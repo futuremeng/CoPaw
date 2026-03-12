@@ -382,7 +382,11 @@ class AgentRunner(Runner):
             logger.info(f"query_handler: {session_id} cancelled!")
             if agent is not None:
                 await agent.interrupt()
-            raise RuntimeError("Task has been cancelled!") from exc
+            # Cancellation can happen when the client disconnects or requests
+            # interruption. Treat it as a graceful stop instead of surfacing
+            # an unknown runtime error to the outer engine.
+            _ = exc
+            return
         except Exception as e:
             debug_dump_path = write_query_error_dump(
                 request=request,
