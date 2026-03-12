@@ -1,7 +1,9 @@
 import {
   AgentScopeRuntimeWebUI,
   IAgentScopeRuntimeWebUIOptions,
+  IAgentScopeRuntimeWebUISession,
 } from "@agentscope-ai/chat";
+import type { ExtendedSession } from "./sessionApi";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Modal, Result } from "antd";
 import { ExclamationCircleOutlined, SettingOutlined } from "@ant-design/icons";
@@ -70,7 +72,7 @@ export default function ChatPage() {
       if (!isChatActiveRef.current) return;
       const target = e.target as HTMLElement;
       if (target?.tagName === "TEXTAREA" && e.key === "Enter" && !e.shiftKey) {
-        if (isComposingRef.current || (e as any).isComposing) {
+        if (isComposingRef.current || (e as KeyboardEvent & { isComposing?: boolean }).isComposing) {
           e.stopPropagation();
           e.stopImmediatePropagation();
           return false;
@@ -155,7 +157,7 @@ export default function ChatPage() {
     return sessionApi.getSession(sessionId);
   }, []);
 
-  const createSessionWrapped = useCallback(async (session: any) => {
+  const createSessionWrapped = useCallback(async (session: Partial<IAgentScopeRuntimeWebUISession>) => {
     const result = await sessionApi.createSession(session);
     const newSessionId = result[0]?.id;
     if (isChatActiveRef.current && newSessionId) {
@@ -173,13 +175,13 @@ export default function ChatPage() {
       updateSession: sessionApi.updateSession.bind(sessionApi),
       removeSession: sessionApi.removeSession.bind(sessionApi),
     }),
-    [],
+    [createSessionWrapped, getSessionListWrapped, getSessionWrapped],
   );
 
   const customFetch = useCallback(
     async (data: {
-      input: any[];
-      biz_params?: any;
+      input: unknown[];
+      biz_params?: Record<string, unknown>;
       signal?: AbortSignal;
     }): Promise<Response> => {
       try {
@@ -197,13 +199,13 @@ export default function ChatPage() {
       }
 
       const { input, biz_params } = data;
-      const session = input[input.length - 1]?.session || {};
+      const session = (input[input.length - 1] as { session?: Partial<ExtendedSession> })?.session || {};
 
       const requestBody = {
         input: input.slice(-1),
-        session_id: window.currentSessionId || session?.session_id || "",
-        user_id: window.currentUserId || session?.user_id || "default",
-        channel: window.currentChannel || session?.channel || "console",
+        session_id: window.currentSessionId || session["sessionId"] || "",
+        user_id: window.currentUserId || session["userId"] || "default",
+        channel: window.currentChannel || session["channel"] || "console",
         stream: true,
         ...biz_params,
       };
@@ -239,7 +241,7 @@ export default function ChatPage() {
         rightHeader: <ModelSelector />,
       },
       sender: {
-        ...(i18nConfig as any)?.sender,
+        ...i18nConfig.sender,
         beforeSubmit: handleBeforeSubmit,
       },
       session: { multiple: true, api: wrappedSessionApi },
@@ -250,6 +252,7 @@ export default function ChatPage() {
           console.log(data);
         },
       },
+        pageSize: 80,
       customToolRenderConfig: {
         "weather search mock": Weather,
       },

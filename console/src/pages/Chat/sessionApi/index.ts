@@ -54,7 +54,7 @@ interface OutputMessage extends Omit<Message, "role"> {
  * Extended session carrying extra fields that the library type does not define
  * but our backend / window globals require.
  */
-interface ExtendedSession extends IAgentScopeRuntimeWebUISession {
+export interface ExtendedSession extends IAgentScopeRuntimeWebUISession {
   sessionId: string;
   userId: string;
   channel: string;
