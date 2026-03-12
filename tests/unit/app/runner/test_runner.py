@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from typing import Any, AsyncIterator, cast
 
@@ -16,8 +17,12 @@ class _Retryable503Error(Exception):
 
 
 class _DummyAgent:
+    last_instance = None
+
     def __init__(self, *args, **kwargs) -> None:
         _ = args, kwargs
+        self.interrupted = False
+        _DummyAgent.last_instance = self
 
     async def register_mcp_clients(self) -> None:
         return None
@@ -31,6 +36,9 @@ class _DummyAgent:
     def __call__(self, msgs):
         _ = msgs
         return object()
+
+    async def interrupt(self) -> None:
+        self.interrupted = True
 
 
 class _DummySession(SafeJSONSession):
@@ -146,3 +154,128 @@ async def test_query_handler_returns_retryable_error_msg(
     assert "503" in text
     assert "稍后再试" in text
     assert cast(_DummySession, runner.session).saved is True
+
+
+async def test_query_handler_cancelled_stops_gracefully(monkeypatch) -> None:
+    from copaw.app.runner import runner as runner_module
+
+    async def _no_approval(session_id: str, query: str | None):
+        _ = session_id, query
+        return None, False
+
+    async def _cancelled_stream_printing_messages(*args, **kwargs):
+        _ = args, kwargs
+        raise asyncio.CancelledError()
+        yield  # pragma: no cover
+
+    runner = AgentRunner()
+    runner.session = _DummySession()
+    cast(Any, runner)._resolve_pending_approval = _no_approval
+
+    monkeypatch.setattr(runner_module, "CoPawAgent", _DummyAgent)
+    monkeypatch.setattr(runner_module, "build_env_context", lambda **kwargs: kwargs)
+    monkeypatch.setattr(
+        runner_module,
+        "load_config",
+        lambda: SimpleNamespace(
+            agents=SimpleNamespace(
+                running=SimpleNamespace(max_iters=8, max_input_length=8192),
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        runner_module,
+        "stream_printing_messages",
+        _cancelled_stream_printing_messages,
+    )
+
+    msgs = [
+        Msg(
+            name="user",
+            role="user",
+            content=[TextBlock(type="text", text="继续")],
+        ),
+    ]
+    request = cast(
+        AgentRequest,
+        SimpleNamespace(
+            session_id="session-1",
+            user_id="user-1",
+            channel="console",
+        ),
+    )
+
+    results = []
+    stream = cast(
+        AsyncIterator[tuple[Msg, bool]],
+        cast(Any, runner).query_handler(msgs, request=request),
+    )
+    async for msg, last in stream:
+        results.append((msg, last))
+
+    assert results == []
+    assert cast(_DummySession, runner.session).saved is True
+    assert _DummyAgent.last_instance is not None
+    assert cast(_DummyAgent, _DummyAgent.last_instance).interrupted is True
+
+
+async def test_stream_query_cancelled_finishes_without_failed_event(
+    monkeypatch,
+) -> None:
+    from copaw.app.runner import runner as runner_module
+
+    async def _no_approval(session_id: str, query: str | None):
+        _ = session_id, query
+        return None, False
+
+    async def _cancelled_stream_printing_messages(*args, **kwargs):
+        _ = args, kwargs
+        raise asyncio.CancelledError()
+        yield  # pragma: no cover
+
+    runner = AgentRunner()
+    runner.session = _DummySession()
+    runner._health = True  # pylint: disable=protected-access
+    cast(Any, runner)._resolve_pending_approval = _no_approval
+
+    monkeypatch.setattr(runner_module, "CoPawAgent", _DummyAgent)
+    monkeypatch.setattr(runner_module, "build_env_context", lambda **kwargs: kwargs)
+    monkeypatch.setattr(
+        runner_module,
+        "load_config",
+        lambda: SimpleNamespace(
+            agents=SimpleNamespace(
+                running=SimpleNamespace(max_iters=8, max_input_length=8192),
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        runner_module,
+        "stream_printing_messages",
+        _cancelled_stream_printing_messages,
+    )
+
+    request = {
+        "input": [
+            {
+                "role": "user",
+                "type": "message",
+                "content": [{"type": "text", "text": "继续"}],
+            },
+        ],
+        "session_id": "session-1",
+        "user_id": "user-1",
+        "channel": "console",
+        "stream": True,
+    }
+
+    events = []
+    async for event in cast(Any, runner).stream_query(request):
+        events.append(event)
+
+    assert len(events) >= 3
+    statuses = [getattr(event, "status", None) for event in events]
+    assert "completed" in statuses
+    assert statuses[-1] == "completed"
+    assert "failed" not in statuses
+    assert all(getattr(event, "error", None) is None for event in events)
