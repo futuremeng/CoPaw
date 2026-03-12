@@ -24,15 +24,14 @@ router = APIRouter(prefix="/chats", tags=["chats"])
 _MAX_PLUGIN_OUTPUT_CHARS = 8000
 
 
-def _is_tool_trace_message(msg: Message) -> bool:
-    return msg.type in {"plugin_call", "plugin_call_output"}
-
-
 def _compact_chat_history_messages(
     messages: list[Message],
 ) -> list[Message]:
-    """Hide low-value tool trace messages for chat history rendering."""
-    return [m for m in messages if not _is_tool_trace_message(m)]
+    """Hide low-value tool call traces but keep tool outputs.
+
+    We keep ``plugin_call_output`` so output truncation remains observable.
+    """
+    return [m for m in messages if m.type != "plugin_call"]
 
 
 def _paginate_chat_history_messages(

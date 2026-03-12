@@ -202,10 +202,10 @@ class AgentRunner(Runner):
             True,
         )
 
-    async def query_handler(
+    async def query_handler(  # type: ignore[override]
         self,
         msgs,
-        request=None,
+        request: AgentRequest | None = None,
         **kwargs,
     ):
         """
@@ -224,7 +224,6 @@ class AgentRunner(Runner):
         ) = await self._resolve_pending_approval(session_id, query)
         if approval_response is not None:
             yield approval_response, True
-            user_id = getattr(request, "user_id", "") or ""
             await self._cleanup_denied_session_memory(
                 session_id,
                 user_id,
@@ -328,11 +327,10 @@ class AgentRunner(Runner):
             # in the session state.
             agent.rebuild_sys_prompt()
 
-            async for stream_item in stream_printing_messages(
+            async for msg, last, *_ in stream_printing_messages(
                 agents=[agent],
                 coroutine_task=agent(msgs),
             ):
-                msg, last = stream_item[0], stream_item[1]
                 yield msg, last
 
         except asyncio.CancelledError as exc:
