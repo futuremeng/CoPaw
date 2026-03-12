@@ -31,6 +31,7 @@ from ...security.tool_guard.models import TOOL_GUARD_DENIED_MARK
 from ...config import load_config, save_config
 from ...config.config import load_agent_config
 from ...constant import (
+    LLM_MAX_RETRIES,
     TOOL_GUARD_APPROVAL_TIMEOUT_SECONDS,
     WORKING_DIR,
 )
@@ -450,6 +451,38 @@ class AgentRunner(Runner):
                 e.args = (
                     (f"{e.args[0]}{suffix}" if e.args else suffix.strip()),
                 ) + e.args[1:]
+
+            if _is_transient_upstream_error(e):
+                status = _extract_status_code(e)
+                status_text = str(status) if status is not None else "unknown"
+                detail_text = (
+                    f"\n(Details:  {debug_dump_path})"
+                    if debug_dump_path
+                    else ""
+                )
+                yield (
+                    Msg(
+                        name="Friday",
+                        role="assistant",
+                        content=[
+                            TextBlock(
+                                type="text",
+                                text=(
+                                    "⚠️ Model service is temporarily unavailable "
+                                    f"(HTTP {status_text}). "
+                                    f"Retried {LLM_MAX_RETRIES} times but still failed. "
+                                    "Please try again shortly.\n"
+                                    "⚠️ 模型服务暂时不可用"
+                                    f"（HTTP {status_text}）。"
+                                    f"已重试 {LLM_MAX_RETRIES} 次仍失败，"
+                                    f"请稍后重试。{detail_text}"
+                                ),
+                            ),
+                        ],
+                    ),
+                    True,
+                )
+                return
             raise
         finally:
             if agent is not None and session_state_loaded:
