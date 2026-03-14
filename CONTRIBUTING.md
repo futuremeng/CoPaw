@@ -65,6 +65,17 @@ fix(channels): handle empty content_parts in Discord
 docs(skills): document Skills Hub import
 ```
 
+### 3.1 Periodic PR Retrospective and Strategy Adjustment (Required)
+
+- Run a periodic PR retrospective at least once per week (or after any major review outcome) for all active upstream PRs.
+- For each PR, review current status and signals: open/merged/closed, review comments, requested changes, CI status, and scope size.
+- Use retrospective outcomes to adjust upcoming PR strategy before opening new PRs:
+  - If scope is too broad, split into smaller single-topic PRs.
+  - If feedback shows roadmap mismatch, realign proposal with upstream direction first.
+  - If quality issues repeat, strengthen local gates (tests, pre-commit, docs) before next submission.
+- For any item that does not align with upstream roadmap or contribution norms, add a short corrective summary and apply it to the next PR plan.
+- Goal: reduce maintainer burden and avoid adding unnecessary review or rework pressure to upstream.
+
 ### 4. Code and Quality
 
 - **Required local gate (must pass before push/PR):**

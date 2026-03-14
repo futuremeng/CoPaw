@@ -65,6 +65,17 @@ fix(channels): handle empty content_parts in Discord
 docs(skills): document Skills Hub import
 ```
 
+### 3.1 PR 定期复盘与策略调整（必做）
+
+- 至少每周一次（或每次出现重要评审结论后）对所有进行中的 upstream PR 做一次复盘。
+- 每个 PR 必查：当前状态（open/merged/closed）、评审意见、requested changes、CI 结果、改动范围大小。
+- 复盘结论必须用于下一批 PR 策略调整，再开新 PR：
+  - 发现范围过大时，拆分为单主题小 PR。
+  - 发现与 upstream 路线图不一致时，先对齐方向再提交。
+  - 发现质量问题重复出现时，先强化本地门禁（tests、pre-commit、文档）再提交。
+- 凡是不符合 upstream 路线图或贡献规范的项，必须形成简短纠偏总结，并落实到下一次 PR 计划。
+- 目标：降低维护者负担，避免给 upstream 增加不必要的评审与返工成本。
+
 ### 4. 代码和质量
 
 - **本地必跑门禁（push/提 PR 前必须通过）：**
