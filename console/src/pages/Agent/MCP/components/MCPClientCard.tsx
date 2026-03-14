@@ -22,6 +22,7 @@ export function MCPClientCard({
   onToggle,
   onDelete,
   onUpdate,
+  runtimeStateOverride,
   isHovered,
   onMouseEnter,
   onMouseLeave,
