@@ -1,22 +1,16 @@
----
-
-## 开发模式说明
-请务必查阅 [docs/devops/DEVELOPMENT_MODE.md](docs/devops/DEVELOPMENT_MODE.md)，了解数字出版方向的开发流程、任务归属与处理标准。
 # 为 CoPaw 贡献代码
 
 ## 欢迎！🐾
 
 感谢你对 CoPaw 的关注！CoPaw 是一个开源的**个人 AI 助手**，可以在你自己的环境中运行——无论是你的机器还是云端。它可以连接钉钉、飞书、QQ、Discord、iMessage 等聊天应用，支持定时任务和心跳机制，并通过 **Skills** 扩展其能力。我们热烈欢迎能让 CoPaw 对所有人更有用的贡献：无论是添加新的频道、新的模型提供商、Skill，改进文档，还是修复 bug。
 
-**快速链接：** [GitHub](https://github.com/agentscope-ai/CoPaw) · [文档](https://copaw.agentscope.io/) · [发布指南](RELEASE_zh.md) · [许可证：Apache 2.0](LICENSE)
+**快速链接：** [GitHub](https://github.com/agentscope-ai/CoPaw) · [文档](https://copaw.agentscope.io/) · [许可证：Apache 2.0](LICENSE)
 
 ---
 
 ## 如何贡献
 
 为了保持协作顺畅并维护质量，请遵循以下指南。
-
-> 分支协作建议：请先阅读[双主线开发 SOP（本地协作版）](DEV_BRANCHING_SOP_zh.md)。
 
 ### 1. 检查现有计划和问题
 
@@ -71,18 +65,7 @@ fix(channels): handle empty content_parts in Discord
 docs(skills): document Skills Hub import
 ```
 
-### 3.1 PR 定期复盘与策略调整（必做）
-
-- 至少每周一次（或每次出现重要评审结论后）对所有进行中的 upstream PR 做一次复盘。
-- 每个 PR 必查：当前状态（open/merged/closed）、评审意见、requested changes、CI 结果、改动范围大小。
-- 复盘结论必须用于下一批 PR 策略调整，再开新 PR：
-  - 发现范围过大时，拆分为单主题小 PR。
-  - 发现与 upstream 路线图不一致时，先对齐方向再提交。
-  - 发现质量问题重复出现时，先强化本地门禁（tests、pre-commit、文档）再提交。
-- 凡是不符合 upstream 路线图或贡献规范的项，必须形成简短纠偏总结，并落实到下一次 PR 计划。
-- 目标：降低维护者负担，避免给 upstream 增加不必要的评审与返工成本。
-
-### 3.2 PR 内容模板与自查（必做）
+### 3.1 PR 内容模板与自查（必做）
 
 - CoPaw 的标准 PR 内容模板固定为：`.github/PULL_REQUEST_TEMPLATE.md`。
 - 在生成 PR 内容前，必须先按该模板逐项自查（Type of Change、Component(s) Affected、Checklist、Testing、Local Verification Evidence）。

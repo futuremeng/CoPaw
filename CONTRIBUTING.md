@@ -4,15 +4,13 @@
 
 Thank you for your interest in contributing to CoPaw! CoPaw is an open-source **personal AI assistant** that runs in your own environment—on your machine or in the cloud. It connects to DingTalk, Feishu, QQ, Discord, iMessage, and other chat apps, supports scheduled tasks and heartbeat, and extends its capabilities through **Skills**. We warmly welcome contributions that help make CoPaw more useful for everyone: whether you add a new channel, a new model provider, a Skill, improve docs, or fix bugs.
 
-**Quick links:** [GitHub](https://github.com/agentscope-ai/CoPaw) · [Docs](https://copaw.agentscope.io/) · [Release Guide](RELEASE.md) · [License: Apache 2.0](LICENSE)
+**Quick links:** [GitHub](https://github.com/agentscope-ai/CoPaw) · [Docs](https://copaw.agentscope.io/) · [License: Apache 2.0](LICENSE)
 
 ---
 
 ## How to Contribute
 
 To keep collaboration smooth and maintain quality, please follow these guidelines.
-
-> Branching recommendation: read the [Dual-Mainline Branching SOP (Local Collaboration)](DEV_BRANCHING_SOP.md) first.
 
 ### 1. Check Existing Plans and Issues
 
@@ -67,18 +65,7 @@ fix(channels): handle empty content_parts in Discord
 docs(skills): document Skills Hub import
 ```
 
-### 3.1 Periodic PR Retrospective and Strategy Adjustment (Required)
-
-- Run a periodic PR retrospective at least once per week (or after any major review outcome) for all active upstream PRs.
-- For each PR, review current status and signals: open/merged/closed, review comments, requested changes, CI status, and scope size.
-- Use retrospective outcomes to adjust upcoming PR strategy before opening new PRs:
-  - If scope is too broad, split into smaller single-topic PRs.
-  - If feedback shows roadmap mismatch, realign proposal with upstream direction first.
-  - If quality issues repeat, strengthen local gates (tests, pre-commit, docs) before next submission.
-- For any item that does not align with upstream roadmap or contribution norms, add a short corrective summary and apply it to the next PR plan.
-- Goal: reduce maintainer burden and avoid adding unnecessary review or rework pressure to upstream.
-
-### 3.2 PR Content Template and Self-Check (Required)
+### 3.1 PR Content Template and Self-Check (Required)
 
 - CoPaw's canonical PR content template is: `.github/PULL_REQUEST_TEMPLATE.md`.
 - Before drafting PR content, you must first self-check against every section in this template (Type of Change, Component(s) Affected, Checklist, Testing, Local Verification Evidence).
