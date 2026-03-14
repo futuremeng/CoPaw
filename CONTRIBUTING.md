@@ -78,6 +78,14 @@ docs(skills): document Skills Hub import
 - For any item that does not align with upstream roadmap or contribution norms, add a short corrective summary and apply it to the next PR plan.
 - Goal: reduce maintainer burden and avoid adding unnecessary review or rework pressure to upstream.
 
+### 3.2 PR Content Template and Self-Check (Required)
+### 3.1 PR Content Template and Self-Check (Required)
+
+- CoPaw's canonical PR content template is: `.github/PULL_REQUEST_TEMPLATE.md`.
+- Before drafting PR content, you must first self-check against every section in this template (Type of Change, Component(s) Affected, Checklist, Testing, Local Verification Evidence).
+- After self-check is complete, generate and submit the PR description using the same template structure; do not omit required sections.
+- If a check was not actually run (for example, pre-commit or pytest), explicitly mark it as "not run" in the corresponding template section. Do not leave it blank or pre-check it as passed.
+
 ### 4. Code and Quality
 
 - **Required local gate (must pass before push/PR):**
