@@ -199,6 +199,12 @@ def desktop_cmd(
             f"[desktop] Cleaned stale desktop backend process(es): {cleaned}",
         )
 
+    cleaned = _cleanup_stale_desktop_backends()
+    if cleaned:
+        _log_desktop(
+            f"[desktop] Cleaned stale desktop backend process(es): {cleaned}",
+        )
+
     port = _find_free_port(host)
     url = f"http://{host}:{port}"
     click.echo(f"Starting CoPaw app on {url} (port {port})")
