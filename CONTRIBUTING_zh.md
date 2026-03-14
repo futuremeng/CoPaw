@@ -83,7 +83,6 @@ docs(skills): document Skills Hub import
 - 目标：降低维护者负担，避免给 upstream 增加不必要的评审与返工成本。
 
 ### 3.2 PR 内容模板与自查（必做）
-### 3.1 PR 内容模板与自查（必做）
 
 - CoPaw 的标准 PR 内容模板固定为：`.github/PULL_REQUEST_TEMPLATE.md`。
 - 在生成 PR 内容前，必须先按该模板逐项自查（Type of Change、Component(s) Affected、Checklist、Testing、Local Verification Evidence）。

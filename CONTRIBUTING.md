@@ -79,7 +79,6 @@ docs(skills): document Skills Hub import
 - Goal: reduce maintainer burden and avoid adding unnecessary review or rework pressure to upstream.
 
 ### 3.2 PR Content Template and Self-Check (Required)
-### 3.1 PR Content Template and Self-Check (Required)
 
 - CoPaw's canonical PR content template is: `.github/PULL_REQUEST_TEMPLATE.md`.
 - Before drafting PR content, you must first self-check against every section in this template (Type of Change, Component(s) Affected, Checklist, Testing, Local Verification Evidence).
