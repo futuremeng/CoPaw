@@ -15,6 +15,8 @@
 >
 > - 本库本地构建与分发入口：`scripts/pack/README.md`（含 macOS `.zip` / Windows `.exe` 产物说明）。
 >   Local build/distribution entry: `scripts/pack/README.md` (including macOS `.zip` and Windows `.exe` artifacts).
+> - 本库下载地址（Local Edition Releases）：https://github.com/futuremeng/CoPaw/releases
+>   Upstream 下载地址（for comparison only）：https://github.com/agentscope-ai/CoPaw/releases
 > - 本库与 upstream **不要在同一 Python 环境中同时安装**（包名同为 `copaw`），后安装会覆盖先安装。
 >   Do **not** install this local edition and upstream in the same Python environment (`copaw` package name is identical); the later install overrides the former.
 > - 桌面端也不要混装：若都命名为 `CoPaw.app` 或同一安装目录，后安装版本会覆盖前安装版本。
