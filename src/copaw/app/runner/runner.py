@@ -515,7 +515,7 @@ class AgentRunner(Runner):
                 )
             start_fn = cast(Any, getattr(self.memory_manager, "start", None))
             if callable(start_fn):
-                start_result = start_fn()
+                start_result = start_fn()  # pylint: disable=not-callable
                 if inspect.isawaitable(start_result):
                     await start_result
             else:
@@ -536,7 +536,7 @@ class AgentRunner(Runner):
                     getattr(self.memory_manager, "close", None),
                 )
                 if callable(close_fn):
-                    close_result = close_fn()
+                    close_result = close_fn()  # pylint: disable=not-callable
                     if inspect.isawaitable(close_result):
                         await close_result
                 else:
