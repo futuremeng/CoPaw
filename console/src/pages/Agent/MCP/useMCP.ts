@@ -1,8 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { message } from "@agentscope-ai/design";
 import api from "../../../api";
-import type { MCPClientInfo } from "../../../api/types";
+import type {
+  MCPClientCreateRequest,
+  MCPClientInfo,
+  MCPClientUpdateRequest,
+} from "../../../api/types";
 import { useTranslation } from "react-i18next";
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
 
 export function useMCP() {
   const { t } = useTranslation();
@@ -47,21 +55,7 @@ export function useMCP() {
   }, [loadClients]);
 
   const createClient = useCallback(
-    async (
-      key: string,
-      clientData: {
-        name: string;
-        description?: string;
-        command: string;
-        enabled?: boolean;
-        transport?: "stdio" | "streamable_http" | "sse";
-        url?: string;
-        headers?: Record<string, string>;
-        args?: string[];
-        env?: Record<string, string>;
-        cwd?: string;
-      },
-    ) => {
+    async (key: string, clientData: MCPClientCreateRequest["client"]) => {
       try {
         await api.createMCPClient({
           client_key: key,
@@ -70,8 +64,8 @@ export function useMCP() {
         message.success(t("mcp.createSuccess"));
         await loadClients();
         return true;
-      } catch (error: any) {
-        const errorMsg = error?.message || t("mcp.createError");
+      } catch (error) {
+        const errorMsg = getErrorMessage(error, t("mcp.createError"));
         message.error(errorMsg);
         return false;
       }
@@ -80,28 +74,14 @@ export function useMCP() {
   );
 
   const updateClient = useCallback(
-    async (
-      key: string,
-      updates: {
-        name?: string;
-        description?: string;
-        command?: string;
-        enabled?: boolean;
-        transport?: "stdio" | "streamable_http" | "sse";
-        url?: string;
-        headers?: Record<string, string>;
-        args?: string[];
-        env?: Record<string, string>;
-        cwd?: string;
-      },
-    ) => {
+    async (key: string, updates: MCPClientUpdateRequest) => {
       try {
         await api.updateMCPClient(key, updates);
         message.success(t("mcp.updateSuccess"));
         await loadClients();
         return true;
-      } catch (error: any) {
-        const errorMsg = error?.message || t("mcp.updateError");
+      } catch (error) {
+        const errorMsg = getErrorMessage(error, t("mcp.updateError"));
         message.error(errorMsg);
         return false;
       }
@@ -117,7 +97,7 @@ export function useMCP() {
           client.enabled ? t("mcp.disableSuccess") : t("mcp.enableSuccess"),
         );
         await loadClients();
-      } catch (error) {
+      } catch {
         message.error(t("mcp.toggleError"));
       }
     },
@@ -130,7 +110,7 @@ export function useMCP() {
         await api.deleteMCPClient(client.key);
         message.success(t("mcp.deleteSuccess"));
         await loadClients();
-      } catch (error) {
+      } catch {
         message.error(t("mcp.deleteError"));
       }
     },

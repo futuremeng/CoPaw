@@ -1,16 +1,25 @@
 import { Card, Button, Modal, Tooltip } from "@agentscope-ai/design";
 import { DeleteOutlined } from "@ant-design/icons";
 import { Server } from "lucide-react";
-import type { MCPClientInfo } from "../../../../api/types";
+import type {
+  MCPClientInfo,
+  MCPClientUpdateRequest,
+} from "../../../../api/types";
 import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import styles from "../index.module.less";
 
+type JSONRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is JSONRecord {
+  return typeof value === "object" && value !== null;
+}
+
 interface MCPClientCardProps {
   client: MCPClientInfo;
-  onToggle: (client: MCPClientInfo, e: React.MouseEvent) => void;
-  onDelete: (client: MCPClientInfo, e: React.MouseEvent) => void;
-  onUpdate: (key: string, updates: any) => Promise<boolean>;
+  onToggle: (client: MCPClientInfo, e?: React.MouseEvent) => void;
+  onDelete: (client: MCPClientInfo, e?: React.MouseEvent) => void;
+  onUpdate: (key: string, updates: MCPClientUpdateRequest) => Promise<boolean>;
   runtimeStateOverride?: "queued" | "checking";
   isHovered: boolean;
   onMouseEnter: () => void;
@@ -74,7 +83,7 @@ export function MCPClientCard({
 
   const confirmDelete = () => {
     setDeleteModalOpen(false);
-    onDelete(client, null as any);
+    onDelete(client);
   };
 
   const handleCardClick = () => {
@@ -87,7 +96,12 @@ export function MCPClientCard({
   const handleSaveJson = async () => {
     try {
       const parsed = JSON.parse(editedJson);
-      const { key, active, ...updates } = parsed;
+      if (!isRecord(parsed)) {
+        throw new Error("Invalid JSON format");
+      }
+      const updates = { ...parsed };
+      delete updates.key;
+      delete updates.active;
 
       // Send all updates directly to backend, let backend handle env masking check
       const success = await onUpdate(client.key, updates);
@@ -95,7 +109,7 @@ export function MCPClientCard({
         setJsonModalOpen(false);
         setIsEditing(false);
       }
-    } catch (error) {
+    } catch {
       alert("Invalid JSON format");
     }
   };
