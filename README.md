@@ -10,6 +10,25 @@
 > - 开发协作请务必查阅 [开发模式说明](docs/devops/DEVELOPMENT_MODE.md)。
 >   For development and collaboration, please refer to [Development Mode](docs/devops/DEVELOPMENT_MODE.md).
 
+> [!IMPORTANT]
+> **本库构建/分发/下载（Local Edition Build & Distribution）**
+>
+> - 本库本地构建与分发入口：`scripts/pack/README.md`（含 macOS `.zip` / Windows `.exe` 产物说明）。
+>   Local build/distribution entry: `scripts/pack/README.md` (including macOS `.zip` and Windows `.exe` artifacts).
+> - 本库与 upstream **不要在同一 Python 环境中同时安装**（包名同为 `copaw`），后安装会覆盖先安装。
+>   Do **not** install this local edition and upstream in the same Python environment (`copaw` package name is identical); the later install overrides the former.
+> - 桌面端也不要混装：若都命名为 `CoPaw.app` 或同一安装目录，后安装版本会覆盖前安装版本。
+>   Do not co-install desktop builds in the same app/install path either; later installs can overwrite earlier ones.
+> - 建议隔离方式：独立虚拟环境（如 `.venv-local` / `.venv-upstream`）或独立容器。
+>   Recommended isolation: separate virtual environments (for example, `.venv-local` / `.venv-upstream`) or separate containers.
+>
+> **本库版本专有主要特性（Local-only Highlights）**
+>
+> - Skills Marketplace（Git-backed skills market aggregation + Console market management + 覆盖前确认）。
+> - 数字出版开发模式与双轨协作文档（本地优先、按需回流 upstream）。
+> - 发布流程增强：`RELEASE.md` / `RELEASE_zh.md`、Release Checklist Issue 模板、PR 发布检查区块。
+> - 本地桌面打包修复：macOS 下 `.venv` Python 优先与 `conda-unpack` 兼容处理。
+
 
 <div align="center">
 
