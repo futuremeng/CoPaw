@@ -309,10 +309,7 @@ export function ProviderConfigModal({
     }
 
     const hostname = window.location.hostname.toLowerCase();
-    if (
-      hostname === "host.docker.internal" ||
-      hostname.includes("docker")
-    ) {
+    if (hostname === "host.docker.internal" || hostname.includes("docker")) {
       return {
         hintKey: "models.ollamaEnvHintDocker",
         recommendedUrl: "http://host.docker.internal:11434",
