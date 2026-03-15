@@ -128,7 +128,7 @@
     "marketSaveRequiresFields": "请先填写完整的市场 ID、名称和仓库地址。",
     "marketSaveRequiresUniqueId": "市场 ID 不能重复，请修改后再保存。",
     "marketUrlPlaceholder": "支持 owner/repo、.git 地址，或 GitHub tree URL",
-    "marketUrlExamples": "示例：futuremeng/editor-skills 或 https://github.com/openclaw/openclaw/tree/main/skills",
+    "marketUrlExamples": "示例：openclaw/openclaw 或 https://github.com/openclaw/openclaw/tree/main/skills",
     "marketAutoParse": "自动解析",
     "marketUrlAutoParsed": "已自动解析 URL，分支：{{branch}}，路径：{{path}}",
     "refreshingMarketplace": "市场刷新中 {{progress}}%",

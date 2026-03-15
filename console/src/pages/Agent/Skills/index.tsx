@@ -304,7 +304,7 @@ function SkillsPage() {
       name: "",
       url: "",
       branch: "",
-      path: "index.json",
+      path: "skills",
       enabled: true,
       order: nextIndex,
     };
@@ -703,7 +703,7 @@ function SkillsPage() {
                   <span>{t("skills.marketPath")}</span>
                   <input
                     className={styles.marketManageInput}
-                    value={market.path || "index.json"}
+                    value={market.path || "skills"}
                     onChange={(e) =>
                       updateMarketField(market.id, "path", e.target.value.trim())
                     }

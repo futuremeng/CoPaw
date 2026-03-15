@@ -128,7 +128,7 @@
     "marketSaveRequiresFields": "Fill in market ID, name, and repository URL before saving.",
     "marketSaveRequiresUniqueId": "Market IDs must be unique before saving.",
     "marketUrlPlaceholder": "Supports owner/repo, .git URLs, or GitHub tree URLs",
-    "marketUrlExamples": "Examples: futuremeng/editor-skills or https://github.com/openclaw/openclaw/tree/main/skills",
+    "marketUrlExamples": "Examples: openclaw/openclaw or https://github.com/openclaw/openclaw/tree/main/skills",
     "marketAutoParse": "Auto Parse",
     "marketUrlAutoParsed": "URL auto-parsed. Branch: {{branch}}, Path: {{path}}",
     "refreshingMarketplace": "Refreshing marketplace {{progress}}%",
