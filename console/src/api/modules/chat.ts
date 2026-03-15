@@ -65,7 +65,10 @@ export const sessionApi = {
     return request<Session[]>(`/chats${query ? `?${query}` : ""}`);
   },
 
-  getSession: (sessionId: string, params?: { offset?: number; limit?: number }) => {
+  getSession: (
+    sessionId: string,
+    params?: { offset?: number; limit?: number },
+  ) => {
     const searchParams = new URLSearchParams();
     if (typeof params?.offset === "number") {
       searchParams.append("offset", String(params.offset));

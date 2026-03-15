@@ -39,7 +39,7 @@ def _paginate_chat_history_messages(
     offset: int,
     limit: int,
 ) -> tuple[list[Message], int, bool]:
-    """Slice chat history into a stable page and provide pagination metadata."""
+    """Slice chat history into a stable page with pagination metadata."""
     total = len(messages)
     if offset >= total:
         return [], total, False
@@ -65,7 +65,8 @@ def _truncate_chat_history_messages(
         content = raw.get("content")
 
         if raw.get("type") != "plugin_call_output" or not isinstance(
-            content, list
+            content,
+            list,
         ):
             truncated.append(msg)
             continue
@@ -267,7 +268,9 @@ async def get_chat(
     messages = _truncate_chat_history_messages(messages)
     messages = _compact_chat_history_messages(messages)
     page, total, has_more = _paginate_chat_history_messages(
-        messages, offset, limit
+        messages,
+        offset,
+        limit,
     )
     return ChatHistory(
         messages=page,
