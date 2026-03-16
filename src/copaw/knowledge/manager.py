@@ -3,13 +3,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import fnmatch
 import hashlib
 import json
 import logging
 import re
 import shutil
-from collections import Counter
 from datetime import UTC, datetime, timedelta
 from html import unescape
 from pathlib import Path
@@ -18,18 +18,10 @@ from urllib.parse import urlparse, parse_qs
 
 import httpx
 
-try:
-    import jieba  # type: ignore[import-not-found]
-except Exception:  # pragma: no cover - optional dependency
-    jieba = None
-
-try:
-    import hanlp  # type: ignore[import-not-found]
-except Exception:  # pragma: no cover - optional dependency
-    hanlp = None
-
 from ..constant import CHATS_FILE
-from ..config.config import KnowledgeConfig, KnowledgeSourceSpec
+from ..config.config import KnowledgeConfig, KnowledgeSourceSpec, LastDispatchConfig
+from ..agents.model_factory import create_model_and_formatter
+from .cognee_engine import CogneeEngine
 
 _UNSAFE_FILENAME_RE = re.compile(r'[\\/:*?"<>|]')
 _CHAT_URL_RE = re.compile(
@@ -58,6 +50,7 @@ _PRIVATE_HOST_RE = re.compile(
     re.IGNORECASE,
 )
 _TITLE_WORD_RE = re.compile(r"[A-Za-z][A-Za-z0-9_-]{2,}|[\u4e00-\u9fff]{2,}")
+_TITLE_REGEN_DEFAULT_PROMPT = "给以下内容起一个标题，一般10个字到20个字。"
 _TITLE_SENTENCE_SPLIT_RE = re.compile(r"(?<=[。！？.!?])\s+|[\n\r]+")
 _TITLE_STOP_WORDS = {
     "the",
@@ -86,41 +79,14 @@ _TITLE_STOP_WORDS = {
     "知识",
     "数据",
 }
-_SEMANTIC_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9_-]{2,}|[\u4e00-\u9fff]{2,}")
-_SEMANTIC_STOP_WORDS = {
-    *_TITLE_STOP_WORDS,
-    "is",
-    "are",
-    "was",
-    "were",
-    "be",
-    "to",
-    "of",
-    "in",
-    "on",
-    "at",
-    "by",
-    "or",
-    "as",
-    "it",
-    "an",
-    "a",
-    "关键词",
-    "关键",
-    "词",
-}
-_KEYWORD_DEFAULT_TOP_N = 3
-_TEXTUAL_CONTENT_TYPE_MARKERS = (
-    "text/",
-    "application/json",
-    "application/xml",
-    "application/xhtml+xml",
-    "application/javascript",
-    "application/x-javascript",
-    "application/ld+json",
-)
 
 logger = logging.getLogger(__name__)
+_TITLE_REGEN_LLM_LOCK = asyncio.Lock()
+_TITLE_REGEN_YIELD_SECONDS = 2.0
+_TITLE_REGEN_ADAPTIVE_ACTIVE_WINDOW_SECONDS = 60.0
+_TITLE_REGEN_ADAPTIVE_BURST_WINDOW_SECONDS = 15.0
+_TITLE_REGEN_ADAPTIVE_ACTIVE_MULTIPLIER = 2.0
+_TITLE_REGEN_ADAPTIVE_BURST_MULTIPLIER = 3.0
 _AUTO_COLLECT_URL_MIN_CONTENT_CHARS = 1000
 
 
@@ -134,42 +100,645 @@ class KnowledgeManager:
     def __init__(self, working_dir: str | Path):
         self.working_dir = Path(working_dir).expanduser().resolve()
         self.root_dir = self.working_dir / "knowledge"
-        self.sources_dir = self.root_dir / "sources"
-        self.catalog_path = self.root_dir / "catalog.json"
+        self.index_dir = self.root_dir / "indexes"
         self.uploads_dir = self.root_dir / "uploads"
         self.backfill_state_path = self.root_dir / "history-backfill-state.json"
-        self.backfill_progress_path = self.root_dir / "history-backfill-progress.json"
         self.remote_dir = self.uploads_dir / "remote"
         self.remote_blob_dir = self.remote_dir / "blobs"
         self.remote_meta_dir = self.remote_dir / "url-meta"
-        legacy_index_dir = self.root_dir / "indexes"
-        if legacy_index_dir.exists():
-            shutil.rmtree(legacy_index_dir, ignore_errors=True)
-        self.sources_dir.mkdir(parents=True, exist_ok=True)
+        self.title_maintenance_state_path = self.root_dir / "title-maintenance-state.json"
+        self.title_regen_queue_state_path = self.root_dir / "title-regen-queue-state.json"
+        self._cognee_engine: CogneeEngine | None = None
+        self.index_dir.mkdir(parents=True, exist_ok=True)
         self.uploads_dir.mkdir(parents=True, exist_ok=True)
         self.remote_blob_dir.mkdir(parents=True, exist_ok=True)
         self.remote_meta_dir.mkdir(parents=True, exist_ok=True)
+
+    @staticmethod
+    def _should_use_cognee(config: KnowledgeConfig) -> bool:
+        engine_cfg = getattr(config, "engine", None)
+        cognee_cfg = getattr(config, "cognee", None)
+        provider = getattr(engine_cfg, "provider", "default")
+        enabled = bool(getattr(cognee_cfg, "enabled", False))
+        return provider == "cognee" and enabled
+
+    @staticmethod
+    def _allow_engine_fallback(config: KnowledgeConfig) -> bool:
+        engine_cfg = getattr(config, "engine", None)
+        return bool(getattr(engine_cfg, "fallback_to_default", True))
+
+    def _get_cognee_engine(self) -> CogneeEngine:
+        if self._cognee_engine is None:
+            self._cognee_engine = CogneeEngine(self.index_dir)
+        return self._cognee_engine
 
     def list_sources(self, config: KnowledgeConfig) -> list[dict[str, Any]]:
         """Return configured sources with index metadata when available."""
         results: list[dict[str, Any]] = []
         for source in config.sources:
             payload = source.model_dump(mode="json")
-            processed = self._process_source_knowledge(source, config)
-            payload["subject"] = processed.get("subject") or source.name
-            payload["summary"] = processed.get("summary") or source.summary
-            payload["keywords"] = processed.get("keywords") or []
             payload["status"] = self.get_source_status(source.id, source)
             results.append(payload)
         return results
 
-    def normalize_source_name(
+    def normalize_source_name(self, source: KnowledgeSourceSpec) -> KnowledgeSourceSpec:
+        """Return a source with auto-generated name derived from its content/location."""
+        return self._source_with_auto_name(source)
+
+    async def normalize_source_name_with_llm(
         self,
         source: KnowledgeSourceSpec,
-        config: KnowledgeConfig | None = None,
+        config: KnowledgeConfig,
+        *,
+        timeout_seconds: float = 30.0,
+        disable_thinking: bool = True,
+        min_content_chars: int = 10,
+        title_prompt: str = _TITLE_REGEN_DEFAULT_PROMPT,
     ) -> KnowledgeSourceSpec:
-        """Return a source with auto-generated name derived from its content/location."""
-        return self._source_with_auto_name(source, config)
+        """Prefer LLM-generated title, fallback to local semantic title."""
+        fallback = self.normalize_source_name(source)
+        context = self._build_llm_title_context(source, config)
+        if not context:
+            return fallback
+
+        # Only call LLM when there is sufficient actual document content,
+        # not just metadata lines (source_id / source_type / location).
+        if not self._context_has_sufficient_content(context, min_content_chars):
+            return fallback
+
+        try:
+            model, _ = create_model_and_formatter()
+        except Exception as exc:
+            logger.warning("Knowledge title model unavailable, fallback applied: %s", exc)
+            return fallback
+
+        # Optionally suppress thinking/reasoning tokens (e.g. qwen3 /no_think)
+        system_suffix = " /no_think" if disable_thinking else ""
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You generate concise semantic titles for knowledge sources. "
+                    "Output one line only, no explanation, max 18 words."
+                    + system_suffix
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"{(title_prompt or _TITLE_REGEN_DEFAULT_PROMPT).strip()}\n\n"
+                    f"{context}"
+                ),
+            },
+        ]
+
+        try:
+            response = await asyncio.wait_for(model(messages), timeout=timeout_seconds)
+            title = self._sanitize_llm_title(self._extract_text_from_model_response(response))
+            if not title:
+                return fallback
+            return fallback.model_copy(update={"name": title})
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Knowledge title LLM call timed out after %.0fs for source %s, fallback applied",
+                timeout_seconds,
+                source.id,
+            )
+            return fallback
+        except Exception as exc:
+            logger.warning("Knowledge title generation failed, fallback applied: %s", exc)
+            return fallback
+
+    async def maintain_next_source_title(
+        self,
+        config: KnowledgeConfig,
+        *,
+        use_llm: bool = True,
+        title_prompt: str = _TITLE_REGEN_DEFAULT_PROMPT,
+        min_content_chars: int = 10,
+    ) -> dict[str, Any]:
+        """Maintain one source title per call, advancing a persisted cursor."""
+        sources = config.sources or []
+        if not sources:
+            return {"processed": False, "reason": "no_sources"}
+
+        state = self._load_title_maintenance_state()
+        cursor = int(state.get("cursor", 0) or 0)
+        index = cursor % len(sources)
+
+        source = sources[index]
+        old_name = source.name
+        if use_llm:
+            if self._is_auto_collected_source(source) and self._is_source_content_empty_for_llm_title(
+                source,
+                config,
+                min_content_chars=min_content_chars,
+            ):
+                removed = sources.pop(index)
+                self.delete_index(removed.id)
+                next_cursor = (index % len(sources)) if sources else 0
+                self._save_title_maintenance_state(
+                    {
+                        "cursor": next_cursor,
+                        "last_source_id": removed.id,
+                        "last_deleted": True,
+                        "updated_at": datetime.now(UTC).isoformat(),
+                    },
+                )
+                return {
+                    "processed": True,
+                    "source_id": removed.id,
+                    "deleted": True,
+                    "next_cursor": next_cursor,
+                }
+            normalized = await self.normalize_source_name_with_llm(
+                source,
+                config,
+                title_prompt=title_prompt,
+                min_content_chars=min_content_chars,
+            )
+        else:
+            normalized = self.normalize_source_name(source)
+
+        updated = normalized.name != old_name
+        if updated:
+            sources[index] = normalized
+
+        next_cursor = (index + 1) % len(sources)
+        self._save_title_maintenance_state(
+            {
+                "cursor": next_cursor,
+                "last_source_id": source.id,
+                "last_updated": updated,
+                "updated_at": datetime.now(UTC).isoformat(),
+            },
+        )
+
+        return {
+            "processed": True,
+            "source_id": source.id,
+            "updated": updated,
+            "old_name": old_name,
+            "new_name": normalized.name,
+            "next_cursor": next_cursor,
+        }
+
+    def enqueue_title_regeneration(
+        self,
+        config: KnowledgeConfig,
+        *,
+        use_llm: bool = True,
+        enabled_only: bool = True,
+        batch_size: int = 5,
+        yield_interval_seconds: float = _TITLE_REGEN_YIELD_SECONDS,
+    ) -> dict[str, Any]:
+        """Create a queued title-regeneration job and persist it."""
+        queue_state = self._load_title_regen_queue_state()
+        jobs = queue_state.get("jobs", [])
+        active = next(
+            (
+                item
+                for item in jobs
+                if item.get("status") in {"queued", "running", "waiting_llm"}
+            ),
+            None,
+        )
+        if active is not None:
+            return {
+                "queued": False,
+                "reason": "QUEUE_ALREADY_ACTIVE",
+                "job": active,
+            }
+
+        source_ids = [
+            source.id
+            for source in config.sources
+            if (source.enabled or not enabled_only)
+        ]
+        now = datetime.now(UTC).isoformat()
+        job = {
+            "job_id": hashlib.sha1(f"{now}-{len(source_ids)}".encode("utf-8")).hexdigest()[:12],
+            "created_at": now,
+            "updated_at": now,
+            "status": "queued",
+            "priority": "low",
+            "use_llm": use_llm,
+            "enabled_only": enabled_only,
+            "batch_size": max(1, min(20, int(batch_size))),
+            "source_ids": source_ids,
+            "cursor": 0,
+            "processed": 0,
+            "updated": 0,
+            "deleted": 0,
+            "total": len(source_ids),
+            "skipped_missing": 0,
+            "yield_interval_seconds": max(0.0, min(30.0, float(yield_interval_seconds))),
+            "effective_yield_seconds": max(0.0, min(30.0, float(yield_interval_seconds))),
+            "yield_mode": "fixed",
+            "yield_reason": "no_recent_dispatch",
+            "dispatch_age_seconds": None,
+            "current_source_id": None,
+            "last_processed_source_id": None,
+            "yielding_until": None,
+            "last_item_duration_ms": None,
+            "avg_item_duration_ms": None,
+            "timing_samples": 0,
+            "errors": [],
+        }
+        jobs.append(job)
+        queue_state["jobs"] = jobs
+        queue_state["updated_at"] = now
+        self._save_title_regen_queue_state(queue_state)
+        return {
+            "queued": True,
+            "job": job,
+        }
+
+    def cancel_active_title_regeneration_jobs(self) -> dict[str, Any]:
+        """Cancel active title-regeneration queue jobs and persist state."""
+        queue_state = self._load_title_regen_queue_state()
+        jobs = queue_state.get("jobs", [])
+        if not isinstance(jobs, list):
+            return {
+                "cancelled": False,
+                "cancelled_count": 0,
+                "cancelled_job_ids": [],
+            }
+
+        active_statuses = {"queued", "running", "waiting_llm"}
+        now = datetime.now(UTC).isoformat()
+        cancelled_job_ids: list[str] = []
+        cancelled_count = 0
+
+        for item in jobs:
+            if not isinstance(item, dict):
+                continue
+            if item.get("status") not in active_statuses:
+                continue
+            item["status"] = "cancelled"
+            item["updated_at"] = now
+            item["cancelled_at"] = now
+            item["cancel_reason"] = "force_restart"
+            item["current_source_id"] = None
+            item["yielding_until"] = None
+            cancelled_count += 1
+            job_id = item.get("job_id")
+            if isinstance(job_id, str) and job_id:
+                cancelled_job_ids.append(job_id)
+
+        if cancelled_count > 0:
+            queue_state["updated_at"] = now
+            self._save_title_regen_queue_state(queue_state)
+
+        return {
+            "cancelled": cancelled_count > 0,
+            "cancelled_count": cancelled_count,
+            "cancelled_job_ids": cancelled_job_ids,
+        }
+
+    async def process_title_regen_queue_batch(
+        self,
+        config: KnowledgeConfig,
+        running_config: Any | None = None,
+        last_dispatch: LastDispatchConfig | None = None,
+    ) -> dict[str, Any]:
+        """Process one low-priority batch from the queued title-regeneration jobs."""
+        queue_state = self._load_title_regen_queue_state()
+        jobs = queue_state.get("jobs", [])
+        job = next(
+            (
+                item
+                for item in jobs
+                if item.get("status") in {"queued", "running", "waiting_llm"}
+            ),
+            None,
+        )
+        if job is None:
+            return {"processed": False, "reason": "no_active_queue"}
+
+        source_ids = job.get("source_ids", [])
+        if not isinstance(source_ids, list) or not source_ids:
+            job["status"] = "completed"
+            job["updated_at"] = datetime.now(UTC).isoformat()
+            self._save_title_regen_queue_state(queue_state)
+            return {"processed": False, "reason": "empty_job", "job": job}
+
+        if bool(job.get("use_llm", True)) and _TITLE_REGEN_LLM_LOCK.locked():
+            job["status"] = "waiting_llm"
+            job["updated_at"] = datetime.now(UTC).isoformat()
+            self._save_title_regen_queue_state(queue_state)
+            return {"processed": False, "reason": "llm_busy_waiting", "job": job}
+
+        cursor = int(job.get("cursor", 0) or 0)
+        batch_size = max(1, min(20, int(job.get("batch_size", 5) or 5)))
+        end = min(cursor + batch_size, len(source_ids))
+        batch_source_ids = source_ids[cursor:end]
+        base_processed = int(job.get("processed", 0) or 0)
+        base_updated = int(job.get("updated", 0) or 0)
+        updated_count = 0
+        processed_count = 0
+        source_map = {source.id: idx for idx, source in enumerate(config.sources)}
+        use_llm = bool(job.get("use_llm", True))
+        yield_seconds = max(
+            0.0,
+            float(
+                job.get(
+                    "yield_interval_seconds",
+                    getattr(
+                        running_config,
+                        "knowledge_maintenance_llm_yield_seconds",
+                        _TITLE_REGEN_YIELD_SECONDS,
+                    ),
+                )
+                or 0.0
+            ),
+        )
+        errors = job.get("errors")
+        if not isinstance(errors, list):
+            errors = []
+
+        def _persist_job_state(*, status: str, yielding_until: str | None = None) -> None:
+            now = datetime.now(UTC).isoformat()
+            job["status"] = status
+            job["cursor"] = cursor + processed_count
+            job["processed"] = base_processed + processed_count
+            job["updated"] = base_updated + updated_count
+            job["errors"] = errors
+            job["yielding_until"] = yielding_until
+            job["updated_at"] = now
+            queue_state["updated_at"] = now
+            self._save_title_regen_queue_state(queue_state)
+
+        def _resolve_effective_yield() -> tuple[str, float, str, float | None]:
+            base_yield = max(0.0, min(30.0, yield_seconds))
+            if base_yield <= 0:
+                return "fixed", 0.0, "yield_disabled", None
+
+            active_window_seconds = max(
+                0.0,
+                float(
+                    getattr(
+                        running_config,
+                        "knowledge_title_regen_adaptive_active_window_seconds",
+                        _TITLE_REGEN_ADAPTIVE_ACTIVE_WINDOW_SECONDS,
+                    )
+                    or 0.0
+                ),
+            )
+            burst_window_seconds = max(
+                0.0,
+                float(
+                    getattr(
+                        running_config,
+                        "knowledge_title_regen_adaptive_burst_window_seconds",
+                        _TITLE_REGEN_ADAPTIVE_BURST_WINDOW_SECONDS,
+                    )
+                    or 0.0
+                ),
+            )
+            active_multiplier = max(
+                1.0,
+                float(
+                    getattr(
+                        running_config,
+                        "knowledge_title_regen_adaptive_active_multiplier",
+                        _TITLE_REGEN_ADAPTIVE_ACTIVE_MULTIPLIER,
+                    )
+                    or 1.0
+                ),
+            )
+            burst_multiplier = max(
+                1.0,
+                float(
+                    getattr(
+                        running_config,
+                        "knowledge_title_regen_adaptive_burst_multiplier",
+                        _TITLE_REGEN_ADAPTIVE_BURST_MULTIPLIER,
+                    )
+                    or 1.0
+                ),
+            )
+            dispatched_at = getattr(last_dispatch, "dispatched_at", "") or ""
+            if not dispatched_at:
+                return "fixed", base_yield, "no_recent_dispatch", None
+            try:
+                dispatch_time = datetime.fromisoformat(dispatched_at.replace("Z", "+00:00"))
+            except ValueError:
+                return "fixed", base_yield, "invalid_dispatch_time", None
+            if dispatch_time.tzinfo is None:
+                dispatch_time = dispatch_time.replace(tzinfo=UTC)
+            age_seconds = max(0.0, (datetime.now(UTC) - dispatch_time).total_seconds())
+            if burst_window_seconds > 0 and age_seconds <= burst_window_seconds:
+                return (
+                    "adaptive",
+                    round(min(30.0, base_yield * burst_multiplier), 1),
+                    "burst_window",
+                    age_seconds,
+                )
+            if active_window_seconds > 0 and age_seconds <= active_window_seconds:
+                return (
+                    "adaptive",
+                    round(min(30.0, base_yield * active_multiplier), 1),
+                    "active_window",
+                    age_seconds,
+                )
+            return "fixed", base_yield, "outside_active_window", age_seconds
+
+        def _record_timing(duration_ms: float) -> None:
+            samples = int(job.get("timing_samples", 0) or 0) + 1
+            prev_avg = float(job.get("avg_item_duration_ms", 0) or 0)
+            job["timing_samples"] = samples
+            job["last_item_duration_ms"] = round(duration_ms, 1)
+            job["avg_item_duration_ms"] = round(
+                ((prev_avg * (samples - 1)) + duration_ms) / samples,
+                1,
+            )
+            job["last_item_finished_at"] = datetime.now(UTC).isoformat()
+
+        async def _process_batch() -> None:
+            nonlocal updated_count, processed_count, source_map
+            loop = asyncio.get_running_loop()
+            for index, source_id in enumerate(batch_source_ids):
+                idx = source_map.get(source_id)
+                if idx is None:
+                    job["current_source_id"] = source_id
+                    job["skipped_missing"] = int(job.get("skipped_missing", 0) or 0) + 1
+                    processed_count += 1
+                    job["last_processed_source_id"] = source_id
+                    _persist_job_state(status="running")
+                    continue
+                source = config.sources[idx]
+                old_name = source.name
+                job["current_source_id"] = source_id
+                _persist_job_state(status="running")
+                started_at = loop.time()
+                try:
+                    if use_llm:
+                        llm_timeout = float(
+                            getattr(
+                                running_config,
+                                "knowledge_title_regen_llm_timeout_seconds",
+                                30.0,
+                            )
+                            or 30.0
+                        )
+                        disable_thinking = bool(
+                            getattr(
+                                running_config,
+                                "knowledge_title_regen_disable_thinking",
+                                True,
+                            )
+                        )
+                        min_content_chars = int(
+                            getattr(
+                                running_config,
+                                "knowledge_title_min_content_chars",
+                                10,
+                            )
+                            or 10
+                        )
+                        if self._is_auto_collected_source(source) and self._is_source_content_empty_for_llm_title(
+                            source,
+                            config,
+                            min_content_chars=min_content_chars,
+                        ):
+                            removed = config.sources.pop(idx)
+                            self.delete_index(removed.id)
+                            source_map = {
+                                item.id: item_idx for item_idx, item in enumerate(config.sources)
+                            }
+                            job["deleted"] = int(job.get("deleted", 0) or 0) + 1
+                            processed_count += 1
+                            job["last_processed_source_id"] = source_id
+                            _record_timing((loop.time() - started_at) * 1000)
+                            _persist_job_state(status="running")
+                            continue
+                        title_prompt = str(
+                            getattr(
+                                running_config,
+                                "knowledge_title_regen_prompt",
+                                _TITLE_REGEN_DEFAULT_PROMPT,
+                            )
+                            or _TITLE_REGEN_DEFAULT_PROMPT
+                        )
+                        async with _TITLE_REGEN_LLM_LOCK:
+                            normalized = await self.normalize_source_name_with_llm(
+                                source,
+                                config,
+                                timeout_seconds=llm_timeout,
+                                disable_thinking=disable_thinking,
+                                min_content_chars=min_content_chars,
+                                title_prompt=title_prompt,
+                            )
+                    else:
+                        normalized = self.normalize_source_name(source)
+                    config.sources[idx] = normalized
+                    if normalized.name != old_name:
+                        updated_count += 1
+                except Exception as exc:  # pylint: disable=broad-except
+                    errors.append({"source_id": source_id, "error": str(exc)})
+                processed_count += 1
+                job["last_processed_source_id"] = source_id
+                _record_timing((loop.time() - started_at) * 1000)
+                _persist_job_state(status="running")
+
+                has_more_in_batch = index < len(batch_source_ids) - 1
+                if use_llm and has_more_in_batch and yield_seconds > 0:
+                    (
+                        yield_mode,
+                        effective_yield_seconds,
+                        yield_reason,
+                        dispatch_age_seconds,
+                    ) = _resolve_effective_yield()
+                    job["yield_mode"] = yield_mode
+                    job["effective_yield_seconds"] = effective_yield_seconds
+                    job["yield_reason"] = yield_reason
+                    job["dispatch_age_seconds"] = (
+                        round(dispatch_age_seconds, 1)
+                        if dispatch_age_seconds is not None
+                        else None
+                    )
+                    yielding_until = (
+                        datetime.now(UTC) + timedelta(seconds=effective_yield_seconds)
+                    ).isoformat()
+                    _persist_job_state(status="running", yielding_until=yielding_until)
+                    await asyncio.sleep(effective_yield_seconds)
+
+        await _process_batch()
+
+        final_status = "running" if end < len(source_ids) else "completed"
+        if final_status == "completed":
+            job["current_source_id"] = None
+        if "yield_mode" not in job or "effective_yield_seconds" not in job:
+            (
+                default_yield_mode,
+                default_effective_yield,
+                default_reason,
+                default_age_seconds,
+            ) = _resolve_effective_yield()
+            job["yield_mode"] = default_yield_mode
+            job["effective_yield_seconds"] = default_effective_yield
+            job["yield_reason"] = default_reason
+            job["dispatch_age_seconds"] = (
+                round(default_age_seconds, 1)
+                if default_age_seconds is not None
+                else None
+            )
+        _persist_job_state(status=final_status)
+
+        return {
+            "processed": processed_count > 0,
+            "job": job,
+            "updated_count": updated_count,
+            "config_changed": updated_count > 0,
+            "batch_processed": processed_count,
+        }
+
+    def get_title_regen_queue_status(self) -> dict[str, Any]:
+        """Return queued regeneration status for observability/control."""
+        queue_state = self._load_title_regen_queue_state()
+        jobs = queue_state.get("jobs", [])
+        active_statuses = {"queued", "running", "waiting_llm"}
+        active = next(
+            (item for item in jobs if item.get("status") in active_statuses),
+            None,
+        )
+        active_list = [item for item in jobs if item.get("status") in active_statuses]
+        running_list = [item for item in jobs if item.get("status") == "running"]
+        completed_list = [
+            item for item in jobs if item.get("status") == "completed"
+        ]
+        last_completed = (
+            max(completed_list, key=lambda j: j.get("updated_at", ""))
+            if completed_list
+            else None
+        )
+
+        active_payload = dict(active) if isinstance(active, dict) else active
+        if isinstance(active_payload, dict):
+            source_ids = active_payload.get("source_ids")
+            cursor = int(active_payload.get("cursor", 0) or 0)
+            inferred_source_id: str | None = None
+            if isinstance(source_ids, list) and source_ids:
+                if 0 <= cursor < len(source_ids):
+                    inferred_source_id = source_ids[cursor]
+                elif cursor > 0 and cursor - 1 < len(source_ids):
+                    inferred_source_id = source_ids[cursor - 1]
+
+            if active_payload.get("current_source_id") is None:
+                active_payload["current_source_id"] = inferred_source_id
+            if active_payload.get("last_processed_source_id") is None and cursor > 0:
+                if isinstance(source_ids, list) and cursor - 1 < len(source_ids):
+                    active_payload["last_processed_source_id"] = source_ids[cursor - 1]
+
+        return {
+            "has_active_job": active_payload is not None,
+            "active_job": active_payload,
+            "queued_jobs": len(active_list),
+            "running_jobs": len(running_list),
+            "last_completed_job": last_completed,
+            "updated_at": queue_state.get("updated_at"),
+        }
 
     def get_source_status(
         self,
@@ -177,8 +746,8 @@ class KnowledgeManager:
         source: KnowledgeSourceSpec | None = None,
     ) -> dict[str, Any]:
         """Return persisted index metadata for a source."""
-        source_index_path = self._source_index_path(source_id)
-        if not source_index_path.exists():
+        index_path = self._index_path(source_id)
+        if not index_path.exists():
             status = {
                 "indexed": False,
                 "indexed_at": None,
@@ -190,7 +759,7 @@ class KnowledgeManager:
                 status.update(self._remote_source_status(source))
             return status
 
-        payload = self._load_json(source_index_path)
+        payload = self._load_json(index_path)
         status = {
             "indexed": True,
             "indexed_at": payload.get("indexed_at"),
@@ -209,6 +778,18 @@ class KnowledgeManager:
         running_config: Any | None = None,
     ) -> dict[str, Any]:
         """Index a single source into chunked JSON files."""
+        if self._should_use_cognee(config):
+            try:
+                return self._get_cognee_engine().index_source(source, config, running_config)
+            except Exception as exc:
+                if not self._allow_engine_fallback(config):
+                    raise
+                logger.warning(
+                    "Cognee index_source failed for %s, fallback to default engine: %s",
+                    source.id,
+                    exc,
+                )
+
         documents = self._load_documents(source, config)
         chunks = self._chunk_documents(
             documents,
@@ -222,7 +803,10 @@ class KnowledgeManager:
             "error": None,
             "chunks": chunks,
         }
-        self._write_source_storage(source, payload, documents)
+        self._index_path(source.id).write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
         return {
             "source_id": source.id,
             "document_count": len(documents),
@@ -236,6 +820,17 @@ class KnowledgeManager:
         running_config: Any | None = None,
     ) -> dict[str, Any]:
         """Index all enabled sources."""
+        if self._should_use_cognee(config):
+            try:
+                return self._get_cognee_engine().index_all(config, running_config)
+            except Exception as exc:
+                if not self._allow_engine_fallback(config):
+                    raise
+                logger.warning(
+                    "Cognee index_all failed, fallback to default engine: %s",
+                    exc,
+                )
+
         results = []
         for source in config.sources:
             if not source.enabled:
@@ -246,37 +841,28 @@ class KnowledgeManager:
             "results": results,
         }
 
-    def delete_index(self, source_id: str) -> None:
+    def delete_index(
+        self,
+        source_id: str,
+        config: KnowledgeConfig | None = None,
+    ) -> None:
         """Delete persisted index for a source."""
-        source_dir = self._source_dir(source_id)
-        if source_dir.exists():
-            shutil.rmtree(source_dir, ignore_errors=True)
+        if config is not None and self._should_use_cognee(config):
+            try:
+                self._get_cognee_engine().delete_index(source_id, config)
+                return
+            except Exception as exc:
+                if not self._allow_engine_fallback(config):
+                    raise
+                logger.warning(
+                    "Cognee delete_index failed for %s, fallback to default engine: %s",
+                    source_id,
+                    exc,
+                )
 
-    def clear_knowledge(self, config: KnowledgeConfig, *, remove_sources: bool = True) -> dict[str, Any]:
-        """Clear persisted knowledge data and optionally reset configured sources."""
-        source_count = len(config.sources)
-        cleared_indexes = 0
-        if self.sources_dir.exists():
-            cleared_indexes = len(list(self.sources_dir.glob("*/index.json")))
-
-        if self.root_dir.exists():
-            shutil.rmtree(self.root_dir, ignore_errors=True)
-
-        # Recreate expected directory structure after cleanup.
-        self.sources_dir.mkdir(parents=True, exist_ok=True)
-        self.uploads_dir.mkdir(parents=True, exist_ok=True)
-        self.remote_blob_dir.mkdir(parents=True, exist_ok=True)
-        self.remote_meta_dir.mkdir(parents=True, exist_ok=True)
-
-        if remove_sources:
-            config.sources = []
-
-        return {
-            "cleared": True,
-            "cleared_indexes": cleared_indexes,
-            "cleared_sources": source_count if remove_sources else 0,
-            "removed_source_configs": bool(remove_sources),
-        }
+        index_path = self._index_path(source_id)
+        if index_path.exists():
+            index_path.unlink()
 
     def search(
         self,
@@ -287,6 +873,23 @@ class KnowledgeManager:
         source_types: list[str] | None = None,
     ) -> dict[str, Any]:
         """Search indexed chunks with a lightweight lexical scorer."""
+        if self._should_use_cognee(config):
+            try:
+                return self._get_cognee_engine().search(
+                    query=query,
+                    config=config,
+                    limit=limit,
+                    source_ids=source_ids,
+                    source_types=source_types,
+                )
+            except Exception as exc:
+                if not self._allow_engine_fallback(config):
+                    raise
+                logger.warning(
+                    "Cognee search failed, fallback to default engine: %s",
+                    exc,
+                )
+
         source_map = {source.id: source for source in config.sources}
         terms = [term for term in re.findall(r"\w+", query.lower()) if term]
         if not terms:
@@ -298,9 +901,10 @@ class KnowledgeManager:
                 continue
             if source_types and source.type not in source_types:
                 continue
-            payload = self._load_index_payload(source.id)
-            if payload is None:
+            index_path = self._index_path(source.id)
+            if not index_path.exists():
                 continue
+            payload = self._load_json(index_path)
             for chunk in payload.get("chunks", []):
                 score = self._score_chunk(chunk.get("text", ""), terms)
                 if score <= 0:
@@ -323,11 +927,28 @@ class KnowledgeManager:
         hits.sort(key=lambda item: item["score"], reverse=True)
         return {"query": query, "hits": hits[:limit]}
 
-    def get_source_documents(self, source_id: str) -> dict[str, Any]:
+    def get_source_documents(
+        self,
+        source_id: str,
+        config: KnowledgeConfig | None = None,
+    ) -> dict[str, Any]:
         """Return the indexed documents for a source, merged by document path."""
-        payload = self._load_index_payload(source_id)
-        if payload is None:
+        if config is not None and self._should_use_cognee(config):
+            try:
+                return self._get_cognee_engine().get_source_documents(source_id)
+            except Exception as exc:
+                if not self._allow_engine_fallback(config):
+                    raise
+                logger.warning(
+                    "Cognee get_source_documents failed for %s, fallback to default engine: %s",
+                    source_id,
+                    exc,
+                )
+
+        index_path = self._index_path(source_id)
+        if not index_path.exists():
             return {"indexed": False, "documents": []}
+        payload = self._load_json(index_path)
         chunks = payload.get("chunks", [])
         # Merge chunks back into per-document text blocks
         docs: dict[str, dict[str, Any]] = {}
@@ -356,206 +977,8 @@ class KnowledgeManager:
             "documents": documents,
         }
 
-    def _source_dir(self, source_id: str) -> Path:
-        return self.sources_dir / self._safe_name(source_id)
-
-    def _source_index_path(self, source_id: str) -> Path:
-        return self._source_dir(source_id) / "index.json"
-
-    def _source_content_md_path(self, source_id: str) -> Path:
-        return self._source_dir(source_id) / "content.md"
-
-    def get_source_storage_dir(self, source_id: str) -> Path:
-        return self._source_dir(source_id)
-
-    def list_sources_from_storage(self) -> list[KnowledgeSourceSpec]:
-        """Rebuild source specs from persisted v2 storage layout."""
-        sources: list[KnowledgeSourceSpec] = []
-        for index_path in sorted(self.sources_dir.glob("*/index.json")):
-            try:
-                payload = self._load_json(index_path)
-                source_payload = payload.get("source")
-                if not isinstance(source_payload, dict):
-                    continue
-                source = KnowledgeSourceSpec.model_validate(source_payload)
-                sources.append(source)
-            except Exception:
-                logger.warning(
-                    "Failed to read source spec from storage index: %s",
-                    index_path,
-                )
-        return sources
-
-    def _load_index_payload(self, source_id: str) -> dict[str, Any] | None:
-        source_index_path = self._source_index_path(source_id)
-        if source_index_path.exists():
-            return self._load_json(source_index_path)
-        return None
-
-    def _write_source_storage(
-        self,
-        source: KnowledgeSourceSpec,
-        payload: dict[str, Any],
-        documents: list[dict[str, str]],
-    ) -> None:
-        source_dir = self._source_dir(source.id)
-        source_dir.mkdir(parents=True, exist_ok=True)
-        (source_dir / "raw").mkdir(parents=True, exist_ok=True)
-        (source_dir / "media").mkdir(parents=True, exist_ok=True)
-
-        self._source_index_path(source.id).write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        self._source_content_md_path(source.id).write_text(
-            self._build_source_markdown(source, documents),
-            encoding="utf-8",
-        )
-        self._sync_raw_source_assets(source)
-        self._update_catalog_entry(source, payload)
-
-    def _update_catalog_entry(
-        self,
-        source: KnowledgeSourceSpec,
-        payload: dict[str, Any],
-    ) -> None:
-        catalog: dict[str, Any] = {
-            "version": 2,
-            "updated_at": datetime.now(UTC).isoformat(),
-            "sources": {},
-        }
-        if self.catalog_path.exists():
-            try:
-                current = self._load_json(self.catalog_path)
-                if isinstance(current, dict):
-                    catalog.update(current)
-                    if not isinstance(catalog.get("sources"), dict):
-                        catalog["sources"] = {}
-            except Exception:
-                logger.warning("Failed to read knowledge catalog, recreating")
-
-        catalog["updated_at"] = datetime.now(UTC).isoformat()
-        catalog["sources"][source.id] = {
-            "id": source.id,
-            "name": source.name,
-            "type": source.type,
-            "indexed_at": payload.get("indexed_at"),
-            "document_count": payload.get("document_count", 0),
-            "chunk_count": payload.get("chunk_count", 0),
-            "path": str(self._source_dir(source.id)),
-        }
-
-        self.catalog_path.write_text(
-            json.dumps(catalog, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-
-    def _build_source_markdown(
-        self,
-        source: KnowledgeSourceSpec,
-        documents: list[dict[str, str]],
-    ) -> str:
-        lines = [
-            f"# {source.name}",
-            "",
-            "## Metadata",
-            "",
-            f"- id: {source.id}",
-            f"- type: {source.type}",
-            f"- location: {source.location or '-'}",
-            f"- updated_at: {datetime.now(UTC).isoformat()}",
-            "",
-            "## Documents",
-            "",
-        ]
-        if not documents:
-            lines.append("(no documents)")
-            lines.append("")
-            return "\n".join(lines)
-
-        for doc in documents:
-            title = self._truncate_title(doc.get("title", "document"), max_len=200)
-            path = doc.get("path", "")
-            text = doc.get("text", "").strip()
-            lines.extend(
-                [
-                    f"### {title}",
-                    "",
-                    f"- path: {path}",
-                    "",
-                    text if text else "(empty)",
-                    "",
-                ],
-            )
-        return "\n".join(lines)
-
-    def _sync_raw_source_assets(self, source: KnowledgeSourceSpec) -> None:
-        raw_root = self._source_dir(source.id) / "raw"
-        media_root = self._source_dir(source.id) / "media"
-
-        if source.type not in {"file", "directory"}:
-            return
-        if not source.location:
-            return
-
-        source_path = Path(source.location).expanduser()
-        if not source_path.exists():
-            return
-
-        if source.type == "file" and source_path.is_file():
-            target_file = raw_root / source_path.name
-            try:
-                shutil.copy2(source_path, target_file)
-                self._write_media_semantic_if_needed(target_file, media_root)
-            except Exception:
-                logger.warning("Failed to sync raw file for source %s", source.id)
-            return
-
-        if source.type == "directory" and source_path.is_dir():
-            target_dir = raw_root / source_path.name
-            if target_dir.exists():
-                shutil.rmtree(target_dir, ignore_errors=True)
-            try:
-                shutil.copytree(source_path, target_dir, dirs_exist_ok=True)
-                for file_path in target_dir.rglob("*"):
-                    if file_path.is_file():
-                        self._write_media_semantic_if_needed(file_path, media_root)
-            except Exception:
-                logger.warning("Failed to sync raw directory for source %s", source.id)
-
-    def _write_media_semantic_if_needed(self, file_path: Path, media_root: Path) -> None:
-        suffix = file_path.suffix.lower()
-        media_kind = None
-        if suffix in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg"}:
-            media_kind = "image"
-        elif suffix in {".mp3", ".wav", ".m4a", ".flac", ".ogg"}:
-            media_kind = "audio"
-        elif suffix in {".mp4", ".mov", ".avi", ".mkv", ".webm"}:
-            media_kind = "video"
-        if media_kind is None:
-            return
-
-        semantic_name = f"{self._safe_name(file_path.stem)}.semantic.md"
-        semantic_path = media_root / semantic_name
-        size = file_path.stat().st_size if file_path.exists() else 0
-        semantic_path.write_text(
-            "\n".join(
-                [
-                    f"# {file_path.name}",
-                    "",
-                    "## Semantic Summary",
-                    "",
-                    "(placeholder) Semantic extraction is not generated yet.",
-                    "",
-                    "## Metadata",
-                    "",
-                    f"- kind: {media_kind}",
-                    f"- original_file: {file_path.as_posix()}",
-                    f"- size_bytes: {size}",
-                ],
-            ),
-            encoding="utf-8",
-        )
+    def _index_path(self, source_id: str) -> Path:
+        return self.index_dir / f"{source_id}.json"
 
     @staticmethod
     def _load_json(path: Path) -> dict[str, Any]:
@@ -566,6 +989,11 @@ class KnowledgeManager:
         source: KnowledgeSourceSpec,
         config: KnowledgeConfig,
     ) -> list[dict[str, str]]:
+        if source.type in {"image", "audio", "video"}:
+            raise ValueError(
+                "Default knowledge engine does not support multimedia sources; "
+                "enable cognee engine for image/audio/video indexing",
+            )
         if source.type == "file":
             path = Path(source.location).expanduser().resolve()
             return [self._read_file_document(path, config)]
@@ -757,47 +1185,8 @@ class KnowledgeManager:
         response_messages: list[Any] | None = None,
         running_config: Any | None = None,
     ) -> dict[str, Any]:
-        """Backward-compatible wrapper for turn-based auto collection."""
-        user_stage = self.auto_collect_user_message_assets(
-            config=config,
-            session_id=session_id,
-            user_id=user_id,
-            request_messages=request_messages,
-            running_config=running_config,
-        )
-        text_stage = self.auto_collect_turn_text_pair(
-            config=config,
-            session_id=session_id,
-            user_id=user_id,
-            request_messages=request_messages,
-            response_messages=response_messages,
-            running_config=running_config,
-        )
-        return {
-            "changed": bool(user_stage.get("changed") or text_stage.get("changed")),
-            "file_sources": int(user_stage.get("file_sources", 0) or 0),
-            "url_sources": int(user_stage.get("url_sources", 0) or 0),
-            "text_sources": int(text_stage.get("text_sources", 0) or 0),
-            "failed_sources": int(user_stage.get("failed_sources", 0) or 0)
-            + int(text_stage.get("failed_sources", 0) or 0),
-            "errors": [
-                *(user_stage.get("errors") or []),
-                *(text_stage.get("errors") or []),
-            ],
-        }
-
-    def auto_collect_user_message_assets(
-        self,
-        config: KnowledgeConfig,
-        session_id: str,
-        user_id: str,
-        request_messages: list[Any] | None,
-        running_config: Any | None = None,
-    ) -> dict[str, Any]:
-        """Collect file/url knowledge immediately from user-sent content."""
-        if not config.enabled or not bool(
-            getattr(running_config, "knowledge_enabled", True)
-        ):
+        """Auto-create knowledge sources from the current chat turn."""
+        if not config.enabled:
             return {
                 "changed": False,
                 "file_sources": 0,
@@ -808,16 +1197,21 @@ class KnowledgeManager:
         changed = False
         file_sources = 0
         url_sources = 0
+        text_sources = 0
         errors: list[dict[str, str]] = []
-        user_messages = list(request_messages or [])
+        turn_messages = list(request_messages or []) + list(response_messages or [])
 
-        knowledge_auto_collect_chat_files = getattr(running_config, "knowledge_auto_collect_chat_files", None)
-        if knowledge_auto_collect_chat_files is None:
-            knowledge_auto_collect_chat_files = config.automation.knowledge_auto_collect_chat_files
+        auto_collect_chat_files = getattr(running_config, "auto_collect_chat_files", None)
+        if auto_collect_chat_files is None:
+            auto_collect_chat_files = config.automation.auto_collect_chat_files
 
-        knowledge_auto_collect_chat_urls = getattr(running_config, "knowledge_auto_collect_chat_urls", None)
-        if knowledge_auto_collect_chat_urls is None:
-            knowledge_auto_collect_chat_urls = config.automation.knowledge_auto_collect_chat_urls
+        auto_collect_long_text = getattr(running_config, "auto_collect_long_text", None)
+        if auto_collect_long_text is None:
+            auto_collect_long_text = config.automation.auto_collect_long_text
+
+        auto_collect_chat_urls = getattr(running_config, "auto_collect_chat_urls", None)
+        if auto_collect_chat_urls is None:
+            auto_collect_chat_urls = config.automation.auto_collect_chat_urls
         auto_collect_url_min_chars = int(
             getattr(
                 running_config,
@@ -827,9 +1221,13 @@ class KnowledgeManager:
             or _AUTO_COLLECT_URL_MIN_CONTENT_CHARS
         )
 
-        if knowledge_auto_collect_chat_files:
+        long_text_min_chars = getattr(running_config, "long_text_min_chars", None)
+        if not isinstance(long_text_min_chars, int):
+            long_text_min_chars = config.automation.long_text_min_chars
+
+        if auto_collect_chat_files:
             for source in self._build_file_sources_from_messages(
-                user_messages,
+                turn_messages,
                 config,
                 session_id,
             ):
@@ -843,9 +1241,27 @@ class KnowledgeManager:
                 )
                 file_sources += 1
 
-        if knowledge_auto_collect_chat_urls:
+        if auto_collect_long_text:
+            for source in self._build_text_sources_from_messages(
+                turn_messages,
+                config,
+                session_id,
+                user_id,
+                long_text_min_chars,
+            ):
+                if self._upsert_source(config, source):
+                    changed = True
+                self._index_source_with_recovery(
+                    source,
+                    config,
+                    running_config,
+                    errors,
+                )
+                text_sources += 1
+
+        if auto_collect_chat_urls:
             for source in self._build_url_sources_from_messages(
-                user_messages,
+                turn_messages,
                 session_id,
                 user_id,
                 automation_config=config.automation,
@@ -865,72 +1281,6 @@ class KnowledgeManager:
             "changed": changed,
             "file_sources": file_sources,
             "url_sources": url_sources,
-            "text_sources": 0,
-        }
-        if errors:
-            result["failed_sources"] = len(errors)
-            result["errors"] = errors
-        return result
-
-    def auto_collect_turn_text_pair(
-        self,
-        config: KnowledgeConfig,
-        session_id: str,
-        user_id: str,
-        request_messages: list[Any] | None,
-        response_messages: list[Any] | None = None,
-        running_config: Any | None = None,
-    ) -> dict[str, Any]:
-        """Collect text knowledge after response, based on one user-assistant turn pair."""
-        if not config.enabled or not bool(
-            getattr(running_config, "knowledge_enabled", True)
-        ):
-            return {
-                "changed": False,
-                "file_sources": 0,
-                "url_sources": 0,
-                "text_sources": 0,
-            }
-
-        knowledge_auto_collect_long_text = getattr(running_config, "knowledge_auto_collect_long_text", None)
-        if knowledge_auto_collect_long_text is None:
-            knowledge_auto_collect_long_text = config.automation.knowledge_auto_collect_long_text
-        if not knowledge_auto_collect_long_text:
-            return {
-                "changed": False,
-                "file_sources": 0,
-                "url_sources": 0,
-                "text_sources": 0,
-            }
-
-        knowledge_long_text_min_chars = getattr(running_config, "knowledge_long_text_min_chars", None)
-        if not isinstance(knowledge_long_text_min_chars, int):
-            knowledge_long_text_min_chars = config.automation.knowledge_long_text_min_chars
-
-        errors: list[dict[str, str]] = []
-        changed = False
-        text_sources = 0
-        for source in self._build_text_sources_from_turn_pair(
-            request_messages=list(request_messages or []),
-            response_messages=list(response_messages or []),
-            session_id=session_id,
-            user_id=user_id,
-            knowledge_long_text_min_chars=knowledge_long_text_min_chars,
-        ):
-            if self._upsert_source(config, source):
-                changed = True
-            self._index_source_with_recovery(
-                source,
-                config,
-                running_config,
-                errors,
-            )
-            text_sources += 1
-
-        result = {
-            "changed": changed,
-            "file_sources": 0,
-            "url_sources": 0,
             "text_sources": text_sources,
         }
         if errors:
@@ -944,19 +1294,12 @@ class KnowledgeManager:
         running_config: Any | None = None,
     ) -> dict[str, Any]:
         """Backfill historical chat-session data into knowledge sources once."""
-        if not config.enabled or not bool(
-            getattr(running_config, "knowledge_enabled", True)
-        ):
-            self._save_backfill_progress(
-                {
-                    "running": False,
-                    "completed": False,
-                    "failed": False,
-                    "reason": "knowledge_disabled",
-                    "updated_at": datetime.now(UTC).isoformat(),
-                }
-            )
+        if not config.enabled:
             return {"changed": False, "skipped": True, "reason": "knowledge_disabled"}
+
+        enabled = getattr(running_config, "auto_backfill_history_data", True)
+        if not enabled:
+            return {"changed": False, "skipped": True, "reason": "backfill_disabled"}
 
         signature = self._history_backfill_signature(running_config)
         state = self._load_backfill_state()
@@ -964,15 +1307,6 @@ class KnowledgeManager:
             state.get("completed")
             and state.get("signature") == signature
         ):
-            self._save_backfill_progress(
-                {
-                    "running": False,
-                    "completed": True,
-                    "failed": False,
-                    "reason": "already_completed",
-                    "updated_at": datetime.now(UTC).isoformat(),
-                }
-            )
             return {"changed": False, "skipped": True, "reason": "already_completed"}
 
         chats_path = self.working_dir / CHATS_FILE
@@ -983,36 +1317,19 @@ class KnowledgeManager:
             chats = []
 
         sessions_dir = self.working_dir / "sessions"
-        total_sessions = sum(
-            1 for chat in chats if str(chat.get("session_id", "") or "").strip()
-        )
         changed = False
-        traversed_sessions = 0
         processed_sessions = 0
         file_sources = 0
         url_sources = 0
         text_sources = 0
         errors: list[dict[str, str]] = []
 
-        self._save_backfill_progress(
-            {
-                "running": True,
-                "completed": False,
-                "failed": False,
-                "total_sessions": total_sessions,
-                "traversed_sessions": 0,
-                "processed_sessions": 0,
-                "current_session_id": None,
-                "updated_at": datetime.now(UTC).isoformat(),
-            }
-        )
-
-        knowledge_long_text_min_chars = getattr(running_config, "knowledge_long_text_min_chars", None)
-        if not isinstance(knowledge_long_text_min_chars, int):
-            knowledge_long_text_min_chars = config.automation.knowledge_long_text_min_chars
-        knowledge_auto_collect_chat_files = getattr(running_config, "knowledge_auto_collect_chat_files", False)
-        knowledge_auto_collect_chat_urls = getattr(running_config, "knowledge_auto_collect_chat_urls", True)
-        knowledge_auto_collect_long_text = getattr(running_config, "knowledge_auto_collect_long_text", False)
+        long_text_min_chars = getattr(running_config, "long_text_min_chars", None)
+        if not isinstance(long_text_min_chars, int):
+            long_text_min_chars = config.automation.long_text_min_chars
+        auto_collect_chat_files = getattr(running_config, "auto_collect_chat_files", False)
+        auto_collect_chat_urls = getattr(running_config, "auto_collect_chat_urls", True)
+        auto_collect_long_text = getattr(running_config, "auto_collect_long_text", False)
         auto_collect_url_min_chars = int(
             getattr(
                 running_config,
@@ -1022,104 +1339,74 @@ class KnowledgeManager:
             or _AUTO_COLLECT_URL_MIN_CONTENT_CHARS
         )
 
-        try:
-            for chat in chats:
-                session_id = str(chat.get("session_id", "") or "")
-                user_id = str(chat.get("user_id", "") or "")
-                if not session_id:
-                    continue
+        for chat in chats:
+            session_id = str(chat.get("session_id", "") or "")
+            user_id = str(chat.get("user_id", "") or "")
+            if not session_id:
+                continue
+            session_path = sessions_dir / self._session_filename(session_id, user_id)
+            if not session_path.exists():
+                continue
+            state_payload = self._load_json(session_path)
+            messages = self._messages_from_session_state(state_payload)
+            if not messages:
+                continue
+            processed_sessions += 1
 
-                traversed_sessions += 1
-                self._save_backfill_progress(
-                    {
-                        "running": True,
-                        "completed": False,
-                        "failed": False,
-                        "total_sessions": total_sessions,
-                        "traversed_sessions": traversed_sessions,
-                        "processed_sessions": processed_sessions,
-                        "current_session_id": session_id,
-                        "updated_at": datetime.now(UTC).isoformat(),
-                    }
-                )
+            if auto_collect_chat_files:
+                for source in self._build_file_sources_from_messages(
+                    messages,
+                    config,
+                    session_id,
+                ):
+                    upserted = self._upsert_source(config, source)
+                    if upserted:
+                        changed = True
+                        self._index_source_with_recovery(
+                            source,
+                            config,
+                            running_config,
+                            errors,
+                        )
+                    file_sources += 1
 
-                session_path = sessions_dir / self._session_filename(session_id, user_id)
-                if not session_path.exists():
-                    continue
-                state_payload = self._load_json(session_path)
-                messages = self._messages_from_session_state(state_payload)
-                if not messages:
-                    continue
-                processed_sessions += 1
+            if auto_collect_long_text:
+                for source in self._build_text_sources_from_messages(
+                    messages,
+                    config,
+                    session_id,
+                    user_id,
+                    long_text_min_chars,
+                ):
+                    upserted = self._upsert_source(config, source)
+                    if upserted:
+                        changed = True
+                        self._index_source_with_recovery(
+                            source,
+                            config,
+                            running_config,
+                            errors,
+                        )
+                    text_sources += 1
 
-                if knowledge_auto_collect_chat_files:
-                    for source in self._build_file_sources_from_messages(
-                        messages,
-                        config,
-                        session_id,
-                    ):
-                        upserted = self._upsert_source(config, source)
-                        if upserted:
-                            changed = True
-                            self._index_source_with_recovery(
-                                source,
-                                config,
-                                running_config,
-                                errors,
-                            )
-                        file_sources += 1
-
-                if knowledge_auto_collect_long_text:
-                    for source in self._build_text_sources_from_messages(
-                        messages,
-                        config,
-                        session_id,
-                        user_id,
-                        knowledge_long_text_min_chars,
-                    ):
-                        upserted = self._upsert_source(config, source)
-                        if upserted:
-                            changed = True
-                            self._index_source_with_recovery(
-                                source,
-                                config,
-                                running_config,
-                                errors,
-                            )
-                        text_sources += 1
-
-                if knowledge_auto_collect_chat_urls:
-                    for source in self._build_url_sources_from_messages(
-                        messages,
-                        session_id,
-                        user_id,
-                        automation_config=config.automation,
-                        min_content_chars=auto_collect_url_min_chars,
-                    ):
-                        upserted = self._upsert_source(config, source)
-                        if upserted:
-                            changed = True
-                            self._index_source_with_recovery(
-                                source,
-                                config,
-                                running_config,
-                                errors,
-                            )
-                        url_sources += 1
-        except Exception as exc:
-            self._save_backfill_progress(
-                {
-                    "running": False,
-                    "completed": False,
-                    "failed": True,
-                    "error": str(exc),
-                    "total_sessions": total_sessions,
-                    "traversed_sessions": traversed_sessions,
-                    "processed_sessions": processed_sessions,
-                    "updated_at": datetime.now(UTC).isoformat(),
-                }
-            )
-            raise
+            if auto_collect_chat_urls:
+                for source in self._build_url_sources_from_messages(
+                    messages,
+                    session_id,
+                    user_id,
+                    automation_config=config.automation,
+                    min_content_chars=auto_collect_url_min_chars,
+                ):
+                    upserted = self._upsert_source(config, source)
+                    if upserted:
+                        changed = True
+                        self._index_source_with_recovery(
+                            source,
+                            config,
+                            running_config,
+                            errors,
+                        )
+                    url_sources += 1
 
         self._save_backfill_state(
             {
@@ -1131,17 +1418,6 @@ class KnowledgeManager:
                 "text_sources": text_sources,
                 "updated_at": datetime.now(UTC).isoformat(),
             },
-        )
-        self._save_backfill_progress(
-            {
-                "running": False,
-                "completed": True,
-                "failed": False,
-                "total_sessions": total_sessions,
-                "traversed_sessions": traversed_sessions,
-                "processed_sessions": processed_sessions,
-                "updated_at": datetime.now(UTC).isoformat(),
-            }
         )
         result = {
             "changed": changed,
@@ -1197,17 +1473,6 @@ class KnowledgeManager:
     def _read_url_document(url: str) -> dict[str, str]:
         response = httpx.get(url, timeout=10.0, follow_redirects=True)
         response.raise_for_status()
-        content_type = str(response.headers.get("content-type", "") or "").lower()
-        if content_type and not any(
-            marker in content_type for marker in _TEXTUAL_CONTENT_TYPE_MARKERS
-        ):
-            # Skip binary payloads (image/audio/video/pdf/zip, etc.) to avoid
-            # turning bytes into garbled text in knowledge sources.
-            return {
-                "path": url,
-                "title": url,
-                "text": "",
-            }
         content = response.text
         title = url
         if "text/html" in response.headers.get("content-type", ""):
@@ -1346,7 +1611,7 @@ class KnowledgeManager:
                     enabled=True,
                     recursive=False,
                     tags=tags,
-                    summary=f"Auto-collected from chat session {session_id}",
+                    description=f"Auto-collected from chat session {session_id}",
                 ),
             )
         return sources
@@ -1357,13 +1622,13 @@ class KnowledgeManager:
         config: KnowledgeConfig,
         session_id: str,
         user_id: str,
-        knowledge_long_text_min_chars: int,
+        long_text_min_chars: int,
     ) -> list[KnowledgeSourceSpec]:
         sources: list[KnowledgeSourceSpec] = []
         seen_ids: set[str] = set()
         for role, text in self._iter_message_texts(messages):
             normalized = self._normalize_text(text)
-            if len(normalized) < knowledge_long_text_min_chars:
+            if len(normalized) < long_text_min_chars:
                 continue
             digest = hashlib.sha1(normalized.encode("utf-8")).hexdigest()[:12]
             source_id = f"auto-text-{digest}"
@@ -1386,67 +1651,13 @@ class KnowledgeManager:
                         "auto:text",
                         f"role:{role}",
                     ],
-                    summary=(
+                    description=(
                         f"Auto-saved from {role} message in {session_id}"
                         + (f" for {user_id}" if user_id else "")
                     ),
                 ),
             )
         return sources
-
-    def _build_text_sources_from_turn_pair(
-        self,
-        request_messages: list[Any],
-        response_messages: list[Any],
-        session_id: str,
-        user_id: str,
-        knowledge_long_text_min_chars: int,
-    ) -> list[KnowledgeSourceSpec]:
-        user_text = self._normalize_text(
-            "\n".join(
-                text
-                for role, text in self._iter_message_texts(request_messages)
-                if str(role).lower() == "user"
-            )
-        )
-        assistant_text = self._normalize_text(
-            "\n".join(
-                text
-                for role, text in self._iter_message_texts(response_messages)
-                if str(role).lower() == "assistant"
-            )
-        )
-        if not user_text or not assistant_text:
-            return []
-
-        merged = self._normalize_text(f"用户: {user_text}\n\n智能体: {assistant_text}")
-        if len(merged) < knowledge_long_text_min_chars:
-            return []
-
-        digest = hashlib.sha1(merged.encode("utf-8")).hexdigest()[:12]
-        source_id = f"auto-text-{digest}"
-        title = merged.splitlines()[0][:48] or "Long chat text"
-        return [
-            KnowledgeSourceSpec(
-                id=source_id,
-                name=f"Auto Text: {title}",
-                type="text",
-                content=merged,
-                enabled=True,
-                recursive=False,
-                tags=[
-                    "auto",
-                    "origin:auto",
-                    "source:chat",
-                    "auto:text",
-                    "role:turn_pair",
-                ],
-                summary=(
-                    f"Auto-saved from user-assistant turn in {session_id}"
-                    + (f" for {user_id}" if user_id else "")
-                ),
-            )
-        ]
 
     def _build_url_sources_from_messages(
         self,
@@ -1481,12 +1692,12 @@ class KnowledgeManager:
                 # Capture surrounding text context from the conversation message
                 # so title generation can use it without fetching the URL.
                 context_snippet = self._extract_url_context(text, url, max_chars=400)
-                summary = (
+                description = (
                     f"Auto-collected URL from {role} message in {session_id}"
                     + (f" for {user_id}" if user_id else "")
                 )
                 if context_snippet:
-                    summary = f"{summary}\n来源上下文: {context_snippet}"
+                    description = f"{description}\n来源上下文: {context_snippet}"
                 sources.append(
                     KnowledgeSourceSpec(
                         id=source_id,
@@ -1503,7 +1714,7 @@ class KnowledgeManager:
                             "auto:url",
                             f"role:{role}",
                         ],
-                        summary=summary,
+                        description=description,
                     ),
                 )
         return sources
@@ -1608,6 +1819,23 @@ class KnowledgeManager:
         # Compact whitespace
         snippet = re.sub(r"\s+", " ", snippet).strip()
         return snippet[:max_chars]
+
+    @staticmethod
+    def _context_has_sufficient_content(context: str, min_chars: int = 50) -> bool:
+        """Return True if context contains actual document content beyond metadata.
+
+        Looks for the presence of a document_text or content section.
+        """
+        if min_chars <= 0:
+            return True
+        # Identify real-content markers
+        for marker in ("document_text:\n", "content:\n", "来源上下文:"):
+            idx = context.find(marker)
+            if idx != -1:
+                actual = context[idx + len(marker):].strip()
+                if len(actual) >= min_chars:
+                    return True
+        return False
 
     @staticmethod
     def _block_to_dict(block: Any) -> dict[str, Any] | None:
@@ -1826,17 +2054,17 @@ class KnowledgeManager:
 
     def _history_backfill_signature(self, running_config: Any | None) -> str:
         payload = {
-            "knowledge_auto_collect_chat_files": bool(
-                getattr(running_config, "knowledge_auto_collect_chat_files", False),
+            "auto_collect_chat_files": bool(
+                getattr(running_config, "auto_collect_chat_files", False),
             ),
-            "knowledge_auto_collect_chat_urls": bool(
-                getattr(running_config, "knowledge_auto_collect_chat_urls", True),
+            "auto_collect_chat_urls": bool(
+                getattr(running_config, "auto_collect_chat_urls", True),
             ),
-            "knowledge_auto_collect_long_text": bool(
-                getattr(running_config, "knowledge_auto_collect_long_text", False),
+            "auto_collect_long_text": bool(
+                getattr(running_config, "auto_collect_long_text", False),
             ),
-            "knowledge_long_text_min_chars": int(
-                getattr(running_config, "knowledge_long_text_min_chars", 2000),
+            "long_text_min_chars": int(
+                getattr(running_config, "long_text_min_chars", 2000),
             ),
             "knowledge_chunk_size": int(
                 getattr(running_config, "knowledge_chunk_size", 1200),
@@ -1885,22 +2113,6 @@ class KnowledgeManager:
             "marked_unbackfilled": marked_unbackfilled,
             "history_chat_count": history_chat_count,
             "has_pending_history": has_pending_history,
-            "progress": self.get_history_backfill_progress(),
-        }
-
-    def get_history_backfill_progress(self) -> dict[str, Any]:
-        payload = self._load_backfill_progress_state()
-        return {
-            "running": bool(payload.get("running")),
-            "completed": bool(payload.get("completed")),
-            "failed": bool(payload.get("failed")),
-            "total_sessions": int(payload.get("total_sessions", 0) or 0),
-            "traversed_sessions": int(payload.get("traversed_sessions", 0) or 0),
-            "processed_sessions": int(payload.get("processed_sessions", 0) or 0),
-            "current_session_id": payload.get("current_session_id"),
-            "error": payload.get("error"),
-            "updated_at": payload.get("updated_at"),
-            "reason": payload.get("reason"),
         }
 
     def _load_backfill_state(self) -> dict[str, Any]:
@@ -1913,20 +2125,6 @@ class KnowledgeManager:
 
     def _save_backfill_state(self, payload: dict[str, Any]) -> None:
         self.backfill_state_path.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-
-    def _load_backfill_progress_state(self) -> dict[str, Any]:
-        if not self.backfill_progress_path.exists():
-            return {}
-        try:
-            return self._load_json(self.backfill_progress_path)
-        except Exception:
-            return {}
-
-    def _save_backfill_progress(self, payload: dict[str, Any]) -> None:
-        self.backfill_progress_path.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
@@ -1985,11 +2183,11 @@ class KnowledgeManager:
         config: KnowledgeConfig,
         source: KnowledgeSourceSpec,
     ) -> bool:
-        normalized = self._source_with_auto_name(source, config)
+        normalized = self._source_with_auto_name(source)
         for index, existing in enumerate(config.sources):
             if existing.id != normalized.id:
                 continue
-            existing_normalized = self._source_with_auto_name(existing, config)
+            existing_normalized = self._source_with_auto_name(existing)
             if existing_normalized.model_dump(mode="json") == normalized.model_dump(mode="json"):
                 return False
             config.sources[index] = normalized
@@ -1997,79 +2195,124 @@ class KnowledgeManager:
         config.sources.append(normalized)
         return True
 
-    def _source_with_auto_name(
-        self,
-        source: KnowledgeSourceSpec,
-        config: KnowledgeConfig | None = None,
-    ) -> KnowledgeSourceSpec:
-        updates: dict[str, Any] = {}
-        source_for_title = source
-
-        if not (source.summary or "").strip():
-            generated_summary = self._generate_source_summary(source, config)
-            if generated_summary:
-                updates["summary"] = generated_summary
-                source_for_title = source.model_copy(
-                    update={"summary": generated_summary}
-                )
-
-        generated = self._generate_source_name(source_for_title, config)
-        if source.name != generated:
-            updates["name"] = generated
-
-        if not updates:
+    def _source_with_auto_name(self, source: KnowledgeSourceSpec) -> KnowledgeSourceSpec:
+        generated = self._generate_source_name(source)
+        if source.name == generated:
             return source
-        return source.model_copy(update=updates)
+        return source.model_copy(update={"name": generated})
 
-    def _generate_source_summary(
+    def _build_llm_title_context(
         self,
         source: KnowledgeSourceSpec,
-        config: KnowledgeConfig | None = None,
+        config: KnowledgeConfig,
     ) -> str:
-        semantic = self._semantic_summary_for_source(source, config)
-        if semantic:
-            keywords = self._semantic_keywords_for_source(source, config)
-            if keywords:
-                summary_with_keywords = (
-                    f"{semantic} 关键词: {', '.join(keywords)}"
-                )
-                return self._truncate_summary(summary_with_keywords)
-            return self._truncate_summary(semantic)
+        segments: list[str] = []
+        if source.content:
+            segments.append(f"content:\n{source.content[:2400]}")
+            return "\n\n".join(segments)
 
-        if source.type == "url":
-            url = (source.location or "").strip()
-            if url:
-                parsed = urlparse(url)
-                host = parsed.netloc or url
-                path = parsed.path.strip("/")
-                tail = path.split("/")[-1] if path else ""
-                if tail:
-                    return self._truncate_summary(f"{host}/{tail}")
-                return self._truncate_summary(host)
+        indexed_payload = self._load_index_payload_safe(source.id)
+        if indexed_payload:
+            first_chunk = next(
+                (chunk for chunk in indexed_payload.get("chunks", []) if chunk.get("text")),
+                None,
+            )
+            if isinstance(first_chunk, dict):
+                if isinstance(first_chunk.get("text"), str):
+                    segments.append(f"document_text:\n{first_chunk['text'][:2400]}")
 
-        if source.type in {"file", "directory"} and source.location:
-            location = (source.location or "").strip()
-            if location:
-                return self._truncate_summary(Path(location).name or location)
+        if source.type in {"file", "directory", "url", "chat"}:
+            try:
+                docs = self._load_documents(source, config)
+                if docs:
+                    doc = docs[0]
+                    text = doc.get("text", "")
+                    if text:
+                        segments.append(f"document_text:\n{text[:2400]}")
+            except Exception:
+                pass
 
-        if source.name:
-            return self._truncate_summary(source.name)
+        return "\n\n".join(seg for seg in segments if seg)
+
+    @staticmethod
+    def _is_auto_collected_source(source: KnowledgeSourceSpec) -> bool:
+        """Return True if the source was created by auto-collection (not manually added)."""
+        return "origin:auto" in (source.tags or [])
+
+    def _is_source_content_empty_for_llm_title(
+        self,
+        source: KnowledgeSourceSpec,
+        config: KnowledgeConfig,
+        *,
+        min_content_chars: int = 10,
+    ) -> bool:
+        context = self._build_llm_title_context(source, config)
+        if not context:
+            return True
+        return not self._context_has_sufficient_content(context, min_content_chars)
+
+    @staticmethod
+    def _extract_text_from_model_response(response: Any) -> str:
+        if hasattr(response, "text") and isinstance(response.text, str):
+            return response.text
+        if isinstance(response, str):
+            return response
+        content = getattr(response, "content", None)
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            for item in content:
+                if isinstance(item, dict) and isinstance(item.get("text"), str):
+                    return item["text"]
         return ""
 
-    def _semantic_summary_for_source(
-        self,
-        source: KnowledgeSourceSpec,
-        config: KnowledgeConfig | None = None,
-    ) -> str:
-        processed = self._process_source_knowledge(source, config)
-        return processed.get("summary", "")
+    @staticmethod
+    def _sanitize_llm_title(text: str, max_len: int = 120) -> str:
+        line = (text or "").strip().splitlines()[0] if text else ""
+        line = re.sub(r"^['\"“”‘’\s-]+|['\"“”‘’\s-]+$", "", line).strip()
+        line = re.sub(r"\s+", " ", line)
+        if not line:
+            return ""
+        if len(line) <= max_len:
+            return line
+        return line[: max_len - 3].rstrip() + "..."
 
-    def _generate_source_name(
-        self,
-        source: KnowledgeSourceSpec,
-        config: KnowledgeConfig | None = None,
-    ) -> str:
-        semantic = self._semantic_subject_for_source(source, config)
+    def _load_title_maintenance_state(self) -> dict[str, Any]:
+        if not self.title_maintenance_state_path.exists():
+            return {}
+        try:
+            return self._load_json(self.title_maintenance_state_path)
+        except Exception:
+            return {}
+
+    def _save_title_maintenance_state(self, payload: dict[str, Any]) -> None:
+        self.title_maintenance_state_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+    def _load_title_regen_queue_state(self) -> dict[str, Any]:
+        if not self.title_regen_queue_state_path.exists():
+            return {"jobs": []}
+        try:
+            payload = self._load_json(self.title_regen_queue_state_path)
+            if not isinstance(payload, dict):
+                return {"jobs": []}
+            jobs = payload.get("jobs")
+            if not isinstance(jobs, list):
+                payload["jobs"] = []
+            return payload
+        except Exception:
+            return {"jobs": []}
+
+    def _save_title_regen_queue_state(self, payload: dict[str, Any]) -> None:
+        self.title_regen_queue_state_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+    def _generate_source_name(self, source: KnowledgeSourceSpec) -> str:
+        semantic = self._semantic_title_for_source(source)
         if semantic:
             return self._truncate_title(semantic)
 
@@ -2091,147 +2334,46 @@ class KnowledgeManager:
 
         return self._truncate_title(source.id)
 
-    def _semantic_subject_for_source(
-        self,
-        source: KnowledgeSourceSpec,
-        config: KnowledgeConfig | None = None,
-    ) -> str:
-        processed = self._process_source_knowledge(source, config)
-        return processed.get("subject", "")
-
-    def _semantic_keywords_for_source(
-        self,
-        source: KnowledgeSourceSpec,
-        config: KnowledgeConfig | None = None,
-        top_n: int = _KEYWORD_DEFAULT_TOP_N,
-    ) -> list[str]:
-        processed = self._process_source_knowledge(source, config, top_n=top_n)
-        return processed.get("keywords", [])
-
-    def _process_source_knowledge(
-        self,
-        source: KnowledgeSourceSpec,
-        config: KnowledgeConfig | None = None,
-        top_n: int = _KEYWORD_DEFAULT_TOP_N,
-    ) -> dict[str, Any]:
-        candidates = self._collect_source_processing_candidates(source, config)
-        merged = self._normalize_text("\n".join(part for part in candidates if part))
-        processed = self._process_knowledge_text(merged, top_n=top_n)
-
-        # Keep deterministic priority for subjects: summary > content > index/title.
-        for candidate in candidates:
-            subject = self._extract_subject_from_text(candidate)
-            if subject:
-                processed["subject"] = subject
-                break
-        return processed
-
-    def _process_knowledge_text(
-        self,
-        text: str,
-        top_n: int = _KEYWORD_DEFAULT_TOP_N,
-    ) -> dict[str, Any]:
-        normalized = self._normalize_text(text or "")
-        if not normalized:
-            return {
-                "subject": "",
-                "summary": "",
-                "keywords": [],
-            }
-
-        return {
-            "subject": self._extract_subject_from_text(normalized),
-            "summary": self._extract_summary_from_text(normalized),
-            "keywords": self._extract_keywords_from_text(normalized, top_n=top_n),
-        }
-
-    def _collect_source_processing_text(
-        self,
-        source: KnowledgeSourceSpec,
-        config: KnowledgeConfig | None = None,
-    ) -> str:
-        candidates = self._collect_source_processing_candidates(source, config)
-        return self._normalize_text("\n".join(part for part in candidates if part))
-
-    def _collect_source_processing_candidates(
-        self,
-        source: KnowledgeSourceSpec,
-        config: KnowledgeConfig | None = None,
-    ) -> list[str]:
+    def _semantic_title_for_source(self, source: KnowledgeSourceSpec) -> str:
         candidates: list[str] = []
 
-        if source.summary and source.summary.strip():
-            candidates.append(source.summary)
-        if source.content and source.content.strip():
+        if source.content:
             candidates.append(source.content)
+        if source.description:
+            candidates.append(source.description)
 
         indexed_payload = self._load_index_payload_safe(source.id)
         if indexed_payload:
-            chunk_titles: list[str] = []
-            chunk_texts: list[str] = []
-            for chunk in indexed_payload.get("chunks", []):
-                if not isinstance(chunk, dict):
-                    continue
-                chunk_title = chunk.get("document_title")
+            first_chunk = next(
+                (chunk for chunk in indexed_payload.get("chunks", []) if chunk.get("text")),
+                None,
+            )
+            if isinstance(first_chunk, dict):
+                chunk_title = first_chunk.get("document_title")
                 if isinstance(chunk_title, str) and chunk_title.strip():
-                    chunk_titles.append(chunk_title)
-                chunk_text = chunk.get("text")
+                    candidates.append(chunk_title)
+                chunk_text = first_chunk.get("text")
                 if isinstance(chunk_text, str) and chunk_text.strip():
-                    chunk_texts.append(chunk_text)
-
-            if chunk_titles:
-                candidates.append("\n".join(chunk_titles))
-            if chunk_texts:
-                candidates.append("\n".join(chunk_texts))
+                    candidates.append(chunk_text)
 
         location = (source.location or "").strip()
         if source.type == "file" and location:
-            full_text = self._read_local_text(Path(location))
-            if full_text:
-                candidates.append(full_text)
-        elif source.type == "directory" and location:
-            full_text = self._read_directory_text(Path(location), config)
-            if full_text:
-                candidates.append(full_text)
+            snippet = self._read_local_text_snippet(Path(location), max_chars=2400)
+            if snippet:
+                candidates.append(snippet)
+        if source.type == "directory" and location:
+            snippet = self._read_directory_text_snippet(Path(location), max_chars=2400)
+            if snippet:
+                candidates.append(snippet)
 
-        return candidates
-
-    def _read_local_text(self, path: Path) -> str:
-        try:
-            resolved = path.expanduser().resolve()
-            if not resolved.exists() or not resolved.is_file():
-                return ""
-            raw = resolved.read_text(encoding="utf-8", errors="ignore")
-            return self._normalize_text(raw)
-        except Exception:
-            return ""
-
-    def _read_directory_text(
-        self,
-        directory: Path,
-        config: KnowledgeConfig | None = None,
-    ) -> str:
-        try:
-            root = directory.expanduser().resolve()
-            if not root.exists() or not root.is_dir():
-                return ""
-            parts: list[str] = []
-            for path in root.rglob("*"):
-                if not path.is_file():
-                    continue
-                if config is not None:
-                    relative = path.relative_to(root).as_posix()
-                    if not self._is_allowed_path(relative, config):
-                        continue
-                text = self._read_local_text(path)
-                if text:
-                    parts.append(text)
-            return self._normalize_text("\n".join(parts))
-        except Exception:
-            return ""
+        for candidate in candidates:
+            title = self._semantic_title_from_text(candidate)
+            if title:
+                return title
+        return ""
 
     def _load_index_payload_safe(self, source_id: str) -> dict[str, Any] | None:
-        index_path = self._source_index_path(source_id)
+        index_path = self._index_path(source_id)
         if not index_path.exists():
             return None
         try:
@@ -2280,7 +2422,11 @@ class KnowledgeManager:
         token_freq: dict[str, int] = {}
         sentence_tokens: list[list[str]] = []
         for sentence in sentences:
-            tokens = self._tokenize_text(sentence)
+            tokens = [
+                tok.lower()
+                for tok in _TITLE_WORD_RE.findall(sentence)
+                if tok.lower() not in _TITLE_STOP_WORDS
+            ]
             sentence_tokens.append(tokens)
             for token in tokens:
                 token_freq[token] = token_freq.get(token, 0) + 1
@@ -2301,80 +2447,11 @@ class KnowledgeManager:
             best_sentence = sentences[0]
         return self._normalize_text(best_sentence)
 
-    def _extract_subject_from_text(self, text: str) -> str:
-        return self._semantic_title_from_text(text)
-
-    def _extract_summary_from_text(self, text: str) -> str:
-        # Keep the summary extractor independent for future tuning.
-        return self._semantic_title_from_text(text)
-
-    @staticmethod
-    def _tokenize_text(text: str) -> list[str]:
-        normalized = re.sub(r"\s+", " ", (text or "").strip())
-        if not normalized:
-            return []
-
-        raw_tokens: list[str] = []
-
-        if jieba is not None:
-            try:
-                raw_tokens = [str(tok) for tok in jieba.lcut(normalized)]
-            except Exception:
-                raw_tokens = []
-        elif hanlp is not None:
-            for attr in ("tokenize", "tok"):
-                fn = getattr(hanlp, attr, None)
-                if not callable(fn):
-                    continue
-                try:
-                    result = fn(normalized)
-                    if isinstance(result, list):
-                        raw_tokens = [str(tok) for tok in result]
-                    elif isinstance(result, tuple):
-                        raw_tokens = [str(tok) for tok in result]
-                    if raw_tokens:
-                        break
-                except Exception:
-                    continue
-
-        if not raw_tokens:
-            raw_tokens = _SEMANTIC_TOKEN_RE.findall(normalized)
-
-        tokens: list[str] = []
-        for raw in raw_tokens:
-            token = str(raw).strip().lower()
-            if not token:
-                continue
-            if not _SEMANTIC_TOKEN_RE.fullmatch(token):
-                continue
-            if token in _SEMANTIC_STOP_WORDS:
-                continue
-            tokens.append(token)
-        return tokens
-
-    def _extract_keywords_from_text(self, text: str, top_n: int = 3) -> list[str]:
-        tokens = self._tokenize_text(text)
-        if not tokens or top_n <= 0:
-            return []
-
-        freq = Counter(tokens)
-        ranked = sorted(freq.items(), key=lambda item: (-item[1], item[0]))
-        return [token for token, _ in ranked[:top_n]]
-
     @staticmethod
     def _truncate_title(value: str, max_len: int = 120) -> str:
         compact = re.sub(r"\s+", " ", (value or "").strip())
         if not compact:
             compact = "knowledge"
-        if len(compact) <= max_len:
-            return compact
-        return compact[: max_len - 3].rstrip() + "..."
-
-    @staticmethod
-    def _truncate_summary(value: str, max_len: int = 180) -> str:
-        compact = re.sub(r"\s+", " ", (value or "").strip())
-        if not compact:
-            return ""
         if len(compact) <= max_len:
             return compact
         return compact[: max_len - 3].rstrip() + "..."

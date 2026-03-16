@@ -9,6 +9,8 @@ Usage:
 Options:
     -u, --unit [DIR]      Run unit tests (optionally specify subdirectory)
     -i, --integrated      Run integrated tests
+    --smoke-cognee        Run local Cognee chat-closure smoke test
+    --smoke-search-mode   Search mode for Cognee smoke test (hybrid/chunks/graph)
     -a, --all             Run all tests (default)
     -c, --coverage        Generate coverage report
     -p, --parallel        Run tests in parallel
@@ -19,6 +21,7 @@ Examples:
     python scripts/run_tests.py -u                 # Run all unit tests
     python scripts/run_tests.py -u providers       # Run unit tests in providers
     python scripts/run_tests.py -i                 # Run integrated tests
+    python scripts/run_tests.py --smoke-cognee     # Run Cognee smoke test
     python scripts/run_tests.py -a -c              # Run all tests with coverage
     python scripts/run_tests.py -p                 # Run tests in parallel
 """
@@ -172,6 +175,23 @@ def run_pytest(
         return e.returncode
 
 
+def run_cognee_smoke_test(project_root: Path, search_mode: str) -> int:
+    """Run local Cognee chat-closure smoke test script."""
+    print_info("Running Cognee chat-closure smoke test...")
+    cmd = [
+        sys.executable,
+        str(project_root / "scripts" / "cognee_chat_smoke.py"),
+        "--search-mode",
+        search_mode,
+    ]
+    try:
+        result = subprocess.run(cmd, cwd=project_root, check=True)
+        print_success("Cognee smoke test completed")
+        return result.returncode
+    except subprocess.CalledProcessError as e:
+        return e.returncode
+
+
 def main() -> int:
     """Main entry point."""
     parser = argparse.ArgumentParser(
@@ -198,6 +218,17 @@ def main() -> int:
         "--all",
         action="store_true",
         help="Run all tests (default)",
+    )
+    parser.add_argument(
+        "--smoke-cognee",
+        action="store_true",
+        help="Run local Cognee chat-closure smoke test",
+    )
+    parser.add_argument(
+        "--smoke-search-mode",
+        choices=["hybrid", "chunks", "graph"],
+        default="hybrid",
+        help="Search mode for Cognee smoke test (default: hybrid)",
     )
     parser.add_argument(
         "-c",
@@ -227,7 +258,11 @@ def main() -> int:
         return 1
 
     # Determine what to run
-    run_all = args.all or (args.unit is None and not args.integrated)
+    run_all = args.all or (
+        args.unit is None
+        and not args.integrated
+        and not args.smoke_cognee
+    )
 
     print()
     print_info("CoPaw Test Runner")
@@ -263,6 +298,11 @@ def main() -> int:
             project_root,
             coverage=args.coverage,
             parallel=args.parallel,
+        )
+    elif args.smoke_cognee:
+        return_code = run_cognee_smoke_test(
+            project_root,
+            search_mode=args.smoke_search_mode,
         )
 
     print()

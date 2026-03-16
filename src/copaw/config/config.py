@@ -920,7 +920,16 @@ class KnowledgeSourceSpec(BaseModel):
         pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$",
     )
     name: str = Field(..., min_length=1, max_length=120)
-    type: Literal["file", "directory", "url", "text", "chat"] = Field(
+    type: Literal[
+        "file",
+        "directory",
+        "url",
+        "text",
+        "chat",
+        "image",
+        "audio",
+        "video",
+    ] = Field(
         default="file",
     )
     location: str = Field(default="")
@@ -932,7 +941,14 @@ class KnowledgeSourceSpec(BaseModel):
 
     @model_validator(mode="after")
     def validate_source(self):
-        if self.type in {"file", "directory", "url"} and not self.location.strip():
+        if self.type in {
+            "file",
+            "directory",
+            "url",
+            "image",
+            "audio",
+            "video",
+        } and not self.location.strip():
             raise ValueError(
                 f"location is required for knowledge source type '{self.type}'",
             )
@@ -997,6 +1013,26 @@ class KnowledgeAutomationConfig(BaseModel):
     )
 
 
+class KnowledgeEngineConfig(BaseModel):
+    """Knowledge indexing/search backend routing."""
+
+    provider: Literal["default", "cognee"] = Field(default="default")
+    fallback_to_default: bool = Field(
+        default=True,
+        description="Fallback to default local engine when selected provider fails",
+    )
+
+
+class KnowledgeCogneeConfig(BaseModel):
+    """Cognee integration options for knowledge backend."""
+
+    enabled: bool = Field(default=False)
+    dataset_prefix: str = Field(default="copaw")
+    search_mode: Literal["hybrid", "chunks", "graph"] = Field(default="hybrid")
+    graph_query_type: str = Field(default="GRAPH_COMPLETION")
+    chunks_query_type: str = Field(default="CHUNKS")
+
+
 class KnowledgeConfig(BaseModel):
     """Root config for the knowledge layer."""
 
@@ -1012,6 +1048,10 @@ class KnowledgeConfig(BaseModel):
     automation: KnowledgeAutomationConfig = Field(
         default_factory=KnowledgeAutomationConfig,
     )
+    engine: KnowledgeEngineConfig = Field(default_factory=KnowledgeEngineConfig)
+    cognee: KnowledgeCogneeConfig = Field(default_factory=KnowledgeCogneeConfig)
+
+
 class Config(BaseModel):
     """Root config (config.json)."""
 

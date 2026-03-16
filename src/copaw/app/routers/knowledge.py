@@ -198,7 +198,7 @@ async def delete_source(source_id: str):
         item for item in config.knowledge.sources if item.id != source_id
     ]
     save_config(config)
-    _manager().delete_index(source_id)
+    _manager().delete_index(source_id, config.knowledge)
     return {"deleted": True, "source_id": source_id}
 
 
@@ -247,7 +247,7 @@ async def get_source_content(source_id: str):
     source = _find_source(config.knowledge, source_id)
     if source is None:
         raise HTTPException(status_code=404, detail="KNOWLEDGE_SOURCE_NOT_FOUND")
-    return _manager().get_source_documents(source_id)
+    return _manager().get_source_documents(source_id, config.knowledge)
 
 
 @router.post("/index")
