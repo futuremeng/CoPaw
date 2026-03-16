@@ -18,5 +18,9 @@ class HeartbeatBody(BaseModel):
         default=None,
         alias="activeHours",
     )
+    knowledge_auto_maintenance_active_hours: Optional[ActiveHoursConfig] = Field(
+        default=None,
+        alias="knowledgeAutoMaintenanceActiveHours",
+    )
 
     model_config = {"populate_by_name": True, "extra": "allow"}

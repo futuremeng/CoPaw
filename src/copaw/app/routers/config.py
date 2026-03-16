@@ -213,6 +213,7 @@ async def put_heartbeat(
         every=body.every,
         target=body.target,
         active_hours=body.active_hours,
+        knowledge_auto_maintenance_active_hours=body.knowledge_auto_maintenance_active_hours,
     )
     config.agents.defaults.heartbeat = hb
     save_config(config)

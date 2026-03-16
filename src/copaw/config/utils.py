@@ -6,6 +6,7 @@ import os
 import plistlib
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -374,6 +375,7 @@ def update_last_dispatch(channel: str, user_id: str, session_id: str) -> None:
         channel=channel,
         user_id=user_id,
         session_id=session_id,
+        dispatched_at=datetime.now(UTC).isoformat(),
     )
     save_config(config)
 
