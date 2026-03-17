@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import os
 from pathlib import Path
 
 from copaw.app.routers import knowledge as knowledge_router_module
@@ -59,7 +60,11 @@ def test_cognee_engine_index_search_delete_workflow(monkeypatch, tmp_path: Path)
     config.sources = [source]
 
     fake = _FakeCognee()
-    monkeypatch.setattr(engine, "_load_cognee_modules", lambda: (fake, None))
+    monkeypatch.setattr(
+        engine,
+        "_load_cognee_modules",
+        lambda _config=None: (fake, None),
+    )
 
     indexed = engine.index_source(source, config)
     assert indexed["source_id"] == "note-1"
@@ -84,3 +89,70 @@ def test_cognee_engine_index_search_delete_workflow(monkeypatch, tmp_path: Path)
     engine.delete_index("note-1", config)
     assert len(fake.delete_calls) == 1
     assert not index_path.exists()
+
+
+def test_cognee_engine_syncs_env_from_ollama_active_model(
+    monkeypatch,
+    tmp_path: Path,
+):
+    engine = CogneeEngine(tmp_path / "indexes")
+    config = Config().knowledge
+    config.cognee.enabled = True
+    config.cognee.sync_with_copaw_provider = True
+
+    monkeypatch.delenv("LLM_MODEL", raising=False)
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    monkeypatch.delenv("LLM_BASE_URL", raising=False)
+    monkeypatch.delenv("LLM_API_BASE", raising=False)
+
+    monkeypatch.setattr(
+        engine,
+        "_resolve_copaw_active_model",
+        lambda: (
+            "ollama",
+            "qwen3:8b",
+            "http://127.0.0.1:11434/v1",
+            "",
+        ),
+    )
+
+    engine._ensure_cognee_llm_env(config)
+
+    assert os.environ["LLM_MODEL"] == "ollama/qwen3:8b"
+    assert os.environ["LLM_API_KEY"] == "local"
+    assert os.environ["LLM_BASE_URL"] == "http://127.0.0.1:11434/v1"
+    assert os.environ["LLM_API_BASE"] == "http://127.0.0.1:11434/v1"
+
+
+def test_cognee_engine_syncs_env_from_custom_provider_with_custom_prefix(
+    monkeypatch,
+    tmp_path: Path,
+):
+    engine = CogneeEngine(tmp_path / "indexes")
+    config = Config().knowledge
+    config.cognee.enabled = True
+    config.cognee.sync_with_copaw_provider = True
+    config.cognee.custom_model_prefix = "hosted_vllm"
+
+    monkeypatch.delenv("LLM_MODEL", raising=False)
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    monkeypatch.delenv("LLM_BASE_URL", raising=False)
+    monkeypatch.delenv("LLM_API_BASE", raising=False)
+
+    monkeypatch.setattr(
+        engine,
+        "_resolve_copaw_active_model",
+        lambda: (
+            "my-custom-provider",
+            "qwen2.5-72b-instruct",
+            "http://localhost:8000/v1",
+            "sk-test",
+        ),
+    )
+
+    engine._ensure_cognee_llm_env(config)
+
+    assert os.environ["LLM_MODEL"] == "hosted_vllm/qwen2.5-72b-instruct"
+    assert os.environ["LLM_API_KEY"] == "sk-test"
+    assert os.environ["LLM_BASE_URL"] == "http://localhost:8000/v1"
+    assert os.environ["LLM_API_BASE"] == "http://localhost:8000/v1"

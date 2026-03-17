@@ -1027,10 +1027,30 @@ class KnowledgeCogneeConfig(BaseModel):
     """Cognee integration options for knowledge backend."""
 
     enabled: bool = Field(default=False)
+    sync_with_copaw_provider: bool = Field(
+        default=True,
+        description="Sync Cognee LLM env from current CoPaw active provider/model",
+    )
     dataset_prefix: str = Field(default="copaw")
     search_mode: Literal["hybrid", "chunks", "graph"] = Field(default="hybrid")
     graph_query_type: str = Field(default="GRAPH_COMPLETION")
     chunks_query_type: str = Field(default="CHUNKS")
+    custom_model_prefix: str = Field(
+        default="openai",
+        description="LiteLLM provider prefix for custom OpenAI-compatible providers",
+    )
+    llm_model: str = Field(
+        default="",
+        description="Optional explicit Cognee LLM model override (e.g. ollama/qwen3:8b)",
+    )
+    llm_api_key: str = Field(
+        default="",
+        description="Optional explicit Cognee LLM API key override",
+    )
+    llm_base_url: str = Field(
+        default="",
+        description="Optional explicit Cognee LLM base url override",
+    )
 
 
 class KnowledgeConfig(BaseModel):

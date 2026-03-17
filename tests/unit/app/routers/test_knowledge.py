@@ -959,7 +959,7 @@ def test_cognee_engine_search_mode_filters_queries(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(
         engine,
         "_load_cognee_modules",
-        lambda: (fake_cognee, None),
+        lambda _config=None: (fake_cognee, None),
     )
 
     result = engine.search("abc", config, limit=2)

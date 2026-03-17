@@ -7,6 +7,7 @@ import asyncio
 import importlib
 import json
 import logging
+import os
 import re
 import threading
 from datetime import UTC, datetime
@@ -23,6 +24,104 @@ class CogneeEngine:
 
     def __init__(self, index_dir: Path):
         self.index_dir = index_dir
+
+    @staticmethod
+    def _provider_model_prefix(provider_id: str, custom_prefix: str) -> str:
+        mapping = {
+            "openai": "openai",
+            "azure-openai": "azure",
+            "anthropic": "anthropic",
+            "ollama": "ollama",
+            "lmstudio": "lm_studio",
+        }
+        if provider_id in mapping:
+            return mapping[provider_id]
+        cleaned = (custom_prefix or "openai").strip()
+        return cleaned or "openai"
+
+    @staticmethod
+    def _with_provider_prefix(model_name: str, provider_prefix: str) -> str:
+        model_name = (model_name or "").strip()
+        if not model_name:
+            return ""
+        if "/" in model_name:
+            return model_name
+        prefix = (provider_prefix or "").strip()
+        if not prefix:
+            return model_name
+        return f"{prefix}/{model_name}"
+
+    def _resolve_copaw_active_model(
+        self,
+    ) -> tuple[str, str, str, str] | None:
+        """Resolve (provider_id, model, base_url, api_key) from CoPaw active model."""
+        try:
+            from ..providers.provider_manager import ProviderManager
+
+            manager = ProviderManager.get_instance()
+            active = manager.get_active_model()
+            if active is None:
+                return None
+            provider = manager.get_provider(active.provider_id)
+            if provider is None:
+                return None
+            return (
+                str(active.provider_id or "").strip(),
+                str(active.model or "").strip(),
+                str(getattr(provider, "base_url", "") or "").strip(),
+                str(getattr(provider, "api_key", "") or "").strip(),
+            )
+        except Exception:
+            logger.debug("Failed to resolve active provider/model for cognee env sync", exc_info=True)
+            return None
+
+    def _ensure_cognee_llm_env(self, config: KnowledgeConfig | None) -> None:
+        """Populate Cognee LLM env from CoPaw provider settings when missing."""
+        if config is None:
+            return
+
+        cognee_cfg = getattr(config, "cognee", None)
+        if cognee_cfg is None:
+            return
+
+        provider_id = ""
+        model = str(getattr(cognee_cfg, "llm_model", "") or "").strip()
+        api_key = str(getattr(cognee_cfg, "llm_api_key", "") or "").strip()
+        base_url = str(getattr(cognee_cfg, "llm_base_url", "") or "").strip()
+
+        if bool(getattr(cognee_cfg, "sync_with_copaw_provider", True)):
+            active = self._resolve_copaw_active_model()
+            if active is not None:
+                active_provider_id, active_model, active_base_url, active_api_key = active
+                provider_id = active_provider_id
+                if not model:
+                    model = active_model
+                if not base_url:
+                    base_url = active_base_url
+                if not api_key:
+                    api_key = active_api_key
+
+        if model:
+            provider_prefix = self._provider_model_prefix(
+                provider_id,
+                str(getattr(cognee_cfg, "custom_model_prefix", "openai") or "openai"),
+            )
+            prefixed_model = self._with_provider_prefix(model, provider_prefix)
+            if prefixed_model and not os.environ.get("LLM_MODEL"):
+                os.environ["LLM_MODEL"] = prefixed_model
+
+        if api_key and not os.environ.get("LLM_API_KEY"):
+            os.environ["LLM_API_KEY"] = api_key
+
+        # Some local providers do not require api_key but cognee/litellm still expects a value.
+        if not os.environ.get("LLM_API_KEY") and provider_id in {"ollama", "lmstudio"}:
+            os.environ["LLM_API_KEY"] = "local"
+
+        if base_url:
+            if not os.environ.get("LLM_BASE_URL"):
+                os.environ["LLM_BASE_URL"] = base_url
+            if not os.environ.get("LLM_API_BASE"):
+                os.environ["LLM_API_BASE"] = base_url
 
     @staticmethod
     def _sanitize_token(text: str) -> str:
@@ -62,8 +161,11 @@ class CogneeEngine:
             raise error_box["error"]
         return result_box.get("value")
 
-    @staticmethod
-    def _load_cognee_modules() -> tuple[Any, Any | None]:
+    def _load_cognee_modules(
+        self,
+        config: KnowledgeConfig | None = None,
+    ) -> tuple[Any, Any | None]:
+        self._ensure_cognee_llm_env(config)
         try:
             cognee = importlib.import_module("cognee")
         except ImportError as exc:
@@ -174,7 +276,7 @@ class CogneeEngine:
         _ = running_config
         payload = self._extract_payload(source)
         dataset_name = self._dataset_name(source, config)
-        cognee, _ = self._load_cognee_modules()
+        cognee, _ = self._load_cognee_modules(config)
 
         async def _index_pipeline() -> None:
             try:
@@ -237,7 +339,7 @@ class CogneeEngine:
 
         dataset_name = self._dataset_name(source, config)
         try:
-            cognee, _ = self._load_cognee_modules()
+            cognee, _ = self._load_cognee_modules(config)
         except Exception:
             return
 
@@ -271,7 +373,7 @@ class CogneeEngine:
         source_ids: list[str] | None = None,
         source_types: list[str] | None = None,
     ) -> dict[str, Any]:
-        cognee, search_types_module = self._load_cognee_modules()
+        cognee, search_types_module = self._load_cognee_modules(config)
 
         sources = [
             source

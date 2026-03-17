@@ -256,7 +256,7 @@ class GraphOpsManager:
             )
 
         # cypher mode: direct cognee search with CYPHER retriever
-        cognee_module, search_types_module = cognee_engine._load_cognee_modules()
+        cognee_module, search_types_module = cognee_engine._load_cognee_modules(config)
         cypher_type = cognee_engine._resolve_query_type("CYPHER", search_types_module)
 
         datasets = None
@@ -324,7 +324,7 @@ class GraphOpsManager:
             return ("succeeded", None, ["COGNEE_MEMIFY_DRY_RUN"])
 
         cognee_engine = CogneeEngine(self.index_dir)
-        cognee_module, _ = cognee_engine._load_cognee_modules()
+        cognee_module, _ = cognee_engine._load_cognee_modules(config)
 
         dataset_names: list[str] | None = None
         if dataset_scope:
