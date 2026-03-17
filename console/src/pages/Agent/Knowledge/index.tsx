@@ -18,11 +18,13 @@ import { useNavigate } from "react-router-dom";
 import {
   BookOutlined,
   DatabaseOutlined,
+  DownloadOutlined,
   DeleteOutlined,
   MoonOutlined,
   PlusOutlined,
   ReloadOutlined,
   SearchOutlined,
+  UploadOutlined,
 } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
 import api from "../../../api";
@@ -139,6 +141,9 @@ function KnowledgePage() {
   const [saving, setSaving] = useState(false);
   const [indexingAll, setIndexingAll] = useState(false);
   const [clearingKnowledge, setClearingKnowledge] = useState(false);
+  const [exportingAll, setExportingAll] = useState(false);
+  const [exportingSourceId, setExportingSourceId] = useState<string | null>(null);
+  const [importingBackup, setImportingBackup] = useState(false);
   const [indexingId, setIndexingId] = useState<string | null>(null);
   const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
   const [selectedSource, setSelectedSource] =
@@ -167,6 +172,7 @@ function KnowledgePage() {
   });
   const singleFileInputRef = useRef<HTMLInputElement>(null);
   const directoryInputRef = useRef<HTMLInputElement>(null);
+  const backupImportInputRef = useRef<HTMLInputElement>(null);
   const remoteStateRef = useRef<Record<string, string | undefined>>({});
   const hasLoadedOnceRef = useRef(false);
   const backfillProgressWsRef = useRef<WebSocket | null>(null);
@@ -573,6 +579,90 @@ function KnowledgePage() {
     }
   };
 
+  const triggerBlobDownload = useCallback((blob: Blob, filename: string) => {
+    const objectUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(objectUrl);
+  }, []);
+
+  const handleBackupAll = useCallback(async () => {
+    try {
+      setExportingAll(true);
+      const blob = await api.downloadKnowledgeBackup();
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      triggerBlobDownload(blob, `copaw_knowledge_${timestamp}.zip`);
+      message.success(t("knowledge.backupAllSuccess"));
+    } catch (error) {
+      console.error("Failed to backup knowledge", error);
+      message.error(t("knowledge.backupFailed"));
+    } finally {
+      setExportingAll(false);
+    }
+  }, [t, triggerBlobDownload]);
+
+  const handleBackupSource = useCallback(
+    async (sourceId: string, sourceName: string) => {
+      try {
+        setExportingSourceId(sourceId);
+        const blob = await api.downloadKnowledgeSourceBackup(sourceId);
+        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+        const normalizedName = (sourceName || sourceId)
+          .replace(/[^A-Za-z0-9._-]+/g, "-")
+          .replace(/^-+|-+$/g, "") || sourceId;
+        triggerBlobDownload(
+          blob,
+          `copaw_knowledge_${normalizedName}_${timestamp}.zip`,
+        );
+        message.success(t("knowledge.backupSourceSuccess"));
+      } catch (error) {
+        console.error("Failed to backup knowledge source", error);
+        message.error(t("knowledge.backupFailed"));
+      } finally {
+        setExportingSourceId(null);
+      }
+    },
+    [t, triggerBlobDownload],
+  );
+
+  const handleRestoreBackupPicked = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0] ?? null;
+      event.target.value = "";
+      if (!file) {
+        return;
+      }
+
+      try {
+        setImportingBackup(true);
+        const result = await api.restoreKnowledgeBackup(file, true);
+        message.success(
+          t("knowledge.restoreSuccess", {
+            count: result.restored_sources,
+          }),
+        );
+        await loadData();
+      } catch (error) {
+        console.error("Failed to restore knowledge backup", error);
+        message.error(t("knowledge.restoreFailed"));
+      } finally {
+        setImportingBackup(false);
+      }
+    },
+    [loadData, t],
+  );
+
+  const handleRestoreBackup = useCallback(() => {
+    if (importingBackup) {
+      return;
+    }
+    backupImportInputRef.current?.click();
+  }, [importingBackup]);
+
   const handleClearKnowledge = useCallback(() => {
     Modal.confirm({
       title: t("knowledge.clearConfirmTitle"),
@@ -896,6 +986,13 @@ function KnowledgePage() {
           </Typography.Paragraph>
         </div>
         <div className={styles.headerActions}>
+          <input
+            ref={backupImportInputRef}
+            type="file"
+            accept=".zip,application/zip,application/x-zip-compressed"
+            style={{ display: "none" }}
+            onChange={handleRestoreBackupPicked}
+          />
           <div className={styles.headerControlGroup}>
             <Typography.Text className={styles.noteStyleLabel}>
               {t("knowledge.noteStyle")}
@@ -922,6 +1019,20 @@ function KnowledgePage() {
               loading={indexingAll}
             >
               {t("knowledge.indexAll")}
+            </Button>
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={handleBackupAll}
+              loading={exportingAll}
+            >
+              {t("knowledge.backupAll")}
+            </Button>
+            <Button
+              icon={<UploadOutlined />}
+              onClick={handleRestoreBackup}
+              loading={importingBackup}
+            >
+              {t("knowledge.restore")}
             </Button>
             <Button onClick={() => navigate("/agent-config")}>
               {t("knowledge.goToRuntimeConfig")}
@@ -1234,6 +1345,17 @@ function KnowledgePage() {
                               {record.status.indexed
                                 ? t("knowledge.reindex")
                                 : t("knowledge.indexNow")}
+                            </Button>
+                            <Button
+                              type="link"
+                              size="small"
+                              className={styles.actionButton}
+                              loading={exportingSourceId === record.id}
+                              onClick={() =>
+                                handleBackupSource(record.id, record.name)
+                              }
+                            >
+                              {t("knowledge.backupSource")}
                             </Button>
                             <Button
                               type="text"
