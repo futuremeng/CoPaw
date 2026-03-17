@@ -442,6 +442,15 @@ def load_config(config_path: Optional[Path] = None) -> Config:
         if "port" not in la and "last_api_port" in data:
             la["port"] = data.get("last_api_port")
 
+    # Backward compat: knowledge.engine object -> literal enum string
+    knowledge = data.get("knowledge")
+    if isinstance(knowledge, dict) and isinstance(knowledge.get("engine"), dict):
+        legacy_engine = knowledge.get("engine") or {}
+        provider = str(legacy_engine.get("provider", "")).strip().lower()
+        knowledge["engine"] = (
+            "cognee" if provider == "cognee" else "local_lexical"
+        )
+
     try:
         return Config.model_validate(data)
     except ValidationError as exc:
