@@ -506,6 +506,26 @@ class ToolsConfig(BaseModel):
                 enabled=True,
                 description="Search indexed knowledge sources",
             ),
+            "graph_query": BuiltinToolConfig(
+                name="graph_query",
+                enabled=False,
+                description="Run graph-oriented knowledge query",
+            ),
+            "memify_run": BuiltinToolConfig(
+                name="memify_run",
+                enabled=False,
+                description="Trigger memify enrichment jobs",
+            ),
+            "memify_status": BuiltinToolConfig(
+                name="memify_status",
+                enabled=False,
+                description="Query memify enrichment job status",
+            ),
+            "triplet_focus_search": BuiltinToolConfig(
+                name="triplet_focus_search",
+                enabled=False,
+                description="Run triplet-focused graph retrieval",
+            ),
         },
     )
 
@@ -677,6 +697,11 @@ class KnowledgeConfig(BaseModel):
 
     version: int = Field(default=1, ge=1)
     enabled: bool = Field(default=False)
+    engine: Literal["local_lexical", "cognee"] = Field(default="local_lexical")
+    graph_query_enabled: bool = Field(default=False)
+    triplet_search_enabled: bool = Field(default=False)
+    memify_enabled: bool = Field(default=False)
+    allow_cypher_query: bool = Field(default=False)
     sources: List[KnowledgeSourceSpec] = Field(default_factory=list)
     index: KnowledgeIndexConfig = Field(default_factory=KnowledgeIndexConfig)
     automation: KnowledgeAutomationConfig = Field(

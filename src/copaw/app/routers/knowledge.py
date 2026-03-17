@@ -12,7 +12,7 @@ from fastapi import APIRouter, Body, File, Form, HTTPException, Query, UploadFil
 from ...config import load_config, save_config
 from ...config.config import KnowledgeConfig, KnowledgeSourceSpec
 from ...constant import WORKING_DIR
-from ...knowledge import KnowledgeManager
+from ...knowledge import GraphOpsManager, KnowledgeManager
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
@@ -237,6 +237,26 @@ async def run_history_backfill_now():
         "result": result,
         "status": manager.history_backfill_status(),
     }
+
+
+@router.get("/memify/jobs/{job_id}")
+async def get_memify_job_status(job_id: str):
+    """Get status of a memify enrichment job."""
+    normalized_job_id = (job_id or "").strip()
+    if not normalized_job_id:
+        raise HTTPException(status_code=400, detail="MEMIFY_JOB_ID_REQUIRED")
+
+    config = load_config()
+    if not config.knowledge.enabled:
+        raise HTTPException(status_code=400, detail="KNOWLEDGE_DISABLED")
+    if not bool(getattr(config.knowledge, "memify_enabled", False)):
+        raise HTTPException(status_code=400, detail="MEMIFY_DISABLED")
+
+    manager = GraphOpsManager(WORKING_DIR)
+    payload = manager.get_memify_status(normalized_job_id)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="MEMIFY_JOB_NOT_FOUND")
+    return payload
 
 
 @router.websocket("/history-backfill/progress/ws")

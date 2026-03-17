@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from copaw.app.routers import knowledge as knowledge_router_module
 from copaw.config.config import Config
-from copaw.knowledge import KnowledgeManager
+from copaw.knowledge import GraphOpsManager, KnowledgeManager
 
 
 @pytest.fixture
@@ -180,3 +180,48 @@ def test_read_url_document_skips_binary_content(monkeypatch):
 
     assert doc["path"] == "https://example.com/a.png"
     assert doc["text"] == ""
+
+
+def test_get_memify_job_status_requires_memify_enabled(
+    knowledge_api_client: TestClient,
+):
+    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload["enabled"] = True
+    config_payload["memify_enabled"] = False
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    response = knowledge_api_client.get("/knowledge/memify/jobs/job-1")
+    assert response.status_code == 400
+    assert response.json()["detail"] == "MEMIFY_DISABLED"
+
+
+def test_get_memify_job_status_success(
+    knowledge_api_client: TestClient,
+    tmp_path: Path,
+):
+    knowledge_config = Config().knowledge
+    config_payload = knowledge_config.model_dump(mode="json")
+    config_payload["enabled"] = True
+    config_payload["memify_enabled"] = True
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    knowledge_config.enabled = True
+    knowledge_config.memify_enabled = True
+
+    graph_ops = GraphOpsManager(tmp_path)
+    job = graph_ops.run_memify(
+        config=knowledge_config,
+        pipeline_type="default",
+        dataset_scope=[],
+        idempotency_key="route-status-job",
+        dry_run=False,
+    )
+    job_id = job["job_id"]
+
+    response = knowledge_api_client.get(f"/knowledge/memify/jobs/{job_id}")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["job_id"] == job_id
+    assert payload["status"] in {"succeeded", "failed"}
