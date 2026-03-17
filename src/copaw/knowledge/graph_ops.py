@@ -52,7 +52,7 @@ class GraphOpsManager:
         retrieval and normalized into graph-like records.
         """
         _ = timeout_sec
-        engine = getattr(config, "engine", "local_lexical")
+        engine = self._resolve_engine_name(config)
         warnings: list[str] = []
 
         if query_mode == "cypher" and engine != "cognee":
@@ -140,7 +140,7 @@ class GraphOpsManager:
 
         job_id = uuid.uuid4().hex[:12]
         now = datetime.now(UTC).isoformat()
-        engine = getattr(config, "engine", "local_lexical")
+        engine = self._resolve_engine_name(config)
 
         if engine == "cognee":
             status = "failed"
@@ -198,3 +198,13 @@ class GraphOpsManager:
             json.dumps(jobs, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+
+    @staticmethod
+    def _resolve_engine_name(config: KnowledgeConfig) -> str:
+        """Normalize knowledge engine config to a string backend name."""
+        engine_cfg = getattr(config, "engine", "local_lexical")
+        if isinstance(engine_cfg, str):
+            return engine_cfg
+
+        provider = getattr(engine_cfg, "provider", "default")
+        return "cognee" if provider == "cognee" else "local_lexical"

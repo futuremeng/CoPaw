@@ -15,20 +15,7 @@ async def knowledge_search(
     min_score: float = 1.0,
     source_types: list[str] | None = None,
 ) -> ToolResponse:
-    """Search knowledge sources and return the top matched snippets.
-
-    Use this tool when you need project-specific facts from indexed
-    knowledge sources instead of guessing from memory.
-
-    Args:
-        query: Search query text.
-        max_results: Maximum number of hits to return.
-        min_score: Minimum lexical score required for a hit.
-        source_types: Optional source type filter, e.g. ["file", "url"].
-
-    Returns:
-        ToolResponse with formatted hit summaries.
-    """
+    """Search knowledge sources and return the top matched snippets."""
     query_text = (query or "").strip()
     if not query_text:
         return ToolResponse(
@@ -48,15 +35,6 @@ async def knowledge_search(
                     TextBlock(
                         type="text",
                         text="Knowledge is disabled in configuration.",
-                    ),
-                ],
-            )
-        if not bool(getattr(config.agents.running, "knowledge_enabled", True)):
-            return ToolResponse(
-                content=[
-                    TextBlock(
-                        type="text",
-                        text="Knowledge is disabled in agent runtime configuration.",
                     ),
                 ],
             )
