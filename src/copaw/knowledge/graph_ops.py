@@ -2,8 +2,7 @@
 """Bridge layer for graph-oriented knowledge operations.
 
 This module provides a lightweight manager used by graph tools. It keeps
-current MVP behavior compatible while reserving integration points for
-Cognee-backed implementations.
+current MVP behavior compatible with the local lexical engine.
 """
 
 from __future__ import annotations
@@ -55,16 +54,13 @@ class GraphOpsManager:
         engine = getattr(config, "engine", "local_lexical")
         warnings: list[str] = []
 
-        if query_mode == "cypher" and engine != "cognee":
+        if query_mode == "cypher":
             return GraphOpsResult(
                 records=[],
                 summary="Cypher mode is not available on local_lexical engine.",
                 provenance={"engine": engine, "dataset_scope": dataset_scope or []},
                 warnings=["CYPHER_UNAVAILABLE_ON_LOCAL_ENGINE"],
             )
-
-        if engine == "cognee":
-            raise RuntimeError("Cognee graph provider is not wired yet.")
 
         manager = KnowledgeManager(self.working_dir)
         search_result = manager.search(
@@ -116,7 +112,7 @@ class GraphOpsManager:
         """Create a memify job record.
 
         The local lexical engine stores a no-op success job so tool contracts
-        and job observability can be validated before real Cognee wiring.
+        and job observability can be validated for MVP flows.
         """
         jobs = self._load_memify_jobs()
 
@@ -142,14 +138,9 @@ class GraphOpsManager:
         now = datetime.now(UTC).isoformat()
         engine = getattr(config, "engine", "local_lexical")
 
-        if engine == "cognee":
-            status = "failed"
-            error = "Cognee memify provider is not wired yet."
-            warnings = ["COGNEE_PROVIDER_NOT_READY"]
-        else:
-            status = "succeeded"
-            error = None
-            warnings = ["LOCAL_ENGINE_MEMIFY_NOOP"]
+        status = "succeeded"
+        error = None
+        warnings = ["LOCAL_ENGINE_MEMIFY_NOOP"]
 
         job_payload = {
             "job_id": job_id,

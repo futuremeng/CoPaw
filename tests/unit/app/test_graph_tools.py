@@ -9,14 +9,23 @@ from copaw.config.config import Config, KnowledgeSourceSpec
 from copaw.knowledge.manager import KnowledgeManager
 
 
+def _mock_config(knowledge: SimpleNamespace) -> SimpleNamespace:
+    return SimpleNamespace(
+        knowledge=knowledge,
+        agents=SimpleNamespace(
+            running=SimpleNamespace(knowledge_enabled=True),
+        ),
+    )
+
+
 async def test_graph_query_requires_graph_enabled(monkeypatch) -> None:
     module = importlib.import_module("copaw.agents.tools.graph_query")
 
     monkeypatch.setattr(
         module,
         "load_config",
-        lambda: SimpleNamespace(
-            knowledge=SimpleNamespace(enabled=True, graph_query_enabled=False),
+        lambda: _mock_config(
+            SimpleNamespace(enabled=True, graph_query_enabled=False),
         ),
     )
 
@@ -44,7 +53,7 @@ async def test_graph_query_formats_payload(monkeypatch) -> None:
     monkeypatch.setattr(
         module,
         "load_config",
-        lambda: SimpleNamespace(
+        lambda: _mock_config(
             knowledge=SimpleNamespace(
                 enabled=True,
                 graph_query_enabled=True,
@@ -66,8 +75,8 @@ async def test_memify_run_requires_memify_enabled(monkeypatch) -> None:
     monkeypatch.setattr(
         module,
         "load_config",
-        lambda: SimpleNamespace(
-            knowledge=SimpleNamespace(enabled=True, memify_enabled=False),
+        lambda: _mock_config(
+            SimpleNamespace(enabled=True, memify_enabled=False),
         ),
     )
     result = await module.memify_run()
@@ -94,8 +103,8 @@ async def test_memify_run_returns_job_payload(monkeypatch) -> None:
     monkeypatch.setattr(
         module,
         "load_config",
-        lambda: SimpleNamespace(
-            knowledge=SimpleNamespace(enabled=True, memify_enabled=True),
+        lambda: _mock_config(
+            SimpleNamespace(enabled=True, memify_enabled=True),
         ),
     )
     monkeypatch.setattr(module, "GraphOpsManager", _FakeGraphOpsManager)
@@ -120,8 +129,8 @@ async def test_memify_status_handles_not_found(monkeypatch) -> None:
     monkeypatch.setattr(
         module,
         "load_config",
-        lambda: SimpleNamespace(
-            knowledge=SimpleNamespace(enabled=True, memify_enabled=True),
+        lambda: _mock_config(
+            SimpleNamespace(enabled=True, memify_enabled=True),
         ),
     )
     monkeypatch.setattr(module, "GraphOpsManager", _FakeGraphOpsManager)
@@ -137,8 +146,8 @@ async def test_triplet_focus_search_requires_enabled(monkeypatch) -> None:
     monkeypatch.setattr(
         module,
         "load_config",
-        lambda: SimpleNamespace(
-            knowledge=SimpleNamespace(enabled=True, triplet_search_enabled=False),
+        lambda: _mock_config(
+            SimpleNamespace(enabled=True, triplet_search_enabled=False),
         ),
     )
 
@@ -175,8 +184,8 @@ async def test_triplet_focus_search_formats_payload(monkeypatch) -> None:
     monkeypatch.setattr(
         module,
         "load_config",
-        lambda: SimpleNamespace(
-            knowledge=SimpleNamespace(enabled=True, triplet_search_enabled=True),
+        lambda: _mock_config(
+            SimpleNamespace(enabled=True, triplet_search_enabled=True),
         ),
     )
     monkeypatch.setattr(module, "GraphOpsManager", _FakeGraphOpsManager)
@@ -221,7 +230,7 @@ async def test_graph_tool_chain_smoke_local_engine(
         SimpleNamespace(knowledge_chunk_size=knowledge_config.index.chunk_size),
     )
 
-    load_config_stub = lambda: SimpleNamespace(knowledge=knowledge_config)
+    load_config_stub = lambda: _mock_config(knowledge_config)
     for module in [
         graph_query_module,
         memify_run_module,
