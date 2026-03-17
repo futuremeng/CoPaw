@@ -110,7 +110,7 @@
     "indexFailed": "知识源索引失败",
     "clearKnowledge": "清空知识库",
     "clearConfirmTitle": "确认清空知识库",
-    "clearConfirmContent": "将删除所有知识来源配置与已索引数据，此操作不可恢复。是否继续？",
+    "clearConfirmContent": "将删除所有知识来源配置与已索引数据，此操作不可恢复。请先执行备份，再继续清空。是否继续？",
     "clearConfirmOk": "确认清空",
     "clearSuccess": "知识库已清空：删除 {{sources}} 个来源配置，清理 {{indexes}} 个索引文件",
     "clearFailed": "清空知识库失败",

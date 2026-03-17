@@ -110,7 +110,7 @@
     "indexFailed": "Failed to index knowledge sources",
     "clearKnowledge": "Clear Knowledge",
     "clearConfirmTitle": "Confirm Clear Knowledge",
-    "clearConfirmContent": "This will delete all knowledge source configs and indexed data. This action cannot be undone. Continue?",
+    "clearConfirmContent": "This will delete all knowledge source configs and indexed data. This action cannot be undone. Please back up first before clearing. Continue?",
     "clearConfirmOk": "Clear",
     "clearSuccess": "Knowledge cleared: removed {{sources}} source configs and {{indexes}} index files",
     "clearFailed": "Failed to clear knowledge",
