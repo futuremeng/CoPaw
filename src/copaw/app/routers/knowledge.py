@@ -31,7 +31,9 @@ def _knowledge_runtime_enabled(config) -> bool:
 
 
 def _knowledge_effective_enabled(config) -> bool:
-    return _knowledge_runtime_enabled(config)
+    return _knowledge_runtime_enabled(config) and bool(
+        getattr(getattr(config, "knowledge", None), "enabled", False)
+    )
 
 
 def _ensure_knowledge_enabled(config) -> None:

@@ -17,6 +17,8 @@ from copaw.knowledge import GraphOpsManager, KnowledgeManager
 @pytest.fixture
 def knowledge_api_client(tmp_path: Path, monkeypatch) -> TestClient:
     config = Config()
+    config.knowledge.enabled = True
+    config.agents.running.knowledge_enabled = True
     state = {"config": config}
 
     def fake_load_config():
@@ -186,6 +188,35 @@ def test_clear_knowledge_requires_confirmation(knowledge_api_client: TestClient)
     response = knowledge_api_client.delete("/knowledge/clear")
     assert response.status_code == 400
     assert response.json()["detail"] == "KNOWLEDGE_CLEAR_CONFIRM_REQUIRED"
+
+
+def test_list_sources_requires_effective_knowledge_enabled(
+    knowledge_api_client: TestClient,
+):
+    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload["enabled"] = False
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    response = knowledge_api_client.get("/knowledge/sources")
+    assert response.status_code == 200
+    assert response.json()["enabled"] is False
+
+    blocked = knowledge_api_client.put(
+        "/knowledge/sources",
+        json={
+            "id": "blocked-source",
+            "name": "blocked-source",
+            "type": "text",
+            "content": "should be blocked",
+            "enabled": True,
+            "recursive": False,
+            "tags": [],
+            "summary": "",
+        },
+    )
+    assert blocked.status_code == 400
+    assert blocked.json()["detail"] == "KNOWLEDGE_DISABLED"
 
 
 def test_clear_knowledge_removes_sources_and_indexes(
