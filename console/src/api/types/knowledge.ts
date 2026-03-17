@@ -96,6 +96,20 @@ export interface KnowledgeHistoryBackfillStatus {
   marked_unbackfilled: boolean;
   history_chat_count: number;
   has_pending_history: boolean;
+  progress?: KnowledgeHistoryBackfillProgress;
+}
+
+export interface KnowledgeHistoryBackfillProgress {
+  running: boolean;
+  completed: boolean;
+  failed: boolean;
+  total_sessions: number;
+  traversed_sessions: number;
+  processed_sessions: number;
+  current_session_id?: string | null;
+  error?: string | null;
+  updated_at?: string | null;
+  reason?: string | null;
 }
 
 export interface KnowledgeHistoryBackfillRunResponse {
@@ -111,48 +125,6 @@ export interface KnowledgeHistoryBackfillRunResponse {
   status: KnowledgeHistoryBackfillStatus;
 }
 
-export interface KnowledgeRegenerateTitlesResponse {
-  queued: boolean;
-  force_clear?: boolean;
-  restarted?: boolean;
-  cleared_jobs?: number;
-  cleared_job_ids?: string[];
-  job: {
-    job_id: string;
-    status: string;
-    priority: string;
-    use_llm: boolean;
-    enabled_only: boolean;
-    batch_size: number;
-    source_ids?: string[];
-    cursor?: number;
-    total: number;
-    processed: number;
-    updated: number;
-    updated_at?: string;
-    yield_interval_seconds?: number;
-    effective_yield_seconds?: number;
-    yield_mode?: string;
-    yield_reason?: string;
-    dispatch_age_seconds?: number | null;
-    current_source_id?: string | null;
-    last_processed_source_id?: string | null;
-    yielding_until?: string | null;
-    last_item_duration_ms?: number | null;
-    avg_item_duration_ms?: number | null;
-    timing_samples?: number;
-  };
-}
-
-export interface KnowledgeRegenerateTitlesQueueStatus {
-  has_active_job: boolean;
-  active_job: KnowledgeRegenerateTitlesResponse["job"] | null;
-  queued_jobs: number;
-  running_jobs: number;
-  last_completed_job: KnowledgeRegenerateTitlesResponse["job"] | null;
-  updated_at?: string;
-}
-
 export interface KnowledgeSourceDocument {
   path: string;
   title: string;
@@ -165,4 +137,11 @@ export interface KnowledgeSourceContent {
   document_count?: number;
   chunk_count?: number;
   documents: KnowledgeSourceDocument[];
+}
+
+export interface KnowledgeClearResponse {
+  cleared: boolean;
+  cleared_indexes: number;
+  cleared_sources: number;
+  removed_source_configs: boolean;
 }

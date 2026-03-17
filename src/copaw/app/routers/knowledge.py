@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import Optional
 from types import SimpleNamespace
 
-from fastapi import APIRouter, Body, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Body, File, Form, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
 
 from ...config import load_config, save_config
 from ...config.config import KnowledgeConfig, KnowledgeSourceSpec
@@ -14,7 +15,15 @@ from ...constant import WORKING_DIR
 from ...knowledge import KnowledgeManager
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
-_titles_regenerate_enqueue_lock = asyncio.Lock()
+
+
+def _clamp_int(value: str | None, default: int, minimum: int, maximum: int) -> int:
+    try:
+        parsed = int((value or "").strip())
+    except (TypeError, ValueError):
+        parsed = default
+    return max(minimum, min(maximum, parsed))
+
 
 def _manager() -> KnowledgeManager:
     return KnowledgeManager(WORKING_DIR)
@@ -57,7 +66,7 @@ async def upsert_source(
 ) -> KnowledgeSourceSpec:
     config = load_config()
     manager = _manager()
-    source = manager.normalize_source_name(source)
+    source = manager.normalize_source_name(source, config.knowledge)
     existing = _find_source(config.knowledge, source.id)
     if existing is None:
         config.knowledge.sources.append(source)
@@ -120,6 +129,24 @@ async def delete_source(source_id: str):
     save_config(config)
     _manager().delete_index(source_id)
     return {"deleted": True, "source_id": source_id}
+
+
+@router.delete("/clear")
+async def clear_knowledge(
+    confirm: bool = Query(default=False),
+    remove_sources: bool = Query(default=True),
+):
+    """Clear all persisted knowledge data and optionally remove source configs."""
+    if not confirm:
+        raise HTTPException(status_code=400, detail="KNOWLEDGE_CLEAR_CONFIRM_REQUIRED")
+
+    config = load_config()
+    result = _manager().clear_knowledge(
+        config.knowledge,
+        remove_sources=remove_sources,
+    )
+    save_config(config)
+    return result
 
 
 @router.post("/sources/{source_id}/index")
@@ -193,14 +220,17 @@ async def run_history_backfill_now():
     manager = _manager()
     running = config.agents.running
     force_running = SimpleNamespace(
-        auto_backfill_history_data=True,
         auto_collect_chat_files=running.auto_collect_chat_files,
         auto_collect_chat_urls=running.auto_collect_chat_urls,
         auto_collect_long_text=running.auto_collect_long_text,
         long_text_min_chars=running.long_text_min_chars,
         knowledge_chunk_size=running.knowledge_chunk_size,
     )
-    result = manager.auto_backfill_history_data(config.knowledge, force_running)
+    result = await asyncio.to_thread(
+        manager.auto_backfill_history_data,
+        config.knowledge,
+        force_running,
+    )
     if result.get("changed"):
         save_config(config)
     return {
@@ -209,45 +239,35 @@ async def run_history_backfill_now():
     }
 
 
-@router.post("/titles/regenerate")
-async def regenerate_all_titles(
-    use_llm: bool = Query(default=False),
-    confirm: bool = Query(default=False),
-    enabled_only: bool = Query(default=True),
-    batch_size: int = Query(default=5, ge=1, le=20),
-    force_clear: bool = Query(default=False),
-):
-    """Queue a low-priority batched title-regeneration job."""
-    if not confirm:
-        raise HTTPException(status_code=400, detail="KNOWLEDGE_TITLES_CONFIRM_REQUIRED")
+@router.websocket("/history-backfill/progress/ws")
+async def stream_history_backfill_progress(websocket: WebSocket):
+    """Stream history backfill progress to console with WebSocket."""
+    await websocket.accept()
+    interval_ms = _clamp_int(
+        websocket.query_params.get("interval_ms"),
+        default=1000,
+        minimum=300,
+        maximum=3000,
+    )
 
-    config = load_config()
-    manager = _manager()
-    cancelled_payload = {
-        "cancelled": False,
-        "cancelled_count": 0,
-        "cancelled_job_ids": [],
-    }
-    async with _titles_regenerate_enqueue_lock:
-        if force_clear:
-            cancelled_payload = manager.cancel_active_title_regeneration_jobs()
-        result = manager.enqueue_title_regeneration(
-            config.knowledge,
-            use_llm=use_llm,
-            enabled_only=enabled_only,
-            batch_size=batch_size,
-            yield_interval_seconds=config.agents.running.knowledge_maintenance_llm_yield_seconds,
-        )
-    if not result.get("queued"):
-        raise HTTPException(status_code=409, detail="KNOWLEDGE_TITLES_QUEUE_ALREADY_ACTIVE")
-    result["force_clear"] = force_clear
-    result["restarted"] = bool(force_clear and cancelled_payload.get("cancelled"))
-    result["cleared_jobs"] = int(cancelled_payload.get("cancelled_count", 0) or 0)
-    result["cleared_job_ids"] = cancelled_payload.get("cancelled_job_ids", [])
-    return result
-
-
-@router.get("/titles/regenerate/queue")
-async def get_title_regenerate_queue_status():
-    """Get queued title-regeneration runtime status."""
-    return _manager().get_title_regen_queue_status()
+    last_fingerprint: str | None = None
+    try:
+        while True:
+            progress = _manager().get_history_backfill_progress()
+            fingerprint = json.dumps(
+                progress,
+                ensure_ascii=False,
+                sort_keys=True,
+                default=str,
+            )
+            if fingerprint != last_fingerprint:
+                await websocket.send_json(
+                    {
+                        "type": "snapshot",
+                        "progress": progress,
+                    }
+                )
+                last_fingerprint = fingerprint
+            await asyncio.sleep(interval_ms / 1000)
+    except WebSocketDisconnect:
+        return

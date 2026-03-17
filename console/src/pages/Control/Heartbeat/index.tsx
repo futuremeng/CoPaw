@@ -54,9 +54,6 @@ type HeartbeatFormValues = Omit<HeartbeatConfig, "every"> & {
   useActiveHours?: boolean;
   activeHoursStart?: string;
   activeHoursEnd?: string;
-  useKnowledgeAutoMaintenanceActiveHours?: boolean;
-  knowledgeAutoMaintenanceActiveHoursStart?: string;
-  knowledgeAutoMaintenanceActiveHoursEnd?: string;
 };
 
 const TARGET_OPTIONS = [
@@ -80,7 +77,6 @@ function HeartbeatPage() {
     try {
       const data = await api.getHeartbeatConfig();
       const everyParts = parseEvery(data.every ?? "6h");
-      const maintenanceHours = data.knowledgeAutoMaintenanceActiveHours;
       form.setFieldsValue({
         enabled: data.enabled ?? false,
         everyNumber: everyParts.number,
@@ -89,11 +85,6 @@ function HeartbeatPage() {
         useActiveHours: !!data.activeHours,
         activeHoursStart: data.activeHours?.start ?? "08:00",
         activeHoursEnd: data.activeHours?.end ?? "22:00",
-        useKnowledgeAutoMaintenanceActiveHours: !!maintenanceHours,
-        knowledgeAutoMaintenanceActiveHoursStart:
-          maintenanceHours?.start ?? "00:00",
-        knowledgeAutoMaintenanceActiveHoursEnd:
-          maintenanceHours?.end ?? "06:00",
       });
     } catch (e) {
       console.error("Failed to load heartbeat config:", e);
@@ -126,15 +117,6 @@ function HeartbeatPage() {
           ? {
               start: values.activeHoursStart,
               end: values.activeHoursEnd,
-            }
-          : undefined,
-      knowledgeAutoMaintenanceActiveHours:
-        values.useKnowledgeAutoMaintenanceActiveHours &&
-        values.knowledgeAutoMaintenanceActiveHoursStart &&
-        values.knowledgeAutoMaintenanceActiveHoursEnd
-          ? {
-              start: values.knowledgeAutoMaintenanceActiveHoursStart,
-              end: values.knowledgeAutoMaintenanceActiveHoursEnd,
             }
           : undefined,
     };
@@ -178,9 +160,6 @@ function HeartbeatPage() {
             useActiveHours: false,
             activeHoursStart: "08:00",
             activeHoursEnd: "22:00",
-            useKnowledgeAutoMaintenanceActiveHours: false,
-            knowledgeAutoMaintenanceActiveHoursStart: "00:00",
-            knowledgeAutoMaintenanceActiveHoursEnd: "06:00",
           }}
         >
           <Form.Item
@@ -262,41 +241,6 @@ function HeartbeatPage() {
                   <Form.Item
                     name="activeHoursEnd"
                     label={t("heartbeat.activeEnd")}
-                  >
-                    <TimePickerHHmm />
-                  </Form.Item>
-                </div>
-              ) : null
-            }
-          </Form.Item>
-
-          <Form.Item
-            name="useKnowledgeAutoMaintenanceActiveHours"
-            label={t("heartbeat.knowledgeAutoMaintenanceActiveHours")}
-            valuePropName="checked"
-          >
-            <Switch />
-          </Form.Item>
-
-          <Form.Item
-            noStyle
-            shouldUpdate={(prev, cur) =>
-              prev.useKnowledgeAutoMaintenanceActiveHours !==
-              cur.useKnowledgeAutoMaintenanceActiveHours
-            }
-          >
-            {({ getFieldValue }) =>
-              getFieldValue("useKnowledgeAutoMaintenanceActiveHours") ? (
-                <div className={styles.activeHoursRow}>
-                  <Form.Item
-                    name="knowledgeAutoMaintenanceActiveHoursStart"
-                    label={t("heartbeat.knowledgeAutoMaintenanceStart")}
-                  >
-                    <TimePickerHHmm />
-                  </Form.Item>
-                  <Form.Item
-                    name="knowledgeAutoMaintenanceActiveHoursEnd"
-                    label={t("heartbeat.knowledgeAutoMaintenanceEnd")}
                   >
                     <TimePickerHHmm />
                   </Form.Item>

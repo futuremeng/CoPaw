@@ -22,6 +22,7 @@ from .desktop_screenshot import desktop_screenshot
 from .memory_search import create_memory_search_tool
 from .get_current_time import get_current_time
 from .get_token_usage import get_token_usage
+from .knowledge_search import knowledge_search
 
 __all__ = [
     "execute_python_code",
@@ -40,4 +41,5 @@ __all__ = [
     "create_memory_search_tool",
     "get_current_time",
     "get_token_usage",
+    "knowledge_search",
 ]

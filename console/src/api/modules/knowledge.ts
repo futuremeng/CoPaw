@@ -6,8 +6,7 @@ import type {
   KnowledgeHistoryBackfillRunResponse,
   KnowledgeHistoryBackfillStatus,
   KnowledgeIndexResult,
-  KnowledgeRegenerateTitlesResponse,
-  KnowledgeRegenerateTitlesQueueStatus,
+  KnowledgeClearResponse,
   KnowledgeSearchResponse,
   KnowledgeSourceContent,
   KnowledgeSourceSpec,
@@ -86,6 +85,16 @@ export const knowledgeApi = {
       },
     ),
 
+  clearKnowledge: (params?: { removeSources?: boolean }) =>
+    request<KnowledgeClearResponse>(
+      `/knowledge/clear?confirm=true&remove_sources=${
+        params?.removeSources === false ? "false" : "true"
+      }`,
+      {
+        method: "DELETE",
+      },
+    ),
+
   indexKnowledgeSource: (sourceId: string) =>
     request<KnowledgeIndexResult>(
       `/knowledge/sources/${encodeURIComponent(sourceId)}/index`,
@@ -106,27 +115,6 @@ export const knowledgeApi = {
     request<KnowledgeHistoryBackfillRunResponse>("/knowledge/history-backfill/run", {
       method: "POST",
     }),
-
-  regenerateKnowledgeTitles: (params?: {
-    enabledOnly?: boolean;
-    batchSize?: number;
-    forceClear?: boolean;
-  }) =>
-    request<KnowledgeRegenerateTitlesResponse>(
-      `/knowledge/titles/regenerate?use_llm=true&confirm=true&enabled_only=${
-        params?.enabledOnly === false ? "false" : "true"
-      }&batch_size=${Math.min(20, Math.max(1, params?.batchSize ?? 5))}&force_clear=${
-        params?.forceClear ? "true" : "false"
-      }`,
-      {
-        method: "POST",
-      },
-    ),
-
-  getRegenerateKnowledgeTitlesQueueStatus: () =>
-    request<KnowledgeRegenerateTitlesQueueStatus>(
-      "/knowledge/titles/regenerate/queue",
-    ),
 
   getKnowledgeSourceContent: (sourceId: string) =>
     request<KnowledgeSourceContent>(

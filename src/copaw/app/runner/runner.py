@@ -177,6 +177,7 @@ class AgentRunner(Runner):
         session_state_loaded = False
         generated_messages = []
         config = None
+        knowledge_manager = None
         try:
             session_id = request.session_id
             user_id = request.user_id
@@ -210,15 +211,35 @@ class AgentRunner(Runner):
                 mcp_clients = await self._mcp_manager.get_clients()
 
             config = load_config()
+            running = config.agents.running
+
+            try:
+                should_collect_user_assets = bool(
+                    getattr(running, "auto_collect_chat_files", False)
+                    or getattr(running, "auto_collect_chat_urls", True)
+                )
+                if should_collect_user_assets:
+                    from ...knowledge import KnowledgeManager
+
+                    knowledge_manager = KnowledgeManager(WORKING_DIR)
+                    user_stage_result = knowledge_manager.auto_collect_user_message_assets(
+                        config.knowledge,
+                        session_id=session_id,
+                        user_id=user_id,
+                        request_messages=list(msgs or []),
+                        running_config=running,
+                    )
+                    if user_stage_result.get("changed"):
+                        save_config(config)
+            except Exception:
+                logger.exception(
+                    "Failed to auto-collect user assets for session %s",
+                    session_id,
+                )
+
             max_iters = config.agents.running.max_iters
             max_input_length = config.agents.running.max_input_length
             effective_msgs = list(msgs or [])
-            knowledge_context_msg = self._build_knowledge_context_message(
-                query=query,
-                config=config,
-            )
-            if knowledge_context_msg is not None:
-                effective_msgs = [knowledge_context_msg, *effective_msgs]
 
             agent = CoPawAgent(
                 env_context=env_context,
@@ -318,27 +339,22 @@ class AgentRunner(Runner):
             if config is not None and session_id:
                 try:
                     running = config.agents.running
-                    backfill_result = {"changed": False}
-                    should_auto_backfill = bool(
-                        getattr(running, "auto_backfill_history_data", True),
-                    )
                     should_auto_collect = bool(
                         getattr(running, "auto_collect_chat_files", False)
                         or getattr(running, "auto_collect_long_text", False)
                     )
 
-                    if should_auto_collect or should_auto_backfill:
+                    if should_auto_collect:
                         from ...knowledge import KnowledgeManager
 
-                        manager = KnowledgeManager(WORKING_DIR)
-                        if should_auto_backfill:
-                            backfill_result = manager.auto_backfill_history_data(
-                                config.knowledge,
-                                running,
-                            )
+                        manager = knowledge_manager or KnowledgeManager(WORKING_DIR)
 
-                    if should_auto_collect:
-                        auto_result = manager.auto_collect_from_messages(
+                    should_auto_collect_text = bool(
+                        getattr(running, "auto_collect_long_text", False),
+                    )
+
+                    if should_auto_collect_text:
+                        text_result = manager.auto_collect_turn_text_pair(
                             config.knowledge,
                             running_config=running,
                             session_id=session_id,
@@ -346,10 +362,8 @@ class AgentRunner(Runner):
                             request_messages=list(msgs or []),
                             response_messages=generated_messages,
                         )
-                        if auto_result.get("changed") or backfill_result.get("changed"):
+                        if text_result.get("changed"):
                             save_config(config)
-                    elif backfill_result.get("changed"):
-                        save_config(config)
                 except Exception:
                     logger.exception(
                         "Failed to auto-collect chat knowledge for session %s",
@@ -358,83 +372,6 @@ class AgentRunner(Runner):
 
             if self._chat_manager is not None and chat is not None:
                 await self._chat_manager.update_chat(chat)
-
-    @staticmethod
-    def _build_knowledge_context_text(
-        hits: list[dict],
-        max_chars: int,
-    ) -> str:
-        lines = [
-            "以下是与当前问题相关的知识库检索结果，请仅在相关时使用，避免编造。",
-        ]
-        for index, hit in enumerate(hits, start=1):
-            source_name = hit.get("source_name", "unknown")
-            source_type = hit.get("source_type", "unknown")
-            score = hit.get("score", 0)
-            snippet = (hit.get("snippet") or "").strip()
-            if not snippet:
-                continue
-            lines.append(
-                f"[{index}] {source_name} ({source_type}) score={score}\n{snippet}",
-            )
-        text = "\n\n".join(lines).strip()
-        return text[:max_chars].rstrip()
-
-    def _build_knowledge_context_message(
-        self,
-        *,
-        query: str,
-        config,
-    ) -> Msg | None:
-        if not query or not query.strip():
-            return None
-        if not getattr(config, "knowledge", None) or not config.knowledge.enabled:
-            return None
-
-        running = getattr(config.agents, "running", None)
-        if running is None:
-            return None
-        if not bool(getattr(running, "knowledge_retrieval_enabled", True)):
-            return None
-
-        top_k = int(getattr(running, "knowledge_retrieval_top_k", 4) or 4)
-        if top_k <= 0:
-            return None
-        max_chars = int(
-            getattr(running, "knowledge_retrieval_max_context_chars", 1800)
-            or 1800,
-        )
-        min_score = float(getattr(running, "knowledge_retrieval_min_score", 1.0) or 1.0)
-
-        try:
-            from ...knowledge import KnowledgeManager
-
-            manager = KnowledgeManager(WORKING_DIR)
-            search_result = manager.search(
-                query=query,
-                config=config.knowledge,
-                limit=top_k,
-            )
-        except Exception:
-            logger.exception("Knowledge retrieval failed before query dispatch")
-            return None
-
-        hits = [
-            hit
-            for hit in (search_result.get("hits") or [])
-            if float(hit.get("score", 0) or 0) >= min_score
-        ]
-        if not hits:
-            return None
-
-        context_text = self._build_knowledge_context_text(hits=hits, max_chars=max_chars)
-        if not context_text:
-            return None
-        return Msg(
-            name="knowledge",
-            role="system",
-            content=[TextBlock(type="text", text=context_text)],
-        )
 
     async def _cleanup_denied_session_memory(
         self,

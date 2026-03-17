@@ -53,54 +53,8 @@ class _DummySession(SafeJSONSession):
         _ = session_id, user_id, state_modules_mapping
 
 
-async def test_query_handler_injects_knowledge_context_when_enabled(monkeypatch) -> None:
+async def test_query_handler_does_not_inject_knowledge_context(monkeypatch) -> None:
     from copaw.app.runner import runner as runner_module
-    from copaw import knowledge as knowledge_module
-
-    class _KnowledgeManager:
-        def __init__(self, working_dir) -> None:
-            _ = working_dir
-
-        def search(self, query: str, config, limit: int = 10, source_ids=None, source_types=None):
-            _ = config, limit, source_ids, source_types
-            assert query == "如何接入知识库"
-            return {
-                "query": query,
-                "hits": [
-                    {
-                        "source_id": "manual-text-1",
-                        "source_name": "Knowledge Design",
-                        "source_type": "text",
-                        "document_path": "manual://note",
-                        "document_title": "Design",
-                        "score": 3,
-                        "snippet": "知识库需要先索引，再在对话时注入检索片段。",
-                    }
-                ],
-            }
-
-        def auto_backfill_history_data(self, knowledge_config, running_config):
-            _ = knowledge_config, running_config
-            return {"changed": False, "skipped": True}
-
-        def auto_collect_from_messages(
-            self,
-            knowledge_config,
-            running_config,
-            session_id: str,
-            user_id: str,
-            request_messages,
-            response_messages,
-        ):
-            _ = (
-                knowledge_config,
-                running_config,
-                session_id,
-                user_id,
-                request_messages,
-                response_messages,
-            )
-            return {"changed": False}
 
     async def _no_approval(session_id: str, query: str | None):
         _ = session_id, query
@@ -122,7 +76,6 @@ async def test_query_handler_injects_knowledge_context_when_enabled(monkeypatch)
     cast(Any, runner)._resolve_pending_approval = _no_approval
 
     monkeypatch.setattr(runner_module, "CoPawAgent", _DummyAgent)
-    monkeypatch.setattr(knowledge_module, "KnowledgeManager", _KnowledgeManager)
     monkeypatch.setattr(runner_module, "build_env_context", lambda **kwargs: kwargs)
     monkeypatch.setattr(
         runner_module,
@@ -133,12 +86,8 @@ async def test_query_handler_injects_knowledge_context_when_enabled(monkeypatch)
                     max_iters=8,
                     max_input_length=8192,
                     auto_collect_chat_files=False,
+                    auto_collect_chat_urls=False,
                     auto_collect_long_text=False,
-                    auto_backfill_history_data=False,
-                    knowledge_retrieval_enabled=True,
-                    knowledge_retrieval_top_k=4,
-                    knowledge_retrieval_max_context_chars=1200,
-                    knowledge_retrieval_min_score=1.0,
                 ),
             ),
             knowledge=SimpleNamespace(enabled=True),
@@ -175,11 +124,8 @@ async def test_query_handler_injects_knowledge_context_when_enabled(monkeypatch)
 
     captured = cast(list[Msg], _DummyAgent.captured_input_msgs)
     assert captured is not None
-    assert len(captured) >= 2
-    assert captured[0].role == "system"
-    injected = captured[0].get_text_content() or ""
-    assert "知识库检索结果" in injected
-    assert "Knowledge Design" in injected
+    assert len(captured) == 1
+    assert captured[0].role == "user"
 
 
 async def test_query_handler_skips_knowledge_context_when_disabled(monkeypatch) -> None:
@@ -216,7 +162,6 @@ async def test_query_handler_skips_knowledge_context_when_disabled(monkeypatch) 
                     max_input_length=8192,
                     auto_collect_chat_files=False,
                     auto_collect_long_text=False,
-                    auto_backfill_history_data=False,
                     knowledge_retrieval_enabled=False,
                 ),
             ),

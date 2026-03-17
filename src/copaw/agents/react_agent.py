@@ -34,6 +34,7 @@ from .tools import (
     execute_shell_command,
     get_current_time,
     get_token_usage,
+    knowledge_search,
     read_file,
     send_file_to_user,
     write_file,
@@ -189,12 +190,27 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
             "send_file_to_user": send_file_to_user,
             "get_current_time": get_current_time,
             "get_token_usage": get_token_usage,
+            "knowledge_search": knowledge_search,
         }
 
         # Register only enabled tools
         for tool_name, tool_func in tool_functions.items():
+            tool_enabled = enabled_tools.get(tool_name, True)
+            if tool_name == "knowledge_search":
+                tool_enabled = (
+                    tool_enabled
+                    and bool(getattr(config.knowledge, "enabled", False))
+                    and bool(
+                        getattr(
+                            config.agents.running,
+                            "knowledge_retrieval_enabled",
+                            True,
+                        )
+                    )
+                )
+
             # If tool not in config, enable by default (backward compatibility)
-            if enabled_tools.get(tool_name, True):
+            if tool_enabled:
                 toolkit.register_tool_function(
                     tool_func,
                     namesake_strategy=namesake_strategy,

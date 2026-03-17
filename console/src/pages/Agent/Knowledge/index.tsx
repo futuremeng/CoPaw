@@ -21,15 +21,15 @@ import {
   PlusOutlined,
   ReloadOutlined,
   SearchOutlined,
-  SyncOutlined,
 } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
 import api from "../../../api";
+import { getApiToken, getApiUrl } from "../../../api/config";
 import type {
   AgentsRunningConfig,
   KnowledgeConfig,
+  KnowledgeHistoryBackfillProgress,
   KnowledgeHistoryBackfillStatus,
-  KnowledgeRegenerateTitlesQueueStatus,
   KnowledgeSearchHit,
   KnowledgeSourceContent,
   KnowledgeSourceItem,
@@ -109,6 +109,8 @@ function KnowledgePage() {
   );
   const [backfillStatus, setBackfillStatus] =
     useState<KnowledgeHistoryBackfillStatus | null>(null);
+  const [backfillProgress, setBackfillProgress] =
+    useState<KnowledgeHistoryBackfillProgress | null>(null);
   const [sources, setSources] = useState<KnowledgeSourceItem[]>([]);
   const [hits, setHits] = useState<KnowledgeSearchHit[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -129,11 +131,8 @@ function KnowledgePage() {
   const [enableModalSubmitting, setEnableModalSubmitting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [indexingAll, setIndexingAll] = useState(false);
+  const [clearingKnowledge, setClearingKnowledge] = useState(false);
   const [indexingId, setIndexingId] = useState<string | null>(null);
-  const [regeneratingTitles, setRegeneratingTitles] = useState(false);
-  const [policyCollapsed, setPolicyCollapsed] = useState(true);
-  const [queueStatus, setQueueStatus] =
-    useState<KnowledgeRegenerateTitlesQueueStatus | null>(null);
   const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
   const [selectedSource, setSelectedSource] =
     useState<KnowledgeSourceItem | null>(null);
@@ -153,6 +152,8 @@ function KnowledgePage() {
   const directoryInputRef = useRef<HTMLInputElement>(null);
   const remoteStateRef = useRef<Record<string, string | undefined>>({});
   const hasLoadedOnceRef = useRef(false);
+  const backfillProgressWsRef = useRef<WebSocket | null>(null);
+  const backfillProgressReconnectTimerRef = useRef<number | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -194,6 +195,7 @@ function KnowledgePage() {
       setSources(sourceData.sources);
       setRunningConfig(runtimeConfig);
       setBackfillStatus(historyStatus);
+      setBackfillProgress(historyStatus.progress ?? null);
     } catch (error) {
       console.error("Failed to load knowledge data", error);
       message.error(t("knowledge.loadFailed"));
@@ -202,39 +204,99 @@ function KnowledgePage() {
     }
   }, [t]);
 
+  const refreshKnowledgeCards = useCallback(async () => {
+    try {
+      const sourceData = await api.listKnowledgeSources();
+      const nextRemoteStateMap: Record<string, string | undefined> = {};
+      sourceData.sources.forEach((source) => {
+        nextRemoteStateMap[source.id] = source.status.remote_cache_state;
+      });
+      remoteStateRef.current = nextRemoteStateMap;
+      setSources(sourceData.sources);
+    } catch {
+      // best-effort polling during backfill, ignore transient errors
+    }
+  }, []);
+
   useEffect(() => {
     loadData();
   }, [loadData]);
 
-  // Poll queue status every 5s; refresh sources when job completes
+  // While history backfill is running, poll existing sources API to refresh cards.
   useEffect(() => {
-    let cancelled = false;
-    let prevActiveJobId: string | null | undefined = undefined;
+    if (!backfillProgress?.running) {
+      return;
+    }
 
-    const poll = async () => {
-      try {
-        const status = await api.getRegenerateKnowledgeTitlesQueueStatus();
-        if (cancelled) return;
-        setQueueStatus(status);
+    refreshKnowledgeCards();
+    const id = window.setInterval(() => {
+      refreshKnowledgeCards();
+    }, 3000);
 
-        // When active job disappears (transitioned to completed), reload source names
-        const curJobId = status.active_job?.job_id ?? null;
-        if (prevActiveJobId !== undefined && prevActiveJobId !== null && curJobId === null) {
-          loadData();
+    return () => {
+      window.clearInterval(id);
+    };
+  }, [backfillProgress?.running, refreshKnowledgeCards]);
+
+  useEffect(() => {
+    let disposed = false;
+
+    const connect = () => {
+      if (disposed) {
+        return;
+      }
+      const baseUrl = getApiUrl("/knowledge/history-backfill/progress/ws");
+      const wsUrl = new URL(baseUrl, window.location.origin);
+      wsUrl.protocol = wsUrl.protocol === "https:" ? "wss:" : "ws:";
+      wsUrl.searchParams.set("interval_ms", "1000");
+      const token = getApiToken();
+      if (token) {
+        wsUrl.searchParams.set("token", token);
+      }
+
+      const ws = new WebSocket(wsUrl.toString());
+      backfillProgressWsRef.current = ws;
+
+      ws.onmessage = (event) => {
+        if (disposed) {
+          return;
         }
-        prevActiveJobId = curJobId;
-      } catch {
-        // silently ignore poll errors
+        try {
+          const payload = JSON.parse(event.data || "{}");
+          const progress = payload?.progress;
+          if (!progress || typeof progress !== "object") {
+            return;
+          }
+          setBackfillProgress(progress as KnowledgeHistoryBackfillProgress);
+        } catch {
+          // ignore malformed websocket messages
+        }
+      };
+
+      ws.onclose = () => {
+        if (disposed) {
+          return;
+        }
+        backfillProgressReconnectTimerRef.current = window.setTimeout(() => {
+          connect();
+        }, 1500);
+      };
+    };
+
+    connect();
+
+    return () => {
+      disposed = true;
+      if (backfillProgressReconnectTimerRef.current) {
+        window.clearTimeout(backfillProgressReconnectTimerRef.current);
+        backfillProgressReconnectTimerRef.current = null;
+      }
+      if (backfillProgressWsRef.current) {
+        backfillProgressWsRef.current.close();
+        backfillProgressWsRef.current = null;
       }
     };
-
-    poll();
-    const id = setInterval(poll, 5000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [loadData]);
+  }, []);
 
   useEffect(() => {
     if (directoryInputRef.current) {
@@ -487,76 +549,35 @@ function KnowledgePage() {
     }
   };
 
-  const runRegenerateTitles = useCallback(async (forceClear = false) => {
-    try {
-      setRegeneratingTitles(true);
-      const result = await api.regenerateKnowledgeTitles({
-        enabledOnly: true,
-        batchSize: 5,
-        forceClear,
-      });
-      message.success(
-        forceClear
-          ? t("knowledge.regenerateTitlesRestarted", {
-              total: result.job.total,
-              batchSize: result.job.batch_size,
-              cleared: result.cleared_jobs ?? 0,
-            })
-          : t("knowledge.regenerateTitlesQueued", {
-              total: result.job.total,
-              batchSize: result.job.batch_size,
-            }),
-      );
-      // Immediately reflect new queue status without waiting for next poll
-      const freshStatus = await api.getRegenerateKnowledgeTitlesQueueStatus();
-      setQueueStatus(freshStatus);
-    } catch (error) {
-      console.error("Failed to regenerate knowledge titles", error);
-      message.error(t("knowledge.regenerateTitlesFailed"));
-    } finally {
-      setRegeneratingTitles(false);
-    }
-  }, [t]);
-
-  const handleRegenerateTitles = useCallback(() => {
-    const enabledCount = sources.filter((item) => item.enabled).length;
+  const handleClearKnowledge = useCallback(() => {
     Modal.confirm({
-      title: t("knowledge.regenerateTitlesConfirmTitle"),
-      content: t("knowledge.regenerateTitlesConfirmContent", {
-        total: sources.length,
-        enabled: enabledCount,
-      }),
-      okText: t("knowledge.regenerateTitlesConfirmOk"),
+      title: t("knowledge.clearConfirmTitle"),
+      content: t("knowledge.clearConfirmContent"),
+      okText: t("knowledge.clearConfirmOk"),
       cancelText: t("common.cancel"),
       okButtonProps: {
         danger: true,
       },
       onOk: async () => {
-        const latestQueue = await api.getRegenerateKnowledgeTitlesQueueStatus();
-        setQueueStatus(latestQueue);
-        if (latestQueue.has_active_job && latestQueue.active_job) {
-          Modal.confirm({
-            title: t("knowledge.regenerateTitlesQueueExistsTitle"),
-            content: t("knowledge.regenerateTitlesQueueExistsContent", {
-              status: latestQueue.active_job.status,
-              processed: latestQueue.active_job.processed,
-              total: latestQueue.active_job.total,
+        try {
+          setClearingKnowledge(true);
+          const result = await api.clearKnowledge({ removeSources: true });
+          message.success(
+            t("knowledge.clearSuccess", {
+              sources: result.cleared_sources,
+              indexes: result.cleared_indexes,
             }),
-            okText: t("knowledge.regenerateTitlesQueueForceOk"),
-            cancelText: t("common.cancel"),
-            okButtonProps: {
-              danger: true,
-            },
-            onOk: async () => {
-              await runRegenerateTitles(true);
-            },
-          });
-          return;
+          );
+          await loadData();
+        } catch (error) {
+          console.error("Failed to clear knowledge", error);
+          message.error(t("knowledge.clearFailed"));
+        } finally {
+          setClearingKnowledge(false);
         }
-        await runRegenerateTitles(false);
       },
     });
-  }, [runRegenerateTitles, sources, t]);
+  }, [loadData, t]);
 
   const handleSearch = async () => {
     const query = searchQuery.trim();
@@ -742,6 +763,64 @@ function KnowledgePage() {
       backfillStatus?.marked_unbackfilled &&
       backfillStatus?.has_pending_history,
   );
+  const unifiedBatchProgress = useMemo(() => {
+    if (indexingAll) {
+      return {
+        visible: true,
+        percent: 0,
+        status: "active" as const,
+        label: t("knowledge.unifiedProgressIndexAll"),
+      };
+    }
+
+    if (backfillProgress?.running) {
+      const total = Math.max(1, backfillProgress.total_sessions || 1);
+      const traversed = Math.max(
+        0,
+        Math.min(total, backfillProgress.traversed_sessions || 0),
+      );
+      return {
+        visible: true,
+        percent: Math.round((traversed / total) * 100),
+        status: "active" as const,
+        label: t("knowledge.unifiedProgressBackfill", {
+          traversed,
+          total,
+        }),
+      };
+    }
+
+    if (backfillingHistory) {
+      return {
+        visible: true,
+        percent: 0,
+        status: "active" as const,
+        label: t("knowledge.unifiedProgressBackfillStarting"),
+      };
+    }
+
+    if (clearingKnowledge) {
+      return {
+        visible: true,
+        percent: 0,
+        status: "active" as const,
+        label: t("knowledge.unifiedProgressClearing"),
+      };
+    }
+
+    return {
+      visible: false,
+      percent: 0,
+      status: "normal" as const,
+      label: "",
+    };
+  }, [
+    backfillProgress,
+    backfillingHistory,
+    clearingKnowledge,
+    indexingAll,
+    t,
+  ]);
 
   return (
     <div className={styles.knowledgePage}>
@@ -773,12 +852,16 @@ function KnowledgePage() {
           >
             {t("knowledge.indexAll")}
           </Button>
+          <Button onClick={() => navigate("/agent-config")}>
+            {t("knowledge.goToRuntimeConfig")}
+          </Button>
           <Button
-            icon={<ReloadOutlined />}
-            onClick={handleRegenerateTitles}
-            loading={regeneratingTitles}
+            danger
+            icon={<DeleteOutlined />}
+            onClick={handleClearKnowledge}
+            loading={clearingKnowledge}
           >
-            {t("knowledge.regenerateTitles")}
+            {t("knowledge.clearKnowledge")}
           </Button>
           {showBackfillNowButton ? (
             <Button
@@ -792,287 +875,20 @@ function KnowledgePage() {
         </div>
       </div>
 
-      <Space direction="vertical" size={16} className={styles.contentStack}>
-
-      {/* Queue status banner — shown whenever a regen job is active OR recently completed */}
-      {(queueStatus?.has_active_job || queueStatus?.last_completed_job) ? (() => {
-        const job = queueStatus!.active_job;
-        const lastDone = queueStatus!.last_completed_job;
-        const jobStatus = job?.status;
-        const isQueued = jobStatus === "queued";
-        const isRunning = jobStatus === "running";
-        const isWaiting = jobStatus === "waiting_llm";
-        const runningJobs = queueStatus!.running_jobs ?? 0;
-        const activeJobs = queueStatus!.queued_jobs ?? 0;
-        const percent = job && job.total > 0 ? Math.round((job.processed / job.total) * 100) : 0;
-        const remaining = job ? Math.max(0, job.total - job.processed) : 0;
-        const remainingBatches = job && job.batch_size > 0 ? Math.ceil(remaining / job.batch_size) : 0;
-        const lastDuration = typeof job?.last_item_duration_ms === "number"
-          ? (job.last_item_duration_ms / 1000).toFixed(1)
-          : null;
-        const avgDuration = typeof job?.avg_item_duration_ms === "number"
-          ? (job.avg_item_duration_ms / 1000).toFixed(1)
-          : null;
-        const yieldSeconds = typeof job?.yield_interval_seconds === "number"
-          ? job.yield_interval_seconds.toFixed(job.yield_interval_seconds >= 10 ? 0 : 1)
-          : null;
-        const effectiveYieldSeconds = typeof job?.effective_yield_seconds === "number"
-          ? job.effective_yield_seconds.toFixed(job.effective_yield_seconds >= 10 ? 0 : 1)
-          : null;
-        const yieldMode = job?.yield_mode === "adaptive"
-          ? t("knowledge.queueYieldModeAdaptive")
-          : t("knowledge.queueYieldModeFixed");
-        const dispatchAgeSeconds = typeof job?.dispatch_age_seconds === "number"
-          ? job.dispatch_age_seconds.toFixed(1)
-          : "-";
-        const inferredRunningSourceId = (() => {
-          if (!job || !Array.isArray(job.source_ids) || job.source_ids.length === 0) {
-            return null;
-          }
-          const cursor = typeof job.cursor === "number" ? job.cursor : 0;
-          if (cursor >= 0 && cursor < job.source_ids.length) {
-            return job.source_ids[cursor];
-          }
-          if (cursor > 0 && cursor - 1 < job.source_ids.length) {
-            return job.source_ids[cursor - 1];
-          }
-          return null;
-        })();
-        const runningSourceId =
-          job?.current_source_id ?? job?.last_processed_source_id ?? inferredRunningSourceId;
-        const yieldReasonText = (() => {
-          const reason = job?.yield_reason;
-          if (reason === "burst_window") {
-            return t("knowledge.queueYieldReasonBurst");
-          }
-          if (reason === "active_window") {
-            return t("knowledge.queueYieldReasonActive");
-          }
-          if (reason === "outside_active_window") {
-            return t("knowledge.queueYieldReasonOutside");
-          }
-          if (reason === "invalid_dispatch_time") {
-            return t("knowledge.queueYieldReasonInvalid");
-          }
-          if (reason === "yield_disabled") {
-            return t("knowledge.queueYieldReasonDisabled");
-          }
-          return t("knowledge.queueYieldReasonNoRecent");
-        })();
-        const lastDoneTime = lastDone?.updated_at
-          ? new Date(lastDone.updated_at).toLocaleString()
-          : null;
-        return (
-          <div className={`${styles.queueBanner} ${isWaiting ? styles.queueBannerWaiting : ""} ${!job && lastDone ? styles.queueBannerDone : ""}`}>
-            <div className={styles.queueBannerLeft}>
-              <SyncOutlined spin={isRunning} className={styles.queueBannerIcon} />
-              <div className={styles.queueBannerText}>
-                {job ? (
-                  <Typography.Text >
-                    {isQueued
-                      ? t("knowledge.queueStatusQueued", {
-                          total: job.total,
-                          remainingBatches,
-                        })
-                      : isWaiting
-                      ? t("knowledge.queueStatusWaiting")
-                      : t("knowledge.queueStatusRunning", {
-                          processed: job.processed,
-                          total: job.total,
-                          remainingBatches,
-                        })}
-                  </Typography.Text>
-                ) : lastDone ? (
-                  <Typography.Text >
-                    {t("knowledge.queueStatusCompleted", { updated: lastDone.updated, total: lastDone.total })}
-                  </Typography.Text>
-                ) : null}
-                <div className={styles.queueBannerMeta}>
-                  <Tag color={activeJobs > 0 ? "processing" : "default"} style={{ marginInlineEnd: 4 }}>
-                    {t("knowledge.queueActiveCount", { count: activeJobs })}
-                  </Tag>
-                  <Tag color={runningJobs > 0 ? "processing" : "default"} style={{ marginInlineEnd: 4 }}>
-                    {t("knowledge.queueRunningCount", { count: runningJobs })}
-                  </Tag>
-                  {runningSourceId ? (
-                    <Tag color="gold" style={{ marginInlineEnd: 4 }}>
-                      {t("knowledge.queueRunningSourceIdShort", {
-                        id: runningSourceId,
-                      })}
-                    </Tag>
-                  ) : null}
-                  {job && (
-                    <Typography.Text className={styles.queueBannerSub}>
-                      {t("knowledge.queueStatusDetail", {
-                        batchSize: job.batch_size,
-                        updated: job.updated,
-                      })}
-                    </Typography.Text>
-                  )}
-                  {job && (lastDuration || avgDuration || yieldSeconds) && (
-                    <div className={styles.queueBannerMetaAction}>
-                      <Typography.Text className={styles.queueBannerSub}>
-                        {t("knowledge.queueLlmTiming", {
-                          last: lastDuration ?? "-",
-                          avg: avgDuration ?? "-",
-                          wait: yieldSeconds ?? "-",
-                        })}
-                      </Typography.Text>
-                      <Typography.Text className={styles.queueBannerSub}>
-                        {t("knowledge.queueYieldMode", {
-                          mode: yieldMode,
-                          effective: effectiveYieldSeconds ?? yieldSeconds ?? "-",
-                        })}
-                      </Typography.Text>
-                      <Typography.Text className={styles.queueBannerSub}>
-                        {t("knowledge.queueYieldReason", {
-                          reason: yieldReasonText,
-                          age: dispatchAgeSeconds,
-                        })}
-                      </Typography.Text>
-                      <Button
-                        type="link"
-                        size="small"
-                        className={styles.queueBannerActionButton}
-                        onClick={() => navigate("/agent-config")}
-                      >
-                        {t("knowledge.queueAdjustYield")}
-                      </Button>
-                    </div>
-                  )}
-                  {lastDoneTime && (
-                    <Typography.Text className={styles.queueBannerSub}>
-                      {t("knowledge.queueLastCompleted", {
-                        time: lastDoneTime,
-                        updated: lastDone!.updated,
-                        total: lastDone!.total,
-                        useLlm: lastDone!.use_llm ? "LLM" : t("knowledge.queueLocalRule"),
-                      })}
-                    </Typography.Text>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className={styles.queueBannerRight}>
-              {job && (
-                <Progress
-                  percent={percent}
-                  size="small"
-                  style={{ width: 160, margin: 0 }}
-                  status={isWaiting ? "exception" : isRunning ? "active" : "normal"}
-                  strokeColor={isWaiting ? "#faad14" : isQueued ? "#91a3c0" : undefined}
-                />
-              )}
-            </div>
-          </div>
-        );
-      })() : null}
-
-      <Card>
-        <div className={styles.policyCard}>
-          <div className={styles.policyHeader}>
-            <div>
-              <Typography.Text >
-                {t("knowledge.automationSummaryTitle")}
-              </Typography.Text>
-              <Typography.Paragraph className={styles.policyDescription}>
-                {t("knowledge.automationSummaryDesc")}
-              </Typography.Paragraph>
-            </div>
-            <Space>
-              <Button type="text" onClick={() => setPolicyCollapsed((prev) => !prev)}>
-                {policyCollapsed
-                  ? t("knowledge.expandPolicy")
-                  : t("knowledge.collapsePolicy")}
-              </Button>
-              <Button onClick={() => navigate("/agent-config")}>
-                {t("knowledge.goToRuntimeConfig")}
-              </Button>
-            </Space>
-          </div>
-
-          {!policyCollapsed ? (
-            <div className={styles.policyGrid}>
-              <div className={styles.policyItem}>
-                <Typography.Text>{t("agentConfig.autoCollectChatFiles")}</Typography.Text>
-                <Tag
-                  color={
-                    runningConfig?.auto_collect_chat_files ? "green" : "default"
-                  }
-                >
-                  {runningConfig?.auto_collect_chat_files
-                    ? t("common.enabled")
-                    : t("common.disabled")}
-                </Tag>
-              </div>
-              <div className={styles.policyItem}>
-                <Typography.Text>{t("agentConfig.autoCollectChatUrls")}</Typography.Text>
-                <Tag
-                  color={runningConfig?.auto_collect_chat_urls ? "green" : "default"}
-                >
-                  {runningConfig?.auto_collect_chat_urls
-                    ? t("common.enabled")
-                    : t("common.disabled")}
-                </Tag>
-              </div>
-              <div className={styles.policyItem}>
-                <Typography.Text>{t("agentConfig.autoCollectLongText")}</Typography.Text>
-                <Tag
-                  color={runningConfig?.auto_collect_long_text ? "green" : "default"}
-                >
-                  {runningConfig?.auto_collect_long_text
-                    ? t("common.enabled")
-                    : t("common.disabled")}
-                </Tag>
-              </div>
-              <div className={styles.policyItem}>
-                <Typography.Text>{t("agentConfig.longTextMinChars")}</Typography.Text>
-                <Tag color="blue">{runningConfig?.long_text_min_chars ?? 2000}</Tag>
-              </div>
-              <div className={styles.policyItem}>
-                <Typography.Text>{t("agentConfig.knowledgeChunkSize")}</Typography.Text>
-                <Tag color="blue">{runningConfig?.knowledge_chunk_size ?? 1200}</Tag>
-              </div>
-              <div className={styles.policyItem}>
-                <Typography.Text>{t("agentConfig.knowledgeMaintenanceLlmYieldSeconds")}</Typography.Text>
-                <Tag color="blue">
-                  {runningConfig?.knowledge_maintenance_llm_yield_seconds ?? 2.0}s
-                </Tag>
-              </div>
-              <div className={styles.policyItem}>
-                <Typography.Text>{t("agentConfig.knowledgeTitleRegenAdaptiveActiveWindowSeconds")}</Typography.Text>
-                <Tag color="blue">
-                  {runningConfig?.knowledge_title_regen_adaptive_active_window_seconds ?? 60}s
-                </Tag>
-              </div>
-              <div className={styles.policyItem}>
-                <Typography.Text>{t("agentConfig.knowledgeTitleRegenAdaptiveBurstWindowSeconds")}</Typography.Text>
-                <Tag color="blue">
-                  {runningConfig?.knowledge_title_regen_adaptive_burst_window_seconds ?? 15}s
-                </Tag>
-              </div>
-              <div className={styles.policyItem}>
-                <Typography.Text>{t("agentConfig.knowledgeTitleRegenAdaptiveActiveMultiplier")}</Typography.Text>
-                <Tag color="blue">
-                  {runningConfig?.knowledge_title_regen_adaptive_active_multiplier ?? 2.0}x
-                </Tag>
-              </div>
-              <div className={styles.policyItem}>
-                <Typography.Text>{t("agentConfig.knowledgeTitleRegenAdaptiveBurstMultiplier")}</Typography.Text>
-                <Tag color="blue">
-                  {runningConfig?.knowledge_title_regen_adaptive_burst_multiplier ?? 3.0}x
-                </Tag>
-              </div>
-              <div className={styles.policyItem}>
-                <Typography.Text>{t("agentConfig.knowledgeTitleRegenPrompt")}</Typography.Text>
-                <Tag color="blue">
-                  {runningConfig?.knowledge_title_regen_prompt ?? "给以下内容起一个标题，一般10个字到20个字。"}
-                </Tag>
-              </div>
-            </div>
-          ) : null}
+      {unifiedBatchProgress.visible ? (
+        <div className={styles.unifiedProgressRow}>
+          <Typography.Text className={styles.unifiedProgressLabel}>
+            {unifiedBatchProgress.label}
+          </Typography.Text>
+          <Progress
+            percent={unifiedBatchProgress.percent}
+            size="small"
+            status={unifiedBatchProgress.status}
+          />
         </div>
-      </Card>
+      ) : null}
+
+      <Space direction="vertical" size={16} className={styles.contentStack}>
 
       <Card>
         <Space className={styles.fullWidth} direction="vertical" size={12}>
@@ -1178,28 +994,9 @@ function KnowledgePage() {
             {filteredSources.map((record) => {
               const originText = getSourceOriginText(record, t);
               const remoteLine = formatRemoteStatus(record, t);
-              const queueRunningSourceId =
-                queueStatus?.active_job?.current_source_id ??
-                queueStatus?.active_job?.last_processed_source_id ??
-                (() => {
-                  const activeJob = queueStatus?.active_job;
-                  if (!activeJob || !Array.isArray(activeJob.source_ids) || activeJob.source_ids.length === 0) {
-                    return null;
-                  }
-                  const cursor = typeof activeJob.cursor === "number" ? activeJob.cursor : 0;
-                  if (cursor >= 0 && cursor < activeJob.source_ids.length) {
-                    return activeJob.source_ids[cursor];
-                  }
-                  if (cursor > 0 && cursor - 1 < activeJob.source_ids.length) {
-                    return activeJob.source_ids[cursor - 1];
-                  }
-                  return null;
-                })();
-              const queueJobStatus = queueStatus?.active_job?.status;
-              const isQueueActiveCard =
-                (queueJobStatus === "running" || queueJobStatus === "waiting_llm") &&
-                queueRunningSourceId === record.id;
-              const isActiveCard = indexingId === record.id || isQueueActiveCard;
+              const isActiveCard = indexingId === record.id;
+              const cardTitle = record.name?.trim() || "";
+              const descriptionText = record.description?.trim() || "";
               const indexedCountText = record.status.indexed
                 ? t("knowledge.indexedCount", {
                     documents: record.status.document_count,
@@ -1221,11 +1018,6 @@ function KnowledgePage() {
                                 <Typography.Text type="secondary" className={styles.sourceHeaderId}>
                                   {record.id}
                                 </Typography.Text>
-                                {isQueueActiveCard ? (
-                                  <span className={styles.sourceRunningTag}>
-                                    {t("knowledge.queueCardRunning")}
-                                  </span>
-                                ) : null}
                                 <span className={`${styles.sourceTypeTag} ${styles.sourceHeaderTypeTag}`}>
                                   {record.type}
                                 </span>
@@ -1235,6 +1027,31 @@ function KnowledgePage() {
                           </div>
 
                           <div className={styles.sourceMeta}>
+                            {cardTitle ? (
+                              <div className={styles.sourceInfoSection}>
+                                <div className={styles.sourceInfoLabel}>
+                                  {t("knowledge.table.title")}
+                                </div>
+                                <div
+                                  role="button"
+                                  tabIndex={0}
+                                  onClick={() => openDetailDrawer(record)}
+                                  onKeyDown={(event) =>
+                                    handleDetailDrawerValueKeyDown(event, record)
+                                  }
+                                  className={`${styles.sourceInfoBlock} ${styles.sourceLocationButton}`}
+                                  title={cardTitle}
+                                >
+                                  <Typography.Text
+                                    className={styles.sourceTitle}
+                                    title={cardTitle}
+                                  >
+                                    {cardTitle}
+                                  </Typography.Text>
+                                </div>
+                              </div>
+                            ) : null}
+
                             <div className={styles.sourceInfoSection}>
                               <div className={styles.sourceInfoLabel}>
                                 {t("knowledge.table.source")}
@@ -1247,35 +1064,37 @@ function KnowledgePage() {
                                   handleDetailDrawerValueKeyDown(event, record)
                                 }
                                 className={`${styles.sourceInfoBlock} ${styles.sourceLocationButton}`}
-                                title={record.name}
+                                title={descriptionText || t("knowledge.inlineText")}
                               >
                                 <Typography.Text
                                   
                                   className={styles.sourceTitle}
-                                  title={record.name}
+                                  title={descriptionText || t("knowledge.inlineText")}
                                 >
-                                  {record.name}
+                                  {descriptionText || t("knowledge.inlineText")}
                                 </Typography.Text>
                               </div>
                             </div>
 
-                            <div className={styles.sourceInfoSection}>
-                              <div className={styles.sourceInfoLabel}>
-                                {t("knowledge.table.location")}
+                            {record.location ? (
+                              <div className={styles.sourceInfoSection}>
+                                <div className={styles.sourceInfoLabel}>
+                                  {t("knowledge.table.location")}
+                                </div>
+                                <div
+                                  role="button"
+                                  tabIndex={0}
+                                  onClick={() => openDetailDrawer(record)}
+                                  onKeyDown={(event) =>
+                                    handleDetailDrawerValueKeyDown(event, record)
+                                  }
+                                  className={`${styles.sourceInfoBlock} ${styles.sourceSingleLineValue} ${styles.sourceLocationButton}`}
+                                  title={record.location}
+                                >
+                                  {record.location}
+                                </div>
                               </div>
-                              <div
-                                role="button"
-                                tabIndex={0}
-                                onClick={() => openDetailDrawer(record)}
-                                onKeyDown={(event) =>
-                                  handleDetailDrawerValueKeyDown(event, record)
-                                }
-                                className={`${styles.sourceInfoBlock} ${styles.sourceSingleLineValue} ${styles.sourceLocationButton}`}
-                                title={record.location || record.description || t("knowledge.inlineText")}
-                              >
-                                {record.location || record.description || t("knowledge.inlineText")}
-                              </div>
-                            </div>
+                            ) : null}
 
                             <div className={styles.sourceInfoSection}>
                               <div className={styles.sourceInfoLabel}>
@@ -1361,6 +1180,8 @@ function KnowledgePage() {
           </div>
         )}
       </Card>
+
+      </Space>
 
       <Modal
         open={modalOpen}
@@ -1620,143 +1441,6 @@ function KnowledgePage() {
                 placeholder={t("agentConfig.knowledgeChunkSizePlaceholder")}
               />
             </Form.Item>
-            <Form.Item
-              label={t("agentConfig.knowledgeMaintenanceLlmYieldSeconds")}
-              name="knowledge_maintenance_llm_yield_seconds"
-              rules={[
-                {
-                  required: true,
-                  message: t("agentConfig.knowledgeMaintenanceLlmYieldSecondsRequired"),
-                },
-                {
-                  type: "number",
-                  min: 0,
-                  message: t("agentConfig.knowledgeMaintenanceLlmYieldSecondsMin"),
-                },
-              ]}
-              tooltip={t("agentConfig.knowledgeMaintenanceLlmYieldSecondsTooltip")}
-            >
-              <InputNumber
-                style={{ width: "100%" }}
-                min={0}
-                max={30}
-                step={0.5}
-                placeholder={t("agentConfig.knowledgeMaintenanceLlmYieldSecondsPlaceholder")}
-              />
-            </Form.Item>
-            <Form.Item
-              label={t("agentConfig.knowledgeTitleRegenAdaptiveActiveWindowSeconds")}
-              name="knowledge_title_regen_adaptive_active_window_seconds"
-              rules={[
-                {
-                  required: true,
-                  message: t("agentConfig.knowledgeTitleRegenAdaptiveActiveWindowSecondsRequired"),
-                },
-                {
-                  type: "number",
-                  min: 0,
-                  message: t("agentConfig.knowledgeTitleRegenAdaptiveActiveWindowSecondsMin"),
-                },
-              ]}
-              tooltip={t("agentConfig.knowledgeTitleRegenAdaptiveActiveWindowSecondsTooltip")}
-            >
-              <InputNumber
-                style={{ width: "100%" }}
-                min={0}
-                max={600}
-                step={1}
-                placeholder={t("agentConfig.knowledgeTitleRegenAdaptiveActiveWindowSecondsPlaceholder")}
-              />
-            </Form.Item>
-            <Form.Item
-              label={t("agentConfig.knowledgeTitleRegenAdaptiveBurstWindowSeconds")}
-              name="knowledge_title_regen_adaptive_burst_window_seconds"
-              rules={[
-                {
-                  required: true,
-                  message: t("agentConfig.knowledgeTitleRegenAdaptiveBurstWindowSecondsRequired"),
-                },
-                {
-                  type: "number",
-                  min: 0,
-                  message: t("agentConfig.knowledgeTitleRegenAdaptiveBurstWindowSecondsMin"),
-                },
-              ]}
-              tooltip={t("agentConfig.knowledgeTitleRegenAdaptiveBurstWindowSecondsTooltip")}
-            >
-              <InputNumber
-                style={{ width: "100%" }}
-                min={0}
-                max={300}
-                step={1}
-                placeholder={t("agentConfig.knowledgeTitleRegenAdaptiveBurstWindowSecondsPlaceholder")}
-              />
-            </Form.Item>
-            <Form.Item
-              label={t("agentConfig.knowledgeTitleRegenAdaptiveActiveMultiplier")}
-              name="knowledge_title_regen_adaptive_active_multiplier"
-              rules={[
-                {
-                  required: true,
-                  message: t("agentConfig.knowledgeTitleRegenAdaptiveActiveMultiplierRequired"),
-                },
-                {
-                  type: "number",
-                  min: 1,
-                  message: t("agentConfig.knowledgeTitleRegenAdaptiveActiveMultiplierMin"),
-                },
-              ]}
-              tooltip={t("agentConfig.knowledgeTitleRegenAdaptiveActiveMultiplierTooltip")}
-            >
-              <InputNumber
-                style={{ width: "100%" }}
-                min={1}
-                max={10}
-                step={0.1}
-                placeholder={t("agentConfig.knowledgeTitleRegenAdaptiveActiveMultiplierPlaceholder")}
-              />
-            </Form.Item>
-            <Form.Item
-              label={t("agentConfig.knowledgeTitleRegenAdaptiveBurstMultiplier")}
-              name="knowledge_title_regen_adaptive_burst_multiplier"
-              rules={[
-                {
-                  required: true,
-                  message: t("agentConfig.knowledgeTitleRegenAdaptiveBurstMultiplierRequired"),
-                },
-                {
-                  type: "number",
-                  min: 1,
-                  message: t("agentConfig.knowledgeTitleRegenAdaptiveBurstMultiplierMin"),
-                },
-              ]}
-              tooltip={t("agentConfig.knowledgeTitleRegenAdaptiveBurstMultiplierTooltip")}
-            >
-              <InputNumber
-                style={{ width: "100%" }}
-                min={1}
-                max={10}
-                step={0.1}
-                placeholder={t("agentConfig.knowledgeTitleRegenAdaptiveBurstMultiplierPlaceholder")}
-              />
-            </Form.Item>
-            <Form.Item
-              label={t("agentConfig.knowledgeTitleRegenPrompt")}
-              name="knowledge_title_regen_prompt"
-              rules={[
-                {
-                  required: true,
-                  message: t("agentConfig.knowledgeTitleRegenPromptRequired"),
-                },
-              ]}
-              tooltip={t("agentConfig.knowledgeTitleRegenPromptTooltip")}
-            >
-              <Input.TextArea
-                autoSize={{ minRows: 2, maxRows: 4 }}
-                maxLength={500}
-                placeholder={t("agentConfig.knowledgeTitleRegenPromptPlaceholder")}
-              />
-            </Form.Item>
           </Form>
           {enableModalNeedsBackfillChoice ? (
             <Typography.Paragraph className={styles.enableBackfillHint}>
@@ -1774,13 +1458,29 @@ function KnowledgePage() {
       <Drawer
         width={520}
         placement="right"
-        title={selectedSource?.name || t("knowledge.form.name")}
+        title={selectedSource?.name?.trim() || t("knowledge.form.id")}
         open={detailDrawerOpen}
         onClose={() => setDetailDrawerOpen(false)}
         destroyOnClose
       >
         {selectedSource ? (
           <Space direction="vertical" size={12} className={styles.fullWidth}>
+            {selectedSource.name?.trim() ? (
+              <div className={styles.sourceInfoSection}>
+                <div className={styles.sourceInfoLabel}>{t("knowledge.table.title")}</div>
+                <div className={`${styles.sourceInfoBlock} ${styles.sourceSingleLineValue}`}>
+                  {selectedSource.name}
+                </div>
+              </div>
+            ) : null}
+
+            <div className={styles.sourceInfoSection}>
+              <div className={styles.sourceInfoLabel}>{t("knowledge.table.source")}</div>
+              <div className={styles.sourceInfoBlock}>
+                {selectedSource.description || t("knowledge.inlineText")}
+              </div>
+            </div>
+
             <div className={styles.detailTagRow}>
               <span className={styles.sourceOriginTag}>{selectedSourceOriginText}</span>
               <span className={styles.sourceTypeTag}>{selectedSource.type}</span>
@@ -1793,12 +1493,12 @@ function KnowledgePage() {
               </div>
             </div>
 
-            <div className={styles.sourceInfoSection}>
-              <div className={styles.sourceInfoLabel}>{t("knowledge.table.location")}</div>
-              <div className={styles.sourceInfoBlock}>
-                {selectedSource.location || selectedSource.description || t("knowledge.inlineText")}
+            {selectedSource.location ? (
+              <div className={styles.sourceInfoSection}>
+                <div className={styles.sourceInfoLabel}>{t("knowledge.table.location")}</div>
+                <div className={styles.sourceInfoBlock}>{selectedSource.location}</div>
               </div>
-            </div>
+            ) : null}
 
             <div className={styles.sourceInfoSection}>
               <div className={styles.sourceInfoLabel}>{t("knowledge.table.chunkStats")}</div>
@@ -1837,13 +1537,6 @@ function KnowledgePage() {
                   error: selectedSource.status.remote_last_error,
                 })}
               </Typography.Text>
-            ) : null}
-
-            {selectedSource.description ? (
-              <div className={styles.sourceInfoSection}>
-                <div className={styles.sourceInfoLabel}>{t("knowledge.form.description")}</div>
-                <div className={styles.sourceInfoBlock}>{selectedSource.description}</div>
-              </div>
             ) : null}
 
             <Divider style={{ margin: "4px 0" }} />
@@ -1891,7 +1584,6 @@ function KnowledgePage() {
         multiple
         onChange={handleDirectoryPicked}
       />
-      </Space>
     </div>
   );
 }

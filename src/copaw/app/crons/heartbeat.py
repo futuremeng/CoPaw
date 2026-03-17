@@ -16,10 +16,8 @@ from ...config import (
     get_heartbeat_config,
     get_heartbeat_query_path,
     load_config,
-    save_config,
 )
-from ...constant import HEARTBEAT_TARGET_LAST, WORKING_DIR
-from ...knowledge import KnowledgeManager
+from ...constant import HEARTBEAT_TARGET_LAST
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +26,6 @@ _EVERY_PATTERN = re.compile(
     r"^(?:(?P<hours>\d+)h)?(?:(?P<minutes>\d+)m)?(?:(?P<seconds>\d+)s)?$",
     re.IGNORECASE,
 )
-
-
 def parse_heartbeat_every(every: str) -> int:
     """Parse interval string (e.g. '30m', '1h') to total seconds."""
     every = (every or "").strip()
@@ -90,12 +86,6 @@ async def run_heartbeat_once(
         logger.debug("heartbeat skipped: outside active hours")
         return
 
-    maintenance_hours = (
-        hb.knowledge_auto_maintenance_active_hours
-        if hb.knowledge_auto_maintenance_active_hours is not None
-        else hb.active_hours
-    )
-
     path = get_heartbeat_query_path()
     if not path.is_file():
         logger.debug("heartbeat skipped: no file at %s", path)
@@ -151,50 +141,3 @@ async def run_heartbeat_once(
             await asyncio.wait_for(_run_only(), timeout=120)
         except asyncio.TimeoutError:
             logger.warning("heartbeat run timed out")
-
-    # Low-priority maintenance: only after heartbeat workload has had chance to run.
-    if _in_active_hours(maintenance_hours):
-        try:
-            manager = KnowledgeManager(WORKING_DIR)
-            queue_result = await manager.process_title_regen_queue_batch(
-                config.knowledge,
-                config.agents.running,
-                config.last_dispatch,
-            )
-            if queue_result.get("reason") == "llm_busy_waiting":
-                logger.debug("heartbeat title queue waiting: llm busy")
-                return
-            if queue_result.get("processed"):
-                if queue_result.get("config_changed"):
-                    save_config(config)
-                logger.info(
-                    "heartbeat title queue batch processed=%s updated=%s status=%s",
-                    queue_result.get("batch_processed"),
-                    queue_result.get("updated_count"),
-                    (queue_result.get("job") or {}).get("status"),
-                )
-                return
-
-            # Fallback: no queue active, keep gentle one-by-one maintenance.
-            maintenance = await manager.maintain_next_source_title(
-                config.knowledge,
-                use_llm=True,
-                title_prompt=(
-                    config.agents.running.knowledge_title_regen_prompt
-                    or "给以下内容起一个标题，一般10个字到20个字。"
-                ),
-                min_content_chars=(
-                    config.agents.running.knowledge_title_min_content_chars
-                    or 10
-                ),
-            )
-            if maintenance.get("updated"):
-                save_config(config)
-                logger.info(
-                    "heartbeat title maintenance updated source=%s",
-                    maintenance.get("source_id"),
-                )
-        except Exception:  # pylint: disable=broad-except
-            logger.exception("heartbeat title maintenance failed")
-    else:
-        logger.debug("heartbeat title maintenance skipped: outside maintenance hours")

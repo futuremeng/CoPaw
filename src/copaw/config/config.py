@@ -166,11 +166,6 @@ class HeartbeatConfig(BaseModel):
         default=None,
         alias="activeHours",
     )
-    knowledge_auto_maintenance_active_hours: Optional[ActiveHoursConfig] = Field(
-        default=None,
-        alias="knowledgeAutoMaintenanceActiveHours",
-        description="Optional active window for heartbeat-driven title maintenance",
-    )
 
 
 class AgentsDefaultsConfig(BaseModel):
@@ -258,74 +253,6 @@ class AgentsRunningConfig(BaseModel):
         description="Chunk size for knowledge indexing",
     )
 
-    knowledge_maintenance_llm_yield_seconds: float = Field(
-        default=2.0,
-        ge=0.0,
-        le=30.0,
-        description="Yield window between LLM-based knowledge title regeneration items",
-    )
-
-    knowledge_title_regen_adaptive_active_window_seconds: float = Field(
-        default=60.0,
-        ge=0.0,
-        le=600.0,
-        description="Adaptive window for recently active foreground traffic",
-    )
-
-    knowledge_title_regen_adaptive_burst_window_seconds: float = Field(
-        default=15.0,
-        ge=0.0,
-        le=300.0,
-        description="Burst window for very recent foreground traffic",
-    )
-
-    knowledge_title_regen_adaptive_active_multiplier: float = Field(
-        default=2.0,
-        ge=1.0,
-        le=10.0,
-        description="Yield multiplier when foreground is recently active",
-    )
-
-    knowledge_title_regen_adaptive_burst_multiplier: float = Field(
-        default=3.0,
-        ge=1.0,
-        le=10.0,
-        description="Yield multiplier when foreground is very recently active",
-    )
-
-    knowledge_title_regen_llm_timeout_seconds: float = Field(
-        default=30.0,
-        ge=5.0,
-        le=300.0,
-        description="Timeout in seconds for a single LLM call during knowledge title regeneration",
-    )
-
-    knowledge_title_regen_disable_thinking: bool = Field(
-        default=True,
-        description="Disable LLM thinking/reasoning mode during knowledge title generation to improve speed",
-    )
-
-    knowledge_title_min_content_chars: int = Field(
-        default=10,
-        ge=0,
-        le=5000,
-        description="Minimum content characters required to invoke LLM for title generation; sources below this threshold use the local fallback title",
-    )
-
-    knowledge_title_regen_prompt: str = Field(
-        default="给以下内容起一个标题，一般10个字到20个字。",
-        min_length=1,
-        max_length=500,
-        description="Prompt template used when asking LLM to generate knowledge titles",
-    )
-
-    auto_backfill_history_data: bool = Field(
-        default=True,
-        description=(
-            "Automatically backfill historical chat-session data into knowledge sources once"
-        ),
-    )
-
     knowledge_retrieval_enabled: bool = Field(
         default=True,
         description="Enable chat-time retrieval augmentation from indexed knowledge",
@@ -411,6 +338,7 @@ class AgentsConfig(BaseModel):
         default_factory=lambda: ["AGENTS.md", "SOUL.md", "PROFILE.md"],
         description="List of markdown files to load into system prompt",
     )
+
 
 
 class LastDispatchConfig(BaseModel):
@@ -572,6 +500,11 @@ class ToolsConfig(BaseModel):
                 name="get_token_usage",
                 enabled=True,
                 description="Get llm token usage",
+            ),
+            "knowledge_search": BuiltinToolConfig(
+                name="knowledge_search",
+                enabled=True,
+                description="Search indexed knowledge sources",
             ),
         },
     )
