@@ -111,11 +111,6 @@
   width: 100%;
 }
 
-.rowBetween {
-  width: 100%;
-  justify-content: space-between;
-}
-
 .queueBanner {
   display: flex;
   align-items: center;
@@ -373,22 +368,6 @@
   color: #8ec5ff;
 }
 
-.documentText {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.6;
-  color: #525866;
-  background: #f5f6fa;
-  border: 1px solid #eceff6;
-  border-radius: 8px;
-  padding: 10px 12px;
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 400px;
-  overflow-y: auto;
-  font-family: inherit;
-}
-
 .searchHeader {
   display: flex;
   align-items: center;
@@ -428,27 +407,40 @@
   color: #475467;
 }
 
-.sourceToolbar {
+.filterBar {
   width: 100%;
   margin-bottom: 12px;
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
-.sourceCards {
+.filterGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 240px;
+}
+
+.filterLabel {
+  color: var(--note-label-color);
+  font-size: 12px;
+}
+
+.filterSelect {
+  width: 100%;
+}
+
+.cardsGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
   align-items: stretch;
 }
 
 .copawCard {
-  height: 100%;
-}
-
-.copawCardBody {
-  height: 100%;
-}
-
-.copawSparkCardWrapper {
   height: 100%;
 }
 
@@ -463,6 +455,7 @@
   flex-direction: column;
   box-shadow: var(--note-card-shadow);
   animation: cardFadeIn 0.35s ease;
+  padding: 14px 14px 0;
 
   &:hover {
     border-color: var(--note-hover-border);
@@ -475,17 +468,7 @@
   box-shadow: var(--note-hover-shadow);
 }
 
-.sourceCardBody {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-height: 0;
-  height: 100%;
-  flex: 1 1 auto;
-  padding: 14px 14px 10px;
-}
-
-.sourceCardHeader {
+.cardHeader {
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -493,42 +476,36 @@
   margin-bottom: 0;
 }
 
-.sourceOriginTag,
-.sourceTypeTag {
+.originTag,
+.typeTag {
   font-size: 12px;
   border-radius: 4px;
   padding: 1px 6px;
   white-space: nowrap;
   line-height: 18px;
+  flex: 0 0 auto;
 }
 
-.sourceOriginTag {
+.originTag {
   color: #615ced;
   background: rgba(97, 92, 237, 0.1);
 }
 
-.sourceTypeTag {
+.typeTag {
   color: #1677ff;
   background: rgba(22, 119, 255, 0.1);
 }
 
-.sourceMainInfo {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 100%;
-  min-width: 0;
-}
-
-.sourceHeaderTopRow {
+.cardHeaderRow {
   display: flex;
   width: 100%;
   align-items: center;
   flex-wrap: nowrap;
   gap: 5px;
+  min-width: 0;
 }
 
-.sourceHeaderId {
+.cardHeaderId {
   flex: 1 1 auto;
   min-width: 0;
   line-height: 20px;
@@ -537,22 +514,7 @@
   text-overflow: ellipsis;
 }
 
-.sourceHeaderTypeTag {
-  flex: 0 0 auto;
-}
-
-.sourceRunningTag {
-  font-size: 12px;
-  color: #f59e0b;
-  background: rgba(245, 158, 11, 0.12);
-  border-radius: 4px;
-  padding: 1px 6px;
-  white-space: nowrap;
-  line-height: 18px;
-  flex: 0 0 auto;
-}
-
-.sourceIndexedTag {
+.indexedTag {
   font-size: 12px;
   color: #389e0d;
   background: rgba(82, 196, 26, 0.12);
@@ -562,7 +524,7 @@
   line-height: 18px;
 }
 
-.sourceNotIndexedTag {
+.notIndexedTag {
   font-size: 12px;
   color: #667085;
   background: rgba(102, 112, 133, 0.12);
@@ -572,7 +534,7 @@
   line-height: 18px;
 }
 
-.sourceTitle {
+.cardTitle {
   display: block;
   width: 100%;
   font-size: 14px;
@@ -583,29 +545,30 @@
   font-family: var(--note-title-font);
 }
 
-.sourceMeta {
+.cardMeta {
   display: flex;
   min-height: 0;
   flex-direction: column;
   gap: 10px;
   flex: 1 1 auto;
+  margin-top: 10px;
 }
 
-.sourceInfoSection {
+.infoSection {
   display: flex;
   flex-direction: column;
   gap: 5px;
   min-width: 0;
 }
 
-.sourceInfoLabel {
+.infoLabel {
   font-size: 12px;
   color: var(--note-label-color);
   margin-bottom: 0;
   line-height: 1.2;
 }
 
-.sourceInfoBlock {
+.infoBlock {
   font-size: 12px;
   color: var(--note-body-color);
   background-color: var(--note-block-bg);
@@ -615,7 +578,7 @@
   line-height: 1.4;
 }
 
-.sourceLocationButton {
+.clickableBlock {
   cursor: pointer;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 
@@ -630,19 +593,13 @@
   }
 }
 
-.sourceSingleLineValue {
+.singleLineValue {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.sourceInfoTagWrap {
-  display: flex;
-  align-items: center;
-  min-height: 20px;
-}
-
-.sourceStatusStatsRow {
+.statusRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -651,7 +608,20 @@
   min-height: 20px;
 }
 
-.sourceStatusStatsSubRow {
+.statusRow > :first-child {
+  display: flex;
+  align-items: center;
+  min-height: 20px;
+}
+
+.statusRow > :last-child {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: right;
+  line-height: 20px;
+}
+
+.statusSubRow {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -660,48 +630,34 @@
   min-height: 20px;
 }
 
-.sourceStatsText {
-  flex: 1 1 auto;
-  min-width: 0;
-  text-align: right;
-  line-height: 20px;
-}
-
 .detailTagRow {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.sourceMetaRow {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-}
-
-.sourceCardFooter {
+.cardFooter {
   display: flex;
   justify-content: flex-end;
   align-items: center;
   gap: 8px;
-  border-top: 1px solid var(--note-block-border);
+  border-top: 1px solid #f1f2f6;
   padding: 8px 14px 10px;
-  margin-top: 0;
+  margin: 0 -14px 0;
 }
 
-.sourceActions {
+.actionRow {
   display: flex;
   justify-content: flex-end;
   align-items: center;
   gap: 8px;
 }
 
-.sourceActionButton {
+.actionButton {
   padding: 0;
 }
 
-.sourceDeleteButton {
+.deleteButton {
   padding: 4px;
   display: flex;
   align-items: center;
@@ -716,10 +672,6 @@
 
 .remoteError {
   color: #d4380d;
-}
-
-.originSelect {
-  width: 220px;
 }
 
 .dragZone {
@@ -767,12 +719,23 @@
     align-items: stretch;
   }
 
+  .knowledgePage {
+    padding: 18px;
+  }
+
   .searchTypeSelect {
     width: 140px;
   }
 
-  .originSelect {
-    width: 180px;
+  .filterBar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .filterGroup {
+    flex-basis: auto;
+    width: 100%;
   }
 
   .noteStyleSegment {
@@ -788,16 +751,16 @@
     gap: 0;
   }
 
-  .sourceCards {
+  .cardsGrid {
     grid-template-columns: 1fr;
   }
 
-  .sourceCardHeader {
+  .cardHeader {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .sourceActions {
+  .actionRow {
     justify-content: flex-start;
     flex-wrap: wrap;
   }
@@ -809,5 +772,27 @@
 
   .policyGrid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1200px) {
+  .cardsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .knowledgePage {
+    padding: 12px;
+    border-radius: 0;
+  }
+
+  .copawSparkContent {
+    padding: 12px 12px 0;
+  }
+
+  .cardFooter {
+    margin: 0 -12px 0;
+    padding: 8px 12px 10px;
   }
 }

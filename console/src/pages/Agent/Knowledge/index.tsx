@@ -1032,33 +1032,41 @@ function KnowledgePage() {
       </Card>
 
       <Card loading={loading}>
-        <Space className={styles.sourceToolbar} align="center">
-          <Typography.Text>{t("knowledge.sourceOriginFilter")}</Typography.Text>
-          <Select
-            value={sourceOriginFilter}
-            onChange={(value) => setSourceOriginFilter(value as SourceOriginFilter)}
-            options={[
-              { label: t("knowledge.originAll"), value: "all" },
-              { label: t("knowledge.originManual"), value: "manual" },
-              { label: t("knowledge.originAuto"), value: "auto" },
-            ]}
-            className={styles.originSelect}
-          />
-          <Typography.Text>{t("knowledge.sourceTypeFilter")}</Typography.Text>
-          <Select
-            value={sourceTypeFilter}
-            onChange={(value) => setSourceTypeFilter(value as KnowledgeSourceType | "all")}
-            options={[
-              { label: t("knowledge.allTypes"), value: "all" },
-              ...SOURCE_TYPE_OPTIONS,
-            ]}
-            className={styles.originSelect}
-          />
-        </Space>
+        <div className={styles.filterBar}>
+          <div className={styles.filterGroup}>
+            <Typography.Text className={styles.filterLabel}>
+              {t("knowledge.sourceOriginFilter")}
+            </Typography.Text>
+            <Select
+              value={sourceOriginFilter}
+              onChange={(value) => setSourceOriginFilter(value as SourceOriginFilter)}
+              options={[
+                { label: t("knowledge.originAll"), value: "all" },
+                { label: t("knowledge.originManual"), value: "manual" },
+                { label: t("knowledge.originAuto"), value: "auto" },
+              ]}
+              className={styles.filterSelect}
+            />
+          </div>
+          <div className={styles.filterGroup}>
+            <Typography.Text className={styles.filterLabel}>
+              {t("knowledge.sourceTypeFilter")}
+            </Typography.Text>
+            <Select
+              value={sourceTypeFilter}
+              onChange={(value) => setSourceTypeFilter(value as KnowledgeSourceType | "all")}
+              options={[
+                { label: t("knowledge.allTypes"), value: "all" },
+                ...SOURCE_TYPE_OPTIONS,
+              ]}
+              className={styles.filterSelect}
+            />
+          </div>
+        </div>
         {filteredSources.length === 0 ? (
           <Empty description={t("knowledge.empty")} />
         ) : (
-          <div className={styles.sourceCards}>
+          <div className={styles.cardsGrid}>
             {filteredSources.map((record) => {
               const originText = getSourceOriginText(record, t);
               const remoteLine = formatRemoteStatus(record, t);
@@ -1073,56 +1081,73 @@ function KnowledgePage() {
                 : "-";
               return (
                 <div key={record.id} className={styles.copawCard}>
-                  <div className={styles.copawCardBody}>
-                    <div className={styles.copawSparkCardWrapper}>
-                      <div
-                        className={`${styles.copawSparkContent} ${isActiveCard ? styles.copawSparkContentActive : ""}`}
-                        aria-busy={isActiveCard}
-                      >
-                        <div className={styles.sourceCardBody}>
-                          <div className={styles.sourceCardHeader}>
-                            <div className={styles.sourceMainInfo}>
-                              <div className={styles.sourceHeaderTopRow}>
-                                <Typography.Text type="secondary" className={styles.sourceHeaderId}>
-                                  {record.id}
-                                </Typography.Text>
-                                <span className={`${styles.sourceTypeTag} ${styles.sourceHeaderTypeTag}`}>
-                                  {record.type}
-                                </span>
-                                <span className={styles.sourceOriginTag}>{originText}</span>
+                  <div
+                    className={`${styles.copawSparkContent} ${isActiveCard ? styles.copawSparkContentActive : ""}`}
+                    aria-busy={isActiveCard}
+                  >
+                        <div className={styles.cardHeader}>
+                          <div className={styles.cardHeaderRow}>
+                            <Typography.Text type="secondary" className={styles.cardHeaderId}>
+                              {record.id}
+                            </Typography.Text>
+                            <span className={styles.typeTag}>{record.type}</span>
+                            <span className={styles.originTag}>{originText}</span>
+                          </div>
+                        </div>
+
+                        <div className={styles.cardMeta}>
+                          {cardTitle ? (
+                            <div className={styles.infoSection}>
+                              <div className={styles.infoLabel}>
+                                {t("knowledge.table.title")}
                               </div>
+                              <div
+                                role="button"
+                                tabIndex={0}
+                                onClick={() => openDetailDrawer(record)}
+                                onKeyDown={(event) =>
+                                  handleDetailDrawerValueKeyDown(event, record)
+                                }
+                                className={`${styles.infoBlock} ${styles.clickableBlock}`}
+                                title={cardTitle}
+                              >
+                                <Typography.Text
+                                  className={styles.cardTitle}
+                                  title={cardTitle}
+                                >
+                                  {cardTitle}
+                                </Typography.Text>
+                              </div>
+                            </div>
+                          ) : null}
+
+                          <div className={styles.infoSection}>
+                            <div className={styles.infoLabel}>
+                              {t("knowledge.table.source")}
+                            </div>
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => openDetailDrawer(record)}
+                              onKeyDown={(event) =>
+                                handleDetailDrawerValueKeyDown(event, record)
+                              }
+                              className={`${styles.infoBlock} ${styles.clickableBlock}`}
+                              title={descriptionText || t("knowledge.inlineText")}
+                            >
+                              <Typography.Text
+                                className={styles.cardTitle}
+                                title={descriptionText || t("knowledge.inlineText")}
+                              >
+                                {descriptionText || t("knowledge.inlineText")}
+                              </Typography.Text>
                             </div>
                           </div>
 
-                          <div className={styles.sourceMeta}>
-                            {cardTitle ? (
-                              <div className={styles.sourceInfoSection}>
-                                <div className={styles.sourceInfoLabel}>
-                                  {t("knowledge.table.title")}
-                                </div>
-                                <div
-                                  role="button"
-                                  tabIndex={0}
-                                  onClick={() => openDetailDrawer(record)}
-                                  onKeyDown={(event) =>
-                                    handleDetailDrawerValueKeyDown(event, record)
-                                  }
-                                  className={`${styles.sourceInfoBlock} ${styles.sourceLocationButton}`}
-                                  title={cardTitle}
-                                >
-                                  <Typography.Text
-                                    className={styles.sourceTitle}
-                                    title={cardTitle}
-                                  >
-                                    {cardTitle}
-                                  </Typography.Text>
-                                </div>
-                              </div>
-                            ) : null}
-
-                            <div className={styles.sourceInfoSection}>
-                              <div className={styles.sourceInfoLabel}>
-                                {t("knowledge.table.source")}
+                          {record.location ? (
+                            <div className={styles.infoSection}>
+                              <div className={styles.infoLabel}>
+                                {t("knowledge.table.location")}
                               </div>
                               <div
                                 role="button"
@@ -1131,94 +1156,68 @@ function KnowledgePage() {
                                 onKeyDown={(event) =>
                                   handleDetailDrawerValueKeyDown(event, record)
                                 }
-                                className={`${styles.sourceInfoBlock} ${styles.sourceLocationButton}`}
-                                title={descriptionText || t("knowledge.inlineText")}
+                                className={`${styles.infoBlock} ${styles.singleLineValue} ${styles.clickableBlock}`}
+                                title={record.location}
                               >
-                                <Typography.Text
-                                  
-                                  className={styles.sourceTitle}
-                                  title={descriptionText || t("knowledge.inlineText")}
-                                >
-                                  {descriptionText || t("knowledge.inlineText")}
-                                </Typography.Text>
+                                {record.location}
                               </div>
                             </div>
+                          ) : null}
 
-                            {record.location ? (
-                              <div className={styles.sourceInfoSection}>
-                                <div className={styles.sourceInfoLabel}>
-                                  {t("knowledge.table.location")}
+                          <div className={styles.infoSection}>
+                            <div className={styles.infoLabel}>
+                              {t("knowledge.statusAndStats")}
+                            </div>
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => openDetailDrawer(record)}
+                              onKeyDown={(event) =>
+                                handleDetailDrawerValueKeyDown(event, record)
+                              }
+                              className={`${styles.infoBlock} ${styles.clickableBlock}`}
+                            >
+                              <div className={styles.statusRow}>
+                                <div>
+                                  <span
+                                    className={
+                                      record.status.indexed
+                                        ? styles.indexedTag
+                                        : styles.notIndexedTag
+                                    }
+                                  >
+                                    {record.status.indexed
+                                      ? t("knowledge.indexed")
+                                      : t("knowledge.notIndexed")}
+                                  </span>
                                 </div>
-                                <div
-                                  role="button"
-                                  tabIndex={0}
-                                  onClick={() => openDetailDrawer(record)}
-                                  onKeyDown={(event) =>
-                                    handleDetailDrawerValueKeyDown(event, record)
-                                  }
-                                  className={`${styles.sourceInfoBlock} ${styles.sourceSingleLineValue} ${styles.sourceLocationButton}`}
-                                  title={record.location}
-                                >
-                                  {record.location}
+                                <Typography.Text type="secondary">
+                                  {indexedCountText}
+                                </Typography.Text>
+                              </div>
+                              {remoteLine ? (
+                                <div className={styles.statusSubRow}>
+                                  <Typography.Text type="secondary">Remote</Typography.Text>
+                                  <Typography.Text type="secondary">{remoteLine}</Typography.Text>
                                 </div>
-                              </div>
-                            ) : null}
-
-                            <div className={styles.sourceInfoSection}>
-                              <div className={styles.sourceInfoLabel}>
-                                {t("knowledge.statusAndStats")}
-                              </div>
-                              <div
-                                role="button"
-                                tabIndex={0}
-                                onClick={() => openDetailDrawer(record)}
-                                onKeyDown={(event) =>
-                                  handleDetailDrawerValueKeyDown(event, record)
-                                }
-                                className={`${styles.sourceInfoBlock} ${styles.sourceLocationButton}`}
-                              >
-                                <div className={styles.sourceStatusStatsRow}>
-                                  <div className={styles.sourceInfoTagWrap}>
-                                    <span
-                                      className={
-                                        record.status.indexed
-                                          ? styles.sourceIndexedTag
-                                          : styles.sourceNotIndexedTag
-                                      }
-                                    >
-                                      {record.status.indexed
-                                        ? t("knowledge.indexed")
-                                        : t("knowledge.notIndexed")}
-                                    </span>
-                                  </div>
-                                  <Typography.Text type="secondary" className={styles.sourceStatsText}>
-                                    {indexedCountText}
-                                  </Typography.Text>
-                                </div>
-                                {remoteLine ? (
-                                  <div className={styles.sourceStatusStatsSubRow}>
-                                    <Typography.Text type="secondary">Remote</Typography.Text>
-                                    <Typography.Text type="secondary">{remoteLine}</Typography.Text>
-                                  </div>
-                                ) : null}
-                                {record.status.remote_last_error ? (
-                                  <Typography.Text type="secondary" className={styles.remoteError}>
-                                    {t("knowledge.remoteLastError", {
-                                      error: record.status.remote_last_error,
-                                    })}
-                                  </Typography.Text>
-                                ) : null}
-                              </div>
+                              ) : null}
+                              {record.status.remote_last_error ? (
+                                <Typography.Text type="secondary" className={styles.remoteError}>
+                                  {t("knowledge.remoteLastError", {
+                                    error: record.status.remote_last_error,
+                                  })}
+                                </Typography.Text>
+                              ) : null}
                             </div>
                           </div>
                         </div>
 
-                        <div className={styles.sourceCardFooter}>
-                          <div className={styles.sourceActions}>
+                        <div className={styles.cardFooter}>
+                          <div className={styles.actionRow}>
                             <Button
                               type="link"
                               size="small"
-                              className={styles.sourceActionButton}
+                              className={styles.actionButton}
                               loading={indexingId === record.id}
                               onClick={() => handleIndexSource(record.id)}
                             >
@@ -1231,7 +1230,7 @@ function KnowledgePage() {
                               size="small"
                               danger
                               icon={<DeleteOutlined />}
-                              className={styles.sourceDeleteButton}
+                              className={styles.deleteButton}
                               onClick={() =>
                                 handleConfirmDeleteSource(record.id, record.name)
                               }
@@ -1239,8 +1238,6 @@ function KnowledgePage() {
                             />
                           </div>
                         </div>
-                      </div>
-                    </div>
                   </div>
                 </div>
               );
@@ -1534,55 +1531,55 @@ function KnowledgePage() {
         {selectedSource ? (
           <Space direction="vertical" size={12} className={styles.fullWidth}>
             {selectedSource.name?.trim() ? (
-              <div className={styles.sourceInfoSection}>
-                <div className={styles.sourceInfoLabel}>{t("knowledge.table.title")}</div>
-                <div className={`${styles.sourceInfoBlock} ${styles.sourceSingleLineValue}`}>
+              <div className={styles.infoSection}>
+                <div className={styles.infoLabel}>{t("knowledge.table.title")}</div>
+                <div className={`${styles.infoBlock} ${styles.singleLineValue}`}>
                   {selectedSource.name}
                 </div>
               </div>
             ) : null}
 
-            <div className={styles.sourceInfoSection}>
-              <div className={styles.sourceInfoLabel}>{t("knowledge.table.source")}</div>
-              <div className={styles.sourceInfoBlock}>
+            <div className={styles.infoSection}>
+              <div className={styles.infoLabel}>{t("knowledge.table.source")}</div>
+              <div className={styles.infoBlock}>
                 {selectedSource.description || t("knowledge.inlineText")}
               </div>
             </div>
 
             <div className={styles.detailTagRow}>
-              <span className={styles.sourceOriginTag}>{selectedSourceOriginText}</span>
-              <span className={styles.sourceTypeTag}>{selectedSource.type}</span>
+              <span className={styles.originTag}>{selectedSourceOriginText}</span>
+              <span className={styles.typeTag}>{selectedSource.type}</span>
             </div>
 
-            <div className={styles.sourceInfoSection}>
-              <div className={styles.sourceInfoLabel}>{t("knowledge.form.id")}</div>
-              <div className={`${styles.sourceInfoBlock} ${styles.sourceSingleLineValue}`}>
+            <div className={styles.infoSection}>
+              <div className={styles.infoLabel}>{t("knowledge.form.id")}</div>
+              <div className={`${styles.infoBlock} ${styles.singleLineValue}`}>
                 {selectedSource.id}
               </div>
             </div>
 
             {selectedSource.location ? (
-              <div className={styles.sourceInfoSection}>
-                <div className={styles.sourceInfoLabel}>{t("knowledge.table.location")}</div>
-                <div className={styles.sourceInfoBlock}>{selectedSource.location}</div>
+              <div className={styles.infoSection}>
+                <div className={styles.infoLabel}>{t("knowledge.table.location")}</div>
+                <div className={styles.infoBlock}>{selectedSource.location}</div>
               </div>
             ) : null}
 
-            <div className={styles.sourceInfoSection}>
-              <div className={styles.sourceInfoLabel}>{t("knowledge.table.chunkStats")}</div>
-              <div className={`${styles.sourceInfoBlock} ${styles.sourceSingleLineValue}`}>
+            <div className={styles.infoSection}>
+              <div className={styles.infoLabel}>{t("knowledge.table.chunkStats")}</div>
+              <div className={`${styles.infoBlock} ${styles.singleLineValue}`}>
                 {selectedSourceIndexedCountText}
               </div>
             </div>
 
-            <div className={styles.sourceInfoSection}>
-              <div className={styles.sourceInfoLabel}>{t("knowledge.table.status")}</div>
-              <div className={styles.sourceInfoTagWrap}>
+            <div className={styles.infoSection}>
+              <div className={styles.infoLabel}>{t("knowledge.table.status")}</div>
+              <div>
                 <span
                   className={
                     selectedSource.status.indexed
-                      ? styles.sourceIndexedTag
-                      : styles.sourceNotIndexedTag
+                      ? styles.indexedTag
+                      : styles.notIndexedTag
                   }
                 >
                   {selectedSource.status.indexed
@@ -1593,9 +1590,9 @@ function KnowledgePage() {
             </div>
 
             {selectedSourceRemoteLine ? (
-              <div className={styles.sourceInfoSection}>
-                <div className={styles.sourceInfoLabel}>Remote</div>
-                <div className={styles.sourceInfoBlock}>{selectedSourceRemoteLine}</div>
+              <div className={styles.infoSection}>
+                <div className={styles.infoLabel}>Remote</div>
+                <div className={styles.infoBlock}>{selectedSourceRemoteLine}</div>
               </div>
             ) : null}
 
@@ -1609,8 +1606,8 @@ function KnowledgePage() {
 
             <Divider style={{ margin: "4px 0" }} />
 
-            <div className={styles.sourceInfoSection}>
-              <div className={styles.sourceInfoLabel}>{t("knowledge.documentContent")}</div>
+            <div className={styles.infoSection}>
+              <div className={styles.infoLabel}>{t("knowledge.documentContent")}</div>
               {sourceContentLoading ? (
                 <div className={styles.contentLoadingWrap}>
                   <Spin size="small" />
