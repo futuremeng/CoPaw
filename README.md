@@ -333,6 +333,56 @@ Tools that need extra keys (e.g. `TAVILY_API_KEY` for web search) can be set in 
 
 > **Using local models only?** If you use [Local Models](#local-models) (llama.cpp or MLX), you do **not** need any API key.
 
+### Pass CoPaw model config to Cognee (Ollama / LM Studio / Custom)
+
+When Cognee is enabled in the knowledge layer, CoPaw can now sync the current active provider/model into Cognee LLM environment variables (`LLM_MODEL`, `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_API_BASE`).
+
+Recommended minimal setup in `config.json`:
+
+```json
+{
+  "knowledge": {
+    "enabled": true,
+    "engine": {
+      "provider": "cognee",
+      "fallback_to_default": true
+    },
+    "cognee": {
+      "enabled": true,
+      "sync_with_copaw_provider": true,
+      "custom_model_prefix": "openai"
+    }
+  }
+}
+```
+
+Behavior:
+
+- Ollama: model is auto-mapped to `ollama/<model>` (for example `ollama/qwen3:8b`).
+- LM Studio: model is auto-mapped to `lm_studio/<model>`.
+- Other custom OpenAI-compatible providers: use `custom_model_prefix` (for example `openai`, `hosted_vllm`, `openrouter`).
+
+If you want to isolate Cognee from your chat primary model (avoid call contention):
+
+1. Set `sync_with_copaw_provider` to `false`.
+2. Configure a dedicated Cognee model explicitly:
+
+```json
+{
+  "knowledge": {
+    "cognee": {
+      "enabled": true,
+      "sync_with_copaw_provider": false,
+      "llm_model": "ollama/qwen3:8b",
+      "llm_api_key": "local",
+      "llm_base_url": "http://127.0.0.1:11434/v1"
+    }
+  }
+}
+```
+
+> Note: Cognee uses LiteLLM routing, and many providers require `provider/model` format (for example `gemini/gemini-2.0-flash`, `openrouter/...`).
+
 ## Local Models
 
 CoPaw can run LLMs entirely on your machine — no API keys or cloud services required. See the [official docs](https://copaw.agentscope.io/docs/models#local-providers-llamacpp--mlx) for details.
