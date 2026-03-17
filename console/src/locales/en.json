@@ -672,6 +672,8 @@
     "toolResultCompactKeepNMin": "Tool result keep count must be at least 1",
     "autoCollectChatFiles": "Auto-collect chat files",
     "autoCollectChatFilesTooltip": "After each chat turn, automatically register file references from the current turn as file knowledge sources.",
+    "knowledgeEnabled": "Enable knowledge",
+    "knowledgeEnabledTooltip": "Master switch for knowledge features. When off, retrieval, auto-collection, and maintenance are all disabled.",
     "autoCollectChatUrls": "Auto-collect chat URLs",
     "autoCollectChatUrlsTooltip": "After each chat turn, automatically register URLs found in chat text as URL knowledge sources.",
     "autoCollectLongText": "Auto-save long text",

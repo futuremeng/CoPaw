@@ -795,7 +795,9 @@ class KnowledgeManager:
         running_config: Any | None = None,
     ) -> dict[str, Any]:
         """Collect file/url knowledge immediately from user-sent content."""
-        if not config.enabled:
+        if not config.enabled or not bool(
+            getattr(running_config, "knowledge_enabled", True)
+        ):
             return {
                 "changed": False,
                 "file_sources": 0,
@@ -809,13 +811,13 @@ class KnowledgeManager:
         errors: list[dict[str, str]] = []
         user_messages = list(request_messages or [])
 
-        auto_collect_chat_files = getattr(running_config, "auto_collect_chat_files", None)
-        if auto_collect_chat_files is None:
-            auto_collect_chat_files = config.automation.auto_collect_chat_files
+        knowledge_auto_collect_chat_files = getattr(running_config, "knowledge_auto_collect_chat_files", None)
+        if knowledge_auto_collect_chat_files is None:
+            knowledge_auto_collect_chat_files = config.automation.knowledge_auto_collect_chat_files
 
-        auto_collect_chat_urls = getattr(running_config, "auto_collect_chat_urls", None)
-        if auto_collect_chat_urls is None:
-            auto_collect_chat_urls = config.automation.auto_collect_chat_urls
+        knowledge_auto_collect_chat_urls = getattr(running_config, "knowledge_auto_collect_chat_urls", None)
+        if knowledge_auto_collect_chat_urls is None:
+            knowledge_auto_collect_chat_urls = config.automation.knowledge_auto_collect_chat_urls
         auto_collect_url_min_chars = int(
             getattr(
                 running_config,
@@ -825,7 +827,7 @@ class KnowledgeManager:
             or _AUTO_COLLECT_URL_MIN_CONTENT_CHARS
         )
 
-        if auto_collect_chat_files:
+        if knowledge_auto_collect_chat_files:
             for source in self._build_file_sources_from_messages(
                 user_messages,
                 config,
@@ -841,7 +843,7 @@ class KnowledgeManager:
                 )
                 file_sources += 1
 
-        if auto_collect_chat_urls:
+        if knowledge_auto_collect_chat_urls:
             for source in self._build_url_sources_from_messages(
                 user_messages,
                 session_id,
@@ -880,7 +882,9 @@ class KnowledgeManager:
         running_config: Any | None = None,
     ) -> dict[str, Any]:
         """Collect text knowledge after response, based on one user-assistant turn pair."""
-        if not config.enabled:
+        if not config.enabled or not bool(
+            getattr(running_config, "knowledge_enabled", True)
+        ):
             return {
                 "changed": False,
                 "file_sources": 0,
@@ -888,10 +892,10 @@ class KnowledgeManager:
                 "text_sources": 0,
             }
 
-        auto_collect_long_text = getattr(running_config, "auto_collect_long_text", None)
-        if auto_collect_long_text is None:
-            auto_collect_long_text = config.automation.auto_collect_long_text
-        if not auto_collect_long_text:
+        knowledge_auto_collect_long_text = getattr(running_config, "knowledge_auto_collect_long_text", None)
+        if knowledge_auto_collect_long_text is None:
+            knowledge_auto_collect_long_text = config.automation.knowledge_auto_collect_long_text
+        if not knowledge_auto_collect_long_text:
             return {
                 "changed": False,
                 "file_sources": 0,
@@ -899,9 +903,9 @@ class KnowledgeManager:
                 "text_sources": 0,
             }
 
-        long_text_min_chars = getattr(running_config, "long_text_min_chars", None)
-        if not isinstance(long_text_min_chars, int):
-            long_text_min_chars = config.automation.long_text_min_chars
+        knowledge_long_text_min_chars = getattr(running_config, "knowledge_long_text_min_chars", None)
+        if not isinstance(knowledge_long_text_min_chars, int):
+            knowledge_long_text_min_chars = config.automation.knowledge_long_text_min_chars
 
         errors: list[dict[str, str]] = []
         changed = False
@@ -911,7 +915,7 @@ class KnowledgeManager:
             response_messages=list(response_messages or []),
             session_id=session_id,
             user_id=user_id,
-            long_text_min_chars=long_text_min_chars,
+            knowledge_long_text_min_chars=knowledge_long_text_min_chars,
         ):
             if self._upsert_source(config, source):
                 changed = True
@@ -940,7 +944,9 @@ class KnowledgeManager:
         running_config: Any | None = None,
     ) -> dict[str, Any]:
         """Backfill historical chat-session data into knowledge sources once."""
-        if not config.enabled:
+        if not config.enabled or not bool(
+            getattr(running_config, "knowledge_enabled", True)
+        ):
             self._save_backfill_progress(
                 {
                     "running": False,
@@ -1001,12 +1007,12 @@ class KnowledgeManager:
             }
         )
 
-        long_text_min_chars = getattr(running_config, "long_text_min_chars", None)
-        if not isinstance(long_text_min_chars, int):
-            long_text_min_chars = config.automation.long_text_min_chars
-        auto_collect_chat_files = getattr(running_config, "auto_collect_chat_files", False)
-        auto_collect_chat_urls = getattr(running_config, "auto_collect_chat_urls", True)
-        auto_collect_long_text = getattr(running_config, "auto_collect_long_text", False)
+        knowledge_long_text_min_chars = getattr(running_config, "knowledge_long_text_min_chars", None)
+        if not isinstance(knowledge_long_text_min_chars, int):
+            knowledge_long_text_min_chars = config.automation.knowledge_long_text_min_chars
+        knowledge_auto_collect_chat_files = getattr(running_config, "knowledge_auto_collect_chat_files", False)
+        knowledge_auto_collect_chat_urls = getattr(running_config, "knowledge_auto_collect_chat_urls", True)
+        knowledge_auto_collect_long_text = getattr(running_config, "knowledge_auto_collect_long_text", False)
         auto_collect_url_min_chars = int(
             getattr(
                 running_config,
@@ -1046,7 +1052,7 @@ class KnowledgeManager:
                     continue
                 processed_sessions += 1
 
-                if auto_collect_chat_files:
+                if knowledge_auto_collect_chat_files:
                     for source in self._build_file_sources_from_messages(
                         messages,
                         config,
@@ -1063,13 +1069,13 @@ class KnowledgeManager:
                             )
                         file_sources += 1
 
-                if auto_collect_long_text:
+                if knowledge_auto_collect_long_text:
                     for source in self._build_text_sources_from_messages(
                         messages,
                         config,
                         session_id,
                         user_id,
-                        long_text_min_chars,
+                        knowledge_long_text_min_chars,
                     ):
                         upserted = self._upsert_source(config, source)
                         if upserted:
@@ -1082,7 +1088,7 @@ class KnowledgeManager:
                             )
                         text_sources += 1
 
-                if auto_collect_chat_urls:
+                if knowledge_auto_collect_chat_urls:
                     for source in self._build_url_sources_from_messages(
                         messages,
                         session_id,
@@ -1351,13 +1357,13 @@ class KnowledgeManager:
         config: KnowledgeConfig,
         session_id: str,
         user_id: str,
-        long_text_min_chars: int,
+        knowledge_long_text_min_chars: int,
     ) -> list[KnowledgeSourceSpec]:
         sources: list[KnowledgeSourceSpec] = []
         seen_ids: set[str] = set()
         for role, text in self._iter_message_texts(messages):
             normalized = self._normalize_text(text)
-            if len(normalized) < long_text_min_chars:
+            if len(normalized) < knowledge_long_text_min_chars:
                 continue
             digest = hashlib.sha1(normalized.encode("utf-8")).hexdigest()[:12]
             source_id = f"auto-text-{digest}"
@@ -1394,7 +1400,7 @@ class KnowledgeManager:
         response_messages: list[Any],
         session_id: str,
         user_id: str,
-        long_text_min_chars: int,
+        knowledge_long_text_min_chars: int,
     ) -> list[KnowledgeSourceSpec]:
         user_text = self._normalize_text(
             "\n".join(
@@ -1414,7 +1420,7 @@ class KnowledgeManager:
             return []
 
         merged = self._normalize_text(f"用户: {user_text}\n\n智能体: {assistant_text}")
-        if len(merged) < long_text_min_chars:
+        if len(merged) < knowledge_long_text_min_chars:
             return []
 
         digest = hashlib.sha1(merged.encode("utf-8")).hexdigest()[:12]
@@ -1820,17 +1826,17 @@ class KnowledgeManager:
 
     def _history_backfill_signature(self, running_config: Any | None) -> str:
         payload = {
-            "auto_collect_chat_files": bool(
-                getattr(running_config, "auto_collect_chat_files", False),
+            "knowledge_auto_collect_chat_files": bool(
+                getattr(running_config, "knowledge_auto_collect_chat_files", False),
             ),
-            "auto_collect_chat_urls": bool(
-                getattr(running_config, "auto_collect_chat_urls", True),
+            "knowledge_auto_collect_chat_urls": bool(
+                getattr(running_config, "knowledge_auto_collect_chat_urls", True),
             ),
-            "auto_collect_long_text": bool(
-                getattr(running_config, "auto_collect_long_text", False),
+            "knowledge_auto_collect_long_text": bool(
+                getattr(running_config, "knowledge_auto_collect_long_text", False),
             ),
-            "long_text_min_chars": int(
-                getattr(running_config, "long_text_min_chars", 2000),
+            "knowledge_long_text_min_chars": int(
+                getattr(running_config, "knowledge_long_text_min_chars", 2000),
             ),
             "knowledge_chunk_size": int(
                 getattr(running_config, "knowledge_chunk_size", 1200),

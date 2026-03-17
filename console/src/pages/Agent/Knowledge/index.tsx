@@ -116,6 +116,8 @@ function KnowledgePage() {
   const [runningConfig, setRunningConfig] = useState<AgentsRunningConfig | null>(
     null,
   );
+  const knowledgeRuntimeEnabled = runningConfig?.knowledge_enabled ?? true;
+  const knowledgePageDisabled = !knowledgeRuntimeEnabled;
   const [backfillStatus, setBackfillStatus] =
     useState<KnowledgeHistoryBackfillStatus | null>(null);
   const [backfillProgress, setBackfillProgress] =
@@ -412,14 +414,18 @@ function KnowledgePage() {
 
   const handleConfirmEnable = useCallback(
     async (runBackfillNow: boolean) => {
-      if (!config) {
+      if (!config || !runningConfig) {
         return;
       }
       try {
-        const nextRunningConfig = await enableConfigForm.validateFields();
+        const nextRunningConfig = {
+          ...runningConfig,
+          ...(await enableConfigForm.validateFields()),
+          knowledge_enabled: true,
+        } as AgentsRunningConfig;
         setEnableModalSubmitting(true);
         const updatedRunningConfig = await api.updateAgentRunningConfig(
-          nextRunningConfig as AgentsRunningConfig,
+          nextRunningConfig,
         );
         setRunningConfig(updatedRunningConfig);
         const updatedKnowledge = await persistKnowledgeConfig({
@@ -454,20 +460,43 @@ function KnowledgePage() {
       handleRunHistoryBackfillNow,
       loadData,
       persistKnowledgeConfig,
+      runningConfig,
       t,
     ],
   );
 
   const handleToggleEnabled = async (checked: boolean) => {
-    if (!config) {
+    if (!config || !runningConfig) {
       return;
     }
 
     if (!checked) {
-      await persistKnowledgeConfig({
-        ...config,
-        enabled: false,
-      });
+      try {
+        const updatedRunningConfig = await api.updateAgentRunningConfig({
+          ...runningConfig,
+          knowledge_enabled: false,
+        });
+        setRunningConfig(updatedRunningConfig);
+        await loadData();
+      } catch (error) {
+        console.error("Failed to disable knowledge runtime", error);
+        message.error(t("knowledge.configSaveFailed"));
+      }
+      return;
+    }
+
+    if (config.enabled) {
+      try {
+        const updatedRunningConfig = await api.updateAgentRunningConfig({
+          ...runningConfig,
+          knowledge_enabled: true,
+        });
+        setRunningConfig(updatedRunningConfig);
+        await loadData();
+      } catch (error) {
+        console.error("Failed to enable knowledge runtime", error);
+        message.error(t("knowledge.configSaveFailed"));
+      }
       return;
     }
 
@@ -485,6 +514,9 @@ function KnowledgePage() {
   };
 
   const handleAddSource = async () => {
+    if (knowledgePageDisabled) {
+      return;
+    }
     try {
       const values = await form.validateFields();
       setSaving(true);
@@ -552,6 +584,9 @@ function KnowledgePage() {
   };
 
   const handleIndexSource = useCallback(async (sourceId: string) => {
+    if (knowledgePageDisabled) {
+      return;
+    }
     try {
       setIndexingId(sourceId);
       await api.indexKnowledgeSource(sourceId);
@@ -563,9 +598,12 @@ function KnowledgePage() {
     } finally {
       setIndexingId(null);
     }
-  }, [loadData, t]);
+  }, [knowledgePageDisabled, loadData, t]);
 
   const handleIndexAll = async () => {
+    if (knowledgePageDisabled) {
+      return;
+    }
     try {
       setIndexingAll(true);
       await api.indexAllKnowledgeSources();
@@ -591,6 +629,9 @@ function KnowledgePage() {
   }, []);
 
   const handleBackupAll = useCallback(async () => {
+    if (knowledgePageDisabled) {
+      return;
+    }
     try {
       setExportingAll(true);
       const blob = await api.downloadKnowledgeBackup();
@@ -603,7 +644,7 @@ function KnowledgePage() {
     } finally {
       setExportingAll(false);
     }
-  }, [t, triggerBlobDownload]);
+  }, [knowledgePageDisabled, t, triggerBlobDownload]);
 
   const handleBackupSource = useCallback(
     async (sourceId: string, sourceName: string) => {
@@ -657,13 +698,19 @@ function KnowledgePage() {
   );
 
   const handleRestoreBackup = useCallback(() => {
+    if (knowledgePageDisabled) {
+      return;
+    }
     if (importingBackup) {
       return;
     }
     backupImportInputRef.current?.click();
-  }, [importingBackup]);
+  }, [importingBackup, knowledgePageDisabled]);
 
   const handleClearKnowledge = useCallback(() => {
+    if (knowledgePageDisabled) {
+      return;
+    }
     Modal.confirm({
       title: t("knowledge.clearConfirmTitle"),
       content: t("knowledge.clearConfirmContent"),
@@ -691,9 +738,12 @@ function KnowledgePage() {
         }
       },
     });
-  }, [loadData, t]);
+  }, [knowledgePageDisabled, loadData, t]);
 
   const handleSearch = async () => {
+    if (knowledgePageDisabled) {
+      return;
+    }
     const query = searchQuery.trim();
     if (!query) {
       setHits([]);
@@ -891,7 +941,7 @@ function KnowledgePage() {
     isFileDragActive ? styles.dragZoneActive : ""
   }`;
   const enableModalAutoCollectLongText = Form.useWatch(
-    "auto_collect_long_text",
+    "knowledge_auto_collect_long_text",
     enableConfigForm,
   );
   const showBackfillNowButton = Boolean(
@@ -1018,7 +1068,7 @@ function KnowledgePage() {
           <div className={styles.headerControlGroup}>
             <Typography.Text>{t("knowledge.enabled")}</Typography.Text>
             <Switch
-              checked={config?.enabled ?? false}
+              checked={knowledgeRuntimeEnabled}
               onChange={handleToggleEnabled}
             />
           </div>
@@ -1027,6 +1077,7 @@ function KnowledgePage() {
               icon={<ReloadOutlined />}
               onClick={handleIndexAll}
               loading={indexingAll}
+              disabled={knowledgePageDisabled}
             >
               {t("knowledge.indexAll")}
             </Button>
@@ -1034,6 +1085,7 @@ function KnowledgePage() {
               icon={<DownloadOutlined />}
               onClick={handleBackupAll}
               loading={exportingAll}
+              disabled={knowledgePageDisabled}
             >
               {t("knowledge.backupAll")}
             </Button>
@@ -1041,6 +1093,7 @@ function KnowledgePage() {
               icon={<UploadOutlined />}
               onClick={handleRestoreBackup}
               loading={importingBackup}
+              disabled={knowledgePageDisabled}
             >
               {t("knowledge.restore")}
             </Button>
@@ -1052,6 +1105,7 @@ function KnowledgePage() {
               icon={<DeleteOutlined />}
               onClick={handleClearKnowledge}
               loading={clearingKnowledge}
+              disabled={knowledgePageDisabled}
             >
               {t("knowledge.clearKnowledge")}
             </Button>
@@ -1060,6 +1114,7 @@ function KnowledgePage() {
                 icon={<ReloadOutlined />}
                 onClick={handleRunHistoryBackfillNow}
                 loading={backfillingHistory}
+                disabled={knowledgePageDisabled}
               >
                 {t("knowledge.backfillNowButton")}
               </Button>
@@ -1081,7 +1136,11 @@ function KnowledgePage() {
         </div>
       ) : null}
 
-      <Space direction="vertical" size={16} className={styles.contentStack}>
+      <Space
+        direction="vertical"
+        size={16}
+        className={`${styles.contentStack} ${knowledgePageDisabled ? styles.disabledPanel : ""}`}
+      >
 
       <Card>
         <Space className={styles.fullWidth} direction="vertical" size={12}>
@@ -1640,7 +1699,7 @@ function KnowledgePage() {
           >
             <Form.Item
               label={t("agentConfig.autoCollectChatFiles")}
-              name="auto_collect_chat_files"
+              name="knowledge_auto_collect_chat_files"
               valuePropName="checked"
               tooltip={t("agentConfig.autoCollectChatFilesTooltip")}
             >
@@ -1648,7 +1707,7 @@ function KnowledgePage() {
             </Form.Item>
             <Form.Item
               label={t("agentConfig.autoCollectChatUrls")}
-              name="auto_collect_chat_urls"
+              name="knowledge_auto_collect_chat_urls"
               valuePropName="checked"
               tooltip={t("agentConfig.autoCollectChatUrlsTooltip")}
             >
@@ -1656,7 +1715,7 @@ function KnowledgePage() {
             </Form.Item>
             <Form.Item
               label={t("agentConfig.autoCollectLongText")}
-              name="auto_collect_long_text"
+              name="knowledge_auto_collect_long_text"
               valuePropName="checked"
               tooltip={t("agentConfig.autoCollectLongTextTooltip")}
             >
@@ -1664,7 +1723,7 @@ function KnowledgePage() {
             </Form.Item>
             <Form.Item
               label={t("agentConfig.longTextMinChars")}
-              name="long_text_min_chars"
+              name="knowledge_long_text_min_chars"
               rules={[
                 {
                   required: true,

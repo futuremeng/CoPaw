@@ -208,6 +208,7 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
                 tool_enabled = (
                     tool_enabled
                     and bool(getattr(config.knowledge, "enabled", False))
+                    and bool(getattr(config.agents.running, "knowledge_enabled", True))
                     and bool(
                         getattr(
                             config.agents.running,
@@ -220,18 +221,21 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
                 tool_enabled = (
                     tool_enabled
                     and bool(getattr(config.knowledge, "enabled", False))
+                    and bool(getattr(config.agents.running, "knowledge_enabled", True))
                     and bool(getattr(config.knowledge, "graph_query_enabled", False))
                 )
             elif tool_name in {"memify_run", "memify_status"}:
                 tool_enabled = (
                     tool_enabled
                     and bool(getattr(config.knowledge, "enabled", False))
+                    and bool(getattr(config.agents.running, "knowledge_enabled", True))
                     and bool(getattr(config.knowledge, "memify_enabled", False))
                 )
             elif tool_name == "triplet_focus_search":
                 tool_enabled = (
                     tool_enabled
                     and bool(getattr(config.knowledge, "enabled", False))
+                    and bool(getattr(config.agents.running, "knowledge_enabled", True))
                     and bool(getattr(config.knowledge, "triplet_search_enabled", False))
                 )
 

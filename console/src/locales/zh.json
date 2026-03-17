@@ -672,6 +672,8 @@
     "toolResultCompactKeepNMin": "工具结果保留数量必须大于等于 1",
     "autoCollectChatFiles": "自动收集对话文件",
     "autoCollectChatFilesTooltip": "在每轮对话结束后，将本轮文件引用自动登记为知识库 file 来源。",
+    "knowledgeEnabled": "启用知识库",
+    "knowledgeEnabledTooltip": "知识库总开关。关闭后，知识检索、自动沉淀与相关维护能力将全部停用。",
     "autoCollectChatUrls": "自动收集对话 URL",
     "autoCollectChatUrlsTooltip": "在每轮对话结束后，将对话文本中出现的 URL 自动登记为知识库 url 来源。",
     "autoCollectLongText": "自动沉淀长文本",
