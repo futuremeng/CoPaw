@@ -896,50 +896,54 @@ function KnowledgePage() {
           </Typography.Paragraph>
         </div>
         <div className={styles.headerActions}>
-          <Typography.Text className={styles.noteStyleLabel}>
-            {t("knowledge.noteStyle")}
-          </Typography.Text>
-          <Segmented
-            options={noteStyleOptions}
-            value={noteStyle}
-            onChange={(value) => setNoteStyle(value as KnowledgeNoteStyle)}
-            className={styles.noteStyleSegment}
-          />
-          <Typography.Text>{t("knowledge.enabled")}</Typography.Text>
-          <Switch
-            checked={config?.enabled ?? false}
-            onChange={handleToggleEnabled}
-          />
-          <Button icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
-            {t("knowledge.addSource")}
-          </Button>
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={handleIndexAll}
-            loading={indexingAll}
-          >
-            {t("knowledge.indexAll")}
-          </Button>
-          <Button onClick={() => navigate("/agent-config")}>
-            {t("knowledge.goToRuntimeConfig")}
-          </Button>
-          <Button
-            danger
-            icon={<DeleteOutlined />}
-            onClick={handleClearKnowledge}
-            loading={clearingKnowledge}
-          >
-            {t("knowledge.clearKnowledge")}
-          </Button>
-          {showBackfillNowButton ? (
+          <div className={styles.headerControlGroup}>
+            <Typography.Text className={styles.noteStyleLabel}>
+              {t("knowledge.noteStyle")}
+            </Typography.Text>
+            <Segmented
+              options={noteStyleOptions}
+              value={noteStyle}
+              onChange={(value) => setNoteStyle(value as KnowledgeNoteStyle)}
+              className={styles.noteStyleSegment}
+            />
+            <Typography.Text>{t("knowledge.enabled")}</Typography.Text>
+            <Switch
+              checked={config?.enabled ?? false}
+              onChange={handleToggleEnabled}
+            />
+          </div>
+          <div className={styles.headerButtonGroup}>
+            <Button icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
+              {t("knowledge.addSource")}
+            </Button>
             <Button
               icon={<ReloadOutlined />}
-              onClick={handleRunHistoryBackfillNow}
-              loading={backfillingHistory}
+              onClick={handleIndexAll}
+              loading={indexingAll}
             >
-              {t("knowledge.backfillNowButton")}
+              {t("knowledge.indexAll")}
             </Button>
-          ) : null}
+            <Button onClick={() => navigate("/agent-config")}>
+              {t("knowledge.goToRuntimeConfig")}
+            </Button>
+            <Button
+              danger
+              icon={<DeleteOutlined />}
+              onClick={handleClearKnowledge}
+              loading={clearingKnowledge}
+            >
+              {t("knowledge.clearKnowledge")}
+            </Button>
+            {showBackfillNowButton ? (
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={handleRunHistoryBackfillNow}
+                loading={backfillingHistory}
+              >
+                {t("knowledge.backfillNowButton")}
+              </Button>
+            ) : null}
+          </div>
         </div>
       </div>
 

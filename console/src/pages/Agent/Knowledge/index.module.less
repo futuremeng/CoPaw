@@ -76,6 +76,19 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.headerControlGroup,
+.headerButtonGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.headerButtonGroup {
+  justify-content: flex-end;
 }
 
 .noteStyleSegment {
@@ -594,8 +607,29 @@
 
 @media (max-width: 900px) {
   .header {
-    flex-direction: column;
+    flex-wrap: wrap;
     align-items: stretch;
+  }
+
+  .headerInfo {
+    flex: 0 0 100%;
+    width: 100%;
+  }
+
+  .headerActions {
+    width: 100%;
+    justify-content: space-between;
+    align-items: flex-start;
+    row-gap: 10px;
+  }
+
+  .headerControlGroup {
+    flex: 1 1 260px;
+  }
+
+  .headerButtonGroup {
+    flex: 1 1 320px;
+    justify-content: flex-start;
   }
 
   .knowledgePage {
@@ -637,6 +671,20 @@
 }
 
 @media (max-width: 640px) {
+  .headerActions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .headerControlGroup,
+  .headerButtonGroup {
+    width: 100%;
+  }
+
+  .headerButtonGroup {
+    justify-content: flex-start;
+  }
+
   .knowledgePage {
     padding: 12px;
     border-radius: 0;
