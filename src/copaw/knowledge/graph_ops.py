@@ -17,6 +17,7 @@ from typing import Any
 
 from ..config.config import KnowledgeConfig
 from ..constant import WORKING_DIR
+from .cognee_engine import CogneeEngine
 from .manager import KnowledgeManager
 
 
@@ -35,6 +36,7 @@ class GraphOpsManager:
         self.working_dir = Path(working_dir)
         self.knowledge_root = self.working_dir / "knowledge"
         self.memify_jobs_path = self.knowledge_root / "memify-jobs.json"
+        self.index_dir = self.knowledge_root / "indexes"
 
     def graph_query(
         self,
@@ -64,7 +66,13 @@ class GraphOpsManager:
             )
 
         if engine == "cognee":
-            raise RuntimeError("Cognee graph provider is not wired yet.")
+            return self._graph_query_with_cognee(
+                config=config,
+                query_mode=query_mode,
+                query_text=query_text,
+                dataset_scope=dataset_scope,
+                top_k=top_k,
+            )
 
         manager = KnowledgeManager(self.working_dir)
         search_result = manager.search(
@@ -143,9 +151,12 @@ class GraphOpsManager:
         engine = self._resolve_engine_name(config)
 
         if engine == "cognee":
-            status = "failed"
-            error = "Cognee memify provider is not wired yet."
-            warnings = ["COGNEE_PROVIDER_NOT_READY"]
+            status, error, warnings = self._run_cognee_memify(
+                config=config,
+                pipeline_type=pipeline_type,
+                dataset_scope=dataset_scope,
+                dry_run=bool(dry_run),
+            )
         else:
             status = "succeeded"
             error = None
@@ -198,6 +209,167 @@ class GraphOpsManager:
             json.dumps(jobs, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+
+    def _graph_query_with_cognee(
+        self,
+        *,
+        config: KnowledgeConfig,
+        query_mode: str,
+        query_text: str,
+        dataset_scope: list[str] | None,
+        top_k: int,
+    ) -> GraphOpsResult:
+        cognee_engine = CogneeEngine(self.index_dir)
+
+        if query_mode == "template":
+            source_ids = dataset_scope or None
+            search_result = cognee_engine.search(
+                query=query_text,
+                config=config,
+                limit=max(1, min(top_k, 50)),
+                source_ids=source_ids,
+                source_types=None,
+            )
+            records = [
+                {
+                    "subject": hit.get("source_name") or hit.get("source_id") or "unknown",
+                    "predicate": "related_to",
+                    "object": (hit.get("snippet") or "").strip(),
+                    "score": float(hit.get("score", 0) or 0),
+                    "source_id": hit.get("source_id"),
+                    "source_type": hit.get("source_type"),
+                    "document_path": hit.get("document_path"),
+                    "document_title": hit.get("document_title"),
+                }
+                for hit in (search_result.get("hits") or [])
+                if (hit.get("snippet") or "").strip()
+            ]
+            return GraphOpsResult(
+                records=records,
+                summary=f"Returned {len(records)} graph-like records from cognee search.",
+                provenance={
+                    "engine": "cognee",
+                    "dataset_scope": dataset_scope or [],
+                    "query_mode": query_mode,
+                },
+                warnings=[] if records else ["NO_GRAPH_RECORDS"],
+            )
+
+        # cypher mode: direct cognee search with CYPHER retriever
+        cognee_module, search_types_module = cognee_engine._load_cognee_modules()
+        cypher_type = cognee_engine._resolve_query_type("CYPHER", search_types_module)
+
+        datasets = None
+        if dataset_scope:
+            datasets = list(dataset_scope)
+        else:
+            datasets = [
+                cognee_engine._dataset_name(source, config)
+                for source in (config.sources or [])
+                if source.enabled
+            ]
+
+        async def _cypher_search() -> Any:
+            try:
+                return await cognee_module.search(
+                    query_text=query_text,
+                    query_type=cypher_type,
+                    top_k=max(1, min(top_k, 50)),
+                    datasets=datasets,
+                )
+            except TypeError:
+                return await cognee_module.search(
+                    query_text,
+                    query_type=cypher_type,
+                    top_k=max(1, min(top_k, 50)),
+                    datasets=datasets,
+                )
+
+        raw = cognee_engine._run_async(_cypher_search())
+        items = raw if isinstance(raw, list) else [raw]
+        records = [
+            {
+                "subject": "cypher",
+                "predicate": "returns",
+                "object": CogneeEngine._stringify_item(item),
+                "score": 1.0,
+                "source_id": None,
+                "source_type": "graph",
+                "document_path": "",
+                "document_title": "cypher",
+            }
+            for item in items
+            if CogneeEngine._stringify_item(item)
+        ]
+        return GraphOpsResult(
+            records=records,
+            summary=f"Returned {len(records)} cypher records from cognee.",
+            provenance={
+                "engine": "cognee",
+                "dataset_scope": dataset_scope or [],
+                "query_mode": query_mode,
+            },
+            warnings=[] if records else ["NO_CYPHER_RECORDS"],
+        )
+
+    def _run_cognee_memify(
+        self,
+        *,
+        config: KnowledgeConfig,
+        pipeline_type: str,
+        dataset_scope: list[str] | None,
+        dry_run: bool,
+    ) -> tuple[str, str | None, list[str]]:
+        if dry_run:
+            return ("succeeded", None, ["COGNEE_MEMIFY_DRY_RUN"])
+
+        cognee_engine = CogneeEngine(self.index_dir)
+        cognee_module, _ = cognee_engine._load_cognee_modules()
+
+        dataset_names: list[str] | None = None
+        if dataset_scope:
+            dataset_names = list(dataset_scope)
+        else:
+            dataset_names = [
+                cognee_engine._dataset_name(source, config)
+                for source in (config.sources or [])
+                if source.enabled
+            ]
+
+        async def _run() -> None:
+            if pipeline_type == "default":
+                fn = getattr(cognee_module, "memify", None)
+                if fn is None:
+                    raise RuntimeError("cognee.memify is not available")
+                try:
+                    await fn(datasets=dataset_names)
+                except TypeError:
+                    await fn()
+                return
+
+            fn_name_map = {
+                "coding_rules": "memify_coding_rules",
+                "triplet_embeddings": "memify_triplet_embeddings",
+                "session_persistence": "memify_session_persistence",
+                "entity_consolidation": "memify_entity_consolidation",
+            }
+            fn_name = fn_name_map.get(pipeline_type)
+            if not fn_name:
+                raise RuntimeError(f"Unsupported memify pipeline: {pipeline_type}")
+
+            fn = getattr(cognee_module, fn_name, None)
+            if fn is None:
+                raise RuntimeError(f"cognee.{fn_name} is not available")
+            try:
+                await fn(datasets=dataset_names)
+            except TypeError:
+                await fn()
+
+        try:
+            cognee_engine._run_async(_run())
+            return ("succeeded", None, ["COGNEE_MEMIFY_EXECUTED"])
+        except Exception as exc:
+            return ("failed", str(exc), ["COGNEE_MEMIFY_FAILED"])
 
     @staticmethod
     def _resolve_engine_name(config: KnowledgeConfig) -> str:
