@@ -388,12 +388,28 @@ def load_config(config_path: Optional[Path] = None) -> Config:
             la["host"] = data.get("last_api_host")
         if "port" not in la and "last_api_port" in data:
             la["port"] = data.get("last_api_port")
-    # Backward compat: knowledge.engine object -> literal enum string
+    # Backward compat: normalize legacy knowledge.engine into
+    # KnowledgeEngineConfig-compatible object shape.
     knowledge = data.get("knowledge")
-    if isinstance(knowledge, dict) and isinstance(knowledge.get("engine"), dict):
-        legacy_engine = knowledge.get("engine") or {}
-        provider = str(legacy_engine.get("provider", "")).strip().lower()
-        knowledge["engine"] = "cognee" if provider == "cognee" else "local_lexical"
+    if isinstance(knowledge, dict):
+        legacy_engine = knowledge.get("engine")
+
+        if isinstance(legacy_engine, dict):
+            provider_raw = str(legacy_engine.get("provider", "")).strip().lower()
+            provider = "cognee" if provider_raw == "cognee" else "default"
+            knowledge["engine"] = {
+                "provider": provider,
+                "fallback_to_default": bool(
+                    legacy_engine.get("fallback_to_default", True),
+                ),
+            }
+        elif isinstance(legacy_engine, str):
+            provider_raw = legacy_engine.strip().lower()
+            provider = "cognee" if provider_raw == "cognee" else "default"
+            knowledge["engine"] = {
+                "provider": provider,
+                "fallback_to_default": True,
+            }
     return Config.model_validate(data)
 
 
