@@ -494,6 +494,16 @@ export function useSkills() {
     }
   };
 
+  const deleteSkillDirect = async (skill: SkillSpec) => {
+    try {
+      const result = await api.deleteSkill(skill.name);
+      return result.deleted ?? false;
+    } catch (error) {
+      console.error("Failed to delete skill", error);
+      return false;
+    }
+  };
+
   return {
     skills,
     markets,
@@ -517,5 +527,7 @@ export function useSkills() {
     importFromHub,
     toggleEnabled,
     deleteSkill,
+    deleteSkillDirect,
+    fetchSkills,
   };
 }
