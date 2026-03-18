@@ -8,7 +8,6 @@ from typing import Dict, List, Optional, Literal
 from fastapi import APIRouter, Body, HTTPException, Path, Request
 from pydantic import BaseModel, Field
 
-from ...config import load_config, save_config
 from ...config.config import MCPClientConfig
 
 router = APIRouter(prefix="/mcp", tags=["mcp"])
@@ -210,11 +209,16 @@ def _get_active_keys(request: Request) -> set:
 )
 async def list_mcp_clients(request: Request) -> List[MCPClientInfo]:
     """Get list of all configured MCP clients."""
-    config = load_config()
-    active_keys = _get_active_keys(request)
+    from ..agent_context import get_agent_for_request
+
+    agent = await get_agent_for_request(request)
+    mcp_config = agent.config.mcp
+    if mcp_config is None or not mcp_config.clients:
+        return []
+
     return [
-        _build_client_info(key, client, active=key in active_keys)
-        for key, client in config.mcp.clients.items()
+        _build_client_info(key, client)
+        for key, client in mcp_config.clients.items()
     ]
 
 
@@ -228,8 +232,14 @@ async def get_mcp_client(
     client_key: str = Path(...),
 ) -> MCPClientInfo:
     """Get details of a specific MCP client."""
-    config = load_config()
-    client = config.mcp.clients.get(client_key)
+    from ..agent_context import get_agent_for_request
+
+    agent = await get_agent_for_request(request)
+    mcp_config = agent.config.mcp
+    if mcp_config is None:
+        raise HTTPException(404, detail=f"MCP client '{client_key}' not found")
+
+    client = mcp_config.clients.get(client_key)
     if client is None:
         raise HTTPException(404, detail=f"MCP client '{client_key}' not found")
     active_keys = _get_active_keys(request)
@@ -267,14 +277,22 @@ async def refresh_mcp_client_status(
     status_code=201,
 )
 async def create_mcp_client(
+    request: Request,
     client_key: str = Body(..., embed=True),
     client: MCPClientCreateRequest = Body(..., embed=True),
 ) -> MCPClientInfo:
     """Create a new MCP client configuration."""
-    config = load_config()
+    from ..agent_context import get_agent_for_request
+    from ...config.config import save_agent_config, MCPConfig
+
+    agent = await get_agent_for_request(request)
+
+    # Initialize mcp config if not exists
+    if agent.config.mcp is None:
+        agent.config.mcp = MCPConfig(clients={})
 
     # Check if client already exists
-    if client_key in config.mcp.clients:
+    if client_key in agent.config.mcp.clients:
         raise HTTPException(
             400,
             detail=f"MCP client '{client_key}' already exists. Use PUT to "
@@ -295,9 +313,29 @@ async def create_mcp_client(
         cwd=client.cwd,
     )
 
-    # Add to config and save
-    config.mcp.clients[client_key] = new_client
-    save_config(config)
+    # Add to agent's config and save
+    agent.config.mcp.clients[client_key] = new_client
+    save_agent_config(agent.agent_id, agent.config)
+
+    # Hot reload config (async, non-blocking)
+    # IMPORTANT: Get manager and agent_id before creating background task
+    # to avoid accessing request/workspace after their lifecycle ends
+    import asyncio
+
+    manager = request.app.state.multi_agent_manager
+    agent_id = agent.agent_id
+
+    async def reload_in_background():
+        try:
+            await manager.reload_agent(agent_id)
+        except Exception as e:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                f"Background reload failed: {e}",
+            )
+
+    asyncio.create_task(reload_in_background())
 
     return _build_client_info(client_key, new_client)
 
@@ -308,16 +346,20 @@ async def create_mcp_client(
     summary="Update an MCP client",
 )
 async def update_mcp_client(
+    request: Request,
     client_key: str = Path(...),
     updates: MCPClientUpdateRequest = Body(...),
 ) -> MCPClientInfo:
     """Update an existing MCP client configuration."""
-    config = load_config()
+    from ..agent_context import get_agent_for_request
+    from ...config.config import save_agent_config
 
-    # Check if client exists
-    existing = config.mcp.clients.get(client_key)
-    if existing is None:
+    agent = await get_agent_for_request(request)
+
+    if agent.config.mcp is None or client_key not in agent.config.mcp.clients:
         raise HTTPException(404, detail=f"MCP client '{client_key}' not found")
+
+    existing = agent.config.mcp.clients[client_key]
 
     # Update fields if provided
     update_data = updates.model_dump(exclude_unset=True)
@@ -331,10 +373,30 @@ async def update_mcp_client(
     merged_data = existing.model_dump(mode="json")
     merged_data.update(update_data)
     updated_client = MCPClientConfig.model_validate(merged_data)
-    config.mcp.clients[client_key] = updated_client
+    agent.config.mcp.clients[client_key] = updated_client
 
     # Save updated config
-    save_config(config)
+    save_agent_config(agent.agent_id, agent.config)
+
+    # Hot reload config (async, non-blocking)
+    # IMPORTANT: Get manager and agent_id before creating background task
+    # to avoid accessing request/workspace after their lifecycle ends
+    import asyncio
+
+    manager = request.app.state.multi_agent_manager
+    agent_id = agent.agent_id
+
+    async def reload_in_background():
+        try:
+            await manager.reload_agent(agent_id)
+        except Exception as e:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                f"Background reload failed: {e}",
+            )
+
+    asyncio.create_task(reload_in_background())
 
     return _build_client_info(client_key, updated_client)
 
@@ -345,18 +407,43 @@ async def update_mcp_client(
     summary="Toggle MCP client enabled status",
 )
 async def toggle_mcp_client(
+    request: Request,
     client_key: str = Path(...),
 ) -> MCPClientInfo:
     """Toggle the enabled status of an MCP client."""
-    config = load_config()
+    from ..agent_context import get_agent_for_request
+    from ...config.config import save_agent_config
 
-    client = config.mcp.clients.get(client_key)
-    if client is None:
+    agent = await get_agent_for_request(request)
+
+    if agent.config.mcp is None or client_key not in agent.config.mcp.clients:
         raise HTTPException(404, detail=f"MCP client '{client_key}' not found")
+
+    client = agent.config.mcp.clients[client_key]
 
     # Toggle enabled status
     client.enabled = not client.enabled
-    save_config(config)
+    save_agent_config(agent.agent_id, agent.config)
+
+    # Hot reload config (async, non-blocking)
+    # IMPORTANT: Get manager and agent_id before creating background task
+    # to avoid accessing request/workspace after their lifecycle ends
+    import asyncio
+
+    manager = request.app.state.multi_agent_manager
+    agent_id = agent.agent_id
+
+    async def reload_in_background():
+        try:
+            await manager.reload_agent(agent_id)
+        except Exception as e:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                f"Background reload failed: {e}",
+            )
+
+    asyncio.create_task(reload_in_background())
 
     return _build_client_info(client_key, client)
 
@@ -367,16 +454,40 @@ async def toggle_mcp_client(
     summary="Delete an MCP client",
 )
 async def delete_mcp_client(
+    request: Request,
     client_key: str = Path(...),
 ) -> Dict[str, str]:
     """Delete an MCP client configuration."""
-    config = load_config()
+    from ..agent_context import get_agent_for_request
+    from ...config.config import save_agent_config
 
-    if client_key not in config.mcp.clients:
+    agent = await get_agent_for_request(request)
+
+    if agent.config.mcp is None or client_key not in agent.config.mcp.clients:
         raise HTTPException(404, detail=f"MCP client '{client_key}' not found")
 
     # Remove client
-    del config.mcp.clients[client_key]
-    save_config(config)
+    del agent.config.mcp.clients[client_key]
+    save_agent_config(agent.agent_id, agent.config)
+
+    # Hot reload config (async, non-blocking)
+    # IMPORTANT: Get manager and agent_id before creating background task
+    # to avoid accessing request/workspace after their lifecycle ends
+    import asyncio
+
+    manager = request.app.state.multi_agent_manager
+    agent_id = agent.agent_id
+
+    async def reload_in_background():
+        try:
+            await manager.reload_agent(agent_id)
+        except Exception as e:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                f"Background reload failed: {e}",
+            )
+
+    asyncio.create_task(reload_in_background())
 
     return {"message": f"MCP client '{client_key}' deleted successfully"}

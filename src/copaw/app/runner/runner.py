@@ -9,7 +9,7 @@ import logging
 import re
 import time
 from pathlib import Path
-from typing import Iterable
+from typing import TYPE_CHECKING
 
 from agentscope.message import Msg, TextBlock
 from agentscope.pipeline import stream_printing_messages
@@ -26,16 +26,18 @@ from .query_error_dump import write_query_error_dump
 from .session import SafeJSONSession
 from .utils import build_env_context
 from ..channels.schema import DEFAULT_CHANNEL
-from ...agents.memory import MemoryManager
 from ...agents.react_agent import CoPawAgent
 from ...security.tool_guard.models import TOOL_GUARD_DENIED_MARK
-from ...config import load_config
+from ...config import load_config, save_config
 from ...constant import (
     TOOL_GUARD_APPROVAL_TIMEOUT_SECONDS,
     WORKING_DIR,
 )
 from ...providers.retry_chat_model import _is_retryable
 from ...security.tool_guard.approval import ApprovalDecision
+
+if TYPE_CHECKING:
+    from ...agents.memory import MemoryManager
 
 logger = logging.getLogger(__name__)
 
@@ -97,9 +99,17 @@ def _build_retryable_error_msg(exc: Exception) -> Msg | None:
 
 
 class AgentRunner(Runner):
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        agent_id: str = "default",
+        workspace_dir: Path | None = None,
+    ) -> None:
         super().__init__()
         self.framework_type = "agentscope"
+        self.agent_id = agent_id  # Store agent_id for config loading
+        self.workspace_dir = (
+            workspace_dir  # Store workspace_dir for prompt building
+        )
         self._chat_manager = None  # Store chat_manager reference
         self._mcp_manager = None  # MCP client manager for hot-reload
         self.memory_manager: MemoryManager | None = None
@@ -209,6 +219,10 @@ class AgentRunner(Runner):
         """
         Handle agent query.
         """
+        logger.debug(
+            f"AgentRunner.query_handler called: agent_id={self.agent_id}, "
+            f"msgs={msgs}, request={request}",
+        )
         query = _get_last_user_text(msgs)
         session_id = str(getattr(request, "session_id", "") or "")
         user_id = str(getattr(request, "user_id", "") or "")
@@ -236,9 +250,22 @@ class AgentRunner(Runner):
                 yield msg, last
             return
 
+        logger.debug(
+            f"AgentRunner.stream_query: request={request}, "
+            f"agent_id={self.agent_id}",
+        )
+
+        # Set agent context for model creation
+        from ..agent_context import set_current_agent_id
+
+        set_current_agent_id(self.agent_id)
+
         agent = None
         chat = None
         session_state_loaded = False
+        generated_messages = []
+        config = None
+        knowledge_manager = None
         try:
             logger.info(
                 "Handle agent query:\n%s",
@@ -259,7 +286,11 @@ class AgentRunner(Runner):
                 session_id=session_id,
                 user_id=user_id,
                 channel=channel,
-                working_dir=str(WORKING_DIR),
+                working_dir=(
+                    str(self.workspace_dir)
+                    if self.workspace_dir
+                    else str(WORKING_DIR)
+                ),
             )
 
             # Get MCP clients from manager (hot-reloadable)
@@ -268,21 +299,48 @@ class AgentRunner(Runner):
                 mcp_clients = await self._mcp_manager.get_clients()
 
             config = load_config()
+            running = config.agents.running
+
+            try:
+                should_collect_user_assets = bool(
+                    getattr(running, "knowledge_auto_collect_chat_files", False)
+                    or getattr(running, "knowledge_auto_collect_chat_urls", True)
+                )
+                if should_collect_user_assets:
+                    from ...knowledge import KnowledgeManager
+
+                    knowledge_manager = KnowledgeManager(WORKING_DIR)
+                    user_stage_result = knowledge_manager.auto_collect_user_message_assets(
+                        config.knowledge,
+                        session_id=session_id,
+                        user_id=user_id,
+                        request_messages=list(msgs or []),
+                        running_config=running,
+                    )
+                    if user_stage_result.get("changed"):
+                        save_config(config)
+            except Exception:
+                logger.exception(
+                    "Failed to auto-collect user assets for session %s",
+                    session_id,
+                )
+
             max_iters = config.agents.running.max_iters
             max_input_length = config.agents.running.max_input_length
-            request_context: dict[str, str] = {
-                "session_id": session_id,
-                "user_id": user_id,
-                "channel": channel,
-            }
+            effective_msgs = list(msgs or [])
 
             agent = CoPawAgent(
+                agent_config=agent_config,
                 env_context=env_context,
                 mcp_clients=mcp_clients,
                 memory_manager=self.memory_manager,
-                request_context=request_context,
-                max_iters=max_iters,
-                max_input_length=max_input_length,
+                request_context={
+                    "session_id": session_id,
+                    "user_id": user_id,
+                    "channel": channel,
+                    "agent_id": self.agent_id,
+                },
+                workspace_dir=self.workspace_dir,
             )
             await agent.register_mcp_clients()
             agent.set_console_output_enabled(enabled=False)
@@ -299,12 +357,30 @@ class AgentRunner(Runner):
                 else:
                     name = "Media Message"
 
+            logger.debug(
+                f"DEBUG chat_manager status: "
+                f"_chat_manager={self._chat_manager}, "
+                f"is_none={self._chat_manager is None}, "
+                f"agent_id={self.agent_id}",
+            )
+
             if self._chat_manager is not None:
+                logger.debug(
+                    f"Runner: Calling get_or_create_chat for "
+                    f"session_id={session_id}, user_id={user_id}, "
+                    f"channel={channel}, name={name}",
+                )
                 chat = await self._chat_manager.get_or_create_chat(
                     session_id,
                     user_id,
                     channel,
                     name=name,
+                )
+                logger.debug(f"Runner: Got chat: {chat.id}")
+            else:
+                logger.warning(
+                    f"ChatManager is None! Cannot auto-register chat for "
+                    f"session_id={session_id}",
                 )
 
             try:
@@ -328,9 +404,9 @@ class AgentRunner(Runner):
 
             async for stream_item in stream_printing_messages(
                 agents=[agent],
-                coroutine_task=agent(msgs),
+                coroutine_task=agent(effective_msgs),
             ):
-                msg, last = stream_item[0], stream_item[1]
+                generated_messages.append(msg)
                 yield msg, last
 
         except asyncio.CancelledError as exc:
@@ -379,6 +455,40 @@ class AgentRunner(Runner):
                     user_id=user_id,
                     agent=agent,
                 )
+
+            if config is not None and session_id:
+                try:
+                    running = config.agents.running
+                    should_auto_collect = bool(
+                        getattr(running, "knowledge_auto_collect_chat_files", False)
+                        or getattr(running, "knowledge_auto_collect_long_text", False)
+                    )
+
+                    if should_auto_collect:
+                        from ...knowledge import KnowledgeManager
+
+                        manager = knowledge_manager or KnowledgeManager(WORKING_DIR)
+
+                    should_auto_collect_text = bool(
+                        getattr(running, "knowledge_auto_collect_long_text", False),
+                    )
+
+                    if should_auto_collect_text:
+                        text_result = manager.auto_collect_turn_text_pair(
+                            config.knowledge,
+                            running_config=running,
+                            session_id=session_id,
+                            user_id=user_id,
+                            request_messages=list(msgs or []),
+                            response_messages=generated_messages,
+                        )
+                        if text_result.get("changed"):
+                            save_config(config)
+                except Exception:
+                    logger.exception(
+                        "Failed to auto-collect chat knowledge for session %s",
+                        session_id,
+                    )
 
             if self._chat_manager is not None and chat is not None:
                 await self._chat_manager.update_chat(chat)
@@ -508,40 +618,13 @@ class AgentRunner(Runner):
                 "using existing environment variables",
             )
 
-        session_dir = str(WORKING_DIR / "sessions")
+        session_dir = str(
+            (self.workspace_dir if self.workspace_dir else WORKING_DIR)
+            / "sessions",
+        )
         self.session = SafeJSONSession(save_dir=session_dir)
-
-        try:
-            if self.memory_manager is None:
-                self.memory_manager = MemoryManager(
-                    working_dir=str(WORKING_DIR),
-                )
-            start_fn = getattr(self.memory_manager, "start", None)
-            if callable(start_fn):
-                start_result = start_fn()
-                if inspect.isawaitable(start_result):
-                    await start_result
-            else:
-                logger.warning(
-                    "MemoryManager has no start() method; skipping startup",
-                )
-        except Exception as e:
-            logger.exception(f"MemoryManager start failed: {e}")
 
     async def shutdown_handler(self, *args, **kwargs):
         """
         Shutdown handler.
         """
-        try:
-            if self.memory_manager is not None:
-                close_fn = getattr(self.memory_manager, "close", None)
-                if callable(close_fn):
-                    close_result = close_fn()
-                    if inspect.isawaitable(close_result):
-                        await close_result
-                else:
-                    logger.warning(
-                        "MemoryManager has no close() method; skipping close",
-                    )
-        except Exception as e:
-            logger.warning(f"MemoryManager stop failed: {e}")

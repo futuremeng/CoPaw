@@ -3,9 +3,11 @@ import { message } from "@agentscope-ai/design";
 import api from "../../../api";
 import type { MCPClientInfo } from "../../../api/types";
 import { useTranslation } from "react-i18next";
+import { useAgentStore } from "../../../stores/agentStore";
 
 export function useMCP() {
   const { t } = useTranslation();
+  const { selectedAgent } = useAgentStore();
   const [clients, setClients] = useState<MCPClientInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [queuedRefreshKeys, setQueuedRefreshKeys] = useState<string[]>([]);
@@ -33,7 +35,7 @@ export function useMCP() {
 
   useEffect(() => {
     loadClients();
-  }, [loadClients]);
+  }, [loadClients, selectedAgent]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
