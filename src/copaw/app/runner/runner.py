@@ -27,6 +27,8 @@ from ..channels.schema import DEFAULT_CHANNEL
 from ...agents.react_agent import CoPawAgent
 from ...security.tool_guard.models import TOOL_GUARD_DENIED_MARK
 from ...config import load_config, save_config
+from ...config.config import load_agent_config
+from ... import knowledge as knowledge_module
 from ...constant import (
     TOOL_GUARD_APPROVAL_TIMEOUT_SECONDS,
     WORKING_DIR,
@@ -202,6 +204,7 @@ class AgentRunner(Runner):
         session_state_loaded = False
         generated_messages = []
         config = None
+        running = None
         knowledge_manager = None
         try:
             session_id = request.session_id
@@ -240,7 +243,98 @@ class AgentRunner(Runner):
                 mcp_clients = await self._mcp_manager.get_clients()
 
             config = load_config()
-            running = config.agents.running
+            if not hasattr(getattr(config, "agents", None), "profiles"):
+                agent_config = None
+                running = config.agents.running
+            else:
+                try:
+                    agent_config = load_agent_config(self.agent_id)
+                    running = agent_config.running
+                except Exception:
+                    logger.warning(
+                        "Failed to load agent config for %s, falling back to root running config",
+                        self.agent_id,
+                    )
+                    agent_config = None
+                    running = config.agents.running
+
+            max_iters = running.max_iters
+            max_input_length = running.max_input_length
+            effective_msgs = list(msgs or [])
+
+            try:
+                retrieval_enabled = bool(
+                    getattr(running, "knowledge_retrieval_enabled", True),
+                )
+                knowledge_enabled = bool(
+                    getattr(getattr(config, "knowledge", None), "enabled", False),
+                )
+                query_text = (_get_last_user_text(msgs) or "").strip()
+                if retrieval_enabled and knowledge_enabled and query_text:
+                    manager = knowledge_module.KnowledgeManager(WORKING_DIR)
+                    top_k = int(
+                        getattr(running, "knowledge_retrieval_top_k", 4) or 4,
+                    )
+                    min_score = float(
+                        getattr(running, "knowledge_retrieval_min_score", 1.0)
+                        or 1.0,
+                    )
+                    max_chars = int(
+                        getattr(
+                            running,
+                            "knowledge_retrieval_max_context_chars",
+                            1800,
+                        )
+                        or 1800,
+                    )
+                    result = manager.search(
+                        query=query_text,
+                        config=config.knowledge,
+                        limit=max(1, min(top_k, 20)),
+                    )
+                    hits = [
+                        hit
+                        for hit in (result.get("hits") or [])
+                        if float(hit.get("score", 0) or 0) >= min_score
+                    ]
+                    if hits:
+                        lines: list[str] = [
+                            "知识库检索结果（仅供参考，注意时效与准确性）：",
+                            "",
+                        ]
+                        for index, hit in enumerate(hits, start=1):
+                            source_name = hit.get("source_name") or "unknown"
+                            score = float(hit.get("score", 0) or 0)
+                            snippet = (hit.get("snippet") or "").strip()
+                            if not snippet:
+                                continue
+                            lines.append(
+                                f"[{index}] {source_name} score={score:.2f}",
+                            )
+                            lines.append(snippet)
+                            lines.append("")
+                        context = "\n".join(lines).strip()
+                        if context:
+                            if len(context) > max_chars:
+                                context = context[:max_chars].rstrip() + "..."
+                            effective_msgs = [
+                                Msg(
+                                    name="system",
+                                    role="system",
+                                    content=[
+                                        TextBlock(
+                                            type="text",
+                                            text=context,
+                                        ),
+                                    ],
+                                ),
+                                *effective_msgs,
+                            ]
+            except Exception:
+                logger.exception(
+                    "Failed to inject knowledge retrieval context for session %s",
+                    session_id,
+                )
 
             try:
                 should_collect_user_assets = bool(
@@ -248,16 +342,24 @@ class AgentRunner(Runner):
                     or getattr(running, "knowledge_auto_collect_chat_urls", True)
                 )
                 if should_collect_user_assets:
-                    from ...knowledge import KnowledgeManager
-
-                    knowledge_manager = KnowledgeManager(WORKING_DIR)
-                    user_stage_result = knowledge_manager.auto_collect_user_message_assets(
-                        config.knowledge,
-                        session_id=session_id,
-                        user_id=user_id,
-                        request_messages=list(msgs or []),
-                        running_config=running,
-                    )
+                    knowledge_manager = knowledge_module.KnowledgeManager(WORKING_DIR)
+                    if hasattr(knowledge_manager, "auto_collect_user_message_assets"):
+                        user_stage_result = knowledge_manager.auto_collect_user_message_assets(
+                            config.knowledge,
+                            session_id=session_id,
+                            user_id=user_id,
+                            request_messages=list(msgs or []),
+                            running_config=running,
+                        )
+                    else:
+                        user_stage_result = knowledge_manager.auto_collect_from_messages(
+                            config.knowledge,
+                            session_id=session_id,
+                            user_id=user_id,
+                            request_messages=list(msgs or []),
+                            response_messages=[],
+                            running_config=running,
+                        )
                     if user_stage_result.get("changed"):
                         save_config(config)
             except Exception:
@@ -265,10 +367,6 @@ class AgentRunner(Runner):
                     "Failed to auto-collect user assets for session %s",
                     session_id,
                 )
-
-            max_iters = config.agents.running.max_iters
-            max_input_length = config.agents.running.max_input_length
-            effective_msgs = list(msgs or [])
 
             agent = CoPawAgent(
                 agent_config=agent_config,
@@ -386,30 +484,52 @@ class AgentRunner(Runner):
 
             if config is not None and session_id:
                 try:
-                    running = config.agents.running
+                    effective_running = running
+                    if effective_running is None:
+                        effective_running = config.agents.running
                     should_auto_collect = bool(
-                        getattr(running, "knowledge_auto_collect_chat_files", False)
-                        or getattr(running, "knowledge_auto_collect_long_text", False)
+                        getattr(
+                            effective_running,
+                            "knowledge_auto_collect_chat_files",
+                            False,
+                        )
+                        or getattr(
+                            effective_running,
+                            "knowledge_auto_collect_long_text",
+                            False,
+                        )
                     )
 
                     if should_auto_collect:
-                        from ...knowledge import KnowledgeManager
-
-                        manager = knowledge_manager or KnowledgeManager(WORKING_DIR)
+                        manager = knowledge_manager or knowledge_module.KnowledgeManager(WORKING_DIR)
 
                     should_auto_collect_text = bool(
-                        getattr(running, "knowledge_auto_collect_long_text", False),
+                        getattr(
+                            effective_running,
+                            "knowledge_auto_collect_long_text",
+                            False,
+                        ),
                     )
 
                     if should_auto_collect_text:
-                        text_result = manager.auto_collect_turn_text_pair(
-                            config.knowledge,
-                            running_config=running,
-                            session_id=session_id,
-                            user_id=user_id,
-                            request_messages=list(msgs or []),
-                            response_messages=generated_messages,
-                        )
+                        if hasattr(manager, "auto_collect_turn_text_pair"):
+                            text_result = manager.auto_collect_turn_text_pair(
+                                config.knowledge,
+                                running_config=effective_running,
+                                session_id=session_id,
+                                user_id=user_id,
+                                request_messages=list(msgs or []),
+                                response_messages=generated_messages,
+                            )
+                        else:
+                            text_result = manager.auto_collect_from_messages(
+                                config.knowledge,
+                                session_id=session_id,
+                                user_id=user_id,
+                                request_messages=list(msgs or []),
+                                response_messages=generated_messages,
+                                running_config=effective_running,
+                            )
                         if text_result.get("changed"):
                             save_config(config)
                 except Exception:

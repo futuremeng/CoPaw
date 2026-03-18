@@ -9,9 +9,10 @@ from types import SimpleNamespace
 from fastapi import APIRouter, Body, File, Form, HTTPException, Query, UploadFile
 
 from ...config import load_config, save_config
-from ...config.config import KnowledgeConfig, KnowledgeSourceSpec
+from ...config.config import KnowledgeConfig, KnowledgeSourceSpec, load_agent_config
 from ...constant import WORKING_DIR
 from ...knowledge import GraphOpsManager, KnowledgeManager
+from ..agent_context import get_active_agent_id
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 _titles_regenerate_enqueue_lock = asyncio.Lock()
@@ -25,6 +26,15 @@ def _find_source(config: KnowledgeConfig, source_id: str) -> Optional[KnowledgeS
         if source.id == source_id:
             return source
     return None
+
+
+def _resolve_running_config(config):
+    """Resolve running config from active agent with root-config fallback."""
+    try:
+        agent_id = get_active_agent_id()
+        return load_agent_config(agent_id).running
+    except Exception:
+        return config.agents.running
 
 
 @router.get("/config", response_model=KnowledgeConfig)
@@ -132,7 +142,7 @@ async def index_source(source_id: str):
         result = _manager().index_source(
             source,
             config.knowledge,
-            config.agents.running,
+            _resolve_running_config(config),
         )
     except (FileNotFoundError, ValueError, OSError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -154,7 +164,10 @@ async def get_source_content(source_id: str):
 async def index_all_sources():
     config = load_config()
     try:
-        return _manager().index_all(config.knowledge, config.agents.running)
+        return _manager().index_all(
+            config.knowledge,
+            _resolve_running_config(config),
+        )
     except (FileNotFoundError, ValueError, OSError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
@@ -191,7 +204,7 @@ async def run_history_backfill_now():
     """Run history backfill immediately regardless of runtime auto-backfill toggle."""
     config = load_config()
     manager = _manager()
-    running = config.agents.running
+    running = _resolve_running_config(config)
     force_running = SimpleNamespace(
         auto_backfill_history_data=True,
         auto_collect_chat_files=running.auto_collect_chat_files,
@@ -243,6 +256,7 @@ async def regenerate_all_titles(
 
     config = load_config()
     manager = _manager()
+    running = _resolve_running_config(config)
     cancelled_payload = {
         "cancelled": False,
         "cancelled_count": 0,
@@ -256,7 +270,7 @@ async def regenerate_all_titles(
             use_llm=use_llm,
             enabled_only=enabled_only,
             batch_size=batch_size,
-            yield_interval_seconds=config.agents.running.knowledge_maintenance_llm_yield_seconds,
+            yield_interval_seconds=running.knowledge_maintenance_llm_yield_seconds,
         )
     if not result.get("queued"):
         raise HTTPException(status_code=409, detail="KNOWLEDGE_TITLES_QUEUE_ALREADY_ACTIVE")

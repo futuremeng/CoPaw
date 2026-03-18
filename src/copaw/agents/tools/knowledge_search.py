@@ -5,6 +5,7 @@ from agentscope.message import TextBlock
 from agentscope.tool import ToolResponse
 
 from ...config import load_config
+from ...config.config import load_agent_config
 from ...constant import WORKING_DIR
 from ...knowledge import KnowledgeManager
 
@@ -38,13 +39,19 @@ async def knowledge_search(
                     ),
                 ],
             )
+        running_config = None
+        try:
+            agent_id = getattr(getattr(config, "agents", None), "active_agent", None)
+            if agent_id:
+                running_config = load_agent_config(agent_id).running
+            else:
+                running_config = getattr(getattr(config, "agents", None), "running", None)
+        except Exception:
+            running_config = getattr(getattr(config, "agents", None), "running", None)
+
         if not bool(
-            getattr(
-                getattr(config, "agents", None),
-                "running",
-                None,
-            )
-            and getattr(config.agents.running, "knowledge_retrieval_enabled", True)
+            running_config
+            and getattr(running_config, "knowledge_retrieval_enabled", True)
         ):
             return ToolResponse(
                 content=[

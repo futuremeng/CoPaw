@@ -80,6 +80,8 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
 
     def __init__(
         self,
+        agent_config: Optional[Any] = None,
+        workspace_dir: Optional[Any] = None,
         env_context: Optional[str] = None,
         enable_memory_manager: bool = True,
         mcp_clients: Optional[List[Any]] = None,
@@ -106,6 +108,8 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
                 Options: "override", "skip", "raise", "rename"
                 (default: "skip")
         """
+        self._agent_config = agent_config
+        self._workspace_dir = workspace_dir
         self._env_context = env_context
         self._request_context = dict(request_context or {})
         self._max_input_length = max_input_length
@@ -177,11 +181,21 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
         # Load config to check which tools are enabled
         config = load_config()
         enabled_tools = {}
-        if hasattr(config, "tools") and hasattr(config.tools, "builtin_tools"):
+        tools_config = getattr(self._agent_config, "tools", None)
+        if tools_config is not None and hasattr(tools_config, "builtin_tools"):
+            enabled_tools = {
+                name: tool_config.enabled
+                for name, tool_config in tools_config.builtin_tools.items()
+            }
+        elif hasattr(config, "tools") and hasattr(config.tools, "builtin_tools"):
             enabled_tools = {
                 name: tool_config.enabled
                 for name, tool_config in config.tools.builtin_tools.items()
             }
+
+        running_config = getattr(self._agent_config, "running", None)
+        if running_config is None:
+            running_config = getattr(getattr(config, "agents", None), "running", None)
 
         # Map of tool functions
         tool_functions = {
@@ -209,8 +223,9 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
                     tool_enabled
                     and bool(getattr(config.knowledge, "enabled", False))
                     and bool(
-                        getattr(
-                            config.agents.running,
+                        running_config
+                        and getattr(
+                            running_config,
                             "knowledge_retrieval_enabled",
                             True,
                         )
@@ -322,9 +337,12 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
         """Register pre-reasoning and pre-acting hooks."""
         # Bootstrap hook - checks BOOTSTRAP.md on first interaction
         config = load_config()
+        language = getattr(self._agent_config, "language", None)
+        if not language:
+            language = config.agents.language
         bootstrap_hook = BootstrapHook(
             working_dir=WORKING_DIR,
-            language=config.agents.language,
+            language=language,
         )
         self.register_instance_hook(
             hook_type="pre_reasoning",
