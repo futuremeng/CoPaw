@@ -452,7 +452,8 @@ def _extract_market_items(
 
         skill_id = str(raw.get("skill_id") or "").strip()
         name = str(raw.get("name") or "").strip() or skill_id
-        source = raw.get("source") if isinstance(raw.get("source"), dict) else {}
+        source_raw = raw.get("source")
+        source: dict[str, Any] = source_raw if isinstance(source_raw, dict) else {}
         source_url = str(source.get("url") or market.url).strip()
         source_branch = str(source.get("branch") or market.branch or "main").strip()
         source_path = str(source.get("path") or "").strip()
@@ -482,7 +483,8 @@ def _extract_market_items(
                 or next(iter(description.values()), "")
             )
 
-        tags = raw.get("tags") if isinstance(raw.get("tags"), list) else []
+        tags_raw = raw.get("tags")
+        tags: list[Any] = tags_raw if isinstance(tags_raw, list) else []
         items.append(
             MarketplaceItem(
                 market_id=market.id,
@@ -953,7 +955,7 @@ async def install_from_hub(
 async def install_from_marketplace(
     request_body: InstallMarketplaceRequest,
     request: Request,
-) -> dict[str, Any]:
+):
     from ..agent_context import get_agent_for_request
 
     workspace = await get_agent_for_request(request)
@@ -1155,7 +1157,7 @@ async def create_skill(
 @router.post("/{skill_name}/disable")
 async def disable_skill(
     skill_name: str,
-    request: Request = None,
+    request: Request,
 ):
     """Disable skill for active agent."""
     from ..agent_context import get_agent_for_request
@@ -1190,7 +1192,7 @@ async def disable_skill(
 @router.post("/{skill_name}/enable")
 async def enable_skill(
     skill_name: str,
-    request: Request = None,
+    request: Request,
 ):
     """Enable skill for active agent."""
     from ..agent_context import get_agent_for_request
