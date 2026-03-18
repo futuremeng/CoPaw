@@ -10,6 +10,29 @@
   --note-title-color: #1f2430;
   --note-body-color: #4f566b;
   --note-label-color: #7f8699;
+  --note-subtle-text: #475467;
+  --note-link-color: #2f67d8;
+  --note-inline-code-bg: rgba(76, 111, 255, 0.08);
+  --note-inline-code-color: #274690;
+  --note-pre-bg: rgba(248, 249, 253, 0.92);
+  --note-quote-border: rgba(76, 111, 255, 0.35);
+  --note-quote-bg: rgba(76, 111, 255, 0.06);
+  --note-tag-primary-color: #615ced;
+  --note-tag-primary-bg: rgba(97, 92, 237, 0.1);
+  --note-tag-info-color: #1677ff;
+  --note-tag-info-bg: rgba(22, 119, 255, 0.1);
+  --note-tag-success-color: #389e0d;
+  --note-tag-success-bg: rgba(82, 196, 26, 0.12);
+  --note-tag-muted-color: #667085;
+  --note-tag-muted-bg: rgba(102, 112, 133, 0.12);
+  --note-danger-color: #d4380d;
+  --note-warning-color: #ff4d4f;
+  --note-on-warning: #fff;
+  --note-dropzone-bg: #fafafa;
+  --note-dropzone-border: #d9d9d9;
+  --note-dropzone-active-bg: #f0f7ff;
+  --note-dropzone-active-border: #1677ff;
+  --note-card-divider: #f1f2f6;
   --note-font: "Avenir Next", "Segoe UI", sans-serif;
   --note-title-font: "Iowan Old Style", "Georgia", serif;
   --note-radius: 18px;
@@ -19,35 +42,41 @@
   font-family: var(--note-font);
 }
 
-.noteStyleNotion {
-  --note-page-bg: linear-gradient(160deg, #f8fafc 0%, #fdfefe 55%, #f3f7ff 100%);
-  --note-card-bg: #ffffff;
-  --note-card-border: rgba(17, 24, 39, 0.09);
-  --note-card-shadow: 0 10px 26px rgba(15, 23, 42, 0.07);
-  --note-hover-border: #4c6fff;
-  --note-hover-shadow: 0 16px 34px rgba(76, 111, 255, 0.2);
-  --note-block-bg: #f8f9fd;
-  --note-block-border: #e8ecf5;
-}
-
-.noteStyleObsidian {
-  --note-page-bg: radial-gradient(circle at top right, #202734 0%, #1a202b 60%, #151b25 100%);
+:global(.dark-mode) .knowledgePage {
+  --note-page-bg: radial-gradient(circle at top right, #1e2633 0%, #181f2b 55%, #131a25 100%);
   --note-card-bg: #1f2633;
-  --note-card-border: #2d3748;
-  --note-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.3);
-  --note-hover-border: #63b3ed;
-  --note-hover-shadow: 0 18px 36px rgba(49, 130, 206, 0.26);
-  --note-block-bg: #273042;
-  --note-block-border: #344259;
+  --note-card-border: #2e394d;
+  --note-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34);
+  --note-hover-border: #7bb8ff;
+  --note-hover-shadow: 0 18px 36px rgba(69, 140, 245, 0.28);
+  --note-block-bg: #273246;
+  --note-block-border: #3a4a62;
   --note-title-color: #edf2f7;
-  --note-body-color: #cbd5e1;
-  --note-label-color: #93a4ba;
-  --note-font: "IBM Plex Sans", "Segoe UI", sans-serif;
-  --note-title-font: "IBM Plex Serif", "Georgia", serif;
-}
-
-.knowledgeListThemeScope {
-  width: 100%;
+  --note-body-color: #cdd8e9;
+  --note-label-color: #9cb1c8;
+  --note-subtle-text: #b3c1d4;
+  --note-link-color: #8ec5ff;
+  --note-inline-code-bg: #2b3a52;
+  --note-inline-code-color: #ffd580;
+  --note-pre-bg: linear-gradient(180deg, #101924 0%, #182334 100%);
+  --note-quote-border: rgba(142, 197, 255, 0.5);
+  --note-quote-bg: rgba(142, 197, 255, 0.1);
+  --note-tag-primary-color: #b8c4ff;
+  --note-tag-primary-bg: rgba(123, 99, 255, 0.22);
+  --note-tag-info-color: #b7dcff;
+  --note-tag-info-bg: rgba(59, 130, 246, 0.22);
+  --note-tag-success-color: #b7f3c7;
+  --note-tag-success-bg: rgba(82, 196, 26, 0.2);
+  --note-tag-muted-color: #b0bed1;
+  --note-tag-muted-bg: rgba(148, 163, 184, 0.22);
+  --note-danger-color: #ff9f84;
+  --note-warning-color: #ff9f95;
+  --note-on-warning: #1f1110;
+  --note-dropzone-bg: rgba(255, 255, 255, 0.03);
+  --note-dropzone-border: rgba(255, 255, 255, 0.2);
+  --note-dropzone-active-bg: rgba(64, 123, 255, 0.16);
+  --note-dropzone-active-border: #6aa7ff;
+  --note-card-divider: rgba(255, 255, 255, 0.1);
 }
 
 .header {
@@ -121,7 +150,7 @@
 .unifiedProgressLabel {
   display: block;
   margin-bottom: 6px;
-  color: #475467;
+  color: var(--note-subtle-text);
 }
 
 .contentStack {
@@ -193,14 +222,14 @@
 }
 
 .documentMarkdownViewer :global(th) {
-  background: rgba(76, 111, 255, 0.08);
+  background: var(--note-inline-code-bg);
   color: var(--note-title-color);
   font-weight: 600;
 }
 
 .documentMarkdownViewer :global(code) {
-  background: rgba(76, 111, 255, 0.08);
-  color: #274690;
+  background: var(--note-inline-code-bg);
+  color: var(--note-inline-code-color);
   border-radius: 6px;
   padding: 0.15em 0.4em;
 }
@@ -209,7 +238,7 @@
   margin: 12px 0;
   border-radius: 12px;
   border: 1px solid var(--note-block-border);
-  background: rgba(248, 249, 253, 0.92);
+  background: var(--note-pre-bg);
   overflow: auto;
 }
 
@@ -223,60 +252,13 @@
 .documentMarkdownViewer :global(blockquote) {
   margin: 12px 0;
   padding: 10px 14px;
-  border-left: 3px solid rgba(76, 111, 255, 0.35);
-  background: rgba(76, 111, 255, 0.06);
+  border-left: 3px solid var(--note-quote-border);
+  background: var(--note-quote-bg);
   color: var(--note-body-color);
 }
 
 .documentMarkdownViewer :global(a) {
-  color: #2f67d8;
-}
-
-.noteStyleObsidian .documentMarkdownViewer :global(table) {
-  background: #1b2432;
-}
-
-.noteStyleObsidian .documentMarkdownViewer :global(th),
-.noteStyleObsidian .documentMarkdownViewer :global(td) {
-  border-color: #42526b;
-}
-
-.noteStyleObsidian .documentMarkdownViewer :global(th) {
-  background: #243247;
-  color: #f8fafc;
-}
-
-.noteStyleObsidian .documentMarkdownViewer :global(tr:nth-child(even) td) {
-  background: rgba(59, 130, 246, 0.08);
-}
-
-.noteStyleObsidian .documentMarkdownViewer :global(tr:nth-child(odd) td) {
-  background: rgba(15, 23, 42, 0.32);
-}
-
-.noteStyleObsidian .documentMarkdownViewer :global(code) {
-  background: #283548;
-  color: #ffd580;
-}
-
-.noteStyleObsidian .documentMarkdownViewer :global(pre) {
-  border-color: #42526b;
-  background: linear-gradient(180deg, #101924 0%, #182334 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-}
-
-.noteStyleObsidian .documentMarkdownViewer :global(pre code) {
-  color: #e5edf8;
-}
-
-.noteStyleObsidian .documentMarkdownViewer :global(blockquote) {
-  border-left-color: #63b3ed;
-  background: rgba(99, 179, 237, 0.08);
-  color: #d7e4f5;
-}
-
-.noteStyleObsidian .documentMarkdownViewer :global(a) {
-  color: #8ec5ff;
+  color: var(--note-link-color);
 }
 
 .searchHeader {
@@ -328,8 +310,8 @@
 
 .searchHitCard {
   border-radius: 12px;
-  border: 1px solid #eceff6;
-  box-shadow: 0 2px 8px rgba(16, 24, 40, 0.04);
+  border: 1px solid var(--note-card-border);
+  box-shadow: var(--note-card-shadow);
 }
 
 .searchHitTopRow {
@@ -347,7 +329,7 @@
 
 .searchHitSnippet {
   margin: 8px 0 0;
-  color: #475467;
+  color: var(--note-subtle-text);
 }
 
 .filterBar {
@@ -424,13 +406,13 @@
 }
 
 .originTag {
-  color: #615ced;
-  background: rgba(97, 92, 237, 0.1);
+  color: var(--note-tag-primary-color);
+  background: var(--note-tag-primary-bg);
 }
 
 .typeTag {
-  color: #1677ff;
-  background: rgba(22, 119, 255, 0.1);
+  color: var(--note-tag-info-color);
+  background: var(--note-tag-info-bg);
 }
 
 .cardHeaderRow {
@@ -461,13 +443,13 @@
 }
 
 .indexedTag {
-  color: #389e0d;
-  background: rgba(82, 196, 26, 0.12);
+  color: var(--note-tag-success-color);
+  background: var(--note-tag-success-bg);
 }
 
 .notIndexedTag {
-  color: #667085;
-  background: rgba(102, 112, 133, 0.12);
+  color: var(--note-tag-muted-color);
+  background: var(--note-tag-muted-bg);
 }
 
 .cardTitle {
@@ -527,13 +509,13 @@
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 
   &:hover {
-    border-color: #615ced;
+    border-color: var(--note-hover-border);
   }
 
   &:focus-visible {
     outline: none;
-    border-color: #615ced;
-    box-shadow: 0 0 0 2px rgba(97, 92, 237, 0.2);
+    border-color: var(--note-hover-border);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--note-hover-border) 30%, transparent);
   }
 }
 
@@ -585,7 +567,7 @@
   justify-content: flex-end;
   align-items: center;
   gap: 8px;
-  border-top: 1px solid #f1f2f6;
+  border-top: 1px solid var(--note-card-divider);
   padding: 8px 14px 10px;
   margin: 0 -14px;
 }
@@ -608,55 +590,28 @@
   justify-content: center;
 
   &:hover {
-    background-color: #ff4d4f;
-    color: #fff;
-    border-color: #ff4d4f;
+    background-color: var(--note-warning-color);
+    color: var(--note-on-warning);
+    border-color: var(--note-warning-color);
   }
 }
 
-.noteStyleObsidian .actionButton {
-  color: #9ecbff;
-}
-
-.noteStyleObsidian .actionButton:hover {
-  color: #d4e8ff;
-}
-
-.noteStyleObsidian .deleteButton {
-  color: #ffb3b8;
-  border: 1px solid rgba(255, 99, 110, 0.38);
-  border-radius: 8px;
-  background: rgba(255, 99, 110, 0.08);
-}
-
-.noteStyleObsidian .deleteButton:hover {
-  background-color: #d64550;
-  color: #fff;
-  border-color: #d64550;
-}
-
-.noteStyleObsidian .keywordTag {
-  background: rgba(99, 179, 237, 0.16);
-  border-color: rgba(99, 179, 237, 0.28);
-  color: #d8ecff;
-}
-
 .remoteError {
-  color: #d4380d;
+  color: var(--note-danger-color);
 }
 
 .dragZone {
-  border: 1px dashed #d9d9d9;
+  border: 1px dashed var(--note-dropzone-border);
   border-radius: 12px;
   padding: 16px;
-  background: #fafafa;
+  background: var(--note-dropzone-bg);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .dragZoneActive {
-  border-color: #1677ff;
-  background: #f0f7ff;
+  border-color: var(--note-dropzone-active-border);
+  background: var(--note-dropzone-active-bg);
 }
 
 .hiddenInput {
@@ -669,7 +624,7 @@
 
 .enableBackfillHint {
   margin-bottom: 0;
-  color: #667085;
+  color: var(--note-subtle-text);
 }
 
 @keyframes cardFadeIn {
@@ -738,19 +693,6 @@
   .filterGroup {
     flex-basis: auto;
     width: 100%;
-  }
-
-  .noteStyleSegment {
-    min-width: auto;
-  }
-
-  .noteStyleLabel,
-  .noteStyleOptionText {
-    display: none;
-  }
-
-  .noteStyleOptionLabel {
-    gap: 0;
   }
 
   .actionRow {

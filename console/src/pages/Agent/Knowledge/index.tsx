@@ -13,14 +13,12 @@ import {
   Tag,
   message,
 } from "@agentscope-ai/design";
-import { Divider, Progress, Segmented, Space, Spin, Typography } from "antd";
+import { Divider, Progress, Space, Spin, Typography } from "antd";
 import { useNavigate } from "react-router-dom";
 import {
-  BookOutlined,
   DatabaseOutlined,
   DownloadOutlined,
   DeleteOutlined,
-  MoonOutlined,
   PlusOutlined,
   ReloadOutlined,
   SearchOutlined,
@@ -42,10 +40,6 @@ import type {
 } from "../../../api/types";
 import { MarkdownCopy } from "../../../components/MarkdownCopy/MarkdownCopy";
 import styles from "./index.module.less";
-
-const KNOWLEDGE_NOTE_STYLE_STORAGE_KEY = "copaw_knowledge_note_style";
-
-type KnowledgeNoteStyle = "notion" | "obsidian";
 
 const SOURCE_TYPE_OPTIONS: Array<{
   label: string;
@@ -162,16 +156,6 @@ function KnowledgePage() {
     Array<{ file: File; relativePath: string }>
   >([]);
   const [selectedDirectorySummary, setSelectedDirectorySummary] = useState("");
-  const [noteStyle, setNoteStyle] = useState<KnowledgeNoteStyle>(() => {
-    if (typeof window === "undefined") {
-      return "notion";
-    }
-    const saved = window.localStorage.getItem(KNOWLEDGE_NOTE_STYLE_STORAGE_KEY);
-    if (saved === "obsidian" || saved === "notion") {
-      return saved;
-    }
-    return "notion";
-  });
   const singleFileInputRef = useRef<HTMLInputElement>(null);
   const directoryInputRef = useRef<HTMLInputElement>(null);
   const backupImportInputRef = useRef<HTMLInputElement>(null);
@@ -246,13 +230,6 @@ function KnowledgePage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    window.localStorage.setItem(KNOWLEDGE_NOTE_STYLE_STORAGE_KEY, noteStyle);
-  }, [noteStyle]);
 
   // While history backfill is running, poll existing sources API to refresh cards.
   useEffect(() => {
@@ -1008,41 +985,6 @@ function KnowledgePage() {
     t,
   ]);
 
-  const noteStyleOptions = useMemo(
-    () => [
-      {
-        label: (
-          <span className={styles.noteStyleOptionLabel}>
-            <BookOutlined />
-            <span className={styles.noteStyleOptionText}>
-              {t("knowledge.noteStyleNotion")}
-            </span>
-          </span>
-        ),
-        value: "notion",
-      },
-      {
-        label: (
-          <span className={styles.noteStyleOptionLabel}>
-            <MoonOutlined />
-            <span className={styles.noteStyleOptionText}>
-              {t("knowledge.noteStyleObsidian")}
-            </span>
-          </span>
-        ),
-        value: "obsidian",
-      },
-    ],
-    [t],
-  );
-
-  const noteStyleClassName = useMemo(() => {
-    if (noteStyle === "obsidian") {
-      return styles.noteStyleObsidian;
-    }
-    return styles.noteStyleNotion;
-  }, [noteStyle]);
-
   return (
     <div className={styles.knowledgePage}>
       <div className={styles.header}>
@@ -1245,20 +1187,9 @@ function KnowledgePage() {
         <Button icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
           {t("knowledge.addSource")}
         </Button>
-        <div className={styles.headerControlGroup}>
-          <Typography.Text className={styles.noteStyleLabel}>
-            {t("knowledge.noteStyle")}
-          </Typography.Text>
-          <Segmented
-            options={noteStyleOptions}
-            value={noteStyle}
-            onChange={(value) => setNoteStyle(value as KnowledgeNoteStyle)}
-            className={styles.noteStyleSegment}
-          />
-        </div>
       </div>
 
-      <div className={`${styles.knowledgeListThemeScope} ${noteStyleClassName}`}>
+      <div>
       <Card loading={loading}>
         <div className={styles.filterBar}>
           <div className={styles.filterGroup}>
