@@ -172,3 +172,29 @@ def test_cognee_engine_syncs_env_from_custom_provider_with_custom_prefix(
     assert os.environ["LLM_API_KEY"] == "sk-test"
     assert os.environ["LLM_BASE_URL"] == "http://localhost:8000/v1"
     assert os.environ["LLM_API_BASE"] == "http://localhost:8000/v1"
+
+
+def test_cognee_engine_can_disable_bootstrap_mock_embedding(
+    monkeypatch,
+    tmp_path: Path,
+):
+    engine = CogneeEngine(tmp_path / "indexes")
+    config = Config().knowledge
+    config.cognee.enabled = True
+    config.cognee.sync_with_copaw_provider = False
+    config.cognee.bootstrap_mock_embedding = False
+    config.cognee.llm_model = "ollama/qwen3:8b"
+    config.cognee.llm_base_url = "http://127.0.0.1:11434/v1"
+    config.cognee.llm_api_key = "local"
+
+    monkeypatch.delenv("MOCK_EMBEDDING", raising=False)
+    monkeypatch.delenv("EMBEDDING_PROVIDER", raising=False)
+    monkeypatch.delenv("EMBEDDING_MODEL", raising=False)
+    monkeypatch.delenv("EMBEDDING_ENDPOINT", raising=False)
+
+    engine._ensure_cognee_llm_env(config)
+
+    assert os.environ.get("MOCK_EMBEDDING") is None
+    assert os.environ["EMBEDDING_PROVIDER"] == "ollama"
+    assert os.environ["EMBEDDING_MODEL"] == "nomic-embed-text:latest"
+    assert os.environ["EMBEDDING_ENDPOINT"] == "http://127.0.0.1:11434/api/embed"

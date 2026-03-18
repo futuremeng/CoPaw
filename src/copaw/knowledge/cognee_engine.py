@@ -90,6 +90,25 @@ class CogneeEngine:
             return candidate.rstrip("/")
         return f"{candidate.rstrip('/')}/v1"
 
+    @staticmethod
+    def _normalize_ollama_embed_endpoint(base_url: str) -> str:
+        candidate = (base_url or "").strip()
+        if not candidate:
+            return ""
+        if candidate.endswith("/api/embed"):
+            return candidate
+        if candidate.endswith("/api/embed/"):
+            return candidate.rstrip("/")
+        if candidate.endswith("/api"):
+            return f"{candidate}/embed"
+        if candidate.endswith("/api/"):
+            return f"{candidate}embed"
+        if candidate.endswith("/v1"):
+            return f"{candidate[:-3]}/api/embed".replace("//api", "/api")
+        if candidate.endswith("/v1/"):
+            return f"{candidate[:-4]}/api/embed".replace("//api", "/api")
+        return f"{candidate.rstrip('/')}/api/embed"
+
     def _ensure_cognee_llm_env(self, config: KnowledgeConfig | None) -> None:
         """Populate Cognee LLM env from CoPaw provider settings when missing."""
         if config is None:
@@ -155,6 +174,9 @@ class CogneeEngine:
         embedding_api_key = str(getattr(cognee_cfg, "embedding_api_key", "") or "").strip()
         embedding_tokenizer = str(getattr(cognee_cfg, "embedding_tokenizer", "") or "").strip()
         embedding_dimensions = int(getattr(cognee_cfg, "embedding_dimensions", 0) or 0)
+        bootstrap_mock_embedding = bool(
+            getattr(cognee_cfg, "bootstrap_mock_embedding", True),
+        )
         has_explicit_embedding_cfg = any(
             [
                 embedding_provider,
@@ -168,28 +190,40 @@ class CogneeEngine:
 
         # Prefer a local-friendly embedding setup when running with local providers.
         if provider_id == "ollama":
-            if not has_explicit_embedding_cfg and not os.environ.get("MOCK_EMBEDDING"):
+            if (
+                bootstrap_mock_embedding
+                and not has_explicit_embedding_cfg
+                and not os.environ.get("MOCK_EMBEDDING")
+            ):
                 # Bootstrap local graph workflow first; users can disable this via env/config when tuning real embeddings.
                 os.environ["MOCK_EMBEDDING"] = "true"
+            use_mock_embedding = os.environ.get("MOCK_EMBEDDING", "").lower() in {
+                "true",
+                "1",
+                "yes",
+            }
             if not embedding_provider:
-                embedding_provider = "openai"
+                embedding_provider = "openai" if use_mock_embedding else "ollama"
             if not embedding_model:
-                if os.environ.get("MOCK_EMBEDDING", "").lower() in {"true", "1", "yes"}:
+                if use_mock_embedding:
                     embedding_model = "openai/text-embedding-3-large"
                 else:
-                    embedding_model = "ollama/nomic-embed-text:latest"
+                    embedding_model = "nomic-embed-text:latest"
             if not embedding_base_url:
-                embedding_base_url = self._normalize_ollama_openai_base(base_url)
+                if embedding_provider == "ollama":
+                    embedding_base_url = self._normalize_ollama_embed_endpoint(base_url)
+                else:
+                    embedding_base_url = self._normalize_ollama_openai_base(base_url)
             if not embedding_api_key:
                 embedding_api_key = api_key or "local"
             if embedding_dimensions <= 0:
-                if os.environ.get("MOCK_EMBEDDING", "").lower() in {"true", "1", "yes"}:
+                if use_mock_embedding:
                     embedding_dimensions = 3072
                 else:
                     embedding_dimensions = 768
             if not embedding_tokenizer:
                 # Cognee requires this env var when EMBEDDING_* vars are provided.
-                embedding_tokenizer = "unused"
+                embedding_tokenizer = "unused" if use_mock_embedding else "bert-base-uncased"
 
         if embedding_provider and not os.environ.get("EMBEDDING_PROVIDER"):
             os.environ["EMBEDDING_PROVIDER"] = embedding_provider

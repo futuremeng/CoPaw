@@ -1076,6 +1076,10 @@ class KnowledgeCogneeConfig(BaseModel):
         default="",
         description="Optional tokenizer hint for Cognee embedding config compatibility",
     )
+    bootstrap_mock_embedding: bool = Field(
+        default=True,
+        description="When true, ollama mode auto-enables MOCK_EMBEDDING for bootstrap runs",
+    )
 
 
 class KnowledgeConfig(BaseModel):

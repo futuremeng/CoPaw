@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -71,6 +72,42 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Run real memify instead of dry-run.",
     )
+    parser.add_argument(
+        "--real-embedding",
+        action="store_true",
+        help="Disable bootstrap mock embedding and try real embedding provider.",
+    )
+    parser.add_argument(
+        "--embedding-provider",
+        default="",
+        help="Optional embedding provider override, e.g. ollama/openai/fastembed.",
+    )
+    parser.add_argument(
+        "--embedding-model",
+        default="",
+        help="Optional embedding model override.",
+    )
+    parser.add_argument(
+        "--embedding-base-url",
+        default="",
+        help="Optional embedding endpoint/base url override.",
+    )
+    parser.add_argument(
+        "--embedding-api-key",
+        default="",
+        help="Optional embedding api key override.",
+    )
+    parser.add_argument(
+        "--embedding-tokenizer",
+        default="",
+        help="Optional embedding tokenizer hint.",
+    )
+    parser.add_argument(
+        "--embedding-dimensions",
+        type=int,
+        default=0,
+        help="Optional embedding dimensions override.",
+    )
     return parser.parse_args()
 
 
@@ -89,6 +126,7 @@ def build_knowledge_config(args: argparse.Namespace):
     config.cognee.dataset_prefix = args.dataset_prefix
     config.cognee.search_mode = "hybrid"
     config.cognee.sync_with_copaw_provider = False
+    config.cognee.bootstrap_mock_embedding = not args.real_embedding
 
     if args.llm_model:
         config.cognee.llm_model = args.llm_model
@@ -96,12 +134,26 @@ def build_knowledge_config(args: argparse.Namespace):
         config.cognee.llm_base_url = args.llm_base_url
     if args.llm_api_key:
         config.cognee.llm_api_key = args.llm_api_key
+    if args.embedding_provider:
+        config.cognee.embedding_provider = args.embedding_provider
+    if args.embedding_model:
+        config.cognee.embedding_model = args.embedding_model
+    if args.embedding_base_url:
+        config.cognee.embedding_base_url = args.embedding_base_url
+    if args.embedding_api_key:
+        config.cognee.embedding_api_key = args.embedding_api_key
+    if args.embedding_tokenizer:
+        config.cognee.embedding_tokenizer = args.embedding_tokenizer
+    if args.embedding_dimensions > 0:
+        config.cognee.embedding_dimensions = args.embedding_dimensions
 
     return config
 
 
 def main() -> int:
     args = parse_args()
+    if args.real_embedding:
+        os.environ.pop("MOCK_EMBEDDING", None)
     working_dir = Path(args.working_dir).resolve()
     working_dir.mkdir(parents=True, exist_ok=True)
 
