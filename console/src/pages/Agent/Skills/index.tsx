@@ -15,10 +15,17 @@ function SkillsPage() {
   const { t } = useTranslation();
   const {
     skills,
+    marketplace,
+    marketErrors,
+    marketMeta,
     loading,
     uploading,
+    marketplaceLoading,
+    installingSkillKey,
     importing,
     cancelImport,
+    fetchMarketplace,
+    installMarketplaceSkill,
     createSkill,
     uploadSkill,
     importFromHub,
@@ -155,6 +162,16 @@ function SkillsPage() {
     }
   };
 
+  const handleInstallMarketplaceSkill = async (
+    marketId: string,
+    skillId: string,
+  ) => {
+    await installMarketplaceSkill(marketId, skillId, {
+      enable: true,
+      overwrite: false,
+    });
+  };
+
   return (
     <div className={styles.skillsPage}>
       <div className={styles.header}>
@@ -260,6 +277,77 @@ function SkillsPage() {
           <div className={styles.importLoadingText}>{t("common.loading")}</div>
         ) : null}
       </Modal>
+
+      <div className={styles.marketplacePanel}>
+        <div className={styles.marketplaceHeader}>
+          <div>
+            <h2 className={styles.marketplaceTitle}>Skills Marketplace</h2>
+            <p className={styles.marketplaceDesc}>
+              Install skills from configured markets.
+            </p>
+          </div>
+          <Button
+            onClick={() => {
+              void fetchMarketplace(true);
+            }}
+            loading={marketplaceLoading}
+          >
+            Refresh
+          </Button>
+        </div>
+
+        {marketMeta ? (
+          <div className={styles.marketMetaRow}>
+            <span>Markets: {marketMeta.enabled_market_count}</span>
+            <span>Healthy: {marketMeta.success_market_count}</span>
+            <span>Items: {marketMeta.item_count}</span>
+          </div>
+        ) : null}
+
+        {marketErrors.length > 0 ? (
+          <div className={styles.marketErrorBox}>
+            {marketErrors.slice(0, 3).map((err) => (
+              <div key={`${err.market_id}-${err.code}-${err.message}`}>
+                [{err.market_id}] {err.code}: {err.message}
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        <div className={styles.marketItems}>
+          {marketplace.slice(0, 12).map((item) => {
+            const key = `${item.market_id}/${item.skill_id}`;
+            return (
+              <div key={key} className={styles.marketItemCard}>
+                <div className={styles.marketItemMain}>
+                  <div className={styles.marketItemName}>{item.name}</div>
+                  <div className={styles.marketItemMeta}>
+                    {item.market_id} / {item.skill_id}
+                  </div>
+                  {item.description ? (
+                    <div className={styles.marketItemDesc}>{item.description}</div>
+                  ) : null}
+                </div>
+                <Button
+                  size="small"
+                  loading={installingSkillKey === key}
+                  onClick={() => {
+                    void handleInstallMarketplaceSkill(
+                      item.market_id,
+                      item.skill_id,
+                    );
+                  }}
+                >
+                  Install
+                </Button>
+              </div>
+            );
+          })}
+          {marketplace.length === 0 && !marketplaceLoading ? (
+            <div className={styles.marketEmpty}>No marketplace items found.</div>
+          ) : null}
+        </div>
+      </div>
 
       {loading ? (
         <div className={styles.loading}>
