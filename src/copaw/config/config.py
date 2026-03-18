@@ -1051,6 +1051,31 @@ class KnowledgeCogneeConfig(BaseModel):
         default="",
         description="Optional explicit Cognee LLM base url override",
     )
+    embedding_provider: str = Field(
+        default="",
+        description="Optional Cognee embedding provider override (e.g. openai, ollama, fastembed)",
+    )
+    embedding_model: str = Field(
+        default="",
+        description="Optional Cognee embedding model override (e.g. ollama/nomic-embed-text:latest)",
+    )
+    embedding_base_url: str = Field(
+        default="",
+        description="Optional Cognee embedding endpoint/base url override",
+    )
+    embedding_api_key: str = Field(
+        default="",
+        description="Optional Cognee embedding API key override",
+    )
+    embedding_dimensions: int = Field(
+        default=0,
+        ge=0,
+        description="Optional Cognee embedding dimensions; 0 means use provider defaults",
+    )
+    embedding_tokenizer: str = Field(
+        default="",
+        description="Optional tokenizer hint for Cognee embedding config compatibility",
+    )
 
 
 class KnowledgeConfig(BaseModel):

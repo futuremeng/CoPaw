@@ -104,6 +104,14 @@ def test_cognee_engine_syncs_env_from_ollama_active_model(
     monkeypatch.delenv("LLM_API_KEY", raising=False)
     monkeypatch.delenv("LLM_BASE_URL", raising=False)
     monkeypatch.delenv("LLM_API_BASE", raising=False)
+    monkeypatch.delenv("LLM_ENDPOINT", raising=False)
+    monkeypatch.delenv("EMBEDDING_PROVIDER", raising=False)
+    monkeypatch.delenv("EMBEDDING_MODEL", raising=False)
+    monkeypatch.delenv("EMBEDDING_DIMENSIONS", raising=False)
+    monkeypatch.delenv("EMBEDDING_ENDPOINT", raising=False)
+    monkeypatch.delenv("EMBEDDING_API_KEY", raising=False)
+    monkeypatch.delenv("HUGGINGFACE_TOKENIZER", raising=False)
+    monkeypatch.delenv("MOCK_EMBEDDING", raising=False)
 
     monkeypatch.setattr(
         engine,
@@ -122,6 +130,14 @@ def test_cognee_engine_syncs_env_from_ollama_active_model(
     assert os.environ["LLM_API_KEY"] == "local"
     assert os.environ["LLM_BASE_URL"] == "http://127.0.0.1:11434/v1"
     assert os.environ["LLM_API_BASE"] == "http://127.0.0.1:11434/v1"
+    assert os.environ["LLM_ENDPOINT"] == "http://127.0.0.1:11434/v1"
+    assert os.environ["EMBEDDING_PROVIDER"] == "openai"
+    assert os.environ["EMBEDDING_MODEL"] == "openai/text-embedding-3-large"
+    assert os.environ["EMBEDDING_DIMENSIONS"] == "3072"
+    assert os.environ["EMBEDDING_ENDPOINT"] == "http://127.0.0.1:11434/v1"
+    assert os.environ["EMBEDDING_API_KEY"] == "local"
+    assert os.environ["HUGGINGFACE_TOKENIZER"] == "unused"
+    assert os.environ["MOCK_EMBEDDING"] == "true"
 
 
 def test_cognee_engine_syncs_env_from_custom_provider_with_custom_prefix(

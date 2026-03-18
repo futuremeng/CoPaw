@@ -75,6 +75,21 @@ class CogneeEngine:
             logger.debug("Failed to resolve active provider/model for cognee env sync", exc_info=True)
             return None
 
+    @staticmethod
+    def _normalize_ollama_openai_base(base_url: str) -> str:
+        candidate = (base_url or "").strip()
+        if not candidate:
+            return ""
+        if candidate.endswith("/api"):
+            return f"{candidate}/v1"
+        if candidate.endswith("/api/"):
+            return f"{candidate}v1"
+        if candidate.endswith("/v1"):
+            return candidate
+        if candidate.endswith("/v1/"):
+            return candidate.rstrip("/")
+        return f"{candidate.rstrip('/')}/v1"
+
     def _ensure_cognee_llm_env(self, config: KnowledgeConfig | None) -> None:
         """Populate Cognee LLM env from CoPaw provider settings when missing."""
         if config is None:
@@ -101,6 +116,15 @@ class CogneeEngine:
                 if not api_key:
                     api_key = active_api_key
 
+        # If provider cannot be inferred from active CoPaw model, derive a best-effort local provider.
+        if not provider_id:
+            lowered_model = model.lower()
+            lowered_base = base_url.lower()
+            if lowered_model.startswith("ollama/") or "11434" in lowered_base:
+                provider_id = "ollama"
+            elif lowered_model.startswith("lm_studio/") or "lmstudio" in lowered_base:
+                provider_id = "lmstudio"
+
         if model:
             provider_prefix = self._provider_model_prefix(
                 provider_id,
@@ -122,6 +146,63 @@ class CogneeEngine:
                 os.environ["LLM_BASE_URL"] = base_url
             if not os.environ.get("LLM_API_BASE"):
                 os.environ["LLM_API_BASE"] = base_url
+            if not os.environ.get("LLM_ENDPOINT"):
+                os.environ["LLM_ENDPOINT"] = base_url
+
+        embedding_provider = str(getattr(cognee_cfg, "embedding_provider", "") or "").strip()
+        embedding_model = str(getattr(cognee_cfg, "embedding_model", "") or "").strip()
+        embedding_base_url = str(getattr(cognee_cfg, "embedding_base_url", "") or "").strip()
+        embedding_api_key = str(getattr(cognee_cfg, "embedding_api_key", "") or "").strip()
+        embedding_tokenizer = str(getattr(cognee_cfg, "embedding_tokenizer", "") or "").strip()
+        embedding_dimensions = int(getattr(cognee_cfg, "embedding_dimensions", 0) or 0)
+        has_explicit_embedding_cfg = any(
+            [
+                embedding_provider,
+                embedding_model,
+                embedding_base_url,
+                embedding_api_key,
+                embedding_tokenizer,
+                embedding_dimensions > 0,
+            ],
+        )
+
+        # Prefer a local-friendly embedding setup when running with local providers.
+        if provider_id == "ollama":
+            if not has_explicit_embedding_cfg and not os.environ.get("MOCK_EMBEDDING"):
+                # Bootstrap local graph workflow first; users can disable this via env/config when tuning real embeddings.
+                os.environ["MOCK_EMBEDDING"] = "true"
+            if not embedding_provider:
+                embedding_provider = "openai"
+            if not embedding_model:
+                if os.environ.get("MOCK_EMBEDDING", "").lower() in {"true", "1", "yes"}:
+                    embedding_model = "openai/text-embedding-3-large"
+                else:
+                    embedding_model = "ollama/nomic-embed-text:latest"
+            if not embedding_base_url:
+                embedding_base_url = self._normalize_ollama_openai_base(base_url)
+            if not embedding_api_key:
+                embedding_api_key = api_key or "local"
+            if embedding_dimensions <= 0:
+                if os.environ.get("MOCK_EMBEDDING", "").lower() in {"true", "1", "yes"}:
+                    embedding_dimensions = 3072
+                else:
+                    embedding_dimensions = 768
+            if not embedding_tokenizer:
+                # Cognee requires this env var when EMBEDDING_* vars are provided.
+                embedding_tokenizer = "unused"
+
+        if embedding_provider and not os.environ.get("EMBEDDING_PROVIDER"):
+            os.environ["EMBEDDING_PROVIDER"] = embedding_provider
+        if embedding_model and not os.environ.get("EMBEDDING_MODEL"):
+            os.environ["EMBEDDING_MODEL"] = embedding_model
+        if embedding_dimensions > 0 and not os.environ.get("EMBEDDING_DIMENSIONS"):
+            os.environ["EMBEDDING_DIMENSIONS"] = str(embedding_dimensions)
+        if embedding_base_url and not os.environ.get("EMBEDDING_ENDPOINT"):
+            os.environ["EMBEDDING_ENDPOINT"] = embedding_base_url
+        if embedding_api_key and not os.environ.get("EMBEDDING_API_KEY"):
+            os.environ["EMBEDDING_API_KEY"] = embedding_api_key
+        if embedding_tokenizer and not os.environ.get("HUGGINGFACE_TOKENIZER"):
+            os.environ["HUGGINGFACE_TOKENIZER"] = embedding_tokenizer
 
     @staticmethod
     def _sanitize_token(text: str) -> str:
@@ -218,7 +299,7 @@ class CogneeEngine:
                 value = item.get(key)
                 if isinstance(value, str) and value.strip():
                     return value.strip()
-            return json.dumps(item, ensure_ascii=False)
+            return json.dumps(item, ensure_ascii=False, default=str)
         if isinstance(item, (list, tuple)):
             joined = "\n".join(CogneeEngine._stringify_item(x) for x in item)
             return joined.strip()

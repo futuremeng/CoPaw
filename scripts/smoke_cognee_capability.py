@@ -128,7 +128,7 @@ def main() -> int:
         knowledge_config,
         SimpleNamespace(knowledge_chunk_size=knowledge_config.index.chunk_size),
     )
-    print(json.dumps(indexed, ensure_ascii=False, indent=2))
+    print(json.dumps(indexed, ensure_ascii=False, indent=2, default=str))
 
     print("[2/5] Running retrieval search...")
     search_result = manager.search(
@@ -136,7 +136,7 @@ def main() -> int:
         config=knowledge_config,
         limit=5,
     )
-    print(json.dumps(search_result, ensure_ascii=False, indent=2))
+    print(json.dumps(search_result, ensure_ascii=False, indent=2, default=str))
     if not search_result.get("hits"):
         print("ERROR: search returned no hits")
         return 2
@@ -148,8 +148,9 @@ def main() -> int:
         query_mode="template",
         dataset_scope=None,
         top_k=5,
+        timeout_sec=20,
     )
-    print(json.dumps(graph_result.__dict__, ensure_ascii=False, indent=2))
+    print(json.dumps(graph_result.__dict__, ensure_ascii=False, indent=2, default=str))
     if not graph_result.records:
         print("ERROR: graph_query returned no records")
         return 3
@@ -161,6 +162,7 @@ def main() -> int:
         query_mode="template",
         dataset_scope=None,
         top_k=10,
+        timeout_sec=20,
     )
     triplets = [
         {
@@ -171,7 +173,7 @@ def main() -> int:
         }
         for item in triplet_result.records
     ]
-    print(json.dumps({"triplets": triplets[:5]}, ensure_ascii=False, indent=2))
+    print(json.dumps({"triplets": triplets[:5]}, ensure_ascii=False, indent=2, default=str))
 
     print("[5/5] Triggering memify job...")
     memify_run = graph_manager.run_memify(
@@ -181,7 +183,7 @@ def main() -> int:
         dry_run=not args.real_memify,
         idempotency_key="smoke-cognee-capability",
     )
-    print(json.dumps(memify_run, ensure_ascii=False, indent=2))
+    print(json.dumps(memify_run, ensure_ascii=False, indent=2, default=str))
 
     job_id = memify_run.get("job_id")
     if not job_id:
@@ -190,7 +192,7 @@ def main() -> int:
 
     status = graph_manager.get_memify_status(job_id)
     print("Memify status:")
-    print(json.dumps(status, ensure_ascii=False, indent=2))
+    print(json.dumps(status, ensure_ascii=False, indent=2, default=str))
 
     if not isinstance(status, dict) or status.get("status") not in {
         "succeeded",
