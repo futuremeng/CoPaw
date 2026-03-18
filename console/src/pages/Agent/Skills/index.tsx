@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Button, Form, Modal, message } from "@agentscope-ai/design";
 import {
+  AppstoreOutlined,
   DownloadOutlined,
   PlusOutlined,
   UploadOutlined,
 } from "@ant-design/icons";
 import type { SkillSpec, SkillsMarketSpec } from "../../../api/types";
-import { SkillCard, SkillDrawer } from "./components";
+import { SkillCard, SkillDrawer, MarketplaceDrawer } from "./components";
 import { useSkills } from "./useSkills";
 import { useTranslation } from "react-i18next";
 import { createDefaultSkillsMarketTemplates } from "../../../constants/skillsMarket";
@@ -36,8 +37,11 @@ function SkillsPage() {
     importFromHub,
     toggleEnabled,
     deleteSkill,
+    deleteSkillDirect,
+    fetchSkills,
   } = useSkills();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [marketplaceDrawerOpen, setMarketplaceDrawerOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importUrl, setImportUrl] = useState("");
   const [importUrlError, setImportUrlError] = useState("");
@@ -186,7 +190,7 @@ function SkillsPage() {
     marketId: string,
     skillId: string,
   ) => {
-    await installMarketplaceSkill(marketId, skillId, {
+    return await installMarketplaceSkill(marketId, skillId, {
       enable: true,
       overwrite: false,
     });
@@ -194,7 +198,7 @@ function SkillsPage() {
 
   const handleAddMarket = () => {
     const next: SkillsMarketSpec = {
-      id: `market-${Date.now()}`,
+      id: "",
       name: "",
       url: "",
       branch: "",
@@ -219,10 +223,88 @@ function SkillsPage() {
     );
   };
 
-  const handleValidateMarket = async (idx: number) => {
-    const current = marketDrafts[idx];
+  const inferMarketNameFromUrl = (raw: string) => {
+    const text = (raw || "").trim();
+    if (!text) return "";
+
+    const parseOwnerRepo = (candidate: string) => {
+      const cleaned = candidate.replace(/^\/+|\/+$/g, "");
+      const parts = cleaned.split("/").filter(Boolean);
+      if (parts.length >= 2) {
+        return parts[1];
+      }
+      return "";
+    };
+
+    try {
+      const u = new URL(text);
+      if (u.hostname.includes("github.com")) {
+        const repo = parseOwnerRepo(u.pathname);
+        if (repo) return repo;
+      }
+      return u.hostname.split(".").filter(Boolean)[0] || "";
+    } catch {
+      const noProto = text.replace(/^https?:\/\//, "");
+      if (noProto.includes("/")) {
+        return parseOwnerRepo(noProto);
+      }
+      return "";
+    }
+  };
+
+  const inferMarketIdFromUrl = (raw: string) => {
+    const text = (raw || "").trim();
+    if (!text) return "";
+
+    const parseOwnerRepo = (candidate: string) => {
+      const cleaned = candidate.replace(/^\/+|\/+$/g, "");
+      const parts = cleaned.split("/").filter(Boolean);
+      if (parts.length >= 2) {
+        return { owner: parts[0], repo: parts[1].replace(/\.git$/i, "") };
+      }
+      return null;
+    };
+
+    try {
+      const u = new URL(text);
+      if (u.hostname.includes("github.com")) {
+        const parsed = parseOwnerRepo(u.pathname);
+        if (parsed) return `${parsed.owner}/${parsed.repo}`;
+      }
+      const parsed = parseOwnerRepo(text.replace(/^https?:\/\//, ""));
+      if (parsed) return `${parsed.owner}-${parsed.repo}`;
+    } catch {
+      const parsed = parseOwnerRepo(text.replace(/^https?:\/\//, ""));
+      if (parsed) return `${parsed.owner}-${parsed.repo}`;
+    }
+
+    return "";
+  };
+
+  const handleValidateMarket = async (
+    idx: number,
+    marketOverride?: SkillsMarketSpec,
+  ) => {
+    const current = marketOverride ?? marketDrafts[idx];
     if (!current) return;
-    const result = await validateMarket(current);
+
+    let next = current;
+    if (!next.id?.trim()) {
+      const inferredId = inferMarketIdFromUrl(next.url);
+      if (inferredId) {
+        next = { ...next, id: inferredId };
+        handleUpdateMarket(idx, { id: inferredId });
+      }
+    }
+    if (!next.name?.trim()) {
+      const inferredName = inferMarketNameFromUrl(next.url);
+      if (inferredName) {
+        next = { ...next, name: inferredName };
+        handleUpdateMarket(idx, { name: inferredName });
+      }
+    }
+
+    const result = await validateMarket(next);
     if (result?.normalized) {
       handleUpdateMarket(idx, result.normalized);
     }
@@ -253,6 +335,148 @@ function SkillsPage() {
 
   const handleResetMarketTemplates = () => {
     setMarketDrafts(createDefaultSkillsMarketTemplates());
+  };
+
+  const getSkillsFromMarket = (marketId: string) => {
+    const marketUrls = new Set(
+      marketplace
+        .filter((item) => item.market_id === marketId)
+        .flatMap((item) => [item.source_url, item.install_url].filter(Boolean)),
+    );
+    return skills.filter((s) => s.source && marketUrls.has(s.source));
+  };
+
+  const handleRunBulkAction = async (params: {
+    type: "enable" | "disable" | "delete";
+    marketId: string;
+    shouldStop: () => boolean;
+    onProgress?: (skillKey: string | null) => void;
+  }) => {
+    const { type, marketId, shouldStop, onProgress } = params;
+    const marketItems = marketplace.filter((item) => item.market_id === marketId);
+    const itemBySource = new Map<string, { key: string }>();
+    for (const item of marketItems) {
+      const key = `${item.market_id}/${item.skill_id}`;
+      if (item.source_url) itemBySource.set(item.source_url, { key });
+      if (item.install_url) itemBySource.set(item.install_url, { key });
+    }
+
+    let total = 0;
+    let affected = 0;
+    let failed = 0;
+    let enabled = 0;
+    let installed = 0;
+    let disabled = 0;
+    let deleted = 0;
+
+    try {
+      if (type === "enable") {
+        const installedSkills = getSkillsFromMarket(marketId);
+        const targetToggle = installedSkills.filter((s) => !s.enabled);
+        const installedSources = new Set(skills.map((s) => s.source).filter(Boolean));
+        const targetInstall = marketItems.filter(
+          (item) =>
+            !installedSources.has(item.source_url) &&
+            !installedSources.has(item.install_url),
+        );
+        total = targetToggle.length + targetInstall.length;
+
+        for (const skill of targetToggle) {
+          if (shouldStop()) break;
+          const key = itemBySource.get(skill.source || "")?.key ?? null;
+          onProgress?.(key);
+          const ok = await toggleEnabled(skill);
+          if (ok) {
+            affected += 1;
+            enabled += 1;
+          } else {
+            failed += 1;
+          }
+        }
+
+        for (const item of targetInstall) {
+          if (shouldStop()) break;
+          const key = `${item.market_id}/${item.skill_id}`;
+          onProgress?.(key);
+          const ok = await handleInstallMarketplaceSkill(item.market_id, item.skill_id);
+          if (ok) {
+            affected += 1;
+            installed += 1;
+          } else {
+            failed += 1;
+          }
+        }
+
+        const processed = affected + failed;
+        return {
+          type,
+          total,
+          affected,
+          failed: Math.max(failed, total - processed),
+          enabled,
+          installed,
+          stopped: shouldStop() && processed < total,
+        };
+      }
+
+      if (type === "disable") {
+        const targetSkills = getSkillsFromMarket(marketId).filter((s) => s.enabled);
+        total = targetSkills.length;
+        for (const skill of targetSkills) {
+          if (shouldStop()) break;
+          const key = itemBySource.get(skill.source || "")?.key ?? null;
+          onProgress?.(key);
+          const ok = await toggleEnabled(skill);
+          if (ok) {
+            affected += 1;
+            disabled += 1;
+          } else {
+            failed += 1;
+          }
+        }
+
+        const processed = affected + failed;
+        return {
+          type,
+          total,
+          affected,
+          failed: Math.max(failed, total - processed),
+          disabled,
+          stopped: shouldStop() && processed < total,
+        };
+      }
+
+      const toDelete = getSkillsFromMarket(marketId);
+      total = toDelete.length;
+      for (const skill of toDelete) {
+        if (shouldStop()) break;
+        const key = itemBySource.get(skill.source || "")?.key ?? null;
+        onProgress?.(key);
+        const ok = await deleteSkillDirect(skill);
+        if (ok) {
+          affected += 1;
+          deleted += 1;
+        } else {
+          failed += 1;
+        }
+      }
+
+      if (deleted > 0) {
+        await fetchSkills();
+      }
+
+      const processed = affected + failed;
+      return {
+        type,
+        total,
+        affected,
+        failed: Math.max(failed, total - processed),
+        deleted,
+        stopped: shouldStop() && processed < total,
+      };
+    } finally {
+      onProgress?.(null);
+    }
   };
 
   return (
@@ -288,6 +512,12 @@ function SkillsPage() {
           </Button>
           <Button type="primary" onClick={handleCreate} icon={<PlusOutlined />}>
             {t("skills.createSkill")}
+          </Button>
+          <Button
+            onClick={() => setMarketplaceDrawerOpen(true)}
+            icon={<AppstoreOutlined />}
+          >
+            {t("skills.marketplaceButton")}
           </Button>
         </div>
       </div>
@@ -361,208 +591,32 @@ function SkillsPage() {
         ) : null}
       </Modal>
 
-      <div className={styles.marketplacePanel}>
-        <div className={styles.marketplaceHeader}>
-          <div>
-            <h2 className={styles.marketplaceTitle}>{t("skills.marketplaceTitle")}</h2>
-            <p className={styles.marketplaceDesc}>{t("skills.marketplaceDesc")}</p>
-          </div>
-          <Button
-            onClick={() => {
-              void fetchMarketplace(true);
-            }}
-            loading={marketplaceLoading}
-          >
-            {t("common.refresh")}
-          </Button>
-        </div>
-
-        <div className={styles.marketEditor}>
-          <div className={styles.marketEditorHeader}>
-            <h3 className={styles.marketEditorTitle}>{t("skills.marketConfigTitle")}</h3>
-            <div className={styles.marketEditorActions}>
-              <Button onClick={handleAddMarket}>{t("skills.marketAdd")}</Button>
-              <Button onClick={handleResetMarketTemplates}>{t("skills.marketResetTemplate")}</Button>
-              <Button
-                type="primary"
-                loading={savingMarkets}
-                onClick={() => {
-                  void handleSaveMarkets();
-                }}
-              >
-                {t("skills.marketSaveConfig")}
-              </Button>
-            </div>
-          </div>
-
-          <div className={styles.marketConfigRow}>
-            <label className={styles.marketConfigLabel}>
-              {t("skills.marketCacheTtlLabel")}
-              <input
-                className={styles.marketInputOrder}
-                type="number"
-                min={0}
-                value={marketCacheTtl}
-                onChange={(e) =>
-                  setMarketCacheTtl(
-                    Number.parseInt(e.target.value || "0", 10) || 0,
-                  )
-                }
-              />
-            </label>
-            <label className={styles.marketEnabledLabel}>
-              <input
-                type="checkbox"
-                checked={marketOverwriteDefault}
-                onChange={(e) => setMarketOverwriteDefault(e.target.checked)}
-              />
-              {t("skills.marketOverwriteDefaultLabel")}
-            </label>
-          </div>
-
-          <div className={styles.marketRows}>
-            {marketDrafts.map((market, idx) => (
-              <div key={`${market.id}-${idx}`} className={styles.marketRow}>
-                <div className={styles.marketRowFields}>
-                  <input
-                    className={styles.marketInput}
-                    value={market.id}
-                    onChange={(e) =>
-                      handleUpdateMarket(idx, { id: e.target.value })
-                    }
-                    placeholder={t("skills.marketIdPlaceholder")}
-                  />
-                  <input
-                    className={styles.marketInput}
-                    value={market.name}
-                    onChange={(e) =>
-                      handleUpdateMarket(idx, { name: e.target.value })
-                    }
-                    placeholder={t("skills.marketNamePlaceholder")}
-                  />
-                  <input
-                    className={styles.marketInputWide}
-                    value={market.url}
-                    onChange={(e) =>
-                      handleUpdateMarket(idx, { url: e.target.value })
-                    }
-                    placeholder={t("skills.marketUrlPlaceholder")}
-                  />
-                  <input
-                    className={styles.marketInput}
-                    value={market.branch ?? ""}
-                    onChange={(e) =>
-                      handleUpdateMarket(idx, { branch: e.target.value })
-                    }
-                    placeholder={t("skills.marketBranchPlaceholder")}
-                  />
-                  <input
-                    className={styles.marketInput}
-                    value={market.path}
-                    onChange={(e) =>
-                      handleUpdateMarket(idx, { path: e.target.value })
-                    }
-                    placeholder={t("skills.marketPathPlaceholder")}
-                  />
-                  <input
-                    className={styles.marketInputOrder}
-                    type="number"
-                    value={market.order}
-                    onChange={(e) =>
-                      handleUpdateMarket(idx, {
-                        order: Number.parseInt(e.target.value || "0", 10) || 0,
-                      })
-                    }
-                    placeholder="order"
-                  />
-                  <label className={styles.marketEnabledLabel}>
-                    <input
-                      type="checkbox"
-                      checked={market.enabled}
-                      onChange={(e) =>
-                        handleUpdateMarket(idx, { enabled: e.target.checked })
-                      }
-                    />
-                    {t("common.enabled")}
-                  </label>
-                </div>
-                <div className={styles.marketRowActions}>
-                  <Button
-                    size="small"
-                    onClick={() => {
-                      void handleValidateMarket(idx);
-                    }}
-                  >
-                    {t("skills.marketValidate")}
-                  </Button>
-                  <Button
-                    size="small"
-                    danger
-                    onClick={() => handleRemoveMarket(idx)}
-                  >
-                    {t("skills.marketRemove")}
-                  </Button>
-                </div>
-              </div>
-            ))}
-            {marketDrafts.length === 0 ? (
-              <div className={styles.marketEmpty}>{t("skills.marketEmptyConfig")}</div>
-            ) : null}
-          </div>
-        </div>
-
-        {marketMeta ? (
-          <div className={styles.marketMetaRow}>
-            <span>{t("skills.marketMetaMarkets")}: {marketMeta.enabled_market_count}</span>
-            <span>{t("skills.marketMetaHealthy")}: {marketMeta.success_market_count}</span>
-            <span>{t("skills.marketMetaItems")}: {marketMeta.item_count}</span>
-          </div>
-        ) : null}
-
-        {marketErrors.length > 0 ? (
-          <div className={styles.marketErrorBox}>
-            {marketErrors.slice(0, 3).map((err) => (
-              <div key={`${err.market_id}-${err.code}-${err.message}`}>
-                [{err.market_id}] {err.code}: {err.message}
-              </div>
-            ))}
-          </div>
-        ) : null}
-
-        <div className={styles.marketItems}>
-          {marketplace.slice(0, 12).map((item) => {
-            const key = `${item.market_id}/${item.skill_id}`;
-            return (
-              <div key={key} className={styles.marketItemCard}>
-                <div className={styles.marketItemMain}>
-                  <div className={styles.marketItemName}>{item.name}</div>
-                  <div className={styles.marketItemMeta}>
-                    {item.market_id} / {item.skill_id}
-                  </div>
-                  {item.description ? (
-                    <div className={styles.marketItemDesc}>{item.description}</div>
-                  ) : null}
-                </div>
-                <Button
-                  size="small"
-                  loading={installingSkillKey === key}
-                  onClick={() => {
-                    void handleInstallMarketplaceSkill(
-                      item.market_id,
-                      item.skill_id,
-                    );
-                  }}
-                >
-                  {t("skills.marketInstall")}
-                </Button>
-              </div>
-            );
-          })}
-          {marketplace.length === 0 && !marketplaceLoading ? (
-            <div className={styles.marketEmpty}>{t("skills.marketEmptyItems")}</div>
-          ) : null}
-        </div>
-      </div>
+      <MarketplaceDrawer
+        open={marketplaceDrawerOpen}
+        onClose={() => setMarketplaceDrawerOpen(false)}
+        marketDrafts={marketDrafts}
+        marketCacheTtl={marketCacheTtl}
+        marketOverwriteDefault={marketOverwriteDefault}
+        savingMarkets={savingMarkets}
+        onAddMarket={handleAddMarket}
+        onRemoveMarket={handleRemoveMarket}
+        onUpdateMarket={handleUpdateMarket}
+        onValidateMarket={handleValidateMarket}
+        onSaveMarkets={handleSaveMarkets}
+        onResetMarketTemplates={handleResetMarketTemplates}
+        onCacheTtlChange={setMarketCacheTtl}
+        onOverwriteDefaultChange={setMarketOverwriteDefault}
+        marketplace={marketplace}
+        marketErrors={marketErrors}
+        marketMeta={marketMeta}
+        marketplaceLoading={marketplaceLoading}
+        onRefreshMarketplace={() => {
+          void fetchMarketplace(true);
+        }}
+        installingSkillKey={installingSkillKey}
+        onInstallSkill={handleInstallMarketplaceSkill}
+        onRunBulkAction={handleRunBulkAction}
+      />
 
       {loading ? (
         <div className={styles.loading}>
