@@ -372,12 +372,13 @@ def _generate_market_index_from_directory(
 def _load_market_index(
     market: SkillMarketSpec,
 ) -> tuple[dict[str, Any], list[str]]:
-    market_url = _normalize_market_url(market.url)
+    normalized_market = _normalize_market_spec(market)
+    market_url = _normalize_market_url(normalized_market.url)
     with tempfile.TemporaryDirectory(prefix="copaw-market-") as tmp:
         repo_dir = Path(tmp) / "repo"
         clone_args = ["clone", "--depth", "1"]
-        if market.branch:
-            clone_args += ["--branch", market.branch]
+        if normalized_market.branch:
+            clone_args += ["--branch", normalized_market.branch]
         clone_args += [market_url, str(repo_dir)]
         clone_result = _run_git_command(clone_args, timeout_sec=40)
         if clone_result.returncode != 0:
@@ -387,7 +388,7 @@ def _load_market_index(
             )
 
         # Resolve branch from local clone when user did not specify one.
-        effective_branch = (market.branch or "").strip()
+        effective_branch = (normalized_market.branch or "").strip()
         if not effective_branch:
             branch_result = _run_git_command(
                 ["rev-parse", "--abbrev-ref", "HEAD"],
@@ -397,13 +398,13 @@ def _load_market_index(
             if branch_result.returncode == 0:
                 effective_branch = branch_result.stdout.strip()
 
-        target_path = repo_dir / (market.path or "index.json")
+        target_path = repo_dir / (normalized_market.path or "index.json")
         warnings: list[str] = []
         if target_path.is_file():
             return json.loads(target_path.read_text(encoding="utf-8")), warnings
         if target_path.is_dir():
             return _generate_market_index_from_directory(
-                market,
+                normalized_market,
                 target_path,
                 effective_branch=effective_branch,
             )
@@ -411,13 +412,13 @@ def _load_market_index(
             parent_dir = target_path.parent
             if parent_dir.is_dir():
                 return _generate_market_index_from_directory(
-                    market,
+                    normalized_market,
                     parent_dir,
                     effective_branch=effective_branch,
                 )
         raise ValueError(
             "MARKET_INDEX_INVALID: index or skills directory not found at "
-            f"{market.path}"
+            f"{normalized_market.path}"
         )
 
 
@@ -526,10 +527,11 @@ def _aggregate_marketplace(
         key=lambda m: m.order,
     )
     for market in enabled_markets:
+        normalized_market = _normalize_market_spec(market)
         try:
-            index_doc, warnings = _load_market_index(market)
+            index_doc, warnings = _load_market_index(normalized_market)
             extracted_items, extracted_errors = _extract_market_items(
-                market,
+                normalized_market,
                 index_doc,
             )
             items.extend(extracted_items)
