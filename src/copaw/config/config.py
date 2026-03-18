@@ -1038,6 +1038,48 @@ class AgentsSquareConfig(BaseModel):
     )
 
 
+class SkillMarketSpec(BaseModel):
+    """A single skills market entry."""
+
+    id: str = Field(..., description="Stable market id")
+    name: str = Field(..., description="Display name")
+    type: Literal["git"] = Field(default="git")
+    url: str = Field(..., description="Git repository URL")
+    branch: str = Field(default="", description="Optional branch")
+    path: str = Field(
+        default="index.json",
+        description="Path to market index file in repo",
+    )
+    enabled: bool = Field(default=True)
+    order: int = Field(default=999)
+    trust: Optional[Literal["official", "community", "custom"]] = None
+
+
+class SkillsMarketCacheConfig(BaseModel):
+    """Cache policy for market index aggregation."""
+
+    ttl_sec: int = Field(default=600, ge=0, le=24 * 3600)
+
+
+class SkillsMarketInstallConfig(BaseModel):
+    """Default install behavior for marketplace installs."""
+
+    overwrite_default: bool = Field(default=False)
+
+
+class SkillsMarketConfig(BaseModel):
+    """Skills market root config."""
+
+    version: int = Field(default=1, ge=1)
+    markets: List[SkillMarketSpec] = Field(default_factory=list)
+    cache: SkillsMarketCacheConfig = Field(
+        default_factory=SkillsMarketCacheConfig,
+    )
+    install: SkillsMarketInstallConfig = Field(
+        default_factory=SkillsMarketInstallConfig,
+    )
+
+
 class Config(BaseModel):
     """Root config (config.json)."""
 
