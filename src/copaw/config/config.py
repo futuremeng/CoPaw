@@ -1076,6 +1076,13 @@ class KnowledgeCogneeConfig(BaseModel):
         default="",
         description="Optional tokenizer hint for Cognee embedding config compatibility",
     )
+    modelscope_tokenizer_dir: str = Field(
+        default="",
+        description=(
+            "Optional local ModelScope tokenizer directory. "
+            "Used when embedding_provider is modelscope."
+        ),
+    )
     bootstrap_mock_embedding: bool = Field(
         default=True,
         description="When true, ollama mode auto-enables MOCK_EMBEDDING for bootstrap runs",

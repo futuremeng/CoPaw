@@ -10,6 +10,7 @@ import logging
 import os
 import re
 import threading
+from fnmatch import fnmatch
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -122,6 +123,59 @@ class CogneeEngine:
             return f"{candidate[:-4]}/api/embed".replace("//api", "/api")
         return f"{candidate.rstrip('/')}/api/embed"
 
+    @staticmethod
+    def _resolve_modelscope_tokenizer_dir(
+        *,
+        explicit_dir: str,
+        model_hint: str,
+    ) -> str:
+        explicit = (explicit_dir or "").strip()
+        if explicit:
+            explicit_path = Path(explicit).expanduser().resolve()
+            if explicit_path.is_dir() and (explicit_path / "tokenizer.json").exists():
+                return str(explicit_path)
+
+        candidates: list[Path] = []
+        env_cache = (os.environ.get("MODELSCOPE_CACHE") or "").strip()
+        if env_cache:
+            candidates.append(Path(env_cache).expanduser())
+        candidates.extend(
+            [
+                Path.cwd() / ".cache" / "modelscope",
+                Path.home() / ".cache" / "modelscope",
+            ],
+        )
+
+        model_key = (model_hint or "").strip().split("/")[-1].lower()
+        model_tokens = [token for token in re.split(r"[^a-z0-9]+", model_key) if token]
+
+        fallback_match = ""
+        for root in candidates:
+            if not root.exists() or not root.is_dir():
+                continue
+            try:
+                for tokenizer_file in root.rglob("tokenizer.json"):
+                    parent = tokenizer_file.parent
+                    parent_name = parent.name.lower()
+
+                    if model_tokens and all(token in parent_name for token in model_tokens):
+                        return str(parent)
+
+                    if model_key and fnmatch(parent_name, f"*{model_key.replace('.', '*')}*"):
+                        return str(parent)
+
+                    if not fallback_match:
+                        fallback_match = str(parent)
+            except Exception:
+                logger.debug(
+                    "Failed to scan ModelScope cache root: %s",
+                    root,
+                    exc_info=True,
+                )
+                continue
+
+        return fallback_match
+
     def _ensure_cognee_llm_env(self, config: KnowledgeConfig | None) -> None:
         """Populate Cognee LLM env from CoPaw provider settings when missing."""
         if config is None:
@@ -189,6 +243,10 @@ class CogneeEngine:
         embedding_base_url = str(getattr(cognee_cfg, "embedding_base_url", "") or "").strip()
         embedding_api_key = str(getattr(cognee_cfg, "embedding_api_key", "") or "").strip()
         embedding_tokenizer = str(getattr(cognee_cfg, "embedding_tokenizer", "") or "").strip()
+        raw_embedding_tokenizer = embedding_tokenizer
+        modelscope_tokenizer_dir = str(
+            getattr(cognee_cfg, "modelscope_tokenizer_dir", "") or "",
+        ).strip()
         embedding_dimensions = int(getattr(cognee_cfg, "embedding_dimensions", 0) or 0)
         bootstrap_mock_embedding = bool(
             getattr(cognee_cfg, "bootstrap_mock_embedding", True),
@@ -240,6 +298,26 @@ class CogneeEngine:
             if not embedding_tokenizer:
                 # Cognee requires this env var when EMBEDDING_* vars are provided.
                 embedding_tokenizer = "unused" if use_mock_embedding else "bert-base-uncased"
+
+        if embedding_provider == "modelscope":
+            # Cognee 0.5.x does not provide a dedicated ModelScope embedding engine.
+            # We route embeddings through Ollama while using a local ModelScope tokenizer.
+            embedding_provider = "ollama"
+            if not embedding_model:
+                embedding_model = "nomic-embed-text:latest"
+            embedding_base_url = self._normalize_ollama_embed_endpoint(
+                embedding_base_url or base_url,
+            )
+            if not embedding_api_key:
+                embedding_api_key = api_key or "local"
+            if embedding_dimensions <= 0:
+                embedding_dimensions = 768
+            if not raw_embedding_tokenizer:
+                resolved = self._resolve_modelscope_tokenizer_dir(
+                    explicit_dir=modelscope_tokenizer_dir,
+                    model_hint=getattr(cognee_cfg, "embedding_model", "") or "",
+                )
+                embedding_tokenizer = resolved or embedding_tokenizer or "bert-base-uncased"
 
         if embedding_provider and not os.environ.get("EMBEDDING_PROVIDER"):
             os.environ["EMBEDDING_PROVIDER"] = embedding_provider

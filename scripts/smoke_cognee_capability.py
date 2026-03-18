@@ -103,6 +103,14 @@ def parse_args() -> argparse.Namespace:
         help="Optional embedding tokenizer hint.",
     )
     parser.add_argument(
+        "--modelscope-tokenizer-dir",
+        default="",
+        help=(
+            "Optional local ModelScope tokenizer directory. "
+            "Used when embedding-provider=modelscope."
+        ),
+    )
+    parser.add_argument(
         "--embedding-dimensions",
         type=int,
         default=0,
@@ -144,6 +152,8 @@ def build_knowledge_config(args: argparse.Namespace):
         config.cognee.embedding_api_key = args.embedding_api_key
     if args.embedding_tokenizer:
         config.cognee.embedding_tokenizer = args.embedding_tokenizer
+    if args.modelscope_tokenizer_dir:
+        config.cognee.modelscope_tokenizer_dir = args.modelscope_tokenizer_dir
     if args.embedding_dimensions > 0:
         config.cognee.embedding_dimensions = args.embedding_dimensions
 

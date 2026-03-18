@@ -198,3 +198,41 @@ def test_cognee_engine_can_disable_bootstrap_mock_embedding(
     assert os.environ["EMBEDDING_PROVIDER"] == "ollama"
     assert os.environ["EMBEDDING_MODEL"] == "nomic-embed-text:latest"
     assert os.environ["EMBEDDING_ENDPOINT"] == "http://127.0.0.1:11434/api/embed"
+
+
+def test_cognee_engine_modelscope_provider_maps_to_ollama_with_local_tokenizer(
+    monkeypatch,
+    tmp_path: Path,
+):
+    engine = CogneeEngine(tmp_path / "indexes")
+    config = Config().knowledge
+    config.cognee.enabled = True
+    config.cognee.sync_with_copaw_provider = False
+    config.cognee.bootstrap_mock_embedding = False
+    config.cognee.llm_model = "ollama/qwen3:8b"
+    config.cognee.llm_base_url = "http://127.0.0.1:11434/v1"
+    config.cognee.llm_api_key = "local"
+    config.cognee.embedding_provider = "modelscope"
+
+    tokenizer_dir = tmp_path / "modelscope" / "AI-ModelScope" / "bge-small-en-v1___5"
+    tokenizer_dir.mkdir(parents=True, exist_ok=True)
+    (tokenizer_dir / "tokenizer.json").write_text("{}", encoding="utf-8")
+    config.cognee.modelscope_tokenizer_dir = str(tokenizer_dir)
+
+    monkeypatch.delenv("MOCK_EMBEDDING", raising=False)
+    monkeypatch.delenv("EMBEDDING_PROVIDER", raising=False)
+    monkeypatch.delenv("EMBEDDING_MODEL", raising=False)
+    monkeypatch.delenv("EMBEDDING_ENDPOINT", raising=False)
+    monkeypatch.delenv("EMBEDDING_API_KEY", raising=False)
+    monkeypatch.delenv("EMBEDDING_DIMENSIONS", raising=False)
+    monkeypatch.delenv("HUGGINGFACE_TOKENIZER", raising=False)
+
+    engine._ensure_cognee_llm_env(config)
+
+    assert os.environ.get("MOCK_EMBEDDING") is None
+    assert os.environ["EMBEDDING_PROVIDER"] == "ollama"
+    assert os.environ["EMBEDDING_MODEL"] == "nomic-embed-text:latest"
+    assert os.environ["EMBEDDING_ENDPOINT"] == "http://127.0.0.1:11434/api/embed"
+    assert os.environ["EMBEDDING_API_KEY"] == "local"
+    assert os.environ["EMBEDDING_DIMENSIONS"] == "768"
+    assert os.environ["HUGGINGFACE_TOKENIZER"] == str(tokenizer_dir)
