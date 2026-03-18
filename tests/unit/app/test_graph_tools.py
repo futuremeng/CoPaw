@@ -6,6 +6,7 @@ import json
 from types import SimpleNamespace
 
 from copaw.config.config import Config, KnowledgeSourceSpec
+from copaw.knowledge.graph_ops import GraphOpsManager
 from copaw.knowledge.manager import KnowledgeManager
 
 
@@ -255,3 +256,50 @@ async def test_graph_tool_chain_smoke_local_engine(
     )
     triplet_payload = json.loads(triplet_result.content[0]["text"])
     assert isinstance(triplet_payload["triplets"], list)
+
+
+def test_graph_ops_fallback_when_cognee_search_fails(tmp_path, monkeypatch) -> None:
+    knowledge_config = Config().knowledge
+    knowledge_config.enabled = True
+    knowledge_config.graph_query_enabled = True
+    knowledge_config.engine.provider = "cognee"
+    knowledge_config.cognee.enabled = True
+
+    source = KnowledgeSourceSpec(
+        id="fallback-source",
+        name="Fallback Source",
+        type="text",
+        content="Agent uses tool for fallback graph query.",
+        enabled=True,
+        recursive=False,
+        tags=["fallback"],
+        summary="",
+    )
+    knowledge_config.sources = [source]
+
+    manager = KnowledgeManager(tmp_path)
+    manager.index_source(
+        source,
+        knowledge_config,
+        SimpleNamespace(knowledge_chunk_size=knowledge_config.index.chunk_size),
+    )
+
+    ops = GraphOpsManager(tmp_path)
+
+    def _raise_search(*args, **kwargs):
+        _ = args, kwargs
+        raise RuntimeError("cognee unavailable")
+
+    monkeypatch.setattr("copaw.knowledge.cognee_engine.CogneeEngine.search", _raise_search)
+
+    result = ops.graph_query(
+        config=knowledge_config,
+        query_mode="template",
+        query_text="Agent uses tool",
+        dataset_scope=None,
+        top_k=5,
+        timeout_sec=20,
+    )
+
+    assert len(result.records) >= 1
+    assert "COGNEE_GRAPH_QUERY_FALLBACK" in result.warnings

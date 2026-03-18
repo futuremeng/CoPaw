@@ -91,6 +91,19 @@ class CogneeEngine:
         return f"{candidate.rstrip('/')}/v1"
 
     @staticmethod
+    def _normalize_ollama_root_base(base_url: str) -> str:
+        candidate = (base_url or "").strip().rstrip("/")
+        if not candidate:
+            return ""
+        if candidate.endswith("/v1"):
+            return candidate[:-3]
+        if candidate.endswith("/api"):
+            return candidate[:-4]
+        if candidate.endswith("/api/embed"):
+            return candidate[:-10]
+        return candidate
+
+    @staticmethod
     def _normalize_ollama_embed_endpoint(base_url: str) -> str:
         candidate = (base_url or "").strip()
         if not candidate:
@@ -166,7 +179,10 @@ class CogneeEngine:
             if not os.environ.get("LLM_API_BASE"):
                 os.environ["LLM_API_BASE"] = base_url
             if not os.environ.get("LLM_ENDPOINT"):
-                os.environ["LLM_ENDPOINT"] = base_url
+                if provider_id == "ollama":
+                    os.environ["LLM_ENDPOINT"] = self._normalize_ollama_root_base(base_url)
+                else:
+                    os.environ["LLM_ENDPOINT"] = base_url
 
         embedding_provider = str(getattr(cognee_cfg, "embedding_provider", "") or "").strip()
         embedding_model = str(getattr(cognee_cfg, "embedding_model", "") or "").strip()

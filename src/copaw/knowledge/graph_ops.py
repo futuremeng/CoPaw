@@ -9,6 +9,7 @@ Cognee-backed implementations.
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -19,6 +20,9 @@ from ..config.config import KnowledgeConfig
 from ..constant import WORKING_DIR
 from .cognee_engine import CogneeEngine
 from .manager import KnowledgeManager
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -220,16 +224,32 @@ class GraphOpsManager:
         top_k: int,
     ) -> GraphOpsResult:
         cognee_engine = CogneeEngine(self.index_dir)
+        manager = KnowledgeManager(self.working_dir)
 
         if query_mode == "template":
             source_ids = dataset_scope or None
-            search_result = cognee_engine.search(
-                query=query_text,
-                config=config,
-                limit=max(1, min(top_k, 50)),
-                source_ids=source_ids,
-                source_types=None,
-            )
+            fallback_warning = None
+            try:
+                search_result = cognee_engine.search(
+                    query=query_text,
+                    config=config,
+                    limit=max(1, min(top_k, 50)),
+                    source_ids=source_ids,
+                    source_types=None,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Cognee graph query failed, fallback to local lexical search: %s",
+                    exc,
+                )
+                search_result = manager.search(
+                    query=query_text,
+                    config=config,
+                    limit=max(1, min(top_k, 50)),
+                    source_ids=source_ids,
+                    source_types=None,
+                )
+                fallback_warning = "COGNEE_GRAPH_QUERY_FALLBACK"
             records = [
                 {
                     "subject": hit.get("source_name") or hit.get("source_id") or "unknown",
@@ -252,7 +272,10 @@ class GraphOpsManager:
                     "dataset_scope": dataset_scope or [],
                     "query_mode": query_mode,
                 },
-                warnings=[] if records else ["NO_GRAPH_RECORDS"],
+                warnings=(
+                    [fallback_warning] if fallback_warning else []
+                )
+                + ([] if records else ["NO_GRAPH_RECORDS"]),
             )
 
         # cypher mode: direct cognee search with CYPHER retriever
@@ -285,7 +308,23 @@ class GraphOpsManager:
                     datasets=datasets,
                 )
 
-        raw = cognee_engine._run_async(_cypher_search())
+        try:
+            raw = cognee_engine._run_async(_cypher_search())
+        except Exception as exc:
+            logger.warning(
+                "Cognee cypher query failed, returning empty result: %s",
+                exc,
+            )
+            return GraphOpsResult(
+                records=[],
+                summary="Cypher query failed on cognee backend.",
+                provenance={
+                    "engine": "cognee",
+                    "dataset_scope": dataset_scope or [],
+                    "query_mode": query_mode,
+                },
+                warnings=["COGNEE_CYPHER_QUERY_FAILED"],
+            )
         items = raw if isinstance(raw, list) else [raw]
         records = [
             {

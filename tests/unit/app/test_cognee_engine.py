@@ -130,7 +130,7 @@ def test_cognee_engine_syncs_env_from_ollama_active_model(
     assert os.environ["LLM_API_KEY"] == "local"
     assert os.environ["LLM_BASE_URL"] == "http://127.0.0.1:11434/v1"
     assert os.environ["LLM_API_BASE"] == "http://127.0.0.1:11434/v1"
-    assert os.environ["LLM_ENDPOINT"] == "http://127.0.0.1:11434/v1"
+    assert os.environ["LLM_ENDPOINT"] == "http://127.0.0.1:11434"
     assert os.environ["EMBEDDING_PROVIDER"] == "openai"
     assert os.environ["EMBEDDING_MODEL"] == "openai/text-embedding-3-large"
     assert os.environ["EMBEDDING_DIMENSIONS"] == "3072"
