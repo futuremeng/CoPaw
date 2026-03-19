@@ -54,7 +54,7 @@ from .constants import (
     FEISHU_USER_NAME_FETCH_TIMEOUT,
 )
 from .utils import (
-    build_interactive_content,
+    build_interactive_content_chunks,
     extract_json_key,
     extract_post_image_keys,
     extract_post_media_file_keys,
@@ -1325,20 +1325,27 @@ class FeishuChannel(BaseChannel):
 
         Returns the message_id on success, None on failure.
         Body already has bot_prefix if needed.
+        When the body contains more than _MAX_TABLES_PER_CARD tables, it
+        is split into multiple cards sent sequentially.
         """
         has_table = bool(re.search(r"^\s*\|", body, re.MULTILINE))
         loop = asyncio.get_running_loop()
         if has_table:
-            content = build_interactive_content(body)
-            return await loop.run_in_executor(
-                None,
-                lambda: self._send_message_sync(
-                    receive_id_type,
-                    receive_id,
-                    "interactive",
-                    content,
-                ),
-            )
+            chunks = build_interactive_content_chunks(body)
+            last_msg_id: Optional[str] = None
+            for chunk in chunks:
+                msg_id = await loop.run_in_executor(
+                    None,
+                    lambda c=chunk: self._send_message_sync(
+                        receive_id_type,
+                        receive_id,
+                        "interactive",
+                        c,
+                    ),
+                )
+                if msg_id is not None:
+                    last_msg_id = msg_id
+            return last_msg_id
         post = self._build_post_content(body, [])
         content = json.dumps(post, ensure_ascii=False)
         return await loop.run_in_executor(

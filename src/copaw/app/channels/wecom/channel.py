@@ -97,6 +97,7 @@ class WecomChannel(BaseChannel):
 
         self._client: Any = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._ws_loop: Optional[asyncio.AbstractEventLoop] = None
         self._ws_thread: Optional[threading.Thread] = None
 
         # message_id dedup (ordered dict, trimmed when over limit)
@@ -739,6 +740,7 @@ class WecomChannel(BaseChannel):
         else:
             ws_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(ws_loop)
+        self._ws_loop = ws_loop
 
         # Set thread name for debugging
         threading.current_thread().name = "wecom-ws"
@@ -763,6 +765,7 @@ class WecomChannel(BaseChannel):
                 ws_loop.close()
             except Exception:
                 pass
+            self._ws_loop = None
 
     async def start(self) -> None:
         if not self.enabled:
@@ -803,6 +806,11 @@ class WecomChannel(BaseChannel):
         if self._client:
             try:
                 self._client.disconnect()
+            except Exception:
+                pass
+        if self._ws_loop is not None:
+            try:
+                self._ws_loop.call_soon_threadsafe(self._ws_loop.stop)
             except Exception:
                 pass
         if self._ws_thread:

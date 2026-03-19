@@ -96,7 +96,7 @@
     "downloadSuccess": "Workspace downloaded successfully",
     "downloadFailed": "Workspace download failed",
     "zipOnly": "Only .zip files are supported for upload",
-    "fileSizeExceeded": "File size exceeds 100MB limit. Current file: {{size}}MB",
+    "fileSizeLimit": "File size exceeds 100MB limit. Current file: {{size}}MB",
     "systemPromptToggleTooltip": "Enable/disable this file in system prompt",
     "memoryFileWarning": "MEMORY.md is typically queried on-demand by the agent using tools. Loading it into the system prompt may cause the context to become too long.",
     "configUpdated": "System prompt configuration updated",
@@ -394,7 +394,7 @@
     "policyOpen": "Open",
     "policyAllowlist": "Allowlist",
     "allowFrom": "Allowlist Users",
-    "allowFromTooltip": "List of user IDs allowed to interact with the bot (format: nickname#last4, e.g. John#1234)",
+    "allowFromTooltip": "List of user IDs allowed to interact with the bot. Enable allowlist first, then DM the bot to see your ID in the deny message",
     "allowFromPlaceholder": "Enter user ID and press Enter to add",
     "denyMessage": "Access Denied Message",
     "denyMessageTooltip": "Custom message shown to users when access is denied",
@@ -627,6 +627,7 @@
     "testConnectionError": "An error occurred while testing connection",
     "discoverModels": "Discover Models",
     "discoverModelsFailed": "Failed to discover models",
+    "ollamaFetchModelsFailed": "Failed to fetch Ollama models. Please check the error details.",
     "modelTestFailed": "Model validation failed, please check if the model ID is correct",
     "modelTestFailedConfirm": "Model connection test failed: {{message}}. Do you still want to add this model?",
     "autoDiscoveredAndAdded": "Auto-discovered {{count}} models and added {{added}} new model(s)",
@@ -757,7 +758,11 @@
     "greeting": "Hello, how can I help you today?",
     "description": "I am a helpful assistant that can help you with your questions.",
     "prompt1": "Let's start a new journey!",
-    "prompt2": "Can you tell me what skills you have?"
+    "prompt2": "Can you tell me what skills you have?",
+    "attachments": {
+      "tooltip": "Supports documents, images, videos, audio and more formats, single file up to 10MB",
+      "fileSizeLimit": "Single file cannot exceed 10MB"
+    }
   },
   "security": {
     "title": "Security",

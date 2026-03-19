@@ -360,7 +360,7 @@
     "policyOpen": "开放",
     "policyAllowlist": "白名单",
     "allowFrom": "白名单用户",
-    "allowFromTooltip": "允许与机器人交互的用户 ID 列表（格式：昵称#后4位，如 张三#1234）",
+    "allowFromTooltip": "允许与机器人交互的用户 ID 列表。启用白名单后，用户私聊机器人即可在拒绝消息中看到自己的 ID",
     "allowFromPlaceholder": "输入用户ID后按回车添加",
     "denyMessage": "拒绝访问消息",
     "denyMessageTooltip": "自定义消息，当用户被拒绝访问时显示",
@@ -593,6 +593,7 @@
     "testConnectionError": "测试连接时发生错误",
     "discoverModels": "自动获取模型",
     "discoverModelsFailed": "自动获取模型失败",
+    "ollamaFetchModelsFailed": "获取 Ollama 模型列表失败，请查看错误详情。",
     "modelTestFailed": "模型验证失败，请检查模型ID是否正确",
     "modelTestFailedConfirm": "模型连接测试失败：{{message}}。是否仍要添加此模型？",
     "autoDiscoveredAndAdded": "已自动获取 {{count}} 个模型，并新增 {{added}} 个到可选列表",
@@ -723,7 +724,11 @@
     "greeting": "你好，我今天能帮你做什么？",
     "description": "我是一个智能助手，可以帮助你解答问题。",
     "prompt1": "让我们开启一段新的旅程吧！",
-    "prompt2": "能告诉我你有哪些技能吗？"
+    "prompt2": "能告诉我你有哪些技能吗？",
+    "attachments": {
+      "tooltip": "支持文档、图片、视频、音频等多种格式，单文件不超过10MB",
+      "fileSizeLimit": "单文件不超过10MB"
+    }
   },
   "security": {
     "title": "安全",
