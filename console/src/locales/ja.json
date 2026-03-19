@@ -151,6 +151,7 @@
     "marketIdPlaceholder": "id",
     "marketNamePlaceholder": "名前",
     "marketUrlPlaceholder": "url（owner/repo または git URL）",
+    "marketUrlExample": "例: https://github.com/openclaw/openclaw/tree/main/skills",
     "marketBranchPlaceholder": "ブランチ",
     "marketPathPlaceholder": "パス",
     "marketUrlNormalizeHint": "GitHub の tree URL は検証/保存時に repo.git + branch + path に自動正規化されます。",

@@ -195,6 +195,7 @@
     "marketIdPlaceholder": "id",
     "marketNamePlaceholder": "name",
     "marketUrlPlaceholder": "url (owner/repo or git url)",
+    "marketUrlExample": "Example: https://github.com/openclaw/openclaw/tree/main/skills",
     "marketBranchPlaceholder": "branch",
     "marketPathPlaceholder": "path",
     "marketUrlNormalizeHint": "GitHub tree URL will be auto-normalized to repo.git + branch + path on validate/save.",

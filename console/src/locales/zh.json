@@ -161,6 +161,7 @@
     "marketIdPlaceholder": "标识 id",
     "marketNamePlaceholder": "名称",
     "marketUrlPlaceholder": "URL（owner/repo 或 git 地址）",
+    "marketUrlExample": "示例：https://github.com/openclaw/openclaw/tree/main/skills",
     "marketBranchPlaceholder": "分支",
     "marketPathPlaceholder": "路径",
     "marketUrlNormalizeHint": "GitHub tree 地址会在校验/保存时自动解析为 repo.git + branch + path。",

@@ -156,6 +156,7 @@
     "marketIdPlaceholder": "id",
     "marketNamePlaceholder": "имя",
     "marketUrlPlaceholder": "url (owner/repo или git адрес)",
+    "marketUrlExample": "Пример: https://github.com/openclaw/openclaw/tree/main/skills",
     "marketBranchPlaceholder": "ветка",
     "marketPathPlaceholder": "путь",
     "marketUrlNormalizeHint": "GitHub tree URL при проверке/сохранении будет автоматически преобразован в repo.git + branch + path.",

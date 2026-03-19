@@ -296,8 +296,30 @@ function SkillsPage() {
     }
   };
 
-  const handleResetMarketTemplates = () => {
-    setMarketDrafts(createDefaultSkillsMarketTemplates());
+  const handleResetMarketTemplates = async () => {
+    const defaults = createDefaultSkillsMarketTemplates();
+    setMarketDrafts(defaults);
+
+    const payload = {
+      version: marketConfig?.version ?? 1,
+      cache: {
+        ttl_sec: marketCacheTtl,
+      },
+      install: {
+        overwrite_default: marketOverwriteDefault,
+      },
+      markets: defaults,
+    };
+
+    setSavingMarkets(true);
+    try {
+      const ok = await saveMarkets(payload);
+      if (ok) {
+        await fetchMarketplace(true);
+      }
+    } finally {
+      setSavingMarkets(false);
+    }
   };
 
   const getSkillsFromMarket = (marketId: string) => {
