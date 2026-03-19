@@ -159,6 +159,8 @@ PROVIDER_ALIYUN_CODINGPLAN = OpenAIProvider(
     base_url="https://coding.dashscope.aliyuncs.com/v1",
     api_key_prefix="sk-sp",
     models=ALIYUN_CODINGPLAN_MODELS,
+    # This provider doesn't support connection check without model config
+    support_connection_check=False,
     freeze_url=True,
 )
 
@@ -208,6 +210,8 @@ PROVIDER_MINIMAX_CN = AnthropicProvider(
     models=MINIMAX_MODELS,
     chat_model="AnthropicChatModel",
     freeze_url=True,
+    # This provider doesn't support connection check without model config
+    support_connection_check=False,
 )
 
 PROVIDER_KIMI_CN = OpenAIProvider(
@@ -427,6 +431,9 @@ class ProviderManager:
         provider = self._provider_from_data(
             provider_payload,
         )  # Validate provider data
+        # For custom providers, we assume they don't support connection check
+        # without model config, to avoid false negatives in the UI.
+        provider.support_connection_check = False
         self.custom_providers[provider.id] = provider
         self._save_provider(provider, is_builtin=False)
         return await provider.get_info()
