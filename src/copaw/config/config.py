@@ -1041,6 +1041,7 @@ class Config(BaseModel):
     knowledge: KnowledgeConfig = Field(default_factory=KnowledgeConfig)
     skills_market: SkillsMarketConfig = Field(
         default_factory=SkillsMarketConfig,
+    )
     agents_square: AgentsSquareConfig = Field(
         default_factory=AgentsSquareConfig,
     )
