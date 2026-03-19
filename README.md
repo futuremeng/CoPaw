@@ -415,7 +415,7 @@ Example source for the `editor-skills` repository:
   "skills_market": {
     "markets": [
       {
-        "id": "editor_skills",
+        "id": "futuremeng/editor-skills",
         "name": "Editor Skills",
         "type": "git",
         "url": "https://github.com/futuremeng/editor-skills",

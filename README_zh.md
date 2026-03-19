@@ -129,14 +129,17 @@
     - [部署到阿里云 ECS](#部署到阿里云-ecs)
   - [API Key](#api-key)
   - [本地模型](#本地模型)
+  - [Skills 市场配置示例](#skills-市场配置示例)
   - [文档](#文档)
   - [常见问题](#常见问题)
   - [路线图](#路线图)
+    - [Fork 用户路线图（精简版）](#fork-用户路线图精简版)
     - [参与贡献](#参与贡献)
   - [从源码安装](#从源码安装)
   - [为什么叫 CoPaw？](#为什么叫-copaw)
   - [由谁构建](#由谁构建)
   - [联系我们](#联系我们)
+  - [遥测数据](#遥测数据)
   - [许可证](#许可证)
   - [贡献者](#贡献者)
 
@@ -420,7 +423,7 @@ copaw app # 启动服务
   "skills_market": {
     "markets": [
       {
-        "id": "editor_skills",
+        "id": "futuremeng/editor-skills",
         "name": "Editor Skills",
         "type": "git",
         "url": "https://github.com/futuremeng/editor-skills",
@@ -494,6 +497,22 @@ copaw app # 启动服务
 | **技能生态**           | 丰富 [AgentScope Skills](https://github.com/agentscope-ai/agentscope-skills) 仓库，提升优质技能的发现与使用 | 长期规划 |
 
 *状态说明：进行中 — 正在推进；计划中 — 已排期或设计中，也**欢迎贡献**；**征集中** — 我们**非常欢迎**社区参与；长期规划 — 中长期路线。*
+
+### Fork 用户路线图（精简版）
+
+> 以下为 fork 侧面向用户的能力进展，不替代上方 upstream 主路线图。
+
+| 方向 | 你可以期待什么 | 状态 |
+| --- | --- | --- |
+| **技能市场** | Skills Marketplace：Git 聚合、控制台市场管理、覆盖前确认 | 已完成 |
+|  | 子项：已集成 [futuremeng/editor-skills](https://github.com/futuremeng/editor-skills) | 已完成 |
+| **知识库** | 知识沉淀能力持续可用并迭代优化 | 进行中 |
+| **知识库增强** | 基于 cognee 的知识库增强能力 | 进行中 |
+| **MCP 扩展** | 内置 jiulu_mcp 与 mineru_mcp | 计划中 |
+
+与 upstream 重合项（如“多模态记忆融合增强”）的处理策略：当 upstream 提供可用能力时，优先评估迁移；若能力或成本不匹配，则保留 fork 实现以保障可用性。
+
+开发路线图详细版请见：[docs/devops/FORK_ROADMAP.md](docs/devops/FORK_ROADMAP.md)。
 
 ### 参与贡献
 
