@@ -8,6 +8,7 @@ Extends ReMeLight to provide memory management capabilities including:
 - Vector and full-text search integration
 - Embedding configuration from environment variables
 """
+import inspect
 import logging
 import os
 import platform
@@ -197,6 +198,40 @@ class MemoryManager(ReMeLight):
         }
         await self.restart(restart_config=restart_config)
 
+    @staticmethod
+    def _token_counter_kwarg(method_name: str) -> str:
+        """Return the token counter kwarg name supported by the installed ReMe."""
+        try:
+            method = getattr(ReMeLight, method_name)
+            parameters = inspect.signature(method).parameters
+        except (AttributeError, TypeError, ValueError):
+            return "token_counter"
+        return (
+            "token_counter"
+            if "token_counter" in parameters
+            else "as_token_counter"
+        )
+
+    async def check_context(
+        self,
+        messages: list[Msg],
+        memory_compact_threshold: int,
+        memory_compact_reserve: int = 10000,
+        token_counter=None,
+        as_token_counter=None,
+    ):
+        """Compatibility wrapper for ReMe check_context across versions."""
+        effective_token_counter = (
+            token_counter if token_counter is not None else as_token_counter
+        )
+        token_counter_kwarg = self._token_counter_kwarg("check_context")
+        return await super().check_context(
+            messages=messages,
+            memory_compact_threshold=memory_compact_threshold,
+            memory_compact_reserve=memory_compact_reserve,
+            **{token_counter_kwarg: effective_token_counter},
+        )
+
     async def compact_memory(
         self,
         messages: list[Msg],
@@ -218,11 +253,13 @@ class MemoryManager(ReMeLight):
         agent_config = load_agent_config(self.agent_id)
         token_counter = get_copaw_token_counter(agent_config)
 
+        token_counter_kwarg = self._token_counter_kwarg("compact_memory")
+
         return await super().compact_memory(
             messages=messages,
             as_llm=self.chat_model,
             as_llm_formatter=self.formatter,
-            as_token_counter=token_counter,
+            **{token_counter_kwarg: token_counter},
             language=agent_config.language,
             max_input_length=agent_config.running.max_input_length,
             compact_ratio=agent_config.running.memory_compact_ratio,
@@ -247,11 +284,13 @@ class MemoryManager(ReMeLight):
         agent_config = load_agent_config(self.agent_id)
         token_counter = get_copaw_token_counter(agent_config)
 
+        token_counter_kwarg = self._token_counter_kwarg("summary_memory")
+
         return await super().summary_memory(
             messages=messages,
             as_llm=self.chat_model,
             as_llm_formatter=self.formatter,
-            as_token_counter=token_counter,
+            **{token_counter_kwarg: token_counter},
             toolkit=self.summary_toolkit,
             language=agent_config.language,
             max_input_length=agent_config.running.max_input_length,
@@ -305,7 +344,9 @@ class MemoryManager(ReMeLight):
         """
         agent_config = load_agent_config(self.agent_id)
         token_counter = get_copaw_token_counter(agent_config)
-
+        token_counter_kwarg = self._token_counter_kwarg(
+            "get_in_memory_memory",
+        )
         return super().get_in_memory_memory(
-            as_token_counter=token_counter,
+            **{token_counter_kwarg: token_counter},
         )
