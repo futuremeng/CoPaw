@@ -269,20 +269,30 @@ _CONSOLE_STATIC_ENV = "COPAW_CONSOLE_STATIC_DIR"
 def _resolve_console_static_dir() -> str:
     if os.environ.get(_CONSOLE_STATIC_ENV):
         return os.environ[_CONSOLE_STATIC_ENV]
-    # Shipped dist lives in copaw package as static data (not a Python pkg).
+    # Shipped dist lives in copaw package as static data
     pkg_dir = Path(__file__).resolve().parent.parent
     candidate = pkg_dir / "console"
     if candidate.is_dir() and (candidate / "index.html").exists():
         return str(candidate)
-    # the following code can be removed after next release,
-    # because the console will be output to copaw's
-    # `src/copaw/console/` directory directly by vite.
+
+    # Fallback to repo data
+    repo_dir = pkg_dir.parent.parent
+    candidate = repo_dir / "console" / "dist"
+    if candidate.is_dir() and (candidate / "index.html").exists():
+        return str(candidate)
+
+    # Fallback to cwd data
     cwd = Path(os.getcwd())
     for subdir in ("console/dist", "console_dist"):
         candidate = cwd / subdir
         if candidate.is_dir() and (candidate / "index.html").exists():
             return str(candidate)
-    return str(cwd / "console" / "dist")
+
+    fallback = cwd / "console" / "dist"
+    logger.warning(
+        f"Console static directory not found. Falling back to '{fallback}'.",
+    )
+    return str(fallback)
 
 
 _CONSOLE_STATIC_DIR = _resolve_console_static_dir()
