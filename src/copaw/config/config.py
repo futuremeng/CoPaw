@@ -802,9 +802,6 @@ class SecurityConfig(BaseModel):
         default_factory=SkillScannerConfig,
     )
 
-
-<<<<<<< HEAD
-=======
 class KnowledgeSourceSpec(BaseModel):
     """A single knowledge source definition."""
 
