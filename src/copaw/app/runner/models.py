@@ -55,6 +55,7 @@ class ChatHistory(BaseModel):
     status: str = Field(
         default="idle",
         description="Conversation status: idle or running",
+    )
     total: int | None = Field(default=None, description="Total messages count")
     offset: int | None = Field(default=None, description="Current page offset")
     limit: int | None = Field(default=None, description="Current page size")
