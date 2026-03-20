@@ -371,6 +371,28 @@ async def get_local_whisper_status() -> dict:
     return check_local_whisper_available()
 
 
+@router.post(
+    "/local-whisper-install",
+    summary="Install local whisper dependencies",
+    description=(
+        "Attempt to install missing dependencies for the local whisper "
+        "provider. Installs openai-whisper into the current Python "
+        "environment and, when supported, installs ffmpeg via the OS "
+        "package manager."
+    ),
+)
+async def post_local_whisper_install() -> dict:
+    """Attempt to install missing Local Whisper dependencies."""
+    from ...agents.utils.audio_transcription import (
+        auto_install_local_whisper_dependencies,
+    )
+
+    try:
+        return await asyncio.to_thread(auto_install_local_whisper_dependencies)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
 @router.get(
     "/transcription-providers",
     summary="List transcription providers",
