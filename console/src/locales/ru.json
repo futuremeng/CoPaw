@@ -101,6 +101,8 @@
     "squareSourcesLabel": "Конфигурация источников",
     "squareSourcesEditTitle": "Редактирование источников",
     "squareAddSource": "Добавить источник",
+    "squareResetTemplate": "Восстановить по умолчанию",
+    "squareResetTemplateConfirm": "Восстановить встроенные источники системы? Все пользовательские источники будут удалены.",
     "squareSaveSources": "Сохранить источники",
     "squareSaveSourcesSuccess": "Источники сохранены",
     "squareSaveSourcesFailed": "Не удалось сохранить источники",

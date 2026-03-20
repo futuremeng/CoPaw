@@ -20,6 +20,92 @@ from copaw.config.config import (
 
 @pytest.fixture
 def agents_square_api_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    square_dir = tmp_path / "agents_square"
+    square_dir.mkdir(parents=True, exist_ok=True)
+
+    config_payload = {
+        "version": 1,
+        "cache": {"ttl_sec": 600},
+        "install": {
+            "overwrite_default": False,
+            "preserve_workspace_files": True,
+        },
+        "sources": [
+            {
+                "id": "agency-agents",
+                "name": "agency-agents",
+                "provider": "agency_markdown_repo",
+                "url": "https://github.com/msitarzewski/agency-agents.git",
+                "branch": "main",
+                "path": ".",
+                "enabled": True,
+                "order": 1,
+                "trust": "official",
+                "license_hint": "MIT",
+                "pinned": True,
+            }
+        ],
+    }
+
+    default_payload = {
+        "version": 1,
+        "cache": {"ttl_sec": 600},
+        "install": {
+            "overwrite_default": False,
+            "preserve_workspace_files": True,
+        },
+        "sources": [
+            {
+                "id": "agency-agents-zh",
+                "name": "agency-agents-zh",
+                "provider": "agency_markdown_repo",
+                "url": "https://github.com/jnMetaCode/agency-agents-zh",
+                "branch": "main",
+                "path": ".",
+                "enabled": True,
+                "order": 1,
+                "trust": "community",
+                "license_hint": "",
+                "pinned": True,
+            },
+            {
+                "id": "agency-agents",
+                "name": "agency-agents",
+                "provider": "agency_markdown_repo",
+                "url": "https://github.com/msitarzewski/agency-agents.git",
+                "branch": "main",
+                "path": ".",
+                "enabled": False,
+                "order": 2,
+                "trust": "official",
+                "license_hint": "MIT",
+                "pinned": True,
+            },
+            {
+                "id": "agent-teams",
+                "name": "agent-teams",
+                "provider": "agency_markdown_repo",
+                "url": "https://github.com/dsclca12/agent-teams",
+                "branch": "main",
+                "path": ".",
+                "enabled": False,
+                "order": 3,
+                "trust": "community",
+                "license_hint": "",
+                "pinned": True,
+            },
+        ],
+    }
+
+    (square_dir / "config.json").write_text(
+        json.dumps(config_payload, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (square_dir / "default.json").write_text(
+        json.dumps(default_payload, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
     state = {
         "config": Config(
             agents=AgentsConfig(
@@ -77,6 +163,17 @@ def agents_square_api_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(agents_router_module, "load_agent_config", fake_load_agent_config)
     monkeypatch.setattr(agents_router_module, "_initialize_agent_workspace", fake_init_workspace)
     monkeypatch.setattr(agents_router_module, "WORKING_DIR", str(tmp_path))
+    monkeypatch.setattr(agents_router_module, "_AGENTS_SQUARE_DIR", square_dir)
+    monkeypatch.setattr(
+        agents_router_module,
+        "_AGENTS_SQUARE_CONFIG_PATH",
+        square_dir / "config.json",
+    )
+    monkeypatch.setattr(
+        agents_router_module,
+        "_AGENTS_SQUARE_DEFAULT_PATH",
+        square_dir / "default.json",
+    )
 
     app = FastAPI()
     app.include_router(agents_router_module.router)
@@ -133,6 +230,61 @@ def test_square_items_endpoint_returns_expected_shape(
     assert data["items"][0]["agent_id"] == "frontend-developer"
     assert data["source_errors"][0]["code"] == "SOURCE_UNREACHABLE"
     assert data["meta"]["item_count"] == 1
+
+
+def test_agents_square_config_defaults_include_expected_sources() -> None:
+    config = AgentsSquareConfig()
+
+    assert [source.id for source in config.sources] == [
+        "agency-agents-zh",
+        "agency-agents",
+        "agent-teams",
+    ]
+    assert [source.enabled for source in config.sources] == [True, False, False]
+    assert [source.order for source in config.sources] == [1, 2, 3]
+    assert [source.url for source in config.sources] == [
+        "https://github.com/jnMetaCode/agency-agents-zh",
+        "https://github.com/msitarzewski/agency-agents.git",
+        "https://github.com/dsclca12/agent-teams",
+    ]
+
+
+def test_square_source_defaults_endpoint_returns_bundled_defaults(
+    agents_square_api_client: TestClient,
+) -> None:
+    response = agents_square_api_client.get("/agents/square/sources/defaults")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [source["id"] for source in payload["sources"]] == [
+        "agency-agents-zh",
+        "agency-agents",
+        "agent-teams",
+    ]
+    assert [source["enabled"] for source in payload["sources"]] == [
+        True,
+        False,
+        False,
+    ]
+
+
+def test_square_source_reset_endpoint_returns_bundled_defaults(
+    agents_square_api_client: TestClient,
+) -> None:
+    response = agents_square_api_client.post("/agents/square/sources/reset")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [source["id"] for source in payload["sources"]] == [
+        "agency-agents-zh",
+        "agency-agents",
+        "agent-teams",
+    ]
+    assert [source["enabled"] for source in payload["sources"]] == [
+        True,
+        False,
+        False,
+    ]
 
 
 def test_square_import_creates_agent_and_writes_import_metadata(

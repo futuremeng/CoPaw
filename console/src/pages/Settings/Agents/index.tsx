@@ -467,6 +467,23 @@ export default function AgentsPage() {
     await persistSquareSources(sourceDrafts);
   };
 
+  const handleResetSquareSources = async () => {
+    Modal.confirm({
+      title: t("agent.squareResetTemplate"),
+      content: t("agent.squareResetTemplateConfirm"),
+      okType: "danger",
+      onOk: async () => {
+        const resetPayload = await agentsApi.resetSquareSources();
+        setSquareSources(resetPayload);
+        setSourceDrafts(resetPayload.sources ?? []);
+        setEditingSourceIdx(null);
+        setSourceEditBackup(null);
+        await loadSquare(true);
+        message.success(t("agent.squareSaveSourcesSuccess"));
+      },
+    });
+  };
+
   const handleToggleSourceEnabled = async (index: number, enabled: boolean) => {
     const current = sourceDrafts[index];
     if (!current || !squareSources) return;
@@ -560,6 +577,9 @@ export default function AgentsPage() {
             <Typography.Text strong>{t("agent.squareSourcesEditTitle")}</Typography.Text>
             <Button size="small" onClick={handleAddSourceDraft}>
               {t("agent.squareAddSource")}
+            </Button>
+            <Button size="small" onClick={handleResetSquareSources}>
+              {t("agent.squareResetTemplate")}
             </Button>
             <Button
               size="small"

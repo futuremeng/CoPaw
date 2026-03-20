@@ -8,6 +8,7 @@ import copy
 import json
 import logging
 import re
+import shutil
 import tempfile
 import subprocess
 import threading
@@ -168,6 +169,104 @@ _SQUARE_SKIP_FILES = {
     "LICENSE",
     "CHANGELOG.md",
 }
+_AGENTS_SQUARE_DIR = Path(__file__).resolve().parents[2] / "agents_square"
+_AGENTS_SQUARE_CONFIG_PATH = _AGENTS_SQUARE_DIR / "config.json"
+_AGENTS_SQUARE_DEFAULT_PATH = _AGENTS_SQUARE_DIR / "default.json"
+
+
+def _ensure_square_config_initialized() -> None:
+    """Ensure agents_square/config.json exists, bootstrap from default.json."""
+    if _AGENTS_SQUARE_CONFIG_PATH.exists():
+        return
+
+    _AGENTS_SQUARE_DIR.mkdir(parents=True, exist_ok=True)
+
+    if _AGENTS_SQUARE_DEFAULT_PATH.exists():
+        shutil.copyfile(_AGENTS_SQUARE_DEFAULT_PATH, _AGENTS_SQUARE_CONFIG_PATH)
+        return
+
+    # Last resort fallback when default.json is missing.
+    fallback_payload = {
+        "version": 1,
+        "sources": [],
+        "cache": {"ttl_sec": 600},
+        "install": {
+            "overwrite_default": False,
+            "preserve_workspace_files": True,
+        },
+    }
+    _AGENTS_SQUARE_CONFIG_PATH.write_text(
+        json.dumps(fallback_payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _load_square_payload_from_file(path: Path) -> AgentsSquareSourcesPayload:
+    """Load Agents Square payload from file."""
+    try:
+        raw_text = path.read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"SQUARE_CONFIG_READ_FAILED: {path.name}: {exc}",
+        ) from exc
+
+    if not raw_text:
+        raise HTTPException(
+            status_code=500,
+            detail=f"SQUARE_CONFIG_INVALID: {path.name} is empty",
+        )
+
+    try:
+        parsed = json.loads(raw_text)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"SQUARE_CONFIG_INVALID_JSON: {path.name}: {exc}",
+        ) from exc
+
+    return AgentsSquareSourcesPayload.model_validate(parsed)
+
+
+def _load_current_square_config() -> AgentsSquareConfig:
+    """Load current square config from agents_square/config.json."""
+    _ensure_square_config_initialized()
+    payload = _load_square_payload_from_file(_AGENTS_SQUARE_CONFIG_PATH)
+    return _payload_to_square_config(payload)
+
+
+def _load_default_square_config() -> AgentsSquareConfig:
+    """Load bundled square defaults from agents_square/default.json."""
+    if not _AGENTS_SQUARE_DEFAULT_PATH.exists():
+        _ensure_square_config_initialized()
+        return _load_current_square_config()
+
+    payload = _load_square_payload_from_file(_AGENTS_SQUARE_DEFAULT_PATH)
+    return _payload_to_square_config(payload)
+
+
+def _save_current_square_config(cfg: AgentsSquareConfig) -> None:
+    """Persist current square config to agents_square/config.json."""
+    _AGENTS_SQUARE_DIR.mkdir(parents=True, exist_ok=True)
+    payload = _square_config_to_payload(cfg).model_dump(mode="json")
+    _AGENTS_SQUARE_CONFIG_PATH.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _reset_current_square_config_to_default() -> AgentsSquareConfig:
+    """Reset current square config by copying default.json to config.json."""
+    _AGENTS_SQUARE_DIR.mkdir(parents=True, exist_ok=True)
+
+    if _AGENTS_SQUARE_DEFAULT_PATH.exists():
+        shutil.copyfile(_AGENTS_SQUARE_DEFAULT_PATH, _AGENTS_SQUARE_CONFIG_PATH)
+        return _load_current_square_config()
+
+    # Fallback when default.json is missing.
+    fallback_cfg = _load_default_square_config()
+    _save_current_square_config(fallback_cfg)
+    return fallback_cfg
 
 
 def _slugify(value: str) -> str:
@@ -739,8 +838,15 @@ async def list_agents() -> AgentListResponse:
 @router.get("/square/sources", response_model=AgentsSquareSourcesPayload)
 async def get_square_sources() -> AgentsSquareSourcesPayload:
     """Get Agents Square source configuration."""
-    config = load_config()
-    return _square_config_to_payload(config.agents_square)
+    square_cfg = _load_current_square_config()
+    return _square_config_to_payload(square_cfg)
+
+
+@router.get("/square/sources/defaults", response_model=AgentsSquareSourcesPayload)
+async def get_square_source_defaults() -> AgentsSquareSourcesPayload:
+    """Get bundled Agents Square default source configuration from package."""
+    square_cfg = _load_default_square_config()
+    return _square_config_to_payload(square_cfg)
 
 
 @router.put("/square/sources", response_model=AgentsSquareSourcesPayload)
@@ -748,13 +854,13 @@ async def put_square_sources(
     payload: AgentsSquareSourcesPayload,
 ) -> AgentsSquareSourcesPayload:
     """Update Agents Square source configuration."""
-    config = load_config()
+    current_square_cfg = _load_current_square_config()
     square_cfg = _payload_to_square_config(payload)
 
     # Pinned sources can be disabled but not removed.
     pinned_ids = {
         source.id
-        for source in config.agents_square.sources
+        for source in current_square_cfg.sources
         if source.pinned
     }
     next_ids = {source.id for source in square_cfg.sources}
@@ -766,8 +872,25 @@ async def put_square_sources(
             detail=f"SOURCE_PINNED_CANNOT_DELETE: {source_id}",
         )
 
+    _save_current_square_config(square_cfg)
+
+    # Keep root config in sync for backward compatibility.
+    config = load_config()
     config.agents_square = square_cfg
     save_config(config)
+    return _square_config_to_payload(square_cfg)
+
+
+@router.post("/square/sources/reset", response_model=AgentsSquareSourcesPayload)
+async def reset_square_sources() -> AgentsSquareSourcesPayload:
+    """Reset current square sources by copying bundled default.json."""
+    square_cfg = _reset_current_square_config_to_default()
+
+    # Keep root config in sync for backward compatibility.
+    config = load_config()
+    config.agents_square = square_cfg
+    save_config(config)
+
     return _square_config_to_payload(square_cfg)
 
 
@@ -817,9 +940,9 @@ async def validate_square_source(
 @router.get("/square/items")
 async def get_square_items(refresh: bool = False) -> dict:
     """Get aggregated Agents Square items."""
-    config = load_config()
+    square_cfg = _load_current_square_config()
     items, source_errors, meta, _ = _aggregate_square_items(
-        config.agents_square,
+        square_cfg,
         refresh=refresh,
     )
 
@@ -838,9 +961,10 @@ async def import_square_agent(
     req: ImportAgentRequest,
 ) -> ImportAgentResponse:
     """Import a source agent into local agents."""
+    square_cfg = _load_current_square_config()
     config = load_config()
     source = next(
-        (s for s in config.agents_square.sources if s.id == req.source_id and s.enabled),
+        (s for s in square_cfg.sources if s.id == req.source_id and s.enabled),
         None,
     )
     if source is None:
@@ -850,7 +974,7 @@ async def import_square_agent(
         )
 
     items, _, _, import_index = _aggregate_square_items(
-        config.agents_square,
+        square_cfg,
         refresh=False,
     )
     selected_item = next(
@@ -877,7 +1001,7 @@ async def import_square_agent(
             ),
         )
 
-    overwrite = bool(req.overwrite or config.agents_square.install.overwrite_default)
+    overwrite = bool(req.overwrite or square_cfg.install.overwrite_default)
     preferred_name = (req.preferred_name or "").strip()
     target_name = preferred_name or selected_item.name
     target_description = selected_item.description

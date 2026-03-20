@@ -68,6 +68,14 @@ export const agentsApi = {
   getSquareSources: () =>
     request<AgentsSquareSourcesPayload>("/agents/square/sources"),
 
+  getSquareDefaultSources: () =>
+    request<AgentsSquareSourcesPayload>("/agents/square/sources/defaults"),
+
+  resetSquareSources: () =>
+    request<AgentsSquareSourcesPayload>("/agents/square/sources/reset", {
+      method: "POST",
+    }),
+
   updateSquareSources: (payload: AgentsSquareSourcesPayload) =>
     request<AgentsSquareSourcesPayload>("/agents/square/sources", {
       method: "PUT",

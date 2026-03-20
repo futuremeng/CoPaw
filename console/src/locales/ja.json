@@ -101,6 +101,8 @@
     "squareSourcesLabel": "ソース設定",
     "squareSourcesEditTitle": "ソース編集",
     "squareAddSource": "ソースを追加",
+    "squareResetTemplate": "デフォルトを復元",
+    "squareResetTemplateConfirm": "システム内蔵ソースに復元しますか？カスタムソースはすべて削除されます。",
     "squareSaveSources": "ソースを保存",
     "squareSaveSourcesSuccess": "ソースを保存しました",
     "squareSaveSourcesFailed": "ソースの保存に失敗しました",

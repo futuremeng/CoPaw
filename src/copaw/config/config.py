@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 import json
+import shutil
 from pathlib import Path
 from typing import Optional, Union, Dict, List, Literal
 
@@ -1078,33 +1079,63 @@ class AgentsSquareInstallConfig(BaseModel):
     preserve_workspace_files: bool = Field(default=True)
 
 
-class AgentsSquareConfig(BaseModel):
-    """Agents Square root config."""
+def _load_agents_square_file_defaults() -> dict:
+    """Load bundled Agents Square defaults from JSON."""
 
-    version: int = Field(default=1, ge=1)
-    sources: List[AgentsSquareSourceSpec] = Field(
-        default_factory=lambda: [
-            AgentsSquareSourceSpec(
-                id="agency-agents",
-                name="agency-agents",
-                provider="agency_markdown_repo",
-                url="https://github.com/msitarzewski/agency-agents.git",
-                branch="main",
-                path=".",
-                enabled=True,
-                order=1,
-                trust="official",
-                license_hint="MIT",
-                pinned=True,
-            ),
-        ],
-    )
-    cache: AgentsSquareCacheConfig = Field(
-        default_factory=AgentsSquareCacheConfig,
-    )
-    install: AgentsSquareInstallConfig = Field(
-        default_factory=AgentsSquareInstallConfig,
-    )
+    default_payload = {
+        "version": 1,
+        "sources": [],
+        "cache": {"ttl_sec": 600},
+        "install": {
+            "overwrite_default": False,
+            "preserve_workspace_files": True,
+        },
+    }
+    base_dir = Path(__file__).resolve().parent.parent / "agents_square"
+    config_path = base_dir / "config.json"
+    default_path = base_dir / "default.json"
+
+    # config.json is current state source of truth; initialize it from default.json.
+    if not config_path.exists() and default_path.exists():
+        base_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            shutil.copyfile(default_path, config_path)
+        except OSError:
+            pass
+
+    raw_text = ""
+    for path in (config_path, default_path):
+        try:
+            raw_text = path.read_text(encoding="utf-8").strip()
+            if raw_text:
+                break
+        except OSError:
+            continue
+
+    if not raw_text:
+        return default_payload
+
+    try:
+        loaded = json.loads(raw_text)
+    except json.JSONDecodeError:
+        return default_payload
+
+    if not isinstance(loaded, dict):
+        return default_payload
+
+    payload = dict(default_payload)
+    payload["version"] = loaded.get("version", payload["version"])
+    payload["sources"] = loaded.get("sources", payload["sources"])
+
+    cache = loaded.get("cache")
+    if isinstance(cache, dict):
+        payload["cache"] = {**payload["cache"], **cache}
+
+    install = loaded.get("install")
+    if isinstance(install, dict):
+        payload["install"] = {**payload["install"], **install}
+
+    return payload
 
 
 class SkillMarketSpec(BaseModel):
@@ -1281,400 +1312,28 @@ class SkillsMarketConfig(BaseModel):
     )
 
 
-class AgentsSquareSourceSpec(BaseModel):
-    """A single Agents Square source entry."""
-
-    id: str = Field(..., description="Stable source id")
-    name: str = Field(..., description="Display name")
-    type: Literal["git"] = Field(default="git")
-    provider: Literal["agency_markdown_repo", "index_json_repo"] = Field(
-        default="agency_markdown_repo",
-    )
-    url: str = Field(..., description="Git repository URL")
-    branch: str = Field(default="", description="Optional branch")
-    path: str = Field(
-        default=".",
-        description="Path to source root in repository",
-    )
-    enabled: bool = Field(default=True)
-    order: int = Field(default=999)
-    trust: Optional[Literal["official", "community", "custom"]] = None
-    license_hint: str = Field(default="")
-    pinned: bool = Field(
-        default=False,
-        description="Pinned sources cannot be removed via API",
-    )
-
-
-class AgentsSquareCacheConfig(BaseModel):
-    """Cache policy for Agents Square item aggregation."""
-
-    ttl_sec: int = Field(default=600, ge=0, le=24 * 3600)
-
-
-class AgentsSquareInstallConfig(BaseModel):
-    """Default install behavior for Agents Square imports."""
-
-    overwrite_default: bool = Field(default=False)
-    preserve_workspace_files: bool = Field(default=True)
-
-
 class AgentsSquareConfig(BaseModel):
     """Agents Square root config."""
 
-    version: int = Field(default=1, ge=1)
-    sources: List[AgentsSquareSourceSpec] = Field(
-        default_factory=lambda: [
-            AgentsSquareSourceSpec(
-                id="agency-agents",
-                name="agency-agents",
-                provider="agency_markdown_repo",
-                url="https://github.com/msitarzewski/agency-agents.git",
-                branch="main",
-                path=".",
-                enabled=True,
-                order=1,
-                trust="official",
-                license_hint="MIT",
-                pinned=True,
-            ),
-        ],
-    )
-    cache: AgentsSquareCacheConfig = Field(
-        default_factory=AgentsSquareCacheConfig,
-    )
-    install: AgentsSquareInstallConfig = Field(
-        default_factory=AgentsSquareInstallConfig,
-    )
+    @model_validator(mode="before")
+    @classmethod
+    def _merge_bundled_defaults(cls, data):
+        if data is None:
+            return _load_agents_square_file_defaults()
+        if not isinstance(data, dict):
+            return data
 
-
-class AgentsSquareSourceSpec(BaseModel):
-    """A single Agents Square source entry."""
-
-    id: str = Field(..., description="Stable source id")
-    name: str = Field(..., description="Display name")
-    type: Literal["git"] = Field(default="git")
-    provider: Literal["agency_markdown_repo", "index_json_repo"] = Field(
-        default="agency_markdown_repo",
-    )
-    url: str = Field(..., description="Git repository URL")
-    branch: str = Field(default="", description="Optional branch")
-    path: str = Field(
-        default=".",
-        description="Path to source root in repository",
-    )
-    enabled: bool = Field(default=True)
-    order: int = Field(default=999)
-    trust: Optional[Literal["official", "community", "custom"]] = None
-    license_hint: str = Field(default="")
-    pinned: bool = Field(
-        default=False,
-        description="Pinned sources cannot be removed via API",
-    )
-
-
-class AgentsSquareCacheConfig(BaseModel):
-    """Cache policy for Agents Square item aggregation."""
-
-    ttl_sec: int = Field(default=600, ge=0, le=24 * 3600)
-
-
-class AgentsSquareInstallConfig(BaseModel):
-    """Default install behavior for Agents Square imports."""
-
-    overwrite_default: bool = Field(default=False)
-    preserve_workspace_files: bool = Field(default=True)
-
-
-class AgentsSquareConfig(BaseModel):
-    """Agents Square root config."""
+        payload = _load_agents_square_file_defaults()
+        merged = dict(payload)
+        for key, value in data.items():
+            if key in {"cache", "install"} and isinstance(value, dict):
+                merged[key] = {**payload.get(key, {}), **value}
+            else:
+                merged[key] = value
+        return merged
 
     version: int = Field(default=1, ge=1)
-    sources: List[AgentsSquareSourceSpec] = Field(
-        default_factory=lambda: [
-            AgentsSquareSourceSpec(
-                id="agency-agents",
-                name="agency-agents",
-                provider="agency_markdown_repo",
-                url="https://github.com/msitarzewski/agency-agents.git",
-                branch="main",
-                path=".",
-                enabled=True,
-                order=1,
-                trust="official",
-                license_hint="MIT",
-                pinned=True,
-            ),
-        ],
-    )
-    cache: AgentsSquareCacheConfig = Field(
-        default_factory=AgentsSquareCacheConfig,
-    )
-    install: AgentsSquareInstallConfig = Field(
-        default_factory=AgentsSquareInstallConfig,
-    )
-
-
-class AgentsSquareSourceSpec(BaseModel):
-    """A single Agents Square source entry."""
-
-    id: str = Field(..., description="Stable source id")
-    name: str = Field(..., description="Display name")
-    type: Literal["git"] = Field(default="git")
-    provider: Literal["agency_markdown_repo", "index_json_repo"] = Field(
-        default="agency_markdown_repo",
-    )
-    url: str = Field(..., description="Git repository URL")
-    branch: str = Field(default="", description="Optional branch")
-    path: str = Field(
-        default=".",
-        description="Path to source root in repository",
-    )
-    enabled: bool = Field(default=True)
-    order: int = Field(default=999)
-    trust: Optional[Literal["official", "community", "custom"]] = None
-    license_hint: str = Field(default="")
-    pinned: bool = Field(
-        default=False,
-        description="Pinned sources cannot be removed via API",
-    )
-
-
-class AgentsSquareCacheConfig(BaseModel):
-    """Cache policy for Agents Square item aggregation."""
-
-    ttl_sec: int = Field(default=600, ge=0, le=24 * 3600)
-
-
-class AgentsSquareInstallConfig(BaseModel):
-    """Default install behavior for Agents Square imports."""
-
-    overwrite_default: bool = Field(default=False)
-    preserve_workspace_files: bool = Field(default=True)
-
-
-class AgentsSquareConfig(BaseModel):
-    """Agents Square root config."""
-
-    version: int = Field(default=1, ge=1)
-    sources: List[AgentsSquareSourceSpec] = Field(
-        default_factory=lambda: [
-            AgentsSquareSourceSpec(
-                id="agency-agents",
-                name="agency-agents",
-                provider="agency_markdown_repo",
-                url="https://github.com/msitarzewski/agency-agents.git",
-                branch="main",
-                path=".",
-                enabled=True,
-                order=1,
-                trust="official",
-                license_hint="MIT",
-                pinned=True,
-            ),
-        ],
-    )
-    cache: AgentsSquareCacheConfig = Field(
-        default_factory=AgentsSquareCacheConfig,
-    )
-    install: AgentsSquareInstallConfig = Field(
-        default_factory=AgentsSquareInstallConfig,
-    )
-
-
-class AgentsSquareSourceSpec(BaseModel):
-    """A single Agents Square source entry."""
-
-    id: str = Field(..., description="Stable source id")
-    name: str = Field(..., description="Display name")
-    type: Literal["git"] = Field(default="git")
-    provider: Literal["agency_markdown_repo", "index_json_repo"] = Field(
-        default="agency_markdown_repo",
-    )
-    url: str = Field(..., description="Git repository URL")
-    branch: str = Field(default="", description="Optional branch")
-    path: str = Field(
-        default=".",
-        description="Path to source root in repository",
-    )
-    enabled: bool = Field(default=True)
-    order: int = Field(default=999)
-    trust: Optional[Literal["official", "community", "custom"]] = None
-    license_hint: str = Field(default="")
-    pinned: bool = Field(
-        default=False,
-        description="Pinned sources cannot be removed via API",
-    )
-
-
-class AgentsSquareCacheConfig(BaseModel):
-    """Cache policy for Agents Square item aggregation."""
-
-    ttl_sec: int = Field(default=600, ge=0, le=24 * 3600)
-
-
-class AgentsSquareInstallConfig(BaseModel):
-    """Default install behavior for Agents Square imports."""
-
-    overwrite_default: bool = Field(default=False)
-    preserve_workspace_files: bool = Field(default=True)
-
-
-class AgentsSquareConfig(BaseModel):
-    """Agents Square root config."""
-
-    version: int = Field(default=1, ge=1)
-    sources: List[AgentsSquareSourceSpec] = Field(
-        default_factory=lambda: [
-            AgentsSquareSourceSpec(
-                id="agency-agents",
-                name="agency-agents",
-                provider="agency_markdown_repo",
-                url="https://github.com/msitarzewski/agency-agents.git",
-                branch="main",
-                path=".",
-                enabled=True,
-                order=1,
-                trust="official",
-                license_hint="MIT",
-                pinned=True,
-            ),
-        ],
-    )
-    cache: AgentsSquareCacheConfig = Field(
-        default_factory=AgentsSquareCacheConfig,
-    )
-    install: AgentsSquareInstallConfig = Field(
-        default_factory=AgentsSquareInstallConfig,
-    )
-
-
-class AgentsSquareSourceSpec(BaseModel):
-    """A single Agents Square source entry."""
-
-    id: str = Field(..., description="Stable source id")
-    name: str = Field(..., description="Display name")
-    type: Literal["git"] = Field(default="git")
-    provider: Literal["agency_markdown_repo", "index_json_repo"] = Field(
-        default="agency_markdown_repo",
-    )
-    url: str = Field(..., description="Git repository URL")
-    branch: str = Field(default="", description="Optional branch")
-    path: str = Field(
-        default=".",
-        description="Path to source root in repository",
-    )
-    enabled: bool = Field(default=True)
-    order: int = Field(default=999)
-    trust: Optional[Literal["official", "community", "custom"]] = None
-    license_hint: str = Field(default="")
-    pinned: bool = Field(
-        default=False,
-        description="Pinned sources cannot be removed via API",
-    )
-
-
-class AgentsSquareCacheConfig(BaseModel):
-    """Cache policy for Agents Square item aggregation."""
-
-    ttl_sec: int = Field(default=600, ge=0, le=24 * 3600)
-
-
-class AgentsSquareInstallConfig(BaseModel):
-    """Default install behavior for Agents Square imports."""
-
-    overwrite_default: bool = Field(default=False)
-    preserve_workspace_files: bool = Field(default=True)
-
-
-class AgentsSquareConfig(BaseModel):
-    """Agents Square root config."""
-
-    version: int = Field(default=1, ge=1)
-    sources: List[AgentsSquareSourceSpec] = Field(
-        default_factory=lambda: [
-            AgentsSquareSourceSpec(
-                id="agency-agents",
-                name="agency-agents",
-                provider="agency_markdown_repo",
-                url="https://github.com/msitarzewski/agency-agents.git",
-                branch="main",
-                path=".",
-                enabled=True,
-                order=1,
-                trust="official",
-                license_hint="MIT",
-                pinned=True,
-            ),
-        ],
-    )
-    cache: AgentsSquareCacheConfig = Field(
-        default_factory=AgentsSquareCacheConfig,
-    )
-    install: AgentsSquareInstallConfig = Field(
-        default_factory=AgentsSquareInstallConfig,
-    )
-
-
-class AgentsSquareSourceSpec(BaseModel):
-    """A single Agents Square source entry."""
-
-    id: str = Field(..., description="Stable source id")
-    name: str = Field(..., description="Display name")
-    type: Literal["git"] = Field(default="git")
-    provider: Literal["agency_markdown_repo", "index_json_repo"] = Field(
-        default="agency_markdown_repo",
-    )
-    url: str = Field(..., description="Git repository URL")
-    branch: str = Field(default="", description="Optional branch")
-    path: str = Field(
-        default=".",
-        description="Path to source root in repository",
-    )
-    enabled: bool = Field(default=True)
-    order: int = Field(default=999)
-    trust: Optional[Literal["official", "community", "custom"]] = None
-    license_hint: str = Field(default="")
-    pinned: bool = Field(
-        default=False,
-        description="Pinned sources cannot be removed via API",
-    )
-
-
-class AgentsSquareCacheConfig(BaseModel):
-    """Cache policy for Agents Square item aggregation."""
-
-    ttl_sec: int = Field(default=600, ge=0, le=24 * 3600)
-
-
-class AgentsSquareInstallConfig(BaseModel):
-    """Default install behavior for Agents Square imports."""
-
-    overwrite_default: bool = Field(default=False)
-    preserve_workspace_files: bool = Field(default=True)
-
-
-class AgentsSquareConfig(BaseModel):
-    """Agents Square root config."""
-
-    version: int = Field(default=1, ge=1)
-    sources: List[AgentsSquareSourceSpec] = Field(
-        default_factory=lambda: [
-            AgentsSquareSourceSpec(
-                id="agency-agents",
-                name="agency-agents",
-                provider="agency_markdown_repo",
-                url="https://github.com/msitarzewski/agency-agents.git",
-                branch="main",
-                path=".",
-                enabled=True,
-                order=1,
-                trust="official",
-                license_hint="MIT",
-                pinned=True,
-            ),
-        ],
-    )
+    sources: List[AgentsSquareSourceSpec] = Field(default_factory=list)
     cache: AgentsSquareCacheConfig = Field(
         default_factory=AgentsSquareCacheConfig,
     )
