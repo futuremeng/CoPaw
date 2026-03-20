@@ -59,6 +59,7 @@ class MemoryManager(ReMeLight):
         self,
         working_dir: str,
         agent_config: "AgentProfileConfig",
+        agent_id: str | None = None,
     ):
         """Initialize MemoryManager with ReMeLight configuration.
 
@@ -68,6 +69,8 @@ class MemoryManager(ReMeLight):
                 including running config (max_input_length,
                 memory_compact_ratio, memory_reserve_ratio, etc.)
                 and language setting.
+            agent_id: Optional agent identifier for hot-reload callers that
+                resolve config from memory_manager.agent_id.
 
         Environment Variables:
             EMBEDDING_API_KEY: API key for embedding service
@@ -88,6 +91,8 @@ class MemoryManager(ReMeLight):
             Vector search is enabled only when both EMBEDDING_API_KEY and
             EMBEDDING_MODEL_NAME are configured.
         """
+        self.agent_id = agent_id or agent_config.id
+
         # Extract configuration from agent_config
         running_config = agent_config.running
         self._max_input_length = running_config.max_input_length
