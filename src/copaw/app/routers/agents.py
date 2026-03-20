@@ -169,9 +169,9 @@ _SQUARE_SKIP_FILES = {
     "LICENSE",
     "CHANGELOG.md",
 }
-_AGENTS_SQUARE_DIR = Path(__file__).resolve().parents[2] / "agents_square"
-_AGENTS_SQUARE_CONFIG_PATH = _AGENTS_SQUARE_DIR / "config.json"
-_AGENTS_SQUARE_DEFAULT_PATH = _AGENTS_SQUARE_DIR / "default.json"
+_AGENTS_SQUARE_DEFAULT_DIR = Path(__file__).resolve().parents[2] / "agents_square"
+_AGENTS_SQUARE_CONFIG_PATH = WORKING_DIR / "agents_square" / "config.json"
+_AGENTS_SQUARE_DEFAULT_PATH = _AGENTS_SQUARE_DEFAULT_DIR / "default.json"
 
 
 def _ensure_square_config_initialized() -> None:
@@ -179,7 +179,7 @@ def _ensure_square_config_initialized() -> None:
     if _AGENTS_SQUARE_CONFIG_PATH.exists():
         return
 
-    _AGENTS_SQUARE_DIR.mkdir(parents=True, exist_ok=True)
+    _AGENTS_SQUARE_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     if _AGENTS_SQUARE_DEFAULT_PATH.exists():
         shutil.copyfile(_AGENTS_SQUARE_DEFAULT_PATH, _AGENTS_SQUARE_CONFIG_PATH)
@@ -247,7 +247,7 @@ def _load_default_square_config() -> AgentsSquareConfig:
 
 def _save_current_square_config(cfg: AgentsSquareConfig) -> None:
     """Persist current square config to agents_square/config.json."""
-    _AGENTS_SQUARE_DIR.mkdir(parents=True, exist_ok=True)
+    _AGENTS_SQUARE_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     payload = _square_config_to_payload(cfg).model_dump(mode="json")
     _AGENTS_SQUARE_CONFIG_PATH.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
@@ -257,7 +257,7 @@ def _save_current_square_config(cfg: AgentsSquareConfig) -> None:
 
 def _reset_current_square_config_to_default() -> AgentsSquareConfig:
     """Reset current square config by copying default.json to config.json."""
-    _AGENTS_SQUARE_DIR.mkdir(parents=True, exist_ok=True)
+    _AGENTS_SQUARE_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     if _AGENTS_SQUARE_DEFAULT_PATH.exists():
         shutil.copyfile(_AGENTS_SQUARE_DEFAULT_PATH, _AGENTS_SQUARE_CONFIG_PATH)

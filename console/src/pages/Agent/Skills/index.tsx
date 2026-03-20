@@ -5,7 +5,6 @@ import type { SkillSpec, SkillsMarketSpec } from "../../../api/types";
 import { SkillCard, SkillDrawer, MarketplaceDrawer } from "./components";
 import { useSkills } from "./useSkills";
 import { useTranslation } from "react-i18next";
-import { createDefaultSkillsMarketTemplates } from "../../../constants/skillsMarket";
 import styles from "./index.module.less";
 
 function SkillsPage() {
@@ -25,6 +24,7 @@ function SkillsPage() {
     validateMarket,
     fetchMarketplace,
     saveMarkets,
+    resetMarkets,
     installMarketplaceSkill,
     createSkill,
     importFromHub,
@@ -297,24 +297,15 @@ function SkillsPage() {
   };
 
   const handleResetMarketTemplates = async () => {
-    const defaults = createDefaultSkillsMarketTemplates();
-    setMarketDrafts(defaults);
-
-    const payload = {
-      version: marketConfig?.version ?? 1,
-      cache: {
-        ttl_sec: marketCacheTtl,
-      },
-      install: {
-        overwrite_default: marketOverwriteDefault,
-      },
-      markets: defaults,
-    };
-
     setSavingMarkets(true);
     try {
-      const ok = await saveMarkets(payload);
-      if (ok) {
+      const resetPayload = await resetMarkets();
+      if (resetPayload) {
+        setMarketDrafts(resetPayload.markets ?? []);
+        setMarketCacheTtl(resetPayload.cache?.ttl_sec ?? 600);
+        setMarketOverwriteDefault(
+          resetPayload.install?.overwrite_default ?? false,
+        );
         await fetchMarketplace(true);
       }
     } finally {

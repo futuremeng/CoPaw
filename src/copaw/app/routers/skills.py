@@ -3,6 +3,7 @@ import asyncio
 import json
 import logging
 import re
+import shutil
 import subprocess
 import tempfile
 import threading
@@ -24,7 +25,7 @@ from ...agents.skills_hub import (
     search_hub_skills,
     install_skill_from_hub,
 )
-from ...config import load_config, save_config
+from ...constant import WORKING_DIR
 from ...config.config import (
     SkillMarketSpec,
     SkillsMarketCacheConfig,
@@ -174,9 +175,115 @@ _MARKETPLACE_CACHE: dict[str, Any] = {
     "errors": [],
     "meta": {},
 }
+_SKILLS_MARKET_DEFAULT_DIR = Path(__file__).resolve().parents[2] / "skills_market"
+_SKILLS_MARKET_CONFIG_PATH = WORKING_DIR / "skills_market" / "config.json"
+_SKILLS_MARKET_DEFAULT_PATH = _SKILLS_MARKET_DEFAULT_DIR / "default.json"
 
 
 router = APIRouter(prefix="/skills", tags=["skills"])
+
+
+def _ensure_skills_market_config_initialized() -> None:
+    """Ensure skills_market/config.json exists, bootstrap from default.json."""
+    if _SKILLS_MARKET_CONFIG_PATH.exists():
+        return
+
+    _SKILLS_MARKET_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+    if _SKILLS_MARKET_DEFAULT_PATH.exists():
+        shutil.copyfile(_SKILLS_MARKET_DEFAULT_PATH, _SKILLS_MARKET_CONFIG_PATH)
+        return
+
+    fallback_payload = {
+        "version": 1,
+        "markets": [],
+        "cache": {"ttl_sec": 600},
+        "install": {"overwrite_default": False},
+    }
+    _SKILLS_MARKET_CONFIG_PATH.write_text(
+        json.dumps(fallback_payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _load_market_payload_from_file(path: Path) -> SkillsMarketPayload:
+    """Load Skills Market payload from file."""
+    try:
+        raw_text = path.read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"MARKETS_CONFIG_READ_FAILED: {path.name}: {exc}",
+        ) from exc
+
+    if not raw_text:
+        raise HTTPException(
+            status_code=500,
+            detail=f"MARKETS_CONFIG_INVALID: {path.name} is empty",
+        )
+
+    try:
+        parsed = json.loads(raw_text)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"MARKETS_CONFIG_INVALID_JSON: {path.name}: {exc}",
+        ) from exc
+
+    return SkillsMarketPayload.model_validate(parsed)
+
+
+def _load_current_market_config() -> SkillsMarketConfig:
+    """Load current market config from skills_market/config.json."""
+    _ensure_skills_market_config_initialized()
+    payload = _load_market_payload_from_file(_SKILLS_MARKET_CONFIG_PATH)
+    return _payload_to_market_config(payload)
+
+
+def _load_default_market_config() -> SkillsMarketConfig:
+    """Load bundled market defaults from skills_market/default.json."""
+    if not _SKILLS_MARKET_DEFAULT_PATH.exists():
+        _ensure_skills_market_config_initialized()
+        return _load_current_market_config()
+
+    payload = _load_market_payload_from_file(_SKILLS_MARKET_DEFAULT_PATH)
+    return _payload_to_market_config(payload)
+
+
+def _save_current_market_config(market_cfg: SkillsMarketConfig) -> None:
+    """Persist current market config to skills_market/config.json."""
+    _SKILLS_MARKET_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    payload = _market_config_to_payload(market_cfg)
+    _SKILLS_MARKET_CONFIG_PATH.write_text(
+        json.dumps(payload.model_dump(mode="json"), ensure_ascii=False, indent=2)
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _reset_current_market_config_to_default() -> SkillsMarketConfig:
+    """Reset current market config by copying default.json to config.json."""
+    _SKILLS_MARKET_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+    if _SKILLS_MARKET_DEFAULT_PATH.exists():
+        shutil.copyfile(_SKILLS_MARKET_DEFAULT_PATH, _SKILLS_MARKET_CONFIG_PATH)
+        return _load_current_market_config()
+
+    _SKILLS_MARKET_CONFIG_PATH.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "markets": [],
+                "cache": {"ttl_sec": 600},
+                "install": {"overwrite_default": False},
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return _load_current_market_config()
 
 
 def _extract_github_market_spec(
@@ -678,16 +785,28 @@ async def search_hub(
 
 @router.get("/markets", response_model=SkillsMarketPayload)
 async def get_markets() -> SkillsMarketPayload:
-    config = load_config()
-    return _market_config_to_payload(config.skills_market)
+    market_cfg = _load_current_market_config()
+    return _market_config_to_payload(market_cfg)
+
+
+@router.get("/markets/defaults", response_model=SkillsMarketPayload)
+async def get_market_defaults() -> SkillsMarketPayload:
+    market_cfg = _load_default_market_config()
+    return _market_config_to_payload(market_cfg)
 
 
 @router.put("/markets", response_model=SkillsMarketPayload)
 async def put_markets(payload: SkillsMarketPayload) -> SkillsMarketPayload:
-    config = load_config()
     market_cfg = _payload_to_market_config(payload)
-    config.skills_market = market_cfg
-    save_config(config)
+    _save_current_market_config(market_cfg)
+    with _MARKETPLACE_CACHE_LOCK:
+        _MARKETPLACE_CACHE["expires_at"] = 0.0
+    return _market_config_to_payload(market_cfg)
+
+
+@router.post("/markets/reset", response_model=SkillsMarketPayload)
+async def reset_markets() -> SkillsMarketPayload:
+    market_cfg = _reset_current_market_config_to_default()
     with _MARKETPLACE_CACHE_LOCK:
         _MARKETPLACE_CACHE["expires_at"] = 0.0
     return _market_config_to_payload(market_cfg)
@@ -748,9 +867,9 @@ async def validate_market(payload: ValidateMarketRequest) -> dict[str, Any]:
 
 @router.get("/marketplace")
 async def get_marketplace(refresh: bool = False) -> dict[str, Any]:
-    config = load_config()
+    market_cfg = _load_current_market_config()
     items, errors, meta = _aggregate_marketplace(
-        config.skills_market,
+        market_cfg,
         refresh=refresh,
     )
     return {
@@ -954,11 +1073,11 @@ async def install_from_marketplace(
 
     workspace = await get_agent_for_request(request)
     workspace_dir = Path(workspace.workspace_dir)
-    config = load_config()
+    market_cfg = _load_current_market_config()
     overwrite = request_body.overwrite or bool(
-        config.skills_market.install.overwrite_default,
+        market_cfg.install.overwrite_default,
     )
-    items, _, _ = _aggregate_marketplace(config.skills_market, refresh=False)
+    items, _, _ = _aggregate_marketplace(market_cfg, refresh=False)
     selected = None
     for item in items:
         if (

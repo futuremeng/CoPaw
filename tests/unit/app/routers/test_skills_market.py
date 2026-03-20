@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import subprocess
 from types import SimpleNamespace
 from pathlib import Path
@@ -11,6 +12,7 @@ from fastapi import FastAPI
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
+from copaw.app.routers import skills as skills_router_module
 from copaw.app.routers.skills import (
     MarketError,
     MarketplaceItem,
@@ -27,7 +29,72 @@ from copaw.config.config import SkillMarketSpec
 
 
 @pytest.fixture
-def skills_api_client() -> TestClient:
+def skills_api_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    market_dir = tmp_path / "skills_market"
+    market_dir.mkdir(parents=True, exist_ok=True)
+
+    config_payload = {
+        "version": 1,
+        "cache": {"ttl_sec": 300},
+        "install": {"overwrite_default": False},
+        "markets": [
+            {
+                "id": "custom",
+                "name": "Custom",
+                "type": "git",
+                "url": "https://github.com/example/custom-skills.git",
+                "branch": "main",
+                "path": "skills",
+                "enabled": True,
+                "order": 1,
+                "trust": "community",
+            }
+        ],
+    }
+    default_payload = {
+        "version": 1,
+        "cache": {"ttl_sec": 600},
+        "install": {"overwrite_default": False},
+        "markets": [
+            {
+                "id": "futuremeng/editor-skills",
+                "name": "Editor Skills",
+                "type": "git",
+                "url": "https://github.com/futuremeng/editor-skills.git",
+                "branch": "main",
+                "path": "skills",
+                "enabled": True,
+                "order": 1,
+                "trust": "community",
+            }
+        ],
+    }
+
+    (market_dir / "config.json").write_text(
+        json.dumps(config_payload, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (market_dir / "default.json").write_text(
+        json.dumps(default_payload, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        skills_router_module,
+        "_SKILLS_MARKET_DEFAULT_DIR",
+        market_dir,
+    )
+    monkeypatch.setattr(
+        skills_router_module,
+        "_SKILLS_MARKET_CONFIG_PATH",
+        market_dir / "config.json",
+    )
+    monkeypatch.setattr(
+        skills_router_module,
+        "_SKILLS_MARKET_DEFAULT_PATH",
+        market_dir / "default.json",
+    )
+
     app = FastAPI()
     app.include_router(router)
     return TestClient(app)
@@ -233,16 +300,16 @@ def test_generate_market_index_from_directory_scans_skill_folders(
         order=1,
     )
 
-    index_doc = _generate_market_index_from_directory(
+    index_doc, warnings = _generate_market_index_from_directory(
         market,
-        repo_dir,
         skills_dir,
-        "main",
+        effective_branch="main",
     )
 
+    assert warnings == []
     assert len(index_doc["skills"]) == 1
     assert index_doc["skills"][0]["skill_id"] == "weather"
-    assert index_doc["skills"][0]["name"] == "Weather Assistant"
+    assert index_doc["skills"][0]["name"] == "weather"
     assert index_doc["skills"][0]["source"]["path"] == "skills/weather"
 
 
@@ -357,8 +424,8 @@ def test_marketplace_endpoint_returns_expected_shape(
     skills_api_client: TestClient,
 ) -> None:
     monkeypatch.setattr(
-        "copaw.app.routers.skills.load_config",
-        lambda: SimpleNamespace(skills_market=SkillsMarketConfig()),
+        "copaw.app.routers.skills._load_current_market_config",
+        lambda: SkillsMarketConfig(),
     )
     monkeypatch.setattr(
         "copaw.app.routers.skills._aggregate_marketplace",
@@ -405,14 +472,23 @@ def test_marketplace_endpoint_returns_expected_shape(
 def test_marketplace_install_endpoint_returns_not_found_when_item_missing(
     monkeypatch: pytest.MonkeyPatch,
     skills_api_client: TestClient,
+    tmp_path: Path,
 ) -> None:
     monkeypatch.setattr(
-        "copaw.app.routers.skills.load_config",
-        lambda: SimpleNamespace(skills_market=SkillsMarketConfig()),
+        "copaw.app.routers.skills._load_current_market_config",
+        lambda: SkillsMarketConfig(),
     )
     monkeypatch.setattr(
         "copaw.app.routers.skills._aggregate_marketplace",
         lambda *_args, **_kwargs: ([], [], {}),
+    )
+
+    async def _mock_get_agent_for_request(_request):
+        return SimpleNamespace(workspace_dir=str(tmp_path / "workspace"))
+
+    monkeypatch.setattr(
+        "copaw.app.agent_context.get_agent_for_request",
+        _mock_get_agent_for_request,
     )
 
     response = skills_api_client.post(
@@ -427,3 +503,30 @@ def test_marketplace_install_endpoint_returns_not_found_when_item_missing(
 
     assert response.status_code == 404
     assert "MARKET_ITEM_NOT_FOUND" in response.json()["detail"]
+
+
+def test_markets_defaults_endpoint_returns_bundled_defaults(
+    skills_api_client: TestClient,
+) -> None:
+    response = skills_api_client.get("/skills/markets/defaults")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["markets"][0]["id"] == "futuremeng/editor-skills"
+    assert data["cache"]["ttl_sec"] == 600
+
+
+def test_markets_reset_endpoint_overwrites_current_with_defaults(
+    skills_api_client: TestClient,
+) -> None:
+    reset_response = skills_api_client.post("/skills/markets/reset")
+    get_response = skills_api_client.get("/skills/markets")
+
+    assert reset_response.status_code == 200
+    reset_data = reset_response.json()
+    assert reset_data["markets"][0]["id"] == "futuremeng/editor-skills"
+    assert reset_data["cache"]["ttl_sec"] == 600
+
+    assert get_response.status_code == 200
+    get_data = get_response.json()
+    assert get_data["markets"][0]["id"] == "futuremeng/editor-skills"

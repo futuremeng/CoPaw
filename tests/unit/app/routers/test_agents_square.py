@@ -163,7 +163,11 @@ def agents_square_api_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(agents_router_module, "load_agent_config", fake_load_agent_config)
     monkeypatch.setattr(agents_router_module, "_initialize_agent_workspace", fake_init_workspace)
     monkeypatch.setattr(agents_router_module, "WORKING_DIR", str(tmp_path))
-    monkeypatch.setattr(agents_router_module, "_AGENTS_SQUARE_DIR", square_dir)
+    monkeypatch.setattr(
+        agents_router_module,
+        "_AGENTS_SQUARE_DEFAULT_DIR",
+        square_dir,
+    )
     monkeypatch.setattr(
         agents_router_module,
         "_AGENTS_SQUARE_CONFIG_PATH",

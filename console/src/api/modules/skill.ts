@@ -59,10 +59,18 @@ export const skillApi = {
 
   getSkillsMarkets: () => request<SkillsMarketsPayload>("/skills/markets"),
 
+  getSkillsMarketDefaults: () =>
+    request<SkillsMarketsPayload>("/skills/markets/defaults"),
+
   updateSkillsMarkets: (payload: SkillsMarketsPayload) =>
     request<SkillsMarketsPayload>("/skills/markets", {
       method: "PUT",
       body: JSON.stringify(payload),
+    }),
+
+  resetSkillsMarkets: () =>
+    request<SkillsMarketsPayload>("/skills/markets/reset", {
+      method: "POST",
     }),
 
   validateSkillsMarket: (payload: SkillsMarketSpec) =>

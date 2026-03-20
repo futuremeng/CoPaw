@@ -259,6 +259,20 @@ export function useSkills() {
     }
   };
 
+  const resetMarkets = async () => {
+    try {
+      const data = await api.resetSkillsMarkets();
+      setMarketConfig(data);
+      setMarkets(data.markets ?? []);
+      message.success("Markets restored");
+      return data;
+    } catch (error) {
+      console.error("Failed to reset markets", error);
+      message.error("Failed to reset markets");
+      return null;
+    }
+  };
+
   const validateMarket = async (market: SkillsMarketSpec) => {
     try {
       const result = await api.validateSkillsMarket(market);
@@ -488,6 +502,7 @@ export function useSkills() {
     fetchMarkets,
     fetchMarketplace,
     saveMarkets,
+    resetMarkets,
     validateMarket,
     installMarketplaceSkill,
     createSkill,

@@ -1028,8 +1028,84 @@ class SkillsMarketInstallConfig(BaseModel):
     overwrite_default: bool = Field(default=False)
 
 
+def _load_skills_market_file_defaults() -> dict:
+    """Load bundled Skills Market defaults from JSON."""
+
+    default_payload = {
+        "version": 1,
+        "markets": [],
+        "cache": {"ttl_sec": 600},
+        "install": {
+            "overwrite_default": False,
+        },
+    }
+    default_dir = Path(__file__).resolve().parent.parent / "skills_market"
+    runtime_dir = WORKING_DIR / "skills_market"
+    config_path = runtime_dir / "config.json"
+    default_path = default_dir / "default.json"
+
+    # config.json is current state source of truth; initialize it from default.json.
+    if not config_path.exists() and default_path.exists():
+        runtime_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            shutil.copyfile(default_path, config_path)
+        except OSError:
+            pass
+
+    raw_text = ""
+    for path in (config_path, default_path):
+        try:
+            raw_text = path.read_text(encoding="utf-8").strip()
+            if raw_text:
+                break
+        except OSError:
+            continue
+
+    if not raw_text:
+        return default_payload
+
+    try:
+        loaded = json.loads(raw_text)
+    except json.JSONDecodeError:
+        return default_payload
+
+    if not isinstance(loaded, dict):
+        return default_payload
+
+    payload = dict(default_payload)
+    payload["version"] = loaded.get("version", payload["version"])
+    payload["markets"] = loaded.get("markets", payload["markets"])
+
+    cache = loaded.get("cache")
+    if isinstance(cache, dict):
+        payload["cache"] = {**payload["cache"], **cache}
+
+    install = loaded.get("install")
+    if isinstance(install, dict):
+        payload["install"] = {**payload["install"], **install}
+
+    return payload
+
+
 class SkillsMarketConfig(BaseModel):
     """Skills market root config."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _merge_bundled_defaults(cls, data):
+        if data is None:
+            return _load_skills_market_file_defaults()
+        if not isinstance(data, dict):
+            return data
+
+        payload = _load_skills_market_file_defaults()
+        merged = dict(payload)
+        for key, value in data.items():
+            if key in {"cache", "install"} and isinstance(value, dict):
+                merged[key] = {**payload.get(key, {}), **value}
+            else:
+                merged[key] = value
+        return merged
 
     version: int = Field(default=1, ge=1)
     markets: List[SkillMarketSpec] = Field(default_factory=list)
@@ -1091,13 +1167,14 @@ def _load_agents_square_file_defaults() -> dict:
             "preserve_workspace_files": True,
         },
     }
-    base_dir = Path(__file__).resolve().parent.parent / "agents_square"
-    config_path = base_dir / "config.json"
-    default_path = base_dir / "default.json"
+    default_dir = Path(__file__).resolve().parent.parent / "agents_square"
+    runtime_dir = WORKING_DIR / "agents_square"
+    config_path = runtime_dir / "config.json"
+    default_path = default_dir / "default.json"
 
     # config.json is current state source of truth; initialize it from default.json.
     if not config_path.exists() and default_path.exists():
-        base_dir.mkdir(parents=True, exist_ok=True)
+        runtime_dir.mkdir(parents=True, exist_ok=True)
         try:
             shutil.copyfile(default_path, config_path)
         except OSError:
