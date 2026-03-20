@@ -232,10 +232,10 @@ class AgentRunner(Runner):
             True,
         )
 
-    async def query_handler(
+    async def query_handler(  # pyright: ignore[reportIncompatibleMethodOverride]
         self,
         msgs,
-        request: AgentRequest = None,
+        request: AgentRequest | None = None,
         **kwargs,
     ):
         """
@@ -281,10 +281,20 @@ class AgentRunner(Runner):
         agent = None
         chat = None
         session_state_loaded = False
+        user_id = getattr(request, "user_id", "") or ""
+        channel = str(
+            getattr(request, "channel", DEFAULT_CHANNEL) or DEFAULT_CHANNEL,
+        )
         try:
-            session_id = request.session_id
-            user_id = request.user_id
-            channel = getattr(request, "channel", DEFAULT_CHANNEL)
+            if request is None:
+                raise ValueError("request is required")
+
+            session_id = request.session_id or ""
+            user_id = request.user_id or ""
+            channel = str(
+                getattr(request, "channel", DEFAULT_CHANNEL)
+                or DEFAULT_CHANNEL,
+            )
 
             logger.info(
                 "Handle agent query:\n%s",
@@ -393,11 +403,11 @@ class AgentRunner(Runner):
             # in the session state.
             agent.rebuild_sys_prompt()
 
-            async for msg, last in stream_printing_messages(
+            async for stream_item in stream_printing_messages(
                 agents=[agent],
                 coroutine_task=agent(msgs),
             ):
-                yield msg, last
+                yield stream_item[0], stream_item[1]
 
         except asyncio.CancelledError as exc:
             logger.info(f"query_handler: {session_id} cancelled!")
