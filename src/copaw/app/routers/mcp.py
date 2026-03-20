@@ -22,9 +22,7 @@ class MCPClientInfo(BaseModel):
     enabled: bool = Field(..., description="Whether the client is enabled")
     runtime: Optional[Dict[str, Optional[str | bool | int]]] = Field(
         default=None,
-        description=(
-            "Aggregated runtime state for UI."
-        ),
+        description=("Aggregated runtime state for UI."),
     )
     transport: Literal["stdio", "streamable_http", "sse"] = Field(
         ...,
@@ -195,11 +193,19 @@ def _build_client_info(
         enabled=client.enabled,
         runtime={
             "active": active,
-            "error_category": runtime_error.get("category") if runtime_error else None,
-            "error_retryable": runtime_error.get("retryable") if runtime_error else None,
-            "error_status": runtime_error.get("status") if runtime_error else None,
+            "error_category": runtime_error.get("category")
+            if runtime_error
+            else None,
+            "error_retryable": runtime_error.get("retryable")
+            if runtime_error
+            else None,
+            "error_status": runtime_error.get("status")
+            if runtime_error
+            else None,
             "error_hint": runtime_error.get("hint") if runtime_error else None,
-            "error_detail": runtime_error.get("detail") if runtime_error else None,
+            "error_detail": runtime_error.get("detail")
+            if runtime_error
+            else None,
         },
         transport=client.transport,
         url=client.url,

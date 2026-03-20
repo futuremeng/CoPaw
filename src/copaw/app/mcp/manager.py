@@ -295,7 +295,8 @@ class MCPClientManager:
         """Best-effort close with guards for known third-party race errors.
 
         In some streamable_http failure paths (e.g., upstream 503), closing an
-        unconnected client may trigger an anyio RuntimeError in background tasks.
+        unconnected client may trigger an anyio RuntimeError in background
+        tasks.
         We skip close for unconnected clients and downgrade known close races.
         """
         if client is None:
@@ -304,7 +305,8 @@ class MCPClientManager:
         is_connected = bool(getattr(client, "is_connected", False))
         if not is_connected:
             logger.debug(
-                "Skipping close for MCP client '%s' because it is not connected",
+                "Skipping close for MCP client '%s' because "
+                "it is not connected",
                 key,
             )
             return
@@ -346,7 +348,11 @@ class MCPClientManager:
         current: BaseException | None = exc
         depth = 0
 
-        while current is not None and depth < max_depth and id(current) not in seen:
+        while (
+            current is not None
+            and depth < max_depth
+            and id(current) not in seen
+        ):
             seen.add(id(current))
             parts.append(_one(current))
             next_exc = getattr(current, "__cause__", None)
@@ -366,7 +372,11 @@ class MCPClientManager:
         seen = set()
         current: BaseException | None = exc
         depth = 0
-        while current is not None and depth < max_depth and id(current) not in seen:
+        while (
+            current is not None
+            and depth < max_depth
+            and id(current) not in seen
+        ):
             seen.add(id(current))
             yield current
             next_exc = getattr(current, "__cause__", None)
@@ -404,44 +414,68 @@ class MCPClientManager:
         Returns:
             (category, retryable)
         """
+        category = "unknown"
+        retryable = True
+
         status_code, _ = cls.extract_status_and_url(exc)
         if status_code in (401, 403):
-            return "auth", False
-        if status_code == 404:
-            return "endpoint_not_found", False
-        if status_code == 429:
-            return "rate_limited", True
-        if status_code is not None and 500 <= status_code <= 599:
-            return "server", True
+            category, retryable = "auth", False
+        elif status_code == 404:
+            category, retryable = "endpoint_not_found", False
+        elif status_code == 429:
+            category, retryable = "rate_limited", True
+        elif status_code is not None and 500 <= status_code <= 599:
+            category, retryable = "server", True
+        else:
+            chain_text = " ".join(
+                f"{type(item).__name__}: {item}"
+                for item in cls._iter_exception_chain(exc)
+            ).lower()
 
-        chain_text = " ".join(
-            f"{type(item).__name__}: {item}" for item in cls._iter_exception_chain(exc)
-        ).lower()
+            if "session terminated" in chain_text:
+                category, retryable = "session_terminated", True
+            elif "timed out" in chain_text or "timeout" in chain_text:
+                category, retryable = "timeout", True
+            elif "connect" in chain_text and "error" in chain_text:
+                category, retryable = "connectivity", True
+            elif "ssl" in chain_text or "certificate" in chain_text:
+                category, retryable = "tls", False
 
-        if "session terminated" in chain_text:
-            return "session_terminated", True
-        if "timed out" in chain_text or "timeout" in chain_text:
-            return "timeout", True
-        if "connect" in chain_text and "error" in chain_text:
-            return "connectivity", True
-        if "ssl" in chain_text or "certificate" in chain_text:
-            return "tls", False
-
-        return "unknown", True
+        return category, retryable
 
     @staticmethod
     def remediation_hint(category: str) -> str:
         """Return a short operator-facing remediation hint."""
         hints = {
-            "auth": "check Authorization token scope/expiry and server auth config",
-            "endpoint_not_found": "verify MCP endpoint path and reverse proxy routing",
-            "rate_limited": "reduce retry frequency or increase upstream rate limit",
-            "server": "check upstream server health/logs and dependency status",
-            "session_terminated": "check upstream session lifecycle and long-poll stability",
-            "timeout": "check network latency, upstream response time, and timeout settings",
-            "connectivity": "check DNS/network reachability/firewall between CoPaw and MCP host",
+            "auth": (
+                "check Authorization token scope/expiry "
+                "and server auth config"
+            ),
+            "endpoint_not_found": (
+                "verify MCP endpoint path and reverse " "proxy routing"
+            ),
+            "rate_limited": (
+                "reduce retry frequency or increase " "upstream rate limit"
+            ),
+            "server": (
+                "check upstream server health/logs " "and dependency status"
+            ),
+            "session_terminated": (
+                "check upstream session lifecycle " "and long-poll stability"
+            ),
+            "timeout": (
+                "check network latency, upstream "
+                "response time, and timeout settings"
+            ),
+            "connectivity": (
+                "check DNS/network reachability/firewall "
+                "between CoPaw and MCP host"
+            ),
             "tls": "check certificate chain, hostname, and TLS settings",
-            "unknown": "inspect exception chain detail and upstream MCP server logs",
+            "unknown": (
+                "inspect exception chain detail and "
+                "upstream MCP server logs"
+            ),
         }
         return hints.get(category, hints["unknown"])
 

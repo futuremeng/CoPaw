@@ -190,7 +190,9 @@ export function MCPClientCard({
                 <span className={`${styles.statusDot} ${runtimeStatusClass}`} />
                 <span className={`${styles.statusText} ${runtimeStatusClass}`}>
                   {runtimeDetailText ? (
-                    <Tooltip title={runtimeDetailText}>{t(runtimeStatusKey)}</Tooltip>
+                    <Tooltip title={runtimeDetailText}>
+                      {t(runtimeStatusKey)}
+                    </Tooltip>
                   ) : (
                     t(runtimeStatusKey)
                   )}

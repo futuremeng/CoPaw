@@ -18,12 +18,14 @@ from .manager import MCPClientManager
 if TYPE_CHECKING:
     from ...config.config import MCPConfig
 
-from ...constant import MCP_RECONNECT_BASE, MCP_RECONNECT_CAP
-
 logger = logging.getLogger(__name__)
 
 # How often to poll (seconds)
 DEFAULT_POLL_INTERVAL = 2.0
+
+# Reconnect backoff defaults (seconds)
+MCP_RECONNECT_BASE = 30.0
+MCP_RECONNECT_CAP = 300.0
 
 
 def _compute_mcp_backoff(attempt: int, base: float, cap: float) -> float:
@@ -403,7 +405,10 @@ class MCPConfigWatcher:
                 self._reconnect_backoff[key] = (attempt + 1, now + delay)
                 err = self._mcp_manager.describe_exception(exc)
                 category, retryable = self._mcp_manager.classify_exception(exc)
-                status_code, failed_url = self._mcp_manager.extract_status_and_url(
+                (
+                    status_code,
+                    failed_url,
+                ) = self._mcp_manager.extract_status_and_url(
                     exc,
                 )
                 hint = self._mcp_manager.remediation_hint(category)

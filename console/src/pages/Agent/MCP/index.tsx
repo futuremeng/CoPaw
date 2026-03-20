@@ -147,8 +147,7 @@ function slugifyClientKey(value: string): string {
 }
 
 function inferSingleClientKey(payload: Record<string, unknown>): string {
-  const explicitKey =
-    typeof payload.key === "string" ? payload.key.trim() : "";
+  const explicitKey = typeof payload.key === "string" ? payload.key.trim() : "";
   if (explicitKey) {
     return explicitKey;
   }
@@ -157,8 +156,8 @@ function inferSingleClientKey(payload: Record<string, unknown>): string {
     typeof payload.name === "string"
       ? payload.name
       : typeof payload.title === "string"
-        ? payload.title
-        : "";
+      ? payload.title
+      : "";
 
   const inferred = slugifyClientKey(nameCandidate);
   return inferred || "mcp-client";
@@ -184,7 +183,9 @@ function validateClientBeforeCreate(
   }
 
   if (!data.url.trim()) {
-    throw new Error(`Client '${key}' with ${data.transport} transport requires url`);
+    throw new Error(
+      `Client '${key}' with ${data.transport} transport requires url`,
+    );
   }
 
   try {
@@ -208,12 +209,14 @@ function parseClientsFromImportJson(newClientJson: string) {
   }> = [];
 
   if (isPlainObject(parsed) && isPlainObject(parsed.mcpServers)) {
-    Object.entries(parsed.mcpServers).forEach(([key, data]: [string, unknown]) => {
-      clientsToCreate.push({
-        key,
-        data: normalizeClientData(key, data as RawMCPClientData),
-      });
-    });
+    Object.entries(parsed.mcpServers).forEach(
+      ([key, data]: [string, unknown]) => {
+        clientsToCreate.push({
+          key,
+          data: normalizeClientData(key, data as RawMCPClientData),
+        });
+      },
+    );
   } else if (
     isPlainObject(parsed) &&
     (parsed.command || parsed.url || parsed.baseUrl)
@@ -228,7 +231,10 @@ function parseClientsFromImportJson(newClientJson: string) {
     Object.entries(parsed).forEach(([key, data]: [string, unknown]) => {
       const candidate =
         data && typeof data === "object" ? (data as RawMCPClientData) : null;
-      if (candidate && (candidate.command || candidate.url || candidate.baseUrl)) {
+      if (
+        candidate &&
+        (candidate.command || candidate.url || candidate.baseUrl)
+      ) {
         clientsToCreate.push({
           key,
           data: normalizeClientData(key, candidate),
@@ -348,7 +354,8 @@ function MCPPage() {
         message.error(t("mcp.invalidJson"));
         return;
       }
-      const text = error instanceof Error ? error.message : t("mcp.createError");
+      const text =
+        error instanceof Error ? error.message : t("mcp.createError");
       message.error(text);
     }
   };
@@ -409,8 +416,8 @@ function MCPPage() {
                 refreshingKeys.includes(client.key)
                   ? "checking"
                   : queuedRefreshKeys.includes(client.key)
-                    ? "queued"
-                    : undefined
+                  ? "queued"
+                  : undefined
               }
               isHovered={hoverKey === client.key}
               onMouseEnter={() => setHoverKey(client.key)}
@@ -571,7 +578,9 @@ function MCPPage() {
           </div>
 
           {!importPreview.valid ? (
-            <div style={{ color: "#cf1322", fontSize: 12 }}>{importPreview.error}</div>
+            <div style={{ color: "#cf1322", fontSize: 12 }}>
+              {importPreview.error}
+            </div>
           ) : (
             <div
               style={{
