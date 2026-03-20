@@ -68,6 +68,18 @@ logger = logging.getLogger(__name__)
 NamesakeStrategy = Literal["override", "skip", "raise", "rename"]
 
 
+def _interrupt_reply_text(language: str) -> str:
+    """Return localized reply text used when current response is interrupted."""
+    lang = (language or "").strip().lower().split("-")[0]
+    if lang == "zh":
+        return "收到，我已停止上一条回复。请继续说你的问题。"
+    if lang == "ja":
+        return "了解しました。先ほどの応答を停止しました。続けてご質問ください。"
+    if lang == "ru":
+        return "Принял, я остановил предыдущий ответ. Продолжайте, пожалуйста."
+    return "Got it. I have stopped the previous response. Please continue with your question."
+
+
 class CoPawAgent(ToolGuardMixin, ReActAgent):
     """CoPaw Agent with integrated tools, skills, and memory management.
 
@@ -900,3 +912,21 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
                     "Exception occurred during interrupt cleanup",
                     exc_info=True,
                 )
+
+    async def handle_interrupt(
+        self,
+        msg: Msg | list[Msg] | None = None,
+        structured_model: Type[BaseModel] | None = None,
+    ) -> Msg:
+        """Override default interruption response with localized wording."""
+        del msg, structured_model
+
+        response_msg = Msg(
+            self.name,
+            _interrupt_reply_text(self.agent_config.language),
+            "assistant",
+            metadata={"_is_interrupted": True},
+        )
+        await self.print(response_msg, True)
+        await self.memory.add(response_msg)
+        return response_msg
