@@ -84,6 +84,7 @@ ollama = [
 ]
 whisper = [
     "openai-whisper>=20231117",
+    "opencc-python-reimplemented>=0.1.7",
 ]
 full = [
     "copaw[local,ollama,llamacpp,whisper]",
