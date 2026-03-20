@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -40,6 +41,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _TRANSIENT_UPSTREAM_STATUS_CODES = {429, 500, 502, 503, 504}
+_RETRYABLE_STATUS_PATTERN = re.compile(
+    r"(?:error\s*code|status)\s*[:=]?\s*(\d{3})",
+    re.IGNORECASE,
+)
 
 
 def _extract_status_code(exc: Exception) -> int | None:
@@ -56,9 +61,22 @@ def _extract_status_code(exc: Exception) -> int | None:
     return None
 
 
+def _extract_status_code_from_message(exc: Exception) -> int | None:
+    text = str(exc)
+    match = _RETRYABLE_STATUS_PATTERN.search(text)
+    if not match:
+        return None
+    try:
+        return int(match.group(1))
+    except (TypeError, ValueError):
+        return None
+
+
 def _is_transient_upstream_error(exc: Exception) -> bool:
     """Whether an exception likely represents a transient model backend failure."""
     status = _extract_status_code(exc)
+    if status is None:
+        status = _extract_status_code_from_message(exc)
     if status in _TRANSIENT_UPSTREAM_STATUS_CODES:
         return True
 
@@ -70,6 +88,36 @@ def _is_transient_upstream_error(exc: Exception) -> bool:
         "ServiceUnavailableError",
         "OverloadedError",
     }
+
+
+def _build_retryable_error_msg(exc: Exception) -> Msg | None:
+    """Build a user-facing retryable error message for transient failures."""
+    if not _is_transient_upstream_error(exc):
+        return None
+
+    status = _extract_status_code(exc)
+    if status is None:
+        status = _extract_status_code_from_message(exc)
+    status_text = str(status) if status is not None else "unknown"
+    return Msg(
+        name="Friday",
+        role="assistant",
+        content=[
+            TextBlock(
+                type="text",
+                text=(
+                    "⚠️ Model service is temporarily unavailable "
+                    f"(HTTP {status_text}). "
+                    f"Retried {LLM_MAX_RETRIES} times but still failed. "
+                    "Please try again shortly.\n"
+                    "⚠️ 模型服务暂时不可用"
+                    f"（HTTP {status_text}）。"
+                    f"已重试 {LLM_MAX_RETRIES} 次仍失败，"
+                    "请稍后再试。"
+                ),
+            ),
+        ],
+    )
 
 
 class AgentRunner(Runner):
@@ -355,7 +403,7 @@ class AgentRunner(Runner):
             logger.info(f"query_handler: {session_id} cancelled!")
             if agent is not None:
                 await agent.interrupt()
-            raise RuntimeError("Task has been cancelled!") from exc
+            return
         except Exception as e:
             debug_dump_path = write_query_error_dump(
                 request=request,
@@ -400,7 +448,7 @@ class AgentRunner(Runner):
                                     "⚠️ 模型服务暂时不可用"
                                     f"（HTTP {status_text}）。"
                                     f"已重试 {LLM_MAX_RETRIES} 次仍失败，"
-                                    f"请稍后重试。{detail_text}"
+                                    f"请稍后再试。{detail_text}"
                                 ),
                             ),
                         ],
