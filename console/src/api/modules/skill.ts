@@ -1,3 +1,4 @@
+import { getApiUrl, getApiToken } from "../config";
 import { request } from "../request";
 import type {
   HubSkillSpec,
@@ -17,6 +18,30 @@ declare const BASE_URL: string;
 function getStreamApiUrl(): string {
   const base = typeof BASE_URL === "string" ? BASE_URL : "";
   return `${base}/api`;
+}
+
+function buildHeaders(): HeadersInit {
+  const headers: Record<string, string> = {};
+
+  const token = getApiToken();
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  try {
+    const agentStorage = localStorage.getItem("copaw-agent-storage");
+    if (agentStorage) {
+      const parsed = JSON.parse(agentStorage);
+      const selectedAgent = parsed?.state?.selectedAgent;
+      if (selectedAgent) {
+        headers["X-Agent-Id"] = selectedAgent;
+      }
+    }
+  } catch (error) {
+    console.warn("Failed to get selected agent from storage:", error);
+  }
+
+  return headers;
 }
 
 export const skillApi = {
@@ -221,5 +246,40 @@ export const skillApi = {
     } finally {
       reader.releaseLock();
     }
+  },
+
+  uploadSkill: async (
+    file: File,
+    options?: { enable?: boolean; overwrite?: boolean },
+  ): Promise<{ imported: string[]; count: number; enabled: boolean }> => {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const params = new URLSearchParams();
+    if (options?.enable !== undefined) {
+      params.set("enable", String(options.enable));
+    }
+    if (options?.overwrite !== undefined) {
+      params.set("overwrite", String(options.overwrite));
+    }
+    const qs = params.toString();
+    const url = getApiUrl(`/skills/upload${qs ? `?${qs}` : ""}`);
+
+    const headers = buildHeaders();
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `Upload failed: ${response.status} ${response.statusText} - ${errorText}`,
+      );
+    }
+
+    return await response.json();
   },
 };

@@ -29,7 +29,7 @@ def migrate_legacy_workspace_to_default_agent() -> bool:
     This function:
     1. Checks if migration is needed
     2. Creates default agent workspace
-    3. Migrates sessions, memory, and markdown files
+    3. Migrates legacy workspace files and directories
     4. Creates agent.json with legacy configuration
     5. Updates root config.json to new structure
 
@@ -160,21 +160,12 @@ def migrate_legacy_workspace_to_default_agent() -> bool:
         migrated_items,
     )
 
-    # Migrate markdown files
-    for md_file in [
-        "AGENTS.md",
-        "SOUL.md",
-        "PROFILE.md",
-        "HEARTBEAT.md",
-        "MEMORY.md",
-        "BOOTSTRAP.md",
-    ]:
-        _migrate_workspace_item(
-            old_workspace / md_file,
-            default_workspace / md_file,
-            md_file,
-            migrated_items,
-        )
+    # Migrate root-level markdown files
+    _migrate_root_markdown_files(
+        old_workspace,
+        default_workspace,
+        migrated_items,
+    )
 
     # Migrate skills directories
     _migrate_workspace_item(
@@ -188,6 +179,22 @@ def migrate_legacy_workspace_to_default_agent() -> bool:
         old_workspace / "customized_skills",
         default_workspace / "customized_skills",
         "customized_skills",
+        migrated_items,
+    )
+
+    # Migrate media directory
+    _migrate_workspace_item(
+        old_workspace / "media",
+        default_workspace / "media",
+        "media",
+        migrated_items,
+    )
+
+    # Migrate embedding cache
+    _migrate_workspace_item(
+        old_workspace / "embedding_cache",
+        default_workspace / "embedding_cache",
+        "embedding_cache",
         migrated_items,
     )
 
@@ -245,6 +252,30 @@ def migrate_legacy_workspace_to_default_agent() -> bool:
     logger.info("=" * 60)
 
     return True
+
+
+def _migrate_root_markdown_files(
+    old_workspace: Path,
+    new_workspace: Path,
+    migrated_items: list,
+) -> None:
+    """Migrate root-level markdown files from the legacy workspace.
+
+    Args:
+        old_workspace: Source legacy workspace path
+        new_workspace: Destination workspace path
+        migrated_items: List to append migrated item names
+    """
+    if not old_workspace.exists():
+        return
+
+    for md_path in sorted(old_workspace.glob("*.md")):
+        _migrate_workspace_item(
+            md_path,
+            new_workspace / md_path.name,
+            md_path.name,
+            migrated_items,
+        )
 
 
 def _migrate_workspace_item(
