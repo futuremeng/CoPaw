@@ -16,7 +16,11 @@ import {
   Typography,
   message,
 } from "antd";
-import { AppstoreOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
+import {
+  AppstoreOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+} from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
 import { agentsApi } from "../../../api/modules/agents";
 import type {
@@ -39,16 +43,20 @@ export default function AgentsPage() {
   const [squareLoading, setSquareLoading] = useState(false);
   const [squareSources, setSquareSources] =
     useState<AgentsSquareSourcesPayload | null>(null);
-  const [squareItems, setSquareItems] = useState<AgentSquareItemsResponse | null>(
-    null,
+  const [squareItems, setSquareItems] =
+    useState<AgentSquareItemsResponse | null>(null);
+  const [sourceDrafts, setSourceDrafts] = useState<AgentsSquareSourceSpec[]>(
+    [],
   );
-  const [sourceDrafts, setSourceDrafts] = useState<AgentsSquareSourceSpec[]>([]);
   const [squareSearch, setSquareSearch] = useState("");
-  const [squareSourceFilter, setSquareSourceFilter] = useState<string>("__all__");
+  const [squareSourceFilter, setSquareSourceFilter] =
+    useState<string>("__all__");
   const [preferredImportName, setPreferredImportName] = useState("");
   const [importingKey, setImportingKey] = useState<string | null>(null);
   const [savingSources, setSavingSources] = useState(false);
-  const [validatingSourceKey, setValidatingSourceKey] = useState<string | null>(null);
+  const [validatingSourceKey, setValidatingSourceKey] = useState<string | null>(
+    null,
+  );
   const [form] = Form.useForm();
 
   const handleCreate = () => {
@@ -130,8 +138,7 @@ export default function AgentsPage() {
     const statusCode = statusMatch ? Number(statusMatch[1]) : 0;
     return {
       statusCode,
-      isConflict:
-        statusCode === 409 || msg.includes("AGENT_NAME_CONFLICT"),
+      isConflict: statusCode === 409 || msg.includes("AGENT_NAME_CONFLICT"),
       message: msg,
     };
   };
@@ -191,7 +198,10 @@ export default function AgentsPage() {
   const allSquareItems = squareItems?.items ?? [];
   const normalizedSearch = squareSearch.trim().toLowerCase();
   const filteredSquareItems = allSquareItems.filter((item) => {
-    if (squareSourceFilter !== "__all__" && item.source_id !== squareSourceFilter) {
+    if (
+      squareSourceFilter !== "__all__" &&
+      item.source_id !== squareSourceFilter
+    ) {
       return false;
     }
     if (!normalizedSearch) return true;
@@ -289,7 +299,11 @@ export default function AgentsPage() {
         description={t("agent.pageDescription")}
         action={
           <Space>
-            <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={handleCreate}
+            >
               {t("agent.create")}
             </Button>
             <Button icon={<AppstoreOutlined />} onClick={handleOpenSquare}>
@@ -341,7 +355,8 @@ export default function AgentsPage() {
         </Typography.Paragraph>
         <Space direction="vertical" size={12} style={{ width: "100%" }}>
           <Typography.Paragraph>
-            {t("agent.squareSourceCount")}: {squareItems?.meta?.source_count ?? 0} ·{" "}
+            {t("agent.squareSourceCount")}:{" "}
+            {squareItems?.meta?.source_count ?? 0} ·{" "}
             {t("agent.squareItemCount")}: {squareItems?.meta?.item_count ?? 0}
           </Typography.Paragraph>
 
@@ -446,7 +461,9 @@ export default function AgentsPage() {
 
           <Divider style={{ margin: "8px 0" }} />
           <Space>
-            <Typography.Text strong>{t("agent.squareSourcesEditTitle")}</Typography.Text>
+            <Typography.Text strong>
+              {t("agent.squareSourcesEditTitle")}
+            </Typography.Text>
             <Button size="small" onClick={handleAddSourceDraft}>
               {t("agent.squareAddSource")}
             </Button>
@@ -487,14 +504,19 @@ export default function AgentsPage() {
                       style={{ width: 180 }}
                       placeholder="name"
                       value={source.name}
-                      onChange={(e) => updateSourceDraft(idx, { name: e.target.value })}
+                      onChange={(e) =>
+                        updateSourceDraft(idx, { name: e.target.value })
+                      }
                     />
                     <Select
                       size="small"
                       style={{ width: 170 }}
                       value={source.provider}
                       options={[
-                        { value: "agency_markdown_repo", label: "agency_markdown_repo" },
+                        {
+                          value: "agency_markdown_repo",
+                          label: "agency_markdown_repo",
+                        },
                         { value: "index_json_repo", label: "index_json_repo" },
                       ]}
                       onChange={(value) =>
@@ -541,7 +563,9 @@ export default function AgentsPage() {
                       placeholder="branch"
                       value={source.branch || ""}
                       onChange={(e) =>
-                        updateSourceDraft(idx, { branch: e.target.value.trim() })
+                        updateSourceDraft(idx, {
+                          branch: e.target.value.trim(),
+                        })
                       }
                     />
                     <Input
@@ -588,7 +612,9 @@ export default function AgentsPage() {
                     aria-label="source url"
                     placeholder="url"
                     value={source.url}
-                    onChange={(e) => updateSourceDraft(idx, { url: e.target.value })}
+                    onChange={(e) =>
+                      updateSourceDraft(idx, { url: e.target.value })
+                    }
                   />
                   <Input
                     size="small"

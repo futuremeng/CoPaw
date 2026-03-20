@@ -294,7 +294,8 @@ def _collect_agency_markdown_items(
         if not name:
             continue
 
-        # Normalize both paths to avoid macOS /var vs /private/var alias mismatch.
+        # Normalize both paths to avoid
+        # macOS /var vs /private/var alias mismatch.
         rel_path = md_file.resolve().relative_to(repo_dir.resolve()).as_posix()
         agent_id = _slugify(str(meta.get("slug") or "") or md_file.stem)
         key = f"{source.id}:{agent_id}"
@@ -338,7 +339,7 @@ def _collect_agency_markdown_items(
 def _collect_index_json_items(
     source: AgentsSquareSourceSpec,
     source_root: Path,
-    repo_dir: Path,
+    _repo_dir: Path,
 ) -> tuple[list[AgentSquareItem], dict[str, dict[str, str]]]:
     index_path = source_root
     if index_path.is_dir():
@@ -399,17 +400,22 @@ def _aggregate_square_items(
     cfg: AgentsSquareConfig,
     *,
     refresh: bool = False,
-) -> tuple[list[AgentSquareItem], list[SourceError], dict[str, object], dict[str, dict[str, str]]]:
+) -> tuple[
+    list[AgentSquareItem],
+    list[SourceError],
+    dict[str, object],
+    dict[str, dict[str, str]],
+]:
     now = time.time()
     with _SQUARE_CACHE_LOCK:
         expires_at = float(_SQUARE_CACHE.get("expires_at", 0.0) or 0.0)
         if not refresh and now < expires_at:
-            meta = cast(
+            cache_meta = cast(
                 dict[str, object],
                 copy.deepcopy(_SQUARE_CACHE.get("meta") or {}),
             )
-            if isinstance(meta, dict):
-                meta["cache_hit"] = True
+            if isinstance(cache_meta, dict):
+                cache_meta["cache_hit"] = True
             return (
                 cast(
                     list[AgentSquareItem],
@@ -419,7 +425,7 @@ def _aggregate_square_items(
                     list[SourceError],
                     copy.deepcopy(_SQUARE_CACHE.get("errors") or []),
                 ),
-                meta,
+                cache_meta,
                 cast(
                     dict[str, dict[str, str]],
                     copy.deepcopy(_SQUARE_CACHE.get("import_index") or {}),
@@ -441,14 +447,19 @@ def _aggregate_square_items(
             tmp_dir = _clone_square_source(source)
             source_root = (tmp_dir / (source.path or ".")).resolve()
             if not str(source_root).startswith(str(tmp_dir.resolve())):
-                raise ValueError("SOURCE_INDEX_INVALID: path escapes repository")
+                raise ValueError(
+                    "SOURCE_INDEX_INVALID: path escapes repository",
+                )
             if not source_root.exists():
                 raise ValueError(
                     f"SOURCE_INDEX_INVALID: path not found '{source.path}'",
                 )
 
             if source.provider == "agency_markdown_repo":
-                source_items, source_import_index = _collect_agency_markdown_items(
+                (
+                    source_items,
+                    source_import_index,
+                ) = _collect_agency_markdown_items(
                     source,
                     source_root,
                     tmp_dir,
@@ -495,7 +506,9 @@ def _aggregate_square_items(
 
                 shutil.rmtree(tmp_dir, ignore_errors=True)
 
-    items.sort(key=lambda item: (item.source_id, item.name.lower(), item.agent_id))
+    items.sort(
+        key=lambda item: (item.source_id, item.name.lower(), item.agent_id),
+    )
     duration_ms = int((time.time() - started) * 1000)
     meta: dict[str, object] = {
         "generated_at": time.time(),
@@ -537,7 +550,10 @@ def _find_imported_agent(
     return None
 
 
-def _persist_import_metadata(workspace_dir: Path, payload: dict[str, str]) -> None:
+def _persist_import_metadata(
+    workspace_dir: Path,
+    payload: dict[str, str],
+) -> None:
     metadata_file = workspace_dir / "imported_from.json"
     metadata_file.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2),
@@ -574,7 +590,9 @@ def _normalize_source_url(url: str) -> str:
     return raw
 
 
-def _normalize_square_source(source: AgentsSquareSourceSpec) -> AgentsSquareSourceSpec:
+def _normalize_square_source(
+    source: AgentsSquareSourceSpec,
+) -> AgentsSquareSourceSpec:
     normalized = source.model_copy(deep=True)
     github_spec = _extract_github_source_spec(normalized.url)
     if github_spec is not None:
@@ -632,7 +650,9 @@ def _validate_square_source_ids(sources: list[AgentsSquareSourceSpec]) -> None:
         seen.add(source.id)
 
 
-def _square_config_to_payload(cfg: AgentsSquareConfig) -> AgentsSquareSourcesPayload:
+def _square_config_to_payload(
+    cfg: AgentsSquareConfig,
+) -> AgentsSquareSourcesPayload:
     return AgentsSquareSourcesPayload(
         version=cfg.version,
         cache={"ttl_sec": cfg.cache.ttl_sec},
@@ -644,7 +664,9 @@ def _square_config_to_payload(cfg: AgentsSquareConfig) -> AgentsSquareSourcesPay
     )
 
 
-def _payload_to_square_config(payload: AgentsSquareSourcesPayload) -> AgentsSquareConfig:
+def _payload_to_square_config(
+    payload: AgentsSquareSourcesPayload,
+) -> AgentsSquareConfig:
     _validate_square_source_ids(payload.sources)
     normalized_sources: list[AgentsSquareSourceSpec] = []
 
@@ -661,7 +683,10 @@ def _payload_to_square_config(payload: AgentsSquareSourcesPayload) -> AgentsSqua
         if not _validate_square_source_path(normalized.path):
             raise HTTPException(
                 status_code=400,
-                detail=f"SOURCE_INDEX_INVALID: invalid path '{normalized.path}'",
+                detail=(
+                    "SOURCE_INDEX_INVALID: invalid path "
+                    f"'{normalized.path}'"
+                ),
             )
         normalized_sources.append(normalized)
 
@@ -753,9 +778,7 @@ async def put_square_sources(
 
     # Pinned sources can be disabled but not removed.
     pinned_ids = {
-        source.id
-        for source in config.agents_square.sources
-        if source.pinned
+        source.id for source in config.agents_square.sources if source.pinned
     }
     next_ids = {source.id for source in square_cfg.sources}
     removed_pinned = pinned_ids - next_ids
@@ -834,13 +857,18 @@ async def get_square_items(refresh: bool = False) -> dict:
 
 
 @router.post("/square/import", response_model=ImportAgentResponse)
+# pylint: disable=too-many-branches,too-many-statements
 async def import_square_agent(
     req: ImportAgentRequest,
 ) -> ImportAgentResponse:
     """Import a source agent into local agents."""
     config = load_config()
     source = next(
-        (s for s in config.agents_square.sources if s.id == req.source_id and s.enabled),
+        (
+            s
+            for s in config.agents_square.sources
+            if s.id == req.source_id and s.enabled
+        ),
         None,
     )
     if source is None:
@@ -857,7 +885,8 @@ async def import_square_agent(
         (
             item
             for item in items
-            if item.source_id == req.source_id and item.agent_id == req.agent_id
+            if item.source_id == req.source_id
+            and item.agent_id == req.agent_id
         ),
         None,
     )
@@ -877,7 +906,9 @@ async def import_square_agent(
             ),
         )
 
-    overwrite = bool(req.overwrite or config.agents_square.install.overwrite_default)
+    overwrite = bool(
+        req.overwrite or config.agents_square.install.overwrite_default,
+    )
     preferred_name = (req.preferred_name or "").strip()
     target_name = preferred_name or selected_item.name
     target_description = selected_item.description
@@ -909,7 +940,10 @@ async def import_square_agent(
                         status_code=409,
                         detail=f"AGENT_NAME_CONFLICT: {target_name}",
                     )
-                existing_import = (local_id, Path(config.agents.profiles[local_id].workspace_dir))
+                existing_import = (
+                    local_id,
+                    Path(config.agents.profiles[local_id].workspace_dir),
+                )
                 break
 
     if existing_import is not None:
@@ -933,7 +967,9 @@ async def import_square_agent(
                 detail="Failed to generate unique agent ID after 10 attempts",
             )
 
-        workspace_dir = Path(f"{WORKING_DIR}/workspaces/{local_agent_id}").expanduser()
+        workspace_dir = Path(
+            f"{WORKING_DIR}/workspaces/{local_agent_id}",
+        ).expanduser()
         workspace_dir.mkdir(parents=True, exist_ok=True)
 
         from ...config.config import (
@@ -966,7 +1002,8 @@ async def import_square_agent(
 
     imported_from_payload = {
         "source_id": req.source_id,
-        "source_url": selected_payload.get("source_url") or selected_item.source_url,
+        "source_url": selected_payload.get("source_url")
+        or selected_item.source_url,
         "license": selected_payload.get("license") or selected_item.license,
         "original_agent_id": req.agent_id,
         "imported_at": str(int(time.time())),

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# pylint: disable=redefined-outer-name,unused-argument
 
 import json
 from pathlib import Path
@@ -18,8 +19,18 @@ from copaw.config.config import (
 )
 
 
+AGENCY_FRONTEND_MD_URL = (
+    "https://github.com/msitarzewski/agency-agents/blob/"
+    "main/engineering/frontend.md"
+)
+AGENCY_REPO_URL = "https://github.com/msitarzewski/agency-agents.git"
+
+
 @pytest.fixture
-def agents_square_api_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+def agents_square_api_client(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> TestClient:
     state = {
         "config": Config(
             agents=AgentsConfig(
@@ -28,7 +39,7 @@ def agents_square_api_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
                     "default": AgentProfileRef(
                         id="default",
                         workspace_dir=str(tmp_path / "workspaces" / "default"),
-                    )
+                    ),
                 },
             ),
             agents_square=AgentsSquareConfig(
@@ -37,7 +48,7 @@ def agents_square_api_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
                         id="agency-agents",
                         name="agency-agents",
                         provider="agency_markdown_repo",
-                        url="https://github.com/msitarzewski/agency-agents.git",
+                        url=AGENCY_REPO_URL,
                         branch="main",
                         path=".",
                         enabled=True,
@@ -45,8 +56,8 @@ def agents_square_api_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
                         trust="official",
                         license_hint="MIT",
                         pinned=True,
-                    )
-                ]
+                    ),
+                ],
             ),
         ),
         "agent_configs": {},
@@ -73,9 +84,21 @@ def agents_square_api_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
 
     monkeypatch.setattr(agents_router_module, "load_config", fake_load_config)
     monkeypatch.setattr(agents_router_module, "save_config", fake_save_config)
-    monkeypatch.setattr(agents_router_module, "save_agent_config", fake_save_agent_config)
-    monkeypatch.setattr(agents_router_module, "load_agent_config", fake_load_agent_config)
-    monkeypatch.setattr(agents_router_module, "_initialize_agent_workspace", fake_init_workspace)
+    monkeypatch.setattr(
+        agents_router_module,
+        "save_agent_config",
+        fake_save_agent_config,
+    )
+    monkeypatch.setattr(
+        agents_router_module,
+        "load_agent_config",
+        fake_load_agent_config,
+    )
+    monkeypatch.setattr(
+        agents_router_module,
+        "_initialize_agent_workspace",
+        fake_init_workspace,
+    )
     monkeypatch.setattr(agents_router_module, "WORKING_DIR", str(tmp_path))
 
     app = FastAPI()
@@ -99,11 +122,11 @@ def test_square_items_endpoint_returns_expected_shape(
                     description="UI expert",
                     version="",
                     license="MIT",
-                    source_url="https://github.com/msitarzewski/agency-agents/blob/main/engineering/frontend.md",
-                    install_url="https://github.com/msitarzewski/agency-agents/blob/main/engineering/frontend.md",
+                    source_url=AGENCY_FRONTEND_MD_URL,
+                    install_url=AGENCY_FRONTEND_MD_URL,
                     tags=["frontend", "react"],
                     extra={"category": "engineering"},
-                )
+                ),
             ],
             [
                 agents_router_module.SourceError(
@@ -111,7 +134,7 @@ def test_square_items_endpoint_returns_expected_shape(
                     code="SOURCE_UNREACHABLE",
                     message="timeout",
                     retryable=True,
-                )
+                ),
             ],
             {
                 "generated_at": 123.0,
@@ -125,7 +148,9 @@ def test_square_items_endpoint_returns_expected_shape(
         ),
     )
 
-    response = agents_square_api_client.get("/agents/square/items?refresh=true")
+    response = agents_square_api_client.get(
+        "/agents/square/items?refresh=true",
+    )
 
     assert response.status_code == 200
     data = response.json()
@@ -152,11 +177,11 @@ def test_square_import_creates_agent_and_writes_import_metadata(
                     description="UI expert",
                     version="",
                     license="MIT",
-                    source_url="https://github.com/msitarzewski/agency-agents/blob/main/engineering/frontend.md",
-                    install_url="https://github.com/msitarzewski/agency-agents/blob/main/engineering/frontend.md",
+                    source_url=AGENCY_FRONTEND_MD_URL,
+                    install_url=AGENCY_FRONTEND_MD_URL,
                     tags=[],
                     extra={},
-                )
+                ),
             ],
             [],
             {
@@ -172,10 +197,10 @@ def test_square_import_creates_agent_and_writes_import_metadata(
                     "name": "Frontend Developer",
                     "description": "UI expert",
                     "content": "# Frontend Developer\n\nDo frontend work.",
-                    "source_url": "https://github.com/msitarzewski/agency-agents/blob/main/engineering/frontend.md",
+                    "source_url": AGENCY_FRONTEND_MD_URL,
                     "license": "MIT",
                     "original_agent_id": "frontend-developer",
-                }
+                },
             },
         ),
     )
@@ -200,7 +225,9 @@ def test_square_import_creates_agent_and_writes_import_metadata(
     assert (workspace_dir / "AGENTS.md").exists()
     assert (workspace_dir / "imported_from.json").exists()
 
-    imported_from = json.loads((workspace_dir / "imported_from.json").read_text(encoding="utf-8"))
+    imported_from = json.loads(
+        (workspace_dir / "imported_from.json").read_text(encoding="utf-8"),
+    )
     assert imported_from["source_id"] == "agency-agents"
     assert imported_from["original_agent_id"] == "frontend-developer"
 
@@ -259,7 +286,7 @@ def test_square_import_conflict_then_overwrite(
                     install_url="https://example.com/src",
                     tags=[],
                     extra={},
-                )
+                ),
             ],
             [],
             {
@@ -278,7 +305,7 @@ def test_square_import_conflict_then_overwrite(
                     "source_url": "https://example.com/src",
                     "license": "MIT",
                     "original_agent_id": "frontend-developer",
-                }
+                },
             },
         ),
     )
@@ -305,8 +332,12 @@ def test_square_import_conflict_then_overwrite(
     assert overwrite.status_code == 200
     data = overwrite.json()
     assert data["id"] == "ag1234"
-    assert (existing_workspace / "AGENTS.md").read_text(encoding="utf-8").startswith(
-        "# Updated"
+    assert (
+        (existing_workspace / "AGENTS.md")
+        .read_text(encoding="utf-8")
+        .startswith(
+            "# Updated",
+        )
     )
 
 
@@ -397,7 +428,7 @@ def test_square_import_returns_422_when_content_missing(
                     install_url="https://example.com/src",
                     tags=[],
                     extra={},
-                )
+                ),
             ],
             [],
             {
@@ -416,7 +447,7 @@ def test_square_import_returns_422_when_content_missing(
                     "source_url": "https://example.com/src",
                     "license": "MIT",
                     "original_agent_id": "empty-agent",
-                }
+                },
             },
         ),
     )
@@ -453,7 +484,7 @@ def test_square_import_uses_preferred_name(
                     install_url="https://example.com/src",
                     tags=[],
                     extra={},
-                )
+                ),
             ],
             [],
             {
@@ -472,7 +503,7 @@ def test_square_import_uses_preferred_name(
                     "source_url": "https://example.com/src",
                     "license": "MIT",
                     "original_agent_id": "frontend-developer",
-                }
+                },
             },
         ),
     )
