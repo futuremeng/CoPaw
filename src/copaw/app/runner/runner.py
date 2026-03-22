@@ -65,19 +65,24 @@ def _iter_exception_chain(exc: BaseException):
 
 def _is_mcp_connection_error(exc: Exception) -> bool:
     """Best-effort check for MCP connectivity/session failures."""
+    mcp_error_markers = (
+        "not connected",
+        "connect() method first",
+        "session terminated",
+        "closed resource",
+        "closedresourceerror",
+    )
     for item in _iter_exception_chain(exc):
         text = f"{item.__class__.__name__}: {item}".lower()
         if "mcp client is not connected to the server" in text:
             return True
-        if "mcp" in text and (
-            "not connected" in text
-            or "connect() method first" in text
-            or "session terminated" in text
-            or "closed resource" in text
-            or "closedresourceerror" in text
+        if "mcp" in text and any(
+            marker in text for marker in mcp_error_markers
         ):
             return True
     return False
+
+
 def _is_approval(text: str) -> bool:
     """Return True when *text* expresses approval intent.
 
