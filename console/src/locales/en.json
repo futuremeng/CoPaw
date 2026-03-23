@@ -35,6 +35,7 @@
     "heartbeat": "Heartbeat",
     "agent": "Agent",
     "workspace": "Workspace",
+    "projects": "Projects",
     "skills": "Skills",
     "tools": "Tools",
     "mcp": "MCP",
@@ -47,6 +48,21 @@
     "tokenUsage": "Token Usage",
     "voiceTranscription": "Voice Transcription",
     "knowledge": "Knowledge"
+  },
+  "projects": {
+    "title": "Projects",
+    "description": "Browse the projects stored under the current agent workspace.",
+    "currentAgent": "Current Agent",
+    "workspacePath": "Workspace Path",
+    "count": "Project Count",
+    "projectId": "Project ID",
+    "updatedTime": "Updated",
+    "dataDir": "Data Directory",
+    "metadataFile": "Metadata File",
+    "descriptionFallback": "No project description yet.",
+    "noAgent": "No agent is currently available.",
+    "noProjects": "No projects in this workspace yet.",
+    "loadFailed": "Failed to load projects for the current agent."
   },
   "voiceTranscription": {
     "title": "Voice Transcription",
@@ -176,7 +192,10 @@
     "squareValidateSuccess": "Source validated",
     "squareValidateFailed": "Source validation failed",
     "squareSourceEnabled": "Enabled",
-    "squareRemoveSource": "Remove source"
+    "squareRemoveSource": "Remove source",
+    "noProjects": "Projects: none",
+    "projectsCount": "Projects: {{count}}",
+    "projectsPreview": "Projects: {{count}} ({{names}})"
   },
   "skills": {
     "title": "Skills",

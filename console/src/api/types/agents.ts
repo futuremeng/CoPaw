@@ -1,10 +1,35 @@
 // Multi-agent management types
 
+export interface AgentProjectSummary {
+  id: string;
+  name: string;
+  description: string;
+  status: string;
+  workspace_dir: string;
+  data_dir: string;
+  metadata_file: string;
+  tags: string[];
+  updated_time: string;
+}
+
+export interface AgentProjectFileInfo {
+  filename: string;
+  path: string;
+  size: number;
+  modified_time: string;
+}
+
+export interface AgentProjectFileContent {
+  content: string;
+}
+
 export interface AgentSummary {
   id: string;
   name: string;
   description: string;
   workspace_dir: string;
+  project_count?: number;
+  projects?: AgentProjectSummary[];
 }
 
 export interface AgentListResponse {

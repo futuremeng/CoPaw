@@ -32,6 +32,7 @@
     "heartbeat": "ハートビート",
     "agent": "エージェント",
     "workspace": "ワークスペース",
+    "projects": "プロジェクト",
     "knowledge": "ナレッジ",
     "skills": "スキル",
     "mcp": "MCP",
@@ -44,6 +45,21 @@
     "tools": "ツール",
     "voiceTranscription": "音声文字起こし",
     "agents": "エージェント管理"
+  },
+  "projects": {
+    "title": "プロジェクト",
+    "description": "現在のエージェントのワークスペース配下にあるプロジェクトを表示します。",
+    "currentAgent": "現在のエージェント",
+    "workspacePath": "ワークスペースのパス",
+    "count": "プロジェクト数",
+    "projectId": "プロジェクト ID",
+    "updatedTime": "更新時刻",
+    "dataDir": "データディレクトリ",
+    "metadataFile": "メタデータファイル",
+    "descriptionFallback": "このプロジェクトにはまだ説明がありません。",
+    "noAgent": "利用可能なエージェントがありません。",
+    "noProjects": "このワークスペースにはまだプロジェクトがありません。",
+    "loadFailed": "現在のエージェントのプロジェクト読み込みに失敗しました。"
   },
   "agent": {
     "management": "エージェント管理",
@@ -110,7 +126,10 @@
     "squareValidateSuccess": "ソース検証に成功しました",
     "squareValidateFailed": "ソース検証に失敗しました",
     "squareSourceEnabled": "有効",
-    "squareRemoveSource": "ソースを削除"
+    "squareRemoveSource": "ソースを削除",
+    "noProjects": "プロジェクト: なし",
+    "projectsCount": "プロジェクト: {{count}} 件",
+    "projectsPreview": "プロジェクト: {{count}} 件（{{names}}）"
   },
   "workspace": {
     "title": "ワークスペース",

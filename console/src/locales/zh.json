@@ -35,6 +35,7 @@
     "heartbeat": "心跳",
     "agent": "智能体",
     "workspace": "工作区",
+    "projects": "项目",
     "skills": "技能",
     "tools": "工具",
     "mcp": "MCP",
@@ -47,6 +48,21 @@
     "tokenUsage": "Token 消耗",
     "voiceTranscription": "语音转写",
     "knowledge": "知识库"
+  },
+  "projects": {
+    "title": "项目",
+    "description": "查看当前智能体工作区下的项目目录。",
+    "currentAgent": "当前智能体",
+    "workspacePath": "工作区路径",
+    "count": "项目数量",
+    "projectId": "项目 ID",
+    "updatedTime": "更新时间",
+    "dataDir": "数据目录",
+    "metadataFile": "元数据文件",
+    "descriptionFallback": "这个项目还没有描述。",
+    "noAgent": "当前没有可用的智能体。",
+    "noProjects": "当前工作区还没有项目。",
+    "loadFailed": "加载当前智能体项目失败。"
   },
   "workspace": {
     "title": "工作区",
@@ -137,7 +153,10 @@
     "squareValidateSuccess": "来源校验成功",
     "squareValidateFailed": "来源校验失败",
     "squareSourceEnabled": "启用",
-    "squareRemoveSource": "删除来源"
+    "squareRemoveSource": "删除来源",
+    "noProjects": "项目：无",
+    "projectsCount": "项目：{{count}} 个",
+    "projectsPreview": "项目：{{count}} 个（{{names}}）"
   },
   "skills": {
     "title": "技能",

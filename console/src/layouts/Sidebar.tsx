@@ -25,6 +25,7 @@ import {
   Database,
   Sparkles,
   Briefcase,
+  FolderOpen,
   Cpu,
   Box,
   Globe,
@@ -261,6 +262,11 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
           key: "workspace",
           label: t("nav.workspace"),
           icon: <Briefcase size={16} />,
+        },
+        {
+          key: "projects",
+          label: t("nav.projects"),
+          icon: <FolderOpen size={16} />,
         },
         {
           key: "knowledge",

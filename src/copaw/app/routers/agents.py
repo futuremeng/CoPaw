@@ -15,6 +15,7 @@ import threading
 import time
 import unicodedata
 from pathlib import Path
+from datetime import datetime
 from typing import Any, cast
 from urllib.parse import unquote, urlparse
 from fastapi import APIRouter, Body, HTTPException, Request
@@ -49,6 +50,22 @@ class AgentSummary(BaseModel):
     name: str
     description: str
     workspace_dir: str
+    project_count: int = 0
+    projects: list["ProjectSummary"] = Field(default_factory=list)
+
+
+class ProjectSummary(BaseModel):
+    """Project summary information under an agent workspace."""
+
+    id: str
+    name: str
+    description: str = ""
+    status: str = "active"
+    workspace_dir: str
+    data_dir: str
+    metadata_file: str
+    tags: list[str] = Field(default_factory=list)
+    updated_time: str
 
 
 class AgentListResponse(BaseModel):
@@ -78,6 +95,21 @@ class MdFileInfo(BaseModel):
 
 class MdFileContent(BaseModel):
     """Markdown file content."""
+
+    content: str
+
+
+class ProjectFileInfo(BaseModel):
+    """Project file metadata."""
+
+    filename: str
+    path: str
+    size: int
+    modified_time: str
+
+
+class ProjectFileContent(BaseModel):
+    """Project file content."""
 
     content: str
 
@@ -172,6 +204,8 @@ _SQUARE_SKIP_FILES = {
 _AGENTS_SQUARE_DEFAULT_DIR = Path(__file__).resolve().parents[2] / "agents_square"
 _AGENTS_SQUARE_CONFIG_PATH = WORKING_DIR / "agents_square" / "config.json"
 _AGENTS_SQUARE_DEFAULT_PATH = _AGENTS_SQUARE_DEFAULT_DIR / "default.json"
+_PROJECTS_DIRNAME = "projects"
+_PROJECT_METADATA_FILENAMES = ("PROJECT.md", "project.md")
 
 
 def _ensure_square_config_initialized() -> None:
@@ -359,6 +393,190 @@ def _parse_markdown_frontmatter(path: Path) -> tuple[dict, str] | None:
     if not isinstance(data, dict):
         return None
     return data, body
+
+
+def _format_iso_time(ts: float) -> str:
+    return datetime.fromtimestamp(ts).isoformat(timespec="seconds")
+
+
+def _safe_project_data_subdir(raw_value: str) -> str:
+    candidate = (raw_value or "").strip() or "data"
+    path = Path(candidate)
+    if path.is_absolute() or ".." in path.parts:
+        return "data"
+    normalized = path.as_posix().strip("/")
+    return normalized or "data"
+
+
+def _parse_project_tags(raw_tags: Any) -> list[str]:
+    if isinstance(raw_tags, list):
+        return [str(item).strip() for item in raw_tags if str(item).strip()]
+    if isinstance(raw_tags, str):
+        return [item.strip() for item in raw_tags.split(",") if item.strip()]
+    return []
+
+
+def _first_nonempty_line(text: str) -> str:
+    for line in text.splitlines():
+        stripped = line.strip().lstrip("#").strip()
+        if stripped:
+            return stripped
+    return ""
+
+
+def _load_project_summary(project_dir: Path) -> ProjectSummary | None:
+    metadata_file = next(
+        (project_dir / name for name in _PROJECT_METADATA_FILENAMES if (project_dir / name).is_file()),
+        None,
+    )
+    if metadata_file is None:
+        return None
+
+    parsed = _parse_markdown_frontmatter(metadata_file)
+    metadata: dict[str, Any] = {}
+    body = ""
+    if parsed is not None:
+        metadata, body = parsed
+    else:
+        body = metadata_file.read_text(encoding="utf-8", errors="ignore")
+
+    data_subdir = _safe_project_data_subdir(
+        str(metadata.get("data_dir") or metadata.get("dataDir") or "data"),
+    )
+    project_id = str(metadata.get("id") or project_dir.name).strip() or project_dir.name
+    project_name = str(metadata.get("name") or project_dir.name).strip() or project_dir.name
+    description = str(metadata.get("description") or _first_nonempty_line(body)).strip()
+    status = str(metadata.get("status") or "active").strip() or "active"
+    tags = _parse_project_tags(metadata.get("tags"))
+    updated_time = _format_iso_time(metadata_file.stat().st_mtime)
+
+    return ProjectSummary(
+        id=project_id,
+        name=project_name,
+        description=description,
+        status=status,
+        workspace_dir=str(project_dir),
+        data_dir=str(project_dir / data_subdir),
+        metadata_file=str(metadata_file),
+        tags=tags,
+        updated_time=updated_time,
+    )
+
+
+def _list_agent_projects(workspace_dir: Path) -> list[ProjectSummary]:
+    projects_dir = workspace_dir / _PROJECTS_DIRNAME
+    if not projects_dir.exists() or not projects_dir.is_dir():
+        return []
+
+    projects: list[ProjectSummary] = []
+    for project_dir in sorted(projects_dir.iterdir(), key=lambda item: item.name.lower()):
+        if not project_dir.is_dir():
+            continue
+        summary = _load_project_summary(project_dir)
+        if summary is not None:
+            projects.append(summary)
+    return projects
+
+
+def _ensure_projects_layout(workspace_dir: Path) -> None:
+    projects_dir = workspace_dir / _PROJECTS_DIRNAME
+    projects_dir.mkdir(exist_ok=True)
+    readme_path = projects_dir / "README.md"
+    if readme_path.exists():
+        return
+
+    readme_path.write_text(
+        """# Projects
+
+Store one project per subdirectory, for example:
+
+- project-abcde123/
+  - PROJECT.md
+  - data/
+
+The project metadata should be declared in PROJECT.md frontmatter:
+
+---
+id: project-abcde123
+name: Example project
+description: Short summary
+status: active
+data_dir: data
+tags: [demo, draft]
+---
+
+Project details go below.
+""",
+        encoding="utf-8",
+    )
+
+
+def _resolve_project_dir(workspace_dir: Path, project_id: str) -> Path:
+    projects_dir = workspace_dir / _PROJECTS_DIRNAME
+    if not projects_dir.exists() or not projects_dir.is_dir():
+        raise HTTPException(status_code=404, detail="Projects directory not found")
+
+    for project_dir in sorted(projects_dir.iterdir(), key=lambda item: item.name.lower()):
+        if not project_dir.is_dir():
+            continue
+        summary = _load_project_summary(project_dir)
+        if summary is None:
+            continue
+        if summary.id == project_id or project_dir.name == project_id:
+            return project_dir
+
+    raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
+
+
+def _is_safe_relative_path(rel_path: str) -> bool:
+    if not rel_path:
+        return False
+    candidate = Path(rel_path)
+    if candidate.is_absolute() or ".." in candidate.parts:
+        return False
+    return True
+
+
+def _list_project_files(project_dir: Path) -> list[ProjectFileInfo]:
+    project_root = project_dir.resolve()
+    files: list[ProjectFileInfo] = []
+
+    for path in sorted(project_root.rglob("*"), key=lambda item: item.as_posix().lower()):
+        if not path.is_file():
+            continue
+
+        rel = path.resolve().relative_to(project_root).as_posix()
+        if rel.startswith(".git/") or "/.git/" in rel:
+            continue
+
+        stat = path.stat()
+        files.append(
+            ProjectFileInfo(
+                filename=path.name,
+                path=rel,
+                size=stat.st_size,
+                modified_time=_format_iso_time(stat.st_mtime),
+            ),
+        )
+
+    return files
+
+
+def _read_project_text_file(project_dir: Path, rel_path: str) -> str:
+    if not _is_safe_relative_path(rel_path):
+        raise HTTPException(status_code=400, detail="Invalid file path")
+
+    target = (project_dir / rel_path).resolve()
+    project_root = project_dir.resolve()
+    if not str(target).startswith(str(project_root)):
+        raise HTTPException(status_code=400, detail="Invalid file path")
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail=f"File '{rel_path}' not found")
+
+    raw = target.read_bytes()
+    if b"\x00" in raw[:4096]:
+        raise HTTPException(status_code=400, detail="Binary file preview is not supported")
+    return raw.decode("utf-8", errors="replace")
 
 
 def _is_square_candidate_markdown(path: Path) -> bool:
@@ -808,6 +1026,10 @@ async def list_agents() -> AgentListResponse:
 
     agents = []
     for agent_id, agent_ref in config.agents.profiles.items():
+        workspace_dir = Path(agent_ref.workspace_dir)
+        _ensure_projects_layout(workspace_dir)
+        projects = _list_agent_projects(workspace_dir)
+
         # Load agent config to get name and description
         try:
             agent_config = load_agent_config(agent_id)
@@ -817,6 +1039,8 @@ async def list_agents() -> AgentListResponse:
                     name=agent_config.name,
                     description=agent_config.description,
                     workspace_dir=agent_ref.workspace_dir,
+                    project_count=len(projects),
+                    projects=projects,
                 ),
             )
         except Exception:  # noqa: E722
@@ -827,6 +1051,8 @@ async def list_agents() -> AgentListResponse:
                     name=agent_id.title(),
                     description="",
                     workspace_dir=agent_ref.workspace_dir,
+                    project_count=len(projects),
+                    projects=projects,
                 ),
             )
 
@@ -1414,6 +1640,64 @@ async def list_agent_memory(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+@router.get(
+    "/{agentId}/projects/{projectId}/files",
+    response_model=list[ProjectFileInfo],
+    summary="List project files",
+    description="List files under a project directory",
+)
+async def list_agent_project_files(
+    request: Request,
+    agentId: str = PathParam(...),
+    projectId: str = PathParam(...),
+) -> list[ProjectFileInfo]:
+    """List files under a project."""
+    manager = _get_multi_agent_manager(request)
+
+    try:
+        workspace = await manager.get_agent(agentId)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    try:
+        project_dir = _resolve_project_dir(Path(workspace.workspace_dir), projectId)
+        return _list_project_files(project_dir)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get(
+    "/{agentId}/projects/{projectId}/files/{filePath:path}",
+    response_model=ProjectFileContent,
+    summary="Read project file",
+    description="Read text content from a project file",
+)
+async def read_agent_project_file(
+    request: Request,
+    agentId: str = PathParam(...),
+    projectId: str = PathParam(...),
+    filePath: str = PathParam(...),
+) -> ProjectFileContent:
+    """Read text content from a project file."""
+    manager = _get_multi_agent_manager(request)
+
+    try:
+        workspace = await manager.get_agent(agentId)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    try:
+        project_dir = _resolve_project_dir(Path(workspace.workspace_dir), projectId)
+        content = _read_project_text_file(project_dir, filePath)
+        return ProjectFileContent(content=content)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
 def _initialize_agent_workspace(  # pylint: disable=too-many-branches
     workspace_dir: Path,
     agent_config: AgentProfileConfig,  # pylint: disable=unused-argument
@@ -1432,6 +1716,7 @@ def _initialize_agent_workspace(  # pylint: disable=too-many-branches
     (workspace_dir / "memory").mkdir(exist_ok=True)
     (workspace_dir / "active_skills").mkdir(exist_ok=True)
     (workspace_dir / "customized_skills").mkdir(exist_ok=True)
+    _ensure_projects_layout(workspace_dir)
 
     # Get language from global config
     config = load_global_config()
