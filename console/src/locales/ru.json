@@ -32,6 +32,7 @@
     "heartbeat": "Пульс",
     "agent": "Агент",
     "workspace": "Рабочее пространство",
+    "projects": "Проекты",
     "knowledge": "База знаний",
     "skills": "Навыки",
     "tools": "Инструменты",
@@ -44,6 +45,21 @@
     "tokenUsage": "Использование токенов",
     "voiceTranscription": "Транскрипция голоса",
     "agents": "Управление агентами"
+  },
+  "projects": {
+    "title": "Проекты",
+    "description": "Показывает проекты в рабочем пространстве текущего агента.",
+    "currentAgent": "Текущий агент",
+    "workspacePath": "Путь рабочего пространства",
+    "count": "Количество проектов",
+    "projectId": "ID проекта",
+    "updatedTime": "Обновлено",
+    "dataDir": "Каталог данных",
+    "metadataFile": "Файл метаданных",
+    "descriptionFallback": "У этого проекта пока нет описания.",
+    "noAgent": "Сейчас нет доступного агента.",
+    "noProjects": "В этом рабочем пространстве пока нет проектов.",
+    "loadFailed": "Не удалось загрузить проекты текущего агента."
   },
   "agent": {
     "management": "Управление агентами",
@@ -110,7 +126,10 @@
     "squareValidateSuccess": "Источник успешно проверен",
     "squareValidateFailed": "Проверка источника не удалась",
     "squareSourceEnabled": "Включено",
-    "squareRemoveSource": "Удалить источник"
+    "squareRemoveSource": "Удалить источник",
+    "noProjects": "Проекты: нет",
+    "projectsCount": "Проекты: {{count}}",
+    "projectsPreview": "Проекты: {{count}} ({{names}})"
   },
   "workspace": {
     "title": "Рабочее пространство",

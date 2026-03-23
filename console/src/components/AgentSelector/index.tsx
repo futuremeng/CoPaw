@@ -36,6 +36,24 @@ export default function AgentSelector() {
 
   const agentCount = agents.length;
 
+  const renderProjectSummary = (agent: {
+    project_count?: number;
+    projects?: Array<{ name: string }>;
+  }) => {
+    const count = agent.project_count ?? agent.projects?.length ?? 0;
+    const names = (agent.projects ?? [])
+      .slice(0, 3)
+      .map((item) => item.name)
+      .join(", ");
+    if (count <= 0) {
+      return t("agent.noProjects");
+    }
+    if (!names) {
+      return t("agent.projectsCount", { count });
+    }
+    return t("agent.projectsPreview", { count, names });
+  };
+
   return (
     <div className={styles.agentSelectorWrapper}>
       <div className={styles.agentSelectorLabel}>
@@ -88,6 +106,9 @@ export default function AgentSelector() {
                       {agent.description}
                     </div>
                   )}
+                  <div className={styles.agentProjectSummary}>
+                    {renderProjectSummary(agent)}
+                  </div>
                 </div>
               </div>
               <div className={styles.agentOptionId}>ID: {agent.id}</div>

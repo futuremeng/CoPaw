@@ -10,6 +10,8 @@ import type {
   AgentSquareItemsResponse,
   ImportAgentSquareRequest,
   ImportAgentSquareResponse,
+  AgentProjectFileInfo,
+  AgentProjectFileContent,
 } from "../types/agents";
 import type { MdFileInfo, MdFileContent } from "../types/workspace";
 
@@ -63,6 +65,20 @@ export const agentsApi = {
   // Agent memory files
   listAgentMemory: (agentId: string) =>
     request<MdFileInfo[]>(`/agents/${agentId}/memory`),
+
+  // Agent project files
+  listProjectFiles: (agentId: string, projectId: string) =>
+    request<AgentProjectFileInfo[]>(
+      `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/files`,
+    ),
+
+  readProjectFile: (agentId: string, projectId: string, filePath: string) =>
+    request<AgentProjectFileContent>(
+      `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/files/${filePath
+        .split("/")
+        .map((part) => encodeURIComponent(part))
+        .join("/")}`,
+    ),
 
   // Agents Square
   getSquareSources: () =>
