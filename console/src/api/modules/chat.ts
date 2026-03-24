@@ -116,6 +116,12 @@ export const chatApi = {
     request<void>(`/console/chat/stop?chat_id=${encodeURIComponent(chatId)}`, {
       method: "POST",
     }),
+
+  // Backward-compatible alias used by existing chat page code.
+  stopConsoleChat: (chatId: string) =>
+    request<void>(`/console/chat/stop?chat_id=${encodeURIComponent(chatId)}`, {
+      method: "POST",
+    }),
 };
 
 export const sessionApi = {

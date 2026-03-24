@@ -411,6 +411,31 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
     return s?.realId ?? null;
   }
 
+  hasLiveMessagesForSession(sessionId: string | undefined): boolean {
+    if (!sessionId) {
+      return false;
+    }
+    const targetId =
+      this.getRealIdForSession(sessionId) ?? sessionId;
+    const session = this.sessionList.find((s) => {
+      const ext = s as ExtendedSession;
+      return s.id === sessionId || ext.realId === targetId;
+    }) as ExtendedSession | undefined;
+
+    if (!session || !Array.isArray(session.messages) || session.messages.length === 0) {
+      return false;
+    }
+
+    const lastMessage = session.messages[session.messages.length - 1] as
+      | (IAgentScopeRuntimeWebUIMessage & { msgStatus?: string })
+      | undefined;
+    if (!lastMessage) {
+      return false;
+    }
+
+    return lastMessage.msgStatus === "generating";
+  }
+
   async getSessionList() {
     // Deduplicate: reuse the in-flight request if one is already running so
     // concurrent calls don't overwrite sessionList and lose realId mappings.
