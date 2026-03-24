@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Card, Empty, Select, Spin, Tag, Typography, message } from "antd";
+import { Button, Card, Empty, Modal, Select, Spin, Tag, Typography, message } from "antd";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { agentsApi } from "../../../api/modules/agents";
@@ -32,12 +32,19 @@ type RunItem = ProjectPipelineRunSummary & {
   projectName: string;
 };
 
+type PipelineManagementData = {
+  templates: TemplateItem[];
+  runs: RunItem[];
+};
+
 type PipelineGroup = {
+  key: string;
   id: string;
   name: string;
   description: string;
   versions: ProjectPipelineTemplateInfo[];
   projects: { id: string; name: string }[];
+  source: "independent" | "project";
 };
 
 type StepDiffItem = {
@@ -47,6 +54,82 @@ type StepDiffItem = {
   compare?: { name: string; kind: string; description: string };
   changedFields: string[];
 };
+
+type EditChatTarget = {
+  pipelineId: string;
+  pipelineName: string;
+  version: string;
+  isEmptyNodes: boolean;
+};
+
+const INDEPENDENT_PIPELINE_SCOPE_ID = "__independent__";
+
+function getTemplateSourceKind(item: TemplateItem): "independent" | "project" {
+  return item.projectId === INDEPENDENT_PIPELINE_SCOPE_ID ? "independent" : "project";
+}
+
+function buildPipelineGroupKey(
+  templateId: string,
+  source: "independent" | "project",
+): string {
+  return `${templateId}::${source}`;
+}
+
+async function loadPipelineManagementData(
+  agentId: string,
+  projectList: AgentProjectSummary[],
+  independentScopeLabel: string,
+): Promise<PipelineManagementData> {
+  const [perProject, agentTemplates] = await Promise.all([
+    Promise.all(
+      projectList.map(async (project) => {
+        const [templatesResult, runsResult] = await Promise.allSettled([
+          agentsApi.listProjectPipelineTemplates(agentId, project.id),
+          agentsApi.listProjectPipelineRuns(agentId, project.id),
+        ]);
+
+        return {
+          project,
+          templates:
+            templatesResult.status === "fulfilled"
+              ? templatesResult.value
+              : [],
+          runs: runsResult.status === "fulfilled" ? runsResult.value : [],
+        };
+      }),
+    ),
+    agentsApi.listAgentPipelineTemplates(agentId).catch(() => []),
+  ]);
+
+  const templates: TemplateItem[] = [
+    ...agentTemplates.map((tpl) => ({
+      ...tpl,
+      projectId: INDEPENDENT_PIPELINE_SCOPE_ID,
+      projectName: independentScopeLabel,
+    })),
+    ...perProject.flatMap((item) =>
+      item.templates.map((tpl) => ({
+        ...tpl,
+        projectId: item.project.id,
+        projectName: item.project.name,
+      })),
+    ),
+  ];
+
+  const runs: RunItem[] = perProject
+    .flatMap((item) =>
+      item.runs.map((run) => ({
+        ...run,
+        projectId: item.project.id,
+        projectName: item.project.name,
+      })),
+    )
+    .sort((a, b) =>
+      (b.updated_at || b.created_at).localeCompare(a.updated_at || a.created_at),
+    );
+
+  return { templates, runs };
+}
 
 function statusTagColor(status: string): string {
   switch (status) {
@@ -195,13 +278,18 @@ export default function PipelinesPage() {
   const [error, setError] = useState("");
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
   const [runs, setRuns] = useState<RunItem[]>([]);
-  const [selectedPipelineId, setSelectedPipelineId] = useState("");
+  const [selectedPipelineKey, setSelectedPipelineKey] = useState("");
+  const [sourceFilter, setSourceFilter] = useState<"all" | "independent" | "project">("all");
   const [selectedCurrentVersion, setSelectedCurrentVersion] = useState("");
   const [selectedCompareVersion, setSelectedCompareVersion] = useState("");
   const [editMode, setEditMode] = useState(false);
   const [designChatStarting, setDesignChatStarting] = useState(false);
+  const [draftSaving, setDraftSaving] = useState(false);
   const [designChatSessionId, setDesignChatSessionId] = useState("");
   const [editTargetKey, setEditTargetKey] = useState("");
+  const [editGuidePlaceholder, setEditGuidePlaceholder] = useState("");
+  const [editWelcomeMode, setEditWelcomeMode] = useState<"default" | "init">("default");
+  const [draftPipelineKeys, setDraftPipelineKeys] = useState<string[]>([]);
 
   const currentAgent = useMemo(
     () => getCurrentAgent(agents, selectedAgent),
@@ -212,6 +300,8 @@ export default function PipelinesPage() {
     () => currentAgent?.projects ?? [],
     [currentAgent?.projects],
   );
+
+  const independentScopeLabel = t("pipelines.independentScope", "独立流程");
 
   useEffect(() => {
     let mounted = true;
@@ -232,55 +322,16 @@ export default function PipelinesPage() {
 
         const agent = getCurrentAgent(availableAgents, selectedAgent);
         const projectList = agent?.projects ?? [];
-        if (projectList.length === 0) {
-          if (!mounted) return;
-          setTemplates([]);
-          setRuns([]);
-          return;
-        }
-
-        const perProject = await Promise.all(
-          projectList.map(async (project) => {
-            const [templatesResult, runsResult] = await Promise.allSettled([
-              agentsApi.listProjectPipelineTemplates(selectedAgent, project.id),
-              agentsApi.listProjectPipelineRuns(selectedAgent, project.id),
-            ]);
-
-            return {
-              project,
-              templates:
-                templatesResult.status === "fulfilled"
-                  ? templatesResult.value
-                  : [],
-              runs: runsResult.status === "fulfilled" ? runsResult.value : [],
-            };
-          }),
+        const data = await loadPipelineManagementData(
+          selectedAgent,
+          projectList,
+          independentScopeLabel,
         );
 
         if (!mounted) return;
 
-        const mergedTemplates: TemplateItem[] = perProject.flatMap((item) =>
-          item.templates.map((tpl) => ({
-            ...tpl,
-            projectId: item.project.id,
-            projectName: item.project.name,
-          })),
-        );
-
-        const mergedRuns: RunItem[] = perProject
-          .flatMap((item) =>
-            item.runs.map((run) => ({
-              ...run,
-              projectId: item.project.id,
-              projectName: item.project.name,
-            })),
-          )
-          .sort((a, b) =>
-            (b.updated_at || b.created_at).localeCompare(a.updated_at || a.created_at),
-          );
-
-        setTemplates(mergedTemplates);
-        setRuns(mergedRuns);
+        setTemplates(data.templates);
+        setRuns(data.runs);
       } catch (err) {
         console.error("failed to load pipeline management data", err);
         if (mounted) {
@@ -301,19 +352,27 @@ export default function PipelinesPage() {
     return () => {
       mounted = false;
     };
-  }, [agents, selectedAgent, setAgents, t]);
+  }, [agents, independentScopeLabel, selectedAgent, setAgents, t]);
 
   const pipelineGroups = useMemo<PipelineGroup[]>(() => {
+    const filteredTemplates = templates.filter((item) => {
+      const isIndependent = item.projectId === INDEPENDENT_PIPELINE_SCOPE_ID;
+      if (sourceFilter === "independent") return isIndependent;
+      if (sourceFilter === "project") return !isIndependent;
+      return true;
+    });
+
     const map = new Map<string, TemplateItem[]>();
-    templates.forEach((item) => {
-      if (!map.has(item.id)) {
-        map.set(item.id, []);
+    filteredTemplates.forEach((item) => {
+      const groupKey = buildPipelineGroupKey(item.id, getTemplateSourceKind(item));
+      if (!map.has(groupKey)) {
+        map.set(groupKey, []);
       }
-      map.get(item.id)?.push(item);
+      map.get(groupKey)?.push(item);
     });
 
     return Array.from(map.entries())
-      .map(([id, items]) => {
+      .map(([groupKey, items]) => {
         const versionsByKey = new Map<string, ProjectPipelineTemplateInfo>();
         const projectMap = new Map<string, { id: string; name: string }>();
 
@@ -340,20 +399,28 @@ export default function PipelinesPage() {
           compareSemverDesc(a.version, b.version),
         );
 
+        const source: PipelineGroup["source"] = getTemplateSourceKind(items[0]);
+
         return {
-          id,
+          key: groupKey,
+          id: items[0].id,
           name: items[0].name,
           description: items[0].description,
           versions,
           projects: Array.from(projectMap.values()),
+          source,
         };
       })
-      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
-  }, [templates]);
+      .sort((a, b) => {
+        const nameCmp = a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+        if (nameCmp !== 0) return nameCmp;
+        return a.source.localeCompare(b.source);
+      });
+  }, [sourceFilter, templates]);
 
   const selectedPipeline = useMemo(
-    () => pipelineGroups.find((item) => item.id === selectedPipelineId),
-    [pipelineGroups, selectedPipelineId],
+    () => pipelineGroups.find((item) => item.key === selectedPipelineKey),
+    [pipelineGroups, selectedPipelineKey],
   );
 
   const currentTemplate = useMemo(() => {
@@ -374,6 +441,91 @@ export default function PipelinesPage() {
     );
   }, [selectedCompareVersion, selectedPipeline]);
 
+  const selectedTemplateItem = useMemo(() => {
+    if (!selectedPipeline || !selectedCurrentVersion) return null;
+    return (
+      templates.find(
+        (item) =>
+          item.id === selectedPipeline.id &&
+          getTemplateSourceKind(item) === selectedPipeline.source &&
+          normalizeVersion(item.version) === selectedCurrentVersion,
+      ) || null
+    );
+  }, [selectedCurrentVersion, selectedPipeline, templates]);
+
+  const selectedIsDraft = useMemo(() => {
+    if (!selectedPipeline) return false;
+    return draftPipelineKeys.includes(selectedPipeline.key);
+  }, [draftPipelineKeys, selectedPipeline]);
+
+  const hasUnsavedDrafts = draftPipelineKeys.length > 0;
+
+  useEffect(() => {
+    if (!hasUnsavedDrafts) return;
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = t(
+        "pipelines.unsavedLeaveWarning",
+        "当前有未保存的流程草稿，离开后将丢失。",
+      );
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [hasUnsavedDrafts, t]);
+
+  const closeEditMode = () => {
+    setEditMode(false);
+    setEditGuidePlaceholder("");
+    setEditWelcomeMode("default");
+  };
+
+  const requestCloseEditMode = () => {
+    if (!selectedIsDraft) {
+      closeEditMode();
+      return;
+    }
+
+    Modal.confirm({
+      title: t("pipelines.unsavedDraftTitle", "存在未保存草稿"),
+      content: t(
+        "pipelines.unsavedExitConfirm",
+        "当前流程草稿尚未保存，退出编辑后改动可能丢失。是否继续？",
+      ),
+      okText: t("common.confirm", "确认"),
+      cancelText: t("common.cancel", "取消"),
+      onOk: () => {
+        closeEditMode();
+      },
+    });
+  };
+
+  const requestSelectPipeline = (nextPipelineKey: string) => {
+    if (!(editMode && selectedIsDraft && selectedPipelineKey !== nextPipelineKey)) {
+      setSelectedPipelineKey(nextPipelineKey);
+      setSelectedCompareVersion("");
+      return;
+    }
+
+    Modal.confirm({
+      title: t("pipelines.unsavedDraftTitle", "存在未保存草稿"),
+      content: t(
+        "pipelines.unsavedSwitchConfirm",
+        "当前流程草稿尚未保存，切换流程后改动可能丢失。是否继续切换？",
+      ),
+      okText: t("common.confirm", "确认"),
+      cancelText: t("common.cancel", "取消"),
+      onOk: () => {
+        closeEditMode();
+        setSelectedPipelineKey(nextPipelineKey);
+        setSelectedCompareVersion("");
+      },
+    });
+  };
+
   const newVersionDiffItems = useMemo(
     () =>
       compareTemplate && currentTemplate
@@ -388,24 +540,26 @@ export default function PipelinesPage() {
   );
 
   const visibleRuns = useMemo(() => {
-    const base = selectedPipelineId
-      ? runs.filter((run) => run.template_id === selectedPipelineId)
+    const base = selectedPipeline
+      ? selectedPipeline.source === "project"
+        ? runs.filter((run) => run.template_id === selectedPipeline.id)
+        : []
       : runs;
     return base.slice(0, 30);
-  }, [runs, selectedPipelineId]);
+  }, [runs, selectedPipeline]);
 
   useEffect(() => {
     if (pipelineGroups.length === 0) {
-      setSelectedPipelineId("");
+      setSelectedPipelineKey("");
       setSelectedCurrentVersion("");
       setSelectedCompareVersion("");
       return;
     }
 
-    if (!pipelineGroups.some((item) => item.id === selectedPipelineId)) {
-      setSelectedPipelineId(pipelineGroups[0].id);
+    if (!pipelineGroups.some((item) => item.key === selectedPipelineKey)) {
+      setSelectedPipelineKey(pipelineGroups[0].key);
     }
-  }, [pipelineGroups, selectedPipelineId]);
+  }, [pipelineGroups, selectedPipelineKey]);
 
   useEffect(() => {
     if (!selectedPipeline) {
@@ -439,15 +593,30 @@ export default function PipelinesPage() {
     }
   }, [selectedCompareVersion, selectedCurrentVersion]);
 
-  const handleOpenDesignChat = async (withEditMode = false) => {
+  const handleOpenDesignChat = async (withEditMode = false, target?: EditChatTarget) => {
     setDesignChatStarting(true);
     try {
       const source = "pipelines_page" as const;
-      const targetPipelineName = selectedPipeline?.name || selectedPipeline?.id || "unknown";
-      const targetVersion = currentTemplate?.version || "latest";
+      const targetPipelineName =
+        target?.pipelineName || selectedPipeline?.name || selectedPipeline?.id || "unknown";
+      const targetVersion = target?.version || currentTemplate?.version || "latest";
+      const isEmptyNodes =
+        target?.isEmptyNodes ?? ((currentTemplate?.steps?.length || 0) === 0);
       const seedTask = withEditMode
         ? `编辑已有流程: ${targetPipelineName} (${targetVersion})\n请先分析当前节点并给出可执行的改造建议。`
         : undefined;
+      const editGuide = t(
+        isEmptyNodes
+          ? "pipelines.editInputPlaceholderInit"
+          : "pipelines.editInputPlaceholder",
+        isEmptyNodes
+          ? "这是一个新流程，请先定义目标、关键步骤和完成标准，我会帮你生成首版节点草案。"
+          : "围绕当前流程 {{name}} ({{version}}) 描述你的改造目标，例如：新增校验节点、调整重试策略、优化输出结构。",
+        {
+          name: targetPipelineName,
+          version: targetVersion,
+        },
+      );
 
       const created = await chatApi.createChat({
         name: t("pipelines.designSessionName", "Pipeline Design"),
@@ -456,6 +625,15 @@ export default function PipelinesPage() {
         channel: "console",
         meta: {},
       });
+
+      setDesignChatSessionId(created.id);
+      if (withEditMode) {
+        setEditMode(true);
+        setEditTargetKey(`${target?.pipelineId || selectedPipeline?.id || "unknown"}@${normalizeVersion(targetVersion)}`);
+        setEditWelcomeMode(isEmptyNodes ? "init" : "default");
+        setEditGuidePlaceholder(editGuide);
+        return;
+      }
 
       const bootstrapPrompt = buildPipelineDesignBootstrapPrompt({
         source,
@@ -484,14 +662,6 @@ export default function PipelinesPage() {
         to,
         reason: "start-pipeline-design-chat-inline",
       });
-
-      setDesignChatSessionId(created.id);
-      if (withEditMode) {
-        setEditMode(true);
-        setEditTargetKey(
-          `${selectedPipeline?.id || "unknown"}@${normalizeVersion(currentTemplate?.version || "")}`,
-        );
-      }
     } catch (error) {
       console.error("failed to start pipeline design chat", error);
       message.error(
@@ -505,6 +675,103 @@ export default function PipelinesPage() {
     }
   };
 
+  const handleCreatePipelineAndEnterEdit = async () => {
+    if (!selectedAgent) {
+      message.warning(t("pipelines.noAgent", "No active agent selected."));
+      return;
+    }
+
+    const now = Date.now();
+    const draftId = `pipeline-${now}`;
+    const draftVersion = "0.1.0";
+    const draftTemplate: TemplateItem = {
+      id: draftId,
+      name: t("pipelines.newPipelineName", "新流程"),
+      version: draftVersion,
+      description: t("pipelines.newPipelineDescription", "待补充流程说明"),
+      steps: [],
+      projectId: INDEPENDENT_PIPELINE_SCOPE_ID,
+      projectName: t("pipelines.independentScope", "独立流程"),
+    };
+
+    const draftGroupKey = buildPipelineGroupKey(draftTemplate.id, "independent");
+    setTemplates((prev) => [draftTemplate, ...prev]);
+    setDraftPipelineKeys((prev) => Array.from(new Set([draftGroupKey, ...prev])));
+    setSourceFilter("independent");
+    setSelectedPipelineKey(draftGroupKey);
+    setSelectedCurrentVersion(normalizeVersion(draftTemplate.version));
+    setSelectedCompareVersion("");
+
+    await handleOpenDesignChat(true, {
+      pipelineId: draftTemplate.id,
+      pipelineName: draftTemplate.name,
+      version: draftTemplate.version,
+      isEmptyNodes: true,
+    });
+  };
+
+  const handleSaveDraftPipeline = async () => {
+    if (!selectedAgent || !selectedTemplateItem) {
+      return;
+    }
+
+    const templateId = (selectedTemplateItem.id || "").trim();
+    const safeTemplateId = templateId
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, "-")
+      .replace(/^-+|-+$/g, "") || `pipeline-${Date.now()}`;
+
+    const templateDoc = {
+      id: safeTemplateId,
+      name: selectedTemplateItem.name || safeTemplateId,
+      version: selectedTemplateItem.version || "0.1.0",
+      description: selectedTemplateItem.description || "",
+      steps: selectedTemplateItem.steps || [],
+    };
+
+    setDraftSaving(true);
+    try {
+      const savedDraftId = selectedTemplateItem.id;
+      const savedDraftKey = buildPipelineGroupKey(savedDraftId, "independent");
+      const preservedDraftTemplates = templates.filter(
+        (item) => {
+          const key = buildPipelineGroupKey(item.id, getTemplateSourceKind(item));
+          return draftPipelineKeys.includes(key) && key !== savedDraftKey;
+        },
+      );
+      const preservedDraftKeys = draftPipelineKeys.filter((key) => key !== savedDraftKey);
+
+      await agentsApi.saveAgentPipelineTemplate(selectedAgent, safeTemplateId, {
+        id: safeTemplateId,
+        name: templateDoc.name,
+        version: templateDoc.version,
+        description: templateDoc.description,
+        steps: templateDoc.steps,
+      });
+
+      const data = await loadPipelineManagementData(
+        selectedAgent,
+        projects,
+        independentScopeLabel,
+      );
+
+      setTemplates([...preservedDraftTemplates, ...data.templates]);
+      setRuns(data.runs);
+      setDraftPipelineKeys(preservedDraftKeys);
+      setSourceFilter("independent");
+      setSelectedPipelineKey(buildPipelineGroupKey(safeTemplateId, "independent"));
+      setSelectedCurrentVersion(normalizeVersion(templateDoc.version));
+      setSelectedCompareVersion("");
+
+      message.success(t("pipelines.saveDraftSuccess", "流程已保存"));
+    } catch (error) {
+      console.error("failed to save draft pipeline", error);
+      message.error(t("pipelines.saveDraftFailed", "保存流程失败，请重试。"));
+    } finally {
+      setDraftSaving(false);
+    }
+  };
+
   const handleEnterEditMode = async () => {
     if (!selectedPipeline || !currentTemplate) {
       message.warning(t("pipelines.selectPipelineFirst", "Please select a pipeline first."));
@@ -512,12 +779,34 @@ export default function PipelinesPage() {
     }
 
     const targetKey = `${selectedPipeline.id}@${normalizeVersion(currentTemplate.version)}`;
+    const isEmptyNodes = (currentTemplate.steps?.length || 0) === 0;
+    setEditWelcomeMode(isEmptyNodes ? "init" : "default");
+    setEditGuidePlaceholder(
+      t(
+        isEmptyNodes
+          ? "pipelines.editInputPlaceholderInit"
+          : "pipelines.editInputPlaceholder",
+        isEmptyNodes
+          ? "这是一个新流程，请先定义目标、关键步骤和完成标准，我会帮你生成首版节点草案。"
+          : "围绕当前流程 {{name}} ({{version}}) 描述你的改造目标，例如：新增校验节点、调整重试策略、优化输出结构。",
+        {
+          name: selectedPipeline.name || selectedPipeline.id || "unknown",
+          version: currentTemplate.version || "latest",
+        },
+      ),
+    );
+
     if (designChatSessionId && editTargetKey === targetKey) {
       setEditMode(true);
       return;
     }
 
-    await handleOpenDesignChat(true);
+    await handleOpenDesignChat(true, {
+      pipelineId: selectedPipeline.id,
+      pipelineName: selectedPipeline.name || selectedPipeline.id,
+      version: currentTemplate.version || "latest",
+      isEmptyNodes,
+    });
   };
 
   return (
@@ -535,19 +824,41 @@ export default function PipelinesPage() {
           </Text>
         </div>
         <div className={styles.actions}>
+          <Select
+            size="small"
+            value={sourceFilter}
+            style={{ width: 180 }}
+            onChange={(value) => setSourceFilter(value)}
+            options={[
+              { value: "all", label: t("pipelines.sourceFilterAll", "全部来源") },
+              { value: "independent", label: t("pipelines.sourceFilterIndependent", "仅独立模板") },
+              { value: "project", label: t("pipelines.sourceFilterProject", "仅项目模板") },
+            ]}
+          />
           <Button
             data-testid="pipeline-open-design-chat"
             loading={designChatStarting}
             disabled={designChatStarting}
-            onClick={() => void handleOpenDesignChat(false)}
+            onClick={() => void handleCreatePipelineAndEnterEdit()}
           >
-            {t("pipelines.openChat", "Open Chat to Design")}
+            {t("pipelines.create", "新建")}
           </Button>
           <Button type="primary" onClick={() => navigate("/projects")}>
             {t("pipelines.openProjects", "Open Projects to Run")}
           </Button>
         </div>
       </div>
+
+      {projects.length === 0 ? (
+        <Card size="small" style={{ marginBottom: 16 }}>
+          <Text type="secondary">
+            {t(
+              "pipelines.noProjectsIndependentHint",
+              "当前没有项目，但你仍可新建与编辑独立流程草稿。需要落盘时请先创建项目。",
+            )}
+          </Text>
+        </Card>
+      ) : null}
 
       <div className={styles.metrics}>
         <Card size="small" className={styles.metricCard}>
@@ -585,7 +896,7 @@ export default function PipelinesPage() {
               description={t("pipelines.noAgent", "No active agent selected.")}
             />
           </Card>
-        ) : projects.length === 0 ? (
+        ) : projects.length === 0 && templates.length === 0 ? (
           <Card>
             <Empty
               description={t(
@@ -610,20 +921,27 @@ export default function PipelinesPage() {
               ) : (
                 <div className={styles.list}>
                   {pipelineGroups.map((item) => {
-                    const selected = item.id === selectedPipelineId;
+                    const selected = item.key === selectedPipelineKey;
                     return (
                       <button
-                        key={item.id}
+                        key={item.key}
                         type="button"
                         className={`${styles.listItem} ${selected ? styles.selected : ""}`}
-                        onClick={() => {
-                          setSelectedPipelineId(item.id);
-                          setSelectedCompareVersion("");
-                        }}
+                        onClick={() => requestSelectPipeline(item.key)}
                       >
                         <div className={styles.listItemHeader}>
                           <Text strong>{item.name}</Text>
                           <Tag>{item.versions.length}</Tag>
+                          <Tag color={item.source === "independent" ? "cyan" : "gold"}>
+                            {item.source === "independent"
+                              ? t("pipelines.sourceIndependent", "独立")
+                              : t("pipelines.sourceProject", "项目")}
+                          </Tag>
+                          {draftPipelineKeys.includes(item.key) ? (
+                            <Tag color="warning">
+                              {t("pipelines.draftBadge", "未保存")}
+                            </Tag>
+                          ) : null}
                         </div>
                         <Text type="secondary">{item.description || item.id}</Text>
                         <Text type="secondary" className={styles.helperText}>
@@ -665,9 +983,25 @@ export default function PipelinesPage() {
                     }}
                   />
                   {editMode ? (
-                    <Button size="small" onClick={() => setEditMode(false)}>
-                      {t("pipelines.exitEdit", "Exit Edit")}
-                    </Button>
+                    <>
+                      {selectedIsDraft ? (
+                        <Button
+                          size="small"
+                          type="primary"
+                          loading={draftSaving}
+                          disabled={draftSaving}
+                          onClick={() => void handleSaveDraftPipeline()}
+                        >
+                          {t("pipelines.saveDraft", "保存")}
+                        </Button>
+                      ) : null}
+                      <Button
+                        size="small"
+                        onClick={requestCloseEditMode}
+                      >
+                        {t("pipelines.exitEdit", "Exit Edit")}
+                      </Button>
+                    </>
                   ) : (
                     <Button
                       size="small"
@@ -809,7 +1143,44 @@ export default function PipelinesPage() {
                     <Spin size="large" />
                   </div>
                 ) : designChatSessionId ? (
-                  <AnywhereChat sessionId={designChatSessionId} />
+                  <AnywhereChat
+                    sessionId={designChatSessionId}
+                    inputPlaceholder={editGuidePlaceholder || undefined}
+                    welcomeGreeting={t(
+                      editWelcomeMode === "init"
+                        ? "pipelines.editWelcomeGreetingInit"
+                        : "pipelines.editWelcomeGreeting",
+                      editWelcomeMode === "init"
+                        ? "新流程已创建，我们先把首版流程搭起来。"
+                        : "流程编辑助手已就绪，你想先改哪一步？",
+                    )}
+                    welcomeDescription={t(
+                      editWelcomeMode === "init"
+                        ? "pipelines.editWelcomeDescriptionInit"
+                        : "pipelines.editWelcomeDescription",
+                      editWelcomeMode === "init"
+                        ? "你可以先描述目标、输入和产出，我会生成初始化节点并给出参数建议。"
+                        : "我会基于当前流程结构给出节点级修改建议，并帮助你整理可执行的改造方案。",
+                    )}
+                    welcomePrompts={[
+                      t(
+                        editWelcomeMode === "init"
+                          ? "pipelines.editWelcomePromptInit1"
+                          : "pipelines.editWelcomePrompt1",
+                        editWelcomeMode === "init"
+                          ? "为这个新流程生成首版节点（目标、输入、步骤、验收标准）。"
+                          : "分析当前流程瓶颈，并给出 3 条可执行优化建议（含节点改动）。",
+                      ),
+                      t(
+                        editWelcomeMode === "init"
+                          ? "pipelines.editWelcomePromptInit2"
+                          : "pipelines.editWelcomePrompt2",
+                        editWelcomeMode === "init"
+                          ? "先给我 5 个澄清问题，再输出可直接执行的流程草案。"
+                          : "我要改这个流程：新增校验节点、调整重试策略，并输出变更后的步骤清单。",
+                      ),
+                    ]}
+                  />
                 ) : (
                   <Empty
                     description={t(
@@ -847,7 +1218,10 @@ export default function PipelinesPage() {
                           type="link"
                           className={styles.runLink}
                           onClick={() => {
-                            setSelectedPipelineId(run.template_id);
+                            setSourceFilter("project");
+                            setSelectedPipelineKey(
+                              buildPipelineGroupKey(run.template_id, "project"),
+                            );
                             setSelectedCompareVersion("");
                           }}
                         >

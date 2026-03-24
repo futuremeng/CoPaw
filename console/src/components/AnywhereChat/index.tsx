@@ -30,14 +30,32 @@ type SenderConfigShape = {
   sender?: Record<string, unknown>;
 };
 
+type WelcomePrompt = {
+  value: string;
+};
+
+type WelcomeConfigShape = {
+  greeting?: string;
+  description?: string;
+  prompts?: WelcomePrompt[];
+};
+
 interface AnywhereChatProps {
   sessionId: string;
   hostClassName?: string;
+  inputPlaceholder?: string;
+  welcomeGreeting?: string;
+  welcomeDescription?: string;
+  welcomePrompts?: string[];
 }
 
 export default function AnywhereChat({
   sessionId,
   hostClassName = "pipeline-anywhere-chat-host",
+  inputPlaceholder,
+  welcomeGreeting,
+  welcomeDescription,
+  welcomePrompts,
 }: AnywhereChatProps) {
   const { t } = useTranslation();
   const { isDark } = useTheme();
@@ -130,6 +148,11 @@ export default function AnywhereChat({
   const options = useMemo(() => {
     const i18nConfig = getDefaultConfig(t);
     const senderConfig = (i18nConfig as SenderConfigShape).sender || {};
+    const welcomeConfig = (i18nConfig.welcome || {}) as WelcomeConfigShape;
+    const prompts =
+      Array.isArray(welcomePrompts) && welcomePrompts.length > 0
+        ? welcomePrompts.map((value) => ({ value }))
+        : (welcomeConfig.prompts || []);
 
     return {
       ...i18nConfig,
@@ -142,6 +165,13 @@ export default function AnywhereChat({
       sender: {
         ...senderConfig,
         attachments: undefined,
+        placeholder: inputPlaceholder || senderConfig.placeholder,
+      },
+      welcome: {
+        ...welcomeConfig,
+        greeting: welcomeGreeting || welcomeConfig.greeting,
+        description: welcomeDescription || welcomeConfig.description,
+        prompts,
       },
       session: {
         multiple: false,
@@ -165,7 +195,17 @@ export default function AnywhereChat({
         replace: true,
       },
     } as unknown as IAgentScopeRuntimeWebUIOptions;
-  }, [customFetch, isDark, sessionId, singleSessionApi, t]);
+  }, [
+    customFetch,
+    inputPlaceholder,
+    isDark,
+    sessionId,
+    singleSessionApi,
+    t,
+    welcomeDescription,
+    welcomeGreeting,
+    welcomePrompts,
+  ]);
 
   return (
     <div
