@@ -28,10 +28,6 @@ import { IconButton } from "@agentscope-ai/design";
 import { SparkAttachmentLine } from "@agentscope-ai/icons";
 import { trackNavigation } from "../../utils/navigationTelemetry";
 import { shouldAutoSyncChatUrl } from "./navigationGuards";
-import { usePipelineChatHandoff } from "./usePipelineChatHandoff";
-import {
-  hasPipelineDesignHandoff,
-} from "../../utils/pipelineDesign";
 
 type CopyableContent = {
   type?: string;
@@ -346,7 +342,8 @@ export default function ChatPage() {
   const [showModelPrompt, setShowModelPrompt] = useState(false);
   const { selectedAgent } = useAgentStore();
   const [refreshKey, setRefreshKey] = useState(0);
-  const pipelineOpportunityMuteUntilRef = useRef(0);
+  const [, setChatStatus] = useState<"idle" | "running">("idle");
+  const [, setReconnectStreaming] = useState(false);
   const runtimeLoadingBridgeRef = useRef<RuntimeLoadingBridgeApi | null>(null);
 
   const isComposingRef = useRef(false);
@@ -360,13 +357,6 @@ export default function ChatPage() {
   const chatRef = useRef<IAgentScopeRuntimeWebUIRef>(null);
   chatIdRef.current = chatId;
   navigateRef.current = navigate;
-
-  const { setChatStatus, setReconnectStreaming } = usePipelineChatHandoff({
-    chatId,
-    selectedAgent,
-    chatRef,
-    pipelineOpportunityMuteUntilRef,
-  });
 
   useEffect(() => {
     sessionApi.setChatRef(chatRef);
@@ -486,11 +476,7 @@ export default function ChatPage() {
 
   const getSessionWrapped = useCallback(async (sessionId: string) => {
     const currentChatId = chatIdRef.current;
-    const pipelineHandoff =
-      !!currentChatId && hasPipelineDesignHandoff(currentChatId);
-    const blockAutoSyncForPipelineNewChat = pipelineHandoff;
-    const canAutoSyncUrl =
-      shouldAutoSyncChatUrl(currentChatId) && !blockAutoSyncForPipelineNewChat;
+    const canAutoSyncUrl = shouldAutoSyncChatUrl(currentChatId);
 
     if (
       isChatActiveRef.current &&
@@ -798,15 +784,9 @@ export default function ChatPage() {
 
       const { input = [], biz_params } = data;
       const latestUserText = extractLatestUserText(input);
-      const inPipelineDesignIntent =
-        !!chatIdRef.current && hasPipelineDesignHandoff(chatIdRef.current);
-      const muteActive = Date.now() < pipelineOpportunityMuteUntilRef.current;
       const bootstrapText = isPipelineDesignBootstrapText(latestUserText);
       const shouldInlinePipelineGuide =
-        !inPipelineDesignIntent &&
-        !muteActive &&
-        !bootstrapText &&
-        shouldSuggestPipelineOpportunity(latestUserText);
+        !bootstrapText && shouldSuggestPipelineOpportunity(latestUserText);
 
       if (shouldInlinePipelineGuide) {
         const now = Date.now();

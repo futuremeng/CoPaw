@@ -1,18 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Card, Empty, Spin, Tag, Typography } from "antd";
+import { Button, Card, Empty, Spin, Tag, Typography, message } from "antd";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { agentsApi } from "../../../api/modules/agents";
 import { chatApi } from "../../../api/modules/chat";
-import { getApiUrl } from "../../../api/config";
-import { buildAuthHeaders } from "../../../api/authHeaders";
 import {
   buildPipelineDesignBootstrapPrompt,
   buildPipelineDesignChatPath,
-  clearPipelineDesignBootstrap,
-  markPipelineDesignHandoff,
-  markPipelineDesignAutostarted,
-  queuePipelineDesignBootstrap,
 } from "../../../utils/pipelineDesign";
 import { trackNavigation } from "../../../utils/navigationTelemetry";
 import type {
@@ -199,65 +193,45 @@ export default function PipelinesPage() {
   );
 
   const handleOpenDesignChat = async () => {
-    const source = "pipelines_page" as const;
-    const created = await chatApi.createChat({
-      name: t("pipelines.designSessionName", "Pipeline Design"),
-      session_id: buildPipelineEntrySessionId(),
-      user_id: "default",
-      channel: "console",
-      meta: {},
-    });
-    const bootstrapPrompt = buildPipelineDesignBootstrapPrompt({
-      source,
-      agentId: selectedAgent,
-    });
-    queuePipelineDesignBootstrap(created.id, bootstrapPrompt);
-    markPipelineDesignHandoff(created.id);
-
     try {
-      const warmupHeaders: Record<string, string> = {
-        ...buildAuthHeaders(),
-        "Content-Type": "application/json",
-      };
-      const warmupResponse = await fetch(getApiUrl("/console/chat"), {
-        method: "POST",
-        headers: warmupHeaders,
-        body: JSON.stringify({
-          input: [
-            {
-              role: "user",
-              type: "message",
-              content: [{ type: "text", text: bootstrapPrompt }],
-            },
-          ],
-          session_id: created.session_id,
-          user_id: created.user_id,
-          channel: created.channel,
-          stream: true,
-        }),
+      const source = "pipelines_page" as const;
+      const created = await chatApi.createChat({
+        name: t("pipelines.designSessionName", "Pipeline Design"),
+        session_id: buildPipelineEntrySessionId(),
+        user_id: "default",
+        channel: "console",
+        meta: {},
       });
 
-      if (warmupResponse.ok) {
-        markPipelineDesignAutostarted(created.id);
-        clearPipelineDesignBootstrap(created.id);
-      }
+      const bootstrapPrompt = buildPipelineDesignBootstrapPrompt({
+        source,
+        agentId: selectedAgent,
+      });
 
-      // Warm-up stream is only used to start backend execution.
-      // Chat page reconnect will continue consuming from this run.
-      void warmupResponse.body?.cancel();
+      await chatApi.startConsoleChat({
+        sessionId: created.session_id || created.id,
+        prompt: bootstrapPrompt,
+        userId: created.user_id || "default",
+        channel: created.channel || "console",
+      });
+
+      const to = buildPipelineDesignChatPath(created.id);
+      trackNavigation({
+        source: "pipelines.handleOpenDesignChat",
+        from: "/pipelines",
+        to,
+        reason: "start-pipeline-design-chat",
+      });
+      navigate(to);
     } catch (error) {
-      // Keep bootstrap in sessionStorage so chat page can fallback to submit.
-      console.warn("pipeline warmup submit failed, fallback to chat autostart", error);
+      console.error("failed to start pipeline design chat", error);
+      message.error(
+        t(
+          "pipelines.startChatFailed",
+          "Failed to start pipeline design chat. Please try again.",
+        ),
+      );
     }
-
-    const to = buildPipelineDesignChatPath(created.id);
-    trackNavigation({
-      source: "pipelines.handleOpenDesignChat",
-      from: "/pipelines",
-      to,
-      reason: "start-pipeline-design-chat",
-    });
-    navigate(to);
   };
 
   return (

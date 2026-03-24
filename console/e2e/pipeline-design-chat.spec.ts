@@ -204,6 +204,12 @@ test("behavior: pipeline design entry keeps newly created chat and does not jump
   const createChatRequest = page.waitForRequest((request) => {
     return request.method() === "POST" && request.url().includes("/api/chats");
   });
+  const startConsoleChatRequest = page.waitForRequest((request) => {
+    return (
+      request.method() === "POST" &&
+      request.url().includes("/api/console/chat")
+    );
+  });
 
   await openDesignBtn.click();
 
@@ -213,6 +219,18 @@ test("behavior: pipeline design entry keeps newly created chat and does not jump
     user_id: "default",
     channel: "console",
   });
+
+  const streamRequest = await startConsoleChatRequest;
+  const streamBody = streamRequest.postDataJSON();
+  expect(streamBody).toMatchObject({
+    stream: true,
+    user_id: "default",
+    channel: "console",
+  });
+  expect(Array.isArray(streamBody.input)).toBeTruthy();
+  expect(streamBody.input[0]?.content?.[0]?.text).toContain(
+    "我想创建一个新的 Pipeline",
+  );
 
   await expect(page).toHaveURL(/\/chat\/[^/?]+/);
 

@@ -1,7 +1,3 @@
-const BOOTSTRAP_KEY_PREFIX = "copaw.pipeline.bootstrap.";
-const STARTED_KEY_PREFIX = "copaw.pipeline.autostart.done.";
-const HANDOFF_KEY_PREFIX = "copaw.pipeline.handoff.";
-
 export type PipelineDesignSource = "pipelines_page" | "chat_opportunity";
 
 interface BuildPromptParams {
@@ -34,40 +30,4 @@ export function buildPipelineDesignChatPath(
   sessionId: string,
 ): string {
   return `/chat/${encodeURIComponent(sessionId)}`;
-}
-
-export function queuePipelineDesignBootstrap(
-  sessionId: string,
-  prompt: string,
-): void {
-  sessionStorage.setItem(`${BOOTSTRAP_KEY_PREFIX}${sessionId}`, prompt);
-}
-
-export function readPipelineDesignBootstrap(sessionId: string): string | null {
-  const key = `${BOOTSTRAP_KEY_PREFIX}${sessionId}`;
-  return sessionStorage.getItem(key);
-}
-
-export function clearPipelineDesignBootstrap(sessionId: string): void {
-  sessionStorage.removeItem(`${BOOTSTRAP_KEY_PREFIX}${sessionId}`);
-}
-
-export function hasPipelineDesignAutostarted(sessionId: string): boolean {
-  return sessionStorage.getItem(`${STARTED_KEY_PREFIX}${sessionId}`) === "1";
-}
-
-export function markPipelineDesignAutostarted(sessionId: string): void {
-  sessionStorage.setItem(`${STARTED_KEY_PREFIX}${sessionId}`, "1");
-}
-
-export function markPipelineDesignHandoff(sessionId: string): void {
-  sessionStorage.setItem(`${HANDOFF_KEY_PREFIX}${sessionId}`, "1");
-}
-
-export function hasPipelineDesignHandoff(sessionId: string): boolean {
-  return sessionStorage.getItem(`${HANDOFF_KEY_PREFIX}${sessionId}`) === "1";
-}
-
-export function clearPipelineDesignHandoff(sessionId: string): void {
-  sessionStorage.removeItem(`${HANDOFF_KEY_PREFIX}${sessionId}`);
 }

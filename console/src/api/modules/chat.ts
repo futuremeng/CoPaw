@@ -32,6 +32,47 @@ function getSelectedAgentId(): string {
 }
 
 export const chatApi = {
+  /** Start a console chat stream with an initial user prompt. */
+  startConsoleChat: async (params: {
+    sessionId: string;
+    prompt: string;
+    userId?: string;
+    channel?: string;
+  }): Promise<void> => {
+    const response = await fetch(getApiUrl("/console/chat"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...buildAuthHeaders(),
+      },
+      body: JSON.stringify({
+        input: [
+          {
+            role: "user",
+            type: "message",
+            content: [{ type: "text", text: params.prompt }],
+          },
+        ],
+        session_id: params.sessionId,
+        user_id: params.userId || "default",
+        channel: params.channel || "console",
+        stream: true,
+      }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(
+        `Failed to start console chat: ${response.status} ${response.statusText}${
+          text ? ` - ${text}` : ""
+        }`,
+      );
+    }
+
+    // We only need to kick off backend execution here.
+    await response.body?.cancel().catch(() => undefined);
+  },
+
   /** Upload a file for chat attachment. Returns URL path for content. */
   uploadFile: async (file: File): Promise<ChatUploadResponse> => {
     const formData = new FormData();
