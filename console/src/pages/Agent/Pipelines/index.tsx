@@ -282,101 +282,103 @@ export default function PipelinesPage() {
         </Card>
       </div>
 
-      {loading ? (
-        <div className={styles.loadingWrap}>
-          <Spin size="large" />
-        </div>
-      ) : error ? (
-        <Card>
-          <Text type="danger">{error}</Text>
-        </Card>
-      ) : !currentAgent ? (
-        <Card>
-          <Empty
-            description={t("pipelines.noAgent", "No active agent selected.")}
-          />
-        </Card>
-      ) : projects.length === 0 ? (
-        <Card>
-          <Empty
-            description={t(
-              "pipelines.noProjects",
-              "No projects found for the current agent.",
-            )}
-          />
-        </Card>
-      ) : (
-        <div className={styles.columns}>
-          <Card
-            title={t("pipelines.library", "Pipeline Library")}
-            className={styles.columnCard}
-          >
-            {uniqueTemplates.length === 0 ? (
-              <Empty
-                description={t(
-                  "pipelines.emptyTemplates",
-                  "No pipeline templates found yet.",
-                )}
-              />
-            ) : (
-              <div className={styles.list}>
-                {uniqueTemplates.map((item) => (
-                  <div key={item.key} className={styles.listItem}>
-                    <div className={styles.listItemHeader}>
-                      <Text strong>{item.name}</Text>
-                      <Tag>{item.version}</Tag>
-                    </div>
-                    <Text type="secondary">{item.description || item.id}</Text>
-                    <Text type="secondary" className={styles.helperText}>
-                      {t("pipelines.usedIn", "Used in {{count}} projects", {
-                        count: item.projects.length,
-                      })}
-                    </Text>
-                  </div>
-                ))}
-              </div>
-            )}
+      <div className={styles.content}>
+        {loading ? (
+          <div className={styles.loadingWrap}>
+            <Spin size="large" />
+          </div>
+        ) : error ? (
+          <Card>
+            <Text type="danger">{error}</Text>
           </Card>
+        ) : !currentAgent ? (
+          <Card>
+            <Empty
+              description={t("pipelines.noAgent", "No active agent selected.")}
+            />
+          </Card>
+        ) : projects.length === 0 ? (
+          <Card>
+            <Empty
+              description={t(
+                "pipelines.noProjects",
+                "No projects found for the current agent.",
+              )}
+            />
+          </Card>
+        ) : (
+          <div className={styles.columns}>
+            <Card
+              title={t("pipelines.library", "Pipeline Library")}
+              className={styles.columnCard}
+            >
+              {uniqueTemplates.length === 0 ? (
+                <Empty
+                  description={t(
+                    "pipelines.emptyTemplates",
+                    "No pipeline templates found yet.",
+                  )}
+                />
+              ) : (
+                <div className={styles.list}>
+                  {uniqueTemplates.map((item) => (
+                    <div key={item.key} className={styles.listItem}>
+                      <div className={styles.listItemHeader}>
+                        <Text strong>{item.name}</Text>
+                        <Tag>{item.version}</Tag>
+                      </div>
+                      <Text type="secondary">{item.description || item.id}</Text>
+                      <Text type="secondary" className={styles.helperText}>
+                        {t("pipelines.usedIn", "Used in {{count}} projects", {
+                          count: item.projects.length,
+                        })}
+                      </Text>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
 
-          <Card
-            title={t("pipelines.recentRuns", "Recent Runs")}
-            className={styles.columnCard}
-          >
-            {runs.length === 0 ? (
-              <Empty
-                description={t(
-                  "pipelines.emptyRuns",
-                  "No pipeline runs yet.",
-                )}
-              />
-            ) : (
-              <div className={styles.list}>
-                {runs.slice(0, 20).map((run) => (
-                  <div key={run.id} className={styles.listItem}>
-                    <div className={styles.listItemHeader}>
-                      <Text strong>{run.template_id}</Text>
-                      <Tag color={statusTagColor(run.status)}>{run.status}</Tag>
+            <Card
+              title={t("pipelines.recentRuns", "Recent Runs")}
+              className={styles.columnCard}
+            >
+              {runs.length === 0 ? (
+                <Empty
+                  description={t(
+                    "pipelines.emptyRuns",
+                    "No pipeline runs yet.",
+                  )}
+                />
+              ) : (
+                <div className={styles.list}>
+                  {runs.slice(0, 20).map((run) => (
+                    <div key={run.id} className={styles.listItem}>
+                      <div className={styles.listItemHeader}>
+                        <Text strong>{run.template_id}</Text>
+                        <Tag color={statusTagColor(run.status)}>{run.status}</Tag>
+                      </div>
+                      <Text type="secondary">
+                        {t("pipelines.projectLabel", "Project: {{name}}", {
+                          name: run.projectName,
+                        })}
+                      </Text>
+                      <Button
+                        size="small"
+                        type="link"
+                        className={styles.runLink}
+                        onClick={() => navigate("/projects")}
+                      >
+                        {t("pipelines.goToProjects", "Go to Projects")}
+                      </Button>
                     </div>
-                    <Text type="secondary">
-                      {t("pipelines.projectLabel", "Project: {{name}}", {
-                        name: run.projectName,
-                      })}
-                    </Text>
-                    <Button
-                      size="small"
-                      type="link"
-                      className={styles.runLink}
-                      onClick={() => navigate("/projects")}
-                    >
-                      {t("pipelines.goToProjects", "Go to Projects")}
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
-        </div>
-      )}
+                  ))}
+                </div>
+              )}
+            </Card>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

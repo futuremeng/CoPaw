@@ -1,11 +1,14 @@
 .page {
+  padding: 24px;
+  height: calc(100vh - 96px);
   display: flex;
   flex-direction: column;
   gap: 16px;
-  min-height: 0;
+  overflow: hidden;
 }
 
 .header {
+  flex-shrink: 0;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -31,6 +34,7 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
+  flex-shrink: 0;
 }
 
 .metricCard {
@@ -50,10 +54,18 @@
 }
 
 .loadingWrap {
-  min-height: 280px;
+  min-height: 320px;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.content {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-bottom: 12px;
 }
 
 .columns {

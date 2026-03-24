@@ -1182,14 +1182,7 @@ function KnowledgePage() {
         ) : null}
       </Card>
 
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: 12,
-        }}
-      >
+      <div className={styles.addSourceRow}>
         <Button icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
           {t("knowledge.addSource")}
         </Button>

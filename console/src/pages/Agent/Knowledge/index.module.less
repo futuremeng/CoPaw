@@ -1,85 +1,15 @@
 .knowledgePage {
-  --note-page-bg: radial-gradient(circle at top left, #f9fbff 0%, #fefefe 40%, #f6f7fb 100%);
-  --note-card-bg: #ffffff;
-  --note-card-border: rgba(26, 31, 44, 0.08);
-  --note-card-shadow: 0 10px 28px rgba(17, 24, 39, 0.06);
-  --note-hover-border: #4c6fff;
-  --note-hover-shadow: 0 16px 36px rgba(76, 111, 255, 0.2);
-  --note-block-bg: #f8f9fd;
-  --note-block-border: #e8ecf5;
-  --note-title-color: #1f2430;
-  --note-body-color: #4f566b;
-  --note-label-color: #7f8699;
-  --note-subtle-text: #475467;
-  --note-link-color: #2f67d8;
-  --note-inline-code-bg: rgba(76, 111, 255, 0.08);
-  --note-inline-code-color: #274690;
-  --note-pre-bg: rgba(248, 249, 253, 0.92);
-  --note-quote-border: rgba(76, 111, 255, 0.35);
-  --note-quote-bg: rgba(76, 111, 255, 0.06);
-  --note-tag-primary-color: #615ced;
-  --note-tag-primary-bg: rgba(97, 92, 237, 0.1);
-  --note-tag-info-color: #1677ff;
-  --note-tag-info-bg: rgba(22, 119, 255, 0.1);
-  --note-tag-success-color: #389e0d;
-  --note-tag-success-bg: rgba(82, 196, 26, 0.12);
-  --note-tag-muted-color: #667085;
-  --note-tag-muted-bg: rgba(102, 112, 133, 0.12);
-  --note-danger-color: #d4380d;
-  --note-warning-color: #ff4d4f;
-  --note-on-warning: #fff;
-  --note-dropzone-bg: #fafafa;
-  --note-dropzone-border: #d9d9d9;
-  --note-dropzone-active-bg: #f0f7ff;
-  --note-dropzone-active-border: #1677ff;
-  --note-card-divider: #f1f2f6;
-  --note-font: "Avenir Next", "Segoe UI", sans-serif;
-  --note-title-font: "Iowan Old Style", "Georgia", serif;
-  --note-radius: 18px;
   padding: 24px;
-  background: var(--note-page-bg);
-  border-radius: 18px;
-  font-family: var(--note-font);
-}
-
-:global(.dark-mode) .knowledgePage {
-  --note-page-bg: radial-gradient(circle at top right, #1e2633 0%, #181f2b 55%, #131a25 100%);
-  --note-card-bg: #1f2633;
-  --note-card-border: #2e394d;
-  --note-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34);
-  --note-hover-border: #7bb8ff;
-  --note-hover-shadow: 0 18px 36px rgba(69, 140, 245, 0.28);
-  --note-block-bg: #273246;
-  --note-block-border: #3a4a62;
-  --note-title-color: #edf2f7;
-  --note-body-color: #cdd8e9;
-  --note-label-color: #9cb1c8;
-  --note-subtle-text: #b3c1d4;
-  --note-link-color: #8ec5ff;
-  --note-inline-code-bg: #2b3a52;
-  --note-inline-code-color: #ffd580;
-  --note-pre-bg: linear-gradient(180deg, #101924 0%, #182334 100%);
-  --note-quote-border: rgba(142, 197, 255, 0.5);
-  --note-quote-bg: rgba(142, 197, 255, 0.1);
-  --note-tag-primary-color: #b8c4ff;
-  --note-tag-primary-bg: rgba(123, 99, 255, 0.22);
-  --note-tag-info-color: #b7dcff;
-  --note-tag-info-bg: rgba(59, 130, 246, 0.22);
-  --note-tag-success-color: #b7f3c7;
-  --note-tag-success-bg: rgba(82, 196, 26, 0.2);
-  --note-tag-muted-color: #b0bed1;
-  --note-tag-muted-bg: rgba(148, 163, 184, 0.22);
-  --note-danger-color: #ff9f84;
-  --note-warning-color: #ff9f95;
-  --note-on-warning: #1f1110;
-  --note-dropzone-bg: rgba(255, 255, 255, 0.03);
-  --note-dropzone-border: rgba(255, 255, 255, 0.2);
-  --note-dropzone-active-bg: rgba(64, 123, 255, 0.16);
-  --note-dropzone-active-border: #6aa7ff;
-  --note-card-divider: rgba(255, 255, 255, 0.1);
+  height: calc(100vh - 96px);
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+  font-family: inherit;
+  overflow: hidden;
 }
 
 .header {
+  flex-shrink: 0;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -94,13 +24,11 @@
 
 .title {
   margin-bottom: 4px;
-  font-size: 24px;
-  font-weight: 600;
 }
 
 .description {
   margin: 0;
-  color: var(--note-label-color);
+  color: #8c8c8c;
   font-size: 14px;
 }
 
@@ -124,24 +52,6 @@
   justify-content: flex-end;
 }
 
-.noteStyleSegment {
-  min-width: 220px;
-}
-
-.noteStyleLabel {
-  color: var(--note-label-color);
-}
-
-.noteStyleOptionLabel {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.noteStyleOptionText {
-  white-space: nowrap;
-}
-
 .unifiedProgressRow {
   width: 100%;
   margin-bottom: 12px;
@@ -150,11 +60,15 @@
 .unifiedProgressLabel {
   display: block;
   margin-bottom: 6px;
-  color: var(--note-subtle-text);
+  color: #595959;
 }
 
 .contentStack {
   width: 100%;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-bottom: 12px;
 }
 
 .disabledPanel {
@@ -175,7 +89,7 @@
 
 .contentEmpty {
   font-size: 12px;
-  color: var(--note-label-color);
+  color: #8c8c8c;
 }
 
 .documentList {
@@ -192,73 +106,19 @@
 
 .documentTitle {
   font-size: 12px;
-  color: var(--note-body-color);
+  color: #595959;
 }
 
 .documentMarkdown {
-  border: 1px solid var(--note-block-border);
-  border-radius: 10px;
-  background: var(--note-block-bg);
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  background: #fff;
   padding: 8px;
 }
 
 .documentMarkdownViewer {
   border: none;
   background: transparent;
-}
-
-.documentMarkdownViewer :global(table) {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 12px 0;
-}
-
-.documentMarkdownViewer :global(th),
-.documentMarkdownViewer :global(td) {
-  border: 1px solid var(--note-block-border);
-  padding: 10px 12px;
-  text-align: left;
-  vertical-align: top;
-}
-
-.documentMarkdownViewer :global(th) {
-  background: var(--note-inline-code-bg);
-  color: var(--note-title-color);
-  font-weight: 600;
-}
-
-.documentMarkdownViewer :global(code) {
-  background: var(--note-inline-code-bg);
-  color: var(--note-inline-code-color);
-  border-radius: 6px;
-  padding: 0.15em 0.4em;
-}
-
-.documentMarkdownViewer :global(pre) {
-  margin: 12px 0;
-  border-radius: 12px;
-  border: 1px solid var(--note-block-border);
-  background: var(--note-pre-bg);
-  overflow: auto;
-}
-
-.documentMarkdownViewer :global(pre code) {
-  display: block;
-  background: transparent;
-  color: var(--note-body-color);
-  padding: 14px 16px;
-}
-
-.documentMarkdownViewer :global(blockquote) {
-  margin: 12px 0;
-  padding: 10px 14px;
-  border-left: 3px solid var(--note-quote-border);
-  background: var(--note-quote-bg);
-  color: var(--note-body-color);
-}
-
-.documentMarkdownViewer :global(a) {
-  color: var(--note-link-color);
 }
 
 .searchHeader {
@@ -294,7 +154,7 @@
 }
 
 .searchStatusText {
-  color: var(--note-label-color);
+  color: #8c8c8c;
   font-size: 13px;
   min-height: 24px;
   display: flex;
@@ -308,10 +168,16 @@
   padding-right: 4px;
 }
 
+.addSourceRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
 .searchHitCard {
-  border-radius: 12px;
-  border: 1px solid var(--note-card-border);
-  box-shadow: var(--note-card-shadow);
+  border-radius: 8px;
+  border: 1px solid #e8e8e8;
 }
 
 .searchHitTopRow {
@@ -329,7 +195,7 @@
 
 .searchHitSnippet {
   margin: 8px 0 0;
-  color: var(--note-subtle-text);
+  color: #595959;
 }
 
 .filterBar {
@@ -350,7 +216,7 @@
 }
 
 .filterLabel {
-  color: var(--note-label-color);
+  color: #8c8c8c;
   font-size: 12px;
 }
 
@@ -361,32 +227,43 @@
 .cardsGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 24px;
+  gap: 16px;
   align-items: stretch;
 }
 
 .cardContainer {
-  background: var(--note-card-bg);
-  border: 1px solid var(--note-card-border);
-  border-radius: var(--note-radius);
-  transition: all 0.2s ease-in-out;
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
   overflow: hidden;
   height: 100%;
   display: flex;
   flex-direction: column;
-  box-shadow: var(--note-card-shadow);
-  animation: cardFadeIn 0.35s ease;
-  padding: 14px 14px 0;
+  padding: 12px 12px 0;
 
   &:hover {
-    border-color: var(--note-hover-border);
-    box-shadow: var(--note-hover-shadow);
+    border-color: #d0d7de;
+  }
+
+  &:active {
+    border-color: #bfc7d1;
+    background: #fcfcfd;
+  }
+
+  &:focus-within {
+    border-color: #1677ff;
+  }
+
+  &[aria-busy="true"] {
+    border-color: #91caff;
+    background: #f7fbff;
+    cursor: progress;
   }
 }
 
 .cardContainerActive {
-  border-color: var(--note-hover-border);
-  box-shadow: var(--note-hover-shadow);
+  border-color: #1677ff;
 }
 
 .cardHeader {
@@ -406,13 +283,15 @@
 }
 
 .originTag {
-  color: var(--note-tag-primary-color);
-  background: var(--note-tag-primary-bg);
+  color: #595959;
+  background: #f5f5f5;
+  border: 1px solid #d9d9d9;
 }
 
 .typeTag {
-  color: var(--note-tag-info-color);
-  background: var(--note-tag-info-bg);
+  color: #595959;
+  background: #f5f5f5;
+  border: 1px solid #d9d9d9;
 }
 
 .cardHeaderRow {
@@ -443,23 +322,25 @@
 }
 
 .indexedTag {
-  color: var(--note-tag-success-color);
-  background: var(--note-tag-success-bg);
+  color: #595959;
+  background: #f5f5f5;
+  border: 1px solid #d9d9d9;
 }
 
 .notIndexedTag {
-  color: var(--note-tag-muted-color);
-  background: var(--note-tag-muted-bg);
+  color: #8c8c8c;
+  background: #f5f5f5;
+  border: 1px solid #d9d9d9;
 }
 
 .cardTitle {
   display: block;
   font-size: 14px;
   line-height: 1.4;
-  color: var(--note-title-color);
+  color: #262626;
   white-space: normal;
   word-break: break-word;
-  font-family: var(--note-title-font);
+  font-family: inherit;
 }
 
 .cardMeta {
@@ -480,15 +361,15 @@
 
 .infoLabel {
   font-size: 12px;
-  color: var(--note-label-color);
+  color: #8c8c8c;
   line-height: 1.2;
 }
 
 .infoBlock {
   font-size: 12px;
-  color: var(--note-body-color);
-  background-color: var(--note-block-bg);
-  border: 1px solid var(--note-block-border);
+  color: #595959;
+  background-color: #fafafa;
+  border: 1px solid #e8e8e8;
   border-radius: 8px;
   padding: 7px 9px;
   line-height: 1.4;
@@ -506,16 +387,22 @@
 
 .clickableBlock {
   cursor: pointer;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
 
   &:hover {
-    border-color: var(--note-hover-border);
+    border-color: #d0d7de;
+    background-color: #fff;
+  }
+
+  &:active {
+    border-color: #bfc7d1;
+    background-color: #f5f5f5;
   }
 
   &:focus-visible {
     outline: none;
-    border-color: var(--note-hover-border);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--note-hover-border) 30%, transparent);
+    border-color: #1677ff;
+    box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.15);
   }
 }
 
@@ -567,9 +454,9 @@
   justify-content: flex-end;
   align-items: center;
   gap: 8px;
-  border-top: 1px solid var(--note-card-divider);
-  padding: 8px 14px 10px;
-  margin: 0 -14px;
+  border-top: 1px solid #f0f0f0;
+  padding: 8px 12px 10px;
+  margin: 0 -12px;
 }
 
 .actionRow {
@@ -580,7 +467,22 @@
 }
 
 .actionButton {
-  padding: 0;
+  padding: 0 4px;
+  border-radius: 4px;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+
+  &:hover {
+    background-color: #f5f5f5;
+  }
+
+  &:active {
+    background-color: #e6e6e6;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.15);
+  }
 }
 
 .deleteButton {
@@ -588,30 +490,43 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 4px;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 
   &:hover {
-    background-color: var(--note-warning-color);
-    color: var(--note-on-warning);
-    border-color: var(--note-warning-color);
+    background-color: #ff4d4f;
+    color: #fff;
+    border-color: #ff4d4f;
+  }
+
+  &:active {
+    background-color: #d9363e;
+    color: #fff;
+    border-color: #d9363e;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(255, 77, 79, 0.22);
   }
 }
 
 .remoteError {
-  color: var(--note-danger-color);
+  color: #d4380d;
 }
 
 .dragZone {
-  border: 1px dashed var(--note-dropzone-border);
-  border-radius: 12px;
+  border: 1px dashed #d9d9d9;
+  border-radius: 8px;
   padding: 16px;
-  background: var(--note-dropzone-bg);
+  background: #fafafa;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .dragZoneActive {
-  border-color: var(--note-dropzone-active-border);
-  background: var(--note-dropzone-active-bg);
+  border-color: #1677ff;
+  background: #f0f7ff;
 }
 
 .hiddenInput {
@@ -624,19 +539,7 @@
 
 .enableBackfillHint {
   margin-bottom: 0;
-  color: var(--note-subtle-text);
-}
-
-@keyframes cardFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  color: #595959;
 }
 
 @media (max-width: 900px) {
