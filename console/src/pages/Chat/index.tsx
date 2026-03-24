@@ -848,6 +848,31 @@ export default function ChatPage() {
         ...biz_params,
       };
 
+      const backendChatId =
+        sessionApi.getRealIdForSession(requestBody.session_id) ??
+        chatIdRef.current ??
+        requestBody.session_id;
+      if (backendChatId) {
+        const userText = rewrittenInput
+          .filter((message) => message.role === "user")
+          .map((message) => {
+            if (typeof message.content === "string") return message.content;
+            if (!Array.isArray(message.content)) return "";
+            return message.content
+              .filter((part) => part.type === "text")
+              .map((part) => (typeof part.text === "string" ? part.text : ""))
+              .join("\n");
+          })
+          .join("\n")
+          .trim();
+        if (userText) {
+          if (requestBody.session_id) {
+            sessionApi.setLastUserMessage(requestBody.session_id, userText);
+          }
+          sessionApi.setLastUserMessage(backendChatId, userText);
+        }
+      }
+
       const response = await fetch(getApiUrl("/console/chat"), {
         method: "POST",
         headers,
