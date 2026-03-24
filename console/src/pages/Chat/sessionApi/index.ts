@@ -569,9 +569,19 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
     }
 
     // --- Regular backend UUID ---
-    const fromList = this.sessionList.find((s) => s.id === sessionId) as
+    let fromList = this.sessionList.find((s) => s.id === sessionId) as
       | ExtendedSession
       | undefined;
+
+    // Ensure metadata is resolved before writing window.currentSessionId.
+    // If fromList is missing on first load, we might incorrectly use chat_id
+    // as session_id and send /console/chat to a different conversation.
+    if (!fromList) {
+      await this.getSessionList();
+      fromList = this.sessionList.find((s) => s.id === sessionId) as
+        | ExtendedSession
+        | undefined;
+    }
 
     const { messages, status } = await this.getAllChatMessages(sessionId);
     const session: ExtendedSession = {
