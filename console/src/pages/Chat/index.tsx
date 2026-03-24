@@ -16,7 +16,6 @@ import defaultConfig, { getDefaultConfig } from "./OptionsPanel/defaultConfig";
 import { chatApi } from "../../api/modules/chat";
 import { getApiToken, getApiUrl } from "../../api/config";
 import { providerApi } from "../../api/modules/provider";
-import api from "../../api";
 import ModelSelector from "./ModelSelector";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useAgentStore } from "../../stores/agentStore";
@@ -29,17 +28,9 @@ import { IconButton } from "@agentscope-ai/design";
 import { SparkAttachmentLine } from "@agentscope-ai/icons";
 import { trackNavigation } from "../../utils/navigationTelemetry";
 import { shouldAutoSyncChatUrl } from "./navigationGuards";
+import { usePipelineChatHandoff } from "./usePipelineChatHandoff";
 import {
-  PIPELINE_DESIGN_INTENT,
-  buildPipelineDesignBootstrapPrompt,
-  buildPipelineDesignChatPath,
-  clearPipelineForceNewChat,
-  clearPipelineDesignBootstrap,
-  hasPipelineForceNewChat,
-  hasPipelineDesignAutostarted,
-  markPipelineDesignAutostarted,
-  queuePipelineDesignBootstrap,
-  readPipelineDesignBootstrap,
+  hasPipelineDesignHandoff,
 } from "../../utils/pipelineDesign";
 
 type CopyableContent = {
@@ -77,6 +68,58 @@ type StreamResponseData = {
 type RuntimeLoadingBridgeApi = {
   getLoading?: () => boolean | string;
   setLoading?: (loading: boolean | string) => void;
+};
+
+type SessionContext = {
+  session_id?: string;
+  user_id?: string;
+  channel?: string;
+};
+
+type ChatInputContentPart = {
+  type?: string;
+  text?: string;
+  image_url?: string;
+  file_url?: string;
+  audio_url?: string;
+  video_url?: string;
+  data?: string;
+  [key: string]: unknown;
+};
+
+type ChatInputItem = {
+  session?: SessionContext;
+  content?: ChatInputContentPart[];
+  [key: string]: unknown;
+};
+
+type BizParams = Record<string, unknown> & {
+  reconnect?: boolean;
+};
+
+type CustomFetchData = {
+  input?: ChatInputItem[];
+  biz_params?: BizParams;
+  signal?: AbortSignal;
+  reconnect?: boolean;
+  session_id?: string;
+  user_id?: string;
+  channel?: string;
+};
+
+type AttachmentTriggerProps = {
+  disabled?: boolean;
+};
+
+type AttachmentUploadOptions = {
+  file: File;
+  onSuccess: (body: { url?: string; thumbUrl?: string }) => void;
+  onError?: (error: Error) => void;
+  onProgress?: (event: { percent?: number }) => void;
+};
+
+type SenderConfigShape = {
+  sender?: Record<string, unknown>;
 };
 
 interface CustomWindow extends Window {
@@ -251,7 +294,7 @@ function RuntimeLoadingBridge({
   return null;
 }
 
-function extractLatestUserText(input: any[] = []): string {
+function extractLatestUserText(input: ChatInputItem[] = []): string {
   const latest = input[input.length - 1];
   const content = latest?.content;
   if (!Array.isArray(content)) return "";
@@ -303,13 +346,7 @@ export default function ChatPage() {
   const [showModelPrompt, setShowModelPrompt] = useState(false);
   const { selectedAgent } = useAgentStore();
   const [refreshKey, setRefreshKey] = useState(0);
-  const [chatStatus, setChatStatus] = useState<"idle" | "running">("idle");
-  const [, setReconnectStreaming] = useState(false);
-  const reconnectTriggeredForRef = useRef<string | null>(null);
-  const autoPipelinePromptingRef = useRef<string | null>(null);
-  const pipelineIntentCreatingRef = useRef(false);
   const pipelineOpportunityMuteUntilRef = useRef(0);
-  const prevChatIdRef = useRef<string | undefined>(undefined);
   const runtimeLoadingBridgeRef = useRef<RuntimeLoadingBridgeApi | null>(null);
 
   const isComposingRef = useRef(false);
@@ -323,6 +360,13 @@ export default function ChatPage() {
   const chatRef = useRef<IAgentScopeRuntimeWebUIRef>(null);
   chatIdRef.current = chatId;
   navigateRef.current = navigate;
+
+  const { setChatStatus, setReconnectStreaming } = usePipelineChatHandoff({
+    chatId,
+    selectedAgent,
+    chatRef,
+    pipelineOpportunityMuteUntilRef,
+  });
 
   useEffect(() => {
     sessionApi.setChatRef(chatRef);
@@ -346,7 +390,7 @@ export default function ChatPage() {
       if (!isChatActiveRef.current) return;
       const target = e.target as HTMLElement;
       if (target?.tagName === "TEXTAREA" && e.key === "Enter" && !e.shiftKey) {
-        if (isComposingRef.current || (e as any).isComposing) {
+        if (isComposingRef.current || e.isComposing) {
           e.stopPropagation();
           e.stopImmediatePropagation();
           return false;
@@ -408,94 +452,6 @@ export default function ChatPage() {
     };
   }, []);
 
-  // Fetch chat status when viewing a chat (for running indicator and reconnect)
-  useEffect(() => {
-    if (!chatId || chatId === "undefined" || chatId === "null") {
-      setChatStatus("idle");
-      return;
-    }
-    const realId = sessionApi.getRealIdForSession(chatId) ?? chatId;
-    api.getChat(realId).then(
-      (res) => setChatStatus((res.status as "idle" | "running") ?? "idle"),
-      () => setChatStatus("idle"),
-    );
-  }, [chatId]);
-
-  // Trigger reconnect when session status becomes "running" so the library
-  // consumes the SSE stream. Done here (not in sessionApi.getSession) so we
-  // run after React has updated and the chat input ref is ready, avoiding
-  // a fixed timeout and race conditions.
-  useEffect(() => {
-    if (prevChatIdRef.current !== chatId) {
-      prevChatIdRef.current = chatId;
-      reconnectTriggeredForRef.current = null;
-    }
-    if (!chatId || chatStatus !== "running") return;
-    if (reconnectTriggeredForRef.current === chatId) return;
-    reconnectTriggeredForRef.current = chatId;
-    sessionApi.triggerReconnectSubmit();
-  }, [chatId, chatStatus]);
-
-  useEffect(() => {
-    if (!chatId) return;
-
-    const search = new URLSearchParams(location.search);
-    const intent = search.get("intent");
-    const autostart = search.get("autostart");
-
-    if (intent !== PIPELINE_DESIGN_INTENT || autostart !== "1") return;
-    if (hasPipelineDesignAutostarted(chatId)) return;
-    if (autoPipelinePromptingRef.current === chatId) return;
-
-    const source =
-      (search.get("source") as "pipelines_page" | "chat_opportunity" | null) ||
-      "pipelines_page";
-    const bootstrapPrompt =
-      readPipelineDesignBootstrap(chatId) ||
-      buildPipelineDesignBootstrapPrompt({
-        source,
-        agentId: selectedAgent,
-      });
-
-    autoPipelinePromptingRef.current = chatId;
-    // Mute opportunity detection in this warm-up window to avoid duplicate triggers.
-    pipelineOpportunityMuteUntilRef.current = Date.now() + 60 * 1000;
-    let attempts = 0;
-    const maxAttempts = 120;
-
-    const timer = window.setInterval(() => {
-      attempts += 1;
-      const submit = chatRef.current?.input?.submit;
-      if (submit) {
-        submit({ query: bootstrapPrompt });
-        clearPipelineDesignBootstrap(chatId);
-        markPipelineDesignAutostarted(chatId);
-        clearPipelineForceNewChat();
-        autoPipelinePromptingRef.current = null;
-        window.clearInterval(timer);
-        trackNavigation({
-          source: "chat.pipelineAutostart",
-          from: location.pathname + location.search,
-          to: `/chat/${chatId}`,
-          reason: "cleanup-autostart-query",
-        });
-        navigate(`/chat/${chatId}`, { replace: true });
-        return;
-      }
-
-      if (attempts >= maxAttempts) {
-        clearPipelineDesignBootstrap(chatId);
-        clearPipelineForceNewChat();
-        autoPipelinePromptingRef.current = null;
-        window.clearInterval(timer);
-      }
-    }, 250);
-
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [chatId, location.pathname, location.search, navigate, selectedAgent]);
-
   // Refresh chat when selectedAgent changes
   const prevSelectedAgentRef = useRef(selectedAgent);
   useEffect(() => {
@@ -530,13 +486,9 @@ export default function ChatPage() {
 
   const getSessionWrapped = useCallback(async (sessionId: string) => {
     const currentChatId = chatIdRef.current;
-    const search = new URLSearchParams(window.location.search);
-    const forceNewChat = hasPipelineForceNewChat();
-    const blockAutoSyncForPipelineNewChat =
-      (search.get("intent") === PIPELINE_DESIGN_INTENT &&
-        search.get("autostart") === "1" &&
-        search.get("newChat") === "1") ||
-      forceNewChat;
+    const pipelineHandoff =
+      !!currentChatId && hasPipelineDesignHandoff(currentChatId);
+    const blockAutoSyncForPipelineNewChat = pipelineHandoff;
     const canAutoSyncUrl =
       shouldAutoSyncChatUrl(currentChatId) && !blockAutoSyncForPipelineNewChat;
 
@@ -564,7 +516,8 @@ export default function ChatPage() {
     return sessionApi.getSession(sessionId);
   }, []);
 
-  const createSessionWrapped = useCallback(async (session: any) => {
+  const createSessionWrapped = useCallback(
+    async (session: Partial<{ id: string }>) => {
     const result = await sessionApi.createSession(session);
     const newSessionId = session?.id || result[0]?.id;
     if (isChatActiveRef.current && newSessionId) {
@@ -578,7 +531,9 @@ export default function ChatPage() {
       navigateRef.current(`/chat/${newSessionId}`, { replace: true });
     }
     return result;
-  }, []);
+    },
+    [],
+  );
 
   const wrappedSessionApi = useMemo(
     () => ({
@@ -588,59 +543,8 @@ export default function ChatPage() {
       updateSession: sessionApi.updateSession.bind(sessionApi),
       removeSession: sessionApi.removeSession.bind(sessionApi),
     }),
-    [],
+    [createSessionWrapped, getSessionListWrapped, getSessionWrapped],
   );
-
-  useEffect(() => {
-    const search = new URLSearchParams(location.search);
-    const intent = search.get("intent");
-    const autostart = search.get("autostart");
-    const shouldCreateNewChat =
-      search.get("newChat") === "1" || hasPipelineForceNewChat();
-
-    if (chatId) return;
-    if (intent !== PIPELINE_DESIGN_INTENT || autostart !== "1") return;
-    if (!shouldCreateNewChat) return;
-
-    if (pipelineIntentCreatingRef.current) return;
-    pipelineIntentCreatingRef.current = true;
-
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const sessions = await createSessionWrapped({
-          name: t("pipelines.designSessionName", "Pipeline Design"),
-        });
-        const sessionId = sessions[0]?.id;
-        if (!sessionId || cancelled) return;
-
-        const source =
-          (search.get("source") as "pipelines_page" | "chat_opportunity" | null) ||
-          "pipelines_page";
-        const bootstrapPrompt = buildPipelineDesignBootstrapPrompt({
-          source,
-          agentId: selectedAgent,
-        });
-        queuePipelineDesignBootstrap(sessionId, bootstrapPrompt);
-
-        const to = buildPipelineDesignChatPath(sessionId, source);
-        trackNavigation({
-          source: "chat.pipelineIntentCreateSession",
-          from: location.pathname + location.search,
-          to,
-          reason: "reuse-new-chat-create-flow",
-        });
-        navigate(to, { replace: true });
-      } finally {
-        pipelineIntentCreatingRef.current = false;
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [chatId, createSessionWrapped, location.pathname, location.search, navigate, selectedAgent, t]);
 
   const copyResponse = useCallback(
     async (response: CopyableResponse) => {
@@ -774,11 +678,9 @@ export default function ChatPage() {
         } catch (error) {
           console.error("Failed to persist background chat stream:", error);
         } finally {
-          if (!hasStreamActivity || didReleaseLoading) {
-            return;
+          if (hasStreamActivity && !didReleaseLoading) {
+            releaseStaleLoadingState(sessionId);
           }
-
-          releaseStaleLoadingState(sessionId);
         }
       })();
     },
@@ -786,15 +688,7 @@ export default function ChatPage() {
   );
 
   const customFetch = useCallback(
-    async (data: {
-      input?: any[];
-      biz_params?: any;
-      signal?: AbortSignal;
-      reconnect?: boolean;
-      session_id?: string;
-      user_id?: string;
-      channel?: string;
-    }): Promise<Response> => {
+    async (data: CustomFetchData): Promise<Response> => {
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
       };
@@ -818,6 +712,7 @@ export default function ChatPage() {
       const reconnectSessionId =
         data.session_id ?? window.currentSessionId ?? "";
       if (shouldReconnect && reconnectSessionId) {
+        setReconnectStreaming(true);
         const res = await fetch(getApiUrl("/console/chat"), {
           method: "POST",
           headers,
@@ -828,7 +723,37 @@ export default function ChatPage() {
             channel: data.channel ?? window.currentChannel ?? "console",
           }),
         });
-        if (!res.ok || !res.body) return res;
+
+        // Reconnect has a small race window: status endpoint can still read
+        // "running" while the stream task has just finished.
+        // Backend then returns 404 "No running chat for this session".
+        // Treat it as a benign idle transition instead of surfacing an error.
+        if (!res.ok || !res.body) {
+          setChatStatus("idle");
+          setReconnectStreaming(false);
+
+          if (res.status === 404) {
+            try {
+              const payload = await res.clone().json();
+              if (payload?.detail === "No running chat for this session") {
+                return new Response(
+                  JSON.stringify({
+                    status: AgentScopeRuntimeRunStatus.Completed,
+                    output: [],
+                  }),
+                  {
+                    status: 200,
+                    headers: { "Content-Type": "application/json" },
+                  },
+                );
+              }
+            } catch {
+              // Ignore parse errors and keep original response below.
+            }
+          }
+
+          return res;
+        }
         const onStreamEnd = () => {
           setChatStatus("idle");
           setReconnectStreaming(false);
@@ -873,10 +798,8 @@ export default function ChatPage() {
 
       const { input = [], biz_params } = data;
       const latestUserText = extractLatestUserText(input);
-      const search = new URLSearchParams(location.search);
       const inPipelineDesignIntent =
-        search.get("intent") === PIPELINE_DESIGN_INTENT &&
-        search.get("autostart") === "1";
+        !!chatIdRef.current && hasPipelineDesignHandoff(chatIdRef.current);
       const muteActive = Date.now() < pipelineOpportunityMuteUntilRef.current;
       const bootstrapText = isPipelineDesignBootstrapText(latestUserText);
       const shouldInlinePipelineGuide =
@@ -903,7 +826,7 @@ export default function ChatPage() {
               {
                 ...lastMsg,
                 content: [
-                  ...lastMsg.content.map((part: any) => {
+                  ...lastMsg.content.map((part: ChatInputContentPart) => {
                     const p = { ...part };
                     const toStoredName = (v: string) => {
                       const m1 = v.match(/\/console\/files\/[^/]+\/(.+)$/);
@@ -965,11 +888,12 @@ export default function ChatPage() {
         headers: response.headers,
       });
     },
-    [location.search, persistStreamSession, setChatStatus, setReconnectStreaming],
+    [persistStreamSession, setChatStatus, setReconnectStreaming],
   );
 
   const options = useMemo(() => {
     const i18nConfig = getDefaultConfig(t);
+    const senderConfig = (i18nConfig as SenderConfigShape).sender || {};
 
     const handleBeforeSubmit = async () => {
       if (isComposingRef.current) return false;
@@ -998,10 +922,10 @@ export default function ChatPage() {
           : `${import.meta.env.BASE_URL}copaw-symbol.svg`,
       },
       sender: {
-        ...(i18nConfig as any)?.sender,
+        ...senderConfig,
         beforeSubmit: handleBeforeSubmit,
         attachments: {
-          trigger: function (props: any) {
+          trigger: function (props: AttachmentTriggerProps) {
             return (
               <Tooltip title={t("chat.attachments.tooltip")}>
                 <IconButton
@@ -1013,12 +937,7 @@ export default function ChatPage() {
             );
           },
           accept: "*/*",
-          customRequest: async (options: {
-            file: File;
-            onSuccess: (body: { url?: string; thumbUrl?: string }) => void;
-            onError?: (e: Error) => void;
-            onProgress?: (e: { percent?: number }) => void;
-          }) => {
+          customRequest: async (options: AttachmentUploadOptions) => {
             try {
               console.log("options.file", options.file);
 
@@ -1074,7 +993,7 @@ export default function ChatPage() {
         replace: true,
       },
     } as unknown as IAgentScopeRuntimeWebUIOptions;
-  }, [wrappedSessionApi, customFetch, copyResponse, t, isDark]);
+  }, [wrappedSessionApi, customFetch, copyResponse, t, isDark, setChatStatus]);
 
   return (
     <div

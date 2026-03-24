@@ -1,8 +1,6 @@
-export const PIPELINE_DESIGN_INTENT = "create-pipeline";
-
 const BOOTSTRAP_KEY_PREFIX = "copaw.pipeline.bootstrap.";
 const STARTED_KEY_PREFIX = "copaw.pipeline.autostart.done.";
-const FORCE_NEW_CHAT_KEY = "copaw.pipeline.force_new_chat";
+const HANDOFF_KEY_PREFIX = "copaw.pipeline.handoff.";
 
 export type PipelineDesignSource = "pipelines_page" | "chat_opportunity";
 
@@ -34,15 +32,8 @@ export function buildPipelineDesignBootstrapPrompt({
 
 export function buildPipelineDesignChatPath(
   sessionId: string,
-  source: PipelineDesignSource,
 ): string {
-  const search = new URLSearchParams({
-    intent: PIPELINE_DESIGN_INTENT,
-    autostart: "1",
-    newChat: "1",
-    source,
-  }).toString();
-  return `/chat/${encodeURIComponent(sessionId)}?${search}`;
+  return `/chat/${encodeURIComponent(sessionId)}`;
 }
 
 export function queuePipelineDesignBootstrap(
@@ -69,10 +60,14 @@ export function markPipelineDesignAutostarted(sessionId: string): void {
   sessionStorage.setItem(`${STARTED_KEY_PREFIX}${sessionId}`, "1");
 }
 
-export function hasPipelineForceNewChat(): boolean {
-  return sessionStorage.getItem(FORCE_NEW_CHAT_KEY) === "1";
+export function markPipelineDesignHandoff(sessionId: string): void {
+  sessionStorage.setItem(`${HANDOFF_KEY_PREFIX}${sessionId}`, "1");
 }
 
-export function clearPipelineForceNewChat(): void {
-  sessionStorage.removeItem(FORCE_NEW_CHAT_KEY);
+export function hasPipelineDesignHandoff(sessionId: string): boolean {
+  return sessionStorage.getItem(`${HANDOFF_KEY_PREFIX}${sessionId}`) === "1";
+}
+
+export function clearPipelineDesignHandoff(sessionId: string): void {
+  sessionStorage.removeItem(`${HANDOFF_KEY_PREFIX}${sessionId}`);
 }

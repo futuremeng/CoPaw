@@ -4,9 +4,14 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { agentsApi } from "../../../api/modules/agents";
 import { chatApi } from "../../../api/modules/chat";
+import { getApiUrl } from "../../../api/config";
+import { buildAuthHeaders } from "../../../api/authHeaders";
 import {
   buildPipelineDesignBootstrapPrompt,
   buildPipelineDesignChatPath,
+  clearPipelineDesignBootstrap,
+  markPipelineDesignHandoff,
+  markPipelineDesignAutostarted,
   queuePipelineDesignBootstrap,
 } from "../../../utils/pipelineDesign";
 import { trackNavigation } from "../../../utils/navigationTelemetry";
@@ -207,7 +212,45 @@ export default function PipelinesPage() {
       agentId: selectedAgent,
     });
     queuePipelineDesignBootstrap(created.id, bootstrapPrompt);
-    const to = buildPipelineDesignChatPath(created.id, source);
+    markPipelineDesignHandoff(created.id);
+
+    try {
+      const warmupHeaders: Record<string, string> = {
+        ...buildAuthHeaders(),
+        "Content-Type": "application/json",
+      };
+      const warmupResponse = await fetch(getApiUrl("/console/chat"), {
+        method: "POST",
+        headers: warmupHeaders,
+        body: JSON.stringify({
+          input: [
+            {
+              role: "user",
+              type: "message",
+              content: [{ type: "text", text: bootstrapPrompt }],
+            },
+          ],
+          session_id: created.session_id,
+          user_id: created.user_id,
+          channel: created.channel,
+          stream: true,
+        }),
+      });
+
+      if (warmupResponse.ok) {
+        markPipelineDesignAutostarted(created.id);
+        clearPipelineDesignBootstrap(created.id);
+      }
+
+      // Warm-up stream is only used to start backend execution.
+      // Chat page reconnect will continue consuming from this run.
+      void warmupResponse.body?.cancel();
+    } catch (error) {
+      // Keep bootstrap in sessionStorage so chat page can fallback to submit.
+      console.warn("pipeline warmup submit failed, fallback to chat autostart", error);
+    }
+
+    const to = buildPipelineDesignChatPath(created.id);
     trackNavigation({
       source: "pipelines.handleOpenDesignChat",
       from: "/pipelines",

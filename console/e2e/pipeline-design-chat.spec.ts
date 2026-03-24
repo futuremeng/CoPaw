@@ -249,3 +249,21 @@ test("behavior: each pipeline create opens a new chat id", async ({ page }) => {
 
   expect(secondChatId).not.toBe(firstChatId);
 });
+
+test("behavior: pipeline design entry lands on plain chat url without query params", async ({ page }) => {
+  test.setTimeout(90_000);
+
+  await setupApiMocks(page);
+
+  await page.goto("/pipelines");
+
+  const openDesignBtn = page.getByTestId("pipeline-open-design-chat");
+  await expect(openDesignBtn).toBeVisible({ timeout: 30_000 });
+
+  await openDesignBtn.click();
+  await expect(page).toHaveURL(/\/chat\/[^/?]+$/);
+
+  const currentUrl = new URL(page.url());
+  expect(currentUrl.pathname).toMatch(/^\/chat\/[^/]+$/);
+  expect(currentUrl.search).toBe("");
+});
