@@ -1297,7 +1297,11 @@ export default function PipelinesPage() {
     [selectedAgent],
   );
 
-  const handleOpenDesignChat = async (withEditMode = false, target?: EditChatTarget) => {
+  const handleOpenDesignChat = async (
+    withEditMode = false,
+    target?: EditChatTarget,
+    options?: { forceNewSession?: boolean },
+  ) => {
     setDesignChatStarting(true);
     try {
       const source = "pipelines_page" as const;
@@ -1352,7 +1356,7 @@ export default function PipelinesPage() {
         },
       );
 
-      if (withEditMode) {
+      if (withEditMode && !options?.forceNewSession) {
         const reusedInMemory =
           designChatSessionId && editTargetKey === targetKey
             ? ({
@@ -2455,6 +2459,11 @@ export default function PipelinesPage() {
                 ) : designChatSessionId ? (
                   <AnywhereChat
                     sessionId={designChatSessionId}
+                    onNewChat={() => {
+                      void handleOpenDesignChat(true, undefined, {
+                        forceNewSession: true,
+                      });
+                    }}
                     onAssistantTurnCompleted={handleAssistantTurnCompleted}
                     inputPlaceholder={editGuidePlaceholder || undefined}
                     welcomeGreeting={t(

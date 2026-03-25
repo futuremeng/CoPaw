@@ -5,7 +5,7 @@ import {
   type IAgentScopeRuntimeWebUIRef,
 } from "@agentscope-ai/chat";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { message } from "antd";
+import { Button, message } from "antd";
 import { useTranslation } from "react-i18next";
 import defaultConfig, { getDefaultConfig } from "../../pages/Chat/OptionsPanel/defaultConfig";
 import ModelSelector from "../../pages/Chat/ModelSelector";
@@ -51,6 +51,7 @@ interface AnywhereChatProps {
   welcomeGreeting?: string;
   welcomeDescription?: string;
   welcomePrompts?: string[];
+  onNewChat?: () => void;
   onAssistantTurnCompleted?: (payload: {
     text: string;
     response: Record<string, unknown> | null;
@@ -129,6 +130,7 @@ export default function AnywhereChat({
   welcomeGreeting,
   welcomeDescription,
   welcomePrompts,
+  onNewChat,
   onAssistantTurnCompleted,
 }: AnywhereChatProps) {
   const { t } = useTranslation();
@@ -378,12 +380,16 @@ export default function AnywhereChat({
           flexShrink: 0,
           display: "flex",
           alignItems: "center",
-          justifyContent: "flex-end",
+          justifyContent: "space-between",
+          gap: 8,
           padding: "4px 8px",
           overflow: "hidden",
         }}
       >
         <ModelSelector />
+        <Button size="small" onClick={onNewChat}>
+          {t("chat.newChat", "New Chat")}
+        </Button>
       </div>
       <div
         className="copaw-chat-anywhere-chat"
