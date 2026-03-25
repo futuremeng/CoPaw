@@ -14,6 +14,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import sessionApi from "./sessionApi";
 import defaultConfig, { getDefaultConfig } from "./OptionsPanel/defaultConfig";
 import { chatApi } from "../../api/modules/chat";
+import { buildAuthHeaders } from "../../api/authHeaders";
 import { getApiToken, getApiUrl } from "../../api/config";
 import { providerApi } from "../../api/modules/provider";
 import type { ProviderInfo, ModelInfo } from "../../api/types";
@@ -23,9 +24,7 @@ import { useAgentStore } from "../../stores/agentStore";
 import AgentScopeRuntimeResponseBuilder from "@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/AgentScopeRuntime/Response/Builder.js";
 import { AgentScopeRuntimeRunStatus } from "@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/AgentScopeRuntime/types.js";
 import { useChatAnywhereInput } from "@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/Context/ChatAnywhereInputContext.js";
-import styles from "./index.module.less";
 import { IconButton } from "@agentscope-ai/design";
-import { SparkAttachmentLine } from "@agentscope-ai/icons";
 import { trackNavigation } from "../../utils/navigationTelemetry";
 import {
   copyText,
@@ -113,13 +112,6 @@ type CustomFetchData = {
 
 type AttachmentTriggerProps = {
   disabled?: boolean;
-};
-
-type AttachmentUploadOptions = {
-  file: File;
-  onSuccess: (body: { url?: string; thumbUrl?: string }) => void;
-  onError?: (error: Error) => void;
-  onProgress?: (event: { percent?: number }) => void;
 };
 
 type SenderConfigShape = {
@@ -637,74 +629,6 @@ export default function ChatPage() {
       cancelled = true;
     };
   }, [chatId]);
-
-  // Fetch multimodal capabilities for the active model
-  const fetchMultimodalCaps = useCallback(async () => {
-    try {
-      const [providers, activeModels] = await Promise.all([
-        providerApi.listProviders(),
-        providerApi.getActiveModels(),
-      ]);
-      const activeProviderId = activeModels?.active_llm?.provider_id;
-      const activeModelId = activeModels?.active_llm?.model;
-      if (!activeProviderId || !activeModelId) {
-        setMultimodalCaps({
-          supportsMultimodal: false,
-          supportsImage: false,
-          supportsVideo: false,
-        });
-        return;
-      }
-      const provider = (providers as ProviderInfo[]).find(
-        (p) => p.id === activeProviderId,
-      );
-      if (!provider) {
-        setMultimodalCaps({
-          supportsMultimodal: false,
-          supportsImage: false,
-          supportsVideo: false,
-        });
-        return;
-      }
-      const allModels: ModelInfo[] = [
-        ...(provider.models ?? []),
-        ...(provider.extra_models ?? []),
-      ];
-      const model = allModels.find((m) => m.id === activeModelId);
-      setMultimodalCaps({
-        supportsMultimodal: model?.supports_multimodal ?? false,
-        supportsImage: model?.supports_image ?? false,
-        supportsVideo: model?.supports_video ?? false,
-      });
-    } catch {
-      setMultimodalCaps({
-        supportsMultimodal: false,
-        supportsImage: false,
-        supportsVideo: false,
-      });
-    }
-  }, []);
-
-  // Fetch caps on mount and whenever refreshKey changes (model switch triggers refreshKey++)
-  useEffect(() => {
-    fetchMultimodalCaps();
-  }, [fetchMultimodalCaps, refreshKey]);
-
-  // Also poll caps when navigating back to chat (model may have been changed on settings page)
-  useEffect(() => {
-    if (isChatActiveRef.current) {
-      fetchMultimodalCaps();
-    }
-  }, [location.pathname, fetchMultimodalCaps]);
-
-  // Listen for model-switched event from ModelSelector
-  useEffect(() => {
-    const handler = () => {
-      fetchMultimodalCaps();
-    };
-    window.addEventListener("model-switched", handler);
-    return () => window.removeEventListener("model-switched", handler);
-  }, [fetchMultimodalCaps]);
 
   const getSessionListWrapped = useCallback(async () => {
     const sessions = await sessionApi.getSessionList();

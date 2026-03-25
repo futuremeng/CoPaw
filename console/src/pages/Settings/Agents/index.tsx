@@ -34,7 +34,7 @@ import styles from "./index.module.less";
 
 export default function AgentsPage() {
   const { t } = useTranslation();
-  const { agents, loading, deleteAgent, toggleAgent, loadAgents } = useAgents();
+  const { agents, loading, deleteAgent, toggleAgent } = useAgents();
   const { selectedAgent, setSelectedAgent } = useAgentStore();
   const [modalVisible, setModalVisible] = useState(false);
   const [editingAgent, setEditingAgent] = useState<AgentSummary | null>(null);

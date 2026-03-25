@@ -98,7 +98,7 @@
     "defaultNotDisablable": "デフォルトのエージェントは無効化できません",
     "currentAgentDisabled": "現在のエージェントが無効化されました。デフォルトエージェントに自動切り替えしました",
     "switchedToDefault": "デフォルトエージェントに自動切り替えしました",
-    "cannotSwitchToDisabled": "このエージェントは無効化されています。管理ページで有効化してください"
+    "cannotSwitchToDisabled": "このエージェントは無効化されています。管理ページで有効化してください",
     "square": "Agents Square",
     "squareAddSource": "ソースを追加",
     "squareAllSources": "すべてのソース",
