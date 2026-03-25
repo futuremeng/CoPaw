@@ -14,6 +14,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import sessionApi from "./sessionApi";
 import defaultConfig, { getDefaultConfig } from "./OptionsPanel/defaultConfig";
 import { chatApi } from "../../api/modules/chat";
+import { buildAuthHeaders } from "../../api/authHeaders";
 import { getApiToken, getApiUrl } from "../../api/config";
 import { providerApi } from "../../api/modules/provider";
 import ModelSelector from "./ModelSelector";
@@ -24,7 +25,6 @@ import { AgentScopeRuntimeRunStatus } from "@agentscope-ai/chat/lib/AgentScopeRu
 import { useChatAnywhereInput } from "@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/Context/ChatAnywhereInputContext.js";
 import "./index.module.less";
 import { IconButton } from "@agentscope-ai/design";
-import { SparkAttachmentLine } from "@agentscope-ai/icons";
 import { trackNavigation } from "../../utils/navigationTelemetry";
 import { shouldAutoSyncChatUrl } from "./navigationGuards";
 
@@ -104,13 +104,6 @@ type CustomFetchData = {
 
 type AttachmentTriggerProps = {
   disabled?: boolean;
-};
-
-type AttachmentUploadOptions = {
-  file: File;
-  onSuccess: (body: { url?: string; thumbUrl?: string }) => void;
-  onError?: (error: Error) => void;
-  onProgress?: (event: { percent?: number }) => void;
 };
 
 type SenderConfigShape = {
