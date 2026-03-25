@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import type { KeyboardEvent, ReactNode, UIEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Form,
   Input,
@@ -9,7 +10,11 @@ import {
   Select,
 } from "@agentscope-ai/design";
 import { ApiOutlined, DownOutlined, RightOutlined } from "@ant-design/icons";
-import type { ProviderConfigRequest } from "../../../../../api/types";
+import type {
+  ActiveModelsInfo,
+  AgentsRunningConfig,
+  ProviderConfigRequest,
+} from "../../../../../api/types";
 import api from "../../../../../api";
 import { useTranslation } from "react-i18next";
 import styles from "../../index.module.less";
@@ -29,7 +34,7 @@ interface JsonCodeEditorProps {
 function highlightJson(text: string): ReactNode[] {
   const tokens: ReactNode[] = [];
   const pattern =
-    /("(?:\\.|[^"\\])*")(\s*:)?|\btrue\b|\bfalse\b|\bnull\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|[{}\[\],:]/g;
+    /("(?:\\.|[^"\\])*")(\s*:)?|\btrue\b|\bfalse\b|\bnull\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|[{}[\],:]/g;
 
   let lastIndex = 0;
   let match: RegExpExecArray | null;
@@ -254,7 +259,7 @@ interface ProviderConfigModalProps {
     support_connection_check: boolean;
     generate_kwargs: Record<string, unknown>;
   };
-  activeModels: any;
+  activeModels?: ActiveModelsInfo | null;
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
@@ -268,13 +273,23 @@ export function ProviderConfigModal({
   onSaved,
 }: ProviderConfigModalProps) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [formDirty, setFormDirty] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [runningConfig, setRunningConfig] =
+    useState<AgentsRunningConfig | null>(null);
   const [form] = Form.useForm<ProviderConfigFormValues>();
   const selectedChatModel = Form.useWatch("chat_model", form);
+  const generateKwargsText = Form.useWatch("generate_kwargs_text", form);
   const canEditBaseUrl = !provider.freeze_url;
+  const exampleContextLength = 48000;
+  const exampleReservedMaxTokens = 4000;
+  const exampleSafetyMargin = 4000;
+  const exampleSuggestedMaxInputLength = 40000;
+  const exampleSettableMaxInputLength =
+    Math.floor(exampleSuggestedMaxInputLength / 1024) * 1024;
 
   const parseGenerateConfig = (value?: string) => {
     const trimmed = value?.trim();
@@ -365,6 +380,50 @@ export function ProviderConfigModal({
     return "https://api.example.com";
   }, [canEditBaseUrl, provider.id, provider.is_custom, effectiveChatModel]);
 
+  const lmStudioContextInfo = useMemo(() => {
+    if (provider.id !== "lmstudio") {
+      return null;
+    }
+
+    const trimmed = generateKwargsText?.trim();
+    let parsedGenerateKwargs: Record<string, unknown> | undefined;
+    try {
+      if (trimmed) {
+        const parsed = JSON.parse(trimmed);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          parsedGenerateKwargs = parsed as Record<string, unknown>;
+        }
+      }
+    } catch {
+      parsedGenerateKwargs = undefined;
+    }
+
+    const rawMaxTokens = parsedGenerateKwargs?.max_tokens;
+    const maxTokens =
+      typeof rawMaxTokens === "number" && Number.isFinite(rawMaxTokens)
+        ? rawMaxTokens
+        : null;
+    const maxInputLength =
+      typeof runningConfig?.max_input_length === "number"
+        ? runningConfig.max_input_length
+        : null;
+    const safetyMargin =
+      maxInputLength != null
+        ? Math.max(1024, Math.round(maxInputLength * 0.1))
+        : null;
+    const safeContextSuggestion =
+      maxTokens != null && maxInputLength != null && safetyMargin != null
+        ? maxInputLength + maxTokens + safetyMargin
+        : null;
+
+    return {
+      maxTokens,
+      maxInputLength,
+      safetyMargin,
+      safeContextSuggestion,
+    };
+  }, [generateKwargsText, provider.id, runningConfig]);
+
   // Sync form when modal opens or provider data changes
   useEffect(() => {
     if (open) {
@@ -382,6 +441,30 @@ export function ProviderConfigModal({
       setFormDirty(false);
     }
   }, [provider, form, open]);
+
+  useEffect(() => {
+    if (!open || provider.id !== "lmstudio") {
+      return;
+    }
+
+    let cancelled = false;
+    void api
+      .getAgentRunningConfig()
+      .then((config) => {
+        if (!cancelled) {
+          setRunningConfig(config);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRunningConfig(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, provider.id]);
 
   const handleSubmit = async () => {
     try {
@@ -461,6 +544,19 @@ export function ProviderConfigModal({
 
   const isActiveLlmProvider =
     activeModels?.active_llm?.provider_id === provider.id;
+
+  const handleCopySettableMaxInputLength = async (withNavigate = false) => {
+    try {
+      await navigator.clipboard.writeText(String(exampleSettableMaxInputLength));
+      message.success(t("common.copied"));
+      if (withNavigate) {
+        onClose();
+        navigate("/agent-config");
+      }
+    } catch {
+      message.error(t("common.copyFailed"));
+    }
+  };
 
   const handleRevoke = () => {
     const confirmContent = isActiveLlmProvider
@@ -685,6 +781,149 @@ export function ProviderConfigModal({
               placeholder={`Example:\n{\n  "extra_body": {\n    "enable_thinking": false\n  },\n  "max_tokens": 2048\n}`}
             />
           </Form.Item>
+
+          {advancedOpen && lmStudioContextInfo && (
+            <div className={styles.providerHintCard}>
+              <div className={styles.providerHintTitle}>
+                {t("models.lmstudioContextTitle")}
+              </div>
+              <div className={styles.providerHintBody}>
+                <p>{t("models.lmstudioContextMeaning")}</p>
+                <p>{t("models.lmstudioConfigOrder")}</p>
+                <p>{t("models.lmstudioContextGuideline")}</p>
+                <p>{t("models.lmstudioNotAutomatic")}</p>
+                <div className={styles.providerHintFormula}>
+                  <span className={styles.providerHintFormulaLabel}>
+                    {t("models.lmstudioFormulaLabel")}
+                  </span>
+                  <code className={styles.providerHintFormulaCode}>
+                    {t("models.lmstudioFormula")}
+                  </code>
+                </div>
+
+                <div className={styles.providerHintSectionTitle}>
+                  {t("models.lmstudioInternalConstraintTitle")}
+                </div>
+                <div className={styles.providerHintExample}>
+                  <div className={styles.providerHintExampleTitle}>
+                    {t("models.lmstudioExampleTitle")}
+                  </div>
+                  <div className={styles.providerHintGrid}>
+                    <div className={styles.providerHintItem}>
+                      <span className={styles.providerHintLabel}>
+                        {t("models.lmstudioExampleContextLength")}
+                      </span>
+                      <span className={styles.providerHintValue}>
+                        {exampleContextLength}
+                      </span>
+                    </div>
+                    <div className={styles.providerHintItem}>
+                      <span className={styles.providerHintLabel}>
+                        {t("models.lmstudioExampleMaxTokens")}
+                      </span>
+                      <span className={styles.providerHintValue}>
+                        {exampleReservedMaxTokens}
+                      </span>
+                    </div>
+                    <div className={styles.providerHintItem}>
+                      <span className={styles.providerHintLabel}>
+                        {t("models.lmstudioExampleSafetyMargin")}
+                      </span>
+                      <span className={styles.providerHintValue}>
+                        {exampleSafetyMargin}
+                      </span>
+                    </div>
+                    <div className={styles.providerHintItem}>
+                      <span className={styles.providerHintLabel}>
+                        {t("models.lmstudioExampleMaxInputLengthSuggested")}
+                      </span>
+                      <span className={styles.providerHintValue}>
+                        {exampleSuggestedMaxInputLength}
+                      </span>
+                    </div>
+                    <div className={styles.providerHintItem}>
+                      <span className={styles.providerHintLabel}>
+                        {t("models.lmstudioCurrentAndSuggestedMaxInputLength")}
+                      </span>
+                      <span className={styles.providerHintValue}>
+                        {t("models.lmstudioCurrentValue", {
+                          value:
+                            lmStudioContextInfo.maxInputLength != null
+                              ? String(lmStudioContextInfo.maxInputLength)
+                              :
+                            t("models.notSet"),
+                        })}
+                      </span>
+                      <span className={styles.providerHintValueSecondary}>
+                        {t("models.lmstudioSuggestedSettableValue", {
+                          value: String(exampleSettableMaxInputLength),
+                        })}
+                      </span>
+                      <div className={styles.providerHintValueActions}>
+                        <Button
+                          size="small"
+                          onClick={() => {
+                            void handleCopySettableMaxInputLength(false);
+                          }}
+                        >
+                          {t("common.copy")}
+                        </Button>
+                        <Button
+                          size="small"
+                          type="link"
+                          onClick={() => {
+                            void handleCopySettableMaxInputLength(true);
+                          }}
+                        >
+                          {t("models.copyAndOpenAgentConfig")}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className={styles.providerHintActionRow}>
+                  <p className={styles.providerHintActionText}>
+                    {t("models.lmstudioAdjustmentPath")}
+                  </p>
+                  <Button
+                    size="small"
+                    onClick={() => {
+                      onClose();
+                      navigate("/agent-config");
+                    }}
+                  >
+                    {t("models.openAgentConfig")}
+                  </Button>
+                </div>
+
+                <div className={styles.providerHintSectionTitle}>
+                  {t("models.lmstudioExpandResourceTitle")}
+                </div>
+                <div className={styles.providerHintGrid}>
+                  <div className={styles.providerHintItem}>
+                    <span className={styles.providerHintLabel}>
+                      {t("models.lmstudioSafetyMargin")}
+                    </span>
+                    <span className={styles.providerHintValue}>
+                      {lmStudioContextInfo.safetyMargin ?? t("models.notSet")}
+                    </span>
+                  </div>
+                  <div className={styles.providerHintItem}>
+                    <span className={styles.providerHintLabel}>
+                      {t("models.lmstudioRecommendedContextLength")}
+                    </span>
+                    <span className={styles.providerHintValue}>
+                      {lmStudioContextInfo.safeContextSuggestion ??
+                        t("models.lmstudioNeedBothValues")}
+                    </span>
+                  </div>
+                </div>
+                <p className={styles.providerHintNote}>
+                  {t("models.lmstudioImpactNote")}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </Form>
     </Modal>
