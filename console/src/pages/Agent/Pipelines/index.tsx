@@ -100,6 +100,41 @@ type PipelineChatBindingMeta = {
 const INDEPENDENT_PIPELINE_SCOPE_ID = "__independent__";
 const PIPELINE_DRAFT_STORAGE_PREFIX = "copaw:pipelines:drafts:";
 
+function buildPrefilledPipelineTemplateSteps(): ProjectPipelineTemplateStep[] {
+  return [
+    {
+      id: "step-1-purpose",
+      name: "明确流程用途",
+      kind: "analysis",
+      description: "[用途] 描述本流程解决的问题和适用范围。",
+    },
+    {
+      id: "step-2-input",
+      name: "整理输入来源",
+      kind: "ingest",
+      description: "[输入] 列出输入数据类型、来源路径和前置要求。",
+    },
+    {
+      id: "step-3-workflow",
+      name: "执行核心处理",
+      kind: "transform",
+      description: "[步骤线索] 按阶段拆解核心处理步骤，可继续细分子步骤。",
+    },
+    {
+      id: "step-4-quality-check",
+      name: "质量校验",
+      kind: "validation",
+      description: "定义质量门槛、失败判定和重试策略。",
+    },
+    {
+      id: "step-5-output",
+      name: "生成目标产物",
+      kind: "publish",
+      description: "[产物] 输出结果格式、保存位置和交付方式。",
+    },
+  ];
+}
+
 function getPipelineDraftStorageKey(agentId: string): string {
   return `${PIPELINE_DRAFT_STORAGE_PREFIX}${agentId}`;
 }
@@ -1099,7 +1134,12 @@ export default function PipelinesPage() {
       const targetVersion = normalizeVersion(target?.version || currentTemplate?.version || "latest");
       const targetScope = target?.source || selectedPipeline?.source || "independent";
       const targetDescription = target?.description || currentTemplate?.description || "";
-      const targetSteps = target?.steps || currentTemplate?.steps || [];
+      const fallbackSteps = buildPrefilledPipelineTemplateSteps();
+      const targetSteps = (target?.steps && target.steps.length > 0)
+        ? target.steps
+        : (currentTemplate?.steps && currentTemplate.steps.length > 0)
+          ? currentTemplate.steps
+          : fallbackSteps;
       const isEmptyNodes = target?.isEmptyNodes ?? (targetSteps.length === 0);
       const normalizedTarget: EditChatTarget = {
         pipelineId: target?.pipelineId || selectedPipeline?.id || "unknown",
@@ -1145,8 +1185,9 @@ export default function PipelinesPage() {
         const restored = reusedInMemory || (await resolveBoundChat(targetKey));
         if (restored) {
           setDesignChatSessionId(restored.id);
-          setDraftNewVersionSteps([]);
-          setDraftParseStatus("idle");
+          const prefilledDraft = isEmptyNodes ? buildPrefilledPipelineTemplateSteps() : [];
+          setDraftNewVersionSteps(prefilledDraft);
+          setDraftParseStatus(prefilledDraft.length > 0 ? "ready" : "idle");
           setDraftParseError("");
           setExpandedDraftDiffKeys([]);
           setEditMode(true);
@@ -1187,8 +1228,9 @@ export default function PipelinesPage() {
 
       setDesignChatSessionId(created.id);
       if (withEditMode) {
-        setDraftNewVersionSteps([]);
-        setDraftParseStatus("idle");
+        const prefilledDraft = isEmptyNodes ? buildPrefilledPipelineTemplateSteps() : [];
+        setDraftNewVersionSteps(prefilledDraft);
+        setDraftParseStatus(prefilledDraft.length > 0 ? "ready" : "idle");
         setDraftParseError("");
         setExpandedDraftDiffKeys([]);
         setEditMode(true);
@@ -2008,7 +2050,7 @@ export default function PipelinesPage() {
                         ? "pipelines.editWelcomeDescriptionInit"
                         : "pipelines.editWelcomeDescription",
                       editWelcomeMode === "init"
-                        ? "你可以先描述目标、输入和产出，我会生成初始化节点并给出参数建议。"
+                        ? "已预填首版模板，你可以直接在对话里按用途/输入/产物/步骤线索进行修改。"
                         : "我会基于当前流程结构给出节点级修改建议，并帮助你整理可执行的改造方案。",
                     )}
                     welcomePrompts={[
@@ -2017,7 +2059,7 @@ export default function PipelinesPage() {
                           ? "pipelines.editWelcomePromptInit1"
                           : "pipelines.editWelcomePrompt1",
                         editWelcomeMode === "init"
-                          ? "为这个新流程生成首版节点（目标、输入、步骤、验收标准）。"
+                          ? "基于用途/输入/产物/步骤线索，修改右侧预填模板并返回完整 pipeline JSON。"
                           : "分析当前流程瓶颈，并给出 3 条可执行优化建议（含节点改动）。",
                       ),
                       t(
@@ -2025,7 +2067,7 @@ export default function PipelinesPage() {
                           ? "pipelines.editWelcomePromptInit2"
                           : "pipelines.editWelcomePrompt2",
                         editWelcomeMode === "init"
-                          ? "先给我 5 个澄清问题，再输出可直接执行的流程草案。"
+                          ? "若信息不足，先保留占位描述并最小修改，不要从零重建。"
                           : "我要改这个流程：新增校验节点、调整重试策略，并输出变更后的步骤清单。",
                       ),
                     ]}
