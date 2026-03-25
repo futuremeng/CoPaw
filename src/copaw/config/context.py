@@ -14,6 +14,16 @@ current_workspace_dir: ContextVar[Path | None] = ContextVar(
     default=None,
 )
 
+# Context variable for the current focus-level working directory (e.g. a
+# pipeline workspace subdirectory or a project directory). It takes
+# precedence over current_workspace_dir for user-facing file tools so that
+# the agent is scoped to the active focus while system tools still use
+# workspace_dir.
+current_focus_dir: ContextVar[Path | None] = ContextVar(
+    "current_focus_dir",
+    default=None,
+)
+
 
 def get_current_workspace_dir() -> Path | None:
     """Get the current agent's workspace directory from context.
@@ -31,3 +41,33 @@ def set_current_workspace_dir(workspace_dir: Path | None) -> None:
         workspace_dir: Path to the agent's workspace directory.
     """
     current_workspace_dir.set(workspace_dir)
+
+
+def get_current_focus_dir() -> Path | None:
+    """Get the current focus-level working directory from context.
+
+    Returns:
+        Path to the current focus directory (e.g. pipeline workspace or
+        project directory), or None if not set.
+    """
+    return current_focus_dir.get()
+
+
+def set_current_focus_dir(focus_dir: Path | None) -> None:
+    """Set the current focus-level working directory in context.
+
+    Args:
+        focus_dir: Path to the focus directory. Pass ``None`` to clear and
+            fall back to workspace_dir.
+    """
+    current_focus_dir.set(focus_dir)
+
+
+def get_current_task_dir() -> Path | None:
+    """Backward-compatible alias for get_current_focus_dir()."""
+    return get_current_focus_dir()
+
+
+def set_current_task_dir(task_dir: Path | None) -> None:
+    """Backward-compatible alias for set_current_focus_dir()."""
+    set_current_focus_dir(task_dir)

@@ -7,6 +7,7 @@ import json
 import logging
 import re
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -64,38 +65,114 @@ _APPROVE_EXACT = frozenset(
 )
 
 
-def _resolve_flow_memory_path_from_chat_meta(
+@dataclass
+class FocusContext:
+    """Resolved focus context from chat metadata."""
+
+    focus_type: str
+    focus_dir: Path
+    flow_memory_path: str | None = None
+
+
+def _is_safe_subpath(candidate: Path, root: Path) -> bool:
+    """True when candidate is within root after resolution."""
+    try:
+        candidate_resolved = candidate.resolve()
+        root_resolved = root.resolve()
+    except Exception:
+        return False
+    return str(candidate_resolved).startswith(str(root_resolved))
+
+
+def _resolve_path_in_workspace(raw_path: str, workspace_dir: Path) -> Path | None:
+    """Resolve path inside workspace safely from absolute/relative raw string."""
+    if not raw_path:
+        return None
+    candidate = Path(raw_path)
+    if not candidate.is_absolute():
+        candidate = (workspace_dir / candidate).resolve()
+    if not _is_safe_subpath(candidate, workspace_dir):
+        return None
+    return candidate
+
+
+def _resolve_focus_context_from_chat_meta(
     chat_meta: dict[str, Any] | None,
     workspace_dir: Path | None,
-) -> str | None:
-    """Resolve flow-scoped memory file path for pipeline edit chats."""
+) -> FocusContext | None:
+    """Resolve focus context from chat metadata with legacy compatibility.
+
+    Supported metadata keys:
+    - New focus keys: focus_type, focus_id, focus_path, focus_flow_memory_path
+    - Legacy pipeline keys: binding_type, pipeline_id, flow_memory_path
+    """
     if not chat_meta or workspace_dir is None:
         return None
 
-    meta_type = str(chat_meta.get("binding_type") or "").strip()
-    if meta_type != "pipeline_edit":
+    ws_dir = workspace_dir.resolve()
+    focus_type = str(chat_meta.get("focus_type") or "").strip()
+    if not focus_type:
+        legacy_type = str(chat_meta.get("binding_type") or "").strip()
+        focus_type = "pipeline_edit" if legacy_type == "pipeline_edit" else ""
+
+    if not focus_type:
         return None
 
-    raw_path = str(chat_meta.get("flow_memory_path") or "").strip()
-    if raw_path:
-        candidate = Path(raw_path)
-        if not candidate.is_absolute():
-            candidate = (workspace_dir / candidate).resolve()
-        if str(candidate).startswith(str(workspace_dir.resolve())):
-            return str(candidate)
+    raw_focus_path = str(chat_meta.get("focus_path") or "").strip()
+    focus_dir: Path | None = None
+    if raw_focus_path:
+        focus_dir = _resolve_path_in_workspace(raw_focus_path, ws_dir)
 
-    pipeline_id = str(chat_meta.get("pipeline_id") or "").strip()
-    if not pipeline_id:
+    if focus_dir is None and focus_type == "pipeline_edit":
+        pipeline_id = str(
+            chat_meta.get("focus_id") or chat_meta.get("pipeline_id") or "",
+        ).strip()
+        if not pipeline_id:
+            return None
+        fallback_dir = ws_dir / "pipelines" / "workspaces" / pipeline_id
+        if _is_safe_subpath(fallback_dir, ws_dir):
+            focus_dir = fallback_dir
+
+    if focus_dir is None and focus_type == "project_run":
+        project_id = str(chat_meta.get("project_id") or "").strip()
+        run_id = str(chat_meta.get("run_id") or "").strip()
+        if run_id:
+            run_dir = ws_dir / "projects" / project_id / "pipelines" / "runs" / run_id
+            if _is_safe_subpath(run_dir, ws_dir):
+                focus_dir = run_dir
+        if focus_dir is None and project_id:
+            project_dir = ws_dir / "projects" / project_id
+            if _is_safe_subpath(project_dir, ws_dir):
+                focus_dir = project_dir
+
+    if focus_dir is None:
         return None
 
-    fallback = (
-        workspace_dir
-        / "pipelines"
-        / "workspaces"
-        / pipeline_id
-        / "flow-memory.md"
+    flow_memory_path: str | None = None
+    raw_flow_memory_path = str(
+        chat_meta.get("focus_flow_memory_path")
+        or chat_meta.get("flow_memory_path")
+        or "",
+    ).strip()
+    if raw_flow_memory_path:
+        flow_candidate = _resolve_path_in_workspace(raw_flow_memory_path, ws_dir)
+        if flow_candidate is not None:
+            flow_memory_path = str(flow_candidate)
+
+    if flow_memory_path is None and focus_type == "pipeline_edit":
+        pipeline_id = str(
+            chat_meta.get("focus_id") or chat_meta.get("pipeline_id") or "",
+        ).strip()
+        if pipeline_id:
+            fallback_flow = ws_dir / "pipelines" / "workspaces" / pipeline_id / "flow-memory.md"
+            if _is_safe_subpath(fallback_flow, ws_dir):
+                flow_memory_path = str(fallback_flow)
+
+    return FocusContext(
+        focus_type=focus_type,
+        focus_dir=focus_dir,
+        flow_memory_path=flow_memory_path,
     )
-    return str(fallback)
 
 
 def _extract_status_code(exc: Exception) -> int | None:
@@ -507,6 +584,9 @@ class AgentRunner(Runner):
             )
             await agent.register_mcp_clients()
             agent.set_console_output_enabled(enabled=False)
+            # Default to agent-level workspace unless chat meta injects a focus.
+            agent.clear_focus_dir()
+            agent.set_flow_memory_path(None)
 
             logger.debug(
                 f"Agent Query msgs {msgs}",
@@ -542,19 +622,37 @@ class AgentRunner(Runner):
                 logger.debug(f"Runner: Got chat: {chat.id}")
 
                 try:
+                    # Always reset focus first, then inject from current chat meta.
+                    agent.clear_focus_dir()
+                    agent.set_flow_memory_path(None)
+
                     chat_meta = (
                         chat.meta
                         if hasattr(chat, "meta") and isinstance(chat.meta, dict)
                         else None
                     )
-                    flow_memory_path = _resolve_flow_memory_path_from_chat_meta(
+                    focus_ctx = _resolve_focus_context_from_chat_meta(
                         chat_meta,
                         self.workspace_dir,
                     )
-                    if flow_memory_path:
-                        agent.set_flow_memory_path(flow_memory_path)
-                except Exception as flow_exc:
-                    logger.warning("Failed to resolve flow memory path from chat meta: %s", flow_exc)
+                    if focus_ctx is not None:
+                        agent.set_focus_dir(focus_ctx.focus_dir)
+                        focus_env_context = build_env_context(
+                            session_id=session_id,
+                            user_id=user_id,
+                            channel=channel,
+                            working_dir=str(focus_ctx.focus_dir),
+                        )
+                        agent.update_env_context(focus_env_context)
+                        if focus_ctx.flow_memory_path:
+                            agent.set_flow_memory_path(focus_ctx.flow_memory_path)
+                        logger.debug(
+                            "Scoped agent focus dir (%s): %s",
+                            focus_ctx.focus_type,
+                            focus_ctx.focus_dir,
+                        )
+                except Exception as focus_exc:
+                    logger.warning("Failed to resolve focus context from chat meta: %s", focus_exc)
             else:
                 logger.warning(
                     f"ChatManager is None! Cannot auto-register chat for "

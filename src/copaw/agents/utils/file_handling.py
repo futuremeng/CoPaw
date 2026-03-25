@@ -18,14 +18,15 @@ from pathlib import Path
 from typing import Optional
 
 from ...config.context import get_current_workspace_dir
+from ...config.context import get_current_workspace_dir, get_current_focus_dir
 from ...constant import WORKING_DIR
 
 logger = logging.getLogger(__name__)
 
 
 def _default_download_dir() -> str:
-    """Return the default download directory under the current workspace."""
-    base_dir = get_current_workspace_dir() or WORKING_DIR
+    """Return the default download directory under the current focus/workspace."""
+    base_dir = get_current_focus_dir() or get_current_workspace_dir() or WORKING_DIR
     return str(base_dir / "downloads")
 
 

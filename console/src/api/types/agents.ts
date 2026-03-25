@@ -78,6 +78,9 @@ export interface ProjectPipelineRunSummary {
   status: string;
   created_at: string;
   updated_at: string;
+  focus_chat_id?: string | null;
+  focus_type?: string | null;
+  focus_path?: string | null;
 }
 
 export interface ProjectPipelineRunStep {

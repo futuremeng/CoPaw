@@ -17,7 +17,7 @@ from agentscope.message import TextBlock
 from agentscope.tool import ToolResponse
 
 from ...constant import WORKING_DIR
-from ...config.context import get_current_workspace_dir
+from ...config.context import get_current_workspace_dir, get_current_focus_dir
 from .file_io import _resolve_file_path
 
 # ---------------------------------------------------------------------------
@@ -143,7 +143,7 @@ def _resolve_search_root(
     search_root = (
         Path(_resolve_file_path(path))
         if path
-        else (get_current_workspace_dir() or WORKING_DIR)
+        else (get_current_focus_dir() or get_current_workspace_dir() or WORKING_DIR)
     )
     try:
         exists = search_root.exists()

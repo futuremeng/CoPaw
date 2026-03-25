@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Button,
@@ -12,6 +12,7 @@ import {
 } from "antd";
 import { useTranslation } from "react-i18next";
 import { agentsApi } from "../../../api/modules/agents";
+import { chatApi } from "../../../api/modules/chat";
 import type {
   AgentProjectFileInfo,
   ProjectPipelineRunDetail,
@@ -85,6 +86,8 @@ export default function ProjectsPage() {
   );
   const [pipelineLoading, setPipelineLoading] = useState(false);
   const [createRunLoading, setCreateRunLoading] = useState(false);
+  const [runFocusChatId, setRunFocusChatId] = useState("");
+  const runFocusChatIdRef = useRef("");
 
   const currentAgent = useMemo(
     () => getCurrentAgent(agents, selectedAgent),
@@ -279,6 +282,29 @@ export default function ProjectsPage() {
       await loadPipelineContext(currentAgent.id, selectedProject.id);
       setSelectedRunId(run.id);
       setRunDetail(run);
+
+      // Clear previous focus chat meta and create a new one for this run
+      const prevFocusChatId = runFocusChatIdRef.current;
+      if (prevFocusChatId) {
+        void chatApi.updateChat(prevFocusChatId, { meta: {} }).catch(() => {});
+      }
+      void chatApi.createChat({
+        name: `[focus] ${selectedProject.name}`,
+        session_id: `project-run-${run.id}`,
+        user_id: "default",
+        channel: "console",
+        meta: {
+          focus_type: "project_run",
+          focus_id: selectedProject.id,
+          project_id: selectedProject.id,
+          run_id: run.id,
+          focus_path: `projects/${selectedProject.id}`,
+        },
+      }).then((chat) => {
+        setRunFocusChatId(chat.id);
+      }).catch((err) => {
+        console.warn("[focus] failed to create project focus chat", err);
+      });
     } catch (err) {
       console.error("failed to create pipeline run", err);
       setError(
@@ -288,6 +314,21 @@ export default function ProjectsPage() {
       setCreateRunLoading(false);
     }
   }, [currentAgent, loadPipelineContext, selectedProject, selectedTemplateId, t]);
+
+  // Sync runFocusChatId state → ref for safe use in cleanup effects
+  useEffect(() => {
+    runFocusChatIdRef.current = runFocusChatId;
+  }, [runFocusChatId]);
+
+  // Clear focus meta when the page unmounts
+  useEffect(() => {
+    return () => {
+      const chatId = runFocusChatIdRef.current;
+      if (chatId) {
+        void chatApi.updateChat(chatId, { meta: {} }).catch(() => {});
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!currentAgent) {

@@ -33,6 +33,18 @@ class _DummyAgent:
     def rebuild_sys_prompt(self) -> None:
         return None
 
+    def clear_focus_dir(self) -> None:
+        return None
+
+    def set_focus_dir(self, focus_dir) -> None:
+        _ = focus_dir
+
+    def set_flow_memory_path(self, path) -> None:
+        _ = path
+
+    def update_env_context(self, env_context: str) -> None:
+        _ = env_context
+
     def __call__(self, msgs):
         _ = msgs
         return object()
@@ -90,7 +102,7 @@ async def test_query_handler_returns_retryable_error_msg(
 
     async def _no_approval(session_id: str, query: str | None):
         _ = session_id, query
-        return None, False
+        return None, False, None
 
     async def _failing_stream_printing_messages(*args, **kwargs):
         _ = args, kwargs
@@ -157,7 +169,7 @@ async def test_query_handler_cancelled_stops_gracefully(monkeypatch) -> None:
 
     async def _no_approval(session_id: str, query: str | None):
         _ = session_id, query
-        return None, False
+        return None, False, None
 
     async def _cancelled_stream_printing_messages(*args, **kwargs):
         _ = args, kwargs
@@ -218,7 +230,7 @@ async def test_query_handler_suppresses_mcp_connection_error(
 
     async def _no_approval(session_id: str, query: str | None):
         _ = session_id, query
-        return None, False
+        return None, False, None
 
     async def _failing_stream_printing_messages(*args, **kwargs):
         _ = args, kwargs
@@ -280,7 +292,7 @@ async def test_stream_query_cancelled_finishes_without_failed_event(
 
     async def _no_approval(session_id: str, query: str | None):
         _ = session_id, query
-        return None, False
+        return None, False, None
 
     async def _cancelled_stream_printing_messages(*args, **kwargs):
         _ = args, kwargs

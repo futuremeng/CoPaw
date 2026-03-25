@@ -73,6 +73,9 @@ class PipelineRunSummary(BaseModel):
     status: str
     created_at: str
     updated_at: str
+    focus_chat_id: str | None = None
+    focus_type: str | None = None
+    focus_path: str | None = None
 
 
 class PipelineRunStep(BaseModel):
@@ -1255,6 +1258,9 @@ def _list_project_pipeline_runs(project_dir: Path) -> list[PipelineRunSummary]:
                     status=run_detail.status,
                     created_at=run_detail.created_at,
                     updated_at=run_detail.updated_at,
+                    focus_chat_id=run_detail.focus_chat_id,
+                    focus_type=run_detail.focus_type,
+                    focus_path=run_detail.focus_path,
                 ),
             )
         except Exception as exc:
@@ -1342,6 +1348,9 @@ def _create_project_pipeline_run(
         parameters=body.parameters,
         steps=steps,
         artifacts=artifacts,
+        focus_chat_id=None,
+        focus_type="project_run",
+        focus_path=f"projects/{project_id}",
     )
     _persist_project_pipeline_run(project_dir, run, template)
     return run

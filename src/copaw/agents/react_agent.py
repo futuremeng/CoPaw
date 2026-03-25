@@ -143,6 +143,7 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
         self._namesake_strategy = namesake_strategy
         self._workspace_dir = workspace_dir
         self._flow_memory_path = flow_memory_path
+        self._focus_dir: Path | None = None
 
         # Extract configuration from agent_config
         running_config = agent_config.running
@@ -393,6 +394,37 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
     def set_flow_memory_path(self, flow_memory_path: str | None) -> None:
         """Set flow-scoped memory path used in system prompt rebuilding."""
         self._flow_memory_path = flow_memory_path
+
+    def set_focus_dir(self, focus_dir: Path | None) -> None:
+        """Set focus-level working directory for the current chat context.
+
+        When set, file tools resolve relative paths against this directory
+        instead of the full agent workspace_dir.
+
+        Args:
+            focus_dir: Path to the focus directory, or ``None`` to clear.
+        """
+        self._focus_dir = focus_dir
+
+    def clear_focus_dir(self) -> None:
+        """Clear focus-level working directory and fallback to workspace root."""
+        self._focus_dir = None
+
+    def set_task_dir(self, task_dir: Path | None) -> None:
+        """Backward-compatible alias for set_focus_dir()."""
+        self.set_focus_dir(task_dir)
+
+    def update_env_context(self, env_context: str) -> None:
+        """Replace the environment context string.
+
+        Useful after task-level context is resolved (e.g. pipeline_edit) to
+        update the working_dir shown in the system prompt before
+        :meth:`rebuild_sys_prompt` is called.
+
+        Args:
+            env_context: New environment context string.
+        """
+        self._env_context = env_context
 
     def _load_flow_memory_content(self) -> str:
         """Load temporary flow-scoped memory content for current pipeline editing session."""
@@ -975,16 +1007,17 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
         """Override reply to process file blocks and handle commands.
 
         Args:
-            msg: Input message(s) from user
-            structured_model: Optional pydantic model for structured output
+            msg: Input message(s)
+            structured_model: Optional structured output model
 
         Returns:
             Response message
         """
-        # Set workspace_dir in context for tool functions
-        from ..config.context import set_current_workspace_dir
+        # Set workspace and focus dirs in context for tool functions
+        from ..config.context import set_current_workspace_dir, set_current_focus_dir
 
         set_current_workspace_dir(self._workspace_dir)
+        set_current_focus_dir(self._focus_dir)
 
         # Process file and media blocks in messages
         if msg is not None:

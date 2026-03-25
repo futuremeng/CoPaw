@@ -9,7 +9,7 @@ from agentscope.message import TextBlock
 from agentscope.tool import ToolResponse
 
 from ...constant import WORKING_DIR
-from ...config.context import get_current_workspace_dir
+from ...config.context import get_current_workspace_dir, get_current_focus_dir
 from .utils import truncate_file_output, read_file_safe
 
 
@@ -27,8 +27,9 @@ def _resolve_file_path(file_path: str) -> str:
     if path.is_absolute():
         return str(path)
     else:
-        # Use current workspace_dir from context, fallback to WORKING_DIR
-        workspace_dir = get_current_workspace_dir() or WORKING_DIR
+        # Prefer focus-level directory when set (e.g. pipeline workspace or
+        # project directory), then fall back to full workspace_dir.
+        workspace_dir = get_current_focus_dir() or get_current_workspace_dir() or WORKING_DIR
         return str(workspace_dir / file_path)
 
 

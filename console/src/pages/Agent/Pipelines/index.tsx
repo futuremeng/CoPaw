@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Card, Empty, Modal, Select, Spin, Tag, Typography, message } from "antd";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -94,6 +94,13 @@ type PipelineSaveConflictInfo = {
 };
 
 type PipelineChatBindingMeta = {
+  focus_type: "pipeline_edit";
+  focus_binding_key: string;
+  focus_id: string;
+  focus_path: string;
+  focus_scope: "independent" | "project";
+  focus_flow_memory_path?: string;
+  // Legacy compatibility fields
   binding_type: "pipeline_edit";
   pipeline_binding_key: string;
   pipeline_id: string;
@@ -319,6 +326,10 @@ function getMetaString(meta: Record<string, unknown> | undefined, key: string): 
   return typeof value === "string" ? value : "";
 }
 
+function buildPipelineWorkspaceRelativePath(pipelineId: string): string {
+  return `pipelines/workspaces/${pipelineId}`;
+}
+
 function buildPipelineChatBindingMeta(params: {
   pipelineId: string;
   pipelineName: string;
@@ -328,12 +339,21 @@ function buildPipelineChatBindingMeta(params: {
   flowMemoryPath?: string;
 }): PipelineChatBindingMeta {
   const normalizedVersion = normalizeVersion(params.version);
+  const bindingKey = buildPipelineDesignBindingKey({
+    pipelineId: params.pipelineId,
+    version: normalizedVersion,
+  });
+  const focusPath = buildPipelineWorkspaceRelativePath(params.pipelineId);
   return {
+    focus_type: "pipeline_edit",
+    focus_binding_key: bindingKey,
+    focus_id: params.pipelineId,
+    focus_path: focusPath,
+    focus_scope: params.scope,
+    focus_flow_memory_path: params.flowMemoryPath,
+    // Legacy compatibility fields
     binding_type: "pipeline_edit",
-    pipeline_binding_key: buildPipelineDesignBindingKey({
-      pipelineId: params.pipelineId,
-      version: normalizedVersion,
-    }),
+    pipeline_binding_key: bindingKey,
     pipeline_id: params.pipelineId,
     pipeline_name: params.pipelineName,
     pipeline_version: normalizedVersion,
@@ -344,7 +364,7 @@ function buildPipelineChatBindingMeta(params: {
 }
 
 function buildPipelineFlowMemoryRelativePath(pipelineId: string): string {
-  return `pipelines/workspaces/${pipelineId}/flow-memory.md`;
+  return `${buildPipelineWorkspaceRelativePath(pipelineId)}/flow-memory.md`;
 }
 
 function normalizeDraftSteps(raw: unknown): DraftParseResult {
@@ -735,6 +755,7 @@ export default function PipelinesPage() {
   const [designChatStarting, setDesignChatStarting] = useState(false);
   const [draftSaving, setDraftSaving] = useState(false);
   const [designChatSessionId, setDesignChatSessionId] = useState("");
+  const designChatSessionIdRef = useRef("");
   const [editTargetKey, setEditTargetKey] = useState("");
   const [editGuidePlaceholder, setEditGuidePlaceholder] = useState("");
   const [editWelcomeMode, setEditWelcomeMode] = useState<"default" | "init">("default");
@@ -856,6 +877,10 @@ export default function PipelinesPage() {
       mounted = false;
     };
   }, [agents, independentScopeLabel, selectedAgent, setAgents, t]);
+
+  useEffect(() => {
+    designChatSessionIdRef.current = designChatSessionId;
+  }, [designChatSessionId]);
 
   const pipelineGroups = useMemo<PipelineGroup[]>(() => {
     const filteredTemplates = templates.filter((item) => {
@@ -980,8 +1005,29 @@ export default function PipelinesPage() {
     };
   }, [hasUnsavedDrafts, t]);
 
+  const clearFocusMeta = useCallback(async (chatId: string) => {
+    if (!chatId) return;
+    try {
+      await chatApi.updateChat(chatId, { meta: {} });
+    } catch {
+      // Ignore cleanup failures on page leave.
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      const sessionId = designChatSessionIdRef.current;
+      if (sessionId) {
+        void clearFocusMeta(sessionId);
+      }
+    };
+  }, [clearFocusMeta]);
+
   const closeEditMode = () => {
+    const prevChatId = designChatSessionId;
     setEditMode(false);
+    setDesignChatSessionId("");
+    setEditTargetKey("");
     setEditGuidePlaceholder("");
     setEditWelcomeMode("default");
     setDraftNewVersionSteps([]);
@@ -997,6 +1043,9 @@ export default function PipelinesPage() {
     setConflictRemoteDraftBackup([]);
     setConflictRestoreAvailable(false);
     setConflictMergeAvailable(false);
+    if (prevChatId) {
+      void clearFocusMeta(prevChatId);
+    }
   };
 
   const handleRefreshAfterConflict = useCallback(async () => {
@@ -1265,8 +1314,8 @@ export default function PipelinesPage() {
           chat.meta && typeof chat.meta === "object"
             ? (chat.meta as Record<string, unknown>)
             : undefined;
-        const metaType = getMetaString(meta, "binding_type");
-        const metaKey = getMetaString(meta, "pipeline_binding_key");
+        const metaType = getMetaString(meta, "focus_type") || getMetaString(meta, "binding_type");
+        const metaKey = getMetaString(meta, "focus_binding_key") || getMetaString(meta, "pipeline_binding_key");
         const metaAgentId = getMetaString(meta, "agent_id");
 
         if (metaType !== "pipeline_edit" || metaKey !== bindingKey) {
@@ -1302,6 +1351,7 @@ export default function PipelinesPage() {
     target?: EditChatTarget,
     options?: { forceNewSession?: boolean },
   ) => {
+    const previousSessionId = designChatSessionId;
     setDesignChatStarting(true);
     try {
       const source = "pipelines_page" as const;
@@ -1406,6 +1456,15 @@ export default function PipelinesPage() {
         channel: "console",
         meta: withEditMode ? bindingMeta : {},
       });
+
+      if (
+        withEditMode &&
+        options?.forceNewSession &&
+        previousSessionId &&
+        previousSessionId !== created.id
+      ) {
+        void clearFocusMeta(previousSessionId);
+      }
 
       setDesignChatSessionId(created.id);
       if (withEditMode) {
