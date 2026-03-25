@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { message } from "antd";
 import { useTranslation } from "react-i18next";
 import defaultConfig, { getDefaultConfig } from "../../pages/Chat/OptionsPanel/defaultConfig";
+import ModelSelector from "../../pages/Chat/ModelSelector";
 import sessionApi from "../../pages/Chat/sessionApi";
 import { chatApi } from "../../api/modules/chat";
 import { getApiToken, getApiUrl } from "../../api/config";
@@ -63,6 +64,23 @@ type StreamResponseData = {
     content?: Array<{ type?: string; text?: string; refusal?: string }>;
   }>;
 };
+
+function extractUserTextFromInput(input?: ChatInputItem): string {
+  if (!input || !Array.isArray(input.content)) return "";
+
+  return input.content
+    .flatMap((part) => {
+      if (!part || typeof part !== "object") return [];
+      const typed = part as { type?: string; text?: string };
+      if (typed.type === "text" && typeof typed.text === "string") {
+        return [typed.text.trim()];
+      }
+      return [];
+    })
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+}
 
 function isFinalResponseStatus(status?: string): boolean {
   return (
@@ -128,6 +146,19 @@ export default function AnywhereChat({
       getSessionList: async () => {
         if (!sessionId) return [];
         try {
+          const sessions = await sessionApi.getSessionList();
+          const matched = sessions.find((item) => {
+            const ext = item as { realId?: string; sessionId?: string };
+            return (
+              item.id === sessionId ||
+              ext.realId === sessionId ||
+              ext.sessionId === sessionId
+            );
+          });
+          if (matched) {
+            return [matched];
+          }
+
           const session = await sessionApi.getSession(sessionId);
           return [session];
         } catch {
@@ -184,6 +215,14 @@ export default function AnywhereChat({
       const input = data.input || [];
       const lastInput = input.slice(-1);
       const session = lastInput[0]?.session || {};
+      const optimisticText = extractUserTextFromInput(lastInput[0]);
+      if (optimisticText) {
+        sessionApi.setLastUserMessage(sessionId, optimisticText);
+        const resolvedSessionId = sessionApi.getRealIdForSession(sessionId);
+        if (resolvedSessionId && resolvedSessionId !== sessionId) {
+          sessionApi.setLastUserMessage(resolvedSessionId, optimisticText);
+        }
+      }
 
       const response = await fetch(getApiUrl("/console/chat"), {
         method: "POST",
@@ -330,7 +369,26 @@ export default function AnywhereChat({
         overflow: "hidden",
       }}
     >
-      <div style={{ flex: 1, minHeight: 0, maxHeight: "100%", overflow: "hidden" }}>
+      <div
+        className="copaw-chat-anywhere-header"
+        style={{
+          height: 44,
+          minHeight: 44,
+          maxHeight: 44,
+          flexShrink: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "flex-end",
+          padding: "4px 8px",
+          overflow: "hidden",
+        }}
+      >
+        <ModelSelector />
+      </div>
+      <div
+        className="copaw-chat-anywhere-chat"
+        style={{ flex: 1, minHeight: 0, maxHeight: "100%", overflow: "hidden" }}
+      >
         <AgentScopeRuntimeWebUI
           ref={chatRef}
           key={`${sessionId}-${refreshKey}`}

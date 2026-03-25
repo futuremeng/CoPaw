@@ -1,9 +1,32 @@
 export type PipelineDesignSource = "pipelines_page" | "chat_opportunity";
 
+export type PipelineDesignScope = "independent" | "project";
+
+interface BuildBindingKeyParams {
+  pipelineId: string;
+  version: string;
+}
+
 interface BuildPromptParams {
   agentId?: string;
   source: PipelineDesignSource;
   seedTask?: string;
+}
+
+interface BuildEditContextPromptParams {
+  agentId?: string;
+  source: PipelineDesignSource;
+  scope: PipelineDesignScope;
+  pipelineId: string;
+  pipelineName: string;
+  version: string;
+  description?: string;
+  steps: Array<{
+    id: string;
+    name: string;
+    kind: string;
+    description?: string;
+  }>;
 }
 
 export function buildPipelineDesignBootstrapPrompt({
@@ -24,6 +47,42 @@ export function buildPipelineDesignBootstrapPrompt({
   }
 
   return lines.join("\n");
+}
+
+export function buildPipelineDesignBindingKey({
+  pipelineId,
+  version,
+}: BuildBindingKeyParams): string {
+  return `${pipelineId}@${version.trim() || "0"}`;
+}
+
+export function buildPipelineDesignEditContextPrompt({
+  agentId,
+  source,
+  scope,
+  pipelineId,
+  pipelineName,
+  version,
+  description,
+  steps,
+}: BuildEditContextPromptParams): string {
+  const safeDescription = (description || "").trim() || "-";
+  const payload = {
+    pipeline_id: pipelineId,
+    pipeline_name: pipelineName,
+    version,
+    description: safeDescription,
+    scope,
+    source,
+    agent_id: agentId || "unknown",
+    steps,
+  };
+
+  return [
+    "继续在当前会话编辑流程。请基于以下当前流程信息继续工作：",
+    JSON.stringify(payload, null, 2),
+    "要求：后续如果你给出流程改造结果，请严格返回 schema_version=1 且包含完整 steps 数组。",
+  ].join("\n\n");
 }
 
 export function buildPipelineDesignChatPath(

@@ -3,6 +3,19 @@ import type { Page, Route } from "@playwright/test";
 
 async function setupApiMocks(page: Page) {
   let createdChatCount = 0;
+  const chats: Array<Record<string, unknown>> = [
+    {
+      id: "old-session-1",
+      name: "Old Session",
+      session_id: "old-session-1",
+      user_id: "default",
+      channel: "console",
+      meta: {},
+      status: "idle",
+      created_at: "2026-03-20T00:00:00Z",
+      updated_at: "2026-03-20T00:00:00Z",
+    },
+  ];
 
   page.on("pageerror", (error: Error) => {
     console.error("[e2e] pageerror:", error.message);
@@ -97,17 +110,7 @@ async function setupApiMocks(page: Page) {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([
-          {
-            id: "old-session-1",
-            name: "Old Session",
-            session_id: "old-session-1",
-            user_id: "default",
-            channel: "console",
-            meta: {},
-            status: "idle",
-          },
-        ]),
+        body: JSON.stringify(chats),
       });
       return;
     }
@@ -117,18 +120,22 @@ async function setupApiMocks(page: Page) {
       const bodyText = route.request().postData() || "{}";
       const body = JSON.parse(bodyText);
       const createdId = `created-chat-${createdChatCount}`;
+      const createdChat = {
+        id: createdId,
+        name: body.name || "Pipeline Design",
+        session_id: body.session_id || createdId,
+        user_id: body.user_id || "default",
+        channel: body.channel || "console",
+        meta: body.meta || {},
+        status: "idle",
+        created_at: "2026-03-25T00:00:00Z",
+        updated_at: "2026-03-25T00:00:00Z",
+      };
+      chats.unshift(createdChat);
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({
-          id: createdId,
-          name: body.name || "Pipeline Design",
-          session_id: body.session_id || createdId,
-          user_id: body.user_id || "default",
-          channel: body.channel || "console",
-          meta: body.meta || {},
-          status: "idle",
-        }),
+        body: JSON.stringify(createdChat),
       });
       return;
     }
@@ -308,4 +315,52 @@ test("behavior: pipeline design entry lands on plain chat url without query para
   const currentUrl = new URL(page.url());
   expect(currentUrl.pathname).toMatch(/^\/chat\/[^/]+$/);
   expect(currentUrl.search).toBe("");
+});
+
+test("behavior: edit pipeline restores bound chat after reload", async ({ page }) => {
+  test.setTimeout(90_000);
+
+  await setupApiMocks(page);
+
+  await page.goto("/pipelines");
+
+  const editBtn = page.getByRole("button", {
+    name: /Edit Pipeline|编辑流程/i,
+  });
+  await expect(editBtn).toBeVisible({ timeout: 30_000 });
+
+  const firstCreateRequest = page.waitForRequest((request) => {
+    return request.method() === "POST" && request.url().includes("/api/chats");
+  });
+
+  await editBtn.click();
+  const firstCreate = await firstCreateRequest;
+  expect(firstCreate.postDataJSON()).toMatchObject({
+    meta: {
+      binding_type: "pipeline_edit",
+      pipeline_binding_key: "books-alignment-v1@0.1.0",
+      pipeline_id: "books-alignment-v1",
+      pipeline_version: "0.1.0",
+    },
+  });
+
+  const exitEditBtn = page.getByRole("button", { name: /Exit Edit|退出编辑/i });
+  await expect(exitEditBtn).toBeVisible({ timeout: 20_000 });
+  await exitEditBtn.click();
+
+  await page.goto("/pipelines");
+  await expect(editBtn).toBeVisible({ timeout: 30_000 });
+
+  let createCount = 0;
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.url().includes("/api/chats")) {
+      createCount += 1;
+    }
+  });
+
+  await editBtn.click();
+  await expect(exitEditBtn).toBeVisible({ timeout: 20_000 });
+  await page.waitForTimeout(500);
+
+  expect(createCount).toBe(0);
 });

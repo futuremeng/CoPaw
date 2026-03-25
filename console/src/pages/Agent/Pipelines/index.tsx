@@ -7,6 +7,8 @@ import { chatApi } from "../../../api/modules/chat";
 import AnywhereChat from "../../../components/AnywhereChat";
 import sessionApi from "../../Chat/sessionApi";
 import {
+  buildPipelineDesignBindingKey,
+  buildPipelineDesignEditContextPrompt,
   buildPipelineDesignBootstrapPrompt,
   buildPipelineDesignChatPath,
 } from "../../../utils/pipelineDesign";
@@ -18,6 +20,7 @@ import type {
   ProjectPipelineRunSummary,
   ProjectPipelineTemplateInfo,
 } from "../../../api/types/agents";
+import type { ChatSpec } from "../../../api/types/chat";
 import { useAgentStore } from "../../../stores/agentStore";
 import styles from "./index.module.less";
 
@@ -61,6 +64,9 @@ type EditChatTarget = {
   pipelineName: string;
   version: string;
   isEmptyNodes: boolean;
+  description?: string;
+  steps?: ProjectPipelineTemplateStep[];
+  source?: "independent" | "project";
 };
 
 type DraftParseResult = {
@@ -70,6 +76,16 @@ type DraftParseResult = {
 
 const PIPELINE_DRAFT_SCHEMA_HINT =
   '{"schema_version":1,"steps":[{"id":"collect-input","name":"Collect Inputs","kind":"ingest","description":"..."}]}';
+
+type PipelineChatBindingMeta = {
+  binding_type: "pipeline_edit";
+  pipeline_binding_key: string;
+  pipeline_id: string;
+  pipeline_name: string;
+  pipeline_version: string;
+  pipeline_scope: "independent" | "project";
+  agent_id: string;
+};
 
 const INDEPENDENT_PIPELINE_SCOPE_ID = "__independent__";
 
@@ -210,6 +226,33 @@ function buildPipelineDraftHint(t: (key: string, fallback: string) => string): s
     "pipelines.realtimeDraftSchemaHint",
     `请按 JSON 输出，格式示例：${PIPELINE_DRAFT_SCHEMA_HINT}`,
   );
+}
+
+function getMetaString(meta: Record<string, unknown> | undefined, key: string): string {
+  const value = meta?.[key];
+  return typeof value === "string" ? value : "";
+}
+
+function buildPipelineChatBindingMeta(params: {
+  pipelineId: string;
+  pipelineName: string;
+  version: string;
+  scope: "independent" | "project";
+  agentId?: string;
+}): PipelineChatBindingMeta {
+  const normalizedVersion = normalizeVersion(params.version);
+  return {
+    binding_type: "pipeline_edit",
+    pipeline_binding_key: buildPipelineDesignBindingKey({
+      pipelineId: params.pipelineId,
+      version: normalizedVersion,
+    }),
+    pipeline_id: params.pipelineId,
+    pipeline_name: params.pipelineName,
+    pipeline_version: normalizedVersion,
+    pipeline_scope: params.scope,
+    agent_id: params.agentId || "unknown",
+  };
 }
 
 function normalizeDraftSteps(raw: unknown): DraftParseResult {
@@ -842,15 +885,98 @@ export default function PipelinesPage() {
     }
   }, [selectedCompareVersion, selectedCurrentVersion]);
 
+  const resolveBoundChat = useCallback(
+    async (bindingKey: string): Promise<ChatSpec | null> => {
+      const chats = await chatApi.listChats({ user_id: "default", channel: "console" });
+      const matched = chats.filter((chat) => {
+        const meta =
+          chat.meta && typeof chat.meta === "object"
+            ? (chat.meta as Record<string, unknown>)
+            : undefined;
+        const metaType = getMetaString(meta, "binding_type");
+        const metaKey = getMetaString(meta, "pipeline_binding_key");
+        const metaAgentId = getMetaString(meta, "agent_id");
+
+        if (metaType !== "pipeline_edit" || metaKey !== bindingKey) {
+          return false;
+        }
+        if (selectedAgent && metaAgentId && metaAgentId !== selectedAgent) {
+          return false;
+        }
+        return true;
+      });
+
+      if (matched.length === 0) return null;
+
+      const toMillis = (value?: string | null): number => {
+        if (!value) return 0;
+        const ts = Date.parse(value);
+        return Number.isFinite(ts) ? ts : 0;
+      };
+
+      matched.sort((a, b) => {
+        const tsA = toMillis(a.updated_at) || toMillis(a.created_at);
+        const tsB = toMillis(b.updated_at) || toMillis(b.created_at);
+        return tsB - tsA;
+      });
+
+      return matched[0] || null;
+    },
+    [selectedAgent],
+  );
+
+  const injectPipelineContext = useCallback(
+    async (chat: Pick<ChatSpec, "id" | "session_id" | "user_id" | "channel">, target: EditChatTarget) => {
+      const prompt = buildPipelineDesignEditContextPrompt({
+        agentId: selectedAgent,
+        source: "pipelines_page",
+        scope: target.source || "independent",
+        pipelineId: target.pipelineId,
+        pipelineName: target.pipelineName,
+        version: normalizeVersion(target.version),
+        description: target.description || "",
+        steps: target.steps || [],
+      });
+
+      sessionApi.setLastUserMessage(chat.id, prompt);
+      if (chat.session_id) {
+        sessionApi.setLastUserMessage(chat.session_id, prompt);
+      }
+
+      await chatApi.startConsoleChat({
+        sessionId: chat.session_id || chat.id,
+        prompt,
+        userId: chat.user_id || "default",
+        channel: chat.channel || "console",
+      });
+    },
+    [selectedAgent],
+  );
+
   const handleOpenDesignChat = async (withEditMode = false, target?: EditChatTarget) => {
     setDesignChatStarting(true);
     try {
       const source = "pipelines_page" as const;
-      const targetPipelineName =
-        target?.pipelineName || selectedPipeline?.name || selectedPipeline?.id || "unknown";
-      const targetVersion = target?.version || currentTemplate?.version || "latest";
-      const isEmptyNodes =
-        target?.isEmptyNodes ?? ((currentTemplate?.steps?.length || 0) === 0);
+      const targetPipelineName = target?.pipelineName || selectedPipeline?.name || selectedPipeline?.id || "unknown";
+      const targetVersion = normalizeVersion(target?.version || currentTemplate?.version || "latest");
+      const targetScope = target?.source || selectedPipeline?.source || "independent";
+      const targetDescription = target?.description || currentTemplate?.description || "";
+      const targetSteps = target?.steps || currentTemplate?.steps || [];
+      const isEmptyNodes = target?.isEmptyNodes ?? (targetSteps.length === 0);
+      const normalizedTarget: EditChatTarget = {
+        pipelineId: target?.pipelineId || selectedPipeline?.id || "unknown",
+        pipelineName: targetPipelineName,
+        version: targetVersion,
+        isEmptyNodes,
+        description: targetDescription,
+        steps: targetSteps,
+        source: targetScope,
+      };
+      const targetKey = buildPipelineDesignBindingKey({
+        pipelineId: normalizedTarget.pipelineId,
+        version: normalizedTarget.version,
+      });
+
       const seedTask = withEditMode
         ? `编辑已有流程: ${targetPipelineName} (${targetVersion})\n请先分析当前节点并给出可执行的改造建议。`
         : undefined;
@@ -868,12 +994,58 @@ export default function PipelinesPage() {
       );
       const editGuideWithSchema = `${editGuide}\n${buildPipelineDraftHint(t)}`;
 
+      if (withEditMode) {
+        const reusedInMemory =
+          designChatSessionId && editTargetKey === targetKey
+            ? ({
+                id: designChatSessionId,
+                session_id: designChatSessionId,
+                user_id: "default",
+                channel: "console",
+              } as ChatSpec)
+            : null;
+
+        const restored = reusedInMemory || (await resolveBoundChat(targetKey));
+        if (restored) {
+          setDesignChatSessionId(restored.id);
+          setDraftNewVersionSteps([]);
+          setDraftParseStatus("idle");
+          setDraftParseError("");
+          setExpandedDraftDiffKeys([]);
+          setEditMode(true);
+          setEditTargetKey(targetKey);
+          setEditWelcomeMode(isEmptyNodes ? "init" : "default");
+          setEditGuidePlaceholder(editGuideWithSchema);
+
+          try {
+            await injectPipelineContext(restored, normalizedTarget);
+            message.success(
+              t("pipelines.boundSessionRestored", "已恢复流程绑定会话，并同步当前流程上下文。"),
+            );
+          } catch (error) {
+            console.error("failed to inject pipeline context on restored session", error);
+            message.warning(
+              t("pipelines.boundSessionContextFailed", "已恢复绑定会话，但同步当前流程上下文失败。"),
+            );
+          }
+          return;
+        }
+      }
+
+      const bindingMeta = buildPipelineChatBindingMeta({
+        pipelineId: normalizedTarget.pipelineId,
+        pipelineName: normalizedTarget.pipelineName,
+        version: normalizedTarget.version,
+        scope: normalizedTarget.source || "independent",
+        agentId: selectedAgent,
+      });
+
       const created = await chatApi.createChat({
         name: t("pipelines.designSessionName", "Pipeline Design"),
         session_id: buildPipelineEntrySessionId(),
         user_id: "default",
         channel: "console",
-        meta: {},
+        meta: withEditMode ? bindingMeta : {},
       });
 
       setDesignChatSessionId(created.id);
@@ -883,9 +1055,21 @@ export default function PipelinesPage() {
         setDraftParseError("");
         setExpandedDraftDiffKeys([]);
         setEditMode(true);
-        setEditTargetKey(`${target?.pipelineId || selectedPipeline?.id || "unknown"}@${normalizeVersion(targetVersion)}`);
+        setEditTargetKey(targetKey);
         setEditWelcomeMode(isEmptyNodes ? "init" : "default");
         setEditGuidePlaceholder(editGuideWithSchema);
+
+        try {
+          await injectPipelineContext(created, normalizedTarget);
+          message.success(
+            t("pipelines.boundSessionCreated", "已创建流程绑定会话，并同步当前流程上下文。"),
+          );
+        } catch (error) {
+          console.error("failed to inject pipeline context on new session", error);
+          message.warning(
+            t("pipelines.boundSessionContextFailed", "已恢复绑定会话，但同步当前流程上下文失败。"),
+          );
+        }
         return;
       }
 
@@ -961,6 +1145,9 @@ export default function PipelinesPage() {
       pipelineName: draftTemplate.name,
       version: draftTemplate.version,
       isEmptyNodes: true,
+      description: draftTemplate.description,
+      steps: draftTemplate.steps,
+      source: "independent",
     });
   };
 
@@ -1041,7 +1228,6 @@ export default function PipelinesPage() {
       return;
     }
 
-    const targetKey = `${selectedPipeline.id}@${normalizeVersion(currentTemplate.version)}`;
     const isEmptyNodes = (currentTemplate.steps?.length || 0) === 0;
     setEditWelcomeMode(isEmptyNodes ? "init" : "default");
     setEditGuidePlaceholder(
@@ -1059,16 +1245,14 @@ export default function PipelinesPage() {
       )}\n${buildPipelineDraftHint(t)}`,
     );
 
-    if (designChatSessionId && editTargetKey === targetKey) {
-      setEditMode(true);
-      return;
-    }
-
     await handleOpenDesignChat(true, {
       pipelineId: selectedPipeline.id,
       pipelineName: selectedPipeline.name || selectedPipeline.id,
       version: currentTemplate.version || "latest",
       isEmptyNodes,
+      description: currentTemplate.description || "",
+      steps: currentTemplate.steps || [],
+      source: selectedPipeline.source,
     });
   };
 

@@ -292,6 +292,29 @@ function extractTextFromContent(content: unknown): string {
     .trim();
 }
 
+function extractTextFromUserCardMessage(message: IAgentScopeRuntimeWebUIMessage): string {
+  const firstCard = message.cards?.[0];
+  if (!firstCard || typeof firstCard !== "object") return "";
+  const cardData = (firstCard as { data?: unknown }).data;
+  if (!cardData || typeof cardData !== "object") return "";
+  const input = (cardData as { input?: Array<{ content?: unknown }> }).input;
+  if (!Array.isArray(input) || input.length === 0) return "";
+  return extractTextFromContent(input[0]?.content);
+}
+
+function hasInjectedUserMessage(
+  messages: IAgentScopeRuntimeWebUIMessage[],
+  cachedText: string,
+): boolean {
+  const normalizedCached = cachedText.trim();
+  if (!normalizedCached) return false;
+
+  return messages.some((msg) => {
+    if (msg.role !== ROLE_USER) return false;
+    return extractTextFromUserCardMessage(msg) === normalizedCached;
+  });
+}
+
 let lastLocalSessionId = 0;
 
 function generateLocalSessionId(): string {
@@ -410,6 +433,10 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
       loadPendingUserMessage(backendSessionId) ||
       (aliasId ? loadPendingUserMessage(aliasId) : "");
     if (!cachedText) return;
+
+    if (hasInjectedUserMessage(messages, cachedText)) {
+      return;
+    }
 
     const lastMsg = messages[messages.length - 1] as RuntimeUiMessageLike | undefined;
     if (lastMsg?.role === ROLE_USER) {
