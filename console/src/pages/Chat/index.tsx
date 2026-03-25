@@ -27,7 +27,6 @@ import "./index.module.less";
 import { IconButton } from "@agentscope-ai/design";
 import { SparkAttachmentLine } from "@agentscope-ai/icons";
 import { trackNavigation } from "../../utils/navigationTelemetry";
-import { shouldAutoSyncChatUrl } from "./navigationGuards";
 
 type CopyableContent = {
   type?: string;
@@ -493,7 +492,13 @@ export default function ChatPage() {
           (session as { status?: "idle" | "running" }).status === "idle";
 
         if (hasAssistantMessage || isIdle) {
-          setRefreshKey((prev) => prev + 1);
+          // Only force a re-mount when we had to wait (session was initially
+          // running with empty history). On the first attempt the component
+          // self-hydrates, so an extra remount just causes a duplicate
+          // /api/chats request without any visible benefit.
+          if (attempts > 1) {
+            setRefreshKey((prev) => prev + 1);
+          }
           return;
         }
       } catch {
@@ -602,11 +607,9 @@ export default function ChatPage() {
 
   const getSessionWrapped = useCallback(async (sessionId: string) => {
     const currentChatId = chatIdRef.current;
-    const canAutoSyncUrl = shouldAutoSyncChatUrl(currentChatId);
 
     if (
       isChatActiveRef.current &&
-      canAutoSyncUrl &&
       sessionId &&
       sessionId !== lastSessionIdRef.current &&
       sessionId !== currentChatId
