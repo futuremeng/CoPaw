@@ -8,7 +8,6 @@ import AnywhereChat from "../../../components/AnywhereChat";
 import sessionApi from "../../Chat/sessionApi";
 import {
   buildPipelineDesignBindingKey,
-  buildPipelineDesignEditContextPrompt,
   buildPipelineDesignBootstrapPrompt,
   buildPipelineDesignChatPath,
 } from "../../../utils/pipelineDesign";
@@ -1298,41 +1297,6 @@ export default function PipelinesPage() {
     [selectedAgent],
   );
 
-  const injectPipelineContext = useCallback(
-    async (
-      chat: Pick<ChatSpec, "id" | "session_id" | "user_id" | "channel">,
-      target: EditChatTarget,
-      mdRelativePath?: string,
-      flowMemoryRelativePath?: string,
-    ) => {
-      const prompt = buildPipelineDesignEditContextPrompt({
-        agentId: selectedAgent,
-        source: "pipelines_page",
-        scope: target.source || "independent",
-        pipelineId: target.pipelineId,
-        pipelineName: target.pipelineName,
-        version: normalizeVersion(target.version),
-        description: target.description || "",
-        steps: target.steps || [],
-        mdRelativePath,
-        flowMemoryRelativePath,
-      });
-
-      sessionApi.setLastUserMessage(chat.id, prompt);
-      if (chat.session_id) {
-        sessionApi.setLastUserMessage(chat.session_id, prompt);
-      }
-
-      await chatApi.startConsoleChat({
-        sessionId: chat.session_id || chat.id,
-        prompt,
-        userId: chat.user_id || "default",
-        channel: chat.channel || "console",
-      });
-    },
-    [selectedAgent],
-  );
-
   const handleOpenDesignChat = async (withEditMode = false, target?: EditChatTarget) => {
     setDesignChatStarting(true);
     try {
@@ -1357,12 +1321,10 @@ export default function PipelinesPage() {
         steps: targetSteps,
         source: targetScope,
       };
-      let mdRelativePath = "";
       let flowMemoryRelativePath = "";
       if (withEditMode && selectedAgent && normalizedTarget.pipelineId !== "unknown") {
         try {
           const draftInfo = await agentsApi.getPipelineDraft(selectedAgent, normalizedTarget.pipelineId);
-          mdRelativePath = draftInfo.md_relative_path || "";
           flowMemoryRelativePath = draftInfo.flow_memory_relative_path || "";
           setLastDraftMdMtime(draftInfo.md_mtime || 0);
         } catch {
@@ -1413,23 +1375,9 @@ export default function PipelinesPage() {
           setEditTargetKey(targetKey);
           setEditWelcomeMode(isEmptyNodes ? "init" : "default");
           setEditGuidePlaceholder(editGuide);
-
-          try {
-            await injectPipelineContext(
-              restored,
-              normalizedTarget,
-              mdRelativePath,
-              flowMemoryRelativePath,
-            );
-            message.success(
-              t("pipelines.boundSessionRestored", "已恢复流程绑定会话，并同步当前流程上下文。"),
-            );
-          } catch (error) {
-            console.error("failed to inject pipeline context on restored session", error);
-            message.warning(
-              t("pipelines.boundSessionContextFailed", "已恢复绑定会话，但同步当前流程上下文失败。"),
-            );
-          }
+          message.success(
+            t("pipelines.boundSessionRestored", "已恢复流程绑定会话。"),
+          );
           return;
         }
       }
@@ -1466,23 +1414,9 @@ export default function PipelinesPage() {
         setEditTargetKey(targetKey);
         setEditWelcomeMode(isEmptyNodes ? "init" : "default");
         setEditGuidePlaceholder(editGuide);
-
-        try {
-          await injectPipelineContext(
-            created,
-            normalizedTarget,
-            mdRelativePath,
-            flowMemoryRelativePath,
-          );
-          message.success(
-            t("pipelines.boundSessionCreated", "已创建流程绑定会话，并同步当前流程上下文。"),
-          );
-        } catch (error) {
-          console.error("failed to inject pipeline context on new session", error);
-          message.warning(
-            t("pipelines.boundSessionContextFailed", "已恢复绑定会话，但同步当前流程上下文失败。"),
-          );
-        }
+        message.success(
+          t("pipelines.boundSessionCreated", "已创建流程绑定会话。"),
+        );
         return;
       }
 
