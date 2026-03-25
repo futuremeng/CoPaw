@@ -8,13 +8,12 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Modal, Result, message } from "antd";
 import { ExclamationCircleOutlined, SettingOutlined } from "@ant-design/icons";
-import { SparkCopyLine } from "@agentscope-ai/icons";
+import { SparkAttachmentLine, SparkCopyLine } from "@agentscope-ai/icons";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import sessionApi from "./sessionApi";
 import defaultConfig, { getDefaultConfig } from "./OptionsPanel/defaultConfig";
 import { chatApi } from "../../api/modules/chat";
-import { buildAuthHeaders } from "../../api/authHeaders";
 import { getApiToken, getApiUrl } from "../../api/config";
 import { providerApi } from "../../api/modules/provider";
 import ModelSelector from "./ModelSelector";
@@ -104,6 +103,13 @@ type CustomFetchData = {
 
 type AttachmentTriggerProps = {
   disabled?: boolean;
+};
+
+type AttachmentUploadOptions = {
+  file: File;
+  onSuccess: (body: { url?: string; thumbUrl?: string }) => void;
+  onError?: (error: Error) => void;
+  onProgress?: (event: { percent?: number }) => void;
 };
 
 type SenderConfigShape = {
