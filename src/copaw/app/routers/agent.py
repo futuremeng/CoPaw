@@ -551,6 +551,7 @@ async def put_agents_running_config(
     agent_config = load_agent_config(workspace.agent_id)
     previous_enabled = bool(getattr(agent_config.running, "knowledge_enabled", True))
     agent_config.running = running_config
+    workspace.config.running = running_config
 
     if previous_enabled != running_config.knowledge_enabled:
         sync_knowledge_module_skills(running_config.knowledge_enabled)

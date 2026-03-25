@@ -381,6 +381,39 @@ class AgentsRunningConfig(BaseModel):
         description="Whether to include thinking blocks when compact",
     )
 
+    knowledge_enabled: bool = Field(
+        default=False,
+        description="Whether knowledge ingestion and retrieval are enabled",
+    )
+
+    knowledge_auto_collect_chat_files: bool = Field(
+        default=False,
+        description="Whether to auto-collect uploaded chat files into knowledge",
+    )
+
+    knowledge_auto_collect_chat_urls: bool = Field(
+        default=True,
+        description="Whether to auto-collect chat URLs into knowledge",
+    )
+
+    knowledge_auto_collect_long_text: bool = Field(
+        default=False,
+        description="Whether to auto-collect long chat text into knowledge",
+    )
+
+    knowledge_long_text_min_chars: int = Field(
+        default=2000,
+        ge=200,
+        description="Minimum characters before long chat text is collected",
+    )
+
+    knowledge_chunk_size: int = Field(
+        default=1200,
+        ge=200,
+        le=8000,
+        description="Chunk size for knowledge indexing",
+    )
+
     embedding_config: EmbeddingConfig = Field(
         default_factory=EmbeddingConfig,
         description="Embedding model configuration",

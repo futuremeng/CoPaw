@@ -104,8 +104,7 @@ function AgentConfigPage() {
         />
 
         <LlmRetryCard llmRetryEnabled={llmRetryEnabled} />
-  <KnowledgeMaintenanceCard />
-  <LlmRetryCard llmRetryEnabled={llmRetryEnabled} />
+        <KnowledgeMaintenanceCard />
       </Form>
 
       <div className={styles.footerActions}>
