@@ -1184,11 +1184,19 @@ def _compute_step_outputs(step_id: str, data_files: list[str]) -> tuple[list[str
 def _apply_real_step_results(project_dir: Path, step: PipelineRunStep) -> list[str]:
     data_files = _list_project_data_files(project_dir)
     outputs, metrics = _compute_step_outputs(step.id, data_files)
+
+    warning_count = 0
+    if not data_files:
+        raise ValueError("Project data directory is missing or contains no files")
+    if not outputs:
+        warning_count = 1
+
     step.metrics = {
         **step.metrics,
         **metrics,
+        "warning_count": warning_count,
     }
-    step.evidence = outputs[:20]
+    step.evidence = outputs[:20] or ["PROJECT.md"]
     return outputs
 
 
@@ -1261,28 +1269,43 @@ def _execute_project_pipeline_run(
         started_at = _pipeline_now_iso()
         step.status = "running"
         step.started_at = started_at
+        step.ended_at = None
         run.status = "running"
         run.updated_at = started_at
         _persist_project_pipeline_run(project_dir, run, template)
 
-        step_started_dt = _parse_pipeline_iso(started_at) or datetime.now(timezone.utc)
-        step_outputs = _apply_real_step_results(project_dir, step)
-        ended_at = _pipeline_now_iso()
-        step_ended_dt = _parse_pipeline_iso(ended_at) or datetime.now(timezone.utc)
-        duration_sec = max((step_ended_dt - step_started_dt).total_seconds(), 0.0)
+        try:
+            step_started_dt = _parse_pipeline_iso(started_at) or datetime.now(timezone.utc)
+            step_outputs = _apply_real_step_results(project_dir, step)
+            ended_at = _pipeline_now_iso()
+            step_ended_dt = _parse_pipeline_iso(ended_at) or datetime.now(timezone.utc)
+            duration_sec = max((step_ended_dt - step_started_dt).total_seconds(), 0.0)
 
-        step.status = "succeeded"
-        step.ended_at = ended_at
-        step.metrics = {
-            **step.metrics,
-            "duration_sec": round(duration_sec, 3),
-        }
-        step.evidence = step.evidence or ["PROJECT.md"]
-        if step_outputs:
-            merged_artifacts = list(dict.fromkeys([*run.artifacts, *step_outputs]))
-            run.artifacts = merged_artifacts[:200]
+            step.status = "succeeded"
+            step.ended_at = ended_at
+            step.metrics = {
+                **step.metrics,
+                "duration_sec": round(duration_sec, 3),
+            }
+            step.evidence = step.evidence or ["PROJECT.md"]
+            if step_outputs:
+                merged_artifacts = list(dict.fromkeys([*run.artifacts, *step_outputs]))
+                run.artifacts = merged_artifacts[:200]
 
-        run.updated_at = ended_at
+            run.updated_at = ended_at
+        except Exception as exc:
+            ended_at = _pipeline_now_iso()
+            step.status = "failed"
+            step.ended_at = ended_at
+            step.metrics = {
+                **step.metrics,
+                "error_count": 1,
+            }
+            step.evidence = [*step.evidence[:19], f"error:{type(exc).__name__}: {exc}"]
+            run.status = "failed"
+            run.updated_at = ended_at
+            _persist_project_pipeline_run(project_dir, run, template)
+            return run
 
     run.status = "succeeded"
     run.updated_at = _pipeline_now_iso()
@@ -1499,13 +1522,7 @@ def _create_project_pipeline_run(
                 status="running" if is_first else "pending",
                 started_at=now if is_first else None,
                 ended_at=None,
-                metrics=(
-                    {
-                        "input_files": len(_sample_project_artifacts(project_dir, limit=200)),
-                    }
-                    if is_first
-                    else {}
-                ),
+                metrics={},
                 evidence=["PROJECT.md"] if is_first else [],
             ),
         )
