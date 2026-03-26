@@ -8,6 +8,7 @@ import logging
 import re
 import hashlib
 from datetime import datetime, timezone
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any, cast
 
@@ -1057,6 +1058,140 @@ def _sample_project_artifacts(project_dir: Path, limit: int = 20) -> list[str]:
     return artifacts
 
 
+def _list_project_data_files(project_dir: Path) -> list[str]:
+    data_dir = project_dir / "data"
+    project_root = project_dir.resolve()
+    if not data_dir.exists() or not data_dir.is_dir():
+        return []
+
+    files: list[str] = []
+    for path in sorted(data_dir.rglob("*"), key=lambda item: item.as_posix().lower()):
+        if not path.is_file():
+            continue
+        files.append(path.resolve().relative_to(project_root).as_posix())
+    return files
+
+
+def _match_project_artifacts(paths: list[str], *patterns: str) -> list[str]:
+    matched: list[str] = []
+    seen: set[str] = set()
+    for path in paths:
+        if any(fnmatch(path, pattern) for pattern in patterns):
+            if path not in seen:
+                matched.append(path)
+                seen.add(path)
+    return matched
+
+
+def _compute_step_outputs(step_id: str, data_files: list[str]) -> tuple[list[str], dict[str, Any]]:
+    markdown_inputs = _match_project_artifacts(data_files, "data/*.md")
+    workbench_dirs = sorted(
+        {
+            path.rsplit("/", 1)[0]
+            for path in data_files
+            if path.startswith("data/term-workbench-") and "/" in path
+        },
+    )
+
+    if step_id == "ingest":
+        outputs = markdown_inputs
+        return outputs, {
+            "input_files": len(markdown_inputs),
+            "markdown_files": len(markdown_inputs),
+        }
+
+    if step_id == "normalize":
+        outputs = markdown_inputs
+        return outputs, {
+            "normalized_files": len(markdown_inputs),
+        }
+
+    if step_id == "extract":
+        outputs = _match_project_artifacts(
+            data_files,
+            "data/term-workbench-*/manifest.json",
+            "data/term-workbench-*/terms.normalized.json",
+            "data/term-workbench-*/terms.reviewed.json",
+            "data/term-workbench-*/terms.baseline*.json",
+            "data/term-workbench-*/code-map*.json",
+        )
+        return outputs, {
+            "workbench_count": len(workbench_dirs),
+            "output_files": len(outputs),
+        }
+
+    if step_id == "align":
+        outputs = _match_project_artifacts(
+            data_files,
+            "data/contrast-*.json",
+            "data/contrast-*.md",
+            "data/concept-trees/*/concept-alignment*.json",
+            "data/concept-trees/*/concept-alignment*.md",
+        )
+        return outputs, {
+            "alignment_outputs": len(outputs),
+        }
+
+    if step_id == "build_concept_tree":
+        outputs = _match_project_artifacts(
+            data_files,
+            "data/concept-trees/*/concept-tree*.json",
+            "data/concept-trees/*/concept-tree*.md",
+            "data/concept-trees/*/concept-tree.index.*",
+        )
+        return outputs, {
+            "concept_tree_outputs": len(outputs),
+        }
+
+    if step_id == "build_relation_matrix":
+        outputs = _match_project_artifacts(
+            data_files,
+            "data/book-relation-matrix*.json",
+            "data/book-relation-matrix*.md",
+            "data/concept-trees/*/concept-alignment.incremental-matrix.*",
+        )
+        return outputs, {
+            "relation_outputs": len(outputs),
+        }
+
+    if step_id == "review_pack":
+        outputs = _match_project_artifacts(
+            data_files,
+            "data/review.dashboard*.json",
+            "data/review.ui-payload*.json",
+            "data/term-eval-detailed-report*.md",
+        )
+        return outputs, {
+            "review_outputs": len(outputs),
+        }
+
+    if step_id == "report":
+        outputs = _match_project_artifacts(
+            data_files,
+            "data/*summary-report.md",
+            "data/repo-archive.manifest.json",
+            "data/concept-trees/*.zip",
+            "data/concept-trees/*/*.zip",
+            "data/concept-trees/*/*.sha256",
+        )
+        return outputs, {
+            "report_outputs": len(outputs),
+        }
+
+    return [], {}
+
+
+def _apply_real_step_results(project_dir: Path, step: PipelineRunStep) -> list[str]:
+    data_files = _list_project_data_files(project_dir)
+    outputs, metrics = _compute_step_outputs(step.id, data_files)
+    step.metrics = {
+        **step.metrics,
+        **metrics,
+    }
+    step.evidence = outputs[:20]
+    return outputs
+
+
 def _persist_project_pipeline_run(project_dir: Path, run: PipelineRunDetail, template: PipelineTemplateInfo) -> None:
     _, _, runs_dir = _project_pipeline_dirs(project_dir)
     run_dir, manifest_path, _ = _run_dir_paths(runs_dir, run.id)
@@ -1125,6 +1260,7 @@ def _advance_pipeline_run_if_due(
     now_iso = _pipeline_now_iso()
     changed = False
     step_duration_sec = 6
+    step_outputs: list[str] = []
 
     running_index = next(
         (idx for idx, step in enumerate(run.steps) if step.status == "running"),
@@ -1147,6 +1283,7 @@ def _advance_pipeline_run_if_due(
         started_at = _parse_pipeline_iso(current_step.started_at) or now
         elapsed = (now - started_at).total_seconds()
         if elapsed >= step_duration_sec:
+            step_outputs = _apply_real_step_results(project_dir, current_step)
             current_step.status = "succeeded"
             current_step.ended_at = now_iso
             current_step.metrics = {
@@ -1154,6 +1291,9 @@ def _advance_pipeline_run_if_due(
                 "duration_sec": round(elapsed, 2),
             }
             current_step.evidence = current_step.evidence or ["PROJECT.md"]
+            if step_outputs:
+                merged_artifacts = list(dict.fromkeys([*run.artifacts, *step_outputs]))
+                run.artifacts = merged_artifacts[:200]
             changed = True
 
             next_index = next(
