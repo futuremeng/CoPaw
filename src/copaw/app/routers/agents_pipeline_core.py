@@ -7,7 +7,7 @@ import json
 import logging
 import re
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
 
@@ -174,39 +174,57 @@ def _project_pipeline_dirs(project_dir: Path) -> tuple[Path, Path, Path]:
 def _default_pipeline_template_doc() -> dict[str, Any]:
     return {
         "id": "books-alignment-v1",
-        "name": "Books Alignment v1",
-        "version": "0.1.0",
-        "description": "Baseline pipeline for large-markdown alignment and quality checks.",
+        "name": "Multi-Book Processing v1",
+        "version": "0.2.0",
+        "description": "Full pipeline for multi-book ingestion, alignment, concept extraction, and report generation.",
         "steps": [
             {
-                "id": "collect-input",
-                "name": "Collect Inputs",
+                "id": "ingest",
+                "name": "Ingest Books",
                 "kind": "ingest",
-                "description": "Discover source markdown and supporting reference files.",
+                "description": "Discover and load all source markdown books into the processing corpus.",
             },
             {
-                "id": "normalize-structure",
+                "id": "normalize",
                 "name": "Normalize Structure",
                 "kind": "transform",
-                "description": "Apply heading and structure normalization before alignment.",
+                "description": "Apply heading and structure normalization across all books.",
             },
             {
-                "id": "run-alignment",
-                "name": "Run Alignment",
+                "id": "extract",
+                "name": "Extract Entities",
+                "kind": "transform",
+                "description": "Extract named entities, terms, and citations from each book.",
+            },
+            {
+                "id": "align",
+                "name": "Cross-Book Alignment",
                 "kind": "alignment",
-                "description": "Execute sentence/chapter alignment with deterministic settings.",
+                "description": "Perform sentence/chapter alignment across the entire book corpus.",
             },
             {
-                "id": "quality-gate",
-                "name": "Quality Gate",
+                "id": "build_concept_tree",
+                "name": "Build Concept Tree",
+                "kind": "analysis",
+                "description": "Construct a hierarchical concept tree from the aligned and extracted content.",
+            },
+            {
+                "id": "build_relation_matrix",
+                "name": "Build Relation Matrix",
+                "kind": "analysis",
+                "description": "Compute cross-book relation and co-occurrence matrix.",
+            },
+            {
+                "id": "review_pack",
+                "name": "Review Pack",
                 "kind": "validation",
-                "description": "Evaluate coverage, consistency, and citation quality metrics.",
+                "description": "Generate review package: diffs, conflicts, and quality metrics.",
             },
             {
-                "id": "package-artifacts",
-                "name": "Package Artifacts",
+                "id": "report",
+                "name": "Generate Report",
                 "kind": "publish",
-                "description": "Emit manifests and reports for downstream review workflows.",
+                "description": "Emit final manifests, reports, and artifacts for downstream use.",
             },
         ],
     }
@@ -760,6 +778,7 @@ def _get_pipeline_draft(workspace_dir: Path, pipeline_id: str) -> PipelineDraftI
 
 def _list_agent_pipeline_templates(workspace_dir: Path) -> list[PipelineTemplateInfo]:
     templates_dir = _agent_pipeline_templates_dir(workspace_dir)
+    _ensure_default_pipeline_template(templates_dir)
     templates: list[PipelineTemplateInfo] = []
 
     for path in sorted(templates_dir.glob("*.json"), key=lambda item: item.name.lower()):
@@ -1102,7 +1121,7 @@ def _advance_pipeline_run_if_due(
     if not run.steps:
         return run
 
-    now = datetime.utcnow().astimezone()
+    now = datetime.now(timezone.utc)
     now_iso = _pipeline_now_iso()
     changed = False
     step_duration_sec = 6
