@@ -17,6 +17,7 @@ import type {
   AgentPipelineDraftInfo,
   PipelineSaveStreamEvent,
   ProjectPipelineTemplateInfo,
+  ProjectPipelineTemplateStep,
   ProjectPipelineRunSummary,
   ProjectPipelineRunDetail,
   CreateProjectPipelineRunRequest,
@@ -224,6 +225,86 @@ export const agentsApi = {
         body: JSON.stringify(body),
       },
     ),
+
+  // Pipeline step operations (add/update/delete individual steps)
+  addOrUpdatePipelineStep: async (
+    agentId: string,
+    templateId: string,
+    step: ProjectPipelineTemplateStep,
+    operation: "add" | "update" = "update",
+    options?: { expectedRevision?: number; signal?: AbortSignal },
+  ) => {
+    const query = new URLSearchParams();
+    query.set("operation", operation);
+    if (options?.expectedRevision !== undefined) {
+      query.set("expectedRevision", String(options.expectedRevision));
+    }
+    const queryStr = query.toString();
+    return request<ProjectPipelineTemplateInfo>(
+      `/agents/${agentId}/pipelines/templates/${encodeURIComponent(templateId)}/steps${queryStr ? "?" + queryStr : ""}`,
+      {
+        method: "POST",
+        body: JSON.stringify(step),
+        signal: options?.signal,
+      },
+    );
+  },
+
+  deletePipelineStep: async (
+    agentId: string,
+    templateId: string,
+    stepId: string,
+    options?: { expectedRevision?: number; signal?: AbortSignal },
+  ) => {
+    const query = new URLSearchParams();
+    if (options?.expectedRevision !== undefined) {
+      query.set("expectedRevision", String(options.expectedRevision));
+    }
+    const queryStr = query.toString();
+    return request<ProjectPipelineTemplateInfo>(
+      `/agents/${agentId}/pipelines/templates/${encodeURIComponent(templateId)}/steps/${encodeURIComponent(stepId)}${queryStr ? "?" + queryStr : ""}`,
+      {
+        method: "DELETE",
+        signal: options?.signal,
+      },
+    );
+  },
+
+  /**
+   * Unified step operation: routes add/update to the POST endpoint and
+   * delete to the DELETE endpoint. Simplifies call sites in the page layer.
+   */
+  applyStepOperation: async (
+    agentId: string,
+    templateId: string,
+    operation: "add" | "update" | "delete",
+    stepOrId: ProjectPipelineTemplateStep | string,
+    options?: { expectedRevision?: number; signal?: AbortSignal },
+  ): Promise<ProjectPipelineTemplateInfo> => {
+    if (operation === "delete") {
+      const stepId = typeof stepOrId === "string" ? stepOrId : (stepOrId as ProjectPipelineTemplateStep).id;
+      const query = new URLSearchParams();
+      if (options?.expectedRevision !== undefined) {
+        query.set("expectedRevision", String(options.expectedRevision));
+      }
+      const queryStr = query.toString();
+      return request<ProjectPipelineTemplateInfo>(
+        `/agents/${agentId}/pipelines/templates/${encodeURIComponent(templateId)}/steps/${encodeURIComponent(stepId)}${queryStr ? "?" + queryStr : ""}`,
+        { method: "DELETE", signal: options?.signal },
+      );
+    }
+    const step = stepOrId as ProjectPipelineTemplateStep;
+    const query = new URLSearchParams();
+    query.set("operation", operation);
+    if (options?.expectedRevision !== undefined) {
+      query.set("expectedRevision", String(options.expectedRevision));
+    }
+    const queryStr = query.toString();
+    return request<ProjectPipelineTemplateInfo>(
+      `/agents/${agentId}/pipelines/templates/${encodeURIComponent(templateId)}/steps${queryStr ? "?" + queryStr : ""}`,
+      { method: "POST", body: JSON.stringify(step), signal: options?.signal },
+    );
+  },
 
   // Agents Square
   getSquareSources: () =>

@@ -935,6 +935,327 @@ def _save_agent_pipeline_template_with_md(
     return parsed_template
 
 
+def _validate_pipeline_step(step: PipelineTemplateStep) -> list[PipelineValidationError]:
+    """Validate a single pipeline step. Return list of errors if any."""
+    # Valid step kinds
+    VALID_STEP_KINDS = {
+        "input", "analysis", "transform", "review", 
+        "validation", "publish", "task", "output"
+    }
+    
+    errors: list[PipelineValidationError] = []
+    
+    # Validate step id
+    step_id = (step.id or "").strip()
+    if not step_id:
+        errors.append(
+            PipelineValidationError(
+                error_code="missing_step_id",
+                message="Step id is required",
+                field_path="id",
+                step_id="",
+                expected="non-empty string",
+                actual="",
+                suggestion="Provide a unique identifier for the step",
+            )
+        )
+    elif not re.match(r"^[a-z][a-z0-9_-]{0,63}$", step_id):
+        errors.append(
+            PipelineValidationError(
+                error_code="invalid_step_id_format",
+                message="Step id must be lowercase alphanumeric with hyphens/underscores, start with letter",
+                field_path="id",
+                step_id=step_id,
+                expected="^[a-z][a-z0-9_-]{0,63}$",
+                actual=step_id,
+                suggestion="Use lowercase letters, numbers, hyphens, underscores",
+            )
+        )
+    
+    # Validate step name
+    step_name = (step.name or "").strip()
+    if not step_name:
+        errors.append(
+            PipelineValidationError(
+                error_code="missing_step_name",
+                message="Step name is required",
+                field_path="name",
+                step_id=step_id,
+                expected="non-empty string",
+                actual="",
+                suggestion="Provide a human-readable display name",
+            )
+        )
+    
+    # Validate step kind
+    step_kind = (step.kind or "").strip()
+    if not step_kind:
+        errors.append(
+            PipelineValidationError(
+                error_code="missing_step_kind",
+                message="Step kind is required",
+                field_path="kind",
+                step_id=step_id,
+                expected="one of: input, analysis, transform, review, validation, publish, task, output",
+                actual="",
+                suggestion="Choose a valid step kind",
+            )
+        )
+    elif step_kind not in VALID_STEP_KINDS:
+        errors.append(
+            PipelineValidationError(
+                error_code="invalid_step_kind",
+                message=f"Step kind '{step_kind}' is not valid",
+                field_path="kind",
+                step_id=step_id,
+                expected=", ".join(sorted(VALID_STEP_KINDS)),
+                actual=step_kind,
+                suggestion=f"Use one of: {', '.join(sorted(VALID_STEP_KINDS))}",
+            )
+        )
+    
+    return errors
+
+
+def _update_step_in_markdown(
+    md_content: str,
+    step_id: str,
+    step: PipelineTemplateStep | None = None,
+    operation: str = "update",
+) -> tuple[str, bool]:
+    """Add, update, or delete a step in markdown content.
+    
+    Args:
+        md_content: Current markdown content
+        step_id: ID of the step to target
+        step: New step data (for add/update operations)
+        operation: 'add', 'update', or 'delete'
+    
+    Returns:
+        (new_markdown_content, step_was_present)
+    """
+    lines = md_content.splitlines(keepends=True)
+    step_found = False
+    new_lines: list[str] = []
+    step_start_idx = -1
+    step_end_idx = -1
+    
+    # Find step location
+    for idx, line in enumerate(lines):
+        match = _STEP_HEADING_RE.match(line.rstrip())
+        if match and match.group(2).strip() == step_id:
+            step_found = True
+            step_start_idx = idx
+            # Find end of step (next heading or end of file)
+            for end_idx in range(idx + 1, len(lines)):
+                if _STEP_HEADING_RE.match(lines[end_idx].rstrip()):
+                    step_end_idx = end_idx
+                    break
+            if step_end_idx < 0:
+                step_end_idx = len(lines)
+            break
+    
+    if operation == "delete":
+        if step_found:
+            # Remove step section
+            new_lines = lines[:step_start_idx] + lines[step_end_idx:]
+        else:
+            new_lines = lines
+        return "".join(new_lines), step_found
+    
+    if operation == "add":
+        if step is None:
+            raise ValueError("step is required for add operation")
+        if step_found:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Step '{step_id}' already exists"
+            )
+        # Add at end of file
+        new_content = "".join(lines).rstrip() + "\n\n"
+        new_content += f"## {step.name} [{step.id}] ({step.kind})\n\n"
+        if step.description:
+            new_content += step.description.strip() + "\n\n"
+        return new_content, False
+    
+    if operation == "update":
+        if step is None:
+            raise ValueError("step is required for update operation")
+        if not step_found:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Step '{step_id}' not found"
+            )
+        # Replace step section
+        heading = f"## {step.name} [{step.id}] ({step.kind})\n\n"
+        description = ""
+        if step.description:
+            description = step.description.strip() + "\n\n"
+        
+        new_lines = (
+            lines[:step_start_idx]
+            + [heading, description]
+            + (lines[step_end_idx:] if step_end_idx < len(lines) else [])
+        )
+        return "".join(new_lines), True
+    
+    return md_content, step_found
+
+
+def _apply_step_operation(
+    workspace_dir: Path,
+    template_id: str,
+    step: PipelineTemplateStep | None = None,
+    step_id: str | None = None,
+    operation: str = "update",
+    expected_revision: int | None = None,
+) -> PipelineTemplateInfo:
+    """Apply a single step operation in pipeline markdown.
+    
+    Args:
+        workspace_dir: Agent workspace directory
+        template_id: Pipeline template ID
+        step: Step payload for add/update
+        step_id: Step id for delete or explicit targeting
+        operation: 'add', 'update', or 'delete'
+        expected_revision: Optional concurrency check
+    
+    Returns:
+        Updated PipelineTemplateInfo
+    """
+    target_step_id = (step_id or (step.id if step else "")).strip()
+    if not target_step_id:
+        raise HTTPException(status_code=400, detail="step_id is required")
+
+    if operation in ("add", "update"):
+        if step is None:
+            raise HTTPException(status_code=400, detail="step payload is required")
+        validation_errors = _validate_pipeline_step(step)
+        if validation_errors:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "validation_errors": [e.model_dump() for e in validation_errors],
+                    "code": "step_validation_failed",
+                }
+            )
+    elif operation != "delete":
+        raise HTTPException(status_code=400, detail="operation must be add, update, or delete")
+    
+    # Load current template and markdown
+    current = _load_agent_pipeline_template(workspace_dir, template_id)
+    if (
+        expected_revision is not None
+        and expected_revision >= 0
+        and current is not None
+        and current.revision != expected_revision
+    ):
+        raise _build_pipeline_revision_conflict_exception(expected_revision, current)
+    
+    md_path = _pipeline_md_path(workspace_dir, template_id)
+    if not md_path.exists():
+        raise HTTPException(status_code=404, detail=f"Pipeline '{template_id}' not found")
+    
+    md_content = md_path.read_text(encoding="utf-8")
+    
+    # Modify markdown
+    new_md_content, step_found = _update_step_in_markdown(md_content, target_step_id, step, operation)
+
+    if operation == "delete" and not step_found:
+        raise HTTPException(status_code=404, detail=f"Step '{target_step_id}' not found")
+    
+    # Parse and validate full pipeline
+    frontmatter, body = _parse_md_frontmatter(new_md_content)
+    parsed_template, errors = _parse_pipeline_md_strict(
+        template_id=template_id,
+        content=new_md_content,
+        fallback_name=current.name if current else template_id,
+        fallback_version=current.version if current else "0.1.0",
+        fallback_description=current.description if current else "",
+    )
+    
+    if errors:
+        raise _build_pipeline_validation_exception(errors, _pipeline_md_relative_path(template_id))
+    
+    # Update markdown file
+    md_path.write_text(new_md_content, encoding="utf-8")
+    
+    # Update JSON and revision
+    parsed_template.md_mtime = md_path.stat().st_mtime
+    parsed_template.content_hash = _template_content_hash(parsed_template)
+    if current and current.content_hash == parsed_template.content_hash:
+        parsed_template.revision = current.revision
+    else:
+        parsed_template.revision = (current.revision if current else 0) + 1
+    parsed_template.compilation_status = "ready"
+    parsed_template.validation_errors = []
+    
+    # Save JSON template
+    template_doc = {
+        "id": parsed_template.id,
+        "name": parsed_template.name,
+        "version": parsed_template.version,
+        "description": parsed_template.description,
+        "steps": [
+            {
+                "id": s.id,
+                "name": s.name,
+                "kind": s.kind,
+                "description": s.description,
+            }
+            for s in parsed_template.steps
+        ],
+        "revision": parsed_template.revision,
+        "content_hash": parsed_template.content_hash,
+        "md_mtime": parsed_template.md_mtime,
+        "validation_errors": [],
+        "compilation_status": parsed_template.compilation_status,
+    }
+    
+    target = _agent_pipeline_templates_dir(workspace_dir) / f"{parsed_template.id}.json"
+    target.write_text(
+        json.dumps(template_doc, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    
+    return parsed_template
+
+
+def _add_or_update_step(
+    workspace_dir: Path,
+    template_id: str,
+    step: PipelineTemplateStep,
+    operation: str = "update",
+    expected_revision: int | None = None,
+) -> PipelineTemplateInfo:
+    """Backward-compatible wrapper for add/update operations."""
+    return _apply_step_operation(
+        workspace_dir,
+        template_id,
+        step=step,
+        step_id=step.id,
+        operation=operation,
+        expected_revision=expected_revision,
+    )
+
+
+def _delete_step(
+    workspace_dir: Path,
+    template_id: str,
+    step_id: str,
+    expected_revision: int | None = None,
+) -> PipelineTemplateInfo:
+    """Delete a single step from pipeline markdown."""
+    return _apply_step_operation(
+        workspace_dir,
+        template_id,
+        step=None,
+        step_id=step_id,
+        operation="delete",
+        expected_revision=expected_revision,
+    )
+
+
 def _resolve_pipeline_template(project_dir: Path, template_id: str) -> PipelineTemplateInfo:
     templates = _list_project_pipeline_templates(project_dir)
     for template in templates:

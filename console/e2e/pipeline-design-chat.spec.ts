@@ -3,13 +3,47 @@ import type { Page, Route } from "@playwright/test";
 
 type ApiMockOptions = {
   conflictScenario?: boolean;
+  projectTemplateSteps?: Array<{
+    id: string;
+    name: string;
+    kind: string;
+    description: string;
+  }>;
 };
 
+function buildRuntimeStatusSnapshot(chatId: string) {
+  return {
+    scope_level: "chat",
+    snapshot_source: "runtime_push",
+    snapshot_stage: "pre_model_call",
+    agent_id: "default",
+    session_id: chatId,
+    user_id: "default",
+    chat_id: chatId,
+    context_window_tokens: 32000,
+    used_tokens: 4000,
+    used_ratio: 0.125,
+    reserved_response_tokens: 2048,
+    remaining_tokens: 25952,
+    model_id: "qwen3.5:27b",
+    provider_id: "ollama",
+    profile_label: "Local runtime",
+    breakdown: [
+      { key: "system-instructions", label: "System Instructions", tokens: 1200, ratio: 0.0375, section: "system" },
+      { key: "tool-definitions", label: "Tool Definitions", tokens: 1800, ratio: 0.05625, section: "system" },
+      { key: "messages", label: "Messages", tokens: 1000, ratio: 0.03125, section: "user" },
+      { key: "tool-results", label: "Tool Results", tokens: 0, ratio: 0, section: "user" },
+      { key: "files", label: "Files", tokens: 0, ratio: 0, section: "user" },
+    ],
+  };
+}
+
 async function setupApiMocks(page: Page, options: ApiMockOptions = {}) {
-  const { conflictScenario = false } = options;
+  const { conflictScenario = false, projectTemplateSteps } = options;
   let createdChatCount = 0;
   let boundPipelineId = "books-alignment-v1";
   let draftMtime = 1_800_000_000;
+  let editableTemplateSteps = projectTemplateSteps || [];
 
   const remoteDraftSteps = [
     {
@@ -103,6 +137,75 @@ async function setupApiMocks(page: Page, options: ApiMockOptions = {}) {
       return;
     }
 
+    if (pathname === "/api/models") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            id: "ollama",
+            name: "Ollama",
+            api_key_prefix: "",
+            chat_model: "qwen3.5:27b",
+            models: [{ id: "qwen3.5:27b", name: "qwen3.5:27b", supports_multimodal: false, supports_image: false, supports_video: false }],
+            extra_models: [],
+            is_custom: false,
+            is_local: true,
+            support_model_discovery: true,
+            support_connection_check: true,
+            freeze_url: false,
+            require_api_key: false,
+            api_key: "",
+            base_url: "http://127.0.0.1:11434",
+            generate_kwargs: { max_tokens: 4096 },
+          },
+        ]),
+      });
+      return;
+    }
+
+    if (pathname === "/api/models/active") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          active_llm: {
+            provider_id: "ollama",
+            model: "qwen3.5:27b",
+          },
+        }),
+      });
+      return;
+    }
+
+    if (pathname === "/api/agent/running-config") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          max_iters: 50,
+          llm_retry_enabled: true,
+          llm_max_retries: 2,
+          llm_backoff_base: 1,
+          llm_backoff_cap: 8,
+          max_input_length: 30000,
+          memory_compact_ratio: 0.8,
+          memory_reserve_ratio: 0.9,
+          tool_result_compact_recent_n: 4,
+          tool_result_compact_old_threshold: 1200,
+          tool_result_compact_recent_threshold: 2400,
+          tool_result_compact_retention_days: 7,
+          knowledge_enabled: true,
+          knowledge_auto_collect_chat_files: true,
+          knowledge_auto_collect_chat_urls: true,
+          knowledge_auto_collect_long_text: true,
+          knowledge_long_text_min_chars: 500,
+          knowledge_chunk_size: 1000,
+        }),
+      });
+      return;
+    }
+
     if (pathname === "/api/agents/default/projects/p1/pipelines/templates") {
       await route.fulfill({
         status: 200,
@@ -113,7 +216,7 @@ async function setupApiMocks(page: Page, options: ApiMockOptions = {}) {
             name: "Books Alignment",
             version: "0.1.0",
             description: "",
-            steps: [],
+            steps: editableTemplateSteps,
           },
         ]),
       });
@@ -160,7 +263,30 @@ async function setupApiMocks(page: Page, options: ApiMockOptions = {}) {
           md_relative_path: `pipelines/${templateId}/pipeline.md`,
           flow_memory_relative_path: `pipelines/${templateId}/flow-memory.md`,
           validation_errors: [],
-          steps: conflictScenario ? remoteDraftSteps : [],
+          steps: conflictScenario ? remoteDraftSteps : editableTemplateSteps,
+        }),
+      });
+      return;
+    }
+
+    const deleteStepMatch = pathname.match(
+      /^\/api\/agents\/default\/pipelines\/templates\/([^/]+)\/steps\/([^/]+)$/,
+    );
+    if (deleteStepMatch && route.request().method() === "DELETE") {
+      const templateId = decodeURIComponent(deleteStepMatch[1]);
+      const stepId = decodeURIComponent(deleteStepMatch[2]);
+      editableTemplateSteps = editableTemplateSteps.filter((step) => step.id !== stepId);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: templateId,
+          name: "Books Alignment",
+          version: "0.1.0",
+          description: "",
+          steps: editableTemplateSteps,
+          revision: 3,
+          content_hash: "sha256:after-delete",
         }),
       });
       return;
@@ -244,11 +370,22 @@ async function setupApiMocks(page: Page, options: ApiMockOptions = {}) {
         created_at: "2026-03-25T00:00:00Z",
         updated_at: "2026-03-25T00:00:00Z",
       };
-      chats.unshift(createdChat);
+      chats.push(createdChat);
       await route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify(createdChat),
+      });
+      return;
+    }
+
+    const runtimeStatusMatch = pathname.match(/^\/api\/console\/chats\/([^/]+)\/runtime-status$/);
+    if (runtimeStatusMatch && route.request().method() === "GET") {
+      const chatId = decodeURIComponent(runtimeStatusMatch[1]);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(buildRuntimeStatusSnapshot(chatId)),
       });
       return;
     }
@@ -403,6 +540,72 @@ test("behavior: each pipeline create opens a new chat id", async ({ page }) => {
   expect(secondChatId).not.toBe(firstChatId);
 });
 
+test("behavior: runtime status panel does not reuse previous chat ownership after new chat", async ({ page }) => {
+  test.setTimeout(90_000);
+
+  await setupApiMocks(page);
+
+  await page.goto("/pipelines");
+
+  const openDesignBtn = page.getByTestId("pipeline-open-design-chat");
+  await expect(openDesignBtn).toBeVisible({ timeout: 30_000 });
+
+  const createChatRequestFirst = page.waitForRequest((request) => {
+    return request.method() === "POST" && request.url().includes("/api/chats");
+  });
+  await openDesignBtn.click();
+  await createChatRequestFirst;
+
+  const runtimeStatusTrigger = page.getByTestId("runtime-status-trigger");
+  await expect(runtimeStatusTrigger).toBeVisible({ timeout: 20_000 });
+  await runtimeStatusTrigger.click();
+
+  await expect(page.getByTestId("runtime-status-meta-chat")).toHaveText("created-chat-1", { timeout: 20_000 });
+  await expect(page.getByTestId("runtime-status-meta-agent")).toHaveText("default", { timeout: 20_000 });
+  await expect(page.getByTestId("runtime-status-meta-source")).toHaveText("runtime_push", { timeout: 20_000 });
+
+  const createChatRequestSecond = page.waitForRequest((request) => {
+    return request.method() === "POST" && request.url().includes("/api/chats");
+  });
+  await page.getByRole("button", { name: /New Chat/i }).click();
+  await createChatRequestSecond;
+
+  await expect(page.getByTestId("runtime-status-meta-chat")).toHaveText("created-chat-2", { timeout: 20_000 });
+  await expect(page.getByTestId("runtime-status-meta-agent")).toHaveText("default", { timeout: 20_000 });
+  await expect(page.getByTestId("runtime-status-meta-chat")).not.toHaveText("created-chat-1", { timeout: 20_000 });
+});
+
+test("behavior: new pipeline edit starts clean and does not restore legacy prefilled steps", async ({ page }) => {
+  test.setTimeout(90_000);
+
+  await setupApiMocks(page);
+
+  await page.goto("/pipelines");
+
+  const openDesignBtn = page.getByTestId("pipeline-open-design-chat");
+  await expect(openDesignBtn).toBeVisible({ timeout: 30_000 });
+  await openDesignBtn.click();
+
+  await expect(
+    page.getByText(/Describe your goal first|先描述你的目标/),
+  ).toBeVisible({ timeout: 20_000 });
+  await expect(
+    page.getByText(/Start by describing the goal and key steps|先描述流程目标和关键步骤/),
+  ).toBeVisible({ timeout: 20_000 });
+  await expect(
+    page.getByText(/Only one node is generated at a time|每次只生成一个节点/),
+  ).toBeVisible({ timeout: 20_000 });
+
+  await expect(
+    page.getByText(/This column updates automatically from the backend draft|这里会根据后端 draft 自动更新/),
+  ).toBeVisible({ timeout: 20_000 });
+
+  await expect(page.getByText(/已根据最新对话更新节点草稿|Updated from the latest chat/i)).toHaveCount(0);
+  await expect(page.getByText("明确流程用途", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("step-1-purpose", { exact: true })).toHaveCount(0);
+  await expect(page.getByText(/逐步生成中：第|Generating step/i)).toHaveCount(0);
+});
+
 test("behavior: pipeline design entry lands on plain chat url without query params", async ({ page }) => {
   test.setTimeout(90_000);
 
@@ -478,7 +681,7 @@ test("behavior: edit pipeline restores bound chat after reload", async ({ page }
   expect(createCount).toBe(0);
 });
 
-test("behavior: conflict panel supports merge remote and local recovery", async ({ page }) => {
+test("behavior: conflict panel offers remote recovery when local draft is empty", async ({ page }) => {
   test.setTimeout(90_000);
 
   await setupApiMocks(page, { conflictScenario: true });
@@ -493,26 +696,95 @@ test("behavior: conflict panel supports merge remote and local recovery", async 
   await expect(saveBtn).toBeVisible({ timeout: 30_000 });
   await saveBtn.click();
 
-  await expect(page.getByText("检测到并发冲突")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/检测到并发冲突|concurrent conflict/i)).toBeVisible({ timeout: 30_000 });
 
-  const refreshBtn = page.getByRole("button", { name: /刷新后重试/i });
+  const refreshBtn = page.getByRole("button", { name: /刷新后重试|refresh/i });
   await refreshBtn.click();
 
-  const mergeBtn = page.getByRole("button", { name: /按 step_id 合并/i });
-  const useRemoteBtn = page.getByRole("button", { name: /采用远端草稿/i });
-  const restoreLocalBtn = page.getByRole("button", { name: /恢复本地草稿/i });
+  const mergeBtn = page.getByRole("button", { name: /按 step_id 合并|merge/i });
+  const useRemoteBtn = page.getByRole("button", { name: /采用远端草稿|remote draft/i });
+  const restoreLocalBtn = page.getByRole("button", { name: /恢复本地草稿|restore local/i });
 
-  await expect(mergeBtn).toBeVisible({ timeout: 20_000 });
   await expect(useRemoteBtn).toBeVisible({ timeout: 20_000 });
-  await expect(restoreLocalBtn).toBeVisible({ timeout: 20_000 });
+  await expect(mergeBtn).toHaveCount(0);
+  await expect(restoreLocalBtn).toHaveCount(0);
 
-  await mergeBtn.click();
   await expect(page.getByText("远端新增步骤")).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByText("明确流程用途")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText("旧用途步骤")).toBeVisible({ timeout: 20_000 });
 
   await useRemoteBtn.click();
   await expect(page.getByText("远端用途步骤")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText("远端新增步骤")).toBeVisible({ timeout: 20_000 });
+});
 
-  await restoreLocalBtn.click();
-  await expect(page.getByText("明确流程用途")).toBeVisible({ timeout: 20_000 });
+test("behavior: edit pipeline applies delete step operation through page workflow", async ({ page }) => {
+  test.setTimeout(90_000);
+
+  await page.addInitScript(() => {
+    (window as typeof window & { __COPAW_ENABLE_TEST_HOOKS__?: boolean }).__COPAW_ENABLE_TEST_HOOKS__ = true;
+  });
+
+  await setupApiMocks(page, {
+    projectTemplateSteps: [
+      {
+        id: "step-1-purpose",
+        name: "旧用途步骤",
+        kind: "analysis",
+        description: "旧版本用途定义",
+      },
+    ],
+  });
+
+  await page.goto("/pipelines");
+
+  const editBtn = page.getByRole("button", {
+    name: /Edit Pipeline|编辑流程/i,
+  });
+  await expect(editBtn).toBeVisible({ timeout: 30_000 });
+  await editBtn.click();
+
+  await expect(page.getByRole("button", { name: /Exit Edit|退出编辑/i })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText("旧用途步骤")).toBeVisible({ timeout: 20_000 });
+
+  await page.waitForFunction(() => Boolean((window as typeof window & { __COPAW_PIPELINES_TEST__?: unknown }).__COPAW_PIPELINES_TEST__));
+
+  await page.evaluate(() => {
+    (window as typeof window & {
+      __COPAW_PIPELINES_TEST__?: { activateIncrementalModify: (input: Record<string, unknown>) => void };
+    }).__COPAW_PIPELINES_TEST__?.activateIncrementalModify({
+      totalStepsExpected: 1,
+      currentStep: 1,
+      userRequirements: "删除旧用途步骤",
+      lastUserRequest: "删除旧用途步骤",
+    });
+  });
+
+  const deleteRequest = page.waitForRequest((request) => {
+    return (
+      request.method() === "DELETE" &&
+      request.url().includes("/api/agents/default/pipelines/templates/books-alignment-v1/steps/step-1-purpose")
+    );
+  }, { timeout: 10_000 });
+
+  await page.evaluate(async () => {
+    await (window as typeof window & {
+      __COPAW_PIPELINES_TEST__?: { completeAssistantTurn: (text: string) => Promise<void> };
+    }).__COPAW_PIPELINES_TEST__?.completeAssistantTurn(
+      JSON.stringify({
+        operation: "delete",
+        step_id: "step-1-purpose",
+      }),
+    );
+  });
+
+  await deleteRequest;
+  await expect
+    .poll(async () => {
+      return page.evaluate(() => {
+        return (window as typeof window & {
+          __COPAW_PIPELINES_TEST__?: { getDraftStepIds: () => string[] };
+        }).__COPAW_PIPELINES_TEST__?.getDraftStepIds() || [];
+      });
+    })
+    .toEqual([]);
 });

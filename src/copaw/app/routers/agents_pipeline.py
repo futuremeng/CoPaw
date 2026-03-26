@@ -15,6 +15,7 @@ from .agents_pipeline_core import (
     PipelineRunDetail,
     PipelineRunSummary,
     PipelineTemplateInfo,
+    PipelineTemplateStep,
     _list_agent_pipeline_templates,
     _create_project_pipeline_run,
     _ensure_pipeline_draft_workspace,
@@ -23,6 +24,8 @@ from .agents_pipeline_core import (
     _list_project_pipeline_runs,
     _list_project_pipeline_templates,
     _load_project_pipeline_run,
+    _add_or_update_step,
+    _delete_step,
 )
 
 router = APIRouter(prefix="/agents", tags=["agents"])
@@ -342,6 +345,84 @@ async def create_project_pipeline_run(
     try:
         project_dir = agents_router_impl._resolve_project_dir(Path(workspace.workspace_dir), projectId)
         return _create_project_pipeline_run(projectId, project_dir, body)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+# ============================================================================
+# Step-level operations (add, update, delete single steps)
+# ============================================================================
+
+
+@router.post(
+    "/{agentId}/pipelines/templates/{templateId}/steps",
+    response_model=PipelineTemplateInfo,
+    summary="Add or update a pipeline step",
+    description="Add a new step or update an existing step in a pipeline template",
+)
+async def add_or_update_pipeline_step(
+    request: Request,
+    body: PipelineTemplateStep,
+    agentId: str = PathParam(...),
+    templateId: str = PathParam(...),
+    operation: str = Query(default="update", description="Either 'add' or 'update'"),
+    expectedRevision: int | None = Query(default=None),
+) -> PipelineTemplateInfo:
+    """Add a new step or update an existing step in a pipeline template."""
+    if operation not in ("add", "update"):
+        raise HTTPException(status_code=400, detail="operation must be 'add' or 'update'")
+    
+    manager = agents_router_impl._get_multi_agent_manager(request)
+
+    try:
+        workspace = await manager.get_agent(agentId)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    try:
+        return _add_or_update_step(
+            Path(workspace.workspace_dir),
+            templateId,
+            body,
+            operation=operation,
+            expected_revision=expectedRevision,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.delete(
+    "/{agentId}/pipelines/templates/{templateId}/steps/{stepId}",
+    response_model=PipelineTemplateInfo,
+    summary="Delete a pipeline step",
+    description="Delete one step from a pipeline template",
+)
+async def delete_pipeline_step(
+    request: Request,
+    agentId: str = PathParam(...),
+    templateId: str = PathParam(...),
+    stepId: str = PathParam(...),
+    expectedRevision: int | None = Query(default=None),
+) -> PipelineTemplateInfo:
+    """Delete one step from a pipeline template."""
+    manager = agents_router_impl._get_multi_agent_manager(request)
+
+    try:
+        workspace = await manager.get_agent(agentId)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    try:
+        return _delete_step(
+            Path(workspace.workspace_dir),
+            templateId,
+            stepId,
+            expected_revision=expectedRevision,
+        )
     except HTTPException:
         raise
     except Exception as e:

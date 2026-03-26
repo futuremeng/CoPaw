@@ -3,6 +3,8 @@ import { Button, Card, Empty, Modal, Select, Spin, Tag, Typography, message } fr
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { agentsApi } from "../../../api/modules/agents";
+import { providerApi } from "../../../api/modules/provider";
+import { agentApi } from "../../../api/modules/agent";
 import { chatApi } from "../../../api/modules/chat";
 import AnywhereChat from "../../../components/AnywhereChat";
 import sessionApi from "../../Chat/sessionApi";
@@ -12,6 +14,16 @@ import {
   buildPipelineDesignChatPath,
   buildPipelineDesignEditContextPrompt,
 } from "../../../utils/pipelineDesign";
+import {
+  buildIncrementalStepGenerationPrompt,
+  buildIncrementalStepEditPrompt,
+  buildJsonRepairPrompt,
+  parseStepFromAIResponse,
+  parseStepOperationFromAIResponse,
+} from "../../../utils/pipelineStepGeneration";
+import {
+  derivePipelineExecutionBudget,
+} from "../../../utils/pipelineModelBudget";
 import { trackNavigation } from "../../../utils/navigationTelemetry";
 import type {
   AgentProjectSummary,
@@ -21,6 +33,8 @@ import type {
   ProjectPipelineRunSummary,
   ProjectPipelineTemplateInfo,
 } from "../../../api/types/agents";
+import type { ActiveModelsInfo, ProviderInfo } from "../../../api/types/provider";
+import type { AgentsRunningConfig } from "../../../api/types/agent";
 import type { ChatSpec } from "../../../api/types/chat";
 import { useAgentStore } from "../../../stores/agentStore";
 import styles from "./index.module.less";
@@ -107,42 +121,104 @@ type PipelineChatBindingMeta = {
   flow_memory_path?: string;
 };
 
+type IncrementalGenerationState = {
+  active: boolean;
+  mode: "create" | "modify";
+  totalStepsExpected: number;
+  currentStep: number;
+  userRequirements: string;
+  lastUserRequest: string;
+  lastSyntheticPrompt: string;
+  operationsApplied: number;
+  parseRetryCount: number;
+  /** Revision number of the last successfully applied step operation; used for failure recovery. */
+  lastSuccessfulRevision?: number;
+};
+
+type PipelinePageTestHooks = {
+  activateIncrementalModify: (overrides?: Partial<IncrementalGenerationState>) => void;
+  completeAssistantTurn: (text: string) => Promise<void>;
+  getDraftStepIds: () => string[];
+};
+
+declare global {
+  interface Window {
+    __COPAW_ENABLE_TEST_HOOKS__?: boolean;
+    __COPAW_PIPELINES_TEST__?: PipelinePageTestHooks;
+  }
+}
+
 const INDEPENDENT_PIPELINE_SCOPE_ID = "__independent__";
 const PIPELINE_DRAFT_STORAGE_PREFIX = "copaw:pipelines:drafts:";
 
-function buildPrefilledPipelineTemplateSteps(): ProjectPipelineTemplateStep[] {
-  return [
-    {
-      id: "step-1-purpose",
-      name: "明确流程用途",
-      kind: "analysis",
-      description: "[用途] 描述本流程解决的问题和适用范围。",
-    },
-    {
-      id: "step-2-input",
-      name: "整理输入来源",
-      kind: "ingest",
-      description: "[输入] 列出输入数据类型、来源路径和前置要求。",
-    },
-    {
-      id: "step-3-workflow",
-      name: "执行核心处理",
-      kind: "transform",
-      description: "[步骤线索] 按阶段拆解核心处理步骤，可继续细分子步骤。",
-    },
-    {
-      id: "step-4-quality-check",
-      name: "质量校验",
-      kind: "validation",
-      description: "定义质量门槛、失败判定和重试策略。",
-    },
-    {
-      id: "step-5-output",
-      name: "生成目标产物",
-      kind: "publish",
-      description: "[产物] 输出结果格式、保存位置和交付方式。",
-    },
-  ];
+function inferStepCountFromRequirements(text: string): number {
+  const normalized = text.trim();
+  if (!normalized) return 0;
+
+  const explicitCount = normalized.match(/(?:包含以下|包含|共|共计)?\s*(\d+)\s*个步骤/);
+  if (explicitCount) {
+    return Math.max(1, Number(explicitCount[1]) || 0);
+  }
+
+  const numberedSteps = normalized.match(/第\s*\d+\s*步/g);
+  if (numberedSteps && numberedSteps.length > 0) {
+    return numberedSteps.length;
+  }
+
+  return 4;
+}
+
+function extractTextFromChatContent(content: unknown): string {
+  if (typeof content === "string") {
+    return content.trim();
+  }
+
+  if (Array.isArray(content)) {
+    return content
+      .map((item) => extractTextFromChatContent(item))
+      .filter(Boolean)
+      .join("\n")
+      .trim();
+  }
+
+  if (content && typeof content === "object") {
+    const record = content as Record<string, unknown>;
+    if (typeof record.text === "string") {
+      return record.text.trim();
+    }
+    if (record.content !== undefined) {
+      return extractTextFromChatContent(record.content);
+    }
+  }
+
+  return "";
+}
+
+function mergeTemplateUpdate(
+  items: TemplateItem[],
+  updated: ProjectPipelineTemplateInfo,
+): TemplateItem[] {
+  return items.map((item) => {
+    if (item.id !== updated.id) {
+      return item;
+    }
+
+    return {
+      ...item,
+      ...updated,
+    };
+  });
+}
+
+function isIncrementalUserMessage(
+  latestUserMessage: string,
+  workflow: IncrementalGenerationState,
+): boolean {
+  const normalized = latestUserMessage.trim();
+  if (!normalized) return false;
+  if (normalized === workflow.lastSyntheticPrompt.trim()) return false;
+  if (workflow.active && normalized === workflow.lastUserRequest.trim()) return false;
+  return normalized !== workflow.lastSyntheticPrompt.trim();
 }
 
 function getPipelineDraftStorageKey(agentId: string): string {
@@ -640,6 +716,30 @@ export default function PipelinesPage() {
   const [conflictRemoteDraftBackup, setConflictRemoteDraftBackup] = useState<ProjectPipelineTemplateStep[]>([]);
   const [conflictRestoreAvailable, setConflictRestoreAvailable] = useState(false);
   const [conflictMergeAvailable, setConflictMergeAvailable] = useState(false);
+  const [incrementalGeneration, setIncrementalGeneration] = useState<IncrementalGenerationState>({
+    active: false,
+    mode: "create",
+    totalStepsExpected: 0,
+    currentStep: 1,
+    userRequirements: "",
+    lastUserRequest: "",
+    lastSyntheticPrompt: "",
+    operationsApplied: 0,
+    parseRetryCount: 0,
+  });
+  const [providerList, setProviderList] = useState<ProviderInfo[]>([]);
+  const [activeModels, setActiveModels] = useState<ActiveModelsInfo | null>(null);
+  const [runningConfig, setRunningConfig] = useState<AgentsRunningConfig | null>(null);
+
+  const pipelineExecutionBudget = useMemo(
+    () =>
+      derivePipelineExecutionBudget({
+        providers: providerList,
+        activeModels,
+        runningConfig,
+      }),
+    [activeModels, providerList, runningConfig],
+  );
 
   const currentAgent = useMemo(
     () => getCurrentAgent(agents, selectedAgent),
@@ -652,6 +752,42 @@ export default function PipelinesPage() {
   );
 
   const independentScopeLabel = t("pipelines.independentScope", "独立流程");
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadExecutionBudgetInputs = async () => {
+      try {
+        const [providers, activeModelConfig, runtimeConfig] = await Promise.all([
+          providerApi.listProviders(),
+          providerApi.getActiveModels(),
+          agentApi.getAgentRunningConfig(),
+        ]);
+        if (!mounted) return;
+        setProviderList(Array.isArray(providers) ? providers : []);
+        setActiveModels(activeModelConfig ?? null);
+        setRunningConfig(runtimeConfig ?? null);
+      } catch (error) {
+        console.warn("failed to load pipeline execution budget inputs", error);
+        if (!mounted) return;
+        setProviderList([]);
+        setActiveModels(null);
+        setRunningConfig(null);
+      }
+    };
+
+    void loadExecutionBudgetInputs();
+
+    const handleModelSwitched = () => {
+      void loadExecutionBudgetInputs();
+    };
+
+    window.addEventListener("model-switched", handleModelSwitched);
+    return () => {
+      mounted = false;
+      window.removeEventListener("model-switched", handleModelSwitched);
+    };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -912,6 +1048,17 @@ export default function PipelinesPage() {
     setConflictRemoteDraftBackup([]);
     setConflictRestoreAvailable(false);
     setConflictMergeAvailable(false);
+    setIncrementalGeneration({
+      active: false,
+      mode: "create",
+      totalStepsExpected: 0,
+      currentStep: 1,
+      userRequirements: "",
+      lastUserRequest: "",
+      lastSyntheticPrompt: "",
+      operationsApplied: 0,
+      parseRetryCount: 0,
+    });
     if (prevChatId) {
       void clearFocusMeta(prevChatId);
     }
@@ -1228,12 +1375,11 @@ export default function PipelinesPage() {
       const targetVersion = normalizeVersion(target?.version || currentTemplate?.version || "latest");
       const targetScope = target?.source || selectedPipeline?.source || "independent";
       const targetDescription = target?.description || currentTemplate?.description || "";
-      const fallbackSteps = buildPrefilledPipelineTemplateSteps();
       const targetSteps = (target?.steps && target.steps.length > 0)
         ? target.steps
         : (currentTemplate?.steps && currentTemplate.steps.length > 0)
           ? currentTemplate.steps
-          : fallbackSteps;
+          : [];
       const isEmptyNodes = target?.isEmptyNodes ?? (targetSteps.length === 0);
       const normalizedTarget: EditChatTarget = {
         pipelineId: target?.pipelineId || selectedPipeline?.id || "unknown",
@@ -1315,7 +1461,7 @@ export default function PipelinesPage() {
         const restored = reusedInMemory || (await resolveBoundChat(targetKey));
         if (restored) {
           setDesignChatSessionId(restored.id);
-          const prefilledDraft = isEmptyNodes ? buildPrefilledPipelineTemplateSteps() : [];
+          const prefilledDraft: ProjectPipelineTemplateStep[] = [];
           setDraftNewVersionSteps(prefilledDraft);
           setDraftParseStatus(prefilledDraft.length > 0 ? "ready" : "idle");
           setDraftParseError("");
@@ -1324,6 +1470,17 @@ export default function PipelinesPage() {
           setEditTargetKey(targetKey);
           setEditWelcomeMode(isEmptyNodes ? "init" : "default");
           setEditGuidePlaceholder(editGuideWithContext);
+          setIncrementalGeneration({
+            active: false,
+            mode: "create",
+            totalStepsExpected: 0,
+            currentStep: 1,
+            userRequirements: "",
+            lastUserRequest: "",
+            lastSyntheticPrompt: "",
+            operationsApplied: 0,
+            parseRetryCount: 0,
+          });
           message.success(
             t("pipelines.boundSessionRestored", "已恢复流程绑定会话。"),
           );
@@ -1363,7 +1520,7 @@ export default function PipelinesPage() {
 
       setDesignChatSessionId(created.id);
       if (withEditMode) {
-        const prefilledDraft = isEmptyNodes ? buildPrefilledPipelineTemplateSteps() : [];
+        const prefilledDraft: ProjectPipelineTemplateStep[] = [];
         setDraftNewVersionSteps(prefilledDraft);
         setDraftParseStatus(prefilledDraft.length > 0 ? "ready" : "idle");
         setDraftParseError("");
@@ -1372,6 +1529,17 @@ export default function PipelinesPage() {
         setEditTargetKey(targetKey);
         setEditWelcomeMode(isEmptyNodes ? "init" : "default");
         setEditGuidePlaceholder(editGuideWithContext);
+        setIncrementalGeneration({
+          active: false,
+          mode: "create",
+          totalStepsExpected: 0,
+          currentStep: 1,
+          userRequirements: "",
+          lastUserRequest: "",
+          lastSyntheticPrompt: "",
+          operationsApplied: 0,
+          parseRetryCount: 0,
+        });
         message.success(
           t("pipelines.boundSessionCreated", "已创建流程绑定会话。"),
         );
@@ -1693,12 +1861,372 @@ export default function PipelinesPage() {
   };
 
   const handleAssistantTurnCompleted = useCallback(
-    () => {
+    async (payload: { text: string; response: Record<string, unknown> | null }) => {
       if (!editMode) return;
 
       const activePipelineId = selectedPipeline?.id || selectedTemplateItem?.id || "";
-      if (!selectedAgent || !activePipelineId) {
+      const activePipelineName =
+        selectedPipeline?.name || selectedTemplateItem?.name || activePipelineId || "unknown";
+
+      if (!selectedAgent || !activePipelineId || !designChatSessionId) {
         return;
+      }
+
+      const fetchLatestUserRequest = async (): Promise<string> => {
+        const history = await chatApi.getChat(designChatSessionId, { limit: 20 });
+        const lastUserMessage = [...(history.messages || [])]
+          .reverse()
+          .find((item) => item.role === "user");
+        return extractTextFromChatContent(lastUserMessage?.content);
+      };
+
+      const dispatchSyntheticPrompt = async (prompt: string) => {
+        sessionApi.setLastUserMessage(designChatSessionId, prompt);
+        await chatApi.startConsoleChat({
+          sessionId: designChatSessionId,
+          prompt,
+          userId: "default",
+          channel: "console",
+        });
+      };
+
+      const startIncrementalWorkflow = async (
+        mode: "create" | "modify",
+        userRequest: string,
+        steps: ProjectPipelineTemplateStep[],
+      ) => {
+        if (mode === "create") {
+          const totalStepsExpected = inferStepCountFromRequirements(userRequest);
+          const firstPrompt = buildIncrementalStepGenerationPrompt(
+            activePipelineId,
+            activePipelineName,
+            {
+              totalStepsExpected,
+              stepsGenerated: steps.length,
+              currentStep: 1,
+              isComplete: false,
+            },
+            steps,
+            userRequest,
+            pipelineExecutionBudget,
+          );
+
+          setIncrementalGeneration({
+            active: true,
+            mode,
+            totalStepsExpected,
+            currentStep: 1,
+            userRequirements: userRequest,
+            lastUserRequest: userRequest,
+            lastSyntheticPrompt: firstPrompt,
+            operationsApplied: 0,
+            parseRetryCount: 0,
+          });
+
+          message.info(
+            t("pipelines.incrementalGenerationStart", "已切换到逐步生成模式，开始生成第 1 步。"),
+          );
+          await dispatchSyntheticPrompt(firstPrompt);
+          return;
+        }
+
+        const firstPrompt = buildIncrementalStepEditPrompt(
+          activePipelineId,
+          activePipelineName,
+          steps,
+          userRequest,
+          0,
+          pipelineExecutionBudget,
+        );
+
+        setIncrementalGeneration({
+          active: true,
+          mode,
+          totalStepsExpected: steps.length,
+          currentStep: 1,
+          userRequirements: userRequest,
+          lastUserRequest: userRequest,
+          lastSyntheticPrompt: firstPrompt,
+          operationsApplied: 0,
+          parseRetryCount: 0,
+        });
+
+        message.info(
+          t("pipelines.incrementalEditStart", "开始按节点逐步应用这次修改请求。"),
+        );
+        await dispatchSyntheticPrompt(firstPrompt);
+      };
+
+      if (incrementalGeneration.active && incrementalGeneration.mode === "create") {
+        const parsed = parseStepFromAIResponse(payload.text || "");
+
+        if (parsed.success && parsed.complete) {
+          setIncrementalGeneration((prev) => ({
+            ...prev,
+            active: false,
+          }));
+          setEditWelcomeMode("default");
+          message.success(
+            t("pipelines.incrementalGenerationDone", "流程节点已逐步生成完成。"),
+          );
+          return;
+        }
+
+        if (!parsed.success || !parsed.step) {
+          if (incrementalGeneration.parseRetryCount < pipelineExecutionBudget.maxParseRetryCount) {
+            const repairPrompt = buildJsonRepairPrompt(
+              "create",
+              payload.text || "",
+              parsed.error,
+            );
+            await dispatchSyntheticPrompt(repairPrompt);
+            setIncrementalGeneration((prev) => ({
+              ...prev,
+              parseRetryCount: prev.parseRetryCount + 1,
+              lastSyntheticPrompt: repairPrompt,
+            }));
+            message.info(
+              t("pipelines.stepParseRepairing", "模型返回格式不稳定，正在请求一次更严格的 JSON 重试。"),
+            );
+            return;
+          }
+
+          setDraftParseStatus("error");
+          setDraftParseError(parsed.error || t("pipelines.stepParseFailed", "无法解析节点 JSON。"));
+          message.warning(
+            parsed.error || t("pipelines.stepParseFailed", "无法解析节点 JSON。"),
+          );
+          return;
+        }
+
+        try {
+          const existingStepIds = new Set(draftNewVersionSteps.map((step) => step.id));
+          const operation = existingStepIds.has(parsed.step.id) ? "update" : "add";
+          const updated = await agentsApi.addOrUpdatePipelineStep(
+            selectedAgent,
+            activePipelineId,
+            parsed.step,
+            operation,
+            {
+              expectedRevision: selectedTemplateItem?.revision,
+            },
+          );
+
+          setTemplates((prev) => mergeTemplateUpdate(prev, updated));
+          setDraftNewVersionSteps(updated.steps || []);
+          setDraftParseStatus("ready");
+          setDraftParseError("");
+          setExpandedDraftDiffKeys([]);
+          setIncrementalGeneration((prev) => ({
+            ...prev,
+            parseRetryCount: 0,
+          }));
+
+          const generatedCount = (updated.steps || []).length;
+          const nextStepNumber = generatedCount + 1;
+          const totalSteps = incrementalGeneration.totalStepsExpected;
+
+          message.success(
+            t("pipelines.incrementalStepSaved", "已生成第 {{current}} / {{total}} 步。", {
+              current: Math.min(generatedCount, totalSteps),
+              total: totalSteps,
+            }),
+          );
+
+          if (generatedCount >= totalSteps) {
+            setIncrementalGeneration((prev) => ({
+              ...prev,
+              active: false,
+            }));
+            setEditWelcomeMode("default");
+            return;
+          }
+
+          const nextPrompt = buildIncrementalStepGenerationPrompt(
+            activePipelineId,
+            activePipelineName,
+            {
+              totalStepsExpected: totalSteps,
+              stepsGenerated: generatedCount,
+              currentStep: nextStepNumber,
+              isComplete: false,
+            },
+            updated.steps || [],
+            incrementalGeneration.userRequirements,
+            pipelineExecutionBudget,
+          );
+
+          await dispatchSyntheticPrompt(nextPrompt);
+
+          setIncrementalGeneration((prev) => ({
+            ...prev,
+            currentStep: nextStepNumber,
+            parseRetryCount: 0,
+            lastSyntheticPrompt: nextPrompt,
+          }));
+          return;
+        } catch (error) {
+          console.error("failed to save incremental pipeline step", error);
+          setDraftParseStatus("error");
+          setDraftParseError(t("pipelines.stepSaveFailed", "节点保存失败，请检查后重试。"));
+          message.error(t("pipelines.stepSaveFailed", "节点保存失败，请检查后重试。"));
+          return;
+        }
+      }
+
+      if (incrementalGeneration.active && incrementalGeneration.mode === "modify") {
+        const parsed = parseStepOperationFromAIResponse(payload.text || "");
+
+        if (parsed.success && parsed.complete) {
+          setIncrementalGeneration((prev) => ({
+            ...prev,
+            active: false,
+          }));
+          message.success(
+            parsed.message || t("pipelines.incrementalEditDone", "节点级修改已完成。"),
+          );
+          return;
+        }
+
+        if (parsed.success && parsed.needsUserInput) {
+          setIncrementalGeneration((prev) => ({
+            ...prev,
+            active: false,
+          }));
+          message.info(
+            parsed.message || t("pipelines.incrementalNeedsUserInput", "继续修改前需要你补充一些信息。"),
+          );
+          return;
+        }
+
+        if (!parsed.success || !parsed.operation) {
+          if (incrementalGeneration.parseRetryCount < pipelineExecutionBudget.maxParseRetryCount) {
+            const repairPrompt = buildJsonRepairPrompt(
+              "modify",
+              payload.text || "",
+              parsed.error,
+            );
+            await dispatchSyntheticPrompt(repairPrompt);
+            setIncrementalGeneration((prev) => ({
+              ...prev,
+              parseRetryCount: prev.parseRetryCount + 1,
+              lastSyntheticPrompt: repairPrompt,
+            }));
+            message.info(
+              t("pipelines.stepParseRepairing", "模型返回格式不稳定，正在请求一次更严格的 JSON 重试。"),
+            );
+            return;
+          }
+
+          setIncrementalGeneration((prev) => ({
+            ...prev,
+            active: false,
+          }));
+          setDraftParseStatus("error");
+          setDraftParseError(parsed.error || t("pipelines.stepParseFailed", "无法解析节点 JSON。"));
+          message.warning(parsed.error || t("pipelines.stepParseFailed", "无法解析节点 JSON。"));
+          return;
+        }
+
+        try {
+          const stepOrId: Parameters<typeof agentsApi.applyStepOperation>[3] =
+            parsed.operation === "delete" ? (parsed.stepId || "") : parsed.step!;
+          const updated = await agentsApi.applyStepOperation(
+            selectedAgent,
+            activePipelineId,
+            parsed.operation,
+            stepOrId,
+            { expectedRevision: incrementalGeneration.lastSuccessfulRevision ?? selectedTemplateItem?.revision },
+          );
+
+          const nextOperationsApplied = incrementalGeneration.operationsApplied + 1;
+
+          setTemplates((prev) => mergeTemplateUpdate(prev, updated));
+          setDraftNewVersionSteps(updated.steps || []);
+          setDraftParseStatus("ready");
+          setDraftParseError("");
+          setExpandedDraftDiffKeys([]);
+          setIncrementalGeneration((prev) => ({
+            ...prev,
+            parseRetryCount: 0,
+          }));
+
+          message.success(
+            parsed.operation === "delete"
+              ? t("pipelines.incrementalDeleteApplied", "已删除 1 个节点，继续处理剩余变更。")
+              : t("pipelines.incrementalEditApplied", "已应用 1 个节点级修改，继续处理剩余变更。"),
+          );
+
+          // Check operation budget before continuing auto-loop
+          if (nextOperationsApplied >= pipelineExecutionBudget.maxAutoOperations) {
+            setIncrementalGeneration((prev) => ({
+              ...prev,
+              active: false,
+              operationsApplied: nextOperationsApplied,
+              parseRetryCount: 0,
+              lastSuccessfulRevision: updated.revision,
+            }));
+            message.info(
+              t(
+                "pipelines.operationBudgetExhausted",
+                "已自动应用 {{count}} 次变更，请确认当前结果后继续。",
+                { count: nextOperationsApplied },
+              ),
+            );
+            return;
+          }
+
+          const nextPrompt = buildIncrementalStepEditPrompt(
+            activePipelineId,
+            activePipelineName,
+            updated.steps || [],
+            incrementalGeneration.userRequirements,
+            nextOperationsApplied,
+            pipelineExecutionBudget,
+          );
+
+          await dispatchSyntheticPrompt(nextPrompt);
+
+          setIncrementalGeneration((prev) => ({
+            ...prev,
+            currentStep: prev.currentStep + 1,
+            totalStepsExpected: updated.steps?.length || prev.totalStepsExpected,
+            operationsApplied: nextOperationsApplied,
+            parseRetryCount: 0,
+            lastSuccessfulRevision: updated.revision,
+            lastSyntheticPrompt: nextPrompt,
+          }));
+          return;
+        } catch (error) {
+          console.error("failed to save incremental pipeline edit", error);
+          setIncrementalGeneration((prev) => ({
+            ...prev,
+            active: false,
+          }));
+          setDraftParseStatus("error");
+          setDraftParseError(t("pipelines.stepSaveFailed", "节点保存失败，请检查后重试。"));
+          message.error(t("pipelines.stepSaveFailed", "节点保存失败，请检查后重试。"));
+          return;
+        }
+      }
+
+      if (!incrementalGeneration.active) {
+        try {
+          const userRequirements = await fetchLatestUserRequest();
+
+          if (isIncrementalUserMessage(userRequirements, incrementalGeneration)) {
+            const steps = draftNewVersionSteps.length > 0
+              ? draftNewVersionSteps
+              : (selectedTemplateItem?.steps || currentTemplate?.steps || []);
+            const mode: "create" | "modify" =
+              editWelcomeMode === "init" || steps.length === 0 ? "create" : "modify";
+
+            await startIncrementalWorkflow(mode, userRequirements, steps);
+            return;
+          }
+        } catch (error) {
+          console.warn("failed to bootstrap incremental pipeline workflow", error);
+        }
       }
 
       void agentsApi
@@ -1736,8 +2264,62 @@ export default function PipelinesPage() {
           // Ignore when draft markdown does not exist yet.
         });
     },
-    [editMode, lastDraftMdMtime, selectedAgent, selectedPipeline?.id, selectedTemplateItem?.id, t],
+    [
+      designChatSessionId,
+      draftNewVersionSteps,
+      editMode,
+      editWelcomeMode,
+      incrementalGeneration,
+      lastDraftMdMtime,
+      currentTemplate?.steps,
+      selectedAgent,
+      selectedPipeline?.id,
+      selectedPipeline?.name,
+      selectedTemplateItem?.id,
+      selectedTemplateItem?.name,
+      selectedTemplateItem?.revision,
+      selectedTemplateItem?.steps,
+      pipelineExecutionBudget,
+      t,
+    ],
   );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!import.meta.env.DEV) return;
+    if (!window.__COPAW_ENABLE_TEST_HOOKS__) return;
+
+    window.__COPAW_PIPELINES_TEST__ = {
+      activateIncrementalModify: (overrides = {}) => {
+        setIncrementalGeneration((prev) => ({
+          ...prev,
+          active: true,
+          mode: "modify",
+          totalStepsExpected:
+            overrides.totalStepsExpected ??
+            draftNewVersionSteps.length ??
+            selectedTemplateItem?.steps?.length ??
+            prev.totalStepsExpected,
+          currentStep: overrides.currentStep ?? 1,
+          userRequirements: overrides.userRequirements ?? "delete the selected step",
+          lastUserRequest: overrides.lastUserRequest ?? "delete the selected step",
+          lastSyntheticPrompt: overrides.lastSyntheticPrompt ?? "",
+          operationsApplied: overrides.operationsApplied ?? 0,
+          parseRetryCount: overrides.parseRetryCount ?? 0,
+        }));
+      },
+      completeAssistantTurn: (text: string) =>
+        handleAssistantTurnCompleted({
+          text,
+          response: null,
+        }),
+      getDraftStepIds: () => draftNewVersionSteps.map((step) => step.id),
+    };
+
+    return () => {
+      delete window.__COPAW_PIPELINES_TEST__;
+    };
+  }, [draftNewVersionSteps, handleAssistantTurnCompleted, selectedTemplateItem?.steps]);
 
   const toggleDraftDiffDetails = useCallback((key: string) => {
     setExpandedDraftDiffKeys((prev) =>
@@ -2366,50 +2948,64 @@ export default function PipelinesPage() {
                     <Spin size="large" />
                   </div>
                 ) : designChatSessionId ? (
-                  <AnywhereChat
-                    sessionId={designChatSessionId}
-                    onNewChat={() => {
-                      void handleOpenDesignChat(true, undefined, {
-                        forceNewSession: true,
-                      });
-                    }}
-                    onAssistantTurnCompleted={handleAssistantTurnCompleted}
-                    inputPlaceholder={editGuidePlaceholder || undefined}
-                    welcomeGreeting={t(
-                      editWelcomeMode === "init"
-                        ? "pipelines.editWelcomeGreetingInit"
-                        : "pipelines.editWelcomeGreeting",
-                      editWelcomeMode === "init"
-                        ? "新流程已创建，我们先把首版流程搭起来。"
-                        : "流程编辑助手已就绪，你想先改哪一步？",
-                    )}
-                    welcomeDescription={t(
-                      editWelcomeMode === "init"
-                        ? "pipelines.editWelcomeDescriptionInit"
-                        : "pipelines.editWelcomeDescription",
-                      editWelcomeMode === "init"
-                        ? "已预填首版模板，你可以直接在对话里按用途/输入/产物/步骤线索进行修改。"
-                        : "我会基于当前流程结构给出节点级修改建议，并帮助你整理可执行的改造方案。",
-                    )}
-                    welcomePrompts={[
-                      t(
-                        editWelcomeMode === "init"
-                          ? "pipelines.editWelcomePromptInit1"
-                          : "pipelines.editWelcomePrompt1",
-                        editWelcomeMode === "init"
-                          ? "基于用途/输入/产物/步骤线索，直接修改右侧预填的流程 Markdown 模板。"
-                          : "分析当前流程瓶颈，并直接修改流程 Markdown 工作文件落实优化建议。",
-                      ),
-                      t(
-                        editWelcomeMode === "init"
-                          ? "pipelines.editWelcomePromptInit2"
-                          : "pipelines.editWelcomePrompt2",
-                        editWelcomeMode === "init"
-                          ? "若信息不足，先保留占位描述并最小修改，不要从零重建。"
-                          : "我要改这个流程：新增校验节点、调整重试策略，并把变更写回流程 Markdown。",
-                      ),
-                    ]}
-                  />
+                  <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+                    {editWelcomeMode === "init" && incrementalGeneration.active ? (
+                      <div style={{ padding: "8px 12px", borderBottom: "1px solid rgba(5, 5, 5, 0.06)" }}>
+                        <Text type="secondary">
+                          {t("pipelines.incrementalProgress", "逐步生成中：第 {{current}} / {{total}} 步", {
+                            current: incrementalGeneration.currentStep,
+                            total: incrementalGeneration.totalStepsExpected,
+                          })}
+                        </Text>
+                      </div>
+                    ) : null}
+                    <div style={{ minHeight: 0, flex: 1 }}>
+                      <AnywhereChat
+                        sessionId={designChatSessionId}
+                        onNewChat={() => {
+                          void handleOpenDesignChat(true, undefined, {
+                            forceNewSession: true,
+                          });
+                        }}
+                        onAssistantTurnCompleted={handleAssistantTurnCompleted}
+                        inputPlaceholder={editGuidePlaceholder || undefined}
+                        welcomeGreeting={t(
+                          editWelcomeMode === "init"
+                            ? "pipelines.editWelcomeGreetingInit"
+                            : "pipelines.editWelcomeGreeting",
+                          editWelcomeMode === "init"
+                            ? "新流程已创建，我们先把首版流程搭起来。"
+                            : "流程编辑助手已就绪，你想先改哪一步？",
+                        )}
+                        welcomeDescription={t(
+                          editWelcomeMode === "init"
+                            ? "pipelines.editWelcomeDescriptionInit"
+                            : "pipelines.editWelcomeDescription",
+                          editWelcomeMode === "init"
+                            ? "描述你的目标后，系统会按步骤逐个生成节点并即时写回流程草稿。"
+                            : "我会基于当前流程结构给出节点级修改建议，并帮助你整理可执行的改造方案。",
+                        )}
+                        welcomePrompts={[
+                          t(
+                            editWelcomeMode === "init"
+                              ? "pipelines.editWelcomePromptInit1"
+                              : "pipelines.editWelcomePrompt1",
+                            editWelcomeMode === "init"
+                              ? "先描述流程目标和关键步骤，我会自动切换到逐步生成模式。"
+                              : "分析当前流程瓶颈，并直接修改流程 Markdown 工作文件落实优化建议。",
+                          ),
+                          t(
+                            editWelcomeMode === "init"
+                              ? "pipelines.editWelcomePromptInit2"
+                              : "pipelines.editWelcomePrompt2",
+                            editWelcomeMode === "init"
+                              ? "每次只生成一个节点；生成后会立即校验并保存，再继续下一步。"
+                              : "我要改这个流程：新增校验节点、调整重试策略，并把变更写回流程 Markdown。",
+                          ),
+                        ]}
+                      />
+                    </div>
+                  </div>
                 ) : (
                   <Empty
                     description={t(
