@@ -181,8 +181,8 @@ async def run_heartbeat_once(
 
     target = (hb.target or "").strip().lower()
     heartbeat_ran = False
-    if target == HEARTBEAT_TARGET_LAST and config.last_dispatch:
-        ld = config.last_dispatch
+    if target == HEARTBEAT_TARGET_LAST and last_dispatch:
+        ld = last_dispatch
         if ld.channel and (ld.user_id or ld.session_id):
 
             async def _run_and_dispatch() -> None:
