@@ -13,6 +13,43 @@ bash scripts/bootstrap_dev.sh
 - Pass `--extras dev,full` to include the full optional dependency set.
 - Pass `--recreate` to force rebuilding `.venv` from scratch.
 
+## One-click source rebuild and start
+
+```bash
+bash scripts/source_one_click_start.sh
+```
+
+- Performs end-to-end source-mode startup in one command:
+	- Stops the existing process on target port (graceful shutdown, then force kill on timeout)
+	- Runs `git pull --ff-only`
+	- Creates/activates `.venv`
+	- Installs editable Python dependencies
+	- Builds `console/` frontend and copies assets to `src/copaw/console`
+	- Starts `copaw app --host 0.0.0.0 --port 8088`
+- Useful options:
+	- `--port 3000` to change service port
+	- `--skip-pull` to skip Git update
+	- `--no-stop` to skip automatic process stopping
+	- `--stop-wait 30` to change graceful-stop timeout
+	- `--no-shortcut` to skip shortcut injection
+
+Shortcut commands installed by default:
+
+```bash
+copaw-rebuild
+```
+
+- Adds `copaw-rebuild` into `~/.local/bin`.
+- Injects shell bridge for:
+
+```bash
+copaw rebuild
+```
+
+- Reload shell once after first install to apply bridge and PATH changes:
+	- zsh: `source ~/.zshrc`
+	- bash: `source ~/.bashrc`
+
 ## Build wheel (with latest console)
 
 ```bash
