@@ -96,6 +96,10 @@ type ChatInputItem = {
   [key: string]: unknown;
 };
 
+type RequestInputMessage = ChatInputItem & {
+  role?: string;
+};
+
 type BizParams = Record<string, unknown> & {
   reconnect?: boolean;
 };
@@ -159,10 +163,11 @@ function useIMEComposition(isChatActive: () => boolean) {
     const suppressImeEnter = (e: KeyboardEvent) => {
       if (!isChatActive()) return;
       const target = e.target as HTMLElement;
+      const composingEvent = e as KeyboardEvent & { isComposing?: boolean };
       if (target?.tagName === "TEXTAREA" && e.key === "Enter" && !e.shiftKey) {
         // e.isComposing is the standard flag; isComposingRef covers the
         // post-compositionend grace period needed by Safari.
-        if (isComposingRef.current || (e as any).isComposing) {
+        if (isComposingRef.current || Boolean(composingEvent.isComposing)) {
           e.stopPropagation();
           e.stopImmediatePropagation();
           e.preventDefault();
@@ -420,6 +425,13 @@ function buildPipelineOpportunityInlineHint(): string {
   ].join("\n");
 }
 
+type ReconnectableSession = {
+  sessionId?: string;
+  userId?: string;
+  channel?: string;
+  messages?: RuntimeUiMessage[];
+};
+
 export default function ChatPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -452,6 +464,7 @@ export default function ChatPage() {
   );
 
   const lastSessionIdRef = useRef<string | null>(null);
+  const reconnectAttemptedSessionIdRef = useRef<string | null>(null);
   const chatIdRef = useRef(chatId);
   const navigateRef = useRef(navigate);
   const chatRef = useRef<IAgentScopeRuntimeWebUIRef>(null);
@@ -461,7 +474,7 @@ export default function ChatPage() {
   useEffect(() => {
     sessionApi.setChatRef(chatRef);
     return () => sessionApi.setChatRef(null);
-  }, []);
+  }, [isComposingRef]);
 
   useEffect(() => {
     const handleCompositionStart = () => {
@@ -505,7 +518,7 @@ export default function ChatPage() {
       );
       document.removeEventListener("keypress", handleKeyPress, true);
     };
-  }, []);
+  }, [isComposingRef]);
 
   // Register session API event callbacks for URL synchronization
 
@@ -580,60 +593,6 @@ export default function ChatPage() {
     }
     prevSelectedAgentRef.current = selectedAgent;
   }, [selectedAgent]);
-
-  useEffect(() => {
-    if (!chatId) {
-      return;
-    }
-
-    let cancelled = false;
-    let attempts = 0;
-    const maxAttempts = 24;
-    const intervalMs = 1500;
-
-    const pollSessionHydration = async () => {
-      if (cancelled) {
-        return;
-      }
-
-      attempts += 1;
-
-      try {
-        const session = await sessionApi.getSession(chatId);
-        const messages = (session.messages as RuntimeUiMessage[] | undefined) || [];
-        const hasAssistantMessage = messages.some(
-          (message) => message.role === "assistant",
-        );
-        const isIdle =
-          (session as { status?: "idle" | "running" }).status === "idle";
-
-        if (hasAssistantMessage || isIdle) {
-          // Only force a re-mount when we had to wait (session was initially
-          // running with empty history). On the first attempt the component
-          // self-hydrates, so an extra remount just causes a duplicate
-          // /api/chats request without any visible benefit.
-          if (attempts > 1) {
-            setRefreshKey((prev) => prev + 1);
-          }
-          return;
-        }
-      } catch {
-        // Ignore transient polling failures and continue retrying.
-      }
-
-      if (!cancelled && attempts < maxAttempts) {
-        setTimeout(() => {
-          void pollSessionHydration();
-        }, intervalMs);
-      }
-    };
-
-    void pollSessionHydration();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [chatId]);
 
   const getSessionListWrapped = useCallback(async () => {
     const sessions = await sessionApi.getSessionList();
@@ -850,6 +809,245 @@ export default function ChatPage() {
     [persistSessionMessages, releaseStaleLoadingState],
   );
 
+  const reconnectRunningSession = useCallback(async (
+    chatSessionId: string,
+    session: ReconnectableSession,
+  ) => {
+      const reconnectSessionId = session.sessionId || window.currentSessionId || "";
+      if (!chatSessionId || !reconnectSessionId) {
+        return false;
+      }
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        ...buildAuthHeaders(),
+      };
+      const currentMessages =
+        (chatRef.current?.messages.getMessages() as RuntimeUiMessage[]) || [];
+      const initialMessages = cloneRuntimeMessages(
+        currentMessages.length > 0 ? currentMessages : session.messages || [],
+      );
+      const assistantMessageId =
+        getStreamingAssistantMessageId(initialMessages) ||
+        `reconnect-${chatSessionId}`;
+      const responseBuilder = new AgentScopeRuntimeResponseBuilder({
+        id: "",
+        status: AgentScopeRuntimeRunStatus.Created,
+        created_at: 0,
+      });
+
+      setChatStatus("running");
+      setReconnectStreaming(true);
+      runtimeLoadingBridgeRef.current?.setLoading?.(true);
+
+      try {
+        const res = await fetch(getApiUrl("/console/chat"), {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            reconnect: true,
+            session_id: reconnectSessionId,
+            user_id: session.userId ?? window.currentUserId ?? DEFAULT_USER_ID,
+            channel: session.channel ?? window.currentChannel ?? DEFAULT_CHANNEL,
+          }),
+        });
+
+        if (!res.ok || !res.body) {
+          if (res.status === 404) {
+            try {
+              const payload = await res.clone().json();
+              if (payload?.detail === "No running chat for this session") {
+                setChatStatus("idle");
+                runtimeLoadingBridgeRef.current?.setLoading?.(false);
+                return true;
+              }
+            } catch {
+              // Ignore parse failures and allow caller to retry later.
+            }
+          }
+          return false;
+        }
+
+        let cachedMessages = initialMessages;
+        let reachedTerminalState = false;
+
+        for await (const chunk of Stream({ readableStream: res.body })) {
+          let chunkData: unknown;
+          try {
+            chunkData = JSON.parse(chunk.data);
+          } catch {
+            continue;
+          }
+
+          const responseData = responseBuilder.handle(
+            chunkData as never,
+          ) as StreamResponseData;
+          const isFinalChunk = isFinalResponseStatus(responseData.status);
+          const existingAssistantMessage = cachedMessages.find(
+            (message) => message.id === assistantMessageId,
+          );
+          const previousResponseData = getResponseCardData(
+            existingAssistantMessage,
+          );
+
+          let nextResponseData: StreamResponseData | null = null;
+          if (hasRenderableOutput(responseData)) {
+            nextResponseData = cloneValue(responseData);
+          } else if (isFinalChunk && previousResponseData) {
+            nextResponseData = {
+              ...previousResponseData,
+              status: responseData.status ?? previousResponseData.status,
+            };
+          }
+
+          if (!nextResponseData) {
+            continue;
+          }
+
+          const assistantMessage: RuntimeUiMessage = {
+            ...(existingAssistantMessage || {
+              id: assistantMessageId,
+              role: "assistant",
+            }),
+            id: assistantMessageId,
+            role: "assistant",
+            cards: [
+              {
+                code: "AgentScopeRuntimeResponseCard",
+                data: nextResponseData,
+              },
+            ],
+            msgStatus: isFinalChunk ? "finished" : "generating",
+          };
+
+          const assistantIndex = cachedMessages.findIndex(
+            (message) => message.id === assistantMessageId,
+          );
+          cachedMessages =
+            assistantIndex >= 0
+              ? [
+                  ...cachedMessages.slice(0, assistantIndex),
+                  assistantMessage,
+                  ...cachedMessages.slice(assistantIndex + 1),
+                ]
+              : [...cachedMessages, assistantMessage];
+
+          if (chatIdRef.current === chatSessionId) {
+            chatRef.current?.messages.updateMessage(cloneValue(assistantMessage));
+          }
+
+          await persistSessionMessages(chatSessionId, cachedMessages);
+
+          if (isFinalChunk) {
+            reachedTerminalState = true;
+            setChatStatus("idle");
+            runtimeLoadingBridgeRef.current?.setLoading?.(false);
+          }
+        }
+
+        if (!reachedTerminalState) {
+          setChatStatus("idle");
+          runtimeLoadingBridgeRef.current?.setLoading?.(false);
+        }
+
+        return true;
+      } catch (error) {
+        console.error("Failed to reconnect chat stream:", error);
+        return false;
+      } finally {
+        setReconnectStreaming(false);
+      }
+    }, [persistSessionMessages]);
+
+  useEffect(() => {
+    if (!chatId) {
+      return;
+    }
+
+    let cancelled = false;
+    let attempts = 0;
+    let didRefreshHydratedMessages = false;
+    const maxAttempts = 24;
+    const intervalMs = 1500;
+
+    const pollSessionHydration = async () => {
+      if (cancelled) {
+        return;
+      }
+
+      attempts += 1;
+
+      try {
+        const session = await sessionApi.getSession(chatId);
+        const messages = (session.messages as RuntimeUiMessage[] | undefined) || [];
+        const uiMessages =
+          (chatRef.current?.messages.getMessages() as RuntimeUiMessage[]) || [];
+        const hasAssistantMessage = messages.some(
+          (message) => message.role === "assistant",
+        );
+        const hasUiLiveMessage = uiMessages.some(
+          (message) => message.msgStatus === "generating",
+        );
+        const isRunning =
+          (session as { status?: "idle" | "running" }).status === "running";
+        const isIdle =
+          (session as { status?: "idle" | "running" }).status === "idle";
+
+        if (isRunning) {
+          runtimeLoadingBridgeRef.current?.setLoading?.(true);
+
+          if (
+            reconnectAttemptedSessionIdRef.current !== chatId &&
+            !hasUiLiveMessage
+          ) {
+            reconnectAttemptedSessionIdRef.current = chatId;
+            void reconnectRunningSession(chatId, {
+              sessionId: (session as ReconnectableSession).sessionId,
+              userId: (session as ReconnectableSession).userId,
+              channel: (session as ReconnectableSession).channel,
+              messages,
+            }).then((connected) => {
+              if (!connected) {
+                reconnectAttemptedSessionIdRef.current = null;
+              }
+            });
+          }
+        }
+
+        if (hasAssistantMessage && !didRefreshHydratedMessages) {
+          didRefreshHydratedMessages = true;
+
+          if (attempts > 1) {
+            setRefreshKey((prev) => prev + 1);
+          }
+        }
+
+        if (isIdle) {
+          reconnectAttemptedSessionIdRef.current = null;
+          runtimeLoadingBridgeRef.current?.setLoading?.(false);
+          return;
+        }
+      } catch {
+        // Ignore transient polling failures and continue retrying.
+      }
+
+      if (!cancelled && attempts < maxAttempts) {
+        setTimeout(() => {
+          void pollSessionHydration();
+        }, intervalMs);
+      }
+    };
+
+    void pollSessionHydration();
+
+    const loadingBridge = runtimeLoadingBridgeRef.current;
+    return () => {
+      cancelled = true;
+      reconnectAttemptedSessionIdRef.current = null;
+      loadingBridge?.setLoading?.(false);
+    };
+  }, [chatId, reconnectRunningSession]);
+
   const customFetch = useCallback(
     async (data: CustomFetchData): Promise<Response> => {
       const headers: Record<string, string> = {
@@ -1014,8 +1212,10 @@ export default function ChatPage() {
         chatIdRef.current ??
         requestBody.session_id;
       if (backendChatId) {
-        const userText = rewrittenInput
-          .filter((m: any) => m.role === "user")
+        const userText = (rewrittenInput as RequestInputMessage[])
+          .filter(
+            (message): message is RequestInputMessage => message.role === "user",
+          )
           .map(extractUserMessageText)
           .join("\n")
           .trim();
@@ -1144,7 +1344,7 @@ export default function ChatPage() {
           customRequest: handleFileUpload,
         },
       },
-      session: { multiple: true, api: sessionApi },
+      session: { multiple: true, api: wrappedSessionApi },
       api: {
         ...defaultConfig.api,
         fetch: customFetch,
@@ -1204,6 +1404,7 @@ export default function ChatPage() {
     handleFileUpload,
     t,
     isDark,
+    isComposingRef,
     multimodalCaps,
     setChatStatus,
   ]);

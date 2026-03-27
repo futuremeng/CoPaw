@@ -438,29 +438,37 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
       return;
     }
 
-    const lastMsg = messages[messages.length - 1] as RuntimeUiMessageLike | undefined;
-    if (lastMsg?.role === ROLE_USER) {
-      const existingText = extractTextFromContent(
-        lastMsg.cards?.[0]?.data &&
-          typeof lastMsg.cards[0].data === "object" &&
-          (lastMsg.cards[0].data as { input?: Array<{ content?: unknown }> }).input?.[0]?.content,
+    const lastUserIndex = [...messages]
+      .map((message, index) => ({ message, index }))
+      .reverse()
+      .find(({ message }) => message.role === ROLE_USER)?.index;
+
+    // Only inject the cached user turn when no user card exists yet.
+    // If a user card already exists, avoid appending another one at the tail,
+    // otherwise assistant output may appear before a duplicated user turn.
+    if (lastUserIndex === undefined) {
+      messages.push(
+        buildUserCard({
+          content: [{ type: "text", text: cachedText }],
+          role: ROLE_USER,
+        } as Message),
       );
-      if (!existingText) {
-        lastMsg.cards =
-          buildUserCard({
-            content: [{ type: "text", text: cachedText }],
-            role: ROLE_USER,
-          } as Message).cards;
-      }
       return;
     }
 
-    messages.push(
-      buildUserCard({
-        content: [{ type: "text", text: cachedText }],
-        role: ROLE_USER,
-      } as Message),
+    const lastUserMessage = messages[lastUserIndex] as RuntimeUiMessageLike;
+    const existingText = extractTextFromContent(
+      lastUserMessage.cards?.[0]?.data &&
+        typeof lastUserMessage.cards[0].data === "object" &&
+        (lastUserMessage.cards[0].data as { input?: Array<{ content?: unknown }> }).input?.[0]?.content,
     );
+    if (!existingText) {
+      lastUserMessage.cards =
+        buildUserCard({
+          content: [{ type: "text", text: cachedText }],
+          role: ROLE_USER,
+        } as Message).cards;
+    }
   }
 
   /**
@@ -776,22 +784,6 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
         | ExtendedSession
         | undefined;
 
-      // During the first running round, backend history/state can be empty for
-      // a short window. Keep local in-memory messages authoritative to avoid
-      // dropping the first user turn before stream completion.
-      if (
-        fromList?.realId &&
-        fromList.status === "running" &&
-        Array.isArray(fromList.messages) &&
-        fromList.messages.length > 0
-      ) {
-        this.updateWindowVariables(fromList);
-        return {
-          ...fromList,
-          messages: JSON.parse(JSON.stringify(fromList.messages)) as IAgentScopeRuntimeWebUIMessage[],
-        } as ExtendedSession;
-      }
-
       // If realId is already resolved, use it directly to fetch history.
       if (fromList?.realId) {
         const { messages, status } = await this.getAllChatMessages(
@@ -882,19 +874,6 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
       fromList = this.findSessionByAnyId(sessionId);
     }
 
-    if (
-      fromList &&
-      fromList.status === "running" &&
-      Array.isArray(fromList.messages) &&
-      fromList.messages.length > 0
-    ) {
-      this.updateWindowVariables(fromList);
-      return {
-        ...fromList,
-        messages: JSON.parse(JSON.stringify(fromList.messages)) as IAgentScopeRuntimeWebUIMessage[],
-      } as ExtendedSession;
-    }
-
     const { messages, status } = await this.getAllChatMessages(sessionId);
     const convertedMessages = convertMessages(messages);
     const generating = isGenerating({ status, messages } as ChatHistory);
@@ -906,10 +885,8 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
     const localHasUser = localMessages.some((m) => m.role === ROLE_USER);
     const shouldUseLocalFallback =
       localMessages.length > 0 &&
-      (status === "running" ||
-        convertedMessages.length === 0 ||
-        (localHasUser && !convertedHasUser) ||
-        convertedMessages.length < localMessages.length);
+      status === "running" &&
+      (convertedMessages.length === 0 || (localHasUser && !convertedHasUser));
 
     const session: ExtendedSession = {
       id: fromList?.id || sessionId,
