@@ -1113,7 +1113,7 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
 
         response_msg = Msg(
             self.name,
-            _interrupt_reply_text(self.agent_config.language),
+            _interrupt_reply_text(self._agent_config.language),
             "assistant",
             metadata={"_is_interrupted": True},
         )
