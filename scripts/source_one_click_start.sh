@@ -12,6 +12,7 @@ SKIP_PULL=0
 AUTO_STOP=1
 STOP_WAIT_SECONDS=20
 INSTALL_SHORTCUT=1
+VENV_PYTHON=""
 
 usage() {
     cat <<'EOF'
@@ -298,14 +299,25 @@ prepare_venv() {
         log "Using existing virtual environment: $VENV_DIR"
     fi
 
-    # shellcheck source=/dev/null
-    source "$VENV_DIR/bin/activate"
+    VENV_PYTHON="$VENV_DIR/bin/python"
+    if [[ ! -x "$VENV_PYTHON" ]]; then
+        echo "Virtual environment python is missing: $VENV_PYTHON" >&2
+        echo "Try removing .venv and rerun this script." >&2
+        exit 1
+    fi
+
+    if [[ -f "$VENV_DIR/bin/activate" ]]; then
+        # shellcheck source=/dev/null
+        source "$VENV_DIR/bin/activate"
+    else
+        log "activate script not found, using $VENV_PYTHON directly."
+    fi
 
     log "Upgrading pip/setuptools/wheel"
-    python -m pip install -U pip setuptools wheel
+    "$VENV_PYTHON" -m pip install -U pip setuptools wheel
 
     log "Installing CoPaw in editable mode with extras: [$EXTRAS]"
-    python -m pip install -e ".[${EXTRAS}]"
+    "$VENV_PYTHON" -m pip install -e ".[${EXTRAS}]"
 }
 
 build_console() {
@@ -335,6 +347,9 @@ build_console() {
 
 start_app() {
     log "Starting CoPaw on ${HOST}:${PORT}"
+    if [[ -n "$VENV_PYTHON" && -x "$VENV_PYTHON" ]]; then
+        exec "$VENV_PYTHON" -m copaw app --host "$HOST" --port "$PORT"
+    fi
     exec copaw app --host "$HOST" --port "$PORT"
 }
 
