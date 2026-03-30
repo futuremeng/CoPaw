@@ -22,6 +22,12 @@ export interface AgentProjectFileContent {
   content: string;
 }
 
+export interface CloneProjectRequest {
+  target_id?: string;
+  target_name?: string;
+  include_pipeline_runs?: boolean;
+}
+
 export interface ProjectPipelineTemplateStep {
   id: string;
   name: string;

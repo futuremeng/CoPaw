@@ -22,10 +22,12 @@ from .messages import router as messages_router
 from .files import router as files_router
 from .settings import router as settings_router
 from .knowledge import router as knowledge_router
+from .agents_pipeline import router as agents_pipeline_router
 
 router = APIRouter()
 
 router.include_router(agents_router)
+router.include_router(agents_pipeline_router)
 router.include_router(agent_router)
 router.include_router(config_router)
 router.include_router(console_router)

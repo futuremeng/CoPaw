@@ -14,6 +14,8 @@ import type {
   ImportAgentSquareResponse,
   AgentProjectFileInfo,
   AgentProjectFileContent,
+  AgentProjectSummary,
+  CloneProjectRequest,
   AgentPipelineDraftInfo,
   PipelineSaveStreamEvent,
   ProjectPipelineTemplateInfo,
@@ -94,6 +96,15 @@ export const agentsApi = {
   listProjectFiles: (agentId: string, projectId: string) =>
     request<AgentProjectFileInfo[]>(
       `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/files`,
+    ),
+
+  cloneProject: (agentId: string, projectId: string, body?: CloneProjectRequest) =>
+    request<AgentProjectSummary>(
+      `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/clone`,
+      {
+        method: "POST",
+        body: JSON.stringify(body || {}),
+      },
     ),
 
   readProjectFile: (agentId: string, projectId: string, filePath: string) =>

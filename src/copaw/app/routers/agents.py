@@ -130,6 +130,14 @@ class ProjectFileContent(BaseModel):
     content: str
 
 
+class CloneProjectRequest(BaseModel):
+    """Request body for cloning a project."""
+
+    target_id: str | None = None
+    target_name: str | None = None
+    include_pipeline_runs: bool = True
+
+
 class AgentsSquareSourcesPayload(BaseModel):
     """Payload for Agents Square source management."""
 
@@ -542,6 +550,98 @@ def _resolve_project_dir(workspace_dir: Path, project_id: str) -> Path:
             return project_dir
 
     raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
+
+
+def _build_unique_project_id(workspace_dir: Path, base_id: str) -> str:
+    projects = _list_agent_projects(workspace_dir)
+    existing = {item.id for item in projects}
+    candidate = _slugify(base_id).replace("agent", "project")
+    if candidate not in existing:
+        return candidate
+    index = 2
+    while f"{candidate}-{index}" in existing:
+        index += 1
+    return f"{candidate}-{index}"
+
+
+def _build_unique_project_name(workspace_dir: Path, base_name: str) -> str:
+    projects = _list_agent_projects(workspace_dir)
+    existing = {item.name for item in projects}
+    name = (base_name or "").strip() or "Project Clone"
+    if name not in existing:
+        return name
+    index = 2
+    while f"{name} ({index})" in existing:
+        index += 1
+    return f"{name} ({index})"
+
+
+def _write_project_frontmatter(
+    metadata_file: Path,
+    metadata: dict[str, Any],
+    body: str,
+) -> None:
+    import yaml
+
+    serialized = yaml.safe_dump(
+        metadata,
+        allow_unicode=True,
+        sort_keys=False,
+    ).strip()
+    text = f"---\n{serialized}\n---\n\n{(body or '').strip()}\n"
+    metadata_file.write_text(text, encoding="utf-8")
+
+
+def _clone_project(
+    workspace_dir: Path,
+    source_project_id: str,
+    body: CloneProjectRequest,
+) -> ProjectSummary:
+    source_dir = _resolve_project_dir(workspace_dir, source_project_id)
+    source_summary = _load_project_summary(source_dir)
+    if source_summary is None:
+        raise HTTPException(status_code=404, detail=f"Project '{source_project_id}' metadata not found")
+
+    cloned_id_seed = body.target_id or f"{source_summary.id}-clone"
+    cloned_id = _build_unique_project_id(workspace_dir, cloned_id_seed)
+    cloned_name_seed = body.target_name or f"{source_summary.name} (Clone)"
+    cloned_name = _build_unique_project_name(workspace_dir, cloned_name_seed)
+
+    projects_dir = workspace_dir / _PROJECTS_DIRNAME
+    projects_dir.mkdir(parents=True, exist_ok=True)
+    target_dir = projects_dir / cloned_id
+    shutil.copytree(source_dir, target_dir)
+
+    if not body.include_pipeline_runs:
+        runs_dir = target_dir / "pipelines" / "runs"
+        if runs_dir.exists() and runs_dir.is_dir():
+            shutil.rmtree(runs_dir)
+
+    metadata_file = next(
+        (target_dir / name for name in _PROJECT_METADATA_FILENAMES if (target_dir / name).is_file()),
+        target_dir / "PROJECT.md",
+    )
+
+    parsed = _parse_markdown_frontmatter(metadata_file)
+    metadata: dict[str, Any] = {}
+    content_body = ""
+    if parsed is not None:
+        metadata, content_body = parsed
+    elif metadata_file.exists():
+        content_body = metadata_file.read_text(encoding="utf-8", errors="ignore")
+
+    metadata["id"] = cloned_id
+    metadata["name"] = cloned_name
+    tags = _parse_project_tags(metadata.get("tags"))
+    if "cloned" not in tags:
+        tags.append("cloned")
+    metadata["tags"] = tags
+    _write_project_frontmatter(metadata_file, metadata, content_body)
+
+    summary = _load_project_summary(target_dir)
+    if summary is None:
+        raise HTTPException(status_code=500, detail="Failed to load cloned project summary")
+    return summary
 
 
 def _is_safe_relative_path(rel_path: str) -> bool:
@@ -1588,9 +1688,9 @@ async def delete_agent(
     description="Enable or disable an agent (cannot disable default agent)",
 )
 async def toggle_agent_enabled(
+    request: Request,
     agentId: str = PathParam(...),
     enabled: bool = Body(..., embed=True),
-    request: Request = None,
 ) -> dict:
     """Toggle agent enabled state.
 
@@ -1790,6 +1890,36 @@ async def list_agent_project_files(
     try:
         project_dir = _resolve_project_dir(Path(workspace.workspace_dir), projectId)
         return _list_project_files(project_dir)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post(
+    "/{agentId}/projects/{projectId}/clone",
+    response_model=ProjectSummary,
+    summary="Clone project",
+    description="Clone one project directory and rewrite PROJECT metadata for the new project",
+)
+async def clone_agent_project(
+    request: Request,
+    body: CloneProjectRequest = Body(default_factory=CloneProjectRequest),
+    agentId: str = PathParam(...),
+    projectId: str = PathParam(...),
+) -> ProjectSummary:
+    """Clone a project under the same agent workspace."""
+    manager = _get_multi_agent_manager(request)
+
+    try:
+        workspace = await manager.get_agent(agentId)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    try:
+        return _clone_project(Path(workspace.workspace_dir), projectId, body)
+    except FileExistsError as e:
+        raise HTTPException(status_code=409, detail=f"Target project already exists: {e}") from e
     except HTTPException:
         raise
     except Exception as e:

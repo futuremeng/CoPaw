@@ -15,7 +15,8 @@ import SkillsPage from "../../pages/Agent/Skills";
 import SkillPoolPage from "../../pages/Agent/SkillPool";
 import ToolsPage from "../../pages/Agent/Tools";
 import WorkspacePage from "../../pages/Agent/Workspace";
-import ProjectsPage from "../../pages/Agent/Projects";
+import ProjectsListPage from "../../pages/Agent/Projects/ProjectsListPage";
+import ProjectDetailPage from "../../pages/Agent/Projects/ProjectDetailPage";
 import PipelinesPage from "../../pages/Agent/Pipelines";
 import MCPPage from "../../pages/Agent/MCP";
 import ModelsPage from "../../pages/Settings/Models";
@@ -53,7 +54,9 @@ const pathToKey: Record<string, string> = {
 export default function MainLayout() {
   const location = useLocation();
   const currentPath = location.pathname;
-  const selectedKey = pathToKey[currentPath] || "chat";
+  const selectedKey =
+    pathToKey[currentPath] ||
+    (currentPath.startsWith("/projects/") ? "projects" : "chat");
 
   return (
     <Layout className={styles.mainLayout}>
@@ -76,7 +79,8 @@ export default function MainLayout() {
               <Route path="/tools" element={<ToolsPage />} />
               <Route path="/mcp" element={<MCPPage />} />
               <Route path="/workspace" element={<WorkspacePage />} />
-              <Route path="/projects" element={<ProjectsPage />} />
+              <Route path="/projects" element={<ProjectsListPage />} />
+              <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
               <Route path="/pipelines" element={<PipelinesPage />} />
               <Route path="/agents" element={<AgentsPage />} />
               <Route path="/models" element={<ModelsPage />} />
