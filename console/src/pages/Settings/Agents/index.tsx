@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { Card, Button, Form, message } from "antd";
+import { Card, Button, Form, message, Tabs } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
 import { agentsApi } from "../../../api/modules/agents";
@@ -7,7 +7,7 @@ import { skillApi } from "../../../api/modules/skill";
 import type { AgentSummary } from "../../../api/types/agents";
 import { useAgents } from "./useAgents";
 import { useAgentStore } from "../../../stores/agentStore";
-import { AgentTable, AgentModal } from "./components";
+import { AgentTable, AgentModal, AgentSquarePanel } from "./components";
 import { PageHeader } from "@/components/PageHeader";
 import styles from "./index.module.less";
 
@@ -20,6 +20,7 @@ export default function AgentsPage() {
   const [form] = Form.useForm();
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const installedSkillsRef = useRef<string[]>([]);
+  const [activeTab, setActiveTab] = useState("manage");
 
   const handleCreate = () => {
     setEditingAgent(null);
@@ -114,27 +115,50 @@ export default function AgentsPage() {
     <div className={styles.agentsPage}>
       <PageHeader
         parent={t("agent.parent")}
-        current={t("agent.agents")}
+        current={
+          activeTab === "square"
+            ? t("agent.squareTitle", "智能体广场")
+            : t("agent.agents")
+        }
         extra={
-          <div className={styles.headerRight}>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={handleCreate}
-            >
-              {t("agent.create")}
-            </Button>
-          </div>
+          activeTab === "manage" ? (
+            <div className={styles.headerRight}>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={handleCreate}
+              >
+                {t("agent.create")}
+              </Button>
+            </div>
+          ) : undefined
         }
       />
 
       <Card className={styles.tableCard}>
-        <AgentTable
-          agents={agents}
-          loading={loading}
-          onEdit={handleEdit}
-          onDelete={handleDelete}
-          onToggle={handleToggle}
+        <Tabs
+          activeKey={activeTab}
+          onChange={setActiveTab}
+          items={[
+            {
+              key: "manage",
+              label: t("agent.management", "智能体管理"),
+              children: (
+                <AgentTable
+                  agents={agents}
+                  loading={loading}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  onToggle={handleToggle}
+                />
+              ),
+            },
+            {
+              key: "square",
+              label: t("agent.squareTitle", "智能体广场"),
+              children: <AgentSquarePanel onImported={loadAgents} />,
+            },
+          ]}
         />
       </Card>
 
