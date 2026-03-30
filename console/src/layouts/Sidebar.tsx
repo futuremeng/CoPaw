@@ -168,6 +168,18 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
       label: t("nav.workspace"),
     },
     {
+      key: "projects",
+      icon: <Briefcase size={18} />,
+      path: "/projects",
+      label: t("nav.projects"),
+    },
+    {
+      key: "pipelines",
+      icon: <Activity size={18} />,
+      path: "/pipelines",
+      label: t("nav.pipelines"),
+    },
+    {
       key: "knowledge",
       icon: <BookOpen size={18} />,
       path: "/knowledge",
@@ -278,6 +290,16 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
           key: "workspace",
           label: collapsed ? null : t("nav.workspace"),
           icon: <Briefcase size={16} />,
+        },
+        {
+          key: "projects",
+          label: collapsed ? null : t("nav.projects"),
+          icon: <Briefcase size={16} />,
+        },
+        {
+          key: "pipelines",
+          label: collapsed ? null : t("nav.pipelines"),
+          icon: <Activity size={16} />,
         },
         {
           key: "knowledge",

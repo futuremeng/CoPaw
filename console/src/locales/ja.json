@@ -35,6 +35,8 @@
     "heartbeat": "ハートビート",
     "agent": "ワークスペース",
     "workspace": "ファイル",
+    "projects": "プロジェクト",
+    "pipelines": "パイプライン",
     "skills": "スキル",
     "skillPool": "スキルプール",
     "mcp": "MCP",

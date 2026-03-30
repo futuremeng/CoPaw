@@ -35,6 +35,8 @@
     "heartbeat": "Heartbeat",
     "agent": "Workspace",
     "workspace": "Files",
+    "projects": "Projects",
+    "pipelines": "Pipelines",
     "knowledge": "Knowledge",
     "skills": "Skills",
     "skillPool": "Skill Pool",

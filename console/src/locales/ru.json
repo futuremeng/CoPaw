@@ -35,6 +35,8 @@
     "heartbeat": "Пульс",
     "agent": "Рабочая область",
     "workspace": "Файлы",
+    "projects": "Проекты",
+    "pipelines": "Конвейеры",
     "skills": "Навыки",
     "skillPool": "Пул навыков",
     "tools": "Инструменты",

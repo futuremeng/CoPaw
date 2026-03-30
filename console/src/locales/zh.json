@@ -35,6 +35,8 @@
     "heartbeat": "心跳",
     "agent": "工作区",
     "workspace": "文件",
+    "projects": "项目",
+    "pipelines": "流程",
     "knowledge": "知识库",
     "skills": "技能",
     "skillPool": "技能池",
