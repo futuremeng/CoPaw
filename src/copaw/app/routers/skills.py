@@ -7,7 +7,9 @@ import asyncio
 import copy
 import json
 import logging
+import re
 import shutil
+import subprocess
 import tempfile
 import threading
 import time
@@ -15,6 +17,7 @@ import uuid
 from enum import Enum
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlparse
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
@@ -45,6 +48,13 @@ from ...agents.skills_manager import (
     reconcile_workspace_manifest,
     suggest_conflict_name,
     update_single_builtin,
+)
+from ...config import load_config, save_config
+from ...config.config import (
+    SkillMarketSpec,
+    SkillsMarketCacheConfig,
+    SkillsMarketConfig,
+    SkillsMarketInstallConfig,
 )
 from ...security.skill_scanner import SkillScanError
 from ..utils import schedule_agent_reload
@@ -219,12 +229,447 @@ _hub_install_runtime_tasks: dict[str, asyncio.Task] = {}
 _hub_install_cancel_events: dict[str, threading.Event] = {}
 _hub_install_lock = asyncio.Lock()
 
+
+class SkillsMarketPayload(BaseModel):
+    version: int = Field(default=1)
+    cache: dict[str, int] = Field(default_factory=lambda: {"ttl_sec": 600})
+    install: dict[str, bool] = Field(
+        default_factory=lambda: {"overwrite_default": False},
+    )
+    markets: list[SkillMarketSpec] = Field(default_factory=list)
+
+
+class ValidateMarketRequest(SkillMarketSpec):
+    pass
+
+
+class MarketError(BaseModel):
+    market_id: str
+    code: str
+    message: str
+    retryable: bool = False
+
+
+class MarketplaceItem(BaseModel):
+    market_id: str
+    skill_id: str
+    name: str
+    description: str = ""
+    version: str = ""
+    source_url: str
+    install_url: str
+    tags: list[str] = Field(default_factory=list)
+
+
+class InstallMarketplaceRequest(BaseModel):
+    market_id: str
+    skill_id: str
+    enable: bool = True
+    overwrite: bool = False
+
+
+_OWNER_REPO_PATTERN = re.compile(r"^[\w.-]+/[\w.-]+$")
+_MARKETPLACE_CACHE_LOCK = threading.Lock()
+_MARKETPLACE_CACHE: dict[str, Any] = {
+    "expires_at": 0.0,
+    "items": [],
+    "errors": [],
+    "meta": {},
+}
+_SKILLS_MARKET_DEFAULT_DIR = Path(__file__).resolve().parents[2] / "skills_market"
+_SKILLS_MARKET_CONFIG_PATH = _SKILLS_MARKET_DEFAULT_DIR / "config.json"
+_SKILLS_MARKET_DEFAULT_PATH = _SKILLS_MARKET_DEFAULT_DIR / "default.json"
+
 _ALLOWED_ZIP_TYPES = {
     "application/zip",
     "application/x-zip-compressed",
     "application/octet-stream",
 }
 _MAX_UPLOAD_BYTES = 100 * 1024 * 1024  # 100 MB
+
+
+def _load_market_payload_from_path(path: Path) -> SkillsMarketPayload:
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    return SkillsMarketPayload.model_validate(raw)
+
+
+def _write_market_payload_to_path(payload: SkillsMarketPayload, path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload.model_dump(mode="json"), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def _load_current_market_config() -> SkillsMarketConfig:
+    if _SKILLS_MARKET_CONFIG_PATH.exists():
+        return _payload_to_market_config(
+            _load_market_payload_from_path(_SKILLS_MARKET_CONFIG_PATH),
+        )
+    return load_config().skills_market
+
+
+def _extract_github_market_spec(url: str) -> tuple[str, str, str] | None:
+    parsed = urlparse((url or "").strip())
+    host = (parsed.netloc or "").lower()
+    if host not in {"github.com", "www.github.com"}:
+        return None
+    parts = [unquote(p) for p in parsed.path.split("/") if p]
+    if len(parts) < 2:
+        return None
+
+    owner, repo = parts[0], parts[1]
+    if repo.endswith(".git"):
+        repo = repo[: -len(".git")]
+    repo_url = f"https://github.com/{owner}/{repo}.git"
+    branch = ""
+    path = ""
+    if len(parts) >= 4 and parts[2] in {"tree", "blob"}:
+        branch = parts[3].strip()
+        if len(parts) > 4:
+            path = "/".join(parts[4:]).strip()
+    return repo_url, branch, path
+
+
+def _normalize_market_url(url: str) -> str:
+    raw = (url or "").strip()
+    if _OWNER_REPO_PATTERN.fullmatch(raw):
+        return f"https://github.com/{raw}.git"
+    return raw
+
+
+def _normalize_market_spec(market: SkillMarketSpec) -> SkillMarketSpec:
+    normalized = market.model_copy(deep=True)
+    github_spec = _extract_github_market_spec(normalized.url)
+    if github_spec is not None:
+        repo_url, branch, path = github_spec
+        normalized.url = repo_url
+        if branch and not normalized.branch:
+            normalized.branch = branch
+        if path and (
+            not normalized.path
+            or normalized.path == "index.json"
+            or normalized.path == "/"
+        ):
+            normalized.path = path
+        return normalized
+    normalized.url = _normalize_market_url(normalized.url)
+    return normalized
+
+
+def _validate_market_url(url: str) -> bool:
+    raw = (url or "").strip()
+    if not raw:
+        return False
+    if _OWNER_REPO_PATTERN.fullmatch(raw):
+        return True
+    if _extract_github_market_spec(raw) is not None:
+        return True
+    if raw.startswith(("https://", "http://", "git@")):
+        return True
+    if raw.endswith(".git"):
+        return True
+    return False
+
+
+def _validate_market_path(path: str) -> bool:
+    raw = (path or "").strip() or "index.json"
+    candidate = Path(raw)
+    if candidate.is_absolute():
+        return False
+    return ".." not in candidate.parts
+
+
+def _validate_market_ids(markets: list[SkillMarketSpec]) -> None:
+    seen: set[str] = set()
+    for market in markets:
+        if market.id in seen:
+            raise HTTPException(
+                status_code=400,
+                detail=f"MARKET_ID_DUPLICATED: {market.id}",
+            )
+        seen.add(market.id)
+
+
+def _market_config_to_payload(cfg: SkillsMarketConfig) -> SkillsMarketPayload:
+    return SkillsMarketPayload(
+        version=cfg.version,
+        cache={"ttl_sec": cfg.cache.ttl_sec},
+        install={"overwrite_default": cfg.install.overwrite_default},
+        markets=cfg.markets,
+    )
+
+
+def _payload_to_market_config(payload: SkillsMarketPayload) -> SkillsMarketConfig:
+    _validate_market_ids(payload.markets)
+    normalized_markets: list[SkillMarketSpec] = []
+    for market in payload.markets:
+        normalized_market = _normalize_market_spec(market)
+        if not _validate_market_url(normalized_market.url):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"MARKET_URL_INVALID: {market.url}. "
+                    "Use owner/repo, http(s), ssh, or .git URL"
+                ),
+            )
+        if not _validate_market_path(normalized_market.path):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"MARKET_INDEX_INVALID: invalid path '{normalized_market.path}'"
+                ),
+            )
+        normalized_markets.append(normalized_market)
+
+    ttl_sec = int(payload.cache.get("ttl_sec", 600))
+    overwrite_default = bool(payload.install.get("overwrite_default", False))
+    return SkillsMarketConfig(
+        version=max(1, int(payload.version)),
+        markets=normalized_markets,
+        cache=SkillsMarketCacheConfig(ttl_sec=ttl_sec),
+        install=SkillsMarketInstallConfig(
+            overwrite_default=overwrite_default,
+        ),
+    )
+
+
+def _run_git_command(
+    args: list[str],
+    *,
+    cwd: str | None = None,
+    timeout_sec: int = 30,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        timeout=timeout_sec,
+        check=False,
+    )
+
+
+def _market_repo_web_url(url: str) -> str:
+    raw = (url or "").strip()
+    if raw.startswith("git@github.com:"):
+        repo = raw[len("git@github.com:") :]
+        if repo.endswith(".git"):
+            repo = repo[: -len(".git")]
+        return f"https://github.com/{repo}"
+    if raw.endswith(".git"):
+        return raw[: -len(".git")]
+    return raw
+
+
+def _generate_market_index_from_directory(
+    market: SkillMarketSpec,
+    skills_dir: Path,
+    *,
+    effective_branch: str,
+) -> tuple[dict[str, Any], list[str]]:
+    branch = effective_branch or market.branch or "main"
+    warnings: list[str] = []
+    skills: list[dict[str, Any]] = []
+    for sub in sorted(skills_dir.iterdir()):
+        if not sub.is_dir():
+            continue
+        if not (sub / "SKILL.md").exists():
+            continue
+        rel_path = sub.relative_to(skills_dir.parent).as_posix()
+        skills.append(
+            {
+                "skill_id": sub.name,
+                "name": sub.name,
+                "description": "",
+                "version": "",
+                "source": {
+                    "type": "git",
+                    "url": market.url,
+                    "branch": branch,
+                    "path": rel_path,
+                },
+                "tags": [],
+            },
+        )
+    if not skills:
+        warnings.append("No SKILL.md folders found in market directory")
+    return {"skills": skills}, warnings
+
+
+def _load_market_index(market: SkillMarketSpec) -> tuple[dict[str, Any], list[str]]:
+    normalized_market = _normalize_market_spec(market)
+    market_url = _normalize_market_url(normalized_market.url)
+    with tempfile.TemporaryDirectory(prefix="copaw-market-") as tmp:
+        repo_dir = Path(tmp) / "repo"
+        clone_args = ["clone", "--depth", "1"]
+        if normalized_market.branch:
+            clone_args += ["--branch", normalized_market.branch]
+        clone_args += [market_url, str(repo_dir)]
+        clone_result = _run_git_command(clone_args, timeout_sec=40)
+        if clone_result.returncode != 0:
+            raise RuntimeError(
+                "MARKET_UNREACHABLE: "
+                + (clone_result.stderr.strip() or "clone failed"),
+            )
+
+        effective_branch = (normalized_market.branch or "").strip()
+        if not effective_branch:
+            branch_result = _run_git_command(
+                ["rev-parse", "--abbrev-ref", "HEAD"],
+                cwd=str(repo_dir),
+                timeout_sec=10,
+            )
+            if branch_result.returncode == 0:
+                effective_branch = branch_result.stdout.strip()
+
+        target_path = repo_dir / (normalized_market.path or "index.json")
+        warnings: list[str] = []
+        if target_path.is_file():
+            return json.loads(target_path.read_text(encoding="utf-8")), warnings
+        if target_path.is_dir():
+            return _generate_market_index_from_directory(
+                normalized_market,
+                target_path,
+                effective_branch=effective_branch,
+            )
+        raise ValueError(
+            f"MARKET_INDEX_INVALID: path '{normalized_market.path}' not found",
+        )
+
+
+def _extract_market_items(
+    market: SkillMarketSpec,
+    index_doc: dict[str, Any],
+) -> tuple[list[MarketplaceItem], list[MarketError]]:
+    skills = index_doc.get("skills")
+    if not isinstance(skills, list):
+        return [], [
+            MarketError(
+                market_id=market.id,
+                code="MARKET_INDEX_INVALID",
+                message="skills field must be a list",
+            ),
+        ]
+
+    items: list[MarketplaceItem] = []
+    errors: list[MarketError] = []
+    for raw in skills:
+        if not isinstance(raw, dict):
+            errors.append(
+                MarketError(
+                    market_id=market.id,
+                    code="MARKET_INDEX_INVALID",
+                    message="skill entry must be an object",
+                ),
+            )
+            continue
+        try:
+            source = raw.get("source") or {}
+            if not isinstance(source, dict):
+                raise ValueError("source must be an object")
+            source_url = str(source.get("url") or market.url).strip()
+            source_branch = str(source.get("branch") or market.branch or "main").strip()
+            source_path = str(source.get("path") or "").strip()
+            repo_web_url = _market_repo_web_url(source_url)
+            install_url = (
+                f"{repo_web_url}/tree/{source_branch}/{source_path}"
+                if source_path
+                else repo_web_url
+            )
+
+            description = raw.get("description") or ""
+            if isinstance(description, dict):
+                description = (
+                    description.get("zh")
+                    or description.get("en")
+                    or next(iter(description.values()), "")
+                )
+
+            items.append(
+                MarketplaceItem(
+                    market_id=market.id,
+                    skill_id=str(raw.get("skill_id") or raw.get("name") or "").strip(),
+                    name=str(raw.get("name") or raw.get("skill_id") or "").strip(),
+                    description=str(description or ""),
+                    version=str(raw.get("version") or ""),
+                    source_url=source_url,
+                    install_url=install_url,
+                    tags=[str(tag) for tag in raw.get("tags") or []],
+                ),
+            )
+        except Exception as exc:
+            errors.append(
+                MarketError(
+                    market_id=market.id,
+                    code="MARKET_INDEX_INVALID",
+                    message=str(exc),
+                ),
+            )
+    return items, errors
+
+
+def _aggregate_marketplace(
+    cfg: SkillsMarketConfig | None = None,
+    *,
+    refresh: bool = False,
+) -> tuple[list[MarketplaceItem], list[MarketError], dict[str, Any]]:
+    cfg = cfg or _load_current_market_config()
+    now = time.time()
+    ttl = max(0, int(cfg.cache.ttl_sec))
+    with _MARKETPLACE_CACHE_LOCK:
+        if not refresh and _MARKETPLACE_CACHE["expires_at"] > now:
+            return (
+                list(_MARKETPLACE_CACHE["items"]),
+                list(_MARKETPLACE_CACHE["errors"]),
+                dict(_MARKETPLACE_CACHE["meta"]),
+            )
+
+    items: list[MarketplaceItem] = []
+    errors: list[MarketError] = []
+    enabled_markets = [market for market in cfg.markets if market.enabled]
+    success_market_count = 0
+    for market in enabled_markets:
+        try:
+            index_doc, warnings = _load_market_index(market)
+            market_items, market_errors = _extract_market_items(market, index_doc)
+            items.extend(market_items)
+            errors.extend(market_errors)
+            for warning in warnings:
+                errors.append(
+                    MarketError(
+                        market_id=market.id,
+                        code="MARKET_WARNING",
+                        message=warning,
+                    ),
+                )
+            success_market_count += 1
+        except Exception as exc:
+            errors.append(
+                MarketError(
+                    market_id=market.id,
+                    code="MARKET_UNREACHABLE",
+                    message=str(exc),
+                    retryable=True,
+                ),
+            )
+    meta = {
+        "refreshed_at": int(now),
+        "cache_hit": False,
+        "enabled_market_count": len(enabled_markets),
+        "success_market_count": success_market_count,
+        "item_count": len(items),
+    }
+    with _MARKETPLACE_CACHE_LOCK:
+        _MARKETPLACE_CACHE.update(
+            {
+                "expires_at": now + ttl,
+                "items": list(items),
+                "errors": list(errors),
+                "meta": dict(meta),
+            },
+        )
+    return items, errors, meta
 
 
 def _workspace_dir_for_agent(agent_id: str) -> Path:
@@ -317,6 +762,111 @@ async def _hub_task_set_status(
 async def _hub_task_get(task_id: str) -> HubInstallTask | None:
     async with _hub_install_lock:
         return _hub_install_tasks.get(task_id)
+
+
+async def validate_market(payload: ValidateMarketRequest) -> dict[str, Any]:
+    normalized = _normalize_market_spec(payload)
+    if not _validate_market_url(normalized.url):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"MARKET_URL_INVALID: {payload.url}. "
+                "Use owner/repo, http(s), ssh, or .git URL"
+            ),
+        )
+    if not _validate_market_path(normalized.path):
+        raise HTTPException(
+            status_code=400,
+            detail=f"MARKET_INDEX_INVALID: invalid path '{normalized.path}'",
+        )
+
+    ls_remote = _run_git_command(["ls-remote", normalized.url], timeout_sec=20)
+    if ls_remote.returncode != 0:
+        raise HTTPException(
+            status_code=502,
+            detail="MARKET_UNREACHABLE: "
+            + (ls_remote.stderr.strip() or "ls-remote failed"),
+        )
+
+    try:
+        _index_doc, warnings = _load_market_index(normalized)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {
+        "ok": True,
+        "normalized": normalized.model_dump(mode="json"),
+        "warnings": warnings,
+    }
+
+
+@router.get("/markets", response_model=SkillsMarketPayload)
+async def get_markets() -> SkillsMarketPayload:
+    return _market_config_to_payload(_load_current_market_config())
+
+
+@router.get("/markets/defaults", response_model=SkillsMarketPayload)
+async def get_market_defaults() -> SkillsMarketPayload:
+    return _load_market_payload_from_path(_SKILLS_MARKET_DEFAULT_PATH)
+
+
+@router.post("/markets/reset", response_model=SkillsMarketPayload)
+async def reset_markets() -> SkillsMarketPayload:
+    payload = _load_market_payload_from_path(_SKILLS_MARKET_DEFAULT_PATH)
+    _write_market_payload_to_path(payload, _SKILLS_MARKET_CONFIG_PATH)
+    return payload
+
+
+@router.post("/markets/validate")
+async def validate_market_endpoint(payload: ValidateMarketRequest) -> dict[str, Any]:
+    return await validate_market(payload)
+
+
+@router.get("/marketplace")
+async def get_marketplace(refresh: bool = False) -> dict[str, Any]:
+    items, errors, meta = _aggregate_marketplace(refresh=refresh)
+    return {
+        "items": [item.model_dump(mode="json") for item in items],
+        "market_errors": [error.model_dump(mode="json") for error in errors],
+        "meta": meta,
+    }
+
+
+@router.post("/marketplace/install")
+async def install_marketplace_skill(
+    payload: InstallMarketplaceRequest,
+    request: Request,
+) -> dict[str, Any]:
+    cfg = _load_current_market_config()
+    items, _errors, _meta = _aggregate_marketplace(cfg, refresh=True)
+    selected = next(
+        (
+            item
+            for item in items
+            if item.market_id == payload.market_id and item.skill_id == payload.skill_id
+        ),
+        None,
+    )
+    if selected is None:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"MARKET_ITEM_NOT_FOUND: market={payload.market_id} skill={payload.skill_id}"
+            ),
+        )
+
+    from ..agent_context import get_agent_for_request
+
+    workspace = await get_agent_for_request(request)
+    return {
+        "installed": False,
+        "workspace_dir": str(workspace.workspace_dir),
+        "market_id": payload.market_id,
+        "skill_id": payload.skill_id,
+        "detail": "MARKET_INSTALL_NOT_IMPLEMENTED_IN_COMPAT_LAYER",
+    }
 
 
 async def _hub_task_register_runtime(task_id: str, task: asyncio.Task) -> None:

@@ -30,7 +30,9 @@ from .prompt import (
 from .skills_manager import (
     apply_skill_config_env_overrides,
     ensure_skills_initialized,
+    get_working_skills_dir,
     get_workspace_skills_dir,
+    list_available_skills,
     resolve_effective_skills,
 )
 from .tool_guard_mixin import ToolGuardMixin
@@ -374,17 +376,33 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
         """
         workspace_dir = getattr(self, "_workspace_dir", None) or WORKING_DIR
 
-        ensure_skills_initialized(workspace_dir)
+        def _call_skill_func(func, *args):
+            try:
+                return func(*args)
+            except TypeError:
+                return func()
+
+        _call_skill_func(ensure_skills_initialized, workspace_dir)
 
         request_context = getattr(self, "_request_context", {})
         channel_name = request_context.get("channel", "console")
 
-        effective_skills = resolve_effective_skills(
-            workspace_dir,
-            channel_name,
+        available_skills = _call_skill_func(
+            list_available_skills,
+            Path(workspace_dir),
         )
-
-        working_skills_dir = get_workspace_skills_dir(Path(workspace_dir))
+        if available_skills:
+            effective_skills = available_skills
+            working_skills_dir = _call_skill_func(
+                get_working_skills_dir,
+                Path(workspace_dir),
+            )
+        else:
+            effective_skills = resolve_effective_skills(
+                workspace_dir,
+                channel_name,
+            )
+            working_skills_dir = get_workspace_skills_dir(Path(workspace_dir))
 
         for skill_name in effective_skills:
             skill_dir = working_skills_dir / skill_name

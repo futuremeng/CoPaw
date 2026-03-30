@@ -59,6 +59,10 @@ ALL_SKILL_ROUTING_CHANNELS = [
 _RegistryResult = TypeVar("_RegistryResult")
 _MAX_ZIP_BYTES = 200 * 1024 * 1024
 
+from ..constant import WORKING_DIR
+
+ACTIVE_SKILLS_DIR = Path(WORKING_DIR) / "active_skills"
+
 
 class SkillInfo(BaseModel):
     """Workspace or hub skill details returned to callers.
@@ -113,6 +117,46 @@ def get_workspace_skills_dir(workspace_dir: Path) -> Path:
         except OSError:
             return legacy
     return preferred
+
+
+def get_working_skills_dir(workspace_dir: Path | None = None) -> Path:
+    """Backward-compatible alias returning the effective workspace skills dir."""
+    base_dir = Path(workspace_dir) if workspace_dir is not None else Path(WORKING_DIR)
+    return get_workspace_skills_dir(base_dir)
+
+
+def list_available_skills(workspace_dir: Path | None = None) -> list[str]:
+    """Backward-compatible helper returning available workspace skill names."""
+    skills_dir = get_working_skills_dir(workspace_dir)
+    if not skills_dir.exists():
+        return []
+    return [
+        item.name
+        for item in sorted(skills_dir.iterdir())
+        if item.is_dir() and (item / "SKILL.md").exists()
+    ]
+
+
+def sync_skill_dir_to_active(skill_dir: Path, force: bool = False) -> bool:
+    """Backward-compatible helper to sync a skill into ACTIVE_SKILLS_DIR."""
+    skill_dir = Path(skill_dir)
+    if not skill_dir.exists() or not skill_dir.is_dir():
+        return False
+
+    ACTIVE_SKILLS_DIR.mkdir(parents=True, exist_ok=True)
+    target_dir = ACTIVE_SKILLS_DIR / skill_dir.name
+    if target_dir.exists():
+        if not force:
+            logger.debug(
+                "Skill '%s' already exists in active_skills and force=False.",
+                skill_dir.name,
+            )
+            return False
+        shutil.rmtree(target_dir)
+
+    shutil.copytree(skill_dir, target_dir)
+    logger.debug("Synced skill '%s' to active_skills.", skill_dir.name)
+    return True
 
 
 def get_workspace_skill_manifest_path(workspace_dir: Path) -> Path:
