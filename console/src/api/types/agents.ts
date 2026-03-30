@@ -28,6 +28,20 @@ export interface CloneProjectRequest {
   include_pipeline_runs?: boolean;
 }
 
+export interface CreateProjectRequest {
+  id?: string;
+  name: string;
+  description?: string;
+  status?: string;
+  data_dir?: string;
+  tags?: string[];
+}
+
+export interface DeleteProjectResponse {
+  success: boolean;
+  project_id: string;
+}
+
 export interface ProjectPipelineTemplateStep {
   id: string;
   name: string;

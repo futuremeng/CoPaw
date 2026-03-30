@@ -26,6 +26,12 @@
   font-size: 14px;
 }
 
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .workspaceInfo {
   flex-shrink: 0;
   min-height: 30px;
@@ -48,7 +54,7 @@
   display: flex;
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
   padding-bottom: 12px;
   gap: 16px;
 }
@@ -60,10 +66,16 @@
 
   :global(.ant-card) {
     height: 100%;
+    display: flex;
+    flex-direction: column;
   }
 
   :global(.ant-card-body) {
-    height: calc(100% - 57px);
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
   }
 }
 
@@ -74,10 +86,16 @@
 
   :global(.ant-card) {
     height: 100%;
+    display: flex;
+    flex-direction: column;
   }
 
   :global(.ant-card-body) {
-    height: calc(100% - 57px);
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
   }
 }
 
@@ -88,10 +106,16 @@
 
   :global(.ant-card) {
     height: 100%;
+    display: flex;
+    flex-direction: column;
   }
 
   :global(.ant-card-body) {
-    height: calc(100% - 57px);
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
   }
 }
 
@@ -103,10 +127,16 @@
 
   :global(.ant-card) {
     height: 100%;
+    display: flex;
+    flex-direction: column;
   }
 
   :global(.ant-card-body) {
-    height: calc(100% - 57px);
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
   }
 }
 
@@ -166,7 +196,8 @@
 }
 
 .scrollContainer {
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   overflow: auto;
 }
 
@@ -268,6 +299,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-height: 124px;
   margin-bottom: 8px;
   transition: all 0.2s;
 
@@ -294,6 +326,18 @@
   gap: 8px;
 }
 
+.itemTitleMain {
+  min-width: 0;
+  flex: 1;
+}
+
+.itemActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 .itemTitle {
   font-size: 14px;
   font-weight: 600;
@@ -301,6 +345,65 @@
   color: #262626;
   word-break: break-word;
   margin-bottom: 2px;
+}
+
+.attachActionButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 !important;
+  border: 1px solid #d6e4ff;
+  border-radius: 999px;
+  color: #1677ff;
+  background: #f0f7ff;
+
+  &:hover,
+  &:focus {
+    border-color: #91caff !important;
+    color: #0958d9 !important;
+    background: #e6f4ff !important;
+  }
+}
+
+.listItemFooter {
+  margin-top: auto;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding-top: 4px;
+}
+
+.attachFloatingBar {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  border: 1px solid #d6e4ff;
+  background: rgba(240, 247, 255, 0.96);
+  box-shadow: 0 6px 18px rgba(9, 88, 217, 0.16);
+}
+
+.attachCountText {
+  font-size: 12px;
+  color: #0958d9;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.attachAutoAnalyzeCheck {
+  :global(.ant-checkbox + span) {
+    font-size: 12px;
+    color: #0958d9;
+    white-space: nowrap;
+  }
 }
 
 .itemMeta {
@@ -311,36 +414,112 @@
 }
 
 .previewBody {
-  height: 100%;
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.previewBodyArtifacts {
+  position: relative;
 }
 
 .rightTabs {
   height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 
-  :global(.ant-tabs-content-holder) {
-    height: calc(100% - 48px);
+  :global(.ant-tabs),
+  :global(.copaw-tabs) {
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
 
-  :global(.ant-tabs-content) {
-    height: 100%;
+  :global(.ant-tabs-nav + div),
+  :global(.copaw-tabs-nav + div) {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
 
-  :global(.ant-tabs-tabpane) {
-    height: 100%;
+  :global(.ant-tabs-content-holder),
+  :global(.copaw-tabs-content-holder) {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    height: auto;
+    overflow: hidden;
+  }
+
+  :global(.ant-tabs-content),
+  :global(.copaw-tabs-content) {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  :global(.ant-tabs-tabpane),
+  :global(.copaw-tabs-tabpane) {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  :global(.ant-tabs-tabpane-active),
+  :global(.copaw-tabs-tabpane-active) {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  :global(.ant-tabs-content-holder > div),
+  :global(.copaw-tabs-content-holder > div),
+  :global(.ant-tabs-content > div),
+  :global(.copaw-tabs-content > div) {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  :global(.ant-tabs-tabpane > div),
+  :global(.copaw-tabs-tabpane > div) {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
   }
 }
 
 .artifactPanel {
+  flex: 1;
   height: 100%;
+  max-height: 100%;
   display: flex;
   gap: 12px;
   min-height: 0;
+  overflow: hidden;
 }
 
 .artifactList {
   width: 340px;
   flex-shrink: 0;
+  min-height: 0;
+  box-sizing: border-box;
   overflow: auto;
   padding: 12px;
   border-right: 1px solid #f0f0f0;
@@ -350,16 +529,32 @@
   margin-bottom: 12px;
 }
 
+.artifactToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 6px 8px;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
 .focusBar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  position: sticky;
+  top: 0;
+  z-index: 3;
   margin-bottom: 12px;
   padding: 8px 10px;
   border: 1px solid #d6e4ff;
   border-radius: 8px;
   background: #f0f7ff;
+  box-shadow: 0 2px 6px rgba(22, 119, 255, 0.08);
 }
 
 .artifactGroupTitle {
@@ -374,6 +569,7 @@
 .previewPane {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   overflow: auto;
 }
 
@@ -449,18 +645,56 @@
 }
 
 .chatPanel {
-  height: 100%;
+  flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 .chatEmptyAction {
-  height: 100%;
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
+  min-height: 0;
+}
+
+.uploadModalBody {
+  display: grid;
+  gap: 12px;
+}
+
+.uploadDragger {
+  :global(.ant-upload) {
+    min-height: 132px;
+    padding: 18px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  :global(.ant-upload-list) {
+    max-height: 240px;
+    overflow-y: auto;
+  }
+
+  :global(.ant-upload-list-item) {
+    align-items: flex-start;
+  }
+
+  :global(.ant-upload-list-item-name) {
+    display: block;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    line-height: 1.4;
+  }
 }
 
 .metricPanel {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
   padding: 12px;
 }
 

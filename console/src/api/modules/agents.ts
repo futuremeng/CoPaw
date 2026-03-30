@@ -16,6 +16,8 @@ import type {
   AgentProjectFileContent,
   AgentProjectSummary,
   CloneProjectRequest,
+  CreateProjectRequest,
+  DeleteProjectResponse,
   AgentPipelineDraftInfo,
   PipelineSaveStreamEvent,
   ProjectPipelineTemplateInfo,
@@ -107,6 +109,23 @@ export const agentsApi = {
       },
     ),
 
+  createProject: (agentId: string, body: CreateProjectRequest) =>
+    request<AgentProjectSummary>(
+      `/agents/${agentId}/projects`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  deleteProject: (agentId: string, projectId: string) =>
+    request<DeleteProjectResponse>(
+      `/agents/${agentId}/projects/${encodeURIComponent(projectId)}`,
+      {
+        method: "DELETE",
+      },
+    ),
+
   readProjectFile: (agentId: string, projectId: string, filePath: string) =>
     request<AgentProjectFileContent>(
       `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/files/${filePath
@@ -114,6 +133,33 @@ export const agentsApi = {
         .map((part) => encodeURIComponent(part))
         .join("/")}`,
     ),
+
+  uploadProjectFile: async (
+    agentId: string,
+    projectId: string,
+    file: File,
+    targetDir = "data",
+  ) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("target_dir", targetDir);
+
+    const response = await fetch(
+      getApiUrl(`/agents/${agentId}/projects/${encodeURIComponent(projectId)}/files/upload`),
+      {
+        method: "POST",
+        headers: buildAuthHeaders(),
+        body: formData,
+      },
+    );
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(
+        `Upload project file failed: ${response.status} ${response.statusText}${text ? ` - ${text}` : ""}`,
+      );
+    }
+    return response.json() as Promise<AgentProjectFileInfo>;
+  },
 
   listAgentPipelineTemplates: (agentId: string) =>
     request<ProjectPipelineTemplateInfo[]>(

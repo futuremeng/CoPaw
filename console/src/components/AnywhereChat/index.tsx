@@ -75,6 +75,23 @@ interface AnywhereChatProps {
     text: string;
     response: Record<string, unknown> | null;
   }) => void;
+  autoAttachRequest?: {
+    id: string;
+    fileName?: string;
+    content?: string;
+    mimeType?: string;
+    files?: Array<{
+      fileName: string;
+      content: string;
+      mimeType?: string;
+    }>;
+    note?: string;
+  } | null;
+  onAutoAttachHandled?: (payload: {
+    id: string;
+    ok: boolean;
+    error?: string;
+  }) => void;
 }
 
 type StreamResponseData = {
@@ -151,6 +168,8 @@ export default function AnywhereChat({
   welcomePrompts,
   onNewChat,
   onAssistantTurnCompleted,
+  autoAttachRequest,
+  onAutoAttachHandled,
 }: AnywhereChatProps) {
   const { t } = useTranslation();
   const { isDark } = useTheme();
@@ -171,6 +190,7 @@ export default function AnywhereChat({
   const sessionIdRef = useRef(sessionId);
   const runtimeStatusRetryTimerRef = useRef<number | null>(null);
   const runtimeStatusRetryCountRef = useRef(0);
+  const handledAutoAttachIdRef = useRef("");
 
   const updateTransientMessages = useCallback((messages: Message[]) => {
     setTransientMessages(messages);
@@ -295,6 +315,80 @@ export default function AnywhereChat({
     setTransientMessages([]);
 
   }, [clearRuntimeStatusRetry, sessionId]);
+
+  useEffect(() => {
+    if (!autoAttachRequest?.id) {
+      return;
+    }
+    if (handledAutoAttachIdRef.current === autoAttachRequest.id) {
+      return;
+    }
+    handledAutoAttachIdRef.current = autoAttachRequest.id;
+
+    const attach = async () => {
+      try {
+        const sourceFiles = Array.isArray(autoAttachRequest.files) && autoAttachRequest.files.length > 0
+          ? autoAttachRequest.files
+          : autoAttachRequest.fileName && autoAttachRequest.content
+            ? [{
+                fileName: autoAttachRequest.fileName,
+                content: autoAttachRequest.content,
+                mimeType: autoAttachRequest.mimeType,
+              }]
+            : [];
+
+        if (sourceFiles.length === 0) {
+          throw new Error("auto_attach_no_files");
+        }
+
+        const uploadedFiles = await Promise.all(
+          sourceFiles.map(async (source, index) => {
+            const file = new File([source.content], source.fileName, {
+              type: source.mimeType || "text/plain",
+            });
+            const uploaded = await chatApi.uploadFile(file);
+            const uploadUrl = chatApi.filePreviewUrl(uploaded.url);
+
+            return {
+              uid: `${autoAttachRequest.id}-${index}`,
+              name: source.fileName,
+              status: "done" as const,
+              type: source.mimeType || "text/plain",
+              size: file.size,
+              file_id: uploaded.stored_name || uploaded.url,
+              response: {
+                url: uploadUrl,
+              },
+            };
+          }),
+        );
+
+        if (!chatRef.current) {
+          throw new Error("chat_input_not_ready");
+        }
+
+        chatRef.current.input.submit({
+          query:
+            autoAttachRequest.note ||
+            `Please use the attached files as the current context and infer the likely task intent.`,
+          fileList: uploadedFiles,
+        });
+
+        onAutoAttachHandled?.({
+          id: autoAttachRequest.id,
+          ok: true,
+        });
+      } catch (error) {
+        onAutoAttachHandled?.({
+          id: autoAttachRequest.id,
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    };
+
+    void attach();
+  }, [autoAttachRequest, onAutoAttachHandled]);
 
   useEffect(() => {
     void loadRuntimeInputs();

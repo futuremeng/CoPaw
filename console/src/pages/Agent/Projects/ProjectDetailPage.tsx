@@ -1,23 +1,34 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  MinusOutlined,
+  PlusOutlined,
+  SendOutlined,
+} from "@ant-design/icons";
+import {
   Alert,
   Button,
   Card,
+  Checkbox,
   Collapse,
   Empty,
+  Input,
   Modal,
+  Popconfirm,
   Select,
+  Switch,
   Spin,
   Tag,
   Tabs,
   Typography,
+  Upload,
   message,
 } from "antd";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { agentsApi } from "../../../api/modules/agents";
 import { chatApi } from "../../../api/modules/chat";
 import AnywhereChat from "../../../components/AnywhereChat";
+import type { ChatSpec } from "../../../api/types/chat";
 import type {
   AgentProjectSummary,
   AgentProjectFileInfo,
@@ -32,6 +43,7 @@ import { useAgentStore } from "../../../stores/agentStore";
 import styles from "./index.module.less";
 
 const { Title, Text } = Typography;
+const { Dragger } = Upload;
 
 function getCurrentAgent(
   agents: AgentSummary[],
@@ -121,8 +133,131 @@ function formatRunTimeLabel(raw: string): string {
   return `${y}-${m}-${d} ${hh}:${mm}:${ss}`;
 }
 
+function buildProjectFlowWorkspaceRelativePath(projectId: string): string {
+  return `projects/${projectId}/pipelines`;
+}
+
+function buildProjectFlowMemoryRelativePath(projectId: string): string {
+  return `${buildProjectFlowWorkspaceRelativePath(projectId)}/flow-memory.md`;
+}
+
+function buildProjectFlowBindingKey(params: { projectId: string; templateId: string }): string {
+  return `project-flow-design:${params.projectId}:${params.templateId || "draft"}`;
+}
+
+function getMetaString(meta: Record<string, unknown> | undefined, key: string): string {
+  const value = meta?.[key];
+  return typeof value === "string" ? value : "";
+}
+
+function isTextSourcePath(path: string): boolean {
+  const normalized = path.toLowerCase();
+  return (
+    normalized.endsWith(".md") ||
+    normalized.endsWith(".markdown") ||
+    normalized.endsWith(".mdx") ||
+    normalized.endsWith(".txt")
+  );
+}
+
+function selectSeedSourceFiles(paths: string[]): string[] {
+  const unique = Array.from(new Set(paths.map((item) => item.trim()).filter(Boolean)));
+  const textFiles = unique.filter((item) => isTextSourcePath(item));
+  const fallback = textFiles.length > 0 ? textFiles : unique;
+  const prioritized = [...fallback].sort((a, b) => {
+    const aPriority = a.includes("/data/") || a.includes("/raw/") ? 0 : 1;
+    const bPriority = b.includes("/data/") || b.includes("/raw/") ? 0 : 1;
+    if (aPriority !== bPriority) {
+      return aPriority - bPriority;
+    }
+    return a.localeCompare(b);
+  });
+  return prioritized.slice(0, 4);
+}
+
+function buildProjectFlowBootstrapPrompt(params: {
+  projectName: string;
+  selectedTemplateName: string;
+  flowMemoryPath: string;
+  sourceFiles: string[];
+}): string {
+  const seedFiles = selectSeedSourceFiles(params.sourceFiles);
+  const fileLines = seedFiles.length
+    ? seedFiles.map((file, index) => `${index + 1}. ${file}`).join("\n")
+    : "- (source files will be uploaded next)";
+  const shortageHint = seedFiles.length < 4
+    ? `注意：当前仅检测到 ${seedFiles.length} 个候选源文件，请先按现有文件生成草案，并显式标注缺失输入。`
+    : "";
+  return [
+    `你现在处于项目流程设计模式。项目：${params.projectName}`,
+    `当前模板：${params.selectedTemplateName}`,
+    `flow memory path: ${params.flowMemoryPath}`,
+    "请基于以下 4 个真实源文件，先给出可执行的 4~6 步流程草案，并为每步明确：inputs / outputs / depends_on / retry_policy。",
+    "源文件列表：",
+    fileLines,
+    shortageHint,
+    "输出要求：",
+    "1) 先给流程总览；",
+    "2) 再逐步给出结构化字段；",
+    "3) 明确哪些是 source artifact、哪些是 intermediate、哪些是 final。",
+  ].join("\n");
+}
+
+function inferMimeTypeByPath(path: string): string {
+  const normalized = path.toLowerCase();
+  if (normalized.endsWith(".md") || normalized.endsWith(".markdown") || normalized.endsWith(".mdx")) {
+    return "text/markdown";
+  }
+  if (normalized.endsWith(".txt")) {
+    return "text/plain";
+  }
+  if (normalized.endsWith(".json")) {
+    return "application/json";
+  }
+  return "text/plain";
+}
+
+function isBuiltInProjectFile(path: string): boolean {
+  const normalized = path.replace(/\\/g, "/").toLowerCase();
+  const fileName = normalized.split("/").pop() || "";
+  if (fileName === "project.md" || fileName === "heartbeat.md") {
+    return true;
+  }
+  return false;
+}
+
+function buildAutoAttachAnalysisPrompt(params: {
+  projectName: string;
+  fileNames: string[];
+  selectedRunId?: string;
+}): string {
+  const fileList = params.fileNames
+    .slice(0, 8)
+    .map((name, index) => `${index + 1}. ${name}`)
+    .join("\n");
+  const modeHint = params.selectedRunId
+    ? "这些文件与当前运行上下文相关。"
+    : "这些文件与当前项目设计上下文相关。";
+  return [
+    `我刚刚附加了 ${params.fileNames.length} 个项目文件，请合并分析。`,
+    `项目：${params.projectName}`,
+    modeHint,
+    "文件列表：",
+    fileList,
+    "请先根据文件名和内容猜测我最可能的目标或需求，再用 2-4 条要点总结你的判断和建议下一步。",
+    "如果信息不足，最后只补一个简短澄清问题；如果已经足够，就直接继续分析。",
+  ].join("\n");
+}
+
+const INLINE_FULL_MAX_BYTES = 32 * 1024;
+const INLINE_TRUNCATE_MAX_BYTES = 256 * 1024;
+const INLINE_TRUNCATE_HEAD_CHARS = 8000;
+const INLINE_TRUNCATE_TAIL_CHARS = 4000;
+const INLINE_TOTAL_CHAR_BUDGET = 20000;
+
 export default function ProjectDetailPage() {
   const { t } = useTranslation();
+  const location = useLocation();
   const navigate = useNavigate();
   const { projectId } = useParams<{ projectId?: string }>();
   const { selectedAgent, agents, setAgents } = useAgentStore();
@@ -137,6 +272,7 @@ export default function ProjectDetailPage() {
   const [resolvedProjectRequestId, setResolvedProjectRequestId] = useState("");
   const [projectFiles, setProjectFiles] = useState<AgentProjectFileInfo[]>([]);
   const [selectedFilePath, setSelectedFilePath] = useState("");
+  const [hideBuiltInFiles, setHideBuiltInFiles] = useState(true);
   const [fileContent, setFileContent] = useState("");
   const [filesLoading, setFilesLoading] = useState(false);
   const [contentLoading, setContentLoading] = useState(false);
@@ -159,9 +295,31 @@ export default function ProjectDetailPage() {
   const [importLoading, setImportLoading] = useState(false);
   const [selectedPlatformTemplateId, setSelectedPlatformTemplateId] = useState("");
   const [runFocusChatId, setRunFocusChatId] = useState("");
+  const [designFocusChatId, setDesignFocusChatId] = useState("");
   const [chatStarting, setChatStarting] = useState(false);
   const [selectedStepId, setSelectedStepId] = useState("");
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [deletingProject, setDeletingProject] = useState(false);
+  const [pendingUploads, setPendingUploads] = useState<File[]>([]);
+  const [uploadTargetDir, setUploadTargetDir] = useState("data");
+  const [autoAttachRequest, setAutoAttachRequest] = useState<{
+    id: string;
+    fileName?: string;
+    content?: string;
+    mimeType?: string;
+    files?: Array<{
+      fileName: string;
+      content: string;
+      mimeType?: string;
+    }>;
+    note?: string;
+  } | null>(null);
+  const [selectedAttachPaths, setSelectedAttachPaths] = useState<string[]>([]);
+  const [sendingSelectedFiles, setSendingSelectedFiles] = useState(false);
+  const [autoAnalyzeOnAttach, setAutoAnalyzeOnAttach] = useState(true);
   const runFocusChatIdRef = useRef("");
+  const designFocusChatIdRef = useRef("");
 
   const currentAgent = useMemo(
     () => getCurrentAgent(agents, selectedAgent),
@@ -185,6 +343,7 @@ export default function ProjectDetailPage() {
 
     return projectFiles
       .filter((file) => isPreviewablePath(file.path))
+      .filter((file) => !hideBuiltInFiles || !isBuiltInProjectFile(file.path))
       .map((file) => ({
         artifact_id: `source:${file.path}`,
         path: file.path,
@@ -199,7 +358,7 @@ export default function ProjectDetailPage() {
         consumer_step_names: [],
         created_at: file.modified_time,
       }));
-  }, [projectFiles, runDetail?.artifact_records, selectedRunId]);
+  }, [hideBuiltInFiles, projectFiles, runDetail?.artifact_records, selectedRunId]);
 
   const relatedArtifactPathsForSelectedStep = useMemo(() => {
     if (!selectedStepId) {
@@ -289,6 +448,11 @@ export default function ProjectDetailPage() {
     );
   }, [pipelineTemplates, selectedTemplateId]);
 
+  const selectedTemplate = useMemo(
+    () => pipelineTemplates.find((item) => item.id === selectedTemplateId),
+    [pipelineTemplates, selectedTemplateId],
+  );
+
   const currentStepIds = useMemo(
     () =>
       (runDetail?.steps?.map((step) => step.id) || activeRunTemplate?.steps?.map((step) => step.id) || []).filter(
@@ -309,6 +473,8 @@ export default function ProjectDetailPage() {
     () => runFocusChatId || runDetail?.focus_chat_id || selectedRunSummary?.focus_chat_id || "",
     [runDetail?.focus_chat_id, runFocusChatId, selectedRunSummary?.focus_chat_id],
   );
+
+  const activeDesignChatId = useMemo(() => designFocusChatId, [designFocusChatId]);
 
   const runProgress = useMemo(() => {
     if (!runDetail) {
@@ -425,6 +591,37 @@ export default function ProjectDetailPage() {
       setContentLoading(false);
     }
   }, [resolvedProjectRequestId, t]);
+
+  const fetchProjectFileContent = useCallback(async (
+    agentId: string,
+    project: AgentProjectSummary,
+    filePath: string,
+  ): Promise<string> => {
+    if (selectedFilePath === filePath && fileContent) {
+      return fileContent;
+    }
+
+    const projectIds = [resolvedProjectRequestId, ...buildProjectIdCandidates(project)]
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const uniqueProjectIds = Array.from(new Set(projectIds));
+
+    for (const projectRequestId of uniqueProjectIds) {
+      try {
+        const data = await agentsApi.readProjectFile(
+          agentId,
+          projectRequestId,
+          filePath,
+        );
+        setResolvedProjectRequestId(projectRequestId);
+        return data.content;
+      } catch {
+        // Try next id candidate.
+      }
+    }
+
+    throw new Error("project_file_content_not_found");
+  }, [fileContent, resolvedProjectRequestId, selectedFilePath]);
 
   const loadRunDetail = useCallback(async (
     agentId: string,
@@ -717,13 +914,13 @@ export default function ProjectDetailPage() {
     }
   }, [currentAgent, loadPipelineContext, resolvedProjectRequestId, selectedProject, selectedTemplateId, t]);
 
-  const handleEnsureRunChat = useCallback(async (forceNew = false) => {
+  const handleEnsureRunChat = useCallback(async (forceNew = false): Promise<string> => {
     if (!selectedProject || !selectedRunId) {
-      return;
+      return "";
     }
 
     if (!forceNew && activeRunChatId) {
-      return;
+      return activeRunChatId;
     }
 
     setChatStarting(true);
@@ -755,17 +952,154 @@ export default function ProjectDetailPage() {
 
       setRunFocusChatId(created.id);
       setError("");
+      return created.id;
     } catch (err) {
       console.error("failed to create project run chat", err);
       setError(t("projects.chat.startFailed", "Failed to start project chat."));
+      return "";
     } finally {
       setChatStarting(false);
     }
   }, [activeRunChatId, resolvedProjectRequestId, selectedProject, selectedRunId, t]);
 
+  const handleEnsureDesignChat = useCallback(async (forceNew = false): Promise<string> => {
+    if (!selectedProject || !currentAgent) {
+      return "";
+    }
+
+    if (!forceNew && activeDesignChatId) {
+      return activeDesignChatId;
+    }
+
+    setChatStarting(true);
+    try {
+      const previousChatId = designFocusChatIdRef.current;
+      if (forceNew && previousChatId) {
+        void chatApi
+          .clearChatMeta(previousChatId, {
+            user_id: "default",
+            channel: "console",
+          })
+          .catch(() => {});
+      }
+
+      const templateId = selectedTemplateId || "draft";
+      const bindingKey = buildProjectFlowBindingKey({
+        projectId: selectedProject.id,
+        templateId,
+      });
+      const focusPath = buildProjectFlowWorkspaceRelativePath(selectedProject.id);
+      const flowMemoryPath = buildProjectFlowMemoryRelativePath(selectedProject.id);
+      const selectedTemplateName = selectedTemplate?.name || selectedProject.name;
+
+      if (!forceNew) {
+        const chats = await chatApi.listChats({ user_id: "default", channel: "console" });
+        const matched = chats.filter((chat) => {
+          const meta =
+            chat.meta && typeof chat.meta === "object"
+              ? (chat.meta as Record<string, unknown>)
+              : undefined;
+          const metaType = getMetaString(meta, "focus_type") || getMetaString(meta, "binding_type");
+          const metaKey = getMetaString(meta, "focus_binding_key") || getMetaString(meta, "pipeline_binding_key");
+          const metaAgentId = getMetaString(meta, "agent_id");
+          if (metaType !== "pipeline_edit" || metaKey !== bindingKey) {
+            return false;
+          }
+          if (metaAgentId && metaAgentId !== currentAgent.id) {
+            return false;
+          }
+          return true;
+        });
+
+        if (matched.length > 0) {
+          const toMillis = (chat: ChatSpec): number => {
+            const updatedTs = chat.updated_at ? Date.parse(chat.updated_at) : 0;
+            if (Number.isFinite(updatedTs) && updatedTs > 0) {
+              return updatedTs;
+            }
+            const createdTs = chat.created_at ? Date.parse(chat.created_at) : 0;
+            return Number.isFinite(createdTs) ? createdTs : 0;
+          };
+          matched.sort((a, b) => toMillis(b) - toMillis(a));
+          setDesignFocusChatId(matched[0].id);
+          setError("");
+          return matched[0].id;
+        }
+      }
+
+      const created = await chatApi.createChat({
+        name: `[flow] ${selectedProject.name}`,
+        session_id: `project-flow-design-${selectedProject.id}-${Date.now()}`,
+        user_id: "default",
+        channel: "console",
+        meta: {
+          focus_type: "pipeline_edit",
+          focus_binding_key: bindingKey,
+          focus_id: templateId,
+          focus_path: focusPath,
+          focus_scope: "project",
+          focus_flow_memory_path: flowMemoryPath,
+          // Legacy compatibility fields
+          binding_type: "pipeline_edit",
+          pipeline_binding_key: bindingKey,
+          pipeline_id: templateId,
+          pipeline_name: selectedTemplate?.name || selectedProject.name,
+          pipeline_version: (selectedTemplate?.version || "0").trim() || "0",
+          pipeline_scope: "project",
+          agent_id: currentAgent.id,
+          flow_memory_path: flowMemoryPath,
+          project_id: selectedProject.id,
+          project_request_id: resolvedProjectRequestId || selectedProject.id,
+        },
+      });
+
+      setDesignFocusChatId(created.id);
+      const sourceFiles = projectFiles
+        .map((item) => item.path)
+        .filter((item) => isPreviewablePath(item))
+        .slice(0, 200);
+      const bootstrapPrompt = buildProjectFlowBootstrapPrompt({
+        projectName: selectedProject.name,
+        selectedTemplateName,
+        flowMemoryPath,
+        sourceFiles,
+      });
+      void chatApi.startConsoleChat({
+        sessionId: created.session_id,
+        prompt: bootstrapPrompt,
+        userId: "default",
+        channel: "console",
+      }).catch((err) => {
+        console.warn("failed to start design bootstrap prompt", err);
+      });
+      setError("");
+      return created.id;
+    } catch (err) {
+      console.error("failed to create project flow design chat", err);
+      setError(t("projects.chat.startFailed", "Failed to start project chat."));
+      return "";
+    } finally {
+      setChatStarting(false);
+    }
+  }, [
+    activeDesignChatId,
+    currentAgent,
+    resolvedProjectRequestId,
+    projectFiles,
+    selectedProject,
+    selectedTemplate?.name,
+    selectedTemplate?.version,
+    selectedTemplateId,
+    t,
+  ]);
+
   useEffect(() => {
     runFocusChatIdRef.current = runFocusChatId;
   }, [runFocusChatId]);
+
+  useEffect(() => {
+    designFocusChatIdRef.current = designFocusChatId;
+  }, [designFocusChatId]);
 
   useEffect(() => {
     const fallbackChatId = runDetail?.focus_chat_id || selectedRunSummary?.focus_chat_id || "";
@@ -776,10 +1110,20 @@ export default function ProjectDetailPage() {
 
   useEffect(() => {
     return () => {
-      const chatId = runFocusChatIdRef.current;
-      if (chatId) {
+      const runChatId = runFocusChatIdRef.current;
+      if (runChatId) {
         void chatApi
-          .clearChatMeta(chatId, {
+          .clearChatMeta(runChatId, {
+            user_id: "default",
+            channel: "console",
+          })
+          .catch(() => {});
+      }
+
+      const designChatId = designFocusChatIdRef.current;
+      if (designChatId) {
+        void chatApi
+          .clearChatMeta(designChatId, {
             user_id: "default",
             channel: "console",
           })
@@ -806,7 +1150,24 @@ export default function ProjectDetailPage() {
     setSelectedStepId("");
     setRunDetail(null);
     setRunFocusChatId("");
+    setDesignFocusChatId("");
+    setUploadModalOpen(false);
+    setPendingUploads([]);
+    setUploadTargetDir("data");
+    setSelectedAttachPaths([]);
+    setSendingSelectedFiles(false);
   }, [routeProjectId]);
+
+  useEffect(() => {
+    const query = new URLSearchParams(location.search);
+    if (query.get("openUpload") !== "1") {
+      return;
+    }
+    setUploadModalOpen(true);
+    query.delete("openUpload");
+    const next = query.toString();
+    navigate(`${location.pathname}${next ? `?${next}` : ""}`, { replace: true });
+  }, [location.pathname, location.search, navigate]);
 
   useEffect(() => {
     if (!selectedStepId) {
@@ -829,6 +1190,16 @@ export default function ProjectDetailPage() {
       setSelectedFilePath(firstRelatedPath);
     }
   }, [relatedArtifactPathsForSelectedStep, selectedFilePath, selectedStepId]);
+
+  useEffect(() => {
+    if (!selectedFilePath) {
+      return;
+    }
+    const stillVisible = artifactRecords.some((item) => item.path === selectedFilePath);
+    if (!stillVisible) {
+      setSelectedFilePath("");
+    }
+  }, [artifactRecords, selectedFilePath]);
 
   useEffect(() => {
     if (!currentAgent || !selectedProject) {
@@ -908,6 +1279,233 @@ export default function ProjectDetailPage() {
     setSelectedStepId((prev) => (prev === stepId ? "" : stepId));
   }, []);
 
+  const handleUploadFiles = useCallback(async () => {
+    if (!currentAgent || !selectedProject || pendingUploads.length === 0) {
+      return;
+    }
+
+    setUploadingFiles(true);
+    const projectIds = [resolvedProjectRequestId, ...buildProjectIdCandidates(selectedProject)]
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const uniqueProjectIds = Array.from(new Set(projectIds));
+    try {
+      let uploadedCount = 0;
+      for (const file of pendingUploads) {
+        let uploaded = false;
+        for (const projectRequestId of uniqueProjectIds) {
+          try {
+            await agentsApi.uploadProjectFile(
+              currentAgent.id,
+              projectRequestId,
+              file,
+              uploadTargetDir || "data",
+            );
+            setResolvedProjectRequestId(projectRequestId);
+            uploaded = true;
+            uploadedCount += 1;
+            break;
+          } catch {
+            // Try next id candidate.
+          }
+        }
+        if (!uploaded) {
+          throw new Error(`upload_failed:${file.name}`);
+        }
+      }
+
+      await loadProjectFiles(currentAgent.id, selectedProject);
+      setUploadModalOpen(false);
+      setPendingUploads([]);
+      message.success(
+        t("projects.upload.success", "Uploaded {{count}} file(s) to project.", {
+          count: uploadedCount,
+        }),
+      );
+    } catch (err) {
+      console.error("failed to upload project files", err);
+      message.error(t("projects.upload.failed", "Failed to upload project files."));
+    } finally {
+      setUploadingFiles(false);
+    }
+  }, [
+    currentAgent,
+    loadProjectFiles,
+    pendingUploads,
+    resolvedProjectRequestId,
+    selectedProject,
+    t,
+    uploadTargetDir,
+  ]);
+
+  const handleDeleteProject = useCallback(async () => {
+    if (!currentAgent || !selectedProject) {
+      return;
+    }
+
+    setDeletingProject(true);
+    try {
+      await agentsApi.deleteProject(currentAgent.id, selectedProject.id);
+      message.success(
+        t("projects.deleteSuccess", "Project deleted: {{name}}", {
+          name: selectedProject.name || selectedProject.id,
+        }),
+      );
+      await loadAgents();
+      navigate("/projects");
+    } catch (err) {
+      console.error("failed to delete project", err);
+      message.error(t("projects.deleteFailed", "Failed to delete project."));
+    } finally {
+      setDeletingProject(false);
+    }
+  }, [currentAgent, loadAgents, navigate, selectedProject, t]);
+
+  const handleSelectArtifactFile = useCallback((path: string) => {
+    setSelectedFilePath(path);
+  }, []);
+
+  const buildAttachContentBySize = useCallback((params: {
+    path: string;
+    fileName: string;
+    size: number;
+    content: string;
+  }): string => {
+    const { path, fileName, size, content } = params;
+    if (size <= INLINE_FULL_MAX_BYTES) {
+      return content;
+    }
+
+    if (size <= INLINE_TRUNCATE_MAX_BYTES) {
+      const head = content.slice(0, INLINE_TRUNCATE_HEAD_CHARS);
+      const tail = content.slice(-INLINE_TRUNCATE_TAIL_CHARS);
+      return [
+        `[Truncated file for context window control]`,
+        `file: ${fileName}`,
+        `path: ${path}`,
+        `size: ${size} bytes`,
+        `--- HEAD ---`,
+        head,
+        `--- TAIL ---`,
+        tail,
+      ].join("\n");
+    }
+
+    return [
+      `[Large file metadata only to avoid context overflow]`,
+      `file: ${fileName}`,
+      `path: ${path}`,
+      `size: ${size} bytes`,
+      `note: use this file name/path as reference and request focused extraction if needed.`,
+    ].join("\n");
+  }, []);
+
+  const handleAttachArtifactToChat = useCallback(async (path: string) => {
+    setSelectedFilePath(path);
+    setSelectedAttachPaths((prev) =>
+      prev.includes(path) ? prev.filter((item) => item !== path) : [...prev, path],
+    );
+  }, [
+    setSelectedAttachPaths,
+  ]);
+
+  const handleSendSelectedFilesToChat = useCallback(async () => {
+    if (!currentAgent || !selectedProject || selectedAttachPaths.length === 0) {
+      return;
+    }
+
+    setSendingSelectedFiles(true);
+    try {
+      if (selectedRunId) {
+        await handleEnsureRunChat();
+      } else {
+        await handleEnsureDesignChat();
+      }
+
+      const filesPayload: Array<{ fileName: string; content: string; mimeType?: string }> = [];
+      let remainingChars = INLINE_TOTAL_CHAR_BUDGET;
+
+      for (const path of selectedAttachPaths) {
+        const fileInfo = projectFiles.find((file) => file.path === path);
+        const fileName = path.split("/").pop() || "project-file.txt";
+        const size = fileInfo?.size || 0;
+
+        if (remainingChars <= 0) {
+          filesPayload.push({
+            fileName,
+            content: buildAttachContentBySize({ path, fileName, size, content: "" }),
+            mimeType: "text/plain",
+          });
+          continue;
+        }
+
+        if (size > INLINE_TRUNCATE_MAX_BYTES) {
+          filesPayload.push({
+            fileName,
+            content: buildAttachContentBySize({ path, fileName, size, content: "" }),
+            mimeType: "text/plain",
+          });
+          remainingChars = Math.max(0, remainingChars - 300);
+          continue;
+        }
+
+        const rawContent = await fetchProjectFileContent(currentAgent.id, selectedProject, path);
+        const prepared = buildAttachContentBySize({ path, fileName, size, content: rawContent });
+        const finalContent =
+          prepared.length <= remainingChars
+            ? prepared
+            : `${prepared.slice(0, Math.max(800, remainingChars))}\n\n[Trimmed by total context budget]`;
+        filesPayload.push({
+          fileName,
+          content: finalContent,
+          mimeType: inferMimeTypeByPath(path),
+        });
+        remainingChars = Math.max(0, remainingChars - finalContent.length);
+      }
+
+      setAutoAttachRequest({
+        id: `manual-batch-${Date.now()}`,
+        files: filesPayload,
+        note: autoAnalyzeOnAttach
+          ? buildAutoAttachAnalysisPrompt({
+              projectName: selectedProject.name,
+              fileNames: filesPayload.map((item) => item.fileName),
+              selectedRunId,
+            })
+          : t(
+              "projects.chat.attachWithoutAnalysis",
+              "I attached selected files. Please treat them as context and wait for my next instruction.",
+            ),
+      });
+
+      message.success(
+        t("projects.chat.autoAttachBatchSent", "Queued {{count}} selected file(s) for chat.", {
+          count: filesPayload.length,
+        }),
+      );
+      setSelectedAttachPaths([]);
+    } catch (err) {
+      console.error("failed to send selected files to chat", err);
+      message.error(
+        t("projects.chat.autoAttachFailed", "Failed to attach selected file to chat."),
+      );
+    } finally {
+      setSendingSelectedFiles(false);
+    }
+  }, [
+    buildAttachContentBySize,
+    currentAgent,
+    fetchProjectFileContent,
+    handleEnsureDesignChat,
+    handleEnsureRunChat,
+    projectFiles,
+    selectedAttachPaths,
+    selectedProject,
+    selectedRunId,
+    t,
+    autoAnalyzeOnAttach,
+  ]);
+
   return (
     <div className={styles.agentsPage}>
       <div className={styles.header}>
@@ -922,9 +1520,38 @@ export default function ProjectDetailPage() {
             )}
           </Text>
         </div>
-        <Button size="small" onClick={() => void loadAgents()} loading={loading}>
-          {t("common.refresh", "Refresh")}
-        </Button>
+        <div className={styles.headerActions}>
+          {selectedProject ? (
+            <>
+              <Button size="small" onClick={() => setUploadModalOpen(true)}>
+                {t("projects.upload.button", "Upload Files")}
+              </Button>
+              <Popconfirm
+                title={t(
+                  "projects.deleteConfirmTitleWithName",
+                  "Delete project {{name}}?",
+                  { name: selectedProject.name || selectedProject.id },
+                )}
+                description={t(
+                  "projects.deleteConfirmDescription",
+                  "This action is irreversible and will permanently delete {{name}} and all project files.",
+                  { name: selectedProject.name || selectedProject.id },
+                )}
+                okText={t("common.delete", "Delete")}
+                cancelText={t("common.cancel", "Cancel")}
+                okButtonProps={{ danger: true, loading: deletingProject }}
+                onConfirm={() => void handleDeleteProject()}
+              >
+                <Button size="small" danger loading={deletingProject}>
+                  {t("common.delete", "Delete")}
+                </Button>
+              </Popconfirm>
+            </>
+          ) : null}
+          <Button size="small" onClick={() => void loadAgents()} loading={loading}>
+            {t("common.refresh", "Refresh")}
+          </Button>
+        </div>
       </div>
 
       {error && <Alert type="error" showIcon message={error} />}
@@ -932,7 +1559,8 @@ export default function ProjectDetailPage() {
       <div className={styles.workspaceInfo}>
         <p className={styles.workspacePath}>
           {t("projects.workspacePath", "Workspace Path")}: {" "}
-          {currentAgent?.workspace_dir ||
+          {selectedProject?.workspace_dir ||
+            currentAgent?.workspace_dir ||
             t("projects.noAgent", "No agent is currently available.")}
         </p>
       </div>
@@ -972,6 +1600,9 @@ export default function ProjectDetailPage() {
                 <div className={styles.pipelineTopActions}>
                   <Button size="small" onClick={() => navigate("/projects")}>
                     {t("projects.backToList", "Back to project list")}
+                  </Button>
+                  <Button size="small" onClick={() => setUploadModalOpen(true)}>
+                    {t("projects.upload.button", "Upload Files")}
                   </Button>
                   <Button
                     size="small"
@@ -1200,6 +1831,49 @@ export default function ProjectDetailPage() {
             </Card>
 
             <Modal
+              title={t("projects.upload.title", "Upload Project Files")}
+              open={uploadModalOpen}
+              width={760}
+              confirmLoading={uploadingFiles}
+              onOk={() => void handleUploadFiles()}
+              onCancel={() => setUploadModalOpen(false)}
+              okButtonProps={{ disabled: pendingUploads.length === 0 }}
+              okText={t("projects.upload.confirm", "Upload")}
+            >
+              <div className={styles.uploadModalBody}>
+                <Input
+                  value={uploadTargetDir}
+                  onChange={(event) => setUploadTargetDir(event.target.value)}
+                  placeholder={t("projects.upload.targetDir", "Target directory (default: data)")}
+                />
+                <Dragger
+                  className={styles.uploadDragger}
+                  multiple
+                  beforeUpload={(file) => {
+                    setPendingUploads((prev) => {
+                      const exists = prev.some((item) => item.name === file.name && item.size === file.size);
+                      return exists ? prev : [...prev, file as File];
+                    });
+                    return false;
+                  }}
+                  onRemove={(file) => {
+                    setPendingUploads((prev) => prev.filter((item) => !(item.name === file.name && item.size === file.size)));
+                    return true;
+                  }}
+                  fileList={pendingUploads.map((file, index) => ({
+                    uid: `${file.name}-${file.size}-${index}`,
+                    name: file.name,
+                    status: "done" as const,
+                    size: file.size,
+                    type: file.type,
+                  }))}
+                >
+                  <p>{t("projects.upload.dragHint", "Drag files here or click to select")}</p>
+                </Dragger>
+              </div>
+            </Modal>
+
+            <Modal
               title={t("projects.pipeline.importGlobalTitle", "Import Global Pipeline")}
               open={importModalOpen}
               confirmLoading={importLoading}
@@ -1232,10 +1906,25 @@ export default function ProjectDetailPage() {
 
           <div className={styles.columnRight}>
             <Card
+              style={{
+                height: "100%",
+                display: "flex",
+                flexDirection: "column",
+                minHeight: 0,
+                overflow: "hidden",
+              }}
               title={
                 <span className={styles.sectionTitle}>{t("projects.preview", "Workbench")}</span>
               }
-              styles={{ body: { padding: 0 } }}
+              styles={{
+                body: {
+                  padding: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  minHeight: 0,
+                  overflow: "hidden",
+                },
+              }}
               extra={
                 <Text type="secondary" className={styles.panelExtraText}>
                   {selectedProject?.id || routeProjectId}
@@ -1249,7 +1938,7 @@ export default function ProjectDetailPage() {
                     key: "artifacts",
                     label: t("projects.artifacts", "Artifacts"),
                     children: (
-                      <div className={styles.previewBody}>
+                      <div className={`${styles.previewBody} ${styles.previewBodyArtifacts}`}>
                         {filesLoading ? (
                           <div className={styles.centerState}>
                             <Spin />
@@ -1262,6 +1951,16 @@ export default function ProjectDetailPage() {
                         ) : (
                           <div className={styles.artifactPanel}>
                             <div className={styles.artifactList}>
+                              <div className={styles.artifactToolbar}>
+                                <div className={styles.itemMeta}>
+                                  {t("projects.artifacts.hideBuiltins", "Hide built-in files")}
+                                </div>
+                                <Switch
+                                  size="small"
+                                  checked={hideBuiltInFiles}
+                                  onChange={setHideBuiltInFiles}
+                                />
+                              </div>
                               {(selectedStepId || selectedArtifactRecord) && (
                                 <div className={styles.focusBar}>
                                   <div className={styles.itemMeta}>
@@ -1297,19 +1996,25 @@ export default function ProjectDetailPage() {
                                         key={item.artifact_id}
                                         type="button"
                                         className={`${styles.listItem} ${selected ? styles.selected : ""} ${artifactRelated && !selected ? styles.related : ""}`}
-                                        onClick={() => setSelectedFilePath(item.path)}
+                                        onClick={() => {
+                                          void handleSelectArtifactFile(item.path);
+                                        }}
                                       >
                                         <div className={styles.itemTitleRow}>
-                                          <div className={styles.itemTitle}>{item.name}</div>
-                                          <Tag color={
-                                            item.kind === "source"
-                                              ? "default"
-                                              : item.kind === "final"
-                                                ? "success"
-                                                : "processing"
-                                          }>
-                                            {item.kind}
-                                          </Tag>
+                                          <div className={styles.itemTitleMain}>
+                                            <div className={styles.itemTitle}>{item.name}</div>
+                                          </div>
+                                          <div className={styles.itemActions}>
+                                            <Tag color={
+                                              item.kind === "source"
+                                                ? "default"
+                                                : item.kind === "final"
+                                                  ? "success"
+                                                  : "processing"
+                                            }>
+                                              {item.kind}
+                                            </Tag>
+                                          </div>
                                         </div>
                                         <div className={styles.itemMeta}>{item.path}</div>
                                         <div className={styles.itemMeta}>
@@ -1324,6 +2029,18 @@ export default function ProjectDetailPage() {
                                             {formatBytes(fileInfo.size)} · {fileInfo.modified_time}
                                           </div>
                                         )}
+                                        <div className={styles.listItemFooter}>
+                                          <Button
+                                            size="small"
+                                            type="text"
+                                            icon={selectedAttachPaths.includes(item.path) ? <MinusOutlined /> : <PlusOutlined />}
+                                            className={styles.attachActionButton}
+                                            onClick={(event) => {
+                                              event.stopPropagation();
+                                              void handleAttachArtifactToChat(item.path);
+                                            }}
+                                          />
+                                        </div>
                                       </button>
                                     );
                                   })}
@@ -1414,6 +2131,31 @@ export default function ProjectDetailPage() {
                                 />
                               )}
                             </div>
+                            {selectedAttachPaths.length > 0 && (
+                              <div className={styles.attachFloatingBar}>
+                                <div className={styles.attachCountText}>
+                                  {t("projects.chat.selectedCount", "Selected files: {{count}}", {
+                                    count: selectedAttachPaths.length,
+                                  })}
+                                </div>
+                                <Checkbox
+                                  className={styles.attachAutoAnalyzeCheck}
+                                  checked={autoAnalyzeOnAttach}
+                                  onChange={(event) => setAutoAnalyzeOnAttach(event.target.checked)}
+                                >
+                                  {t("projects.chat.autoAnalyze", "Auto Analyze")}
+                                </Checkbox>
+                                <Button
+                                  type="primary"
+                                  size="small"
+                                  icon={<SendOutlined />}
+                                  loading={sendingSelectedFiles}
+                                  onClick={() => void handleSendSelectedFilesToChat()}
+                                >
+                                  {t("projects.chat.sendSelected", "Attach To Chat")}
+                                </Button>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1512,8 +2254,24 @@ export default function ProjectDetailPage() {
 
           <div className={styles.columnChat}>
             <Card
+              style={{
+                height: "100%",
+                display: "flex",
+                flexDirection: "column",
+                minHeight: 0,
+                overflow: "hidden",
+              }}
               title={<span className={styles.sectionTitle}>{t("projects.chat", "Chat")}</span>}
-              styles={{ body: { padding: 0 } }}
+              styles={{
+                body: {
+                  padding: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  flex: 1,
+                  minHeight: 0,
+                  overflow: "hidden",
+                },
+              }}
               extra={
                 <Text type="secondary" className={styles.panelExtraText}>
                   {selectedRunId || t("projects.pipeline.noRun", "No run")}
@@ -1522,13 +2280,65 @@ export default function ProjectDetailPage() {
             >
               <div className={styles.previewBody}>
                 {!selectedRunId ? (
-                  <Empty
-                    image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description={t(
-                      "projects.chat.selectRun",
-                      "Select a pipeline run first to open chat",
-                    )}
-                  />
+                  chatStarting ? (
+                    <div className={styles.centerState}>
+                      <Spin />
+                    </div>
+                  ) : activeDesignChatId ? (
+                    <div className={styles.chatPanel}>
+                      <AnywhereChat
+                        sessionId={activeDesignChatId}
+                        autoAttachRequest={autoAttachRequest}
+                        onAutoAttachHandled={(payload) => {
+                          if (!payload.ok) {
+                            message.error(
+                              t("projects.chat.autoAttachFailed", "Failed to attach selected file to chat."),
+                            );
+                          }
+                          setAutoAttachRequest((prev) => (prev?.id === payload.id ? null : prev));
+                        }}
+                        onNewChat={() => {
+                          void handleEnsureDesignChat(true);
+                        }}
+                        inputPlaceholder={t(
+                          "projects.chat.designPlaceholder",
+                          "Describe your target workflow and constraints, and I will draft/refine the project flow.",
+                        )}
+                        welcomeGreeting={t(
+                          "projects.chat.designWelcomeGreeting",
+                          "Project flow design assistant is ready.",
+                        )}
+                        welcomeDescription={t(
+                          "projects.chat.designWelcomeDescription",
+                          "Use this session to build a flow draft from your real project files before launching a run.",
+                        )}
+                        welcomePrompts={[
+                          t(
+                            "projects.chat.designPrompt1",
+                            "Based on the current source files, propose a 4-step flow with clear inputs and outputs.",
+                          ),
+                          t(
+                            "projects.chat.designPrompt2",
+                            "Please optimize the flow for reliability and add retry policy suggestions.",
+                          ),
+                        ]}
+                      />
+                    </div>
+                  ) : (
+                    <div className={styles.chatEmptyAction}>
+                      <Empty
+                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                        description={t(
+                          "projects.chat.selectRun",
+                          "Select a run, or start a flow design session first.",
+                        )}
+                      >
+                        <Button type="primary" onClick={() => void handleEnsureDesignChat()}>
+                          {t("projects.chat.startDesign", "Start flow design")}
+                        </Button>
+                      </Empty>
+                    </div>
+                  )
                 ) : chatStarting ? (
                   <div className={styles.centerState}>
                     <Spin />
@@ -1537,6 +2347,15 @@ export default function ProjectDetailPage() {
                   <div className={styles.chatPanel}>
                     <AnywhereChat
                       sessionId={activeRunChatId}
+                      autoAttachRequest={autoAttachRequest}
+                      onAutoAttachHandled={(payload) => {
+                        if (!payload.ok) {
+                          message.error(
+                            t("projects.chat.autoAttachFailed", "Failed to attach selected file to chat."),
+                          );
+                        }
+                        setAutoAttachRequest((prev) => (prev?.id === payload.id ? null : prev));
+                      }}
                       onNewChat={() => {
                         void handleEnsureRunChat(true);
                       }}

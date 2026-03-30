@@ -395,7 +395,6 @@ def _parse_pipeline_template_doc(raw: dict[str, Any], fallback_id: str) -> Pipel
 
 def _list_project_pipeline_templates(project_dir: Path) -> list[PipelineTemplateInfo]:
     _, templates_dir, _ = _project_pipeline_dirs(project_dir)
-    _ensure_default_pipeline_template(templates_dir)
 
     templates: list[PipelineTemplateInfo] = []
     for path in sorted(templates_dir.glob("*.json"), key=lambda item: item.name.lower()):

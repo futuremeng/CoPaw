@@ -18,7 +18,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Any, cast
 from urllib.parse import unquote, urlparse
-from fastapi import APIRouter, Body, HTTPException, Request
+from fastapi import APIRouter, Body, File, Form, HTTPException, Request, UploadFile
 from fastapi import Path as PathParam
 from pydantic import BaseModel, Field, field_validator
 
@@ -136,6 +136,24 @@ class CloneProjectRequest(BaseModel):
     target_id: str | None = None
     target_name: str | None = None
     include_pipeline_runs: bool = True
+
+
+class CreateProjectRequest(BaseModel):
+    """Request body for creating a project."""
+
+    id: str | None = None
+    name: str
+    description: str = ""
+    status: str = "active"
+    data_dir: str = "data"
+    tags: list[str] = Field(default_factory=list)
+
+
+class DeleteProjectResponse(BaseModel):
+    """Response body for deleting a project."""
+
+    success: bool
+    project_id: str
 
 
 class AgentsSquareSourcesPayload(BaseModel):
@@ -564,6 +582,15 @@ def _build_unique_project_id(workspace_dir: Path, base_id: str) -> str:
     return f"{candidate}-{index}"
 
 
+def _build_random_project_id(workspace_dir: Path) -> str:
+    projects = _list_agent_projects(workspace_dir)
+    existing = {item.id for item in projects}
+    while True:
+        candidate = f"project-{generate_short_agent_id()}"
+        if candidate not in existing:
+            return candidate
+
+
 def _build_unique_project_name(workspace_dir: Path, base_name: str) -> str:
     projects = _list_agent_projects(workspace_dir)
     existing = {item.name for item in projects}
@@ -644,6 +671,52 @@ def _clone_project(
     return summary
 
 
+def _create_project(
+    workspace_dir: Path,
+    body: CreateProjectRequest,
+) -> ProjectSummary:
+    _ensure_projects_layout(workspace_dir)
+
+    project_name_seed = (body.name or "").strip() or "New Project"
+    project_name = _build_unique_project_name(workspace_dir, project_name_seed)
+    if (body.id or "").strip():
+        project_id_seed = body.id or "project"
+        project_id = _build_unique_project_id(workspace_dir, project_id_seed)
+    else:
+        project_id = _build_random_project_id(workspace_dir)
+
+    projects_dir = workspace_dir / _PROJECTS_DIRNAME
+    project_dir = projects_dir / project_id
+    project_dir.mkdir(parents=True, exist_ok=False)
+
+    data_subdir = _safe_project_data_subdir(body.data_dir)
+    (project_dir / data_subdir).mkdir(parents=True, exist_ok=True)
+    (project_dir / "pipelines" / "templates").mkdir(parents=True, exist_ok=True)
+
+    metadata_file = project_dir / "PROJECT.md"
+    metadata = {
+        "id": project_id,
+        "name": project_name,
+        "description": (body.description or "").strip(),
+        "status": (body.status or "active").strip() or "active",
+        "data_dir": data_subdir,
+        "tags": [item.strip() for item in body.tags if str(item).strip()],
+    }
+    body_text = (body.description or "").strip() or f"# {project_name}"
+    _write_project_frontmatter(metadata_file, metadata, body_text)
+
+    summary = _load_project_summary(project_dir)
+    if summary is None:
+        raise HTTPException(status_code=500, detail="Failed to load created project summary")
+    return summary
+
+
+def _delete_project(workspace_dir: Path, project_id: str) -> DeleteProjectResponse:
+    project_dir = _resolve_project_dir(workspace_dir, project_id)
+    shutil.rmtree(project_dir)
+    return DeleteProjectResponse(success=True, project_id=project_id)
+
+
 def _is_safe_relative_path(rel_path: str) -> bool:
     if not rel_path:
         return False
@@ -693,6 +766,42 @@ def _read_project_text_file(project_dir: Path, rel_path: str) -> str:
     if b"\x00" in raw[:4096]:
         raise HTTPException(status_code=400, detail="Binary file preview is not supported")
     return raw.decode("utf-8", errors="replace")
+
+
+def _upload_project_file(
+    project_dir: Path,
+    upload: UploadFile,
+    target_dir: str,
+) -> ProjectFileInfo:
+    if not upload.filename:
+        raise HTTPException(status_code=400, detail="Uploaded file must have a filename")
+
+    safe_dir = _safe_project_data_subdir(target_dir or "data")
+    raw_name = Path(upload.filename).name.strip()
+    if not raw_name:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    destination_dir = (project_dir / safe_dir).resolve()
+    project_root = project_dir.resolve()
+    if not str(destination_dir).startswith(str(project_root)):
+        raise HTTPException(status_code=400, detail="Invalid target directory")
+    destination_dir.mkdir(parents=True, exist_ok=True)
+
+    destination_path = (destination_dir / raw_name).resolve()
+    if not str(destination_path).startswith(str(project_root)):
+        raise HTTPException(status_code=400, detail="Invalid destination path")
+
+    content = upload.file.read()
+    destination_path.write_bytes(content)
+
+    stat = destination_path.stat()
+    rel = destination_path.relative_to(project_root).as_posix()
+    return ProjectFileInfo(
+        filename=destination_path.name,
+        path=rel,
+        size=stat.st_size,
+        modified_time=_format_iso_time(stat.st_mtime),
+    )
 
 
 def _is_square_candidate_markdown(path: Path) -> bool:
@@ -1897,6 +2006,35 @@ async def list_agent_project_files(
 
 
 @router.post(
+    "/{agentId}/projects",
+    response_model=ProjectSummary,
+    summary="Create project",
+    description="Create a new project directory and initialize PROJECT metadata",
+)
+async def create_agent_project(
+    request: Request,
+    body: CreateProjectRequest = Body(...),
+    agentId: str = PathParam(...),
+) -> ProjectSummary:
+    """Create a project under the given agent workspace."""
+    manager = _get_multi_agent_manager(request)
+
+    try:
+        workspace = await manager.get_agent(agentId)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    try:
+        return _create_project(Path(workspace.workspace_dir), body)
+    except FileExistsError as e:
+        raise HTTPException(status_code=409, detail=f"Project already exists: {e}") from e
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post(
     "/{agentId}/projects/{projectId}/clone",
     response_model=ProjectSummary,
     summary="Clone project",
@@ -1920,6 +2058,33 @@ async def clone_agent_project(
         return _clone_project(Path(workspace.workspace_dir), projectId, body)
     except FileExistsError as e:
         raise HTTPException(status_code=409, detail=f"Target project already exists: {e}") from e
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.delete(
+    "/{agentId}/projects/{projectId}",
+    response_model=DeleteProjectResponse,
+    summary="Delete project",
+    description="Delete one project directory and all files under it",
+)
+async def delete_agent_project(
+    request: Request,
+    agentId: str = PathParam(...),
+    projectId: str = PathParam(...),
+) -> DeleteProjectResponse:
+    """Delete a project under the given agent workspace."""
+    manager = _get_multi_agent_manager(request)
+
+    try:
+        workspace = await manager.get_agent(agentId)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    try:
+        return _delete_project(Path(workspace.workspace_dir), projectId)
     except HTTPException:
         raise
     except Exception as e:
@@ -1950,6 +2115,36 @@ async def read_agent_project_file(
         project_dir = _resolve_project_dir(Path(workspace.workspace_dir), projectId)
         content = _read_project_text_file(project_dir, filePath)
         return ProjectFileContent(content=content)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post(
+    "/{agentId}/projects/{projectId}/files/upload",
+    response_model=ProjectFileInfo,
+    summary="Upload project file",
+    description="Upload a file into project data directory or a safe subdirectory",
+)
+async def upload_agent_project_file(
+    request: Request,
+    agentId: str = PathParam(...),
+    projectId: str = PathParam(...),
+    file: UploadFile = File(...),
+    target_dir: str = Form("data"),
+) -> ProjectFileInfo:
+    """Upload a file into project workspace."""
+    manager = _get_multi_agent_manager(request)
+
+    try:
+        workspace = await manager.get_agent(agentId)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    try:
+        project_dir = _resolve_project_dir(Path(workspace.workspace_dir), projectId)
+        return _upload_project_file(project_dir, file, target_dir)
     except HTTPException:
         raise
     except Exception as e:
