@@ -15,9 +15,11 @@ import {
   buildPipelineDesignEditContextPrompt,
 } from "../../../utils/pipelineDesign";
 import {
+  buildInitialStepProposalPrompt,
   buildIncrementalStepGenerationPrompt,
   buildIncrementalStepEditPrompt,
   buildJsonRepairPrompt,
+  parseStepProposalFromAIResponse,
   parseStepFromAIResponse,
   parseStepOperationFromAIResponse,
 } from "../../../utils/pipelineStepGeneration";
@@ -124,6 +126,9 @@ type PipelineChatBindingMeta = {
 type IncrementalGenerationState = {
   active: boolean;
   mode: "create" | "modify";
+  createStage: "ask_strategy" | "stepwise" | "proposal" | "await_confirm" | "applying";
+  createStrategy: "stepwise" | "plan_then_refine" | null;
+  plannedSteps: ProjectPipelineTemplateStep[];
   totalStepsExpected: number;
   currentStep: number;
   userRequirements: string;
@@ -151,6 +156,15 @@ declare global {
 const INDEPENDENT_PIPELINE_SCOPE_ID = "__independent__";
 const PIPELINE_DRAFT_STORAGE_PREFIX = "copaw:pipelines:drafts:";
 
+const CREATE_PLAN_CONFIRM_PATTERN =
+  /^(确认|确认创建|确认执行|开始创建|开始执行|开始吧|同意|可以|没问题|好|ok|okay|yes|confirm|approved|looks good|go ahead|proceed)\b/i;
+
+const CREATE_STRATEGY_STEPWISE_PATTERN =
+  /(一个节点一个节点|逐个节点|逐步添加|边做边加|step by step|one by one|逐节点)/i;
+
+const CREATE_STRATEGY_PLAN_PATTERN =
+  /(一次性|整体规划|先规划|先出方案|先做完节点规划|plan first|proposal first|整体方案|先整体后细化)/i;
+
 function inferStepCountFromRequirements(text: string): number {
   const normalized = text.trim();
   if (!normalized) return 0;
@@ -166,6 +180,42 @@ function inferStepCountFromRequirements(text: string): number {
   }
 
   return 4;
+}
+
+function isCreatePlanConfirmed(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized) return false;
+  if (CREATE_PLAN_CONFIRM_PATTERN.test(normalized)) return true;
+  if (normalized.includes("确认") && (normalized.includes("流程") || normalized.includes("节点"))) {
+    return true;
+  }
+  if (normalized.includes("confirm") && (normalized.includes("plan") || normalized.includes("steps"))) {
+    return true;
+  }
+  return false;
+}
+
+function detectCreateStrategy(
+  text: string,
+): "stepwise" | "plan_then_refine" | null {
+  const normalized = text.trim();
+  if (!normalized) return null;
+  if (CREATE_STRATEGY_STEPWISE_PATTERN.test(normalized)) return "stepwise";
+  if (CREATE_STRATEGY_PLAN_PATTERN.test(normalized)) return "plan_then_refine";
+  return null;
+}
+
+function buildCreateStrategySelectionPrompt(userRequirements: string): string {
+  return [
+    "你想做的流程主题已收到：",
+    userRequirements || "（未提供）",
+    "",
+    "请二选一确认创建策略：",
+    "1) 一个节点一个节点加（逐步生成并写入）",
+    "2) 一次性做完节点规划，再逐个改并写入",
+    "",
+    "请直接回复“1”或“2”，也可以回复“逐节点”或“先规划”。",
+  ].join("\n");
 }
 
 function extractTextFromChatContent(content: unknown): string {
@@ -719,6 +769,9 @@ export default function PipelinesPage() {
   const [incrementalGeneration, setIncrementalGeneration] = useState<IncrementalGenerationState>({
     active: false,
     mode: "create",
+    createStage: "ask_strategy",
+    createStrategy: null,
+    plannedSteps: [],
     totalStepsExpected: 0,
     currentStep: 1,
     userRequirements: "",
@@ -1051,6 +1104,9 @@ export default function PipelinesPage() {
     setIncrementalGeneration({
       active: false,
       mode: "create",
+      createStage: "ask_strategy",
+      createStrategy: null,
+      plannedSteps: [],
       totalStepsExpected: 0,
       currentStep: 1,
       userRequirements: "",
@@ -1473,6 +1529,9 @@ export default function PipelinesPage() {
           setIncrementalGeneration({
             active: false,
             mode: "create",
+            createStage: "ask_strategy",
+            createStrategy: null,
+            plannedSteps: [],
             totalStepsExpected: 0,
             currentStep: 1,
             userRequirements: "",
@@ -1532,6 +1591,9 @@ export default function PipelinesPage() {
         setIncrementalGeneration({
           active: false,
           mode: "create",
+          createStage: "ask_strategy",
+          createStrategy: null,
+          plannedSteps: [],
           totalStepsExpected: 0,
           currentStep: 1,
           userRequirements: "",
@@ -1860,6 +1922,205 @@ export default function PipelinesPage() {
     });
   };
 
+  const applyConfirmedCreatePlan = useCallback(
+    async (confirmedRequest?: string) => {
+      if (!selectedAgent) return;
+
+      const activePipelineId = selectedPipeline?.id || selectedTemplateItem?.id || "";
+      if (!activePipelineId) return;
+
+      const plannedSteps = incrementalGeneration.plannedSteps;
+      if (!plannedSteps || plannedSteps.length === 0) {
+        setIncrementalGeneration((prev) => ({
+          ...prev,
+          active: false,
+        }));
+        message.warning(
+          t("pipelines.incrementalProposalEmpty", "当前没有可写入的节点方案，请先重新生成。"),
+        );
+        return;
+      }
+
+      try {
+        setIncrementalGeneration((prev) => ({
+          ...prev,
+          createStage: "applying",
+          currentStep: 1,
+          parseRetryCount: 0,
+          lastUserRequest: confirmedRequest || prev.lastUserRequest,
+        }));
+
+        let expectedRevision = incrementalGeneration.lastSuccessfulRevision ?? selectedTemplateItem?.revision;
+        let latestSteps = draftNewVersionSteps.length > 0
+          ? draftNewVersionSteps
+          : (selectedTemplateItem?.steps || currentTemplate?.steps || []);
+
+        for (let index = 0; index < plannedSteps.length; index += 1) {
+          const step = plannedSteps[index];
+          const operation = latestSteps.some((item) => item.id === step.id) ? "update" : "add";
+          const updated = await agentsApi.addOrUpdatePipelineStep(
+            selectedAgent,
+            activePipelineId,
+            step,
+            operation,
+            {
+              expectedRevision,
+            },
+          );
+
+          expectedRevision = updated.revision;
+          latestSteps = updated.steps || [];
+
+          setTemplates((prev) => mergeTemplateUpdate(prev, updated));
+          setDraftNewVersionSteps(updated.steps || []);
+          setDraftParseStatus("ready");
+          setDraftParseError("");
+          setExpandedDraftDiffKeys([]);
+          setIncrementalGeneration((prev) => ({
+            ...prev,
+            currentStep: index + 1,
+            operationsApplied: index + 1,
+            lastSuccessfulRevision: updated.revision,
+          }));
+
+          message.success(
+            t("pipelines.incrementalStepSaved", "已生成第 {{current}} / {{total}} 步。", {
+              current: index + 1,
+              total: plannedSteps.length,
+            }),
+          );
+        }
+
+        setIncrementalGeneration((prev) => ({
+          ...prev,
+          active: false,
+          createStage: "ask_strategy",
+          createStrategy: null,
+          plannedSteps: [],
+          parseRetryCount: 0,
+        }));
+        setEditWelcomeMode("default");
+        message.success(
+          t("pipelines.incrementalGenerationDone", "流程节点已逐步生成完成。"),
+        );
+      } catch (error) {
+        console.error("failed to apply confirmed pipeline proposal", error);
+        setDraftParseStatus("error");
+        setDraftParseError(t("pipelines.stepSaveFailed", "节点保存失败，请检查后重试。"));
+        setIncrementalGeneration((prev) => ({
+          ...prev,
+          createStage: "await_confirm",
+          parseRetryCount: 0,
+        }));
+        message.error(t("pipelines.stepSaveFailed", "节点保存失败，请检查后重试。"));
+      }
+    },
+    [
+      currentTemplate?.steps,
+      draftNewVersionSteps,
+      incrementalGeneration.lastSuccessfulRevision,
+      incrementalGeneration.plannedSteps,
+      selectedAgent,
+      selectedPipeline?.id,
+      selectedTemplateItem?.id,
+      selectedTemplateItem?.revision,
+      selectedTemplateItem?.steps,
+      t,
+    ],
+  );
+
+  const handleSelectCreateStrategyByButton = useCallback(
+    async (strategy: "stepwise" | "plan_then_refine") => {
+      if (!designChatSessionId || !editMode || !incrementalGeneration.active || incrementalGeneration.mode !== "create") {
+        return;
+      }
+
+      if (incrementalGeneration.createStage !== "ask_strategy") {
+        return;
+      }
+
+      const strategyInput = strategy === "stepwise" ? "1" : "2";
+      const strategyLabel =
+        strategy === "stepwise"
+          ? t("pipelines.strategyStepwise", "一个节点一个节点加")
+          : t("pipelines.strategyPlanThenRefine", "先整体规划再逐个改");
+
+      try {
+        sessionApi.setLastUserMessage(designChatSessionId, strategyInput);
+        await chatApi.startConsoleChat({
+          sessionId: designChatSessionId,
+          prompt: strategyInput,
+          userId: "default",
+          channel: "console",
+        });
+        message.info(
+          t("pipelines.strategySelectedHint", "已选择：{{strategy}}，正在进入对应创建路径。", {
+            strategy: strategyLabel,
+          }),
+        );
+      } catch (error) {
+        console.error("failed to submit strategy selection", error);
+        message.error(
+          t("pipelines.strategySubmitFailed", "提交策略失败，请重试或直接输入 1 / 2。"),
+        );
+      }
+    },
+    [
+      designChatSessionId,
+      editMode,
+      incrementalGeneration.active,
+      incrementalGeneration.createStage,
+      incrementalGeneration.mode,
+      t,
+    ],
+  );
+
+  const handleEditCreateTopic = useCallback(async () => {
+    if (!designChatSessionId || !editMode) {
+      return;
+    }
+
+    setIncrementalGeneration((prev) => ({
+      ...prev,
+      active: false,
+      mode: "create",
+      createStage: "ask_strategy",
+      createStrategy: null,
+      plannedSteps: [],
+      totalStepsExpected: 0,
+      currentStep: 1,
+      userRequirements: "",
+      lastUserRequest: "",
+      lastSyntheticPrompt: "",
+      operationsApplied: 0,
+      parseRetryCount: 0,
+      lastSuccessfulRevision: undefined,
+    }));
+
+    const prompt = t(
+      "pipelines.reenterTopicPrompt",
+      "请重新描述你想创建的流程主题，我会先记录主题，再让你选择创建策略。",
+    );
+
+    try {
+      sessionApi.setLastUserMessage(designChatSessionId, prompt);
+      await chatApi.startConsoleChat({
+        sessionId: designChatSessionId,
+        prompt,
+        userId: "default",
+        channel: "console",
+      });
+      message.info(
+        t("pipelines.reenterTopicHint", "已切换到主题重填模式，请输入新的流程主题。"),
+      );
+    } catch (error) {
+      console.error("failed to request topic re-entry", error);
+      message.warning(
+        t("pipelines.reenterTopicFailed", "请直接在输入框重新描述流程主题。"),
+      );
+    }
+  }, [designChatSessionId, editMode, t]);
+
   const handleAssistantTurnCompleted = useCallback(
     async (payload: { text: string; response: Record<string, unknown> | null }) => {
       if (!editMode) return;
@@ -1897,23 +2158,14 @@ export default function PipelinesPage() {
       ) => {
         if (mode === "create") {
           const totalStepsExpected = inferStepCountFromRequirements(userRequest);
-          const firstPrompt = buildIncrementalStepGenerationPrompt(
-            activePipelineId,
-            activePipelineName,
-            {
-              totalStepsExpected,
-              stepsGenerated: steps.length,
-              currentStep: 1,
-              isComplete: false,
-            },
-            steps,
-            userRequest,
-            pipelineExecutionBudget,
-          );
+          const firstPrompt = buildCreateStrategySelectionPrompt(userRequest);
 
           setIncrementalGeneration({
             active: true,
             mode,
+            createStage: "ask_strategy",
+            createStrategy: null,
+            plannedSteps: [],
             totalStepsExpected,
             currentStep: 1,
             userRequirements: userRequest,
@@ -1924,7 +2176,7 @@ export default function PipelinesPage() {
           });
 
           message.info(
-            t("pipelines.incrementalGenerationStart", "已切换到逐步生成模式，开始生成第 1 步。"),
+            t("pipelines.incrementalTopicCaptured", "已记录流程主题，请先选择创建策略。"),
           );
           await dispatchSyntheticPrompt(firstPrompt);
           return;
@@ -1942,6 +2194,9 @@ export default function PipelinesPage() {
         setIncrementalGeneration({
           active: true,
           mode,
+          createStage: "ask_strategy",
+          createStrategy: null,
+          plannedSteps: [],
           totalStepsExpected: steps.length,
           currentStep: 1,
           userRequirements: userRequest,
@@ -1958,120 +2213,323 @@ export default function PipelinesPage() {
       };
 
       if (incrementalGeneration.active && incrementalGeneration.mode === "create") {
-        const parsed = parseStepFromAIResponse(payload.text || "");
+        if (incrementalGeneration.createStage === "ask_strategy") {
+          const latestUserRequest = await fetchLatestUserRequest();
 
-        if (parsed.success && parsed.complete) {
-          setIncrementalGeneration((prev) => ({
-            ...prev,
-            active: false,
-          }));
-          setEditWelcomeMode("default");
-          message.success(
-            t("pipelines.incrementalGenerationDone", "流程节点已逐步生成完成。"),
-          );
-          return;
-        }
+          if (!isIncrementalUserMessage(latestUserRequest, incrementalGeneration)) {
+            return;
+          }
 
-        if (!parsed.success || !parsed.step) {
-          if (incrementalGeneration.parseRetryCount < pipelineExecutionBudget.maxParseRetryCount) {
-            const repairPrompt = buildJsonRepairPrompt(
-              "create",
-              payload.text || "",
-              parsed.error,
+          const detectedStrategy =
+            latestUserRequest.trim() === "1"
+              ? "stepwise"
+              : latestUserRequest.trim() === "2"
+                ? "plan_then_refine"
+                : detectCreateStrategy(latestUserRequest);
+
+          if (!detectedStrategy) {
+            const strategyPrompt = buildCreateStrategySelectionPrompt(
+              incrementalGeneration.userRequirements,
             );
-            await dispatchSyntheticPrompt(repairPrompt);
+            await dispatchSyntheticPrompt(strategyPrompt);
             setIncrementalGeneration((prev) => ({
               ...prev,
-              parseRetryCount: prev.parseRetryCount + 1,
-              lastSyntheticPrompt: repairPrompt,
+              parseRetryCount: 0,
+              lastUserRequest: latestUserRequest,
+              lastSyntheticPrompt: strategyPrompt,
             }));
             message.info(
-              t("pipelines.stepParseRepairing", "模型返回格式不稳定，正在请求一次更严格的 JSON 重试。"),
+              t(
+                "pipelines.incrementalStrategyChooseHint",
+                "请先选择策略：回复 1（逐节点）或 2（先规划后逐个改）。",
+              ),
             );
             return;
           }
 
-          setDraftParseStatus("error");
-          setDraftParseError(parsed.error || t("pipelines.stepParseFailed", "无法解析节点 JSON。"));
-          message.warning(
-            parsed.error || t("pipelines.stepParseFailed", "无法解析节点 JSON。"),
-          );
-          return;
-        }
+          if (detectedStrategy === "stepwise") {
+            const effectiveSteps = draftNewVersionSteps.length > 0
+              ? draftNewVersionSteps
+              : (selectedTemplateItem?.steps || currentTemplate?.steps || []);
+            const totalStepsExpected = inferStepCountFromRequirements(
+              `${incrementalGeneration.userRequirements}\n${latestUserRequest}`,
+            );
+            const firstPrompt = buildIncrementalStepGenerationPrompt(
+              activePipelineId,
+              activePipelineName,
+              {
+                totalStepsExpected,
+                stepsGenerated: effectiveSteps.length,
+                currentStep: 1,
+                isComplete: false,
+              },
+              effectiveSteps,
+              incrementalGeneration.userRequirements,
+              pipelineExecutionBudget,
+            );
 
-        try {
-          const existingStepIds = new Set(draftNewVersionSteps.map((step) => step.id));
-          const operation = existingStepIds.has(parsed.step.id) ? "update" : "add";
-          const updated = await agentsApi.addOrUpdatePipelineStep(
-            selectedAgent,
-            activePipelineId,
-            parsed.step,
-            operation,
-            {
-              expectedRevision: selectedTemplateItem?.revision,
-            },
-          );
-
-          setTemplates((prev) => mergeTemplateUpdate(prev, updated));
-          setDraftNewVersionSteps(updated.steps || []);
-          setDraftParseStatus("ready");
-          setDraftParseError("");
-          setExpandedDraftDiffKeys([]);
-          setIncrementalGeneration((prev) => ({
-            ...prev,
-            parseRetryCount: 0,
-          }));
-
-          const generatedCount = (updated.steps || []).length;
-          const nextStepNumber = generatedCount + 1;
-          const totalSteps = incrementalGeneration.totalStepsExpected;
-
-          message.success(
-            t("pipelines.incrementalStepSaved", "已生成第 {{current}} / {{total}} 步。", {
-              current: Math.min(generatedCount, totalSteps),
-              total: totalSteps,
-            }),
-          );
-
-          if (generatedCount >= totalSteps) {
             setIncrementalGeneration((prev) => ({
               ...prev,
-              active: false,
+              createStage: "stepwise",
+              createStrategy: "stepwise",
+              plannedSteps: [],
+              totalStepsExpected,
+              currentStep: 1,
+              parseRetryCount: 0,
+              lastUserRequest: latestUserRequest,
+              lastSyntheticPrompt: firstPrompt,
             }));
-            setEditWelcomeMode("default");
+
+            message.info(
+              t("pipelines.incrementalGenerationStart", "已切换到逐步生成模式，开始生成第 1 步。"),
+            );
+            await dispatchSyntheticPrompt(firstPrompt);
             return;
           }
 
-          const nextPrompt = buildIncrementalStepGenerationPrompt(
+          const proposalPrompt = buildInitialStepProposalPrompt(
             activePipelineId,
             activePipelineName,
-            {
-              totalStepsExpected: totalSteps,
-              stepsGenerated: generatedCount,
-              currentStep: nextStepNumber,
-              isComplete: false,
-            },
-            updated.steps || [],
             incrementalGeneration.userRequirements,
             pipelineExecutionBudget,
           );
+          setIncrementalGeneration((prev) => ({
+            ...prev,
+            createStage: "proposal",
+            createStrategy: "plan_then_refine",
+            plannedSteps: [],
+            totalStepsExpected: inferStepCountFromRequirements(incrementalGeneration.userRequirements),
+            currentStep: 1,
+            parseRetryCount: 0,
+            lastUserRequest: latestUserRequest,
+            lastSyntheticPrompt: proposalPrompt,
+          }));
 
-          await dispatchSyntheticPrompt(nextPrompt);
+          message.info(
+            t("pipelines.incrementalProposalStart", "先生成一个节点组合初步方案，确认后再逐个写入流程。"),
+          );
+          await dispatchSyntheticPrompt(proposalPrompt);
+          return;
+        }
+
+        if (incrementalGeneration.createStage === "stepwise") {
+          const parsed = parseStepFromAIResponse(payload.text || "");
+
+          if (parsed.success && parsed.complete) {
+            setIncrementalGeneration((prev) => ({
+              ...prev,
+              active: false,
+              createStage: "ask_strategy",
+              createStrategy: null,
+              plannedSteps: [],
+            }));
+            setEditWelcomeMode("default");
+            message.success(
+              t("pipelines.incrementalGenerationDone", "流程节点已逐步生成完成。"),
+            );
+            return;
+          }
+
+          if (!parsed.success || !parsed.step) {
+            if (incrementalGeneration.parseRetryCount < pipelineExecutionBudget.maxParseRetryCount) {
+              const repairPrompt = buildJsonRepairPrompt(
+                "create",
+                payload.text || "",
+                parsed.error,
+              );
+              await dispatchSyntheticPrompt(repairPrompt);
+              setIncrementalGeneration((prev) => ({
+                ...prev,
+                parseRetryCount: prev.parseRetryCount + 1,
+                lastSyntheticPrompt: repairPrompt,
+              }));
+              message.info(
+                t("pipelines.stepParseRepairing", "模型返回格式不稳定，正在请求一次更严格的 JSON 重试。"),
+              );
+              return;
+            }
+
+            setDraftParseStatus("error");
+            setDraftParseError(parsed.error || t("pipelines.stepParseFailed", "无法解析节点 JSON。"));
+            message.warning(
+              parsed.error || t("pipelines.stepParseFailed", "无法解析节点 JSON。"),
+            );
+            return;
+          }
+
+          try {
+            const existingStepIds = new Set(draftNewVersionSteps.map((step) => step.id));
+            const operation = existingStepIds.has(parsed.step.id) ? "update" : "add";
+            const updated = await agentsApi.addOrUpdatePipelineStep(
+              selectedAgent,
+              activePipelineId,
+              parsed.step,
+              operation,
+              {
+                expectedRevision: incrementalGeneration.lastSuccessfulRevision ?? selectedTemplateItem?.revision,
+              },
+            );
+
+            setTemplates((prev) => mergeTemplateUpdate(prev, updated));
+            setDraftNewVersionSteps(updated.steps || []);
+            setDraftParseStatus("ready");
+            setDraftParseError("");
+            setExpandedDraftDiffKeys([]);
+            setIncrementalGeneration((prev) => ({
+              ...prev,
+              parseRetryCount: 0,
+              lastSuccessfulRevision: updated.revision,
+            }));
+
+            const generatedCount = (updated.steps || []).length;
+            const nextStepNumber = generatedCount + 1;
+            const totalSteps = incrementalGeneration.totalStepsExpected;
+
+            message.success(
+              t("pipelines.incrementalStepSaved", "已生成第 {{current}} / {{total}} 步。", {
+                current: Math.min(generatedCount, totalSteps),
+                total: totalSteps,
+              }),
+            );
+
+            if (generatedCount >= totalSteps) {
+              setIncrementalGeneration((prev) => ({
+                ...prev,
+                active: false,
+                createStage: "ask_strategy",
+                createStrategy: null,
+                plannedSteps: [],
+              }));
+              setEditWelcomeMode("default");
+              return;
+            }
+
+            const nextPrompt = buildIncrementalStepGenerationPrompt(
+              activePipelineId,
+              activePipelineName,
+              {
+                totalStepsExpected: totalSteps,
+                stepsGenerated: generatedCount,
+                currentStep: nextStepNumber,
+                isComplete: false,
+              },
+              updated.steps || [],
+              incrementalGeneration.userRequirements,
+              pipelineExecutionBudget,
+            );
+
+            await dispatchSyntheticPrompt(nextPrompt);
+
+            setIncrementalGeneration((prev) => ({
+              ...prev,
+              currentStep: nextStepNumber,
+              parseRetryCount: 0,
+              lastSyntheticPrompt: nextPrompt,
+            }));
+            return;
+          } catch (error) {
+            console.error("failed to save incremental pipeline step", error);
+            setDraftParseStatus("error");
+            setDraftParseError(t("pipelines.stepSaveFailed", "节点保存失败，请检查后重试。"));
+            message.error(t("pipelines.stepSaveFailed", "节点保存失败，请检查后重试。"));
+            return;
+          }
+        }
+
+        if (incrementalGeneration.createStage === "proposal") {
+          const parsedProposal = parseStepProposalFromAIResponse(payload.text || "");
+
+          if (!parsedProposal.success || !parsedProposal.steps || parsedProposal.steps.length === 0) {
+            if (incrementalGeneration.parseRetryCount < pipelineExecutionBudget.maxParseRetryCount) {
+              const repairPrompt = buildJsonRepairPrompt(
+                "proposal",
+                payload.text || "",
+                parsedProposal.error,
+              );
+              await dispatchSyntheticPrompt(repairPrompt);
+              setIncrementalGeneration((prev) => ({
+                ...prev,
+                parseRetryCount: prev.parseRetryCount + 1,
+                lastSyntheticPrompt: repairPrompt,
+              }));
+              message.info(
+                t("pipelines.stepParseRepairing", "模型返回格式不稳定，正在请求一次更严格的 JSON 重试。"),
+              );
+              return;
+            }
+
+            setDraftParseStatus("error");
+            setDraftParseError(parsedProposal.error || t("pipelines.stepParseFailed", "无法解析节点 JSON。"));
+            message.warning(
+              parsedProposal.error || t("pipelines.stepParseFailed", "无法解析节点 JSON。"),
+            );
+            return;
+          }
+
+          const proposalSteps = parsedProposal.steps;
 
           setIncrementalGeneration((prev) => ({
             ...prev,
-            currentStep: nextStepNumber,
+            createStage: "await_confirm",
+            plannedSteps: proposalSteps,
+            totalStepsExpected: proposalSteps.length,
+            currentStep: 1,
             parseRetryCount: 0,
-            lastSyntheticPrompt: nextPrompt,
           }));
-          return;
-        } catch (error) {
-          console.error("failed to save incremental pipeline step", error);
-          setDraftParseStatus("error");
-          setDraftParseError(t("pipelines.stepSaveFailed", "节点保存失败，请检查后重试。"));
-          message.error(t("pipelines.stepSaveFailed", "节点保存失败，请检查后重试。"));
+          setDraftParseStatus("idle");
+          setDraftParseError("");
+          setExpandedDraftDiffKeys([]);
+          message.info(
+            t(
+              "pipelines.incrementalProposalReady",
+              "节点组合初步方案已生成，请回复“确认创建流程”后按节点逐个写入。",
+            ),
+          );
           return;
         }
+
+        if (incrementalGeneration.createStage === "await_confirm") {
+          const latestUserRequest = await fetchLatestUserRequest();
+
+          if (!isCreatePlanConfirmed(latestUserRequest)) {
+            if (isIncrementalUserMessage(latestUserRequest, incrementalGeneration)) {
+              const refreshedPrompt = buildInitialStepProposalPrompt(
+                activePipelineId,
+                activePipelineName,
+                latestUserRequest,
+                pipelineExecutionBudget,
+              );
+              await dispatchSyntheticPrompt(refreshedPrompt);
+              setIncrementalGeneration((prev) => ({
+                ...prev,
+                createStage: "proposal",
+                plannedSteps: [],
+                currentStep: 1,
+                totalStepsExpected: inferStepCountFromRequirements(latestUserRequest),
+                parseRetryCount: 0,
+                userRequirements: latestUserRequest,
+                lastUserRequest: latestUserRequest,
+                lastSyntheticPrompt: refreshedPrompt,
+              }));
+              message.info(
+                t("pipelines.incrementalProposalRefresh", "已根据你的补充重新生成节点组合方案。"),
+              );
+            } else {
+              message.info(
+                t(
+                  "pipelines.incrementalProposalConfirmHint",
+                  "请先确认方案，回复“确认创建流程”后开始逐节点写入。",
+                ),
+              );
+            }
+            return;
+          }
+
+          await applyConfirmedCreatePlan(latestUserRequest);
+          return;
+        }
+
+        return;
       }
 
       if (incrementalGeneration.active && incrementalGeneration.mode === "modify") {
@@ -2265,6 +2723,7 @@ export default function PipelinesPage() {
         });
     },
     [
+      applyConfirmedCreatePlan,
       designChatSessionId,
       draftNewVersionSteps,
       editMode,
@@ -2949,14 +3408,72 @@ export default function PipelinesPage() {
                   </div>
                 ) : designChatSessionId ? (
                   <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-                    {editWelcomeMode === "init" && incrementalGeneration.active ? (
-                      <div style={{ padding: "8px 12px", borderBottom: "1px solid rgba(5, 5, 5, 0.06)" }}>
-                        <Text type="secondary">
-                          {t("pipelines.incrementalProgress", "逐步生成中：第 {{current}} / {{total}} 步", {
-                            current: incrementalGeneration.currentStep,
-                            total: incrementalGeneration.totalStepsExpected,
-                          })}
-                        </Text>
+                    {editWelcomeMode === "init" && incrementalGeneration.active && incrementalGeneration.mode === "create" ? (
+                      <div style={{ padding: "8px 12px", borderBottom: "1px solid rgba(5, 5, 5, 0.06)", display: "flex", flexDirection: "column", gap: 8 }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                          <Text type="secondary">
+                            {incrementalGeneration.createStage === "applying"
+                              ? t("pipelines.incrementalProgress", "逐步生成中：第 {{current}} / {{total}} 步", {
+                                current: incrementalGeneration.currentStep,
+                                total: incrementalGeneration.totalStepsExpected,
+                              })
+                              : incrementalGeneration.createStage === "ask_strategy"
+                                ? t(
+                                  "pipelines.incrementalChooseStrategyBanner",
+                                  "第 2 步：请选择创建策略（1 逐节点 / 2 先规划后逐个改）。",
+                                )
+                                : incrementalGeneration.createStage === "stepwise"
+                                  ? t(
+                                    "pipelines.incrementalStepwiseBanner",
+                                    "逐节点模式进行中：每次生成并写入 1 个节点。",
+                                  )
+                                  : incrementalGeneration.createStage === "proposal"
+                                    ? t(
+                                      "pipelines.incrementalProposalBuildingBanner",
+                                      "正在生成节点组合方案，请稍候确认。",
+                                    )
+                              : t(
+                                "pipelines.incrementalProposalAwaitConfirm",
+                                "节点组合方案已就绪（{{count}} 个节点），确认后将逐个写入。",
+                                { count: incrementalGeneration.plannedSteps.length },
+                              )}
+                          </Text>
+                          {incrementalGeneration.createStage === "await_confirm" ? (
+                            <Button
+                              size="small"
+                              type="primary"
+                              onClick={() => void applyConfirmedCreatePlan("确认创建流程")}
+                            >
+                              {t("pipelines.confirmAndCreate", "确认并创建节点")}
+                            </Button>
+                          ) : incrementalGeneration.createStage === "ask_strategy" ? (
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <Button
+                                size="small"
+                                onClick={() => void handleSelectCreateStrategyByButton("stepwise")}
+                              >
+                                {t("pipelines.strategyStepwise", "逐节点添加")}
+                              </Button>
+                              <Button
+                                size="small"
+                                type="primary"
+                                onClick={() => void handleSelectCreateStrategyByButton("plan_then_refine")}
+                              >
+                                {t("pipelines.strategyPlanThenRefine", "先规划后逐个改")}
+                              </Button>
+                            </div>
+                          ) : null}
+                        </div>
+                        {incrementalGeneration.userRequirements ? (
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                            <Text type="secondary" style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                              {t("pipelines.topicSummaryLabel", "流程主题")}: {incrementalGeneration.userRequirements}
+                            </Text>
+                            <Button size="small" type="link" onClick={() => void handleEditCreateTopic()}>
+                              {t("pipelines.editTopic", "编辑主题")}
+                            </Button>
+                          </div>
+                        ) : null}
                       </div>
                     ) : null}
                     <div style={{ minHeight: 0, flex: 1 }}>
@@ -2974,7 +3491,7 @@ export default function PipelinesPage() {
                             ? "pipelines.editWelcomeGreetingInit"
                             : "pipelines.editWelcomeGreeting",
                           editWelcomeMode === "init"
-                            ? "新流程已创建，我们先把首版流程搭起来。"
+                            ? "你要做一个关于什么的流程？先告诉我流程目标与场景。"
                             : "流程编辑助手已就绪，你想先改哪一步？",
                         )}
                         welcomeDescription={t(
@@ -2982,27 +3499,27 @@ export default function PipelinesPage() {
                             ? "pipelines.editWelcomeDescriptionInit"
                             : "pipelines.editWelcomeDescription",
                           editWelcomeMode === "init"
-                            ? "描述你的目标后，系统会按步骤逐个生成节点并即时写回流程草稿。"
+                            ? [
+                              "先用一句话描述：你要做一个关于什么的流程。",
+                              "收到主题后，我会引导你选择创建策略：逐节点添加，或先整体规划再逐个修改。",
+                              "无论哪种策略，节点都会在通过校验后即时写回流程草稿。",
+                            ].join("\n")
                             : "我会基于当前流程结构给出节点级修改建议，并帮助你整理可执行的改造方案。",
                         )}
-                        welcomePrompts={[
-                          t(
-                            editWelcomeMode === "init"
-                              ? "pipelines.editWelcomePromptInit1"
-                              : "pipelines.editWelcomePrompt1",
-                            editWelcomeMode === "init"
-                              ? "先描述流程目标和关键步骤，我会自动切换到逐步生成模式。"
-                              : "分析当前流程瓶颈，并直接修改流程 Markdown 工作文件落实优化建议。",
-                          ),
-                          t(
-                            editWelcomeMode === "init"
-                              ? "pipelines.editWelcomePromptInit2"
-                              : "pipelines.editWelcomePrompt2",
-                            editWelcomeMode === "init"
-                              ? "每次只生成一个节点；生成后会立即校验并保存，再继续下一步。"
-                              : "我要改这个流程：新增校验节点、调整重试策略，并把变更写回流程 Markdown。",
-                          ),
-                        ]}
+                        welcomePrompts={
+                          editWelcomeMode === "init"
+                            ? []
+                            : [
+                              t(
+                                "pipelines.editWelcomePrompt1",
+                                "分析当前流程瓶颈，并直接修改流程 Markdown 工作文件落实优化建议。",
+                              ),
+                              t(
+                                "pipelines.editWelcomePrompt2",
+                                "我要改这个流程：新增校验节点、调整重试策略，并把变更写回流程 Markdown。",
+                              ),
+                            ]
+                        }
                       />
                     </div>
                   </div>

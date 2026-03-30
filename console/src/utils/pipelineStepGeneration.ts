@@ -42,6 +42,12 @@ export interface ParsedStepOperationResponse {
   error?: string;
 }
 
+export interface ParsedStepProposalResponse {
+  success: boolean;
+  steps?: ProjectPipelineTemplateStep[];
+  error?: string;
+}
+
 export interface PipelinePromptBudgetOptions {
   maxPromptSteps?: number;
   maxUserRequirementChars?: number;
@@ -166,6 +172,36 @@ export function buildIncrementalStepGenerationPrompt(
   ].join("\n");
 }
 
+export function buildInitialStepProposalPrompt(
+  pipelineId: string,
+  pipelineName: string,
+  userRequirements: string,
+  budget?: PipelinePromptBudgetOptions,
+): string {
+  const trimmedRequirements = trimForPrompt(
+    userRequirements,
+    budget?.maxUserRequirementChars ?? MAX_USER_REQUIREMENTS_CHARS,
+  );
+
+  return [
+    "Design an initial pipeline step plan.",
+    `Pipeline: ${pipelineName} (${pipelineId})`,
+    "Return one executable initial step combination for user confirmation.",
+    "",
+    "User requirements:",
+    trimmedRequirements || "None",
+    "",
+    "Return raw JSON only. No markdown. No explanation.",
+    `Allowed kinds: ${VALID_STEP_KINDS.join(", ")}`,
+    "JSON schema:",
+    '{"steps":[{"id":"step-id","name":"Step Name","kind":"analysis","description":"What this step does"}]}',
+    "Rules:",
+    "- Keep IDs lowercase and unique.",
+    "- Default to 4 steps if user did not specify count.",
+    "- Step count should be within 1-12.",
+  ].join("\n");
+}
+
 export function buildIncrementalStepEditPrompt(
   pipelineId: string,
   pipelineName: string,
@@ -205,18 +241,24 @@ export function buildIncrementalStepEditPrompt(
 }
 
 export function buildJsonRepairPrompt(
-  mode: "create" | "modify",
+  mode: "create" | "modify" | "proposal",
   invalidResponse: string,
   parseError?: string,
 ): string {
   const trimmedResponse = trimForPrompt(invalidResponse, 600);
   return [
-    mode === "create" ? "Your last reply was not valid JSON for one step." : "Your last reply was not valid JSON for one pipeline edit.",
+    mode === "create"
+      ? "Your last reply was not valid JSON for one step."
+      : mode === "proposal"
+        ? "Your last reply was not valid JSON for a step proposal list."
+        : "Your last reply was not valid JSON for one pipeline edit.",
     parseError ? `Parse error: ${parseError}` : "Parse error: invalid JSON payload",
     "Rewrite your last answer as one raw JSON object only.",
     "No markdown fences. No explanation. No extra text.",
     mode === "create"
       ? 'Allowed output: {"id":"step-id","name":"Step Name","kind":"analysis","description":"What this step does"} or {"complete":true,"message":"All steps generated successfully"}'
+      : mode === "proposal"
+        ? 'Allowed output: {"steps":[{"id":"step-id","name":"Step Name","kind":"analysis","description":"What this step does"}]}'
       : 'Allowed output: {"operation":"add"|"update","step":{...}} or {"operation":"delete","step_id":"existing-step-id"} or {"complete":true,"message":"All requested edits are applied"} or {"needs_user_input":true,"message":"What is missing"}',
     "Invalid reply to repair:",
     trimmedResponse || "<empty>",
@@ -242,6 +284,67 @@ export function parseStepFromAIResponse(aiResponse: string): ParsedStepResponse 
     }
 
     return parseValidatedStep(parsed as Record<string, unknown>);
+  } catch (e) {
+    return {
+      success: false,
+      error: `Failed to parse JSON: ${e instanceof Error ? e.message : String(e)}`,
+    };
+  }
+}
+
+export function parseStepProposalFromAIResponse(aiResponse: string): ParsedStepProposalResponse {
+  const jsonStr = extractJsonPayload(aiResponse);
+
+  try {
+    const parsed = JSON.parse(jsonStr) as Record<string, unknown>;
+    const rawSteps = parsed.steps;
+    if (!Array.isArray(rawSteps) || rawSteps.length === 0) {
+      return {
+        success: false,
+        error: "Missing or empty steps array in proposal payload",
+      };
+    }
+
+    if (rawSteps.length > 12) {
+      return {
+        success: false,
+        error: "Proposal step count exceeds 12",
+      };
+    }
+
+    const seenIds = new Set<string>();
+    const normalizedSteps: ProjectPipelineTemplateStep[] = [];
+    for (const item of rawSteps) {
+      if (!item || typeof item !== "object") {
+        return {
+          success: false,
+          error: "Invalid step item in steps array",
+        };
+      }
+
+      const parsedStep = parseValidatedStep(item as Record<string, unknown>);
+      if (!parsedStep.success || !parsedStep.step) {
+        return {
+          success: false,
+          error: parsedStep.error || "Invalid step in proposal payload",
+        };
+      }
+
+      if (seenIds.has(parsedStep.step.id)) {
+        return {
+          success: false,
+          error: `Duplicate step id in proposal: ${parsedStep.step.id}`,
+        };
+      }
+
+      seenIds.add(parsedStep.step.id);
+      normalizedSteps.push(parsedStep.step);
+    }
+
+    return {
+      success: true,
+      steps: normalizedSteps,
+    };
   } catch (e) {
     return {
       success: false,

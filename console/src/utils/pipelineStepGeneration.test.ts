@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildInitialStepProposalPrompt,
   buildIncrementalStepGenerationPrompt,
   buildIncrementalStepEditPrompt,
   buildJsonRepairPrompt,
+  parseStepProposalFromAIResponse,
   parseStepFromAIResponse,
   parseStepOperationFromAIResponse,
 } from "./pipelineStepGeneration";
@@ -106,6 +108,18 @@ describe("pipelineStepGeneration", () => {
     expect(prompt).toContain("needs_user_input");
   });
 
+  it("builds proposal prompt with requirements", () => {
+    const prompt = buildInitialStepProposalPrompt(
+      "essay-pipeline",
+      "Essay Pipeline",
+      "做一个 5 步作文批改流程",
+    );
+
+    expect(prompt).toContain("initial pipeline step plan");
+    expect(prompt).toContain("essay-pipeline");
+    expect(prompt).toContain("\"steps\"");
+  });
+
   it("compacts edit prompt when many steps exist", () => {
     const prompt = buildIncrementalStepEditPrompt(
       "essay-pipeline",
@@ -131,6 +145,13 @@ describe("pipelineStepGeneration", () => {
     expect(prompt).toContain("not valid JSON");
     expect(prompt).toContain("Rewrite your last answer as one raw JSON object only");
     expect(prompt).toContain("Allowed output");
+  });
+
+  it("builds proposal repair prompt", () => {
+    const prompt = buildJsonRepairPrompt("proposal", "I suggest 4 steps", "Missing steps array");
+
+    expect(prompt).toContain("step proposal list");
+    expect(prompt).toContain("\"steps\"");
   });
 
   it("parses step edit add operation", () => {
@@ -177,5 +198,54 @@ describe("pipelineStepGeneration", () => {
     expect(parsed.success).toBe(true);
     expect(parsed.operation).toBe("delete");
     expect(parsed.stepId).toBe("essay-review");
+  });
+
+  it("parses valid proposal steps", () => {
+    const parsed = parseStepProposalFromAIResponse(
+      JSON.stringify({
+        steps: [
+          {
+            id: "essay-input",
+            name: "接收作文",
+            kind: "input",
+            description: "读取输入",
+          },
+          {
+            id: "essay-output",
+            name: "输出结果",
+            kind: "output",
+            description: "给出最终评分",
+          },
+        ],
+      }),
+    );
+
+    expect(parsed.success).toBe(true);
+    expect(parsed.steps).toHaveLength(2);
+    expect(parsed.steps?.[1].id).toBe("essay-output");
+  });
+
+  it("rejects proposal with duplicate step ids", () => {
+    const parsed = parseStepProposalFromAIResponse(
+      JSON.stringify({
+        steps: [
+          {
+            id: "essay-input",
+            name: "接收作文",
+            kind: "input",
+            description: "读取输入",
+          },
+          {
+            id: "essay-input",
+            name: "重复",
+            kind: "analysis",
+            description: "重复 id",
+          },
+        ],
+      }),
+    );
+
+    expect(parsed.success).toBe(false);
+    expect(parsed.error).toContain("Duplicate step id");
   });
 });
