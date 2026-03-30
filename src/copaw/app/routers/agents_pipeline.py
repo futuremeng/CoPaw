@@ -11,6 +11,11 @@ from fastapi.responses import StreamingResponse
 from . import agents as agents_router_impl
 from .agents_pipeline_core import (
     CreatePipelineRunRequest,
+    ImportPlatformTemplateRequest,
+    PlatformFlowTemplateInfo,
+    PlatformTemplateVersionRecord,
+    ProjectFlowInstanceInfo,
+    PublishProjectTemplateRequest,
     PipelineDraftInfo,
     PipelineRunDetail,
     PipelineRunSummary,
@@ -20,10 +25,14 @@ from .agents_pipeline_core import (
     _create_project_pipeline_run,
     _ensure_pipeline_draft_workspace,
     _get_pipeline_draft,
+    _import_platform_template_to_project,
+    _list_platform_template_versions,
+    _list_platform_flow_templates,
     _save_agent_pipeline_template_with_md,
     _list_project_pipeline_runs,
     _list_project_pipeline_templates,
     _load_project_pipeline_run,
+    _publish_project_template_to_platform,
     _add_or_update_step,
     _delete_step,
 )
@@ -51,6 +60,58 @@ async def list_agent_pipeline_templates(
 
     try:
         return _list_agent_pipeline_templates(Path(workspace.workspace_dir))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get(
+    "/{agentId}/pipelines/platform/templates",
+    response_model=list[PlatformFlowTemplateInfo],
+    summary="List platform flow templates",
+    description="List project-agnostic flow templates from platform library",
+)
+async def list_platform_flow_templates(
+    request: Request,
+    agentId: str = PathParam(...),
+) -> list[PlatformFlowTemplateInfo]:
+    """List project-agnostic flow templates from platform library."""
+    manager = agents_router_impl._get_multi_agent_manager(request)
+
+    try:
+        workspace = await manager.get_agent(agentId)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    try:
+        return _list_platform_flow_templates(Path(workspace.workspace_dir))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get(
+    "/{agentId}/pipelines/platform/templates/{templateId}/versions",
+    response_model=list[PlatformTemplateVersionRecord],
+    summary="List platform template version history",
+    description="List published versions of one platform flow template",
+)
+async def list_platform_template_versions(
+    request: Request,
+    agentId: str = PathParam(...),
+    templateId: str = PathParam(...),
+) -> list[PlatformTemplateVersionRecord]:
+    """List published versions of one platform flow template."""
+    manager = agents_router_impl._get_multi_agent_manager(request)
+
+    try:
+        workspace = await manager.get_agent(agentId)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    try:
+        return _list_platform_template_versions(
+            Path(workspace.workspace_dir),
+            templateId,
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -259,6 +320,107 @@ async def list_project_pipeline_templates(
     try:
         project_dir = agents_router_impl._resolve_project_dir(Path(workspace.workspace_dir), projectId)
         return _list_project_pipeline_templates(project_dir)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post(
+    "/{agentId}/projects/{projectId}/pipelines/platform/import",
+    response_model=ProjectFlowInstanceInfo,
+    summary="Import platform template into project",
+    description="Create one project flow instance from a platform template",
+)
+async def import_platform_template_into_project(
+    request: Request,
+    body: ImportPlatformTemplateRequest,
+    agentId: str = PathParam(...),
+    projectId: str = PathParam(...),
+) -> ProjectFlowInstanceInfo:
+    """Create one project flow instance from a platform template."""
+    manager = agents_router_impl._get_multi_agent_manager(request)
+
+    try:
+        workspace = await manager.get_agent(agentId)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    try:
+        workspace_dir = Path(workspace.workspace_dir)
+        project_dir = agents_router_impl._resolve_project_dir(
+            workspace_dir,
+            projectId,
+        )
+        platform_templates = {
+            item.id: item
+            for item in _list_platform_flow_templates(workspace_dir)
+        }
+        target_template = platform_templates.get(body.platform_template_id)
+        if target_template is None:
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    "Platform template "
+                    f"'{body.platform_template_id}' not found"
+                ),
+            )
+
+        return _import_platform_template_to_project(
+            projectId,
+            project_dir,
+            target_template,
+            target_template_id=body.target_template_id,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post(
+    "/{agentId}/projects/{projectId}/pipelines/templates/{templateId}/publish-platform",
+    response_model=PlatformFlowTemplateInfo,
+    summary="Publish project template to platform",
+    description="Standardize one project flow instance as platform template",
+)
+async def publish_project_template_to_platform(
+    request: Request,
+    body: PublishProjectTemplateRequest,
+    agentId: str = PathParam(...),
+    projectId: str = PathParam(...),
+    templateId: str = PathParam(...),
+) -> PlatformFlowTemplateInfo:
+    """Standardize one project flow instance as platform template."""
+    manager = agents_router_impl._get_multi_agent_manager(request)
+
+    try:
+        workspace = await manager.get_agent(agentId)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    bump = (body.bump or "patch").strip().lower()
+    if bump not in {"major", "minor", "patch"}:
+        raise HTTPException(
+            status_code=400,
+            detail="bump must be one of: major, minor, patch",
+        )
+
+    try:
+        workspace_dir = Path(workspace.workspace_dir)
+        project_dir = agents_router_impl._resolve_project_dir(
+            workspace_dir,
+            projectId,
+        )
+        return _publish_project_template_to_platform(
+            projectId,
+            project_dir,
+            workspace_dir,
+            templateId,
+            platform_template_id=body.platform_template_id,
+            bump=bump,
+            tags=body.tags,
+        )
     except HTTPException:
         raise
     except Exception as e:

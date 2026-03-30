@@ -65,6 +65,50 @@ export interface ProjectPipelineTemplateInfo {
   compilation_status?: string;
 }
 
+export interface PlatformFlowTemplateInfo {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  steps: ProjectPipelineTemplateStep[];
+  revision?: number;
+  content_hash?: string;
+  md_mtime?: number;
+  validation_errors?: PipelineValidationError[];
+  compilation_status?: string;
+  tags: string[];
+  source_project_id?: string | null;
+  source_project_template_id?: string | null;
+  source_project_template_version?: string | null;
+}
+
+export interface ProjectFlowInstanceInfo extends ProjectPipelineTemplateInfo {
+  project_id: string;
+  source_platform_template_id?: string | null;
+  source_platform_template_version?: string | null;
+}
+
+export interface ImportPlatformTemplateRequest {
+  platform_template_id: string;
+  target_template_id?: string;
+}
+
+export interface PublishProjectTemplateRequest {
+  platform_template_id?: string;
+  bump?: "major" | "minor" | "patch";
+  tags?: string[];
+}
+
+export interface PlatformTemplateVersionRecord {
+  template_id: string;
+  version: string;
+  published_at: string;
+  source_project_id?: string | null;
+  source_project_template_id?: string | null;
+  source_project_template_version?: string | null;
+  bump: string;
+}
+
 export interface PipelineSaveStreamEvent {
   event: string;
   agent_id: string;
@@ -94,11 +138,27 @@ export interface ProjectPipelineRunStep {
   evidence: string[];
 }
 
+export interface ProjectPipelineCollaborationEvent {
+  ts: string;
+  event: string;
+  step_id: string;
+  role: string;
+  actor: string;
+  status: string;
+  message: string;
+  evidence: string[];
+  metrics: Record<string, unknown>;
+}
+
 export interface ProjectPipelineRunDetail extends ProjectPipelineRunSummary {
   project_id: string;
   parameters: Record<string, unknown>;
   steps: ProjectPipelineRunStep[];
   artifacts: string[];
+  flow_version: string;
+  source_platform_template_id?: string | null;
+  source_platform_template_version?: string | null;
+  collaboration_events: ProjectPipelineCollaborationEvent[];
 }
 
 export interface CreateProjectPipelineRunRequest {

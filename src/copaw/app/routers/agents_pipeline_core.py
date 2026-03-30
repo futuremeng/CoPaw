@@ -24,6 +24,7 @@ _PROJECT_PIPELINE_TEMPLATES_DIRNAME = "templates"
 _PROJECT_PIPELINE_RUNS_DIRNAME = "runs"
 _AGENT_PIPELINES_DIRNAME = "pipelines"
 _AGENT_PIPELINE_TEMPLATES_DIRNAME = "templates"
+_AGENT_PIPELINE_PLATFORM_DIRNAME = "platform-templates"
 _AGENT_PIPELINE_WORKSPACES_DIRNAME = "workspaces"
 _PIPELINE_MD_FILENAME = "pipeline.md"
 _PIPELINE_MEMORY_FILENAME = "pipeline-workspaces.md"
@@ -92,6 +93,20 @@ class PipelineRunStep(BaseModel):
     evidence: list[str] = Field(default_factory=list)
 
 
+class PipelineCollaborationEvent(BaseModel):
+    """Structured collaboration event for one run."""
+
+    ts: str
+    event: str
+    step_id: str = ""
+    role: str = ""
+    actor: str = ""
+    status: str = ""
+    message: str = ""
+    evidence: list[str] = Field(default_factory=list)
+    metrics: dict[str, Any] = Field(default_factory=dict)
+
+
 class PipelineRunDetail(PipelineRunSummary):
     """Pipeline run detail."""
 
@@ -99,6 +114,12 @@ class PipelineRunDetail(PipelineRunSummary):
     parameters: dict[str, Any] = Field(default_factory=dict)
     steps: list[PipelineRunStep] = Field(default_factory=list)
     artifacts: list[str] = Field(default_factory=list)
+    flow_version: str = ""
+    source_platform_template_id: str | None = None
+    source_platform_template_version: str | None = None
+    collaboration_events: list[PipelineCollaborationEvent] = Field(
+        default_factory=list,
+    )
 
 
 class CreatePipelineRunRequest(BaseModel):
@@ -121,6 +142,50 @@ class PipelineDraftInfo(BaseModel):
     content_hash: str = ""
     validation_errors: list[PipelineValidationError] = Field(default_factory=list)
     compilation_status: str = "ready"
+
+
+class PlatformFlowTemplateInfo(PipelineTemplateInfo):
+    """Project-agnostic platform flow template."""
+
+    tags: list[str] = Field(default_factory=list)
+    source_project_id: str | None = None
+    source_project_template_id: str | None = None
+    source_project_template_version: str | None = None
+
+
+class ProjectFlowInstanceInfo(PipelineTemplateInfo):
+    """Project-bound flow instance with optional upstream lineage."""
+
+    project_id: str
+    source_platform_template_id: str | None = None
+    source_platform_template_version: str | None = None
+
+
+class ImportPlatformTemplateRequest(BaseModel):
+    """Import one platform template into a project as an instance."""
+
+    platform_template_id: str
+    target_template_id: str | None = None
+
+
+class PublishProjectTemplateRequest(BaseModel):
+    """Publish one project template back to platform library."""
+
+    platform_template_id: str | None = None
+    bump: str = "patch"
+    tags: list[str] = Field(default_factory=list)
+
+
+class PlatformTemplateVersionRecord(BaseModel):
+    """Version history entry of one platform template."""
+
+    template_id: str
+    version: str
+    published_at: str
+    source_project_id: str | None = None
+    source_project_template_id: str | None = None
+    source_project_template_version: str | None = None
+    bump: str = "patch"
 
 
 def _pipeline_now_iso() -> str:
@@ -307,6 +372,66 @@ def _agent_pipeline_templates_dir(workspace_dir: Path) -> Path:
     )
     templates_dir.mkdir(parents=True, exist_ok=True)
     return templates_dir
+
+
+def _agent_platform_templates_dir(workspace_dir: Path) -> Path:
+    templates_dir = (
+        workspace_dir
+        / _AGENT_PIPELINES_DIRNAME
+        / _AGENT_PIPELINE_PLATFORM_DIRNAME
+    )
+    templates_dir.mkdir(parents=True, exist_ok=True)
+    return templates_dir
+
+
+def _platform_template_history_path(
+    workspace_dir: Path,
+    template_id: str,
+) -> Path:
+    history_dir = _agent_platform_templates_dir(workspace_dir) / ".history"
+    history_dir.mkdir(parents=True, exist_ok=True)
+    return history_dir / f"{template_id}.versions.json"
+
+
+def _list_platform_template_versions(
+    workspace_dir: Path,
+    template_id: str,
+) -> list[PlatformTemplateVersionRecord]:
+    path = _platform_template_history_path(workspace_dir, template_id)
+    if not path.exists() or not path.is_file():
+        return []
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    if not isinstance(raw, list):
+        return []
+    return [
+        PlatformTemplateVersionRecord.model_validate(item)
+        for item in raw
+        if isinstance(item, dict)
+    ]
+
+
+def _append_platform_template_version(
+    workspace_dir: Path,
+    record: PlatformTemplateVersionRecord,
+) -> None:
+    history = _list_platform_template_versions(
+        workspace_dir,
+        record.template_id,
+    )
+    history.append(record)
+    path = _platform_template_history_path(workspace_dir, record.template_id)
+    path.write_text(
+        json.dumps(
+            [item.model_dump() for item in history],
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 def _pipeline_workspace_dir(workspace_dir: Path, pipeline_id: str) -> Path:
@@ -796,6 +921,202 @@ def _list_agent_pipeline_templates(workspace_dir: Path) -> list[PipelineTemplate
     return templates
 
 
+def _parse_platform_template_doc(
+    raw: dict[str, Any],
+    fallback_id: str,
+) -> PlatformFlowTemplateInfo | None:
+    parsed = _parse_pipeline_template_doc(raw, fallback_id)
+    if parsed is None:
+        return None
+    return PlatformFlowTemplateInfo(
+        **parsed.model_dump(),
+        tags=[
+            str(item).strip()
+            for item in (raw.get("tags") or [])
+            if str(item).strip()
+        ],
+        source_project_id=(str(raw.get("source_project_id") or "").strip() or None),
+        source_project_template_id=(
+            str(raw.get("source_project_template_id") or "").strip() or None
+        ),
+        source_project_template_version=(
+            str(raw.get("source_project_template_version") or "").strip() or None
+        ),
+    )
+
+
+def _list_platform_flow_templates(
+    workspace_dir: Path,
+) -> list[PlatformFlowTemplateInfo]:
+    templates_dir = _agent_platform_templates_dir(workspace_dir)
+    templates: list[PlatformFlowTemplateInfo] = []
+    for path in sorted(
+        templates_dir.glob("*.json"),
+        key=lambda item: item.name.lower(),
+    ):
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(raw, dict):
+                continue
+            parsed = _parse_platform_template_doc(raw, fallback_id=path.stem)
+            if parsed is not None:
+                templates.append(parsed)
+        except Exception as exc:
+            logger.warning(
+                "Skip invalid platform template %s: %s",
+                path,
+                exc,
+            )
+    return templates
+
+
+def _bump_semver(version: str, mode: str) -> str:
+    raw = (version or "0.1.0").strip()
+    m = re.match(r"^(\d+)\.(\d+)\.(\d+)$", raw)
+    if m is None:
+        return "0.1.0"
+    major, minor, patch = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    if mode == "major":
+        return f"{major + 1}.0.0"
+    if mode == "minor":
+        return f"{major}.{minor + 1}.0"
+    return f"{major}.{minor}.{patch + 1}"
+
+
+def _import_platform_template_to_project(
+    project_id: str,
+    project_dir: Path,
+    platform_template: PlatformFlowTemplateInfo,
+    target_template_id: str | None = None,
+) -> ProjectFlowInstanceInfo:
+    _, templates_dir, _ = _project_pipeline_dirs(project_dir)
+
+    instance_id = (
+        (target_template_id or platform_template.id).strip().lower()
+    )
+    instance_id = re.sub(r"[^a-z0-9_-]+", "-", instance_id).strip("-")
+    if not instance_id:
+        raise HTTPException(status_code=400, detail="Invalid target template id")
+
+    template_doc = {
+        "id": instance_id,
+        "name": platform_template.name,
+        "version": platform_template.version or "0.1.0",
+        "description": platform_template.description,
+        "steps": [
+            {
+                "id": step.id,
+                "name": step.name,
+                "kind": step.kind,
+                "description": step.description,
+            }
+            for step in platform_template.steps
+        ],
+        "source_platform_template_id": platform_template.id,
+        "source_platform_template_version": platform_template.version,
+        "imported_at": _pipeline_now_iso(),
+    }
+
+    target = templates_dir / f"{instance_id}.json"
+    target.write_text(
+        json.dumps(template_doc, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    return ProjectFlowInstanceInfo(
+        id=instance_id,
+        name=platform_template.name,
+        version=platform_template.version or "0.1.0",
+        description=platform_template.description,
+        steps=platform_template.steps,
+        project_id=project_id,
+        source_platform_template_id=platform_template.id,
+        source_platform_template_version=platform_template.version,
+    )
+
+
+def _publish_project_template_to_platform(
+    project_id: str,
+    project_dir: Path,
+    workspace_dir: Path,
+    template_id: str,
+    platform_template_id: str | None = None,
+    bump: str = "patch",
+    tags: list[str] | None = None,
+) -> PlatformFlowTemplateInfo:
+    source_template = _resolve_pipeline_template(project_dir, template_id)
+    target_id = (
+        (platform_template_id or source_template.id).strip().lower()
+    )
+    target_id = re.sub(r"[^a-z0-9_-]+", "-", target_id).strip("-")
+    if not target_id:
+        raise HTTPException(status_code=400, detail="Invalid platform template id")
+
+    current_templates = {
+        item.id: item for item in _list_platform_flow_templates(workspace_dir)
+    }
+    current = current_templates.get(target_id)
+    next_version = _bump_semver(
+        current.version if current else source_template.version,
+        bump,
+    )
+
+    merged_tags = tags or ([] if current is None else current.tags)
+    merged_tags = [item for item in merged_tags if item]
+
+    doc = {
+        "id": target_id,
+        "name": source_template.name,
+        "version": next_version,
+        "description": source_template.description,
+        "steps": [
+            {
+                "id": step.id,
+                "name": step.name,
+                "kind": step.kind,
+                "description": step.description,
+            }
+            for step in source_template.steps
+        ],
+        "tags": merged_tags,
+        "source_project_id": project_id,
+        "source_project_template_id": source_template.id,
+        "source_project_template_version": source_template.version,
+        "published_at": _pipeline_now_iso(),
+    }
+
+    target = _agent_platform_templates_dir(workspace_dir) / f"{target_id}.json"
+    target.write_text(
+        json.dumps(doc, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    _append_platform_template_version(
+        workspace_dir,
+        PlatformTemplateVersionRecord(
+            template_id=target_id,
+            version=next_version,
+            published_at=str(doc.get("published_at") or _pipeline_now_iso()),
+            source_project_id=project_id,
+            source_project_template_id=source_template.id,
+            source_project_template_version=source_template.version,
+            bump=bump,
+        ),
+    )
+
+    return PlatformFlowTemplateInfo(
+        id=target_id,
+        name=source_template.name,
+        version=next_version,
+        description=source_template.description,
+        steps=source_template.steps,
+        tags=merged_tags,
+        source_project_id=project_id,
+        source_project_template_id=source_template.id,
+        source_project_template_version=source_template.version,
+    )
+
+
 def _save_agent_pipeline_template(
     workspace_dir: Path,
     template: PipelineTemplateInfo,
@@ -1264,6 +1585,61 @@ def _resolve_pipeline_template(project_dir: Path, template_id: str) -> PipelineT
     raise HTTPException(status_code=404, detail=f"Pipeline template '{template_id}' not found")
 
 
+def _load_project_template_doc(
+    project_dir: Path,
+    template_id: str,
+) -> dict[str, Any]:
+    """Load raw template doc to read lineage fields not in core model."""
+    _, templates_dir, _ = _project_pipeline_dirs(project_dir)
+    target = templates_dir / f"{template_id}.json"
+    if not target.exists() or not target.is_file():
+        return {}
+    try:
+        raw = json.loads(target.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def _infer_collab_role(step_kind: str) -> str:
+    mapping = {
+        "ingest": "collector",
+        "transform": "processor",
+        "alignment": "aligner",
+        "analysis": "analyst",
+        "validation": "reviewer",
+        "publish": "publisher",
+    }
+    return mapping.get(step_kind, "executor")
+
+
+def _append_collab_event(
+    run: PipelineRunDetail,
+    event: str,
+    *,
+    step_id: str = "",
+    role: str = "",
+    actor: str = "multi-agent",
+    status: str = "",
+    message: str = "",
+    evidence: list[str] | None = None,
+    metrics: dict[str, Any] | None = None,
+) -> None:
+    run.collaboration_events.append(
+        PipelineCollaborationEvent(
+            ts=_pipeline_now_iso(),
+            event=event,
+            step_id=step_id,
+            role=role,
+            actor=actor,
+            status=status,
+            message=message,
+            evidence=evidence or [],
+            metrics=metrics or {},
+        )
+    )
+
+
 def _step_storage_name(step_id: str) -> str:
     safe = re.sub(r"[^A-Za-z0-9._-]", "_", step_id.strip())
     return safe or "step"
@@ -1557,6 +1933,9 @@ def _persist_project_pipeline_run(project_dir: Path, run: PipelineRunDetail, tem
         "dataset_id": "",
         "pipeline_id": run.template_id,
         "pipeline_version": template.version,
+        "flow_version": run.flow_version or template.version,
+        "source_platform_template_id": run.source_platform_template_id,
+        "source_platform_template_version": run.source_platform_template_version,
         "spec_version": "0.1.0",
         "status": _normalize_run_status(run.status),
         "started_at": run.created_at,
@@ -1567,6 +1946,10 @@ def _persist_project_pipeline_run(project_dir: Path, run: PipelineRunDetail, tem
         ),
         "params": run.parameters,
         "steps": manifest_steps,
+        "collaboration_events": [
+            item.model_dump()
+            for item in run.collaboration_events
+        ],
     }
 
     manifest_path.write_text(
@@ -1580,19 +1963,42 @@ def _execute_project_pipeline_run(
     run: PipelineRunDetail,
     template: PipelineTemplateInfo,
 ) -> PipelineRunDetail:
+    if not run.collaboration_events:
+        _append_collab_event(
+            run,
+            "run.started",
+            status="running",
+            message="Project flow run started",
+        )
+
     if not run.steps:
         run.status = "succeeded"
         run.updated_at = _pipeline_now_iso()
+        _append_collab_event(
+            run,
+            "run.completed",
+            status="succeeded",
+            message="No steps to execute",
+        )
         _persist_project_pipeline_run(project_dir, run, template)
         return run
 
     for step in run.steps:
         started_at = _pipeline_now_iso()
+        step_role = _infer_collab_role(step.kind)
         step.status = "running"
         step.started_at = started_at
         step.ended_at = None
         run.status = "running"
         run.updated_at = started_at
+        _append_collab_event(
+            run,
+            "step.started",
+            step_id=step.id,
+            role=step_role,
+            status="running",
+            message=f"Step {step.id} started",
+        )
         _persist_project_pipeline_run(project_dir, run, template)
 
         try:
@@ -1613,6 +2019,20 @@ def _execute_project_pipeline_run(
                 merged_artifacts = list(dict.fromkeys([*run.artifacts, *step_outputs]))
                 run.artifacts = merged_artifacts[:200]
 
+            _append_collab_event(
+                run,
+                "step.completed",
+                step_id=step.id,
+                role=step_role,
+                status="succeeded",
+                message=f"Step {step.id} completed",
+                evidence=step.evidence[:5],
+                metrics={
+                    "duration_sec": step.metrics.get("duration_sec", 0),
+                    "output_count": len(step_outputs),
+                },
+            )
+
             run.updated_at = ended_at
         except Exception as exc:
             ended_at = _pipeline_now_iso()
@@ -1625,11 +2045,33 @@ def _execute_project_pipeline_run(
             step.evidence = [*step.evidence[:19], f"error:{type(exc).__name__}: {exc}"]
             run.status = "failed"
             run.updated_at = ended_at
+            _append_collab_event(
+                run,
+                "step.failed",
+                step_id=step.id,
+                role=step_role,
+                status="failed",
+                message=f"Step {step.id} failed: {type(exc).__name__}",
+                evidence=step.evidence[:5],
+                metrics={"error_count": 1},
+            )
+            _append_collab_event(
+                run,
+                "run.failed",
+                status="failed",
+                message="Project flow run failed",
+            )
             _persist_project_pipeline_run(project_dir, run, template)
             return run
 
     run.status = "succeeded"
     run.updated_at = _pipeline_now_iso()
+    _append_collab_event(
+        run,
+        "run.completed",
+        status="succeeded",
+        message="Project flow run completed",
+    )
     _persist_project_pipeline_run(project_dir, run, template)
     return run
 
@@ -1721,6 +2163,18 @@ def _load_pipeline_run_from_manifest(project_dir: Path, run_id: str) -> Pipeline
         parameters=cast(dict[str, Any], raw.get("params") or {}),
         steps=steps,
         artifacts=sorted(set(all_artifacts)),
+        flow_version=str(raw.get("flow_version") or raw.get("pipeline_version") or ""),
+        source_platform_template_id=(
+            str(raw.get("source_platform_template_id") or "").strip() or None
+        ),
+        source_platform_template_version=(
+            str(raw.get("source_platform_template_version") or "").strip() or None
+        ),
+        collaboration_events=[
+            PipelineCollaborationEvent.model_validate(item)
+            for item in (raw.get("collaboration_events") or [])
+            if isinstance(item, dict)
+        ],
     )
     return run_detail
 
@@ -1827,6 +2281,7 @@ def _create_project_pipeline_run(
     body: CreatePipelineRunRequest,
 ) -> PipelineRunDetail:
     template = _resolve_pipeline_template(project_dir, body.template_id)
+    template_doc = _load_project_template_doc(project_dir, template.id)
     now = _pipeline_now_iso()
     run_id = f"run-{generate_short_agent_id()}"
 
@@ -1858,6 +2313,15 @@ def _create_project_pipeline_run(
         parameters=body.parameters,
         steps=steps,
         artifacts=artifacts,
+        flow_version=(template.version or "0.1.0"),
+        source_platform_template_id=(
+            str(template_doc.get("source_platform_template_id") or "").strip() or None
+        ),
+        source_platform_template_version=(
+            str(template_doc.get("source_platform_template_version") or "").strip()
+            or None
+        ),
+        collaboration_events=[],
         focus_chat_id=None,
         focus_type="project_run",
         focus_path=f"projects/{project_id}",

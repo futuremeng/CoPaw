@@ -17,6 +17,11 @@ import type {
   AgentPipelineDraftInfo,
   PipelineSaveStreamEvent,
   ProjectPipelineTemplateInfo,
+  PlatformFlowTemplateInfo,
+  PlatformTemplateVersionRecord,
+  ProjectFlowInstanceInfo,
+  ImportPlatformTemplateRequest,
+  PublishProjectTemplateRequest,
   ProjectPipelineTemplateStep,
   ProjectPipelineRunSummary,
   ProjectPipelineRunDetail,
@@ -201,6 +206,43 @@ export const agentsApi = {
   listProjectPipelineTemplates: (agentId: string, projectId: string) =>
     request<ProjectPipelineTemplateInfo[]>(
       `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/pipelines/templates`,
+    ),
+
+  listPlatformFlowTemplates: (agentId: string) =>
+    request<PlatformFlowTemplateInfo[]>(
+      `/agents/${agentId}/pipelines/platform/templates`,
+    ),
+
+  listPlatformTemplateVersions: (agentId: string, templateId: string) =>
+    request<PlatformTemplateVersionRecord[]>(
+      `/agents/${agentId}/pipelines/platform/templates/${encodeURIComponent(templateId)}/versions`,
+    ),
+
+  importPlatformTemplateIntoProject: (
+    agentId: string,
+    projectId: string,
+    body: ImportPlatformTemplateRequest,
+  ) =>
+    request<ProjectFlowInstanceInfo>(
+      `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/pipelines/platform/import`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  publishProjectTemplateToPlatform: (
+    agentId: string,
+    projectId: string,
+    templateId: string,
+    body: PublishProjectTemplateRequest,
+  ) =>
+    request<PlatformFlowTemplateInfo>(
+      `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/pipelines/templates/${encodeURIComponent(templateId)}/publish-platform`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
     ),
 
   listProjectPipelineRuns: (agentId: string, projectId: string) =>
