@@ -1093,7 +1093,6 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
         Returns:
             Response message
         """
-<<<<<<< HEAD
         # Set workspace_dir and recent_max_bytes in context for tool functions
         from ..config.context import (
             set_current_focus_dir,

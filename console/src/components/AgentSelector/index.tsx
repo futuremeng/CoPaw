@@ -109,12 +109,12 @@ export default function AgentSelector({
         className={styles.agentSelector}
         placeholder={t("agent.selectAgent")}
         optionLabelProp="label"
-        popupClassName={styles.agentSelectorDropdown}
-        onDropdownVisibleChange={setDropdownOpen}
+        classNames={{ popup: { root: styles.agentSelectorDropdown } }}
+        onOpenChange={setDropdownOpen}
         suffixIcon={
           dropdownOpen ? <SparkUpLine size={20} /> : <SparkDownLine size={20} />
         }
-        dropdownRender={(menu) => (
+        popupRender={(menu) => (
           <>
             <div className={styles.dropdownHeader}>
               <span className={styles.dropdownHeaderTitle}>

@@ -136,24 +136,13 @@ function HeartbeatPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className={styles.heartbeatPage}>
-        <PageHeader
-          items={[{ title: t("nav.control") }, { title: t("heartbeat.title") }]}
-        />
-        <span className={styles.description}>{t("common.loading")}</span>
-      </div>
-    );
-  }
-
   return (
     <div className={styles.heartbeatPage}>
       <PageHeader
         items={[{ title: t("nav.control") }, { title: t("heartbeat.title") }]}
       />
       <div className={styles.heartbeatContent}>
-        <Card className={styles.card}>
+        <Card className={styles.card} loading={loading}>
           <Form
             form={form}
             layout="vertical"
@@ -256,7 +245,12 @@ function HeartbeatPage() {
             </Form.Item>
 
             <Form.Item className={styles.formActions}>
-              <Button type="primary" htmlType="submit" loading={saving}>
+              <Button
+                type="primary"
+                htmlType="submit"
+                loading={saving}
+                disabled={loading}
+              >
                 {t("common.save")}
               </Button>
             </Form.Item>

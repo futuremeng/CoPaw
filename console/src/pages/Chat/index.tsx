@@ -27,9 +27,6 @@ import { trackNavigation } from "../../utils/navigationTelemetry";
 import { useChatAnywhereInput } from "@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/Context/ChatAnywhereInputContext.js";
 import styles from "./index.module.less";
 import { IconButton } from "@agentscope-ai/design";
-import ChatActionGroup from "./components/ChatActionGroup";
-import ChatHeaderTitle from "./components/ChatHeaderTitle";
-import ChatSessionInitializer from "./components/ChatSessionInitializer";
 import {
   toDisplayUrl,
   copyText,
@@ -1349,7 +1346,6 @@ export default function ChatPage() {
         },
         rightHeader: (
           <>
-            <ChatSessionInitializer />
             <RuntimeLoadingBridge bridgeRef={runtimeLoadingBridgeRef} />
             <span style={{ flex: 1 }} />
             <ModelSelector />

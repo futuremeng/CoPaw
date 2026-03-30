@@ -1,7 +1,6 @@
 export { SliderWithValue } from "./SliderWithValue";
 export { ReactAgentCard } from "./ReactAgentCard";
 export { LlmRetryCard } from "./LlmRetryCard";
-export { ContextManagementCard } from "./ContextManagementCard";
 export { KnowledgeMaintenanceCard } from "./KnowledgeMaintenanceCard";
 export { LlmRateLimiterCard } from "./LlmRateLimiterCard";
 export { ContextCompactCard } from "./ContextCompactCard";

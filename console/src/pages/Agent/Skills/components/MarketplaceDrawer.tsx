@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Drawer, Button, Modal, message } from "@agentscope-ai/design";
 import { useTranslation } from "react-i18next";
 import type {
@@ -128,6 +128,14 @@ export function MarketplaceDrawer({
   const stopInstallRef = useRef(false);
   const stopCoolTimerRef = useRef<number | null>(null);
 
+  const areSetsEqual = (a: Set<string>, b: Set<string>) => {
+    if (a.size !== b.size) return false;
+    for (const v of a) {
+      if (!b.has(v)) return false;
+    }
+    return true;
+  };
+
   useEffect(() => {
     return () => {
       if (stopCoolTimerRef.current !== null) {
@@ -136,9 +144,13 @@ export function MarketplaceDrawer({
     };
   }, []);
 
-  const marketIdOptions = Array.from(
-    new Set(marketplace.map((item) => item.market_id).filter(Boolean)),
-  ).sort();
+  const marketIdOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(marketplace.map((item) => item.market_id).filter(Boolean)),
+      ).sort(),
+    [marketplace],
+  );
 
   const marketItemCountMap = marketplace.reduce<Record<string, number>>(
     (acc, item) => {
@@ -167,39 +179,54 @@ export function MarketplaceDrawer({
     );
   };
 
-  const filteredMarketplace = marketplace.filter((item) => {
-    if (selectedMarketId !== "__all__" && item.market_id !== selectedMarketId) {
-      return false;
-    }
+  const filteredMarketplace = useMemo(
+    () =>
+      marketplace.filter((item) => {
+        if (
+          selectedMarketId !== "__all__" &&
+          item.market_id !== selectedMarketId
+        ) {
+          return false;
+        }
 
-    if (!searchKeyword) {
-      return true;
-    }
+        if (!searchKeyword) {
+          return true;
+        }
 
-    const haystack = [
-      item.name,
-      item.skill_id,
-      item.market_id,
-      item.description ?? "",
-    ]
-      .join(" ")
-      .toLowerCase();
+        const haystack = [
+          item.name,
+          item.skill_id,
+          item.market_id,
+          item.description ?? "",
+        ]
+          .join(" ")
+          .toLowerCase();
 
-    return haystack.includes(searchKeyword);
-  });
+        return haystack.includes(searchKeyword);
+      }),
+    [marketplace, searchKeyword, selectedMarketId],
+  );
 
-  const groupedMarketplace = filteredMarketplace.reduce<
-    Record<string, MarketplaceItem[]>
-  >((acc, item) => {
-    const groupId = item.market_id || "unknown";
-    if (!acc[groupId]) {
-      acc[groupId] = [];
-    }
-    acc[groupId].push(item);
-    return acc;
-  }, {});
+  const groupedMarketplace = useMemo(
+    () =>
+      filteredMarketplace.reduce<Record<string, MarketplaceItem[]>>(
+        (acc, item) => {
+          const groupId = item.market_id || "unknown";
+          if (!acc[groupId]) {
+            acc[groupId] = [];
+          }
+          acc[groupId].push(item);
+          return acc;
+        },
+        {},
+      ),
+    [filteredMarketplace],
+  );
 
-  const groupedMarketIds = Object.keys(groupedMarketplace).sort();
+  const groupedMarketIds = useMemo(
+    () => Object.keys(groupedMarketplace).sort(),
+    [groupedMarketplace],
+  );
 
   useEffect(() => {
     if (selectedMarketId === "__all__") return;
@@ -216,7 +243,7 @@ export function MarketplaceDrawer({
           next.add(id);
         }
       }
-      return next;
+      return areSetsEqual(prev, next) ? prev : next;
     });
   }, [marketIdOptions, groupedMarketIds]);
 

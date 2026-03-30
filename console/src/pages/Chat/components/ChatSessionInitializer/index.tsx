@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useRef } from "react";
 import { useLocation } from "react-router-dom";
-import { useChatAnywhereSessionsState } from "@agentscope-ai/chat";
+import { useContextSelector } from "use-context-selector";
+import {
+  ChatAnywhereSessionsContext,
+} from "@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/Context/ChatAnywhereSessionsContext.js";
+import type { IAgentScopeRuntimeWebUISessionsContext } from "@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/types/ISessions";
 
 /**
  * URL chatId → context currentSessionId (one direction of bidirectional sync).
@@ -16,8 +20,18 @@ const ChatSessionInitializer: React.FC = () => {
     return match?.[1];
   }, [location.pathname]);
 
-  const { sessions, currentSessionId, setCurrentSessionId } =
-    useChatAnywhereSessionsState();
+  const sessions = useContextSelector(
+    ChatAnywhereSessionsContext,
+    (v: IAgentScopeRuntimeWebUISessionsContext) => v.sessions,
+  );
+  const currentSessionId = useContextSelector(
+    ChatAnywhereSessionsContext,
+    (v: IAgentScopeRuntimeWebUISessionsContext) => v.currentSessionId,
+  );
+  const setCurrentSessionId = useContextSelector(
+    ChatAnywhereSessionsContext,
+    (v: IAgentScopeRuntimeWebUISessionsContext) => v.setCurrentSessionId,
+  );
 
   const currentSessionIdRef = useRef(currentSessionId);
   currentSessionIdRef.current = currentSessionId;

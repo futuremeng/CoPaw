@@ -363,17 +363,25 @@ async function loadPipelineManagementData(
     ),
   ];
 
-  const runs: RunItem[] = perProject
-    .flatMap((item) =>
-      item.runs.map((run) => ({
+  const dedupedRuns = new Map<string, RunItem>();
+  perProject.forEach((item) => {
+    item.runs.forEach((run) => {
+      const normalizedRun: RunItem = {
         ...run,
         projectId: item.project.id,
         projectName: item.project.name,
-      })),
-    )
-    .sort((a, b) =>
-      (b.updated_at || b.created_at).localeCompare(a.updated_at || a.created_at),
-    );
+      };
+      const key = buildRunIdentity(normalizedRun);
+      const existing = dedupedRuns.get(key);
+      if (!existing || runTimeValue(normalizedRun) >= runTimeValue(existing)) {
+        dedupedRuns.set(key, normalizedRun);
+      }
+    });
+  });
+
+  const runs: RunItem[] = Array.from(dedupedRuns.values()).sort(
+    (a, b) => runTimeValue(b) - runTimeValue(a),
+  );
 
   return { templates, runs };
 }
@@ -406,6 +414,15 @@ function buildPipelineEntrySessionId(): string {
     return crypto.randomUUID();
   }
   return `pipeline-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function buildRunIdentity(run: RunItem): string {
+  return `${run.projectId}:${run.id}`;
+}
+
+function runTimeValue(run: RunItem): number {
+  const value = Date.parse(run.updated_at || run.created_at || "");
+  return Number.isFinite(value) ? value : 0;
 }
 
 function normalizeVersion(version: string): string {
@@ -3541,7 +3558,7 @@ export default function PipelinesPage() {
               ) : (
                 <div className={styles.list}>
                   {visibleRuns.map((run) => (
-                    <div key={run.id} className={styles.listItemStatic}>
+                    <div key={buildRunIdentity(run)} className={styles.listItemStatic}>
                       <div className={styles.listItemHeader}>
                         <Text strong>{run.template_id}</Text>
                         <Tag color={statusTagColor(run.status)}>{run.status}</Tag>

@@ -291,6 +291,7 @@ export function SkillDrawer({
       open={open}
       onClose={onClose}
       destroyOnClose
+      forceRender
       footer={drawerFooter}
     >
       <Form form={form} layout="vertical" onFinish={handleSubmit}>

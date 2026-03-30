@@ -9,7 +9,6 @@ import {
   ToolResultCompactCard,
   MemorySummaryCard,
   EmbeddingConfigCard,
-  ContextManagementCard,
   KnowledgeMaintenanceCard,
 } from "./components";
 import { PageHeader } from "@/components/PageHeader";
@@ -76,8 +75,6 @@ function AgentConfigPage() {
             <LlmRetryCard llmRetryEnabled={llmRetryEnabled} />
 
             <LlmRateLimiterCard />
-
-            <ContextManagementCard />
 
             <KnowledgeMaintenanceCard />
 
