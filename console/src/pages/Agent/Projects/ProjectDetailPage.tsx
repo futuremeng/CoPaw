@@ -3,6 +3,7 @@ import {
   Alert,
   Button,
   Card,
+  Drawer,
   Empty,
   Popconfirm,
   Spin,
@@ -193,6 +194,7 @@ export default function ProjectDetailPage() {
   const [chatStarting, setChatStarting] = useState(false);
   const [selectedStepId, setSelectedStepId] = useState("");
   const [deletingProject, setDeletingProject] = useState(false);
+  const [automationDrawerOpen, setAutomationDrawerOpen] = useState(false);
   const [autoAttachRequest, setAutoAttachRequest] = useState<ProjectChatAutoAttachRequest | null>(null);
   const [selectedAttachPaths, setSelectedAttachPaths] = useState<string[]>([]);
   const [sendingSelectedFiles, setSendingSelectedFiles] = useState(false);
@@ -396,6 +398,22 @@ export default function ProjectDetailPage() {
     () => runsForSelectedTemplate.filter((item) => isSucceededStatus(item.status)).length,
     [runsForSelectedTemplate],
   );
+
+  const automationSummaryText = useMemo(() => {
+    if (pipelineLoading) {
+      return t("projects.automationSummary.loading", "Loading automation status...");
+    }
+    if (!selectedTemplateId) {
+      return t("projects.automationSummary.noTemplate", "No template selected yet");
+    }
+    if (!selectedRunSummary) {
+      return t("projects.automationSummary.noRun", "No runs yet, start one when ready");
+    }
+    return t("projects.automationSummary.latest", "Latest run: {{runId}} ({{status}})", {
+      runId: selectedRunSummary.id,
+      status: selectedRunSummary.status || "unknown",
+    });
+  }, [pipelineLoading, selectedRunSummary, selectedTemplateId, t]);
 
   const projectFileCount = useMemo(
     () => projectFiles.filter((file) => !isBuiltInProjectFile(file.path)).length,
@@ -1419,89 +1437,45 @@ export default function ProjectDetailPage() {
       ) : (
         <div className={styles.content}>
           <div className={styles.columnLeft}>
-            <ProjectOverviewCard
-              selectedProject={selectedProject}
-              projectFileCount={projectFileCount}
-              pipelineTemplateCount={pipelineTemplates.length}
-              pipelineRunCount={pipelineRuns.length}
-              projectWorkspaceSummary={projectWorkspaceSummary}
-              onStartCollaboration={() => {
-                setDesignFocusChatId("");
-                void handleEnsureWorkspaceChat(true);
-              }}
-              onUploadFiles={() => setUploadModalOpen(true)}
-            />
-          </div>
+            <div className={styles.columnStack}>
+              <ProjectOverviewCard
+                selectedProject={selectedProject}
+                projectFileCount={projectFileCount}
+                pipelineTemplateCount={pipelineTemplates.length}
+                pipelineRunCount={pipelineRuns.length}
+                projectWorkspaceSummary={projectWorkspaceSummary}
+                onStartCollaboration={() => {
+                  setDesignFocusChatId("");
+                  void handleEnsureWorkspaceChat(true);
+                }}
+                onUploadFiles={() => setUploadModalOpen(true)}
+              />
 
-          <div className={styles.columnMiddle}>
-            <ProjectAutomationPanel
-              selectedRunStatus={selectedRunSummary?.status}
-              selectedTemplateId={selectedTemplateId}
-              selectedRunId={selectedRunId}
-              selectedProjectExists={Boolean(selectedProject)}
-              pipelineTemplates={pipelineTemplates}
-              pipelineLoading={pipelineLoading}
-              pipelineRuns={pipelineRuns}
-              runsForSelectedTemplate={runsForSelectedTemplate}
-              activeRunTemplate={activeRunTemplate}
-              runDetail={runDetail}
-              runProgress={runProgress}
-              stepContractById={stepContractById}
-              selectedStepId={selectedStepId}
-              highlightedStepIds={highlightedStepIds}
-              createRunLoading={createRunLoading}
-              importLoading={importLoading}
-              importModalOpen={importModalOpen}
-              selectedPlatformTemplateId={selectedPlatformTemplateId}
-              platformTemplates={platformTemplates}
-              verificationGateSummary={verificationGateSummary}
-              canPromoteToTemplateDraft={canPromoteToTemplateDraft}
-              onBackToList={() => navigate("/projects")}
-              onUploadFiles={() => setUploadModalOpen(true)}
-              onOpenImportModal={() => {
-                void handleOpenImportModal();
-              }}
-              onCreateRun={() => {
-                void handleCreateRun();
-              }}
-              onStartAutomation={() => {
-                setWorkspaceFocusChatId("");
-                void handleEnsureDesignChat(true);
-              }}
-              onPrepareImplementationDraft={() => {
-                void handlePrepareImplementationDraft();
-              }}
-              onPrepareValidationDraft={() => {
-                void handlePrepareValidationDraft();
-              }}
-              onPreparePromotionDraft={() => {
-                void handlePreparePromotionDraft();
-              }}
-              onSelectTemplateId={setSelectedTemplateId}
-              onSelectRunId={setSelectedRunId}
-              onSelectStep={handleSelectStep}
-              onCloseImportModal={() => setImportModalOpen(false)}
-              onImportPlatformTemplate={() => {
-                void handleImportPlatformTemplate();
-              }}
-              onSelectPlatformTemplateId={setSelectedPlatformTemplateId}
-              formatRunTimeLabel={formatRunTimeLabel}
-              statusTagColor={statusTagColor}
-            />
-
-            <ProjectUploadModal
-              open={uploadModalOpen}
-              uploadingFiles={uploadingFiles}
-              pendingUploads={pendingUploads}
-              uploadTargetDir={uploadTargetDir}
-              onChangeUploadTargetDir={setUploadTargetDir}
-              onChangePendingUploads={setPendingUploads}
-              onUpload={() => {
-                void handleUploadFiles();
-              }}
-              onCancel={() => setUploadModalOpen(false)}
-            />
-
+              <Card
+                size="small"
+                title={t("projects.automationDrawer.title", "Automation")}
+                className={styles.automationSummaryCard}
+                extra={(
+                  <Button
+                    size="small"
+                    type="primary"
+                    onClick={() => setAutomationDrawerOpen(true)}
+                  >
+                    {t("projects.automationDrawer.open", "Open")}
+                  </Button>
+                )}
+              >
+                <div className={styles.automationSummaryMeta}>
+                  <Text type="secondary">{automationSummaryText}</Text>
+                  <Text type="secondary">
+                    {t("projects.automationSummary.counts", "Templates: {{templateCount}} | Runs: {{runCount}}", {
+                      templateCount: pipelineTemplates.length,
+                      runCount: pipelineRuns.length,
+                    })}
+                  </Text>
+                </div>
+              </Card>
+            </div>
           </div>
 
           <div className={styles.columnRight}>
@@ -1568,6 +1542,83 @@ export default function ProjectDetailPage() {
               }}
             />
           </div>
+
+          <Drawer
+            title={t("projects.automationDrawer.title", "Automation")}
+            placement="right"
+            width={460}
+            open={automationDrawerOpen}
+            onClose={() => setAutomationDrawerOpen(false)}
+            destroyOnHidden={false}
+          >
+            <ProjectAutomationPanel
+              selectedRunStatus={selectedRunSummary?.status}
+              selectedTemplateId={selectedTemplateId}
+              selectedRunId={selectedRunId}
+              selectedProjectExists={Boolean(selectedProject)}
+              pipelineTemplates={pipelineTemplates}
+              pipelineLoading={pipelineLoading}
+              pipelineRuns={pipelineRuns}
+              runsForSelectedTemplate={runsForSelectedTemplate}
+              activeRunTemplate={activeRunTemplate}
+              runDetail={runDetail}
+              runProgress={runProgress}
+              stepContractById={stepContractById}
+              selectedStepId={selectedStepId}
+              highlightedStepIds={highlightedStepIds}
+              createRunLoading={createRunLoading}
+              importLoading={importLoading}
+              importModalOpen={importModalOpen}
+              selectedPlatformTemplateId={selectedPlatformTemplateId}
+              platformTemplates={platformTemplates}
+              verificationGateSummary={verificationGateSummary}
+              canPromoteToTemplateDraft={canPromoteToTemplateDraft}
+              onBackToList={() => navigate("/projects")}
+              onUploadFiles={() => setUploadModalOpen(true)}
+              onOpenImportModal={() => {
+                void handleOpenImportModal();
+              }}
+              onCreateRun={() => {
+                void handleCreateRun();
+              }}
+              onStartAutomation={() => {
+                setWorkspaceFocusChatId("");
+                void handleEnsureDesignChat(true);
+              }}
+              onPrepareImplementationDraft={() => {
+                void handlePrepareImplementationDraft();
+              }}
+              onPrepareValidationDraft={() => {
+                void handlePrepareValidationDraft();
+              }}
+              onPreparePromotionDraft={() => {
+                void handlePreparePromotionDraft();
+              }}
+              onSelectTemplateId={setSelectedTemplateId}
+              onSelectRunId={setSelectedRunId}
+              onSelectStep={handleSelectStep}
+              onCloseImportModal={() => setImportModalOpen(false)}
+              onImportPlatformTemplate={() => {
+                void handleImportPlatformTemplate();
+              }}
+              onSelectPlatformTemplateId={setSelectedPlatformTemplateId}
+              formatRunTimeLabel={formatRunTimeLabel}
+              statusTagColor={statusTagColor}
+            />
+          </Drawer>
+
+          <ProjectUploadModal
+            open={uploadModalOpen}
+            uploadingFiles={uploadingFiles}
+            pendingUploads={pendingUploads}
+            uploadTargetDir={uploadTargetDir}
+            onChangeUploadTargetDir={setUploadTargetDir}
+            onChangePendingUploads={setPendingUploads}
+            onUpload={() => {
+              void handleUploadFiles();
+            }}
+            onCancel={() => setUploadModalOpen(false)}
+          />
         </div>
       )}
     </div>
