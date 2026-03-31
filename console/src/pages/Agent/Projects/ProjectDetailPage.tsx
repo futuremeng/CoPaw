@@ -1,24 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  MinusOutlined,
-  PlusOutlined,
-  SendOutlined,
-} from "@ant-design/icons";
-import {
   Alert,
   Button,
   Card,
-  Checkbox,
   Empty,
-  Input,
-  Modal,
   Popconfirm,
-  Switch,
   Spin,
-  Tag,
-  Tabs,
   Typography,
-  Upload,
   message,
 } from "antd";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
@@ -28,6 +16,9 @@ import { chatApi } from "../../../api/modules/chat";
 import ProjectAutomationPanel from "./ProjectAutomationPanel";
 import ProjectChatPanel, { type ProjectChatAutoAttachRequest } from "./ProjectChatPanel";
 import ProjectOverviewCard from "./ProjectOverviewCard";
+import ProjectUploadModal from "./ProjectUploadModal";
+import ProjectWorkbenchPanel from "./ProjectWorkbenchPanel";
+import useProjectUploadController from "./useProjectUploadController";
 import type { ChatSpec } from "../../../api/types/chat";
 import type {
   AgentProjectSummary,
@@ -43,7 +34,6 @@ import { useAgentStore } from "../../../stores/agentStore";
 import styles from "./index.module.less";
 
 const { Title, Text } = Typography;
-const { Dragger } = Upload;
 
 function getCurrentAgent(
   agents: AgentSummary[],
@@ -431,11 +421,7 @@ export default function ProjectDetailPage() {
   const [designFocusChatId, setDesignFocusChatId] = useState("");
   const [chatStarting, setChatStarting] = useState(false);
   const [selectedStepId, setSelectedStepId] = useState("");
-  const [uploadModalOpen, setUploadModalOpen] = useState(false);
-  const [uploadingFiles, setUploadingFiles] = useState(false);
   const [deletingProject, setDeletingProject] = useState(false);
-  const [pendingUploads, setPendingUploads] = useState<File[]>([]);
-  const [uploadTargetDir, setUploadTargetDir] = useState("data");
   const [autoAttachRequest, setAutoAttachRequest] = useState<ProjectChatAutoAttachRequest | null>(null);
   const [selectedAttachPaths, setSelectedAttachPaths] = useState<string[]>([]);
   const [sendingSelectedFiles, setSendingSelectedFiles] = useState(false);
@@ -468,123 +454,6 @@ export default function ProjectDetailPage() {
       ),
     [t],
   );
-
-  const shouldBlockLeave = useMemo(() => {
-    const runInProgress = runDetail?.status === "running" || runDetail?.status === "pending";
-    const designSessionActive = Boolean(designFocusChatId && !selectedRunId);
-
-    return Boolean(
-      selectedAttachPaths.length > 0 ||
-      pendingUploads.length > 0 ||
-      uploadModalOpen ||
-      importModalOpen ||
-      sendingSelectedFiles ||
-      uploadingFiles ||
-      chatStarting ||
-      createRunLoading ||
-      runInProgress ||
-      designSessionActive,
-    );
-  }, [
-    chatStarting,
-    createRunLoading,
-    designFocusChatId,
-    importModalOpen,
-    pendingUploads.length,
-    runDetail?.status,
-    selectedAttachPaths.length,
-    selectedRunId,
-    sendingSelectedFiles,
-    uploadModalOpen,
-    uploadingFiles,
-  ]);
-
-  useEffect(() => {
-    if (!shouldBlockLeave) {
-      return;
-    }
-
-    const rawPushState = window.history.pushState.bind(window.history);
-    const rawReplaceState = window.history.replaceState.bind(window.history);
-    const rawGo = window.history.go.bind(window.history);
-    const rawBack = window.history.back.bind(window.history);
-    const rawForward = window.history.forward.bind(window.history);
-
-    const shouldConfirmLeave = (nextUrl?: string | URL | null): boolean => {
-      if (!nextUrl) {
-        return false;
-      }
-      const current = new URL(window.location.href);
-      const target = new URL(String(nextUrl), window.location.origin);
-      return target.pathname !== current.pathname;
-    };
-
-    const confirmLeave = (): boolean => window.confirm(leaveConfirmText);
-
-    const patchedPushState: History["pushState"] = function patched(
-      data,
-      unused,
-      url,
-    ) {
-      if (shouldConfirmLeave(url) && !confirmLeave()) {
-        return;
-      }
-      rawPushState(data, unused, url);
-    };
-
-    const patchedReplaceState: History["replaceState"] = function patched(
-      data,
-      unused,
-      url,
-    ) {
-      if (shouldConfirmLeave(url) && !confirmLeave()) {
-        return;
-      }
-      rawReplaceState(data, unused, url);
-    };
-
-    const patchedGo: History["go"] = function patched(delta) {
-      if ((delta || 0) !== 0 && !confirmLeave()) {
-        return;
-      }
-      rawGo(delta);
-    };
-
-    const patchedBack: History["back"] = function patched() {
-      if (!confirmLeave()) {
-        return;
-      }
-      rawBack();
-    };
-
-    const patchedForward: History["forward"] = function patched() {
-      if (!confirmLeave()) {
-        return;
-      }
-      rawForward();
-    };
-
-    window.history.pushState = patchedPushState;
-    window.history.replaceState = patchedReplaceState;
-    window.history.go = patchedGo;
-    window.history.back = patchedBack;
-    window.history.forward = patchedForward;
-
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = leaveConfirmText;
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-
-    return () => {
-      window.history.pushState = rawPushState;
-      window.history.replaceState = rawReplaceState;
-      window.history.go = rawGo;
-      window.history.back = rawBack;
-      window.history.forward = rawForward;
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-    };
-  }, [leaveConfirmText, shouldBlockLeave]);
 
   const artifactRecords = useMemo<ProjectPipelineArtifactRecord[]>(() => {
     if (runDetail?.artifact_records?.length) {
@@ -865,6 +734,142 @@ export default function ProjectDetailPage() {
       setFilesLoading(false);
     }
   }, [t]);
+
+  const {
+    uploadModalOpen,
+    setUploadModalOpen,
+    uploadingFiles,
+    pendingUploads,
+    setPendingUploads,
+    uploadTargetDir,
+    setUploadTargetDir,
+    resetUploadState,
+    handleUploadFiles,
+  } = useProjectUploadController({
+    currentAgent,
+    selectedProject,
+    resolvedProjectRequestId,
+    setResolvedProjectRequestId,
+    buildProjectIdCandidates,
+    loadProjectFiles,
+  });
+
+  const shouldBlockLeave = useMemo(() => {
+    const runInProgress = runDetail?.status === "running" || runDetail?.status === "pending";
+    const designSessionActive = Boolean(designFocusChatId && !selectedRunId);
+
+    return Boolean(
+      selectedAttachPaths.length > 0 ||
+      pendingUploads.length > 0 ||
+      uploadModalOpen ||
+      importModalOpen ||
+      sendingSelectedFiles ||
+      uploadingFiles ||
+      chatStarting ||
+      createRunLoading ||
+      runInProgress ||
+      designSessionActive,
+    );
+  }, [
+    chatStarting,
+    createRunLoading,
+    designFocusChatId,
+    importModalOpen,
+    pendingUploads.length,
+    runDetail?.status,
+    selectedAttachPaths.length,
+    selectedRunId,
+    sendingSelectedFiles,
+    uploadModalOpen,
+    uploadingFiles,
+  ]);
+
+  useEffect(() => {
+    if (!shouldBlockLeave) {
+      return;
+    }
+
+    const rawPushState = window.history.pushState.bind(window.history);
+    const rawReplaceState = window.history.replaceState.bind(window.history);
+    const rawGo = window.history.go.bind(window.history);
+    const rawBack = window.history.back.bind(window.history);
+    const rawForward = window.history.forward.bind(window.history);
+
+    const shouldConfirmLeave = (nextUrl?: string | URL | null): boolean => {
+      if (!nextUrl) {
+        return false;
+      }
+      const current = new URL(window.location.href);
+      const target = new URL(String(nextUrl), window.location.origin);
+      return target.pathname !== current.pathname;
+    };
+
+    const confirmLeave = (): boolean => window.confirm(leaveConfirmText);
+
+    const patchedPushState: History["pushState"] = function patched(
+      data,
+      unused,
+      url,
+    ) {
+      if (shouldConfirmLeave(url) && !confirmLeave()) {
+        return;
+      }
+      rawPushState(data, unused, url);
+    };
+
+    const patchedReplaceState: History["replaceState"] = function patched(
+      data,
+      unused,
+      url,
+    ) {
+      if (shouldConfirmLeave(url) && !confirmLeave()) {
+        return;
+      }
+      rawReplaceState(data, unused, url);
+    };
+
+    const patchedGo: History["go"] = function patched(delta) {
+      if ((delta || 0) !== 0 && !confirmLeave()) {
+        return;
+      }
+      rawGo(delta);
+    };
+
+    const patchedBack: History["back"] = function patched() {
+      if (!confirmLeave()) {
+        return;
+      }
+      rawBack();
+    };
+
+    const patchedForward: History["forward"] = function patched() {
+      if (!confirmLeave()) {
+        return;
+      }
+      rawForward();
+    };
+
+    window.history.pushState = patchedPushState;
+    window.history.replaceState = patchedReplaceState;
+    window.history.go = patchedGo;
+    window.history.back = patchedBack;
+    window.history.forward = patchedForward;
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = leaveConfirmText;
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.history.pushState = rawPushState;
+      window.history.replaceState = rawReplaceState;
+      window.history.go = rawGo;
+      window.history.back = rawBack;
+      window.history.forward = rawForward;
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [leaveConfirmText, shouldBlockLeave]);
 
   const loadFileContent = useCallback(async (
     agentId: string,
@@ -1567,13 +1572,11 @@ export default function ProjectDetailPage() {
     setRunFocusChatId("");
     setWorkspaceFocusChatId("");
     setDesignFocusChatId("");
-    setUploadModalOpen(false);
-    setPendingUploads([]);
-    setUploadTargetDir("data");
+    resetUploadState();
     setSelectedAttachPaths([]);
     setSendingSelectedFiles(false);
     runRestoreAttemptKeyRef.current = "";
-  }, [routeProjectId]);
+  }, [resetUploadState, routeProjectId]);
 
   useEffect(() => {
     const query = new URLSearchParams(location.search);
@@ -1584,7 +1587,7 @@ export default function ProjectDetailPage() {
     query.delete("openUpload");
     const next = query.toString();
     navigate(`${location.pathname}${next ? `?${next}` : ""}`, { replace: true });
-  }, [location.pathname, location.search, navigate]);
+  }, [location.pathname, location.search, navigate, setUploadModalOpen]);
 
   useEffect(() => {
     if (!selectedStepId) {
@@ -1735,65 +1738,6 @@ export default function ProjectDetailPage() {
   const handleSelectStep = useCallback((stepId: string) => {
     setSelectedStepId((prev) => (prev === stepId ? "" : stepId));
   }, []);
-
-  const handleUploadFiles = useCallback(async () => {
-    if (!currentAgent || !selectedProject || pendingUploads.length === 0) {
-      return;
-    }
-
-    setUploadingFiles(true);
-    const projectIds = [resolvedProjectRequestId, ...buildProjectIdCandidates(selectedProject)]
-      .map((item) => item.trim())
-      .filter(Boolean);
-    const uniqueProjectIds = Array.from(new Set(projectIds));
-    try {
-      let uploadedCount = 0;
-      for (const file of pendingUploads) {
-        let uploaded = false;
-        for (const projectRequestId of uniqueProjectIds) {
-          try {
-            await agentsApi.uploadProjectFile(
-              currentAgent.id,
-              projectRequestId,
-              file,
-              uploadTargetDir || "data",
-            );
-            setResolvedProjectRequestId(projectRequestId);
-            uploaded = true;
-            uploadedCount += 1;
-            break;
-          } catch {
-            // Try next id candidate.
-          }
-        }
-        if (!uploaded) {
-          throw new Error(`upload_failed:${file.name}`);
-        }
-      }
-
-      await loadProjectFiles(currentAgent.id, selectedProject);
-      setUploadModalOpen(false);
-      setPendingUploads([]);
-      message.success(
-        t("projects.upload.success", "Uploaded {{count}} file(s) to project.", {
-          count: uploadedCount,
-        }),
-      );
-    } catch (err) {
-      console.error("failed to upload project files", err);
-      message.error(t("projects.upload.failed", "Failed to upload project files."));
-    } finally {
-      setUploadingFiles(false);
-    }
-  }, [
-    currentAgent,
-    loadProjectFiles,
-    pendingUploads,
-    resolvedProjectRequestId,
-    selectedProject,
-    t,
-    uploadTargetDir,
-  ]);
 
   const handleDeleteProject = useCallback(async () => {
     if (!currentAgent || !selectedProject) {
@@ -2258,404 +2202,59 @@ export default function ProjectDetailPage() {
               statusTagColor={statusTagColor}
             />
 
-            <Modal
-              title={t("projects.upload.title", "Upload Project Files")}
+            <ProjectUploadModal
               open={uploadModalOpen}
-              width={760}
-              confirmLoading={uploadingFiles}
-              onOk={() => void handleUploadFiles()}
+              uploadingFiles={uploadingFiles}
+              pendingUploads={pendingUploads}
+              uploadTargetDir={uploadTargetDir}
+              onChangeUploadTargetDir={setUploadTargetDir}
+              onChangePendingUploads={setPendingUploads}
+              onUpload={() => {
+                void handleUploadFiles();
+              }}
               onCancel={() => setUploadModalOpen(false)}
-              okButtonProps={{ disabled: pendingUploads.length === 0 }}
-              okText={t("projects.upload.confirm", "Upload")}
-            >
-              <div className={styles.uploadModalBody}>
-                <Input
-                  value={uploadTargetDir}
-                  onChange={(event) => setUploadTargetDir(event.target.value)}
-                  placeholder={t("projects.upload.targetDir", "Target directory (default: data)")}
-                />
-                <Dragger
-                  className={styles.uploadDragger}
-                  multiple
-                  beforeUpload={(file) => {
-                    setPendingUploads((prev) => {
-                      const exists = prev.some((item) => item.name === file.name && item.size === file.size);
-                      return exists ? prev : [...prev, file as File];
-                    });
-                    return false;
-                  }}
-                  onRemove={(file) => {
-                    setPendingUploads((prev) => prev.filter((item) => !(item.name === file.name && item.size === file.size)));
-                    return true;
-                  }}
-                  fileList={pendingUploads.map((file, index) => ({
-                    uid: `${file.name}-${file.size}-${index}`,
-                    name: file.name,
-                    status: "done" as const,
-                    size: file.size,
-                    type: file.type,
-                  }))}
-                >
-                  <p>{t("projects.upload.dragHint", "Drag files here or click to select")}</p>
-                </Dragger>
-              </div>
-            </Modal>
+            />
 
           </div>
 
           <div className={styles.columnRight}>
-            <Card
-              style={{
-                height: "100%",
-                display: "flex",
-                flexDirection: "column",
-                minHeight: 0,
-                overflow: "hidden",
+            <ProjectWorkbenchPanel
+              projectLabel={selectedProject?.id || routeProjectId}
+              filesLoading={filesLoading}
+              contentLoading={contentLoading}
+              hideBuiltInFiles={hideBuiltInFiles}
+              artifactRecords={artifactRecords}
+              groupedArtifactRecords={groupedArtifactRecords}
+              selectedArtifactRecord={selectedArtifactRecord}
+              selectedFilePath={selectedFilePath}
+              selectedStepId={selectedStepId}
+              relatedArtifactPathsForSelectedStep={relatedArtifactPathsForSelectedStep}
+              projectFiles={projectFiles}
+              fileContent={fileContent}
+              selectedAttachPaths={selectedAttachPaths}
+              autoAnalyzeOnAttach={autoAnalyzeOnAttach}
+              sendingSelectedFiles={sendingSelectedFiles}
+              runDetail={runDetail}
+              runProgress={runProgress}
+              onToggleHideBuiltInFiles={setHideBuiltInFiles}
+              onClearArtifactFocus={() => {
+                setSelectedStepId("");
+                setSelectedFilePath("");
               }}
-              title={
-                <span className={styles.sectionTitle}>{t("projects.preview", "Workbench")}</span>
-              }
-              styles={{
-                body: {
-                  padding: 0,
-                  display: "flex",
-                  flexDirection: "column",
-                  minHeight: 0,
-                  overflow: "hidden",
-                },
+              onSelectArtifactFile={(path) => {
+                void handleSelectArtifactFile(path);
               }}
-              extra={
-                <Text type="secondary" className={styles.panelExtraText}>
-                  {selectedProject?.id || routeProjectId}
-                </Text>
-              }
-            >
-              <Tabs
-                className={styles.rightTabs}
-                items={[
-                  {
-                    key: "artifacts",
-                    label: t("projects.artifacts", "Artifacts"),
-                    children: (
-                      <div className={`${styles.previewBody} ${styles.previewBodyArtifacts}`}>
-                        {filesLoading ? (
-                          <div className={styles.centerState}>
-                            <Spin />
-                          </div>
-                        ) : artifactRecords.length === 0 ? (
-                          <Empty
-                            image={Empty.PRESENTED_IMAGE_SIMPLE}
-                            description={t("projects.noFiles", "No files in this project")}
-                          />
-                        ) : (
-                          <div className={styles.artifactPanel}>
-                            <div className={styles.artifactList}>
-                              <div className={styles.artifactToolbar}>
-                                <div className={styles.itemMeta}>
-                                  {t("projects.artifacts.hideBuiltins", "Hide built-in files")}
-                                </div>
-                                <Switch
-                                  size="small"
-                                  checked={hideBuiltInFiles}
-                                  onChange={setHideBuiltInFiles}
-                                />
-                              </div>
-                              {(selectedStepId || selectedArtifactRecord) && (
-                                <div className={styles.focusBar}>
-                                  <div className={styles.itemMeta}>
-                                    {selectedStepId
-                                      ? t("projects.artifacts.filteredByStep", "Filtered by step: {{stepId}}", {
-                                          stepId: selectedStepId,
-                                        })
-                                      : selectedArtifactRecord
-                                        ? t("projects.artifacts.focusedArtifact", "Focused artifact relation")
-                                        : ""}
-                                  </div>
-                                  <Button
-                                    size="small"
-                                    onClick={() => {
-                                      setSelectedStepId("");
-                                      setSelectedFilePath("");
-                                    }}
-                                  >
-                                    {t("common.clear", "Clear")}
-                                  </Button>
-                                </div>
-                              )}
-                              {groupedArtifactRecords.map((group) => (
-                                <div key={group.key} className={styles.artifactGroup}>
-                                  <div className={styles.artifactGroupTitle}>{group.title}</div>
-                                  {group.items.map((item) => {
-                                    const selected = item.path === selectedFilePath;
-                                    const artifactRelated =
-                                      Boolean(selectedStepId) && relatedArtifactPathsForSelectedStep.has(item.path);
-                                    const fileInfo = projectFiles.find((file) => file.path === item.path);
-                                    return (
-                                      <div
-                                        key={item.artifact_id}
-                                        role="button"
-                                        tabIndex={0}
-                                        className={`${styles.listItem} ${selected ? styles.selected : ""} ${artifactRelated && !selected ? styles.related : ""}`}
-                                        onClick={() => {
-                                          void handleSelectArtifactFile(item.path);
-                                        }}
-                                        onKeyDown={(event) => {
-                                          if (event.key === "Enter" || event.key === " ") {
-                                            event.preventDefault();
-                                            void handleSelectArtifactFile(item.path);
-                                          }
-                                        }}
-                                      >
-                                        <div className={styles.itemTitleRow}>
-                                          <div className={styles.itemTitleMain}>
-                                            <div className={styles.itemTitle}>{item.name}</div>
-                                          </div>
-                                          <div className={styles.itemActions}>
-                                            <Tag color={
-                                              item.kind === "source"
-                                                ? "default"
-                                                : item.kind === "final"
-                                                  ? "success"
-                                                  : "processing"
-                                            }>
-                                              {item.kind}
-                                            </Tag>
-                                          </div>
-                                        </div>
-                                        <div className={styles.itemMeta}>{item.path}</div>
-                                        <div className={styles.itemMeta}>
-                                          {item.producer_step_name
-                                            ? t("projects.artifacts.producedBy", "Produced by: {{step}}", {
-                                                step: item.producer_step_name,
-                                              })
-                                            : t("projects.artifacts.originalFile", "Original project file")}
-                                        </div>
-                                        {fileInfo && (
-                                          <div className={styles.itemMeta}>
-                                            {formatBytes(fileInfo.size)} · {fileInfo.modified_time}
-                                          </div>
-                                        )}
-                                        <div className={styles.listItemFooter}>
-                                          <Button
-                                            size="small"
-                                            type="text"
-                                            icon={selectedAttachPaths.includes(item.path) ? <MinusOutlined /> : <PlusOutlined />}
-                                            className={styles.attachActionButton}
-                                            onClick={(event) => {
-                                              event.stopPropagation();
-                                              void handleAttachArtifactToChat(item.path);
-                                            }}
-                                          />
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              ))}
-                            </div>
-                            <div className={styles.previewPane}>
-                              {contentLoading ? (
-                                <div className={styles.centerState}>
-                                  <Spin />
-                                </div>
-                              ) : selectedFilePath ? (
-                                <>
-                                  {selectedArtifactRecord && (
-                                    <div className={styles.artifactDetailCard}>
-                                      <div className={styles.itemTitleRow}>
-                                        <div className={styles.itemTitle}>{selectedArtifactRecord.name}</div>
-                                        <Tag color={
-                                          selectedArtifactRecord.kind === "source"
-                                            ? "default"
-                                            : selectedArtifactRecord.kind === "final"
-                                              ? "success"
-                                              : "processing"
-                                        }>
-                                          {selectedArtifactRecord.kind}
-                                        </Tag>
-                                      </div>
-                                      <div className={styles.itemMeta}>{selectedArtifactRecord.path}</div>
-                                      <div className={styles.itemMeta}>
-                                        {selectedArtifactRecord.producer_step_name
-                                          ? t("projects.artifacts.producedBy", "Produced by: {{step}}", {
-                                              step: selectedArtifactRecord.producer_step_name,
-                                            })
-                                          : t("projects.artifacts.originalFile", "Original project file")}
-                                      </div>
-                                      <div className={styles.itemMeta}>
-                                        {t("projects.artifacts.consumedBy", "Consumed by")}: {selectedArtifactRecord.consumer_step_names.join(", ") || "-"}
-                                      </div>
-                                      <div className={styles.lineageRow}>
-                                        <span className={styles.lineageLabel}>
-                                          {t("projects.artifacts.lineage", "Lineage")}
-                                        </span>
-                                        <div className={styles.lineageFlow}>
-                                          {selectedArtifactRecord.producer_step_name ? (
-                                            <button
-                                              type="button"
-                                              className={styles.lineageNode}
-                                              onClick={() => handleSelectStep(selectedArtifactRecord.producer_step_id || "")}
-                                            >
-                                              {selectedArtifactRecord.producer_step_name}
-                                            </button>
-                                          ) : (
-                                            <span className={styles.lineageTerminal}>
-                                              {t("projects.artifacts.sourceTerminal", "Project Source")}
-                                            </span>
-                                          )}
-                                          <span className={styles.lineageArrow}>-&gt;</span>
-                                          <span className={styles.lineageArtifact}>{selectedArtifactRecord.name}</span>
-                                          <span className={styles.lineageArrow}>-&gt;</span>
-                                          {selectedArtifactRecord.consumer_step_names.length > 0 ? (
-                                            <div className={styles.lineageConsumerList}>
-                                              {selectedArtifactRecord.consumer_step_names.map((consumerName, index) => (
-                                                <button
-                                                  key={`${selectedArtifactRecord.artifact_id}-${consumerName}`}
-                                                  type="button"
-                                                  className={styles.lineageNode}
-                                                  onClick={() => handleSelectStep(selectedArtifactRecord.consumer_step_ids[index] || "")}
-                                                >
-                                                  {consumerName}
-                                                </button>
-                                              ))}
-                                            </div>
-                                          ) : (
-                                            <span className={styles.lineageTerminal}>
-                                              {t("projects.artifacts.finalTerminal", "Terminal Output")}
-                                            </span>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  )}
-                                  <pre className={styles.previewContent}>{fileContent}</pre>
-                                </>
-                              ) : (
-                                <Empty
-                                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                                  description={t("projects.selectFile", "Select a file to preview")}
-                                />
-                              )}
-                            </div>
-                            {selectedAttachPaths.length > 0 && (
-                              <div className={styles.attachFloatingBar}>
-                                <div className={styles.attachCountText}>
-                                  {t("projects.chat.selectedCount", "Selected files: {{count}}", {
-                                    count: selectedAttachPaths.length,
-                                  })}
-                                </div>
-                                <Checkbox
-                                  className={styles.attachAutoAnalyzeCheck}
-                                  checked={autoAnalyzeOnAttach}
-                                  onChange={(event) => setAutoAnalyzeOnAttach(event.target.checked)}
-                                >
-                                  {t("projects.chat.autoAnalyze", "Auto Analyze")}
-                                </Checkbox>
-                                <Button
-                                  type="primary"
-                                  size="small"
-                                  icon={<SendOutlined />}
-                                  loading={sendingSelectedFiles}
-                                  onClick={() => void handleSendSelectedFilesToChat()}
-                                >
-                                  {t("projects.chat.sendSelected", "Attach To Chat")}
-                                </Button>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ),
-                  },
-                  {
-                    key: "metrics",
-                    label: t("projects.metrics", "Metrics"),
-                    children: (
-                      <div className={styles.previewBody}>
-                        {!runDetail ? (
-                          <Empty
-                            image={Empty.PRESENTED_IMAGE_SIMPLE}
-                            description={t("projects.pipeline.noRun", "No run")}
-                          />
-                        ) : (
-                          <div className={styles.metricPanel}>
-                            <div className={styles.metricSummaryGrid}>
-                              <div className={styles.metricSummaryCard}>
-                                <div className={styles.itemMeta}>Total Steps</div>
-                                <div className={styles.metricSummaryValue}>{runProgress.total}</div>
-                              </div>
-                              <div className={styles.metricSummaryCard}>
-                                <div className={styles.itemMeta}>Completed</div>
-                                <div className={styles.metricSummaryValue}>{runProgress.completed}</div>
-                              </div>
-                              <div className={styles.metricSummaryCard}>
-                                <div className={styles.itemMeta}>Running</div>
-                                <div className={styles.metricSummaryValue}>{runProgress.running}</div>
-                              </div>
-                              <div className={styles.metricSummaryCard}>
-                                <div className={styles.itemMeta}>Pending</div>
-                                <div className={styles.metricSummaryValue}>{runProgress.pending}</div>
-                              </div>
-                            </div>
-                            {runDetail.steps.map((step) => {
-                              const entries = Object.entries(step.metrics || {});
-                              return (
-                                <div key={step.id} className={styles.metricBlock}>
-                                  <div className={styles.itemTitleRow}>
-                                    <span className={styles.itemTitle}>{step.name}</span>
-                                    <Tag color={statusTagColor(step.status)}>{step.status}</Tag>
-                                  </div>
-                                  {entries.length === 0 ? (
-                                    <div className={styles.itemMeta}>No metrics</div>
-                                  ) : (
-                                    entries.map(([key, value]) => (
-                                      <div key={key} className={styles.itemMeta}>
-                                        {key}: {String(value)}
-                                      </div>
-                                    ))
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    ),
-                  },
-                  {
-                    key: "evidence",
-                    label: t("projects.evidence", "Evidence"),
-                    children: (
-                      <div className={styles.previewBody}>
-                        {!runDetail ? (
-                          <Empty
-                            image={Empty.PRESENTED_IMAGE_SIMPLE}
-                            description={t("projects.pipeline.noRun", "No run")}
-                          />
-                        ) : (
-                          <div className={styles.metricPanel}>
-                            {runDetail.steps.map((step) => (
-                              <div key={step.id} className={styles.metricBlock}>
-                                <div className={styles.itemTitle}>{step.name}</div>
-                                {step.evidence.length === 0 ? (
-                                  <div className={styles.itemMeta}>No evidence</div>
-                                ) : (
-                                  step.evidence.map((item) => (
-                                    <div key={`${step.id}-${item}`} className={styles.itemMeta}>
-                                      {item}
-                                    </div>
-                                  ))
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ),
-                  },
-                ]}
-              />
-            </Card>
+              onAttachArtifactToChat={(path) => {
+                void handleAttachArtifactToChat(path);
+              }}
+              onSelectStep={handleSelectStep}
+              onToggleAutoAnalyze={setAutoAnalyzeOnAttach}
+              onSendSelectedFilesToChat={() => {
+                void handleSendSelectedFilesToChat();
+              }}
+              statusTagColor={statusTagColor}
+              formatBytes={formatBytes}
+            />
           </div>
 
           <div className={styles.columnChat}>
