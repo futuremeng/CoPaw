@@ -197,6 +197,51 @@ def test_extract_market_items_builds_install_url_with_branch_and_path() -> None:
     assert items[0].description == "Python 开发技能"
 
 
+def test_extract_market_items_builds_blob_install_url_for_markdown_file() -> None:
+    market_payload = SkillsMarketPayload(
+        version=1,
+        cache={"ttl_sec": 600},
+        install={"overwrite_default": False},
+        markets=[
+            SkillMarketSpec(
+                id="official",
+                name="Official",
+                url="https://github.com/example/skills.git",
+                branch="main",
+                path="index.json",
+                enabled=True,
+                order=1,
+            ),
+        ],
+    )
+    market = _payload_to_market_config(market_payload).markets[0]
+
+    items, errors = _extract_market_items(
+        market,
+        {
+            "skills": [
+                {
+                    "skill_id": "weather",
+                    "name": "Weather",
+                    "source": {
+                        "type": "git",
+                        "url": "https://github.com/example/skills.git",
+                        "branch": "main",
+                        "path": "skills/weather.md",
+                    },
+                },
+            ],
+        },
+    )
+
+    assert errors == []
+    assert len(items) == 1
+    assert (
+        items[0].install_url
+        == "https://github.com/example/skills/blob/main/skills/weather.md"
+    )
+
+
 def test_extract_market_items_returns_error_for_invalid_skills_field() -> None:
     market_payload = SkillsMarketPayload(
         version=1,
@@ -311,6 +356,38 @@ def test_generate_market_index_from_directory_scans_skill_folders(
     assert index_doc["skills"][0]["skill_id"] == "weather"
     assert index_doc["skills"][0]["name"] == "weather"
     assert index_doc["skills"][0]["source"]["path"] == "skills/weather"
+
+
+def test_generate_market_index_from_directory_scans_markdown_files(
+    tmp_path: Path,
+) -> None:
+    repo_dir = tmp_path / "repo"
+    skills_dir = repo_dir / "skills"
+    skills_dir.mkdir(parents=True)
+    (skills_dir / "weather.md").write_text(
+        "# Weather Assistant\n\nQuery weather quickly.\n",
+        encoding="utf-8",
+    )
+    market = SkillMarketSpec(
+        id="openclaw",
+        name="OpenClaw Skills",
+        url="https://github.com/openclaw/openclaw.git",
+        branch="main",
+        path="skills",
+        enabled=True,
+        order=1,
+    )
+
+    index_doc, warnings = _generate_market_index_from_directory(
+        market,
+        skills_dir,
+        effective_branch="main",
+    )
+
+    assert warnings == []
+    assert len(index_doc["skills"]) == 1
+    assert index_doc["skills"][0]["skill_id"] == "weather"
+    assert index_doc["skills"][0]["source"]["path"] == "skills/weather.md"
 
 
 def test_validate_market_maps_index_value_error_to_http_400(

@@ -30,6 +30,8 @@ export interface MarketplaceDrawerProps {
   marketErrors: MarketError[];
   marketMeta: MarketplaceMeta | null;
   marketplaceLoading: boolean;
+  loadingMarketKey: string | null;
+  onLoadMarket: (idx: number) => Promise<void>;
   onRefreshMarketplace: () => void;
   installingSkillKey: string | null;
   onInstallSkill: (marketId: string, skillId: string) => Promise<boolean>;
@@ -95,6 +97,8 @@ export function MarketplaceDrawer({
   marketErrors,
   marketMeta,
   marketplaceLoading,
+  loadingMarketKey,
+  onLoadMarket,
   onRefreshMarketplace,
   installingSkillKey,
   onInstallSkill,
@@ -822,6 +826,10 @@ export function MarketplaceDrawer({
                 const runningType = marketBusy ? bulkActionState?.type : null;
                 const anyBulkRunning = bulkActionState !== null;
                 const marketDisabled = !market.enabled;
+                const marketKey = market.id?.trim() || `market-${idx}`;
+                const hasMarketError = marketErrors.some(
+                  (err) => err.market_id === market.id,
+                );
                 return (
               <div
                 key={`${market.id}-${idx}`}
@@ -844,10 +852,26 @@ export function MarketplaceDrawer({
                 <div className={styles.marketRowBulkActions}>
                   <Button
                     size="small"
-                    disabled={anyBulkRunning}
+                    disabled={anyBulkRunning || loadingMarketKey !== null}
                     onClick={() => handleEditRow(idx)}
                   >
                     {t("skills.marketEditRow")}
+                  </Button>
+                  <Button
+                    size="small"
+                    loading={loadingMarketKey === marketKey}
+                    disabled={
+                      marketDisabled ||
+                      anyBulkRunning ||
+                      (loadingMarketKey !== null && loadingMarketKey !== marketKey)
+                    }
+                    onClick={() => {
+                      void onLoadMarket(idx);
+                    }}
+                  >
+                    {hasMarketError
+                      ? t("skills.marketRetryLoad")
+                      : t("skills.marketLoad")}
                   </Button>
                   <span
                     className={

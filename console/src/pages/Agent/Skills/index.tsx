@@ -72,6 +72,7 @@ function SkillsPage() {
   const [marketErrors, setMarketErrors] = useState<MarketError[]>([]);
   const [marketMeta, setMarketMeta] = useState<MarketplaceMeta | null>(null);
   const [marketplaceLoading, setMarketplaceLoading] = useState(false);
+  const [loadingMarketKey, setLoadingMarketKey] = useState<string | null>(null);
   const [installingSkillKey, setInstallingSkillKey] = useState<string | null>(
     null,
   );
@@ -176,6 +177,16 @@ function SkillsPage() {
     setMarketConfigLoaded(true);
   };
 
+  const buildValidateMarketPayload = (row: SkillsMarketSpec) => ({
+    id: row.id,
+    name: row.name,
+    url: row.url,
+    branch: row.branch,
+    path: row.path,
+    enabled: row.enabled,
+    order: row.order,
+  });
+
   const refreshMarketplace = async (refresh = true) => {
     setMarketplaceLoading(true);
     try {
@@ -183,10 +194,12 @@ function SkillsPage() {
       setMarketplace(res.items ?? []);
       setMarketErrors(res.market_errors ?? []);
       setMarketMeta(res.meta ?? null);
+      return true;
     } catch (error) {
       message.error(
         error instanceof Error ? error.message : t("common.refresh"),
       );
+      return false;
     } finally {
       setMarketplaceLoading(false);
     }
@@ -226,15 +239,7 @@ function SkillsPage() {
 
   const handleValidateMarket = async (idx: number, draft?: SkillsMarketSpec) => {
     const row = draft ?? marketDrafts[idx];
-    const validated = await api.validateSkillMarket({
-      id: row.id,
-      name: row.name,
-      url: row.url,
-      branch: row.branch,
-      path: row.path,
-      enabled: row.enabled,
-      order: row.order,
-    });
+    const validated = await api.validateSkillMarket(buildValidateMarketPayload(row));
     setMarketDrafts((prev) =>
       prev.map((item, i) => (i === idx ? validated.normalized : item)),
     );
@@ -242,6 +247,51 @@ function SkillsPage() {
       message.warning(validated.warnings.join("; "));
     } else {
       message.success(t("common.save"));
+    }
+  };
+
+  const handleLoadMarket = async (idx: number) => {
+    const row = marketDrafts[idx];
+    if (!row) {
+      return;
+    }
+
+    const marketKey = row.id?.trim() || `market-${idx}`;
+    setLoadingMarketKey(marketKey);
+    try {
+      const validated = await api.validateSkillMarket(
+        buildValidateMarketPayload(row),
+      );
+      setMarketDrafts((prev) =>
+        prev.map((item, i) => (i === idx ? validated.normalized : item)),
+      );
+
+      const refreshed = await refreshMarketplace(true);
+      if (!refreshed) {
+        return;
+      }
+
+      if (validated.warnings?.length) {
+        message.warning(validated.warnings.join("; "));
+        return;
+      }
+
+      message.success(
+        t("skills.marketLoadSuccess", {
+          marketId:
+            validated.normalized.id || row.id || row.name || `#${idx + 1}`,
+        }),
+      );
+    } catch (error) {
+      const detail = parseErrorDetail(error);
+      message.error(
+        detail?.message ||
+          t("skills.marketLoadFailed", {
+            marketId: row.id || row.name || `#${idx + 1}`,
+          }),
+      );
+    } finally {
+      setLoadingMarketKey(null);
     }
   };
 
@@ -818,6 +868,8 @@ function SkillsPage() {
         marketErrors={marketErrors}
         marketMeta={marketMeta}
         marketplaceLoading={marketplaceLoading}
+        loadingMarketKey={loadingMarketKey}
+        onLoadMarket={handleLoadMarket}
         onRefreshMarketplace={() => {
           void refreshMarketplace(true);
         }}

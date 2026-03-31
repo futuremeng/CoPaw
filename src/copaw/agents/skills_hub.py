@@ -685,6 +685,8 @@ def _normalize_bundle(
             name = post.get("name", "")
         except yaml.YAMLError:
             name = ""
+    if not isinstance(name, str):
+        name = ""
     if not name:
         raise ValueError("Hub bundle missing skill name")
 
@@ -759,6 +761,113 @@ def _sanitize_skill_dir_name(name: str) -> str:
         sanitized = _normalize_skill_key(name)
         return sanitized or _safe_fallback_name(name)
     return name
+
+
+def _is_markdown_skill_path(path_hint: str) -> bool:
+    lowered = path_hint.lower().strip()
+    return lowered.endswith(".md") or lowered.endswith(".markdown")
+
+
+def _humanize_markdown_skill_name(raw: str) -> str:
+    cleaned = str(raw or "").strip()
+    if not cleaned:
+        return "Imported Skill"
+    return cleaned.replace("_", " ").replace("-", " ").strip() or cleaned
+
+
+def _extract_markdown_heading(markdown_text: str) -> str:
+    for line in markdown_text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("#"):
+            continue
+        heading = stripped.lstrip("#").strip()
+        if heading:
+            return heading
+    return ""
+
+
+def _extract_markdown_description(markdown_text: str) -> str:
+    lines: list[str] = []
+    in_code_block = False
+    for line in markdown_text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            in_code_block = not in_code_block
+            continue
+        if in_code_block:
+            continue
+        if not stripped:
+            if lines:
+                break
+            continue
+        if stripped.startswith("#"):
+            if lines:
+                break
+            continue
+        lines.append(stripped)
+    return " ".join(lines).strip()
+
+
+def _normalize_markdown_skill_document(
+    markdown_text: str,
+    *,
+    fallback_name: str,
+) -> tuple[str, str]:
+    body = markdown_text
+    metadata: dict[str, Any] = {}
+    try:
+        post = frontmatter.loads(markdown_text)
+        body = post.content
+        metadata = dict(post.metadata or {})
+    except yaml.YAMLError:
+        metadata = {}
+        body = markdown_text
+
+    name = metadata.get("name")
+    if not isinstance(name, str) or not name.strip():
+        name = _extract_markdown_heading(body) or _humanize_markdown_skill_name(
+            fallback_name,
+        )
+    else:
+        name = name.strip()
+
+    description = metadata.get("description")
+    if not isinstance(description, str) or not description.strip():
+        description = _extract_markdown_description(body)
+        if not description:
+            description = f"Imported from {fallback_name}"
+    else:
+        description = description.strip()
+
+    metadata["name"] = name
+    metadata["description"] = description
+    normalized = frontmatter.dumps(frontmatter.Post(body, **metadata))
+    return normalized, name
+
+
+def _fetch_bundle_from_github_markdown_file(
+    *,
+    owner: str,
+    repo: str,
+    path_hint: str,
+    branch: str,
+) -> tuple[Any, str]:
+    entry = _github_get_content_entry(owner, repo, path_hint, branch)
+    if str(entry.get("type") or "") != "file":
+        raise ValueError(
+            f"GitHub path does not point to a file: {path_hint}",
+        )
+
+    markdown_text = _github_read_file(entry)
+    fallback_name = Path(path_hint).stem or repo
+    normalized_content, skill_name = _normalize_markdown_skill_document(
+        markdown_text,
+        fallback_name=fallback_name,
+    )
+    return {
+        "name": skill_name,
+        "files": {"SKILL.md": normalized_content},
+    }, f"https://github.com/{owner}/{repo}"
 
 
 def _is_http_url(text: str) -> bool:
@@ -1289,6 +1398,14 @@ def _fetch_bundle_from_github_url(
         default_branch = _github_get_default_branch(owner, repo)
     except Exception:
         pass
+    resolved_branch = branch or default_branch or "main"
+    if path_hint and _is_markdown_skill_path(path_hint):
+        return _fetch_bundle_from_github_markdown_file(
+            owner=owner,
+            repo=repo,
+            path_hint=path_hint,
+            branch=resolved_branch,
+        )
     return _fetch_bundle_from_repo_and_skill_hint(
         owner=owner,
         repo=repo,

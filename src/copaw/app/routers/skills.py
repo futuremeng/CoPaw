@@ -462,6 +462,41 @@ def _market_repo_web_url(url: str) -> str:
     return raw
 
 
+def _is_markdown_market_file(path: Path) -> bool:
+    suffix = path.suffix.lower()
+    if suffix not in {".md", ".markdown"}:
+        return False
+    return path.name.lower() not in {
+        "readme.md",
+        "readme.markdown",
+        "index.md",
+        "index.markdown",
+    }
+
+
+def _build_market_skill_entry(
+    market: SkillMarketSpec,
+    *,
+    skill_id: str,
+    name: str,
+    source_path: str,
+    branch: str,
+) -> dict[str, Any]:
+    return {
+        "skill_id": skill_id,
+        "name": name,
+        "description": "",
+        "version": "",
+        "source": {
+            "type": "git",
+            "url": market.url,
+            "branch": branch,
+            "path": source_path,
+        },
+        "tags": [],
+    }
+
+
 def _generate_market_index_from_directory(
     market: SkillMarketSpec,
     skills_dir: Path,
@@ -472,29 +507,73 @@ def _generate_market_index_from_directory(
     warnings: list[str] = []
     skills: list[dict[str, Any]] = []
     for sub in sorted(skills_dir.iterdir()):
-        if not sub.is_dir():
+        if sub.is_dir() and (sub / "SKILL.md").exists():
+            rel_path = sub.relative_to(skills_dir.parent).as_posix()
+            skills.append(
+                _build_market_skill_entry(
+                    market,
+                    skill_id=sub.name,
+                    name=sub.name,
+                    source_path=rel_path,
+                    branch=branch,
+                ),
+            )
             continue
-        if not (sub / "SKILL.md").exists():
-            continue
-        rel_path = sub.relative_to(skills_dir.parent).as_posix()
-        skills.append(
-            {
-                "skill_id": sub.name,
-                "name": sub.name,
-                "description": "",
-                "version": "",
-                "source": {
-                    "type": "git",
-                    "url": market.url,
-                    "branch": branch,
-                    "path": rel_path,
-                },
-                "tags": [],
-            },
-        )
+        if sub.is_file() and _is_markdown_market_file(sub):
+            rel_path = sub.relative_to(skills_dir.parent).as_posix()
+            skills.append(
+                _build_market_skill_entry(
+                    market,
+                    skill_id=sub.stem,
+                    name=sub.stem,
+                    source_path=rel_path,
+                    branch=branch,
+                ),
+            )
     if not skills:
-        warnings.append("No SKILL.md folders found in market directory")
+        warnings.append(
+            "No importable skill entries found in market directory",
+        )
     return {"skills": skills}, warnings
+
+
+def _generate_market_index_from_markdown_file(
+    market: SkillMarketSpec,
+    markdown_path: Path,
+    *,
+    repo_dir: Path,
+    effective_branch: str,
+) -> tuple[dict[str, Any], list[str]]:
+    branch = effective_branch or market.branch or "main"
+    rel_path = markdown_path.relative_to(repo_dir).as_posix()
+    return {
+        "skills": [
+            _build_market_skill_entry(
+                market,
+                skill_id=markdown_path.stem,
+                name=markdown_path.stem,
+                source_path=rel_path,
+                branch=branch,
+            ),
+        ],
+    }, []
+
+
+def _is_default_market_index_path(path: str) -> bool:
+    raw = (path or "").strip()
+    return raw in {"", "/", "index.json"}
+
+
+def _market_source_install_url(
+    repo_web_url: str,
+    branch: str,
+    source_path: str,
+) -> str:
+    if not source_path:
+        return repo_web_url
+    if source_path.lower().endswith((".md", ".markdown")):
+        return f"{repo_web_url}/blob/{branch}/{source_path}"
+    return f"{repo_web_url}/tree/{branch}/{source_path}"
 
 
 def _load_market_index(market: SkillMarketSpec) -> tuple[dict[str, Any], list[str]]:
@@ -523,9 +602,17 @@ def _load_market_index(market: SkillMarketSpec) -> tuple[dict[str, Any], list[st
             if branch_result.returncode == 0:
                 effective_branch = branch_result.stdout.strip()
 
-        target_path = repo_dir / (normalized_market.path or "index.json")
+        target_raw_path = normalized_market.path or "index.json"
+        target_path = repo_dir / target_raw_path
         warnings: list[str] = []
         if target_path.is_file():
+            if target_path.suffix.lower() in {".md", ".markdown"}:
+                return _generate_market_index_from_markdown_file(
+                    normalized_market,
+                    target_path,
+                    repo_dir=repo_dir,
+                    effective_branch=effective_branch,
+                )
             return json.loads(target_path.read_text(encoding="utf-8")), warnings
         if target_path.is_dir():
             return _generate_market_index_from_directory(
@@ -533,6 +620,21 @@ def _load_market_index(market: SkillMarketSpec) -> tuple[dict[str, Any], list[st
                 target_path,
                 effective_branch=effective_branch,
             )
+        if _is_default_market_index_path(target_raw_path):
+            fallback_skills_dir = repo_dir / "skills"
+            if fallback_skills_dir.is_dir():
+                index_doc, fallback_warnings = _generate_market_index_from_directory(
+                    normalized_market,
+                    fallback_skills_dir,
+                    effective_branch=effective_branch,
+                )
+                return index_doc, [
+                    (
+                        "index.json not found; auto-generated marketplace "
+                        "from skills/"
+                    ),
+                    *fallback_warnings,
+                ]
         raise ValueError(
             f"MARKET_INDEX_INVALID: path '{normalized_market.path}' not found",
         )
@@ -572,10 +674,10 @@ def _extract_market_items(
             source_branch = str(source.get("branch") or market.branch or "main").strip()
             source_path = str(source.get("path") or "").strip()
             repo_web_url = _market_repo_web_url(source_url)
-            install_url = (
-                f"{repo_web_url}/tree/{source_branch}/{source_path}"
-                if source_path
-                else repo_web_url
+            install_url = _market_source_install_url(
+                repo_web_url,
+                source_branch,
+                source_path,
             )
 
             description = raw.get("description") or ""
