@@ -1,4 +1,22 @@
 // Multi-agent management types
+export interface ProjectArtifactItem {
+  id: string;
+  name: string;
+  kind: "skill" | "script" | "flow" | "case";
+  status: string;
+  version: string;
+  tags: string[];
+  market_source_id?: string | null;
+  market_item_id?: string | null;
+}
+
+export interface ProjectArtifactProfile {
+  skills: ProjectArtifactItem[];
+  scripts: ProjectArtifactItem[];
+  flows: ProjectArtifactItem[];
+  cases: ProjectArtifactItem[];
+}
+
 export interface AgentProjectSummary {
   id: string;
   name: string;
@@ -8,6 +26,7 @@ export interface AgentProjectSummary {
   data_dir: string;
   metadata_file: string;
   tags: string[];
+  artifact_profile: ProjectArtifactProfile;
   updated_time: string;
 }
 
@@ -35,6 +54,7 @@ export interface CreateProjectRequest {
   status?: string;
   data_dir?: string;
   tags?: string[];
+  artifact_profile?: ProjectArtifactProfile;
 }
 
 export interface DeleteProjectResponse {

@@ -15,6 +15,7 @@ import type {
   AgentProjectFileInfo,
   AgentProjectFileContent,
   AgentProjectSummary,
+  ProjectArtifactProfile,
   CloneProjectRequest,
   CreateProjectRequest,
   DeleteProjectResponse,
@@ -114,6 +115,24 @@ export const agentsApi = {
       `/agents/${agentId}/projects`,
       {
         method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  getProjectArtifactProfile: (agentId: string, projectId: string) =>
+    request<ProjectArtifactProfile>(
+      `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/artifact-profile`,
+    ),
+
+  updateProjectArtifactProfile: (
+    agentId: string,
+    projectId: string,
+    body: ProjectArtifactProfile,
+  ) =>
+    request<AgentProjectSummary>(
+      `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/artifact-profile`,
+      {
+        method: "PUT",
         body: JSON.stringify(body),
       },
     ),

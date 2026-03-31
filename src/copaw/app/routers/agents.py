@@ -69,7 +69,32 @@ class ProjectSummary(BaseModel):
     data_dir: str
     metadata_file: str
     tags: list[str] = Field(default_factory=list)
+    artifact_profile: "ProjectArtifactProfile" = Field(
+        default_factory=lambda: ProjectArtifactProfile(),
+    )
     updated_time: str
+
+
+class ProjectArtifactItem(BaseModel):
+    """Single project artifact item in the unified product model."""
+
+    id: str
+    name: str
+    kind: str
+    status: str = "draft"
+    version: str = ""
+    tags: list[str] = Field(default_factory=list)
+    market_source_id: str | None = None
+    market_item_id: str | None = None
+
+
+class ProjectArtifactProfile(BaseModel):
+    """Unified artifact profile for standard and scenario artifacts."""
+
+    skills: list[ProjectArtifactItem] = Field(default_factory=list)
+    scripts: list[ProjectArtifactItem] = Field(default_factory=list)
+    flows: list[ProjectArtifactItem] = Field(default_factory=list)
+    cases: list[ProjectArtifactItem] = Field(default_factory=list)
 
 
 class AgentListResponse(BaseModel):
@@ -147,6 +172,9 @@ class CreateProjectRequest(BaseModel):
     status: str = "active"
     data_dir: str = "data"
     tags: list[str] = Field(default_factory=list)
+    artifact_profile: ProjectArtifactProfile = Field(
+        default_factory=lambda: ProjectArtifactProfile(),
+    )
 
 
 class DeleteProjectResponse(BaseModel):
@@ -458,6 +486,110 @@ def _parse_project_tags(raw_tags: Any) -> list[str]:
     return []
 
 
+def _normalize_project_artifact_item(
+    raw_item: Any,
+    kind: str,
+) -> ProjectArtifactItem | None:
+    if isinstance(raw_item, str):
+        normalized = raw_item.strip()
+        if not normalized:
+            return None
+        return ProjectArtifactItem(id=normalized, name=normalized, kind=kind)
+
+    if not isinstance(raw_item, dict):
+        return None
+
+    item_id = str(raw_item.get("id") or raw_item.get("name") or "").strip()
+    if not item_id:
+        return None
+
+    item_name = str(raw_item.get("name") or item_id).strip() or item_id
+    status = str(raw_item.get("status") or "draft").strip() or "draft"
+    version = str(raw_item.get("version") or "").strip()
+    tags = _parse_project_tags(raw_item.get("tags"))
+    market_source_id = (
+        str(raw_item.get("market_source_id") or "").strip() or None
+    )
+    market_item_id = str(raw_item.get("market_item_id") or "").strip() or None
+
+    return ProjectArtifactItem(
+        id=item_id,
+        name=item_name,
+        kind=kind,
+        status=status,
+        version=version,
+        tags=tags,
+        market_source_id=market_source_id,
+        market_item_id=market_item_id,
+    )
+
+
+def _parse_project_artifact_list(
+    raw_value: Any,
+    kind: str,
+) -> list[ProjectArtifactItem]:
+    if raw_value is None:
+        return []
+
+    if isinstance(raw_value, list):
+        raw_list = raw_value
+    elif isinstance(raw_value, str):
+        raw_list = [raw_value]
+    else:
+        return []
+
+    result: list[ProjectArtifactItem] = []
+    seen: set[str] = set()
+    for raw_item in raw_list:
+        normalized = _normalize_project_artifact_item(raw_item, kind)
+        if normalized is None or normalized.id in seen:
+            continue
+        seen.add(normalized.id)
+        result.append(normalized)
+    return result
+
+
+def _parse_project_artifact_profile(
+    metadata: dict[str, Any],
+) -> ProjectArtifactProfile:
+    raw_profile = metadata.get("artifact_profile")
+    if not isinstance(raw_profile, dict):
+        raw_profile = metadata.get("artifacts")
+    if not isinstance(raw_profile, dict):
+        raw_profile = {}
+
+    skills_raw = raw_profile.get("skills")
+    if skills_raw is None:
+        skills_raw = raw_profile.get("skill")
+    if skills_raw is None:
+        skills_raw = metadata.get("skills")
+
+    scripts_raw = raw_profile.get("scripts")
+    if scripts_raw is None:
+        scripts_raw = raw_profile.get("script")
+    if scripts_raw is None:
+        scripts_raw = metadata.get("scripts")
+
+    flows_raw = raw_profile.get("flows")
+    if flows_raw is None:
+        flows_raw = raw_profile.get("flow")
+    if flows_raw is None:
+        flows_raw = metadata.get("flows")
+
+    cases_raw = raw_profile.get("cases")
+    if cases_raw is None:
+        cases_raw = raw_profile.get("case")
+    if cases_raw is None:
+        cases_raw = metadata.get("cases")
+
+    return ProjectArtifactProfile(
+        skills=_parse_project_artifact_list(skills_raw, "skill"),
+        scripts=_parse_project_artifact_list(scripts_raw, "script"),
+        flows=_parse_project_artifact_list(flows_raw, "flow"),
+        cases=_parse_project_artifact_list(cases_raw, "case"),
+    )
+
+
 def _first_nonempty_line(text: str) -> str:
     for line in text.splitlines():
         stripped = line.strip().lstrip("#").strip()
@@ -490,6 +622,7 @@ def _load_project_summary(project_dir: Path) -> ProjectSummary | None:
     description = str(metadata.get("description") or _first_nonempty_line(body)).strip()
     status = str(metadata.get("status") or "active").strip() or "active"
     tags = _parse_project_tags(metadata.get("tags"))
+    artifact_profile = _parse_project_artifact_profile(metadata)
     updated_time = _format_iso_time(metadata_file.stat().st_mtime)
 
     return ProjectSummary(
@@ -501,6 +634,7 @@ def _load_project_summary(project_dir: Path) -> ProjectSummary | None:
         data_dir=str(project_dir / data_subdir),
         metadata_file=str(metadata_file),
         tags=tags,
+        artifact_profile=artifact_profile,
         updated_time=updated_time,
     )
 
@@ -545,6 +679,11 @@ description: Short summary
 status: active
 data_dir: data
 tags: [demo, draft]
+artifact_profile:
+    skills: []
+    scripts: []
+    flows: []
+    cases: []
 ---
 
 Project details go below.
@@ -568,6 +707,62 @@ def _resolve_project_dir(workspace_dir: Path, project_id: str) -> Path:
             return project_dir
 
     raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
+
+
+def _read_project_frontmatter_with_body(
+    metadata_file: Path,
+) -> tuple[dict[str, Any], str]:
+    parsed = _parse_markdown_frontmatter(metadata_file)
+    if parsed is not None:
+        metadata, body = parsed
+        return metadata, body
+    if metadata_file.exists():
+        return {}, metadata_file.read_text(encoding="utf-8", errors="ignore")
+    return {}, ""
+
+
+def _get_project_artifact_profile(
+    workspace_dir: Path,
+    project_id: str,
+) -> ProjectArtifactProfile:
+    project_dir = _resolve_project_dir(workspace_dir, project_id)
+    summary = _load_project_summary(project_dir)
+    if summary is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Project '{project_id}' metadata not found",
+        )
+    return summary.artifact_profile
+
+
+def _update_project_artifact_profile(
+    workspace_dir: Path,
+    project_id: str,
+    profile: ProjectArtifactProfile,
+) -> ProjectSummary:
+    project_dir = _resolve_project_dir(workspace_dir, project_id)
+    summary = _load_project_summary(project_dir)
+    if summary is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Project '{project_id}' metadata not found",
+        )
+
+    metadata_file = Path(summary.metadata_file)
+    metadata, body = _read_project_frontmatter_with_body(metadata_file)
+    metadata["artifact_profile"] = profile.model_dump(
+        mode="json",
+        exclude_none=True,
+    )
+    _write_project_frontmatter(metadata_file, metadata, body)
+
+    updated = _load_project_summary(project_dir)
+    if updated is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to load updated project summary",
+        )
+    return updated
 
 
 def _build_unique_project_id(workspace_dir: Path, base_id: str) -> str:
@@ -701,6 +896,10 @@ def _create_project(
         "status": (body.status or "active").strip() or "active",
         "data_dir": data_subdir,
         "tags": [item.strip() for item in body.tags if str(item).strip()],
+        "artifact_profile": body.artifact_profile.model_dump(
+            mode="json",
+            exclude_none=True,
+        ),
     }
     body_text = (body.description or "").strip() or f"# {project_name}"
     _write_project_frontmatter(metadata_file, metadata, body_text)
@@ -2028,6 +2227,68 @@ async def create_agent_project(
         return _create_project(Path(workspace.workspace_dir), body)
     except FileExistsError as e:
         raise HTTPException(status_code=409, detail=f"Project already exists: {e}") from e
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get(
+    "/{agentId}/projects/{projectId}/artifact-profile",
+    response_model=ProjectArtifactProfile,
+    summary="Get project artifact profile",
+    description="Get project unified artifact profile for skills/scripts/flows/cases",
+)
+async def get_project_artifact_profile(
+    request: Request,
+    agentId: str = PathParam(...),
+    projectId: str = PathParam(...),
+) -> ProjectArtifactProfile:
+    """Get project unified artifact profile."""
+    manager = _get_multi_agent_manager(request)
+
+    try:
+        workspace = await manager.get_agent(agentId)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    try:
+        return _get_project_artifact_profile(
+            Path(workspace.workspace_dir),
+            projectId,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.put(
+    "/{agentId}/projects/{projectId}/artifact-profile",
+    response_model=ProjectSummary,
+    summary="Update project artifact profile",
+    description="Update project unified artifact profile in PROJECT metadata",
+)
+async def update_project_artifact_profile(
+    request: Request,
+    body: ProjectArtifactProfile = Body(...),
+    agentId: str = PathParam(...),
+    projectId: str = PathParam(...),
+) -> ProjectSummary:
+    """Update project unified artifact profile."""
+    manager = _get_multi_agent_manager(request)
+
+    try:
+        workspace = await manager.get_agent(agentId)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    try:
+        return _update_project_artifact_profile(
+            Path(workspace.workspace_dir),
+            projectId,
+            body,
+        )
     except HTTPException:
         raise
     except Exception as e:

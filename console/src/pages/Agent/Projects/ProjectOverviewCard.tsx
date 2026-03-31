@@ -247,6 +247,13 @@ export default function ProjectOverviewCard({
     attachTitle,
     detachTitle,
   );
+  const artifactProfile = selectedProject?.artifact_profile;
+  const artifactCounts = {
+    skills: artifactProfile?.skills.length || 0,
+    scripts: artifactProfile?.scripts.length || 0,
+    flows: artifactProfile?.flows.length || 0,
+    cases: artifactProfile?.cases.length || 0,
+  };
 
   return (
     <Card
@@ -298,6 +305,26 @@ export default function ProjectOverviewCard({
                 <span className={styles.metricSummaryDateSuffix}>/{updatedDateParts.month}</span>
               ) : null}
             </div>
+          </div>
+        </div>
+
+        <div className={styles.overviewSection}>
+          <div className={styles.subSectionTitle}>
+            {t("projects.artifactArchitecture", "Product Artifacts")}
+          </div>
+          <div className={styles.overviewTags}>
+            <Tag color="blue">
+              {t("projects.artifacts.skill", "Skills")}: {artifactCounts.skills}
+            </Tag>
+            <Tag color="geekblue">
+              {t("projects.artifacts.script", "Scripts")}: {artifactCounts.scripts}
+            </Tag>
+            <Tag color="purple">
+              {t("projects.artifacts.flow", "Flows")}: {artifactCounts.flows}
+            </Tag>
+            <Tag color="gold">
+              {t("projects.artifacts.case", "Cases")}: {artifactCounts.cases}
+            </Tag>
           </div>
         </div>
 
