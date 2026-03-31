@@ -69,7 +69,7 @@ export default function ProjectChatPanel({
         minHeight: 0,
         overflow: "hidden",
       }}
-      title={<span className={styles.sectionTitle}>{t("projects.chat", "Chat")}</span>}
+      title={<span className={styles.sectionTitle}>{t("projects.chat.workspaceLabel", "Project collaboration")}</span>}
       styles={{
         body: {
           padding: 0,
