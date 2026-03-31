@@ -4,6 +4,7 @@ import { useContextSelector } from "use-context-selector";
 import {
   ChatAnywhereSessionsContext,
 } from "@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/Context/ChatAnywhereSessionsContext.js";
+import type { IAgentScopeRuntimeWebUISession } from "@agentscope-ai/chat";
 import type { IAgentScopeRuntimeWebUISessionsContext } from "@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/types/ISessions";
 
 /**
@@ -38,7 +39,9 @@ const ChatSessionInitializer: React.FC = () => {
 
   useEffect(() => {
     if (!chatId || !sessions.length) return;
-    const matching = sessions.find((s) => s.id === chatId);
+    const matching = sessions.find(
+      (s: IAgentScopeRuntimeWebUISession) => s.id === chatId,
+    );
     if (matching && currentSessionIdRef.current !== matching.id) {
       setCurrentSessionId(matching.id);
     }
