@@ -18,6 +18,9 @@ import ProjectChatPanel, { type ProjectChatAutoAttachRequest } from "./ProjectCh
 import ProjectOverviewCard from "./ProjectOverviewCard";
 import ProjectUploadModal from "./ProjectUploadModal";
 import ProjectWorkbenchPanel from "./ProjectWorkbenchPanel";
+import useArtifactSelectionGuards from "./useArtifactSelectionGuards";
+import useLeaveConfirmGuard from "./useLeaveConfirmGuard";
+import useOpenUploadQuery from "./useOpenUploadQuery";
 import useProjectUploadController from "./useProjectUploadController";
 import type { ChatSpec } from "../../../api/types/chat";
 import type {
@@ -783,93 +786,7 @@ export default function ProjectDetailPage() {
     uploadModalOpen,
     uploadingFiles,
   ]);
-
-  useEffect(() => {
-    if (!shouldBlockLeave) {
-      return;
-    }
-
-    const rawPushState = window.history.pushState.bind(window.history);
-    const rawReplaceState = window.history.replaceState.bind(window.history);
-    const rawGo = window.history.go.bind(window.history);
-    const rawBack = window.history.back.bind(window.history);
-    const rawForward = window.history.forward.bind(window.history);
-
-    const shouldConfirmLeave = (nextUrl?: string | URL | null): boolean => {
-      if (!nextUrl) {
-        return false;
-      }
-      const current = new URL(window.location.href);
-      const target = new URL(String(nextUrl), window.location.origin);
-      return target.pathname !== current.pathname;
-    };
-
-    const confirmLeave = (): boolean => window.confirm(leaveConfirmText);
-
-    const patchedPushState: History["pushState"] = function patched(
-      data,
-      unused,
-      url,
-    ) {
-      if (shouldConfirmLeave(url) && !confirmLeave()) {
-        return;
-      }
-      rawPushState(data, unused, url);
-    };
-
-    const patchedReplaceState: History["replaceState"] = function patched(
-      data,
-      unused,
-      url,
-    ) {
-      if (shouldConfirmLeave(url) && !confirmLeave()) {
-        return;
-      }
-      rawReplaceState(data, unused, url);
-    };
-
-    const patchedGo: History["go"] = function patched(delta) {
-      if ((delta || 0) !== 0 && !confirmLeave()) {
-        return;
-      }
-      rawGo(delta);
-    };
-
-    const patchedBack: History["back"] = function patched() {
-      if (!confirmLeave()) {
-        return;
-      }
-      rawBack();
-    };
-
-    const patchedForward: History["forward"] = function patched() {
-      if (!confirmLeave()) {
-        return;
-      }
-      rawForward();
-    };
-
-    window.history.pushState = patchedPushState;
-    window.history.replaceState = patchedReplaceState;
-    window.history.go = patchedGo;
-    window.history.back = patchedBack;
-    window.history.forward = patchedForward;
-
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = leaveConfirmText;
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-
-    return () => {
-      window.history.pushState = rawPushState;
-      window.history.replaceState = rawReplaceState;
-      window.history.go = rawGo;
-      window.history.back = rawBack;
-      window.history.forward = rawForward;
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-    };
-  }, [leaveConfirmText, shouldBlockLeave]);
+  useLeaveConfirmGuard({ enabled: shouldBlockLeave, confirmText: leaveConfirmText });
 
   const loadFileContent = useCallback(async (
     agentId: string,
@@ -1578,48 +1495,22 @@ export default function ProjectDetailPage() {
     runRestoreAttemptKeyRef.current = "";
   }, [resetUploadState, routeProjectId]);
 
-  useEffect(() => {
-    const query = new URLSearchParams(location.search);
-    if (query.get("openUpload") !== "1") {
-      return;
-    }
-    setUploadModalOpen(true);
-    query.delete("openUpload");
-    const next = query.toString();
-    navigate(`${location.pathname}${next ? `?${next}` : ""}`, { replace: true });
-  }, [location.pathname, location.search, navigate, setUploadModalOpen]);
+  useOpenUploadQuery({
+    pathname: location.pathname,
+    search: location.search,
+    navigate,
+    onOpenUpload: () => setUploadModalOpen(true),
+  });
 
-  useEffect(() => {
-    if (!selectedStepId) {
-      return;
-    }
-    if (!currentStepIds.includes(selectedStepId)) {
-      setSelectedStepId("");
-    }
-  }, [currentStepIds, selectedStepId]);
-
-  useEffect(() => {
-    if (!selectedStepId) {
-      return;
-    }
-    if (selectedFilePath && relatedArtifactPathsForSelectedStep.has(selectedFilePath)) {
-      return;
-    }
-    const firstRelatedPath = Array.from(relatedArtifactPathsForSelectedStep)[0];
-    if (firstRelatedPath) {
-      setSelectedFilePath(firstRelatedPath);
-    }
-  }, [relatedArtifactPathsForSelectedStep, selectedFilePath, selectedStepId]);
-
-  useEffect(() => {
-    if (!selectedFilePath) {
-      return;
-    }
-    const stillVisible = artifactRecords.some((item) => item.path === selectedFilePath);
-    if (!stillVisible) {
-      setSelectedFilePath("");
-    }
-  }, [artifactRecords, selectedFilePath]);
+  useArtifactSelectionGuards({
+    selectedStepId,
+    setSelectedStepId,
+    currentStepIds,
+    selectedFilePath,
+    setSelectedFilePath,
+    relatedArtifactPathsForSelectedStep,
+    artifactRecords,
+  });
 
   useEffect(() => {
     if (!currentAgent || !selectedProject) {
