@@ -45,6 +45,24 @@ interface TreeNode {
   isLeaf?: boolean;
 }
 
+function formatUpdatedDateParts(updatedTime?: string): { day: string; month: string } {
+  if (!updatedTime) {
+    return { day: "-", month: "" };
+  }
+
+  const datePart = updatedTime.split("T")[0] || updatedTime;
+  const parts = datePart.split("-");
+  if (parts.length >= 3) {
+    const month = parts[1] || "";
+    const day = parts[2] || "";
+    if (day) {
+      return { day, month };
+    }
+  }
+
+  return { day: updatedTime.slice(5, 10), month: "" };
+}
+
 function isBuiltInProjectFile(path: string): boolean {
   const normalized = path.replace(/\\/g, "/").toLowerCase();
   const fileName = normalized.split("/").pop() || "";
@@ -212,6 +230,7 @@ export default function ProjectOverviewCard({
   onToggleHideBuiltInFiles,
 }: ProjectOverviewCardProps) {
   const { t } = useTranslation();
+  const updatedDateParts = formatUpdatedDateParts(selectedProject?.updated_time);
 
   const visibleFiles = hideBuiltInFiles
     ? projectFiles.filter((item) => !isBuiltInProjectFile(item.path))
@@ -274,7 +293,10 @@ export default function ProjectOverviewCard({
           <div className={styles.metricSummaryCard}>
             <div className={styles.itemMeta}>{t("projects.updated", "Updated")}</div>
             <div className={styles.metricSummaryValue}>
-              {selectedProject?.updated_time ? selectedProject.updated_time.slice(5, 10) : "-"}
+              <span>{updatedDateParts.day}</span>
+              {updatedDateParts.month ? (
+                <span className={styles.metricSummaryDateSuffix}>/{updatedDateParts.month}</span>
+              ) : null}
             </div>
           </div>
         </div>
