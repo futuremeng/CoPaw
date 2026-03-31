@@ -37,6 +37,10 @@ import {
   isPreviewablePath,
   selectSeedSourceFiles,
 } from "./projectFileSelectionUtils";
+import {
+  buildProjectIdCandidates,
+  matchesRouteProject,
+} from "./projectIdUtils";
 import type {
   AgentProjectSummary,
   AgentProjectFileInfo,
@@ -57,29 +61,6 @@ function getCurrentAgent(
   selectedAgent: string,
 ): AgentSummary | undefined {
   return agents.find((agent) => agent.id === selectedAgent);
-}
-
-function projectDirNameFromMetadata(metadataFile: string): string {
-  const normalized = metadataFile.replace(/\\/g, "/").trim();
-  if (!normalized) {
-    return "";
-  }
-  const segments = normalized.split("/").filter(Boolean);
-  return segments.length >= 2 ? segments[segments.length - 2] : "";
-}
-
-function buildProjectIdCandidates(project?: AgentProjectSummary): string[] {
-  if (!project) {
-    return [];
-  }
-  const candidates = [project.id, projectDirNameFromMetadata(project.metadata_file)]
-    .map((item) => item.trim())
-    .filter(Boolean);
-  return Array.from(new Set(candidates));
-}
-
-function matchesRouteProject(project: AgentProjectSummary, routeProjectId: string): boolean {
-  return buildProjectIdCandidates(project).includes(routeProjectId);
 }
 
 function formatBytes(size: number): string {
@@ -540,7 +521,6 @@ export default function ProjectDetailPage() {
     selectedProject,
     resolvedProjectRequestId,
     setResolvedProjectRequestId,
-    buildProjectIdCandidates,
     loadProjectFiles,
   });
 

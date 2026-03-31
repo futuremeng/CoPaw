@@ -3,13 +3,13 @@ import { message } from "antd";
 import { useTranslation } from "react-i18next";
 import { agentsApi } from "../../../api/modules/agents";
 import type { AgentProjectSummary, AgentSummary } from "../../../api/types/agents";
+import { buildProjectIdCandidates } from "./projectIdUtils";
 
 interface UseProjectUploadControllerParams {
   currentAgent?: AgentSummary;
   selectedProject?: AgentProjectSummary;
   resolvedProjectRequestId: string;
   setResolvedProjectRequestId: (value: string) => void;
-  buildProjectIdCandidates: (project?: AgentProjectSummary) => string[];
   loadProjectFiles: (agentId: string, project: AgentProjectSummary) => Promise<void>;
 }
 
@@ -18,7 +18,6 @@ export default function useProjectUploadController({
   selectedProject,
   resolvedProjectRequestId,
   setResolvedProjectRequestId,
-  buildProjectIdCandidates,
   loadProjectFiles,
 }: UseProjectUploadControllerParams) {
   const { t } = useTranslation();
@@ -83,7 +82,6 @@ export default function useProjectUploadController({
       setUploadingFiles(false);
     }
   }, [
-    buildProjectIdCandidates,
     currentAgent,
     loadProjectFiles,
     pendingUploads,
