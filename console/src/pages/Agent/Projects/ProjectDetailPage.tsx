@@ -33,6 +33,10 @@ import {
   buildValidationRoundPrompt,
 } from "./projectChatPrompts";
 import { composeSelectedFilesPayload } from "./projectChatAttachmentPayload";
+import {
+  isPreviewablePath,
+  selectSeedSourceFiles,
+} from "./projectFileSelectionUtils";
 import type {
   AgentProjectSummary,
   AgentProjectFileInfo,
@@ -88,20 +92,6 @@ function formatBytes(size: number): string {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function isPreviewablePath(path: string): boolean {
-  if (!path) {
-    return false;
-  }
-  const normalized = path.replace(/\\/g, "/");
-  if (normalized.startsWith(".")) {
-    return false;
-  }
-  if (normalized.split("/").some((part) => part.startsWith("."))) {
-    return false;
-  }
-  return true;
-}
-
 function statusTagColor(status: string): string {
   switch (status) {
     case "running":
@@ -134,31 +124,6 @@ function formatRunTimeLabel(raw: string): string {
   const mm = String(parsed.getMinutes()).padStart(2, "0");
   const ss = String(parsed.getSeconds()).padStart(2, "0");
   return `${y}-${m}-${d} ${hh}:${mm}:${ss}`;
-}
-
-function isTextSourcePath(path: string): boolean {
-  const normalized = path.toLowerCase();
-  return (
-    normalized.endsWith(".md") ||
-    normalized.endsWith(".markdown") ||
-    normalized.endsWith(".mdx") ||
-    normalized.endsWith(".txt")
-  );
-}
-
-function selectSeedSourceFiles(paths: string[]): string[] {
-  const unique = Array.from(new Set(paths.map((item) => item.trim()).filter(Boolean)));
-  const textFiles = unique.filter((item) => isTextSourcePath(item));
-  const fallback = textFiles.length > 0 ? textFiles : unique;
-  const prioritized = [...fallback].sort((a, b) => {
-    const aPriority = a.includes("/data/") || a.includes("/raw/") ? 0 : 1;
-    const bPriority = b.includes("/data/") || b.includes("/raw/") ? 0 : 1;
-    if (aPriority !== bPriority) {
-      return aPriority - bPriority;
-    }
-    return a.localeCompare(b);
-  });
-  return prioritized.slice(0, 4);
 }
 
 function buildProjectWorkspaceSummary(params: {
