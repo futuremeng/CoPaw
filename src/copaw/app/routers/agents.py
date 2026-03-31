@@ -189,6 +189,25 @@ class DeleteProjectResponse(BaseModel):
     project_id: str
 
 
+class PromoteProjectArtifactRequest(BaseModel):
+    """Request body for promoting a project artifact to agent scope."""
+
+    target_name: str | None = None
+    overwrite: bool = False
+    enable: bool = True
+
+
+class PromoteProjectArtifactResponse(BaseModel):
+    """Response body for promote artifact API."""
+
+    promoted: bool
+    artifact_kind: str
+    artifact_id: str
+    target_name: str
+    target_path: str
+    project: ProjectSummary
+
+
 class AgentsSquareSourcesPayload(BaseModel):
     """Payload for Agents Square source management."""
 
@@ -909,6 +928,156 @@ def _update_project_artifact_profile(
             detail="Failed to load updated project summary",
         )
     return updated
+
+
+def _build_promoted_skill_markdown(
+    item: ProjectArtifactItem,
+    project_id: str,
+    source_body: str,
+) -> str:
+    skill_name = item.name.strip() or item.id
+    description = item.distillation_note.strip() or (
+        f"Promoted from project '{project_id}' skill artifact '{item.id}'."
+    )
+    version = item.version.strip() or "v0-draft"
+    tags = [*item.tags, "project-promoted", f"project:{project_id}"]
+    deduped_tags = [tag for tag in dict.fromkeys(tags) if tag]
+    tags_text = ", ".join(deduped_tags)
+    source_text = source_body.strip()
+    if not source_text:
+        source_text = item.distillation_note.strip()
+    source_block = source_text or "No additional project notes provided."
+    return (
+        "---\n"
+        f"name: {skill_name}\n"
+        f"description: {description}\n"
+        f"version: {version}\n"
+        f"tags: [{tags_text}]\n"
+        "---\n\n"
+        "## Origin\n"
+        f"- project_id: {project_id}\n"
+        f"- artifact_id: {item.id}\n"
+        f"- source_path: {item.artifact_file_path}\n\n"
+        "## Distilled Skill\n\n"
+        f"{source_block}\n"
+    )
+
+
+def _promote_project_skill_to_agent(
+    workspace_dir: Path,
+    project_id: str,
+    artifact_id: str,
+    body: PromoteProjectArtifactRequest,
+) -> PromoteProjectArtifactResponse:
+    project_dir = _resolve_project_dir(workspace_dir, project_id)
+    summary = _load_project_summary(project_dir)
+    if summary is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Project '{project_id}' metadata not found",
+        )
+
+    skill_item = next(
+        (item for item in summary.artifact_profile.skills if item.id == artifact_id),
+        None,
+    )
+    if skill_item is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Skill artifact '{artifact_id}' not found in project",
+        )
+
+    skill_dir_name = _safe_artifact_slug(
+        body.target_name or skill_item.id,
+        f"skill-{generate_short_agent_id()}",
+    )
+    target_skill_dir = workspace_dir / "skills" / skill_dir_name
+    target_skill_md = target_skill_dir / "SKILL.md"
+    if target_skill_dir.exists() and not body.overwrite:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Target skill '{skill_dir_name}' already exists. "
+                "Set overwrite=true to replace it."
+            ),
+        )
+
+    source_body = ""
+    source_path = skill_item.artifact_file_path.strip()
+    if source_path:
+        source_file = (project_dir / source_path).resolve()
+        try:
+            source_file.relative_to(project_dir.resolve())
+        except ValueError:
+            source_file = project_dir / "skills" / f"{skill_item.id}.md"
+        if source_file.exists() and source_file.is_file():
+            source_body = source_file.read_text(
+                encoding="utf-8",
+                errors="ignore",
+            )
+
+    target_skill_dir.mkdir(parents=True, exist_ok=True)
+    promoted_md = _build_promoted_skill_markdown(
+        skill_item,
+        project_id,
+        source_body,
+    )
+    target_skill_md.write_text(promoted_md, encoding="utf-8")
+
+    if body.enable:
+        try:
+            from ...agents.skills_manager import reconcile_workspace_manifest
+
+            manifest = reconcile_workspace_manifest(workspace_dir)
+            entry = manifest.get("skills", {}).get(skill_dir_name)
+            if isinstance(entry, dict):
+                entry["enabled"] = True
+                manifest_path = workspace_dir / "skill.json"
+                manifest_path.write_text(
+                    json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+                    encoding="utf-8",
+                )
+        except Exception as exc:  # pragma: no cover - best effort enable
+            logger.warning("Failed to auto-enable promoted skill: %s", exc)
+
+    metadata_file = Path(summary.metadata_file)
+    metadata, content_body = _read_project_frontmatter_with_body(metadata_file)
+    normalized_profile = _parse_project_artifact_profile(metadata)
+    for idx, item in enumerate(normalized_profile.skills):
+        if item.id != artifact_id:
+            continue
+        updated_item = item.model_copy(
+            update={
+                "origin": "project-promoted",
+                "market_item_id": skill_dir_name,
+            },
+        )
+        normalized_profile.skills[idx] = _normalize_project_artifact_storage(
+            updated_item,
+            "skill",
+        )
+        break
+    metadata["artifact_profile"] = normalized_profile.model_dump(
+        mode="json",
+        exclude_none=True,
+    )
+    _write_project_frontmatter(metadata_file, metadata, content_body)
+
+    updated_summary = _load_project_summary(project_dir)
+    if updated_summary is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to load project after promote",
+        )
+
+    return PromoteProjectArtifactResponse(
+        promoted=True,
+        artifact_kind="skill",
+        artifact_id=artifact_id,
+        target_name=skill_dir_name,
+        target_path=str(target_skill_md),
+        project=updated_summary,
+    )
 
 
 def _build_unique_project_id(workspace_dir: Path, base_id: str) -> str:
@@ -2441,6 +2610,47 @@ async def update_project_artifact_profile(
             projectId,
             body,
         )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post(
+    "/{agentId}/projects/{projectId}/artifacts/skills/{artifactId}/promote",
+    response_model=PromoteProjectArtifactResponse,
+    summary="Promote project skill to agent",
+    description=(
+        "Promote one project skill artifact into agent-level skills directory"
+    ),
+)
+async def promote_project_skill_artifact(
+    request: Request,
+    body: PromoteProjectArtifactRequest = Body(
+        default_factory=PromoteProjectArtifactRequest,
+    ),
+    agentId: str = PathParam(...),
+    projectId: str = PathParam(...),
+    artifactId: str = PathParam(...),
+) -> PromoteProjectArtifactResponse:
+    """Promote project skill artifact to agent-level skill."""
+    manager = _get_multi_agent_manager(request)
+
+    try:
+        workspace = await manager.get_agent(agentId)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    try:
+        result = _promote_project_skill_to_agent(
+            Path(workspace.workspace_dir),
+            projectId,
+            artifactId,
+            body,
+        )
+        if body.enable:
+            schedule_agent_reload(request, agentId)
+        return result
     except HTTPException:
         raise
     except Exception as e:

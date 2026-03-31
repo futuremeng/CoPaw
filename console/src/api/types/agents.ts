@@ -71,6 +71,21 @@ export interface DeleteProjectResponse {
   project_id: string;
 }
 
+export interface PromoteProjectArtifactRequest {
+  target_name?: string;
+  overwrite?: boolean;
+  enable?: boolean;
+}
+
+export interface PromoteProjectArtifactResponse {
+  promoted: boolean;
+  artifact_kind: string;
+  artifact_id: string;
+  target_name: string;
+  target_path: string;
+  project: AgentProjectSummary;
+}
+
 export interface ProjectPipelineTemplateStep {
   id: string;
   name: string;

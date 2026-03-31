@@ -19,6 +19,8 @@ import type {
   CloneProjectRequest,
   CreateProjectRequest,
   DeleteProjectResponse,
+  PromoteProjectArtifactRequest,
+  PromoteProjectArtifactResponse,
   AgentPipelineDraftInfo,
   PipelineSaveStreamEvent,
   ProjectPipelineTemplateInfo,
@@ -134,6 +136,20 @@ export const agentsApi = {
       {
         method: "PUT",
         body: JSON.stringify(body),
+      },
+    ),
+
+  promoteProjectSkillArtifact: (
+    agentId: string,
+    projectId: string,
+    artifactId: string,
+    body?: PromoteProjectArtifactRequest,
+  ) =>
+    request<PromoteProjectArtifactResponse>(
+      `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/artifacts/skills/${encodeURIComponent(artifactId)}/promote`,
+      {
+        method: "POST",
+        body: JSON.stringify(body || {}),
       },
     ),
 
