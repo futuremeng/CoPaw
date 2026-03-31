@@ -19,6 +19,7 @@ import ProjectOverviewCard from "./ProjectOverviewCard";
 import ProjectUploadModal from "./ProjectUploadModal";
 import ProjectWorkbenchPanel from "./ProjectWorkbenchPanel";
 import useArtifactSelectionGuards from "./useArtifactSelectionGuards";
+import useProjectChatEnsureController from "./useProjectChatEnsureController";
 import useProjectChatFocusEffects from "./useProjectChatFocusEffects";
 import useLeaveConfirmGuard from "./useLeaveConfirmGuard";
 import useOpenUploadQuery from "./useOpenUploadQuery";
@@ -1155,100 +1156,23 @@ export default function ProjectDetailPage() {
     }
   }, [currentAgent, loadPipelineContext, resolvedProjectRequestId, selectedProject, selectedTemplateId, t]);
 
-  const handleEnsureRunChat = useCallback(async (forceNew = false): Promise<string> => {
-    if (!selectedProject || !selectedRunId) {
-      return "";
-    }
-
-    if (!forceNew && activeRunChatId) {
-      return activeRunChatId;
-    }
-
-    setChatStarting(true);
-    try {
-      const previousChatId = runFocusChatIdRef.current;
-      if (forceNew && previousChatId) {
-        void chatApi
-          .clearChatMeta(previousChatId, {
-            user_id: "default",
-            channel: "console",
-          })
-          .catch(() => {});
-      }
-
-      const created = await chatApi.createChat({
-        name: `[focus] ${selectedProject.name}`,
-        session_id: `project-run-${selectedRunId}-${Date.now()}`,
-        user_id: "default",
-        channel: "console",
-        meta: {
-          focus_type: "project_run",
-          focus_id: selectedProject.id,
-          project_id: selectedProject.id,
-          project_request_id: resolvedProjectRequestId || selectedProject.id,
-          run_id: selectedRunId,
-          focus_path: `projects/${selectedProject.id}`,
-        },
-      });
-
-      setRunFocusChatId(created.id);
-      setError("");
-      return created.id;
-    } catch (err) {
-      console.error("failed to create project run chat", err);
-      setError(t("projects.chat.startFailed", "Failed to start project chat."));
-      return "";
-    } finally {
-      setChatStarting(false);
-    }
-  }, [activeRunChatId, resolvedProjectRequestId, selectedProject, selectedRunId, t]);
-
-  const handleEnsureWorkspaceChat = useCallback(async (forceNew = false): Promise<string> => {
-    if (!selectedProject) {
-      return "";
-    }
-
-    if (!forceNew && workspaceFocusChatId) {
-      return workspaceFocusChatId;
-    }
-
-    setChatStarting(true);
-    try {
-      const previousChatId = workspaceFocusChatIdRef.current;
-      if (forceNew && previousChatId) {
-        void chatApi
-          .clearChatMeta(previousChatId, {
-            user_id: "default",
-            channel: "console",
-          })
-          .catch(() => {});
-      }
-
-      const created = await chatApi.createChat({
-        name: `[project] ${selectedProject.name}`,
-        session_id: `project-workspace-${selectedProject.id}-${Date.now()}`,
-        user_id: "default",
-        channel: "console",
-        meta: {
-          focus_type: "project_workspace",
-          focus_id: selectedProject.id,
-          project_id: selectedProject.id,
-          project_request_id: resolvedProjectRequestId || selectedProject.id,
-          focus_path: `projects/${selectedProject.id}`,
-        },
-      });
-
-      setWorkspaceFocusChatId(created.id);
-      setError("");
-      return created.id;
-    } catch (err) {
-      console.error("failed to create project workspace chat", err);
-      setError(t("projects.chat.startFailed", "Failed to start project chat."));
-      return "";
-    } finally {
-      setChatStarting(false);
-    }
-  }, [resolvedProjectRequestId, selectedProject, t, workspaceFocusChatId]);
+  const {
+    handleEnsureRunChat,
+    handleEnsureWorkspaceChat,
+  } = useProjectChatEnsureController({
+    selectedProject,
+    selectedRunId,
+    activeRunChatId,
+    workspaceFocusChatId,
+    resolvedProjectRequestId,
+    runFocusChatIdRef,
+    workspaceFocusChatIdRef,
+    setRunFocusChatId,
+    setWorkspaceFocusChatId,
+    setChatStarting,
+    setError,
+    startFailedText: t("projects.chat.startFailed", "Failed to start project chat."),
+  });
 
   const resolveLatestDesignBoundChatId = useCallback(async (): Promise<string> => {
     if (!selectedProject || !currentAgent) {
