@@ -9,12 +9,10 @@ import {
   Button,
   Card,
   Checkbox,
-  Collapse,
   Empty,
   Input,
   Modal,
   Popconfirm,
-  Select,
   Switch,
   Spin,
   Tag,
@@ -27,6 +25,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { agentsApi } from "../../../api/modules/agents";
 import { chatApi } from "../../../api/modules/chat";
+import ProjectAutomationPanel from "./ProjectAutomationPanel";
 import ProjectChatPanel, { type ProjectChatAutoAttachRequest } from "./ProjectChatPanel";
 import ProjectOverviewCard from "./ProjectOverviewCard";
 import type { ChatSpec } from "../../../api/types/chat";
@@ -2204,282 +2203,60 @@ export default function ProjectDetailPage() {
           </div>
 
           <div className={styles.columnMiddle}>
-            <Card
-              title={<span className={styles.sectionTitle}>{t("projects.automation.title", "Automation")}</span>}
-              styles={{ body: { padding: 12 } }}
-              extra={
-                <Text type="secondary" className={styles.panelExtraText}>
-                  {selectedRunSummary?.status || t("projects.pipeline.noRun", "No run")}
-                </Text>
-              }
-            >
-              <div className={styles.scrollContainer}>
-                <div className={styles.pipelineTopActions}>
-                  <Button size="small" onClick={() => navigate("/projects")}>
-                    {t("projects.backToList", "Back to project list")}
-                  </Button>
-                  <Button size="small" onClick={() => setUploadModalOpen(true)}>
-                    {t("projects.upload.button", "Upload Files")}
-                  </Button>
-                  <Button
-                    size="small"
-                    onClick={() => void handleOpenImportModal()}
-                    loading={importLoading && !importModalOpen}
-                  >
-                    {t("projects.pipeline.importGlobal", "Import Global")}
-                  </Button>
-                </div>
-
-                <div className={styles.runToolbar}>
-                  <Select
-                    size="small"
-                    className={styles.templateSelect}
-                    value={selectedTemplateId || undefined}
-                    placeholder={t("projects.pipeline.template", "Select template")}
-                    options={pipelineTemplates.map((template) => ({
-                      label: `${template.name}${template.version ? ` (${template.version})` : ""}`,
-                      value: template.id,
-                    }))}
-                    onChange={setSelectedTemplateId}
-                  />
-                  <Button
-                    size="small"
-                    type="primary"
-                    className={styles.runButton}
-                    disabled={!selectedTemplateId || !selectedProject}
-                    loading={createRunLoading}
-                    onClick={() => void handleCreateRun()}
-                  >
-                    {t("projects.pipeline.run", "Run")}
-                  </Button>
-                </div>
-
-                <div className={styles.progressCoach}>
-                  <div className={styles.progressCoachMeta}>
-                    <div className={styles.subSectionTitle}>
-                      {t("projects.automation.guidance", "Automation Guidance")}
-                    </div>
-                    <div className={styles.itemMeta}>{verificationGateSummary}</div>
-                  </div>
-                  <div className={styles.progressCoachActions}>
-                    <Button
-                      size="small"
-                      onClick={() => {
-                        setWorkspaceFocusChatId("");
-                        void handleEnsureDesignChat(true);
-                      }}
-                    >
-                      {t("projects.chat.startAutomation", "Open automation design")}
-                    </Button>
-                    <Button size="small" onClick={() => void handlePrepareImplementationDraft()}>
-                      {t("projects.pipeline.nextImplementation", "Prepare next implementation prompt")}
-                    </Button>
-                    <Button size="small" onClick={() => void handlePrepareValidationDraft()}>
-                      {t("projects.pipeline.nextValidation", "Prepare validation prompt")}
-                    </Button>
-                    <Button
-                      size="small"
-                      type="primary"
-                      disabled={!canPromoteToTemplateDraft || !selectedTemplateId || !selectedRunId}
-                      onClick={() => void handlePreparePromotionDraft()}
-                    >
-                      {t("projects.pipeline.promoteDraft", "Prepare promotion-to-template prompt")}
-                    </Button>
-                  </div>
-                </div>
-
-                {pipelineLoading ? (
-                  <div className={styles.centerState}>
-                    <Spin />
-                  </div>
-                ) : (
-                  <>
-                    <div className={styles.runList}>
-                      {runsForSelectedTemplate.length === 0 ? (
-                        <Empty
-                          image={Empty.PRESENTED_IMAGE_SIMPLE}
-                          description={t(
-                            "projects.pipeline.noRunsForFlow",
-                            "No runs for selected flow yet",
-                          )}
-                        />
-                      ) : (
-                        <Collapse
-                          accordion
-                          ghost
-                          activeKey={selectedRunId || undefined}
-                          onChange={(activeKey) => {
-                            const key = Array.isArray(activeKey) ? activeKey[0] : activeKey;
-                            setSelectedRunId(typeof key === "string" ? key : "");
-                          }}
-                          items={runsForSelectedTemplate.map((run) => ({
-                            key: run.id,
-                            label: (
-                              <div className={styles.itemTitleRow}>
-                                <span className={styles.itemTitle}>
-                                  {t("projects.pipeline.runStartedAt", "Run @ {{time}}", {
-                                    time: formatRunTimeLabel(run.created_at),
-                                  })}
-                                </span>
-                                <Tag color={statusTagColor(run.status)}>{run.status}</Tag>
-                              </div>
-                            ),
-                            children: (
-                              <div className={styles.runAccordionBody}>
-                                <div className={styles.itemMeta}>{run.id}</div>
-                                <div className={styles.itemMeta}>{run.template_id}</div>
-                                <div className={styles.itemMeta}>{run.updated_at}</div>
-                                {selectedRunId === run.id && runDetail ? (
-                                  <>
-                                    <div className={styles.subSectionTitle}>
-                                      {t("projects.pipeline.steps", "Steps")}
-                                    </div>
-                                    <div className={styles.progressLine}>
-                                      {t("projects.pipeline.progress", "Progress")}: {runProgress.completed}/
-                                      {runProgress.total} · running {runProgress.running} · pending {runProgress.pending}
-                                    </div>
-                                    {runDetail.steps.length > 0 ? (
-                                      runDetail.steps.map((step) => {
-                                        const contract = stepContractById.get(step.id);
-                                        const dependsOn = (contract?.depends_on || []).filter(Boolean);
-                                        const inputKeys = Object.keys(contract?.inputs || {});
-                                        const outputKeys = Object.keys(contract?.outputs || {});
-                                        const bindingKeys = Object.keys(contract?.input_bindings || {});
-                                        const hasPrompt = Boolean((contract?.prompt || "").trim());
-                                        const hasScript = Boolean((contract?.script || "").trim());
-                                        const retryMaxAttempts =
-                                          typeof contract?.retry_policy?.max_attempts === "number"
-                                            ? String(contract.retry_policy.max_attempts)
-                                            : "-";
-
-                                        const stepSelected = selectedStepId === step.id;
-                                        const stepRelated = !stepSelected && highlightedStepIds.has(step.id);
-
-                                        return (
-                                          <button
-                                            key={step.id}
-                                            type="button"
-                                            className={`${styles.stepItem} ${stepSelected ? styles.selected : ""} ${stepRelated ? styles.related : ""}`}
-                                            onClick={() => handleSelectStep(step.id)}
-                                          >
-                                            <div className={styles.itemTitleRow}>
-                                              <span className={styles.itemTitle}>{step.name}</span>
-                                              <Tag color={statusTagColor(step.status)}>{step.status}</Tag>
-                                            </div>
-                                            <div className={styles.itemMeta}>{step.kind}</div>
-                                            <div className={styles.itemMeta}>{step.id}</div>
-                                            <div className={styles.itemMeta}>
-                                              {t("projects.pipeline.contract.dependsOn", "Depends on")}: {dependsOn.join(", ") || "-"}
-                                            </div>
-                                            <div className={styles.itemMeta}>
-                                              {t("projects.pipeline.contract.inputs", "Inputs")}: {inputKeys.join(", ") || "-"}
-                                            </div>
-                                            <div className={styles.itemMeta}>
-                                              {t("projects.pipeline.contract.outputs", "Outputs")}: {outputKeys.join(", ") || "-"}
-                                            </div>
-                                            <div className={styles.itemMeta}>
-                                              {t("projects.pipeline.contract.bindings", "Input bindings")}: {bindingKeys.join(", ") || "-"}
-                                            </div>
-                                            <div className={styles.itemMeta}>
-                                              {t("projects.pipeline.contract.execution", "Execution")}: {hasPrompt ? "prompt" : "-"}
-                                              {hasScript ? "+script" : ""}
-                                            </div>
-                                            <div className={styles.itemMeta}>
-                                              {t("projects.pipeline.contract.retry", "Retry max attempts")}: {retryMaxAttempts}
-                                            </div>
-                                          </button>
-                                        );
-                                      })
-                                    ) : (
-                                      <Empty
-                                        image={Empty.PRESENTED_IMAGE_SIMPLE}
-                                        description={t("projects.pipeline.noSteps", "No steps available")}
-                                      />
-                                    )}
-                                  </>
-                                ) : (
-                                  <div className={styles.itemMeta}>
-                                    {t(
-                                      "projects.pipeline.expandToViewSteps",
-                                      "Expand selected run to view step records",
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            ),
-                          }))}
-                        />
-                      )}
-                    </div>
-
-                    {runsForSelectedTemplate.length === 0 && (
-                      <div className={styles.stepPanel}>
-                        <div className={styles.subSectionTitle}>
-                          {t("projects.pipeline.steps", "Steps")}
-                        </div>
-                        {activeRunTemplate?.steps && activeRunTemplate.steps.length > 0 ? (
-                        activeRunTemplate.steps.map((step) => {
-                          const dependsOn = (step.depends_on || []).filter(Boolean);
-                          const inputKeys = Object.keys(step.inputs || {});
-                          const outputKeys = Object.keys(step.outputs || {});
-                          const bindingKeys = Object.keys(step.input_bindings || {});
-                          const hasPrompt = Boolean((step.prompt || "").trim());
-                          const hasScript = Boolean((step.script || "").trim());
-                          const retryMaxAttempts =
-                            typeof step.retry_policy?.max_attempts === "number"
-                              ? String(step.retry_policy.max_attempts)
-                              : "-";
-
-                          const stepSelected = selectedStepId === step.id;
-                          const stepRelated = !stepSelected && highlightedStepIds.has(step.id);
-
-                          return (
-                            <button
-                              key={step.id}
-                              type="button"
-                              className={`${styles.stepItem} ${stepSelected ? styles.selected : ""} ${stepRelated ? styles.related : ""}`}
-                              onClick={() => handleSelectStep(step.id)}
-                            >
-                              <div className={styles.itemTitleRow}>
-                                <span className={styles.itemTitle}>{step.name}</span>
-                                <Tag color="blue">{t("projects.pipeline.templateStep", "template")}</Tag>
-                              </div>
-                              <div className={styles.itemMeta}>{step.kind}</div>
-                              <div className={styles.itemMeta}>{step.id}</div>
-                              <div className={styles.itemMeta}>
-                                {t("projects.pipeline.contract.dependsOn", "Depends on")}: {dependsOn.join(", ") || "-"}
-                              </div>
-                              <div className={styles.itemMeta}>
-                                {t("projects.pipeline.contract.inputs", "Inputs")}: {inputKeys.join(", ") || "-"}
-                              </div>
-                              <div className={styles.itemMeta}>
-                                {t("projects.pipeline.contract.outputs", "Outputs")}: {outputKeys.join(", ") || "-"}
-                              </div>
-                              <div className={styles.itemMeta}>
-                                {t("projects.pipeline.contract.bindings", "Input bindings")}: {bindingKeys.join(", ") || "-"}
-                              </div>
-                              <div className={styles.itemMeta}>
-                                {t("projects.pipeline.contract.execution", "Execution")}: {hasPrompt ? "prompt" : "-"}
-                                {hasScript ? "+script" : ""}
-                              </div>
-                              <div className={styles.itemMeta}>
-                                {t("projects.pipeline.contract.retry", "Retry max attempts")}: {retryMaxAttempts}
-                              </div>
-                            </button>
-                          );
-                        })
-                        ) : (
-                          <Empty
-                            image={Empty.PRESENTED_IMAGE_SIMPLE}
-                            description={t("projects.pipeline.noSteps", "No steps available")}
-                          />
-                        )}
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            </Card>
+            <ProjectAutomationPanel
+              selectedRunStatus={selectedRunSummary?.status}
+              selectedTemplateId={selectedTemplateId}
+              selectedRunId={selectedRunId}
+              selectedProjectExists={Boolean(selectedProject)}
+              pipelineTemplates={pipelineTemplates}
+              pipelineLoading={pipelineLoading}
+              pipelineRuns={pipelineRuns}
+              runsForSelectedTemplate={runsForSelectedTemplate}
+              activeRunTemplate={activeRunTemplate}
+              runDetail={runDetail}
+              runProgress={runProgress}
+              stepContractById={stepContractById}
+              selectedStepId={selectedStepId}
+              highlightedStepIds={highlightedStepIds}
+              createRunLoading={createRunLoading}
+              importLoading={importLoading}
+              importModalOpen={importModalOpen}
+              selectedPlatformTemplateId={selectedPlatformTemplateId}
+              platformTemplates={platformTemplates}
+              verificationGateSummary={verificationGateSummary}
+              canPromoteToTemplateDraft={canPromoteToTemplateDraft}
+              onBackToList={() => navigate("/projects")}
+              onUploadFiles={() => setUploadModalOpen(true)}
+              onOpenImportModal={() => {
+                void handleOpenImportModal();
+              }}
+              onCreateRun={() => {
+                void handleCreateRun();
+              }}
+              onStartAutomation={() => {
+                setWorkspaceFocusChatId("");
+                void handleEnsureDesignChat(true);
+              }}
+              onPrepareImplementationDraft={() => {
+                void handlePrepareImplementationDraft();
+              }}
+              onPrepareValidationDraft={() => {
+                void handlePrepareValidationDraft();
+              }}
+              onPreparePromotionDraft={() => {
+                void handlePreparePromotionDraft();
+              }}
+              onSelectTemplateId={setSelectedTemplateId}
+              onSelectRunId={setSelectedRunId}
+              onSelectStep={handleSelectStep}
+              onCloseImportModal={() => setImportModalOpen(false)}
+              onImportPlatformTemplate={() => {
+                void handleImportPlatformTemplate();
+              }}
+              onSelectPlatformTemplateId={setSelectedPlatformTemplateId}
+              formatRunTimeLabel={formatRunTimeLabel}
+              statusTagColor={statusTagColor}
+            />
 
             <Modal
               title={t("projects.upload.title", "Upload Project Files")}
@@ -2524,35 +2301,6 @@ export default function ProjectDetailPage() {
               </div>
             </Modal>
 
-            <Modal
-              title={t("projects.pipeline.importGlobalTitle", "Import Global Pipeline")}
-              open={importModalOpen}
-              confirmLoading={importLoading}
-              onOk={() => void handleImportPlatformTemplate()}
-              onCancel={() => setImportModalOpen(false)}
-              okButtonProps={{ disabled: !selectedPlatformTemplateId }}
-              okText={t("projects.pipeline.importGlobal", "Import Global")}
-            >
-              {platformTemplates.length === 0 ? (
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description={t(
-                    "projects.pipeline.noGlobalTemplates",
-                    "No global templates available",
-                  )}
-                />
-              ) : (
-                <Select
-                  className={styles.importTemplateSelect}
-                  value={selectedPlatformTemplateId || undefined}
-                  options={platformTemplates.map((template) => ({
-                    label: `${template.name}${template.version ? ` (${template.version})` : ""}`,
-                    value: template.id,
-                  }))}
-                  onChange={setSelectedPlatformTemplateId}
-                />
-              )}
-            </Modal>
           </div>
 
           <div className={styles.columnRight}>
