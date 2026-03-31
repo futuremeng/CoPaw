@@ -203,6 +203,7 @@ export default function ProjectDetailPage() {
   const workspaceFocusChatIdRef = useRef("");
   const designFocusChatIdRef = useRef("");
   const runRestoreAttemptKeyRef = useRef("");
+  const automationDrawerAutoOpenKeyRef = useRef("");
 
   const currentAgent = useMemo(
     () => getCurrentAgent(agents, selectedAgent),
@@ -1074,8 +1075,30 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     if (!selectedRunId) {
       setRunDetail(null);
+      automationDrawerAutoOpenKeyRef.current = "";
     }
   }, [selectedRunId]);
+
+  useEffect(() => {
+    if (!selectedRunId) {
+      return;
+    }
+    const runStatus = runDetail?.status || selectedRunSummary?.status || "";
+    if (runStatus !== "running" && runStatus !== "failed") {
+      return;
+    }
+
+    const autoOpenKey = `${selectedRunId}:${runStatus}`;
+    if (automationDrawerAutoOpenKeyRef.current === autoOpenKey) {
+      return;
+    }
+    automationDrawerAutoOpenKeyRef.current = autoOpenKey;
+    setAutomationDrawerOpen(true);
+  }, [
+    runDetail?.status,
+    selectedRunId,
+    selectedRunSummary?.status,
+  ]);
 
   useEffect(() => {
     if (!currentAgent || !selectedProject || !selectedRunId) {
