@@ -426,7 +426,11 @@ build_console() {
     fi
 
     log "Installing frontend dependencies (npm ci)..."
-    (cd "$CONSOLE_DIR" && npm ci)
+    if ! (cd "$CONSOLE_DIR" && npm ci); then
+        log "npm ci failed (likely lockfile mismatch)."
+        log "Falling back to npm install to refresh dependencies and lockfile."
+        (cd "$CONSOLE_DIR" && npm install)
+    fi
 
     log "Building frontend (npm run build)..."
     (cd "$CONSOLE_DIR" && npm run build)
