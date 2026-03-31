@@ -16,7 +16,7 @@ import sessionApi from "./sessionApi";
 import defaultConfig, { getDefaultConfig } from "./OptionsPanel/defaultConfig";
 import { chatApi } from "../../api/modules/chat";
 import { buildAuthHeaders } from "../../api/authHeaders";
-import { getApiToken, getApiUrl } from "../../api/config";
+import { getApiUrl } from "../../api/config";
 import { providerApi } from "../../api/modules/provider";
 import type { ProviderInfo, ModelInfo } from "../../api/types";
 import ModelSelector from "./ModelSelector";
@@ -493,9 +493,21 @@ export default function ChatPage() {
   const staleAutoSelectedIdRef = useRef<string | null>(null);
   const chatIdRef = useRef(chatId);
   const navigateRef = useRef(navigate);
+  const pendingNavigationTargetRef = useRef<string | null>(null);
   const chatRef = useRef<IAgentScopeRuntimeWebUIRef>(null);
   chatIdRef.current = chatId;
   navigateRef.current = navigate;
+
+  const scheduleReplaceNavigation = useCallback((target: string) => {
+    pendingNavigationTargetRef.current = target;
+    queueMicrotask(() => {
+      if (pendingNavigationTargetRef.current !== target) {
+        return;
+      }
+      pendingNavigationTargetRef.current = null;
+      navigateRef.current(target, { replace: true });
+    });
+  }, []);
 
   useEffect(() => {
     sessionApi.setChatRef(chatRef);
@@ -504,9 +516,11 @@ export default function ChatPage() {
 
   // Tell sessionApi which session to put first in getSessionList, so the library's
   // useMount auto-selects the correct session without an extra getSession round-trip.
-  if (chatId && sessionApi.preferredChatId !== chatId) {
-    sessionApi.preferredChatId = chatId;
-  }
+  useEffect(() => {
+    if (chatId && sessionApi.preferredChatId !== chatId) {
+      sessionApi.preferredChatId = chatId;
+    }
+  }, [chatId]);
 
   // Register session API event callbacks for URL synchronization
 
@@ -516,7 +530,7 @@ export default function ChatPage() {
       // Update URL when realId is resolved, regardless of current chatId
       // (chatId may be undefined if URL was cleared in onSessionCreated)
       lastSessionIdRef.current = realId;
-      navigateRef.current(`/chat/${realId}`, { replace: true });
+      scheduleReplaceNavigation(`/chat/${realId}`);
     };
 
     sessionApi.onSessionRemoved = (removedId) => {
@@ -534,7 +548,7 @@ export default function ChatPage() {
           to: "/chat",
           reason: "removed-current-session",
         });
-        navigateRef.current("/chat", { replace: true });
+        scheduleReplaceNavigation("/chat");
       }
     };
 
@@ -572,7 +586,7 @@ export default function ChatPage() {
 
       if (targetId !== lastSessionIdRef.current) {
         lastSessionIdRef.current = targetId;
-        navigateRef.current(`/chat/${targetId}`, { replace: true });
+        scheduleReplaceNavigation(`/chat/${targetId}`);
       }
     };
 
@@ -580,7 +594,7 @@ export default function ChatPage() {
       if (!isChatActiveRef.current) return;
       // Clear URL when creating new session, wait for realId resolution to update
       lastSessionIdRef.current = null;
-      navigateRef.current("/chat", { replace: true });
+      scheduleReplaceNavigation("/chat");
     };
 
     return () => {
@@ -589,7 +603,7 @@ export default function ChatPage() {
       sessionApi.onSessionSelected = null;
       sessionApi.onSessionCreated = null;
     };
-  }, []);
+  }, [scheduleReplaceNavigation]);
 
   // Setup multimodal capabilities tracking via custom hook
 
@@ -645,11 +659,11 @@ export default function ChatPage() {
           requestedSessionId: sessionId,
         },
       });
-      navigateRef.current(`/chat/${urlId}`, { replace: true });
+      scheduleReplaceNavigation(`/chat/${urlId}`);
     }
 
     return sessionApi.getSession(sessionId);
-  }, []);
+  }, [scheduleReplaceNavigation]);
 
   const createSessionWrapped = useCallback(
     async (session: Partial<{ id: string }>) => {
@@ -663,11 +677,11 @@ export default function ChatPage() {
         to: `/chat/${newSessionId}`,
         reason: "create-new-session",
       });
-      navigateRef.current(`/chat/${newSessionId}`, { replace: true });
+      scheduleReplaceNavigation(`/chat/${newSessionId}`);
     }
     return result;
     },
-    [],
+    [scheduleReplaceNavigation],
   );
 
   const wrappedSessionApi = useMemo(
@@ -690,7 +704,7 @@ export default function ChatPage() {
         message.error(t("common.copyFailed"));
       }
     },
-    [t],
+    [message, t],
   );
 
   const persistSessionMessages = useCallback(
@@ -1065,21 +1079,8 @@ export default function ChatPage() {
     async (data: CustomFetchData): Promise<Response> => {
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
+        ...buildAuthHeaders(),
       };
-      const token = getApiToken();
-      if (token) headers.Authorization = `Bearer ${token}`;
-      try {
-        const agentStorage = localStorage.getItem("copaw-agent-storage");
-        if (agentStorage) {
-          const parsed = JSON.parse(agentStorage);
-          const selectedAgent = parsed?.state?.selectedAgent;
-          if (selectedAgent) {
-            headers["X-Agent-Id"] = selectedAgent;
-          }
-        }
-      } catch (error) {
-        console.warn("Failed to get selected agent from storage:", error);
-      }
 
       const shouldReconnect =
         data.reconnect || data.biz_params?.reconnect === true;
@@ -1304,7 +1305,7 @@ export default function ChatPage() {
         onError?.(e instanceof Error ? e : new Error(String(e)));
       }
     },
-    [multimodalCaps, t],
+    [message, multimodalCaps, t],
   );
 
   const options = useMemo(() => {

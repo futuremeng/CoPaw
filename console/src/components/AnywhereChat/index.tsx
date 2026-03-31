@@ -15,7 +15,8 @@ import sessionApi from "../../pages/Chat/sessionApi";
 import { chatApi } from "../../api/modules/chat";
 import { providerApi } from "../../api/modules/provider";
 import { agentApi } from "../../api/modules/agent";
-import { getApiToken, getApiUrl } from "../../api/config";
+import { buildAuthHeaders } from "../../api/authHeaders";
+import { getApiUrl } from "../../api/config";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useAgentStore } from "../../stores/agentStore";
 import AgentScopeRuntimeResponseBuilder from "@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/AgentScopeRuntime/Response/Builder.js";
@@ -711,12 +712,8 @@ export default function AnywhereChat({
 
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
+        ...buildAuthHeaders(),
       };
-      const token = getApiToken();
-      if (token) headers.Authorization = `Bearer ${token}`;
-      if (selectedAgent) {
-        headers["X-Agent-Id"] = selectedAgent;
-      }
 
       const input = data.input || [];
       const lastInput = input.slice(-1);
@@ -839,7 +836,6 @@ export default function AnywhereChat({
       loadRuntimeStatusWithRetry,
       onAssistantTurnCompleted,
       runtimeStatusOpen,
-      selectedAgent,
       sessionId,
       updateTransientMessages,
     ],
