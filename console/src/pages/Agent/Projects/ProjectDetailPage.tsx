@@ -1222,48 +1222,6 @@ export default function ProjectDetailPage() {
     return sorted[0]?.id || "";
   }, [currentAgent, selectedProject, selectedTemplateId]);
 
-  const resolveLatestRunBoundChatId = useCallback(async (): Promise<string> => {
-    if (!selectedProject || !selectedRunId) {
-      return "";
-    }
-
-    const chats = await chatApi.listChats({ user_id: "default", channel: "console" });
-    const matched = chats.filter((chat) => {
-      const meta =
-        chat.meta && typeof chat.meta === "object"
-          ? (chat.meta as Record<string, unknown>)
-          : undefined;
-      const metaType = getMetaString(meta, "focus_type");
-      const metaRunId = getMetaString(meta, "run_id");
-      const metaProjectId = getMetaString(meta, "project_id");
-      if (metaType !== "project_run" || metaRunId !== selectedRunId) {
-        return false;
-      }
-      if (metaProjectId && metaProjectId !== selectedProject.id) {
-        return false;
-      }
-      return true;
-    });
-
-    if (matched.length === 0) {
-      const sessionPrefix = `project-run-${selectedRunId}-`;
-      const bySession = chats.filter((chat) =>
-        (chat.session_id || "").startsWith(sessionPrefix),
-      );
-      if (bySession.length > 0) {
-        const sorted = sortChatsForRestore(bySession);
-        return sorted[0]?.id || "";
-      }
-    }
-
-    if (matched.length === 0) {
-      return "";
-    }
-
-    const sorted = sortChatsForRestore(matched);
-    return sorted[0]?.id || "";
-  }, [selectedProject, selectedRunId]);
-
   const handleEnsureDesignChat = useCallback(async (forceNew = false, allowCreate = true): Promise<string> => {
     if (!selectedProject || !currentAgent) {
       return "";
@@ -1392,7 +1350,6 @@ export default function ProjectDetailPage() {
     activeRunChatId,
     pipelineLoading,
     chatStarting,
-    resolveLatestRunBoundChatId,
     setError,
   });
 
