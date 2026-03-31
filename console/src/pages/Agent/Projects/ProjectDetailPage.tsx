@@ -19,6 +19,7 @@ import ProjectOverviewCard from "./ProjectOverviewCard";
 import ProjectUploadModal from "./ProjectUploadModal";
 import ProjectWorkbenchPanel from "./ProjectWorkbenchPanel";
 import useArtifactSelectionGuards from "./useArtifactSelectionGuards";
+import useProjectChatFocusEffects from "./useProjectChatFocusEffects";
 import useLeaveConfirmGuard from "./useLeaveConfirmGuard";
 import useOpenUploadQuery from "./useOpenUploadQuery";
 import useProjectUploadController from "./useProjectUploadController";
@@ -1450,24 +1451,26 @@ export default function ProjectDetailPage() {
     t,
   ]);
 
-  useEffect(() => {
-    runFocusChatIdRef.current = runFocusChatId;
-  }, [runFocusChatId]);
-
-  useEffect(() => {
-    workspaceFocusChatIdRef.current = workspaceFocusChatId;
-  }, [workspaceFocusChatId]);
-
-  useEffect(() => {
-    designFocusChatIdRef.current = designFocusChatId;
-  }, [designFocusChatId]);
-
-  useEffect(() => {
-    const fallbackChatId = runDetail?.focus_chat_id || selectedRunSummary?.focus_chat_id || "";
-    if (fallbackChatId && fallbackChatId !== runFocusChatId) {
-      setRunFocusChatId(fallbackChatId);
-    }
-  }, [runDetail?.focus_chat_id, runFocusChatId, selectedRunSummary?.focus_chat_id]);
+  useProjectChatFocusEffects({
+    runFocusChatId,
+    workspaceFocusChatId,
+    designFocusChatId,
+    setRunFocusChatId,
+    runDetailFocusChatId: runDetail?.focus_chat_id,
+    selectedRunSummaryFocusChatId: selectedRunSummary?.focus_chat_id,
+    runFocusChatIdRef,
+    workspaceFocusChatIdRef,
+    designFocusChatIdRef,
+    runRestoreAttemptKeyRef,
+    currentAgentId: currentAgent?.id,
+    selectedProjectId: selectedProject?.id,
+    selectedRunId,
+    activeRunChatId,
+    pipelineLoading,
+    chatStarting,
+    resolveLatestRunBoundChatId,
+    setError,
+  });
 
   useEffect(() => {
     if (!currentAgent) {
@@ -1519,46 +1522,6 @@ export default function ProjectDetailPage() {
     void loadProjectFiles(currentAgent.id, selectedProject);
     void loadPipelineContext(currentAgent.id, selectedProject);
   }, [currentAgent, selectedProject, loadProjectFiles, loadPipelineContext]);
-
-  useEffect(() => {
-    if (!currentAgent || !selectedProject || !selectedRunId) {
-      return;
-    }
-    if (activeRunChatId || pipelineLoading || chatStarting) {
-      return;
-    }
-
-    const restoreKey = `${currentAgent.id}:${selectedProject.id}:${selectedRunId}`;
-    if (runRestoreAttemptKeyRef.current === restoreKey) {
-      return;
-    }
-    runRestoreAttemptKeyRef.current = restoreKey;
-
-    let cancelled = false;
-    void resolveLatestRunBoundChatId()
-      .then((restoredChatId) => {
-        if (cancelled || !restoredChatId) {
-          return;
-        }
-        setRunFocusChatId((prev) => prev || restoredChatId);
-        setError("");
-      })
-      .catch(() => {
-        // Keep silent for passive restore checks.
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    activeRunChatId,
-    chatStarting,
-    currentAgent,
-    pipelineLoading,
-    resolveLatestRunBoundChatId,
-    selectedProject,
-    selectedRunId,
-  ]);
 
   useEffect(() => {
     if (!currentAgent || !selectedProject || !selectedFilePath) {
