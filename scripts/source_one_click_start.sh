@@ -13,6 +13,8 @@ AUTO_STOP=1
 STOP_WAIT_SECONDS=20
 INSTALL_SHORTCUT=1
 VENV_PYTHON=""
+AUTO_STASH_CREATED=0
+AUTO_STASH_REF=""
 
 usage() {
     cat <<'EOF'
@@ -20,6 +22,7 @@ One-click source startup for CoPaw.
 
 What it does:
 1) git pull (ff-only)
+    - if local changes exist: ask within 5s to keep (stash) or discard
 2) create/activate .venv
 3) install Python deps (editable mode)
 4) build console frontend and copy dist assets
@@ -122,8 +125,84 @@ prepare_git() {
 
     local branch
     branch="$(git -C "$ROOT_DIR" rev-parse --abbrev-ref HEAD)"
+
+    local has_local_changes=0
+    if [[ -n "$(git -C "$ROOT_DIR" status --porcelain --untracked-files=normal)" ]]; then
+        has_local_changes=1
+    fi
+
+    if [[ "$has_local_changes" -eq 1 ]]; then
+        local action=""
+        local stash_before=""
+        local stash_after=""
+
+        log "Detected local changes in working tree."
+        echo "[source-start] Choose within 5s: keep via stash [k], discard [d], abort [a]."
+        if read -r -t 5 -p "[source-start] Action [k/d/a] (default: d): " action; then
+            echo
+        else
+            action="d"
+            echo
+            log "No input received within 5s, defaulting to discard."
+        fi
+
+        action="${action,,}"
+        case "$action" in
+            ""|d|discard)
+                log "Discarding local changes before pull."
+                git -C "$ROOT_DIR" reset --hard HEAD
+                git -C "$ROOT_DIR" clean -fd
+                ;;
+            k|keep|stash)
+                stash_before="$(git -C "$ROOT_DIR" rev-parse -q --verify refs/stash 2>/dev/null || true)"
+                log "Keeping local changes via temporary stash before pull."
+                git -C "$ROOT_DIR" stash push --include-untracked -m "source-start:auto-stash"
+                stash_after="$(git -C "$ROOT_DIR" rev-parse -q --verify refs/stash 2>/dev/null || true)"
+                if [[ -n "$stash_after" && "$stash_after" != "$stash_before" ]]; then
+                    AUTO_STASH_CREATED=1
+                    AUTO_STASH_REF="$stash_after"
+                    log "Temporary stash created: $AUTO_STASH_REF"
+                fi
+                ;;
+            a|abort|q|quit)
+                log "Aborted due to local changes."
+                exit 1
+                ;;
+            *)
+                log "Unknown action '$action', defaulting to discard."
+                git -C "$ROOT_DIR" reset --hard HEAD
+                git -C "$ROOT_DIR" clean -fd
+                ;;
+        esac
+    fi
+
     log "Pulling latest changes for branch: $branch"
-    git -C "$ROOT_DIR" pull --ff-only
+    if ! git -C "$ROOT_DIR" pull --ff-only; then
+        if [[ "$AUTO_STASH_CREATED" -eq 1 && -n "$AUTO_STASH_REF" ]]; then
+            log "Pull failed, restoring stashed local changes..."
+            if ! git -C "$ROOT_DIR" stash apply --index "$AUTO_STASH_REF"; then
+                echo "Failed to auto-restore stashed changes ($AUTO_STASH_REF)." >&2
+                echo "Please recover manually: git stash list" >&2
+                exit 1
+            fi
+            git -C "$ROOT_DIR" stash drop "$AUTO_STASH_REF" >/dev/null
+            AUTO_STASH_CREATED=0
+            AUTO_STASH_REF=""
+        fi
+        exit 1
+    fi
+
+    if [[ "$AUTO_STASH_CREATED" -eq 1 && -n "$AUTO_STASH_REF" ]]; then
+        log "Pull succeeded, restoring stashed local changes..."
+        if ! git -C "$ROOT_DIR" stash apply --index "$AUTO_STASH_REF"; then
+            echo "Pulled latest code, but failed to auto-restore stashed changes." >&2
+            echo "Resolve manually: git stash apply --index $AUTO_STASH_REF" >&2
+            exit 1
+        fi
+        git -C "$ROOT_DIR" stash drop "$AUTO_STASH_REF" >/dev/null
+        AUTO_STASH_CREATED=0
+        AUTO_STASH_REF=""
+    fi
 }
 
 collect_running_pids_on_port() {
