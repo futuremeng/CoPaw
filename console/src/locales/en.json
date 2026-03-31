@@ -1492,5 +1492,34 @@
     "nothingToUpdate": "Please enter a new username or password",
     "passwordEmpty": "Password cannot be blank",
     "usernameEmpty": "Username cannot be blank"
+  },
+  "projects": {
+    "title": "Projects",
+    "open": "Open",
+    "overview": "Overview",
+    "summary": "Project Summary",
+    "tags": "Tags",
+    "files": "Files",
+    "runs": "Runs",
+    "updated": "Updated",
+    "workspaceSummary": "Workspace Snapshot",
+    "detailTitle": "Project Workspace",
+    "detailDescription": "Move this project forward through goals, materials, collaboration, and deliverables. Automation stays available as an advanced capability.",
+    "automation": {
+      "title": "Automation",
+      "flows": "Flows",
+      "guidance": "Automation Guidance"
+    },
+    "chat": {
+      "workspaceLabel": "Project workspace",
+      "selectContext": "Start a project collaboration session first. Open automation design only when you are ready to formalize the workflow.",
+      "startCollaboration": "Start project collaboration",
+      "startAutomation": "Open automation design",
+      "collaborationPlaceholder": "Describe the project goal, current materials, or the next thing you want to move forward.",
+      "collaborationWelcomeGreeting": "Project collaboration assistant is ready.",
+      "collaborationWelcomeDescription": "Use this space to understand the project, organize materials, and plan the next step before opening automation.",
+      "collaborationPrompt1": "Summarize the current project based on the available files and highlight missing inputs.",
+      "collaborationPrompt2": "Suggest the next three actions to move this project forward without assuming a fixed flow yet."
+    }
   }
 }

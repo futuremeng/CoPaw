@@ -227,6 +227,26 @@ function buildProjectFlowBootstrapPrompt(params: {
   ].join("\n");
 }
 
+function buildProjectWorkspaceSummary(params: {
+  projectName: string;
+  projectDescription: string;
+  workspaceDir: string;
+  sourceFiles: string[];
+}): string {
+  const seedFiles = selectSeedSourceFiles(params.sourceFiles);
+  const fileLines = seedFiles.length
+    ? seedFiles.map((file, index) => `${index + 1}. ${file}`).join("\n")
+    : "- 暂无已索引的项目资料";
+  const safeDescription = params.projectDescription.trim() || "暂无项目简介";
+  return [
+    `项目：${params.projectName}`,
+    `简介：${safeDescription}`,
+    `工作区：${params.workspaceDir || "-"}`,
+    "优先资料：",
+    fileLines,
+  ].join("\n");
+}
+
 function inferMimeTypeByPath(path: string): string {
   const normalized = path.toLowerCase();
   if (normalized.endsWith(".md") || normalized.endsWith(".markdown") || normalized.endsWith(".mdx")) {
@@ -407,6 +427,7 @@ export default function ProjectDetailPage() {
   const [importLoading, setImportLoading] = useState(false);
   const [selectedPlatformTemplateId, setSelectedPlatformTemplateId] = useState("");
   const [runFocusChatId, setRunFocusChatId] = useState("");
+  const [workspaceFocusChatId, setWorkspaceFocusChatId] = useState("");
   const [designFocusChatId, setDesignFocusChatId] = useState("");
   const [chatStarting, setChatStarting] = useState(false);
   const [selectedStepId, setSelectedStepId] = useState("");
@@ -432,8 +453,8 @@ export default function ProjectDetailPage() {
   const [sendingSelectedFiles, setSendingSelectedFiles] = useState(false);
   const [autoAnalyzeOnAttach, setAutoAnalyzeOnAttach] = useState(true);
   const runFocusChatIdRef = useRef("");
+  const workspaceFocusChatIdRef = useRef("");
   const designFocusChatIdRef = useRef("");
-  const designRestoreAttemptKeyRef = useRef("");
   const runRestoreAttemptKeyRef = useRef("");
 
   const currentAgent = useMemo(
@@ -715,6 +736,8 @@ export default function ProjectDetailPage() {
     [runDetail?.focus_chat_id, runFocusChatId, selectedRunSummary?.focus_chat_id],
   );
 
+  const activeWorkspaceChatId = useMemo(() => workspaceFocusChatId, [workspaceFocusChatId]);
+
   const activeDesignChatId = useMemo(() => designFocusChatId, [designFocusChatId]);
 
   const runProgress = useMemo(() => {
@@ -744,6 +767,28 @@ export default function ProjectDetailPage() {
   const succeededRunCountForSelectedTemplate = useMemo(
     () => runsForSelectedTemplate.filter((item) => isSucceededStatus(item.status)).length,
     [runsForSelectedTemplate],
+  );
+
+  const projectFileCount = useMemo(
+    () => projectFiles.filter((file) => !isBuiltInProjectFile(file.path)).length,
+    [projectFiles],
+  );
+
+  const projectWorkspaceSummary = useMemo(
+    () => buildProjectWorkspaceSummary({
+      projectName: selectedProject?.name || routeProjectId || "-",
+      projectDescription: selectedProject?.description || "",
+      workspaceDir: selectedProject?.workspace_dir || currentAgent?.workspace_dir || "",
+      sourceFiles: projectFiles.map((item) => item.path),
+    }),
+    [
+      currentAgent?.workspace_dir,
+      projectFiles,
+      routeProjectId,
+      selectedProject?.description,
+      selectedProject?.name,
+      selectedProject?.workspace_dir,
+    ],
   );
 
   const selectedRunAllStepsSucceeded = useMemo(() => {
@@ -1247,6 +1292,53 @@ export default function ProjectDetailPage() {
     }
   }, [activeRunChatId, resolvedProjectRequestId, selectedProject, selectedRunId, t]);
 
+  const handleEnsureWorkspaceChat = useCallback(async (forceNew = false): Promise<string> => {
+    if (!selectedProject) {
+      return "";
+    }
+
+    if (!forceNew && workspaceFocusChatId) {
+      return workspaceFocusChatId;
+    }
+
+    setChatStarting(true);
+    try {
+      const previousChatId = workspaceFocusChatIdRef.current;
+      if (forceNew && previousChatId) {
+        void chatApi
+          .clearChatMeta(previousChatId, {
+            user_id: "default",
+            channel: "console",
+          })
+          .catch(() => {});
+      }
+
+      const created = await chatApi.createChat({
+        name: `[project] ${selectedProject.name}`,
+        session_id: `project-workspace-${selectedProject.id}-${Date.now()}`,
+        user_id: "default",
+        channel: "console",
+        meta: {
+          focus_type: "project_workspace",
+          focus_id: selectedProject.id,
+          project_id: selectedProject.id,
+          project_request_id: resolvedProjectRequestId || selectedProject.id,
+          focus_path: `projects/${selectedProject.id}`,
+        },
+      });
+
+      setWorkspaceFocusChatId(created.id);
+      setError("");
+      return created.id;
+    } catch (err) {
+      console.error("failed to create project workspace chat", err);
+      setError(t("projects.chat.startFailed", "Failed to start project chat."));
+      return "";
+    } finally {
+      setChatStarting(false);
+    }
+  }, [resolvedProjectRequestId, selectedProject, t, workspaceFocusChatId]);
+
   const resolveLatestDesignBoundChatId = useCallback(async (): Promise<string> => {
     if (!selectedProject || !currentAgent) {
       return "";
@@ -1453,6 +1545,10 @@ export default function ProjectDetailPage() {
   }, [runFocusChatId]);
 
   useEffect(() => {
+    workspaceFocusChatIdRef.current = workspaceFocusChatId;
+  }, [workspaceFocusChatId]);
+
+  useEffect(() => {
     designFocusChatIdRef.current = designFocusChatId;
   }, [designFocusChatId]);
 
@@ -1481,13 +1577,13 @@ export default function ProjectDetailPage() {
     setSelectedStepId("");
     setRunDetail(null);
     setRunFocusChatId("");
+    setWorkspaceFocusChatId("");
     setDesignFocusChatId("");
     setUploadModalOpen(false);
     setPendingUploads([]);
     setUploadTargetDir("data");
     setSelectedAttachPaths([]);
     setSendingSelectedFiles(false);
-    designRestoreAttemptKeyRef.current = "";
     runRestoreAttemptKeyRef.current = "";
   }, [routeProjectId]);
 
@@ -1541,33 +1637,6 @@ export default function ProjectDetailPage() {
     void loadProjectFiles(currentAgent.id, selectedProject);
     void loadPipelineContext(currentAgent.id, selectedProject);
   }, [currentAgent, selectedProject, loadProjectFiles, loadPipelineContext]);
-
-  useEffect(() => {
-    if (!currentAgent || !selectedProject) {
-      return;
-    }
-    if (selectedRunId || activeDesignChatId || pipelineLoading || chatStarting) {
-      return;
-    }
-
-    const templateId = selectedTemplateId || "draft";
-    const restoreKey = `${currentAgent.id}:${selectedProject.id}:${templateId}`;
-    if (designRestoreAttemptKeyRef.current === restoreKey) {
-      return;
-    }
-    designRestoreAttemptKeyRef.current = restoreKey;
-
-    void handleEnsureDesignChat(false, true);
-  }, [
-    activeDesignChatId,
-    chatStarting,
-    currentAgent,
-    handleEnsureDesignChat,
-    pipelineLoading,
-    selectedProject,
-    selectedRunId,
-    selectedTemplateId,
-  ]);
 
   useEffect(() => {
     if (!currentAgent || !selectedProject || !selectedRunId) {
@@ -2130,9 +2199,82 @@ export default function ProjectDetailPage() {
         </Card>
       ) : (
         <div className={styles.content}>
+          <div className={styles.columnLeft}>
+            <Card
+              title={<span className={styles.sectionTitle}>{t("projects.overview", "Overview")}</span>}
+              styles={{ body: { padding: 12 } }}
+              extra={
+                <Text type="secondary" className={styles.panelExtraText}>
+                  {selectedProject.status || t("projects.statusActive", "active")}
+                </Text>
+              }
+            >
+              <div className={styles.scrollContainer}>
+                <div className={styles.overviewSection}>
+                  <div className={styles.subSectionTitle}>{t("projects.summary", "Project Summary")}</div>
+                  <div className={styles.overviewDescription}>
+                    {selectedProject.description || t("projects.noDescription", "No description")}
+                  </div>
+                </div>
+
+                {selectedProject.tags.length > 0 && (
+                  <div className={styles.overviewSection}>
+                    <div className={styles.subSectionTitle}>{t("projects.tags", "Tags")}</div>
+                    <div className={styles.overviewTags}>
+                      {selectedProject.tags.map((tag) => (
+                        <Tag key={tag}>{tag}</Tag>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className={styles.metricSummaryGrid}>
+                  <div className={styles.metricSummaryCard}>
+                    <div className={styles.itemMeta}>{t("projects.files", "Files")}</div>
+                    <div className={styles.metricSummaryValue}>{projectFileCount}</div>
+                  </div>
+                  <div className={styles.metricSummaryCard}>
+                    <div className={styles.itemMeta}>{t("projects.automation.flows", "Flows")}</div>
+                    <div className={styles.metricSummaryValue}>{pipelineTemplates.length}</div>
+                  </div>
+                  <div className={styles.metricSummaryCard}>
+                    <div className={styles.itemMeta}>{t("projects.runs", "Runs")}</div>
+                    <div className={styles.metricSummaryValue}>{pipelineRuns.length}</div>
+                  </div>
+                  <div className={styles.metricSummaryCard}>
+                    <div className={styles.itemMeta}>{t("projects.updated", "Updated")}</div>
+                    <div className={styles.metricSummaryValue}>
+                      {selectedProject.updated_time ? selectedProject.updated_time.slice(5, 10) : "-"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className={styles.overviewSection}>
+                  <div className={styles.subSectionTitle}>{t("projects.workspaceSummary", "Workspace Snapshot")}</div>
+                  <pre className={styles.overviewSummary}>{projectWorkspaceSummary}</pre>
+                </div>
+
+                <div className={styles.overviewActions}>
+                  <Button
+                    type="primary"
+                    onClick={() => {
+                      setDesignFocusChatId("");
+                      void handleEnsureWorkspaceChat(true);
+                    }}
+                  >
+                    {t("projects.chat.startCollaboration", "Start project collaboration")}
+                  </Button>
+                  <Button onClick={() => setUploadModalOpen(true)}>
+                    {t("projects.upload.button", "Upload Files")}
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          </div>
+
           <div className={styles.columnMiddle}>
             <Card
-              title={<span className={styles.sectionTitle}>{t("projects.pipeline.title", "Pipeline")}</span>}
+              title={<span className={styles.sectionTitle}>{t("projects.automation.title", "Automation")}</span>}
               styles={{ body: { padding: 12 } }}
               extra={
                 <Text type="secondary" className={styles.panelExtraText}>
@@ -2184,11 +2326,20 @@ export default function ProjectDetailPage() {
                 <div className={styles.progressCoach}>
                   <div className={styles.progressCoachMeta}>
                     <div className={styles.subSectionTitle}>
-                      {t("projects.pipeline.dialogueDriven", "Dialogue-Driven Build")}
+                      {t("projects.automation.guidance", "Automation Guidance")}
                     </div>
                     <div className={styles.itemMeta}>{verificationGateSummary}</div>
                   </div>
                   <div className={styles.progressCoachActions}>
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        setWorkspaceFocusChatId("");
+                        void handleEnsureDesignChat(true);
+                      }}
+                    >
+                      {t("projects.chat.startAutomation", "Open automation design")}
+                    </Button>
                     <Button size="small" onClick={() => void handlePrepareImplementationDraft()}>
                       {t("projects.pipeline.nextImplementation", "Prepare next implementation prompt")}
                     </Button>
@@ -2850,7 +3001,7 @@ export default function ProjectDetailPage() {
               }}
               extra={
                 <Text type="secondary" className={styles.panelExtraText}>
-                  {selectedRunId || t("projects.pipeline.noRun", "No run")}
+                  {selectedRunId || t("projects.chat.workspaceLabel", "Project workspace")}
                 </Text>
               }
             >
@@ -2859,6 +3010,47 @@ export default function ProjectDetailPage() {
                   chatStarting ? (
                     <div className={styles.centerState}>
                       <Spin />
+                    </div>
+                  ) : activeWorkspaceChatId ? (
+                    <div className={styles.chatPanel}>
+                      <AnywhereChat
+                        sessionId={activeWorkspaceChatId}
+                        autoAttachRequest={autoAttachRequest}
+                        onAutoAttachHandled={(payload) => {
+                          if (!payload.ok) {
+                            message.error(
+                              t("projects.chat.autoAttachFailed", "Failed to attach selected file to chat."),
+                            );
+                          }
+                          setAutoAttachRequest((prev) => (prev?.id === payload.id ? null : prev));
+                        }}
+                        onNewChat={() => {
+                          setDesignFocusChatId("");
+                          void handleEnsureWorkspaceChat(true);
+                        }}
+                        inputPlaceholder={t(
+                          "projects.chat.collaborationPlaceholder",
+                          "Describe the project goal, current materials, or the next thing you want to move forward.",
+                        )}
+                        welcomeGreeting={t(
+                          "projects.chat.collaborationWelcomeGreeting",
+                          "Project collaboration assistant is ready.",
+                        )}
+                        welcomeDescription={t(
+                          "projects.chat.collaborationWelcomeDescription",
+                          "Use this space to understand the project, organize materials, and plan the next step before opening automation.",
+                        )}
+                        welcomePrompts={[
+                          t(
+                            "projects.chat.collaborationPrompt1",
+                            "Summarize the current project based on the available files and highlight missing inputs.",
+                          ),
+                          t(
+                            "projects.chat.collaborationPrompt2",
+                            "Suggest the next three actions to move this project forward without assuming a fixed flow yet.",
+                          ),
+                        ]}
+                      />
                     </div>
                   ) : activeDesignChatId ? (
                     <div className={styles.chatPanel}>
@@ -2905,13 +3097,29 @@ export default function ProjectDetailPage() {
                       <Empty
                         image={Empty.PRESENTED_IMAGE_SIMPLE}
                         description={t(
-                          "projects.chat.selectRun",
-                          "Select a run, or start a flow design session first.",
+                          "projects.chat.selectContext",
+                          "Start a project collaboration session, or open automation design when you are ready to formalize the workflow.",
                         )}
                       >
-                        <Button type="primary" onClick={() => void handleEnsureDesignChat()}>
-                          {t("projects.chat.startDesign", "Start flow design")}
-                        </Button>
+                        <div className={styles.chatEmptyActions}>
+                          <Button
+                            type="primary"
+                            onClick={() => {
+                              setDesignFocusChatId("");
+                              void handleEnsureWorkspaceChat(true);
+                            }}
+                          >
+                            {t("projects.chat.startCollaboration", "Start project collaboration")}
+                          </Button>
+                          <Button
+                            onClick={() => {
+                              setWorkspaceFocusChatId("");
+                              void handleEnsureDesignChat(true);
+                            }}
+                          >
+                            {t("projects.chat.startAutomation", "Open automation design")}
+                          </Button>
+                        </div>
                       </Empty>
                     </div>
                   )

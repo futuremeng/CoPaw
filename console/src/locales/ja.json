@@ -1490,5 +1490,34 @@
     "transcriptionInfoTitle": "文字起こしの仕組み",
     "transcriptionInfoDesc": "Whisper API 文字起こしは OpenAI 互換の /v1/audio/transcriptions エンドポイントを使用します。Whisper 対応エンドポイントを持つプロバイダー（例: OpenAI）の設定が必要です。上記で具体的なプロバイダーを選択して文字起こしを有効にしてください。",
     "transcriptionInfoDescLocal": "ローカル Whisper 文字起こしは、お使いのマシン上で直接 openai-whisper ライブラリを実行します。ffmpeg（音声デコード用）と openai-whisper Python パッケージの両方のインストールが必要です。API キーやネットワーク接続は不要です。インストール：uv pip install 'copaw[whisper]'。"
+  },
+  "projects": {
+    "title": "プロジェクト",
+    "open": "開く",
+    "overview": "概要",
+    "summary": "プロジェクト概要",
+    "tags": "タグ",
+    "files": "ファイル",
+    "runs": "実行",
+    "updated": "更新",
+    "workspaceSummary": "ワークスペース概要",
+    "detailTitle": "プロジェクトワークスペース",
+    "detailDescription": "目標、資料、協作、成果物を中心にこのプロジェクトを進めます。自動化は必要な時だけ使う高度な機能です。",
+    "automation": {
+      "title": "自動化",
+      "flows": "フロー",
+      "guidance": "自動化ガイダンス"
+    },
+    "chat": {
+      "workspaceLabel": "プロジェクト協作",
+      "selectContext": "まずはプロジェクト協作を開始し、ワークフローを固める準備ができたら自動化設計を開いてください。",
+      "startCollaboration": "プロジェクト協作を開始",
+      "startAutomation": "自動化設計を開く",
+      "collaborationPlaceholder": "プロジェクトの目標、現在の資料、または次に進めたいことを入力してください。",
+      "collaborationWelcomeGreeting": "プロジェクト協作アシスタントの準備ができました。",
+      "collaborationWelcomeDescription": "まずここでプロジェクトを理解し、資料を整理し、次の一手を決めてから自動化に進みます。",
+      "collaborationPrompt1": "現在のファイルをもとに、このプロジェクトの現状を要約し、不足している情報を指摘してください。",
+      "collaborationPrompt2": "固定されたフローを前提にせず、このプロジェクトを前進させるための次の3つの行動を提案してください。"
+    }
   }
 }

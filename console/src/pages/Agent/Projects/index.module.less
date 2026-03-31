@@ -195,6 +195,42 @@
   text-overflow: ellipsis;
 }
 
+.overviewSection {
+  margin-bottom: 16px;
+}
+
+.overviewDescription {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #444;
+  white-space: pre-wrap;
+}
+
+.overviewTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.overviewSummary {
+  margin: 0;
+  padding: 10px;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  background: #fafafa;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #666;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.overviewActions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .scrollContainer {
   flex: 1;
   min-height: 0;
@@ -684,6 +720,13 @@
   align-items: center;
   justify-content: center;
   min-height: 0;
+}
+
+.chatEmptyActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 .uploadModalBody {

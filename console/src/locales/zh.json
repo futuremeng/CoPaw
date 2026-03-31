@@ -1492,5 +1492,34 @@
     "transcriptionInfoTitle": "转写工作原理",
     "transcriptionInfoDesc": "Whisper API 转写使用 OpenAI 兼容的 /v1/audio/transcriptions 端点。需要配置一个支持 Whisper 端点的提供商（如 OpenAI）。请在上方选择具体的提供商以启用转写。",
     "transcriptionInfoDescLocal": "本地 Whisper 转写直接在您的设备上运行 openai-whisper 库。需要同时安装 ffmpeg（用于音频解码）和 openai-whisper Python 包。无需 API Key 或网络连接。安装命令：uv pip install 'copaw[whisper]'。"
+  },
+  "projects": {
+    "title": "项目",
+    "open": "打开",
+    "overview": "概览",
+    "summary": "项目摘要",
+    "tags": "标签",
+    "files": "文件",
+    "runs": "运行",
+    "updated": "更新",
+    "workspaceSummary": "工作空间快照",
+    "detailTitle": "项目工作空间",
+    "detailDescription": "围绕目标、资料、协作与产出推进这个项目；自动化流程作为高级能力按需使用。",
+    "automation": {
+      "title": "自动化",
+      "flows": "流程",
+      "guidance": "自动化指导"
+    },
+    "chat": {
+      "workspaceLabel": "项目协作",
+      "selectContext": "先开始项目协作，等你准备把工作固化为自动化方案时，再进入自动化设计。",
+      "startCollaboration": "开始项目协作",
+      "startAutomation": "打开自动化设计",
+      "collaborationPlaceholder": "描述项目目标、现有资料，或你现在想推进的下一步。",
+      "collaborationWelcomeGreeting": "项目协作助手已就绪。",
+      "collaborationWelcomeDescription": "先在这里理解项目、整理资料、规划下一步，再决定是否进入自动化。",
+      "collaborationPrompt1": "请基于当前文件总结这个项目的现状，并指出缺失信息。",
+      "collaborationPrompt2": "在不预设固定流程的前提下，给出推进这个项目的三个下一步建议。"
+    }
   }
 }

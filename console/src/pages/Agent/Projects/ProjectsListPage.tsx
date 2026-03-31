@@ -127,6 +127,11 @@ export default function ProjectsListPage() {
     navigate(`/projects/${encodeURIComponent(projectId)}?openUpload=1`);
   }, [navigate]);
 
+  const handleOpenWorkspace = useCallback((projectId: string, event: React.MouseEvent) => {
+    event.stopPropagation();
+    navigate(`/projects/${encodeURIComponent(projectId)}`);
+  }, [navigate]);
+
   const handleDelete = useCallback(async (
     projectId: string,
     projectName: string,
@@ -181,7 +186,7 @@ export default function ProjectsListPage() {
       );
       setCreateOpen(false);
       await loadAgents();
-      navigate(`/projects/${encodeURIComponent(created.id)}?openUpload=1`);
+      navigate(`/projects/${encodeURIComponent(created.id)}`);
     } catch (err) {
       if ((err as { errorFields?: unknown[] })?.errorFields) {
         return;
@@ -270,6 +275,14 @@ export default function ProjectsListPage() {
 
               {(hoverKey === project.id || deleteConfirmOpenId === project.id) && (
                 <div className={styles.cardFooter}>
+                  <Button
+                    size="small"
+                    type="primary"
+                    className={styles.openButton}
+                    onClick={(event) => handleOpenWorkspace(project.id, event)}
+                  >
+                    {t("projects.open", "Open")}
+                  </Button>
                   <Button
                     size="small"
                     className={styles.uploadButton}
