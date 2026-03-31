@@ -232,6 +232,28 @@ def _is_transient_upstream_error(exc: Exception) -> bool:
     }
 
 
+def _is_tool_call_parse_input_error(exc: Exception) -> bool:
+    """Detect model/provider parse failures for malformed tool-call output.
+
+    Some OpenAI-compatible backends reject XML-style tool calls (for example
+    ``<tool_call>`` payloads) before a response is produced.  Without a
+    dedicated check, these bubble up as AGENT_UNKNOWN_ERROR in the UI.
+    """
+    text = str(exc).lower()
+    if "failed to parse input" not in text:
+        return False
+    return any(
+        marker in text
+        for marker in (
+            "<tool_call>",
+            "<function=",
+            "</function>",
+            "<parameter=",
+            "tool_call",
+        )
+    )
+
+
 def _iter_exception_chain(exc: BaseException):
     """Yield exception with chained causes/contexts exactly once."""
     seen: set[int] = set()
@@ -827,6 +849,36 @@ class AgentRunner(Runner):
                                     f"（HTTP {status_text}）。"
                                     f"已重试 {LLM_MAX_RETRIES} 次仍失败，"
                                     f"请稍后再试。{detail_text}"
+                                ),
+                            ),
+                        ],
+                    ),
+                    True,
+                )
+                return
+
+            if _is_tool_call_parse_input_error(e):
+                detail_text = (
+                    f"\n(Details:  {debug_dump_path})"
+                    if debug_dump_path
+                    else ""
+                )
+                yield (
+                    Msg(
+                        name="Friday",
+                        role="assistant",
+                        content=[
+                            TextBlock(
+                                type="text",
+                                text=(
+                                    "⚠️ Model tool-call format is not accepted "
+                                    "by the current provider/runtime. "
+                                    "Please retry, or switch to a model/runtime "
+                                    "with function-calling compatibility.\n"
+                                    "⚠️ 当前模型/运行时不接受工具调用格式。"
+                                    "请重试，或切换到支持 function calling "
+                                    "的模型/运行时。"
+                                    f"{detail_text}"
                                 ),
                             ),
                         ],
