@@ -84,6 +84,8 @@ class ProjectArtifactItem(BaseModel):
     origin: str = "project-distilled"
     status: str = "draft"
     version: str = ""
+    artifact_file_path: str = ""
+    version_history: list[dict[str, str]] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
     derived_from_ids: list[str] = Field(default_factory=list)
     distillation_note: str = ""
@@ -279,6 +281,12 @@ _AGENTS_SQUARE_CONFIG_PATH = WORKING_DIR / "agents_square" / "config.json"
 _AGENTS_SQUARE_DEFAULT_PATH = _AGENTS_SQUARE_DEFAULT_DIR / "default.json"
 _PROJECTS_DIRNAME = "projects"
 _PROJECT_METADATA_FILENAMES = ("PROJECT.md", "project.md")
+_PROJECT_ARTIFACT_DIR_BY_KIND = {
+    "skill": "skills",
+    "script": "scripts",
+    "flow": "flows",
+    "case": "cases",
+}
 
 
 def _ensure_square_config_initialized() -> None:
@@ -489,6 +497,123 @@ def _parse_project_tags(raw_tags: Any) -> list[str]:
     return []
 
 
+def _safe_artifact_slug(raw_value: str, fallback: str) -> str:
+    slug = _slugify(raw_value)
+    if not slug or slug == "agent":
+        return fallback
+    return slug
+
+
+def _build_project_artifact_file_path(
+    kind: str,
+    artifact_id: str,
+    version: str,
+) -> str:
+    kind_dir = _PROJECT_ARTIFACT_DIR_BY_KIND.get(kind, "artifacts")
+    artifact_slug = _safe_artifact_slug(artifact_id, f"{kind}-item")
+    version_slug = _safe_artifact_slug(version, "v0-draft")
+    return f"{kind_dir}/{artifact_slug}/{version_slug}.md"
+
+
+def _parse_project_artifact_version_history(
+    raw_value: Any,
+) -> list[dict[str, str]]:
+    if not isinstance(raw_value, list):
+        return []
+
+    history: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for item in raw_value:
+        version = ""
+        file_path = ""
+        note = ""
+        if isinstance(item, str):
+            version = item.strip()
+        elif isinstance(item, dict):
+            version = str(item.get("version") or "").strip()
+            file_path = str(item.get("file_path") or "").strip()
+            note = str(item.get("note") or "").strip()
+        if not version:
+            continue
+        key = (version, file_path)
+        if key in seen:
+            continue
+        seen.add(key)
+        payload: dict[str, str] = {"version": version}
+        if file_path:
+            payload["file_path"] = file_path
+        if note:
+            payload["note"] = note
+        history.append(payload)
+    return history
+
+
+def _normalize_project_artifact_storage(
+    item: ProjectArtifactItem,
+    kind: str,
+) -> ProjectArtifactItem:
+    file_path = item.artifact_file_path.strip() or _build_project_artifact_file_path(
+        kind,
+        item.id,
+        item.version,
+    )
+    history = _parse_project_artifact_version_history(item.version_history)
+
+    current_version = item.version.strip() or "v0-draft"
+    current_entry = {
+        "version": current_version,
+        "file_path": file_path,
+    }
+    current_key = (
+        current_entry["version"],
+        current_entry["file_path"],
+    )
+    existing_keys = {
+        (
+            str(entry.get("version") or "").strip(),
+            str(entry.get("file_path") or "").strip(),
+        )
+        for entry in history
+    }
+    if current_key not in existing_keys:
+        history.append(current_entry)
+
+    return item.model_copy(
+        update={
+            "artifact_file_path": file_path,
+            "version_history": history,
+        },
+    )
+
+
+def _normalize_project_artifact_profile_storage(
+    profile: ProjectArtifactProfile,
+) -> ProjectArtifactProfile:
+    return ProjectArtifactProfile(
+        skills=[
+            _normalize_project_artifact_storage(item, "skill")
+            for item in profile.skills
+        ],
+        scripts=[
+            _normalize_project_artifact_storage(item, "script")
+            for item in profile.scripts
+        ],
+        flows=[
+            _normalize_project_artifact_storage(item, "flow")
+            for item in profile.flows
+        ],
+        cases=[
+            _normalize_project_artifact_storage(item, "case")
+            for item in profile.cases
+        ],
+    )
+
+
+def _ensure_project_artifact_layout(project_dir: Path) -> None:
+    for dirname in _PROJECT_ARTIFACT_DIR_BY_KIND.values():
+        (project_dir / dirname).mkdir(parents=True, exist_ok=True)
+
+
 def _normalize_project_artifact_item(
     raw_item: Any,
     kind: str,
@@ -513,6 +638,10 @@ def _normalize_project_artifact_item(
     )
     status = str(raw_item.get("status") or "draft").strip() or "draft"
     version = str(raw_item.get("version") or "").strip()
+    artifact_file_path = str(raw_item.get("artifact_file_path") or "").strip()
+    version_history = _parse_project_artifact_version_history(
+        raw_item.get("version_history"),
+    )
     tags = _parse_project_tags(raw_item.get("tags"))
     derived_from_ids = _parse_project_tags(raw_item.get("derived_from_ids"))
     distillation_note = str(raw_item.get("distillation_note") or "").strip()
@@ -521,19 +650,22 @@ def _normalize_project_artifact_item(
     )
     market_item_id = str(raw_item.get("market_item_id") or "").strip() or None
 
-    return ProjectArtifactItem(
+    item = ProjectArtifactItem(
         id=item_id,
         name=item_name,
         kind=kind,
         origin=origin,
         status=status,
         version=version,
+        artifact_file_path=artifact_file_path,
+        version_history=version_history,
         tags=tags,
         derived_from_ids=derived_from_ids,
         distillation_note=distillation_note,
         market_source_id=market_source_id,
         market_item_id=market_item_id,
     )
+    return _normalize_project_artifact_storage(item, kind)
 
 
 def _parse_project_artifact_list(
@@ -762,7 +894,9 @@ def _update_project_artifact_profile(
 
     metadata_file = Path(summary.metadata_file)
     metadata, body = _read_project_frontmatter_with_body(metadata_file)
-    metadata["artifact_profile"] = profile.model_dump(
+    normalized_profile = _normalize_project_artifact_profile_storage(profile)
+    _ensure_project_artifact_layout(project_dir)
+    metadata["artifact_profile"] = normalized_profile.model_dump(
         mode="json",
         exclude_none=True,
     )
@@ -851,6 +985,8 @@ def _clone_project(
         if runs_dir.exists() and runs_dir.is_dir():
             shutil.rmtree(runs_dir)
 
+    _ensure_project_artifact_layout(target_dir)
+
     metadata_file = next(
         (target_dir / name for name in _PROJECT_METADATA_FILENAMES if (target_dir / name).is_file()),
         target_dir / "PROJECT.md",
@@ -899,8 +1035,12 @@ def _create_project(
     data_subdir = _safe_project_data_subdir(body.data_dir)
     (project_dir / data_subdir).mkdir(parents=True, exist_ok=True)
     (project_dir / "pipelines" / "templates").mkdir(parents=True, exist_ok=True)
+    _ensure_project_artifact_layout(project_dir)
 
     metadata_file = project_dir / "PROJECT.md"
+    normalized_profile = _normalize_project_artifact_profile_storage(
+        body.artifact_profile,
+    )
     metadata = {
         "id": project_id,
         "name": project_name,
@@ -908,7 +1048,7 @@ def _create_project(
         "status": (body.status or "active").strip() or "active",
         "data_dir": data_subdir,
         "tags": [item.strip() for item in body.tags if str(item).strip()],
-        "artifact_profile": body.artifact_profile.model_dump(
+        "artifact_profile": normalized_profile.model_dump(
             mode="json",
             exclude_none=True,
         ),

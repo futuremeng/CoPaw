@@ -6,6 +6,12 @@ export interface ProjectArtifactItem {
   origin: string;
   status: string;
   version: string;
+  artifact_file_path?: string;
+  version_history?: Array<{
+    version: string;
+    file_path?: string;
+    note?: string;
+  }>;
   tags: string[];
   derived_from_ids: string[];
   distillation_note: string;
