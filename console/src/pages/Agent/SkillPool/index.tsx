@@ -5,10 +5,10 @@ import {
   Input,
   Modal,
   Tooltip,
-  message,
   Drawer,
   Form,
 } from "@agentscope-ai/design";
+import { useAppMessage } from "../../../hooks/useAppMessage";
 import {
   AppstoreAddOutlined,
   ImportOutlined,
@@ -84,6 +84,7 @@ function SkillPoolPage() {
   );
   const { showConflictRenameModal, conflictRenameModal } =
     useConflictRenameModal();
+  const { message } = useAppMessage();
 
   // Form state for create/edit drawer
   const [form] = Form.useForm();

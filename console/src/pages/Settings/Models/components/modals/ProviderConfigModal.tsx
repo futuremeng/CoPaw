@@ -1,14 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import type { KeyboardEvent, ReactNode, UIEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Form,
-  Input,
-  Modal,
-  message,
-  Button,
-  Select,
-} from "@agentscope-ai/design";
+import { Form, Input, Modal, Button, Select } from "@agentscope-ai/design";
+import { useAppMessage } from "../../../../../hooks/useAppMessage";
 import { ApiOutlined, DownOutlined, RightOutlined } from "@ant-design/icons";
 import type {
   ActiveModelsInfo,
@@ -281,6 +275,7 @@ export function ProviderConfigModal({
   const [runningConfig, setRunningConfig] =
     useState<AgentsRunningConfig | null>(null);
   const [form] = Form.useForm<ProviderConfigFormValues>();
+  const { message } = useAppMessage();
   const selectedChatModel = Form.useWatch("chat_model", form);
   const generateKwargsText = Form.useWatch("generate_kwargs_text", form);
   const canEditBaseUrl = !provider.freeze_url;

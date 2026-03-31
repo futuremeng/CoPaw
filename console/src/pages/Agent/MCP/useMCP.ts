@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { message } from "@agentscope-ai/design";
+import { useAppMessage } from "../../../hooks/useAppMessage";
 import api from "../../../api";
 import type { MCPClientInfo } from "../../../api/types";
 import { useTranslation } from "react-i18next";
@@ -12,6 +12,7 @@ export function useMCP() {
   const [loading, setLoading] = useState(false);
   const [queuedRefreshKeys, setQueuedRefreshKeys] = useState<string[]>([]);
   const [refreshingKeys, setRefreshingKeys] = useState<string[]>([]);
+  const { message } = useAppMessage();
 
   const loadClients = useCallback(async (options?: { silent?: boolean; showLoading?: boolean }) => {
     const { silent = false, showLoading = true } = options ?? {};
@@ -31,7 +32,7 @@ export function useMCP() {
         setLoading(false);
       }
     }
-  }, [t]);
+  }, [message, t]);
 
   useEffect(() => {
     loadClients();
@@ -75,7 +76,7 @@ export function useMCP() {
         return false;
       }
     },
-    [t, loadClients],
+    [loadClients, message, t],
   );
 
   const updateClient = useCallback(
@@ -105,7 +106,7 @@ export function useMCP() {
         return false;
       }
     },
-    [t, loadClients],
+    [loadClients, message, t],
   );
 
   const toggleEnabled = useCallback(
@@ -120,7 +121,7 @@ export function useMCP() {
         message.error(t("mcp.toggleError"));
       }
     },
-    [t, loadClients],
+    [loadClients, message, t],
   );
 
   const deleteClient = useCallback(
@@ -133,7 +134,7 @@ export function useMCP() {
         message.error(t("mcp.deleteError"));
       }
     },
-    [t, loadClients],
+    [loadClients, message, t],
   );
 
   const refreshClients = useCallback(async () => {

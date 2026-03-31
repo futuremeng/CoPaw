@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
-import { Card, Button, Form, message, Tabs } from "antd";
+import { Card, Button, Form, Tabs } from "antd";
+import { useAppMessage } from "../../../hooks/useAppMessage";
 import { PlusOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
 import { agentsApi } from "../../../api/modules/agents";
@@ -21,6 +22,7 @@ export default function AgentsPage() {
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const installedSkillsRef = useRef<string[]>([]);
   const [activeTab, setActiveTab] = useState("manage");
+  const { message } = useAppMessage();
 
   const handleCreate = () => {
     setEditingAgent(null);
