@@ -55,7 +55,7 @@ import type {
 import { useAgentStore } from "../../../stores/agentStore";
 import styles from "./index.module.less";
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 function getCurrentAgent(
   agents: AgentSummary[],
@@ -1383,14 +1383,32 @@ export default function ProjectDetailPage() {
     <div className={styles.agentsPage}>
       <div className={styles.header}>
         <div>
-          <Title level={4} className={styles.title}>
-            {t("projects.detailTitle", "Project Detail")}
-          </Title>
+          <div className={styles.pathTitleRow}>
+            <div className={styles.pathBreadcrumb}>
+              <span className={styles.pathParent}>{t("projects.path.workspace", "工作区")}</span>
+              <span className={styles.pathSeparator}>/</span>
+              <Button
+                type="link"
+                size="small"
+                className={styles.pathParentLink}
+                onClick={() => navigate("/projects")}
+              >
+                {t("projects.path.project", "项目")}
+              </Button>
+              <span className={styles.pathSeparator}>/</span>
+              <span className={styles.pathCurrent}>{t("projects.path.projectSpace", "项目空间")}</span>
+            </div>
+          </div>
           <Text type="secondary" className={styles.description}>
             {t(
               "projects.detailDescription",
-              "Inspect artifacts, pipeline runs, and execution evidence for this project.",
+              "围绕目标与资料协作推进项目，自动化按需启用。",
             )}
+            <span className={styles.descriptionDivider}> | </span>
+            {t("projects.workspacePath", "Workspace Path")}: {" "}
+            {selectedProject?.workspace_dir ||
+              currentAgent?.workspace_dir ||
+              t("projects.noAgent", "No agent is currently available.")}
           </Text>
         </div>
         <div className={styles.headerActions}>
@@ -1428,15 +1446,6 @@ export default function ProjectDetailPage() {
       </div>
 
       {error && <Alert type="error" showIcon message={error} />}
-
-      <div className={styles.workspaceInfo}>
-        <p className={styles.workspacePath}>
-          {t("projects.workspacePath", "Workspace Path")}: {" "}
-          {selectedProject?.workspace_dir ||
-            currentAgent?.workspace_dir ||
-            t("projects.noAgent", "No agent is currently available.")}
-        </p>
-      </div>
 
       {loading && !currentAgent ? (
         <div className={styles.centerState}>
