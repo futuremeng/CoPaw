@@ -1521,6 +1521,8 @@
       "selectContext": "Start a project collaboration session first. Open automation design only when you are ready to formalize the workflow.",
       "startCollaboration": "Start project collaboration",
       "startAutomation": "Open automation design",
+      "addAttachment": "Add to chat attachments",
+      "removeAttachment": "Remove from chat attachments",
       "collaborationPlaceholder": "Describe the project goal, current materials, or the next thing you want to move forward.",
       "collaborationWelcomeGreeting": "Project collaboration assistant is ready.",
       "collaborationWelcomeDescription": "Use this space to understand the project, organize materials, and plan the next step before opening automation.",

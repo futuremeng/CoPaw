@@ -1521,6 +1521,8 @@
       "selectContext": "先开始项目协作，等你准备把工作固化为自动化方案时，再进入自动化设计。",
       "startCollaboration": "开始项目协作",
       "startAutomation": "打开自动化设计",
+      "addAttachment": "加入聊天附件",
+      "removeAttachment": "移出聊天附件",
       "collaborationPlaceholder": "描述项目目标、现有资料，或你现在想推进的下一步。",
       "collaborationWelcomeGreeting": "项目协作助手已就绪。",
       "collaborationWelcomeDescription": "先在这里理解项目、整理资料、规划下一步，再决定是否进入自动化。",

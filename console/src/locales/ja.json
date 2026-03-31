@@ -1519,6 +1519,8 @@
       "selectContext": "まずはプロジェクト協作を開始し、ワークフローを固める準備ができたら自動化設計を開いてください。",
       "startCollaboration": "プロジェクト協作を開始",
       "startAutomation": "自動化設計を開く",
+      "addAttachment": "チャット添付に追加",
+      "removeAttachment": "チャット添付から削除",
       "collaborationPlaceholder": "プロジェクトの目標、現在の資料、または次に進めたいことを入力してください。",
       "collaborationWelcomeGreeting": "プロジェクト協作アシスタントの準備ができました。",
       "collaborationWelcomeDescription": "まずここでプロジェクトを理解し、資料を整理し、次の一手を決めてから自動化に進みます。",

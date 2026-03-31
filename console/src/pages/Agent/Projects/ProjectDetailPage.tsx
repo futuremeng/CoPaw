@@ -7,6 +7,7 @@ import {
   Empty,
   Popconfirm,
   Spin,
+  Tabs,
   Typography,
   message,
 } from "antd";
@@ -19,6 +20,8 @@ import ProjectChatPanel, { type ProjectChatAutoAttachRequest } from "./ProjectCh
 import ProjectOverviewCard from "./ProjectOverviewCard";
 import ProjectUploadModal from "./ProjectUploadModal";
 import ProjectWorkbenchPanel from "./ProjectWorkbenchPanel";
+import ProjectMetricsPanel from "./ProjectMetricsPanel";
+import ProjectEvidencePanel from "./ProjectEvidencePanel";
 import useArtifactSelectionGuards from "./useArtifactSelectionGuards";
 import useProjectChatEnsureController from "./useProjectChatEnsureController";
 import useProjectChatFocusEffects from "./useProjectChatFocusEffects";
@@ -112,19 +115,12 @@ function buildProjectWorkspaceSummary(params: {
   projectName: string;
   projectDescription: string;
   workspaceDir: string;
-  sourceFiles: string[];
 }): string {
-  const seedFiles = selectSeedSourceFiles(params.sourceFiles);
-  const fileLines = seedFiles.length
-    ? seedFiles.map((file, index) => `${index + 1}. ${file}`).join("\n")
-    : "- 暂无已索引的项目资料";
   const safeDescription = params.projectDescription.trim() || "暂无项目简介";
   return [
     `项目：${params.projectName}`,
     `简介：${safeDescription}`,
     `工作区：${params.workspaceDir || "-"}`,
-    "优先资料：",
-    fileLines,
   ].join("\n");
 }
 
@@ -268,34 +264,6 @@ export default function ProjectDetailPage() {
     );
   }, [artifactRecords, selectedStepId]);
 
-  const visibleArtifactRecords = useMemo(() => {
-    if (!selectedStepId) {
-      return artifactRecords;
-    }
-    return artifactRecords.filter((item) => relatedArtifactPathsForSelectedStep.has(item.path));
-  }, [artifactRecords, relatedArtifactPathsForSelectedStep, selectedStepId]);
-
-  const groupedArtifactRecords = useMemo(
-    () => [
-      {
-        key: "source",
-        title: t("projects.artifacts.source", "Source Files"),
-        items: visibleArtifactRecords.filter((item) => item.kind === "source"),
-      },
-      {
-        key: "intermediate",
-        title: t("projects.artifacts.intermediate", "Intermediate Artifacts"),
-        items: visibleArtifactRecords.filter((item) => item.kind === "intermediate"),
-      },
-      {
-        key: "final",
-        title: t("projects.artifacts.final", "Final Outputs"),
-        items: visibleArtifactRecords.filter((item) => item.kind === "final"),
-      },
-    ].filter((group) => group.items.length > 0),
-    [t, visibleArtifactRecords],
-  );
-
   const selectedArtifactRecord = useMemo(
     () => artifactRecords.find((item) => item.path === selectedFilePath),
     [artifactRecords, selectedFilePath],
@@ -426,16 +394,19 @@ export default function ProjectDetailPage() {
       projectName: selectedProject?.name || routeProjectId || "-",
       projectDescription: selectedProject?.description || "",
       workspaceDir: selectedProject?.workspace_dir || currentAgent?.workspace_dir || "",
-      sourceFiles: projectFiles.map((item) => item.path),
     }),
     [
       currentAgent?.workspace_dir,
-      projectFiles,
       routeProjectId,
       selectedProject?.description,
       selectedProject?.name,
       selectedProject?.workspace_dir,
     ],
+  );
+
+  const priorityFilePaths = useMemo(
+    () => selectSeedSourceFiles(projectFiles.map((item) => item.path)),
+    [projectFiles],
   );
 
   const selectedRunAllStepsSucceeded = useMemo(() => {
@@ -1476,11 +1447,23 @@ export default function ProjectDetailPage() {
                 pipelineTemplateCount={pipelineTemplates.length}
                 pipelineRunCount={pipelineRuns.length}
                 projectWorkspaceSummary={projectWorkspaceSummary}
+                projectFiles={projectFiles}
+                priorityFilePaths={priorityFilePaths}
+                selectedFilePath={selectedFilePath}
+                selectedAttachPaths={selectedAttachPaths}
+                hideBuiltInFiles={hideBuiltInFiles}
                 onStartCollaboration={() => {
                   setDesignFocusChatId("");
                   void handleEnsureWorkspaceChat(true);
                 }}
                 onUploadFiles={() => setUploadModalOpen(true)}
+                onSelectFileFromTree={(path) => {
+                  void handleSelectArtifactFile(path);
+                }}
+                onAttachArtifactToChat={(path) => {
+                  void handleAttachArtifactToChat(path);
+                }}
+                onToggleHideBuiltInFiles={setHideBuiltInFiles}
               />
 
               <Card
@@ -1515,37 +1498,18 @@ export default function ProjectDetailPage() {
               projectLabel={selectedProject?.id || routeProjectId}
               filesLoading={filesLoading}
               contentLoading={contentLoading}
-              hideBuiltInFiles={hideBuiltInFiles}
               artifactRecords={artifactRecords}
-              groupedArtifactRecords={groupedArtifactRecords}
               selectedArtifactRecord={selectedArtifactRecord}
               selectedFilePath={selectedFilePath}
-              selectedStepId={selectedStepId}
-              relatedArtifactPathsForSelectedStep={relatedArtifactPathsForSelectedStep}
               projectFiles={projectFiles}
               fileContent={fileContent}
               selectedAttachPaths={selectedAttachPaths}
               autoAnalyzeOnAttach={autoAnalyzeOnAttach}
               sendingSelectedFiles={sendingSelectedFiles}
-              runDetail={runDetail}
-              runProgress={runProgress}
-              onToggleHideBuiltInFiles={setHideBuiltInFiles}
-              onClearArtifactFocus={() => {
-                setSelectedStepId("");
-                setSelectedFilePath("");
-              }}
-              onSelectArtifactFile={(path) => {
-                void handleSelectArtifactFile(path);
-              }}
-              onAttachArtifactToChat={(path) => {
-                void handleAttachArtifactToChat(path);
-              }}
-              onSelectStep={handleSelectStep}
               onToggleAutoAnalyze={setAutoAnalyzeOnAttach}
               onSendSelectedFilesToChat={() => {
                 void handleSendSelectedFilesToChat();
               }}
-              statusTagColor={statusTagColor}
               formatBytes={formatBytes}
             />
           </div>
@@ -1583,60 +1547,84 @@ export default function ProjectDetailPage() {
             onClose={() => setAutomationDrawerOpen(false)}
             destroyOnHidden={false}
           >
-            <ProjectAutomationPanel
-              selectedRunStatus={selectedRunSummary?.status}
-              selectedTemplateId={selectedTemplateId}
-              selectedRunId={selectedRunId}
-              selectedProjectExists={Boolean(selectedProject)}
-              pipelineTemplates={pipelineTemplates}
-              pipelineLoading={pipelineLoading}
-              pipelineRuns={pipelineRuns}
-              runsForSelectedTemplate={runsForSelectedTemplate}
-              activeRunTemplate={activeRunTemplate}
-              runDetail={runDetail}
-              runProgress={runProgress}
-              stepContractById={stepContractById}
-              selectedStepId={selectedStepId}
-              highlightedStepIds={highlightedStepIds}
-              createRunLoading={createRunLoading}
-              importLoading={importLoading}
-              importModalOpen={importModalOpen}
-              selectedPlatformTemplateId={selectedPlatformTemplateId}
-              platformTemplates={platformTemplates}
-              verificationGateSummary={verificationGateSummary}
-              canPromoteToTemplateDraft={canPromoteToTemplateDraft}
-              onBackToList={() => navigate("/projects")}
-              onUploadFiles={() => setUploadModalOpen(true)}
-              onOpenImportModal={() => {
-                void handleOpenImportModal();
-              }}
-              onCreateRun={() => {
-                void handleCreateRun();
-              }}
-              onStartAutomation={() => {
-                setWorkspaceFocusChatId("");
-                void handleEnsureDesignChat(true);
-              }}
-              onPrepareImplementationDraft={() => {
-                void handlePrepareImplementationDraft();
-              }}
-              onPrepareValidationDraft={() => {
-                void handlePrepareValidationDraft();
-              }}
-              onPreparePromotionDraft={() => {
-                void handlePreparePromotionDraft();
-              }}
-              onSelectTemplateId={setSelectedTemplateId}
-              onSelectRunId={setSelectedRunId}
-              onSelectStep={handleSelectStep}
-              onCloseImportModal={() => setImportModalOpen(false)}
-              onImportPlatformTemplate={() => {
-                void handleImportPlatformTemplate();
-              }}
-              onSelectPlatformTemplateId={setSelectedPlatformTemplateId}
-              formatRunTimeLabel={formatRunTimeLabel}
-              statusTagColor={statusTagColor}
-            />
+            <div className={styles.automationDrawerBody}>
+              <ProjectAutomationPanel
+                selectedRunStatus={selectedRunSummary?.status}
+                selectedTemplateId={selectedTemplateId}
+                selectedRunId={selectedRunId}
+                selectedProjectExists={Boolean(selectedProject)}
+                pipelineTemplates={pipelineTemplates}
+                pipelineLoading={pipelineLoading}
+                pipelineRuns={pipelineRuns}
+                runsForSelectedTemplate={runsForSelectedTemplate}
+                activeRunTemplate={activeRunTemplate}
+                runDetail={runDetail}
+                runProgress={runProgress}
+                stepContractById={stepContractById}
+                selectedStepId={selectedStepId}
+                highlightedStepIds={highlightedStepIds}
+                createRunLoading={createRunLoading}
+                importLoading={importLoading}
+                importModalOpen={importModalOpen}
+                selectedPlatformTemplateId={selectedPlatformTemplateId}
+                platformTemplates={platformTemplates}
+                verificationGateSummary={verificationGateSummary}
+                canPromoteToTemplateDraft={canPromoteToTemplateDraft}
+                onBackToList={() => navigate("/projects")}
+                onUploadFiles={() => setUploadModalOpen(true)}
+                onOpenImportModal={() => {
+                  void handleOpenImportModal();
+                }}
+                onCreateRun={() => {
+                  void handleCreateRun();
+                }}
+                onStartAutomation={() => {
+                  setWorkspaceFocusChatId("");
+                  void handleEnsureDesignChat(true);
+                }}
+                onPrepareImplementationDraft={() => {
+                  void handlePrepareImplementationDraft();
+                }}
+                onPrepareValidationDraft={() => {
+                  void handlePrepareValidationDraft();
+                }}
+                onPreparePromotionDraft={() => {
+                  void handlePreparePromotionDraft();
+                }}
+                onSelectTemplateId={setSelectedTemplateId}
+                onSelectRunId={setSelectedRunId}
+                onSelectStep={handleSelectStep}
+                onCloseImportModal={() => setImportModalOpen(false)}
+                onImportPlatformTemplate={() => {
+                  void handleImportPlatformTemplate();
+                }}
+                onSelectPlatformTemplateId={setSelectedPlatformTemplateId}
+                formatRunTimeLabel={formatRunTimeLabel}
+                statusTagColor={statusTagColor}
+              />
+
+              <Tabs
+                className={styles.automationDrawerTabs}
+                items={[
+                  {
+                    key: "metrics",
+                    label: t("projects.metrics", "Metrics"),
+                    children: (
+                      <ProjectMetricsPanel
+                        runDetail={runDetail}
+                        runProgress={runProgress}
+                        statusTagColor={statusTagColor}
+                      />
+                    ),
+                  },
+                  {
+                    key: "evidence",
+                    label: t("projects.evidence", "Evidence"),
+                    children: <ProjectEvidencePanel runDetail={runDetail} />,
+                  },
+                ]}
+              />
+            </div>
           </Drawer>
 
           <ProjectUploadModal
