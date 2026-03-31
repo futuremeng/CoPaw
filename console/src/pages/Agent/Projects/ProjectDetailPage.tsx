@@ -27,7 +27,8 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { agentsApi } from "../../../api/modules/agents";
 import { chatApi } from "../../../api/modules/chat";
-import AnywhereChat from "../../../components/AnywhereChat";
+import ProjectChatPanel, { type ProjectChatAutoAttachRequest } from "./ProjectChatPanel";
+import ProjectOverviewCard from "./ProjectOverviewCard";
 import type { ChatSpec } from "../../../api/types/chat";
 import type {
   AgentProjectSummary,
@@ -436,19 +437,7 @@ export default function ProjectDetailPage() {
   const [deletingProject, setDeletingProject] = useState(false);
   const [pendingUploads, setPendingUploads] = useState<File[]>([]);
   const [uploadTargetDir, setUploadTargetDir] = useState("data");
-  const [autoAttachRequest, setAutoAttachRequest] = useState<{
-    id: string;
-    mode?: "submit" | "draft";
-    fileName?: string;
-    content?: string;
-    mimeType?: string;
-    files?: Array<{
-      fileName: string;
-      content: string;
-      mimeType?: string;
-    }>;
-    note?: string;
-  } | null>(null);
+  const [autoAttachRequest, setAutoAttachRequest] = useState<ProjectChatAutoAttachRequest | null>(null);
   const [selectedAttachPaths, setSelectedAttachPaths] = useState<string[]>([]);
   const [sendingSelectedFiles, setSendingSelectedFiles] = useState(false);
   const [autoAnalyzeOnAttach, setAutoAnalyzeOnAttach] = useState(true);
@@ -2200,76 +2189,18 @@ export default function ProjectDetailPage() {
       ) : (
         <div className={styles.content}>
           <div className={styles.columnLeft}>
-            <Card
-              title={<span className={styles.sectionTitle}>{t("projects.overview", "Overview")}</span>}
-              styles={{ body: { padding: 12 } }}
-              extra={
-                <Text type="secondary" className={styles.panelExtraText}>
-                  {selectedProject.status || t("projects.statusActive", "active")}
-                </Text>
-              }
-            >
-              <div className={styles.scrollContainer}>
-                <div className={styles.overviewSection}>
-                  <div className={styles.subSectionTitle}>{t("projects.summary", "Project Summary")}</div>
-                  <div className={styles.overviewDescription}>
-                    {selectedProject.description || t("projects.noDescription", "No description")}
-                  </div>
-                </div>
-
-                {selectedProject.tags.length > 0 && (
-                  <div className={styles.overviewSection}>
-                    <div className={styles.subSectionTitle}>{t("projects.tags", "Tags")}</div>
-                    <div className={styles.overviewTags}>
-                      {selectedProject.tags.map((tag) => (
-                        <Tag key={tag}>{tag}</Tag>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className={styles.metricSummaryGrid}>
-                  <div className={styles.metricSummaryCard}>
-                    <div className={styles.itemMeta}>{t("projects.files", "Files")}</div>
-                    <div className={styles.metricSummaryValue}>{projectFileCount}</div>
-                  </div>
-                  <div className={styles.metricSummaryCard}>
-                    <div className={styles.itemMeta}>{t("projects.automation.flows", "Flows")}</div>
-                    <div className={styles.metricSummaryValue}>{pipelineTemplates.length}</div>
-                  </div>
-                  <div className={styles.metricSummaryCard}>
-                    <div className={styles.itemMeta}>{t("projects.runs", "Runs")}</div>
-                    <div className={styles.metricSummaryValue}>{pipelineRuns.length}</div>
-                  </div>
-                  <div className={styles.metricSummaryCard}>
-                    <div className={styles.itemMeta}>{t("projects.updated", "Updated")}</div>
-                    <div className={styles.metricSummaryValue}>
-                      {selectedProject.updated_time ? selectedProject.updated_time.slice(5, 10) : "-"}
-                    </div>
-                  </div>
-                </div>
-
-                <div className={styles.overviewSection}>
-                  <div className={styles.subSectionTitle}>{t("projects.workspaceSummary", "Workspace Snapshot")}</div>
-                  <pre className={styles.overviewSummary}>{projectWorkspaceSummary}</pre>
-                </div>
-
-                <div className={styles.overviewActions}>
-                  <Button
-                    type="primary"
-                    onClick={() => {
-                      setDesignFocusChatId("");
-                      void handleEnsureWorkspaceChat(true);
-                    }}
-                  >
-                    {t("projects.chat.startCollaboration", "Start project collaboration")}
-                  </Button>
-                  <Button onClick={() => setUploadModalOpen(true)}>
-                    {t("projects.upload.button", "Upload Files")}
-                  </Button>
-                </div>
-              </div>
-            </Card>
+            <ProjectOverviewCard
+              selectedProject={selectedProject}
+              projectFileCount={projectFileCount}
+              pipelineTemplateCount={pipelineTemplates.length}
+              pipelineRunCount={pipelineRuns.length}
+              projectWorkspaceSummary={projectWorkspaceSummary}
+              onStartCollaboration={() => {
+                setDesignFocusChatId("");
+                void handleEnsureWorkspaceChat(true);
+              }}
+              onUploadFiles={() => setUploadModalOpen(true)}
+            />
           </div>
 
           <div className={styles.columnMiddle}>
@@ -2980,210 +2911,28 @@ export default function ProjectDetailPage() {
           </div>
 
           <div className={styles.columnChat}>
-            <Card
-              style={{
-                height: "100%",
-                display: "flex",
-                flexDirection: "column",
-                minHeight: 0,
-                overflow: "hidden",
+            <ProjectChatPanel
+              selectedRunId={selectedRunId}
+              chatStarting={chatStarting}
+              activeWorkspaceChatId={activeWorkspaceChatId}
+              activeDesignChatId={activeDesignChatId}
+              activeRunChatId={activeRunChatId}
+              autoAttachRequest={autoAttachRequest}
+              onAutoAttachHandled={(payload) => {
+                setAutoAttachRequest((prev) => (prev?.id === payload.id ? null : prev));
               }}
-              title={<span className={styles.sectionTitle}>{t("projects.chat", "Chat")}</span>}
-              styles={{
-                body: {
-                  padding: 0,
-                  display: "flex",
-                  flexDirection: "column",
-                  flex: 1,
-                  minHeight: 0,
-                  overflow: "hidden",
-                },
+              onStartWorkspaceChat={() => {
+                setDesignFocusChatId("");
+                void handleEnsureWorkspaceChat(true);
               }}
-              extra={
-                <Text type="secondary" className={styles.panelExtraText}>
-                  {selectedRunId || t("projects.chat.workspaceLabel", "Project workspace")}
-                </Text>
-              }
-            >
-              <div className={styles.previewBody}>
-                {!selectedRunId ? (
-                  chatStarting ? (
-                    <div className={styles.centerState}>
-                      <Spin />
-                    </div>
-                  ) : activeWorkspaceChatId ? (
-                    <div className={styles.chatPanel}>
-                      <AnywhereChat
-                        sessionId={activeWorkspaceChatId}
-                        autoAttachRequest={autoAttachRequest}
-                        onAutoAttachHandled={(payload) => {
-                          if (!payload.ok) {
-                            message.error(
-                              t("projects.chat.autoAttachFailed", "Failed to attach selected file to chat."),
-                            );
-                          }
-                          setAutoAttachRequest((prev) => (prev?.id === payload.id ? null : prev));
-                        }}
-                        onNewChat={() => {
-                          setDesignFocusChatId("");
-                          void handleEnsureWorkspaceChat(true);
-                        }}
-                        inputPlaceholder={t(
-                          "projects.chat.collaborationPlaceholder",
-                          "Describe the project goal, current materials, or the next thing you want to move forward.",
-                        )}
-                        welcomeGreeting={t(
-                          "projects.chat.collaborationWelcomeGreeting",
-                          "Project collaboration assistant is ready.",
-                        )}
-                        welcomeDescription={t(
-                          "projects.chat.collaborationWelcomeDescription",
-                          "Use this space to understand the project, organize materials, and plan the next step before opening automation.",
-                        )}
-                        welcomePrompts={[
-                          t(
-                            "projects.chat.collaborationPrompt1",
-                            "Summarize the current project based on the available files and highlight missing inputs.",
-                          ),
-                          t(
-                            "projects.chat.collaborationPrompt2",
-                            "Suggest the next three actions to move this project forward without assuming a fixed flow yet.",
-                          ),
-                        ]}
-                      />
-                    </div>
-                  ) : activeDesignChatId ? (
-                    <div className={styles.chatPanel}>
-                      <AnywhereChat
-                        sessionId={activeDesignChatId}
-                        autoAttachRequest={autoAttachRequest}
-                        onAutoAttachHandled={(payload) => {
-                          if (!payload.ok) {
-                            message.error(
-                              t("projects.chat.autoAttachFailed", "Failed to attach selected file to chat."),
-                            );
-                          }
-                          setAutoAttachRequest((prev) => (prev?.id === payload.id ? null : prev));
-                        }}
-                        onNewChat={() => {
-                          void handleEnsureDesignChat(true);
-                        }}
-                        inputPlaceholder={t(
-                          "projects.chat.designPlaceholder",
-                          "Describe your target workflow and constraints, and I will draft/refine the project flow.",
-                        )}
-                        welcomeGreeting={t(
-                          "projects.chat.designWelcomeGreeting",
-                          "Project flow design assistant is ready.",
-                        )}
-                        welcomeDescription={t(
-                          "projects.chat.designWelcomeDescription",
-                          "Use this session to build a flow draft from your real project files before launching a run.",
-                        )}
-                        welcomePrompts={[
-                          t(
-                            "projects.chat.designPrompt1",
-                            "Based on the current source files, propose a 4-step flow with clear inputs and outputs.",
-                          ),
-                          t(
-                            "projects.chat.designPrompt2",
-                            "Please optimize the flow for reliability and add retry policy suggestions.",
-                          ),
-                        ]}
-                      />
-                    </div>
-                  ) : (
-                    <div className={styles.chatEmptyAction}>
-                      <Empty
-                        image={Empty.PRESENTED_IMAGE_SIMPLE}
-                        description={t(
-                          "projects.chat.selectContext",
-                          "Start a project collaboration session, or open automation design when you are ready to formalize the workflow.",
-                        )}
-                      >
-                        <div className={styles.chatEmptyActions}>
-                          <Button
-                            type="primary"
-                            onClick={() => {
-                              setDesignFocusChatId("");
-                              void handleEnsureWorkspaceChat(true);
-                            }}
-                          >
-                            {t("projects.chat.startCollaboration", "Start project collaboration")}
-                          </Button>
-                          <Button
-                            onClick={() => {
-                              setWorkspaceFocusChatId("");
-                              void handleEnsureDesignChat(true);
-                            }}
-                          >
-                            {t("projects.chat.startAutomation", "Open automation design")}
-                          </Button>
-                        </div>
-                      </Empty>
-                    </div>
-                  )
-                ) : chatStarting ? (
-                  <div className={styles.centerState}>
-                    <Spin />
-                  </div>
-                ) : activeRunChatId ? (
-                  <div className={styles.chatPanel}>
-                    <AnywhereChat
-                      sessionId={activeRunChatId}
-                      autoAttachRequest={autoAttachRequest}
-                      onAutoAttachHandled={(payload) => {
-                        if (!payload.ok) {
-                          message.error(
-                            t("projects.chat.autoAttachFailed", "Failed to attach selected file to chat."),
-                          );
-                        }
-                        setAutoAttachRequest((prev) => (prev?.id === payload.id ? null : prev));
-                      }}
-                      onNewChat={() => {
-                        void handleEnsureRunChat(true);
-                      }}
-                      inputPlaceholder={t(
-                        "projects.chat.placeholder",
-                        "Describe what you want to adjust in this run, and I will help iterate.",
-                      )}
-                      welcomeGreeting={t(
-                        "projects.chat.welcomeGreeting",
-                        "Project run assistant is ready.",
-                      )}
-                      welcomeDescription={t(
-                        "projects.chat.welcomeDescription",
-                        "Discuss artifacts, metrics, and evidence for the selected run without leaving this page.",
-                      )}
-                      welcomePrompts={[
-                        t(
-                          "projects.chat.prompt1",
-                          "Summarize the risks in this run and suggest next actions.",
-                        ),
-                        t(
-                          "projects.chat.prompt2",
-                          "Based on current evidence, propose a retry strategy for failed steps.",
-                        ),
-                      ]}
-                    />
-                  </div>
-                ) : (
-                  <div className={styles.chatEmptyAction}>
-                    <Empty
-                      image={Empty.PRESENTED_IMAGE_SIMPLE}
-                      description={t(
-                        "projects.chat.noSession",
-                        "No chat session for this run yet",
-                      )}
-                    >
-                      <Button type="primary" onClick={() => void handleEnsureRunChat()}>
-                        {t("projects.chat.start", "Start chat")}
-                      </Button>
-                    </Empty>
-                  </div>
-                )}
-              </div>
-            </Card>
+              onStartDesignChat={() => {
+                setWorkspaceFocusChatId("");
+                void handleEnsureDesignChat(true);
+              }}
+              onStartRunChat={() => {
+                void handleEnsureRunChat(true);
+              }}
+            />
           </div>
         </div>
       )}
