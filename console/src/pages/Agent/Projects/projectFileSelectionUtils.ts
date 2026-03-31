@@ -12,6 +12,15 @@ export function isPreviewablePath(path: string): boolean {
   return true;
 }
 
+export function isIgnoredProjectFile(path: string): boolean {
+  if (!path) {
+    return false;
+  }
+  const normalized = path.replace(/\\/g, "/");
+  const fileName = (normalized.split("/").pop() || "").toLowerCase();
+  return [".ds_store", ".gitkeep", "thumbs.db"].includes(fileName);
+}
+
 function isTextSourcePath(path: string): boolean {
   const normalized = path.toLowerCase();
   return (

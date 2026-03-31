@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import type { ProjectPipelineArtifactRecord } from "../../../api/types/agents";
+import { isPreviewablePath } from "./projectFileSelectionUtils";
 
 interface UseArtifactSelectionGuardsParams {
   selectedStepId: string;
@@ -49,6 +50,9 @@ export default function useArtifactSelectionGuards({
 
   useEffect(() => {
     if (!selectedFilePath) {
+      return;
+    }
+    if (!isPreviewablePath(selectedFilePath)) {
       return;
     }
     const stillVisible = artifactRecords.some((item) => item.path === selectedFilePath);

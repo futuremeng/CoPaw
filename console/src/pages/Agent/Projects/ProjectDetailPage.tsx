@@ -38,6 +38,7 @@ import {
 } from "./projectChatPrompts";
 import { composeSelectedFilesPayload } from "./projectChatAttachmentPayload";
 import {
+  isIgnoredProjectFile,
   isPreviewablePath,
   selectSeedSourceFiles,
 } from "./projectFileSelectionUtils";
@@ -469,9 +470,14 @@ export default function ProjectDetailPage() {
       for (const projectRequestId of projectIds) {
         try {
           const files = await agentsApi.listProjectFiles(agentId, projectRequestId);
-          setProjectFiles(files);
+          const filteredFiles = files.filter(
+            (item) => !isIgnoredProjectFile(item.path),
+          );
+          setProjectFiles(filteredFiles);
           setResolvedProjectRequestId(projectRequestId);
-          const defaultFile = files.find((item) => isPreviewablePath(item.path));
+          const defaultFile = filteredFiles.find((item) =>
+            isPreviewablePath(item.path),
+          );
           if (defaultFile) {
             setSelectedFilePath(defaultFile.path);
           }
@@ -1020,8 +1026,18 @@ export default function ProjectDetailPage() {
     if (!currentAgent || !selectedProject || !selectedFilePath) {
       return;
     }
+    if (!isPreviewablePath(selectedFilePath)) {
+      setContentLoading(false);
+      setFileContent(
+        t(
+          "projects.previewLoadFailed",
+          "Unable to preview this file. It might be binary or inaccessible.",
+        ),
+      );
+      return;
+    }
     void loadFileContent(currentAgent.id, selectedProject, selectedFilePath);
-  }, [currentAgent, selectedProject, selectedFilePath, loadFileContent]);
+  }, [currentAgent, selectedProject, selectedFilePath, loadFileContent, t]);
 
   useEffect(() => {
     if (!selectedTemplateId) {
