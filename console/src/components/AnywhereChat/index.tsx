@@ -860,6 +860,7 @@ export default function AnywhereChat({
       },
       sender: {
         ...senderConfig,
+        allowSpeech: true,
         attachments: {
           trigger: function (props: AttachmentTriggerProps) {
             return (
