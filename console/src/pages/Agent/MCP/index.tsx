@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button, Empty, Modal, Input, message } from "@agentscope-ai/design";
+import { PlusOutlined } from "@ant-design/icons";
 import type { MCPClientInfo } from "../../../api/types";
 import { MCPClientCard } from "./components";
 import { useMCP } from "./useMCP";
@@ -189,7 +190,11 @@ function MCPPage() {
             >
               {probingCount > 0 ? t("mcp.probing") : t("mcp.probeStatus")}
             </Button>
-            <Button type="primary" onClick={() => setCreateModalOpen(true)}>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => setCreateModalOpen(true)}
+            >
               {t("mcp.create")}
             </Button>
           </div>
