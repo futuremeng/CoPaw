@@ -14,9 +14,14 @@ import {
 } from "@ant-design/icons";
 import { Button, Card, Empty, Tag, Tree, Typography } from "antd";
 import { useTranslation } from "react-i18next";
-import type { AgentProjectFileInfo, AgentProjectSummary } from "../../../api/types/agents";
+import type {
+  AgentProjectFileInfo,
+  AgentProjectSummary,
+  ProjectArtifactProfile,
+} from "../../../api/types/agents";
 import styles from "./index.module.less";
 import type { ReactNode } from "react";
+import ProjectArtifactProfileEditor from "./ProjectArtifactProfileEditor";
 
 const { Text } = Typography;
 
@@ -36,6 +41,8 @@ interface ProjectOverviewCardProps {
   onSelectFileFromTree: (path: string) => void;
   onAttachArtifactToChat: (path: string) => void;
   onToggleHideBuiltInFiles: (value: boolean) => void;
+  artifactProfileSaving: boolean;
+  onSaveArtifactProfile: (profile: ProjectArtifactProfile) => Promise<void>;
 }
 
 interface TreeNode {
@@ -228,6 +235,8 @@ export default function ProjectOverviewCard({
   onSelectFileFromTree,
   onAttachArtifactToChat,
   onToggleHideBuiltInFiles,
+  artifactProfileSaving,
+  onSaveArtifactProfile,
 }: ProjectOverviewCardProps) {
   const { t } = useTranslation();
   const updatedDateParts = formatUpdatedDateParts(selectedProject?.updated_time);
@@ -326,6 +335,11 @@ export default function ProjectOverviewCard({
               {t("projects.artifacts.case", "Cases")}: {artifactCounts.cases}
             </Tag>
           </div>
+          <ProjectArtifactProfileEditor
+            value={artifactProfile}
+            saving={artifactProfileSaving}
+            onSave={onSaveArtifactProfile}
+          />
         </div>
 
         <div className={styles.overviewSection}>

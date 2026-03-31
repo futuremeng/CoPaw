@@ -49,6 +49,7 @@ import {
 import type {
   AgentProjectSummary,
   AgentProjectFileInfo,
+  ProjectArtifactProfile,
   ProjectPipelineArtifactRecord,
   ProjectPipelineRunDetail,
   ProjectPipelineRunSummary,
@@ -192,6 +193,7 @@ export default function ProjectDetailPage() {
   const [selectedStepId, setSelectedStepId] = useState("");
   const [deletingProject, setDeletingProject] = useState(false);
   const [automationDrawerOpen, setAutomationDrawerOpen] = useState(false);
+  const [artifactProfileSaving, setArtifactProfileSaving] = useState(false);
   const [autoAttachRequest, setAutoAttachRequest] = useState<ProjectChatAutoAttachRequest | null>(null);
   const [selectedAttachPaths, setSelectedAttachPaths] = useState<string[]>([]);
   const [sendingSelectedFiles, setSendingSelectedFiles] = useState(false);
@@ -501,6 +503,41 @@ export default function ProjectDetailPage() {
       setFilesLoading(false);
     }
   }, [t]);
+
+  const handleSaveArtifactProfile = useCallback(async (
+    profile: ProjectArtifactProfile,
+  ) => {
+    if (!currentAgent || !selectedProject) {
+      return;
+    }
+
+    setArtifactProfileSaving(true);
+    try {
+      await agentsApi.updateProjectArtifactProfile(
+        currentAgent.id,
+        selectedProject.id,
+        profile,
+      );
+      await loadAgents();
+      message.success(
+        t(
+          "projects.artifacts.saveSuccess",
+          "Project artifacts updated.",
+        ),
+      );
+    } catch (err) {
+      console.error("failed to update project artifact profile", err);
+      message.error(
+        t(
+          "projects.artifacts.saveFailed",
+          "Failed to update project artifacts.",
+        ),
+      );
+      throw err;
+    } finally {
+      setArtifactProfileSaving(false);
+    }
+  }, [currentAgent, loadAgents, selectedProject, t]);
 
   const {
     uploadModalOpen,
@@ -1480,6 +1517,8 @@ export default function ProjectDetailPage() {
                   void handleAttachArtifactToChat(path);
                 }}
                 onToggleHideBuiltInFiles={setHideBuiltInFiles}
+                artifactProfileSaving={artifactProfileSaving}
+                onSaveArtifactProfile={handleSaveArtifactProfile}
               />
 
               <Card

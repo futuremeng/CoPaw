@@ -81,9 +81,12 @@ class ProjectArtifactItem(BaseModel):
     id: str
     name: str
     kind: str
+    origin: str = "project-distilled"
     status: str = "draft"
     version: str = ""
     tags: list[str] = Field(default_factory=list)
+    derived_from_ids: list[str] = Field(default_factory=list)
+    distillation_note: str = ""
     market_source_id: str | None = None
     market_item_id: str | None = None
 
@@ -504,9 +507,15 @@ def _normalize_project_artifact_item(
         return None
 
     item_name = str(raw_item.get("name") or item_id).strip() or item_id
+    origin = (
+        str(raw_item.get("origin") or "project-distilled").strip()
+        or "project-distilled"
+    )
     status = str(raw_item.get("status") or "draft").strip() or "draft"
     version = str(raw_item.get("version") or "").strip()
     tags = _parse_project_tags(raw_item.get("tags"))
+    derived_from_ids = _parse_project_tags(raw_item.get("derived_from_ids"))
+    distillation_note = str(raw_item.get("distillation_note") or "").strip()
     market_source_id = (
         str(raw_item.get("market_source_id") or "").strip() or None
     )
@@ -516,9 +525,12 @@ def _normalize_project_artifact_item(
         id=item_id,
         name=item_name,
         kind=kind,
+        origin=origin,
         status=status,
         version=version,
         tags=tags,
+        derived_from_ids=derived_from_ids,
+        distillation_note=distillation_note,
         market_source_id=market_source_id,
         market_item_id=market_item_id,
     )

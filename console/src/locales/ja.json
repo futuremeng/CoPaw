@@ -63,7 +63,23 @@
     "create": "エージェントを作成",
     "createTitle": "新しいエージェントを作成",
     "createSuccess": "エージェントが正常に作成されました",
-    "createFailed": "エージェントの作成に失敗しました",
+    "artifactArchitecture": "成果物アーキテクチャ",
+    "artifacts": {
+      "skill": "スキル",
+      "script": "スクリプト",
+      "flow": "フロー",
+      "case": "ケース",
+      "empty": "標準成果物はまだありません",
+      "manage": "成果物を管理",
+      "add": "追加",
+      "emptyCategory": "この分類にはまだ項目がありません",
+      "fields": {
+        "name": "名称",
+        "version": "バージョン"
+      },
+      "saveSuccess": "プロジェクト成果物を更新しました。",
+      "saveFailed": "プロジェクト成果物の更新に失敗しました。"
+    },
     "edit": "編集",
     "editTitle": "エージェントを編集 - {{name}}",
     "updateSuccess": "エージェントが正常に更新されました",
@@ -1513,6 +1529,28 @@
       "title": "自動化",
       "flows": "フロー",
       "guidance": "自動化ガイダンス"
+    },
+    "artifacts": {
+      "skill": "スキル",
+      "script": "スクリプト",
+      "flow": "フロー",
+      "case": "ケース",
+      "empty": "成果物はまだありません",
+      "manage": "成果物を管理",
+      "add": "追加",
+      "emptyCategory": "項目はまだありません",
+      "fields": {
+        "name": "名称",
+        "version": "バージョン",
+        "derivedFromIds": "元になった項目 ID（カンマ区切り）",
+        "distillationNote": "抽象化メモ"
+      },
+      "origins": {
+        "project-distilled": "プロジェクトから抽出",
+        "market-imported": "マーケットから導入",
+        "manual": "手動作成",
+        "external-reference": "外部参照"
+      }
     },
     "chat": {
       "workspaceLabel": "プロジェクト協作",

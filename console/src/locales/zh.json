@@ -86,7 +86,23 @@
     "create": "创建智能体",
     "createTitle": "创建新智能体",
     "createSuccess": "智能体创建成功",
-    "createFailed": "智能体创建失败",
+    "artifactArchitecture": "产物架构",
+    "artifacts": {
+      "skill": "技能",
+      "script": "脚本",
+      "flow": "流程",
+      "case": "案例",
+      "empty": "暂无标准产物",
+      "manage": "管理产物",
+      "add": "新增",
+      "emptyCategory": "当前分类暂无条目",
+      "fields": {
+        "name": "名称",
+        "version": "版本"
+      },
+      "saveSuccess": "项目产物已更新。",
+      "saveFailed": "更新项目产物失败。"
+    },
     "edit": "编辑",
     "editTitle": "编辑智能体 - {{name}}",
     "updateSuccess": "智能体更新成功",
@@ -1515,6 +1531,28 @@
       "title": "自动化",
       "flows": "流程",
       "guidance": "自动化指导"
+    },
+    "artifacts": {
+      "skill": "技能",
+      "script": "脚本",
+      "flow": "流程",
+      "case": "案例",
+      "empty": "还没有项目产物",
+      "manage": "管理产物",
+      "add": "新增",
+      "emptyCategory": "暂无条目",
+      "fields": {
+        "name": "名称",
+        "version": "版本",
+        "derivedFromIds": "来源条目 ID，使用逗号分隔",
+        "distillationNote": "沉淀说明"
+      },
+      "origins": {
+        "project-distilled": "项目沉淀",
+        "market-imported": "市场导入",
+        "manual": "手动创建",
+        "external-reference": "外部参考"
+      }
     },
     "chat": {
       "workspaceLabel": "项目协作",

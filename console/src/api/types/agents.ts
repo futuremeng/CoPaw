@@ -3,9 +3,12 @@ export interface ProjectArtifactItem {
   id: string;
   name: string;
   kind: "skill" | "script" | "flow" | "case";
+  origin: string;
   status: string;
   version: string;
   tags: string[];
+  derived_from_ids: string[];
+  distillation_note: string;
   market_source_id?: string | null;
   market_item_id?: string | null;
 }
