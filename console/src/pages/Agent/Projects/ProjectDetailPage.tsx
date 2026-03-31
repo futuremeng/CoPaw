@@ -2183,12 +2183,19 @@ export default function ProjectDetailPage() {
                                       Boolean(selectedStepId) && relatedArtifactPathsForSelectedStep.has(item.path);
                                     const fileInfo = projectFiles.find((file) => file.path === item.path);
                                     return (
-                                      <button
+                                      <div
                                         key={item.artifact_id}
-                                        type="button"
+                                        role="button"
+                                        tabIndex={0}
                                         className={`${styles.listItem} ${selected ? styles.selected : ""} ${artifactRelated && !selected ? styles.related : ""}`}
                                         onClick={() => {
                                           void handleSelectArtifactFile(item.path);
+                                        }}
+                                        onKeyDown={(event) => {
+                                          if (event.key === "Enter" || event.key === " ") {
+                                            event.preventDefault();
+                                            void handleSelectArtifactFile(item.path);
+                                          }
                                         }}
                                       >
                                         <div className={styles.itemTitleRow}>
@@ -2232,7 +2239,7 @@ export default function ProjectDetailPage() {
                                             }}
                                           />
                                         </div>
-                                      </button>
+                                      </div>
                                     );
                                   })}
                                 </div>

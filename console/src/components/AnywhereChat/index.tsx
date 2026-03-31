@@ -1025,11 +1025,13 @@ export default function AnywhereChat({
               setRuntimeStatusOpen(open);
             }}
             content={runtimeStatusContent}
-            overlayInnerStyle={{
-              borderRadius: 12,
-              background: isDark ? "rgba(20,22,28,0.96)" : "rgba(20,22,28,0.96)",
-              boxShadow: "0 16px 48px rgba(0,0,0,0.24)",
-              padding: 14,
+            styles={{
+              body: {
+                borderRadius: 12,
+                background: isDark ? "rgba(20,22,28,0.96)" : "rgba(20,22,28,0.96)",
+                boxShadow: "0 16px 48px rgba(0,0,0,0.24)",
+                padding: 14,
+              },
             }}
           >
             <Button
