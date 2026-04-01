@@ -643,7 +643,9 @@ export default function ProjectDetailPage() {
     }
   }, [currentAgent, loadAgents, selectedProject, t]);
 
-  const handleAutoDistillSkillDrafts = useCallback(async () => {
+  const handleAutoDistillSkillDrafts = useCallback(async (
+    options?: { runId?: string },
+  ) => {
     if (!currentAgent || !selectedProject) {
       return;
     }
@@ -653,6 +655,9 @@ export default function ProjectDetailPage() {
       const result = await agentsApi.autoDistillProjectSkillsDraft(
         currentAgent.id,
         selectedProject.id,
+        options?.runId
+          ? { run_id: options.runId }
+          : undefined,
       );
       await loadAgents();
       const isConversationMode =

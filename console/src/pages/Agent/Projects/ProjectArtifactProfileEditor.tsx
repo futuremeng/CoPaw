@@ -157,7 +157,7 @@ interface ProjectArtifactProfileEditorProps {
     profile: ProjectArtifactProfile,
     distillMode: "file_scan" | "conversation_evidence",
   ) => Promise<void>;
-  onAutoDistillSkills: () => Promise<void>;
+  onAutoDistillSkills: (options?: { runId?: string }) => Promise<void>;
   onConfirmSkillStable: (item: ProjectArtifactItem) => Promise<void>;
   onPromoteSkill: (item: ProjectArtifactItem) => Promise<void>;
 }
@@ -179,6 +179,7 @@ export default function ProjectArtifactProfileEditor({
   const [draftDistillMode, setDraftDistillMode] = useState<
     "file_scan" | "conversation_evidence"
   >(distillMode);
+  const [draftRunId, setDraftRunId] = useState("");
   const [draft, setDraft] = useState<ProjectArtifactProfile>(() =>
     cloneArtifactProfile(value),
   );
@@ -187,6 +188,7 @@ export default function ProjectArtifactProfileEditor({
     if (!open) {
       setDraft(cloneArtifactProfile(value));
       setDraftDistillMode(distillMode);
+      setDraftRunId("");
     }
   }, [distillMode, open, value]);
 
@@ -311,6 +313,16 @@ export default function ProjectArtifactProfileEditor({
                 setDraftDistillMode(mode as "file_scan" | "conversation_evidence");
               }}
             />
+            {draftDistillMode === "conversation_evidence" ? (
+              <Input
+                value={draftRunId}
+                placeholder={t(
+                  "projects.artifacts.conversationRunIdPlaceholder",
+                  "Optional run_id (for explicit distill)",
+                )}
+                onChange={(event) => setDraftRunId(event.target.value)}
+              />
+            ) : null}
           </div>
 
           {ARTIFACT_KIND_META.map((meta) => (
@@ -331,7 +343,11 @@ export default function ProjectArtifactProfileEditor({
                     <Button
                       size="small"
                       loading={Boolean(distillingSkills)}
-                      onClick={() => void onAutoDistillSkills()}
+                      onClick={() =>
+                        void onAutoDistillSkills({
+                          runId: draftRunId.trim() || undefined,
+                        })
+                      }
                     >
                       {draftDistillMode === "conversation_evidence"
                         ? t(

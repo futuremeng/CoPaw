@@ -50,7 +50,7 @@ interface ProjectOverviewCardProps {
     profile: ProjectArtifactProfile,
     distillMode: "file_scan" | "conversation_evidence",
   ) => Promise<void>;
-  onAutoDistillSkills: () => Promise<void>;
+  onAutoDistillSkills: (options?: { runId?: string }) => Promise<void>;
   onConfirmArtifactSkillStable: (item: ProjectArtifactItem) => Promise<void>;
   onPromoteArtifactSkill: (item: ProjectArtifactItem) => Promise<void>;
 }

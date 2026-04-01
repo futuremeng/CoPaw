@@ -236,6 +236,12 @@ class DistillProjectSkillsDraftResponse(BaseModel):
     project: ProjectSummary
 
 
+class DistillProjectSkillsDraftRequest(BaseModel):
+    """Request body for auto-distilling project skills into drafts."""
+
+    run_id: str | None = None
+
+
 class ConfirmProjectSkillStableResponse(BaseModel):
     """Response body for confirming one project skill artifact as stable."""
 
@@ -1077,6 +1083,7 @@ def _build_promoted_skill_markdown(
 def _extract_project_conversation_skill_candidates(
     project_dir: Path,
     limit: int = 50,
+    run_id: str | None = None,
 ) -> list[dict[str, str]]:
     runs_dir = project_dir / "pipelines" / "runs"
     if not runs_dir.exists() or not runs_dir.is_dir():
@@ -1084,6 +1091,7 @@ def _extract_project_conversation_skill_candidates(
 
     candidates: list[dict[str, str]] = []
     seen_ids: set[str] = set()
+    expected_run_id = str(run_id or "").strip().lower()
 
     for run_dir in sorted(
         runs_dir.iterdir(), key=lambda item: item.name.lower()
@@ -1103,6 +1111,8 @@ def _extract_project_conversation_skill_candidates(
         run_id = (
             str(raw_doc.get("run_id") or run_dir.name).strip() or run_dir.name
         )
+        if expected_run_id and run_id.lower() != expected_run_id:
+            continue
         events = raw_doc.get("collaboration_events") or []
         if not isinstance(events, list):
             continue
@@ -1154,6 +1164,7 @@ def _extract_project_conversation_skill_candidates(
 def _auto_distill_project_skills_to_draft(
     workspace_dir: Path,
     project_id: str,
+    run_id: str | None = None,
 ) -> DistillProjectSkillsDraftResponse:
     project_dir = _resolve_project_dir(workspace_dir, project_id)
     summary = _load_project_summary(project_dir)
@@ -1173,7 +1184,8 @@ def _auto_distill_project_skills_to_draft(
 
     if summary.artifact_distill_mode == "conversation_evidence":
         candidates = _extract_project_conversation_skill_candidates(
-            project_dir
+            project_dir,
+            run_id=run_id,
         )
         for candidate in candidates:
             artifact_id = candidate["id"]
@@ -3447,6 +3459,9 @@ async def update_project_artifact_distill_mode(
 )
 async def auto_distill_project_skills_draft(
     request: Request,
+    body: DistillProjectSkillsDraftRequest = Body(
+        default_factory=DistillProjectSkillsDraftRequest,
+    ),
     agentId: str = PathParam(...),
     projectId: str = PathParam(...),
 ) -> DistillProjectSkillsDraftResponse:
@@ -3462,6 +3477,7 @@ async def auto_distill_project_skills_draft(
         return _auto_distill_project_skills_to_draft(
             Path(workspace.workspace_dir),
             projectId,
+            run_id=body.run_id,
         )
     except HTTPException:
         raise

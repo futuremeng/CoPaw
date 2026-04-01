@@ -1561,6 +1561,7 @@
       "autoDraft": "ファイルから自動下書き",
       "autoDraftFromFiles": "ファイルから自動下書き",
       "autoDraftFromConversation": "会話から自動下書き",
+      "conversationRunIdPlaceholder": "任意の run_id（明示的抽出用）",
       "autoDraftSuccess": "{{count}} 件のスキルを自動下書きしました（{{skipped}} 件をスキップ）。",
       "autoDraftFileSuccess": "ファイルから {{count}} 件のスキルを自動下書きしました（{{skipped}} 件をスキップ）。",
       "autoDraftConversationSuccess": "会話エビデンスから {{count}} 件のスキルを自動下書きしました（{{skipped}} 件をスキップ）。",

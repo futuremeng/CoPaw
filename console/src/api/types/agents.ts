@@ -99,6 +99,10 @@ export interface DistillProjectSkillsDraftResponse {
   project: AgentProjectSummary;
 }
 
+export interface AutoDistillProjectSkillsDraftRequest {
+  run_id?: string;
+}
+
 export interface ConfirmProjectSkillStableResponse {
   confirmed: boolean;
   artifact_id: string;

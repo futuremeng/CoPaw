@@ -188,6 +188,59 @@ def test_distill_draft_uses_conversation_evidence_mode(
     assert skill_item.artifact_file_path.endswith("run_manifest.json")
 
 
+def test_distill_draft_can_target_specific_run_id(
+    project_artifact_router_client: tuple[TestClient, Path, str],
+):
+    client, workspace_dir, project_id = project_artifact_router_client
+
+    run_a_dir = (
+        workspace_dir / "projects" / project_id / "pipelines" / "runs" / "run-a"
+    )
+    run_a_dir.mkdir(parents=True, exist_ok=True)
+    (run_a_dir / "run_manifest.json").write_text(
+        "{\n"
+        '  "run_id": "run-a",\n'
+        '  "collaboration_events": [\n'
+        '    {"event": "step.completed", "step_id": "step-a", "message": "Summarize A."}\n'
+        "  ]\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    run_b_dir = (
+        workspace_dir / "projects" / project_id / "pipelines" / "runs" / "run-b"
+    )
+    run_b_dir.mkdir(parents=True, exist_ok=True)
+    (run_b_dir / "run_manifest.json").write_text(
+        "{\n"
+        '  "run_id": "run-b",\n'
+        '  "collaboration_events": [\n'
+        '    {"event": "step.completed", "step_id": "step-b", "message": "Summarize B."}\n'
+        "  ]\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    updated = client.put(
+        f"/agents/default/projects/{project_id}/artifact-distill-mode",
+        json={"artifact_distill_mode": "conversation_evidence"},
+    )
+    assert updated.status_code == 200
+
+    distill = client.post(
+        f"/agents/default/projects/{project_id}/artifacts/skills/distill-draft",
+        json={"run_id": "run-b"},
+    )
+    assert distill.status_code == 200
+    body = distill.json()
+    assert body["drafted_ids"] == ["run-b-step-b"]
+
+    summary = _load_project_summary(workspace_dir / "projects" / project_id)
+    assert summary is not None
+    assert len(summary.artifact_profile.skills) == 1
+    assert summary.artifact_profile.skills[0].id == "run-b-step-b"
+
+
 def test_confirm_stable_endpoint_updates_status(
     project_artifact_router_client: tuple[TestClient, Path, str],
 ):

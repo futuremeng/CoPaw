@@ -22,6 +22,7 @@ import type {
   PromoteProjectArtifactRequest,
   PromoteProjectArtifactResponse,
   UpdateProjectArtifactDistillModeRequest,
+  AutoDistillProjectSkillsDraftRequest,
   DistillProjectSkillsDraftResponse,
   ConfirmProjectSkillStableResponse,
   AgentPipelineDraftInfo,
@@ -172,11 +173,13 @@ export const agentsApi = {
   autoDistillProjectSkillsDraft: (
     agentId: string,
     projectId: string,
+    body?: AutoDistillProjectSkillsDraftRequest,
   ) =>
     request<DistillProjectSkillsDraftResponse>(
       `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/artifacts/skills/distill-draft`,
       {
         method: "POST",
+        body: body ? JSON.stringify(body) : undefined,
       },
     ),
 
