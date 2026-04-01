@@ -7,7 +7,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from copaw.app.routers import agents as agents_router_module
-from copaw.app.routers.agents import _load_project_summary, _write_project_frontmatter
+from copaw.app.routers.agents import (
+    _load_project_summary,
+    _write_project_frontmatter,
+)
 
 
 class _FakeAgentWorkspace:
@@ -51,7 +54,9 @@ def _seed_project(workspace_dir: Path) -> str:
             "cases": [],
         },
     }
-    _write_project_frontmatter(project_dir / "PROJECT.md", metadata, "# Demo Project\n")
+    _write_project_frontmatter(
+        project_dir / "PROJECT.md", metadata, "# Demo Project\n"
+    )
     return project_id
 
 
@@ -114,6 +119,75 @@ def test_confirm_stable_endpoint_returns_404_for_missing_artifact(
     assert "not found" in str(resp.json().get("detail", "")).lower()
 
 
+def test_update_artifact_distill_mode_endpoint(
+    project_artifact_router_client: tuple[TestClient, Path, str],
+):
+    client, workspace_dir, project_id = project_artifact_router_client
+
+    updated = client.put(
+        f"/agents/default/projects/{project_id}/artifact-distill-mode",
+        json={"artifact_distill_mode": "conversation_evidence"},
+    )
+    assert updated.status_code == 200
+    payload = updated.json()
+    assert payload["artifact_distill_mode"] == "conversation_evidence"
+
+    summary = _load_project_summary(workspace_dir / "projects" / project_id)
+    assert summary is not None
+    assert summary.artifact_distill_mode == "conversation_evidence"
+
+
+def test_distill_draft_uses_conversation_evidence_mode(
+    project_artifact_router_client: tuple[TestClient, Path, str],
+):
+    client, workspace_dir, project_id = project_artifact_router_client
+
+    runs_dir = (
+        workspace_dir
+        / "projects"
+        / project_id
+        / "pipelines"
+        / "runs"
+        / "run-demo-1"
+    )
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    (runs_dir / "run_manifest.json").write_text(
+        "{\n"
+        '  "run_id": "run-demo-1",\n'
+        '  "collaboration_events": [\n'
+        '    {"event": "step.completed", "step_id": "collect-context", "message": "Summarize repeated troubleshooting operation into reusable skill."}\n'
+        "  ]\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    updated = client.put(
+        f"/agents/default/projects/{project_id}/artifact-distill-mode",
+        json={"artifact_distill_mode": "conversation_evidence"},
+    )
+    assert updated.status_code == 200
+
+    distill = client.post(
+        f"/agents/default/projects/{project_id}/artifacts/skills/distill-draft",
+    )
+    assert distill.status_code == 200
+    body = distill.json()
+    assert body["artifact_distill_mode"] == "conversation_evidence"
+    assert body["drafted_count"] == 1
+    drafted_ids = body.get("drafted_ids") or []
+    assert drafted_ids == ["run-demo-1-collect-context"]
+
+    summary = _load_project_summary(workspace_dir / "projects" / project_id)
+    assert summary is not None
+    skill_item = next(
+        item
+        for item in summary.artifact_profile.skills
+        if item.id == "run-demo-1-collect-context"
+    )
+    assert "conversation-evidence" in skill_item.tags
+    assert skill_item.artifact_file_path.endswith("run_manifest.json")
+
+
 def test_confirm_stable_endpoint_updates_status(
     project_artifact_router_client: tuple[TestClient, Path, str],
 ):
@@ -138,7 +212,11 @@ def test_confirm_stable_endpoint_updates_status(
 
     summary = _load_project_summary(workspace_dir / "projects" / project_id)
     assert summary is not None
-    item = next(skill for skill in summary.artifact_profile.skills if skill.id == artifact_id)
+    item = next(
+        skill
+        for skill in summary.artifact_profile.skills
+        if skill.id == artifact_id
+    )
     assert item.status == "stable"
 
 
@@ -179,6 +257,10 @@ def test_full_artifact_chain_distill_confirm_and_promote(
 
     summary = _load_project_summary(workspace_dir / "projects" / project_id)
     assert summary is not None
-    item = next(skill for skill in summary.artifact_profile.skills if skill.id == artifact_id)
+    item = next(
+        skill
+        for skill in summary.artifact_profile.skills
+        if skill.id == artifact_id
+    )
     assert item.origin == "project-promoted"
     assert item.market_item_id == "auto_chain_skill"

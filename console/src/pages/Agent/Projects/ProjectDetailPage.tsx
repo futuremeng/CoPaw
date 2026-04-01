@@ -523,6 +523,7 @@ export default function ProjectDetailPage() {
 
   const handleSaveArtifactProfile = useCallback(async (
     profile: ProjectArtifactProfile,
+    distillMode: "file_scan" | "conversation_evidence",
   ) => {
     if (!currentAgent || !selectedProject) {
       return;
@@ -534,6 +535,13 @@ export default function ProjectDetailPage() {
         currentAgent.id,
         selectedProject.id,
         profile,
+      );
+      await agentsApi.updateProjectArtifactDistillMode(
+        currentAgent.id,
+        selectedProject.id,
+        {
+          artifact_distill_mode: distillMode,
+        },
       );
       await loadAgents();
       message.success(
@@ -647,23 +655,45 @@ export default function ProjectDetailPage() {
         selectedProject.id,
       );
       await loadAgents();
+      const isConversationMode =
+        (result.artifact_distill_mode || "").toLowerCase() ===
+        "conversation_evidence";
       message.success(
-        t(
-          "projects.artifacts.autoDraftSuccess",
-          "Auto drafted {{count}} skill artifacts (skipped {{skipped}}).",
-          {
-            count: result.drafted_count,
-            skipped: result.skipped_count,
-          },
-        ),
+        isConversationMode
+          ? t(
+              "projects.artifacts.autoDraftConversationSuccess",
+              "Auto drafted {{count}} skill artifacts from conversation evidence (skipped {{skipped}}).",
+              {
+                count: result.drafted_count,
+                skipped: result.skipped_count,
+              },
+            )
+          : t(
+              "projects.artifacts.autoDraftFileSuccess",
+              "Auto drafted {{count}} skill artifacts from files (skipped {{skipped}}).",
+              {
+                count: result.drafted_count,
+                skipped: result.skipped_count,
+              },
+            ),
       );
     } catch (err) {
       console.error("failed to auto-distill project skills", err);
+      const currentMode =
+        (selectedProject.artifact_distill_mode || "").toLowerCase() ===
+        "conversation_evidence"
+          ? "conversation"
+          : "file";
       message.error(
-        t(
-          "projects.artifacts.autoDraftFailed",
-          "Failed to auto draft project skills.",
-        ),
+        currentMode === "conversation"
+          ? t(
+              "projects.artifacts.autoDraftConversationFailed",
+              "Failed to auto draft project skills from conversation evidence.",
+            )
+          : t(
+              "projects.artifacts.autoDraftFileFailed",
+              "Failed to auto draft project skills from files.",
+            ),
       );
       throw err;
     } finally {

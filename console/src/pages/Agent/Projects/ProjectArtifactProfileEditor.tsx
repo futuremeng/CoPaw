@@ -148,11 +148,15 @@ function normalizeArtifactProfile(
 
 interface ProjectArtifactProfileEditorProps {
   value?: ProjectArtifactProfile;
+  distillMode: "file_scan" | "conversation_evidence";
   saving: boolean;
   distillingSkills?: boolean;
   promotingSkillId?: string;
   confirmingSkillId?: string;
-  onSave: (profile: ProjectArtifactProfile) => Promise<void>;
+  onSave: (
+    profile: ProjectArtifactProfile,
+    distillMode: "file_scan" | "conversation_evidence",
+  ) => Promise<void>;
   onAutoDistillSkills: () => Promise<void>;
   onConfirmSkillStable: (item: ProjectArtifactItem) => Promise<void>;
   onPromoteSkill: (item: ProjectArtifactItem) => Promise<void>;
@@ -160,6 +164,7 @@ interface ProjectArtifactProfileEditorProps {
 
 export default function ProjectArtifactProfileEditor({
   value,
+  distillMode,
   saving,
   distillingSkills,
   promotingSkillId,
@@ -171,6 +176,9 @@ export default function ProjectArtifactProfileEditor({
 }: ProjectArtifactProfileEditorProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
+  const [draftDistillMode, setDraftDistillMode] = useState<
+    "file_scan" | "conversation_evidence"
+  >(distillMode);
   const [draft, setDraft] = useState<ProjectArtifactProfile>(() =>
     cloneArtifactProfile(value),
   );
@@ -178,8 +186,9 @@ export default function ProjectArtifactProfileEditor({
   useEffect(() => {
     if (!open) {
       setDraft(cloneArtifactProfile(value));
+      setDraftDistillMode(distillMode);
     }
-  }, [open, value]);
+  }, [distillMode, open, value]);
 
   const hasArtifacts = useMemo(
     () => ARTIFACT_KIND_META.some((meta) => (value?.[meta.key] || []).length > 0),
@@ -214,7 +223,7 @@ export default function ProjectArtifactProfileEditor({
   };
 
   const handleSave = async () => {
-    await onSave(normalizeArtifactProfile(draft));
+    await onSave(normalizeArtifactProfile(draft), draftDistillMode);
     setOpen(false);
   };
 
@@ -257,6 +266,12 @@ export default function ProjectArtifactProfileEditor({
         <Button size="small" onClick={() => setOpen(true)}>
           {t("projects.artifacts.manage", "Manage Artifacts")}
         </Button>
+        <Tag color="default">
+          {t("projects.artifacts.distillModeLabel", "Distill Mode")}: {t(
+            `projects.artifacts.distillModes.${distillMode}`,
+            distillMode,
+          )}
+        </Tag>
       </div>
 
       <Modal
@@ -270,6 +285,34 @@ export default function ProjectArtifactProfileEditor({
         width={860}
       >
         <div className={styles.artifactEditorModalBody}>
+          <div className={styles.artifactEditorSection}>
+            <div className={styles.subSectionTitle}>
+              {t("projects.artifacts.distillModeLabel", "Distill Mode")}
+            </div>
+            <Select
+              value={draftDistillMode}
+              options={[
+                {
+                  value: "file_scan",
+                  label: t(
+                    "projects.artifacts.distillModes.file_scan",
+                    "File Scan",
+                  ),
+                },
+                {
+                  value: "conversation_evidence",
+                  label: t(
+                    "projects.artifacts.distillModes.conversation_evidence",
+                    "Conversation Evidence",
+                  ),
+                },
+              ]}
+              onChange={(mode) => {
+                setDraftDistillMode(mode as "file_scan" | "conversation_evidence");
+              }}
+            />
+          </div>
+
           {ARTIFACT_KIND_META.map((meta) => (
             <div key={meta.key} className={styles.artifactEditorSection}>
               <div className={styles.artifactEditorSectionHeader}>
@@ -290,10 +333,15 @@ export default function ProjectArtifactProfileEditor({
                       loading={Boolean(distillingSkills)}
                       onClick={() => void onAutoDistillSkills()}
                     >
-                      {t(
-                        "projects.artifacts.autoDraft",
-                        "Auto Draft from Files",
-                      )}
+                      {draftDistillMode === "conversation_evidence"
+                        ? t(
+                            "projects.artifacts.autoDraftFromConversation",
+                            "Auto Draft from Conversation",
+                          )
+                        : t(
+                            "projects.artifacts.autoDraftFromFiles",
+                            "Auto Draft from Files",
+                          )}
                     </Button>
                   ) : null}
                 </div>

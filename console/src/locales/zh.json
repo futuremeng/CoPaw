@@ -88,6 +88,11 @@
     "createSuccess": "智能体创建成功",
     "artifactArchitecture": "产物架构",
     "artifacts": {
+      "distillModeLabel": "沉淀模式",
+      "distillModes": {
+        "file_scan": "文件扫描",
+        "conversation_evidence": "对话证据"
+      },
       "skill": "技能",
       "script": "脚本",
       "flow": "流程",
@@ -1556,8 +1561,14 @@
       "promotedBadge": "已晋升",
       "promotedAs": "已发布为 {{name}}",
       "autoDraft": "从文件自动草拟",
+      "autoDraftFromFiles": "从文件自动草拟",
+      "autoDraftFromConversation": "从对话自动草拟",
       "autoDraftSuccess": "已自动草拟 {{count}} 个技能条目（跳过 {{skipped}} 个）。",
+      "autoDraftFileSuccess": "已从文件自动草拟 {{count}} 个技能条目（跳过 {{skipped}} 个）。",
+      "autoDraftConversationSuccess": "已从对话证据自动草拟 {{count}} 个技能条目（跳过 {{skipped}} 个）。",
       "autoDraftFailed": "自动草拟项目技能失败。",
+      "autoDraftFileFailed": "从文件自动草拟项目技能失败。",
+      "autoDraftConversationFailed": "从对话证据自动草拟项目技能失败。",
       "confirmStable": "一键确认为 stable",
       "confirmStableSuccess": "技能状态已确认为 stable。",
       "confirmStableFailed": "确认技能 stable 状态失败。",

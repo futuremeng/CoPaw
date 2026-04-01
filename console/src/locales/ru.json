@@ -65,6 +65,11 @@
     "createSuccess": "Агент успешно создан",
     "artifactArchitecture": "Архитектура артефактов",
     "artifacts": {
+      "distillModeLabel": "Режим осаждения",
+      "distillModes": {
+        "file_scan": "Сканирование файлов",
+        "conversation_evidence": "Доказательства из диалога"
+      },
       "skill": "Навыки",
       "script": "Скрипты",
       "flow": "Потоки",
@@ -1554,8 +1559,14 @@
       "promotedBadge": "Повышено",
       "promotedAs": "опубликовано как {{name}}",
       "autoDraft": "Авточерновик из файлов",
+      "autoDraftFromFiles": "Авточерновик из файлов",
+      "autoDraftFromConversation": "Авточерновик из диалога",
       "autoDraftSuccess": "Автоматически создано {{count}} черновиков навыков (пропущено {{skipped}}).",
+      "autoDraftFileSuccess": "Автоматически создано {{count}} черновиков навыков из файлов (пропущено {{skipped}}).",
+      "autoDraftConversationSuccess": "Автоматически создано {{count}} черновиков навыков из доказательств диалога (пропущено {{skipped}}).",
       "autoDraftFailed": "Не удалось автоматически создать черновики навыков проекта.",
+      "autoDraftFileFailed": "Не удалось автоматически создать черновики навыков из файлов.",
+      "autoDraftConversationFailed": "Не удалось автоматически создать черновики навыков из доказательств диалога.",
       "confirmStable": "Подтвердить stable",
       "confirmStableSuccess": "Статус навыка подтверждён как stable.",
       "confirmStableFailed": "Не удалось подтвердить статус stable для навыка.",

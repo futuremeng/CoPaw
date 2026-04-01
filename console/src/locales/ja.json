@@ -65,6 +65,11 @@
     "createSuccess": "エージェントが正常に作成されました",
     "artifactArchitecture": "成果物アーキテクチャ",
     "artifacts": {
+      "distillModeLabel": "抽出モード",
+      "distillModes": {
+        "file_scan": "ファイル走査",
+        "conversation_evidence": "会話エビデンス"
+      },
       "skill": "スキル",
       "script": "スクリプト",
       "flow": "フロー",
@@ -1554,8 +1559,14 @@
       "promotedBadge": "昇格済み",
       "promotedAs": "公開名: {{name}}",
       "autoDraft": "ファイルから自動下書き",
+      "autoDraftFromFiles": "ファイルから自動下書き",
+      "autoDraftFromConversation": "会話から自動下書き",
       "autoDraftSuccess": "{{count}} 件のスキルを自動下書きしました（{{skipped}} 件をスキップ）。",
+      "autoDraftFileSuccess": "ファイルから {{count}} 件のスキルを自動下書きしました（{{skipped}} 件をスキップ）。",
+      "autoDraftConversationSuccess": "会話エビデンスから {{count}} 件のスキルを自動下書きしました（{{skipped}} 件をスキップ）。",
       "autoDraftFailed": "プロジェクトスキルの自動下書きに失敗しました。",
+      "autoDraftFileFailed": "ファイルからのスキル自動下書きに失敗しました。",
+      "autoDraftConversationFailed": "会話エビデンスからのスキル自動下書きに失敗しました。",
       "confirmStable": "stable として確定",
       "confirmStableSuccess": "スキル状態を stable に確定しました。",
       "confirmStableFailed": "スキルを stable に確定できませんでした。",

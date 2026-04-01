@@ -21,6 +21,7 @@ import type {
   DeleteProjectResponse,
   PromoteProjectArtifactRequest,
   PromoteProjectArtifactResponse,
+  UpdateProjectArtifactDistillModeRequest,
   DistillProjectSkillsDraftResponse,
   ConfirmProjectSkillStableResponse,
   AgentPipelineDraftInfo,
@@ -135,6 +136,19 @@ export const agentsApi = {
   ) =>
     request<AgentProjectSummary>(
       `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/artifact-profile`,
+      {
+        method: "PUT",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  updateProjectArtifactDistillMode: (
+    agentId: string,
+    projectId: string,
+    body: UpdateProjectArtifactDistillModeRequest,
+  ) =>
+    request<AgentProjectSummary>(
+      `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/artifact-distill-mode`,
       {
         method: "PUT",
         body: JSON.stringify(body),

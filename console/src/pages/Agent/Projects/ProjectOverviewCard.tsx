@@ -46,7 +46,10 @@ interface ProjectOverviewCardProps {
   distillingSkills: boolean;
   promotingSkillId: string;
   confirmingSkillId: string;
-  onSaveArtifactProfile: (profile: ProjectArtifactProfile) => Promise<void>;
+  onSaveArtifactProfile: (
+    profile: ProjectArtifactProfile,
+    distillMode: "file_scan" | "conversation_evidence",
+  ) => Promise<void>;
   onAutoDistillSkills: () => Promise<void>;
   onConfirmArtifactSkillStable: (item: ProjectArtifactItem) => Promise<void>;
   onPromoteArtifactSkill: (item: ProjectArtifactItem) => Promise<void>;
@@ -350,6 +353,7 @@ export default function ProjectOverviewCard({
           </div>
           <ProjectArtifactProfileEditor
             value={artifactProfile}
+            distillMode={selectedProject?.artifact_distill_mode || "file_scan"}
             saving={artifactProfileSaving}
             distillingSkills={distillingSkills}
             promotingSkillId={promotingSkillId}

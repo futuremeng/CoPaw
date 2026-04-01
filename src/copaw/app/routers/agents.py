@@ -18,7 +18,15 @@ from pathlib import Path
 from datetime import datetime
 from typing import Any, cast
 from urllib.parse import unquote, urlparse
-from fastapi import APIRouter, Body, File, Form, HTTPException, Request, UploadFile
+from fastapi import (
+    APIRouter,
+    Body,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+)
 from fastapi import Path as PathParam
 from pydantic import BaseModel, Field, field_validator
 
@@ -71,6 +79,7 @@ class ProjectSummary(BaseModel):
     data_dir: str
     metadata_file: str
     tags: list[str] = Field(default_factory=list)
+    artifact_distill_mode: str = "file_scan"
     artifact_profile: "ProjectArtifactProfile" = Field(
         default_factory=lambda: ProjectArtifactProfile(),
     )
@@ -179,9 +188,16 @@ class CreateProjectRequest(BaseModel):
     status: str = "active"
     data_dir: str = "data"
     tags: list[str] = Field(default_factory=list)
+    artifact_distill_mode: str = "file_scan"
     artifact_profile: ProjectArtifactProfile = Field(
         default_factory=lambda: ProjectArtifactProfile(),
     )
+
+
+class UpdateProjectArtifactDistillModeRequest(BaseModel):
+    """Request body for updating project artifact distill mode."""
+
+    artifact_distill_mode: str = "file_scan"
 
 
 class DeleteProjectResponse(BaseModel):
@@ -216,6 +232,7 @@ class DistillProjectSkillsDraftResponse(BaseModel):
     drafted_count: int
     skipped_count: int
     drafted_ids: list[str] = Field(default_factory=list)
+    artifact_distill_mode: str = "file_scan"
     project: ProjectSummary
 
 
@@ -315,7 +332,9 @@ _SQUARE_SKIP_FILES = {
     "LICENSE",
     "CHANGELOG.md",
 }
-_AGENTS_SQUARE_DEFAULT_DIR = Path(__file__).resolve().parents[2] / "agents_square"
+_AGENTS_SQUARE_DEFAULT_DIR = (
+    Path(__file__).resolve().parents[2] / "agents_square"
+)
 _AGENTS_SQUARE_CONFIG_PATH = WORKING_DIR / "agents_square" / "config.json"
 _AGENTS_SQUARE_DEFAULT_PATH = _AGENTS_SQUARE_DEFAULT_DIR / "default.json"
 _PROJECTS_DIRNAME = "projects"
@@ -326,6 +345,17 @@ _PROJECT_ARTIFACT_DIR_BY_KIND = {
     "flow": "flows",
     "case": "cases",
 }
+_PROJECT_ARTIFACT_DISTILL_MODES = {
+    "file_scan",
+    "conversation_evidence",
+}
+
+
+def _normalize_project_artifact_distill_mode(raw_value: Any) -> str:
+    mode = str(raw_value or "").strip().lower()
+    if mode in _PROJECT_ARTIFACT_DISTILL_MODES:
+        return mode
+    return "file_scan"
 
 
 def _ensure_square_config_initialized() -> None:
@@ -336,7 +366,9 @@ def _ensure_square_config_initialized() -> None:
     _AGENTS_SQUARE_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     if _AGENTS_SQUARE_DEFAULT_PATH.exists():
-        shutil.copyfile(_AGENTS_SQUARE_DEFAULT_PATH, _AGENTS_SQUARE_CONFIG_PATH)
+        shutil.copyfile(
+            _AGENTS_SQUARE_DEFAULT_PATH, _AGENTS_SQUARE_CONFIG_PATH
+        )
         return
 
     # Last resort fallback when default.json is missing.
@@ -414,7 +446,9 @@ def _reset_current_square_config_to_default() -> AgentsSquareConfig:
     _AGENTS_SQUARE_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     if _AGENTS_SQUARE_DEFAULT_PATH.exists():
-        shutil.copyfile(_AGENTS_SQUARE_DEFAULT_PATH, _AGENTS_SQUARE_CONFIG_PATH)
+        shutil.copyfile(
+            _AGENTS_SQUARE_DEFAULT_PATH, _AGENTS_SQUARE_CONFIG_PATH
+        )
         return _load_current_square_config()
 
     # Fallback when default.json is missing.
@@ -591,10 +625,13 @@ def _normalize_project_artifact_storage(
     item: ProjectArtifactItem,
     kind: str,
 ) -> ProjectArtifactItem:
-    file_path = item.artifact_file_path.strip() or _build_project_artifact_file_path(
-        kind,
-        item.id,
-        item.version,
+    file_path = (
+        item.artifact_file_path.strip()
+        or _build_project_artifact_file_path(
+            kind,
+            item.id,
+            item.version,
+        )
     )
     history = _parse_project_artifact_version_history(item.version_history)
 
@@ -783,7 +820,11 @@ def _first_nonempty_line(text: str) -> str:
 
 def _load_project_summary(project_dir: Path) -> ProjectSummary | None:
     metadata_file = next(
-        (project_dir / name for name in _PROJECT_METADATA_FILENAMES if (project_dir / name).is_file()),
+        (
+            project_dir / name
+            for name in _PROJECT_METADATA_FILENAMES
+            if (project_dir / name).is_file()
+        ),
         None,
     )
     if metadata_file is None:
@@ -800,11 +841,21 @@ def _load_project_summary(project_dir: Path) -> ProjectSummary | None:
     data_subdir = _safe_project_data_subdir(
         str(metadata.get("data_dir") or metadata.get("dataDir") or "data"),
     )
-    project_id = str(metadata.get("id") or project_dir.name).strip() or project_dir.name
-    project_name = str(metadata.get("name") or project_dir.name).strip() or project_dir.name
-    description = str(metadata.get("description") or _first_nonempty_line(body)).strip()
+    project_id = (
+        str(metadata.get("id") or project_dir.name).strip() or project_dir.name
+    )
+    project_name = (
+        str(metadata.get("name") or project_dir.name).strip()
+        or project_dir.name
+    )
+    description = str(
+        metadata.get("description") or _first_nonempty_line(body)
+    ).strip()
     status = str(metadata.get("status") or "active").strip() or "active"
     tags = _parse_project_tags(metadata.get("tags"))
+    artifact_distill_mode = _normalize_project_artifact_distill_mode(
+        metadata.get("artifact_distill_mode") or metadata.get("distill_mode"),
+    )
     artifact_profile = _parse_project_artifact_profile(metadata)
     updated_time = _format_iso_time(metadata_file.stat().st_mtime)
 
@@ -817,6 +868,7 @@ def _load_project_summary(project_dir: Path) -> ProjectSummary | None:
         data_dir=str(project_dir / data_subdir),
         metadata_file=str(metadata_file),
         tags=tags,
+        artifact_distill_mode=artifact_distill_mode,
         artifact_profile=artifact_profile,
         updated_time=updated_time,
     )
@@ -828,7 +880,9 @@ def _list_agent_projects(workspace_dir: Path) -> list[ProjectSummary]:
         return []
 
     projects: list[ProjectSummary] = []
-    for project_dir in sorted(projects_dir.iterdir(), key=lambda item: item.name.lower()):
+    for project_dir in sorted(
+        projects_dir.iterdir(), key=lambda item: item.name.lower()
+    ):
         if not project_dir.is_dir():
             continue
         summary = _load_project_summary(project_dir)
@@ -878,9 +932,13 @@ Project details go below.
 def _resolve_project_dir(workspace_dir: Path, project_id: str) -> Path:
     projects_dir = workspace_dir / _PROJECTS_DIRNAME
     if not projects_dir.exists() or not projects_dir.is_dir():
-        raise HTTPException(status_code=404, detail="Projects directory not found")
+        raise HTTPException(
+            status_code=404, detail="Projects directory not found"
+        )
 
-    for project_dir in sorted(projects_dir.iterdir(), key=lambda item: item.name.lower()):
+    for project_dir in sorted(
+        projects_dir.iterdir(), key=lambda item: item.name.lower()
+    ):
         if not project_dir.is_dir():
             continue
         summary = _load_project_summary(project_dir)
@@ -889,7 +947,9 @@ def _resolve_project_dir(workspace_dir: Path, project_id: str) -> Path:
         if summary.id == project_id or project_dir.name == project_id:
             return project_dir
 
-    raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
+    raise HTTPException(
+        status_code=404, detail=f"Project '{project_id}' not found"
+    )
 
 
 def _read_project_frontmatter_with_body(
@@ -950,6 +1010,37 @@ def _update_project_artifact_profile(
     return updated
 
 
+def _update_project_artifact_distill_mode(
+    workspace_dir: Path,
+    project_id: str,
+    artifact_distill_mode: str,
+) -> ProjectSummary:
+    project_dir = _resolve_project_dir(workspace_dir, project_id)
+    summary = _load_project_summary(project_dir)
+    if summary is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Project '{project_id}' metadata not found",
+        )
+
+    metadata_file = Path(summary.metadata_file)
+    metadata, body = _read_project_frontmatter_with_body(metadata_file)
+    metadata[
+        "artifact_distill_mode"
+    ] = _normalize_project_artifact_distill_mode(
+        artifact_distill_mode,
+    )
+    _write_project_frontmatter(metadata_file, metadata, body)
+
+    updated = _load_project_summary(project_dir)
+    if updated is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to load updated project summary",
+        )
+    return updated
+
+
 def _build_promoted_skill_markdown(
     item: ProjectArtifactItem,
     project_id: str,
@@ -983,6 +1074,83 @@ def _build_promoted_skill_markdown(
     )
 
 
+def _extract_project_conversation_skill_candidates(
+    project_dir: Path,
+    limit: int = 50,
+) -> list[dict[str, str]]:
+    runs_dir = project_dir / "pipelines" / "runs"
+    if not runs_dir.exists() or not runs_dir.is_dir():
+        return []
+
+    candidates: list[dict[str, str]] = []
+    seen_ids: set[str] = set()
+
+    for run_dir in sorted(
+        runs_dir.iterdir(), key=lambda item: item.name.lower()
+    ):
+        if not run_dir.is_dir():
+            continue
+        manifest_file = run_dir / "run_manifest.json"
+        if not manifest_file.exists() or not manifest_file.is_file():
+            continue
+        try:
+            raw_doc = json.loads(manifest_file.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(raw_doc, dict):
+            continue
+
+        run_id = (
+            str(raw_doc.get("run_id") or run_dir.name).strip() or run_dir.name
+        )
+        events = raw_doc.get("collaboration_events") or []
+        if not isinstance(events, list):
+            continue
+
+        for event in events:
+            if not isinstance(event, dict):
+                continue
+            event_name = str(event.get("event") or "").strip().lower()
+            if event_name not in {"step.completed", "run.completed"}:
+                continue
+
+            message = str(event.get("message") or "").strip()
+            if not message:
+                continue
+
+            step_id = (
+                str(event.get("step_id") or event_name).strip() or event_name
+            )
+            artifact_id = _safe_artifact_slug(
+                f"{run_id}-{step_id}",
+                f"skill-{generate_short_agent_id()}",
+            )
+            if artifact_id in seen_ids:
+                continue
+            seen_ids.add(artifact_id)
+
+            name_seed = message.split(".")[0].strip() or message
+            name_tokens = [token for token in name_seed.split() if token]
+            if len(name_tokens) > 8:
+                name_seed = " ".join(name_tokens[:8])
+
+            rel_manifest_path = manifest_file.resolve().relative_to(
+                project_dir.resolve()
+            )
+            candidates.append(
+                {
+                    "id": artifact_id,
+                    "name": name_seed,
+                    "note": f"[{run_id}] {message}",
+                    "source_path": rel_manifest_path.as_posix(),
+                },
+            )
+            if len(candidates) >= limit:
+                return candidates
+
+    return candidates
+
+
 def _auto_distill_project_skills_to_draft(
     workspace_dir: Path,
     project_id: str,
@@ -995,15 +1163,6 @@ def _auto_distill_project_skills_to_draft(
             detail=f"Project '{project_id}' metadata not found",
         )
 
-    skills_dir = project_dir / "skills"
-    if not skills_dir.exists() or not skills_dir.is_dir():
-        return DistillProjectSkillsDraftResponse(
-            drafted_count=0,
-            skipped_count=0,
-            drafted_ids=[],
-            project=summary,
-        )
-
     metadata_file = Path(summary.metadata_file)
     metadata, content_body = _read_project_frontmatter_with_body(metadata_file)
     profile = _parse_project_artifact_profile(metadata)
@@ -1012,63 +1171,117 @@ def _auto_distill_project_skills_to_draft(
     drafted_ids: list[str] = []
     skipped_count = 0
 
-    for md_file in sorted(skills_dir.rglob("*.md"), key=lambda item: item.as_posix()):
-        if not md_file.is_file():
-            continue
-        rel_path = md_file.resolve().relative_to(project_dir.resolve()).as_posix()
-        if rel_path.lower().endswith("/skill.md"):
-            # Skip skill market packaging files that may appear in nested folders.
-            skipped_count += 1
-            continue
-
-        artifact_seed = md_file.relative_to(skills_dir).with_suffix("").as_posix()
-        artifact_id = _safe_artifact_slug(
-            artifact_seed.replace("/", "-"),
-            f"skill-{generate_short_agent_id()}",
+    if summary.artifact_distill_mode == "conversation_evidence":
+        candidates = _extract_project_conversation_skill_candidates(
+            project_dir
         )
-        if artifact_id in existing_ids:
-            skipped_count += 1
-            continue
-
-        raw_text = read_text_file_with_encoding_fallback(md_file)
-        lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
-        heading = next(
-            (line.lstrip("#").strip() for line in lines if line.startswith("#")),
-            "",
-        )
-        name = heading or md_file.stem.replace("-", " ").replace("_", " ").strip()
-        if not name:
-            name = artifact_id
-
-        note_lines: list[str] = []
-        for line in lines:
-            if line.startswith("#"):
+        for candidate in candidates:
+            artifact_id = candidate["id"]
+            if artifact_id in existing_ids:
+                skipped_count += 1
                 continue
-            note_lines.append(line)
-            if len(" ".join(note_lines)) >= 240:
-                break
-        distillation_note = " ".join(note_lines).strip() or (
-            f"Auto drafted from {rel_path}."
-        )
 
-        profile.skills.append(
-            ProjectArtifactItem(
-                id=artifact_id,
-                name=name,
-                kind="skill",
-                origin="project-distilled",
-                status="draft",
-                version="v0-draft",
-                artifact_file_path=rel_path,
-                tags=["auto-draft"],
-                derived_from_ids=[],
-                distillation_note=distillation_note,
-                market_source_id=None,
-                market_item_id=None,
-            ),
-        )
-        existing_ids.add(artifact_id)
-        drafted_ids.append(artifact_id)
+            profile.skills.append(
+                ProjectArtifactItem(
+                    id=artifact_id,
+                    name=candidate["name"],
+                    kind="skill",
+                    origin="project-distilled",
+                    status="draft",
+                    version="v0-draft",
+                    artifact_file_path=candidate["source_path"],
+                    tags=["auto-draft", "conversation-evidence"],
+                    derived_from_ids=[],
+                    distillation_note=candidate["note"],
+                    market_source_id=None,
+                    market_item_id=None,
+                ),
+            )
+            existing_ids.add(artifact_id)
+            drafted_ids.append(artifact_id)
+    else:
+        skills_dir = project_dir / "skills"
+        if not skills_dir.exists() or not skills_dir.is_dir():
+            return DistillProjectSkillsDraftResponse(
+                drafted_count=0,
+                skipped_count=0,
+                drafted_ids=[],
+                artifact_distill_mode=summary.artifact_distill_mode,
+                project=summary,
+            )
+
+        for md_file in sorted(
+            skills_dir.rglob("*.md"), key=lambda item: item.as_posix()
+        ):
+            if not md_file.is_file():
+                continue
+            rel_path = (
+                md_file.resolve().relative_to(project_dir.resolve()).as_posix()
+            )
+            if rel_path.lower().endswith("/skill.md"):
+                # Skip skill market packaging files that may appear in nested folders.
+                skipped_count += 1
+                continue
+
+            artifact_seed = (
+                md_file.relative_to(skills_dir).with_suffix("").as_posix()
+            )
+            artifact_id = _safe_artifact_slug(
+                artifact_seed.replace("/", "-"),
+                f"skill-{generate_short_agent_id()}",
+            )
+            if artifact_id in existing_ids:
+                skipped_count += 1
+                continue
+
+            raw_text = read_text_file_with_encoding_fallback(md_file)
+            lines = [
+                line.strip() for line in raw_text.splitlines() if line.strip()
+            ]
+            heading = next(
+                (
+                    line.lstrip("#").strip()
+                    for line in lines
+                    if line.startswith("#")
+                ),
+                "",
+            )
+            name = (
+                heading
+                or md_file.stem.replace("-", " ").replace("_", " ").strip()
+            )
+            if not name:
+                name = artifact_id
+
+            note_lines: list[str] = []
+            for line in lines:
+                if line.startswith("#"):
+                    continue
+                note_lines.append(line)
+                if len(" ".join(note_lines)) >= 240:
+                    break
+            distillation_note = " ".join(note_lines).strip() or (
+                f"Auto drafted from {rel_path}."
+            )
+
+            profile.skills.append(
+                ProjectArtifactItem(
+                    id=artifact_id,
+                    name=name,
+                    kind="skill",
+                    origin="project-distilled",
+                    status="draft",
+                    version="v0-draft",
+                    artifact_file_path=rel_path,
+                    tags=["auto-draft"],
+                    derived_from_ids=[],
+                    distillation_note=distillation_note,
+                    market_source_id=None,
+                    market_item_id=None,
+                ),
+            )
+            existing_ids.add(artifact_id)
+            drafted_ids.append(artifact_id)
 
     normalized_profile = _normalize_project_artifact_profile_storage(profile)
     _ensure_project_artifact_layout(project_dir)
@@ -1089,6 +1302,7 @@ def _auto_distill_project_skills_to_draft(
         drafted_count=len(drafted_ids),
         skipped_count=skipped_count,
         drafted_ids=drafted_ids,
+        artifact_distill_mode=updated_summary.artifact_distill_mode,
         project=updated_summary,
     )
 
@@ -1107,7 +1321,11 @@ def _confirm_project_skill_stable(
         )
 
     skill_item = next(
-        (item for item in summary.artifact_profile.skills if item.id == artifact_id),
+        (
+            item
+            for item in summary.artifact_profile.skills
+            if item.id == artifact_id
+        ),
         None,
     )
     if skill_item is None:
@@ -1142,7 +1360,11 @@ def _confirm_project_skill_stable(
         )
 
     confirmed_item = next(
-        (item for item in updated_summary.artifact_profile.skills if item.id == artifact_id),
+        (
+            item
+            for item in updated_summary.artifact_profile.skills
+            if item.id == artifact_id
+        ),
         None,
     )
     if confirmed_item is None:
@@ -1174,7 +1396,11 @@ def _promote_project_skill_to_agent(
         )
 
     skill_item = next(
-        (item for item in summary.artifact_profile.skills if item.id == artifact_id),
+        (
+            item
+            for item in summary.artifact_profile.skills
+            if item.id == artifact_id
+        ),
         None,
     )
     if skill_item is None:
@@ -1341,7 +1567,10 @@ def _clone_project(
     source_dir = _resolve_project_dir(workspace_dir, source_project_id)
     source_summary = _load_project_summary(source_dir)
     if source_summary is None:
-        raise HTTPException(status_code=404, detail=f"Project '{source_project_id}' metadata not found")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Project '{source_project_id}' metadata not found",
+        )
 
     cloned_id_seed = body.target_id or f"{source_summary.id}-clone"
     cloned_id = _build_unique_project_id(workspace_dir, cloned_id_seed)
@@ -1361,7 +1590,11 @@ def _clone_project(
     _ensure_project_artifact_layout(target_dir)
 
     metadata_file = next(
-        (target_dir / name for name in _PROJECT_METADATA_FILENAMES if (target_dir / name).is_file()),
+        (
+            target_dir / name
+            for name in _PROJECT_METADATA_FILENAMES
+            if (target_dir / name).is_file()
+        ),
         target_dir / "PROJECT.md",
     )
 
@@ -1371,7 +1604,9 @@ def _clone_project(
     if parsed is not None:
         metadata, content_body = parsed
     elif metadata_file.exists():
-        content_body = metadata_file.read_text(encoding="utf-8", errors="ignore")
+        content_body = metadata_file.read_text(
+            encoding="utf-8", errors="ignore"
+        )
 
     metadata["id"] = cloned_id
     metadata["name"] = cloned_name
@@ -1383,7 +1618,9 @@ def _clone_project(
 
     summary = _load_project_summary(target_dir)
     if summary is None:
-        raise HTTPException(status_code=500, detail="Failed to load cloned project summary")
+        raise HTTPException(
+            status_code=500, detail="Failed to load cloned project summary"
+        )
     return summary
 
 
@@ -1407,7 +1644,9 @@ def _create_project(
 
     data_subdir = _safe_project_data_subdir(body.data_dir)
     (project_dir / data_subdir).mkdir(parents=True, exist_ok=True)
-    (project_dir / "pipelines" / "templates").mkdir(parents=True, exist_ok=True)
+    (project_dir / "pipelines" / "templates").mkdir(
+        parents=True, exist_ok=True
+    )
     _ensure_project_artifact_layout(project_dir)
 
     metadata_file = project_dir / "PROJECT.md"
@@ -1421,6 +1660,9 @@ def _create_project(
         "status": (body.status or "active").strip() or "active",
         "data_dir": data_subdir,
         "tags": [item.strip() for item in body.tags if str(item).strip()],
+        "artifact_distill_mode": _normalize_project_artifact_distill_mode(
+            body.artifact_distill_mode,
+        ),
         "artifact_profile": normalized_profile.model_dump(
             mode="json",
             exclude_none=True,
@@ -1431,11 +1673,15 @@ def _create_project(
 
     summary = _load_project_summary(project_dir)
     if summary is None:
-        raise HTTPException(status_code=500, detail="Failed to load created project summary")
+        raise HTTPException(
+            status_code=500, detail="Failed to load created project summary"
+        )
     return summary
 
 
-def _delete_project(workspace_dir: Path, project_id: str) -> DeleteProjectResponse:
+def _delete_project(
+    workspace_dir: Path, project_id: str
+) -> DeleteProjectResponse:
     project_dir = _resolve_project_dir(workspace_dir, project_id)
     shutil.rmtree(project_dir)
     return DeleteProjectResponse(success=True, project_id=project_id)
@@ -1454,7 +1700,9 @@ def _list_project_files(project_dir: Path) -> list[ProjectFileInfo]:
     project_root = project_dir.resolve()
     files: list[ProjectFileInfo] = []
 
-    for path in sorted(project_root.rglob("*"), key=lambda item: item.as_posix().lower()):
+    for path in sorted(
+        project_root.rglob("*"), key=lambda item: item.as_posix().lower()
+    ):
         if not path.is_file():
             continue
 
@@ -1484,11 +1732,15 @@ def _read_project_text_file(project_dir: Path, rel_path: str) -> str:
     if not str(target).startswith(str(project_root)):
         raise HTTPException(status_code=400, detail="Invalid file path")
     if not target.exists() or not target.is_file():
-        raise HTTPException(status_code=404, detail=f"File '{rel_path}' not found")
+        raise HTTPException(
+            status_code=404, detail=f"File '{rel_path}' not found"
+        )
 
     raw = target.read_bytes()
     if b"\x00" in raw[:4096]:
-        raise HTTPException(status_code=400, detail="Binary file preview is not supported")
+        raise HTTPException(
+            status_code=400, detail="Binary file preview is not supported"
+        )
     return raw.decode("utf-8", errors="replace")
 
 
@@ -1498,7 +1750,9 @@ def _upload_project_file(
     target_dir: str,
 ) -> ProjectFileInfo:
     if not upload.filename:
-        raise HTTPException(status_code=400, detail="Uploaded file must have a filename")
+        raise HTTPException(
+            status_code=400, detail="Uploaded file must have a filename"
+        )
 
     safe_dir = _safe_project_data_subdir(target_dir or "data")
     raw_name = Path(upload.filename).name.strip()
@@ -1626,12 +1880,14 @@ def _collect_index_json_items(
             return raw_content
 
         soul = str(node_doc.get("soul") or node_doc.get("SOUL") or "").strip()
-        rules = str(node_doc.get("rules") or node_doc.get("RULES") or "").strip()
+        rules = str(
+            node_doc.get("rules") or node_doc.get("RULES") or ""
+        ).strip()
         agents_md = str(
             node_doc.get("agents_md")
             or node_doc.get("agents")
             or node_doc.get("AGENTS")
-            or ""
+            or "",
         ).strip()
 
         sections: list[str] = []
@@ -1693,7 +1949,12 @@ def _aggregate_square_items(
     cfg: AgentsSquareConfig,
     *,
     refresh: bool = False,
-) -> tuple[list[AgentSquareItem], list[SourceError], dict[str, object], dict[str, dict[str, Any]]]:
+) -> tuple[
+    list[AgentSquareItem],
+    list[SourceError],
+    dict[str, object],
+    dict[str, dict[str, Any]],
+]:
     now = time.time()
     with _SQUARE_CACHE_LOCK:
         expires_at = float(_SQUARE_CACHE.get("expires_at", 0.0) or 0.0)
@@ -1735,14 +1996,19 @@ def _aggregate_square_items(
             tmp_dir = _clone_square_source(source)
             source_root = (tmp_dir / (source.path or ".")).resolve()
             if not str(source_root).startswith(str(tmp_dir.resolve())):
-                raise ValueError("SOURCE_INDEX_INVALID: path escapes repository")
+                raise ValueError(
+                    "SOURCE_INDEX_INVALID: path escapes repository"
+                )
             if not source_root.exists():
                 raise ValueError(
                     f"SOURCE_INDEX_INVALID: path not found '{source.path}'",
                 )
 
             if source.provider == "agency_markdown_repo":
-                source_items, source_import_index = _collect_agency_markdown_items(
+                (
+                    source_items,
+                    source_import_index,
+                ) = _collect_agency_markdown_items(
                     source,
                     source_root,
                     tmp_dir,
@@ -1789,7 +2055,9 @@ def _aggregate_square_items(
 
                 shutil.rmtree(tmp_dir, ignore_errors=True)
 
-    items.sort(key=lambda item: (item.source_id, item.name.lower(), item.agent_id))
+    items.sort(
+        key=lambda item: (item.source_id, item.name.lower(), item.agent_id)
+    )
     duration_ms = int((time.time() - started) * 1000)
     meta: dict[str, object] = {
         "generated_at": time.time(),
@@ -1828,7 +2096,9 @@ def _extract_install_urls(bundle: dict[str, Any]) -> list[str]:
             if isinstance(item, str) and item.strip():
                 urls.append(item.strip())
             elif isinstance(item, dict):
-                url = str(item.get("install_url") or item.get("url") or "").strip()
+                url = str(
+                    item.get("install_url") or item.get("url") or ""
+                ).strip()
                 if url:
                     urls.append(url)
 
@@ -1838,7 +2108,9 @@ def _extract_install_urls(bundle: dict[str, Any]) -> list[str]:
             if isinstance(item, str) and item.strip():
                 urls.append(item.strip())
             elif isinstance(item, dict):
-                url = str(item.get("url") or item.get("install_url") or "").strip()
+                url = str(
+                    item.get("url") or item.get("install_url") or ""
+                ).strip()
                 if url:
                     urls.append(url)
 
@@ -1996,14 +2268,22 @@ def _activate_import_bundle(
             ).strip()
             flow_id = _slugify(flow_id_raw)
             flow_name = str(flow.get("name") or flow_id_raw).strip() or flow_id
-            flow_version = str(flow.get("version") or "v0-draft").strip() or "v0-draft"
-            flow_content = str(flow.get("content") or flow.get("markdown") or "").strip()
+            flow_version = (
+                str(flow.get("version") or "v0-draft").strip() or "v0-draft"
+            )
+            flow_content = str(
+                flow.get("content") or flow.get("markdown") or ""
+            ).strip()
             if not flow_content:
-                flow_content = "```json\n" + json.dumps(
-                    flow,
-                    ensure_ascii=False,
-                    indent=2,
-                ) + "\n```"
+                flow_content = (
+                    "```json\n"
+                    + json.dumps(
+                        flow,
+                        ensure_ascii=False,
+                        indent=2,
+                    )
+                    + "\n```"
+                )
 
             flow_item = _normalize_project_artifact_storage(
                 ProjectArtifactItem(
@@ -2061,7 +2341,9 @@ def _find_imported_agent(
     return None
 
 
-def _persist_import_metadata(workspace_dir: Path, payload: dict[str, str]) -> None:
+def _persist_import_metadata(
+    workspace_dir: Path, payload: dict[str, str]
+) -> None:
     metadata_file = workspace_dir / "imported_from.json"
     metadata_file.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2),
@@ -2098,7 +2380,9 @@ def _normalize_source_url(url: str) -> str:
     return raw
 
 
-def _normalize_square_source(source: AgentsSquareSourceSpec) -> AgentsSquareSourceSpec:
+def _normalize_square_source(
+    source: AgentsSquareSourceSpec,
+) -> AgentsSquareSourceSpec:
     normalized = source.model_copy(deep=True)
     github_spec = _extract_github_source_spec(normalized.url)
     if github_spec is not None:
@@ -2156,7 +2440,9 @@ def _validate_square_source_ids(sources: list[AgentsSquareSourceSpec]) -> None:
         seen.add(source.id)
 
 
-def _square_config_to_payload(cfg: AgentsSquareConfig) -> AgentsSquareSourcesPayload:
+def _square_config_to_payload(
+    cfg: AgentsSquareConfig,
+) -> AgentsSquareSourcesPayload:
     return AgentsSquareSourcesPayload(
         version=cfg.version,
         cache={"ttl_sec": cfg.cache.ttl_sec},
@@ -2168,7 +2454,9 @@ def _square_config_to_payload(cfg: AgentsSquareConfig) -> AgentsSquareSourcesPay
     )
 
 
-def _payload_to_square_config(payload: AgentsSquareSourcesPayload) -> AgentsSquareConfig:
+def _payload_to_square_config(
+    payload: AgentsSquareSourcesPayload,
+) -> AgentsSquareConfig:
     _validate_square_source_ids(payload.sources)
     normalized_sources: list[AgentsSquareSourceSpec] = []
 
@@ -2326,7 +2614,9 @@ async def get_square_sources() -> AgentsSquareSourcesPayload:
     return _square_config_to_payload(square_cfg)
 
 
-@router.get("/square/sources/defaults", response_model=AgentsSquareSourcesPayload)
+@router.get(
+    "/square/sources/defaults", response_model=AgentsSquareSourcesPayload
+)
 async def get_square_source_defaults() -> AgentsSquareSourcesPayload:
     """Get bundled Agents Square default source configuration from package."""
     square_cfg = _load_default_square_config()
@@ -2343,9 +2633,7 @@ async def put_square_sources(
 
     # Pinned sources can be disabled but not removed.
     pinned_ids = {
-        source.id
-        for source in current_square_cfg.sources
-        if source.pinned
+        source.id for source in current_square_cfg.sources if source.pinned
     }
     next_ids = {source.id for source in square_cfg.sources}
     removed_pinned = pinned_ids - next_ids
@@ -2365,7 +2653,9 @@ async def put_square_sources(
     return _square_config_to_payload(square_cfg)
 
 
-@router.post("/square/sources/reset", response_model=AgentsSquareSourcesPayload)
+@router.post(
+    "/square/sources/reset", response_model=AgentsSquareSourcesPayload
+)
 async def reset_square_sources() -> AgentsSquareSourcesPayload:
     """Reset current square sources by copying bundled default.json."""
     square_cfg = _reset_current_square_config_to_default()
@@ -2465,7 +2755,8 @@ async def import_square_agent(
         (
             item
             for item in items
-            if item.source_id == req.source_id and item.agent_id == req.agent_id
+            if item.source_id == req.source_id
+            and item.agent_id == req.agent_id
         ),
         None,
     )
@@ -2517,7 +2808,10 @@ async def import_square_agent(
                         status_code=409,
                         detail=f"AGENT_NAME_CONFLICT: {target_name}",
                     )
-                existing_import = (local_id, Path(config.agents.profiles[local_id].workspace_dir))
+                existing_import = (
+                    local_id,
+                    Path(config.agents.profiles[local_id].workspace_dir),
+                )
                 break
 
     if existing_import is not None:
@@ -2541,7 +2835,9 @@ async def import_square_agent(
                 detail="Failed to generate unique agent ID after 10 attempts",
             )
 
-        workspace_dir = Path(f"{WORKING_DIR}/workspaces/{local_agent_id}").expanduser()
+        workspace_dir = Path(
+            f"{WORKING_DIR}/workspaces/{local_agent_id}"
+        ).expanduser()
         workspace_dir.mkdir(parents=True, exist_ok=True)
 
         from ...config.config import (
@@ -2594,7 +2890,8 @@ async def import_square_agent(
 
     imported_from_payload = {
         "source_id": req.source_id,
-        "source_url": selected_payload.get("source_url") or selected_item.source_url,
+        "source_url": selected_payload.get("source_url")
+        or selected_item.source_url,
         "license": selected_payload.get("license") or selected_item.license,
         "original_agent_id": req.agent_id,
         "imported_at": str(int(time.time())),
@@ -3004,7 +3301,9 @@ async def list_agent_project_files(
         raise HTTPException(status_code=404, detail=str(e)) from e
 
     try:
-        project_dir = _resolve_project_dir(Path(workspace.workspace_dir), projectId)
+        project_dir = _resolve_project_dir(
+            Path(workspace.workspace_dir), projectId
+        )
         return _list_project_files(project_dir)
     except HTTPException:
         raise
@@ -3034,7 +3333,9 @@ async def create_agent_project(
     try:
         return _create_project(Path(workspace.workspace_dir), body)
     except FileExistsError as e:
-        raise HTTPException(status_code=409, detail=f"Project already exists: {e}") from e
+        raise HTTPException(
+            status_code=409, detail=f"Project already exists: {e}"
+        ) from e
     except HTTPException:
         raise
     except Exception as e:
@@ -3096,6 +3397,38 @@ async def update_project_artifact_profile(
             Path(workspace.workspace_dir),
             projectId,
             body,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.put(
+    "/{agentId}/projects/{projectId}/artifact-distill-mode",
+    response_model=ProjectSummary,
+    summary="Update project artifact distill mode",
+    description="Set project artifact distill mode for subsequent draft actions",
+)
+async def update_project_artifact_distill_mode(
+    request: Request,
+    body: UpdateProjectArtifactDistillModeRequest = Body(...),
+    agentId: str = PathParam(...),
+    projectId: str = PathParam(...),
+) -> ProjectSummary:
+    """Update project artifact distill mode."""
+    manager = _get_multi_agent_manager(request)
+
+    try:
+        workspace = await manager.get_agent(agentId)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    try:
+        return _update_project_artifact_distill_mode(
+            Path(workspace.workspace_dir),
+            projectId,
+            body.artifact_distill_mode,
         )
     except HTTPException:
         raise
@@ -3232,7 +3565,9 @@ async def clone_agent_project(
     try:
         return _clone_project(Path(workspace.workspace_dir), projectId, body)
     except FileExistsError as e:
-        raise HTTPException(status_code=409, detail=f"Target project already exists: {e}") from e
+        raise HTTPException(
+            status_code=409, detail=f"Target project already exists: {e}"
+        ) from e
     except HTTPException:
         raise
     except Exception as e:
@@ -3287,7 +3622,9 @@ async def read_agent_project_file(
         raise HTTPException(status_code=404, detail=str(e)) from e
 
     try:
-        project_dir = _resolve_project_dir(Path(workspace.workspace_dir), projectId)
+        project_dir = _resolve_project_dir(
+            Path(workspace.workspace_dir), projectId
+        )
         content = _read_project_text_file(project_dir, filePath)
         return ProjectFileContent(content=content)
     except HTTPException:
@@ -3318,7 +3655,9 @@ async def upload_agent_project_file(
         raise HTTPException(status_code=404, detail=str(e)) from e
 
     try:
-        project_dir = _resolve_project_dir(Path(workspace.workspace_dir), projectId)
+        project_dir = _resolve_project_dir(
+            Path(workspace.workspace_dir), projectId
+        )
         return _upload_project_file(project_dir, file, target_dir)
     except HTTPException:
         raise

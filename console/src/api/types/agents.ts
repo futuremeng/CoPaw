@@ -35,6 +35,7 @@ export interface AgentProjectSummary {
   data_dir: string;
   metadata_file: string;
   tags: string[];
+  artifact_distill_mode: "file_scan" | "conversation_evidence";
   artifact_profile: ProjectArtifactProfile;
   updated_time: string;
 }
@@ -86,10 +87,15 @@ export interface PromoteProjectArtifactResponse {
   project: AgentProjectSummary;
 }
 
+export interface UpdateProjectArtifactDistillModeRequest {
+  artifact_distill_mode: "file_scan" | "conversation_evidence";
+}
+
 export interface DistillProjectSkillsDraftResponse {
   drafted_count: number;
   skipped_count: number;
   drafted_ids: string[];
+  artifact_distill_mode: "file_scan" | "conversation_evidence";
   project: AgentProjectSummary;
 }
 

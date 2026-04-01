@@ -8,6 +8,7 @@ sessions_mount_dir/
 
 # testing
 /coverage
+test-results/
 
 # cookbook
 cookbook/_build
