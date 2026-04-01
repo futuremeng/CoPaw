@@ -1,0 +1,40 @@
+{
+  "agents": [
+    {
+      "agent_id": "gitagent-compliance-analyst",
+      "name": "Compliance Analyst",
+      "description": "GitAgent-style agent package with bundled skills/tools/workflows.",
+      "version": "0.1.0",
+      "license": "MIT",
+      "tags": ["gitagent", "compliance"],
+      "content": "# Compliance Analyst\n\n## Role\nAnalyze compliance documents and provide structured risk findings.\n\n## Constraints\n- Follow regulatory guardrails\n- Escalate high-risk findings\n",
+      "bundle": {
+        "import": {
+          "skills": true,
+          "tools": true,
+          "flow_descriptions": true
+        },
+        "manifest": {
+          "spec_version": "0.1.0",
+          "name": "compliance-analyst",
+          "version": "0.1.0",
+          "tools": ["read_file", "grep_search"]
+        },
+        "skills": {
+          "install_urls": [
+            "https://lobehub.com/discover/skill/code-analysis-assistant"
+          ]
+        },
+        "workflows": [
+          {
+            "id": "regulatory-review",
+            "name": "Regulatory Review Workflow",
+            "version": "1.0.0",
+            "content": "# Regulatory Review Workflow\n\n1. Classify document type.\n2. Map to applicable rules.\n3. Generate findings and severity.\n"
+          }
+        ],
+        "project_name": "Imported Compliance Bundle"
+      }
+    }
+  ]
+}

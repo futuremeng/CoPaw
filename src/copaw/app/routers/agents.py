@@ -1880,6 +1880,35 @@ def _extract_flow_items(bundle: dict[str, Any]) -> list[dict[str, Any]]:
     return [item for item in flows if isinstance(item, dict)]
 
 
+def _resolve_bundle_import_toggles(bundle: dict[str, Any]) -> dict[str, bool]:
+    """Resolve optional per-resource import toggles from bundle payload."""
+    toggles: dict[str, bool] = {
+        "skills": True,
+        "tools": True,
+        "flow_descriptions": True,
+    }
+
+    raw_import = bundle.get("import")
+    if not isinstance(raw_import, dict):
+        return toggles
+
+    if "skills" in raw_import:
+        toggles["skills"] = bool(raw_import.get("skills"))
+    if "tools" in raw_import:
+        toggles["tools"] = bool(raw_import.get("tools"))
+
+    if "flow_descriptions" in raw_import:
+        toggles["flow_descriptions"] = bool(
+            raw_import.get("flow_descriptions"),
+        )
+    elif "workflows" in raw_import:
+        toggles["flow_descriptions"] = bool(raw_import.get("workflows"))
+    elif "flows" in raw_import:
+        toggles["flow_descriptions"] = bool(raw_import.get("flows"))
+
+    return toggles
+
+
 def _activate_import_bundle(
     *,
     workspace_dir: Path,
@@ -1889,54 +1918,59 @@ def _activate_import_bundle(
     bundle: dict[str, Any],
     overwrite: bool,
 ) -> dict[str, Any]:
+    toggles = _resolve_bundle_import_toggles(bundle)
     summary: dict[str, Any] = {
         "skills_installed": [],
         "skill_errors": [],
         "builtin_tools_enabled": [],
+        "flow_description_count": 0,
         "flow_count": 0,
         "project_id": "",
+        "import_toggles": toggles,
     }
 
-    install_urls = _extract_install_urls(bundle)
-    for url in install_urls:
-        try:
-            result = install_skill_from_hub(
-                workspace_dir=workspace_dir,
-                bundle_url=url,
-                enable=True,
-                overwrite=overwrite,
-            )
-            summary["skills_installed"].append(result.name)
-        except SkillConflictError as exc:
-            summary["skill_errors"].append(str(exc.detail))
-        except Exception as exc:  # pylint: disable=broad-except
-            summary["skill_errors"].append(str(exc))
-
-    tool_names = _extract_builtin_tool_names(bundle)
-    if tool_names:
-        try:
-            agent_cfg = load_agent_config(local_agent_id)
-            tools_cfg = agent_cfg.tools
-            if tools_cfg is None:
-                summary.setdefault("tool_errors", []).append(
-                    "tools config is missing",
+    if toggles["skills"]:
+        install_urls = _extract_install_urls(bundle)
+        for url in install_urls:
+            try:
+                result = install_skill_from_hub(
+                    workspace_dir=workspace_dir,
+                    bundle_url=url,
+                    enable=True,
+                    overwrite=overwrite,
                 )
-            else:
-                changed = False
-                for tool_name in tool_names:
-                    builtin = tools_cfg.builtin_tools.get(tool_name)
-                    if builtin is None:
-                        continue
-                    if not builtin.enabled:
-                        builtin.enabled = True
-                        changed = True
-                    summary["builtin_tools_enabled"].append(tool_name)
-                if changed:
-                    save_agent_config(local_agent_id, agent_cfg)
-        except Exception as exc:  # pylint: disable=broad-except
-            summary.setdefault("tool_errors", []).append(str(exc))
+                summary["skills_installed"].append(result.name)
+            except SkillConflictError as exc:
+                summary["skill_errors"].append(str(exc.detail))
+            except Exception as exc:  # pylint: disable=broad-except
+                summary["skill_errors"].append(str(exc))
 
-    flows = _extract_flow_items(bundle)
+    if toggles["tools"]:
+        tool_names = _extract_builtin_tool_names(bundle)
+        if tool_names:
+            try:
+                agent_cfg = load_agent_config(local_agent_id)
+                tools_cfg = agent_cfg.tools
+                if tools_cfg is None:
+                    summary.setdefault("tool_errors", []).append(
+                        "tools config is missing",
+                    )
+                else:
+                    changed = False
+                    for tool_name in tool_names:
+                        builtin = tools_cfg.builtin_tools.get(tool_name)
+                        if builtin is None:
+                            continue
+                        if not builtin.enabled:
+                            builtin.enabled = True
+                            changed = True
+                        summary["builtin_tools_enabled"].append(tool_name)
+                    if changed:
+                        save_agent_config(local_agent_id, agent_cfg)
+            except Exception as exc:  # pylint: disable=broad-except
+                summary.setdefault("tool_errors", []).append(str(exc))
+
+    flows = _extract_flow_items(bundle) if toggles["flow_descriptions"] else []
     if flows:
         project_seed = f"import-{source_id}-{original_agent_id}"
         project_name = (
@@ -1979,7 +2013,11 @@ def _activate_import_bundle(
                     origin="imported-bundle",
                     status="active",
                     version=flow_version,
-                    distillation_note="Imported from agent exchange bundle.",
+                    tags=["imported", "description"],
+                    distillation_note=(
+                        "Imported as flow description artifact from "
+                        "agent exchange bundle."
+                    ),
                 ),
                 "flow",
             )
@@ -1995,6 +2033,7 @@ def _activate_import_bundle(
             project_summary.id,
             profile,
         )
+        summary["flow_description_count"] = len(flows)
         summary["flow_count"] = len(flows)
         summary["project_id"] = updated_summary.id
 

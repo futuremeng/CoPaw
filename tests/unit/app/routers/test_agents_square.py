@@ -645,3 +645,191 @@ def test_square_import_uses_preferred_name(
     assert response.status_code == 200
     payload = response.json()
     assert payload["name"] == "My Frontend Lead"
+
+
+def test_square_import_bundle_toggles_skip_skills_and_tools(
+    agents_square_api_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    install_calls: list[str] = []
+
+    def _fake_install_skill_from_hub(**kwargs):
+        install_calls.append(str(kwargs.get("bundle_url") or ""))
+        raise AssertionError("skill install should be skipped")
+
+    monkeypatch.setattr(
+        agents_router_module,
+        "install_skill_from_hub",
+        _fake_install_skill_from_hub,
+    )
+    monkeypatch.setattr(
+        agents_router_module,
+        "_aggregate_square_items",
+        lambda *_args, **_kwargs: (
+            [
+                agents_router_module.AgentSquareItem(
+                    source_id="agency-agents",
+                    agent_id="bundle-agent",
+                    name="Bundle Agent",
+                    description="bundle import with toggles",
+                    version="",
+                    license="MIT",
+                    source_url="https://example.com/src",
+                    install_url="https://example.com/src",
+                    tags=[],
+                    extra={},
+                )
+            ],
+            [],
+            {
+                "generated_at": 1.0,
+                "cache_ttl_sec": 600,
+                "source_count": 1,
+                "item_count": 1,
+                "cache_hit": False,
+                "duration_ms": 1,
+            },
+            {
+                "agency-agents/bundle-agent": {
+                    "name": "Bundle Agent",
+                    "description": "bundle import with toggles",
+                    "content": "# Bundle Agent\n\nImported.",
+                    "source_url": "https://example.com/src",
+                    "license": "MIT",
+                    "original_agent_id": "bundle-agent",
+                    "bundle": {
+                        "import": {
+                            "skills": False,
+                            "tools": False,
+                            "flow_descriptions": True,
+                        },
+                        "skills": {
+                            "install_urls": [
+                                "https://lobehub.com/discover/skill/should-not-run"
+                            ]
+                        },
+                        "manifest": {
+                            "tools": ["read_file"]
+                        },
+                        "workflows": [
+                            {
+                                "id": "flow-a",
+                                "name": "Flow A",
+                                "version": "1.0.0",
+                                "content": "# Flow A\n\nDescribe only.",
+                            }
+                        ],
+                    },
+                }
+            },
+        ),
+    )
+
+    response = agents_square_api_client.post(
+        "/agents/square/import",
+        json={
+            "source_id": "agency-agents",
+            "agent_id": "bundle-agent",
+            "overwrite": False,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    workspace_dir = Path(payload["workspace_dir"])
+
+    imported_from = json.loads(
+        (workspace_dir / "imported_from.json").read_text(encoding="utf-8")
+    )
+    assert install_calls == []
+
+    activation_summary = json.loads(imported_from["activation_summary"])
+    assert activation_summary["import_toggles"] == {
+        "skills": False,
+        "tools": False,
+        "flow_descriptions": True,
+    }
+    assert activation_summary["skills_installed"] == []
+    assert activation_summary["builtin_tools_enabled"] == []
+    assert activation_summary["flow_description_count"] == 1
+    assert activation_summary["flow_count"] == 1
+
+
+def test_square_import_bundle_can_skip_flow_descriptions(
+    agents_square_api_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        agents_router_module,
+        "_aggregate_square_items",
+        lambda *_args, **_kwargs: (
+            [
+                agents_router_module.AgentSquareItem(
+                    source_id="agency-agents",
+                    agent_id="bundle-agent-no-flow",
+                    name="Bundle Agent No Flow",
+                    description="bundle import without flow descriptions",
+                    version="",
+                    license="MIT",
+                    source_url="https://example.com/src",
+                    install_url="https://example.com/src",
+                    tags=[],
+                    extra={},
+                )
+            ],
+            [],
+            {
+                "generated_at": 1.0,
+                "cache_ttl_sec": 600,
+                "source_count": 1,
+                "item_count": 1,
+                "cache_hit": False,
+                "duration_ms": 1,
+            },
+            {
+                "agency-agents/bundle-agent-no-flow": {
+                    "name": "Bundle Agent No Flow",
+                    "description": "bundle import without flow descriptions",
+                    "content": "# Bundle Agent No Flow\n\nImported.",
+                    "source_url": "https://example.com/src",
+                    "license": "MIT",
+                    "original_agent_id": "bundle-agent-no-flow",
+                    "bundle": {
+                        "import": {
+                            "flow_descriptions": False,
+                        },
+                        "workflows": [
+                            {
+                                "id": "flow-a",
+                                "name": "Flow A",
+                                "version": "1.0.0",
+                                "content": "# Flow A\n\nDescribe only.",
+                            }
+                        ],
+                    },
+                }
+            },
+        ),
+    )
+
+    response = agents_square_api_client.post(
+        "/agents/square/import",
+        json={
+            "source_id": "agency-agents",
+            "agent_id": "bundle-agent-no-flow",
+            "overwrite": False,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    workspace_dir = Path(payload["workspace_dir"])
+    imported_from = json.loads(
+        (workspace_dir / "imported_from.json").read_text(encoding="utf-8")
+    )
+    activation_summary = json.loads(imported_from["activation_summary"])
+
+    assert activation_summary["import_toggles"]["flow_descriptions"] is False
+    assert activation_summary["flow_description_count"] == 0
+    assert activation_summary["flow_count"] == 0
+    assert activation_summary["project_id"] == ""
