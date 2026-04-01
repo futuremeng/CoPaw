@@ -369,7 +369,6 @@ export default function ProjectOverviewCard({
             <div className={styles.overviewTags}>
               {selectedProject?.tags.map((tag) => (
                 <div key={tag} className={styles.metricSummaryCard}>
-                  <div className={styles.itemMeta}>{t("projects.tags", "Tags")}</div>
                   <div className={styles.metricSummaryTextValue}>{tag}</div>
                 </div>
               ))}
@@ -421,15 +420,6 @@ export default function ProjectOverviewCard({
             <div className={styles.metricSummaryCard}>
               <div className={styles.itemMeta}>{t("projects.automation.flows", "Flows")}</div>
               <div className={styles.metricSummaryValue}>{pipelineTemplateCount}</div>
-            </div>
-            <div className={styles.metricSummaryCard}>
-              <div className={styles.itemMeta}>{t("projects.updated", "Updated")}</div>
-              <div className={styles.metricSummaryValue}>
-                <span>{updatedDateParts.day}</span>
-                {updatedDateParts.month ? (
-                  <span className={styles.metricSummaryDateSuffix}>/{updatedDateParts.month}</span>
-                ) : null}
-              </div>
             </div>
           </div>
 
