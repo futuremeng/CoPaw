@@ -160,6 +160,143 @@ function extractUserTextFromInput(input?: ChatInputItem): string {
     .trim();
 }
 
+function getStableOutputMessageId(message: unknown): string | null {
+  if (!message || typeof message !== "object") {
+    return null;
+  }
+
+  const id = (message as { id?: unknown }).id;
+  if (typeof id === "string" && id.trim()) {
+    return id.trim();
+  }
+
+  const messageId = (message as { message_id?: unknown }).message_id;
+  if (typeof messageId === "string" && messageId.trim()) {
+    return messageId.trim();
+  }
+
+  return null;
+}
+
+function dedupeOutputMessagesByStableId<T>(messages: T[]): T[] {
+  const deduped: T[] = [];
+  const indexById = new Map<string, number>();
+
+  for (const message of messages) {
+    const stableId = getStableOutputMessageId(message);
+    if (!stableId) {
+      deduped.push(message);
+      continue;
+    }
+
+    const existingIndex = indexById.get(stableId);
+    if (existingIndex === undefined) {
+      indexById.set(stableId, deduped.length);
+      deduped.push(message);
+      continue;
+    }
+
+    // Streamed "thinking" updates can resend the same message id; keep latest.
+    deduped[existingIndex] = message;
+  }
+
+  return deduped;
+}
+
+function sanitizeStreamEventPayload(rawData: string): string {
+  if (!rawData || rawData === "[DONE]") {
+    return rawData;
+  }
+
+  try {
+    const parsed = JSON.parse(rawData) as StreamResponseData & {
+      output?: unknown;
+    };
+    if (!Array.isArray(parsed.output) || parsed.output.length <= 1) {
+      return rawData;
+    }
+
+    const dedupedOutput = dedupeOutputMessagesByStableId(parsed.output);
+    if (dedupedOutput.length === parsed.output.length) {
+      return rawData;
+    }
+
+    return JSON.stringify({
+      ...parsed,
+      output: dedupedOutput,
+    });
+  } catch {
+    return rawData;
+  }
+}
+
+function sanitizeConsoleChatSseStream(
+  source: ReadableStream<Uint8Array>,
+): ReadableStream<Uint8Array> {
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+
+  const transformFrame = (frame: string): string => {
+    const lines = frame.split(/\r?\n/);
+    const dataLineIndexes = lines
+      .map((line, index) => ({ line, index }))
+      .filter(({ line }) => line.startsWith("data:"))
+      .map(({ index }) => index);
+
+    if (dataLineIndexes.length !== 1) {
+      return frame;
+    }
+
+    const idx = dataLineIndexes[0];
+    const rawData = lines[idx].slice(5).trimStart();
+    const sanitized = sanitizeStreamEventPayload(rawData);
+    if (sanitized === rawData) {
+      return frame;
+    }
+
+    lines[idx] = `data: ${sanitized}`;
+    return lines.join("\n");
+  };
+
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      const reader = source.getReader();
+      let buffer = "";
+
+      const pump = (): void => {
+        void reader.read().then(({ done, value }) => {
+          if (done) {
+            buffer += decoder.decode();
+            if (buffer.length > 0) {
+              controller.enqueue(encoder.encode(transformFrame(buffer)));
+            }
+            controller.close();
+            return;
+          }
+
+          buffer += decoder.decode(value, { stream: true });
+
+          let boundary = buffer.indexOf("\n\n");
+          while (boundary !== -1) {
+            const frame = buffer.slice(0, boundary);
+            buffer = buffer.slice(boundary + 2);
+            controller.enqueue(
+              encoder.encode(`${transformFrame(frame)}\n\n`),
+            );
+            boundary = buffer.indexOf("\n\n");
+          }
+
+          pump();
+        }).catch((error) => {
+          controller.error(error);
+        });
+      };
+
+      pump();
+    },
+  });
+}
+
 function formatLocalDateTime(raw?: string): string {
   if (!raw) {
     return "";
@@ -1179,7 +1316,8 @@ export default function AnywhereChat({
         return response;
       }
 
-      const [uiStream, cacheStream] = response.body.tee();
+      const sanitizedStream = sanitizeConsoleChatSseStream(response.body);
+      const [uiStream, cacheStream] = sanitizedStream.tee();
       void (async () => {
         const responseBuilder = new AgentScopeRuntimeResponseBuilder({
           id: "",
