@@ -646,7 +646,46 @@ export default function AnywhereChat({
     if (handledAutoAttachIdRef.current === autoAttachRequest.id) {
       return;
     }
-    handledAutoAttachIdRef.current = autoAttachRequest.id;
+
+    let cancelled = false;
+
+    const waitFor = async (ms: number) =>
+      new Promise<void>((resolve) => {
+        window.setTimeout(() => resolve(), ms);
+      });
+
+    const waitForDraftInputReady = async (
+      draftText: string,
+      attempts = 12,
+      intervalMs = 80,
+    ): Promise<boolean> => {
+      for (let i = 0; i < attempts; i += 1) {
+        if (cancelled) {
+          return false;
+        }
+        if (setDraftInputValue(draftText)) {
+          return true;
+        }
+        await waitFor(intervalMs);
+      }
+      return false;
+    };
+
+    const waitForChatRefReady = async (
+      attempts = 12,
+      intervalMs = 80,
+    ): Promise<boolean> => {
+      for (let i = 0; i < attempts; i += 1) {
+        if (cancelled) {
+          return false;
+        }
+        if (chatRef.current) {
+          return true;
+        }
+        await waitFor(intervalMs);
+      }
+      return false;
+    };
 
     const attach = async () => {
       try {
@@ -656,7 +695,8 @@ export default function AnywhereChat({
             autoAttachRequest.note ||
             "I attached files as context. Please review them and wait for my next instruction.";
 
-          if (setDraftInputValue(draftText)) {
+          if (await waitForDraftInputReady(draftText)) {
+            handledAutoAttachIdRef.current = autoAttachRequest.id;
             onAutoAttachHandled?.({
               id: autoAttachRequest.id,
               ok: true,
@@ -703,17 +743,23 @@ export default function AnywhereChat({
           }),
         );
 
-        if (!chatRef.current) {
+        if (!(await waitForChatRefReady())) {
           throw new Error("chat_input_not_ready");
         }
 
-        chatRef.current.input.submit({
+        const chat = chatRef.current;
+        if (!chat) {
+          throw new Error("chat_input_not_ready");
+        }
+
+        chat.input.submit({
           query:
             autoAttachRequest.note ||
             `Please use the attached files as the current context and infer the likely task intent.`,
           fileList: uploadedFiles,
         });
 
+        handledAutoAttachIdRef.current = autoAttachRequest.id;
         onAutoAttachHandled?.({
           id: autoAttachRequest.id,
           ok: true,
@@ -728,6 +774,10 @@ export default function AnywhereChat({
     };
 
     void attach();
+
+    return () => {
+      cancelled = true;
+    };
   }, [
     autoAttachRequest,
     onAutoAttachHandled,

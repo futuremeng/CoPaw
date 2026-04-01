@@ -37,7 +37,6 @@ import {
   buildPromotionDraftPrompt,
   buildValidationRoundPrompt,
 } from "./projectChatPrompts";
-import { composeSelectedFilesPayload } from "./projectChatAttachmentPayload";
 import {
   isIgnoredProjectFile,
   isPreviewablePath,
@@ -866,37 +865,6 @@ export default function ProjectDetailPage() {
     }
   }, [resolvedProjectRequestId, t]);
 
-  const fetchProjectFileContent = useCallback(async (
-    agentId: string,
-    project: AgentProjectSummary,
-    filePath: string,
-  ): Promise<string> => {
-    if (selectedFilePath === filePath && fileContent) {
-      return fileContent;
-    }
-
-    const projectIds = [resolvedProjectRequestId, ...buildProjectIdCandidates(project)]
-      .map((item) => item.trim())
-      .filter(Boolean);
-    const uniqueProjectIds = Array.from(new Set(projectIds));
-
-    for (const projectRequestId of uniqueProjectIds) {
-      try {
-        const data = await agentsApi.readProjectFile(
-          agentId,
-          projectRequestId,
-          filePath,
-        );
-        setResolvedProjectRequestId(projectRequestId);
-        return data.content;
-      } catch {
-        // Try next id candidate.
-      }
-    }
-
-    throw new Error("project_file_content_not_found");
-  }, [fileContent, resolvedProjectRequestId, selectedFilePath]);
-
   const loadRunDetail = useCallback(async (
     agentId: string,
     project: AgentProjectSummary,
@@ -1472,55 +1440,34 @@ export default function ProjectDetailPage() {
         await handleEnsureDesignChat();
       }
 
-      if (!autoAnalyzeOnAttach) {
-        const selectedFiles = selectedAttachPaths.map((path) => {
-          const fileInfo = projectFiles.find((file) => file.path === path);
-          return {
-            path,
-            size: fileInfo?.size || 0,
-          };
-        });
-        setAutoAttachRequest({
-          id: `manual-batch-draft-${Date.now()}`,
-          mode: "draft",
-          note: buildAttachDraftPrompt({
-            projectName: selectedProject.name,
-            selectedRunId,
-            selectedFiles,
-          }),
-        });
-        message.success(
-          t(
-            "projects.chat.attachDraftReady",
-            "Prepared selected file context in the chat input box.",
-          ),
-        );
-        setSelectedAttachPaths([]);
-        return;
-      }
-
-      const filesPayload = await composeSelectedFilesPayload({
-        selectedAttachPaths,
-        projectFiles,
-        fetchContentByPath: async (path) =>
-          fetchProjectFileContent(currentAgent.id, selectedProject, path),
+      const selectedFiles = selectedAttachPaths.map((path) => {
+        const fileInfo = projectFiles.find((file) => file.path === path);
+        return {
+          path,
+          size: fileInfo?.size || 0,
+        };
       });
-
       setAutoAttachRequest({
-        id: `manual-batch-${Date.now()}`,
-        mode: "submit",
-        files: filesPayload,
-        note: buildAutoAttachAnalysisPrompt({
-          projectName: selectedProject.name,
-          fileNames: filesPayload.map((item) => item.fileName),
-          selectedRunId,
-        }),
+        id: `manual-batch-draft-${Date.now()}`,
+        mode: "draft",
+        note: autoAnalyzeOnAttach
+          ? buildAutoAttachAnalysisPrompt({
+              projectName: selectedProject.name,
+              fileNames: selectedFiles.map((item) => item.path),
+              selectedRunId,
+            })
+          : buildAttachDraftPrompt({
+              projectName: selectedProject.name,
+              selectedRunId,
+              selectedFiles,
+            }),
       });
 
       message.success(
-        t("projects.chat.autoAttachBatchSent", "Queued {{count}} selected file(s) for chat.", {
-          count: filesPayload.length,
-        }),
+        t(
+          "projects.chat.attachDraftReady",
+          "Prepared selected file context in the chat input box.",
+        ),
       );
       setSelectedAttachPaths([]);
     } catch (err) {
@@ -1533,7 +1480,6 @@ export default function ProjectDetailPage() {
     }
   }, [
     currentAgent,
-    fetchProjectFileContent,
     handleEnsureDesignChat,
     handleEnsureRunChat,
     projectFiles,
