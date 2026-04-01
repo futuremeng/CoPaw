@@ -36,6 +36,9 @@ interface ProjectChatPanelProps {
   onStartWorkspaceChat: () => void;
   onStartDesignChat: () => void;
   onStartRunChat: () => void;
+  onSelectWorkspaceHistoryChat: (chatId: string) => void;
+  onSelectDesignHistoryChat: (chatId: string) => void;
+  onSelectRunHistoryChat: (chatId: string) => void;
 }
 
 export default function ProjectChatPanel({
@@ -50,6 +53,9 @@ export default function ProjectChatPanel({
   onStartWorkspaceChat,
   onStartDesignChat,
   onStartRunChat,
+  onSelectWorkspaceHistoryChat,
+  onSelectDesignHistoryChat,
+  onSelectRunHistoryChat,
 }: ProjectChatPanelProps) {
   const { t } = useTranslation();
   const hasUserFiles = projectFileCount > 0;
@@ -102,6 +108,7 @@ export default function ProjectChatPanel({
                 autoAttachRequest={autoAttachRequest}
                 onAutoAttachHandled={handleAutoAttachHandled}
                 onNewChat={onStartWorkspaceChat}
+                onSelectHistoryChat={onSelectWorkspaceHistoryChat}
                 welcomePromptClickBehavior="append"
                 inputPlaceholder={t(
                   "projects.chat.collaborationPlaceholder",
@@ -156,6 +163,7 @@ export default function ProjectChatPanel({
                 autoAttachRequest={autoAttachRequest}
                 onAutoAttachHandled={handleAutoAttachHandled}
                 onNewChat={onStartDesignChat}
+                onSelectHistoryChat={onSelectDesignHistoryChat}
                 inputPlaceholder={t(
                   "projects.chat.designPlaceholder",
                   "Describe your target workflow and constraints, and I will draft/refine the project flow.",
@@ -202,6 +210,7 @@ export default function ProjectChatPanel({
               autoAttachRequest={autoAttachRequest}
               onAutoAttachHandled={handleAutoAttachHandled}
               onNewChat={onStartRunChat}
+              onSelectHistoryChat={onSelectRunHistoryChat}
               inputPlaceholder={t(
                 "projects.chat.placeholder",
                 "Describe what you want to adjust in this run, and I will help iterate.",

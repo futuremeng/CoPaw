@@ -1858,6 +1858,19 @@ export default function ProjectDetailPage() {
               onStartRunChat={() => {
                 void handleEnsureRunChat(true);
               }}
+              onSelectWorkspaceHistoryChat={(chatId) => {
+                setRunFocusChatId("");
+                setDesignFocusChatId("");
+                setWorkspaceFocusChatId(chatId);
+              }}
+              onSelectDesignHistoryChat={(chatId) => {
+                setRunFocusChatId("");
+                setWorkspaceFocusChatId("");
+                setDesignFocusChatId(chatId);
+              }}
+              onSelectRunHistoryChat={(chatId) => {
+                setRunFocusChatId(chatId);
+              }}
             />
           </div>
 

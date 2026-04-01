@@ -3501,6 +3501,9 @@ export default function PipelinesPage() {
                             forceNewSession: true,
                           });
                         }}
+                        onSelectHistoryChat={(chatId) => {
+                          setDesignChatSessionId(chatId);
+                        }}
                         onAssistantTurnCompleted={handleAssistantTurnCompleted}
                         inputPlaceholder={editGuidePlaceholder || undefined}
                         welcomeGreeting={t(

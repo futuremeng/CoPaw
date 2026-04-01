@@ -6,7 +6,7 @@ import {
   type IAgentScopeRuntimeWebUIRef,
 } from "@agentscope-ai/chat";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Button, Popover, Tooltip, message } from "antd";
+import { Button, Empty, Popover, Spin, Tooltip, message } from "antd";
 import { CopyOutlined, DashboardOutlined, FileMarkdownOutlined } from "@ant-design/icons";
 import { SparkAttachmentLine } from "@agentscope-ai/icons";
 import { useTranslation } from "react-i18next";
@@ -25,6 +25,7 @@ import { AgentScopeRuntimeRunStatus } from "@agentscope-ai/chat/lib/AgentScopeRu
 import type {
   ActiveModelsInfo,
   AgentsRunningConfig,
+  ChatSpec,
   ChatHistory,
   Message,
   ChatRuntimeStatus,
@@ -79,6 +80,7 @@ interface AnywhereChatProps {
   welcomePromptsWhenDraft?: string[];
   welcomePromptClickBehavior?: "submit" | "append";
   onNewChat?: () => void;
+  onSelectHistoryChat?: (chatId: string) => void;
   onAssistantTurnCompleted?: (payload: {
     text: string;
     response: Record<string, unknown> | null;
@@ -249,6 +251,7 @@ export default function AnywhereChat({
   welcomePromptsWhenDraft,
   welcomePromptClickBehavior = "submit",
   onNewChat,
+  onSelectHistoryChat,
   onAssistantTurnCompleted,
   autoAttachRequest,
   onAutoAttachHandled,
@@ -263,6 +266,9 @@ export default function AnywhereChat({
   const [chatHistory, setChatHistory] = useState<ChatHistory | null>(null);
   const [runtimeStatusFromApi, setRuntimeStatusFromApi] = useState<ChatRuntimeStatus | null>(null);
   const [runtimeStatusOpen, setRuntimeStatusOpen] = useState(false);
+  const [historyPopoverOpen, setHistoryPopoverOpen] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyChats, setHistoryChats] = useState<ChatSpec[]>([]);
   const [isChatStreaming, setIsChatStreaming] = useState(false);
   const [lastRuntimeStatusUpdatedAt, setLastRuntimeStatusUpdatedAt] = useState<number | null>(null);
   const [runtimeStatusError, setRuntimeStatusError] = useState<string | null>(null);
@@ -327,6 +333,85 @@ export default function AnywhereChat({
       : promptText;
     setDraftInputValue(nextValue);
   }, [getInputTextarea, setDraftInputValue]);
+
+  const getMetaString = useCallback((meta: Record<string, unknown> | undefined, key: string): string => {
+    const value = meta?.[key];
+    return typeof value === "string" ? value : "";
+  }, []);
+
+  const toTimestamp = useCallback((raw?: string | null): number => {
+    if (!raw) {
+      return 0;
+    }
+    const ts = Date.parse(raw);
+    return Number.isFinite(ts) ? ts : 0;
+  }, []);
+
+  const loadHistoryChats = useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      const chats = await chatApi.listChats({ user_id: "default", channel: "console" });
+      const current = chats.find((chat) => chat.id === sessionId);
+      const currentMeta =
+        current?.meta && typeof current.meta === "object"
+          ? (current.meta as Record<string, unknown>)
+          : undefined;
+      const currentFocusType = getMetaString(currentMeta, "focus_type");
+      const currentProjectId = getMetaString(currentMeta, "project_id");
+      const currentRunId = getMetaString(currentMeta, "run_id");
+      const currentBindingKey =
+        getMetaString(currentMeta, "focus_binding_key") ||
+        getMetaString(currentMeta, "pipeline_binding_key");
+
+      const filtered = chats.filter((chat) => {
+        const meta =
+          chat.meta && typeof chat.meta === "object"
+            ? (chat.meta as Record<string, unknown>)
+            : undefined;
+        const focusType = getMetaString(meta, "focus_type");
+        const projectId = getMetaString(meta, "project_id");
+        const runId = getMetaString(meta, "run_id");
+        const bindingKey =
+          getMetaString(meta, "focus_binding_key") ||
+          getMetaString(meta, "pipeline_binding_key");
+
+        if (currentFocusType === "project_workspace") {
+          return focusType === "project_workspace" && (!currentProjectId || projectId === currentProjectId);
+        }
+        if (currentFocusType === "project_run") {
+          return (
+            focusType === "project_run" &&
+            (!currentRunId || runId === currentRunId) &&
+            (!currentProjectId || !projectId || projectId === currentProjectId)
+          );
+        }
+        if (currentFocusType === "pipeline_edit") {
+          return focusType === "pipeline_edit" && (!currentBindingKey || bindingKey === currentBindingKey);
+        }
+        if (currentBindingKey) {
+          return bindingKey === currentBindingKey;
+        }
+        if (current?.session_id) {
+          const basePrefix = current.session_id.replace(/-\d+$/, "");
+          return (chat.session_id || "").startsWith(basePrefix);
+        }
+        return true;
+      });
+
+      filtered.sort((a, b) => {
+        const aTs = toTimestamp(a.updated_at) || toTimestamp(a.created_at);
+        const bTs = toTimestamp(b.updated_at) || toTimestamp(b.created_at);
+        return bTs - aTs;
+      });
+
+      setHistoryChats(filtered);
+    } catch (error) {
+      console.warn("AnywhereChat: failed to load history chats", error);
+      setHistoryChats([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [getMetaString, sessionId, toTimestamp]);
 
   const updateTransientMessages = useCallback((messages: Message[]) => {
     setTransientMessages(messages);
@@ -1289,6 +1374,87 @@ export default function AnywhereChat({
       ? t("chat.runtimeStatusHealthyShort", "正常")
       : t("chat.runtimeStatusPendingShort", "等待");
 
+  const historyPopoverContent = useMemo(() => {
+    if (historyLoading) {
+      return (
+        <div style={{ display: "flex", justifyContent: "center", padding: "16px 8px" }}>
+          <Spin size="small" />
+        </div>
+      );
+    }
+
+    if (historyChats.length === 0) {
+      return (
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={t("chat.historyEmpty", "No history chats")}
+        />
+      );
+    }
+
+    return (
+      <div
+        style={{
+          width: 320,
+          maxHeight: 320,
+          overflow: "auto",
+          display: "flex",
+          flexDirection: "column",
+          gap: 6,
+        }}
+      >
+        {historyChats.map((chat) => {
+          const title = (chat.name || chat.session_id || chat.id || "").trim() || t("chat.untitled", "Untitled chat");
+          const updatedAt = chat.updated_at || chat.created_at || "";
+          const isActive = chat.id === sessionId;
+          return (
+            <Button
+              key={chat.id}
+              type={isActive ? "primary" : "text"}
+              style={{ justifyContent: "flex-start", height: "auto", paddingBlock: 8, textAlign: "left" }}
+              onClick={() => {
+                if (!onSelectHistoryChat) {
+                  message.warning(
+                    t(
+                      "chat.historySwitchUnavailable",
+                      "Current page does not support switching history chats.",
+                    ),
+                  );
+                  return;
+                }
+                onSelectHistoryChat(chat.id);
+                setHistoryPopoverOpen(false);
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "flex-start",
+                  minWidth: 0,
+                }}
+              >
+                <span
+                  style={{
+                    width: "100%",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {title}
+                </span>
+                <span style={{ fontSize: 11, opacity: 0.72 }}>
+                  {updatedAt || t("chat.unknownTime", "Unknown time")}
+                </span>
+              </div>
+            </Button>
+          );
+        })}
+      </div>
+    );
+  }, [historyChats, historyLoading, onSelectHistoryChat, sessionId, t]);
+
   return (
     <div
       className={hostClassName}
@@ -1365,6 +1531,20 @@ export default function AnywhereChat({
           <Button size="small" onClick={onNewChat}>
             {t("chat.newChat", "New Chat")}
           </Button>
+          <Popover
+            trigger="click"
+            placement="bottomRight"
+            open={historyPopoverOpen}
+            onOpenChange={(open) => {
+              setHistoryPopoverOpen(open);
+              if (open) {
+                void loadHistoryChats();
+              }
+            }}
+            content={historyPopoverContent}
+          >
+            <Button size="small">{t("chat.historyChat", "History Chats")}</Button>
+          </Popover>
         </div>
       </div>
       <div
