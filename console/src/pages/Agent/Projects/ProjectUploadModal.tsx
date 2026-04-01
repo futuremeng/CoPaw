@@ -42,7 +42,7 @@ export default function ProjectUploadModal({
         <Input
           value={uploadTargetDir}
           onChange={(event) => onChangeUploadTargetDir(event.target.value)}
-          placeholder={t("projects.upload.targetDir", "Target directory (default: data)")}
+          placeholder={t("projects.upload.targetDir", "Target directory (default: original)")}
         />
         <Dragger
           className={styles.uploadDragger}

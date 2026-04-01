@@ -24,12 +24,12 @@ export default function useProjectUploadController({
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [pendingUploads, setPendingUploads] = useState<File[]>([]);
-  const [uploadTargetDir, setUploadTargetDir] = useState("data");
+  const [uploadTargetDir, setUploadTargetDir] = useState("original");
 
   const resetUploadState = useCallback(() => {
     setUploadModalOpen(false);
     setPendingUploads([]);
-    setUploadTargetDir("data");
+    setUploadTargetDir("original");
   }, []);
 
   const handleUploadFiles = useCallback(async () => {
@@ -53,7 +53,7 @@ export default function useProjectUploadController({
               currentAgent.id,
               projectRequestId,
               file,
-              uploadTargetDir || "data",
+              uploadTargetDir || "original",
             );
             setResolvedProjectRequestId(projectRequestId);
             uploaded = true;

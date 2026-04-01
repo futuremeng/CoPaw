@@ -93,7 +93,12 @@ function normalizeProjectPath(path: string): string {
 
 function isOriginalInputFile(path: string): boolean {
   const normalized = normalizeProjectPath(path);
-  return normalized === "data" || normalized.startsWith("data/");
+  return (
+    normalized === "original"
+    || normalized.startsWith("original/")
+    || normalized === "data"
+    || normalized.startsWith("data/")
+  );
 }
 
 function buildArtifactFilePathSet(

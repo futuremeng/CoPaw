@@ -560,12 +560,12 @@ def _format_iso_time(ts: float) -> str:
 
 
 def _safe_project_data_subdir(raw_value: str) -> str:
-    candidate = (raw_value or "").strip() or "data"
+    candidate = (raw_value or "").strip() or "original"
     path = Path(candidate)
     if path.is_absolute() or ".." in path.parts:
-        return "data"
+        return "original"
     normalized = path.as_posix().strip("/")
-    return normalized or "data"
+    return normalized or "original"
 
 
 def _parse_project_tags(raw_tags: Any) -> list[str]:
@@ -1766,7 +1766,7 @@ def _upload_project_file(
             status_code=400, detail="Uploaded file must have a filename"
         )
 
-    safe_dir = _safe_project_data_subdir(target_dir or "data")
+    safe_dir = _safe_project_data_subdir(target_dir or "original")
     raw_name = Path(upload.filename).name.strip()
     if not raw_name:
         raise HTTPException(status_code=400, detail="Invalid filename")
@@ -3653,14 +3653,14 @@ async def read_agent_project_file(
     "/{agentId}/projects/{projectId}/files/upload",
     response_model=ProjectFileInfo,
     summary="Upload project file",
-    description="Upload a file into project data directory or a safe subdirectory",
+    description="Upload a file into project original directory or a safe subdirectory",
 )
 async def upload_agent_project_file(
     request: Request,
     agentId: str = PathParam(...),
     projectId: str = PathParam(...),
     file: UploadFile = File(...),
-    target_dir: str = Form("data"),
+    target_dir: str = Form("original"),
 ) -> ProjectFileInfo:
     """Upload a file into project workspace."""
     manager = _get_multi_agent_manager(request)

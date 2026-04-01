@@ -215,7 +215,7 @@ export const agentsApi = {
     agentId: string,
     projectId: string,
     file: File,
-    targetDir = "data",
+    targetDir = "original",
   ) => {
     const formData = new FormData();
     formData.append("file", file);
