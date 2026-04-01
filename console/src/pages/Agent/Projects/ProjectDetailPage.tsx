@@ -5,7 +5,6 @@ import {
   Card,
   Drawer,
   Empty,
-  Modal,
   Popconfirm,
   Spin,
   Tabs,
@@ -49,14 +48,12 @@ import {
 import type {
   AgentProjectSummary,
   AgentProjectFileInfo,
-  ProjectArtifactProfile,
   ProjectPipelineArtifactRecord,
   ProjectPipelineRunDetail,
   ProjectPipelineRunSummary,
   ProjectPipelineTemplateInfo,
   PlatformFlowTemplateInfo,
   AgentSummary,
-  ProjectArtifactItem,
 } from "../../../api/types/agents";
 import { useAgentStore } from "../../../stores/agentStore";
 import styles from "./index.module.less";
@@ -95,18 +92,6 @@ function statusTagColor(status: string): string {
     default:
       return "blue";
   }
-}
-
-function slugifyArtifactName(raw: string, fallback: string): string {
-  const normalized = (raw || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  if (!normalized || normalized === "agent") {
-    return fallback;
-  }
-  return normalized;
 }
 
 function formatRunTimeLabel(raw: string): string {
@@ -206,10 +191,6 @@ export default function ProjectDetailPage() {
   const [selectedStepId, setSelectedStepId] = useState("");
   const [deletingProject, setDeletingProject] = useState(false);
   const [automationDrawerOpen, setAutomationDrawerOpen] = useState(false);
-  const [artifactProfileSaving, setArtifactProfileSaving] = useState(false);
-  const [distillingSkills, setDistillingSkills] = useState(false);
-  const [promotingSkillId, setPromotingSkillId] = useState("");
-  const [confirmingSkillId, setConfirmingSkillId] = useState("");
   const [autoAttachRequest, setAutoAttachRequest] = useState<ProjectChatAutoAttachRequest | null>(null);
   const [selectedAttachPaths, setSelectedAttachPaths] = useState<string[]>([]);
   const [sendingSelectedFiles, setSendingSelectedFiles] = useState(false);
@@ -383,35 +364,6 @@ export default function ProjectDetailPage() {
     return sorted[0] || null;
   }, [runsForSelectedTemplate]);
 
-  const latestSucceededRunForSelectedTemplate = useMemo(() => {
-    const succeededRuns = runsForSelectedTemplate.filter((item) =>
-      isSucceededStatus(item.status),
-    );
-    if (succeededRuns.length === 0) {
-      return null;
-    }
-    const sorted = [...succeededRuns].sort((a, b) =>
-      toTimestamp(b.updated_at || b.created_at) -
-      toTimestamp(a.updated_at || a.created_at),
-    );
-    return sorted[0] || null;
-  }, [runsForSelectedTemplate]);
-
-  const suggestedDistillRunId = useMemo(() => {
-    if (selectedRunId && isSucceededStatus(selectedRunSummary?.status || "")) {
-      return selectedRunId;
-    }
-    if (latestSucceededRunForSelectedTemplate?.id) {
-      return latestSucceededRunForSelectedTemplate.id;
-    }
-    return selectedRunId || latestRunForSelectedTemplate?.id || "";
-  }, [
-    latestRunForSelectedTemplate?.id,
-    latestSucceededRunForSelectedTemplate?.id,
-    selectedRunId,
-    selectedRunSummary?.status,
-  ]);
-
   const succeededRunCountForSelectedTemplate = useMemo(
     () => runsForSelectedTemplate.filter((item) => isSucceededStatus(item.status)).length,
     [runsForSelectedTemplate],
@@ -549,228 +501,6 @@ export default function ProjectDetailPage() {
       setFilesLoading(false);
     }
   }, [t]);
-
-  const handleSaveArtifactProfile = useCallback(async (
-    profile: ProjectArtifactProfile,
-    distillMode: "file_scan" | "conversation_evidence",
-  ) => {
-    if (!currentAgent || !selectedProject) {
-      return;
-    }
-
-    setArtifactProfileSaving(true);
-    try {
-      await agentsApi.updateProjectArtifactProfile(
-        currentAgent.id,
-        selectedProject.id,
-        profile,
-      );
-      await agentsApi.updateProjectArtifactDistillMode(
-        currentAgent.id,
-        selectedProject.id,
-        {
-          artifact_distill_mode: distillMode,
-        },
-      );
-      await loadAgents();
-      message.success(
-        t(
-          "projects.artifacts.saveSuccess",
-          "Project artifacts updated.",
-        ),
-      );
-    } catch (err) {
-      console.error("failed to update project artifact profile", err);
-      message.error(
-        t(
-          "projects.artifacts.saveFailed",
-          "Failed to update project artifacts.",
-        ),
-      );
-      throw err;
-    } finally {
-      setArtifactProfileSaving(false);
-    }
-  }, [currentAgent, loadAgents, selectedProject, t]);
-
-  const handlePromoteArtifactSkill = useCallback(async (item: ProjectArtifactItem) => {
-    if (!currentAgent || !selectedProject || !item.id) {
-      return;
-    }
-
-    if ((item.status || "").toLowerCase() !== "stable") {
-      message.warning(
-        t(
-          "projects.artifacts.promoteRequiresStable",
-          "Only stable skills can be promoted.",
-        ),
-      );
-      return;
-    }
-
-    const targetName = slugifyArtifactName(item.id, "project-skill");
-    const targetPath = `skills/${targetName}/SKILL.md`;
-    const confirmed = await new Promise<boolean>((resolve) => {
-      Modal.confirm({
-        title: t("projects.artifacts.promoteConfirmTitle", "Confirm promotion"),
-        content: (
-          <div>
-            <div>
-              {t(
-                "projects.artifacts.promoteConfirmBody",
-                "Promote this project skill to agent-level reusable skill?",
-              )}
-            </div>
-            <div>
-              {t("projects.artifacts.promoteTargetName", "Target name")}: {targetName}
-            </div>
-            <div>
-              {t("projects.artifacts.promoteTargetPath", "Target path")}: {targetPath}
-            </div>
-          </div>
-        ),
-        okText: t("projects.artifacts.promoteConfirmOk", "Promote"),
-        cancelText: t("common.cancel", "Cancel"),
-        onOk: () => resolve(true),
-        onCancel: () => resolve(false),
-      });
-    });
-    if (!confirmed) {
-      return;
-    }
-
-    setPromotingSkillId(item.id);
-    try {
-      const result = await agentsApi.promoteProjectSkillArtifact(
-        currentAgent.id,
-        selectedProject.id,
-        item.id,
-        {
-          enable: true,
-          target_name: targetName,
-        },
-      );
-      await loadAgents();
-      message.success(
-        t(
-          "projects.artifacts.promoteSuccess",
-          "Promoted to agent skill: {{name}}",
-          { name: result.target_name },
-        ),
-      );
-    } catch (err) {
-      console.error("failed to promote project skill", err);
-      message.error(
-        t(
-          "projects.artifacts.promoteFailed",
-          "Failed to promote project skill.",
-        ),
-      );
-      throw err;
-    } finally {
-      setPromotingSkillId("");
-    }
-  }, [currentAgent, loadAgents, selectedProject, t]);
-
-  const handleAutoDistillSkillDrafts = useCallback(async (
-    options?: { runId?: string },
-  ) => {
-    if (!currentAgent || !selectedProject) {
-      return;
-    }
-
-    setDistillingSkills(true);
-    try {
-      const result = await agentsApi.autoDistillProjectSkillsDraft(
-        currentAgent.id,
-        selectedProject.id,
-        options?.runId
-          ? { run_id: options.runId }
-          : undefined,
-      );
-      await loadAgents();
-      const isConversationMode =
-        (result.artifact_distill_mode || "").toLowerCase() ===
-        "conversation_evidence";
-      message.success(
-        isConversationMode
-          ? t(
-              "projects.artifacts.autoDraftConversationSuccess",
-              "Auto drafted {{count}} skill artifacts from conversation evidence (skipped {{skipped}}).",
-              {
-                count: result.drafted_count,
-                skipped: result.skipped_count,
-              },
-            )
-          : t(
-              "projects.artifacts.autoDraftFileSuccess",
-              "Auto drafted {{count}} skill artifacts from files (skipped {{skipped}}).",
-              {
-                count: result.drafted_count,
-                skipped: result.skipped_count,
-              },
-            ),
-      );
-    } catch (err) {
-      console.error("failed to auto-distill project skills", err);
-      const currentMode =
-        (selectedProject.artifact_distill_mode || "").toLowerCase() ===
-        "conversation_evidence"
-          ? "conversation"
-          : "file";
-      message.error(
-        currentMode === "conversation"
-          ? t(
-              "projects.artifacts.autoDraftConversationFailed",
-              "Failed to auto draft project skills from conversation evidence.",
-            )
-          : t(
-              "projects.artifacts.autoDraftFileFailed",
-              "Failed to auto draft project skills from files.",
-            ),
-      );
-      throw err;
-    } finally {
-      setDistillingSkills(false);
-    }
-  }, [currentAgent, loadAgents, selectedProject, t]);
-
-  const handleConfirmArtifactSkillStable = useCallback(async (item: ProjectArtifactItem) => {
-    if (!currentAgent || !selectedProject || !item.id) {
-      return;
-    }
-
-    if ((item.status || "").toLowerCase() === "stable") {
-      return;
-    }
-
-    setConfirmingSkillId(item.id);
-    try {
-      await agentsApi.confirmProjectSkillStable(
-        currentAgent.id,
-        selectedProject.id,
-        item.id,
-      );
-      await loadAgents();
-      message.success(
-        t(
-          "projects.artifacts.confirmStableSuccess",
-          "Skill status confirmed as stable.",
-        ),
-      );
-    } catch (err) {
-      console.error("failed to confirm project skill stable", err);
-      message.error(
-        t(
-          "projects.artifacts.confirmStableFailed",
-          "Failed to confirm skill as stable.",
-        ),
-      );
-      throw err;
-    } finally {
-      setConfirmingSkillId("");
-    }
-  }, [currentAgent, loadAgents, selectedProject, t]);
 
   const {
     uploadModalOpen,
@@ -916,8 +646,8 @@ export default function ProjectDetailPage() {
           );
           setRunDetail(detail);
           setResolvedProjectRequestId(projectRequestId);
-          if (detail.artifacts.length > 0 && !selectedFilePath) {
-            setSelectedFilePath(detail.artifacts[0]);
+          if (detail.artifacts.length > 0) {
+            setSelectedFilePath((prev) => prev || detail.artifacts[0]);
           }
           loaded = true;
           break;
@@ -935,7 +665,7 @@ export default function ProjectDetailPage() {
         t("projects.pipeline.loadRunFailed", "Failed to load pipeline run detail."),
       );
     }
-  }, [resolvedProjectRequestId, selectedFilePath, t]);
+  }, [resolvedProjectRequestId, t]);
 
   const loadPipelineContext = useCallback(async (
     agentId: string,
@@ -1283,6 +1013,7 @@ export default function ProjectDetailPage() {
     setSelectedFilePath,
     relatedArtifactPathsForSelectedStep,
     artifactRecords,
+    projectFiles,
   });
 
   useEffect(() => {
@@ -1799,15 +1530,6 @@ export default function ProjectDetailPage() {
                   void handleAttachArtifactToChat(path);
                 }}
                 onToggleHideBuiltInFiles={setHideBuiltInFiles}
-                artifactProfileSaving={artifactProfileSaving}
-                distillingSkills={distillingSkills}
-                promotingSkillId={promotingSkillId}
-                confirmingSkillId={confirmingSkillId}
-                suggestedDistillRunId={suggestedDistillRunId}
-                onSaveArtifactProfile={handleSaveArtifactProfile}
-                onAutoDistillSkills={handleAutoDistillSkillDrafts}
-                onConfirmArtifactSkillStable={handleConfirmArtifactSkillStable}
-                onPromoteArtifactSkill={handlePromoteArtifactSkill}
               />
 
               <Card

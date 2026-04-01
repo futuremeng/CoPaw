@@ -1,4 +1,5 @@
 import {
+  CodeOutlined,
   FileExcelOutlined,
   FileImageOutlined,
   FileMarkdownOutlined,
@@ -10,22 +11,20 @@ import {
   FolderOpenOutlined,
   MinusOutlined,
   PlusOutlined,
-  CodeOutlined,
 } from "@ant-design/icons";
 import { Button, Card, Empty, Tree, Typography } from "antd";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type {
-  ProjectArtifactItem,
   AgentProjectFileInfo,
   AgentProjectSummary,
-  ProjectArtifactProfile,
 } from "../../../api/types/agents";
 import styles from "./index.module.less";
-import type { ReactNode } from "react";
-import ProjectArtifactProfileEditor from "./ProjectArtifactProfileEditor";
 
 const { Text } = Typography;
+
+type FileMetricFilterKey = "original" | "derived" | "skills" | "scripts" | "flows" | "cases";
 
 interface ProjectOverviewCardProps {
   selectedProject?: AgentProjectSummary;
@@ -42,18 +41,6 @@ interface ProjectOverviewCardProps {
   onSelectFileFromTree: (path: string) => void;
   onAttachArtifactToChat: (path: string) => void;
   onToggleHideBuiltInFiles: (value: boolean) => void;
-  artifactProfileSaving: boolean;
-  distillingSkills: boolean;
-  promotingSkillId: string;
-  confirmingSkillId: string;
-  suggestedDistillRunId?: string;
-  onSaveArtifactProfile: (
-    profile: ProjectArtifactProfile,
-    distillMode: "file_scan" | "conversation_evidence",
-  ) => Promise<void>;
-  onAutoDistillSkills: (options?: { runId?: string }) => Promise<void>;
-  onConfirmArtifactSkillStable: (item: ProjectArtifactItem) => Promise<void>;
-  onPromoteArtifactSkill: (item: ProjectArtifactItem) => Promise<void>;
 }
 
 interface TreeNode {
@@ -96,28 +83,22 @@ function isOriginalInputFile(path: string): boolean {
   return normalized === "original" || normalized.startsWith("original/");
 }
 
-function buildArtifactFilePathSet(
-  profile?: ProjectArtifactProfile,
-): Set<string> {
-  const set = new Set<string>();
-  if (!profile) {
-    return set;
-  }
-  const groups: Array<ProjectArtifactItem[]> = [
-    profile.skills || [],
-    profile.scripts || [],
-    profile.flows || [],
-    profile.cases || [],
-  ];
-  for (const group of groups) {
-    for (const item of group) {
-      const artifactPath = normalizeProjectPath(item.artifact_file_path || "");
-      if (artifactPath) {
-        set.add(artifactPath);
-      }
-    }
-  }
-  return set;
+function isPathInStandardDir(path: string, dir: "skills" | "scripts" | "flows" | "cases"): boolean {
+  const normalized = normalizeProjectPath(path);
+  return normalized === dir || normalized.startsWith(`${dir}/`);
+}
+
+function isStandardArtifactDirPath(path: string): boolean {
+  return (
+    isPathInStandardDir(path, "skills")
+    || isPathInStandardDir(path, "scripts")
+    || isPathInStandardDir(path, "flows")
+    || isPathInStandardDir(path, "cases")
+  );
+}
+
+function isStandardTreeRootDir(dir: string): boolean {
+  return ["original", "skills", "scripts", "flows", "cases", "data"].includes(dir);
 }
 
 function getFileNodeIcon(fileName: string, isDirectory: boolean): ReactNode {
@@ -163,9 +144,7 @@ function renderNodeIcon(fileName: string, isDirectory: boolean, isPriority: bool
   }
 
   return (
-    <span
-      className={isPriority ? styles.priorityFileIcon : styles.treeNodeIconWrap}
-    >
+    <span className={isPriority ? styles.priorityFileIcon : styles.treeNodeIconWrap}>
       {icon}
     </span>
   );
@@ -184,25 +163,31 @@ function buildFileTree(
     title: string;
     children: Record<string, RawNode>;
   };
+
   const root: Record<string, RawNode> = {};
-  const collapseDataRoot =
-    paths.length > 0 &&
-    paths.every((path) => {
-      const parts = path.split("/").filter(Boolean);
-      return parts.length > 1 && parts[0] === "data";
-    });
+  const collapseStandardRoot =
+    paths.length > 0
+    && (() => {
+      const firstParts = paths
+        .map((path) => path.split("/").filter(Boolean))
+        .filter((parts) => parts.length > 1)
+        .map((parts) => parts[0]);
+      if (firstParts.length !== paths.length) {
+        return false;
+      }
+      const rootDir = firstParts[0];
+      return firstParts.every((part) => part === rootDir) && isStandardTreeRootDir(rootDir);
+    })();
 
   for (const path of paths) {
     const originalParts = path.split("/").filter(Boolean);
-    const displayParts = collapseDataRoot ? originalParts.slice(1) : originalParts;
+    const displayParts = collapseStandardRoot ? originalParts.slice(1) : originalParts;
     let current = root;
-    let originalPrefix = collapseDataRoot ? "data" : "";
+    let originalPrefix = collapseStandardRoot ? originalParts[0] : "";
     for (let index = 0; index < displayParts.length; index += 1) {
       const part = displayParts[index];
-      const originalPart = originalParts[collapseDataRoot ? index + 1 : index];
-      originalPrefix = originalPrefix
-        ? `${originalPrefix}/${originalPart}`
-        : originalPart;
+      const originalPart = originalParts[collapseStandardRoot ? index + 1 : index];
+      originalPrefix = originalPrefix ? `${originalPrefix}/${originalPart}` : originalPart;
       if (!current[part]) {
         current[part] = { key: originalPrefix, title: part, children: {} };
       }
@@ -278,18 +263,12 @@ export default function ProjectOverviewCard({
   onSelectFileFromTree,
   onAttachArtifactToChat,
   onToggleHideBuiltInFiles,
-  artifactProfileSaving,
-  distillingSkills,
-  promotingSkillId,
-  confirmingSkillId,
-  suggestedDistillRunId,
-  onSaveArtifactProfile,
-  onAutoDistillSkills,
-  onConfirmArtifactSkillStable,
-  onPromoteArtifactSkill,
 }: ProjectOverviewCardProps) {
+  void _projectFileCount;
+  void _pipelineTemplateCount;
   const { t } = useTranslation();
   const [workspaceSummaryExpanded, setWorkspaceSummaryExpanded] = useState(false);
+  const [selectedMetricFilter, setSelectedMetricFilter] = useState<FileMetricFilterKey | "">("");
   const updatedDateParts = formatUpdatedDateParts(selectedProject?.updated_time);
 
   const visibleFiles = hideBuiltInFiles
@@ -299,14 +278,6 @@ export default function ProjectOverviewCard({
   const detachTitle = t("projects.chat.removeAttachment", "Remove from chat attachments");
   const priorityFileSet = new Set(priorityFilePaths);
   const selectedAttachSet = new Set(selectedAttachPaths);
-  const treeData = buildFileTree(
-    visibleFiles.map((item) => item.path),
-    priorityFileSet,
-    selectedAttachSet,
-    onAttachArtifactToChat,
-    attachTitle,
-    detachTitle,
-  );
   const artifactProfile = selectedProject?.artifact_profile;
   const artifactCounts = {
     skills: artifactProfile?.skills.length || 0,
@@ -314,17 +285,98 @@ export default function ProjectOverviewCard({
     flows: artifactProfile?.flows.length || 0,
     cases: artifactProfile?.cases.length || 0,
   };
-  const artifactFilePathSet = buildArtifactFilePathSet(artifactProfile);
-  const normalizedVisibleFiles = visibleFiles.map((item) =>
-    normalizeProjectPath(item.path),
-  );
-  const originalFileCount = normalizedVisibleFiles.filter(
-    (path: string) => isOriginalInputFile(path),
-  ).length;
+  const normalizedVisibleFiles = visibleFiles.map((item) => normalizeProjectPath(item.path));
+  const originalFileCount = normalizedVisibleFiles.filter((path) => isOriginalInputFile(path)).length;
   const derivedFileCount = normalizedVisibleFiles.filter(
-    (path: string) =>
-      !isOriginalInputFile(path) && !artifactFilePathSet.has(path),
+    (path) => !isOriginalInputFile(path) && !isStandardArtifactDirPath(path),
   ).length;
+  const filteredFiles = visibleFiles.filter((item) => {
+    const normalizedPath = normalizeProjectPath(item.path);
+    switch (selectedMetricFilter) {
+      case "original":
+        return isOriginalInputFile(normalizedPath);
+      case "derived":
+        return !isOriginalInputFile(normalizedPath) && !isStandardArtifactDirPath(normalizedPath);
+      case "skills":
+        return isPathInStandardDir(normalizedPath, "skills");
+      case "scripts":
+        return isPathInStandardDir(normalizedPath, "scripts");
+      case "flows":
+        return isPathInStandardDir(normalizedPath, "flows");
+      case "cases":
+        return isPathInStandardDir(normalizedPath, "cases");
+      default:
+        return true;
+    }
+  });
+  const filteredFilePaths = filteredFiles.map((item) => item.path);
+  const treeData = buildFileTree(
+    filteredFilePaths,
+    priorityFileSet,
+    selectedAttachSet,
+    onAttachArtifactToChat,
+    attachTitle,
+    detachTitle,
+  );
+  const selectedFilterLabel =
+    selectedMetricFilter === "original"
+      ? t("projects.filesOriginal", "Original Files")
+      : selectedMetricFilter === "derived"
+        ? t("projects.filesDerived", "Derived Files")
+        : selectedMetricFilter === "skills"
+          ? t("projects.artifacts.skill", "Skills")
+          : selectedMetricFilter === "scripts"
+            ? t("projects.artifacts.script", "Scripts")
+            : selectedMetricFilter === "flows"
+              ? t("projects.artifacts.flow", "Flows")
+              : selectedMetricFilter === "cases"
+                ? t("projects.artifacts.case", "Cases")
+                : "";
+
+  useEffect(() => {
+    if (!selectedMetricFilter) {
+      return;
+    }
+    if (filteredFilePaths.length === 0) {
+      return;
+    }
+    if (!selectedFilePath) {
+      onSelectFileFromTree(filteredFilePaths[0]);
+    }
+  }, [filteredFilePaths, onSelectFileFromTree, selectedFilePath, selectedMetricFilter]);
+
+  const metricCards: Array<{ key: FileMetricFilterKey; label: string; value: number }> = [
+    {
+      key: "original",
+      label: t("projects.filesOriginal", "Original Files"),
+      value: originalFileCount,
+    },
+    {
+      key: "derived",
+      label: t("projects.filesDerived", "Derived Files"),
+      value: derivedFileCount,
+    },
+    {
+      key: "skills",
+      label: t("projects.artifacts.skill", "Skills"),
+      value: artifactCounts.skills,
+    },
+    {
+      key: "scripts",
+      label: t("projects.artifacts.script", "Scripts"),
+      value: artifactCounts.scripts,
+    },
+    {
+      key: "flows",
+      label: t("projects.artifacts.flow", "Flows"),
+      value: artifactCounts.flows,
+    },
+    {
+      key: "cases",
+      label: t("projects.artifacts.case", "Cases"),
+      value: artifactCounts.cases,
+    },
+  ];
 
   return (
     <Card
@@ -361,7 +413,7 @@ export default function ProjectOverviewCard({
           ) : null}
         </div>
 
-        {(selectedProject?.tags || []).length > 0 && (
+        {(selectedProject?.tags || []).length > 0 ? (
           <div className={styles.overviewSection}>
             <div className={styles.subSectionTitle}>{t("projects.tags", "Tags")}</div>
             <div className={styles.overviewTags}>
@@ -372,41 +424,30 @@ export default function ProjectOverviewCard({
               ))}
             </div>
           </div>
-        )}
+        ) : null}
 
         <div className={styles.overviewSection}>
           <div className={styles.subSectionTitle}>
             {t("projects.progressMaturity", "Project Progress & Maturity")}
           </div>
           <div className={styles.metricSummaryGrid}>
-            <div className={styles.metricSummaryCard}>
-              <div className={styles.itemMeta}>
-                {t("projects.filesOriginal", "Original Files")}
-              </div>
-              <div className={styles.metricSummaryValue}>{originalFileCount}</div>
-            </div>
-            <div className={styles.metricSummaryCard}>
-              <div className={styles.itemMeta}>
-                {t("projects.filesDerived", "Derived Files")}
-              </div>
-              <div className={styles.metricSummaryValue}>{derivedFileCount}</div>
-            </div>
-            <div className={styles.metricSummaryCard}>
-              <div className={styles.itemMeta}>{t("projects.artifacts.skill", "Skills")}</div>
-              <div className={styles.metricSummaryValue}>{artifactCounts.skills}</div>
-            </div>
-            <div className={styles.metricSummaryCard}>
-              <div className={styles.itemMeta}>{t("projects.artifacts.script", "Scripts")}</div>
-              <div className={styles.metricSummaryValue}>{artifactCounts.scripts}</div>
-            </div>
-            <div className={styles.metricSummaryCard}>
-              <div className={styles.itemMeta}>{t("projects.artifacts.flow", "Flows")}</div>
-              <div className={styles.metricSummaryValue}>{artifactCounts.flows}</div>
-            </div>
-            <div className={styles.metricSummaryCard}>
-              <div className={styles.itemMeta}>{t("projects.artifacts.case", "Cases")}</div>
-              <div className={styles.metricSummaryValue}>{artifactCounts.cases}</div>
-            </div>
+            {metricCards.map((item) => {
+              const active = selectedMetricFilter === item.key;
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={`${styles.metricSummaryCard} ${styles.metricFilterCard} ${active ? styles.metricFilterCardActive : ""}`}
+                  onClick={() => {
+                    setSelectedMetricFilter((prev) => (prev === item.key ? "" : item.key));
+                  }}
+                  aria-pressed={active}
+                >
+                  <div className={styles.itemMeta}>{item.label}</div>
+                  <div className={styles.metricSummaryValue}>{item.value}</div>
+                </button>
+              );
+            })}
             <div className={styles.metricSummaryCard}>
               <div className={styles.itemMeta}>{t("projects.runs", "Runs")}</div>
               <div className={styles.metricSummaryValue}>{pipelineRunCount}</div>
@@ -421,23 +462,19 @@ export default function ProjectOverviewCard({
               </div>
             </div>
           </div>
-          <ProjectArtifactProfileEditor
-            value={artifactProfile}
-            distillMode={selectedProject?.artifact_distill_mode || "file_scan"}
-            saving={artifactProfileSaving}
-            distillingSkills={distillingSkills}
-            promotingSkillId={promotingSkillId}
-            confirmingSkillId={confirmingSkillId}
-            suggestedDistillRunId={suggestedDistillRunId}
-            onSave={onSaveArtifactProfile}
-            onAutoDistillSkills={onAutoDistillSkills}
-            onConfirmSkillStable={onConfirmArtifactSkillStable}
-            onPromoteSkill={onPromoteArtifactSkill}
-          />
         </div>
 
         <div className={styles.overviewSection}>
           <div className={styles.subSectionTitle}>{t("projects.workspaceSummaryFiles", "Workspace Files")}</div>
+          {selectedFilterLabel ? (
+            <div className={styles.treeFilterIndicator}>
+              <Text type="secondary" className={styles.itemMeta}>
+                {t("projects.workspaceSummaryFilterLabel", "Current filter: {{label}}", {
+                  label: selectedFilterLabel,
+                })}
+              </Text>
+            </div>
+          ) : null}
           <div className={styles.overviewTreeToolbar}>
             <Text type="secondary" className={styles.itemMeta}>
               {t("projects.artifacts.hideBuiltins", "Hide built-in files")}
@@ -453,12 +490,16 @@ export default function ProjectOverviewCard({
           {treeData.length === 0 ? (
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={t("projects.noFiles", "No files in this project")}
+              description={
+                selectedFilterLabel
+                  ? t("projects.noFilteredFiles", "No related files under the current filter")
+                  : t("projects.noFiles", "No files in this project")
+              }
             />
           ) : (
             <Tree
               className={styles.overviewCompactTree}
-              selectedKeys={selectedFilePath ? [selectedFilePath] : []}
+              selectedKeys={selectedFilePath && filteredFilePaths.includes(selectedFilePath) ? [selectedFilePath] : []}
               treeData={treeData}
               onSelect={(keys) => {
                 const key = String(keys[0] || "");

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import type { ProjectPipelineArtifactRecord } from "../../../api/types/agents";
+import type { AgentProjectFileInfo, ProjectPipelineArtifactRecord } from "../../../api/types/agents";
 import { isPreviewablePath } from "./projectFileSelectionUtils";
 
 interface UseArtifactSelectionGuardsParams {
@@ -10,6 +10,7 @@ interface UseArtifactSelectionGuardsParams {
   setSelectedFilePath: (value: string) => void;
   relatedArtifactPathsForSelectedStep: Set<string>;
   artifactRecords: ProjectPipelineArtifactRecord[];
+  projectFiles: AgentProjectFileInfo[];
 }
 
 export default function useArtifactSelectionGuards({
@@ -20,6 +21,7 @@ export default function useArtifactSelectionGuards({
   setSelectedFilePath,
   relatedArtifactPathsForSelectedStep,
   artifactRecords,
+  projectFiles,
 }: UseArtifactSelectionGuardsParams) {
   useEffect(() => {
     if (!selectedStepId) {
@@ -55,9 +57,11 @@ export default function useArtifactSelectionGuards({
     if (!isPreviewablePath(selectedFilePath)) {
       return;
     }
-    const stillVisible = artifactRecords.some((item) => item.path === selectedFilePath);
+    const stillVisible =
+      artifactRecords.some((item) => item.path === selectedFilePath)
+      || projectFiles.some((item) => item.path === selectedFilePath);
     if (!stillVisible) {
       setSelectedFilePath("");
     }
-  }, [artifactRecords, selectedFilePath, setSelectedFilePath]);
+  }, [artifactRecords, projectFiles, selectedFilePath, setSelectedFilePath]);
 }

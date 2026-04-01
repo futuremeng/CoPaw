@@ -1,10 +1,10 @@
 import { expect, test } from "@playwright/test";
 import type { Page, Route } from "@playwright/test";
 
-type ArtifactSkill = {
+type ArtifactItem = {
   id: string;
   name: string;
-  kind: "skill";
+  kind: "skill" | "script" | "flow" | "case";
   origin: string;
   status: string;
   version: string;
@@ -18,7 +18,12 @@ type ArtifactSkill = {
 };
 
 function buildProject(
-  artifactSkills: ArtifactSkill[],
+  artifactProfile: {
+    skills: ArtifactItem[];
+    scripts: ArtifactItem[];
+    flows: ArtifactItem[];
+    cases: ArtifactItem[];
+  },
   artifactDistillMode: "file_scan" | "conversation_evidence" = "file_scan",
 ) {
   return {
@@ -31,242 +36,93 @@ function buildProject(
     metadata_file: "PROJECT.md",
     tags: [],
     artifact_distill_mode: artifactDistillMode,
-    artifact_profile: {
-      skills: artifactSkills,
-      scripts: [],
-      flows: [],
-      cases: [],
-    },
+    artifact_profile: artifactProfile,
     updated_time: "2026-03-23T00:00:00Z",
   };
 }
 
-async function setupProjectWorkflowApiMocks(page: Page) {
-  const artifactSkills: ArtifactSkill[] = [];
+async function setupProjectOverviewFilterMocks(page: Page) {
+  const artifactProfile = {
+    skills: [
+      {
+        id: "quick_start",
+        name: "Quick Start",
+        kind: "skill" as const,
+        origin: "project-distilled",
+        status: "stable",
+        version: "v1",
+        artifact_file_path: "skills/quick_start.md",
+        version_history: [{ version: "v1", file_path: "skills/quick_start.md" }],
+        tags: ["skill"],
+        derived_from_ids: [],
+        distillation_note: "Skill note",
+        market_source_id: null,
+        market_item_id: null,
+      },
+    ],
+    scripts: [
+      {
+        id: "cleanup_script",
+        name: "Cleanup Script",
+        kind: "script" as const,
+        origin: "project-distilled",
+        status: "active",
+        version: "v1",
+        artifact_file_path: "scripts/cleanup.py",
+        version_history: [{ version: "v1", file_path: "scripts/cleanup.py" }],
+        tags: ["script"],
+        derived_from_ids: [],
+        distillation_note: "Script note",
+        market_source_id: null,
+        market_item_id: null,
+      },
+    ],
+    flows: [
+      {
+        id: "review_flow",
+        name: "Review Flow",
+        kind: "flow" as const,
+        origin: "project-distilled",
+        status: "active",
+        version: "v1",
+        artifact_file_path: "flows/review.flow.json",
+        version_history: [{ version: "v1", file_path: "flows/review.flow.json" }],
+        tags: ["flow"],
+        derived_from_ids: [],
+        distillation_note: "Flow note",
+        market_source_id: null,
+        market_item_id: null,
+      },
+    ],
+    cases: [
+      {
+        id: "case_a",
+        name: "Case A",
+        kind: "case" as const,
+        origin: "project-distilled",
+        status: "active",
+        version: "v1",
+        artifact_file_path: "cases/case_a.md",
+        version_history: [{ version: "v1", file_path: "cases/case_a.md" }],
+        tags: ["case"],
+        derived_from_ids: [],
+        distillation_note: "Case note",
+        market_source_id: null,
+        market_item_id: null,
+      },
+    ],
+  };
 
-  await page.route("**/api/**", async (route: Route) => {
-    const url = new URL(route.request().url());
-    const pathname = url.pathname.replace(/^\/console(?=\/api\/)/, "");
-    const method = route.request().method();
+  const projectFiles = [
+    { filename: "brief.md", path: "original/brief.md", size: 123, modified_time: "2026-03-23T00:00:00Z" },
+    { filename: "quick_start.md", path: "skills/quick_start.md", size: 123, modified_time: "2026-03-23T00:00:00Z" },
+    { filename: "cleanup.py", path: "scripts/cleanup.py", size: 123, modified_time: "2026-03-23T00:00:00Z" },
+    { filename: "review.flow.json", path: "flows/review.flow.json", size: 123, modified_time: "2026-03-23T00:00:00Z" },
+    { filename: "case_a.md", path: "cases/case_a.md", size: 123, modified_time: "2026-03-23T00:00:00Z" },
+    { filename: "design_notes.md", path: "notes/design_notes.md", size: 123, modified_time: "2026-03-23T00:00:00Z" },
+    { filename: "PROJECT.md", path: "PROJECT.md", size: 123, modified_time: "2026-03-23T00:00:00Z" },
+  ];
 
-    if (!pathname.startsWith("/api/")) {
-      await route.continue();
-      return;
-    }
-
-    if (pathname === "/api/auth/status") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ enabled: false }),
-      });
-      return;
-    }
-
-    if (pathname === "/api/models") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([]),
-      });
-      return;
-    }
-
-    if (pathname === "/api/models/active") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ active_llm: null }),
-      });
-      return;
-    }
-
-    if (pathname === "/api/agent/running-config") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ knowledge_enabled: true }),
-      });
-      return;
-    }
-
-    if (pathname === "/api/chats") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([]),
-      });
-      return;
-    }
-
-    if (pathname.startsWith("/api/chats/")) {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ messages: [], status: "idle", has_more: false, total: 0 }),
-      });
-      return;
-    }
-
-    if (pathname === "/api/agents") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          agents: [
-            {
-              id: "default",
-              name: "Default",
-              description: "",
-              workspace_dir: "/tmp/default",
-              projects: [buildProject(artifactSkills)],
-            },
-          ],
-        }),
-      });
-      return;
-    }
-
-    if (pathname === "/api/agents/default/projects/p1/files") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([]),
-      });
-      return;
-    }
-
-    if (pathname === "/api/agents/default/projects/p1/pipelines/templates") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([]),
-      });
-      return;
-    }
-
-    if (pathname === "/api/agents/default/projects/p1/pipelines/runs") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([]),
-      });
-      return;
-    }
-
-    if (
-      pathname === "/api/agents/default/projects/p1/artifacts/skills/distill-draft" &&
-      method === "POST"
-    ) {
-      if (artifactSkills.length === 0) {
-        artifactSkills.push({
-          id: "quick_start",
-          name: "Quick Start",
-          kind: "skill",
-          origin: "project-distilled",
-          status: "draft",
-          version: "v0-draft",
-          artifact_file_path: "skills/quick_start.md",
-          version_history: [{ version: "v0-draft", file_path: "skills/quick_start.md" }],
-          tags: ["auto-draft"],
-          derived_from_ids: [],
-          distillation_note: "Auto drafted from file.",
-          market_source_id: null,
-          market_item_id: null,
-        });
-      }
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          drafted_count: 1,
-          skipped_count: 0,
-          drafted_ids: ["quick_start"],
-          project: buildProject(artifactSkills),
-        }),
-      });
-      return;
-    }
-
-    const confirmStableMatch = pathname.match(
-      /^\/api\/agents\/default\/projects\/p1\/artifacts\/skills\/([^/]+)\/confirm-stable$/,
-    );
-    if (confirmStableMatch && method === "POST") {
-      const artifactId = decodeURIComponent(confirmStableMatch[1]);
-      const skill = artifactSkills.find((item) => item.id === artifactId);
-      if (!skill) {
-        await route.fulfill({
-          status: 404,
-          contentType: "application/json",
-          body: JSON.stringify({ detail: "not found" }),
-        });
-        return;
-      }
-      skill.status = "stable";
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          confirmed: true,
-          artifact_id: artifactId,
-          status: "stable",
-          project: buildProject(artifactSkills),
-        }),
-      });
-      return;
-    }
-
-    const promoteMatch = pathname.match(
-      /^\/api\/agents\/default\/projects\/p1\/artifacts\/skills\/([^/]+)\/promote$/,
-    );
-    if (promoteMatch && method === "POST") {
-      const artifactId = decodeURIComponent(promoteMatch[1]);
-      const body = JSON.parse(route.request().postData() || "{}");
-      const targetName = String(body.target_name || "quick_start_promoted");
-      const skill = artifactSkills.find((item) => item.id === artifactId);
-      if (!skill) {
-        await route.fulfill({
-          status: 404,
-          contentType: "application/json",
-          body: JSON.stringify({ detail: "not found" }),
-        });
-        return;
-      }
-      if (skill.status !== "stable") {
-        await route.fulfill({
-          status: 400,
-          contentType: "application/json",
-          body: JSON.stringify({ detail: "Only stable skill artifacts can be promoted." }),
-        });
-        return;
-      }
-      skill.origin = "project-promoted";
-      skill.market_item_id = targetName;
-
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          promoted: true,
-          artifact_kind: "skill",
-          artifact_id: artifactId,
-          target_name: targetName,
-          target_path: `/tmp/default/skills/${targetName}/SKILL.md`,
-          project: buildProject(artifactSkills),
-        }),
-      });
-      return;
-    }
-
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({}),
-    });
-  });
-}
-
-async function setupConversationDistillSuggestionMocks(page: Page) {
   await page.route("**/api/**", async (route: Route) => {
     const url = new URL(route.request().url());
     const pathname = url.pathname.replace(/^\/console(?=\/api\/)/, "");
@@ -341,7 +197,7 @@ async function setupConversationDistillSuggestionMocks(page: Page) {
               name: "Default",
               description: "",
               workspace_dir: "/tmp/default",
-              projects: [buildProject([], "conversation_evidence")],
+              projects: [buildProject(artifactProfile)],
             },
           ],
         }),
@@ -353,7 +209,7 @@ async function setupConversationDistillSuggestionMocks(page: Page) {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([]),
+        body: JSON.stringify(projectFiles),
       });
       return;
     }
@@ -392,72 +248,55 @@ async function setupConversationDistillSuggestionMocks(page: Page) {
   });
 }
 
-test("artifact workflow: auto draft -> confirm stable -> promote", async ({ page }) => {
+function metricCard(page: Page, label: RegExp) {
+  return page.locator('[class*="metricFilterCard"]', { hasText: label }).first();
+}
+
+function treeText(page: Page, text: string) {
+  return page.getByRole("tree").getByText(text, { exact: true });
+}
+
+test("project overview: remove manage artifacts and filter workspace tree", async ({ page }) => {
   test.setTimeout(90_000);
 
-  await setupProjectWorkflowApiMocks(page);
+  await setupProjectOverviewFilterMocks(page);
   await page.goto("/projects/p1");
 
-  const manageBtn = page.getByRole("button", { name: /Manage Artifacts|管理产物/i });
-  await expect(manageBtn).toBeVisible({ timeout: 30_000 });
-  await manageBtn.click();
+  await expect(page.getByRole("button", { name: /Manage Artifacts|管理产物/i })).toHaveCount(0);
 
-  const autoDraftRequest = page.waitForRequest((request) => {
-    return (
-      request.method() === "POST" &&
-      request.url().includes("/api/agents/default/projects/p1/artifacts/skills/distill-draft")
-    );
-  });
-  const autoDraftBtn = page.getByRole("button", { name: /Auto Draft from Files|从文件自动草拟/i });
-  await autoDraftBtn.click();
-  await autoDraftRequest;
+  const skillsCard = metricCard(page, /Skills|技能/i);
+  const scriptsCard = metricCard(page, /Scripts|脚本/i);
 
-  await expect(page.locator('input[value="Quick Start"]')).toBeVisible({ timeout: 20_000 });
+  await skillsCard.click();
+  await expect(skillsCard).toHaveAttribute("aria-pressed", "true");
+  await expect(treeText(page, "quick_start.md")).toBeVisible();
+  await expect(treeText(page, "brief.md")).toHaveCount(0);
+  await expect(treeText(page, "cleanup.py")).toHaveCount(0);
 
-  const confirmRequest = page.waitForRequest((request) => {
-    return (
-      request.method() === "POST" &&
-      request.url().includes("/api/agents/default/projects/p1/artifacts/skills/quick_start/confirm-stable")
-    );
-  });
-  const confirmBtn = page.getByRole("button", { name: /Confirm Stable|确认为 stable/i });
-  await confirmBtn.click();
-  await confirmRequest;
-
-  const promoteRequest = page.waitForRequest((request) => {
-    return (
-      request.method() === "POST" &&
-      request.url().includes("/api/agents/default/projects/p1/artifacts/skills/quick_start/promote")
-    );
-  });
-  const promoteBtn = page.getByRole("button", { name: /Promote to Agent|晋升为智能体技能/i });
-  await promoteBtn.click();
-
-  const promoteConfirmBtn = page.getByRole("button", { name: /Promote|确认晋升/i });
-  await expect(promoteConfirmBtn).toBeVisible({ timeout: 10_000 });
-  await promoteConfirmBtn.click();
-  await promoteRequest;
-
-  await expect(page.getByText(/Promoted|已晋升/i)).toBeVisible({ timeout: 20_000 });
+  await scriptsCard.click();
+  await expect(skillsCard).toHaveAttribute("aria-pressed", "false");
+  await expect(scriptsCard).toHaveAttribute("aria-pressed", "true");
+  await expect(treeText(page, "cleanup.py")).toBeVisible();
+  await expect(treeText(page, "quick_start.md")).toHaveCount(0);
 });
 
-test("artifact workflow: conversation mode shows suggested run_id", async ({ page }) => {
+test("project overview: original and derived filters are mutually exclusive", async ({ page }) => {
   test.setTimeout(90_000);
 
-  await setupConversationDistillSuggestionMocks(page);
+  await setupProjectOverviewFilterMocks(page);
   await page.goto("/projects/p1");
 
-  const manageBtn = page.getByRole("button", { name: /Manage Artifacts|管理产物/i });
-  await expect(manageBtn).toBeVisible({ timeout: 30_000 });
-  await manageBtn.click();
+  const originalCard = metricCard(page, /Original Files|原件文件/i);
+  const derivedCard = metricCard(page, /Derived Files|衍生文件/i);
 
-  await expect(
-    page.getByRole("button", {
-      name: /Auto Draft from Conversation|从对话自动草拟/i,
-    }),
-  ).toBeVisible({ timeout: 20_000 });
+  await originalCard.click();
+  await expect(originalCard).toHaveAttribute("aria-pressed", "true");
+  await expect(treeText(page, "brief.md")).toBeVisible();
+  await expect(treeText(page, "notes")).toHaveCount(0);
 
-  await expect(
-    page.getByText(/Suggested run_id: run-42|建议 run_id：run-42/i),
-  ).toBeVisible({ timeout: 20_000 });
+  await derivedCard.click();
+  await expect(originalCard).toHaveAttribute("aria-pressed", "false");
+  await expect(derivedCard).toHaveAttribute("aria-pressed", "true");
+  await expect(treeText(page, "notes")).toBeVisible();
+  await expect(treeText(page, "brief.md")).toHaveCount(0);
 });
