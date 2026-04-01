@@ -1704,7 +1704,9 @@ export default function ProjectDetailPage() {
                 {t("projects.path.project", "项目")}
               </Button>
               <span className={styles.pathSeparator}>/</span>
-              <span className={styles.pathCurrent}>{t("projects.path.projectSpace", "项目空间")}</span>
+              <span className={styles.pathCurrent}>
+                {selectedProject?.name || t("projects.path.projectSpace", "项目空间")}
+              </span>
             </div>
           </div>
           <Text type="secondary" className={styles.description}>
