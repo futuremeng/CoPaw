@@ -154,6 +154,9 @@ type HeaderSession = Pick<IAgentScopeRuntimeWebUISession, "id" | "name"> & {
   updated_at?: string | null;
 };
 
+const DEFAULT_CHAT_TITLE = "New Chat";
+const HEADER_TITLE_TARGET_LEN = 20;
+
 function formatLocalDateTime(raw?: string | null): string {
   if (!raw) return "";
   const ts = Date.parse(raw);
@@ -165,6 +168,69 @@ function formatLocalDateTime(raw?: string | null): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function trimSingleLine(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function clipReadableTitle(raw: string, maxLen = HEADER_TITLE_TARGET_LEN): string {
+  const text = trimSingleLine(raw);
+  if (!text) return "";
+  if (text.length <= maxLen) return text;
+
+  const window = text.slice(0, maxLen + 1);
+  const punctPositions = ["。", "！", "？", "；", ".", "!", "?", ";", ",", "，", "、"]
+    .map((token) => window.lastIndexOf(token))
+    .filter((idx) => idx >= 0);
+  const lastPunct = punctPositions.length > 0 ? Math.max(...punctPositions) : -1;
+  if (lastPunct >= Math.floor(maxLen * 0.6)) {
+    return window.slice(0, lastPunct + 1).trim();
+  }
+
+  const lastSpace = window.lastIndexOf(" ");
+  if (lastSpace >= Math.floor(maxLen * 0.6)) {
+    return window.slice(0, lastSpace).trim();
+  }
+
+  return text.slice(0, maxLen).trim();
+}
+
+function extractUserTextFromSessionMessages(
+  messages: unknown,
+): string {
+  if (!Array.isArray(messages)) return "";
+
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const message = messages[i] as {
+      role?: string;
+      content?: unknown;
+      cards?: Array<{ data?: { input?: Array<{ content?: unknown }> } }>;
+    };
+    if (message?.role !== "user") continue;
+
+    if (typeof message.content === "string") {
+      const plain = trimSingleLine(message.content);
+      if (plain) return plain;
+    }
+
+    if (Array.isArray(message.content)) {
+      const fromContent = trimSingleLine(extractUserMessageText({ content: message.content }));
+      if (fromContent) return fromContent;
+    }
+
+    const cardInputContent = message.cards?.[0]?.data?.input?.[0]?.content;
+    if (typeof cardInputContent === "string") {
+      const fromCard = trimSingleLine(cardInputContent);
+      if (fromCard) return fromCard;
+    }
+    if (Array.isArray(cardInputContent)) {
+      const fromCard = trimSingleLine(extractUserMessageText({ content: cardInputContent }));
+      if (fromCard) return fromCard;
+    }
+  }
+
+  return "";
 }
 
 function renderSuggestionLabel(command: string, description: string) {
@@ -496,6 +562,7 @@ export default function ChatPage() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historySessions, setHistorySessions] = useState<HeaderSession[]>([]);
+  const [currentChatNameOverride, setCurrentChatNameOverride] = useState("");
   const [, setChatStatus] = useState<"idle" | "running">("idle");
   const [, setReconnectStreaming] = useState(false);
   const runtimeLoadingBridgeRef = useRef<RuntimeLoadingBridgeApi | null>(null);
@@ -738,8 +805,15 @@ export default function ChatPage() {
 
   const currentChatName = useMemo(() => {
     const current = historySessions.find((item) => item.id === chatId);
-    return (current?.name || "").trim() || t("chat.newChat", "New Chat");
-  }, [chatId, historySessions, t]);
+    const baseName = (current?.name || "").trim();
+    if (currentChatNameOverride) {
+      return currentChatNameOverride;
+    }
+    if (!baseName || baseName === DEFAULT_CHAT_TITLE) {
+      return t("chat.newChat", "New Chat");
+    }
+    return clipReadableTitle(baseName, HEADER_TITLE_TARGET_LEN);
+  }, [chatId, currentChatNameOverride, historySessions, t]);
 
   const handleStartNewChat = useCallback(async () => {
     const localId = String(Date.now());
@@ -751,6 +825,49 @@ export default function ChatPage() {
   useEffect(() => {
     void loadHistorySessions();
   }, [chatId, loadHistorySessions]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const hydrateCurrentTitle = async () => {
+      if (!chatId) {
+        setCurrentChatNameOverride("");
+        return;
+      }
+
+      const current = historySessions.find((item) => item.id === chatId);
+      const baseName = (current?.name || "").trim();
+      const baseNameUsable =
+        baseName &&
+        baseName !== DEFAULT_CHAT_TITLE &&
+        baseName.length >= Math.floor(HEADER_TITLE_TARGET_LEN * 0.6);
+
+      if (baseNameUsable) {
+        setCurrentChatNameOverride(clipReadableTitle(baseName, HEADER_TITLE_TARGET_LEN));
+        return;
+      }
+
+      try {
+        const session = (await sessionApi.getSession(chatId)) as { messages?: unknown };
+        if (cancelled) return;
+        const userText = extractUserTextFromSessionMessages(session?.messages);
+        setCurrentChatNameOverride(
+          userText
+            ? clipReadableTitle(userText, HEADER_TITLE_TARGET_LEN)
+            : clipReadableTitle(baseName || t("chat.newChat", "New Chat"), HEADER_TITLE_TARGET_LEN),
+        );
+      } catch {
+        if (cancelled) return;
+        setCurrentChatNameOverride(clipReadableTitle(baseName || t("chat.newChat", "New Chat"), HEADER_TITLE_TARGET_LEN));
+      }
+    };
+
+    void hydrateCurrentTitle();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [chatId, historySessions, t]);
 
   const copyResponse = useCallback(
     async (response: CopyableResponse) => {
