@@ -1,15 +1,21 @@
 import {
   AgentScopeRuntimeWebUI,
   IAgentScopeRuntimeWebUIOptions,
+  type IAgentScopeRuntimeWebUISession,
   type IAgentScopeRuntimeWebUIMessage,
   type IAgentScopeRuntimeWebUIRef,
   Stream,
 } from "@agentscope-ai/chat";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Button, Modal, Result, Tooltip } from "antd";
+import { Button, Empty, Modal, Popover, Result, Spin, Tooltip } from "antd";
 import { useAppMessage } from "../../hooks/useAppMessage";
 import { ExclamationCircleOutlined, SettingOutlined } from "@ant-design/icons";
-import { SparkCopyLine, SparkAttachmentLine } from "@agentscope-ai/icons";
+import {
+  SparkAttachmentLine,
+  SparkCopyLine,
+  SparkHistoryLine,
+  SparkNewChatFill,
+} from "@agentscope-ai/icons";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import sessionApi from "./sessionApi";
@@ -139,6 +145,26 @@ interface CommandSuggestion {
   command: string;
   value: string;
   description: string;
+}
+
+type HeaderSession = Pick<IAgentScopeRuntimeWebUISession, "id" | "name"> & {
+  createdAt?: string | null;
+  created_at?: string | null;
+  updatedAt?: string | null;
+  updated_at?: string | null;
+};
+
+function formatLocalDateTime(raw?: string | null): string {
+  if (!raw) return "";
+  const ts = Date.parse(raw);
+  if (!Number.isFinite(ts)) return raw;
+  return new Date(ts).toLocaleString([], {
+    hour12: false,
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function renderSuggestionLabel(command: string, description: string) {
@@ -467,6 +493,9 @@ export default function ChatPage() {
   const [showModelPrompt, setShowModelPrompt] = useState(false);
   const { selectedAgent } = useAgentStore();
   const [refreshKey, setRefreshKey] = useState(0);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historySessions, setHistorySessions] = useState<HeaderSession[]>([]);
   const [, setChatStatus] = useState<"idle" | "running">("idle");
   const [, setReconnectStreaming] = useState(false);
   const runtimeLoadingBridgeRef = useRef<RuntimeLoadingBridgeApi | null>(null);
@@ -694,6 +723,34 @@ export default function ChatPage() {
     }),
     [createSessionWrapped, getSessionListWrapped, getSessionWrapped],
   );
+
+  const loadHistorySessions = useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      const sessions = (await getSessionListWrapped()) as HeaderSession[];
+      setHistorySessions(Array.isArray(sessions) ? sessions : []);
+    } catch {
+      setHistorySessions([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [getSessionListWrapped]);
+
+  const currentChatName = useMemo(() => {
+    const current = historySessions.find((item) => item.id === chatId);
+    return (current?.name || "").trim() || t("chat.newChat", "New Chat");
+  }, [chatId, historySessions, t]);
+
+  const handleStartNewChat = useCallback(async () => {
+    const localId = String(Date.now());
+    await createSessionWrapped({ id: localId });
+    setHistoryOpen(false);
+    void loadHistorySessions();
+  }, [createSessionWrapped, loadHistorySessions]);
+
+  useEffect(() => {
+    void loadHistorySessions();
+  }, [chatId, loadHistorySessions]);
 
   const copyResponse = useCallback(
     async (response: CopyableResponse) => {
@@ -1350,8 +1407,86 @@ export default function ChatPage() {
         rightHeader: (
           <>
             <RuntimeLoadingBridge bridgeRef={runtimeLoadingBridgeRef} />
+            <span className={styles.headerChatName} title={currentChatName}>
+              {currentChatName}
+            </span>
             <span style={{ flex: 1 }} />
             <ModelSelector />
+            <Tooltip title={t("chat.newChat", "New Chat")} mouseEnterDelay={0.3}>
+              <IconButton
+                bordered={false}
+                icon={<SparkNewChatFill />}
+                onClick={() => {
+                  void handleStartNewChat();
+                }}
+                aria-label={t("chat.newChat", "New Chat")}
+              />
+            </Tooltip>
+            <Popover
+              trigger="click"
+              placement="bottomRight"
+              open={historyOpen}
+              onOpenChange={(open) => {
+                setHistoryOpen(open);
+                if (open) {
+                  void loadHistorySessions();
+                }
+              }}
+              content={
+                historyLoading ? (
+                  <div style={{ display: "flex", justifyContent: "center", padding: "16px 8px" }}>
+                    <Spin size="small" />
+                  </div>
+                ) : historySessions.length === 0 ? (
+                  <Empty
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    description={t("chat.historyEmpty", "No history chats")}
+                  />
+                ) : (
+                  <div className={styles.headerHistoryPopover}>
+                    {historySessions.map((session) => {
+                      const title = (session.name || session.id || "").trim() || t("chat.untitled", "Untitled chat");
+                      const updatedAt = formatLocalDateTime(
+                        session.updatedAt || session.updated_at || session.createdAt || session.created_at,
+                      );
+                      const isActive = session.id === chatId;
+                      return (
+                        <Button
+                          key={session.id}
+                          type={isActive ? "primary" : "text"}
+                          style={{
+                            width: "100%",
+                            justifyContent: "flex-start",
+                            height: "auto",
+                            paddingBlock: 8,
+                            textAlign: "left",
+                          }}
+                          onClick={() => {
+                            scheduleReplaceNavigation(`/chat/${session.id}`);
+                            setHistoryOpen(false);
+                          }}
+                        >
+                          <div className={styles.headerHistoryItem}>
+                            <span className={styles.headerHistoryTitle}>{title}</span>
+                            <span className={styles.headerHistoryTime}>
+                              {updatedAt || t("chat.unknownTime", "Unknown time")}
+                            </span>
+                          </div>
+                        </Button>
+                      );
+                    })}
+                  </div>
+                )
+              }
+            >
+              <Tooltip title={t("chat.historyChat", "History Chats")} mouseEnterDelay={0.3}>
+                <IconButton
+                  bordered={false}
+                  icon={<SparkHistoryLine />}
+                  aria-label={t("chat.historyChat", "History Chats")}
+                />
+              </Tooltip>
+            </Popover>
           </>
         ),
       },
@@ -1393,6 +1528,7 @@ export default function ChatPage() {
       },
       session: {
         multiple: true,
+        // Keep built-in list visible to preserve current fallback behavior.
         hideBuiltInSessionList: false,
         api: wrappedSessionApi,
       },
@@ -1461,6 +1597,14 @@ export default function ChatPage() {
     isComposingRef,
     multimodalCaps,
     setChatStatus,
+    currentChatName,
+    handleStartNewChat,
+    historyLoading,
+    historyOpen,
+    historySessions,
+    loadHistorySessions,
+    chatId,
+    scheduleReplaceNavigation,
   ]);
 
   return (
@@ -1472,7 +1616,7 @@ export default function ChatPage() {
         flexDirection: "column",
       }}
     >
-      <div style={{ flex: 1, minHeight: 0 }}>
+      <div className={styles.chatMessagesArea}>
         <AgentScopeRuntimeWebUI
           ref={chatRef}
           key={refreshKey}
