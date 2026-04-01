@@ -1546,6 +1546,11 @@
       "promoteSuccess": "Повышено до навыка агента: {{name}}",
       "promoteFailed": "Не удалось повысить навык проекта.",
       "promoteRequiresStable": "Повышать можно только навыки со статусом stable.",
+      "promoteConfirmTitle": "Подтвердите повышение",
+      "promoteConfirmBody": "Повысить этот навык проекта до переиспользуемого навыка агента?",
+      "promoteTargetName": "Имя цели",
+      "promoteTargetPath": "Путь назначения",
+      "promoteConfirmOk": "Повысить",
       "add": "Добавить",
       "emptyCategory": "Записей пока нет",
       "fields": {

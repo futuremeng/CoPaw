@@ -132,6 +132,11 @@
       "promoteSuccess": "Promoted to agent skill: {{name}}",
       "promoteFailed": "Failed to promote project skill.",
       "promoteRequiresStable": "Only stable skills can be promoted.",
+      "promoteConfirmTitle": "Confirm promotion",
+      "promoteConfirmBody": "Promote this project skill to agent-level reusable skill?",
+      "promoteTargetName": "Target name",
+      "promoteTargetPath": "Target path",
+      "promoteConfirmOk": "Promote",
       "add": "Add",
       "emptyCategory": "No entries",
       "fields": {

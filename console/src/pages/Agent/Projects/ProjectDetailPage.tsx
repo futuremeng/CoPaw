@@ -5,6 +5,7 @@ import {
   Card,
   Drawer,
   Empty,
+  Modal,
   Popconfirm,
   Spin,
   Tabs,
@@ -56,6 +57,7 @@ import type {
   ProjectPipelineTemplateInfo,
   PlatformFlowTemplateInfo,
   AgentSummary,
+  ProjectArtifactItem,
 } from "../../../api/types/agents";
 import { useAgentStore } from "../../../stores/agentStore";
 import styles from "./index.module.less";
@@ -94,6 +96,18 @@ function statusTagColor(status: string): string {
     default:
       return "blue";
   }
+}
+
+function slugifyArtifactName(raw: string, fallback: string): string {
+  const normalized = (raw || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (!normalized || normalized === "agent") {
+    return fallback;
+  }
+  return normalized;
 }
 
 function formatRunTimeLabel(raw: string): string {
@@ -540,15 +554,12 @@ export default function ProjectDetailPage() {
     }
   }, [currentAgent, loadAgents, selectedProject, t]);
 
-  const handlePromoteArtifactSkill = useCallback(async (artifactId: string) => {
-    if (!currentAgent || !selectedProject || !artifactId) {
+  const handlePromoteArtifactSkill = useCallback(async (item: ProjectArtifactItem) => {
+    if (!currentAgent || !selectedProject || !item.id) {
       return;
     }
 
-    const skillItem = (selectedProject.artifact_profile?.skills || []).find(
-      (item) => item.id === artifactId,
-    );
-    if ((skillItem?.status || "").toLowerCase() !== "stable") {
+    if ((item.status || "").toLowerCase() !== "stable") {
       message.warning(
         t(
           "projects.artifacts.promoteRequiresStable",
@@ -558,12 +569,43 @@ export default function ProjectDetailPage() {
       return;
     }
 
-    setPromotingSkillId(artifactId);
+    const targetName = slugifyArtifactName(item.id, "project-skill");
+    const targetPath = `skills/${targetName}/SKILL.md`;
+    const confirmed = await new Promise<boolean>((resolve) => {
+      Modal.confirm({
+        title: t("projects.artifacts.promoteConfirmTitle", "Confirm promotion"),
+        content: (
+          <div>
+            <div>
+              {t(
+                "projects.artifacts.promoteConfirmBody",
+                "Promote this project skill to agent-level reusable skill?",
+              )}
+            </div>
+            <div>
+              {t("projects.artifacts.promoteTargetName", "Target name")}: {targetName}
+            </div>
+            <div>
+              {t("projects.artifacts.promoteTargetPath", "Target path")}: {targetPath}
+            </div>
+          </div>
+        ),
+        okText: t("projects.artifacts.promoteConfirmOk", "Promote"),
+        cancelText: t("common.cancel", "Cancel"),
+        onOk: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    setPromotingSkillId(item.id);
     try {
       const result = await agentsApi.promoteProjectSkillArtifact(
         currentAgent.id,
         selectedProject.id,
-        artifactId,
+        item.id,
         { enable: true },
       );
       await loadAgents();

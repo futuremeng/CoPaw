@@ -1548,6 +1548,11 @@
       "promoteSuccess": "已晋升为智能体技能：{{name}}",
       "promoteFailed": "晋升项目技能失败。",
       "promoteRequiresStable": "仅 stable 状态的技能可晋升。",
+      "promoteConfirmTitle": "确认晋升",
+      "promoteConfirmBody": "要将该项目技能晋升为智能体级可复用技能吗？",
+      "promoteTargetName": "目标名称",
+      "promoteTargetPath": "目标路径",
+      "promoteConfirmOk": "确认晋升",
       "add": "新增",
       "emptyCategory": "暂无条目",
       "fields": {

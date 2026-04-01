@@ -151,7 +151,7 @@ interface ProjectArtifactProfileEditorProps {
   saving: boolean;
   promotingSkillId?: string;
   onSave: (profile: ProjectArtifactProfile) => Promise<void>;
-  onPromoteSkill: (artifactId: string) => Promise<void>;
+  onPromoteSkill: (item: ProjectArtifactItem) => Promise<void>;
 }
 
 export default function ProjectArtifactProfileEditor({
@@ -390,7 +390,7 @@ export default function ProjectArtifactProfileEditor({
                               saving ||
                               (item.status || "").toLowerCase() !== "stable"
                             }
-                            onClick={() => void onPromoteSkill(item.id)}
+                            onClick={() => void onPromoteSkill(item)}
                           >
                             {t("projects.artifacts.promote", "Promote to Agent")}
                           </Button>

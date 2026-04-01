@@ -1546,6 +1546,11 @@
       "promoteSuccess": "エージェントスキルに昇格しました: {{name}}",
       "promoteFailed": "プロジェクトスキルの昇格に失敗しました。",
       "promoteRequiresStable": "stable 状態のスキルのみ昇格できます。",
+      "promoteConfirmTitle": "昇格の確認",
+      "promoteConfirmBody": "このプロジェクトスキルをエージェント再利用スキルへ昇格しますか？",
+      "promoteTargetName": "対象名",
+      "promoteTargetPath": "保存先パス",
+      "promoteConfirmOk": "昇格する",
       "add": "追加",
       "emptyCategory": "項目はまだありません",
       "fields": {

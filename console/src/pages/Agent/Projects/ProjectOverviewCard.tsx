@@ -15,6 +15,7 @@ import {
 import { Button, Card, Empty, Tag, Tree, Typography } from "antd";
 import { useTranslation } from "react-i18next";
 import type {
+  ProjectArtifactItem,
   AgentProjectFileInfo,
   AgentProjectSummary,
   ProjectArtifactProfile,
@@ -44,7 +45,7 @@ interface ProjectOverviewCardProps {
   artifactProfileSaving: boolean;
   promotingSkillId: string;
   onSaveArtifactProfile: (profile: ProjectArtifactProfile) => Promise<void>;
-  onPromoteArtifactSkill: (artifactId: string) => Promise<void>;
+  onPromoteArtifactSkill: (item: ProjectArtifactItem) => Promise<void>;
 }
 
 interface TreeNode {
