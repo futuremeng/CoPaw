@@ -159,19 +159,10 @@ export default function ProjectChatPanel({
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description={t(
-                  "projects.chat.selectContext",
-                  "Start a project collaboration session, or open automation design when you are ready to formalize the workflow.",
+                  "projects.chat.initializingCollaboration",
+                  "Preparing project collaboration session...",
                 )}
-              >
-                <div className={styles.chatEmptyActions}>
-                  <Button type="primary" onClick={onStartWorkspaceChat}>
-                    {t("projects.chat.startCollaboration", "Start project collaboration")}
-                  </Button>
-                  <Button onClick={onStartDesignChat}>
-                    {t("projects.chat.startAutomation", "Open automation design")}
-                  </Button>
-                </div>
-              </Empty>
+              />
             </div>
           )
         ) : chatStarting ? (

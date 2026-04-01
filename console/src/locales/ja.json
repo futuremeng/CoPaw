@@ -1595,6 +1595,7 @@
     },
     "chat": {
       "workspaceLabel": "プロジェクト協作",
+      "initializingCollaboration": "プロジェクト協作セッションを準備しています...",
       "selectContext": "まずはプロジェクト協作を開始し、ワークフローを固める準備ができたら自動化設計を開いてください。",
       "startCollaboration": "プロジェクト協作を開始",
       "startAutomation": "自動化設計を開く",

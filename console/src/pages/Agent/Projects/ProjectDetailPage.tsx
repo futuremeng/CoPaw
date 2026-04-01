@@ -220,6 +220,7 @@ export default function ProjectDetailPage() {
   const designFocusChatIdRef = useRef("");
   const runRestoreAttemptKeyRef = useRef("");
   const automationDrawerAutoOpenKeyRef = useRef("");
+  const workspaceAutoInitProjectKeyRef = useRef("");
 
   const currentAgent = useMemo(
     () => getCurrentAgent(agents, selectedAgent),
@@ -1265,6 +1266,7 @@ export default function ProjectDetailPage() {
     setSelectedAttachPaths([]);
     setSendingSelectedFiles(false);
     runRestoreAttemptKeyRef.current = "";
+    workspaceAutoInitProjectKeyRef.current = "";
   }, [resetUploadState, routeProjectId]);
 
   useOpenUploadQuery({
@@ -1291,6 +1293,34 @@ export default function ProjectDetailPage() {
     void loadProjectFiles(currentAgent.id, selectedProject);
     void loadPipelineContext(currentAgent.id, selectedProject);
   }, [currentAgent, selectedProject, loadProjectFiles, loadPipelineContext]);
+
+  useEffect(() => {
+    if (!selectedProject?.id) {
+      return;
+    }
+    if (selectedRunId || activeWorkspaceChatId || activeDesignChatId || chatStarting) {
+      return;
+    }
+
+    const autoInitKey = selectedProject.id;
+    if (workspaceAutoInitProjectKeyRef.current === autoInitKey) {
+      return;
+    }
+    workspaceAutoInitProjectKeyRef.current = autoInitKey;
+
+    void handleEnsureWorkspaceChat().then((chatId) => {
+      if (!chatId) {
+        workspaceAutoInitProjectKeyRef.current = "";
+      }
+    });
+  }, [
+    activeDesignChatId,
+    activeWorkspaceChatId,
+    chatStarting,
+    handleEnsureWorkspaceChat,
+    selectedProject?.id,
+    selectedRunId,
+  ]);
 
   useEffect(() => {
     if (!currentAgent || !selectedProject || !selectedFilePath) {
@@ -1738,10 +1768,6 @@ export default function ProjectDetailPage() {
                 selectedFilePath={selectedFilePath}
                 selectedAttachPaths={selectedAttachPaths}
                 hideBuiltInFiles={hideBuiltInFiles}
-                onStartCollaboration={() => {
-                  setDesignFocusChatId("");
-                  void handleEnsureWorkspaceChat(true);
-                }}
                 onUploadFiles={() => setUploadModalOpen(true)}
                 onSelectFileFromTree={(path) => {
                   void handleSelectArtifactFile(path);

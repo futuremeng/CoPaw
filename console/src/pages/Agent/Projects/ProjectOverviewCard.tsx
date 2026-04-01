@@ -38,7 +38,6 @@ interface ProjectOverviewCardProps {
   selectedFilePath: string;
   selectedAttachPaths: string[];
   hideBuiltInFiles: boolean;
-  onStartCollaboration: () => void;
   onUploadFiles: () => void;
   onSelectFileFromTree: (path: string) => void;
   onAttachArtifactToChat: (path: string) => void;
@@ -275,7 +274,6 @@ export default function ProjectOverviewCard({
   selectedFilePath,
   selectedAttachPaths,
   hideBuiltInFiles,
-  onStartCollaboration,
   onUploadFiles,
   onSelectFileFromTree,
   onAttachArtifactToChat,
@@ -473,9 +471,6 @@ export default function ProjectOverviewCard({
         </div>
 
         <div className={styles.overviewActions}>
-          <Button type="primary" onClick={onStartCollaboration}>
-            {t("projects.chat.startCollaboration", "Start project collaboration")}
-          </Button>
           <Button onClick={onUploadFiles}>{t("projects.upload.button", "Upload Files")}</Button>
         </div>
       </div>

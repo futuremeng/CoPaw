@@ -1597,6 +1597,7 @@
     },
     "chat": {
       "workspaceLabel": "项目协作",
+      "initializingCollaboration": "正在准备项目协作会话...",
       "selectContext": "先开始项目协作，等你准备把工作固化为自动化方案时，再进入自动化设计。",
       "startCollaboration": "开始项目协作",
       "startAutomation": "打开自动化设计",

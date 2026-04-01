@@ -1597,6 +1597,7 @@
     },
     "chat": {
       "workspaceLabel": "Project workspace",
+      "initializingCollaboration": "Preparing project collaboration session...",
       "selectContext": "Start a project collaboration session first. Open automation design only when you are ready to formalize the workflow.",
       "startCollaboration": "Start project collaboration",
       "startAutomation": "Open automation design",
