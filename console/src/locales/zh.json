@@ -1547,6 +1547,7 @@
       "promote": "晋升为智能体技能",
       "promoteSuccess": "已晋升为智能体技能：{{name}}",
       "promoteFailed": "晋升项目技能失败。",
+      "promoteRequiresStable": "仅 stable 状态的技能可晋升。",
       "add": "新增",
       "emptyCategory": "暂无条目",
       "fields": {

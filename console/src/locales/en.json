@@ -131,6 +131,7 @@
       "promote": "Promote to Agent",
       "promoteSuccess": "Promoted to agent skill: {{name}}",
       "promoteFailed": "Failed to promote project skill.",
+      "promoteRequiresStable": "Only stable skills can be promoted.",
       "add": "Add",
       "emptyCategory": "No entries",
       "fields": {

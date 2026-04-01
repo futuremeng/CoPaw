@@ -986,6 +986,14 @@ def _promote_project_skill_to_agent(
             status_code=404,
             detail=f"Skill artifact '{artifact_id}' not found in project",
         )
+    if (skill_item.status or "").strip().lower() != "stable":
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Only stable skill artifacts can be promoted. "
+                f"Current status: '{skill_item.status or 'draft'}'."
+            ),
+        )
 
     skill_dir_name = _safe_artifact_slug(
         body.target_name or skill_item.id,

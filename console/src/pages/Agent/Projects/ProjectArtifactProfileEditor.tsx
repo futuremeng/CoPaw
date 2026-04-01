@@ -385,7 +385,11 @@ export default function ProjectArtifactProfileEditor({
                           <Button
                             size="small"
                             loading={promotingSkillId === item.id}
-                            disabled={!item.id || saving}
+                            disabled={
+                              !item.id ||
+                              saving ||
+                              (item.status || "").toLowerCase() !== "stable"
+                            }
                             onClick={() => void onPromoteSkill(item.id)}
                           >
                             {t("projects.artifacts.promote", "Promote to Agent")}

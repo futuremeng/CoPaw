@@ -1545,6 +1545,7 @@
       "promote": "Повысить до навыка агента",
       "promoteSuccess": "Повышено до навыка агента: {{name}}",
       "promoteFailed": "Не удалось повысить навык проекта.",
+      "promoteRequiresStable": "Повышать можно только навыки со статусом stable.",
       "add": "Добавить",
       "emptyCategory": "Записей пока нет",
       "fields": {

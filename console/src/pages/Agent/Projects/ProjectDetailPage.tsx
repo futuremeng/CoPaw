@@ -545,6 +545,19 @@ export default function ProjectDetailPage() {
       return;
     }
 
+    const skillItem = (selectedProject.artifact_profile?.skills || []).find(
+      (item) => item.id === artifactId,
+    );
+    if ((skillItem?.status || "").toLowerCase() !== "stable") {
+      message.warning(
+        t(
+          "projects.artifacts.promoteRequiresStable",
+          "Only stable skills can be promoted.",
+        ),
+      );
+      return;
+    }
+
     setPromotingSkillId(artifactId);
     try {
       const result = await agentsApi.promoteProjectSkillArtifact(

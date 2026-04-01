@@ -1545,6 +1545,7 @@
       "promote": "エージェントスキルへ昇格",
       "promoteSuccess": "エージェントスキルに昇格しました: {{name}}",
       "promoteFailed": "プロジェクトスキルの昇格に失敗しました。",
+      "promoteRequiresStable": "stable 状態のスキルのみ昇格できます。",
       "add": "追加",
       "emptyCategory": "項目はまだありません",
       "fields": {
