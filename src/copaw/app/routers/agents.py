@@ -5,6 +5,7 @@ Provides RESTful API for managing multiple agent instances.
 """
 import asyncio
 import copy
+import importlib.resources
 import json
 import logging
 import re
@@ -58,6 +59,72 @@ router = APIRouter(prefix="/agents", tags=["agents"])
 _PROJECT_TEMPLATES_DIR = (
     Path(__file__).resolve().parents[1] / "project_templates"
 )
+
+_DEFAULT_PROJECT_TEMPLATES = {
+    "projects/README.md": "# Projects\n\n"
+    "Store one project per subdirectory, for example:\n\n"
+    "- project-abcde123/\n"
+    "  - PROJECT.md\n"
+    "  - data/\n\n"
+    "The project metadata should be declared in PROJECT.md frontmatter:\n\n"
+    "---\n"
+    "id: project-abcde123\n"
+    "name: Example project\n"
+    "description: Short summary\n"
+    "status: active\n"
+    "data_dir: data\n"
+    "tags: [demo, draft]\n"
+    "artifact_profile:\n"
+    "    skills: []\n"
+    "    scripts: []\n"
+    "    flows: []\n"
+    "    cases: []\n"
+    "---\n\n"
+    "Project details go below.\n",
+    "project/AGENTS.md": "# Project Collaboration Rules\n\n"
+    "Use this file only for the highest-signal project rules.\n\n"
+    "- Workspace root is this project directory.\n"
+    "- Resolve files by relative path from project root.\n"
+    "- If a requested path starts with original/, retry {{DATA_DIR}}/ once.\n"
+    "- Prefer exact file reads over broad scans.\n"
+    "- Artifact mapping: scripts/*.py => script, pipelines/templates/*.json => flow, {{DATA_DIR}}/* and pipelines/runs/* => case.\n"
+    "- Put detailed behavior and distillation rules in skills/project-artifact-governor/SKILL.md.\n",
+    "project/data/README.md": "# {{DATA_DIR}} directory\n\n"
+    "Purpose: case artifacts and evidence outputs.\n\n"
+    "## Mapping to artifact kind\n"
+    "- Most files here are case artifacts.\n\n"
+    "## Notes\n"
+    "- Historical user references may use original/.\n"
+    "- In this project, use {{DATA_DIR}}/ as canonical location.\n",
+    "project/scripts/README.md": "# scripts directory\n\n"
+    "Purpose: executable scripts for project workflows.\n\n"
+    "## Mapping to artifact kind\n"
+    "- scripts/*.py are script artifacts.\n",
+    "project/pipelines/templates/README.md": "# pipelines/templates directory\n\n"
+    "Purpose: reusable flow templates.\n\n"
+    "## Mapping to artifact kind\n"
+    "- pipelines/templates/*.json are flow artifacts.\n",
+    "project/pipelines/runs/README.md": "# pipelines/runs directory\n\n"
+    "Purpose: run instances, manifests, and evidence.\n\n"
+    "## Mapping to artifact kind\n"
+    "- Run outputs are primarily case evidence.\n",
+    "project/skills/project-artifact-governor/SKILL.md": "---\n"
+    "name: project-artifact-governor\n"
+    "description: Enforce project path resolution and four-artifact governance for this project workspace.\n"
+    "---\n\n"
+    "# project-artifact-governor\n\n"
+    "## Procedure\n"
+    "1. Confirm workspace root.\n"
+    "2. Resolve each file via absolute path first.\n"
+    "3. If path uses original/, remap to {{DATA_DIR}}/ and retry once.\n"
+    "4. Classify outputs by directory + intent.\n"
+    "5. Generate concise structured result.\n\n"
+    "## Classification Rules\n"
+    "- scripts/*.py => script\n"
+    "- pipelines/templates/*.json => flow\n"
+    "- {{DATA_DIR}}/* or pipelines/runs/* outputs => case\n"
+    "- reusable method/checklist distilled from repeated evidence => skill\n",
+}
 
 
 class AgentSummary(BaseModel):
@@ -918,8 +985,33 @@ def _load_project_template_text(
     relative_path: str,
     replacements: dict[str, str] | None = None,
 ) -> str:
-    template_path = _PROJECT_TEMPLATES_DIR / relative_path
-    content = template_path.read_text(encoding="utf-8")
+    content: str | None = None
+
+    try:
+        template_resource = importlib.resources.files("copaw").joinpath(
+            "app", "project_templates", *relative_path.split("/")
+        )
+        if template_resource.is_file():
+            content = template_resource.read_text(encoding="utf-8")
+    except Exception:
+        content = None
+
+    if content is None:
+        template_path = _PROJECT_TEMPLATES_DIR / relative_path
+        if template_path.is_file():
+            content = template_path.read_text(encoding="utf-8")
+
+    if content is None:
+        content = _DEFAULT_PROJECT_TEMPLATES.get(relative_path)
+        if content is None:
+            raise FileNotFoundError(
+                f"Project template not found: {relative_path}"
+            )
+        logger.warning(
+            "Project template missing from package and source tree; using builtin fallback: %s",
+            relative_path,
+        )
+
     for key, value in (replacements or {}).items():
         content = content.replace(f"{{{{{key}}}}}", value)
     return content

@@ -8,6 +8,8 @@ from fastapi.testclient import TestClient
 
 from copaw.app.routers import agents as agents_router_module
 from copaw.app.routers.agents import (
+    CreateProjectRequest,
+    _create_project,
     _load_project_summary,
     _write_project_frontmatter,
 )
@@ -135,6 +137,46 @@ def test_update_artifact_distill_mode_endpoint(
     summary = _load_project_summary(workspace_dir / "projects" / project_id)
     assert summary is not None
     assert summary.artifact_distill_mode == "conversation_evidence"
+
+
+def test_create_project_uses_builtin_template_fallbacks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    empty_templates_dir = tmp_path / "missing-project-templates"
+    empty_templates_dir.mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setattr(
+        agents_router_module,
+        "_PROJECT_TEMPLATES_DIR",
+        empty_templates_dir,
+    )
+    monkeypatch.setattr(
+        agents_router_module.importlib.resources,
+        "files",
+        lambda _package: empty_templates_dir,
+    )
+
+    project = _create_project(
+        tmp_path,
+        CreateProjectRequest(
+            name="Fallback Project",
+            description="Created without packaged templates",
+        ),
+    )
+
+    project_dir = tmp_path / "projects" / project.id
+    assert (tmp_path / "projects" / "README.md").exists()
+    assert (project_dir / "AGENTS.md").exists()
+    assert (project_dir / "data" / "README.md").exists()
+    assert (project_dir / "pipelines" / "templates" / "README.md").exists()
+    assert (project_dir / "pipelines" / "runs" / "README.md").exists()
+    assert (
+        project_dir
+        / "skills"
+        / "project-artifact-governor"
+        / "SKILL.md"
+    ).exists()
 
 
 def test_distill_draft_uses_conversation_evidence_mode(
