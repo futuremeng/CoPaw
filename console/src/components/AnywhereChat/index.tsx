@@ -1500,7 +1500,7 @@ export default function AnywhereChat({
               {formatTokenCount(runtimeStatus.used_tokens)}/{formatTokenCount(runtimeStatus.context_window_tokens)} {t("chat.runtimeStatusTokens", "个令牌")}
             </span>
             <span style={{ fontSize: 18, fontWeight: 700, color: runtimeStatus.used_ratio >= 0.8 ? "#ff7875" : "#95de64" }}>
-              {Math.round(runtimeStatus.used_ratio * 100)}%
+              {(runtimeStatus.used_ratio * 100).toFixed(1)}%
             </span>
           </div>
           <div style={{ height: 8, borderRadius: 999, background: "rgba(255,255,255,0.12)", overflow: "hidden" }}>
@@ -1735,7 +1735,7 @@ export default function AnywhereChat({
             >
               <DashboardOutlined />
               <span style={{ fontSize: 12, fontWeight: 600 }}>
-                {Math.round(runtimeStatus.used_ratio * 100)}%
+                {(runtimeStatus.used_ratio * 100).toFixed(1)}%
               </span>
               <span style={{ fontSize: 11, fontWeight: 500 }}>
                 {runtimeTriggerLabel}

@@ -536,7 +536,7 @@ def _create_file_block_support_formatter(
                         msgs,
                     )
 
-                messages = await super()._format(msgs)
+                messages = await cast(Any, super())._format(msgs)
 
                 if video_subs:
                     _replace_video_placeholders(
@@ -717,7 +717,9 @@ def create_model_and_formatter(
             pass
 
     # Try to get agent-specific model first
+    agent_config = None
     model_slot = None
+    provider = None
     retry_config = None
     rate_limit_config = None
     if agent_id:
@@ -763,12 +765,50 @@ def create_model_and_formatter(
                 "or set an agent-specific model.",
             )
         provider_id = global_model.provider_id
+        provider = ProviderManager.get_instance().get_provider(provider_id)
 
     # Create the formatter based on the real model class
     formatter = _create_formatter_instance(model.__class__)
 
+    runtime_status_recorder = None
+    if agent_config is not None:
+        try:
+            from ..agents.utils import get_copaw_token_counter
+            from ..app.runner.runtime_status_store import (
+                RuntimeStatusRecorder,
+                resolve_context_window_tokens,
+                resolve_reserved_response_tokens,
+            )
+
+            token_counter = get_copaw_token_counter(agent_config)
+            reserved_response_tokens = resolve_reserved_response_tokens(provider)
+            context_window_tokens = resolve_context_window_tokens(
+                provider,
+                agent_config.running,
+                reserved_response_tokens,
+            )
+            runtime_status_recorder = RuntimeStatusRecorder(
+                token_counter=token_counter,
+                context_window_tokens=context_window_tokens,
+                reserved_response_tokens=reserved_response_tokens,
+                provider_id=provider_id,
+                model_id=getattr(model, "model_name", None),
+                profile_label=(
+                    "Local runtime" if getattr(provider, "is_local", False) else "Cloud/runtime"
+                ),
+            )
+        except Exception:
+            logger.debug(
+                "Failed to initialize runtime status recorder",
+                exc_info=True,
+            )
+
     # Wrap with retry logic for transient LLM API errors
-    wrapped_model = TokenRecordingModelWrapper(provider_id, model)
+    wrapped_model = TokenRecordingModelWrapper(
+        provider_id,
+        model,
+        runtime_status_recorder=runtime_status_recorder,
+    )
     wrapped_model = RetryChatModel(
         wrapped_model,
         retry_config=retry_config,
