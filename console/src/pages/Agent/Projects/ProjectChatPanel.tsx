@@ -144,16 +144,6 @@ export default function ProjectChatPanel({
                       : "Give me a from-zero-to-one kickoff checklist with the first three actions I can start today.",
                   ),
                 ]}
-                welcomePromptsWhenDraft={[
-                  t(
-                    "projects.chat.collaborationPrompt1",
-                    "Summarize the current project based on the available files and highlight missing inputs.",
-                  ),
-                  t(
-                    "projects.chat.collaborationPrompt2",
-                    "Suggest the next three actions to move this project forward without assuming a fixed flow yet.",
-                  ),
-                ]}
               />
             </div>
           ) : activeDesignChatId ? (

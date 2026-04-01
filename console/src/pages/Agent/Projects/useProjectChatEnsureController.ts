@@ -23,6 +23,50 @@ function getMetaString(meta: Record<string, unknown> | undefined, key: string): 
   return typeof value === "string" ? value : "";
 }
 
+function isProjectWorkspaceRelatedChat(chat: ChatSpec, projectId: string): boolean {
+  const meta =
+    chat.meta && typeof chat.meta === "object"
+      ? (chat.meta as Record<string, unknown>)
+      : undefined;
+  const focusType = getMetaString(meta, "focus_type");
+  const projectMetaId =
+    getMetaString(meta, "project_id") || getMetaString(meta, "project_request_id");
+  const focusPath = getMetaString(meta, "focus_path");
+  const sessionPrefix = `project-workspace-${projectId}-`;
+
+  if (focusType === "project_workspace") {
+    return !projectMetaId || projectMetaId === projectId;
+  }
+
+  if ((chat.session_id || "").startsWith(sessionPrefix)) {
+    return true;
+  }
+
+  if (projectMetaId && projectMetaId === projectId) {
+    return true;
+  }
+
+  if (focusPath === `projects/${projectId}`) {
+    return true;
+  }
+
+  return false;
+}
+
+function collectWorkspaceChatCandidates(chats: ChatSpec[], projectId: string): ChatSpec[] {
+  const parentChats = chats.filter((chat) =>
+    isProjectWorkspaceRelatedChat(chat, projectId),
+  );
+  const parentIds = new Set(parentChats.map((chat) => chat.id));
+  const linkedChats = chats.filter((chat) => parentIds.has(chat.session_id || ""));
+
+  const merged = new Map<string, ChatSpec>();
+  for (const chat of [...parentChats, ...linkedChats]) {
+    merged.set(chat.id, chat);
+  }
+  return Array.from(merged.values());
+}
+
 function sortChatsForRestore<T extends ChatSpec>(chats: T[]): T[] {
   const toMillis = (chat: ChatSpec): number => {
     const updatedTs = chat.updated_at ? Date.parse(chat.updated_at) : 0;
@@ -41,6 +85,20 @@ function sortChatsForRestore<T extends ChatSpec>(chats: T[]): T[] {
     }
     return toMillis(b) - toMillis(a);
   });
+}
+
+async function pickChatWithHistory(chats: ChatSpec[]): Promise<string> {
+  for (const chat of chats.slice(0, 20)) {
+    try {
+      const history = await chatApi.getChat(chat.id, { limit: 1 });
+      if ((history.messages || []).length > 0) {
+        return chat.id;
+      }
+    } catch {
+      // Skip invalid/unavailable chats and continue fallback scan.
+    }
+  }
+  return chats[0]?.id || "";
 }
 
 export default function useProjectChatEnsureController({
@@ -137,15 +195,13 @@ export default function useProjectChatEnsureController({
               ? (chat.meta as Record<string, unknown>)
               : undefined;
           const metaType = getMetaString(meta, "focus_type");
-          const metaProjectId = getMetaString(meta, "project_id");
-          if (metaType !== "project_workspace") {
-            return false;
-          }
-          return !metaProjectId || metaProjectId === selectedProject.id;
+          return metaType === "project_workspace" && isProjectWorkspaceRelatedChat(chat, selectedProject.id);
         });
 
         if (matched.length > 0) {
-          const restoredChatId = sortChatsForRestore(matched)[0]?.id || "";
+          const candidates = collectWorkspaceChatCandidates(chats, selectedProject.id);
+          const sorted = sortChatsForRestore(candidates.length > 0 ? candidates : matched);
+          const restoredChatId = await pickChatWithHistory(sorted);
           if (restoredChatId) {
             setWorkspaceFocusChatId(restoredChatId);
             setError("");
@@ -158,7 +214,19 @@ export default function useProjectChatEnsureController({
           (chat.session_id || "").startsWith(sessionPrefix),
         );
         if (bySession.length > 0) {
-          const restoredChatId = sortChatsForRestore(bySession)[0]?.id || "";
+          const sorted = sortChatsForRestore(bySession);
+          const restoredChatId = await pickChatWithHistory(sorted);
+          if (restoredChatId) {
+            setWorkspaceFocusChatId(restoredChatId);
+            setError("");
+            return restoredChatId;
+          }
+        }
+
+        const related = collectWorkspaceChatCandidates(chats, selectedProject.id);
+        if (related.length > 0) {
+          const sorted = sortChatsForRestore(related);
+          const restoredChatId = await pickChatWithHistory(sorted);
           if (restoredChatId) {
             setWorkspaceFocusChatId(restoredChatId);
             setError("");

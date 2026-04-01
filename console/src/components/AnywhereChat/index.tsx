@@ -37,7 +37,11 @@ import {
   mergeRuntimeStatusSnapshot,
 } from "../../utils/chatRuntimeStatus";
 import { IconButton } from "@agentscope-ai/design";
-import { copyText, extractCopyableText, toDisplayUrl } from "../../pages/Chat/utils";
+import {
+  copyText,
+  extractCopyableText,
+  toDisplayUrl,
+} from "../../pages/Chat/utils";
 
 type SessionContext = {
   session_id?: string;
@@ -77,7 +81,6 @@ interface AnywhereChatProps {
   welcomeDescription?: string;
   welcomePrompts?: string[];
   welcomePromptsWhenEmpty?: string[];
-  welcomePromptsWhenDraft?: string[];
   welcomePromptClickBehavior?: "submit" | "append";
   onNewChat?: () => void;
   onSelectHistoryChat?: (chatId: string) => void;
@@ -153,6 +156,62 @@ function extractUserTextFromInput(input?: ChatInputItem): string {
     .filter(Boolean)
     .join("\n")
     .trim();
+}
+
+function formatLocalDateTime(raw?: string): string {
+  if (!raw) {
+    return "";
+  }
+  const ts = Date.parse(raw);
+  if (!Number.isFinite(ts)) {
+    return raw;
+  }
+  return new Date(ts).toLocaleString([], {
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function getChatMeta(chat?: ChatSpec): Record<string, unknown> | undefined {
+  return chat?.meta && typeof chat.meta === "object"
+    ? (chat.meta as Record<string, unknown>)
+    : undefined;
+}
+
+function getMetaString(
+  meta: Record<string, unknown> | undefined,
+  key: string,
+): string {
+  const value = meta?.[key];
+  return typeof value === "string" ? value : "";
+}
+
+function getChatScope(chat?: ChatSpec, parent?: ChatSpec) {
+  const meta = getChatMeta(chat) || getChatMeta(parent);
+  return {
+    focusType: getMetaString(meta, "focus_type"),
+    projectId:
+      getMetaString(meta, "project_id") ||
+      getMetaString(meta, "project_request_id"),
+    runId: getMetaString(meta, "run_id"),
+    focusPath: getMetaString(meta, "focus_path"),
+    bindingKey:
+      getMetaString(meta, "focus_binding_key") ||
+      getMetaString(meta, "pipeline_binding_key"),
+  };
+}
+
+function toTimestamp(raw?: string | null): number {
+  if (!raw) {
+    return 0;
+  }
+  const ts = Date.parse(raw);
+  return Number.isFinite(ts) ? ts : 0;
 }
 
 function isFinalResponseStatus(status?: string): boolean {
@@ -248,7 +307,6 @@ export default function AnywhereChat({
   welcomeDescription,
   welcomePrompts,
   welcomePromptsWhenEmpty,
-  welcomePromptsWhenDraft,
   welcomePromptClickBehavior = "submit",
   onNewChat,
   onSelectHistoryChat,
@@ -273,15 +331,12 @@ export default function AnywhereChat({
   const [lastRuntimeStatusUpdatedAt, setLastRuntimeStatusUpdatedAt] = useState<number | null>(null);
   const [runtimeStatusError, setRuntimeStatusError] = useState<string | null>(null);
   const [transientMessages, setTransientMessages] = useState<Message[]>([]);
-  const [hasDraftContent, setHasDraftContent] = useState(false);
   const chatRef = useRef<IAgentScopeRuntimeWebUIRef>(null);
   const runtimeStatusRequestInFlight = useRef(false);
   const sessionIdRef = useRef(sessionId);
   const runtimeStatusRetryTimerRef = useRef<number | null>(null);
   const runtimeStatusRetryCountRef = useRef(0);
   const handledAutoAttachIdRef = useRef("");
-  const suppressNextDraftStateSyncRef = useRef(false);
-  const freezeDraftStateUntilRef = useRef(0);
 
   const getInputRoot = useCallback((): HTMLElement | null => {
     return document.querySelector(`.${hostClassName}`) as HTMLElement | null;
@@ -292,29 +347,8 @@ export default function AnywhereChat({
     return root?.querySelector("textarea") as HTMLTextAreaElement | null;
   }, [getInputRoot]);
 
-  const updateDraftContentState = useCallback(() => {
-    if (Date.now() < freezeDraftStateUntilRef.current) {
-      return;
-    }
-
-    if (suppressNextDraftStateSyncRef.current) {
-      suppressNextDraftStateSyncRef.current = false;
-      return;
-    }
-
-    const root = getInputRoot();
-    const textArea = getInputTextarea();
-    const hasText = Boolean((textArea?.value || "").trim());
-    const hasAttachments = Boolean(
-      root?.querySelector(
-        "[class$='-attachment'], [class*='-attachment-list-item'], [class*='-sender-header'] [class*='-attachment-list']",
-      ),
-    );
-    setHasDraftContent(hasText || hasAttachments);
-  }, [getInputRoot, getInputTextarea]);
-
   const setDraftInputValue = useCallback(
-    (nextValue: string, shouldFocus = true, shouldSyncDraftState = true) => {
+    (nextValue: string, shouldFocus = true) => {
     const textArea = getInputTextarea();
     if (!textArea) {
       return false;
@@ -328,15 +362,9 @@ export default function AnywhereChat({
     } else {
       textArea.value = nextValue;
     }
-    if (!shouldSyncDraftState) {
-      suppressNextDraftStateSyncRef.current = true;
-    }
     textArea.dispatchEvent(new Event("input", { bubbles: true }));
     if (shouldFocus) {
       textArea.focus();
-    }
-    if (shouldSyncDraftState) {
-      setHasDraftContent(Boolean(nextValue.trim()));
     }
     return true;
   }, [getInputTextarea]);
@@ -353,62 +381,64 @@ export default function AnywhereChat({
     setDraftInputValue(nextValue);
   }, [getInputTextarea, setDraftInputValue]);
 
-  const getMetaString = useCallback((meta: Record<string, unknown> | undefined, key: string): string => {
-    const value = meta?.[key];
-    return typeof value === "string" ? value : "";
-  }, []);
-
-  const toTimestamp = useCallback((raw?: string | null): number => {
-    if (!raw) {
-      return 0;
-    }
-    const ts = Date.parse(raw);
-    return Number.isFinite(ts) ? ts : 0;
-  }, []);
-
   const loadHistoryChats = useCallback(async () => {
     setHistoryLoading(true);
     try {
       const chats = await chatApi.listChats({ user_id: "default", channel: "console" });
       const current = chats.find((chat) => chat.id === sessionId);
-      const currentMeta =
-        current?.meta && typeof current.meta === "object"
-          ? (current.meta as Record<string, unknown>)
-          : undefined;
-      const currentFocusType = getMetaString(currentMeta, "focus_type");
-      const currentProjectId = getMetaString(currentMeta, "project_id");
-      const currentRunId = getMetaString(currentMeta, "run_id");
-      const currentBindingKey =
-        getMetaString(currentMeta, "focus_binding_key") ||
-        getMetaString(currentMeta, "pipeline_binding_key");
+      const currentParent = current?.session_id
+        ? chats.find((chat) => chat.id === current.session_id)
+        : undefined;
+      const currentScope = getChatScope(current, currentParent);
+      const currentWorkspaceParentIds = new Set(
+        chats
+          .filter((chat) => {
+            const scope = getChatScope(chat);
+            return (
+              currentScope.focusType === "project_workspace" &&
+              ((scope.focusType === "project_workspace" &&
+                (!currentScope.projectId || scope.projectId === currentScope.projectId)) ||
+                (!!currentScope.projectId && scope.focusPath === `projects/${currentScope.projectId}`) ||
+                (!!currentScope.projectId && scope.projectId === currentScope.projectId))
+            );
+          })
+          .map((chat) => chat.id),
+      );
 
       const filtered = chats.filter((chat) => {
-        const meta =
-          chat.meta && typeof chat.meta === "object"
-            ? (chat.meta as Record<string, unknown>)
-            : undefined;
-        const focusType = getMetaString(meta, "focus_type");
-        const projectId = getMetaString(meta, "project_id");
-        const runId = getMetaString(meta, "run_id");
-        const bindingKey =
-          getMetaString(meta, "focus_binding_key") ||
-          getMetaString(meta, "pipeline_binding_key");
+        const parent = chat.session_id
+          ? chats.find((item) => item.id === chat.session_id)
+          : undefined;
+        const scope = getChatScope(chat, parent);
 
-        if (currentFocusType === "project_workspace") {
-          return focusType === "project_workspace" && (!currentProjectId || projectId === currentProjectId);
-        }
-        if (currentFocusType === "project_run") {
+        if (currentScope.focusType === "project_workspace") {
+          const sessionPrefix = currentScope.projectId
+            ? `project-workspace-${currentScope.projectId}-`
+            : "";
           return (
-            focusType === "project_run" &&
-            (!currentRunId || runId === currentRunId) &&
-            (!currentProjectId || !projectId || projectId === currentProjectId)
+            (scope.focusType === "project_workspace" &&
+              (!currentScope.projectId || scope.projectId === currentScope.projectId)) ||
+            (!!sessionPrefix && (chat.session_id || "").startsWith(sessionPrefix)) ||
+            currentWorkspaceParentIds.has(chat.session_id || "") ||
+            (!!currentScope.projectId && scope.projectId === currentScope.projectId) ||
+            (!!currentScope.projectId && scope.focusPath === `projects/${currentScope.projectId}`)
           );
         }
-        if (currentFocusType === "pipeline_edit") {
-          return focusType === "pipeline_edit" && (!currentBindingKey || bindingKey === currentBindingKey);
+        if (currentScope.focusType === "project_run") {
+          return (
+            scope.focusType === "project_run" &&
+            (!currentScope.runId || scope.runId === currentScope.runId) &&
+            (!currentScope.projectId || !scope.projectId || scope.projectId === currentScope.projectId)
+          );
         }
-        if (currentBindingKey) {
-          return bindingKey === currentBindingKey;
+        if (currentScope.focusType === "pipeline_edit") {
+          return (
+            scope.focusType === "pipeline_edit" &&
+            (!currentScope.bindingKey || scope.bindingKey === currentScope.bindingKey)
+          );
+        }
+        if (currentScope.bindingKey) {
+          return scope.bindingKey === currentScope.bindingKey;
         }
         if (current?.session_id) {
           const basePrefix = current.session_id.replace(/-\d+$/, "");
@@ -423,14 +453,18 @@ export default function AnywhereChat({
         return bTs - aTs;
       });
 
-      setHistoryChats(filtered);
+      setHistoryChats(
+        filtered.filter(
+          (chat, index, array) => array.findIndex((item) => item.id === chat.id) === index,
+        ),
+      );
     } catch (error) {
       console.warn("AnywhereChat: failed to load history chats", error);
       setHistoryChats([]);
     } finally {
       setHistoryLoading(false);
     }
-  }, [getMetaString, sessionId, toTimestamp]);
+  }, [sessionId]);
 
   const updateTransientMessages = useCallback((messages: Message[]) => {
     setTransientMessages(messages);
@@ -614,49 +648,8 @@ export default function AnywhereChat({
     setRuntimeStatusFromApi(null);
     setRuntimeStatusError(null);
     setTransientMessages([]);
-    setHasDraftContent(false);
 
   }, [clearRuntimeStatusRetry, sessionId]);
-
-  useEffect(() => {
-    const root = getInputRoot();
-    if (!root) {
-      return;
-    }
-
-    let boundTextArea: HTMLTextAreaElement | null = null;
-    const handleInput = () => {
-      updateDraftContentState();
-    };
-
-    const bindInputListener = () => {
-      const textArea = root.querySelector("textarea") as HTMLTextAreaElement | null;
-      if (boundTextArea === textArea) {
-        return;
-      }
-      if (boundTextArea) {
-        boundTextArea.removeEventListener("input", handleInput);
-      }
-      boundTextArea = textArea;
-      if (boundTextArea) {
-        boundTextArea.addEventListener("input", handleInput);
-      }
-      updateDraftContentState();
-    };
-
-    bindInputListener();
-    const observer = new MutationObserver(() => {
-      bindInputListener();
-    });
-    observer.observe(root, { subtree: true, childList: true });
-
-    return () => {
-      observer.disconnect();
-      if (boundTextArea) {
-        boundTextArea.removeEventListener("input", handleInput);
-      }
-    };
-  }, [getInputRoot, updateDraftContentState]);
 
   useEffect(() => {
     if (!autoAttachRequest?.id) {
@@ -682,7 +675,7 @@ export default function AnywhereChat({
         if (cancelled) {
           return false;
         }
-        if (setDraftInputValue(draftText, false, false)) {
+        if (setDraftInputValue(draftText, false)) {
           return true;
         }
         await waitFor(intervalMs);
@@ -710,15 +703,11 @@ export default function AnywhereChat({
       try {
         const mode = autoAttachRequest.mode || "submit";
         if (mode === "draft") {
-          freezeDraftStateUntilRef.current = Date.now() + 1200;
           const draftText =
             autoAttachRequest.note ||
             "I attached files as context. Please review them and wait for my next instruction.";
 
           if (await waitForDraftInputReady(draftText)) {
-            window.setTimeout(() => {
-              freezeDraftStateUntilRef.current = 0;
-            }, 1300);
             handledAutoAttachIdRef.current = autoAttachRequest.id;
             onAutoAttachHandled?.({
               id: autoAttachRequest.id,
@@ -726,8 +715,6 @@ export default function AnywhereChat({
             });
             return;
           }
-
-          freezeDraftStateUntilRef.current = 0;
 
           throw new Error("chat_input_not_found");
         }
@@ -790,7 +777,6 @@ export default function AnywhereChat({
           ok: true,
         });
       } catch (error) {
-        freezeDraftStateUntilRef.current = 0;
         onAutoAttachHandled?.({
           id: autoAttachRequest.id,
           ok: false,
@@ -1098,9 +1084,7 @@ export default function AnywhereChat({
     const i18nConfig = getDefaultConfig(t);
     const senderConfig = (i18nConfig as SenderConfigShape).sender || {};
     const welcomeConfig = (i18nConfig.welcome || {}) as WelcomeConfigShape;
-    const selectedPromptValues = hasDraftContent
-      ? (welcomePromptsWhenDraft || welcomePrompts || [])
-      : (welcomePromptsWhenEmpty || welcomePrompts || []);
+    const selectedPromptValues = welcomePromptsWhenEmpty || welcomePrompts || [];
     const prompts =
       Array.isArray(selectedPromptValues) && selectedPromptValues.length > 0
         ? selectedPromptValues.map((value) => ({ value }))
@@ -1223,7 +1207,6 @@ export default function AnywhereChat({
     handleFileUpload,
     inputPlaceholder,
     isDark,
-    hasDraftContent,
     appendPromptToDraftInput,
     sessionId,
     singleSessionApi,
@@ -1232,7 +1215,6 @@ export default function AnywhereChat({
     welcomeGreeting,
     welcomePromptClickBehavior,
     welcomePrompts,
-    welcomePromptsWhenDraft,
     welcomePromptsWhenEmpty,
   ]);
 
@@ -1481,7 +1463,7 @@ export default function AnywhereChat({
       >
         {historyChats.map((chat) => {
           const title = (chat.name || chat.session_id || chat.id || "").trim() || t("chat.untitled", "Untitled chat");
-          const updatedAt = chat.updated_at || chat.created_at || "";
+          const updatedAt = formatLocalDateTime(chat.updated_at || chat.created_at || "");
           const isActive = chat.id === sessionId;
           return (
             <Button
