@@ -160,7 +160,7 @@
 }
 
 .columnRight {
-  flex: 1;
+  flex: 1 1 340px;
   min-width: 0;
   min-height: 0;
 
@@ -180,10 +180,20 @@
 }
 
 .columnChat {
-  width: 420px;
-  flex-shrink: 0;
+  width: auto;
+  flex: 1 1 clamp(560px, 38vw, 760px);
+  max-width: 860px;
   min-width: 0;
   min-height: 0;
+
+  :global(.copaw-chat-anywhere-chat) {
+    width: 100%;
+  }
+
+  :global([class*='copaw-markdown']) {
+    width: auto !important;
+    max-width: 100% !important;
+  }
 
   :global(.ant-card) {
     height: 100%;
@@ -1067,22 +1077,57 @@
   justify-content: center;
 }
 
+.uploadModal {
+  :global(.ant-modal) {
+    max-width: min(760px, calc(100vw - 32px));
+  }
+
+  :global(.ant-modal-content) {
+    max-height: calc(100vh - 48px);
+    display: flex;
+    flex-direction: column;
+  }
+
+  :global(.ant-modal-body) {
+    flex: 1;
+    min-height: 0;
+  }
+}
+
 .uploadModalBody {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 12px;
+  height: 100%;
+  min-height: 0;
 }
 
 .uploadDragger {
+  display: flex;
+  flex-direction: column;
+  min-height: 220px;
+  max-height: min(56vh, 460px);
+  overflow: hidden;
+
+  :global(.ant-upload-wrapper) {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+  }
+
   :global(.ant-upload) {
     min-height: 132px;
     padding: 18px 14px;
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
   }
 
   :global(.ant-upload-list) {
-    max-height: 240px;
+    min-height: 0;
+    max-height: min(36vh, 300px);
     overflow-y: auto;
   }
 

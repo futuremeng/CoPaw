@@ -32,6 +32,13 @@ export default function ProjectUploadModal({
       title={t("projects.upload.title", "Upload Project Files")}
       open={open}
       width={760}
+      wrapClassName={styles.uploadModal}
+      styles={{
+        body: {
+          maxHeight: "min(72vh, 640px)",
+          overflow: "hidden",
+        },
+      }}
       confirmLoading={uploadingFiles}
       onOk={onUpload}
       onCancel={onCancel}
