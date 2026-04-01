@@ -21,6 +21,8 @@ import type {
   DeleteProjectResponse,
   PromoteProjectArtifactRequest,
   PromoteProjectArtifactResponse,
+  DistillProjectSkillsDraftResponse,
+  ConfirmProjectSkillStableResponse,
   AgentPipelineDraftInfo,
   PipelineSaveStreamEvent,
   ProjectPipelineTemplateInfo,
@@ -150,6 +152,29 @@ export const agentsApi = {
       {
         method: "POST",
         body: JSON.stringify(body || {}),
+      },
+    ),
+
+  autoDistillProjectSkillsDraft: (
+    agentId: string,
+    projectId: string,
+  ) =>
+    request<DistillProjectSkillsDraftResponse>(
+      `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/artifacts/skills/distill-draft`,
+      {
+        method: "POST",
+      },
+    ),
+
+  confirmProjectSkillStable: (
+    agentId: string,
+    projectId: string,
+    artifactId: string,
+  ) =>
+    request<ConfirmProjectSkillStableResponse>(
+      `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/artifacts/skills/${encodeURIComponent(artifactId)}/confirm-stable`,
+      {
+        method: "POST",
       },
     ),
 

@@ -139,6 +139,12 @@
       "promoteConfirmOk": "Promote",
       "promotedBadge": "Promoted",
       "promotedAs": "as {{name}}",
+      "autoDraft": "Auto Draft from Files",
+      "autoDraftSuccess": "Auto drafted {{count}} skill artifacts (skipped {{skipped}}).",
+      "autoDraftFailed": "Failed to auto draft project skills.",
+      "confirmStable": "Confirm Stable",
+      "confirmStableSuccess": "Skill status confirmed as stable.",
+      "confirmStableFailed": "Failed to confirm skill as stable.",
       "add": "Add",
       "emptyCategory": "No entries",
       "fields": {

@@ -86,6 +86,20 @@ export interface PromoteProjectArtifactResponse {
   project: AgentProjectSummary;
 }
 
+export interface DistillProjectSkillsDraftResponse {
+  drafted_count: number;
+  skipped_count: number;
+  drafted_ids: string[];
+  project: AgentProjectSummary;
+}
+
+export interface ConfirmProjectSkillStableResponse {
+  confirmed: boolean;
+  artifact_id: string;
+  status: string;
+  project: AgentProjectSummary;
+}
+
 export interface ProjectPipelineTemplateStep {
   id: string;
   name: string;

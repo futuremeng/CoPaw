@@ -208,7 +208,9 @@ export default function ProjectDetailPage() {
   const [deletingProject, setDeletingProject] = useState(false);
   const [automationDrawerOpen, setAutomationDrawerOpen] = useState(false);
   const [artifactProfileSaving, setArtifactProfileSaving] = useState(false);
+  const [distillingSkills, setDistillingSkills] = useState(false);
   const [promotingSkillId, setPromotingSkillId] = useState("");
+  const [confirmingSkillId, setConfirmingSkillId] = useState("");
   const [autoAttachRequest, setAutoAttachRequest] = useState<ProjectChatAutoAttachRequest | null>(null);
   const [selectedAttachPaths, setSelectedAttachPaths] = useState<string[]>([]);
   const [sendingSelectedFiles, setSendingSelectedFiles] = useState(false);
@@ -630,6 +632,79 @@ export default function ProjectDetailPage() {
       throw err;
     } finally {
       setPromotingSkillId("");
+    }
+  }, [currentAgent, loadAgents, selectedProject, t]);
+
+  const handleAutoDistillSkillDrafts = useCallback(async () => {
+    if (!currentAgent || !selectedProject) {
+      return;
+    }
+
+    setDistillingSkills(true);
+    try {
+      const result = await agentsApi.autoDistillProjectSkillsDraft(
+        currentAgent.id,
+        selectedProject.id,
+      );
+      await loadAgents();
+      message.success(
+        t(
+          "projects.artifacts.autoDraftSuccess",
+          "Auto drafted {{count}} skill artifacts (skipped {{skipped}}).",
+          {
+            count: result.drafted_count,
+            skipped: result.skipped_count,
+          },
+        ),
+      );
+    } catch (err) {
+      console.error("failed to auto-distill project skills", err);
+      message.error(
+        t(
+          "projects.artifacts.autoDraftFailed",
+          "Failed to auto draft project skills.",
+        ),
+      );
+      throw err;
+    } finally {
+      setDistillingSkills(false);
+    }
+  }, [currentAgent, loadAgents, selectedProject, t]);
+
+  const handleConfirmArtifactSkillStable = useCallback(async (item: ProjectArtifactItem) => {
+    if (!currentAgent || !selectedProject || !item.id) {
+      return;
+    }
+
+    if ((item.status || "").toLowerCase() === "stable") {
+      return;
+    }
+
+    setConfirmingSkillId(item.id);
+    try {
+      await agentsApi.confirmProjectSkillStable(
+        currentAgent.id,
+        selectedProject.id,
+        item.id,
+      );
+      await loadAgents();
+      message.success(
+        t(
+          "projects.artifacts.confirmStableSuccess",
+          "Skill status confirmed as stable.",
+        ),
+      );
+    } catch (err) {
+      console.error("failed to confirm project skill stable", err);
+      message.error(
+        t(
+          "projects.artifacts.confirmStableFailed",
+          "Failed to confirm skill as stable.",
+        ),
+      );
+      throw err;
+    } finally {
+      setConfirmingSkillId("");
     }
   }, [currentAgent, loadAgents, selectedProject, t]);
 
@@ -1612,8 +1687,12 @@ export default function ProjectDetailPage() {
                 }}
                 onToggleHideBuiltInFiles={setHideBuiltInFiles}
                 artifactProfileSaving={artifactProfileSaving}
+                distillingSkills={distillingSkills}
                 promotingSkillId={promotingSkillId}
+                confirmingSkillId={confirmingSkillId}
                 onSaveArtifactProfile={handleSaveArtifactProfile}
+                onAutoDistillSkills={handleAutoDistillSkillDrafts}
+                onConfirmArtifactSkillStable={handleConfirmArtifactSkillStable}
                 onPromoteArtifactSkill={handlePromoteArtifactSkill}
               />
 

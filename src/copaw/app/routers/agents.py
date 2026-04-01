@@ -23,6 +23,8 @@ from fastapi import Path as PathParam
 from pydantic import BaseModel, Field, field_validator
 
 from ...agents.utils.file_handling import read_text_file_with_encoding_fallback
+from ...agents.skills_hub import install_skill_from_hub
+from ...agents.skills_manager import SkillConflictError
 from ..utils import schedule_agent_reload
 from ...config.config import (
     AgentProfileConfig,
@@ -205,6 +207,24 @@ class PromoteProjectArtifactResponse(BaseModel):
     artifact_id: str
     target_name: str
     target_path: str
+    project: ProjectSummary
+
+
+class DistillProjectSkillsDraftResponse(BaseModel):
+    """Response body for auto-distilling project skills into drafts."""
+
+    drafted_count: int
+    skipped_count: int
+    drafted_ids: list[str] = Field(default_factory=list)
+    project: ProjectSummary
+
+
+class ConfirmProjectSkillStableResponse(BaseModel):
+    """Response body for confirming one project skill artifact as stable."""
+
+    confirmed: bool
+    artifact_id: str
+    status: str
     project: ProjectSummary
 
 
@@ -963,6 +983,182 @@ def _build_promoted_skill_markdown(
     )
 
 
+def _auto_distill_project_skills_to_draft(
+    workspace_dir: Path,
+    project_id: str,
+) -> DistillProjectSkillsDraftResponse:
+    project_dir = _resolve_project_dir(workspace_dir, project_id)
+    summary = _load_project_summary(project_dir)
+    if summary is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Project '{project_id}' metadata not found",
+        )
+
+    skills_dir = project_dir / "skills"
+    if not skills_dir.exists() or not skills_dir.is_dir():
+        return DistillProjectSkillsDraftResponse(
+            drafted_count=0,
+            skipped_count=0,
+            drafted_ids=[],
+            project=summary,
+        )
+
+    metadata_file = Path(summary.metadata_file)
+    metadata, content_body = _read_project_frontmatter_with_body(metadata_file)
+    profile = _parse_project_artifact_profile(metadata)
+    existing_ids = {item.id for item in profile.skills}
+
+    drafted_ids: list[str] = []
+    skipped_count = 0
+
+    for md_file in sorted(skills_dir.rglob("*.md"), key=lambda item: item.as_posix()):
+        if not md_file.is_file():
+            continue
+        rel_path = md_file.resolve().relative_to(project_dir.resolve()).as_posix()
+        if rel_path.lower().endswith("/skill.md"):
+            # Skip skill market packaging files that may appear in nested folders.
+            skipped_count += 1
+            continue
+
+        artifact_seed = md_file.relative_to(skills_dir).with_suffix("").as_posix()
+        artifact_id = _safe_artifact_slug(
+            artifact_seed.replace("/", "-"),
+            f"skill-{generate_short_agent_id()}",
+        )
+        if artifact_id in existing_ids:
+            skipped_count += 1
+            continue
+
+        raw_text = read_text_file_with_encoding_fallback(md_file)
+        lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
+        heading = next(
+            (line.lstrip("#").strip() for line in lines if line.startswith("#")),
+            "",
+        )
+        name = heading or md_file.stem.replace("-", " ").replace("_", " ").strip()
+        if not name:
+            name = artifact_id
+
+        note_lines: list[str] = []
+        for line in lines:
+            if line.startswith("#"):
+                continue
+            note_lines.append(line)
+            if len(" ".join(note_lines)) >= 240:
+                break
+        distillation_note = " ".join(note_lines).strip() or (
+            f"Auto drafted from {rel_path}."
+        )
+
+        profile.skills.append(
+            ProjectArtifactItem(
+                id=artifact_id,
+                name=name,
+                kind="skill",
+                origin="project-distilled",
+                status="draft",
+                version="v0-draft",
+                artifact_file_path=rel_path,
+                tags=["auto-draft"],
+                derived_from_ids=[],
+                distillation_note=distillation_note,
+                market_source_id=None,
+                market_item_id=None,
+            ),
+        )
+        existing_ids.add(artifact_id)
+        drafted_ids.append(artifact_id)
+
+    normalized_profile = _normalize_project_artifact_profile_storage(profile)
+    _ensure_project_artifact_layout(project_dir)
+    metadata["artifact_profile"] = normalized_profile.model_dump(
+        mode="json",
+        exclude_none=True,
+    )
+    _write_project_frontmatter(metadata_file, metadata, content_body)
+
+    updated_summary = _load_project_summary(project_dir)
+    if updated_summary is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to load project after auto distillation",
+        )
+
+    return DistillProjectSkillsDraftResponse(
+        drafted_count=len(drafted_ids),
+        skipped_count=skipped_count,
+        drafted_ids=drafted_ids,
+        project=updated_summary,
+    )
+
+
+def _confirm_project_skill_stable(
+    workspace_dir: Path,
+    project_id: str,
+    artifact_id: str,
+) -> ConfirmProjectSkillStableResponse:
+    project_dir = _resolve_project_dir(workspace_dir, project_id)
+    summary = _load_project_summary(project_dir)
+    if summary is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Project '{project_id}' metadata not found",
+        )
+
+    skill_item = next(
+        (item for item in summary.artifact_profile.skills if item.id == artifact_id),
+        None,
+    )
+    if skill_item is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Skill artifact '{artifact_id}' not found in project",
+        )
+
+    metadata_file = Path(summary.metadata_file)
+    metadata, content_body = _read_project_frontmatter_with_body(metadata_file)
+    normalized_profile = _parse_project_artifact_profile(metadata)
+    for idx, item in enumerate(normalized_profile.skills):
+        if item.id != artifact_id:
+            continue
+        normalized_profile.skills[idx] = _normalize_project_artifact_storage(
+            item.model_copy(update={"status": "stable"}),
+            "skill",
+        )
+        break
+
+    metadata["artifact_profile"] = normalized_profile.model_dump(
+        mode="json",
+        exclude_none=True,
+    )
+    _write_project_frontmatter(metadata_file, metadata, content_body)
+
+    updated_summary = _load_project_summary(project_dir)
+    if updated_summary is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to load project after confirming stable",
+        )
+
+    confirmed_item = next(
+        (item for item in updated_summary.artifact_profile.skills if item.id == artifact_id),
+        None,
+    )
+    if confirmed_item is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to read updated skill artifact",
+        )
+
+    return ConfirmProjectSkillStableResponse(
+        confirmed=True,
+        artifact_id=artifact_id,
+        status=confirmed_item.status,
+        project=updated_summary,
+    )
+
+
 def _promote_project_skill_to_agent(
     workspace_dir: Path,
     project_id: str,
@@ -1347,9 +1543,9 @@ def _collect_agency_markdown_items(
     source: AgentsSquareSourceSpec,
     source_root: Path,
     repo_dir: Path,
-) -> tuple[list[AgentSquareItem], dict[str, dict[str, str]]]:
+) -> tuple[list[AgentSquareItem], dict[str, dict[str, Any]]]:
     items: list[AgentSquareItem] = []
-    import_index: dict[str, dict[str, str]] = {}
+    import_index: dict[str, dict[str, Any]] = {}
     seen: set[str] = set()
 
     for md_file in sorted(source_root.rglob("*.md")):
@@ -1409,7 +1605,7 @@ def _collect_index_json_items(
     source: AgentsSquareSourceSpec,
     source_root: Path,
     repo_dir: Path,
-) -> tuple[list[AgentSquareItem], dict[str, dict[str, str]]]:
+) -> tuple[list[AgentSquareItem], dict[str, dict[str, Any]]]:
     index_path = source_root
     if index_path.is_dir():
         index_path = index_path / "index.json"
@@ -1422,7 +1618,33 @@ def _collect_index_json_items(
         raise ValueError("SOURCE_INDEX_INVALID: agents must be list")
 
     items: list[AgentSquareItem] = []
-    import_index: dict[str, dict[str, str]] = {}
+    import_index: dict[str, dict[str, Any]] = {}
+
+    def _compose_content(node_doc: dict[str, Any], fallback_name: str) -> str:
+        raw_content = str(node_doc.get("content") or "").strip()
+        if raw_content:
+            return raw_content
+
+        soul = str(node_doc.get("soul") or node_doc.get("SOUL") or "").strip()
+        rules = str(node_doc.get("rules") or node_doc.get("RULES") or "").strip()
+        agents_md = str(
+            node_doc.get("agents_md")
+            or node_doc.get("agents")
+            or node_doc.get("AGENTS")
+            or ""
+        ).strip()
+
+        sections: list[str] = []
+        if agents_md:
+            sections.append(agents_md)
+        else:
+            sections.append(f"# {fallback_name}")
+        if soul:
+            sections.append("## SOUL\n" + soul)
+        if rules:
+            sections.append("## RULES\n" + rules)
+        return "\n\n".join(part for part in sections if part.strip())
+
     for node in agents:
         if not isinstance(node, dict):
             continue
@@ -1436,6 +1658,7 @@ def _collect_index_json_items(
         if rel and not source_url:
             source_url = _build_github_blob_url(source, rel)
             install_url = source_url
+        content = _compose_content(node, name)
 
         item = AgentSquareItem(
             source_id=source.id,
@@ -1456,10 +1679,11 @@ def _collect_index_json_items(
         import_index[f"{source.id}/{agent_id}"] = {
             "name": name,
             "description": str(node.get("description") or ""),
-            "content": str(node.get("content") or ""),
+            "content": content,
             "source_url": item.source_url,
             "license": item.license,
             "original_agent_id": agent_id,
+            "bundle": node.get("bundle") or node.get("exchange") or {},
         }
 
     return items, import_index
@@ -1469,7 +1693,7 @@ def _aggregate_square_items(
     cfg: AgentsSquareConfig,
     *,
     refresh: bool = False,
-) -> tuple[list[AgentSquareItem], list[SourceError], dict[str, object], dict[str, dict[str, str]]]:
+) -> tuple[list[AgentSquareItem], list[SourceError], dict[str, object], dict[str, dict[str, Any]]]:
     now = time.time()
     with _SQUARE_CACHE_LOCK:
         expires_at = float(_SQUARE_CACHE.get("expires_at", 0.0) or 0.0)
@@ -1491,7 +1715,7 @@ def _aggregate_square_items(
                 ),
                 meta,
                 cast(
-                    dict[str, dict[str, str]],
+                    dict[str, dict[str, Any]],
                     copy.deepcopy(_SQUARE_CACHE.get("import_index") or {}),
                 ),
             )
@@ -1499,7 +1723,7 @@ def _aggregate_square_items(
     started = time.time()
     items: list[AgentSquareItem] = []
     errors: list[SourceError] = []
-    import_index: dict[str, dict[str, str]] = {}
+    import_index: dict[str, dict[str, Any]] = {}
     enabled_sources = sorted(
         [s for s in cfg.sources if s.enabled],
         key=lambda s: (s.order, s.id),
@@ -1584,6 +1808,197 @@ def _aggregate_square_items(
         _SQUARE_CACHE["import_index"] = copy.deepcopy(import_index)
 
     return items, errors, meta, import_index
+
+
+def _extract_install_urls(bundle: dict[str, Any]) -> list[str]:
+    urls: list[str] = []
+
+    raw_skills = bundle.get("skills")
+    if isinstance(raw_skills, dict):
+        candidates = (
+            raw_skills.get("install_urls")
+            or raw_skills.get("bundle_urls")
+            or []
+        )
+    else:
+        candidates = raw_skills
+
+    if isinstance(candidates, list):
+        for item in candidates:
+            if isinstance(item, str) and item.strip():
+                urls.append(item.strip())
+            elif isinstance(item, dict):
+                url = str(item.get("install_url") or item.get("url") or "").strip()
+                if url:
+                    urls.append(url)
+
+    raw_skill_bundles = bundle.get("skill_bundles")
+    if isinstance(raw_skill_bundles, list):
+        for item in raw_skill_bundles:
+            if isinstance(item, str) and item.strip():
+                urls.append(item.strip())
+            elif isinstance(item, dict):
+                url = str(item.get("url") or item.get("install_url") or "").strip()
+                if url:
+                    urls.append(url)
+
+    return [u for u in dict.fromkeys(urls) if u]
+
+
+def _extract_builtin_tool_names(bundle: dict[str, Any]) -> list[str]:
+    names: list[str] = []
+
+    for key in ("tools", "builtin_tools"):
+        raw = bundle.get(key)
+        if not isinstance(raw, list):
+            continue
+        for item in raw:
+            if isinstance(item, str) and item.strip():
+                names.append(item.strip())
+            elif isinstance(item, dict):
+                name = str(item.get("name") or item.get("id") or "").strip()
+                if name:
+                    names.append(name)
+
+    manifest = bundle.get("manifest")
+    if isinstance(manifest, dict):
+        raw_manifest_tools = manifest.get("tools")
+        if isinstance(raw_manifest_tools, list):
+            for item in raw_manifest_tools:
+                if isinstance(item, str) and item.strip():
+                    names.append(item.strip())
+
+    return [n for n in dict.fromkeys(names) if n]
+
+
+def _extract_flow_items(bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    flows = bundle.get("workflows")
+    if flows is None:
+        flows = bundle.get("flows")
+    if not isinstance(flows, list):
+        return []
+    return [item for item in flows if isinstance(item, dict)]
+
+
+def _activate_import_bundle(
+    *,
+    workspace_dir: Path,
+    local_agent_id: str,
+    source_id: str,
+    original_agent_id: str,
+    bundle: dict[str, Any],
+    overwrite: bool,
+) -> dict[str, Any]:
+    summary: dict[str, Any] = {
+        "skills_installed": [],
+        "skill_errors": [],
+        "builtin_tools_enabled": [],
+        "flow_count": 0,
+        "project_id": "",
+    }
+
+    install_urls = _extract_install_urls(bundle)
+    for url in install_urls:
+        try:
+            result = install_skill_from_hub(
+                workspace_dir=workspace_dir,
+                bundle_url=url,
+                enable=True,
+                overwrite=overwrite,
+            )
+            summary["skills_installed"].append(result.name)
+        except SkillConflictError as exc:
+            summary["skill_errors"].append(str(exc.detail))
+        except Exception as exc:  # pylint: disable=broad-except
+            summary["skill_errors"].append(str(exc))
+
+    tool_names = _extract_builtin_tool_names(bundle)
+    if tool_names:
+        try:
+            agent_cfg = load_agent_config(local_agent_id)
+            tools_cfg = agent_cfg.tools
+            if tools_cfg is None:
+                summary.setdefault("tool_errors", []).append(
+                    "tools config is missing",
+                )
+            else:
+                changed = False
+                for tool_name in tool_names:
+                    builtin = tools_cfg.builtin_tools.get(tool_name)
+                    if builtin is None:
+                        continue
+                    if not builtin.enabled:
+                        builtin.enabled = True
+                        changed = True
+                    summary["builtin_tools_enabled"].append(tool_name)
+                if changed:
+                    save_agent_config(local_agent_id, agent_cfg)
+        except Exception as exc:  # pylint: disable=broad-except
+            summary.setdefault("tool_errors", []).append(str(exc))
+
+    flows = _extract_flow_items(bundle)
+    if flows:
+        project_seed = f"import-{source_id}-{original_agent_id}"
+        project_name = (
+            str(bundle.get("project_name") or "Imported Bundle").strip()
+            or "Imported Bundle"
+        )
+        project_summary = _create_project(
+            workspace_dir,
+            CreateProjectRequest(
+                id=project_seed,
+                name=project_name,
+                description="Imported workflow bundle",
+                tags=["imported", "bundle"],
+            ),
+        )
+        project_dir = _resolve_project_dir(workspace_dir, project_summary.id)
+        _ensure_project_artifact_layout(project_dir)
+
+        profile = project_summary.artifact_profile
+        for idx, flow in enumerate(flows, start=1):
+            flow_id_raw = str(
+                flow.get("id") or flow.get("name") or f"flow-{idx}",
+            ).strip()
+            flow_id = _slugify(flow_id_raw)
+            flow_name = str(flow.get("name") or flow_id_raw).strip() or flow_id
+            flow_version = str(flow.get("version") or "v0-draft").strip() or "v0-draft"
+            flow_content = str(flow.get("content") or flow.get("markdown") or "").strip()
+            if not flow_content:
+                flow_content = "```json\n" + json.dumps(
+                    flow,
+                    ensure_ascii=False,
+                    indent=2,
+                ) + "\n```"
+
+            flow_item = _normalize_project_artifact_storage(
+                ProjectArtifactItem(
+                    id=flow_id,
+                    name=flow_name,
+                    kind="flow",
+                    origin="imported-bundle",
+                    status="active",
+                    version=flow_version,
+                    distillation_note="Imported from agent exchange bundle.",
+                ),
+                "flow",
+            )
+            artifact_file = project_dir / flow_item.artifact_file_path
+            artifact_file.parent.mkdir(parents=True, exist_ok=True)
+            artifact_file.write_text(flow_content + "\n", encoding="utf-8")
+
+            if all(existing.id != flow_item.id for existing in profile.flows):
+                profile.flows.append(flow_item)
+
+        updated_summary = _update_project_artifact_profile(
+            workspace_dir,
+            project_summary.id,
+            profile,
+        )
+        summary["flow_count"] = len(flows)
+        summary["project_id"] = updated_summary.id
+
+    return summary
 
 
 def _find_imported_agent(
@@ -2118,6 +2533,26 @@ async def import_square_agent(
 
     (workspace_dir / "AGENTS.md").write_text(content + "\n", encoding="utf-8")
 
+    bundle_payload = selected_payload.get("bundle")
+    if isinstance(bundle_payload, str):
+        try:
+            bundle_payload = json.loads(bundle_payload)
+        except Exception:
+            bundle_payload = {}
+    if not isinstance(bundle_payload, dict):
+        bundle_payload = {}
+
+    activation_summary: dict[str, Any] | None = None
+    if bundle_payload:
+        activation_summary = _activate_import_bundle(
+            workspace_dir=workspace_dir,
+            local_agent_id=local_agent_id,
+            source_id=req.source_id,
+            original_agent_id=req.agent_id,
+            bundle=bundle_payload,
+            overwrite=overwrite,
+        )
+
     imported_from_payload = {
         "source_id": req.source_id,
         "source_url": selected_payload.get("source_url") or selected_item.source_url,
@@ -2125,6 +2560,11 @@ async def import_square_agent(
         "original_agent_id": req.agent_id,
         "imported_at": str(int(time.time())),
     }
+    if activation_summary is not None:
+        imported_from_payload["activation_summary"] = json.dumps(
+            activation_summary,
+            ensure_ascii=False,
+        )
     _persist_import_metadata(workspace_dir, imported_from_payload)
 
     return ImportAgentResponse(
@@ -2617,6 +3057,71 @@ async def update_project_artifact_profile(
             Path(workspace.workspace_dir),
             projectId,
             body,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post(
+    "/{agentId}/projects/{projectId}/artifacts/skills/distill-draft",
+    response_model=DistillProjectSkillsDraftResponse,
+    summary="Auto-distill project skills as draft",
+    description=(
+        "Scan project skills markdown files and append missing skill artifacts "
+        "with draft status"
+    ),
+)
+async def auto_distill_project_skills_draft(
+    request: Request,
+    agentId: str = PathParam(...),
+    projectId: str = PathParam(...),
+) -> DistillProjectSkillsDraftResponse:
+    """Auto-distill project skill artifacts as draft entries."""
+    manager = _get_multi_agent_manager(request)
+
+    try:
+        workspace = await manager.get_agent(agentId)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    try:
+        return _auto_distill_project_skills_to_draft(
+            Path(workspace.workspace_dir),
+            projectId,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post(
+    "/{agentId}/projects/{projectId}/artifacts/skills/{artifactId}/confirm-stable",
+    response_model=ConfirmProjectSkillStableResponse,
+    summary="Confirm one project skill as stable",
+    description="Set one project skill artifact status to stable",
+)
+async def confirm_project_skill_stable(
+    request: Request,
+    agentId: str = PathParam(...),
+    projectId: str = PathParam(...),
+    artifactId: str = PathParam(...),
+) -> ConfirmProjectSkillStableResponse:
+    """Mark one project skill artifact as stable by explicit confirmation."""
+    manager = _get_multi_agent_manager(request)
+
+    try:
+        workspace = await manager.get_agent(agentId)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    try:
+        return _confirm_project_skill_stable(
+            Path(workspace.workspace_dir),
+            projectId,
+            artifactId,
         )
     except HTTPException:
         raise

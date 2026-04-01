@@ -149,16 +149,24 @@ function normalizeArtifactProfile(
 interface ProjectArtifactProfileEditorProps {
   value?: ProjectArtifactProfile;
   saving: boolean;
+  distillingSkills?: boolean;
   promotingSkillId?: string;
+  confirmingSkillId?: string;
   onSave: (profile: ProjectArtifactProfile) => Promise<void>;
+  onAutoDistillSkills: () => Promise<void>;
+  onConfirmSkillStable: (item: ProjectArtifactItem) => Promise<void>;
   onPromoteSkill: (item: ProjectArtifactItem) => Promise<void>;
 }
 
 export default function ProjectArtifactProfileEditor({
   value,
   saving,
+  distillingSkills,
   promotingSkillId,
+  confirmingSkillId,
   onSave,
+  onAutoDistillSkills,
+  onConfirmSkillStable,
   onPromoteSkill,
 }: ProjectArtifactProfileEditorProps) {
   const { t } = useTranslation();
@@ -268,13 +276,27 @@ export default function ProjectArtifactProfileEditor({
                 <div className={styles.subSectionTitle}>
                   {t(meta.labelKey, meta.defaultLabel)}
                 </div>
-                <Button
-                  size="small"
-                  icon={<PlusOutlined />}
-                  onClick={() => addItem(meta.key, meta.kind)}
-                >
-                  {t("projects.artifacts.add", "Add")}
-                </Button>
+                <div className={styles.artifactEditorHeaderActions}>
+                  <Button
+                    size="small"
+                    icon={<PlusOutlined />}
+                    onClick={() => addItem(meta.key, meta.kind)}
+                  >
+                    {t("projects.artifacts.add", "Add")}
+                  </Button>
+                  {meta.kind === "skill" ? (
+                    <Button
+                      size="small"
+                      loading={Boolean(distillingSkills)}
+                      onClick={() => void onAutoDistillSkills()}
+                    >
+                      {t(
+                        "projects.artifacts.autoDraft",
+                        "Auto Draft from Files",
+                      )}
+                    </Button>
+                  ) : null}
+                </div>
               </div>
 
               {(draft[meta.key] || []).length === 0 ? (
@@ -404,6 +426,21 @@ export default function ProjectArtifactProfileEditor({
                             ) : null}
                           </div>
                           <div className={styles.artifactEditorActions}>
+                            <Button
+                              size="small"
+                              loading={confirmingSkillId === item.id}
+                              disabled={
+                                !item.id ||
+                                saving ||
+                                (item.status || "").toLowerCase() === "stable"
+                              }
+                              onClick={() => void onConfirmSkillStable(item)}
+                            >
+                              {t(
+                                "projects.artifacts.confirmStable",
+                                "Confirm Stable",
+                              )}
+                            </Button>
                             <Button
                               size="small"
                               loading={promotingSkillId === item.id}

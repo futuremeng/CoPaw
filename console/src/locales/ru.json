@@ -1553,6 +1553,12 @@
       "promoteConfirmOk": "Повысить",
       "promotedBadge": "Повышено",
       "promotedAs": "опубликовано как {{name}}",
+      "autoDraft": "Авточерновик из файлов",
+      "autoDraftSuccess": "Автоматически создано {{count}} черновиков навыков (пропущено {{skipped}}).",
+      "autoDraftFailed": "Не удалось автоматически создать черновики навыков проекта.",
+      "confirmStable": "Подтвердить stable",
+      "confirmStableSuccess": "Статус навыка подтверждён как stable.",
+      "confirmStableFailed": "Не удалось подтвердить статус stable для навыка.",
       "add": "Добавить",
       "emptyCategory": "Записей пока нет",
       "fields": {

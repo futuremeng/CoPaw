@@ -1553,6 +1553,12 @@
       "promoteConfirmOk": "昇格する",
       "promotedBadge": "昇格済み",
       "promotedAs": "公開名: {{name}}",
+      "autoDraft": "ファイルから自動下書き",
+      "autoDraftSuccess": "{{count}} 件のスキルを自動下書きしました（{{skipped}} 件をスキップ）。",
+      "autoDraftFailed": "プロジェクトスキルの自動下書きに失敗しました。",
+      "confirmStable": "stable として確定",
+      "confirmStableSuccess": "スキル状態を stable に確定しました。",
+      "confirmStableFailed": "スキルを stable に確定できませんでした。",
       "add": "追加",
       "emptyCategory": "項目はまだありません",
       "fields": {

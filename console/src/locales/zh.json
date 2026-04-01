@@ -1555,6 +1555,12 @@
       "promoteConfirmOk": "确认晋升",
       "promotedBadge": "已晋升",
       "promotedAs": "已发布为 {{name}}",
+      "autoDraft": "从文件自动草拟",
+      "autoDraftSuccess": "已自动草拟 {{count}} 个技能条目（跳过 {{skipped}} 个）。",
+      "autoDraftFailed": "自动草拟项目技能失败。",
+      "confirmStable": "一键确认为 stable",
+      "confirmStableSuccess": "技能状态已确认为 stable。",
+      "confirmStableFailed": "确认技能 stable 状态失败。",
       "add": "新增",
       "emptyCategory": "暂无条目",
       "fields": {

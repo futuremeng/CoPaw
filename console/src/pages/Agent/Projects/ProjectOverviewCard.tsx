@@ -43,8 +43,12 @@ interface ProjectOverviewCardProps {
   onAttachArtifactToChat: (path: string) => void;
   onToggleHideBuiltInFiles: (value: boolean) => void;
   artifactProfileSaving: boolean;
+  distillingSkills: boolean;
   promotingSkillId: string;
+  confirmingSkillId: string;
   onSaveArtifactProfile: (profile: ProjectArtifactProfile) => Promise<void>;
+  onAutoDistillSkills: () => Promise<void>;
+  onConfirmArtifactSkillStable: (item: ProjectArtifactItem) => Promise<void>;
   onPromoteArtifactSkill: (item: ProjectArtifactItem) => Promise<void>;
 }
 
@@ -239,8 +243,12 @@ export default function ProjectOverviewCard({
   onAttachArtifactToChat,
   onToggleHideBuiltInFiles,
   artifactProfileSaving,
+  distillingSkills,
   promotingSkillId,
+  confirmingSkillId,
   onSaveArtifactProfile,
+  onAutoDistillSkills,
+  onConfirmArtifactSkillStable,
   onPromoteArtifactSkill,
 }: ProjectOverviewCardProps) {
   const { t } = useTranslation();
@@ -343,8 +351,12 @@ export default function ProjectOverviewCard({
           <ProjectArtifactProfileEditor
             value={artifactProfile}
             saving={artifactProfileSaving}
+            distillingSkills={distillingSkills}
             promotingSkillId={promotingSkillId}
+            confirmingSkillId={confirmingSkillId}
             onSave={onSaveArtifactProfile}
+            onAutoDistillSkills={onAutoDistillSkills}
+            onConfirmSkillStable={onConfirmArtifactSkillStable}
             onPromoteSkill={onPromoteArtifactSkill}
           />
         </div>
