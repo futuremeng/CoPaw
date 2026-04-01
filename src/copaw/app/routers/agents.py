@@ -55,6 +55,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
+_PROJECT_TEMPLATES_DIR = (
+    Path(__file__).resolve().parents[1] / "project_templates"
+)
+
 
 class AgentSummary(BaseModel):
     """Agent summary information."""
@@ -905,34 +909,93 @@ def _ensure_projects_layout(workspace_dir: Path) -> None:
         return
 
     readme_path.write_text(
-        """# Projects
-
-Store one project per subdirectory, for example:
-
-- project-abcde123/
-  - PROJECT.md
-  - data/
-
-The project metadata should be declared in PROJECT.md frontmatter:
-
----
-id: project-abcde123
-name: Example project
-description: Short summary
-status: active
-data_dir: data
-tags: [demo, draft]
-artifact_profile:
-    skills: []
-    scripts: []
-    flows: []
-    cases: []
----
-
-Project details go below.
-""",
+        _load_project_template_text("projects/README.md"),
         encoding="utf-8",
     )
+
+
+def _load_project_template_text(
+    relative_path: str,
+    replacements: dict[str, str] | None = None,
+) -> str:
+    template_path = _PROJECT_TEMPLATES_DIR / relative_path
+    content = template_path.read_text(encoding="utf-8")
+    for key, value in (replacements or {}).items():
+        content = content.replace(f"{{{{{key}}}}}", value)
+    return content
+
+
+def _scaffold_project_governance_files(
+    project_dir: Path,
+    data_subdir: str,
+) -> None:
+    """Create default governance files for new projects.
+
+    Files are created only when missing, so callers can safely re-run this.
+    """
+
+    agents_md = project_dir / "AGENTS.md"
+    if not agents_md.exists():
+        agents_md.write_text(
+            _load_project_template_text(
+                "project/AGENTS.md",
+                {"DATA_DIR": data_subdir},
+            ),
+            encoding="utf-8",
+        )
+
+    data_readme = project_dir / data_subdir / "README.md"
+    if not data_readme.exists():
+        data_readme.write_text(
+            _load_project_template_text(
+                "project/data/README.md",
+                {"DATA_DIR": data_subdir},
+            ),
+            encoding="utf-8",
+        )
+
+    scripts_readme = project_dir / "scripts" / "README.md"
+    scripts_readme.parent.mkdir(parents=True, exist_ok=True)
+    if not scripts_readme.exists():
+        scripts_readme.write_text(
+            _load_project_template_text("project/scripts/README.md"),
+            encoding="utf-8",
+        )
+
+    templates_readme = project_dir / "pipelines" / "templates" / "README.md"
+    if not templates_readme.exists():
+        templates_readme.write_text(
+            _load_project_template_text(
+                "project/pipelines/templates/README.md",
+            ),
+            encoding="utf-8",
+        )
+
+    runs_readme = project_dir / "pipelines" / "runs" / "README.md"
+    runs_readme.parent.mkdir(parents=True, exist_ok=True)
+    if not runs_readme.exists():
+        runs_readme.write_text(
+            _load_project_template_text(
+                "project/pipelines/runs/README.md",
+            ),
+            encoding="utf-8",
+        )
+
+    skill_md = (
+        project_dir
+        / "skills"
+        / "project-artifact-governor"
+        / "SKILL.md"
+    )
+    skill_md.parent.mkdir(parents=True, exist_ok=True)
+    if not skill_md.exists():
+        skill_md.write_text(
+            _load_project_template_text(
+                "project/skills/project-artifact-governor/SKILL.md",
+                {"DATA_DIR": data_subdir},
+            ),
+            encoding="utf-8",
+        )
 
 
 def _resolve_project_dir(workspace_dir: Path, project_id: str) -> Path:
@@ -1682,6 +1745,7 @@ def _create_project(
     }
     body_text = (body.description or "").strip() or f"# {project_name}"
     _write_project_frontmatter(metadata_file, metadata, body_text)
+    _scaffold_project_governance_files(project_dir, data_subdir)
 
     summary = _load_project_summary(project_dir)
     if summary is None:
@@ -1706,6 +1770,16 @@ def _is_safe_relative_path(rel_path: str) -> bool:
     if candidate.is_absolute() or ".." in candidate.parts:
         return False
     return True
+
+
+def _rewrite_original_to_data_path(rel_path: str) -> str | None:
+    normalized = rel_path.strip().replace("\\", "/")
+    if not normalized.startswith("original/"):
+        return None
+    remainder = normalized[len("original/") :]
+    if not remainder:
+        return None
+    return f"data/{remainder}"
 
 
 def _list_project_files(project_dir: Path) -> list[ProjectFileInfo]:
@@ -1739,10 +1813,18 @@ def _read_project_text_file(project_dir: Path, rel_path: str) -> str:
     if not _is_safe_relative_path(rel_path):
         raise HTTPException(status_code=400, detail="Invalid file path")
 
-    target = (project_dir / rel_path).resolve()
+    target_rel_path = rel_path
+    target = (project_dir / target_rel_path).resolve()
     project_root = project_dir.resolve()
     if not str(target).startswith(str(project_root)):
         raise HTTPException(status_code=400, detail="Invalid file path")
+    if not target.exists() or not target.is_file():
+        fallback_rel_path = _rewrite_original_to_data_path(target_rel_path)
+        if fallback_rel_path and _is_safe_relative_path(fallback_rel_path):
+            fallback_target = (project_dir / fallback_rel_path).resolve()
+            if str(fallback_target).startswith(str(project_root)) and fallback_target.exists() and fallback_target.is_file():
+                target_rel_path = fallback_rel_path
+                target = fallback_target
     if not target.exists() or not target.is_file():
         raise HTTPException(
             status_code=404, detail=f"File '{rel_path}' not found"

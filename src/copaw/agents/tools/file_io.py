@@ -45,6 +45,28 @@ def _resolve_file_path(file_path: str) -> str:
         return str(workspace_dir / file_path)
 
 
+def _resolve_original_alias_path(requested_path: str) -> str | None:
+    """Resolve legacy original/* path to data/* when available.
+
+    This is a compatibility fallback for project workspaces that migrated
+    materials from original/ to data/.
+    """
+    normalized = requested_path.strip().replace("\\", "/")
+    if not normalized.startswith("original/"):
+        return None
+
+    remainder = normalized[len("original/") :]
+    if not remainder:
+        return None
+
+    fallback_requested = f"data/{remainder}"
+    fallback_resolved = _resolve_file_path(fallback_requested)
+    if os.path.exists(fallback_resolved):
+        return fallback_resolved
+
+    return None
+
+
 def _get_encoding_for_file(file_path: str) -> str:
     """Determine the appropriate encoding for a file based on its type.
 
@@ -115,7 +137,13 @@ async def read_file(  # pylint: disable=too-many-return-statements
                 ],
             )
 
+    requested_path = file_path
     file_path = _resolve_file_path(file_path)
+
+    if not os.path.exists(file_path):
+        fallback_path = _resolve_original_alias_path(requested_path)
+        if fallback_path:
+            file_path = fallback_path
 
     if not os.path.exists(file_path):
         return ToolResponse(
@@ -287,7 +315,13 @@ async def edit_file(
             ],
         )
 
+    requested_path = file_path
     resolved_path = _resolve_file_path(file_path)
+
+    if not os.path.exists(resolved_path):
+        fallback_path = _resolve_original_alias_path(requested_path)
+        if fallback_path:
+            resolved_path = fallback_path
 
     if not os.path.exists(resolved_path):
         return ToolResponse(

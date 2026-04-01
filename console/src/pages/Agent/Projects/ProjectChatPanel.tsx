@@ -123,8 +123,8 @@ export default function ProjectChatPanel({
                     ? "projects.chat.collaborationWelcomeDescription"
                     : "projects.chat.collaborationWelcomeDescriptionEmptyProject",
                   hasUserFiles
-                    ? "Use this space to understand the project, organize materials, and plan the next step before opening automation."
-                    : "This is a new project. Start by clarifying goals, scope, and expected outcomes, then prepare the first batch of materials.",
+                    ? "Use this space to understand the project, organize materials, and plan the next step. In your first reply, confirm workspace root and path mapping (original/* -> data/*) before drafting actions."
+                    : "This is a new project. Start by clarifying goals, scope, and expected outcomes, then confirm workspace root and path mapping before preparing the first batch of materials.",
                 )}
                 welcomePromptsWhenEmpty={[
                   t(
@@ -132,16 +132,16 @@ export default function ProjectChatPanel({
                       ? "projects.chat.collaborationPromptEmpty1"
                       : "projects.chat.collaborationPromptEmptyNewProject1",
                     hasUserFiles
-                      ? "Help me clarify this project's goal, current stage, and expected deliverable."
-                      : "This is a new project. Help me define the goal, scope, milestones, and acceptance criteria.",
+                      ? "First confirm workspace root and map original/* to data/*. Then help me clarify this project's goal, current stage, and expected deliverable."
+                      : "This is a new project. First confirm workspace root and path mapping, then help me define goal, scope, milestones, and acceptance criteria.",
                   ),
                   t(
                     hasUserFiles
                       ? "projects.chat.collaborationPromptEmpty2"
                       : "projects.chat.collaborationPromptEmptyNewProject2",
                     hasUserFiles
-                      ? "I have provided materials. Summarize the current state and point out missing information."
-                      : "Give me a from-zero-to-one kickoff checklist with the first three actions I can start today.",
+                      ? "I have provided materials. Summarize current state with exact file paths, point out missing information, and avoid guessing non-existent paths."
+                      : "Give me a from-zero-to-one kickoff checklist with the first three actions, and include where each artifact should be stored (skills/scripts/flows/cases).",
                   ),
                 ]}
               />

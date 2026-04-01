@@ -53,6 +53,7 @@ include-package-data = true
 # Dockerfile copies console build output to src/copaw/console/ (no dist subdir).
 "copaw" = [
     "console/**",
+    "app/project_templates/**",
     "agents/md_files/**",
     "agents/skills/**",
     "tokenizer/**",
