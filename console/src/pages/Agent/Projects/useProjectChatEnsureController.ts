@@ -58,13 +58,32 @@ function collectWorkspaceChatCandidates(chats: ChatSpec[], projectId: string): C
     isProjectWorkspaceRelatedChat(chat, projectId),
   );
   const parentIds = new Set(parentChats.map((chat) => chat.id));
-  const linkedChats = chats.filter((chat) => parentIds.has(chat.session_id || ""));
 
-  const merged = new Map<string, ChatSpec>();
-  for (const chat of [...parentChats, ...linkedChats]) {
-    merged.set(chat.id, chat);
+  const childrenByParent = new Map<string, ChatSpec[]>();
+  for (const chat of chats) {
+    if (!chat.session_id) {
+      continue;
+    }
+    const children = childrenByParent.get(chat.session_id) || [];
+    children.push(chat);
+    childrenByParent.set(chat.session_id, children);
   }
-  return Array.from(merged.values());
+
+  const relatedIds = new Set(parentIds);
+  const queue = [...parentIds];
+  while (queue.length > 0) {
+    const currentId = queue.shift() as string;
+    const children = childrenByParent.get(currentId) || [];
+    for (const child of children) {
+      if (relatedIds.has(child.id)) {
+        continue;
+      }
+      relatedIds.add(child.id);
+      queue.push(child.id);
+    }
+  }
+
+  return chats.filter((chat) => relatedIds.has(chat.id));
 }
 
 function sortChatsForRestore<T extends ChatSpec>(chats: T[]): T[] {
@@ -99,6 +118,12 @@ async function pickChatWithHistory(chats: ChatSpec[]): Promise<string> {
     }
   }
   return chats[0]?.id || "";
+}
+
+function pickLeafChatCandidates(chats: ChatSpec[]): ChatSpec[] {
+  const parentIds = new Set(chats.map((chat) => chat.session_id).filter(Boolean) as string[]);
+  const leaves = chats.filter((chat) => !parentIds.has(chat.id));
+  return leaves.length > 0 ? leaves : chats;
 }
 
 export default function useProjectChatEnsureController({
@@ -200,7 +225,8 @@ export default function useProjectChatEnsureController({
 
         if (matched.length > 0) {
           const candidates = collectWorkspaceChatCandidates(chats, selectedProject.id);
-          const sorted = sortChatsForRestore(candidates.length > 0 ? candidates : matched);
+          const leafCandidates = pickLeafChatCandidates(candidates.length > 0 ? candidates : matched);
+          const sorted = sortChatsForRestore(leafCandidates);
           const restoredChatId = await pickChatWithHistory(sorted);
           if (restoredChatId) {
             setWorkspaceFocusChatId(restoredChatId);
@@ -225,7 +251,8 @@ export default function useProjectChatEnsureController({
 
         const related = collectWorkspaceChatCandidates(chats, selectedProject.id);
         if (related.length > 0) {
-          const sorted = sortChatsForRestore(related);
+          const leafCandidates = pickLeafChatCandidates(related);
+          const sorted = sortChatsForRestore(leafCandidates);
           const restoredChatId = await pickChatWithHistory(sorted);
           if (restoredChatId) {
             setWorkspaceFocusChatId(restoredChatId);

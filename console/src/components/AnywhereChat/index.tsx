@@ -214,6 +214,52 @@ function toTimestamp(raw?: string | null): number {
   return Number.isFinite(ts) ? ts : 0;
 }
 
+function collectDescendantChatIds(chats: ChatSpec[], seedIds: string[]): Set<string> {
+  const childrenByParent = new Map<string, ChatSpec[]>();
+  for (const chat of chats) {
+    if (!chat.session_id) {
+      continue;
+    }
+    const children = childrenByParent.get(chat.session_id) || [];
+    children.push(chat);
+    childrenByParent.set(chat.session_id, children);
+  }
+
+  const relatedIds = new Set(seedIds);
+  const queue = [...seedIds];
+  while (queue.length > 0) {
+    const currentId = queue.shift() as string;
+    const children = childrenByParent.get(currentId) || [];
+    for (const child of children) {
+      if (relatedIds.has(child.id)) {
+        continue;
+      }
+      relatedIds.add(child.id);
+      queue.push(child.id);
+    }
+  }
+
+  return relatedIds;
+}
+
+function resolveChatScopeFromAncestors(chats: ChatSpec[], chat?: ChatSpec) {
+  const chatById = new Map(chats.map((item) => [item.id, item]));
+  let current = chat;
+
+  while (current) {
+    const scope = getChatScope(current);
+    if (scope.focusType || scope.projectId || scope.runId || scope.bindingKey || scope.focusPath) {
+      return scope;
+    }
+    if (!current.session_id) {
+      break;
+    }
+    current = chatById.get(current.session_id);
+  }
+
+  return getChatScope(chat);
+}
+
 function isFinalResponseStatus(status?: string): boolean {
   return (
     status === AgentScopeRuntimeRunStatus.Completed ||
@@ -386,23 +432,20 @@ export default function AnywhereChat({
     try {
       const chats = await chatApi.listChats({ user_id: "default", channel: "console" });
       const current = chats.find((chat) => chat.id === sessionId);
-      const currentParent = current?.session_id
-        ? chats.find((chat) => chat.id === current.session_id)
-        : undefined;
-      const currentScope = getChatScope(current, currentParent);
-      const currentWorkspaceParentIds = new Set(
-        chats
-          .filter((chat) => {
-            const scope = getChatScope(chat);
-            return (
-              currentScope.focusType === "project_workspace" &&
-              ((scope.focusType === "project_workspace" &&
-                (!currentScope.projectId || scope.projectId === currentScope.projectId)) ||
-                (!!currentScope.projectId && scope.focusPath === `projects/${currentScope.projectId}`) ||
-                (!!currentScope.projectId && scope.projectId === currentScope.projectId))
-            );
-          })
-          .map((chat) => chat.id),
+      const currentScope = resolveChatScopeFromAncestors(chats, current);
+      const currentWorkspaceRootIds = chats
+        .filter((chat) => {
+          const scope = getChatScope(chat);
+          return (
+            currentScope.focusType === "project_workspace" &&
+            scope.focusType === "project_workspace" &&
+            (!currentScope.projectId || scope.projectId === currentScope.projectId)
+          );
+        })
+        .map((chat) => chat.id);
+      const currentWorkspaceRelatedIds = collectDescendantChatIds(
+        chats,
+        currentWorkspaceRootIds,
       );
 
       const filtered = chats.filter((chat) => {
@@ -412,16 +455,9 @@ export default function AnywhereChat({
         const scope = getChatScope(chat, parent);
 
         if (currentScope.focusType === "project_workspace") {
-          const sessionPrefix = currentScope.projectId
-            ? `project-workspace-${currentScope.projectId}-`
-            : "";
           return (
-            (scope.focusType === "project_workspace" &&
-              (!currentScope.projectId || scope.projectId === currentScope.projectId)) ||
-            (!!sessionPrefix && (chat.session_id || "").startsWith(sessionPrefix)) ||
-            currentWorkspaceParentIds.has(chat.session_id || "") ||
-            (!!currentScope.projectId && scope.projectId === currentScope.projectId) ||
-            (!!currentScope.projectId && scope.focusPath === `projects/${currentScope.projectId}`)
+            currentWorkspaceRelatedIds.has(chat.id) ||
+            currentWorkspaceRelatedIds.has(chat.session_id || "")
           );
         }
         if (currentScope.focusType === "project_run") {
