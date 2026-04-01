@@ -87,6 +87,39 @@ function isBuiltInProjectFile(path: string): boolean {
   return fileName === "project.md" || fileName === "heartbeat.md";
 }
 
+function normalizeProjectPath(path: string): string {
+  return path.replace(/\\/g, "/").replace(/^\.\//, "").toLowerCase();
+}
+
+function isOriginalInputFile(path: string): boolean {
+  const normalized = normalizeProjectPath(path);
+  return normalized === "data" || normalized.startsWith("data/");
+}
+
+function buildArtifactFilePathSet(
+  profile?: ProjectArtifactProfile,
+): Set<string> {
+  const set = new Set<string>();
+  if (!profile) {
+    return set;
+  }
+  const groups: Array<ProjectArtifactItem[]> = [
+    profile.skills || [],
+    profile.scripts || [],
+    profile.flows || [],
+    profile.cases || [],
+  ];
+  for (const group of groups) {
+    for (const item of group) {
+      const artifactPath = normalizeProjectPath(item.artifact_file_path || "");
+      if (artifactPath) {
+        set.add(artifactPath);
+      }
+    }
+  }
+  return set;
+}
+
 function getFileNodeIcon(fileName: string, isDirectory: boolean): ReactNode {
   if (isDirectory) {
     return <FolderOpenOutlined className={styles.treeNodeIconFolder} />;
@@ -281,6 +314,36 @@ export default function ProjectOverviewCard({
     flows: artifactProfile?.flows.length || 0,
     cases: artifactProfile?.cases.length || 0,
   };
+  const artifactFilePathSet = buildArtifactFilePathSet(artifactProfile);
+  const normalizedVisibleFiles = visibleFiles.map((item) =>
+    normalizeProjectPath(item.path),
+  );
+  const originalFileCount = normalizedVisibleFiles.filter(
+    (path: string) => isOriginalInputFile(path),
+  ).length;
+  const derivedFileCount = normalizedVisibleFiles.filter(
+    (path: string) =>
+      !isOriginalInputFile(path) && !artifactFilePathSet.has(path),
+  ).length;
+  const stableArtifactCount =
+    (artifactProfile?.skills || []).filter(
+      (item) => (item.status || "").toLowerCase() === "stable",
+    ).length +
+    (artifactProfile?.scripts || []).filter(
+      (item) => (item.status || "").toLowerCase() === "stable",
+    ).length +
+    (artifactProfile?.flows || []).filter(
+      (item) => (item.status || "").toLowerCase() === "stable",
+    ).length +
+    (artifactProfile?.cases || []).filter(
+      (item) => (item.status || "").toLowerCase() === "stable",
+    ).length;
+  const maturityLabel =
+    stableArtifactCount > 0
+      ? t("projects.maturity.stable", "Stable")
+      : pipelineRunCount > 0 || projectFileCount > 0
+        ? t("projects.maturity.inProgress", "In Progress")
+        : t("projects.maturity.bootstrap", "Bootstrap");
 
   return (
     <Card
@@ -311,34 +374,50 @@ export default function ProjectOverviewCard({
           </div>
         )}
 
-        <div className={styles.metricSummaryGrid}>
-          <div className={styles.metricSummaryCard}>
-            <div className={styles.itemMeta}>{t("projects.files", "Files")}</div>
-            <div className={styles.metricSummaryValue}>{projectFileCount}</div>
-          </div>
-          <div className={styles.metricSummaryCard}>
-            <div className={styles.itemMeta}>{t("projects.automation.flows", "Flows")}</div>
-            <div className={styles.metricSummaryValue}>{pipelineTemplateCount}</div>
-          </div>
-          <div className={styles.metricSummaryCard}>
-            <div className={styles.itemMeta}>{t("projects.runs", "Runs")}</div>
-            <div className={styles.metricSummaryValue}>{pipelineRunCount}</div>
-          </div>
-          <div className={styles.metricSummaryCard}>
-            <div className={styles.itemMeta}>{t("projects.updated", "Updated")}</div>
-            <div className={styles.metricSummaryValue}>
-              <span>{updatedDateParts.day}</span>
-              {updatedDateParts.month ? (
-                <span className={styles.metricSummaryDateSuffix}>/{updatedDateParts.month}</span>
-              ) : null}
-            </div>
-          </div>
-        </div>
-
         <div className={styles.overviewSection}>
           <div className={styles.subSectionTitle}>
-            {t("projects.artifactArchitecture", "Product Artifacts")}
+            {t("projects.progressMaturity", "Project Progress & Maturity")}
           </div>
+          <div className={styles.metricSummaryGrid}>
+            <div className={styles.metricSummaryCard}>
+              <div className={styles.itemMeta}>
+                {t("projects.filesOriginal", "Original Files")}
+              </div>
+              <div className={styles.metricSummaryValue}>{originalFileCount}</div>
+            </div>
+            <div className={styles.metricSummaryCard}>
+              <div className={styles.itemMeta}>
+                {t("projects.filesDerived", "Derived Files")}
+              </div>
+              <div className={styles.metricSummaryValue}>{derivedFileCount}</div>
+            </div>
+            <div className={styles.metricSummaryCard}>
+              <div className={styles.itemMeta}>{t("projects.runs", "Runs")}</div>
+              <div className={styles.metricSummaryValue}>{pipelineRunCount}</div>
+            </div>
+            <div className={styles.metricSummaryCard}>
+              <div className={styles.itemMeta}>{t("projects.updated", "Updated")}</div>
+              <div className={styles.metricSummaryValue}>
+                <span>{updatedDateParts.day}</span>
+                {updatedDateParts.month ? (
+                  <span className={styles.metricSummaryDateSuffix}>/{updatedDateParts.month}</span>
+                ) : null}
+              </div>
+            </div>
+          </div>
+
+          <div className={styles.overviewTags}>
+            <Tag color="cyan">
+              {t("projects.maturity.label", "Maturity")}: {maturityLabel}
+            </Tag>
+            <Tag color="blue">
+              {t("projects.files", "Files")}: {projectFileCount}
+            </Tag>
+            <Tag color="geekblue">
+              {t("projects.automation.flows", "Flows")}: {pipelineTemplateCount}
+            </Tag>
+          </div>
+
           <div className={styles.overviewTags}>
             <Tag color="blue">
               {t("projects.artifacts.skill", "Skills")}: {artifactCounts.skills}
