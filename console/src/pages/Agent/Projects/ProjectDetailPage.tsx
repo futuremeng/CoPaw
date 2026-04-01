@@ -383,6 +383,13 @@ export default function ProjectDetailPage() {
     return sorted[0] || null;
   }, [runsForSelectedTemplate]);
 
+  const suggestedDistillRunId = useMemo(() => {
+    if (selectedRunId) {
+      return selectedRunId;
+    }
+    return latestRunForSelectedTemplate?.id || "";
+  }, [latestRunForSelectedTemplate?.id, selectedRunId]);
+
   const succeededRunCountForSelectedTemplate = useMemo(
     () => runsForSelectedTemplate.filter((item) => isSucceededStatus(item.status)).length,
     [runsForSelectedTemplate],
@@ -1725,6 +1732,7 @@ export default function ProjectDetailPage() {
                 distillingSkills={distillingSkills}
                 promotingSkillId={promotingSkillId}
                 confirmingSkillId={confirmingSkillId}
+                suggestedDistillRunId={suggestedDistillRunId}
                 onSaveArtifactProfile={handleSaveArtifactProfile}
                 onAutoDistillSkills={handleAutoDistillSkillDrafts}
                 onConfirmArtifactSkillStable={handleConfirmArtifactSkillStable}

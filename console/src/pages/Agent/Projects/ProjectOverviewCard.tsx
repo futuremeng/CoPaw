@@ -46,6 +46,7 @@ interface ProjectOverviewCardProps {
   distillingSkills: boolean;
   promotingSkillId: string;
   confirmingSkillId: string;
+  suggestedDistillRunId?: string;
   onSaveArtifactProfile: (
     profile: ProjectArtifactProfile,
     distillMode: "file_scan" | "conversation_evidence",
@@ -249,6 +250,7 @@ export default function ProjectOverviewCard({
   distillingSkills,
   promotingSkillId,
   confirmingSkillId,
+  suggestedDistillRunId,
   onSaveArtifactProfile,
   onAutoDistillSkills,
   onConfirmArtifactSkillStable,
@@ -358,6 +360,7 @@ export default function ProjectOverviewCard({
             distillingSkills={distillingSkills}
             promotingSkillId={promotingSkillId}
             confirmingSkillId={confirmingSkillId}
+            suggestedDistillRunId={suggestedDistillRunId}
             onSave={onSaveArtifactProfile}
             onAutoDistillSkills={onAutoDistillSkills}
             onConfirmSkillStable={onConfirmArtifactSkillStable}

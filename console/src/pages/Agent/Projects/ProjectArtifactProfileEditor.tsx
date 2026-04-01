@@ -153,6 +153,7 @@ interface ProjectArtifactProfileEditorProps {
   distillingSkills?: boolean;
   promotingSkillId?: string;
   confirmingSkillId?: string;
+  suggestedDistillRunId?: string;
   onSave: (
     profile: ProjectArtifactProfile,
     distillMode: "file_scan" | "conversation_evidence",
@@ -169,6 +170,7 @@ export default function ProjectArtifactProfileEditor({
   distillingSkills,
   promotingSkillId,
   confirmingSkillId,
+  suggestedDistillRunId,
   onSave,
   onAutoDistillSkills,
   onConfirmSkillStable,
@@ -188,9 +190,25 @@ export default function ProjectArtifactProfileEditor({
     if (!open) {
       setDraft(cloneArtifactProfile(value));
       setDraftDistillMode(distillMode);
-      setDraftRunId("");
+      setDraftRunId(suggestedDistillRunId || "");
     }
-  }, [distillMode, open, value]);
+  }, [distillMode, open, suggestedDistillRunId, value]);
+
+  useEffect(() => {
+    if (
+      open
+      && draftDistillMode === "conversation_evidence"
+      && !draftRunId.trim()
+      && suggestedDistillRunId
+    ) {
+      setDraftRunId(suggestedDistillRunId);
+    }
+  }, [
+    draftDistillMode,
+    draftRunId,
+    open,
+    suggestedDistillRunId,
+  ]);
 
   const hasArtifacts = useMemo(
     () => ARTIFACT_KIND_META.some((meta) => (value?.[meta.key] || []).length > 0),
