@@ -865,6 +865,37 @@ export default function ProjectDetailPage() {
     }
   }, [resolvedProjectRequestId, t]);
 
+  const fetchProjectFileSnippet = useCallback(async (
+    agentId: string,
+    project: AgentProjectSummary,
+    filePath: string,
+  ): Promise<string> => {
+    const projectIds = [resolvedProjectRequestId, ...buildProjectIdCandidates(project)]
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const uniqueProjectIds = Array.from(new Set(projectIds));
+
+    for (const projectRequestId of uniqueProjectIds) {
+      try {
+        const data = await agentsApi.readProjectFile(
+          agentId,
+          projectRequestId,
+          filePath,
+        );
+        setResolvedProjectRequestId(projectRequestId);
+        const normalized = (data.content || "")
+          .replace(/\r\n/g, "\n")
+          .replace(/\n{3,}/g, "\n\n")
+          .trim();
+        return normalized.slice(0, 1200);
+      } catch {
+        // Try next candidate id.
+      }
+    }
+
+    throw new Error("project_file_content_not_found");
+  }, [resolvedProjectRequestId]);
+
   const loadRunDetail = useCallback(async (
     agentId: string,
     project: AgentProjectSummary,
@@ -1435,9 +1466,19 @@ export default function ProjectDetailPage() {
     setSendingSelectedFiles(true);
     try {
       if (selectedRunId) {
-        await handleEnsureRunChat();
+        if (!activeRunChatId) {
+          await handleEnsureRunChat();
+        }
       } else {
-        await handleEnsureDesignChat();
+        // Keep attach target aligned with the currently visible chat panel
+        // to avoid switching session (which looks like a full chat reload).
+        if (activeWorkspaceChatId) {
+          // Already in workspace chat, keep current session.
+        } else if (activeDesignChatId) {
+          // Already in design chat, keep current session.
+        } else {
+          await handleEnsureWorkspaceChat();
+        }
       }
 
       const selectedFiles = selectedAttachPaths.map((path) => {
@@ -1447,17 +1488,46 @@ export default function ProjectDetailPage() {
           size: fileInfo?.size || 0,
         };
       });
+
+      const fileContexts = autoAnalyzeOnAttach
+        ? await Promise.all(
+            selectedFiles.slice(0, 4).map(async (item) => {
+              try {
+                const excerpt = await fetchProjectFileSnippet(
+                  currentAgent.id,
+                  selectedProject,
+                  item.path,
+                );
+                return {
+                  path: item.path,
+                  excerpt,
+                };
+              } catch {
+                return {
+                  path: item.path,
+                  excerpt: "[文件内容暂不可读取，请先基于文件名和现有上下文分析]",
+                };
+              }
+            }),
+          )
+        : [];
+
       setAutoAttachRequest({
         id: `manual-batch-draft-${Date.now()}`,
         mode: "draft",
         note: autoAnalyzeOnAttach
           ? buildAutoAttachAnalysisPrompt({
               projectName: selectedProject.name,
+              workspaceDir:
+                selectedProject.workspace_dir || currentAgent.workspace_dir || "",
               fileNames: selectedFiles.map((item) => item.path),
               selectedRunId,
+              fileContexts,
             })
           : buildAttachDraftPrompt({
               projectName: selectedProject.name,
+              workspaceDir:
+                selectedProject.workspace_dir || currentAgent.workspace_dir || "",
               selectedRunId,
               selectedFiles,
             }),
@@ -1479,9 +1549,14 @@ export default function ProjectDetailPage() {
       setSendingSelectedFiles(false);
     }
   }, [
+    activeDesignChatId,
+    activeRunChatId,
+    activeWorkspaceChatId,
     currentAgent,
+    fetchProjectFileSnippet,
     handleEnsureDesignChat,
     handleEnsureRunChat,
+    handleEnsureWorkspaceChat,
     projectFiles,
     selectedAttachPaths,
     selectedProject,
@@ -1791,7 +1866,9 @@ export default function ProjectDetailPage() {
               activeRunChatId={activeRunChatId}
               autoAttachRequest={autoAttachRequest}
               onAutoAttachHandled={(payload) => {
-                setAutoAttachRequest((prev) => (prev?.id === payload.id ? null : prev));
+                window.requestAnimationFrame(() => {
+                  setAutoAttachRequest((prev) => (prev?.id === payload.id ? null : prev));
+                });
               }}
               onStartWorkspaceChat={() => {
                 setDesignFocusChatId("");

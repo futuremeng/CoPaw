@@ -1,43 +1,126 @@
 export function buildAutoAttachAnalysisPrompt(params: {
   projectName: string;
+  workspaceDir?: string;
   fileNames: string[];
   selectedRunId?: string;
+  fileContexts?: Array<{ path: string; excerpt: string }>;
 }): string {
-  const fileList = params.fileNames
-    .slice(0, 8)
-    .map((name, index) => `${index + 1}. ${name}`)
+  const fileRefs = params.fileNames.slice(0, 8).map((name, index) => ({
+    id: `F${index + 1}`,
+    path: name,
+    name: name.split("/").pop() || name,
+  }));
+
+  const fileList = fileRefs
+    .map((item) => `${item.id}. ${item.name} (${item.path})`)
     .join("\n");
+
   const modeHint = params.selectedRunId
     ? "这些文件与当前运行上下文相关。"
     : "这些文件与当前项目设计上下文相关。";
+
+  const workspaceDir = (params.workspaceDir || "").trim();
+  const absoluteFileList = workspaceDir
+    ? fileRefs
+        .map(
+          (item) =>
+            `${item.id}. ${workspaceDir.replace(/\/$/, "")}/${item.path.replace(/^\//, "")}`,
+        )
+        .join("\n")
+    : "";
+
+  const contextItems = Array.isArray(params.fileContexts)
+    ? params.fileContexts.slice(0, 8)
+    : [];
+
   return [
-    `我刚刚附加了 ${params.fileNames.length} 个项目文件，请合并分析。`,
+    `我选择了 ${params.fileNames.length} 个项目文件，先做一轮合并判断。`,
     `项目：${params.projectName}`,
     modeHint,
-    "文件列表：",
+    ...(workspaceDir
+      ? [
+          `项目工作区绝对路径（workspace root）：${workspaceDir}`,
+          "读文件规则：若需要读文件，请使用 workspace root + 相对路径 组合成绝对路径。",
+        ]
+      : []),
+    "文件引用：",
     fileList,
-    "请先根据文件名和内容猜测我最可能的目标或需求，再用 2-4 条要点总结你的判断和建议下一步。",
-    "如果信息不足，最后只补一个简短澄清问题；如果已经足够，就直接继续分析。",
+    ...(absoluteFileList
+      ? [
+          "可读绝对路径：",
+          absoluteFileList,
+        ]
+      : []),
+    ...(contextItems.length > 0
+      ? [
+          "以下是可直接使用的文件内容片段（已截断）：",
+          contextItems
+            .map(
+              (item, index) =>
+                `${fileRefs[index]?.id || `F${index + 1}`}\n---\n${item.excerpt}`,
+            )
+            .join("\n\n"),
+        ]
+      : []),
+    "任务：先判断我当前最可能的目标/需求。",
+    "输出：用 2-4 条要点给出你的判断，并给出下一步建议。",
+    "若信息不足：最后只补 1 个简短澄清问题；若信息足够：直接继续分析。",
   ].join("\n");
 }
 
 export function buildAttachDraftPrompt(params: {
   projectName: string;
+  workspaceDir?: string;
   selectedRunId?: string;
   selectedFiles: Array<{ path: string; size: number }>;
 }): string {
   const modeHint = params.selectedRunId
     ? `当前运行：${params.selectedRunId}`
     : "当前上下文：流程设计";
-  const fileList = params.selectedFiles
-    .map((item, index) => `${index + 1}. ${item.path} (${item.size} bytes)`)
+
+  const fileRefs = params.selectedFiles.map((item, index) => {
+    const name = item.path.split("/").pop() || item.path;
+    return {
+      id: `F${index + 1}`,
+      name,
+      path: item.path,
+      size: item.size,
+    };
+  });
+
+  const fileList = fileRefs
+    .map((item) => `${item.id}. ${item.name} (${item.path}, ${item.size} bytes)`)
     .join("\n");
+
+  const workspaceDir = (params.workspaceDir || "").trim();
+  const absoluteFileList = workspaceDir
+    ? fileRefs
+        .map(
+          (item) =>
+            `${item.id}. ${workspaceDir.replace(/\/$/, "")}/${item.path.replace(/^\//, "")}`,
+        )
+        .join("\n")
+    : "";
+
   return [
-    `我已选择 ${params.selectedFiles.length} 个项目文件作为上下文。`,
+    `我已选择 ${params.selectedFiles.length} 个项目文件作为当前上下文参考。`,
     `项目：${params.projectName}`,
     modeHint,
-    "文件列表：",
+    ...(workspaceDir
+      ? [
+          `项目工作区绝对路径（workspace root）：${workspaceDir}`,
+          "读文件规则：若需要读文件，请使用 workspace root + 相对路径 组合成绝对路径。",
+        ]
+      : []),
+    "文件引用：",
     fileList,
+    ...(absoluteFileList
+      ? [
+          "可读绝对路径：",
+          absoluteFileList,
+        ]
+      : []),
+    "请直接继续分析当前任务，并给出下一步建议。",
   ].join("\n");
 }
 

@@ -280,6 +280,8 @@ export default function AnywhereChat({
   const runtimeStatusRetryTimerRef = useRef<number | null>(null);
   const runtimeStatusRetryCountRef = useRef(0);
   const handledAutoAttachIdRef = useRef("");
+  const suppressNextDraftStateSyncRef = useRef(false);
+  const freezeDraftStateUntilRef = useRef(0);
 
   const getInputRoot = useCallback((): HTMLElement | null => {
     return document.querySelector(`.${hostClassName}`) as HTMLElement | null;
@@ -291,6 +293,15 @@ export default function AnywhereChat({
   }, [getInputRoot]);
 
   const updateDraftContentState = useCallback(() => {
+    if (Date.now() < freezeDraftStateUntilRef.current) {
+      return;
+    }
+
+    if (suppressNextDraftStateSyncRef.current) {
+      suppressNextDraftStateSyncRef.current = false;
+      return;
+    }
+
     const root = getInputRoot();
     const textArea = getInputTextarea();
     const hasText = Boolean((textArea?.value || "").trim());
@@ -302,7 +313,8 @@ export default function AnywhereChat({
     setHasDraftContent(hasText || hasAttachments);
   }, [getInputRoot, getInputTextarea]);
 
-  const setDraftInputValue = useCallback((nextValue: string) => {
+  const setDraftInputValue = useCallback(
+    (nextValue: string, shouldFocus = true, shouldSyncDraftState = true) => {
     const textArea = getInputTextarea();
     if (!textArea) {
       return false;
@@ -316,9 +328,16 @@ export default function AnywhereChat({
     } else {
       textArea.value = nextValue;
     }
+    if (!shouldSyncDraftState) {
+      suppressNextDraftStateSyncRef.current = true;
+    }
     textArea.dispatchEvent(new Event("input", { bubbles: true }));
-    textArea.focus();
-    setHasDraftContent(Boolean(nextValue.trim()));
+    if (shouldFocus) {
+      textArea.focus();
+    }
+    if (shouldSyncDraftState) {
+      setHasDraftContent(Boolean(nextValue.trim()));
+    }
     return true;
   }, [getInputTextarea]);
 
@@ -663,7 +682,7 @@ export default function AnywhereChat({
         if (cancelled) {
           return false;
         }
-        if (setDraftInputValue(draftText)) {
+        if (setDraftInputValue(draftText, false, false)) {
           return true;
         }
         await waitFor(intervalMs);
@@ -691,11 +710,15 @@ export default function AnywhereChat({
       try {
         const mode = autoAttachRequest.mode || "submit";
         if (mode === "draft") {
+          freezeDraftStateUntilRef.current = Date.now() + 1200;
           const draftText =
             autoAttachRequest.note ||
             "I attached files as context. Please review them and wait for my next instruction.";
 
           if (await waitForDraftInputReady(draftText)) {
+            window.setTimeout(() => {
+              freezeDraftStateUntilRef.current = 0;
+            }, 1300);
             handledAutoAttachIdRef.current = autoAttachRequest.id;
             onAutoAttachHandled?.({
               id: autoAttachRequest.id,
@@ -703,6 +726,8 @@ export default function AnywhereChat({
             });
             return;
           }
+
+          freezeDraftStateUntilRef.current = 0;
 
           throw new Error("chat_input_not_found");
         }
@@ -765,6 +790,7 @@ export default function AnywhereChat({
           ok: true,
         });
       } catch (error) {
+        freezeDraftStateUntilRef.current = 0;
         onAutoAttachHandled?.({
           id: autoAttachRequest.id,
           ok: false,
