@@ -12,7 +12,7 @@ import {
   PlusOutlined,
   CodeOutlined,
 } from "@ant-design/icons";
-import { Button, Card, Empty, Tag, Tree, Typography } from "antd";
+import { Button, Card, Empty, Tree, Typography } from "antd";
 import { useTranslation } from "react-i18next";
 import type {
   ProjectArtifactItem,
@@ -368,7 +368,10 @@ export default function ProjectOverviewCard({
             <div className={styles.subSectionTitle}>{t("projects.tags", "Tags")}</div>
             <div className={styles.overviewTags}>
               {selectedProject?.tags.map((tag) => (
-                <Tag key={tag}>{tag}</Tag>
+                <div key={tag} className={styles.metricSummaryCard}>
+                  <div className={styles.itemMeta}>{t("projects.tags", "Tags")}</div>
+                  <div className={styles.metricSummaryTextValue}>{tag}</div>
+                </div>
               ))}
             </div>
           </div>
@@ -406,31 +409,47 @@ export default function ProjectOverviewCard({
             </div>
           </div>
 
-          <div className={styles.overviewTags}>
-            <Tag color="cyan">
-              {t("projects.maturity.label", "Maturity")}: {maturityLabel}
-            </Tag>
-            <Tag color="blue">
-              {t("projects.files", "Files")}: {projectFileCount}
-            </Tag>
-            <Tag color="geekblue">
-              {t("projects.automation.flows", "Flows")}: {pipelineTemplateCount}
-            </Tag>
+          <div className={styles.metricSummaryGrid}>
+            <div className={styles.metricSummaryCard}>
+              <div className={styles.itemMeta}>{t("projects.maturity.label", "Maturity")}</div>
+              <div className={styles.metricSummaryTextValue}>{maturityLabel}</div>
+            </div>
+            <div className={styles.metricSummaryCard}>
+              <div className={styles.itemMeta}>{t("projects.files", "Files")}</div>
+              <div className={styles.metricSummaryValue}>{projectFileCount}</div>
+            </div>
+            <div className={styles.metricSummaryCard}>
+              <div className={styles.itemMeta}>{t("projects.automation.flows", "Flows")}</div>
+              <div className={styles.metricSummaryValue}>{pipelineTemplateCount}</div>
+            </div>
+            <div className={styles.metricSummaryCard}>
+              <div className={styles.itemMeta}>{t("projects.updated", "Updated")}</div>
+              <div className={styles.metricSummaryValue}>
+                <span>{updatedDateParts.day}</span>
+                {updatedDateParts.month ? (
+                  <span className={styles.metricSummaryDateSuffix}>/{updatedDateParts.month}</span>
+                ) : null}
+              </div>
+            </div>
           </div>
 
-          <div className={styles.overviewTags}>
-            <Tag color="blue">
-              {t("projects.artifacts.skill", "Skills")}: {artifactCounts.skills}
-            </Tag>
-            <Tag color="geekblue">
-              {t("projects.artifacts.script", "Scripts")}: {artifactCounts.scripts}
-            </Tag>
-            <Tag color="purple">
-              {t("projects.artifacts.flow", "Flows")}: {artifactCounts.flows}
-            </Tag>
-            <Tag color="gold">
-              {t("projects.artifacts.case", "Cases")}: {artifactCounts.cases}
-            </Tag>
+          <div className={styles.metricSummaryGrid}>
+            <div className={styles.metricSummaryCard}>
+              <div className={styles.itemMeta}>{t("projects.artifacts.skill", "Skills")}</div>
+              <div className={styles.metricSummaryValue}>{artifactCounts.skills}</div>
+            </div>
+            <div className={styles.metricSummaryCard}>
+              <div className={styles.itemMeta}>{t("projects.artifacts.script", "Scripts")}</div>
+              <div className={styles.metricSummaryValue}>{artifactCounts.scripts}</div>
+            </div>
+            <div className={styles.metricSummaryCard}>
+              <div className={styles.itemMeta}>{t("projects.artifacts.flow", "Flows")}</div>
+              <div className={styles.metricSummaryValue}>{artifactCounts.flows}</div>
+            </div>
+            <div className={styles.metricSummaryCard}>
+              <div className={styles.itemMeta}>{t("projects.artifacts.case", "Cases")}</div>
+              <div className={styles.metricSummaryValue}>{artifactCounts.cases}</div>
+            </div>
           </div>
           <ProjectArtifactProfileEditor
             value={artifactProfile}
