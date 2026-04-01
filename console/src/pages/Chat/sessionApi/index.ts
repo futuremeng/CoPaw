@@ -158,6 +158,52 @@ const toOutputMessage = (msg: Message): OutputMessage => ({
   metadata: null,
 });
 
+function getStableMessageId(message: unknown): string | null {
+  if (!message || typeof message !== "object") {
+    return null;
+  }
+
+  const id = (message as { id?: unknown }).id;
+  if (typeof id === "string" && id.trim()) {
+    return id.trim();
+  }
+
+  const messageId = (message as { message_id?: unknown }).message_id;
+  if (typeof messageId === "string" && messageId.trim()) {
+    return messageId.trim();
+  }
+
+  return null;
+}
+
+function dedupeMessagesByStableId<T>(
+  messages: T[],
+  getId: (message: T) => string | null,
+): T[] {
+  const deduped: T[] = [];
+  const indexById = new Map<string, number>();
+
+  for (const message of messages) {
+    const stableId = getId(message);
+    if (!stableId) {
+      deduped.push(message);
+      continue;
+    }
+
+    const existingIndex = indexById.get(stableId);
+    if (existingIndex === undefined) {
+      indexById.set(stableId, deduped.length);
+      deduped.push(message);
+      continue;
+    }
+
+    // Keep the latest payload for streaming/history overlap scenarios.
+    deduped[existingIndex] = message;
+  }
+
+  return deduped;
+}
+
 /** Build a user card (AgentScopeRuntimeRequestCard) from a user message. */
 function buildUserCard(msg: Message): IAgentScopeRuntimeWebUIMessage {
   const contentParts = contentToRequestParts(msg.content);
@@ -188,13 +234,17 @@ function buildUserCard(msg: Message): IAgentScopeRuntimeWebUIMessage {
 const buildResponseCard = (
   outputMessages: OutputMessage[],
 ): IAgentScopeRuntimeWebUIMessage => {
+  const uniqueOutputMessages = dedupeMessagesByStableId(
+    outputMessages,
+    getStableMessageId,
+  );
   const now = Math.floor(Date.now() / 1000);
-  const maxSeq = outputMessages.reduce(
+  const maxSeq = uniqueOutputMessages.reduce(
     (max, m) => Math.max(max, m.sequence_number || 0),
     0,
   );
 
-  const normalizedMessages = outputMessages.map((msg) => ({
+  const normalizedMessages = uniqueOutputMessages.map((msg) => ({
     ...msg,
     content: normalizeOutputMessageContent(msg.content),
   }));
@@ -673,7 +723,10 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
         offset += pageMessages.length;
       }
 
-      return { messages: allMessages, status: latestStatus };
+      return {
+        messages: dedupeMessagesByStableId(allMessages, getStableMessageId),
+        status: latestStatus,
+      };
     };
 
     let history = await fetchPagedHistory();
