@@ -383,12 +383,34 @@ export default function ProjectDetailPage() {
     return sorted[0] || null;
   }, [runsForSelectedTemplate]);
 
+  const latestSucceededRunForSelectedTemplate = useMemo(() => {
+    const succeededRuns = runsForSelectedTemplate.filter((item) =>
+      isSucceededStatus(item.status),
+    );
+    if (succeededRuns.length === 0) {
+      return null;
+    }
+    const sorted = [...succeededRuns].sort((a, b) =>
+      toTimestamp(b.updated_at || b.created_at) -
+      toTimestamp(a.updated_at || a.created_at),
+    );
+    return sorted[0] || null;
+  }, [runsForSelectedTemplate]);
+
   const suggestedDistillRunId = useMemo(() => {
-    if (selectedRunId) {
+    if (selectedRunId && isSucceededStatus(selectedRunSummary?.status || "")) {
       return selectedRunId;
     }
-    return latestRunForSelectedTemplate?.id || "";
-  }, [latestRunForSelectedTemplate?.id, selectedRunId]);
+    if (latestSucceededRunForSelectedTemplate?.id) {
+      return latestSucceededRunForSelectedTemplate.id;
+    }
+    return selectedRunId || latestRunForSelectedTemplate?.id || "";
+  }, [
+    latestRunForSelectedTemplate?.id,
+    latestSucceededRunForSelectedTemplate?.id,
+    selectedRunId,
+    selectedRunSummary?.status,
+  ]);
 
   const succeededRunCountForSelectedTemplate = useMemo(
     () => runsForSelectedTemplate.filter((item) => isSucceededStatus(item.status)).length,
