@@ -194,6 +194,7 @@ export default function ProjectDetailPage() {
   const [deletingProject, setDeletingProject] = useState(false);
   const [automationDrawerOpen, setAutomationDrawerOpen] = useState(false);
   const [artifactProfileSaving, setArtifactProfileSaving] = useState(false);
+  const [promotingSkillId, setPromotingSkillId] = useState("");
   const [autoAttachRequest, setAutoAttachRequest] = useState<ProjectChatAutoAttachRequest | null>(null);
   const [selectedAttachPaths, setSelectedAttachPaths] = useState<string[]>([]);
   const [sendingSelectedFiles, setSendingSelectedFiles] = useState(false);
@@ -536,6 +537,41 @@ export default function ProjectDetailPage() {
       throw err;
     } finally {
       setArtifactProfileSaving(false);
+    }
+  }, [currentAgent, loadAgents, selectedProject, t]);
+
+  const handlePromoteArtifactSkill = useCallback(async (artifactId: string) => {
+    if (!currentAgent || !selectedProject || !artifactId) {
+      return;
+    }
+
+    setPromotingSkillId(artifactId);
+    try {
+      const result = await agentsApi.promoteProjectSkillArtifact(
+        currentAgent.id,
+        selectedProject.id,
+        artifactId,
+        { enable: true },
+      );
+      await loadAgents();
+      message.success(
+        t(
+          "projects.artifacts.promoteSuccess",
+          "Promoted to agent skill: {{name}}",
+          { name: result.target_name },
+        ),
+      );
+    } catch (err) {
+      console.error("failed to promote project skill", err);
+      message.error(
+        t(
+          "projects.artifacts.promoteFailed",
+          "Failed to promote project skill.",
+        ),
+      );
+      throw err;
+    } finally {
+      setPromotingSkillId("");
     }
   }, [currentAgent, loadAgents, selectedProject, t]);
 
@@ -1518,7 +1554,9 @@ export default function ProjectDetailPage() {
                 }}
                 onToggleHideBuiltInFiles={setHideBuiltInFiles}
                 artifactProfileSaving={artifactProfileSaving}
+                promotingSkillId={promotingSkillId}
                 onSaveArtifactProfile={handleSaveArtifactProfile}
+                onPromoteArtifactSkill={handlePromoteArtifactSkill}
               />
 
               <Card

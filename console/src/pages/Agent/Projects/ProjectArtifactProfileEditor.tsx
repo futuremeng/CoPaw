@@ -149,13 +149,17 @@ function normalizeArtifactProfile(
 interface ProjectArtifactProfileEditorProps {
   value?: ProjectArtifactProfile;
   saving: boolean;
+  promotingSkillId?: string;
   onSave: (profile: ProjectArtifactProfile) => Promise<void>;
+  onPromoteSkill: (artifactId: string) => Promise<void>;
 }
 
 export default function ProjectArtifactProfileEditor({
   value,
   saving,
+  promotingSkillId,
   onSave,
+  onPromoteSkill,
 }: ProjectArtifactProfileEditorProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -375,6 +379,19 @@ export default function ProjectArtifactProfileEditor({
                           })
                         }
                       />
+
+                      {meta.kind === "skill" ? (
+                        <div className={styles.artifactEditorActions}>
+                          <Button
+                            size="small"
+                            loading={promotingSkillId === item.id}
+                            disabled={!item.id || saving}
+                            onClick={() => void onPromoteSkill(item.id)}
+                          >
+                            {t("projects.artifacts.promote", "Promote to Agent")}
+                          </Button>
+                        </div>
+                      ) : null}
                     </div>
                   ))}
                 </div>

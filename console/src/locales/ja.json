@@ -1542,6 +1542,9 @@
       "case": "ケース",
       "empty": "成果物はまだありません",
       "manage": "成果物を管理",
+      "promote": "エージェントスキルへ昇格",
+      "promoteSuccess": "エージェントスキルに昇格しました: {{name}}",
+      "promoteFailed": "プロジェクトスキルの昇格に失敗しました。",
       "add": "追加",
       "emptyCategory": "項目はまだありません",
       "fields": {

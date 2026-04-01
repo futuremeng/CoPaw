@@ -1544,6 +1544,9 @@
       "case": "案例",
       "empty": "还没有项目产物",
       "manage": "管理产物",
+      "promote": "晋升为智能体技能",
+      "promoteSuccess": "已晋升为智能体技能：{{name}}",
+      "promoteFailed": "晋升项目技能失败。",
       "add": "新增",
       "emptyCategory": "暂无条目",
       "fields": {

@@ -42,7 +42,9 @@ interface ProjectOverviewCardProps {
   onAttachArtifactToChat: (path: string) => void;
   onToggleHideBuiltInFiles: (value: boolean) => void;
   artifactProfileSaving: boolean;
+  promotingSkillId: string;
   onSaveArtifactProfile: (profile: ProjectArtifactProfile) => Promise<void>;
+  onPromoteArtifactSkill: (artifactId: string) => Promise<void>;
 }
 
 interface TreeNode {
@@ -236,7 +238,9 @@ export default function ProjectOverviewCard({
   onAttachArtifactToChat,
   onToggleHideBuiltInFiles,
   artifactProfileSaving,
+  promotingSkillId,
   onSaveArtifactProfile,
+  onPromoteArtifactSkill,
 }: ProjectOverviewCardProps) {
   const { t } = useTranslation();
   const updatedDateParts = formatUpdatedDateParts(selectedProject?.updated_time);
@@ -338,7 +342,9 @@ export default function ProjectOverviewCard({
           <ProjectArtifactProfileEditor
             value={artifactProfile}
             saving={artifactProfileSaving}
+            promotingSkillId={promotingSkillId}
             onSave={onSaveArtifactProfile}
+            onPromoteSkill={onPromoteArtifactSkill}
           />
         </div>
 
