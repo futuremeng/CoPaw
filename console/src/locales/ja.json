@@ -1536,6 +1536,9 @@
     "filesDerived": "派生ファイル",
     "progressMaturity": "プロジェクト進捗と成熟度",
     "workspaceSummary": "ワークスペース概要",
+    "workspaceSummaryExpand": "ワークスペース概要を展開",
+    "workspaceSummaryCollapse": "ワークスペース概要を折りたたむ",
+    "workspaceSummaryFiles": "ワークスペースファイル",
     "detailTitle": "プロジェクトワークスペース",
     "detailDescription": "目標、資料、協作、成果物を中心にこのプロジェクトを進めます。自動化は必要な時だけ使う高度な機能です。",
     "automation": {

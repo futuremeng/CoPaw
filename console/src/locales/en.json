@@ -1563,6 +1563,9 @@
     "filesDerived": "Derived Files",
     "progressMaturity": "Project Progress & Maturity",
     "workspaceSummary": "Workspace Snapshot",
+    "workspaceSummaryExpand": "Expand workspace snapshot",
+    "workspaceSummaryCollapse": "Collapse workspace snapshot",
+    "workspaceSummaryFiles": "Workspace Files",
     "detailTitle": "Project Workspace",
     "detailDescription": "Move this project forward through goals, materials, collaboration, and deliverables. Automation stays available as an advanced capability.",
     "automation": {

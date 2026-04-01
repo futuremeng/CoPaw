@@ -1538,6 +1538,9 @@
     "filesDerived": "衍生文件",
     "progressMaturity": "项目进度与成熟度",
     "workspaceSummary": "工作空间快照",
+    "workspaceSummaryExpand": "展开工作空间快照",
+    "workspaceSummaryCollapse": "收起工作空间快照",
+    "workspaceSummaryFiles": "工作空间文件",
     "detailTitle": "工作区  /  项目  /  项目空间",
     "detailDescription": "围绕目标、资料、协作与产出推进这个项目；自动化流程作为高级能力按需使用。",
     "automation": {

@@ -13,6 +13,7 @@ import {
   CodeOutlined,
 } from "@ant-design/icons";
 import { Button, Card, Empty, Tree, Typography } from "antd";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type {
   ProjectArtifactItem,
@@ -290,6 +291,7 @@ export default function ProjectOverviewCard({
   onPromoteArtifactSkill,
 }: ProjectOverviewCardProps) {
   const { t } = useTranslation();
+  const [workspaceSummaryExpanded, setWorkspaceSummaryExpanded] = useState(false);
   const updatedDateParts = formatUpdatedDateParts(selectedProject?.updated_time);
 
   const visibleFiles = hideBuiltInFiles
@@ -339,9 +341,26 @@ export default function ProjectOverviewCard({
       <div className={styles.scrollContainer}>
         <div className={styles.overviewSection}>
           <div className={styles.subSectionTitle}>{t("projects.summary", "Project Summary")}</div>
+          <div className={styles.projectSummaryHeader}>
+            <div className={styles.projectSummaryName}>
+              {selectedProject?.name || selectedProject?.id || "-"}
+            </div>
+            <Button
+              size="small"
+              type="text"
+              onClick={() => setWorkspaceSummaryExpanded((prev) => !prev)}
+            >
+              {workspaceSummaryExpanded
+                ? t("projects.workspaceSummaryCollapse", "Collapse workspace snapshot")
+                : t("projects.workspaceSummaryExpand", "Expand workspace snapshot")}
+            </Button>
+          </div>
           <div className={styles.overviewDescription}>
             {selectedProject?.description || t("projects.noDescription", "No description")}
           </div>
+          {workspaceSummaryExpanded ? (
+            <pre className={styles.overviewSummary}>{projectWorkspaceSummary}</pre>
+          ) : null}
         </div>
 
         {(selectedProject?.tags || []).length > 0 && (
@@ -420,8 +439,7 @@ export default function ProjectOverviewCard({
         </div>
 
         <div className={styles.overviewSection}>
-          <div className={styles.subSectionTitle}>{t("projects.workspaceSummary", "Workspace Snapshot")}</div>
-          <pre className={styles.overviewSummary}>{projectWorkspaceSummary}</pre>
+          <div className={styles.subSectionTitle}>{t("projects.workspaceSummaryFiles", "Workspace Files")}</div>
           <div className={styles.overviewTreeToolbar}>
             <Text type="secondary" className={styles.itemMeta}>
               {t("projects.artifacts.hideBuiltins", "Hide built-in files")}
