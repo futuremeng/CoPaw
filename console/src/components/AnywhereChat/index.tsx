@@ -31,6 +31,7 @@ import type {
   ChatRuntimeStatus,
   ProviderInfo,
 } from "../../api/types";
+import type { IAgentScopeRuntimeWebUISession } from "@agentscope-ai/chat";
 import {
   deriveRuntimeStatusSnapshot,
   formatTokenCount,
@@ -258,6 +259,87 @@ function resolveChatScopeFromAncestors(chats: ChatSpec[], chat?: ChatSpec) {
   }
 
   return getChatScope(chat);
+}
+
+function collectSessionLineageIds(chats: ChatSpec[], sessionId: string): string[] {
+  const chatById = new Map(chats.map((chat) => [chat.id, chat]));
+  const lineage: string[] = [];
+  const visited = new Set<string>();
+  let currentId: string | undefined = sessionId;
+
+  while (currentId && chatById.has(currentId) && !visited.has(currentId)) {
+    visited.add(currentId);
+    lineage.push(currentId);
+    currentId = chatById.get(currentId)?.session_id || undefined;
+  }
+
+  return lineage.reverse();
+}
+
+async function loadMergedRawChatHistory(sessionId: string): Promise<ChatHistory | null> {
+  const chats = await chatApi.listChats({ user_id: "default", channel: "console" });
+  const lineageIds = collectSessionLineageIds(chats, sessionId);
+  const histories: ChatHistory[] = [];
+
+  for (const lineageId of lineageIds.length > 0 ? lineageIds : [sessionId]) {
+    try {
+      const history = await chatApi.getChat(lineageId, { limit: 100 });
+      histories.push(history);
+    } catch {
+      // Skip missing segments; continue merging the remaining chain.
+    }
+  }
+
+  if (histories.length === 0) {
+    return null;
+  }
+
+  const mergedMessages = histories.flatMap((history) => history.messages || []);
+  const lastHistory = histories[histories.length - 1];
+
+  return {
+    ...lastHistory,
+    messages: mergedMessages,
+    total: mergedMessages.length,
+    has_more: false,
+  };
+}
+
+async function loadMergedRuntimeSession(
+  sessionId: string,
+): Promise<IAgentScopeRuntimeWebUISession | null> {
+  const chats = await chatApi.listChats({ user_id: "default", channel: "console" });
+  const lineageIds = collectSessionLineageIds(chats, sessionId);
+  const sessions: IAgentScopeRuntimeWebUISession[] = [];
+
+  for (const lineageId of lineageIds.length > 0 ? lineageIds : [sessionId]) {
+    try {
+      const session = await sessionApi.getSession(lineageId);
+      sessions.push(session);
+    } catch {
+      // Skip missing segments; continue merging the remaining chain.
+    }
+  }
+
+  if (sessions.length === 0) {
+    return null;
+  }
+
+  const mergedMessages = sessions.flatMap((session) =>
+    Array.isArray(session.messages)
+      ? JSON.parse(JSON.stringify(session.messages))
+      : [],
+  );
+  const leafSession = sessions[sessions.length - 1] as IAgentScopeRuntimeWebUISession & {
+    realId?: string;
+    meta?: Record<string, unknown>;
+  };
+
+  return {
+    ...leafSession,
+    id: leafSession.id || sessionId,
+    messages: mergedMessages,
+  };
 }
 
 function isFinalResponseStatus(status?: string): boolean {
@@ -532,7 +614,7 @@ export default function AnywhereChat({
     }
     const requestedSessionId = sessionId;
     try {
-      const history = await chatApi.getChat(requestedSessionId, { limit: 100 });
+      const history = await loadMergedRawChatHistory(requestedSessionId);
       if (sessionIdRef.current !== requestedSessionId) {
         return;
       }
@@ -928,21 +1010,8 @@ export default function AnywhereChat({
       getSessionList: async () => {
         if (!sessionId) return [];
         try {
-          const sessions = await sessionApi.getSessionList();
-          const matched = sessions.find((item) => {
-            const ext = item as { realId?: string; sessionId?: string };
-            return (
-              item.id === sessionId ||
-              ext.realId === sessionId ||
-              ext.sessionId === sessionId
-            );
-          });
-          if (matched) {
-            return [matched];
-          }
-
-          const session = await sessionApi.getSession(sessionId);
-          return [session];
+          const mergedSession = await loadMergedRuntimeSession(sessionId);
+          return mergedSession ? [mergedSession] : [];
         } catch {
           return [];
         }
@@ -950,6 +1019,10 @@ export default function AnywhereChat({
       getSession: async () => {
         if (!sessionId) {
           throw new Error("session id missing");
+        }
+        const mergedSession = await loadMergedRuntimeSession(sessionId);
+        if (mergedSession) {
+          return mergedSession;
         }
         return sessionApi.getSession(sessionId);
       },
