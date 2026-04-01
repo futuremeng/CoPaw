@@ -209,22 +209,55 @@ function sanitizeStreamEventPayload(rawData: string): string {
   }
 
   try {
-    const parsed = JSON.parse(rawData) as StreamResponseData & {
-      output?: unknown;
+    const parsed = JSON.parse(rawData) as unknown;
+
+    const sanitizeNode = (node: unknown): [unknown, boolean] => {
+      if (Array.isArray(node)) {
+        let changed = false;
+        const items = node.map((item) => {
+          const [nextItem, itemChanged] = sanitizeNode(item);
+          if (itemChanged) {
+            changed = true;
+          }
+          return nextItem;
+        });
+        return [items, changed];
+      }
+
+      if (!node || typeof node !== "object") {
+        return [node, false];
+      }
+
+      const record = node as Record<string, unknown>;
+      let changed = false;
+      const next: Record<string, unknown> = { ...record };
+
+      for (const [key, value] of Object.entries(record)) {
+        if (key === "output" && Array.isArray(value) && value.length > 1) {
+          const deduped = dedupeOutputMessagesByStableId(value);
+          if (deduped.length !== value.length) {
+            next[key] = deduped;
+            changed = true;
+            continue;
+          }
+        }
+
+        const [nextValue, valueChanged] = sanitizeNode(value);
+        if (valueChanged) {
+          next[key] = nextValue;
+          changed = true;
+        }
+      }
+
+      return [changed ? next : node, changed];
     };
-    if (!Array.isArray(parsed.output) || parsed.output.length <= 1) {
+
+    const [sanitized, changed] = sanitizeNode(parsed);
+    if (!changed) {
       return rawData;
     }
 
-    const dedupedOutput = dedupeOutputMessagesByStableId(parsed.output);
-    if (dedupedOutput.length === parsed.output.length) {
-      return rawData;
-    }
-
-    return JSON.stringify({
-      ...parsed,
-      output: dedupedOutput,
-    });
+    return JSON.stringify(sanitized);
   } catch {
     return rawData;
   }
@@ -236,25 +269,62 @@ function sanitizeConsoleChatSseStream(
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
 
-  const transformFrame = (frame: string): string => {
-    const lines = frame.split(/\r?\n/);
-    const dataLineIndexes = lines
-      .map((line, index) => ({ line, index }))
-      .filter(({ line }) => line.startsWith("data:"))
-      .map(({ index }) => index);
+  const splitNextEvent = (input: string): [string, string] | null => {
+    const lfBoundary = input.indexOf("\n\n");
+    const crlfBoundary = input.indexOf("\r\n\r\n");
 
-    if (dataLineIndexes.length !== 1) {
+    if (lfBoundary === -1 && crlfBoundary === -1) {
+      return null;
+    }
+
+    const useCrLf =
+      crlfBoundary !== -1 &&
+      (lfBoundary === -1 || crlfBoundary < lfBoundary);
+    const boundary = useCrLf ? crlfBoundary : lfBoundary;
+    const sepLength = useCrLf ? 4 : 2;
+    const frame = input.slice(0, boundary);
+    const rest = input.slice(boundary + sepLength);
+
+    return [frame, rest];
+  };
+
+  const transformFrame = (frame: string): string => {
+    if (!frame) {
       return frame;
     }
 
-    const idx = dataLineIndexes[0];
-    const rawData = lines[idx].slice(5).trimStart();
+    const lines = frame.split(/\r?\n/);
+    const dataIndexes: number[] = [];
+    const dataValues: string[] = [];
+
+    for (let i = 0; i < lines.length; i += 1) {
+      const line = lines[i];
+      if (!line.startsWith("data:")) {
+        continue;
+      }
+      dataIndexes.push(i);
+      dataValues.push(line.slice(5).trimStart());
+    }
+
+    if (dataIndexes.length === 0) {
+      return frame;
+    }
+
+    const rawData = dataValues.join("\n");
     const sanitized = sanitizeStreamEventPayload(rawData);
     if (sanitized === rawData) {
       return frame;
     }
 
-    lines[idx] = `data: ${sanitized}`;
+    const firstDataIndex = dataIndexes[0];
+    lines[firstDataIndex] = `data: ${sanitized}`;
+
+    // Collapse additional data lines into the first one to avoid
+    // duplicated payload fragments after sanitization.
+    for (let i = dataIndexes.length - 1; i >= 1; i -= 1) {
+      lines.splice(dataIndexes[i], 1);
+    }
+
     return lines.join("\n");
   };
 
@@ -268,7 +338,9 @@ function sanitizeConsoleChatSseStream(
           if (done) {
             buffer += decoder.decode();
             if (buffer.length > 0) {
-              controller.enqueue(encoder.encode(transformFrame(buffer)));
+              controller.enqueue(
+                encoder.encode(`${transformFrame(buffer)}\n\n`),
+              );
             }
             controller.close();
             return;
@@ -276,14 +348,14 @@ function sanitizeConsoleChatSseStream(
 
           buffer += decoder.decode(value, { stream: true });
 
-          let boundary = buffer.indexOf("\n\n");
-          while (boundary !== -1) {
-            const frame = buffer.slice(0, boundary);
-            buffer = buffer.slice(boundary + 2);
+          let eventParts = splitNextEvent(buffer);
+          while (eventParts) {
+            const [frame, rest] = eventParts;
+            buffer = rest;
             controller.enqueue(
               encoder.encode(`${transformFrame(frame)}\n\n`),
             );
-            boundary = buffer.indexOf("\n\n");
+            eventParts = splitNextEvent(buffer);
           }
 
           pump();
