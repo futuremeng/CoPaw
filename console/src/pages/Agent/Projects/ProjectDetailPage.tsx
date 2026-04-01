@@ -606,7 +606,10 @@ export default function ProjectDetailPage() {
         currentAgent.id,
         selectedProject.id,
         item.id,
-        { enable: true },
+        {
+          enable: true,
+          target_name: targetName,
+        },
       );
       await loadAgents();
       message.success(
