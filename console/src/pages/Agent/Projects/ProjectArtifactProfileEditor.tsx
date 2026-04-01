@@ -381,19 +381,42 @@ export default function ProjectArtifactProfileEditor({
                       />
 
                       {meta.kind === "skill" ? (
-                        <div className={styles.artifactEditorActions}>
-                          <Button
-                            size="small"
-                            loading={promotingSkillId === item.id}
-                            disabled={
-                              !item.id ||
-                              saving ||
-                              (item.status || "").toLowerCase() !== "stable"
-                            }
-                            onClick={() => void onPromoteSkill(item)}
-                          >
-                            {t("projects.artifacts.promote", "Promote to Agent")}
-                          </Button>
+                        <div className={styles.artifactEditorActionsRow}>
+                          <div className={styles.artifactEditorPromotionInfo}>
+                            {item.origin === "project-promoted" ? (
+                              <>
+                                <Tag color="success">
+                                  {t(
+                                    "projects.artifacts.promotedBadge",
+                                    "Promoted",
+                                  )}
+                                </Tag>
+                                {item.market_item_id ? (
+                                  <span className={styles.itemMeta}>
+                                    {t(
+                                      "projects.artifacts.promotedAs",
+                                      "as {{name}}",
+                                      { name: item.market_item_id },
+                                    )}
+                                  </span>
+                                ) : null}
+                              </>
+                            ) : null}
+                          </div>
+                          <div className={styles.artifactEditorActions}>
+                            <Button
+                              size="small"
+                              loading={promotingSkillId === item.id}
+                              disabled={
+                                !item.id ||
+                                saving ||
+                                (item.status || "").toLowerCase() !== "stable"
+                              }
+                              onClick={() => void onPromoteSkill(item)}
+                            >
+                              {t("projects.artifacts.promote", "Promote to Agent")}
+                            </Button>
+                          </div>
                         </div>
                       ) : null}
                     </div>

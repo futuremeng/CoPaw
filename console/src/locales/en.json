@@ -137,6 +137,8 @@
       "promoteTargetName": "Target name",
       "promoteTargetPath": "Target path",
       "promoteConfirmOk": "Promote",
+      "promotedBadge": "Promoted",
+      "promotedAs": "as {{name}}",
       "add": "Add",
       "emptyCategory": "No entries",
       "fields": {

@@ -1551,6 +1551,8 @@
       "promoteTargetName": "対象名",
       "promoteTargetPath": "保存先パス",
       "promoteConfirmOk": "昇格する",
+      "promotedBadge": "昇格済み",
+      "promotedAs": "公開名: {{name}}",
       "add": "追加",
       "emptyCategory": "項目はまだありません",
       "fields": {

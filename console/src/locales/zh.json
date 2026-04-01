@@ -1553,6 +1553,8 @@
       "promoteTargetName": "目标名称",
       "promoteTargetPath": "目标路径",
       "promoteConfirmOk": "确认晋升",
+      "promotedBadge": "已晋升",
+      "promotedAs": "已发布为 {{name}}",
       "add": "新增",
       "emptyCategory": "暂无条目",
       "fields": {

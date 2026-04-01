@@ -1551,6 +1551,8 @@
       "promoteTargetName": "Имя цели",
       "promoteTargetPath": "Путь назначения",
       "promoteConfirmOk": "Повысить",
+      "promotedBadge": "Повышено",
+      "promotedAs": "опубликовано как {{name}}",
       "add": "Добавить",
       "emptyCategory": "Записей пока нет",
       "fields": {
