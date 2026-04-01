@@ -8,7 +8,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Empty, Popover, Spin, Tooltip, message } from "antd";
 import { CopyOutlined, DashboardOutlined, FileMarkdownOutlined } from "@ant-design/icons";
-import { SparkAttachmentLine } from "@agentscope-ai/icons";
+import { SparkAttachmentLine, SparkHistoryLine, SparkNewChatFill } from "@agentscope-ai/icons";
 import { useTranslation } from "react-i18next";
 import defaultConfig, { getDefaultConfig } from "../../pages/Chat/OptionsPanel/defaultConfig";
 import ModelSelector from "../../pages/Chat/ModelSelector";
@@ -43,6 +43,7 @@ import {
   extractCopyableText,
   toDisplayUrl,
 } from "../../pages/Chat/utils";
+import styles from "./index.module.less";
 
 type SessionContext = {
   session_id?: string;
@@ -455,6 +456,7 @@ export default function AnywhereChat({
   const [historyPopoverOpen, setHistoryPopoverOpen] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyChats, setHistoryChats] = useState<ChatSpec[]>([]);
+  const [currentChatName, setCurrentChatName] = useState("");
   const [isChatStreaming, setIsChatStreaming] = useState(false);
   const [lastRuntimeStatusUpdatedAt, setLastRuntimeStatusUpdatedAt] = useState<number | null>(null);
   const [runtimeStatusError, setRuntimeStatusError] = useState<string | null>(null);
@@ -509,10 +511,29 @@ export default function AnywhereChat({
     setDraftInputValue(nextValue);
   }, [getInputTextarea, setDraftInputValue]);
 
+  const resolveCurrentChatName = useCallback(
+    (chats: ChatSpec[]): string => {
+      const current = chats.find((chat) => chat.id === sessionId);
+      return (current?.name || current?.session_id || current?.id || "").trim()
+        || t("chat.newChat", "New Chat");
+    },
+    [sessionId, t],
+  );
+
+  const loadCurrentChatName = useCallback(async () => {
+    try {
+      const chats = await chatApi.listChats({ user_id: "default", channel: "console" });
+      setCurrentChatName(resolveCurrentChatName(chats));
+    } catch {
+      setCurrentChatName(t("chat.newChat", "New Chat"));
+    }
+  }, [resolveCurrentChatName, t]);
+
   const loadHistoryChats = useCallback(async () => {
     setHistoryLoading(true);
     try {
       const chats = await chatApi.listChats({ user_id: "default", channel: "console" });
+      setCurrentChatName(resolveCurrentChatName(chats));
       const current = chats.find((chat) => chat.id === sessionId);
       const currentScope = resolveChatScopeFromAncestors(chats, current);
       const currentWorkspaceRootIds = chats
@@ -582,7 +603,7 @@ export default function AnywhereChat({
     } finally {
       setHistoryLoading(false);
     }
-  }, [sessionId]);
+  }, [resolveCurrentChatName, sessionId]);
 
   const updateTransientMessages = useCallback((messages: Message[]) => {
     setTransientMessages(messages);
@@ -761,13 +782,14 @@ export default function AnywhereChat({
     sessionIdRef.current = sessionId;
     clearRuntimeStatusRetry();
     runtimeStatusRetryCountRef.current = 0;
+    void loadCurrentChatName();
     setRefreshKey((prev) => prev + 1);
     setChatHistory(null);
     setRuntimeStatusFromApi(null);
     setRuntimeStatusError(null);
     setTransientMessages([]);
 
-  }, [clearRuntimeStatusRetry, sessionId]);
+  }, [clearRuntimeStatusRetry, loadCurrentChatName, sessionId]);
 
   useEffect(() => {
     if (!autoAttachRequest?.id) {
@@ -1560,16 +1582,7 @@ export default function AnywhereChat({
     }
 
     return (
-      <div
-        style={{
-          width: 320,
-          maxHeight: 320,
-          overflow: "auto",
-          display: "flex",
-          flexDirection: "column",
-          gap: 6,
-        }}
-      >
+      <div className={styles.historyPopover}>
         {historyChats.map((chat) => {
           const title = (chat.name || chat.session_id || chat.id || "").trim() || t("chat.untitled", "Untitled chat");
           const updatedAt = formatLocalDateTime(chat.updated_at || chat.created_at || "");
@@ -1624,34 +1637,18 @@ export default function AnywhereChat({
 
   return (
     <div
-      className={hostClassName}
-      style={{
-        height: "100%",
-        minHeight: 0,
-        maxHeight: "100%",
-        width: "100%",
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-      }}
+      className={`${hostClassName} copaw-chat-anywhere-layout ${styles.anywhereLayout}`}
     >
       <div
-        className="copaw-chat-anywhere-header"
-        style={{
-          height: 44,
-          minHeight: 44,
-          maxHeight: 44,
-          flexShrink: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 8,
-          padding: "4px 8px",
-          overflow: "hidden",
-        }}
+        className={`copaw-chat-anywhere-header ${styles.header}`}
       >
-        <ModelSelector />
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+        <div className={styles.headerLeft}>
+          <span className={styles.chatName} title={currentChatName}>
+            {currentChatName || t("chat.newChat", "New Chat")}
+          </span>
+        </div>
+        <div className={styles.headerRight}>
+          <ModelSelector />
           <Popover
             trigger="click"
             placement="bottomRight"
@@ -1695,9 +1692,14 @@ export default function AnywhereChat({
               </span>
             </Button>
           </Popover>
-          <Button size="small" onClick={onNewChat}>
-            {t("chat.newChat", "New Chat")}
-          </Button>
+          <Tooltip title={t("chat.newChat", "New Chat")} mouseEnterDelay={0.3}>
+            <IconButton
+              bordered={false}
+              icon={<SparkNewChatFill />}
+              onClick={onNewChat}
+              aria-label={t("chat.newChat", "New Chat")}
+            />
+          </Tooltip>
           <Popover
             trigger="click"
             placement="bottomRight"
@@ -1710,13 +1712,18 @@ export default function AnywhereChat({
             }}
             content={historyPopoverContent}
           >
-            <Button size="small">{t("chat.historyChat", "History Chats")}</Button>
+            <Tooltip title={t("chat.historyChat", "History Chats")} mouseEnterDelay={0.3}>
+              <IconButton
+                bordered={false}
+                icon={<SparkHistoryLine />}
+                aria-label={t("chat.historyChat", "History Chats")}
+              />
+            </Tooltip>
           </Popover>
         </div>
       </div>
       <div
-        className="copaw-chat-anywhere-chat"
-        style={{ flex: 1, minHeight: 0, maxHeight: "100%", overflow: "hidden" }}
+        className={`copaw-chat-anywhere-chat ${styles.chatArea}`}
       >
         <AgentScopeRuntimeWebUI
           ref={chatRef}
