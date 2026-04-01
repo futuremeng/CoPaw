@@ -140,3 +140,45 @@ def test_confirm_stable_endpoint_updates_status(
     assert summary is not None
     item = next(skill for skill in summary.artifact_profile.skills if skill.id == artifact_id)
     assert item.status == "stable"
+
+
+def test_full_artifact_chain_distill_confirm_and_promote(
+    project_artifact_router_client: tuple[TestClient, Path, str],
+):
+    client, workspace_dir, project_id = project_artifact_router_client
+
+    distill = client.post(
+        f"/agents/default/projects/{project_id}/artifacts/skills/distill-draft",
+    )
+    assert distill.status_code == 200
+    drafted_ids = distill.json().get("drafted_ids") or []
+    assert drafted_ids
+
+    artifact_id = drafted_ids[0]
+    confirm = client.post(
+        f"/agents/default/projects/{project_id}/artifacts/skills/{artifact_id}/confirm-stable",
+    )
+    assert confirm.status_code == 200
+    assert confirm.json().get("status") == "stable"
+
+    promote = client.post(
+        f"/agents/default/projects/{project_id}/artifacts/skills/{artifact_id}/promote",
+        json={
+            "target_name": "auto_chain_skill",
+            "enable": False,
+        },
+    )
+    assert promote.status_code == 200
+    promote_body = promote.json()
+    assert promote_body.get("promoted") is True
+    assert promote_body.get("target_name") == "auto_chain_skill"
+
+    target_md = workspace_dir / "skills" / "auto_chain_skill" / "SKILL.md"
+    assert target_md.exists()
+    assert "project_id: project-demo" in target_md.read_text(encoding="utf-8")
+
+    summary = _load_project_summary(workspace_dir / "projects" / project_id)
+    assert summary is not None
+    item = next(skill for skill in summary.artifact_profile.skills if skill.id == artifact_id)
+    assert item.origin == "project-promoted"
+    assert item.market_item_id == "auto_chain_skill"
