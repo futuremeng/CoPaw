@@ -1605,7 +1605,12 @@
       "removeAttachment": "Remove from chat attachments",
       "collaborationPlaceholder": "Describe the project goal, current materials, or the next thing you want to move forward.",
       "collaborationWelcomeGreeting": "Project collaboration assistant is ready.",
-      "collaborationWelcomeDescription": "Use this space to understand the project, organize materials, and plan the next step before opening automation.",
+      "collaborationWelcomeDescription": "Briefly describe the project goal, current stage, and expected deliverable. If materials are available, upload or paste them first so the missing context can be completed.",
+      "collaborationWelcomeDescriptionEmptyProject": "This is a new project. Start by clarifying goals, scope, and expected outcomes, then prepare the first batch of materials.",
+      "collaborationPromptEmpty1": "Help me clarify this project's goal, current stage, and expected deliverable.",
+      "collaborationPromptEmpty2": "I have provided materials. Summarize the current state and point out missing information.",
+      "collaborationPromptEmptyNewProject1": "This is a new project. Help me define the goal, scope, milestones, and acceptance criteria.",
+      "collaborationPromptEmptyNewProject2": "Give me a from-zero-to-one kickoff checklist with the first three actions I can start today.",
       "collaborationPrompt1": "Summarize the current project based on the available files and highlight missing inputs.",
       "collaborationPrompt2": "Suggest the next three actions to move this project forward without assuming a fixed flow yet."
     }

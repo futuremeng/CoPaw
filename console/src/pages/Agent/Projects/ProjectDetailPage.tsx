@@ -1837,6 +1837,7 @@ export default function ProjectDetailPage() {
 
           <div className={styles.columnChat}>
             <ProjectChatPanel
+              projectFileCount={projectFileCount}
               selectedRunId={selectedRunId}
               chatStarting={chatStarting}
               activeWorkspaceChatId={activeWorkspaceChatId}

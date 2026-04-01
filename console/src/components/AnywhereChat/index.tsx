@@ -1,5 +1,6 @@
 import {
   AgentScopeRuntimeWebUI,
+  WelcomePrompts,
   Stream,
   type IAgentScopeRuntimeWebUIOptions,
   type IAgentScopeRuntimeWebUIRef,
@@ -74,6 +75,9 @@ interface AnywhereChatProps {
   welcomeGreeting?: string;
   welcomeDescription?: string;
   welcomePrompts?: string[];
+  welcomePromptsWhenEmpty?: string[];
+  welcomePromptsWhenDraft?: string[];
+  welcomePromptClickBehavior?: "submit" | "append";
   onNewChat?: () => void;
   onAssistantTurnCompleted?: (payload: {
     text: string;
@@ -241,6 +245,9 @@ export default function AnywhereChat({
   welcomeGreeting,
   welcomeDescription,
   welcomePrompts,
+  welcomePromptsWhenEmpty,
+  welcomePromptsWhenDraft,
+  welcomePromptClickBehavior = "submit",
   onNewChat,
   onAssistantTurnCompleted,
   autoAttachRequest,
@@ -260,12 +267,66 @@ export default function AnywhereChat({
   const [lastRuntimeStatusUpdatedAt, setLastRuntimeStatusUpdatedAt] = useState<number | null>(null);
   const [runtimeStatusError, setRuntimeStatusError] = useState<string | null>(null);
   const [transientMessages, setTransientMessages] = useState<Message[]>([]);
+  const [hasDraftContent, setHasDraftContent] = useState(false);
   const chatRef = useRef<IAgentScopeRuntimeWebUIRef>(null);
   const runtimeStatusRequestInFlight = useRef(false);
   const sessionIdRef = useRef(sessionId);
   const runtimeStatusRetryTimerRef = useRef<number | null>(null);
   const runtimeStatusRetryCountRef = useRef(0);
   const handledAutoAttachIdRef = useRef("");
+
+  const getInputRoot = useCallback((): HTMLElement | null => {
+    return document.querySelector(`.${hostClassName}`) as HTMLElement | null;
+  }, [hostClassName]);
+
+  const getInputTextarea = useCallback((): HTMLTextAreaElement | null => {
+    const root = getInputRoot();
+    return root?.querySelector("textarea") as HTMLTextAreaElement | null;
+  }, [getInputRoot]);
+
+  const updateDraftContentState = useCallback(() => {
+    const root = getInputRoot();
+    const textArea = getInputTextarea();
+    const hasText = Boolean((textArea?.value || "").trim());
+    const hasAttachments = Boolean(
+      root?.querySelector(
+        "[class$='-attachment'], [class*='-attachment-list-item'], [class*='-sender-header'] [class*='-attachment-list']",
+      ),
+    );
+    setHasDraftContent(hasText || hasAttachments);
+  }, [getInputRoot, getInputTextarea]);
+
+  const setDraftInputValue = useCallback((nextValue: string) => {
+    const textArea = getInputTextarea();
+    if (!textArea) {
+      return false;
+    }
+    const prototype = Object.getPrototypeOf(textArea) as {
+      value?: PropertyDescriptor;
+    };
+    const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
+    if (descriptor?.set) {
+      descriptor.set.call(textArea, nextValue);
+    } else {
+      textArea.value = nextValue;
+    }
+    textArea.dispatchEvent(new Event("input", { bubbles: true }));
+    textArea.focus();
+    setHasDraftContent(Boolean(nextValue.trim()));
+    return true;
+  }, [getInputTextarea]);
+
+  const appendPromptToDraftInput = useCallback((promptText: string) => {
+    const textArea = getInputTextarea();
+    if (!textArea) {
+      return;
+    }
+    const current = (textArea.value || "").trim();
+    const nextValue = current
+      ? `${current}\n\n${promptText}`
+      : promptText;
+    setDraftInputValue(nextValue);
+  }, [getInputTextarea, setDraftInputValue]);
 
   const updateTransientMessages = useCallback((messages: Message[]) => {
     setTransientMessages(messages);
@@ -449,8 +510,49 @@ export default function AnywhereChat({
     setRuntimeStatusFromApi(null);
     setRuntimeStatusError(null);
     setTransientMessages([]);
+    setHasDraftContent(false);
 
   }, [clearRuntimeStatusRetry, sessionId]);
+
+  useEffect(() => {
+    const root = getInputRoot();
+    if (!root) {
+      return;
+    }
+
+    let boundTextArea: HTMLTextAreaElement | null = null;
+    const handleInput = () => {
+      updateDraftContentState();
+    };
+
+    const bindInputListener = () => {
+      const textArea = root.querySelector("textarea") as HTMLTextAreaElement | null;
+      if (boundTextArea === textArea) {
+        return;
+      }
+      if (boundTextArea) {
+        boundTextArea.removeEventListener("input", handleInput);
+      }
+      boundTextArea = textArea;
+      if (boundTextArea) {
+        boundTextArea.addEventListener("input", handleInput);
+      }
+      updateDraftContentState();
+    };
+
+    bindInputListener();
+    const observer = new MutationObserver(() => {
+      bindInputListener();
+    });
+    observer.observe(root, { subtree: true, childList: true });
+
+    return () => {
+      observer.disconnect();
+      if (boundTextArea) {
+        boundTextArea.removeEventListener("input", handleInput);
+      }
+    };
+  }, [getInputRoot, updateDraftContentState]);
 
   useEffect(() => {
     if (!autoAttachRequest?.id) {
@@ -465,25 +567,11 @@ export default function AnywhereChat({
       try {
         const mode = autoAttachRequest.mode || "submit";
         if (mode === "draft") {
-          const root = document.querySelector(`.${hostClassName}`) as HTMLElement | null;
           const draftText =
             autoAttachRequest.note ||
             "I attached files as context. Please review them and wait for my next instruction.";
 
-          const textArea = root?.querySelector("textarea") as HTMLTextAreaElement | null;
-          if (textArea) {
-            const prototype = Object.getPrototypeOf(textArea) as {
-              value?: PropertyDescriptor;
-            };
-            const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
-            if (descriptor?.set) {
-              descriptor.set.call(textArea, draftText);
-            } else {
-              textArea.value = draftText;
-            }
-            textArea.dispatchEvent(new Event("input", { bubbles: true }));
-            textArea.focus();
-
+          if (setDraftInputValue(draftText)) {
             onAutoAttachHandled?.({
               id: autoAttachRequest.id,
               ok: true,
@@ -555,7 +643,11 @@ export default function AnywhereChat({
     };
 
     void attach();
-  }, [autoAttachRequest, hostClassName, onAutoAttachHandled]);
+  }, [
+    autoAttachRequest,
+    onAutoAttachHandled,
+    setDraftInputValue,
+  ]);
 
   useEffect(() => {
     void loadRuntimeInputs();
@@ -845,10 +937,36 @@ export default function AnywhereChat({
     const i18nConfig = getDefaultConfig(t);
     const senderConfig = (i18nConfig as SenderConfigShape).sender || {};
     const welcomeConfig = (i18nConfig.welcome || {}) as WelcomeConfigShape;
+    const selectedPromptValues = hasDraftContent
+      ? (welcomePromptsWhenDraft || welcomePrompts || [])
+      : (welcomePromptsWhenEmpty || welcomePrompts || []);
     const prompts =
-      Array.isArray(welcomePrompts) && welcomePrompts.length > 0
-        ? welcomePrompts.map((value) => ({ value }))
+      Array.isArray(selectedPromptValues) && selectedPromptValues.length > 0
+        ? selectedPromptValues.map((value) => ({ value }))
         : (welcomeConfig.prompts || []);
+
+    const renderWelcome =
+      welcomePromptClickBehavior === "append"
+        ? (props: {
+            greeting?: string;
+            avatar?: string;
+            description?: string;
+            prompts?: Array<{ value: string }>;
+          }) => (
+            <WelcomePrompts
+              greeting={props.greeting}
+              avatar={props.avatar}
+              description={props.description}
+              prompts={(props.prompts || []).map((item) => ({
+                value: item.value,
+                label: item.value,
+              }))}
+              onClick={(query) => {
+                appendPromptToDraftInput(query);
+              }}
+            />
+          )
+        : undefined;
 
     return {
       ...i18nConfig,
@@ -883,6 +1001,7 @@ export default function AnywhereChat({
         greeting: welcomeGreeting || welcomeConfig.greeting,
         description: welcomeDescription || welcomeConfig.description,
         prompts,
+        render: renderWelcome,
       },
       session: {
         multiple: false,
@@ -943,12 +1062,17 @@ export default function AnywhereChat({
     handleFileUpload,
     inputPlaceholder,
     isDark,
+    hasDraftContent,
+    appendPromptToDraftInput,
     sessionId,
     singleSessionApi,
     t,
     welcomeDescription,
     welcomeGreeting,
+    welcomePromptClickBehavior,
     welcomePrompts,
+    welcomePromptsWhenDraft,
+    welcomePromptsWhenEmpty,
   ]);
 
   const runtimeStatusContent = useMemo(() => {

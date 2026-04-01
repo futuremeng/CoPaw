@@ -25,6 +25,7 @@ interface AutoAttachHandledPayload {
 }
 
 interface ProjectChatPanelProps {
+  projectFileCount: number;
   selectedRunId: string;
   chatStarting: boolean;
   activeWorkspaceChatId: string;
@@ -38,6 +39,7 @@ interface ProjectChatPanelProps {
 }
 
 export default function ProjectChatPanel({
+  projectFileCount,
   selectedRunId,
   chatStarting,
   activeWorkspaceChatId,
@@ -50,6 +52,7 @@ export default function ProjectChatPanel({
   onStartRunChat,
 }: ProjectChatPanelProps) {
   const { t } = useTranslation();
+  const hasUserFiles = projectFileCount > 0;
 
   const handleAutoAttachHandled = (payload: AutoAttachHandledPayload) => {
     if (!payload.ok) {
@@ -99,6 +102,7 @@ export default function ProjectChatPanel({
                 autoAttachRequest={autoAttachRequest}
                 onAutoAttachHandled={handleAutoAttachHandled}
                 onNewChat={onStartWorkspaceChat}
+                welcomePromptClickBehavior="append"
                 inputPlaceholder={t(
                   "projects.chat.collaborationPlaceholder",
                   "Describe the project goal, current materials, or the next thing you want to move forward.",
@@ -108,10 +112,32 @@ export default function ProjectChatPanel({
                   "Project collaboration assistant is ready.",
                 )}
                 welcomeDescription={t(
-                  "projects.chat.collaborationWelcomeDescription",
-                  "Use this space to understand the project, organize materials, and plan the next step before opening automation.",
+                  hasUserFiles
+                    ? "projects.chat.collaborationWelcomeDescription"
+                    : "projects.chat.collaborationWelcomeDescriptionEmptyProject",
+                  hasUserFiles
+                    ? "Use this space to understand the project, organize materials, and plan the next step before opening automation."
+                    : "This is a new project. Start by clarifying goals, scope, and expected outcomes, then prepare the first batch of materials.",
                 )}
-                welcomePrompts={[
+                welcomePromptsWhenEmpty={[
+                  t(
+                    hasUserFiles
+                      ? "projects.chat.collaborationPromptEmpty1"
+                      : "projects.chat.collaborationPromptEmptyNewProject1",
+                    hasUserFiles
+                      ? "Help me clarify this project's goal, current stage, and expected deliverable."
+                      : "This is a new project. Help me define the goal, scope, milestones, and acceptance criteria.",
+                  ),
+                  t(
+                    hasUserFiles
+                      ? "projects.chat.collaborationPromptEmpty2"
+                      : "projects.chat.collaborationPromptEmptyNewProject2",
+                    hasUserFiles
+                      ? "I have provided materials. Summarize the current state and point out missing information."
+                      : "Give me a from-zero-to-one kickoff checklist with the first three actions I can start today.",
+                  ),
+                ]}
+                welcomePromptsWhenDraft={[
                   t(
                     "projects.chat.collaborationPrompt1",
                     "Summarize the current project based on the available files and highlight missing inputs.",

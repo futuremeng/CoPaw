@@ -1016,6 +1016,23 @@
   flex: 1;
   min-height: 0;
   overflow: hidden;
+
+  :global([class$='-welcome-prompts-prompts']) {
+    width: min(560px, 100%);
+  }
+
+  :global([class$='-welcome-prompts-prompt']) {
+    height: auto;
+    align-items: flex-start;
+  }
+
+  :global([class$='-welcome-prompts-prompt-label']) {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: initial;
+    line-height: 1.5;
+    word-break: break-word;
+  }
 }
 
 .automationDrawerBody {

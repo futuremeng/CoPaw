@@ -1605,7 +1605,12 @@
       "removeAttachment": "移出聊天附件",
       "collaborationPlaceholder": "描述项目目标、现有资料，或你现在想推进的下一步。",
       "collaborationWelcomeGreeting": "项目协作助手已就绪。",
-      "collaborationWelcomeDescription": "先在这里理解项目、整理资料、规划下一步，再决定是否进入自动化。",
+      "collaborationWelcomeDescription": "请先简要说明项目目标、当前阶段和预期产出；如果你已有资料，请先上传或粘贴，我会基于材料补全项目背景与缺失信息。",
+      "collaborationWelcomeDescriptionEmptyProject": "这是一个新建项目，先明确目标、范围与预期产出，再准备第一批资料。",
+      "collaborationPromptEmpty1": "请帮我梳理这个项目的目标、当前阶段与预期产出。",
+      "collaborationPromptEmpty2": "我已提供资料，请基于这些材料总结项目现状并指出缺失信息。",
+      "collaborationPromptEmptyNewProject1": "这是一个新建项目，请帮我定义目标、范围、里程碑和验收标准。",
+      "collaborationPromptEmptyNewProject2": "请给我一个从 0 到 1 的启动清单：今天就能开始的前三步。",
       "collaborationPrompt1": "请基于当前文件总结这个项目的现状，并指出缺失信息。",
       "collaborationPrompt2": "在不预设固定流程的前提下，给出推进这个项目的三个下一步建议。"
     }
