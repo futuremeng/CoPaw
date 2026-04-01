@@ -17,7 +17,10 @@ type ArtifactSkill = {
   market_item_id: string | null;
 };
 
-function buildProject(artifactSkills: ArtifactSkill[]) {
+function buildProject(
+  artifactSkills: ArtifactSkill[],
+  artifactDistillMode: "file_scan" | "conversation_evidence" = "file_scan",
+) {
   return {
     id: "p1",
     name: "Project One",
@@ -27,6 +30,7 @@ function buildProject(artifactSkills: ArtifactSkill[]) {
     data_dir: "/tmp/default/projects/p1/data",
     metadata_file: "PROJECT.md",
     tags: [],
+    artifact_distill_mode: artifactDistillMode,
     artifact_profile: {
       skills: artifactSkills,
       scripts: [],
@@ -262,6 +266,132 @@ async function setupProjectWorkflowApiMocks(page: Page) {
   });
 }
 
+async function setupConversationDistillSuggestionMocks(page: Page) {
+  await page.route("**/api/**", async (route: Route) => {
+    const url = new URL(route.request().url());
+    const pathname = url.pathname.replace(/^\/console(?=\/api\/)/, "");
+
+    if (!pathname.startsWith("/api/")) {
+      await route.continue();
+      return;
+    }
+
+    if (pathname === "/api/auth/status") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ enabled: false }),
+      });
+      return;
+    }
+
+    if (pathname === "/api/models") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([]),
+      });
+      return;
+    }
+
+    if (pathname === "/api/models/active") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ active_llm: null }),
+      });
+      return;
+    }
+
+    if (pathname === "/api/agent/running-config") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ knowledge_enabled: true }),
+      });
+      return;
+    }
+
+    if (pathname === "/api/chats") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([]),
+      });
+      return;
+    }
+
+    if (pathname.startsWith("/api/chats/")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ messages: [], status: "idle", has_more: false, total: 0 }),
+      });
+      return;
+    }
+
+    if (pathname === "/api/agents") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          agents: [
+            {
+              id: "default",
+              name: "Default",
+              description: "",
+              workspace_dir: "/tmp/default",
+              projects: [buildProject([], "conversation_evidence")],
+            },
+          ],
+        }),
+      });
+      return;
+    }
+
+    if (pathname === "/api/agents/default/projects/p1/files") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([]),
+      });
+      return;
+    }
+
+    if (pathname === "/api/agents/default/projects/p1/pipelines/templates") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([]),
+      });
+      return;
+    }
+
+    if (pathname === "/api/agents/default/projects/p1/pipelines/runs") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            id: "run-42",
+            template_id: "",
+            status: "succeeded",
+            created_at: "2026-03-23T00:00:00Z",
+            updated_at: "2026-03-23T00:10:00Z",
+          },
+        ]),
+      });
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({}),
+    });
+  });
+}
+
 test("artifact workflow: auto draft -> confirm stable -> promote", async ({ page }) => {
   test.setTimeout(90_000);
 
@@ -309,4 +439,25 @@ test("artifact workflow: auto draft -> confirm stable -> promote", async ({ page
   await promoteRequest;
 
   await expect(page.getByText(/Promoted|已晋升/i)).toBeVisible({ timeout: 20_000 });
+});
+
+test("artifact workflow: conversation mode shows suggested run_id", async ({ page }) => {
+  test.setTimeout(90_000);
+
+  await setupConversationDistillSuggestionMocks(page);
+  await page.goto("/projects/p1");
+
+  const manageBtn = page.getByRole("button", { name: /Manage Artifacts|管理产物/i });
+  await expect(manageBtn).toBeVisible({ timeout: 30_000 });
+  await manageBtn.click();
+
+  await expect(
+    page.getByRole("button", {
+      name: /Auto Draft from Conversation|从对话自动草拟/i,
+    }),
+  ).toBeVisible({ timeout: 20_000 });
+
+  await expect(
+    page.getByText(/Suggested run_id: run-42|建议 run_id：run-42/i),
+  ).toBeVisible({ timeout: 20_000 });
 });
