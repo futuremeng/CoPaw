@@ -122,11 +122,6 @@ export default function ProjectsListPage() {
     setCreateOpen(true);
   }, [createForm]);
 
-  const handleOpenUpload = useCallback((projectId: string, event: React.MouseEvent) => {
-    event.stopPropagation();
-    navigate(`/projects/${encodeURIComponent(projectId)}?openUpload=1`);
-  }, [navigate]);
-
   const handleOpenWorkspace = useCallback((projectId: string, event: React.MouseEvent) => {
     event.stopPropagation();
     navigate(`/projects/${encodeURIComponent(projectId)}`);
@@ -282,13 +277,6 @@ export default function ProjectsListPage() {
                     onClick={(event) => handleOpenWorkspace(project.id, event)}
                   >
                     {t("projects.open", "Open")}
-                  </Button>
-                  <Button
-                    size="small"
-                    className={styles.uploadButton}
-                    onClick={(event) => handleOpenUpload(project.id, event)}
-                  >
-                    {t("projects.upload.button", "Upload Files")}
                   </Button>
                   <Button
                     size="small"
