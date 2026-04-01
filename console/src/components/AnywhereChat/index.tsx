@@ -277,6 +277,50 @@ function collectSessionLineageIds(chats: ChatSpec[], sessionId: string): string[
   return lineage.reverse();
 }
 
+type StableMessageIdentity = {
+  id?: unknown;
+  message_id?: unknown;
+};
+
+function getStableMessageId(message: StableMessageIdentity): string | null {
+  const id = message.id;
+  if (typeof id === "string" && id.trim()) {
+    return id.trim();
+  }
+
+  const messageId = message.message_id;
+  if (typeof messageId === "string" && messageId.trim()) {
+    return messageId.trim();
+  }
+
+  return null;
+}
+
+function mergeMessagesByStableId<T extends object>(messages: T[]): T[] {
+  const merged: T[] = [];
+  const indexById = new Map<string, number>();
+
+  for (const message of messages) {
+    const stableId = getStableMessageId(message as StableMessageIdentity);
+    if (!stableId) {
+      merged.push(message);
+      continue;
+    }
+
+    const existingIndex = indexById.get(stableId);
+    if (existingIndex === undefined) {
+      indexById.set(stableId, merged.length);
+      merged.push(message);
+      continue;
+    }
+
+    // Prefer the latest payload for the same message id to keep stream updates fresh.
+    merged[existingIndex] = message;
+  }
+
+  return merged;
+}
+
 async function loadMergedRawChatHistory(sessionId: string): Promise<ChatHistory | null> {
   const chats = await chatApi.listChats({ user_id: "default", channel: "console" });
   const lineageIds = collectSessionLineageIds(chats, sessionId);
@@ -295,7 +339,9 @@ async function loadMergedRawChatHistory(sessionId: string): Promise<ChatHistory 
     return null;
   }
 
-  const mergedMessages = histories.flatMap((history) => history.messages || []);
+  const mergedMessages = mergeMessagesByStableId(
+    histories.flatMap((history) => history.messages || []),
+  );
   const lastHistory = histories[histories.length - 1];
 
   return {
@@ -326,10 +372,14 @@ async function loadMergedRuntimeSession(
     return null;
   }
 
-  const mergedMessages = sessions.flatMap((session) =>
-    Array.isArray(session.messages)
-      ? JSON.parse(JSON.stringify(session.messages))
-      : [],
+  const mergedMessages = mergeMessagesByStableId(
+    sessions.flatMap((session) =>
+      Array.isArray(session.messages)
+        ? (JSON.parse(
+            JSON.stringify(session.messages),
+          ) as IAgentScopeRuntimeWebUISession["messages"])
+        : [],
+    ),
   );
   const leafSession = sessions[sessions.length - 1] as IAgentScopeRuntimeWebUISession & {
     realId?: string;
