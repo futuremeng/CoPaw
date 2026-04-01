@@ -1562,6 +1562,7 @@
       "autoDraftFromFiles": "Авточерновик из файлов",
       "autoDraftFromConversation": "Авточерновик из диалога",
       "conversationRunIdPlaceholder": "Необязательный run_id (для явной дистилляции)",
+      "conversationRunIdSuggested": "Рекомендуемый run_id: {{runId}}",
       "autoDraftSuccess": "Автоматически создано {{count}} черновиков навыков (пропущено {{skipped}}).",
       "autoDraftFileSuccess": "Автоматически создано {{count}} черновиков навыков из файлов (пропущено {{skipped}}).",
       "autoDraftConversationSuccess": "Автоматически создано {{count}} черновиков навыков из доказательств диалога (пропущено {{skipped}}).",

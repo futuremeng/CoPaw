@@ -1564,6 +1564,7 @@
       "autoDraftFromFiles": "从文件自动草拟",
       "autoDraftFromConversation": "从对话自动草拟",
       "conversationRunIdPlaceholder": "可选 run_id（用于显式沉淀）",
+      "conversationRunIdSuggested": "建议 run_id：{{runId}}",
       "autoDraftSuccess": "已自动草拟 {{count}} 个技能条目（跳过 {{skipped}} 个）。",
       "autoDraftFileSuccess": "已从文件自动草拟 {{count}} 个技能条目（跳过 {{skipped}} 个）。",
       "autoDraftConversationSuccess": "已从对话证据自动草拟 {{count}} 个技能条目（跳过 {{skipped}} 个）。",

@@ -148,6 +148,7 @@
       "autoDraftFromFiles": "Auto Draft from Files",
       "autoDraftFromConversation": "Auto Draft from Conversation",
       "conversationRunIdPlaceholder": "Optional run_id (for explicit distill)",
+      "conversationRunIdSuggested": "Suggested run_id: {{runId}}",
       "autoDraftSuccess": "Auto drafted {{count}} skill artifacts (skipped {{skipped}}).",
       "autoDraftFileSuccess": "Auto drafted {{count}} skill artifacts from files (skipped {{skipped}}).",
       "autoDraftConversationSuccess": "Auto drafted {{count}} skill artifacts from conversation evidence (skipped {{skipped}}).",

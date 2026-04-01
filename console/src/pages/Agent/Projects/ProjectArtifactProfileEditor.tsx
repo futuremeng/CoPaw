@@ -332,14 +332,25 @@ export default function ProjectArtifactProfileEditor({
               }}
             />
             {draftDistillMode === "conversation_evidence" ? (
-              <Input
-                value={draftRunId}
-                placeholder={t(
-                  "projects.artifacts.conversationRunIdPlaceholder",
-                  "Optional run_id (for explicit distill)",
-                )}
-                onChange={(event) => setDraftRunId(event.target.value)}
-              />
+              <>
+                <Input
+                  value={draftRunId}
+                  placeholder={t(
+                    "projects.artifacts.conversationRunIdPlaceholder",
+                    "Optional run_id (for explicit distill)",
+                  )}
+                  onChange={(event) => setDraftRunId(event.target.value)}
+                />
+                {suggestedDistillRunId ? (
+                  <div>
+                    {t(
+                      "projects.artifacts.conversationRunIdSuggested",
+                      "Suggested run_id: {{runId}}",
+                      { runId: suggestedDistillRunId },
+                    )}
+                  </div>
+                ) : null}
+              </>
             ) : null}
           </div>
 
