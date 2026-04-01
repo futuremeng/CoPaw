@@ -265,8 +265,8 @@ function buildFileTree(
 
 export default function ProjectOverviewCard({
   selectedProject,
-  projectFileCount,
-  pipelineTemplateCount,
+  projectFileCount: _projectFileCount,
+  pipelineTemplateCount: _pipelineTemplateCount,
   pipelineRunCount,
   projectWorkspaceSummary,
   projectFiles,
@@ -325,25 +325,6 @@ export default function ProjectOverviewCard({
     (path: string) =>
       !isOriginalInputFile(path) && !artifactFilePathSet.has(path),
   ).length;
-  const stableArtifactCount =
-    (artifactProfile?.skills || []).filter(
-      (item) => (item.status || "").toLowerCase() === "stable",
-    ).length +
-    (artifactProfile?.scripts || []).filter(
-      (item) => (item.status || "").toLowerCase() === "stable",
-    ).length +
-    (artifactProfile?.flows || []).filter(
-      (item) => (item.status || "").toLowerCase() === "stable",
-    ).length +
-    (artifactProfile?.cases || []).filter(
-      (item) => (item.status || "").toLowerCase() === "stable",
-    ).length;
-  const maturityLabel =
-    stableArtifactCount > 0
-      ? t("projects.maturity.stable", "Stable")
-      : pipelineRunCount > 0 || projectFileCount > 0
-        ? t("projects.maturity.inProgress", "In Progress")
-        : t("projects.maturity.bootstrap", "Bootstrap");
 
   return (
     <Card
@@ -394,37 +375,6 @@ export default function ProjectOverviewCard({
               <div className={styles.metricSummaryValue}>{derivedFileCount}</div>
             </div>
             <div className={styles.metricSummaryCard}>
-              <div className={styles.itemMeta}>{t("projects.runs", "Runs")}</div>
-              <div className={styles.metricSummaryValue}>{pipelineRunCount}</div>
-            </div>
-            <div className={styles.metricSummaryCard}>
-              <div className={styles.itemMeta}>{t("projects.updated", "Updated")}</div>
-              <div className={styles.metricSummaryValue}>
-                <span>{updatedDateParts.day}</span>
-                {updatedDateParts.month ? (
-                  <span className={styles.metricSummaryDateSuffix}>/{updatedDateParts.month}</span>
-                ) : null}
-              </div>
-            </div>
-          </div>
-
-          <div className={styles.metricSummaryGrid}>
-            <div className={styles.metricSummaryCard}>
-              <div className={styles.itemMeta}>{t("projects.maturity.label", "Maturity")}</div>
-              <div className={styles.metricSummaryTextValue}>{maturityLabel}</div>
-            </div>
-            <div className={styles.metricSummaryCard}>
-              <div className={styles.itemMeta}>{t("projects.files", "Files")}</div>
-              <div className={styles.metricSummaryValue}>{projectFileCount}</div>
-            </div>
-            <div className={styles.metricSummaryCard}>
-              <div className={styles.itemMeta}>{t("projects.automation.flows", "Flows")}</div>
-              <div className={styles.metricSummaryValue}>{pipelineTemplateCount}</div>
-            </div>
-          </div>
-
-          <div className={styles.metricSummaryGrid}>
-            <div className={styles.metricSummaryCard}>
               <div className={styles.itemMeta}>{t("projects.artifacts.skill", "Skills")}</div>
               <div className={styles.metricSummaryValue}>{artifactCounts.skills}</div>
             </div>
@@ -439,6 +389,19 @@ export default function ProjectOverviewCard({
             <div className={styles.metricSummaryCard}>
               <div className={styles.itemMeta}>{t("projects.artifacts.case", "Cases")}</div>
               <div className={styles.metricSummaryValue}>{artifactCounts.cases}</div>
+            </div>
+            <div className={styles.metricSummaryCard}>
+              <div className={styles.itemMeta}>{t("projects.runs", "Runs")}</div>
+              <div className={styles.metricSummaryValue}>{pipelineRunCount}</div>
+            </div>
+            <div className={styles.metricSummaryCard}>
+              <div className={styles.itemMeta}>{t("projects.updated", "Updated")}</div>
+              <div className={styles.metricSummaryValue}>
+                <span>{updatedDateParts.day}</span>
+                {updatedDateParts.month ? (
+                  <span className={styles.metricSummaryDateSuffix}>/{updatedDateParts.month}</span>
+                ) : null}
+              </div>
             </div>
           </div>
           <ProjectArtifactProfileEditor
