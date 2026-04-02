@@ -1033,6 +1033,7 @@
     "localLlamacppInstallFailed": "Failed to install llama.cpp",
     "localRuntimeSectionTitle": "Inference Engine",
     "localRuntimeSectionDescription": "Powered by Llama.cpp",
+    "localRuntimeComputeHint": "CPU is used by default. For GPU acceleration, use Ollama or LM Studio.",
     "localRuntimeInstalled": "Installed",
     "localRuntimeUnsupported": "Unsupported",
     "localRuntimeMissing": "Missing",
@@ -1064,7 +1065,7 @@
     "localModelsCount": "Downloaded {{downloaded}} / {{total}}",
     "localCurrentDownloadTitle": "Current download",
     "localCustomModelTitle": "Custom model download",
-    "localCustomModelHint": "Enter a model repository ID and source.",
+    "localCustomModelHint": "Enter a model repository ID. GGUF format only.",
     "localSourceHuggingFace": "Hugging Face",
     "localSourceModelScope": "ModelScope",
     "ollamaModelNamePlaceholder": "e.g. mistral:7b, qwen3:8b",
@@ -1332,10 +1333,7 @@
   "theme": {
     "dark": "Dark",
     "light": "Light",
-    "darkMode": "Dark mode",
-    "lightMode": "Light mode",
-    "switchToDark": "Switch to dark mode",
-    "switchToLight": "Switch to light mode"
+    "system": "System"
   },
   "sidebar": {
     "newVersion": "New version available: v{{version}}, click to upgrade",

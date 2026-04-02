@@ -974,6 +974,7 @@
     "localLlamacppInstallFailed": "Не удалось установить llama.cpp",
     "localRuntimeSectionTitle": "Inference Engine",
     "localRuntimeSectionDescription": "Powered by Llama.cpp",
+    "localRuntimeComputeHint": "По умолчанию используется CPU. Если нужна GPU-акселерация, используйте Ollama или LM Studio.",
     "localRuntimeInstalled": "Установлен",
     "localRuntimeUnsupported": "Не поддерживается",
     "localRuntimeMissing": "Не установлен",
@@ -1005,7 +1006,7 @@
     "localModelsCount": "Загружено {{downloaded}} / {{total}}",
     "localCurrentDownloadTitle": "Текущая загрузка",
     "localCustomModelTitle": "Загрузка пользовательской модели",
-    "localCustomModelHint": "Введите ID репозитория модели и источник.",
+    "localCustomModelHint": "Введите ID репозитория модели. Поддерживается только GGUF.",
     "localSourceHuggingFace": "Hugging Face",
     "localSourceModelScope": "ModelScope",
     "ollamaModelNamePlaceholder": "например: mistral:7b, qwen3:8b",
@@ -1273,10 +1274,7 @@
   "theme": {
     "dark": "Тёмная",
     "light": "Светлая",
-    "darkMode": "Тёмный режим",
-    "lightMode": "Светлый режим",
-    "switchToDark": "Переключить на тёмный режим",
-    "switchToLight": "Переключить на светлый режим"
+    "system": "Как в системе"
   },
   "sidebar": {
     "newVersion": "Доступна новая версия: v{{version}}, нажмите для обновления",

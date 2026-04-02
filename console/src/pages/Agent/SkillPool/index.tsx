@@ -1291,6 +1291,11 @@ function SkillPoolPage() {
                         <span className={styles.fileIcon}>
                           {getSkillVisual(skill.name, skill.content)}
                         </span>
+                        <div className={styles.titleRow}>
+                          <Tooltip title={skill.name}>
+                            <h3 className={styles.skillTitle}>{skill.name}</h3>
+                          </Tooltip>
+                        </div>
                       </div>
                       <div className={styles.statusRow}>
                         <span className={styles.statusLabel}>

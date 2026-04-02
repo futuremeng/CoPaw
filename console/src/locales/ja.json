@@ -974,6 +974,7 @@
     "localLlamacppInstallFailed": "llama.cpp のインストールに失敗しました",
     "localRuntimeSectionTitle": "Inference Engine",
     "localRuntimeSectionDescription": "Powered by Llama.cpp",
+    "localRuntimeComputeHint": "デフォルトでは CPU を使用します。GPU アクセラレーションが必要な場合は、Ollama または LM Studio を使用してください。",
     "localRuntimeInstalled": "インストール済み",
     "localRuntimeUnsupported": "未対応",
     "localRuntimeMissing": "未導入",
@@ -1005,7 +1006,7 @@
     "localModelsCount": "ダウンロード済み {{downloaded}} / {{total}}",
     "localCurrentDownloadTitle": "現在のダウンロード",
     "localCustomModelTitle": "カスタムモデルのダウンロード",
-    "localCustomModelHint": "モデルリポジトリIDとソースを入力します。",
+    "localCustomModelHint": "モデルリポジトリIDを入力します。GGUF形式のみ対応。",
     "localSourceHuggingFace": "Hugging Face",
     "localSourceModelScope": "ModelScope",
     "ollamaModelNamePlaceholder": "例: mistral:7b, qwen3:8b",
@@ -1273,10 +1274,7 @@
   "theme": {
     "dark": "ダーク",
     "light": "ライト",
-    "darkMode": "ダークモード",
-    "lightMode": "ライトモード",
-    "switchToDark": "ダークモードに切り替え",
-    "switchToLight": "ライトモードに切り替え"
+    "system": "システムに従う"
   },
   "sidebar": {
     "newVersion": "新しいバージョンが利用可能です: v{{version}}、クリックしてアップグレード",
