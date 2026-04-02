@@ -377,6 +377,7 @@ class AgentRunner(Runner):
         self._chat_manager = None  # Store chat_manager reference
         self._mcp_manager = None  # MCP client manager for hot-reload
         self._workspace: Any = None  # Workspace instance for control commands
+        self._manager: Any = None  # MultiAgentManager for /daemon restart
         self.memory_manager: BaseMemoryManager | None = None
         self._task_tracker = task_tracker  # Task tracker for background tasks
 
@@ -415,15 +416,17 @@ class AgentRunner(Runner):
         try:
             memory = agent.memory
             before = ""
-            if hasattr(memory, "get_compressed_summary"):
-                before = memory.get_compressed_summary() or ""
+            get_summary = getattr(memory, "get_compressed_summary", None)
+            if callable(get_summary):
+                before = get_summary() or ""
 
             hook = MemoryCompactionHook(memory_manager=memory_manager)
             await hook(agent, {})
 
             after = ""
-            if hasattr(memory, "get_compressed_summary"):
-                after = memory.get_compressed_summary() or ""
+            get_summary = getattr(memory, "get_compressed_summary", None)
+            if callable(get_summary):
+                after = get_summary() or ""
 
             if after != before:
                 return True
@@ -557,16 +560,11 @@ class AgentRunner(Runner):
         query = _get_last_user_text(msgs)
         session_id = getattr(request, "session_id", "") or ""
 
-        approval_result = await self._resolve_pending_approval(session_id, query)
-        if isinstance(approval_result, tuple) and len(approval_result) == 2:
-            approval_response, approval_consumed = approval_result
-            approved_tool_call = None
-        else:
-            (
-                approval_response,
-                approval_consumed,
-                approved_tool_call,
-            ) = approval_result
+        (
+            approval_response,
+            approval_consumed,
+            approved_tool_call,
+        ) = await self._resolve_pending_approval(session_id, query)
         if approval_response is not None:
             yield approval_response, True
             user_id = getattr(request, "user_id", "") or ""

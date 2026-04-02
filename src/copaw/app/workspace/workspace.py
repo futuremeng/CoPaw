@@ -150,6 +150,10 @@ class Workspace:
         # pylint: disable=protected-access
         sm = self._service_manager
 
+        # Import at runtime because service_class needs the concrete symbol.
+        # Keeping this local also avoids module-import cycles during startup.
+        from ..runner.runner import AgentRunner
+
         # Priority 10: Runner
         sm.register(
             ServiceDescriptor(
