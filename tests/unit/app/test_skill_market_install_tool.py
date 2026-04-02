@@ -19,6 +19,8 @@ async def test_skill_market_install_requires_explicit_confirmation(monkeypatch) 
 
     text = result.content[0]["text"]
     assert "requires explicit confirmation" in text
+    assert "JSON_RESULT_START" in text
+    assert '"code": "CONFIRMATION_REQUIRED"' in text
 
 
 async def test_skill_market_install_returns_not_found(monkeypatch) -> None:
@@ -40,6 +42,8 @@ async def test_skill_market_install_returns_not_found(monkeypatch) -> None:
 
     text = result.content[0]["text"]
     assert "skill not found in enabled markets" in text
+    assert "JSON_RESULT_START" in text
+    assert '"code": "MARKET_ITEM_NOT_FOUND"' in text
 
 
 async def test_skill_market_install_succeeds(monkeypatch, tmp_path) -> None:
@@ -104,6 +108,8 @@ async def test_skill_market_install_succeeds(monkeypatch, tmp_path) -> None:
     assert "Skill installed successfully" in text
     assert "name=proofread-single" in text
     assert "trust=community" in text
+    assert "JSON_RESULT_START" in text
+    assert '"ok": true' in text
     assert captured["bundle_url"].endswith("/skills/proofread-single")
     assert captured["overwrite"] is False
     assert captured["enable"] is True
@@ -154,6 +160,8 @@ async def test_skill_market_install_blocks_untrusted_market_by_default(
     text = result.content[0]["text"]
     assert "reason=UNTRUSTED_MARKET" in text
     assert "allow_untrusted=true" in text
+    assert "JSON_RESULT_START" in text
+    assert '"code": "UNTRUSTED_MARKET"' in text
 
 
 async def test_skill_market_install_allows_untrusted_market_with_override(
@@ -209,3 +217,5 @@ async def test_skill_market_install_allows_untrusted_market_with_override(
     text = result.content[0]["text"]
     assert "Skill installed successfully" in text
     assert "trust=custom" in text
+    assert "JSON_RESULT_START" in text
+    assert '"ok": true' in text

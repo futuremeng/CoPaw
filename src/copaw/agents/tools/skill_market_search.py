@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import json
+
 from agentscope.message import TextBlock
 from agentscope.tool import ToolResponse
 
@@ -99,13 +101,70 @@ async def skill_market_search(
                 lines.append(f"install_ref: market_id={item.market_id} skill_id={item.skill_id}")
                 lines.append("")
 
+        json_payload = {
+            "ok": True,
+            "filters": {
+                "query": query_text,
+                "tags": normalized_tags,
+                "refresh": bool(refresh),
+                "limit": max(1, min(int(limit), 50)),
+            },
+            "meta": {
+                "enabled_market_count": int(meta.get("enabled_market_count", 0)),
+                "success_market_count": int(meta.get("success_market_count", 0)),
+                "item_count": int(meta.get("item_count", len(items))),
+                "matched_count": len(filtered),
+                "returned_count": len(capped),
+            },
+            "errors": [
+                {
+                    "market_id": err.market_id,
+                    "code": err.code,
+                    "message": err.message,
+                    "retryable": bool(err.retryable),
+                }
+                for err in errors
+            ],
+            "items": [
+                {
+                    "market_id": item.market_id,
+                    "skill_id": item.skill_id,
+                    "name": item.name,
+                    "description": item.description,
+                    "version": item.version,
+                    "tags": list(item.tags),
+                    "trust": market_trust.get(item.market_id, "custom"),
+                    "install_ref": {
+                        "market_id": item.market_id,
+                        "skill_id": item.skill_id,
+                    },
+                }
+                for item in capped
+            ],
+        }
+        lines.append("JSON_RESULT_START")
+        lines.append(json.dumps(json_payload, ensure_ascii=False))
+        lines.append("JSON_RESULT_END")
+
         return ToolResponse(content=[TextBlock(type="text", text="\n".join(lines).strip())])
     except Exception as exc:
+        error_payload = {
+            "ok": False,
+            "error": {
+                "code": "SKILL_MARKET_SEARCH_FAILED",
+                "message": str(exc),
+            },
+        }
         return ToolResponse(
             content=[
                 TextBlock(
                     type="text",
-                    text=f"Error: skill market search failed due to\n{exc}",
+                    text=(
+                        f"Error: skill market search failed due to\n{exc}\n"
+                        "JSON_RESULT_START\n"
+                        f"{json.dumps(error_payload, ensure_ascii=False)}\n"
+                        "JSON_RESULT_END"
+                    ),
                 ),
             ],
         )

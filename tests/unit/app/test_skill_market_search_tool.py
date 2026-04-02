@@ -75,6 +75,9 @@ async def test_skill_market_search_filters_by_query_and_tags(monkeypatch) -> Non
     assert "market=editor trust=community" in text
     assert "Numeric Unit Consistency" not in text
     assert "[MARKET_WARNING] editor: using fallback index" in text
+    assert "JSON_RESULT_START" in text
+    assert '"ok": true' in text
+    assert '"returned_count": 1' in text
 
 
 async def test_skill_market_search_returns_no_matches_message(monkeypatch) -> None:
@@ -102,6 +105,8 @@ async def test_skill_market_search_returns_no_matches_message(monkeypatch) -> No
     result = await module.skill_market_search(query="", tags=None, limit=10)
     text = result.content[0]["text"]
     assert "No matching skills found in enabled markets." in text
+    assert "JSON_RESULT_START" in text
+    assert '"returned_count": 0' in text
 
 
 async def test_skill_market_search_returns_error_message_on_exception(monkeypatch) -> None:
@@ -122,3 +127,5 @@ async def test_skill_market_search_returns_error_message_on_exception(monkeypatc
     text = result.content[0]["text"]
     assert "skill market search failed" in text
     assert "market backend unavailable" in text
+    assert "JSON_RESULT_START" in text
+    assert '"code": "SKILL_MARKET_SEARCH_FAILED"' in text

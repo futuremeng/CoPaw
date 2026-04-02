@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from agentscope.message import TextBlock
@@ -52,23 +53,49 @@ async def skill_market_install(
     market_key = (market_id or "").strip()
     skill_key = (skill_id or "").strip()
     if not market_key or not skill_key:
+        payload = {
+            "ok": False,
+            "error": {
+                "code": "INVALID_INPUT",
+                "message": "market_id and skill_id are required",
+            },
+        }
         return ToolResponse(
             content=[
                 TextBlock(
                     type="text",
-                    text="Error: market_id and skill_id are required.",
+                    text=(
+                        "Error: market_id and skill_id are required.\n"
+                        "JSON_RESULT_START\n"
+                        f"{json.dumps(payload, ensure_ascii=False)}\n"
+                        "JSON_RESULT_END"
+                    ),
                 ),
             ],
         )
 
     if not _confirmation_valid(confirm, confirmation_token):
+        payload = {
+            "ok": False,
+            "error": {
+                "code": "CONFIRMATION_REQUIRED",
+                "message": (
+                    "Set confirm=true and "
+                    "confirmation_token=INSTALL_CONFIRMED"
+                ),
+            },
+            "required_confirmation_token": _CONFIRM_TOKEN,
+        }
         return ToolResponse(
             content=[
                 TextBlock(
                     type="text",
                     text=(
                         "Installation requires explicit confirmation. "
-                        "Set confirm=true and confirmation_token=INSTALL_CONFIRMED."
+                        "Set confirm=true and confirmation_token=INSTALL_CONFIRMED.\n"
+                        "JSON_RESULT_START\n"
+                        f"{json.dumps(payload, ensure_ascii=False)}\n"
+                        "JSON_RESULT_END"
                     ),
                 ),
             ],
@@ -90,13 +117,25 @@ async def skill_market_install(
             None,
         )
         if selected is None:
+            payload = {
+                "ok": False,
+                "error": {
+                    "code": "MARKET_ITEM_NOT_FOUND",
+                    "message": "skill not found in enabled markets",
+                },
+                "market_id": market_key,
+                "skill_id": skill_key,
+            }
             return ToolResponse(
                 content=[
                     TextBlock(
                         type="text",
                         text=(
                             "Error: skill not found in enabled markets. "
-                            f"market_id={market_key} skill_id={skill_key}"
+                            f"market_id={market_key} skill_id={skill_key}\n"
+                            "JSON_RESULT_START\n"
+                            f"{json.dumps(payload, ensure_ascii=False)}\n"
+                            "JSON_RESULT_END"
                         ),
                     ),
                 ],
@@ -104,6 +143,17 @@ async def skill_market_install(
 
         trust_level = market_trust.get(market_key, "custom")
         if trust_level not in _TRUSTED_MARKET_LEVELS and not allow_untrusted:
+            payload = {
+                "ok": False,
+                "error": {
+                    "code": "UNTRUSTED_MARKET",
+                    "message": "installation blocked by trust policy",
+                },
+                "market_id": market_key,
+                "skill_id": skill_key,
+                "trust": trust_level,
+                "allow_untrusted": False,
+            }
             return ToolResponse(
                 content=[
                     TextBlock(
@@ -112,7 +162,10 @@ async def skill_market_install(
                             "Error: installation blocked by trust policy. "
                             "reason=UNTRUSTED_MARKET "
                             f"market_id={market_key} trust={trust_level}. "
-                            "Set allow_untrusted=true to override."
+                            "Set allow_untrusted=true to override.\n"
+                            "JSON_RESULT_START\n"
+                            f"{json.dumps(payload, ensure_ascii=False)}\n"
+                            "JSON_RESULT_END"
                         ),
                     ),
                 ],
@@ -129,6 +182,15 @@ async def skill_market_install(
 
         reconcile_workspace_manifest(workspace_dir)
 
+        payload = {
+            "ok": True,
+            "market_id": market_key,
+            "skill_id": skill_key,
+            "name": result.name,
+            "enabled": bool(result.enabled),
+            "trust": trust_level,
+            "workspace_dir": str(workspace_dir),
+        }
         return ToolResponse(
             content=[
                 TextBlock(
@@ -138,29 +200,58 @@ async def skill_market_install(
                         f"name={result.name}, enabled={str(result.enabled).lower()}, "
                         f"market_id={market_key}, skill_id={skill_key}, "
                         f"trust={trust_level}, "
-                        f"workspace_dir={workspace_dir}"
+                        f"workspace_dir={workspace_dir}\n"
+                        "JSON_RESULT_START\n"
+                        f"{json.dumps(payload, ensure_ascii=False)}\n"
+                        "JSON_RESULT_END"
                     ),
                 ),
             ],
         )
     except SkillScanError as exc:
+        payload = {
+            "ok": False,
+            "error": {
+                "code": "SECURITY_SCAN_FAILED",
+                "message": str(exc),
+            },
+            "market_id": market_key,
+            "skill_id": skill_key,
+        }
         return ToolResponse(
             content=[
                 TextBlock(
                     type="text",
                     text=(
                         "Error: skill installation blocked by security scanner. "
-                        f"{exc}"
+                        f"{exc}\n"
+                        "JSON_RESULT_START\n"
+                        f"{json.dumps(payload, ensure_ascii=False)}\n"
+                        "JSON_RESULT_END"
                     ),
                 ),
             ],
         )
     except Exception as exc:
+        payload = {
+            "ok": False,
+            "error": {
+                "code": "SKILL_MARKET_INSTALL_FAILED",
+                "message": str(exc),
+            },
+            "market_id": market_key,
+            "skill_id": skill_key,
+        }
         return ToolResponse(
             content=[
                 TextBlock(
                     type="text",
-                    text=f"Error: skill installation failed due to\n{exc}",
+                    text=(
+                        f"Error: skill installation failed due to\n{exc}\n"
+                        "JSON_RESULT_START\n"
+                        f"{json.dumps(payload, ensure_ascii=False)}\n"
+                        "JSON_RESULT_END"
+                    ),
                 ),
             ],
         )
