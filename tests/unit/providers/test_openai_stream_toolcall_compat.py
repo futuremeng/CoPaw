@@ -8,6 +8,7 @@ from typing import Any
 
 from copaw.providers.openai_chat_model_compat import (
     OpenAIChatModelCompat,
+    _promote_thinking_only_answer,
     _strip_leaked_thinking_prefix,
     _sanitize_tool_call,
 )
@@ -191,3 +192,45 @@ def test_strip_leaked_thinking_prefix_keeps_normal_text() -> None:
     cleaned = _strip_leaked_thinking_prefix(normal)
 
     assert cleaned == normal
+
+
+def test_promote_thinking_only_structured_answer_to_text() -> None:
+    parsed = SimpleNamespace(
+        content=[
+            {
+                "type": "thinking",
+                "thinking": (
+                    "## ✅ 当前进展确认\n\n"
+                    "- [x] Pipeline schema 完成\n"
+                    "- [x] Script 标准化完成\n\n"
+                    "| 项目 | 状态 |\n|------|------|\n| P0 | ✅ |"
+                ),
+            },
+        ],
+    )
+
+    _promote_thinking_only_answer(parsed)
+
+    assert parsed.content
+    assert parsed.content[0]["type"] == "text"
+    assert "当前进展确认" in parsed.content[0]["text"]
+
+
+def test_promote_thinking_only_keeps_internal_draft() -> None:
+    parsed = SimpleNamespace(
+        content=[
+            {
+                "type": "thinking",
+                "thinking": (
+                    "让我先检查三个点再决定怎么回复用户。"
+                    "接下来我会读取文件并核对日志，然后再给结论。"
+                    "最后再决定是否调用工具。"
+                ),
+            },
+        ],
+    )
+
+    _promote_thinking_only_answer(parsed)
+
+    assert parsed.content
+    assert parsed.content[0]["type"] == "thinking"
