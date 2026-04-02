@@ -22,7 +22,6 @@ from .service_factories import (
     create_agent_config_watcher,
     create_mcp_config_watcher,
 )
-from ..runner import AgentRunner
 from ..runner.task_tracker import TaskTracker
 from ..mcp import MCPClientManager
 from ..crons.manager import CronManager
@@ -31,6 +30,7 @@ from ...config.config import load_agent_config
 
 if TYPE_CHECKING:
     from ..channels.base import BaseChannel
+    from ..runner.runner import AgentRunner
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +86,7 @@ class Workspace:
 
     # Service access via properties (delegates to ServiceManager)
     @property
-    def runner(self) -> Optional[AgentRunner]:
+    def runner(self) -> Optional["AgentRunner"]:
         """Get runner instance from ServiceManager."""
         return self._service_manager.services.get("runner")
 

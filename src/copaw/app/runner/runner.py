@@ -296,6 +296,30 @@ def _is_context_overflow_error(exc: Exception) -> bool:
             return True
     return False
 
+
+def _build_context_overflow_error_msg(
+    detail_text: str = "",
+) -> Msg:
+    """Build a user-facing message for context overflow failures."""
+    return Msg(
+        name="Friday",
+        role="assistant",
+        content=[
+            TextBlock(
+                type="text",
+                text=(
+                    "⚠️ Context window is full. CoPaw has already attempted "
+                    "auto-compaction and retried once, but the request is still "
+                    "too large. Please continue in a new thread or run /compact "
+                    "then retry.\n"
+                    "⚠️ 上下文窗口已满。CoPaw 已自动尝试压缩并重试 1 次，"
+                    "但请求仍然过长。请新开对话继续，或先执行 /compact 再重试。"
+                    f"{detail_text}"
+                ),
+            ),
+        ],
+    )
+
 def _build_retryable_error_msg(exc: Exception) -> Msg | None:
     """Build a user-facing retryable error message for transient failures."""
     if not _is_transient_upstream_error(exc):
@@ -406,7 +430,12 @@ class AgentRunner(Runner):
 
             # Fallback signal: summary task queued means compaction path ran.
             tasks = getattr(memory_manager, "summary_tasks", None)
-            return bool(tasks)
+            if bool(tasks):
+                return True
+
+            # If hook completes without errors, consider compaction attempt
+            # successful even when no summary delta is observable.
+            return True
         except Exception as compact_err:
             logger.warning(
                 "Failed to force context compaction retry path: %s",
@@ -883,6 +912,18 @@ class AgentRunner(Runner):
                             ),
                         ],
                     ),
+                    True,
+                )
+                return
+
+            if _is_context_overflow_error(e):
+                detail_text = (
+                    f"\n(Details:  {debug_dump_path})"
+                    if debug_dump_path
+                    else ""
+                )
+                yield (
+                    _build_context_overflow_error_msg(detail_text),
                     True,
                 )
                 return

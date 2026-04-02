@@ -341,3 +341,156 @@ async def test_stream_query_cancelled_finishes_without_failed_event(
     assert statuses[-1] == "completed"
     assert "failed" not in statuses
     assert all(getattr(event, "error", None) is None for event in events)
+
+
+async def test_query_handler_context_overflow_retries_once(
+    monkeypatch,
+) -> None:
+    from copaw.app.runner import runner as runner_module
+
+    async def _no_approval(session_id: str, query: str | None):
+        _ = session_id, query
+        return None, False, None
+
+    state = {"calls": 0}
+
+    async def _stream_with_one_overflow(*args, **kwargs):
+        _ = args, kwargs
+        state["calls"] += 1
+        if state["calls"] == 1:
+            raise RuntimeError("APIError: Context size has been exceeded")
+        yield (
+            Msg(
+                name="Friday",
+                role="assistant",
+                content=[TextBlock(type="text", text="ok")],
+            ),
+            True,
+        )
+
+    compact_calls = {"count": 0}
+
+    async def _force_compact(_agent):
+        compact_calls["count"] += 1
+        return True
+
+    runner = AgentRunner()
+    runner.session = _DummySession()
+    cast(Any, runner)._resolve_pending_approval = _no_approval
+    cast(Any, runner)._force_context_compaction = _force_compact
+
+    monkeypatch.setattr(runner_module, "CoPawAgent", _DummyAgent)
+    monkeypatch.setattr(runner_module, "build_env_context", lambda **kwargs: kwargs)
+    monkeypatch.setattr(
+        runner_module,
+        "load_agent_config",
+        lambda _agent_id: SimpleNamespace(),
+    )
+    monkeypatch.setattr(
+        runner_module,
+        "stream_printing_messages",
+        _stream_with_one_overflow,
+    )
+
+    msgs = [
+        Msg(
+            name="user",
+            role="user",
+            content=[TextBlock(type="text", text="继续")],
+        ),
+    ]
+    request = cast(
+        AgentRequest,
+        SimpleNamespace(
+            session_id="session-1",
+            user_id="user-1",
+            channel="console",
+        ),
+    )
+
+    results = []
+    stream = cast(
+        AsyncIterator[tuple[Msg, bool]],
+        cast(Any, runner).query_handler(msgs, request=request),
+    )
+    async for msg, last in stream:
+        results.append((msg, last))
+
+    assert len(results) == 1
+    assert cast(str, results[0][0].get_text_content() or "") == "ok"
+    assert results[0][1] is True
+    assert compact_calls["count"] == 1
+    assert state["calls"] == 2
+
+
+async def test_query_handler_context_overflow_returns_friendly_msg(
+    monkeypatch,
+) -> None:
+    from copaw.app.runner import runner as runner_module
+
+    async def _no_approval(session_id: str, query: str | None):
+        _ = session_id, query
+        return None, False, None
+
+    async def _always_overflow_stream(*args, **kwargs):
+        _ = args, kwargs
+        raise RuntimeError("APIError: Context size has been exceeded")
+        yield  # pragma: no cover
+
+    async def _compact_fail(_agent):
+        return False
+
+    runner = AgentRunner()
+    runner.session = _DummySession()
+    cast(Any, runner)._resolve_pending_approval = _no_approval
+    cast(Any, runner)._force_context_compaction = _compact_fail
+
+    monkeypatch.setattr(runner_module, "CoPawAgent", _DummyAgent)
+    monkeypatch.setattr(runner_module, "build_env_context", lambda **kwargs: kwargs)
+    monkeypatch.setattr(
+        runner_module,
+        "load_agent_config",
+        lambda _agent_id: SimpleNamespace(),
+    )
+    monkeypatch.setattr(
+        runner_module,
+        "stream_printing_messages",
+        _always_overflow_stream,
+    )
+    monkeypatch.setattr(
+        runner_module,
+        "write_query_error_dump",
+        lambda **kwargs: "/tmp/copaw_query_error_overflow.json",
+    )
+
+    msgs = [
+        Msg(
+            name="user",
+            role="user",
+            content=[TextBlock(type="text", text="继续")],
+        ),
+    ]
+    request = cast(
+        AgentRequest,
+        SimpleNamespace(
+            session_id="session-1",
+            user_id="user-1",
+            channel="console",
+        ),
+    )
+
+    results = []
+    stream = cast(
+        AsyncIterator[tuple[Msg, bool]],
+        cast(Any, runner).query_handler(msgs, request=request),
+    )
+    async for msg, last in stream:
+        results.append((msg, last))
+
+    assert len(results) == 1
+    msg, last = results[0]
+    text = cast(str, msg.get_text_content() or "")
+    assert last is True
+    assert "上下文窗口已满" in text
+    assert "/compact" in text
+    assert "copaw_query_error_overflow.json" in text
