@@ -43,6 +43,10 @@ import {
   extractCopyableText,
   toDisplayUrl,
 } from "../../pages/Chat/utils";
+import {
+  extractRenderableAssistantText,
+  materializeThinkingOnlyFallback,
+} from "../../utils/runtimeResponseFallback";
 import styles from "./index.module.less";
 
 type SessionContext = {
@@ -611,41 +615,28 @@ function isFinalResponseStatus(status?: string): boolean {
 }
 
 function hasRenderableOutput(response: StreamResponseData): boolean {
+  const normalized = materializeThinkingOnlyFallback(response);
   if (response.status === AgentScopeRuntimeRunStatus.Failed) {
     return true;
   }
 
   return (
-    response.output?.some((message) => (message.content?.length ?? 0) > 0) ??
+    normalized.output?.some((message) => (message.content?.length ?? 0) > 0) ??
     false
   );
 }
 
 function extractAssistantText(response: StreamResponseData | null): string {
-  if (!response || !Array.isArray(response.output)) return "";
-
-  return response.output
-    .flatMap((message) => {
-      if (!Array.isArray(message.content)) return [];
-      return message.content.flatMap((part) => {
-        if (part.type === "text" && typeof part.text === "string") {
-          return [part.text];
-        }
-        if (part.type === "refusal" && typeof part.refusal === "string") {
-          return [part.refusal];
-        }
-        return [];
-      });
-    })
-    .filter(Boolean)
-    .join("\n\n")
-    .trim();
+  return extractRenderableAssistantText(response);
 }
 
 function extractRawMarkdownText(response: CopyableResponse): string {
+  const normalized = materializeThinkingOnlyFallback(
+    response as CopyableResponse & StreamResponseData,
+  );
   const textBlocks: string[] = [];
 
-  for (const message of response.output || []) {
+  for (const message of normalized.output || []) {
     if (typeof message.content === "string") {
       textBlocks.push(message.content);
       continue;
@@ -1410,10 +1401,11 @@ export default function AnywhereChat({
             const responseData = responseBuilder.handle(
               chunkData as never,
             ) as unknown as StreamResponseData;
+            const renderableResponse = materializeThinkingOnlyFallback(responseData);
 
-            if (hasRenderableOutput(responseData)) {
+            if (hasRenderableOutput(renderableResponse)) {
               latestRenderable = JSON.parse(
-                JSON.stringify(responseData),
+                JSON.stringify(renderableResponse),
               ) as StreamResponseData;
 
               const partialAssistantText = extractAssistantText(latestRenderable);
@@ -1434,7 +1426,7 @@ export default function AnywhereChat({
               continue;
             }
 
-            const finalPayload = latestRenderable || responseData;
+            const finalPayload = latestRenderable || renderableResponse;
             onAssistantTurnCompleted({
               text: extractAssistantText(finalPayload),
               response: finalPayload as Record<string, unknown>,

@@ -234,3 +234,38 @@ def test_promote_thinking_only_keeps_internal_draft() -> None:
 
     assert parsed.content
     assert parsed.content[0]["type"] == "thinking"
+
+    def test_promote_thinking_only_keeps_markdown_file_excerpt() -> None:
+        parsed = _parse_openai_stream_response(
+            _stream(
+                [
+                    {
+                        "choices": [
+                            {
+                                "delta": {
+                                    "reasoning_content": (
+                                        "# RELEASE NOTES\n"
+                                        "## 2026-03\n"
+                                        "- Fix parser edge cases\n"
+                                        "| item | status |\n"
+                                        "| --- | --- |\n"
+                                        "| thinking parser | updated |\n"
+                                    )
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "choices": [
+                            {
+                                "delta": {},
+                                "finish_reason": "stop",
+                            }
+                        ]
+                    },
+                ]
+            )
+        )
+
+        assert parsed.thinking
+        assert parsed.content == []

@@ -117,3 +117,31 @@
     scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
   }
 }
+
+/* Dedicated fallback style for thinking-only assistant turns. */
+:global {
+  pre code[class*="thinking-fallback"],
+  code[class*="thinking-fallback"] {
+    display: block;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 12px;
+    line-height: 1.55;
+    color: #3d2f06;
+    background: linear-gradient(180deg, rgba(255, 247, 228, 0.96), rgba(255, 241, 204, 0.9));
+    border: 1px solid rgba(255, 184, 77, 0.55);
+    border-left: 4px solid #fa8c16;
+    border-radius: 12px;
+    padding: 12px 14px;
+    box-shadow: 0 4px 14px rgba(250, 140, 22, 0.16);
+  }
+
+  html.dark-mode pre code[class*="thinking-fallback"],
+  html.dark-mode code[class*="thinking-fallback"] {
+    color: rgba(255, 239, 214, 0.96);
+    background: linear-gradient(180deg, rgba(73, 45, 12, 0.92), rgba(56, 34, 9, 0.9));
+    border-color: rgba(255, 184, 77, 0.45);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  }
+}

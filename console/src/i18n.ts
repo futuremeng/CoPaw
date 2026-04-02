@@ -19,9 +19,21 @@ const resources = {
   },
 };
 
+function resolveInitialLanguage(): string {
+  if (typeof window === "undefined") {
+    return "en";
+  }
+
+  try {
+    return window.localStorage.getItem("language") || "en";
+  } catch {
+    return "en";
+  }
+}
+
 i18n.use(initReactI18next).init({
   resources,
-  lng: localStorage.getItem("language") || "en",
+  lng: resolveInitialLanguage(),
   fallbackLng: "en",
   interpolation: {
     escapeValue: false,

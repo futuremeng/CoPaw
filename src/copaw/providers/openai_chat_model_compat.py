@@ -31,6 +31,11 @@ _THINKING_INTERNAL_PREFIX_RE = re.compile(
     r"^\s*(?:让我|我需要|我应该|先\s|let me\b|i need to\b|i should\b|i'?ll\b)",
     re.IGNORECASE,
 )
+_THINKING_FINAL_ANSWER_CUE_RE = re.compile(
+    r"(?:当前进展|下一步|关键确认|可选行动|总结|结论|状态|建议|您可以|你可以|可以继续|"
+    r"next steps?|summary|status|recommend(?:ation)?s?)",
+    re.IGNORECASE,
+)
 
 
 def _strip_leaked_thinking_prefix(text: str) -> str:
@@ -116,7 +121,14 @@ def _promote_thinking_only_answer(parsed: ChatResponse) -> None:
     if not _THINKING_REPORT_SIGNAL_RE.search(merged):
         return
 
+    # Avoid promoting raw markdown/file excerpts that happen to include
+    # headings/lists/tables but are not user-facing final answers.
+    if not _THINKING_FINAL_ANSWER_CUE_RE.search(merged):
+        return
+
     parsed.content = [{"type": "text", "text": merged}]
+
+
 def _clone_with_overrides(obj: Any, **overrides: Any) -> Any:
     """Clone a stream object into a mutable namespace with overrides."""
     data = dict(getattr(obj, "__dict__", {}))

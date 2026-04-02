@@ -13,6 +13,7 @@ import api, {
 } from "../../../api";
 import type { ChatStatus } from "../../../api/types/chat";
 import { toDisplayUrl } from "../utils";
+import { materializeThinkingOnlyFallback } from "../../../utils/runtimeResponseFallback";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -255,7 +256,7 @@ const buildResponseCard = (
     cards: [
       {
         code: CARD_RESPONSE,
-        data: {
+        data: materializeThinkingOnlyFallback({
           id: `response_${generateId()}`,
           output: normalizedMessages,
           object: "response",
@@ -265,7 +266,7 @@ const buildResponseCard = (
           error: null,
           completed_at: now,
           usage: null,
-        },
+        }),
       },
     ],
     msgStatus: "finished",

@@ -43,6 +43,7 @@ import {
   extractUserMessageText,
   type RuntimeLoadingBridgeApi,
 } from "./utils";
+import { materializeThinkingOnlyFallback } from "../../utils/runtimeResponseFallback";
 
 type CopyableContent = {
   type?: string;
@@ -418,12 +419,13 @@ function isFinalResponseStatus(status?: string): boolean {
 }
 
 function hasRenderableOutput(response: StreamResponseData): boolean {
+  const normalized = materializeThinkingOnlyFallback(response);
   if (response.status === AgentScopeRuntimeRunStatus.Failed) {
     return true;
   }
 
   return (
-    response.output?.some((message) => (message.content?.length ?? 0) > 0) ??
+    normalized.output?.some((message) => (message.content?.length ?? 0) > 0) ??
     false
   );
 }
@@ -941,6 +943,7 @@ export default function ChatPage() {
             const responseData = responseBuilder.handle(
               chunkData as never,
             ) as StreamResponseData;
+            const renderableResponse = materializeThinkingOnlyFallback(responseData);
             const isFinalChunk = isFinalResponseStatus(responseData.status);
             const existingAssistantMessage = cachedMessages.find(
               (message) => message.id === assistantMessageId,
@@ -950,8 +953,8 @@ export default function ChatPage() {
             );
 
             let nextResponseData: StreamResponseData | null = null;
-            if (hasRenderableOutput(responseData)) {
-              nextResponseData = cloneValue(responseData);
+            if (hasRenderableOutput(renderableResponse)) {
+              nextResponseData = cloneValue(renderableResponse);
             } else if (isFinalChunk && previousResponseData) {
               nextResponseData = {
                 ...previousResponseData,
@@ -1083,6 +1086,7 @@ export default function ChatPage() {
           const responseData = responseBuilder.handle(
             chunkData as never,
           ) as StreamResponseData;
+          const renderableResponse = materializeThinkingOnlyFallback(responseData);
           const isFinalChunk = isFinalResponseStatus(responseData.status);
           const existingAssistantMessage = cachedMessages.find(
             (message) => message.id === assistantMessageId,
@@ -1092,8 +1096,8 @@ export default function ChatPage() {
           );
 
           let nextResponseData: StreamResponseData | null = null;
-          if (hasRenderableOutput(responseData)) {
-            nextResponseData = cloneValue(responseData);
+          if (hasRenderableOutput(renderableResponse)) {
+            nextResponseData = cloneValue(renderableResponse);
           } else if (isFinalChunk && previousResponseData) {
             nextResponseData = {
               ...previousResponseData,
