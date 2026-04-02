@@ -307,7 +307,9 @@
     "emptyStateCreate": "创建第一个技能",
     "selectAll": "全选",
     "clearSelection": "清空选择",
-    "renameSingleOnly": "仅在只选择一个技能时支持重命名。"
+    "renameSingleOnly": "仅在只选择一个技能时支持重命名。",
+    "batchOperation": "批量操作",
+    "exitBatch": "退出批量"
   },
   "knowledge": {
     "title": "知识库",
@@ -1292,6 +1294,8 @@
     "chatHistoryTooltip": "聊天历史",
     "allChats": "全部聊天",
     "createNewChat": "创建新聊天",
+    "statusIdle": "空闲",
+    "statusInProgress": "进行中",
     "thinkingFallbackTitle": "思考兜底展示",
     "thinkingFallbackDescription": "本轮模型尚未产出正式答复，以下展示已生成的思考内容，仅供参考。",
     "thinkingFallbackLabel": "模型思考草稿",

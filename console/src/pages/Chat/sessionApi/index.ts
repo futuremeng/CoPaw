@@ -781,6 +781,35 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
     return lastMessage.msgStatus === "generating";
   }
 
+  /** Apply listChats to sessionList; merge realId and generating by session_id. */
+  private applyChatsToSessionList(
+    chats: ChatSpec[],
+  ): IAgentScopeRuntimeWebUISession[] {
+    const newList = chats
+      .filter((c) => c.id && c.id !== "undefined" && c.id !== "null")
+      .map(chatSpecToSession)
+      .reverse();
+
+    this.sessionList = newList.map((s) => {
+      const existing = this.sessionList.find(
+        (e) =>
+          (e as ExtendedSession).sessionId === (s as ExtendedSession).sessionId,
+      ) as ExtendedSession | undefined;
+      if (!existing) return s;
+      const next = { ...s } as ExtendedSession;
+      if (existing.realId) {
+        next.id = existing.id;
+        next.realId = existing.realId;
+      }
+      if (existing.generating !== undefined) {
+        next.generating = existing.generating;
+      }
+      return next as IAgentScopeRuntimeWebUISession;
+    });
+
+    return [...this.sessionList];
+  }
+
   async getSessionList() {
     // Deduplicate: reuse the in-flight request if one is already running so
     // concurrent calls don't overwrite sessionList and lose realId mappings.
@@ -790,82 +819,7 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
       try {
         const chatPayload = (await api.listChats()) as ChatsListPayload;
         const chats = this.normalizeChatList(chatPayload);
-        const newList = chats
-          .filter((c) => c.id && c.id !== "undefined" && c.id !== "null")
-          .map(chatSpecToSession)
-          .reverse();
-
-        // Merge: preserve realId mappings (timestamp → UUID) stored in memory
-        this.sessionList = newList.map((s) => {
-          const existing = this.sessionList.find(
-            (e) =>
-              (e as ExtendedSession).sessionId ===
-              (s as ExtendedSession).sessionId,
-          ) as ExtendedSession | undefined;
-
-          if (!existing) {
-            return s;
-          }
-
-          // First resolution moment: backend row (UUID) appears while local
-          // timestamp session still owns the freshest in-memory messages.
-          if (isLocalTimestamp(existing.id) && !existing.realId) {
-            return {
-              ...s,
-              id: existing.id,
-              realId: (s as ExtendedSession).id,
-              messages: this.pickRicherMessages(
-                existing.messages as IAgentScopeRuntimeWebUIMessage[] | undefined,
-                (s as ExtendedSession).messages as IAgentScopeRuntimeWebUIMessage[] | undefined,
-              ),
-              meta:
-                Object.keys(existing.meta || {}).length > 0
-                  ? existing.meta
-                  : (s as ExtendedSession).meta,
-              status: existing.status ?? (s as ExtendedSession).status,
-            } as ExtendedSession;
-          }
-
-          if (!existing.realId) {
-            return {
-              ...s,
-              messages: this.pickRicherMessages(
-                existing.messages as IAgentScopeRuntimeWebUIMessage[] | undefined,
-                (s as ExtendedSession).messages as IAgentScopeRuntimeWebUIMessage[] | undefined,
-              ),
-            } as ExtendedSession;
-          }
-
-          const messages = this.pickRicherMessages(
-            existing.messages as IAgentScopeRuntimeWebUIMessage[] | undefined,
-            (s as ExtendedSession).messages as IAgentScopeRuntimeWebUIMessage[] | undefined,
-          );
-
-          return {
-            ...s,
-            id: existing.id,
-            realId: existing.realId,
-            messages,
-            meta:
-              Object.keys(existing.meta || {}).length > 0
-                ? existing.meta
-                : (s as ExtendedSession).meta,
-          } as ExtendedSession;
-        });
-
-        // Move the preferred session to the front so the library's useMount
-        // auto-selects it, avoiding an unnecessary getSession call for sessions[0].
-        if (this.preferredChatId) {
-          const preferredId = this.preferredChatId;
-          this.preferredChatId = null;
-          const idx = this.sessionList.findIndex((s) => s.id === preferredId);
-          if (idx > 0) {
-            const [preferred] = this.sessionList.splice(idx, 1);
-            this.sessionList.unshift(preferred);
-          }
-        }
-
-        return [...this.sessionList];
+        return this.applyChatsToSessionList(chats);
       } finally {
         this.sessionListRequest = null;
       }

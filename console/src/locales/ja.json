@@ -307,7 +307,9 @@
     "emptyStateText": "これは正常です。新しいワークスペースにはスキルが自動で追加されません。ローカルのスキルプールから読み込むか、ここで新しいスキルを作成してこのエージェントに装備してください。",
     "selectAll": "すべて選択",
     "clearSelection": "選択をクリア",
-    "renameSingleOnly": "リネームはスキルを 1 つだけ選択している場合に利用できます。"
+    "renameSingleOnly": "リネームはスキルを 1 つだけ選択している場合に利用できます。",
+    "batchOperation": "一括操作",
+    "exitBatch": "一括操作を終了"
   },
   "knowledge": {
     "title": "ナレッジ",
@@ -1290,6 +1292,8 @@
     "chatHistoryTooltip": "チャット履歴",
     "allChats": "すべてのチャット",
     "createNewChat": "新しいチャットを作成",
+    "statusIdle": "待機",
+    "statusInProgress": "処理中",
     "thinkingFallbackTitle": "思考フォールバック表示",
     "thinkingFallbackDescription": "このターンではモデルの正式な回答が出る前に終了しました。以下には参照用として思考内容を下書き表示します。",
     "thinkingFallbackLabel": "思考ドラフト",
