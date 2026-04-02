@@ -52,6 +52,7 @@ from .tools import (
     read_file,
     send_file_to_user,
     set_user_timezone,
+    skill_market_search,
     triplet_focus_search,
     view_image,
     view_video,
@@ -267,6 +268,7 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
             "memify_run": memify_run,
             "memify_status": memify_status,
             "triplet_focus_search": triplet_focus_search,
+            "skill_market_search": skill_market_search,
         }
 
         multimodal = get_active_model_supports_multimodal()

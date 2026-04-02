@@ -972,6 +972,11 @@ def _default_builtin_tools() -> Dict[str, BuiltinToolConfig]:
             enabled=True,
             description="Get llm token usage",
         ),
+        "skill_market_search": BuiltinToolConfig(
+            name="skill_market_search",
+            enabled=True,
+            description="Search enabled skill markets for installable skills",
+        ),
     }
 
 
