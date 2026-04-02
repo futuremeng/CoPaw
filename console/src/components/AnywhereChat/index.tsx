@@ -145,7 +145,22 @@ type AttachmentTriggerProps = {
   disabled?: boolean;
 };
 
+type CommandSuggestion = {
+  command: string;
+  value: string;
+  description: string;
+};
+
 const CHAT_ATTACHMENT_MAX_MB = 10;
+
+function renderSuggestionLabel(command: string, description: string) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <span style={{ fontFamily: "monospace", fontWeight: 600 }}>{command}</span>
+      <span style={{ opacity: 0.75 }}>{description}</span>
+    </div>
+  );
+}
 
 function extractUserTextFromInput(input?: ChatInputItem): string {
   if (!input || !Array.isArray(input.content)) return "";
@@ -693,6 +708,7 @@ export default function AnywhereChat({
   autoAttachRequest,
   onAutoAttachHandled,
 }: AnywhereChatProps) {
+  const isComposingRef = useRef(false);
   const { t } = useTranslation();
   const { isDark } = useTheme();
   const { selectedAgent } = useAgentStore();
@@ -717,6 +733,49 @@ export default function AnywhereChat({
   const runtimeStatusRetryTimerRef = useRef<number | null>(null);
   const runtimeStatusRetryCountRef = useRef(0);
   const handledAutoAttachIdRef = useRef("");
+
+  useEffect(() => {
+    const isAnywhereChatInput = (eventTarget: EventTarget | null): boolean => {
+      const target = eventTarget as HTMLElement | null;
+      if (!target) return false;
+      if (target.tagName !== "TEXTAREA") return false;
+      return Boolean(target.closest(".copaw-chat-anywhere-layout"));
+    };
+
+    const handleCompositionStart = (event: CompositionEvent) => {
+      if (!isAnywhereChatInput(event.target)) return;
+      isComposingRef.current = true;
+    };
+
+    const handleCompositionEnd = (event: CompositionEvent) => {
+      if (!isAnywhereChatInput(event.target)) return;
+      // Safari on macOS may dispatch keydown right after compositionend.
+      setTimeout(() => {
+        isComposingRef.current = false;
+      }, 200);
+    };
+
+    const suppressImeEnter = (event: KeyboardEvent) => {
+      if (!isAnywhereChatInput(event.target)) return;
+      const composingEvent = event as KeyboardEvent & { isComposing?: boolean };
+      if (event.key === "Enter" && !event.shiftKey) {
+        if (composingEvent.isComposing || isComposingRef.current) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      }
+    };
+
+    document.addEventListener("compositionstart", handleCompositionStart, true);
+    document.addEventListener("compositionend", handleCompositionEnd, true);
+    document.addEventListener("keydown", suppressImeEnter, true);
+
+    return () => {
+      document.removeEventListener("compositionstart", handleCompositionStart, true);
+      document.removeEventListener("compositionend", handleCompositionEnd, true);
+      document.removeEventListener("keydown", suppressImeEnter, true);
+    };
+  }, []);
 
   const getInputRoot = useCallback((): HTMLElement | null => {
     return document.querySelector(`.${hostClassName}`) as HTMLElement | null;
@@ -1466,12 +1525,39 @@ export default function AnywhereChat({
   const options = useMemo(() => {
     const i18nConfig = getDefaultConfig(t);
     const senderConfig = (i18nConfig as SenderConfigShape).sender || {};
+    const commandSuggestions: CommandSuggestion[] = [
+      {
+        command: "/clear",
+        value: "clear",
+        description: t("chat.commands.clear.description"),
+      },
+      {
+        command: "/compact",
+        value: "compact",
+        description: t("chat.commands.compact.description"),
+      },
+      {
+        command: "/approve",
+        value: "approve",
+        description: t("chat.commands.approve.description"),
+      },
+      {
+        command: "/deny",
+        value: "deny",
+        description: t("chat.commands.deny.description"),
+      },
+    ];
     const welcomeConfig = (i18nConfig.welcome || {}) as WelcomeConfigShape;
     const selectedPromptValues = welcomePromptsWhenEmpty || welcomePrompts || [];
     const prompts =
       Array.isArray(selectedPromptValues) && selectedPromptValues.length > 0
         ? selectedPromptValues.map((value) => ({ value }))
         : (welcomeConfig.prompts || []);
+
+    const handleBeforeSubmit = async () => {
+      if (isComposingRef.current) return false;
+      return true;
+    };
 
     const renderWelcome =
       welcomePromptClickBehavior === "append"
@@ -1506,6 +1592,7 @@ export default function AnywhereChat({
       },
       sender: {
         ...senderConfig,
+        beforeSubmit: handleBeforeSubmit,
         allowSpeech: true,
         attachments: {
           trigger: function (props: AttachmentTriggerProps) {
@@ -1523,6 +1610,10 @@ export default function AnywhereChat({
           customRequest: handleFileUpload,
         },
         placeholder: inputPlaceholder || senderConfig.placeholder,
+        suggestions: commandSuggestions.map((item) => ({
+          label: renderSuggestionLabel(item.command, item.description),
+          value: item.value,
+        })),
       },
       welcome: {
         ...welcomeConfig,
