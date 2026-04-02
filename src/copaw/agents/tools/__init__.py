@@ -29,6 +29,7 @@ from .memify_run import memify_run
 from .memify_status import memify_status
 from .triplet_focus_search import triplet_focus_search
 from .skill_market_search import skill_market_search
+from .skill_market_install import skill_market_install
 
 __all__ = [
     "execute_python_code",
@@ -56,4 +57,5 @@ __all__ = [
     "memify_status",
     "triplet_focus_search",
     "skill_market_search",
+    "skill_market_install",
 ]
