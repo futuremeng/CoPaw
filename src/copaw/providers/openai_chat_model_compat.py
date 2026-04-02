@@ -23,6 +23,14 @@ _LEAKED_THINKING_PREFIX_RE = re.compile(
     r"^\s*(?:Thinking|Reasoning|思考|推理)\s*:?\s*(?:\r?\n)+",
     re.IGNORECASE,
 )
+_THINKING_REPORT_SIGNAL_RE = re.compile(
+    r"(?:^|\n)(?:#{1,6}\s|[-*]\s\[[ xX]\]\s|\d+\.\s|\|.+\|)",
+    re.MULTILINE,
+)
+_THINKING_INTERNAL_PREFIX_RE = re.compile(
+    r"^\s*(?:让我|我需要|我应该|先\s|let me\b|i need to\b|i should\b|i'?ll\b)",
+    re.IGNORECASE,
+)
 
 
 def _strip_leaked_thinking_prefix(text: str) -> str:
@@ -66,6 +74,49 @@ def _sanitize_visible_text_blocks(parsed: ChatResponse) -> None:
             raw_refusal = block.get("refusal")
             if isinstance(raw_refusal, str):
                 block["refusal"] = _strip_leaked_thinking_prefix(raw_refusal)
+
+
+def _promote_thinking_only_answer(parsed: ChatResponse) -> None:
+    """Promote thinking-only formatted answers into visible text blocks.
+
+    Some model streams occasionally end with only ``thinking`` content even
+    when the text is clearly a final structured answer. In that case, move it
+    into a ``text`` block so UI/history can render it consistently.
+    """
+    if not isinstance(parsed.content, list) or not parsed.content:
+        return
+
+    if any(
+        isinstance(block, dict) and block.get("type") != "thinking"
+        for block in parsed.content
+    ):
+        return
+
+    think_chunks = []
+    for block in parsed.content:
+        if not isinstance(block, dict) or block.get("type") != "thinking":
+            return
+        chunk = block.get("thinking")
+        if isinstance(chunk, str) and chunk.strip():
+            think_chunks.append(chunk.strip())
+
+    if not think_chunks:
+        return
+
+    merged = _strip_leaked_thinking_prefix("\n\n".join(think_chunks).strip())
+    if not merged:
+        return
+
+    if len(merged) < 60:
+        return
+
+    if _THINKING_INTERNAL_PREFIX_RE.match(merged):
+        return
+
+    if not _THINKING_REPORT_SIGNAL_RE.search(merged):
+        return
+
+    parsed.content = [{"type": "text", "text": merged}]
 
 
 def _clone_with_overrides(obj: Any, **overrides: Any) -> Any:
@@ -360,5 +411,7 @@ class OpenAIChatModelCompat(OpenAIChatModel):
                 )
                 if extra:
                     parsed.content = list(parsed.content) + extra
+
+            _promote_thinking_only_answer(parsed)
 
             yield parsed
