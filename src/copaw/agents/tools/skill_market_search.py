@@ -42,6 +42,10 @@ async def skill_market_search(
     try:
         cfg = _load_current_market_config()
         items, errors, meta = _aggregate_marketplace(cfg, refresh=refresh)
+        market_trust = {
+            market.id: (market.trust or "custom")
+            for market in (cfg.markets or [])
+        }
 
         filtered = []
         for item in items:
@@ -84,7 +88,9 @@ async def skill_market_search(
             for idx, item in enumerate(capped, start=1):
                 lines.append(
                     f"[{idx}] {item.name} ({item.skill_id}) "
-                    f"market={item.market_id} version={item.version or 'n/a'}"
+                    f"market={item.market_id} "
+                    f"trust={market_trust.get(item.market_id, 'custom')} "
+                    f"version={item.version or 'n/a'}"
                 )
                 if item.tags:
                     lines.append(f"tags: {', '.join(item.tags)}")

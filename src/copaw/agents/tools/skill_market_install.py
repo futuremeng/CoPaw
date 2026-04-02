@@ -16,6 +16,7 @@ from ...constant import WORKING_DIR
 from ...security.skill_scanner import SkillScanError
 
 _CONFIRM_TOKEN = "INSTALL_CONFIRMED"
+_TRUSTED_MARKET_LEVELS = {"official", "community"}
 
 
 def _confirmation_valid(confirm: bool, confirmation_token: str) -> bool:
@@ -27,6 +28,7 @@ async def skill_market_install(
     skill_id: str,
     confirm: bool = False,
     confirmation_token: str = "",
+    allow_untrusted: bool = False,
     enable: bool = True,
     overwrite: bool = False,
 ) -> ToolResponse:
@@ -40,6 +42,7 @@ async def skill_market_install(
         skill_id: Skill id inside the marketplace index.
         confirm: Must be true to proceed.
         confirmation_token: Must equal INSTALL_CONFIRMED to proceed.
+        allow_untrusted: Whether to allow install from non-trusted markets.
         enable: Whether to enable the installed skill.
         overwrite: Whether to overwrite existing skill if present.
 
@@ -74,6 +77,10 @@ async def skill_market_install(
     try:
         cfg = _load_current_market_config()
         items, _errors, _meta = _aggregate_marketplace(cfg, refresh=True)
+        market_trust = {
+            market.id: (market.trust or "custom")
+            for market in (cfg.markets or [])
+        }
         selected = next(
             (
                 item
@@ -90,6 +97,22 @@ async def skill_market_install(
                         text=(
                             "Error: skill not found in enabled markets. "
                             f"market_id={market_key} skill_id={skill_key}"
+                        ),
+                    ),
+                ],
+            )
+
+        trust_level = market_trust.get(market_key, "custom")
+        if trust_level not in _TRUSTED_MARKET_LEVELS and not allow_untrusted:
+            return ToolResponse(
+                content=[
+                    TextBlock(
+                        type="text",
+                        text=(
+                            "Error: installation blocked by trust policy. "
+                            "reason=UNTRUSTED_MARKET "
+                            f"market_id={market_key} trust={trust_level}. "
+                            "Set allow_untrusted=true to override."
                         ),
                     ),
                 ],
@@ -114,6 +137,7 @@ async def skill_market_install(
                         "Skill installed successfully. "
                         f"name={result.name}, enabled={str(result.enabled).lower()}, "
                         f"market_id={market_key}, skill_id={skill_key}, "
+                        f"trust={trust_level}, "
                         f"workspace_dir={workspace_dir}"
                     ),
                 ),

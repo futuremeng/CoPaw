@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib
+from types import SimpleNamespace
 
 from copaw.app.routers.skills import MarketError, MarketplaceItem
 
@@ -9,7 +10,13 @@ from copaw.app.routers.skills import MarketError, MarketplaceItem
 async def test_skill_market_search_filters_by_query_and_tags(monkeypatch) -> None:
     module = importlib.import_module("copaw.agents.tools.skill_market_search")
 
-    monkeypatch.setattr(module, "_load_current_market_config", lambda: object())
+    monkeypatch.setattr(
+        module,
+        "_load_current_market_config",
+        lambda: SimpleNamespace(
+            markets=[SimpleNamespace(id="editor", trust="community")],
+        ),
+    )
     monkeypatch.setattr(
         module,
         "_aggregate_marketplace",
@@ -65,6 +72,7 @@ async def test_skill_market_search_filters_by_query_and_tags(monkeypatch) -> Non
     assert "tags=editor" in text
     assert "refresh=true" in text
     assert "Proofread Single (proofread-single)" in text
+    assert "market=editor trust=community" in text
     assert "Numeric Unit Consistency" not in text
     assert "[MARKET_WARNING] editor: using fallback index" in text
 
@@ -72,7 +80,11 @@ async def test_skill_market_search_filters_by_query_and_tags(monkeypatch) -> Non
 async def test_skill_market_search_returns_no_matches_message(monkeypatch) -> None:
     module = importlib.import_module("copaw.agents.tools.skill_market_search")
 
-    monkeypatch.setattr(module, "_load_current_market_config", lambda: object())
+    monkeypatch.setattr(
+        module,
+        "_load_current_market_config",
+        lambda: SimpleNamespace(markets=[]),
+    )
     monkeypatch.setattr(
         module,
         "_aggregate_marketplace",
@@ -95,7 +107,11 @@ async def test_skill_market_search_returns_no_matches_message(monkeypatch) -> No
 async def test_skill_market_search_returns_error_message_on_exception(monkeypatch) -> None:
     module = importlib.import_module("copaw.agents.tools.skill_market_search")
 
-    monkeypatch.setattr(module, "_load_current_market_config", lambda: object())
+    monkeypatch.setattr(
+        module,
+        "_load_current_market_config",
+        lambda: SimpleNamespace(markets=[]),
+    )
 
     def _raise(*_args, **_kwargs):
         raise RuntimeError("market backend unavailable")
