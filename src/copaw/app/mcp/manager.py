@@ -116,7 +116,11 @@ class MCPClientManager:
 
         if existing is not None and getattr(existing, "is_connected", False):
             try:
-                await asyncio.wait_for(existing.list_tools(), timeout=timeout)
+                await self._probe_client_capabilities(
+                    existing,
+                    key,
+                    timeout=timeout,
+                )
                 self._failed_keys.discard(key)
                 return True
             except Exception as exc:
@@ -132,11 +136,73 @@ class MCPClientManager:
 
         try:
             await self.replace_client(key, client_config, timeout=timeout)
+
+            refreshed = self._clients.get(key)
+            if refreshed is None:
+                raise RuntimeError(
+                    f"MCP client '{key}' missing after reconnect",
+                )
+
+            await self._probe_client_capabilities(
+                refreshed,
+                key,
+                timeout=timeout,
+            )
             self._failed_keys.discard(key)
             return True
         except Exception:
+            failed_client = None
+            async with self._lock:
+                failed_client = self._clients.pop(key, None)
+            if failed_client is not None:
+                try:
+                    await failed_client.close()
+                except Exception:
+                    logger.debug(
+                        "Error closing failed MCP client '%s'",
+                        key,
+                        exc_info=True,
+                    )
             self._failed_keys.add(key)
             return False
+
+    async def _probe_client_capabilities(
+        self,
+        client: Any,
+        key: str,
+        timeout: float,
+    ) -> None:
+        """Probe MCP permissions by listing tools or resources.
+
+        Token/auth failures for remote MCP usually surface here even if
+        transport connect succeeded.
+        """
+        probe_errors: List[str] = []
+        has_probe_method = False
+
+        for method_name in ("list_tools", "list_resources"):
+            method = getattr(client, method_name, None)
+            if method is None or not callable(method):
+                continue
+
+            has_probe_method = True
+            try:
+                await asyncio.wait_for(method(), timeout=timeout)
+                return
+            except Exception as exc:
+                probe_errors.append(f"{method_name}: {type(exc).__name__}: {exc}")
+
+        if not has_probe_method:
+            logger.debug(
+                "MCP client '%s' has no probe methods; skip capability probe",
+                key,
+            )
+            return
+
+        raise RuntimeError(
+            f"MCP client '{key}' capability probe failed: "
+            + "; ".join(probe_errors)
+        )
 
     async def get_clients(self) -> List[Any]:
         """Get list of all active MCP clients.
