@@ -52,6 +52,10 @@ export interface ChatRuntimeStatus {
   breakdown: ChatRuntimeStatusBreakdownItem[];
 }
 
+export interface ChatUpdateRequest {
+  name?: string;
+}
+
 export interface ChatDeleteResponse {
   success: boolean;
   chat_id: string;
