@@ -1688,8 +1688,12 @@ export default function AnywhereChat({
               <span
                 key="copy-md-action-icon"
                 title={`${t("chat.copyMarkdown", "复制原始Markdown")} · ${t("chat.copyMarkdownHint", "保留Markdown格式")}`}
+                className={styles.markdownCopyBadge}
               >
                 <FileMarkdownOutlined />
+                <span className={styles.markdownCopyBadgeText}>
+                  {t("chat.copyMarkdownShortLabel", "MD")}
+                </span>
               </span>
             ),
             onClick: ({ data }: { data: CopyableResponse }) => {
