@@ -1640,6 +1640,9 @@ export default function AnywhereChat({
       },
       welcome: {
         ...welcomeConfig,
+        nick: "CoPaw",
+        avatar:
+          "https://gw.alicdn.com/imgextra/i2/O1CN01pyXzjQ1EL1PuZMlSd_!!6000000000334-2-tps-288-288.png",
         greeting: welcomeGreeting || welcomeConfig.greeting,
         description: welcomeDescription || welcomeConfig.description,
         prompts,
