@@ -5,7 +5,9 @@ import {
   Card,
   Drawer,
   Empty,
+  Modal,
   Popconfirm,
+  Select,
   Spin,
   Tabs,
   Typography,
@@ -16,7 +18,10 @@ import { useTranslation } from "react-i18next";
 import { agentsApi } from "../../../api/modules/agents";
 import { chatApi } from "../../../api/modules/chat";
 import ProjectAutomationPanel from "./ProjectAutomationPanel";
-import ProjectChatPanel, { type ProjectChatAutoAttachRequest } from "./ProjectChatPanel";
+import ProjectChatPanel, {
+  type ProjectChatAutoAttachRequest,
+  type ProjectChatMode,
+} from "./ProjectChatPanel";
 import ProjectOverviewCard from "./ProjectOverviewCard";
 import ProjectUploadModal from "./ProjectUploadModal";
 import ProjectWorkbenchPanel from "./ProjectWorkbenchPanel";
@@ -25,6 +30,7 @@ import ProjectEvidencePanel from "./ProjectEvidencePanel";
 import useArtifactSelectionGuards from "./useArtifactSelectionGuards";
 import useProjectChatEnsureController from "./useProjectChatEnsureController";
 import useProjectChatFocusEffects from "./useProjectChatFocusEffects";
+import usePreferredProjectWorkspaceChat from "./usePreferredProjectWorkspaceChat";
 import useProjectDesignChatController from "./useProjectDesignChatController";
 import useLeaveConfirmGuard from "./useLeaveConfirmGuard";
 import useOpenUploadQuery from "./useOpenUploadQuery";
@@ -56,6 +62,7 @@ import type {
   PlatformFlowTemplateInfo,
   AgentSummary,
 } from "../../../api/types/agents";
+import type { ChatSpec } from "../../../api/types/chat";
 import { useAgentStore } from "../../../stores/agentStore";
 import styles from "./index.module.less";
 
@@ -138,7 +145,7 @@ function isSucceededStatus(status: string): boolean {
   return status === "succeeded" || status === "completed";
 }
 
-function toTimestamp(raw?: string): number {
+function toTimestamp(raw?: string | null): number {
   if (!raw) {
     return 0;
   }
@@ -188,6 +195,10 @@ export default function ProjectDetailPage() {
   const [runFocusChatId, setRunFocusChatId] = useState("");
   const [workspaceFocusChatId, setWorkspaceFocusChatId] = useState("");
   const [designFocusChatId, setDesignFocusChatId] = useState("");
+  const [manualRecoverOpen, setManualRecoverOpen] = useState(false);
+  const [manualRecoverLoading, setManualRecoverLoading] = useState(false);
+  const [manualRecoverCandidates, setManualRecoverCandidates] = useState<ChatSpec[]>([]);
+  const [manualRecoverChatId, setManualRecoverChatId] = useState("");
   const [chatStarting, setChatStarting] = useState(false);
   const [selectedStepId, setSelectedStepId] = useState("");
   const [deletingProject, setDeletingProject] = useState(false);
@@ -201,7 +212,6 @@ export default function ProjectDetailPage() {
   const designFocusChatIdRef = useRef("");
   const runRestoreAttemptKeyRef = useRef("");
   const automationDrawerAutoOpenKeyRef = useRef("");
-  const workspaceAutoInitProjectKeyRef = useRef("");
 
   const currentAgent = useMemo(
     () => getCurrentAgent(agents, selectedAgent),
@@ -340,6 +350,16 @@ export default function ProjectDetailPage() {
   const activeWorkspaceChatId = useMemo(() => workspaceFocusChatId, [workspaceFocusChatId]);
 
   const activeDesignChatId = useMemo(() => designFocusChatId, [designFocusChatId]);
+
+  const projectChatMode = useMemo<ProjectChatMode>(() => {
+    if (selectedRunId) {
+      return "run";
+    }
+    if (activeDesignChatId) {
+      return "design";
+    }
+    return "workspace";
+  }, [activeDesignChatId, selectedRunId]);
 
   const runProgress = useMemo(() => {
     if (!runDetail) {
@@ -992,6 +1012,175 @@ export default function ProjectDetailPage() {
     startFailedText: t("projects.chat.startFailed"),
   });
 
+  const {
+    preferredWorkspaceChatId,
+    applyWorkspaceChatFocus,
+    syncPreferredWorkspaceChatBinding,
+    resetPreferredWorkspaceChatBinding,
+  } = usePreferredProjectWorkspaceChat({
+    currentAgentId: currentAgent?.id,
+    selectedProject,
+    workspaceFocusChatId,
+    activeWorkspaceChatId,
+    activeDesignChatId,
+    selectedRunId,
+    chatStarting,
+    handleEnsureWorkspaceChat,
+    setSelectedRunId,
+    setSelectedStepId,
+    setRunDetail,
+    setRunFocusChatId,
+    setDesignFocusChatId,
+    setWorkspaceFocusChatId,
+  });
+
+  const selectDesignChatSession = useCallback((chatId: string) => {
+    setRunFocusChatId("");
+    setWorkspaceFocusChatId("");
+    setDesignFocusChatId(chatId);
+  }, []);
+
+  const selectRunChatSession = useCallback((chatId: string) => {
+    setRunFocusChatId(chatId);
+  }, []);
+
+  const handleStartWorkspaceChat = useCallback(() => {
+    setDesignFocusChatId("");
+    void handleEnsureWorkspaceChat(true);
+  }, [handleEnsureWorkspaceChat]);
+
+  const handleStartDesignChat = useCallback(() => {
+    setWorkspaceFocusChatId("");
+    void handleEnsureDesignChat(true);
+  }, [handleEnsureDesignChat]);
+
+  const handleStartRunChat = useCallback(() => {
+    void handleEnsureRunChat(true);
+  }, [handleEnsureRunChat]);
+
+  const ensureVisibleProjectChat = useCallback(async (): Promise<string> => {
+    if (projectChatMode === "run") {
+      return activeRunChatId || handleEnsureRunChat(false);
+    }
+    if (projectChatMode === "design") {
+      return activeDesignChatId || handleEnsureDesignChat(false, true);
+    }
+    return activeWorkspaceChatId || handleEnsureWorkspaceChat(false);
+  }, [
+    activeDesignChatId,
+    activeRunChatId,
+    activeWorkspaceChatId,
+    handleEnsureDesignChat,
+    handleEnsureRunChat,
+    handleEnsureWorkspaceChat,
+    projectChatMode,
+  ]);
+
+  const prepareDraftInChat = useCallback(async (params: {
+    ensureChat: () => Promise<string>;
+    request: ProjectChatAutoAttachRequest;
+    successText: string;
+  }): Promise<boolean> => {
+    const chatId = await params.ensureChat();
+    if (!chatId) {
+      message.error(t("projects.chat.startFailed"));
+      return false;
+    }
+
+    setAutoAttachRequest(params.request);
+    message.success(params.successText);
+    return true;
+  }, [t]);
+
+  const loadManualRecoverCandidates = useCallback(async () => {
+    setManualRecoverLoading(true);
+    try {
+      const chats = await chatApi.listChats({
+        user_id: "default",
+        channel: "console",
+      });
+      const sorted = [...chats].sort((a, b) =>
+        toTimestamp(b.updated_at || b.created_at) -
+        toTimestamp(a.updated_at || a.created_at),
+      );
+      setManualRecoverCandidates(sorted);
+    } catch (err) {
+      console.error("failed to load recoverable chats", err);
+      setManualRecoverCandidates([]);
+      setError(
+        t("projects.chat.manualRecoverListFailed", "Failed to load history chats."),
+      );
+    } finally {
+      setManualRecoverLoading(false);
+    }
+  }, [setError, t]);
+
+  const handleOpenManualRecoverDialog = useCallback(async () => {
+    if (!selectedProject) {
+      return;
+    }
+    setManualRecoverOpen(true);
+    setManualRecoverChatId("");
+    await loadManualRecoverCandidates();
+  }, [loadManualRecoverCandidates, selectedProject]);
+
+  const handleConfirmManualRecover = useCallback(async () => {
+    if (!selectedProject || !manualRecoverChatId) {
+      return;
+    }
+    setManualRecoverLoading(true);
+    try {
+      const fallbackChats =
+        manualRecoverCandidates.length > 0
+          ? manualRecoverCandidates
+          : await chatApi.listChats({ user_id: "default", channel: "console" });
+      const target = fallbackChats.find((chat) => chat.id === manualRecoverChatId);
+      if (!target) {
+        throw new Error("recover_chat_not_found");
+      }
+
+      const targetMeta =
+        target.meta && typeof target.meta === "object"
+          ? (target.meta as Record<string, unknown>)
+          : {};
+
+      await chatApi.updateChat(target.id, {
+        meta: {
+          ...targetMeta,
+          focus_type: "project_workspace",
+          focus_id: selectedProject.id,
+          project_id: selectedProject.id,
+          project_request_id: resolvedProjectRequestId || selectedProject.id,
+          focus_path: `projects/${selectedProject.id}`,
+          recovered_by: "manual_project_rebind",
+          recovered_at: new Date().toISOString(),
+        },
+      });
+
+      applyWorkspaceChatFocus(target.id);
+      await syncPreferredWorkspaceChatBinding(target.id);
+      setManualRecoverOpen(false);
+      message.success(
+        t("projects.chat.manualRecoverSuccess", "Chat linked to current project."),
+      );
+    } catch (err) {
+      console.error("failed to manually recover project chat", err);
+      message.error(
+        t("projects.chat.manualRecoverFailed", "Failed to recover chat binding."),
+      );
+    } finally {
+      setManualRecoverLoading(false);
+    }
+  }, [
+    applyWorkspaceChatFocus,
+    manualRecoverCandidates,
+    manualRecoverChatId,
+    resolvedProjectRequestId,
+    selectedProject,
+    syncPreferredWorkspaceChatBinding,
+    t,
+  ]);
+
   useProjectChatFocusEffects({
     runFocusChatId,
     workspaceFocusChatId,
@@ -1036,8 +1225,8 @@ export default function ProjectDetailPage() {
     setSelectedAttachPaths([]);
     setSendingSelectedFiles(false);
     runRestoreAttemptKeyRef.current = "";
-    workspaceAutoInitProjectKeyRef.current = "";
-  }, [resetUploadState, routeProjectId]);
+    resetPreferredWorkspaceChatBinding();
+  }, [resetPreferredWorkspaceChatBinding, resetUploadState, routeProjectId]);
 
   useOpenUploadQuery({
     pathname: location.pathname,
@@ -1064,34 +1253,6 @@ export default function ProjectDetailPage() {
     void loadProjectFiles(currentAgent.id, selectedProject);
     void loadPipelineContext(currentAgent.id, selectedProject);
   }, [currentAgent, selectedProject, loadProjectFiles, loadPipelineContext]);
-
-  useEffect(() => {
-    if (!selectedProject?.id) {
-      return;
-    }
-    if (selectedRunId || activeWorkspaceChatId || activeDesignChatId || chatStarting) {
-      return;
-    }
-
-    const autoInitKey = selectedProject.id;
-    if (workspaceAutoInitProjectKeyRef.current === autoInitKey) {
-      return;
-    }
-    workspaceAutoInitProjectKeyRef.current = autoInitKey;
-
-    void handleEnsureWorkspaceChat().then((chatId) => {
-      if (!chatId) {
-        workspaceAutoInitProjectKeyRef.current = "";
-      }
-    });
-  }, [
-    activeDesignChatId,
-    activeWorkspaceChatId,
-    chatStarting,
-    handleEnsureWorkspaceChat,
-    selectedProject?.id,
-    selectedRunId,
-  ]);
 
   useEffect(() => {
     if (!currentAgent || !selectedProject || !selectedFilePath) {
@@ -1123,12 +1284,22 @@ export default function ProjectDetailPage() {
       return;
     }
 
+    const hasPreferredWorkspaceChat = Boolean(
+      preferredWorkspaceChatId,
+    );
+
     setSelectedRunId((prev) =>
       runsForSelectedTemplate.some((item) => item.id === prev)
         ? prev
-        : runsForSelectedTemplate[0].id,
+        : hasPreferredWorkspaceChat
+          ? ""
+          : runsForSelectedTemplate[0].id,
     );
-  }, [runsForSelectedTemplate, selectedTemplateId]);
+  }, [
+    preferredWorkspaceChatId,
+    runsForSelectedTemplate,
+    selectedTemplateId,
+  ]);
 
   useEffect(() => {
     if (!selectedRunId) {
@@ -1237,20 +1408,10 @@ export default function ProjectDetailPage() {
 
     setSendingSelectedFiles(true);
     try {
-      if (selectedRunId) {
-        if (!activeRunChatId) {
-          await handleEnsureRunChat();
-        }
-      } else {
-        // Keep attach target aligned with the currently visible chat panel
-        // to avoid switching session (which looks like a full chat reload).
-        if (activeWorkspaceChatId) {
-          // Already in workspace chat, keep current session.
-        } else if (activeDesignChatId) {
-          // Already in design chat, keep current session.
-        } else {
-          await handleEnsureWorkspaceChat();
-        }
+      const targetChatId = await ensureVisibleProjectChat();
+      if (!targetChatId) {
+        message.error(t("projects.chat.startFailed"));
+        return;
       }
 
       const selectedFiles = selectedAttachPaths.map((path) => {
@@ -1284,33 +1445,33 @@ export default function ProjectDetailPage() {
           )
         : [];
 
-      setAutoAttachRequest({
-        id: `manual-batch-draft-${Date.now()}`,
-        mode: "draft",
-        note: autoAnalyzeOnAttach
-          ? buildAutoAttachAnalysisPrompt({
-              projectName: selectedProject.name,
-              workspaceDir:
-                selectedProject.workspace_dir || currentAgent.workspace_dir || "",
-              fileNames: selectedFiles.map((item) => item.path),
-              selectedRunId,
-              fileContexts,
-            })
-          : buildAttachDraftPrompt({
-              projectName: selectedProject.name,
-              workspaceDir:
-                selectedProject.workspace_dir || currentAgent.workspace_dir || "",
-              selectedRunId,
-              selectedFiles,
-            }),
-      });
-
-      message.success(
-        t(
+      await prepareDraftInChat({
+        ensureChat: async () => targetChatId,
+        request: {
+          id: `manual-batch-draft-${Date.now()}`,
+          mode: "draft",
+          note: autoAnalyzeOnAttach
+            ? buildAutoAttachAnalysisPrompt({
+                projectName: selectedProject.name,
+                workspaceDir:
+                  selectedProject.workspace_dir || currentAgent.workspace_dir || "",
+                fileNames: selectedFiles.map((item) => item.path),
+                selectedRunId,
+                fileContexts,
+              })
+            : buildAttachDraftPrompt({
+                projectName: selectedProject.name,
+                workspaceDir:
+                  selectedProject.workspace_dir || currentAgent.workspace_dir || "",
+                selectedRunId,
+                selectedFiles,
+              }),
+        },
+        successText: t(
           "projects.chat.attachDraftReady",
           "Prepared selected file context in the chat input box.",
         ),
-      );
+      });
       setSelectedAttachPaths([]);
     } catch (err) {
       console.error("failed to send selected files to chat", err);
@@ -1321,14 +1482,11 @@ export default function ProjectDetailPage() {
       setSendingSelectedFiles(false);
     }
   }, [
-    activeDesignChatId,
-    activeRunChatId,
-    activeWorkspaceChatId,
+    ensureVisibleProjectChat,
     currentAgent,
     fetchProjectFileSnippet,
-    handleEnsureRunChat,
-    handleEnsureWorkspaceChat,
     projectFiles,
+    prepareDraftInChat,
     selectedAttachPaths,
     selectedProject,
     selectedRunId,
@@ -1341,33 +1499,29 @@ export default function ProjectDetailPage() {
       return;
     }
 
-    const chatId = await handleEnsureDesignChat(false, true);
-    if (!chatId) {
-      message.error(t("projects.chat.startFailed"));
-      return;
-    }
-
-    setAutoAttachRequest({
-      id: `flow-impl-${Date.now()}`,
-      mode: "draft",
-      note: buildImplementationAdvancePrompt({
-        projectName: selectedProject.name,
-        templateName: selectedTemplate?.name || "draft",
-        templateId: selectedTemplateId || "draft",
-        runCount: runsForSelectedTemplate.length,
-        latestRunStatus: latestRunForSelectedTemplate?.status || "",
-        gateSummary: verificationGateSummary,
-      }),
-    });
-    message.success(
-      t(
+    void prepareDraftInChat({
+      ensureChat: () => handleEnsureDesignChat(false, true),
+      request: {
+        id: `flow-impl-${Date.now()}`,
+        mode: "draft",
+        note: buildImplementationAdvancePrompt({
+          projectName: selectedProject.name,
+          templateName: selectedTemplate?.name || "draft",
+          templateId: selectedTemplateId || "draft",
+          runCount: runsForSelectedTemplate.length,
+          latestRunStatus: latestRunForSelectedTemplate?.status || "",
+          gateSummary: verificationGateSummary,
+        }),
+      },
+      successText: t(
         "projects.chat.implDraftReady",
         "Implementation prompt has been prepared in the design chat input.",
       ),
-    );
+    });
   }, [
     handleEnsureDesignChat,
     latestRunForSelectedTemplate?.status,
+    prepareDraftInChat,
     runsForSelectedTemplate.length,
     selectedProject,
     selectedTemplate?.name,
@@ -1390,30 +1544,26 @@ export default function ProjectDetailPage() {
       return;
     }
 
-    const chatId = await handleEnsureRunChat(false);
-    if (!chatId) {
-      message.error(t("projects.chat.startFailed"));
-      return;
-    }
-
-    setAutoAttachRequest({
-      id: `flow-validate-${Date.now()}`,
-      mode: "draft",
-      note: buildValidationRoundPrompt({
-        projectName: selectedProject.name,
-        runId: selectedRunId,
-        templateName: selectedTemplate?.name || selectedTemplateId || "draft",
-        gateSummary: verificationGateSummary,
-      }),
-    });
-    message.success(
-      t(
+    void prepareDraftInChat({
+      ensureChat: () => handleEnsureRunChat(false),
+      request: {
+        id: `flow-validate-${Date.now()}`,
+        mode: "draft",
+        note: buildValidationRoundPrompt({
+          projectName: selectedProject.name,
+          runId: selectedRunId,
+          templateName: selectedTemplate?.name || selectedTemplateId || "draft",
+          gateSummary: verificationGateSummary,
+        }),
+      },
+      successText: t(
         "projects.chat.validationDraftReady",
         "Validation prompt has been prepared in the run chat input.",
       ),
-    );
+    });
   }, [
     handleEnsureRunChat,
+    prepareDraftInChat,
     selectedProject,
     selectedRunId,
     selectedTemplate?.name,
@@ -1427,30 +1577,26 @@ export default function ProjectDetailPage() {
       return;
     }
 
-    const chatId = await handleEnsureDesignChat(false, true);
-    if (!chatId) {
-      message.error(t("projects.chat.startFailed"));
-      return;
-    }
-
-    setAutoAttachRequest({
-      id: `flow-promote-${Date.now()}`,
-      mode: "draft",
-      note: buildPromotionDraftPrompt({
-        projectName: selectedProject.name,
-        templateName: selectedTemplate?.name || selectedTemplateId,
-        templateId: selectedTemplateId,
-        runId: selectedRunId,
-      }),
-    });
-    message.success(
-      t(
+    void prepareDraftInChat({
+      ensureChat: () => handleEnsureDesignChat(false, true),
+      request: {
+        id: `flow-promote-${Date.now()}`,
+        mode: "draft",
+        note: buildPromotionDraftPrompt({
+          projectName: selectedProject.name,
+          templateName: selectedTemplate?.name || selectedTemplateId,
+          templateId: selectedTemplateId,
+          runId: selectedRunId,
+        }),
+      },
+      successText: t(
         "projects.chat.promotionDraftReady",
         "Promotion draft prompt has been prepared in the design chat input.",
       ),
-    );
+    });
   }, [
     handleEnsureDesignChat,
+    prepareDraftInChat,
     selectedProject,
     selectedRunId,
     selectedTemplate?.name,
@@ -1475,29 +1621,25 @@ export default function ProjectDetailPage() {
       "请直接给出最小闭环动作，并说明是否需要重跑。",
     ].filter(Boolean).join("\n");
 
-    const useRunChat = Boolean(selectedRunId);
-    const chatId = useRunChat
-      ? await handleEnsureRunChat(false)
-      : await handleEnsureDesignChat(false, true);
-
-    if (!chatId) {
-      message.error(t("projects.chat.startFailed"));
-      return;
-    }
-
-    setAutoAttachRequest({
-      id: `next-action-${action.id}-${Date.now()}`,
-      mode: "draft",
-      note: prompt,
-    });
-    message.success(
-      t(
+    void prepareDraftInChat({
+      ensureChat: () => (
+        selectedRunId
+          ? handleEnsureRunChat(false)
+          : handleEnsureDesignChat(false, true)
+      ),
+      request: {
+        id: `next-action-${action.id}-${Date.now()}`,
+        mode: "draft",
+        note: prompt,
+      },
+      successText: t(
         "projects.pipeline.nextActionReady",
       ),
-    );
+    });
   }, [
     handleEnsureDesignChat,
     handleEnsureRunChat,
+    prepareDraftInChat,
     selectedProject,
     selectedRunId,
     t,
@@ -1740,6 +1882,7 @@ export default function ProjectDetailPage() {
           <div className={styles.columnChat}>
             <ProjectChatPanel
               projectFileCount={projectFileCount}
+              chatMode={projectChatMode}
               selectedRunId={selectedRunId}
               chatStarting={chatStarting}
               activeWorkspaceChatId={activeWorkspaceChatId}
@@ -1751,29 +1894,14 @@ export default function ProjectDetailPage() {
                   setAutoAttachRequest((prev) => (prev?.id === payload.id ? null : prev));
                 });
               }}
-              onStartWorkspaceChat={() => {
-                setDesignFocusChatId("");
-                void handleEnsureWorkspaceChat(true);
-              }}
-              onStartDesignChat={() => {
-                setWorkspaceFocusChatId("");
-                void handleEnsureDesignChat(true);
-              }}
-              onStartRunChat={() => {
-                void handleEnsureRunChat(true);
-              }}
-              onSelectWorkspaceHistoryChat={(chatId) => {
-                setRunFocusChatId("");
-                setDesignFocusChatId("");
-                setWorkspaceFocusChatId(chatId);
-              }}
-              onSelectDesignHistoryChat={(chatId) => {
-                setRunFocusChatId("");
-                setWorkspaceFocusChatId("");
-                setDesignFocusChatId(chatId);
-              }}
-              onSelectRunHistoryChat={(chatId) => {
-                setRunFocusChatId(chatId);
+              onStartWorkspaceChat={handleStartWorkspaceChat}
+              onStartDesignChat={handleStartDesignChat}
+              onStartRunChat={handleStartRunChat}
+              onSelectWorkspaceHistoryChat={applyWorkspaceChatFocus}
+              onSelectDesignHistoryChat={selectDesignChatSession}
+              onSelectRunHistoryChat={selectRunChatSession}
+              onOpenManualRecoverDialog={() => {
+                void handleOpenManualRecoverDialog();
               }}
             />
           </div>
@@ -1816,10 +1944,7 @@ export default function ProjectDetailPage() {
                 onCreateRun={() => {
                   void handleCreateRun();
                 }}
-                onStartAutomation={() => {
-                  setWorkspaceFocusChatId("");
-                  void handleEnsureDesignChat(true);
-                }}
+                onStartAutomation={handleStartDesignChat}
                 onPrepareImplementationDraft={() => {
                   void handlePrepareImplementationDraft();
                 }}
@@ -1904,6 +2029,73 @@ export default function ProjectDetailPage() {
             }}
             onCancel={() => setUploadModalOpen(false)}
           />
+
+          <Modal
+            title={t("projects.chat.manualRecoverTitle", "手动恢复对话关联")}
+            open={manualRecoverOpen}
+            onCancel={() => setManualRecoverOpen(false)}
+            onOk={() => {
+              void handleConfirmManualRecover();
+            }}
+            okButtonProps={{
+              disabled: !manualRecoverChatId,
+              loading: manualRecoverLoading,
+            }}
+            confirmLoading={manualRecoverLoading}
+            okText={t("projects.chat.manualRecoverConfirm", "关联并切换")}
+            cancelText={t("common.cancel", "Cancel")}
+          >
+            <Text type="secondary">
+              {t(
+                "projects.chat.manualRecoverHint",
+                "若自动恢复失败，可从历史会话中选择一个并绑定到当前项目。",
+              )}
+            </Text>
+            <div style={{ marginTop: 12 }}>
+              <Select
+                style={{ width: "100%" }}
+                showSearch
+                loading={manualRecoverLoading}
+                placeholder={t("projects.chat.manualRecoverPlaceholder", "选择历史对话")}
+                optionFilterProp="label"
+                value={manualRecoverChatId || undefined}
+                onChange={(value) => setManualRecoverChatId(value)}
+                options={manualRecoverCandidates.map((chat) => ({
+                  value: chat.id,
+                  label:
+                    `${chat.name || t("chat.newChat", "New Chat")} · ${chat.id.slice(0, 8)} · ` +
+                    `${formatRunTimeLabel(chat.updated_at || chat.created_at || "")}`,
+                }))}
+              />
+            </div>
+            <div
+              style={{
+                marginTop: 12,
+                maxHeight: 220,
+                overflow: "auto",
+                border: "1px solid var(--ant-color-border-secondary)",
+                borderRadius: 8,
+                padding: 8,
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+              }}
+            >
+              {manualRecoverCandidates.slice(0, 40).map((chat) => (
+                <Button
+                  key={chat.id}
+                  size="small"
+                  type={manualRecoverChatId === chat.id ? "primary" : "text"}
+                  onClick={() => setManualRecoverChatId(chat.id)}
+                  style={{ textAlign: "left", justifyContent: "flex-start" }}
+                >
+                  {(chat.name || t("chat.newChat", "New Chat"))}
+                  {" · "}
+                  {chat.id.slice(0, 8)}
+                </Button>
+              ))}
+            </div>
+          </Modal>
         </div>
       )}
     </div>

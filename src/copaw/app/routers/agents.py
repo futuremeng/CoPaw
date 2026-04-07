@@ -155,6 +155,7 @@ class ProjectSummary(BaseModel):
     artifact_profile: "ProjectArtifactProfile" = Field(
         default_factory=lambda: ProjectArtifactProfile(),
     )
+    preferred_workspace_chat_id: str = ""
     updated_time: str
 
 
@@ -276,6 +277,12 @@ class UpdateProjectArtifactDistillModeRequest(BaseModel):
     """Request body for updating project artifact distill mode."""
 
     artifact_distill_mode: str = "file_scan"
+
+
+class UpdateProjectWorkspaceChatBindingRequest(BaseModel):
+    """Request body for updating preferred project workspace chat binding."""
+
+    preferred_workspace_chat_id: str = ""
 
 
 class DeleteProjectResponse(BaseModel):
@@ -941,6 +948,11 @@ def _load_project_summary(project_dir: Path) -> ProjectSummary | None:
         metadata.get("artifact_distill_mode") or metadata.get("distill_mode"),
     )
     artifact_profile = _parse_project_artifact_profile(metadata)
+    preferred_workspace_chat_id = str(
+        metadata.get("preferred_workspace_chat_id")
+        or metadata.get("preferred_workspace_chat")
+        or "",
+    ).strip()
     updated_time = _format_iso_time(metadata_file.stat().st_mtime)
 
     return ProjectSummary(
@@ -954,6 +966,7 @@ def _load_project_summary(project_dir: Path) -> ProjectSummary | None:
         tags=tags,
         artifact_distill_mode=artifact_distill_mode,
         artifact_profile=artifact_profile,
+        preferred_workspace_chat_id=preferred_workspace_chat_id,
         updated_time=updated_time,
     )
 
@@ -1197,6 +1210,35 @@ def _update_project_artifact_distill_mode(
         "artifact_distill_mode"
     ] = _normalize_project_artifact_distill_mode(
         artifact_distill_mode,
+    )
+    _write_project_frontmatter(metadata_file, metadata, body)
+
+    updated = _load_project_summary(project_dir)
+    if updated is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to load updated project summary",
+        )
+    return updated
+
+
+def _update_project_workspace_chat_binding(
+    workspace_dir: Path,
+    project_id: str,
+    preferred_workspace_chat_id: str,
+) -> ProjectSummary:
+    project_dir = _resolve_project_dir(workspace_dir, project_id)
+    summary = _load_project_summary(project_dir)
+    if summary is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Project '{project_id}' metadata not found",
+        )
+
+    metadata_file = Path(summary.metadata_file)
+    metadata, body = _read_project_frontmatter_with_body(metadata_file)
+    metadata["preferred_workspace_chat_id"] = (
+        preferred_workspace_chat_id.strip()
     )
     _write_project_frontmatter(metadata_file, metadata, body)
 
@@ -3624,6 +3666,38 @@ async def update_project_artifact_distill_mode(
             Path(workspace.workspace_dir),
             projectId,
             body.artifact_distill_mode,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.put(
+    "/{agentId}/projects/{projectId}/workspace-chat-binding",
+    response_model=ProjectSummary,
+    summary="Update preferred project workspace chat binding",
+    description="Persist preferred workspace chat id in project metadata",
+)
+async def update_project_workspace_chat_binding(
+    request: Request,
+    body: UpdateProjectWorkspaceChatBindingRequest = Body(...),
+    agentId: str = PathParam(...),
+    projectId: str = PathParam(...),
+) -> ProjectSummary:
+    """Update preferred workspace chat id for a project."""
+    manager = _get_multi_agent_manager(request)
+
+    try:
+        workspace = await manager.get_agent(agentId)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    try:
+        return _update_project_workspace_chat_binding(
+            Path(workspace.workspace_dir),
+            projectId,
+            body.preferred_workspace_chat_id,
         )
     except HTTPException:
         raise

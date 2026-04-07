@@ -37,7 +37,12 @@ export interface AgentProjectSummary {
   tags: string[];
   artifact_distill_mode: "file_scan" | "conversation_evidence";
   artifact_profile: ProjectArtifactProfile;
+  preferred_workspace_chat_id?: string;
   updated_time: string;
+}
+
+export interface UpdateProjectWorkspaceChatBindingRequest {
+  preferred_workspace_chat_id: string;
 }
 
 export interface AgentProjectFileInfo {

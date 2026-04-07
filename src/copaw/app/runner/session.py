@@ -12,6 +12,7 @@ import logging
 import os
 import re
 import uuid
+import shutil
 
 from typing import Any, Union, Sequence
 
@@ -233,6 +234,47 @@ class SafeJSONSession(SessionBase):
             file_path = f"{safe_sid}.json"
         return os.path.join(self.save_dir, file_path)
 
+    def _get_snapshot_path(self, session_save_path: str) -> str:
+        """Return sidecar snapshot path for a session state file.
+
+        Snapshot is intentionally colocated with the primary state file so it
+        survives most accidental cleanup patterns that only target ``*.json``.
+        """
+        return f"{session_save_path}.snapshot"
+
+    async def _mirror_snapshot_unlocked(self, session_save_path: str) -> None:
+        """Mirror latest session state into a sidecar snapshot file."""
+        snapshot_path = self._get_snapshot_path(session_save_path)
+        try:
+            shutil.copyfile(session_save_path, snapshot_path)
+        except Exception:
+            logger.warning(
+                "Failed to mirror session snapshot for %s",
+                session_save_path,
+                exc_info=True,
+            )
+
+    async def _restore_from_snapshot_unlocked(self, session_save_path: str) -> bool:
+        """Restore primary session file from snapshot when available."""
+        snapshot_path = self._get_snapshot_path(session_save_path)
+        if not os.path.exists(snapshot_path):
+            return False
+
+        try:
+            shutil.copyfile(snapshot_path, session_save_path)
+            logger.warning(
+                "Recovered missing session file from snapshot: %s",
+                session_save_path,
+            )
+            return True
+        except Exception:
+            logger.warning(
+                "Failed to recover session file from snapshot: %s",
+                session_save_path,
+                exc_info=True,
+            )
+            return False
+
     async def save_session_state(
         self,
         session_id: str,
@@ -247,6 +289,7 @@ class SafeJSONSession(SessionBase):
         session_save_path = self._get_save_path(session_id, user_id=user_id)
         async with self._get_file_lock(session_save_path):
             await self._write_state_dict_unlocked(session_save_path, state_dicts)
+            await self._mirror_snapshot_unlocked(session_save_path)
 
         logger.info(
             "Saved session state to %s successfully.",
@@ -262,6 +305,11 @@ class SafeJSONSession(SessionBase):
     ) -> None:
         """Load state modules from a JSON file using async I/O."""
         session_save_path = self._get_save_path(session_id, user_id=user_id)
+        if not os.path.exists(session_save_path):
+            async with self._get_file_lock(session_save_path):
+                if not os.path.exists(session_save_path):
+                    await self._restore_from_snapshot_unlocked(session_save_path)
+
         if os.path.exists(session_save_path):
             states = await self._read_state_dict(session_save_path)
 
@@ -316,6 +364,7 @@ class SafeJSONSession(SessionBase):
 
             cur[path[-1]] = value
             await self._write_state_dict_unlocked(session_save_path, states)
+            await self._mirror_snapshot_unlocked(session_save_path)
 
         logger.info(
             "Updated session state key '%s' in %s successfully.",
@@ -347,6 +396,11 @@ class SafeJSONSession(SessionBase):
                 `allow_not_exist=True`.
         """
         session_save_path = self._get_save_path(session_id, user_id=user_id)
+        if not os.path.exists(session_save_path):
+            async with self._get_file_lock(session_save_path):
+                if not os.path.exists(session_save_path):
+                    await self._restore_from_snapshot_unlocked(session_save_path)
+
         if os.path.exists(session_save_path):
             states = await self._read_state_dict(session_save_path)
 

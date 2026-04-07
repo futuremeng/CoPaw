@@ -90,6 +90,8 @@ interface AnywhereChatProps {
   welcomePromptClickBehavior?: "submit" | "append";
   onNewChat?: () => void;
   onSelectHistoryChat?: (chatId: string) => void;
+  historyMenuActionLabel?: string;
+  onHistoryMenuAction?: () => void;
   onAssistantTurnCompleted?: (payload: {
     text: string;
     response: Record<string, unknown> | null;
@@ -704,6 +706,8 @@ export default function AnywhereChat({
   welcomePromptClickBehavior = "submit",
   onNewChat,
   onSelectHistoryChat,
+  historyMenuActionLabel,
+  onHistoryMenuAction,
   onAssistantTurnCompleted,
   autoAttachRequest,
   onAutoAttachHandled,
@@ -1974,9 +1978,40 @@ export default function AnywhereChat({
             </Button>
           );
         })}
+        {onHistoryMenuAction ? (
+          <>
+            <div
+              style={{
+                borderTop: "1px solid var(--ant-color-border-secondary)",
+                marginTop: 8,
+                paddingTop: 8,
+              }}
+            >
+              <Button
+                type="link"
+                size="small"
+                style={{ width: "100%", textAlign: "left", paddingInline: 0 }}
+                onClick={() => {
+                  onHistoryMenuAction();
+                  setHistoryPopoverOpen(false);
+                }}
+              >
+                {historyMenuActionLabel || t("projects.chat.manualRecover", "手动恢复对话关联")}
+              </Button>
+            </div>
+          </>
+        ) : null}
       </div>
     );
-  }, [historyChats, historyLoading, onSelectHistoryChat, sessionId, t]);
+  }, [
+    historyChats,
+    historyLoading,
+    historyMenuActionLabel,
+    onHistoryMenuAction,
+    onSelectHistoryChat,
+    sessionId,
+    t,
+  ]);
 
   return (
     <div

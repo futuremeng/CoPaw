@@ -58,6 +58,10 @@ class ChatUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str | None = Field(default=None, description="Chat name")
+    meta: Dict[str, Any] | None = Field(
+        default=None,
+        description="Chat metadata for focus/binding annotations",
+    )
 
 
 class ChatHistory(BaseModel):
