@@ -734,6 +734,7 @@ export default function AnywhereChat({
   const chatRef = useRef<IAgentScopeRuntimeWebUIRef>(null);
   const runtimeStatusRequestInFlight = useRef(false);
   const sessionIdRef = useRef(sessionId);
+  const backendSessionIdRef = useRef(sessionId);
   const runtimeStatusRetryTimerRef = useRef<number | null>(null);
   const runtimeStatusRetryCountRef = useRef(0);
   const handledAutoAttachIdRef = useRef("");
@@ -836,8 +837,11 @@ export default function AnywhereChat({
   const loadCurrentChatName = useCallback(async () => {
     try {
       const chats = await chatApi.listChats({ user_id: "default", channel: "console" });
+      const current = chats.find((chat) => chat.id === sessionId);
+      backendSessionIdRef.current = current?.session_id || sessionId;
       setCurrentChatName(resolveCurrentChatName(chats));
     } catch {
+      backendSessionIdRef.current = sessionId;
       setCurrentChatName(t("chat.newChat", "New Chat"));
     }
   }, [resolveCurrentChatName, t]);
@@ -848,6 +852,7 @@ export default function AnywhereChat({
       const chats = await chatApi.listChats({ user_id: "default", channel: "console" });
       setCurrentChatName(resolveCurrentChatName(chats));
       const current = chats.find((chat) => chat.id === sessionId);
+      backendSessionIdRef.current = current?.session_id || sessionId;
       const currentScope = resolveChatScopeFromAncestors(chats, current);
       const currentWorkspaceRootIds = chats
         .filter((chat) => {
@@ -912,6 +917,7 @@ export default function AnywhereChat({
       );
     } catch (error) {
       console.warn("AnywhereChat: failed to load history chats", error);
+      backendSessionIdRef.current = sessionId;
       setHistoryChats([]);
     } finally {
       setHistoryLoading(false);
@@ -1093,6 +1099,7 @@ export default function AnywhereChat({
 
   useEffect(() => {
     sessionIdRef.current = sessionId;
+    backendSessionIdRef.current = sessionId;
     clearRuntimeStatusRetry();
     runtimeStatusRetryCountRef.current = 0;
     void loadCurrentChatName();
@@ -1420,13 +1427,25 @@ export default function AnywhereChat({
         }
       }
 
+      let backendSessionId = backendSessionIdRef.current || sessionId;
+      if (!backendSessionId || backendSessionId === sessionId) {
+        try {
+          const chats = await chatApi.listChats({ user_id: "default", channel: "console" });
+          const current = chats.find((chat) => chat.id === sessionId);
+          backendSessionId = current?.session_id || backendSessionId;
+          backendSessionIdRef.current = backendSessionId;
+        } catch {
+          backendSessionId = backendSessionIdRef.current || sessionId;
+        }
+      }
+
       const response = await fetch(getApiUrl("/console/chat"), {
         method: "POST",
         headers,
         signal: data.signal,
         body: JSON.stringify({
           input: lastInput,
-          session_id: sessionId || data.session_id || session?.session_id || "",
+          session_id: backendSessionId || data.session_id || session?.session_id || "",
           user_id: data.user_id || session?.user_id || "default",
           channel: data.channel || session?.channel || "console",
           stream: true,
