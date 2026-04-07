@@ -6,6 +6,7 @@ import type {
   ChatHistory,
   ChatRuntimeStatus,
   ChatDeleteResponse,
+  ChatTailUserDeleteResponse,
   ChatUpdateRequest,
   Session,
 } from "../types";
@@ -188,6 +189,14 @@ export const chatApi = {
     request<ChatDeleteResponse>(`/chats/${encodeURIComponent(chatId)}`, {
       method: "DELETE",
     }),
+
+  deleteTailUserMessage: (chatId: string) =>
+    request<ChatTailUserDeleteResponse>(
+      `/chats/${encodeURIComponent(chatId)}/tail-user/delete`,
+      {
+        method: "POST",
+      },
+    ),
 
   batchDeleteChats: (chatIds: string[]) =>
     request<{ success: boolean; deleted_count: number }>(

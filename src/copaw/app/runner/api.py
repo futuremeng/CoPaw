@@ -3,18 +3,23 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import Optional
+from typing import Any, Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from agentscope_runtime.engine.schemas.agent_schemas import Message
 
-from .session import SafeJSONSession, restore_in_memory_memory
+from .session import (
+    SafeJSONSession,
+    normalize_in_memory_memory_state,
+    restore_in_memory_memory,
+)
 from .manager import ChatManager
 from .models import (
     ChatSpec,
     ChatUpdate,
     ChatHistory,
+    ChatTailUserDeleteResponse,
 )
 from .utils import agentscope_msg_to_message
 
@@ -26,6 +31,13 @@ _MAX_PLUGIN_OUTPUT_CHARS = 8000
 
 def _is_tool_trace_message(msg: Message) -> bool:
     return msg.type in {"plugin_call", "plugin_call_output"}
+
+
+def _is_tool_trace_message_dict(message_dict: dict[str, Any]) -> bool:
+    return str(message_dict.get("type") or "").strip() in {
+        "plugin_call",
+        "plugin_call_output",
+    }
 
 
 def _compact_chat_history_messages(
@@ -108,6 +120,33 @@ def _truncate_chat_history_messages(
             truncated.append(msg)
 
     return truncated
+
+
+def _memory_item_to_message_dict(item: Any) -> dict[str, Any] | None:
+    if isinstance(item, list) and len(item) == 2 and isinstance(item[0], dict):
+        return item[0]
+    if isinstance(item, dict):
+        return item
+    return None
+
+
+def _extract_text_from_content(content: Any) -> str:
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        text_parts: list[str] = []
+        for item in content:
+            if not isinstance(item, dict):
+                continue
+            text = item.get("text")
+            if isinstance(text, str) and text.strip():
+                text_parts.append(text.strip())
+        return "\n".join(text_parts).strip()
+    return ""
+
+
+def _is_user_memory_message(message_dict: dict[str, Any]) -> bool:
+    return str(message_dict.get("role") or "").strip().lower() == "user"
 
 
 async def get_workspace(request: Request):
@@ -312,6 +351,92 @@ async def update_chat(
             detail=f"Chat not found: {chat_id}",
         )
     return updated
+
+
+@router.post(
+    "/{chat_id}/tail-user/delete",
+    response_model=ChatTailUserDeleteResponse,
+)
+async def delete_tail_user_message(
+    chat_id: str,
+    mgr: ChatManager = Depends(get_chat_manager),
+    session: SafeJSONSession = Depends(get_session),
+):
+    """Delete the last visible user message from persisted session memory."""
+    chat_spec = await mgr.get_chat(chat_id)
+    if not chat_spec:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Chat not found: {chat_id}",
+        )
+
+    state = await session.get_session_state_dict(
+        chat_spec.session_id,
+        chat_spec.user_id,
+    )
+    agent_state = state.get("agent") if isinstance(state, dict) else None
+    if not isinstance(agent_state, dict):
+        raise HTTPException(
+            status_code=409,
+            detail="Chat session memory is unavailable.",
+        )
+
+    normalized_memory = normalize_in_memory_memory_state(agent_state.get("memory"))
+    content = normalized_memory.get("content", [])
+    if not isinstance(content, list) or not content:
+        raise HTTPException(
+            status_code=409,
+            detail="Chat session memory is empty.",
+        )
+
+    memory = restore_in_memory_memory(normalized_memory)
+    visible_messages = agentscope_msg_to_message(
+        await memory.get_memory(prepend_summary=False),
+    )
+    visible_messages = _truncate_chat_history_messages(visible_messages)
+    visible_messages = _compact_chat_history_messages(visible_messages)
+    last_visible_message = visible_messages[-1] if visible_messages else None
+    is_last_visible_user = bool(
+        last_visible_message
+        and str(last_visible_message.role or "").strip().lower() == "user"
+    )
+    if not is_last_visible_user:
+        raise HTTPException(
+            status_code=409,
+            detail="Last visible message is not a user message.",
+        )
+
+    tail_user_index = -1
+    removed_text = ""
+    for idx in range(len(content) - 1, -1, -1):
+        message_dict = _memory_item_to_message_dict(content[idx])
+        if message_dict is None or not _is_user_memory_message(message_dict):
+            continue
+        tail_user_index = idx
+        removed_text = _extract_text_from_content(message_dict.get("content"))
+        break
+
+    if tail_user_index < 0:
+        raise HTTPException(
+            status_code=409,
+            detail="Last persisted user message is unavailable.",
+        )
+
+    removed_count = len(content) - tail_user_index
+    normalized_memory["content"] = content[:tail_user_index]
+    await session.update_session_state(
+        session_id=chat_spec.session_id,
+        user_id=chat_spec.user_id,
+        key="agent.memory",
+        value=normalized_memory,
+    )
+    await mgr.touch_chat(chat_id)
+
+    return ChatTailUserDeleteResponse(
+        deleted=True,
+        removed_text=removed_text,
+        removed_count=removed_count,
+    )
 
 
 @router.delete("/{chat_id}", response_model=dict)

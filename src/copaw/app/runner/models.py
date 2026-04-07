@@ -81,6 +81,23 @@ class ChatHistory(BaseModel):
     )
 
 
+class ChatTailUserDeleteResponse(BaseModel):
+    """Result of deleting the last persisted user message."""
+
+    deleted: bool = Field(
+        default=False,
+        description="Whether the tail user message was deleted",
+    )
+    removed_text: str = Field(
+        default="",
+        description="Extracted plain text from the removed message",
+    )
+    removed_count: int = Field(
+        default=0,
+        description="Number of raw memory items removed from session state",
+    )
+
+
 class ChatRuntimeStatusBreakdownItem(BaseModel):
     """One categorized token usage item inside a chat runtime snapshot."""
 

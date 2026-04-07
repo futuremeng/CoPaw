@@ -54,6 +54,21 @@
   min-height: 0;
   max-height: 100%;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.lastUserActionRow {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.lastUserActionRow :global(.ant-btn) {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
 }
 
 .markdownCopyBadge {
@@ -127,6 +142,13 @@
 
   .chatName {
     color: rgba(255, 255, 255, 0.88);
+  }
+
+  .lastUserActionRow :global(.ant-btn) {
+    color: rgba(255, 255, 255, 0.88);
+    background: rgba(20, 22, 28, 0.92);
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32);
   }
 
   .markdownCopyBadge {
