@@ -109,6 +109,8 @@ function renderStepContractSummary(params: {
     input_bindings?: Record<string, string>;
     prompt?: string;
     script?: string;
+    input_preview_items?: string[];
+    output_preview_items?: string[];
     retry_policy?: Record<string, unknown>;
   };
   selected: boolean;
@@ -131,6 +133,8 @@ function renderStepContractSummary(params: {
   const promptText = (params.step.prompt || "").trim();
   const scriptText = (params.step.script || "").trim();
   const descriptionText = (params.step.description || "").trim();
+  const inputPreviewItems = params.step.input_preview_items || [];
+  const outputPreviewItems = params.step.output_preview_items || [];
   const hasPrompt = Boolean(promptText);
   const hasScript = Boolean(scriptText);
   const retryMaxAttempts =
@@ -169,6 +173,28 @@ function renderStepContractSummary(params: {
       tone: "code",
       value: scriptText || params.t("projects.pipeline.stepPreviewNoScript"),
       empty: !scriptText,
+    },
+    {
+      key: "inputs",
+      label: params.t("projects.pipeline.stepPreviewInputs"),
+      mode: params.t("projects.pipeline.stepPreviewTextMode"),
+      tone: "text",
+      value:
+        inputPreviewItems.length > 0
+          ? inputPreviewItems.map((item, index) => `${index + 1}. ${item}`).join("\n")
+          : params.t("projects.pipeline.stepPreviewNoInputs"),
+      empty: inputPreviewItems.length === 0,
+    },
+    {
+      key: "outputs",
+      label: params.t("projects.pipeline.stepPreviewOutputs"),
+      mode: params.t("projects.pipeline.stepPreviewTextMode"),
+      tone: "text",
+      value:
+        outputPreviewItems.length > 0
+          ? outputPreviewItems.map((item, index) => `${index + 1}. ${item}`).join("\n")
+          : params.t("projects.pipeline.stepPreviewNoOutputs"),
+      empty: outputPreviewItems.length === 0,
     },
   ];
   const configuredPreviewCount = previewSections.filter((section) => !section.empty).length;
@@ -594,6 +620,56 @@ export default function ProjectAutomationPanel({
     });
   };
 
+  const formatStepInputPreviewItems = (params: {
+    stepId: string;
+    stepInputs?: Record<string, unknown>;
+    contractInputs?: Record<string, unknown>;
+  }): string[] => {
+    const items: string[] = [];
+    const inputKeys = Object.keys(params.stepInputs || params.contractInputs || {});
+    for (const key of inputKeys) {
+      items.push(`dataset:${key}`);
+    }
+
+    for (const artifact of runDetail?.artifact_records || []) {
+      if (!(artifact.consumer_step_ids || []).includes(params.stepId)) {
+        continue;
+      }
+      const label = (artifact.path || artifact.name || "").trim();
+      if (!label) {
+        continue;
+      }
+      items.push(label);
+    }
+
+    return Array.from(new Set(items));
+  };
+
+  const formatStepOutputPreviewItems = (params: {
+    stepId: string;
+    stepOutputs?: Record<string, unknown>;
+    contractOutputs?: Record<string, unknown>;
+  }): string[] => {
+    const items: string[] = [];
+    const outputKeys = Object.keys(params.stepOutputs || params.contractOutputs || {});
+    for (const key of outputKeys) {
+      items.push(`dataset:${key}`);
+    }
+
+    for (const artifact of runDetail?.artifact_records || []) {
+      if ((artifact.producer_step_id || "") !== params.stepId) {
+        continue;
+      }
+      const label = (artifact.path || artifact.name || "").trim();
+      if (!label) {
+        continue;
+      }
+      items.push(label);
+    }
+
+    return Array.from(new Set(items));
+  };
+
   const renderStepPreviewBatchActions = (stepIds: string[]) => {
     if (stepIds.length === 0) {
       return null;
@@ -849,6 +925,16 @@ export default function ProjectAutomationPanel({
                                             : contract?.input_bindings,
                                           prompt: step.prompt || contract?.prompt,
                                           script: step.script || contract?.script,
+                                          input_preview_items: formatStepInputPreviewItems({
+                                            stepId: step.id,
+                                            stepInputs: step.inputs,
+                                            contractInputs: contract?.inputs,
+                                          }),
+                                          output_preview_items: formatStepOutputPreviewItems({
+                                            stepId: step.id,
+                                            stepOutputs: step.outputs,
+                                            contractOutputs: contract?.outputs,
+                                          }),
                                           retry_policy: Object.keys(step.retry_policy || {}).length
                                             ? step.retry_policy
                                             : contract?.retry_policy,
@@ -895,7 +981,19 @@ export default function ProjectAutomationPanel({
                     <div className={styles.stepCardGrid}>
                       {activeRunTemplate.steps.map((step, stepIndex) =>
                         renderStepContractSummary({
-                          step,
+                          step: {
+                            ...step,
+                            input_preview_items: formatStepInputPreviewItems({
+                              stepId: step.id,
+                              stepInputs: step.inputs,
+                              contractInputs: step.inputs,
+                            }),
+                            output_preview_items: formatStepOutputPreviewItems({
+                              stepId: step.id,
+                              stepOutputs: step.outputs,
+                              contractOutputs: step.outputs,
+                            }),
+                          },
                           selected: selectedStepId === step.id,
                           related: highlightedStepIds.has(step.id) && selectedStepId !== step.id,
                           templateMode: true,

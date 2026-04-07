@@ -948,11 +948,15 @@
   border-radius: 8px;
   overflow: hidden;
   background: #fff;
+  max-height: 200px;
 }
 
 .stepPreviewCellMain {
   min-width: 0;
   flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .stepPreviewCellMeta {
@@ -1517,6 +1521,9 @@
   font-family: "SF Mono", Monaco, Menlo, Consolas, monospace;
   white-space: pre-wrap;
   word-break: break-word;
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .stepPreviewCellText .previewContent,
@@ -1542,6 +1549,7 @@
   flex-direction: column;
   min-height: 0;
   background: #0b1220;
+  max-height: 200px;
 }
 
 .readonlyCodeEditorToolbar {
@@ -1570,7 +1578,7 @@
   display: flex;
   align-items: stretch;
   min-height: 0;
-  max-height: 320px;
+  flex: 1;
   overflow: auto;
 }
 
