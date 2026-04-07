@@ -1981,9 +1981,18 @@ export default function ProjectDetailPage() {
                     label: t("projects.metrics"),
                     children: (
                       <ProjectMetricsPanel
+                        currentAgentId={currentAgent?.id}
+                        selectedProjectRequestId={resolvedProjectRequestId || selectedProject?.id || ""}
                         runDetail={runDetail}
+                        selectedRunId={selectedRunId}
+                        pipelineRuns={pipelineRuns}
                         runProgress={runProgress}
                         statusTagColor={statusTagColor}
+                        formatRunTimeLabel={formatRunTimeLabel}
+                        onSelectArtifactPath={(path) => {
+                          handleSelectArtifactFile(path);
+                          setAutomationDrawerOpen(false);
+                        }}
                       />
                     ),
                   },
