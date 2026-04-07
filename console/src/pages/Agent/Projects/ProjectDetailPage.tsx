@@ -1024,8 +1024,6 @@ export default function ProjectDetailPage() {
     activeWorkspaceChatId,
     activeDesignChatId,
     selectedRunId,
-    chatStarting,
-    handleEnsureWorkspaceChat,
     setSelectedRunId,
     setSelectedStepId,
     setRunDetail,
