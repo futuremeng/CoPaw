@@ -127,44 +127,20 @@
   padding: 16px;
 }
 
-/* ─── Select Circle (batch selection) ─────────────────────────────────────── */
-.selectCircle {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  border: 1.5px dashed #ccc;
-  background: rgba(255, 255, 255, 0.85);
+/* ─── Status with Select (batch selection) ───────────────────────────────── */
+.statusWithSelect {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  color: #fff;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-  z-index: 2;
-
-  &:hover {
-    border-color: #ff7f16;
-  }
-}
-
-.selectCircleVisible {
-  opacity: 1;
-}
-
-.selectCircleSelected {
-  opacity: 1;
-  background: #ff7f16;
-  border: 1.5px solid #ff7f16;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .selectedCard {
-  border-color: #ff7f16 !important;
   box-shadow: 0 0 0 1px rgba(255, 127, 22, 0.2) !important;
+}
+
+.selectedListItem {
+  background: rgba(255, 127, 22, 0.02);
 }
 
 /* ─── Batch Mode Header ──────────────────────────────────────────────────── */
@@ -235,13 +211,62 @@
 
 .leftSection {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: flex-start;
-  gap: 8px;
+  gap: 12px;
   flex: 1;
+  width: 100%;
 
-  .metaContainer {
-    margin-top: 0;
+  .titleInfoContainer {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+
+    .updatedTime {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      color: rgba(20, 20, 19, 0.45);
+      margin-top: -2px;
+
+      .calendarIcon {
+        font-size: 10px;
+      }
+    }
+
+    .channelsRow {
+      display: none;
+    }
+  }
+}
+
+.channelsRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  margin-top: 8px;
+
+  .channelIcon {
+    font-size: 12px;
+    color: rgba(26, 23, 22, 0.45);
+    flex-shrink: 0;
+  }
+
+  .channelLabel {
+    color: rgba(26, 23, 22, 0.65);
+    flex-shrink: 0;
+  }
+
+  .channelValue {
+    color: rgba(20, 20, 19, 0.88);
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background-color: rgba(239, 240, 243, 0.5);
   }
 }
 
@@ -272,7 +297,9 @@
 .titleRow {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
+  width: 100%;
 }
 
 .skillTitle {
@@ -288,52 +315,22 @@
   white-space: nowrap;
 }
 
-.typeBadge {
-  font-size: 10px;
+.statusValue {
   padding: 2px 6px;
-  border-radius: 3px;
+  border-radius: 4px;
+  font-size: 11px;
   font-weight: 500;
   flex-shrink: 0;
-  background-color: rgba(239, 240, 243, 0.8);
-  color: #8e8c99;
-}
-
-.statusContainer {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  flex-shrink: 0;
-}
-
-.statusDot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
+  white-space: nowrap;
 
   &.enabled {
-    background-color: rgba(20, 184, 166, 1);
+    background-color: rgba(82, 196, 26, 0.12);
+    color: #389e0d;
   }
 
   &.disabled {
-    background-color: #d9d9d9;
-  }
-}
-
-.statusText {
-  font-family: Lato;
-  font-size: 12px;
-  font-weight: normal;
-  line-height: 19px;
-  letter-spacing: normal;
-
-  &.enabled {
-    color: rgba(20, 184, 166, 1);
-  }
-
-  &.disabled {
-    color: rgba(20, 20, 19, 0.45);
+    background-color: rgba(239, 240, 243, 0.8);
+    color: rgba(20, 20, 19, 0.65);
   }
 }
 
@@ -361,7 +358,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
 }
 
@@ -418,6 +415,84 @@
   font-weight: 500;
   background-color: rgba(255, 247, 230, 0.8);
   color: #d48806;
+}
+
+/* ─── Category & Tags ─────────────────────────────────────────────────────── */
+.categoriesTagsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.metaRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.metaIcon {
+  font-size: 12px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  margin-top: 1px;
+}
+
+.metaContent {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 1;
+}
+
+.categoryChip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+  padding: 0 6px;
+  border-radius: 3px;
+  background: rgba(22, 119, 255, 0.08);
+  color: #1677ff;
+  border: 1px solid rgba(22, 119, 255, 0.18);
+  white-space: nowrap;
+}
+
+.categoryBadge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  padding: 0 6px;
+  height: 18px;
+  border-radius: 3px;
+  font-weight: 500;
+  background-color: rgba(22, 119, 255, 0.08);
+  color: #1677ff;
+  border: 1px solid rgba(22, 119, 255, 0.18);
+  white-space: nowrap;
+}
+
+.tagChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.tagChip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  line-height: 16px;
+  padding: 0 6px;
+  border-radius: 3px;
+  font-weight: 400;
+  background-color: transparent;
+  color: rgba(26, 23, 22, 0.45);
+  border: 1px solid rgba(26, 23, 22, 0.15);
+  white-space: nowrap;
 }
 
 .cardFooter {
@@ -701,451 +776,215 @@
   padding-right: 18px;
 }
 
-/* ─── Marketplace Drawer ──────────────────────────────────────────────────── */
-.marketSearchHighlight {
-  background: #fff3c4;
-  color: #7a4b00;
-  border-radius: 4px;
-  padding: 0 2px;
-}
-
-.marketEditor,
-.marketplaceItemsSection {
-  border: 1px solid #e6ebf2;
-  border-radius: 12px;
-  background: #ffffff;
-  padding: 14px;
-}
-
-.marketplaceItemsSection {
-  margin-top: 14px;
-}
-
-.marketEditorHeader,
-.marketplaceItemsHeader,
-.marketFilterRow,
-.marketConfigRow {
+/* ─── Toolbar (search + view toggle) ─────────────────────────────────────── */
+.toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.marketEditorTitle {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: #1f2937;
-}
-
-.marketEditorActions,
-.marketRowActions,
-.marketRowBulkActions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.marketRows {
-  margin-top: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.marketRow,
-.marketRowReadonly {
-  border: 1px solid #e6ebf2;
-  border-radius: 10px;
-  background: #fbfdff;
-  padding: 10px;
-}
-
-.marketRowFields {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(110px, 1fr));
-  gap: 8px;
-  align-items: center;
-}
-
-.marketInput,
-.marketInputWide,
-.marketInputOrder,
-.marketSearchInput,
-.marketFilterSelect {
-  height: 34px;
-  border: 1px solid #d9e1ec;
-  border-radius: 8px;
-  padding: 0 10px;
-  outline: none;
-  background: #fff;
-  color: #1f2937;
-
-  &:focus {
-    border-color: #8aa4ff;
-    box-shadow: 0 0 0 2px rgba(89, 113, 255, 0.14);
-  }
-}
-
-.marketInputWide {
-  grid-column: span 2;
-}
-
-.marketInputOrder {
-  width: 100%;
-  min-width: 88px;
-}
-
-.marketEnabledLabel,
-.marketConfigLabel,
-.marketFilterLabel {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: #4b5563;
-  font-size: 13px;
-}
-
-.marketConfigLabel {
-  font-weight: 500;
-}
-
-.marketUrlHint {
-  grid-column: span 6;
-  font-size: 12px;
-  color: #6b7280;
-}
-
-.marketRowReadonly {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  padding: 12px 16px 0;
   gap: 12px;
 }
 
-.marketRowReadonlyInfo {
-  min-width: 0;
-  display: grid;
-  gap: 4px;
-}
-
-.marketRowReadonlyId {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: #475569;
-  font-size: 12px;
-}
-
-.marketRowReadonlyName {
-  color: #111827;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.marketRowReadonlyUrl {
-  color: #6b7280;
-  font-size: 12px;
+.searchContainer {
+  flex: 1;
   max-width: 600px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
-.marketRowBadgeEnabled,
-.marketRowBadgeDisabled {
+.searchSelect {
+  width: 100%;
+
+  :global {
+    .ant-select-selector {
+      min-height: 36px;
+      padding: 2px 4px;
+    }
+
+    .ant-select-selection-search {
+      margin-inline-start: 4px;
+    }
+
+    .ant-select-selection-item {
+      background: rgba(22, 119, 255, 0.08);
+      border: 1px solid rgba(22, 119, 255, 0.18);
+      color: #1677ff;
+      border-radius: 4px;
+      padding: 0 8px;
+      margin: 2px 4px 2px 0;
+      font-size: 12px;
+    }
+  }
+}
+
+.filterGroup {
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.filterGroupTitle {
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.45);
+}
+
+.filterOptions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 12px;
+}
+
+.filterOption {
   display: inline-flex;
   align-items: center;
   padding: 2px 8px;
-  border-radius: 999px;
   font-size: 12px;
-  font-weight: 600;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.04);
+  color: rgba(0, 0, 0, 0.65);
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: rgba(22, 119, 255, 0.08);
+    color: #1677ff;
+  }
 }
 
-.marketRowBadgeEnabled {
-  color: #0f766e;
-  background: #ccfbf1;
+.filterOptionActive {
+  background: rgba(22, 119, 255, 0.12);
+  color: #1677ff;
+  font-weight: 500;
 }
 
-.marketRowBadgeDisabled {
-  color: #475569;
-  background: #e5e7eb;
-}
-
-.marketRowDivider {
-  color: #c0c7d4;
-}
-
-.marketRowCount {
-  color: #4b5563;
-  font-size: 12px;
-}
-
-.marketMetaRow {
+.toolbarRight {
   display: flex;
   align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-  color: #4b5563;
-  font-size: 13px;
+  gap: 12px;
 }
 
-.marketFilterRow {
-  margin-top: 10px;
-}
-
-.marketSearchInput {
-  min-width: 220px;
-  flex: 1;
-}
-
-.marketFilterSelect {
-  min-width: 180px;
-}
-
-.marketErrorBox {
-  margin-top: 10px;
-  border-radius: 8px;
-  border: 1px solid #ffd7d5;
-  background: #fff7f7;
-  color: #a33a32;
-  font-size: 12px;
-  padding: 8px 10px;
-  display: grid;
+.viewToggle {
+  display: flex;
+  align-items: center;
   gap: 4px;
 }
 
-.marketItems {
-  margin-top: 12px;
-  max-height: 48vh;
-  overflow: auto;
-  padding-right: 4px;
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
-}
-
-.marketGroup {
-  border: 1px solid #e4ebf6;
-  border-radius: 10px;
-  background: #f7faff;
-  overflow: hidden;
-}
-
-.marketGroupHeader {
-  width: 100%;
+.viewToggleBtn {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-}
-
-.marketGroupCollapseBtn {
-  flex: 1;
-  width: 100%;
-  border: 0;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
   background: transparent;
+  color: rgba(20, 20, 19, 0.45);
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0;
-  text-align: left;
+  border-radius: 4px;
+  font-size: 16px;
+  transition: all 0.2s;
 
   &:hover {
-    background: rgba(87, 109, 255, 0.08);
-    border-radius: 8px;
+    color: rgba(20, 20, 19, 0.88);
+    background: rgba(0, 0, 0, 0.04);
+  }
+
+  &.viewToggleBtnActive {
+    color: rgba(20, 20, 19, 0.88);
+    background: rgba(0, 0, 0, 0.06);
   }
 }
 
-.marketGroupHeaderActions {
-  display: inline-flex;
+/* ─── List Mode ─────────────────────────────────────────────────────────── */
+.skillsList {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 16px;
+}
+
+.skillListItem {
+  display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  padding: 16px;
+  border: 1px solid var(--color-border-secondary, #eae8e7);
+  border-bottom: none;
+  background: var(--color-bg-base, #ffffff);
+  cursor: pointer;
+  transition: background 0.15s ease;
+
+  &:first-child {
+    border-radius: 8px 8px 0 0;
+  }
+
+  &:last-child {
+    border-bottom: 1px solid var(--color-border-secondary, #eae8e7);
+    border-radius: 0 0 8px 8px;
+  }
+
+  &:only-child {
+    border-radius: 8px;
+    border-bottom: 1px solid var(--color-border-secondary, #eae8e7);
+  }
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.02);
+  }
 }
 
-.marketGroupTitle {
-  font-size: 13px;
-  font-weight: 700;
-  color: #1f2937;
+.listItemLeft {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
   min-width: 0;
-  word-break: break-all;
 }
 
-.marketGroupCount {
-  padding: 1px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-  color: #475569;
-  background: #dfe8ff;
+.listItemInfo {
+  flex: 1;
+  min-width: 0;
 }
 
-.marketGroupToggle {
-  margin-left: auto;
-  color: #5b6578;
-  font-weight: 700;
-}
-
-.marketGroupItems {
-  border-top: 1px solid #e6eef9;
-  padding: 10px;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 10px;
-}
-
-.marketInstallProgressWrap {
+.listItemHeader {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 12px 10px;
+  flex-wrap: wrap;
 }
 
-.marketInstallProgressTrack {
-  flex: 1;
-  height: 6px;
-  background: #e8edf7;
-  border-radius: 999px;
-  overflow: hidden;
+.channelBadge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 500;
+  background-color: rgba(239, 240, 243, 0.8);
+  color: #8e8c99;
 }
 
-.marketInstallProgressFill {
-  height: 100%;
-  background: linear-gradient(90deg, #6f86ff 0%, #4f68eb 100%);
-  border-radius: 999px;
-  transition: width 0.2s ease;
-}
-
-.marketInstallProgressText {
+.listItemTime {
   font-size: 12px;
-  color: #4b5563;
+  color: rgba(20, 20, 19, 0.45);
+}
+
+.listItemDesc {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: rgba(20, 20, 19, 0.65);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.marketItemCard {
-  border: 1px solid #e6ebf2;
-  border-radius: 10px;
-  background: #ffffff;
-  padding: 12px;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease,
-    transform 0.2s ease;
-
-  &:hover {
-    border-color: #c7d5f5;
-    box-shadow: 0 4px 14px rgba(31, 41, 55, 0.08);
-    transform: translateY(-1px);
-  }
-}
-
-.marketItemCardActive {
-  border-color: #7c93ff;
-  box-shadow: 0 0 0 2px rgba(124, 147, 255, 0.2);
-}
-
-.marketItemMain {
-  min-width: 0;
-  display: grid;
-  gap: 6px;
-  flex: 1;
-}
-
-.marketItemName {
-  color: #111827;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.35;
-  word-break: break-word;
-}
-
-.marketItemMeta {
-  color: #64748b;
-  font-size: 12px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  line-height: 1.4;
-  word-break: break-all;
-}
-
-.marketItemDesc {
-  color: #374151;
-  font-size: 12px;
-  line-height: 1.55;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-.marketItemTags {
+.listItemRight {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.marketItemTag,
-.marketItemTagMuted {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  line-height: 1.2;
-  border: 1px solid transparent;
-}
-
-.marketItemTag {
-  background: #e8efff;
-  color: #314489;
-  border-color: #d3deff;
-}
-
-.marketItemTagMuted {
-  background: #eef2f7;
-  color: #4b5563;
-  border-color: #dbe3ee;
-}
-
-.marketEmpty {
-  border: 1px dashed #d3dbe8;
-  border-radius: 10px;
-  background: #f8fafc;
-  color: #64748b;
-  font-size: 13px;
-  text-align: center;
-  padding: 18px 14px;
-}
-
-@media (max-width: 900px) {
-  .marketRowFields {
-    grid-template-columns: repeat(2, minmax(120px, 1fr));
-  }
-
-  .marketInputWide,
-  .marketUrlHint {
-    grid-column: span 2;
-  }
-
-  .marketRowReadonly {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .marketRowReadonlyUrl {
-    max-width: 100%;
-  }
-
-  .marketItems {
-    max-height: 56vh;
-  }
-
-  .marketGroupItems {
-    grid-template-columns: 1fr;
-  }
+  gap: 12px;
+  flex-shrink: 0;
+  margin-left: 24px;
 }
 
 /* ─── Dark mode ─────────────────────────────────────────────────────────────── */
@@ -1247,6 +1086,23 @@
     color: rgba(255, 255, 255, 1);
   }
 
+  .updatedTime {
+    color: rgba(255, 255, 255, 0.45);
+  }
+
+  .channelIcon {
+    color: rgba(255, 255, 255, 0.45);
+  }
+
+  .channelLabel {
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  .channelValue {
+    color: rgba(255, 255, 255, 0.88);
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+
   .typeBadge {
     background-color: rgba(255, 255, 255, 0.15);
     color: rgba(255, 255, 255, 0.8);
@@ -1293,6 +1149,68 @@
     color: #ffcc66;
   }
 
+  /* Category & Tags - dark mode */
+  .categoryChip {
+    background: rgba(22, 119, 255, 0.15);
+    color: #4da3ff;
+    border-color: rgba(22, 119, 255, 0.3);
+  }
+
+  .categoryBadge {
+    background-color: rgba(22, 119, 255, 0.15);
+    color: #4da3ff;
+    border-color: rgba(22, 119, 255, 0.3);
+  }
+
+  .tagChip {
+    background-color: transparent;
+    color: rgba(255, 255, 255, 0.45);
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+
+  /* Search select - dark mode */
+  .searchSelect {
+    :global {
+      .ant-select-selector {
+        background: #2a2a2a;
+        border-color: rgba(255, 255, 255, 0.15);
+      }
+
+      .ant-select-selection-item {
+        background: rgba(22, 119, 255, 0.15);
+        border-color: rgba(22, 119, 255, 0.3);
+        color: #4da3ff;
+      }
+
+      .ant-select-selection-placeholder {
+        color: rgba(255, 255, 255, 0.25);
+      }
+    }
+  }
+
+  .filterGroup {
+    border-bottom-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .filterGroupTitle {
+    color: rgba(255, 255, 255, 0.45);
+  }
+
+  .filterOption {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.65);
+
+    &:hover {
+      background: rgba(22, 119, 255, 0.15);
+      color: #4da3ff;
+    }
+  }
+
+  .filterOptionActive {
+    background: rgba(22, 119, 255, 0.2);
+    color: #4da3ff;
+  }
+
   /* Action button */
   .actionButton {
     background-color: #4a4a4a !important;
@@ -1302,16 +1220,6 @@
     &:hover {
       border-color: #777 !important;
       background-color: #555 !important;
-    }
-  }
-
-  /* Select circle */
-  .selectCircle {
-    border-color: rgba(255, 255, 255, 0.3);
-    background: rgba(30, 30, 30, 0.85);
-
-    &:hover {
-      border-color: #ff7f16;
     }
   }
 
@@ -1358,127 +1266,71 @@
     }
   }
 
-  .marketSearchHighlight {
-    background: rgba(255, 215, 92, 0.3);
-    color: rgba(255, 244, 212, 0.95);
+  /* View toggle buttons - dark mode */
+  .viewToggleBtn {
+    color: rgba(255, 255, 255, 0.45);
+
+    &:hover {
+      color: rgba(255, 255, 255, 0.85);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    &.viewToggleBtnActive {
+      color: rgba(255, 255, 255, 0.85);
+      background: rgba(255, 255, 255, 0.12);
+    }
   }
 
-  .marketEditor,
-  .marketplaceItemsSection,
-  .marketRow,
-  .marketRowReadonly,
-  .marketItemCard {
-    background: #1f2633;
-    border-color: rgba(255, 255, 255, 0.12);
+  /* List mode - dark mode */
+  .skillListItem {
+    background: #1f1f1f;
+    border-color: rgba(255, 255, 255, 0.15);
+
+    &:hover {
+      background: #2a2a2a;
+    }
   }
 
-  .marketEditorTitle,
-  .marketItemName,
-  .marketRowReadonlyName {
-    color: rgba(255, 255, 255, 0.9);
+  .listItemTime {
+    color: rgba(255, 255, 255, 0.45);
   }
 
-  .marketConfigLabel,
-  .marketFilterLabel,
-  .marketMetaRow,
-  .marketGroupTitle,
-  .marketInstallProgressText,
-  .marketRowCount,
-  .marketItemDesc,
-  .marketRowReadonlyUrl,
-  .marketUrlHint,
-  .marketRowReadonlyId,
-  .marketItemMeta {
-    color: rgba(255, 255, 255, 0.62);
+  .listItemDesc {
+    color: rgba(255, 255, 255, 0.65);
   }
 
-  .marketInput,
-  .marketInputWide,
-  .marketInputOrder,
-  .marketSearchInput,
-  .marketFilterSelect {
-    background: #131926;
-    color: rgba(255, 255, 255, 0.88);
-    border-color: rgba(255, 255, 255, 0.18);
+  .channelBadge {
+    background-color: rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.8);
   }
 
-  .marketErrorBox {
-    background: rgba(157, 46, 46, 0.18);
-    border-color: rgba(255, 113, 113, 0.35);
-    color: rgba(255, 210, 210, 0.95);
+  .statusValue {
+    &.enabled {
+      background-color: rgba(82, 196, 26, 0.15);
+      color: #67cf22;
+    }
+
+    &.disabled {
+      background-color: rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.65);
+    }
   }
 
-  .marketGroup {
-    background: #1a2230;
-    border-color: rgba(255, 255, 255, 0.14);
+  .descriptionText {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.65);
   }
 
-  .marketGroupHeader {
-    .marketGroupCollapseBtn {
-      &:hover {
-        background: rgba(143, 165, 255, 0.12);
+  .leftSection {
+    .titleInfoContainer {
+      .updatedTime {
+        color: rgba(255, 255, 255, 0.45);
+
+        .calendarIcon {
+          color: rgba(255, 255, 255, 0.45);
+        }
       }
     }
-  }
-
-  .marketGroupCount {
-    background: rgba(122, 144, 255, 0.24);
-    color: rgba(234, 240, 255, 0.92);
-  }
-
-  .marketGroupToggle {
-    color: rgba(255, 255, 255, 0.72);
-  }
-
-  .marketGroupItems {
-    border-top-color: rgba(255, 255, 255, 0.12);
-  }
-
-  .marketInstallProgressTrack {
-    background: rgba(255, 255, 255, 0.16);
-  }
-
-  .marketInstallProgressFill {
-    background: linear-gradient(90deg, #8ca5ff 0%, #6f8cff 100%);
-  }
-
-  .marketEmpty {
-    background: #1a2230;
-    border-color: rgba(255, 255, 255, 0.16);
-    color: rgba(255, 255, 255, 0.58);
-  }
-
-  .marketItemCard {
-    &:hover {
-      border-color: rgba(152, 178, 255, 0.55);
-      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.32);
-    }
-  }
-
-  .marketItemCardActive {
-    border-color: #8ca5ff;
-    box-shadow: 0 0 0 2px rgba(137, 160, 255, 0.24);
-  }
-
-  .marketItemTag {
-    background: rgba(102, 129, 255, 0.28);
-    color: rgba(235, 240, 255, 0.95);
-    border-color: rgba(139, 162, 255, 0.4);
-  }
-
-  .marketItemTagMuted {
-    background: rgba(148, 163, 184, 0.24);
-    color: rgba(226, 232, 240, 0.92);
-    border-color: rgba(148, 163, 184, 0.32);
-  }
-
-  .marketRowBadgeEnabled {
-    background: rgba(13, 148, 136, 0.24);
-    color: #8cf2e6;
-  }
-
-  .marketRowBadgeDisabled {
-    background: rgba(148, 163, 184, 0.24);
-    color: rgba(226, 232, 240, 0.95);
   }
 }

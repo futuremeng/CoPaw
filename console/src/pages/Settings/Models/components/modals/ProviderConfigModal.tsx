@@ -11,6 +11,7 @@ import type {
 } from "../../../../../api/types";
 import api from "../../../../../api";
 import { useTranslation } from "react-i18next";
+import { getLocalizedTestConnectionMessage } from "./testConnectionMessage";
 import styles from "../../index.module.less";
 
 interface ProviderConfigFormValues
@@ -480,7 +481,7 @@ export function ProviderConfigModal({
         });
 
         if (!result.success) {
-          message.error(result.message || t("models.testConnectionFailed"));
+          message.error(getLocalizedTestConnectionMessage(result, t));
           // For built-in providers, we want to enforce valid config before saving
           return;
         }
@@ -521,9 +522,9 @@ export function ProviderConfigModal({
         chat_model: values.chat_model,
       });
       if (result.success) {
-        message.success(result.message || t("models.testConnectionSuccess"));
+        message.success(getLocalizedTestConnectionMessage(result, t));
       } else {
-        message.warning(result.message || t("models.testConnectionFailed"));
+        message.warning(getLocalizedTestConnectionMessage(result, t));
       }
     } catch (error) {
       if (error && typeof error === "object" && "errorFields" in error) return;

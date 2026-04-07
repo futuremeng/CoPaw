@@ -2,6 +2,8 @@ export { SkillCard } from "./SkillCard";
 export {
   SkillDrawer,
   parseFrontmatter,
+  MAX_TAGS,
+  MAX_TAG_LENGTH,
   type SkillDrawerFormValues,
 } from "./SkillDrawer";
 export { getFileIcon, getSkillVisual } from "./SkillCard";
@@ -14,6 +16,11 @@ export { useConflictRenameModal } from "./useConflictRenameModal";
 export { ImportHubModal } from "./ImportHubModal";
 export { PoolTransferModal } from "./PoolTransferModal";
 export { MarketplaceDrawer } from "./MarketplaceDrawer";
+export {
+  SkillFilterDropdown,
+  CATEGORY_PREFIX,
+  TAG_PREFIX,
+} from "./SkillFilterDropdown";
 
 export const SUPPORTED_SKILL_URL_PREFIXES = [
   "https://skills.sh/",
