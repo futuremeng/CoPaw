@@ -1574,10 +1574,211 @@
     "workspaceSummaryFiles": "工作空间文件",
     "detailTitle": "工作区  /  项目  /  项目空间",
     "detailDescription": "围绕目标、资料、协作与产出推进这个项目；自动化流程作为高级能力按需使用。",
+    "backToList": "返回项目列表",
+    "workspacePath": "工作区路径",
+    "noAgent": "当前没有可用智能体。",
+    "noProjects": "当前工作区还没有项目。",
+    "notFound": "在当前工作区未找到该项目",
+    "loadFailed": "加载当前智能体的项目失败。",
+    "loadFilesFailed": "加载该项目文件失败。",
+    "previewLoadFailed": "无法预览该文件，可能是二进制文件或无访问权限。",
+    "leaveConfirm": "当前有未保存的项目上下文，确认离开吗？",
+    "deleteSuccess": "项目已删除：{{name}}",
+    "deleteFailed": "删除项目失败。",
+    "deleteConfirmTitleWithName": "确认删除项目 {{name}}？",
+    "deleteConfirmDescription": "此操作不可逆，将永久删除 {{name}} 及其所有项目文件。",
+    "path": {
+      "workspace": "工作区",
+      "project": "项目",
+      "projectSpace": "项目空间"
+    },
+    "upload": {
+      "button": "上传文件",
+      "batchButton": "上传当前运行批次",
+      "batchHint": "当前批次目录：original/batches/{{runId}}（针对当前 run）",
+      "defaultHint": "未选中运行，默认批次目录：original/batches/manual",
+      "batchBehaviorHint": "若未上传批次文件，系统将默认处理项目中全部原件文件。"
+    },
     "automation": {
       "title": "自动化",
       "flows": "流程",
       "guidance": "自动化指导"
+    },
+    "automationDrawer": {
+      "title": "自动化",
+      "open": "打开"
+    },
+    "automationSummary": {
+      "loading": "正在加载自动化状态...",
+      "noTemplate": "尚未选择模板",
+      "noRun": "暂无运行记录，准备好后可发起运行",
+      "latest": "最新运行：{{runId}}（{{status}}）",
+      "counts": "模板：{{templateCount}} | 运行：{{runCount}}"
+    },
+    "metrics": "指标",
+    "evidence": "证据",
+    "pipeline": {
+      "noRun": "暂无运行记录",
+      "timeline": "事件时间线",
+      "step": "步骤",
+      "role": "角色",
+      "evidenceBrief": "证据",
+      "noTimeline": "暂无时间线事件",
+      "noEvidence": "暂无证据",
+      "inputScopeSummary": "输入范围",
+      "inputScope": "输入范围模式",
+      "inputScopePolicy": "输入范围策略",
+      "inputScopeValue": {
+        "allOriginal": "处理项目全部原件",
+        "unknown": "未知"
+      },
+      "inputScopePolicyValue": {
+        "defaultIfNoBatchUpload": "未上传批次文件时默认处理全部原件",
+        "unknown": "未知"
+      },
+      "templateStep": "模板",
+      "template": "选择模板",
+      "run": "运行",
+      "steps": "步骤",
+      "progress": "进度",
+      "noSteps": "暂无步骤",
+      "expandToViewSteps": "展开所选运行以查看步骤记录",
+      "importGlobalTitle": "导入全局流程",
+      "importGlobal": "导入全局",
+      "noGlobalTemplates": "暂无全局模板",
+      "noRunsForFlow": "当前所选流程还没有运行记录",
+      "nextImplementation": "准备下一轮实现提示词",
+      "nextValidation": "准备验证提示词",
+      "promoteDraft": "准备晋升模板提示词",
+      "validationNeedRun": "请先启动或选择一次运行，再准备验证提示词。",
+      "loadFailed": "加载流程模板和运行记录失败。",
+      "loadRunFailed": "加载流程运行详情失败。",
+      "loadGlobalFailed": "加载全局流程模板失败。",
+      "importGlobalSuccess": "已将全局模板导入到当前项目。",
+      "importGlobalFailed": "导入全局模板失败。",
+      "createRunFailed": "启动流程运行失败。",
+      "runStartedAt": "运行时间：{{time}}",
+      "convergence": "收敛状态",
+      "convergenceStage": "阶段",
+      "convergenceScore": "得分",
+      "highlights": "亮点",
+      "blockingIssues": "阻塞问题",
+      "nextActions": "下一步动作",
+      "severity": {
+        "high": "高",
+        "medium": "中",
+        "low": "低",
+        "info": "信息"
+      },
+      "stage": {
+        "bootstrapping": "启动阶段",
+        "executing": "执行阶段",
+        "analyzing": "分析阶段",
+        "blocked": "阻塞阶段",
+        "closedLoop": "闭环完成",
+        "unknown": "未知"
+      },
+      "convergenceItem": {
+        "termDetected": "已检测到术语抽取产物",
+        "alignmentDetected": "已检测到跨书对齐产物",
+        "relationDetected": "已检测到关系矩阵产物",
+        "reviewDetected": "已检测到评审包产物",
+        "termIncomplete": "术语工作台输出不完整",
+        "alignmentIncomplete": "跨书对齐输出不完整",
+        "relationIncomplete": "关系矩阵输出不完整",
+        "reviewIncomplete": "评审包输出不完整",
+        "missingStepRecords": "缺失步骤记录：{{value}}",
+        "failedSteps": "失败步骤：{{value}}"
+      },
+      "nextActionText": {
+        "waitForCompletion": {
+          "title": "等待流程完成",
+          "description": "当前运行仍在进行中，请持续轮询运行详情直到所有步骤稳定。"
+        },
+        "handleFailedSteps": {
+          "title": "修复失败步骤输入并续跑",
+          "description": "先检查失败步骤证据和源数据，再从失败步骤继续执行。"
+        },
+        "validateTemplateContract": {
+          "title": "校验模板-步骤契约",
+          "description": "运行详情缺少模板步骤记录，请核对模板版本与运行清单一致性。"
+        },
+        "completeTermExtraction": {
+          "title": "补齐术语抽取输出",
+          "description": "缺少预期 terms.reviewed 产物，请复核 ingest/normalize/extract 输入。"
+        },
+        "completeAlignment": {
+          "title": "补齐跨书对齐",
+          "description": "缺少 contrast 或 concept-alignment 产物，请继续 align/build_concept_tree 步骤。"
+        },
+        "buildRelationMatrix": {
+          "title": "构建关系矩阵",
+          "description": "缺少 book-relation-matrix 产物，请执行关系矩阵阶段并校验依赖。"
+        },
+        "finishReviewPack": {
+          "title": "完成质量门与评审包",
+          "description": "缺少 review.dashboard 或 review.ui-payload 产物，请执行 review_pack/report 完成闭环。"
+        },
+        "startImprovementIteration": {
+          "title": "启动下一轮优化",
+          "description": "当前运行已闭环，建议发起对比运行以提升一致性与成本表现。"
+        }
+      },
+      "stepPreviewOpen": "预览",
+      "stepPreviewClose": "收起预览",
+      "stepPreviewExpandAll": "展开全部预览",
+      "stepPreviewCollapseAll": "收起全部预览",
+      "stepPreviewNotebook": "Notebook 预览",
+      "stepPreviewConfiguredSummary": "已配置 {{count}} / {{total}} 个预览单元",
+      "stepPreviewAgent": "智能体",
+      "stepPreviewDescription": "提示意图",
+      "stepPreviewPrompt": "提示词",
+      "stepPreviewScript": "脚本",
+      "stepPreviewMetaMode": "元信息",
+      "stepPreviewTextMode": "文本",
+      "stepPreviewCodeMode": "代码",
+      "stepPreviewExpandCell": "展开",
+      "stepPreviewCollapseCell": "收起",
+      "stepPreviewCollapsedHint": "该预览单元已收起。",
+      "stepPreviewCopy": "复制",
+      "stepPreviewCopySuccess": "已复制{{section}}内容。",
+      "stepPreviewCopyFailed": "复制{{section}}内容失败。",
+      "stepPreviewLineCount": "共 {{count}} 行",
+      "stepPreviewNoDescription": "当前步骤未配置说明。",
+      "stepPreviewNoPrompt": "当前步骤未配置提示词。",
+      "stepPreviewNoScript": "当前步骤未配置脚本。",
+      "executeAction": "执行",
+      "focusStep": "定位步骤",
+      "useInChat": "用于聊天",
+      "noNextActions": "暂无待处理动作",
+      "nextActionReady": "下一步动作提示词已写入当前聊天输入框。",
+      "executeActionSuccess": "已从步骤 {{stepId}} 启动续跑。",
+      "executeActionFailed": "从所选步骤续跑失败。",
+      "contract": {
+        "dependsOn": "依赖步骤",
+        "inputs": "输入",
+        "outputs": "输出",
+        "bindings": "输入绑定",
+        "execution": "执行",
+        "retry": "重试最大次数"
+      },
+      "event": {
+        "runRestarted": "已创建续跑",
+        "stepCarriedForward": "已复用上次运行步骤",
+        "stepStarted": "步骤开始",
+        "stepCompleted": "步骤完成",
+        "stepFailed": "步骤失败",
+        "unknown": "事件"
+      },
+      "status": {
+        "info": "信息",
+        "succeeded": "成功",
+        "running": "进行中",
+        "failed": "失败",
+        "blocked": "阻塞",
+        "cancelled": "已取消",
+        "pending": "等待中"
+      }
     },
     "artifacts": {
       "skill": "技能",
@@ -1629,6 +1830,12 @@
     "chat": {
       "workspaceLabel": "项目协作",
       "initializingCollaboration": "正在准备项目协作会话...",
+      "startFailed": "启动项目聊天失败。",
+      "autoAttachFailed": "将选中文件附加到聊天失败。",
+      "attachDraftReady": "已将所选文件上下文写入聊天输入框。",
+      "implDraftReady": "已在设计聊天输入框中准备实现提示词。",
+      "validationDraftReady": "已在运行聊天输入框中准备验证提示词。",
+      "promotionDraftReady": "已在设计聊天输入框中准备晋升草稿提示词。",
       "selectContext": "先开始项目协作，等你准备把工作固化为自动化方案时，再进入自动化设计。",
       "startCollaboration": "开始项目协作",
       "startAutomation": "打开自动化设计",

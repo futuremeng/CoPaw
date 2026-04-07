@@ -49,6 +49,7 @@ import type {
   AgentProjectSummary,
   AgentProjectFileInfo,
   ProjectPipelineArtifactRecord,
+  ProjectPipelineNextAction,
   ProjectPipelineRunDetail,
   ProjectPipelineRunSummary,
   ProjectPipelineTemplateInfo,
@@ -371,15 +372,15 @@ export default function ProjectDetailPage() {
 
   const automationSummaryText = useMemo(() => {
     if (pipelineLoading) {
-      return t("projects.automationSummary.loading", "Loading automation status...");
+      return t("projects.automationSummary.loading");
     }
     if (!selectedTemplateId) {
-      return t("projects.automationSummary.noTemplate", "No template selected yet");
+      return t("projects.automationSummary.noTemplate");
     }
     if (!selectedRunSummary) {
-      return t("projects.automationSummary.noRun", "No runs yet, start one when ready");
+      return t("projects.automationSummary.noRun");
     }
-    return t("projects.automationSummary.latest", "Latest run: {{runId}} ({{status}})", {
+    return t("projects.automationSummary.latest", {
       runId: selectedRunSummary.id,
       status: selectedRunSummary.status || "unknown",
     });
@@ -495,7 +496,7 @@ export default function ProjectDetailPage() {
       console.error("failed to load project files", err);
       setProjectFiles([]);
       setError(
-        t("projects.loadFilesFailed", "Failed to load files for this project."),
+        t("projects.loadFilesFailed"),
       );
     } finally {
       setFilesLoading(false);
@@ -519,6 +520,25 @@ export default function ProjectDetailPage() {
     setResolvedProjectRequestId,
     loadProjectFiles,
   });
+
+  const uploadModalHint = useMemo(() => {
+    if (selectedRunId) {
+      return `${t("projects.upload.batchHint", { runId: selectedRunId })} ${t("projects.upload.batchBehaviorHint")}`;
+    }
+    return `${t("projects.upload.defaultHint")} ${t("projects.upload.batchBehaviorHint")}`;
+  }, [selectedRunId, t]);
+
+  const openProjectUploadModal = useCallback(() => {
+    setPendingUploads([]);
+    setUploadTargetDir("original");
+    setUploadModalOpen(true);
+  }, [setPendingUploads, setUploadTargetDir, setUploadModalOpen]);
+
+  const openRunBatchUploadModal = useCallback(() => {
+    setPendingUploads([]);
+    setUploadTargetDir(selectedRunId ? `original/batches/${selectedRunId}` : "original/batches/manual");
+    setUploadModalOpen(true);
+  }, [selectedRunId, setPendingUploads, setUploadTargetDir, setUploadModalOpen]);
 
   const shouldBlockLeave = useMemo(() => {
     const runInProgress = runDetail?.status === "running" || runDetail?.status === "pending";
@@ -662,7 +682,7 @@ export default function ProjectDetailPage() {
       console.error("failed to load pipeline run detail", err);
       setRunDetail(null);
       setError(
-        t("projects.pipeline.loadRunFailed", "Failed to load pipeline run detail."),
+        t("projects.pipeline.loadRunFailed"),
       );
     }
   }, [resolvedProjectRequestId, t]);
@@ -724,7 +744,7 @@ export default function ProjectDetailPage() {
       setSelectedRunId("");
       setRunDetail(null);
       setError(
-        `${t("projects.pipeline.loadFailed", "Failed to load pipeline templates and runs.")} ${(err as Error)?.message || ""}`.trim(),
+        `${t("projects.pipeline.loadFailed")} ${(err as Error)?.message || ""}`.trim(),
       );
     } finally {
       setPipelineLoading(false);
@@ -749,7 +769,7 @@ export default function ProjectDetailPage() {
     } catch (err) {
       console.error("failed to load platform templates", err);
       message.error(
-        t("projects.pipeline.loadGlobalFailed", "Failed to load global pipeline templates."),
+        t("projects.pipeline.loadGlobalFailed"),
       );
     } finally {
       setImportLoading(false);
@@ -797,12 +817,12 @@ export default function ProjectDetailPage() {
       }
       setImportModalOpen(false);
       message.success(
-        t("projects.pipeline.importGlobalSuccess", "Global template imported to current project."),
+        t("projects.pipeline.importGlobalSuccess"),
       );
     } catch (err) {
       console.error("failed to import global template", err);
       message.error(
-        t("projects.pipeline.importGlobalFailed", "Failed to import global template."),
+        t("projects.pipeline.importGlobalFailed"),
       );
     } finally {
       setImportLoading(false);
@@ -845,6 +865,45 @@ export default function ProjectDetailPage() {
     }
   }, [resolvedProjectRequestId]);
 
+  const handleSwitchToRunFocusChat = useCallback((params: {
+    runId: string;
+    projectRequestId?: string;
+  }) => {
+    if (!selectedProject) {
+      return;
+    }
+
+    const prevFocusChatId = runFocusChatIdRef.current;
+    if (prevFocusChatId) {
+      void chatApi
+        .clearChatMeta(prevFocusChatId, {
+          user_id: "default",
+          channel: "console",
+        })
+        .catch(() => {});
+    }
+
+    setRunFocusChatId("");
+    void chatApi.createChat({
+      name: `[focus] ${selectedProject.name}`,
+      session_id: `project-run-${params.runId}`,
+      user_id: "default",
+      channel: "console",
+      meta: {
+        focus_type: "project_run",
+        focus_id: selectedProject.id,
+        project_id: selectedProject.id,
+        project_request_id: params.projectRequestId || selectedProject.id,
+        run_id: params.runId,
+        focus_path: `projects/${selectedProject.id}`,
+      },
+    }).then((chat) => {
+      setRunFocusChatId(chat.id);
+    }).catch((err) => {
+      console.warn("[focus] failed to create project focus chat", err);
+    });
+  }, [selectedProject]);
+
   const handleCreateRun = useCallback(async () => {
     if (!currentAgent || !selectedProject || !selectedTemplateId) {
       return;
@@ -862,7 +921,13 @@ export default function ProjectDetailPage() {
           run = await agentsApi.createProjectPipelineRun(
             currentAgent.id,
             projectRequestId,
-            { template_id: selectedTemplateId },
+            {
+              template_id: selectedTemplateId,
+              parameters: {
+                input_scope: "all_original",
+                input_scope_policy: "default_if_no_batch_upload",
+              },
+            },
           );
           requestProjectId = projectRequestId;
           setResolvedProjectRequestId(projectRequestId);
@@ -879,43 +944,19 @@ export default function ProjectDetailPage() {
       await loadPipelineContext(currentAgent.id, selectedProject);
       setSelectedRunId(run.id);
       setRunDetail(run);
-
-      const prevFocusChatId = runFocusChatIdRef.current;
-      if (prevFocusChatId) {
-        void chatApi
-          .clearChatMeta(prevFocusChatId, {
-            user_id: "default",
-            channel: "console",
-          })
-          .catch(() => {});
-      }
-      void chatApi.createChat({
-        name: `[focus] ${selectedProject.name}`,
-        session_id: `project-run-${run.id}`,
-        user_id: "default",
-        channel: "console",
-        meta: {
-          focus_type: "project_run",
-          focus_id: selectedProject.id,
-          project_id: selectedProject.id,
-          project_request_id: requestProjectId || selectedProject.id,
-          run_id: run.id,
-          focus_path: `projects/${selectedProject.id}`,
-        },
-      }).then((chat) => {
-        setRunFocusChatId(chat.id);
-      }).catch((err) => {
-        console.warn("[focus] failed to create project focus chat", err);
+      handleSwitchToRunFocusChat({
+        runId: run.id,
+        projectRequestId: requestProjectId || selectedProject.id,
       });
     } catch (err) {
       console.error("failed to create pipeline run", err);
       setError(
-        t("projects.pipeline.createRunFailed", "Failed to start pipeline run."),
+        t("projects.pipeline.createRunFailed"),
       );
     } finally {
       setCreateRunLoading(false);
     }
-  }, [currentAgent, loadPipelineContext, resolvedProjectRequestId, selectedProject, selectedTemplateId, t]);
+  }, [currentAgent, handleSwitchToRunFocusChat, loadPipelineContext, resolvedProjectRequestId, selectedProject, selectedTemplateId, t]);
 
   const {
     handleEnsureRunChat,
@@ -932,7 +973,7 @@ export default function ProjectDetailPage() {
     setWorkspaceFocusChatId,
     setChatStarting,
     setError,
-    startFailedText: t("projects.chat.startFailed", "Failed to start project chat."),
+    startFailedText: t("projects.chat.startFailed"),
   });
 
   const { handleEnsureDesignChat } = useProjectDesignChatController({
@@ -948,7 +989,7 @@ export default function ProjectDetailPage() {
     setDesignFocusChatId,
     setChatStarting,
     setError,
-    startFailedText: t("projects.chat.startFailed", "Failed to start project chat."),
+    startFailedText: t("projects.chat.startFailed"),
   });
 
   useProjectChatFocusEffects({
@@ -1002,7 +1043,7 @@ export default function ProjectDetailPage() {
     pathname: location.pathname,
     search: location.search,
     navigate,
-    onOpenUpload: () => setUploadModalOpen(true),
+    onOpenUpload: openProjectUploadModal,
   });
 
   useArtifactSelectionGuards({
@@ -1163,7 +1204,7 @@ export default function ProjectDetailPage() {
     try {
       await agentsApi.deleteProject(currentAgent.id, selectedProject.id);
       message.success(
-        t("projects.deleteSuccess", "Project deleted: {{name}}", {
+        t("projects.deleteSuccess", {
           name: selectedProject.name || selectedProject.id,
         }),
       );
@@ -1171,7 +1212,7 @@ export default function ProjectDetailPage() {
       navigate("/projects");
     } catch (err) {
       console.error("failed to delete project", err);
-      message.error(t("projects.deleteFailed", "Failed to delete project."));
+      message.error(t("projects.deleteFailed"));
     } finally {
       setDeletingProject(false);
     }
@@ -1274,7 +1315,7 @@ export default function ProjectDetailPage() {
     } catch (err) {
       console.error("failed to send selected files to chat", err);
       message.error(
-        t("projects.chat.autoAttachFailed", "Failed to attach selected file to chat."),
+        t("projects.chat.autoAttachFailed"),
       );
     } finally {
       setSendingSelectedFiles(false);
@@ -1285,7 +1326,6 @@ export default function ProjectDetailPage() {
     activeWorkspaceChatId,
     currentAgent,
     fetchProjectFileSnippet,
-    handleEnsureDesignChat,
     handleEnsureRunChat,
     handleEnsureWorkspaceChat,
     projectFiles,
@@ -1303,7 +1343,7 @@ export default function ProjectDetailPage() {
 
     const chatId = await handleEnsureDesignChat(false, true);
     if (!chatId) {
-      message.error(t("projects.chat.startFailed", "Failed to start project chat."));
+      message.error(t("projects.chat.startFailed"));
       return;
     }
 
@@ -1352,7 +1392,7 @@ export default function ProjectDetailPage() {
 
     const chatId = await handleEnsureRunChat(false);
     if (!chatId) {
-      message.error(t("projects.chat.startFailed", "Failed to start project chat."));
+      message.error(t("projects.chat.startFailed"));
       return;
     }
 
@@ -1389,7 +1429,7 @@ export default function ProjectDetailPage() {
 
     const chatId = await handleEnsureDesignChat(false, true);
     if (!chatId) {
-      message.error(t("projects.chat.startFailed", "Failed to start project chat."));
+      message.error(t("projects.chat.startFailed"));
       return;
     }
 
@@ -1418,13 +1458,130 @@ export default function ProjectDetailPage() {
     t,
   ]);
 
+  const handleApplyNextAction = useCallback(async (action: ProjectPipelineNextAction) => {
+    if (!selectedProject) {
+      return;
+    }
+
+    if (action.target_step_id) {
+      setSelectedStepId(action.target_step_id);
+    }
+
+    const prompt = (action.suggested_prompt || "").trim() || [
+      `项目：${selectedProject.name}`,
+      `动作：${action.title}`,
+      action.description,
+      action.target_step_id ? `目标步骤：${action.target_step_id}` : "",
+      "请直接给出最小闭环动作，并说明是否需要重跑。",
+    ].filter(Boolean).join("\n");
+
+    const useRunChat = Boolean(selectedRunId);
+    const chatId = useRunChat
+      ? await handleEnsureRunChat(false)
+      : await handleEnsureDesignChat(false, true);
+
+    if (!chatId) {
+      message.error(t("projects.chat.startFailed"));
+      return;
+    }
+
+    setAutoAttachRequest({
+      id: `next-action-${action.id}-${Date.now()}`,
+      mode: "draft",
+      note: prompt,
+    });
+    message.success(
+      t(
+        "projects.pipeline.nextActionReady",
+      ),
+    );
+  }, [
+    handleEnsureDesignChat,
+    handleEnsureRunChat,
+    selectedProject,
+    selectedRunId,
+    t,
+  ]);
+
+  const handleExecuteNextAction = useCallback(async (action: ProjectPipelineNextAction) => {
+    if (!currentAgent || !selectedProject || !selectedRunId || !action.target_step_id) {
+      return;
+    }
+
+    const projectIds = [resolvedProjectRequestId, ...buildProjectIdCandidates(selectedProject)]
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const uniqueProjectIds = Array.from(new Set(projectIds));
+
+    try {
+      let continuedRun: ProjectPipelineRunDetail | null = null;
+      let requestProjectId = "";
+      for (const projectRequestId of uniqueProjectIds) {
+        try {
+          continuedRun = await agentsApi.retryProjectPipelineRun(
+            currentAgent.id,
+            projectRequestId,
+            selectedRunId,
+            {
+              step_id: action.target_step_id,
+              note: action.title,
+            },
+          );
+          requestProjectId = projectRequestId;
+          setResolvedProjectRequestId(projectRequestId);
+          break;
+        } catch {
+          // Try next candidate id.
+        }
+      }
+
+      if (!continuedRun) {
+        throw new Error("project_pipeline_run_retry_failed");
+      }
+
+      await loadPipelineContext(currentAgent.id, selectedProject);
+      setSelectedRunId(continuedRun.id);
+      setRunDetail(continuedRun);
+      setSelectedStepId(action.target_step_id);
+      handleSwitchToRunFocusChat({
+        runId: continuedRun.id,
+        projectRequestId: requestProjectId || selectedProject.id,
+      });
+      message.success(
+        t(
+          "projects.pipeline.executeActionSuccess",
+          { stepId: action.target_step_id },
+        ),
+      );
+
+      if (!requestProjectId) {
+        return;
+      }
+    } catch (err) {
+      console.error("failed to execute next action", err);
+      message.error(
+        t(
+          "projects.pipeline.executeActionFailed",
+        ),
+      );
+    }
+  }, [
+    currentAgent,
+    handleSwitchToRunFocusChat,
+    loadPipelineContext,
+    resolvedProjectRequestId,
+    selectedProject,
+    selectedRunId,
+    t,
+  ]);
+
   return (
     <div className={styles.agentsPage}>
       <div className={styles.header}>
         <div>
           <div className={styles.pathTitleRow}>
             <div className={styles.pathBreadcrumb}>
-              <span className={styles.pathParent}>{t("projects.path.workspace", "工作区")}</span>
+              <span className={styles.pathParent}>{t("projects.path.workspace")}</span>
               <span className={styles.pathSeparator}>/</span>
               <Button
                 type="link"
@@ -1432,11 +1589,11 @@ export default function ProjectDetailPage() {
                 className={styles.pathParentLink}
                 onClick={() => navigate("/projects")}
               >
-                {t("projects.path.project", "项目")}
+                {t("projects.path.project")}
               </Button>
               <span className={styles.pathSeparator}>/</span>
               <span className={styles.pathCurrent}>
-                {selectedProject?.name || t("projects.path.projectSpace", "项目空间")}
+                {selectedProject?.name || t("projects.path.projectSpace")}
               </span>
             </div>
           </div>
@@ -1446,17 +1603,17 @@ export default function ProjectDetailPage() {
               "围绕目标与资料协作推进项目，自动化按需启用。",
             )}
             <span className={styles.descriptionDivider}> | </span>
-            {t("projects.workspacePath", "Workspace Path")}: {" "}
+            {t("projects.workspacePath")}: {" "}
             {selectedProject?.workspace_dir ||
               currentAgent?.workspace_dir ||
-              t("projects.noAgent", "No agent is currently available.")}
+              t("projects.noAgent")}
           </Text>
         </div>
         <div className={styles.headerActions}>
           {selectedProject ? (
             <>
-              <Button size="small" onClick={() => setUploadModalOpen(true)}>
-                {t("projects.upload.button", "Upload Files")}
+              <Button size="small" onClick={openProjectUploadModal}>
+                {t("projects.upload.button")}
               </Button>
               <Popconfirm
                 title={t(
@@ -1493,17 +1650,17 @@ export default function ProjectDetailPage() {
           <Spin />
         </div>
       ) : !currentAgent ? (
-        <Empty description={t("projects.noAgent", "No agent is currently available.")} />
+        <Empty description={t("projects.noAgent")} />
       ) : projects.length === 0 ? (
-        <Empty description={t("projects.noProjects", "No projects in this workspace yet.")} />
+        <Empty description={t("projects.noProjects")} />
       ) : !selectedProject ? (
         <Card>
           <Empty
-            description={t("projects.notFound", "Project not found in current workspace")}
+            description={t("projects.notFound")}
             image={Empty.PRESENTED_IMAGE_SIMPLE}
           >
             <Button onClick={() => navigate("/projects")}>
-              {t("projects.backToList", "Back to project list")}
+              {t("projects.backToList")}
             </Button>
           </Empty>
         </Card>
@@ -1522,7 +1679,7 @@ export default function ProjectDetailPage() {
                 selectedFilePath={selectedFilePath}
                 selectedAttachPaths={selectedAttachPaths}
                 hideBuiltInFiles={hideBuiltInFiles}
-                onUploadFiles={() => setUploadModalOpen(true)}
+                onUploadFiles={openProjectUploadModal}
                 onSelectFileFromTree={(path) => {
                   void handleSelectArtifactFile(path);
                 }}
@@ -1534,7 +1691,7 @@ export default function ProjectDetailPage() {
 
               <Card
                 size="small"
-                title={t("projects.automationDrawer.title", "Automation")}
+                title={t("projects.automationDrawer.title")}
                 className={styles.automationSummaryCard}
                 extra={(
                   <Button
@@ -1542,14 +1699,14 @@ export default function ProjectDetailPage() {
                     type="primary"
                     onClick={() => setAutomationDrawerOpen(true)}
                   >
-                    {t("projects.automationDrawer.open", "Open")}
+                    {t("projects.automationDrawer.open")}
                   </Button>
                 )}
               >
                 <div className={styles.automationSummaryMeta}>
                   <Text type="secondary">{automationSummaryText}</Text>
                   <Text type="secondary">
-                    {t("projects.automationSummary.counts", "Templates: {{templateCount}} | Runs: {{runCount}}", {
+                    {t("projects.automationSummary.counts", {
                       templateCount: pipelineTemplates.length,
                       runCount: pipelineRuns.length,
                     })}
@@ -1622,9 +1779,9 @@ export default function ProjectDetailPage() {
           </div>
 
           <Drawer
-            title={t("projects.automationDrawer.title", "Automation")}
+            title={t("projects.automationDrawer.title")}
             placement="right"
-            width={460}
+            width="min(80vw, 1280px)"
             open={automationDrawerOpen}
             onClose={() => setAutomationDrawerOpen(false)}
             destroyOnHidden={false}
@@ -1652,8 +1809,7 @@ export default function ProjectDetailPage() {
                 platformTemplates={platformTemplates}
                 verificationGateSummary={verificationGateSummary}
                 canPromoteToTemplateDraft={canPromoteToTemplateDraft}
-                onBackToList={() => navigate("/projects")}
-                onUploadFiles={() => setUploadModalOpen(true)}
+                onUploadFiles={openRunBatchUploadModal}
                 onOpenImportModal={() => {
                   void handleOpenImportModal();
                 }}
@@ -1673,6 +1829,15 @@ export default function ProjectDetailPage() {
                 onPreparePromotionDraft={() => {
                   void handlePreparePromotionDraft();
                 }}
+                onFocusNextActionStep={(stepId) => {
+                  setSelectedStepId(stepId);
+                }}
+                onApplyNextAction={(action) => {
+                  void handleApplyNextAction(action);
+                }}
+                onExecuteNextAction={(action) => {
+                  void handleExecuteNextAction(action);
+                }}
                 onSelectTemplateId={setSelectedTemplateId}
                 onSelectRunId={setSelectedRunId}
                 onSelectStep={handleSelectStep}
@@ -1690,7 +1855,7 @@ export default function ProjectDetailPage() {
                 items={[
                   {
                     key: "metrics",
-                    label: t("projects.metrics", "Metrics"),
+                    label: t("projects.metrics"),
                     children: (
                       <ProjectMetricsPanel
                         runDetail={runDetail}
@@ -1700,9 +1865,26 @@ export default function ProjectDetailPage() {
                     ),
                   },
                   {
+                    key: "timeline",
+                    label: t("projects.pipeline.timeline"),
+                    children: (
+                      <ProjectEvidencePanel
+                        runDetail={runDetail}
+                        showTimeline={true}
+                        showEvidence={false}
+                      />
+                    ),
+                  },
+                  {
                     key: "evidence",
-                    label: t("projects.evidence", "Evidence"),
-                    children: <ProjectEvidencePanel runDetail={runDetail} />,
+                    label: t("projects.evidence"),
+                    children: (
+                      <ProjectEvidencePanel
+                        runDetail={runDetail}
+                        showTimeline={false}
+                        showEvidence={true}
+                      />
+                    ),
                   },
                 ]}
               />
@@ -1714,6 +1896,7 @@ export default function ProjectDetailPage() {
             uploadingFiles={uploadingFiles}
             pendingUploads={pendingUploads}
             uploadTargetDir={uploadTargetDir}
+            uploadHint={uploadModalHint}
             onChangeUploadTargetDir={setUploadTargetDir}
             onChangePendingUploads={setPendingUploads}
             onUpload={() => {

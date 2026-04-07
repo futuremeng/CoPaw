@@ -37,6 +37,7 @@ import type {
   ProjectPipelineRunSummary,
   ProjectPipelineRunDetail,
   CreateProjectPipelineRunRequest,
+  RetryProjectPipelineRunRequest,
   ReorderAgentsResponse,
 } from "../types/agents";
 import type { MdFileInfo, MdFileContent } from "../types/workspace";
@@ -404,6 +405,20 @@ export const agentsApi = {
   ) =>
     request<ProjectPipelineRunDetail>(
       `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/pipelines/runs`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  retryProjectPipelineRun: (
+    agentId: string,
+    projectId: string,
+    runId: string,
+    body: RetryProjectPipelineRunRequest,
+  ) =>
+    request<ProjectPipelineRunDetail>(
+      `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/pipelines/runs/${encodeURIComponent(runId)}/retry`,
       {
         method: "POST",
         body: JSON.stringify(body),

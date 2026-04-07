@@ -16,6 +16,7 @@ from .agents_pipeline_core import (
     PlatformTemplateVersionRecord,
     ProjectFlowInstanceInfo,
     PublishProjectTemplateRequest,
+    RetryPipelineRunRequest,
     PipelineDraftInfo,
     PipelineRunDetail,
     PipelineRunSummary,
@@ -33,6 +34,7 @@ from .agents_pipeline_core import (
     _list_project_pipeline_templates,
     _load_project_pipeline_run,
     _publish_project_template_to_platform,
+    _retry_project_pipeline_run,
     _add_or_update_step,
     _delete_step,
 )
@@ -507,6 +509,36 @@ async def create_project_pipeline_run(
     try:
         project_dir = agents_router_impl._resolve_project_dir(Path(workspace.workspace_dir), projectId)
         return _create_project_pipeline_run(projectId, project_dir, body)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post(
+    "/{agentId}/projects/{projectId}/pipelines/runs/{runId}/retry",
+    response_model=PipelineRunDetail,
+    summary="Retry or continue one project pipeline run",
+    description="Create a continuation run from a target step of an existing run",
+)
+async def retry_project_pipeline_run(
+    request: Request,
+    body: RetryPipelineRunRequest,
+    agentId: str = PathParam(...),
+    projectId: str = PathParam(...),
+    runId: str = PathParam(...),
+) -> PipelineRunDetail:
+    """Create a continuation run from a target step of an existing run."""
+    manager = agents_router_impl._get_multi_agent_manager(request)
+
+    try:
+        workspace = await manager.get_agent(agentId)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    try:
+        project_dir = agents_router_impl._resolve_project_dir(Path(workspace.workspace_dir), projectId)
+        return _retry_project_pipeline_run(projectId, project_dir, runId, body)
     except HTTPException:
         raise
     except Exception as e:

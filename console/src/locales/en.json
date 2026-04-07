@@ -1614,10 +1614,211 @@
     "workspaceSummaryFiles": "Workspace Files",
     "detailTitle": "Project Workspace",
     "detailDescription": "Move this project forward through goals, materials, collaboration, and deliverables. Automation stays available as an advanced capability.",
+    "backToList": "Back to project list",
+    "workspacePath": "Workspace Path",
+    "noAgent": "No agent is currently available.",
+    "noProjects": "No projects in this workspace yet.",
+    "notFound": "Project not found in current workspace",
+    "loadFailed": "Failed to load projects for the current agent.",
+    "loadFilesFailed": "Failed to load files for this project.",
+    "previewLoadFailed": "Unable to preview this file. It might be binary or inaccessible.",
+    "leaveConfirm": "You have unsaved project context. Leave this page?",
+    "deleteSuccess": "Project deleted: {{name}}",
+    "deleteFailed": "Failed to delete project.",
+    "deleteConfirmTitleWithName": "Delete project {{name}}?",
+    "deleteConfirmDescription": "This action is irreversible and will permanently delete {{name}} and all project files.",
+    "path": {
+      "workspace": "Workspace",
+      "project": "Project",
+      "projectSpace": "Project Space"
+    },
+    "upload": {
+      "button": "Upload Files",
+      "batchButton": "Upload current run batch",
+      "batchHint": "Current batch directory: original/batches/{{runId}} (scoped to current run)",
+      "defaultHint": "No run selected. Default batch directory: original/batches/manual",
+      "batchBehaviorHint": "If no batch files are uploaded, the run will process all original files in the project by default."
+    },
     "automation": {
       "title": "Automation",
       "flows": "Flows",
       "guidance": "Automation Guidance"
+    },
+    "automationDrawer": {
+      "title": "Automation",
+      "open": "Open"
+    },
+    "automationSummary": {
+      "loading": "Loading automation status...",
+      "noTemplate": "No template selected yet",
+      "noRun": "No runs yet, start one when ready",
+      "latest": "Latest run: {{runId}} ({{status}})",
+      "counts": "Templates: {{templateCount}} | Runs: {{runCount}}"
+    },
+    "metrics": "Metrics",
+    "evidence": "Evidence",
+    "pipeline": {
+      "noRun": "No run",
+      "timeline": "Timeline",
+      "step": "Step",
+      "role": "Role",
+      "evidenceBrief": "Evidence",
+      "noTimeline": "No timeline events available",
+      "noEvidence": "No evidence",
+      "inputScopeSummary": "Input scope",
+      "inputScope": "Input scope mode",
+      "inputScopePolicy": "Input scope policy",
+      "inputScopeValue": {
+        "allOriginal": "Process all original files in project",
+        "unknown": "Unknown"
+      },
+      "inputScopePolicyValue": {
+        "defaultIfNoBatchUpload": "Default to all original files when no batch upload is provided",
+        "unknown": "Unknown"
+      },
+      "templateStep": "template",
+      "template": "Select template",
+      "run": "Run",
+      "steps": "Steps",
+      "progress": "Progress",
+      "noSteps": "No steps available",
+      "expandToViewSteps": "Expand selected run to view step records",
+      "importGlobalTitle": "Import Global Pipeline",
+      "importGlobal": "Import Global",
+      "noGlobalTemplates": "No global templates available",
+      "noRunsForFlow": "No runs for selected flow yet",
+      "nextImplementation": "Prepare next implementation prompt",
+      "nextValidation": "Prepare validation prompt",
+      "promoteDraft": "Prepare promotion-to-template prompt",
+      "validationNeedRun": "Please start or select one run before preparing a validation prompt.",
+      "loadFailed": "Failed to load pipeline templates and runs.",
+      "loadRunFailed": "Failed to load pipeline run detail.",
+      "loadGlobalFailed": "Failed to load global pipeline templates.",
+      "importGlobalSuccess": "Global template imported to current project.",
+      "importGlobalFailed": "Failed to import global template.",
+      "createRunFailed": "Failed to start pipeline run.",
+      "runStartedAt": "Run @ {{time}}",
+      "convergence": "Convergence",
+      "convergenceStage": "Stage",
+      "convergenceScore": "Score",
+      "highlights": "Highlights",
+      "blockingIssues": "Blocking issues",
+      "nextActions": "Next actions",
+      "severity": {
+        "high": "High",
+        "medium": "Medium",
+        "low": "Low",
+        "info": "Info"
+      },
+      "stage": {
+        "bootstrapping": "Bootstrapping",
+        "executing": "Executing",
+        "analyzing": "Analyzing",
+        "blocked": "Blocked",
+        "closedLoop": "Closed-loop",
+        "unknown": "Unknown"
+      },
+      "convergenceItem": {
+        "termDetected": "Term extraction artifacts detected",
+        "alignmentDetected": "Cross-book alignment artifacts detected",
+        "relationDetected": "Relation matrix artifacts detected",
+        "reviewDetected": "Review pack artifacts detected",
+        "termIncomplete": "Term workbench outputs are incomplete",
+        "alignmentIncomplete": "Cross-book alignment outputs are incomplete",
+        "relationIncomplete": "Relation matrix outputs are incomplete",
+        "reviewIncomplete": "Review pack outputs are incomplete",
+        "missingStepRecords": "Missing step records: {{value}}",
+        "failedSteps": "Failed steps: {{value}}"
+      },
+      "nextActionText": {
+        "waitForCompletion": {
+          "title": "Wait for pipeline completion",
+          "description": "The run is still in progress. Keep polling run detail until all steps settle."
+        },
+        "handleFailedSteps": {
+          "title": "Fix failed step inputs and rerun",
+          "description": "Inspect failed-step evidence and source data, then continue from the failed step."
+        },
+        "validateTemplateContract": {
+          "title": "Validate template-step contract",
+          "description": "Run detail is missing template step records. Verify template revision and run manifest consistency."
+        },
+        "completeTermExtraction": {
+          "title": "Complete term extraction outputs",
+          "description": "Expected terms.reviewed artifacts are missing. Recheck ingest/normalize/extract inputs."
+        },
+        "completeAlignment": {
+          "title": "Complete cross-book alignment",
+          "description": "Contrast or concept-alignment outputs are missing. Continue align/build_concept_tree steps."
+        },
+        "buildRelationMatrix": {
+          "title": "Build relation matrix",
+          "description": "book-relation-matrix outputs are missing. Execute relation matrix stage and verify dependencies."
+        },
+        "finishReviewPack": {
+          "title": "Finish quality gate and review pack",
+          "description": "review.dashboard or review.ui-payload outputs are missing. Execute review_pack/report for closure."
+        },
+        "startImprovementIteration": {
+          "title": "Start next optimization iteration",
+          "description": "Closed-loop run completed. Start a comparison run to improve consistency and cost."
+        }
+      },
+      "stepPreviewOpen": "Preview",
+      "stepPreviewClose": "Hide preview",
+      "stepPreviewExpandAll": "Open all previews",
+      "stepPreviewCollapseAll": "Close all previews",
+      "stepPreviewNotebook": "Notebook Preview",
+      "stepPreviewConfiguredSummary": "Configured {{count}} / {{total}} preview cells",
+      "stepPreviewAgent": "Agent",
+      "stepPreviewDescription": "Prompt intent",
+      "stepPreviewPrompt": "Prompt",
+      "stepPreviewScript": "Script",
+      "stepPreviewMetaMode": "meta",
+      "stepPreviewTextMode": "text",
+      "stepPreviewCodeMode": "code",
+      "stepPreviewExpandCell": "Expand",
+      "stepPreviewCollapseCell": "Collapse",
+      "stepPreviewCollapsedHint": "This preview cell is collapsed.",
+      "stepPreviewCopy": "Copy",
+      "stepPreviewCopySuccess": "Copied {{section}} content.",
+      "stepPreviewCopyFailed": "Failed to copy {{section}} content.",
+      "stepPreviewLineCount": "{{count}} lines",
+      "stepPreviewNoDescription": "No step description configured.",
+      "stepPreviewNoPrompt": "No prompt configured for this step.",
+      "stepPreviewNoScript": "No script configured for this step.",
+      "executeAction": "Execute",
+      "focusStep": "Focus step",
+      "useInChat": "Use in chat",
+      "noNextActions": "No pending next actions",
+      "nextActionReady": "Next action prompt has been prepared in the current chat input.",
+      "executeActionSuccess": "Continuation run started from step {{stepId}}.",
+      "executeActionFailed": "Failed to continue pipeline run from the selected step.",
+      "contract": {
+        "dependsOn": "Depends on",
+        "inputs": "Inputs",
+        "outputs": "Outputs",
+        "bindings": "Input bindings",
+        "execution": "Execution",
+        "retry": "Retry max attempts"
+      },
+      "event": {
+        "runRestarted": "Continuation run created",
+        "stepCarriedForward": "Step reused from previous run",
+        "stepStarted": "Step started",
+        "stepCompleted": "Step completed",
+        "stepFailed": "Step failed",
+        "unknown": "Event"
+      },
+      "status": {
+        "info": "Info",
+        "succeeded": "Succeeded",
+        "running": "Running",
+        "failed": "Failed",
+        "blocked": "Blocked",
+        "cancelled": "Cancelled",
+        "pending": "Pending"
+      }
     },
     "artifacts": {
       "skill": "Skills",
@@ -1644,6 +1845,12 @@
     "chat": {
       "workspaceLabel": "Project workspace",
       "initializingCollaboration": "Preparing project collaboration session...",
+      "startFailed": "Failed to start project chat.",
+      "autoAttachFailed": "Failed to attach selected file to chat.",
+      "attachDraftReady": "Prepared selected file context in the chat input box.",
+      "implDraftReady": "Implementation prompt has been prepared in the design chat input.",
+      "validationDraftReady": "Validation prompt has been prepared in the run chat input.",
+      "promotionDraftReady": "Promotion draft prompt has been prepared in the design chat input.",
       "selectContext": "Start a project collaboration session first. Open automation design only when you are ready to formalize the workflow.",
       "startCollaboration": "Start project collaboration",
       "startAutomation": "Open automation design",

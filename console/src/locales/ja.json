@@ -1572,10 +1572,211 @@
     "workspaceSummaryFiles": "ワークスペースファイル",
     "detailTitle": "プロジェクトワークスペース",
     "detailDescription": "目標、資料、協作、成果物を中心にこのプロジェクトを進めます。自動化は必要な時だけ使う高度な機能です。",
+    "backToList": "プロジェクト一覧に戻る",
+    "workspacePath": "ワークスペースパス",
+    "noAgent": "現在利用可能なエージェントがありません。",
+    "noProjects": "このワークスペースにはまだプロジェクトがありません。",
+    "notFound": "現在のワークスペースにプロジェクトが見つかりません",
+    "loadFailed": "現在のエージェントのプロジェクト読み込みに失敗しました。",
+    "loadFilesFailed": "このプロジェクトのファイル読み込みに失敗しました。",
+    "previewLoadFailed": "このファイルをプレビューできません。バイナリまたはアクセス不可の可能性があります。",
+    "leaveConfirm": "未保存のプロジェクトコンテキストがあります。このページを離れますか？",
+    "deleteSuccess": "プロジェクトを削除しました: {{name}}",
+    "deleteFailed": "プロジェクトの削除に失敗しました。",
+    "deleteConfirmTitleWithName": "プロジェクト {{name}} を削除しますか？",
+    "deleteConfirmDescription": "この操作は元に戻せません。{{name}} と全プロジェクトファイルを完全に削除します。",
+    "path": {
+      "workspace": "ワークスペース",
+      "project": "プロジェクト",
+      "projectSpace": "プロジェクトスペース"
+    },
+    "upload": {
+      "button": "ファイルをアップロード",
+      "batchButton": "現在の実行バッチをアップロード",
+      "batchHint": "現在のバッチディレクトリ: original/batches/{{runId}}（現在の run に紐づく）",
+      "defaultHint": "実行が未選択のため、既定バッチディレクトリ: original/batches/manual",
+      "batchBehaviorHint": "バッチファイルをアップロードしない場合、既定ではプロジェクト内の全ての原本ファイルを処理します。"
+    },
     "automation": {
       "title": "自動化",
       "flows": "フロー",
       "guidance": "自動化ガイダンス"
+    },
+    "automationDrawer": {
+      "title": "自動化",
+      "open": "開く"
+    },
+    "automationSummary": {
+      "loading": "自動化ステータスを読み込み中...",
+      "noTemplate": "テンプレートが未選択です",
+      "noRun": "実行履歴はまだありません。準備できたら開始してください",
+      "latest": "最新実行: {{runId}}（{{status}}）",
+      "counts": "テンプレート: {{templateCount}} | 実行: {{runCount}}"
+    },
+    "metrics": "メトリクス",
+    "evidence": "エビデンス",
+    "pipeline": {
+      "noRun": "実行はありません",
+      "timeline": "タイムライン",
+      "step": "ステップ",
+      "role": "ロール",
+      "evidenceBrief": "エビデンス",
+      "noTimeline": "表示可能なタイムラインイベントはありません",
+      "noEvidence": "エビデンスはありません",
+      "inputScopeSummary": "入力範囲",
+      "inputScope": "入力範囲モード",
+      "inputScopePolicy": "入力範囲ポリシー",
+      "inputScopeValue": {
+        "allOriginal": "プロジェクト内の全原本ファイルを処理",
+        "unknown": "不明"
+      },
+      "inputScopePolicyValue": {
+        "defaultIfNoBatchUpload": "バッチ未アップロード時は全原本を既定処理",
+        "unknown": "不明"
+      },
+      "templateStep": "テンプレート",
+      "template": "テンプレートを選択",
+      "run": "実行",
+      "steps": "ステップ",
+      "progress": "進捗",
+      "noSteps": "ステップはありません",
+      "expandToViewSteps": "選択した実行を展開してステップ記録を表示",
+      "importGlobalTitle": "グローバルパイプラインをインポート",
+      "importGlobal": "グローバルをインポート",
+      "noGlobalTemplates": "利用可能なグローバルテンプレートがありません",
+      "noRunsForFlow": "選択したフローにはまだ実行がありません",
+      "nextImplementation": "次の実装プロンプトを準備",
+      "nextValidation": "検証プロンプトを準備",
+      "promoteDraft": "テンプレート昇格プロンプトを準備",
+      "validationNeedRun": "検証プロンプトを準備する前に、実行を開始または選択してください。",
+      "loadFailed": "パイプラインテンプレートと実行履歴の読み込みに失敗しました。",
+      "loadRunFailed": "パイプライン実行詳細の読み込みに失敗しました。",
+      "loadGlobalFailed": "グローバルパイプラインテンプレートの読み込みに失敗しました。",
+      "importGlobalSuccess": "グローバルテンプレートを現在のプロジェクトにインポートしました。",
+      "importGlobalFailed": "グローバルテンプレートのインポートに失敗しました。",
+      "createRunFailed": "パイプライン実行の開始に失敗しました。",
+      "runStartedAt": "実行開始: {{time}}",
+      "convergence": "収束状況",
+      "convergenceStage": "ステージ",
+      "convergenceScore": "スコア",
+      "highlights": "ハイライト",
+      "blockingIssues": "ブロッカー",
+      "nextActions": "次のアクション",
+      "severity": {
+        "high": "高",
+        "medium": "中",
+        "low": "低",
+        "info": "情報"
+      },
+      "stage": {
+        "bootstrapping": "立ち上げ段階",
+        "executing": "実行段階",
+        "analyzing": "分析段階",
+        "blocked": "ブロック段階",
+        "closedLoop": "クローズドループ完了",
+        "unknown": "不明"
+      },
+      "convergenceItem": {
+        "termDetected": "用語抽出アーティファクトを検出",
+        "alignmentDetected": "書籍間アラインメントアーティファクトを検出",
+        "relationDetected": "関係行列アーティファクトを検出",
+        "reviewDetected": "レビュー・パックアーティファクトを検出",
+        "termIncomplete": "Term workbench 出力が不完全です",
+        "alignmentIncomplete": "書籍間アラインメント出力が不完全です",
+        "relationIncomplete": "関係行列出力が不完全です",
+        "reviewIncomplete": "レビュー・パック出力が不完全です",
+        "missingStepRecords": "ステップ記録が不足: {{value}}",
+        "failedSteps": "失敗ステップ: {{value}}"
+      },
+      "nextActionText": {
+        "waitForCompletion": {
+          "title": "パイプライン完了を待機",
+          "description": "実行はまだ進行中です。すべてのステップが確定するまで実行詳細を継続確認してください。"
+        },
+        "handleFailedSteps": {
+          "title": "失敗ステップの入力を修正して再実行",
+          "description": "失敗ステップの証拠と元データを確認し、失敗ステップから継続実行してください。"
+        },
+        "validateTemplateContract": {
+          "title": "テンプレート-ステップ契約を検証",
+          "description": "実行詳細にテンプレートのステップ記録が不足しています。テンプレート版とマニフェスト整合性を確認してください。"
+        },
+        "completeTermExtraction": {
+          "title": "用語抽出出力を補完",
+          "description": "期待される terms.reviewed が不足しています。ingest/normalize/extract 入力を再確認してください。"
+        },
+        "completeAlignment": {
+          "title": "書籍間アラインメントを補完",
+          "description": "contrast または concept-alignment 出力が不足しています。align/build_concept_tree を継続してください。"
+        },
+        "buildRelationMatrix": {
+          "title": "関係行列を構築",
+          "description": "book-relation-matrix 出力が不足しています。関係行列ステージを実行し依存関係を確認してください。"
+        },
+        "finishReviewPack": {
+          "title": "品質ゲートとレビュー・パックを完了",
+          "description": "review.dashboard または review.ui-payload が不足しています。review_pack/report を実行して閉ループ化してください。"
+        },
+        "startImprovementIteration": {
+          "title": "次の最適化イテレーションを開始",
+          "description": "クローズドループ実行が完了しました。一貫性とコスト改善のため比較実行を開始してください。"
+        }
+      },
+      "stepPreviewOpen": "プレビュー",
+      "stepPreviewClose": "プレビューを閉じる",
+      "stepPreviewExpandAll": "すべてのプレビューを開く",
+      "stepPreviewCollapseAll": "すべてのプレビューを閉じる",
+      "stepPreviewNotebook": "Notebook プレビュー",
+      "stepPreviewConfiguredSummary": "{{total}} 個中 {{count}} 個のプレビューセルを設定済み",
+      "stepPreviewAgent": "エージェント",
+      "stepPreviewDescription": "プロンプト意図",
+      "stepPreviewPrompt": "プロンプト",
+      "stepPreviewScript": "スクリプト",
+      "stepPreviewMetaMode": "メタ",
+      "stepPreviewTextMode": "テキスト",
+      "stepPreviewCodeMode": "コード",
+      "stepPreviewExpandCell": "展開",
+      "stepPreviewCollapseCell": "折りたたむ",
+      "stepPreviewCollapsedHint": "このプレビューセルは折りたたまれています。",
+      "stepPreviewCopy": "コピー",
+      "stepPreviewCopySuccess": "{{section}} の内容をコピーしました。",
+      "stepPreviewCopyFailed": "{{section}} の内容をコピーできませんでした。",
+      "stepPreviewLineCount": "全 {{count}} 行",
+      "stepPreviewNoDescription": "このステップには説明が設定されていません。",
+      "stepPreviewNoPrompt": "このステップにはプロンプトが設定されていません。",
+      "stepPreviewNoScript": "このステップにはスクリプトが設定されていません。",
+      "executeAction": "実行",
+      "focusStep": "ステップに移動",
+      "useInChat": "チャットで使う",
+      "noNextActions": "保留中のアクションはありません",
+      "nextActionReady": "次のアクション用プロンプトを現在のチャット入力欄に準備しました。",
+      "executeActionSuccess": "ステップ {{stepId}} から継続実行を開始しました。",
+      "executeActionFailed": "選択したステップから継続実行できませんでした。",
+      "contract": {
+        "dependsOn": "依存ステップ",
+        "inputs": "入力",
+        "outputs": "出力",
+        "bindings": "入力バインディング",
+        "execution": "実行",
+        "retry": "最大再試行回数"
+      },
+      "event": {
+        "runRestarted": "継続実行を作成しました",
+        "stepCarriedForward": "前回実行のステップを再利用しました",
+        "stepStarted": "ステップ開始",
+        "stepCompleted": "ステップ完了",
+        "stepFailed": "ステップ失敗",
+        "unknown": "イベント"
+      },
+      "status": {
+        "info": "情報",
+        "succeeded": "成功",
+        "running": "実行中",
+        "failed": "失敗",
+        "blocked": "ブロック中",
+        "cancelled": "キャンセル済み",
+        "pending": "待機中"
+      }
     },
     "artifacts": {
       "skill": "スキル",
@@ -1627,6 +1828,12 @@
     "chat": {
       "workspaceLabel": "プロジェクト協作",
       "initializingCollaboration": "プロジェクト協作セッションを準備しています...",
+      "startFailed": "プロジェクトチャットの開始に失敗しました。",
+      "autoAttachFailed": "選択したファイルをチャットに添付できませんでした。",
+      "attachDraftReady": "選択したファイルのコンテキストをチャット入力欄に準備しました。",
+      "implDraftReady": "設計チャット入力欄に実装プロンプトを準備しました。",
+      "validationDraftReady": "実行チャット入力欄に検証プロンプトを準備しました。",
+      "promotionDraftReady": "設計チャット入力欄に昇格ドラフトプロンプトを準備しました。",
       "selectContext": "まずはプロジェクト協作を開始し、ワークフローを固める準備ができたら自動化設計を開いてください。",
       "startCollaboration": "プロジェクト協作を開始",
       "startAutomation": "自動化設計を開く",

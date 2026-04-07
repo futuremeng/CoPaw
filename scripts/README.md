@@ -114,3 +114,32 @@ python scripts/run_tests.py -p
 # Show help
 python scripts/run_tests.py -h
 ```
+
+## Multibook 24h reproducibility
+
+Trigger one project pipeline run and optionally wait until it reaches a terminal status:
+
+```bash
+python scripts/run_multibook_repro.py \
+	--agent-id <agent_id> \
+	--project-id <project_id> \
+	--template-id books-alignment-v1 \
+	--parameters '{"goal":"multibook-24h-repro"}' \
+	--wait
+```
+
+Validate run outputs against the reproducibility checklist:
+
+```bash
+python scripts/verify_multibook_repro.py \
+	--run-detail logs/multibook-run-<run_id>-<timestamp>.json \
+	--project-dir <absolute_project_dir> \
+	--strict-status \
+	--min-depth 8 \
+	--require-pairwise-count 6
+```
+
+Notes:
+
+- If `--run-detail` is not provided, `verify_multibook_repro.py` can fetch details from API via `--agent-id --project-id --run-id`.
+- Set `COPAW_API_TOKEN` when your API requires bearer auth.

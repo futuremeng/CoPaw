@@ -9,6 +9,7 @@ interface ProjectUploadModalProps {
   uploadingFiles: boolean;
   pendingUploads: File[];
   uploadTargetDir: string;
+  uploadHint?: string;
   onChangeUploadTargetDir: (value: string) => void;
   onChangePendingUploads: (updater: (prev: File[]) => File[]) => void;
   onUpload: () => void;
@@ -20,6 +21,7 @@ export default function ProjectUploadModal({
   uploadingFiles,
   pendingUploads,
   uploadTargetDir,
+  uploadHint,
   onChangeUploadTargetDir,
   onChangePendingUploads,
   onUpload,
@@ -46,6 +48,7 @@ export default function ProjectUploadModal({
       okText={t("projects.upload.confirm", "Upload")}
     >
       <div className={styles.uploadModalBody}>
+        {uploadHint ? <div className={styles.itemMeta}>{uploadHint}</div> : null}
         <Input
           value={uploadTargetDir}
           onChange={(event) => onChangeUploadTargetDir(event.target.value)}

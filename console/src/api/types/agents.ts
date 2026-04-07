@@ -226,6 +226,14 @@ export interface ProjectPipelineRunStep {
   id: string;
   name: string;
   kind: string;
+  description: string;
+  inputs: Record<string, unknown>;
+  prompt: string;
+  script: string;
+  outputs: Record<string, unknown>;
+  depends_on: string[];
+  input_bindings: Record<string, string>;
+  retry_policy: Record<string, unknown>;
   status: string;
   started_at: string | null;
   ended_at: string | null;
@@ -260,6 +268,25 @@ export interface ProjectPipelineArtifactRecord {
   created_at: string;
 }
 
+export interface ProjectPipelineNextAction {
+  id: string;
+  title: string;
+  description: string;
+  severity: string;
+  status: string;
+  target_step_id?: string | null;
+  suggested_prompt: string;
+}
+
+export interface ProjectPipelineConvergence {
+  stage: string;
+  score: number;
+  passed_checks: number;
+  total_checks: number;
+  blocking_issues: string[];
+  highlights: string[];
+}
+
 export interface ProjectPipelineRunDetail extends ProjectPipelineRunSummary {
   project_id: string;
   parameters: Record<string, unknown>;
@@ -270,11 +297,18 @@ export interface ProjectPipelineRunDetail extends ProjectPipelineRunSummary {
   source_platform_template_id?: string | null;
   source_platform_template_version?: string | null;
   collaboration_events: ProjectPipelineCollaborationEvent[];
+  convergence: ProjectPipelineConvergence;
+  next_actions: ProjectPipelineNextAction[];
 }
 
 export interface CreateProjectPipelineRunRequest {
   template_id: string;
   parameters?: Record<string, unknown>;
+}
+
+export interface RetryProjectPipelineRunRequest {
+  step_id?: string;
+  note?: string;
 }
 
 export interface AgentsSquareSourceSpec {

@@ -93,6 +93,14 @@ class PipelineRunStep(BaseModel):
     id: str
     name: str
     kind: str
+    description: str = ""
+    inputs: dict[str, Any] = Field(default_factory=dict)
+    prompt: str = ""
+    script: str = ""
+    outputs: dict[str, Any] = Field(default_factory=dict)
+    depends_on: list[str] = Field(default_factory=list)
+    input_bindings: dict[str, str] = Field(default_factory=dict)
+    retry_policy: dict[str, Any] = Field(default_factory=dict)
     status: str
     started_at: str | None = None
     ended_at: str | None = None
@@ -131,6 +139,29 @@ class PipelineCollaborationEvent(BaseModel):
     metrics: dict[str, Any] = Field(default_factory=dict)
 
 
+class PipelineRunNextAction(BaseModel):
+    """Actionable guidance item for user-facing run closure."""
+
+    id: str
+    title: str
+    description: str
+    severity: str = "info"
+    status: str = "pending"
+    target_step_id: str | None = None
+    suggested_prompt: str = ""
+
+
+class PipelineRunConvergence(BaseModel):
+    """Convergence snapshot for one run."""
+
+    stage: str = "bootstrapping"
+    score: int = 0
+    passed_checks: int = 0
+    total_checks: int = 0
+    blocking_issues: list[str] = Field(default_factory=list)
+    highlights: list[str] = Field(default_factory=list)
+
+
 class PipelineRunDetail(PipelineRunSummary):
     """Pipeline run detail."""
 
@@ -145,6 +176,8 @@ class PipelineRunDetail(PipelineRunSummary):
     collaboration_events: list[PipelineCollaborationEvent] = Field(
         default_factory=list,
     )
+    convergence: PipelineRunConvergence = Field(default_factory=PipelineRunConvergence)
+    next_actions: list[PipelineRunNextAction] = Field(default_factory=list)
 
 
 class CreatePipelineRunRequest(BaseModel):
@@ -152,6 +185,13 @@ class CreatePipelineRunRequest(BaseModel):
 
     template_id: str
     parameters: dict[str, Any] = Field(default_factory=dict)
+
+
+class RetryPipelineRunRequest(BaseModel):
+    """Retry or continue one pipeline run from a target step."""
+
+    step_id: str | None = None
+    note: str = ""
 
 
 class PipelineDraftInfo(BaseModel):
@@ -1879,6 +1919,13 @@ def _apply_step_operation(
                 "name": s.name,
                 "kind": s.kind,
                 "description": s.description,
+                "inputs": s.inputs,
+                "prompt": s.prompt,
+                "script": s.script,
+                "outputs": s.outputs,
+                "depends_on": s.depends_on,
+                "input_bindings": s.input_bindings,
+                "retry_policy": s.retry_policy,
             }
             for s in parsed_template.steps
         ],
@@ -2234,6 +2281,200 @@ def _compute_step_outputs(step_id: str, data_files: list[str]) -> tuple[list[str
     return [], {}
 
 
+def _has_artifact_match(paths: list[str], pattern: str) -> bool:
+    return any(fnmatch(path, pattern) for path in paths)
+
+
+def _enrich_run_with_guidance(
+    run: PipelineRunDetail,
+    template: PipelineTemplateInfo,
+) -> None:
+    """Compute convergence and next actions from run state and produced artifacts."""
+    template_step_ids = [step.id for step in template.steps]
+    step_status_by_id = {
+        step.id: _normalize_step_status(step.status)
+        for step in run.steps
+    }
+    missing_steps = [step_id for step_id in template_step_ids if step_id not in step_status_by_id]
+    failed_steps = [
+        step_id for step_id, status in step_status_by_id.items() if status in {"failed", "blocked"}
+    ]
+    unfinished_steps = [
+        step_id
+        for step_id, status in step_status_by_id.items()
+        if status not in {"succeeded", "failed", "blocked", "cancelled"}
+    ]
+    unsucceeded_steps = [
+        step_id for step_id, status in step_status_by_id.items() if status != "succeeded"
+    ]
+
+    artifacts = run.artifacts or []
+    has_term_workbench = _has_artifact_match(artifacts, "data/term-workbench-*/terms.reviewed.json")
+    has_alignment = _has_artifact_match(artifacts, "data/contrast-*.json") and _has_artifact_match(
+        artifacts,
+        "data/concept-trees/*/concept-alignment*.json",
+    )
+    has_relation_matrix = _has_artifact_match(artifacts, "data/book-relation-matrix*.json")
+    has_review_pack = _has_artifact_match(artifacts, "data/review.dashboard*.json") and _has_artifact_match(
+        artifacts,
+        "data/review.ui-payload*.json",
+    )
+
+    checks = [
+        ("steps_covered", not missing_steps),
+        ("steps_succeeded", not unsucceeded_steps),
+        ("term_workbench_ready", has_term_workbench),
+        ("cross_book_alignment_ready", has_alignment),
+        ("relation_matrix_ready", has_relation_matrix),
+        ("review_pack_ready", has_review_pack),
+    ]
+    passed_checks = sum(1 for _, ok in checks if ok)
+    total_checks = len(checks)
+    score = int(round((passed_checks / total_checks) * 100)) if total_checks else 0
+
+    blocking_issues: list[str] = []
+    highlights: list[str] = []
+    if missing_steps:
+        blocking_issues.append(f"Missing step records: {', '.join(missing_steps)}")
+    if failed_steps:
+        blocking_issues.append(f"Failed steps: {', '.join(failed_steps)}")
+    if not has_term_workbench:
+        blocking_issues.append("Term workbench outputs are incomplete")
+    if not has_alignment:
+        blocking_issues.append("Cross-book alignment outputs are incomplete")
+    if not has_relation_matrix:
+        blocking_issues.append("Relation matrix outputs are incomplete")
+    if not has_review_pack:
+        blocking_issues.append("Review pack outputs are incomplete")
+
+    if has_term_workbench:
+        highlights.append("Term extraction artifacts detected")
+    if has_alignment:
+        highlights.append("Cross-book alignment artifacts detected")
+    if has_relation_matrix:
+        highlights.append("Relation matrix artifacts detected")
+    if has_review_pack:
+        highlights.append("Review pack artifacts detected")
+
+    run_status = _normalize_run_status(run.status)
+    if run_status in {"failed", "blocked", "cancelled"}:
+        stage = "blocked"
+    elif run_status in {"running", "pending"}:
+        stage = "executing"
+    elif passed_checks == total_checks:
+        stage = "closed-loop"
+    elif has_term_workbench and has_alignment:
+        stage = "analyzing"
+    else:
+        stage = "bootstrapping"
+
+    next_actions: list[PipelineRunNextAction] = []
+    if run_status in {"running", "pending"}:
+        next_actions.append(
+            PipelineRunNextAction(
+                id="wait_for_completion",
+                title="Wait for pipeline completion",
+                description="The run is still in progress. Keep polling run detail until all steps settle.",
+                severity="info",
+                status="active",
+                suggested_prompt="Continue this run and notify me when all steps are complete.",
+            ),
+        )
+    if failed_steps:
+        next_actions.append(
+            PipelineRunNextAction(
+                id="handle_failed_steps",
+                title="Fix failed step inputs and rerun",
+                description=f"Failed steps: {', '.join(failed_steps)}. Inspect step evidence and source data before rerun.",
+                severity="high",
+                status="pending",
+                target_step_id=failed_steps[0],
+                suggested_prompt="Summarize why this step failed and provide a rerun-ready fix checklist.",
+            ),
+        )
+    if missing_steps:
+        next_actions.append(
+            PipelineRunNextAction(
+                id="validate_template_contract",
+                title="Validate template-step contract",
+                description="Run detail is missing template step records. Verify template revision and run manifest consistency.",
+                severity="high",
+                status="pending",
+                target_step_id=missing_steps[0],
+                suggested_prompt="Check pipeline template and run manifest mismatch, then propose repair actions.",
+            ),
+        )
+    if not has_term_workbench:
+        next_actions.append(
+            PipelineRunNextAction(
+                id="complete_term_extraction",
+                title="Complete term extraction outputs",
+                description="Expected terms.reviewed artifacts are missing. Recheck ingest/normalize/extract inputs.",
+                severity="medium",
+                status="pending",
+                target_step_id="extract",
+                suggested_prompt="Guide me to complete term-workbench reviewed outputs for all books.",
+            ),
+        )
+    if not has_alignment:
+        next_actions.append(
+            PipelineRunNextAction(
+                id="complete_alignment",
+                title="Complete cross-book alignment",
+                description="Contrast or concept-alignment outputs are missing. Continue align/build_concept_tree steps.",
+                severity="medium",
+                status="pending",
+                target_step_id="align",
+                suggested_prompt="Generate missing cross-book alignment outputs and explain data gaps.",
+            ),
+        )
+    if not has_relation_matrix:
+        next_actions.append(
+            PipelineRunNextAction(
+                id="build_relation_matrix",
+                title="Build relation matrix",
+                description="book-relation-matrix outputs are missing. Execute relation matrix stage and verify dependencies.",
+                severity="medium",
+                status="pending",
+                target_step_id="build_relation_matrix",
+                suggested_prompt="Build relation matrix and report pairwise differences for all book pairs.",
+            ),
+        )
+    if not has_review_pack:
+        next_actions.append(
+            PipelineRunNextAction(
+                id="finish_review_pack",
+                title="Finish quality gate and review pack",
+                description="review.dashboard or review.ui-payload outputs are missing. Execute review_pack/report for closure.",
+                severity="high",
+                status="pending",
+                target_step_id="review_pack",
+                suggested_prompt="Run quality gate and output final review package with acceptance summary.",
+            ),
+        )
+    if run_status == "succeeded" and passed_checks == total_checks:
+        next_actions.append(
+            PipelineRunNextAction(
+                id="start_improvement_iteration",
+                title="Start next optimization iteration",
+                description="Closed-loop run completed. Start a comparison run to improve terminology consistency and costs.",
+                severity="info",
+                status="suggested",
+                suggested_prompt="Create a follow-up run plan that improves quality metrics while keeping reproducibility.",
+            ),
+        )
+
+    run.convergence = PipelineRunConvergence(
+        stage=stage,
+        score=score,
+        passed_checks=passed_checks,
+        total_checks=total_checks,
+        blocking_issues=blocking_issues[:20],
+        highlights=highlights[:20],
+    )
+    run.next_actions = next_actions[:12]
+
+
 def _apply_real_step_results(project_dir: Path, step: PipelineRunStep) -> list[str]:
     data_files = _list_project_data_files(project_dir)
     outputs, metrics = _compute_step_outputs(step.id, data_files)
@@ -2254,6 +2495,7 @@ def _apply_real_step_results(project_dir: Path, step: PipelineRunStep) -> list[s
 
 
 def _persist_project_pipeline_run(project_dir: Path, run: PipelineRunDetail, template: PipelineTemplateInfo) -> None:
+    _enrich_run_with_guidance(run, template)
     _, _, runs_dir = _project_pipeline_dirs(project_dir)
     run_dir, manifest_path, _ = _run_dir_paths(runs_dir, run.id)
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -2306,6 +2548,8 @@ def _persist_project_pipeline_run(project_dir: Path, run: PipelineRunDetail, tem
             item.model_dump()
             for item in run.collaboration_events
         ],
+        "convergence": run.convergence.model_dump(),
+        "next_actions": [item.model_dump() for item in run.next_actions],
     }
 
     manifest_path.write_text(
@@ -2425,6 +2669,19 @@ def _execute_project_pipeline_run(
         return run
 
     for step in run.steps:
+        if _normalize_step_status(step.status) == "succeeded" and bool(step.metrics.get("carried_forward")):
+            _append_collab_event(
+                run,
+                "step.carried_forward",
+                step_id=step.id,
+                role=_infer_collab_role(step.kind),
+                status="succeeded",
+                message=f"Step {step.id} reused from previous run state",
+                evidence=step.evidence[:5],
+                metrics={"carried_forward": True},
+            )
+            continue
+
         started_at = _pipeline_now_iso()
         step_role = _infer_collab_role(step.kind)
         step.status = "running"
@@ -2574,14 +2831,43 @@ def _load_pipeline_run_from_manifest(project_dir: Path, run_id: str) -> Pipeline
                     if source:
                         evidence.append(source)
 
-        step_name = next((item.name for item in template.steps if item.id == step_id), step_id)
-        step_kind = next((item.kind for item in template.steps if item.id == step_id), "task")
+        template_step = next((item for item in template.steps if item.id == step_id), None)
+        step_name = template_step.name if template_step else step_id
+        step_kind = template_step.kind if template_step else "task"
 
         steps.append(
             PipelineRunStep(
                 id=step_id,
                 name=step_name,
                 kind=step_kind,
+                description=str(node.get("description") or (template_step.description if template_step else "")).strip(),
+                inputs=(
+                    cast(dict[str, Any], node.get("contract_inputs"))
+                    if isinstance(node.get("contract_inputs"), dict)
+                    else (dict(template_step.inputs) if template_step else {})
+                ),
+                prompt=str(node.get("contract_prompt") or (template_step.prompt if template_step else "")).strip(),
+                script=str(node.get("contract_script") or (template_step.script if template_step else "")).strip(),
+                outputs=(
+                    cast(dict[str, Any], node.get("contract_outputs"))
+                    if isinstance(node.get("contract_outputs"), dict)
+                    else (dict(template_step.outputs) if template_step else {})
+                ),
+                depends_on=(
+                    [str(item).strip() for item in cast(list[Any], node.get("contract_depends_on")) if str(item).strip()]
+                    if isinstance(node.get("contract_depends_on"), list)
+                    else (template_step.depends_on[:] if template_step else [])
+                ),
+                input_bindings=(
+                    {str(key): str(value) for key, value in cast(dict[str, Any], node.get("contract_input_bindings")).items()}
+                    if isinstance(node.get("contract_input_bindings"), dict)
+                    else (dict(template_step.input_bindings) if template_step else {})
+                ),
+                retry_policy=(
+                    cast(dict[str, Any], node.get("contract_retry_policy"))
+                    if isinstance(node.get("contract_retry_policy"), dict)
+                    else (dict(template_step.retry_policy) if template_step else {})
+                ),
                 status=_normalize_step_status(str(node.get("status") or "pending")),
                 started_at=node.get("started_at"),
                 ended_at=node.get("ended_at"),
@@ -2625,7 +2911,14 @@ def _load_pipeline_run_from_manifest(project_dir: Path, run_id: str) -> Pipeline
             for item in (raw.get("collaboration_events") or [])
             if isinstance(item, dict)
         ],
+        convergence=PipelineRunConvergence.model_validate(raw.get("convergence") or {}),
+        next_actions=[
+            PipelineRunNextAction.model_validate(item)
+            for item in (raw.get("next_actions") or [])
+            if isinstance(item, dict)
+        ],
     )
+    _enrich_run_with_guidance(run_detail, template)
     return run_detail
 
 
@@ -2648,6 +2941,14 @@ def _load_legacy_pipeline_run(project_dir: Path, run_id: str) -> PipelineRunDeta
             id=step.id,
             name=step.name,
             kind=step.kind,
+            description=step.description,
+            inputs=dict(step.inputs),
+            prompt=step.prompt,
+            script=step.script,
+            outputs=dict(step.outputs),
+            depends_on=step.depends_on[:],
+            input_bindings=dict(step.input_bindings),
+            retry_policy=dict(step.retry_policy),
             status=_normalize_step_status(step.status),
             started_at=step.started_at,
             ended_at=step.ended_at,
@@ -2658,6 +2959,15 @@ def _load_legacy_pipeline_run(project_dir: Path, run_id: str) -> PipelineRunDeta
     ]
     if not hasattr(run, "artifact_records") or run.artifact_records is None:
         run.artifact_records = []
+    if not hasattr(run, "convergence") or run.convergence is None:
+        run.convergence = PipelineRunConvergence()
+    if not hasattr(run, "next_actions") or run.next_actions is None:
+        run.next_actions = []
+    try:
+        template = _resolve_pipeline_template(project_dir, run.template_id)
+        _enrich_run_with_guidance(run, template)
+    except Exception:
+        pass
     return run
 
 
@@ -2747,6 +3057,14 @@ def _create_project_pipeline_run(
                 id=step.id,
                 name=step.name,
                 kind=step.kind,
+                description=step.description,
+                inputs=dict(step.inputs),
+                prompt=step.prompt,
+                script=step.script,
+                outputs=dict(step.outputs),
+                depends_on=step.depends_on[:],
+                input_bindings=dict(step.input_bindings),
+                retry_policy=dict(step.retry_policy),
                 status="running" if is_first else "pending",
                 started_at=now if is_first else None,
                 ended_at=None,
@@ -2777,5 +3095,155 @@ def _create_project_pipeline_run(
         focus_chat_id=None,
         focus_type="project_run",
         focus_path=f"projects/{project_id}",
+    )
+    return _execute_project_pipeline_run(project_dir, run, template)
+
+
+def _build_continuation_run(
+    project_id: str,
+    project_dir: Path,
+    source_run: PipelineRunDetail,
+    template: PipelineTemplateInfo,
+    target_step_id: str,
+    note: str = "",
+) -> PipelineRunDetail:
+    template_doc = _load_project_template_doc(project_dir, template.id)
+    step_ids = [step.id for step in template.steps]
+    if target_step_id not in step_ids:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Target step '{target_step_id}' not found in template '{template.id}'",
+        )
+
+    now = _pipeline_now_iso()
+    run_id = f"run-{generate_short_agent_id()}"
+    target_index = step_ids.index(target_step_id)
+    source_steps = {step.id: step for step in source_run.steps}
+
+    steps: list[PipelineRunStep] = []
+    for idx, template_step in enumerate(template.steps):
+        source_step = source_steps.get(template_step.id)
+        if idx < target_index:
+            steps.append(
+                PipelineRunStep(
+                    id=template_step.id,
+                    name=template_step.name,
+                    kind=template_step.kind,
+                    description=template_step.description,
+                    inputs=dict(template_step.inputs),
+                    prompt=template_step.prompt,
+                    script=template_step.script,
+                    outputs=dict(template_step.outputs),
+                    depends_on=template_step.depends_on[:],
+                    input_bindings=dict(template_step.input_bindings),
+                    retry_policy=dict(template_step.retry_policy),
+                    status="succeeded",
+                    started_at=(source_step.started_at if source_step else source_run.created_at),
+                    ended_at=(source_step.ended_at if source_step and source_step.ended_at else now),
+                    metrics={
+                        **(source_step.metrics if source_step else {}),
+                        "carried_forward": True,
+                        "source_run_id": source_run.id,
+                    },
+                    evidence=(source_step.evidence[:] if source_step and source_step.evidence else [f"continued-from:{source_run.id}"]),
+                ),
+            )
+            continue
+
+        steps.append(
+            PipelineRunStep(
+                id=template_step.id,
+                name=template_step.name,
+                kind=template_step.kind,
+                description=template_step.description,
+                inputs=dict(template_step.inputs),
+                prompt=template_step.prompt,
+                script=template_step.script,
+                outputs=dict(template_step.outputs),
+                depends_on=template_step.depends_on[:],
+                input_bindings=dict(template_step.input_bindings),
+                retry_policy=dict(template_step.retry_policy),
+                status="running" if idx == target_index else "pending",
+                started_at=now if idx == target_index else None,
+                ended_at=None,
+                metrics={
+                    "continued_from_run_id": source_run.id,
+                    "continued_from_step_id": target_step_id,
+                },
+                evidence=[f"continued-from:{source_run.id}"] if idx == target_index else [],
+            ),
+        )
+
+    parameters = dict(source_run.parameters or {})
+    parameters["source_run_id"] = source_run.id
+    parameters["continued_from_step_id"] = target_step_id
+    if note.strip():
+        parameters["continuation_note"] = note.strip()
+
+    run = PipelineRunDetail(
+        id=run_id,
+        project_id=project_id,
+        template_id=template.id,
+        status="running",
+        created_at=now,
+        updated_at=now,
+        parameters=parameters,
+        steps=steps,
+        artifacts=list(dict.fromkeys(source_run.artifacts or _sample_project_artifacts(project_dir)))[:200],
+        flow_version=(template.version or source_run.flow_version or "0.1.0"),
+        source_platform_template_id=(
+            str(template_doc.get("source_platform_template_id") or "").strip()
+            or source_run.source_platform_template_id
+            or None
+        ),
+        source_platform_template_version=(
+            str(template_doc.get("source_platform_template_version") or "").strip()
+            or source_run.source_platform_template_version
+            or None
+        ),
+        collaboration_events=[],
+        focus_chat_id=None,
+        focus_type="project_run",
+        focus_path=f"projects/{project_id}",
+    )
+    _append_collab_event(
+        run,
+        "run.restarted",
+        step_id=target_step_id,
+        status="running",
+        message=f"Continuation run created from {source_run.id} at step {target_step_id}",
+        metrics={"source_run_id": source_run.id},
+    )
+    return run
+
+
+def _retry_project_pipeline_run(
+    project_id: str,
+    project_dir: Path,
+    source_run_id: str,
+    body: RetryPipelineRunRequest,
+) -> PipelineRunDetail:
+    source_run = _load_project_pipeline_run(project_dir, source_run_id)
+    template = _resolve_pipeline_template(project_dir, source_run.template_id)
+    target_step_id = (body.step_id or "").strip() or next(
+        (
+            step.id
+            for step in source_run.steps
+            if _normalize_step_status(step.status) in {"failed", "blocked", "pending", "running", "cancelled"}
+        ),
+        "",
+    )
+    if not target_step_id:
+        target_step_id = template.steps[-1].id if template.steps else ""
+    if not target_step_id:
+        raise HTTPException(status_code=400, detail="Pipeline template has no steps to continue")
+
+    run = _build_continuation_run(
+        project_id,
+        project_dir,
+        source_run,
+        template,
+        target_step_id,
+        note=body.note,
     )
     return _execute_project_pipeline_run(project_dir, run, template)

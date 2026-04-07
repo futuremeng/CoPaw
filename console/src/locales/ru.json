@@ -1572,10 +1572,211 @@
     "workspaceSummaryFiles": "Файлы рабочего пространства",
     "detailTitle": "Рабочее пространство проекта",
     "detailDescription": "Продвигайте проект через цели, материалы, совместную работу и результаты. Автоматизация остаётся доступной как продвинутая возможность.",
+    "backToList": "Вернуться к списку проектов",
+    "workspacePath": "Путь рабочего пространства",
+    "noAgent": "Сейчас нет доступного агента.",
+    "noProjects": "В этом рабочем пространстве пока нет проектов.",
+    "notFound": "Проект не найден в текущем рабочем пространстве",
+    "loadFailed": "Не удалось загрузить проекты для текущего агента.",
+    "loadFilesFailed": "Не удалось загрузить файлы этого проекта.",
+    "previewLoadFailed": "Не удалось показать предпросмотр файла. Возможно, это бинарный файл или нет доступа.",
+    "leaveConfirm": "Есть несохранённый контекст проекта. Покинуть страницу?",
+    "deleteSuccess": "Проект удалён: {{name}}",
+    "deleteFailed": "Не удалось удалить проект.",
+    "deleteConfirmTitleWithName": "Удалить проект {{name}}?",
+    "deleteConfirmDescription": "Это действие необратимо: {{name}} и все файлы проекта будут удалены навсегда.",
+    "path": {
+      "workspace": "Рабочее пространство",
+      "project": "Проект",
+      "projectSpace": "Пространство проекта"
+    },
+    "upload": {
+      "button": "Загрузить файлы",
+      "batchButton": "Загрузить пакет текущего запуска",
+      "batchHint": "Текущая пакетная директория: original/batches/{{runId}} (для текущего run)",
+      "defaultHint": "Запуск не выбран. Директория пакета по умолчанию: original/batches/manual",
+      "batchBehaviorHint": "Если пакетные файлы не загружены, по умолчанию запуск обработает все исходные файлы проекта."
+    },
     "automation": {
       "title": "Автоматизация",
       "flows": "Потоки",
       "guidance": "Подсказки по автоматизации"
+    },
+    "automationDrawer": {
+      "title": "Автоматизация",
+      "open": "Открыть"
+    },
+    "automationSummary": {
+      "loading": "Загрузка статуса автоматизации...",
+      "noTemplate": "Шаблон ещё не выбран",
+      "noRun": "Запусков пока нет, начните, когда будете готовы",
+      "latest": "Последний запуск: {{runId}} ({{status}})",
+      "counts": "Шаблоны: {{templateCount}} | Запуски: {{runCount}}"
+    },
+    "metrics": "Метрики",
+    "evidence": "Доказательства",
+    "pipeline": {
+      "noRun": "Запусков нет",
+      "timeline": "Таймлайн",
+      "step": "Шаг",
+      "role": "Роль",
+      "evidenceBrief": "Доказательства",
+      "noTimeline": "События таймлайна недоступны",
+      "noEvidence": "Доказательств нет",
+      "inputScopeSummary": "Область входных данных",
+      "inputScope": "Режим области входа",
+      "inputScopePolicy": "Политика области входа",
+      "inputScopeValue": {
+        "allOriginal": "Обрабатывать все исходные файлы проекта",
+        "unknown": "Неизвестно"
+      },
+      "inputScopePolicyValue": {
+        "defaultIfNoBatchUpload": "По умолчанию обрабатывать все исходные файлы при отсутствии пакетной загрузки",
+        "unknown": "Неизвестно"
+      },
+      "templateStep": "шаблон",
+      "template": "Выберите шаблон",
+      "run": "Запустить",
+      "steps": "Шаги",
+      "progress": "Прогресс",
+      "noSteps": "Нет доступных шагов",
+      "expandToViewSteps": "Разверните выбранный запуск, чтобы увидеть шаги",
+      "importGlobalTitle": "Импорт глобального пайплайна",
+      "importGlobal": "Импортировать глобальный",
+      "noGlobalTemplates": "Глобальные шаблоны недоступны",
+      "noRunsForFlow": "Для выбранного потока пока нет запусков",
+      "nextImplementation": "Подготовить подсказку для следующей реализации",
+      "nextValidation": "Подготовить подсказку для валидации",
+      "promoteDraft": "Подготовить подсказку для повышения в шаблон",
+      "validationNeedRun": "Перед подготовкой валидационной подсказки запустите или выберите запуск.",
+      "loadFailed": "Не удалось загрузить шаблоны пайплайна и запуски.",
+      "loadRunFailed": "Не удалось загрузить детали запуска пайплайна.",
+      "loadGlobalFailed": "Не удалось загрузить глобальные шаблоны пайплайна.",
+      "importGlobalSuccess": "Глобальный шаблон импортирован в текущий проект.",
+      "importGlobalFailed": "Не удалось импортировать глобальный шаблон.",
+      "createRunFailed": "Не удалось запустить пайплайн.",
+      "runStartedAt": "Запуск: {{time}}",
+      "convergence": "Сходимость",
+      "convergenceStage": "Этап",
+      "convergenceScore": "Оценка",
+      "highlights": "Ключевые моменты",
+      "blockingIssues": "Блокирующие проблемы",
+      "nextActions": "Следующие действия",
+      "severity": {
+        "high": "Высокий",
+        "medium": "Средний",
+        "low": "Низкий",
+        "info": "Инфо"
+      },
+      "stage": {
+        "bootstrapping": "Начальный этап",
+        "executing": "Этап выполнения",
+        "analyzing": "Этап анализа",
+        "blocked": "Этап блокировки",
+        "closedLoop": "Замкнутый цикл завершён",
+        "unknown": "Неизвестно"
+      },
+      "convergenceItem": {
+        "termDetected": "Обнаружены артефакты извлечения терминов",
+        "alignmentDetected": "Обнаружены артефакты межкнижного выравнивания",
+        "relationDetected": "Обнаружены артефакты матрицы связей",
+        "reviewDetected": "Обнаружены артефакты review-пакета",
+        "termIncomplete": "Выходы Term workbench неполные",
+        "alignmentIncomplete": "Выходы межкнижного выравнивания неполные",
+        "relationIncomplete": "Выходы матрицы связей неполные",
+        "reviewIncomplete": "Выходы review-пакета неполные",
+        "missingStepRecords": "Отсутствуют записи шагов: {{value}}",
+        "failedSteps": "Сбойные шаги: {{value}}"
+      },
+      "nextActionText": {
+        "waitForCompletion": {
+          "title": "Дождаться завершения пайплайна",
+          "description": "Запуск всё ещё выполняется. Продолжайте проверять детали запуска, пока все шаги не стабилизируются."
+        },
+        "handleFailedSteps": {
+          "title": "Исправить входы сбойных шагов и перезапустить",
+          "description": "Проверьте доказательства сбойных шагов и исходные данные, затем продолжите с проблемного шага."
+        },
+        "validateTemplateContract": {
+          "title": "Проверить контракт шаблон-шаг",
+          "description": "В деталях запуска отсутствуют записи шагов шаблона. Проверьте версию шаблона и согласованность манифеста запуска."
+        },
+        "completeTermExtraction": {
+          "title": "Завершить выходы извлечения терминов",
+          "description": "Отсутствуют ожидаемые артефакты terms.reviewed. Проверьте входы ingest/normalize/extract."
+        },
+        "completeAlignment": {
+          "title": "Завершить межкнижное выравнивание",
+          "description": "Отсутствуют выходы contrast или concept-alignment. Продолжите шаги align/build_concept_tree."
+        },
+        "buildRelationMatrix": {
+          "title": "Построить матрицу связей",
+          "description": "Отсутствуют выходы book-relation-matrix. Выполните этап матрицы связей и проверьте зависимости."
+        },
+        "finishReviewPack": {
+          "title": "Завершить quality gate и review-пакет",
+          "description": "Отсутствуют review.dashboard или review.ui-payload. Выполните review_pack/report для замыкания цикла."
+        },
+        "startImprovementIteration": {
+          "title": "Запустить следующую итерацию оптимизации",
+          "description": "Запуск с замкнутым циклом завершён. Начните сравнительный запуск для улучшения согласованности и стоимости."
+        }
+      },
+      "stepPreviewOpen": "Предпросмотр",
+      "stepPreviewClose": "Скрыть предпросмотр",
+      "stepPreviewExpandAll": "Открыть все предпросмотры",
+      "stepPreviewCollapseAll": "Закрыть все предпросмотры",
+      "stepPreviewNotebook": "Notebook-предпросмотр",
+      "stepPreviewConfiguredSummary": "Настроено {{count}} из {{total}} ячеек предпросмотра",
+      "stepPreviewAgent": "Агент",
+      "stepPreviewDescription": "Замысел промпта",
+      "stepPreviewPrompt": "Промпт",
+      "stepPreviewScript": "Скрипт",
+      "stepPreviewMetaMode": "мета",
+      "stepPreviewTextMode": "текст",
+      "stepPreviewCodeMode": "код",
+      "stepPreviewExpandCell": "Развернуть",
+      "stepPreviewCollapseCell": "Свернуть",
+      "stepPreviewCollapsedHint": "Эта ячейка предпросмотра свернута.",
+      "stepPreviewCopy": "Копировать",
+      "stepPreviewCopySuccess": "Содержимое {{section}} скопировано.",
+      "stepPreviewCopyFailed": "Не удалось скопировать содержимое {{section}}.",
+      "stepPreviewLineCount": "Строк: {{count}}",
+      "stepPreviewNoDescription": "Для этого шага не настроено описание.",
+      "stepPreviewNoPrompt": "Для этого шага не настроен промпт.",
+      "stepPreviewNoScript": "Для этого шага не настроен скрипт.",
+      "executeAction": "Выполнить",
+      "focusStep": "Перейти к шагу",
+      "useInChat": "Использовать в чате",
+      "noNextActions": "Нет ожидающих действий",
+      "nextActionReady": "Промпт следующего действия добавлен в текущее поле ввода чата.",
+      "executeActionSuccess": "Продолжение запуска начато с шага {{stepId}}.",
+      "executeActionFailed": "Не удалось продолжить запуск с выбранного шага.",
+      "contract": {
+        "dependsOn": "Зависит от",
+        "inputs": "Входы",
+        "outputs": "Выходы",
+        "bindings": "Привязки входов",
+        "execution": "Выполнение",
+        "retry": "Макс. число повторов"
+      },
+      "event": {
+        "runRestarted": "Создано продолжение запуска",
+        "stepCarriedForward": "Шаг переиспользован из предыдущего запуска",
+        "stepStarted": "Шаг начат",
+        "stepCompleted": "Шаг завершён",
+        "stepFailed": "Шаг завершился ошибкой",
+        "unknown": "Событие"
+      },
+      "status": {
+        "info": "Инфо",
+        "succeeded": "Успешно",
+        "running": "Выполняется",
+        "failed": "Ошибка",
+        "blocked": "Заблокировано",
+        "cancelled": "Отменено",
+        "pending": "Ожидает"
+      }
     },
     "artifacts": {
       "skill": "Навыки",
@@ -1627,6 +1828,12 @@
     "chat": {
       "workspaceLabel": "Пространство проекта",
       "initializingCollaboration": "Подготавливаем сессию совместной работы по проекту...",
+      "startFailed": "Не удалось запустить чат проекта.",
+      "autoAttachFailed": "Не удалось прикрепить выбранный файл к чату.",
+      "attachDraftReady": "Контекст выбранных файлов подготовлен во входном поле чата.",
+      "implDraftReady": "Подсказка для реализации подготовлена во входе чата дизайна.",
+      "validationDraftReady": "Подсказка для валидации подготовлена во входе чата запуска.",
+      "promotionDraftReady": "Черновик подсказки повышения подготовлен во входе чата дизайна.",
       "selectContext": "Сначала начните совместную работу по проекту. Открывайте проектирование автоматизации только когда будете готовы формализовать процесс.",
       "startCollaboration": "Начать совместную работу",
       "startAutomation": "Открыть проектирование автоматизации",
