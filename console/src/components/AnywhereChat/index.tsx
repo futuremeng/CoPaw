@@ -1044,9 +1044,9 @@ export default function AnywhereChat({
     }
     try {
       await copyText(payload);
-      message.success(t("common.copied", "Copied"));
+      message.success(t("common.copiedText", "Text copied"));
     } catch {
-      message.error(t("common.copyFailed", "Copy failed"));
+      message.error(t("common.copyTextFailed", "Failed to copy text"));
     }
   }, [t]);
 
@@ -1059,9 +1059,9 @@ export default function AnywhereChat({
     }
     try {
       await copyText(payload);
-      message.success(t("common.copied", "Copied"));
+      message.success(t("common.copiedMarkdown", "Markdown copied"));
     } catch {
-      message.error(t("common.copyFailed", "Copy failed"));
+      message.error(t("common.copyMarkdownFailed", "Failed to copy Markdown"));
     }
   }, [t]);
 
