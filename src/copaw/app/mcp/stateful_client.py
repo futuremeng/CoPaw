@@ -145,11 +145,14 @@ class StdIOStatefulClient(StatefulClientBase):
             )
 
         self.name = name
+        merged_env = dict(os.environ)
+        if env:
+            merged_env.update(env)
         resolved_command = _resolve_stdio_command(command)
         self.server_params = StdioServerParameters(
             command=resolved_command,
             args=args or [],
-            env=env,
+            env=merged_env,
             cwd=cwd,
             encoding=encoding,
             encoding_error_handler=encoding_error_handler,
