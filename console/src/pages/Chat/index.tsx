@@ -1808,7 +1808,105 @@ export default function ChatPage() {
           if (!continueResponse.ok || !continueResponse.body) {
             return;
           }
-          persistStreamSession(requestBody.session_id, continueResponse.body);
+
+          // Drive the continuation stream into the live chat UI directly,
+          // the same way reconnectRunningSession does — persistStreamSession
+          // only saves to storage and never calls chatRef.current?.messages.updateMessage,
+          // so the user would see the toast but no actual output.
+          const acSessionId = requestBody.session_id;
+          const acInitialMessages = cloneRuntimeMessages(
+            (chatRef.current?.messages.getMessages() as RuntimeUiMessage[]) || [],
+          );
+          const acAssistantMessageId = `ac-${acSessionId}-${Date.now()}`;
+          const acResponseBuilder = new AgentScopeRuntimeResponseBuilder({
+            id: "",
+            status: AgentScopeRuntimeRunStatus.Created,
+            created_at: 0,
+          });
+
+          setChatStatus("running");
+          runtimeLoadingBridgeRef.current?.setLoading?.(true);
+
+          let acCachedMessages = acInitialMessages;
+          let acReachedTerminal = false;
+
+          try {
+            for await (const chunk of Stream({ readableStream: continueResponse.body })) {
+              let acChunkData: unknown;
+              try {
+                acChunkData = JSON.parse(chunk.data);
+              } catch {
+                continue;
+              }
+
+              const acResponseData = acResponseBuilder.handle(
+                acChunkData as never,
+              ) as StreamResponseData;
+              const acRenderable = materializeThinkingOnlyFallback(acResponseData);
+              const acIsFinal = isFinalResponseStatus(acResponseData.status);
+
+              const acExistingMsg = acCachedMessages.find(
+                (m) => m.id === acAssistantMessageId,
+              );
+              const acPrevData = getResponseCardData(acExistingMsg);
+
+              let acNextData: StreamResponseData | null = null;
+              if (hasRenderableOutput(acRenderable)) {
+                acNextData = cloneValue(acRenderable);
+              } else if (acIsFinal && acPrevData) {
+                acNextData = {
+                  ...acPrevData,
+                  status: acResponseData.status ?? acPrevData.status,
+                };
+              }
+
+              if (!acNextData) {
+                continue;
+              }
+
+              const acAssistantMsg: RuntimeUiMessage = {
+                ...(acExistingMsg || { id: acAssistantMessageId, role: "assistant" }),
+                id: acAssistantMessageId,
+                role: "assistant",
+                cards: [
+                  {
+                    code: "AgentScopeRuntimeResponseCard",
+                    data: acNextData,
+                  },
+                ],
+                msgStatus: acIsFinal ? "finished" : "generating",
+              };
+
+              const acMsgIdx = acCachedMessages.findIndex(
+                (m) => m.id === acAssistantMessageId,
+              );
+              acCachedMessages =
+                acMsgIdx >= 0
+                  ? [
+                      ...acCachedMessages.slice(0, acMsgIdx),
+                      acAssistantMsg,
+                      ...acCachedMessages.slice(acMsgIdx + 1),
+                    ]
+                  : [...acCachedMessages, acAssistantMsg];
+
+              if (chatIdRef.current === acSessionId) {
+                chatRef.current?.messages.updateMessage(cloneValue(acAssistantMsg));
+              }
+
+              await persistSessionMessages(acSessionId, acCachedMessages);
+
+              if (acIsFinal) {
+                acReachedTerminal = true;
+                setChatStatus("idle");
+                runtimeLoadingBridgeRef.current?.setLoading?.(false);
+              }
+            }
+          } finally {
+            if (!acReachedTerminal) {
+              setChatStatus("idle");
+              runtimeLoadingBridgeRef.current?.setLoading?.(false);
+            }
+          }
         } finally {
           autoContinueInFlightRef.current[requestBody.session_id] = false;
         }
@@ -1820,7 +1918,7 @@ export default function ChatPage() {
         headers: response.headers,
       });
     },
-    [message, persistStreamSession, selectedAgent, setChatStatus, setReconnectStreaming, t],
+    [message, persistSessionMessages, persistStreamSession, selectedAgent, setChatStatus, setReconnectStreaming, t],
   );
 
   const handleFileUpload = useCallback(
