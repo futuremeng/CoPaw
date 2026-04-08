@@ -3,6 +3,10 @@ import { chatApi } from "../../api/modules/chat";
 import sessionApi from "../../pages/Chat/sessionApi";
 import type { ChatHistory, ChatSpec, Message } from "../../api/types";
 
+const CHAT_HISTORY_PAGE_SIZE = 100;
+const RUNNING_EMPTY_HISTORY_RETRY_COUNT = 20;
+const RUNNING_EMPTY_HISTORY_RETRY_DELAY_MS = 500;
+
 type StableMessageIdentity = {
   id?: unknown;
   message_id?: unknown;
@@ -154,6 +158,65 @@ export function removeLastVisibleUserMessage(
   };
 }
 
+async function loadPagedChatHistory(chatId: string): Promise<ChatHistory> {
+  const fetchAllPages = async (): Promise<ChatHistory> => {
+    const allMessages: Message[] = [];
+    let offset = 0;
+    let latestStatus: "idle" | "running" = "idle";
+    let leafHistory: ChatHistory | null = null;
+
+    while (true) {
+      const history = await chatApi.getChat(chatId, {
+        offset,
+        limit: CHAT_HISTORY_PAGE_SIZE,
+      });
+      leafHistory = history;
+      latestStatus = history.status ?? latestStatus;
+
+      const pageMessages = Array.isArray(history.messages) ? history.messages : [];
+      allMessages.push(...pageMessages);
+
+      const hasMoreByFlag = history.has_more === true;
+      const hasMoreByTotal =
+        typeof history.total === "number"
+          ? offset + pageMessages.length < history.total
+          : false;
+      const hasMore = hasMoreByFlag || hasMoreByTotal;
+
+      if (!hasMore || pageMessages.length === 0) {
+        break;
+      }
+
+      offset += pageMessages.length;
+    }
+
+    return {
+      ...(leafHistory || { messages: [] }),
+      messages: allMessages,
+      status: latestStatus,
+      total: allMessages.length,
+      has_more: false,
+    };
+  };
+
+  let history = await fetchAllPages();
+
+  for (
+    let i = 0;
+    i < RUNNING_EMPTY_HISTORY_RETRY_COUNT
+      && history.status === "running"
+      && history.messages.length === 0;
+    i += 1
+  ) {
+    await new Promise<void>((resolve) => {
+      window.setTimeout(resolve, RUNNING_EMPTY_HISTORY_RETRY_DELAY_MS);
+    });
+    history = await fetchAllPages();
+  }
+
+  return history;
+}
+
 export async function loadMergedRawChatHistory(sessionId: string): Promise<ChatHistory | null> {
   const chats = await chatApi.listChats({ user_id: "default", channel: "console" });
   const lineageIds = collectSessionLineageIds(chats, sessionId);
@@ -161,7 +224,7 @@ export async function loadMergedRawChatHistory(sessionId: string): Promise<ChatH
 
   for (const lineageId of lineageIds.length > 0 ? lineageIds : [sessionId]) {
     try {
-      const history = await chatApi.getChat(lineageId, { limit: 100 });
+      const history = await loadPagedChatHistory(lineageId);
       histories.push(history);
     } catch {
       // Skip missing segments; continue merging the remaining chain.

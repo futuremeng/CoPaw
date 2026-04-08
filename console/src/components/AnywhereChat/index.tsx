@@ -314,6 +314,19 @@ function getStreamingAssistantMessageId(messages: RuntimeUiMessage[]): string | 
   );
 }
 
+function hasVisibleGeneratingAssistantMessage(message: RuntimeUiMessage): boolean {
+  if (message.role !== "assistant" || message.msgStatus !== "generating") {
+    return false;
+  }
+
+  const responseData = getResponseCardData(message);
+  if (!responseData) {
+    return false;
+  }
+
+  return hasRenderableOutput(responseData) || extractAssistantText(responseData).trim().length > 0;
+}
+
 function sanitizeStreamEventPayload(rawData: string): string {
   if (!rawData || rawData === "[DONE]") {
     return rawData;
@@ -1437,15 +1450,15 @@ export default function AnywhereChat({
 
         const status = (session as { status?: string } | null)?.status;
         const uiMessages =
-          (chatRef.current?.messages.getMessages() as Array<{ msgStatus?: string }>) || [];
-        const hasUiLiveMessage = uiMessages.some(
-          (message) => message.msgStatus === "generating",
+          (chatRef.current?.messages.getMessages() as RuntimeUiMessage[]) || [];
+        const hasVisibleUiLiveMessage = uiMessages.some(
+          hasVisibleGeneratingAssistantMessage,
         );
 
         if (status === "running") {
           if (
             !isChatStreaming &&
-            !hasUiLiveMessage &&
+            !hasVisibleUiLiveMessage &&
             reconnectAttemptedSessionIdRef.current !== sessionId
           ) {
             const submit = chatRef.current?.input?.submit;
