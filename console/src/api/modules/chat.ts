@@ -6,6 +6,7 @@ import type {
   ChatHistory,
   ChatRuntimeStatus,
   ChatDeleteResponse,
+  ChatTailUserDeleteRequest,
   ChatTailUserDeleteResponse,
   ChatUpdateRequest,
   Session,
@@ -190,11 +191,15 @@ export const chatApi = {
       method: "DELETE",
     }),
 
-  deleteTailUserMessage: (chatId: string) =>
+  deleteTailUserMessage: (
+    chatId: string,
+    payload?: ChatTailUserDeleteRequest,
+  ) =>
     request<ChatTailUserDeleteResponse>(
       `/chats/${encodeURIComponent(chatId)}/tail-user/delete`,
       {
         method: "POST",
+        body: JSON.stringify(payload || {}),
       },
     ),
 

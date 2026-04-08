@@ -71,5 +71,9 @@ export interface ChatTailUserDeleteResponse {
   removed_count: number;
 }
 
+export interface ChatTailUserDeleteRequest {
+  message_id?: string;
+}
+
 // Legacy Session type alias for backward compatibility
 export type Session = ChatSpec;

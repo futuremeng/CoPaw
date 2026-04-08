@@ -19,6 +19,7 @@ from .models import (
     ChatSpec,
     ChatUpdate,
     ChatHistory,
+    ChatTailUserDeleteRequest,
     ChatTailUserDeleteResponse,
 )
 from .utils import agentscope_msg_to_message
@@ -147,6 +148,31 @@ def _extract_text_from_content(content: Any) -> str:
 
 def _is_user_memory_message(message_dict: dict[str, Any]) -> bool:
     return str(message_dict.get("role") or "").strip().lower() == "user"
+
+
+async def _load_visible_messages_for_chat(
+    chat_spec: ChatSpec,
+    session: SafeJSONSession,
+) -> tuple[dict[str, Any], list[Message]]:
+    state = await session.get_session_state_dict(
+        chat_spec.session_id,
+        chat_spec.user_id,
+    )
+    agent_state = state.get("agent") if isinstance(state, dict) else None
+    if not isinstance(agent_state, dict):
+        raise HTTPException(
+            status_code=409,
+            detail="Chat session memory is unavailable.",
+        )
+
+    normalized_memory = normalize_in_memory_memory_state(agent_state.get("memory"))
+    memory = restore_in_memory_memory(normalized_memory)
+    visible_messages = agentscope_msg_to_message(
+        await memory.get_memory(prepend_summary=False),
+    )
+    visible_messages = _truncate_chat_history_messages(visible_messages)
+    visible_messages = _compact_chat_history_messages(visible_messages)
+    return normalized_memory, visible_messages
 
 
 async def get_workspace(request: Request):
@@ -359,6 +385,7 @@ async def update_chat(
 )
 async def delete_tail_user_message(
     chat_id: str,
+    payload: ChatTailUserDeleteRequest | None = None,
     mgr: ChatManager = Depends(get_chat_manager),
     session: SafeJSONSession = Depends(get_session),
 ):
@@ -370,18 +397,112 @@ async def delete_tail_user_message(
             detail=f"Chat not found: {chat_id}",
         )
 
-    state = await session.get_session_state_dict(
-        chat_spec.session_id,
-        chat_spec.user_id,
+    requested_message_id = (payload.message_id or "").strip() if payload else ""
+    all_chats = await mgr.list_chats(
+        user_id=chat_spec.user_id,
+        channel=chat_spec.channel,
     )
-    agent_state = state.get("agent") if isinstance(state, dict) else None
-    if not isinstance(agent_state, dict):
+    chat_by_id = {chat.id: chat for chat in all_chats}
+    lineage_ids: list[str] = []
+    visited_ids: set[str] = set()
+    current_id: str | None = chat_id
+    while current_id and current_id in chat_by_id and current_id not in visited_ids:
+        visited_ids.add(current_id)
+        lineage_ids.append(current_id)
+        current_id = chat_by_id[current_id].session_id or None
+    lineage_ids.reverse()
+    if not lineage_ids:
+        lineage_ids = [chat_id]
+
+    normalized_memory_by_chat_id: dict[str, dict[str, Any]] = {}
+    visible_messages_by_chat_id: dict[str, list[Message]] = {}
+    source_chat_id_by_message_id: dict[str, str] = {}
+    merged_visible_messages: list[Message] = []
+    merged_index_by_id: dict[str, int] = {}
+
+    for lineage_id in lineage_ids:
+        lineage_chat_spec = chat_by_id.get(lineage_id)
+        if lineage_chat_spec is None:
+            continue
+        try:
+            normalized_memory, visible_messages = await _load_visible_messages_for_chat(
+                lineage_chat_spec,
+                session,
+            )
+        except HTTPException as exc:
+            if exc.status_code == 409 and exc.detail == "Chat session memory is unavailable.":
+                continue
+            raise
+        normalized_memory_by_chat_id[lineage_id] = normalized_memory
+        visible_messages_by_chat_id[lineage_id] = visible_messages
+        for message in visible_messages:
+            stable_id = str(message.id or "").strip()
+            if stable_id:
+                source_chat_id_by_message_id[stable_id] = lineage_id
+            if stable_id and stable_id in merged_index_by_id:
+                merged_visible_messages[merged_index_by_id[stable_id]] = message
+                continue
+            if stable_id:
+                merged_index_by_id[stable_id] = len(merged_visible_messages)
+            merged_visible_messages.append(message)
+
+    target_visible_message: Message | None = None
+    if requested_message_id:
+        for message in reversed(merged_visible_messages):
+            if str(message.id or "").strip() == requested_message_id:
+                target_visible_message = message
+                break
+
+    if target_visible_message is None:
+        for message in reversed(merged_visible_messages):
+            if str(message.role or "").strip().lower() == "user":
+                target_visible_message = message
+                break
+
+    is_target_visible_user = bool(
+        target_visible_message
+        and str(target_visible_message.role or "").strip().lower() == "user"
+    )
+    if not is_target_visible_user:
         raise HTTPException(
             status_code=409,
-            detail="Chat session memory is unavailable.",
+            detail="Last visible message is not a user message.",
         )
 
-    normalized_memory = normalize_in_memory_memory_state(agent_state.get("memory"))
+    target_visible_id = str(target_visible_message.id or "").strip()
+    target_chat_id = source_chat_id_by_message_id.get(target_visible_id, chat_id)
+    target_visible_messages = visible_messages_by_chat_id.get(target_chat_id, [])
+    target_visible_user_indexes = [
+        idx
+        for idx, message in enumerate(target_visible_messages)
+        if str(message.role or "").strip().lower() == "user"
+    ]
+    target_visible_index = -1
+    for idx in reversed(target_visible_user_indexes):
+        if str(target_visible_messages[idx].id or "").strip() == target_visible_id:
+            target_visible_index = idx
+            break
+    if target_visible_index < 0:
+        raise HTTPException(
+            status_code=409,
+            detail="Last visible message is not a user message.",
+        )
+    target_visible_user_from_end = sum(
+        1 for idx in target_visible_user_indexes if idx >= target_visible_index
+    )
+
+    target_chat_spec = chat_by_id.get(target_chat_id)
+    if target_chat_spec is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Target source chat is unavailable.",
+        )
+    normalized_memory = normalized_memory_by_chat_id.get(target_chat_id)
+    if normalized_memory is None:
+        normalized_memory, _ = await _load_visible_messages_for_chat(
+            target_chat_spec,
+            session,
+        )
     content = normalized_memory.get("content", [])
     if not isinstance(content, list) or not content:
         raise HTTPException(
@@ -389,28 +510,15 @@ async def delete_tail_user_message(
             detail="Chat session memory is empty.",
         )
 
-    memory = restore_in_memory_memory(normalized_memory)
-    visible_messages = agentscope_msg_to_message(
-        await memory.get_memory(prepend_summary=False),
-    )
-    visible_messages = _truncate_chat_history_messages(visible_messages)
-    visible_messages = _compact_chat_history_messages(visible_messages)
-    last_visible_message = visible_messages[-1] if visible_messages else None
-    is_last_visible_user = bool(
-        last_visible_message
-        and str(last_visible_message.role or "").strip().lower() == "user"
-    )
-    if not is_last_visible_user:
-        raise HTTPException(
-            status_code=409,
-            detail="Last visible message is not a user message.",
-        )
-
     tail_user_index = -1
     removed_text = ""
+    matched_visible_user_count = 0
     for idx in range(len(content) - 1, -1, -1):
         message_dict = _memory_item_to_message_dict(content[idx])
         if message_dict is None or not _is_user_memory_message(message_dict):
+            continue
+        matched_visible_user_count += 1
+        if matched_visible_user_count != target_visible_user_from_end:
             continue
         tail_user_index = idx
         removed_text = _extract_text_from_content(message_dict.get("content"))
@@ -425,12 +533,12 @@ async def delete_tail_user_message(
     removed_count = len(content) - tail_user_index
     normalized_memory["content"] = content[:tail_user_index]
     await session.update_session_state(
-        session_id=chat_spec.session_id,
-        user_id=chat_spec.user_id,
+        session_id=target_chat_spec.session_id,
+        user_id=target_chat_spec.user_id,
         key="agent.memory",
         value=normalized_memory,
     )
-    await mgr.touch_chat(chat_id)
+    await mgr.touch_chat(target_chat_id)
 
     return ChatTailUserDeleteResponse(
         deleted=True,

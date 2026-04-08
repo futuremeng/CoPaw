@@ -98,6 +98,15 @@ class ChatTailUserDeleteResponse(BaseModel):
     )
 
 
+class ChatTailUserDeleteRequest(BaseModel):
+    """Optional target for deleting a visible user message."""
+
+    message_id: str | None = Field(
+        default=None,
+        description="Visible message id to delete from the chat tail",
+    )
+
+
 class ChatRuntimeStatusBreakdownItem(BaseModel):
     """One categorized token usage item inside a chat runtime snapshot."""
 

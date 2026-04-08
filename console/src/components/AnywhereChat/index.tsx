@@ -789,7 +789,6 @@ export default function AnywhereChat({
   const [isDeletingTailUser, setIsDeletingTailUser] = useState(false);
   const [tailUserActionHost, setTailUserActionHost] = useState<HTMLElement | null>(null);
   const [tailUserActionMessageId, setTailUserActionMessageId] = useState("");
-  const [tailUserActionChatId, setTailUserActionChatId] = useState("");
   const chatRef = useRef<IAgentScopeRuntimeWebUIRef>(null);
   const runtimeStatusRequestInFlight = useRef(false);
   const sessionIdRef = useRef(sessionId);
@@ -1015,7 +1014,7 @@ export default function AnywhereChat({
     }
     const requestedSessionId = sessionId;
     try {
-      const { history, sourceChatIdByStableMessageId } = await loadMergedRawChatHistory(requestedSessionId);
+      const { history } = await loadMergedRawChatHistory(requestedSessionId);
       if (sessionIdRef.current !== requestedSessionId) {
         return;
       }
@@ -1037,9 +1036,6 @@ export default function AnywhereChat({
         const recoverKey = `${requestedSessionId}:${stableTailId}`;
         recoveredTailUserKeyRef.current = recoverKey;
         setRecoveredTailUserDraft(tailText);
-        setTailUserActionChatId(
-          sourceChatIdByStableMessageId[stableTailId] || requestedSessionId,
-        );
 
         if (dismissedTailUserKeyRef.current === recoverKey) {
           const trimmedMessages = historyMessages.slice(0, -1);
@@ -1054,7 +1050,6 @@ export default function AnywhereChat({
         }
       } else {
         setRecoveredTailUserDraft("");
-        setTailUserActionChatId("");
         setChatHistory(history);
       }
 
@@ -1069,7 +1064,6 @@ export default function AnywhereChat({
         error instanceof Error ? error.message : t("chat.runtimeStatusUnknownError", "未知错误"),
       );
       setChatHistory(null);
-      setTailUserActionChatId("");
     }
   }, [sessionId, t]);
 
@@ -1382,10 +1376,18 @@ export default function AnywhereChat({
     return isUserRole(lastMessage?.role);
   }, [chatHistory?.messages]);
 
+  const lastVisibleUserMessageId = useMemo(() => {
+    const messages = chatHistory?.messages || [];
+    const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+    if (!isUserRole(lastMessage?.role)) {
+      return "";
+    }
+    return getStableMessageId((lastMessage || {}) as StableMessageIdentity) || "";
+  }, [chatHistory?.messages]);
+
   const executeRestoreTailUserDraft = useCallback(async () => {
     if (
       !sessionId
-      || !tailUserActionChatId
       || !recoveredTailUserDraft
       || !recoveredTailUserKeyRef.current
       || isDeletingTailUser
@@ -1395,7 +1397,7 @@ export default function AnywhereChat({
 
     setIsDeletingTailUser(true);
     try {
-      const result = await chatApi.deleteTailUserMessage(tailUserActionChatId);
+      const result = await chatApi.deleteTailUserMessage(sessionId);
       if (!result?.deleted) {
         throw new Error(
           t(
@@ -1406,8 +1408,42 @@ export default function AnywhereChat({
       }
 
       dismissedTailUserKeyRef.current = recoveredTailUserKeyRef.current;
+      setChatHistory((previousHistory) => {
+        if (!previousHistory || !Array.isArray(previousHistory.messages)) {
+          return previousHistory;
+        }
+
+        const previousMessages = previousHistory.messages;
+        if (previousMessages.length === 0) {
+          return previousHistory;
+        }
+
+        let targetIndex = -1;
+        for (let index = previousMessages.length - 1; index >= 0; index -= 1) {
+          if (isUserRole(previousMessages[index]?.role)) {
+            targetIndex = index;
+            break;
+          }
+        }
+        if (targetIndex < 0) {
+          return previousHistory;
+        }
+
+        const nextMessages = previousMessages.filter((_, index) => {
+          return index !== targetIndex;
+        });
+        return {
+          ...previousHistory,
+          messages: nextMessages,
+          total: nextMessages.length,
+          has_more: false,
+        };
+      });
       setDraftInputValue(result.removed_text || recoveredTailUserDraft);
       setRecoveredTailUserDraft("");
+      setTailUserActionHost(null);
+      setTailUserActionMessageId("");
+      setRefreshKey((previous) => previous + 1);
       await loadChatHistory();
       if (runtimeStatusOpen) {
         runtimeStatusRetryCountRef.current = 0;
@@ -1434,7 +1470,6 @@ export default function AnywhereChat({
     runtimeStatusOpen,
     sessionId,
     setDraftInputValue,
-    tailUserActionChatId,
     t,
   ]);
 
@@ -1505,16 +1540,12 @@ export default function AnywhereChat({
   useEffect(() => {
     if (!isLastVisibleMessageUser || !recoveredTailUserDraft) {
       setTailUserActionHost(null);
-      setTailUserActionMessageId("");
-      setTailUserActionChatId("");
       return;
     }
 
     const root = getInputRoot();
     if (!root) {
       setTailUserActionHost(null);
-      setTailUserActionMessageId("");
-      setTailUserActionChatId("");
       return;
     }
 
@@ -1538,7 +1569,6 @@ export default function AnywhereChat({
         target?.querySelector<HTMLElement>(":scope > .copaw-bubble-content-wrapper")
         || target;
       setTailUserActionHost(host || null);
-      setTailUserActionMessageId(target?.id || "");
     };
 
     resolveHost();
@@ -1562,6 +1592,10 @@ export default function AnywhereChat({
     isLastVisibleMessageUser,
     recoveredTailUserDraft,
   ]);
+
+  useEffect(() => {
+    setTailUserActionMessageId(lastVisibleUserMessageId);
+  }, [lastVisibleUserMessageId]);
 
   useEffect(() => {
     if (!runtimeStatusOpen) {
