@@ -2,6 +2,7 @@ import {
   AgentScopeRuntimeWebUI,
   WelcomePrompts,
   Stream,
+  type IAgentScopeRuntimeWebUIMessage,
   type IAgentScopeRuntimeWebUIOptions,
   type IAgentScopeRuntimeWebUIRef,
 } from "@agentscope-ai/chat";
@@ -30,6 +31,7 @@ import type {
   ChatHistory,
   Message,
   ChatRuntimeStatus,
+  ModelInfo,
   ProviderInfo,
 } from "../../api/types";
 import {
@@ -39,8 +41,10 @@ import {
 } from "../../utils/chatRuntimeStatus";
 import { IconButton } from "@agentscope-ai/design";
 import {
+  buildModelError,
   copyText,
   extractCopyableText,
+  normalizeContentUrls,
   toDisplayUrl,
 } from "../../pages/Chat/utils";
 import {
@@ -159,7 +163,24 @@ type CommandSuggestion = {
   description: string;
 };
 
+type RuntimeUiMessage = IAgentScopeRuntimeWebUIMessage & {
+  msgStatus?: string;
+  role?: string;
+  cards?: Array<{
+    code: string;
+    data: unknown;
+  }>;
+};
+
 const CHAT_ATTACHMENT_MAX_MB = 10;
+
+function cloneValue<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function cloneRuntimeMessages(messages: RuntimeUiMessage[]): RuntimeUiMessage[] {
+  return cloneValue(messages);
+}
 
 function renderSuggestionLabel(command: string, description: string) {
   return (
@@ -185,6 +206,43 @@ function extractUserTextFromInput(input?: ChatInputItem): string {
     .filter(Boolean)
     .join("\n")
     .trim();
+}
+
+function extractLatestUserText(input: ChatInputItem[] = []): string {
+  const latest = input[input.length - 1];
+  return extractUserTextFromInput(latest);
+}
+
+function shouldSuggestPipelineOpportunity(text: string): boolean {
+  if (!text) return false;
+  if (text.length < 16) return false;
+  const patterns = [
+    /多步|流程|pipeline|管线/i,
+    /批量|自动化|反复|复用/i,
+    /抽取|对齐|校验|分析|报告/i,
+  ];
+  return patterns.some((pattern) => pattern.test(text));
+}
+
+function isPipelineDesignBootstrapText(text: string): boolean {
+  if (!text) return false;
+  return (
+    text.includes("pipeline-create-guide") ||
+    text.includes("我想创建一个新的 Pipeline") ||
+    text.includes("模板设计模式") ||
+    text.includes("I want to create a new Pipeline")
+  );
+}
+
+function buildPipelineOpportunityInlineHint(): string {
+  return [
+    "",
+    "[PipelineDesignHint]",
+    "当前场景是模板设计模式，不是任务执行。不要搜索真实文件、不要扫描目录。",
+    "请按 4 项槽位补齐：流程用途、输入来源、期望产物、步骤线索；若用户已提供则不要重复追问。",
+    "如果当前会话已绑定流程 Markdown 工作文件，请优先直接修改该 Markdown 文件，不要输出 JSON 草稿。",
+    "继续在当前会话中迭代，不要要求用户切换到新会话。",
+  ].join("\n");
 }
 
 function getStableOutputMessageId(message: unknown): string | null {
@@ -228,6 +286,32 @@ function dedupeOutputMessagesByStableId<T>(messages: T[]): T[] {
   }
 
   return deduped;
+}
+
+function getResponseCardData(message?: RuntimeUiMessage): StreamResponseData | null {
+  const responseCard = message?.cards?.find(
+    (card) => card.code === "AgentScopeRuntimeResponseCard",
+  );
+
+  if (!responseCard?.data) {
+    return null;
+  }
+
+  return cloneValue(responseCard.data as StreamResponseData);
+}
+
+function getStreamingAssistantMessageId(messages: RuntimeUiMessage[]): string | null {
+  return (
+    [...messages]
+      .reverse()
+      .find(
+        (message) =>
+          message.role === "assistant" &&
+          (message.msgStatus === "generating" || (message.cards?.length ?? 0) === 0),
+      )?.id ||
+    [...messages].reverse().find((message) => message.role === "assistant")?.id ||
+    null
+  );
 }
 
 function sanitizeStreamEventPayload(rawData: string): string {
@@ -616,9 +700,43 @@ export default function AnywhereChat({
   const backendSessionIdRef = useRef(sessionId);
   const runtimeStatusRetryTimerRef = useRef<number | null>(null);
   const runtimeStatusRetryCountRef = useRef(0);
+  const reconnectAttemptedSessionIdRef = useRef<string | null>(null);
   const handledAutoAttachIdRef = useRef("");
   const recoveredTailUserKeyRef = useRef("");
   const dismissedTailUserKeyRef = useRef("");
+
+  const multimodalCaps = useMemo(() => {
+    const providerId = activeModels?.active_llm?.provider_id;
+    const modelId = activeModels?.active_llm?.model;
+    if (!providerId || !modelId) {
+      return {
+        supportsMultimodal: false,
+        supportsImage: false,
+        supportsVideo: false,
+      };
+    }
+
+    const provider = providerList.find((item) => item.id === providerId);
+    if (!provider) {
+      return {
+        supportsMultimodal: false,
+        supportsImage: false,
+        supportsVideo: false,
+      };
+    }
+
+    const allModels: ModelInfo[] = [
+      ...(provider.models ?? []),
+      ...(provider.extra_models ?? []),
+    ];
+    const model = allModels.find((item) => item.id === modelId);
+
+    return {
+      supportsMultimodal: model?.supports_multimodal ?? false,
+      supportsImage: model?.supports_image ?? false,
+      supportsVideo: model?.supports_video ?? false,
+    };
+  }, [activeModels, providerList]);
 
   useEffect(() => {
     const isAnywhereChatInput = (eventTarget: EventTarget | null): boolean => {
@@ -814,7 +932,10 @@ export default function AnywhereChat({
     try {
       const [providers, activeModelConfig, runtimeConfig] = await Promise.all([
         providerApi.listProviders(),
-        providerApi.getActiveModels(),
+        providerApi.getActiveModels({
+          scope: "effective",
+          agent_id: selectedAgent,
+        }),
         agentApi.getAgentRunningConfig(),
       ]);
       setProviderList(Array.isArray(providers) ? providers : []);
@@ -826,7 +947,112 @@ export default function AnywhereChat({
       setActiveModels(null);
       setRunningConfig(null);
     }
-  }, []);
+  }, [selectedAgent]);
+
+  const persistSessionMessages = useCallback(
+    async (persistedSessionId: string, messages: RuntimeUiMessage[]) => {
+      if (!persistedSessionId) {
+        return;
+      }
+
+      await sessionApi.updateSession({
+        id: persistedSessionId,
+        messages: cloneRuntimeMessages(messages),
+      });
+    },
+    [],
+  );
+
+  const persistStreamSession = useCallback(
+    (persistedSessionId: string, readableStream: ReadableStream<Uint8Array>) => {
+      if (!persistedSessionId) {
+        return;
+      }
+
+      const initialMessages = cloneRuntimeMessages(
+        (chatRef.current?.messages.getMessages() as RuntimeUiMessage[]) || [],
+      );
+      const assistantMessageId =
+        getStreamingAssistantMessageId(initialMessages) || `stream-${persistedSessionId}`;
+      const responseBuilder = new AgentScopeRuntimeResponseBuilder({
+        id: "",
+        status: AgentScopeRuntimeRunStatus.Created,
+        created_at: 0,
+      });
+
+      void (async () => {
+        let cachedMessages = initialMessages;
+
+        try {
+          for await (const chunk of Stream({ readableStream })) {
+            let chunkData: unknown;
+            try {
+              chunkData = JSON.parse(chunk.data);
+            } catch {
+              continue;
+            }
+
+            const responseData = responseBuilder.handle(
+              chunkData as never,
+            ) as unknown as StreamResponseData;
+            const renderableResponse = materializeThinkingOnlyFallback(responseData);
+            const isFinalChunk = isFinalResponseStatus(responseData.status);
+            const existingAssistantMessage = cachedMessages.find(
+              (message) => message.id === assistantMessageId,
+            );
+            const previousResponseData = getResponseCardData(existingAssistantMessage);
+
+            let nextResponseData: StreamResponseData | null = null;
+            if (hasRenderableOutput(renderableResponse)) {
+              nextResponseData = cloneValue(renderableResponse);
+            } else if (isFinalChunk && previousResponseData) {
+              nextResponseData = {
+                ...previousResponseData,
+                status: responseData.status ?? previousResponseData.status,
+              };
+            }
+
+            if (!nextResponseData) {
+              continue;
+            }
+
+            const assistantMessage: RuntimeUiMessage = {
+              ...(existingAssistantMessage || {
+                id: assistantMessageId,
+                role: "assistant",
+              }),
+              id: assistantMessageId,
+              role: "assistant",
+              cards: [
+                {
+                  code: "AgentScopeRuntimeResponseCard",
+                  data: nextResponseData,
+                },
+              ],
+              msgStatus: isFinalChunk ? "finished" : "generating",
+            };
+
+            const assistantIndex = cachedMessages.findIndex(
+              (message) => message.id === assistantMessageId,
+            );
+            cachedMessages =
+              assistantIndex >= 0
+                ? [
+                    ...cachedMessages.slice(0, assistantIndex),
+                    assistantMessage,
+                    ...cachedMessages.slice(assistantIndex + 1),
+                  ]
+                : [...cachedMessages, assistantMessage];
+
+            await persistSessionMessages(persistedSessionId, cachedMessages);
+          }
+        } catch (error) {
+          console.error("AnywhereChat failed to persist background chat stream", error);
+        }
+      })();
+    },
+    [persistSessionMessages],
+  );
 
   const loadChatHistory = useCallback(async () => {
     if (!sessionId) {
@@ -972,6 +1198,16 @@ export default function AnywhereChat({
     }) => {
       const { file, onSuccess, onError, onProgress } = options;
       try {
+        if (!multimodalCaps.supportsMultimodal) {
+          message.warning(t("chat.attachments.multimodalWarning"));
+        } else if (
+          multimodalCaps.supportsImage &&
+          !multimodalCaps.supportsVideo &&
+          !file.type.startsWith("image/")
+        ) {
+          message.warning(t("chat.attachments.imageOnlyWarning"));
+        }
+
         const sizeMb = file.size / 1024 / 1024;
         if (sizeMb >= CHAT_ATTACHMENT_MAX_MB) {
           message.error(
@@ -992,12 +1228,13 @@ export default function AnywhereChat({
         onError?.(e instanceof Error ? e : new Error(String(e)));
       }
     },
-    [t],
+    [multimodalCaps, t],
   );
 
   useEffect(() => {
     sessionIdRef.current = sessionId;
     backendSessionIdRef.current = sessionId;
+    reconnectAttemptedSessionIdRef.current = null;
     recoveredTailUserKeyRef.current = "";
     dismissedTailUserKeyRef.current = "";
     setRecoveredTailUserDraft("");
@@ -1173,6 +1410,82 @@ export default function AnywhereChat({
   useEffect(() => {
     void loadChatHistory();
   }, [loadChatHistory, sessionId]);
+
+  useEffect(() => {
+    if (!sessionId) {
+      return;
+    }
+
+    let cancelled = false;
+    let attempts = 0;
+    let pollTimer: number | null = null;
+    const maxAttempts = 24;
+    const intervalMs = 1500;
+
+    const pollRunningSession = async () => {
+      if (cancelled) {
+        return;
+      }
+
+      attempts += 1;
+
+      try {
+        const session = await loadMergedRuntimeSession(sessionId);
+        if (cancelled) {
+          return;
+        }
+
+        const status = (session as { status?: string } | null)?.status;
+        const uiMessages =
+          (chatRef.current?.messages.getMessages() as Array<{ msgStatus?: string }>) || [];
+        const hasUiLiveMessage = uiMessages.some(
+          (message) => message.msgStatus === "generating",
+        );
+
+        if (status === "running") {
+          if (
+            !isChatStreaming &&
+            !hasUiLiveMessage &&
+            reconnectAttemptedSessionIdRef.current !== sessionId
+          ) {
+            const submit = chatRef.current?.input?.submit;
+            if (submit) {
+              reconnectAttemptedSessionIdRef.current = sessionId;
+              submit({
+                query: "",
+                biz_params: { reconnect: true } as never,
+              });
+            }
+          }
+
+          if (attempts < maxAttempts) {
+            pollTimer = window.setTimeout(() => {
+              void pollRunningSession();
+            }, intervalMs);
+          }
+          return;
+        }
+
+        reconnectAttemptedSessionIdRef.current = null;
+      } catch {
+        if (attempts < maxAttempts) {
+          pollTimer = window.setTimeout(() => {
+            void pollRunningSession();
+          }, intervalMs);
+        }
+      }
+    };
+
+    void pollRunningSession();
+
+    return () => {
+      cancelled = true;
+      reconnectAttemptedSessionIdRef.current = null;
+      if (pollTimer !== null) {
+        window.clearTimeout(pollTimer);
+      }
+    };
+  }, [isChatStreaming, sessionId]);
 
   const lastVisibleUserState = useMemo(() => {
     return getLastVisibleUserState(chatHistory);
@@ -1499,6 +1812,10 @@ export default function AnywhereChat({
       session_id?: string;
       user_id?: string;
       channel?: string;
+      reconnect?: boolean;
+      biz_params?: {
+        reconnect?: boolean;
+      };
     }) => {
       if (!sessionId) {
         return new Response(JSON.stringify({ error: "session id missing" }), {
@@ -1512,15 +1829,165 @@ export default function AnywhereChat({
         ...buildAuthHeaders(),
       };
 
+      const shouldReconnect =
+        data.reconnect || data.biz_params?.reconnect === true;
+      if (shouldReconnect) {
+        const reconnectSessionId =
+          backendSessionIdRef.current || data.session_id || sessionId;
+        setIsChatStreaming(true);
+
+        try {
+          const response = await fetch(getApiUrl("/console/chat"), {
+            method: "POST",
+            headers,
+            signal: data.signal,
+            body: JSON.stringify({
+              reconnect: true,
+              session_id: reconnectSessionId,
+              user_id: data.user_id || "default",
+              channel: data.channel || "console",
+            }),
+          });
+
+          if (!response.ok || !response.body) {
+            setIsChatStreaming(false);
+            reconnectAttemptedSessionIdRef.current = null;
+
+            if (response.status === 404) {
+              try {
+                const payload = await response.clone().json();
+                if (payload?.detail === "No running chat for this session") {
+                  void loadChatHistory();
+                  return new Response(
+                    JSON.stringify({
+                      status: AgentScopeRuntimeRunStatus.Completed,
+                      output: [],
+                    }),
+                    {
+                      status: 200,
+                      headers: { "Content-Type": "application/json" },
+                    },
+                  );
+                }
+              } catch {
+                // Ignore parse errors and return the original response.
+              }
+            }
+
+            return response;
+          }
+
+          const stream = sanitizeConsoleChatSseStream(response.body);
+          const [uiSource, persistSource] = stream.tee();
+          persistStreamSession(reconnectSessionId, persistSource);
+          const transformed = new ReadableStream<Uint8Array>({
+            start(controller) {
+              const reader = uiSource.getReader();
+
+              const finalize = () => {
+                setIsChatStreaming(false);
+                reconnectAttemptedSessionIdRef.current = null;
+                updateTransientMessages([]);
+                void loadChatHistory();
+                if (runtimeStatusOpen) {
+                  runtimeStatusRetryCountRef.current = 0;
+                  void loadRuntimeStatusWithRetry();
+                }
+              };
+
+              const pump = (): void => {
+                void reader.read().then(({ done, value }) => {
+                  if (done) {
+                    controller.close();
+                    finalize();
+                    return;
+                  }
+                  controller.enqueue(value);
+                  pump();
+                }).catch((error) => {
+                  controller.error(error);
+                  finalize();
+                });
+              };
+
+              pump();
+            },
+          });
+
+          return new Response(transformed, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: response.headers,
+          });
+        } catch (error) {
+          setIsChatStreaming(false);
+          reconnectAttemptedSessionIdRef.current = null;
+          throw error;
+        }
+      }
+
+      try {
+        const effectiveModels = await providerApi.getActiveModels({
+          scope: "effective",
+          agent_id: selectedAgent,
+        });
+        if (
+          !effectiveModels?.active_llm?.provider_id ||
+          !effectiveModels?.active_llm?.model
+        ) {
+          return buildModelError();
+        }
+      } catch {
+        return buildModelError();
+      }
+
       const input = data.input || [];
       const lastInput = input.slice(-1);
-      const session = lastInput[0]?.session || {};
-      const optimisticText = extractUserTextFromInput(lastInput[0]);
-      const optimisticContent = lastInput[0]?.content;
+      const latestUserText = extractLatestUserText(input);
+      const bootstrapText = isPipelineDesignBootstrapText(latestUserText);
+      const shouldInlinePipelineGuide =
+        !bootstrapText && shouldSuggestPipelineOpportunity(latestUserText);
+
+      if (shouldInlinePipelineGuide) {
+        const now = Date.now();
+        const cooldownKey = "copaw.pipeline.opportunity.lastAt";
+        const lastAt = Number(localStorage.getItem(cooldownKey) || "0");
+        if (now - lastAt > 30 * 60 * 1000) {
+          localStorage.setItem(cooldownKey, String(now));
+        }
+      }
+
+      const lastMessage = lastInput[0];
+      const rewrittenInput =
+        lastMessage?.content && Array.isArray(lastMessage.content)
+          ? [
+              {
+                ...lastMessage,
+                content: [
+                  ...lastMessage.content.map((part) =>
+                    part && typeof part === "object"
+                      ? normalizeContentUrls(part)
+                      : part,
+                  ),
+                  ...(shouldInlinePipelineGuide
+                    ? [
+                        {
+                          type: "text",
+                          text: buildPipelineOpportunityInlineHint(),
+                        },
+                      ]
+                    : []),
+                ],
+              },
+            ]
+          : lastInput;
+      const session = rewrittenInput[0]?.session || {};
+      const optimisticText = extractUserTextFromInput(rewrittenInput[0]);
+      const optimisticContent = rewrittenInput[0]?.content;
       const pendingUserMessage: Message | null =
         optimisticText || Array.isArray(optimisticContent)
           ? {
-              role: String(lastInput[0]?.role || "user"),
+              role: String(rewrittenInput[0]?.role || "user"),
               content: Array.isArray(optimisticContent)
                 ? optimisticContent
                 : optimisticText,
@@ -1553,7 +2020,7 @@ export default function AnywhereChat({
         headers,
         signal: data.signal,
         body: JSON.stringify({
-          input: lastInput,
+          input: rewrittenInput,
           session_id: backendSessionId || data.session_id || session?.session_id || "",
           user_id: data.user_id || session?.user_id || "default",
           channel: data.channel || session?.channel || "console",
@@ -1564,81 +2031,118 @@ export default function AnywhereChat({
       setIsChatStreaming(true);
       updateTransientMessages(pendingUserMessage ? [pendingUserMessage] : []);
 
-      if (!response.ok || !response.body || !onAssistantTurnCompleted) {
+      if (!response.ok || !response.body) {
         setIsChatStreaming(false);
         updateTransientMessages([]);
         return response;
       }
 
       const sanitizedStream = sanitizeConsoleChatSseStream(response.body);
-      const [uiStream, cacheStream] = sanitizedStream.tee();
-      void (async () => {
-        const responseBuilder = new AgentScopeRuntimeResponseBuilder({
-          id: "",
-          status: AgentScopeRuntimeRunStatus.Created,
-          created_at: 0,
-        });
-        let latestRenderable: StreamResponseData | null = null;
+      const [uiStream, observerStream] = sanitizedStream.tee();
+      const [cacheStream, persistStream] = observerStream.tee();
+      const persistedSessionId = backendSessionId || data.session_id || session?.session_id || "";
+      persistStreamSession(persistedSessionId, persistStream);
 
-        try {
-          for await (const chunk of Stream({ readableStream: cacheStream })) {
-            let chunkData: unknown;
-            try {
-              chunkData = JSON.parse(chunk.data);
-            } catch {
-              continue;
-            }
-
-            const responseData = responseBuilder.handle(
-              chunkData as never,
-            ) as unknown as StreamResponseData;
-            const renderableResponse = materializeThinkingOnlyFallback(responseData);
-
-            if (hasRenderableOutput(renderableResponse)) {
-              latestRenderable = JSON.parse(
-                JSON.stringify(renderableResponse),
-              ) as StreamResponseData;
-
-              const partialAssistantText = extractAssistantText(latestRenderable);
-              updateTransientMessages(
-                [
-                  pendingUserMessage,
-                  partialAssistantText
-                    ? {
-                        role: "assistant",
-                        content: partialAssistantText,
-                      }
-                    : null,
-                ].filter(Boolean) as Message[],
-              );
-            }
-
-            if (!isFinalResponseStatus(responseData.status)) {
-              continue;
-            }
-
-            const finalPayload = latestRenderable || renderableResponse;
-            onAssistantTurnCompleted({
-              text: extractAssistantText(finalPayload),
-              response: finalPayload as Record<string, unknown>,
-            });
-            setIsChatStreaming(false);
-            await loadChatHistory();
-            if (runtimeStatusOpen) {
-              runtimeStatusRetryCountRef.current = 0;
-              await loadRuntimeStatusWithRetry();
-            }
-            updateTransientMessages([]);
-            break;
-          }
-        } catch (error) {
-          setIsChatStreaming(false);
-          updateTransientMessages([]);
-          console.warn("AnywhereChat stream side-channel parse failed", error);
+      let finalized = false;
+      const finalize = () => {
+        if (finalized) {
+          return;
         }
-      })();
+        finalized = true;
+        setIsChatStreaming(false);
+        updateTransientMessages([]);
+        void loadChatHistory();
+        if (runtimeStatusOpen) {
+          runtimeStatusRetryCountRef.current = 0;
+          void loadRuntimeStatusWithRetry();
+        }
+      };
 
-      return new Response(uiStream, {
+      if (onAssistantTurnCompleted) {
+        void (async () => {
+          const responseBuilder = new AgentScopeRuntimeResponseBuilder({
+            id: "",
+            status: AgentScopeRuntimeRunStatus.Created,
+            created_at: 0,
+          });
+          let latestRenderable: StreamResponseData | null = null;
+
+          try {
+            for await (const chunk of Stream({ readableStream: cacheStream })) {
+              let chunkData: unknown;
+              try {
+                chunkData = JSON.parse(chunk.data);
+              } catch {
+                continue;
+              }
+
+              const responseData = responseBuilder.handle(
+                chunkData as never,
+              ) as unknown as StreamResponseData;
+              const renderableResponse = materializeThinkingOnlyFallback(responseData);
+
+              if (hasRenderableOutput(renderableResponse)) {
+                latestRenderable = JSON.parse(
+                  JSON.stringify(renderableResponse),
+                ) as StreamResponseData;
+
+                const partialAssistantText = extractAssistantText(latestRenderable);
+                updateTransientMessages(
+                  [
+                    pendingUserMessage,
+                    partialAssistantText
+                      ? {
+                          role: "assistant",
+                          content: partialAssistantText,
+                        }
+                      : null,
+                  ].filter(Boolean) as Message[],
+                );
+              }
+
+              if (!isFinalResponseStatus(responseData.status)) {
+                continue;
+              }
+
+              const finalPayload = latestRenderable || renderableResponse;
+              onAssistantTurnCompleted({
+                text: extractAssistantText(finalPayload),
+                response: finalPayload as Record<string, unknown>,
+              });
+              finalize();
+              break;
+            }
+          } catch (error) {
+            finalize();
+            console.warn("AnywhereChat stream side-channel parse failed", error);
+          }
+        })();
+      }
+
+      const forwardedUiStream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          const reader = uiStream.getReader();
+
+          const pump = (): void => {
+            void reader.read().then(({ done, value }) => {
+              if (done) {
+                controller.close();
+                finalize();
+                return;
+              }
+              controller.enqueue(value);
+              pump();
+            }).catch((error) => {
+              controller.error(error);
+              finalize();
+            });
+          };
+
+          pump();
+        },
+      });
+
+      return new Response(forwardedUiStream, {
         status: response.status,
         statusText: response.statusText,
         headers: response.headers,
@@ -1648,7 +2152,9 @@ export default function AnywhereChat({
       loadChatHistory,
       loadRuntimeStatusWithRetry,
       onAssistantTurnCompleted,
+      persistStreamSession,
       runtimeStatusOpen,
+      selectedAgent,
       sessionId,
       updateTransientMessages,
     ],
@@ -1728,8 +2234,13 @@ export default function AnywhereChat({
         allowSpeech: true,
         attachments: {
           trigger: function (props: AttachmentTriggerProps) {
+            const tooltipKey = !multimodalCaps.supportsMultimodal
+              ? "chat.attachments.tooltipNoMultimodal"
+              : multimodalCaps.supportsImage && !multimodalCaps.supportsVideo
+                ? "chat.attachments.tooltipImageOnly"
+                : "chat.attachments.tooltip";
             return (
-              <Tooltip title={t("chat.attachments.tooltip", "Attach files")}> 
+              <Tooltip title={t(tooltipKey, { limit: CHAT_ATTACHMENT_MAX_MB })}>
                 <IconButton
                   disabled={props?.disabled}
                   icon={<SparkAttachmentLine />}
@@ -1820,6 +2331,7 @@ export default function AnywhereChat({
     handleFileUpload,
     inputPlaceholder,
     isDark,
+    multimodalCaps,
     appendPromptToDraftInput,
     sessionId,
     singleSessionApi,
