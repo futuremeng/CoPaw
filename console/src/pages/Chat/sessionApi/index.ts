@@ -353,6 +353,21 @@ function clearPendingUserMessage(sessionId: string): void {
   }
 }
 
+function findLastUserRuntimeMessage(
+  messages: IAgentScopeRuntimeWebUIMessage[] | undefined,
+): RuntimeUiMessageLike | null {
+  const runtimeMessages = Array.isArray(messages) ? messages : [];
+
+  for (let index = runtimeMessages.length - 1; index >= 0; index -= 1) {
+    const message = runtimeMessages[index] as RuntimeUiMessageLike | undefined;
+    if (message?.role === ROLE_USER) {
+      return message;
+    }
+  }
+
+  return null;
+}
+
 function extractTextFromContent(content: unknown): string {
   if (typeof content === "string") {
     return content.trim();
@@ -481,6 +496,36 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
   setLastUserMessage(sessionId: string, text: string): void {
     if (!sessionId || !text) return;
     savePendingUserMessage(sessionId, text);
+  }
+
+  removeLastUserMessage(sessionId: string): boolean {
+    if (!sessionId) {
+      return false;
+    }
+
+    const session = this.findSessionByAnyId(sessionId);
+    if (!session || !Array.isArray(session.messages) || session.messages.length === 0) {
+      clearPendingUserMessage(sessionId);
+      return false;
+    }
+
+    const lastUserMessage = findLastUserRuntimeMessage(session.messages);
+    if (!lastUserMessage?.id) {
+      clearPendingUserMessage(sessionId);
+      return false;
+    }
+
+    session.messages = session.messages.filter((message) => message.id !== lastUserMessage.id);
+    clearPendingUserMessage(sessionId);
+
+    if (session.realId) {
+      clearPendingUserMessage(session.realId);
+    }
+    if (session.sessionId) {
+      clearPendingUserMessage(session.sessionId);
+    }
+
+    return true;
   }
 
   private pickRicherMessages(

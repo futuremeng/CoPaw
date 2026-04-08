@@ -32,7 +32,6 @@ import type {
   ChatRuntimeStatus,
   ProviderInfo,
 } from "../../api/types";
-import type { IAgentScopeRuntimeWebUISession } from "@agentscope-ai/chat";
 import {
   deriveRuntimeStatusSnapshot,
   formatTokenCount,
@@ -48,6 +47,12 @@ import {
   extractRenderableAssistantText,
   materializeThinkingOnlyFallback,
 } from "../../utils/runtimeResponseFallback";
+import {
+  getLastVisibleUserState,
+  loadMergedRawChatHistory,
+  loadMergedRuntimeSession,
+  removeLastVisibleUserMessage,
+} from "./history";
 import styles from "./index.module.less";
 
 type SessionContext = {
@@ -180,41 +185,6 @@ function extractUserTextFromInput(input?: ChatInputItem): string {
     .filter(Boolean)
     .join("\n")
     .trim();
-}
-
-function extractTextFromChatContent(content: unknown): string {
-  if (typeof content === "string") {
-    return content.trim();
-  }
-
-  if (Array.isArray(content)) {
-    return content
-      .map((item) => extractTextFromChatContent(item))
-      .filter(Boolean)
-      .join("\n")
-      .trim();
-  }
-
-  if (content && typeof content === "object") {
-    const record = content as Record<string, unknown>;
-    if (typeof record.text === "string") {
-      return record.text.trim();
-    }
-    if (record.content !== undefined) {
-      return extractTextFromChatContent(record.content);
-    }
-  }
-
-  return "";
-}
-
-function normalizeMessageRole(role: unknown): string {
-  return typeof role === "string" ? role.trim().toLowerCase() : "";
-}
-
-function isUserRole(role: unknown): boolean {
-  const normalized = normalizeMessageRole(role);
-  return normalized === "user" || normalized === "human";
 }
 
 function getStableOutputMessageId(message: unknown): string | null {
@@ -526,155 +496,6 @@ function resolveChatScopeFromAncestors(chats: ChatSpec[], chat?: ChatSpec) {
   }
 
   return getChatScope(chat);
-}
-
-function collectSessionLineageIds(chats: ChatSpec[], sessionId: string): string[] {
-  const chatById = new Map(chats.map((chat) => [chat.id, chat]));
-  const lineage: string[] = [];
-  const visited = new Set<string>();
-  let currentId: string | undefined = sessionId;
-
-  while (currentId && chatById.has(currentId) && !visited.has(currentId)) {
-    visited.add(currentId);
-    lineage.push(currentId);
-    currentId = chatById.get(currentId)?.session_id || undefined;
-  }
-
-  return lineage.reverse();
-}
-
-type StableMessageIdentity = {
-  id?: unknown;
-  message_id?: unknown;
-};
-
-type MergedRawChatHistoryResult = {
-  history: ChatHistory | null;
-  sourceChatIdByStableMessageId: Record<string, string>;
-};
-
-function getStableMessageId(message: StableMessageIdentity): string | null {
-  const id = message.id;
-  if (typeof id === "string" && id.trim()) {
-    return id.trim();
-  }
-
-  const messageId = message.message_id;
-  if (typeof messageId === "string" && messageId.trim()) {
-    return messageId.trim();
-  }
-
-  return null;
-}
-
-function mergeMessagesByStableId<T extends object>(messages: T[]): T[] {
-  const merged: T[] = [];
-  const indexById = new Map<string, number>();
-
-  for (const message of messages) {
-    const stableId = getStableMessageId(message as StableMessageIdentity);
-    if (!stableId) {
-      merged.push(message);
-      continue;
-    }
-
-    const existingIndex = indexById.get(stableId);
-    if (existingIndex === undefined) {
-      indexById.set(stableId, merged.length);
-      merged.push(message);
-      continue;
-    }
-
-    // Prefer the latest payload for the same message id to keep stream updates fresh.
-    merged[existingIndex] = message;
-  }
-
-  return merged;
-}
-
-async function loadMergedRawChatHistory(sessionId: string): Promise<MergedRawChatHistoryResult> {
-  const chats = await chatApi.listChats({ user_id: "default", channel: "console" });
-  const lineageIds = collectSessionLineageIds(chats, sessionId);
-  const histories: ChatHistory[] = [];
-  const sourceChatIdByStableMessageId: Record<string, string> = {};
-
-  for (const lineageId of lineageIds.length > 0 ? lineageIds : [sessionId]) {
-    try {
-      const history = await chatApi.getChat(lineageId, { limit: 100 });
-      for (const message of history.messages || []) {
-        const stableId = getStableMessageId(message as StableMessageIdentity);
-        if (stableId) {
-          sourceChatIdByStableMessageId[stableId] = lineageId;
-        }
-      }
-      histories.push(history);
-    } catch {
-      // Skip missing segments; continue merging the remaining chain.
-    }
-  }
-
-  if (histories.length === 0) {
-    return {
-      history: null,
-      sourceChatIdByStableMessageId,
-    };
-  }
-
-  const mergedMessages = mergeMessagesByStableId(
-    histories.flatMap((history) => history.messages || []),
-  );
-  const lastHistory = histories[histories.length - 1];
-
-  return {
-    history: {
-      ...lastHistory,
-      messages: mergedMessages,
-      total: mergedMessages.length,
-      has_more: false,
-    },
-    sourceChatIdByStableMessageId,
-  };
-}
-
-async function loadMergedRuntimeSession(
-  sessionId: string,
-): Promise<IAgentScopeRuntimeWebUISession | null> {
-  const chats = await chatApi.listChats({ user_id: "default", channel: "console" });
-  const lineageIds = collectSessionLineageIds(chats, sessionId);
-  const sessions: IAgentScopeRuntimeWebUISession[] = [];
-
-  for (const lineageId of lineageIds.length > 0 ? lineageIds : [sessionId]) {
-    try {
-      const session = await sessionApi.getSession(lineageId);
-      sessions.push(session);
-    } catch {
-      // Skip missing segments; continue merging the remaining chain.
-    }
-  }
-
-  if (sessions.length === 0) {
-    return null;
-  }
-
-  const mergedMessages = mergeMessagesByStableId(
-    sessions.flatMap((session) =>
-      Array.isArray(session.messages)
-        ? (JSON.parse(
-            JSON.stringify(session.messages),
-          ) as IAgentScopeRuntimeWebUISession["messages"])
-        : [],
-    ),
-  );
-  const leafSession = sessions[sessions.length - 1] as IAgentScopeRuntimeWebUISession & {
-    realId?: string;
-    meta?: Record<string, unknown>;
-  };
-
-  return {
-    ...leafSession,
-    id: leafSession.id || sessionId,
-    messages: mergedMessages,
-  };
 }
 
 function isFinalResponseStatus(status?: string): boolean {
@@ -1014,37 +835,20 @@ export default function AnywhereChat({
     }
     const requestedSessionId = sessionId;
     try {
-      const { history } = await loadMergedRawChatHistory(requestedSessionId);
+      const history = await loadMergedRawChatHistory(requestedSessionId);
       if (sessionIdRef.current !== requestedSessionId) {
         return;
       }
 
-      const historyMessages = Array.isArray(history?.messages)
-        ? history.messages
-        : [];
-      const tailMessage = historyMessages.length > 0
-        ? historyMessages[historyMessages.length - 1]
-        : undefined;
-      const tailText = isUserRole(tailMessage?.role)
-        ? extractTextFromChatContent(tailMessage?.content)
-        : "";
+      const tailUserState = getLastVisibleUserState(history);
 
-      if (tailText && historyMessages.length > 0) {
-        const stableTailId = getStableMessageId(
-          (tailMessage || {}) as StableMessageIdentity,
-        ) || tailText;
-        const recoverKey = `${requestedSessionId}:${stableTailId}`;
+      if (tailUserState) {
+        const recoverKey = `${requestedSessionId}:${tailUserState.stableId}`;
         recoveredTailUserKeyRef.current = recoverKey;
-        setRecoveredTailUserDraft(tailText);
+        setRecoveredTailUserDraft(tailUserState.text);
 
         if (dismissedTailUserKeyRef.current === recoverKey) {
-          const trimmedMessages = historyMessages.slice(0, -1);
-          setChatHistory({
-            ...(history || {}),
-            messages: trimmedMessages,
-            total: trimmedMessages.length,
-            has_more: false,
-          } as ChatHistory);
+          setChatHistory(removeLastVisibleUserMessage(history) as ChatHistory | null);
         } else {
           setChatHistory(history);
         }
@@ -1370,20 +1174,13 @@ export default function AnywhereChat({
     void loadChatHistory();
   }, [loadChatHistory, sessionId]);
 
-  const isLastVisibleMessageUser = useMemo(() => {
-    const messages = chatHistory?.messages || [];
-    const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
-    return isUserRole(lastMessage?.role);
-  }, [chatHistory?.messages]);
+  const lastVisibleUserState = useMemo(() => {
+    return getLastVisibleUserState(chatHistory);
+  }, [chatHistory]);
 
-  const lastVisibleUserMessageId = useMemo(() => {
-    const messages = chatHistory?.messages || [];
-    const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
-    if (!isUserRole(lastMessage?.role)) {
-      return "";
-    }
-    return getStableMessageId((lastMessage || {}) as StableMessageIdentity) || "";
-  }, [chatHistory?.messages]);
+  const isLastVisibleMessageUser = Boolean(lastVisibleUserState);
+
+  const lastVisibleUserMessageId = lastVisibleUserState?.stableId || "";
 
   const executeRestoreTailUserDraft = useCallback(async () => {
     if (
@@ -1409,41 +1206,25 @@ export default function AnywhereChat({
 
       dismissedTailUserKeyRef.current = recoveredTailUserKeyRef.current;
       setChatHistory((previousHistory) => {
-        if (!previousHistory || !Array.isArray(previousHistory.messages)) {
-          return previousHistory;
-        }
-
-        const previousMessages = previousHistory.messages;
-        if (previousMessages.length === 0) {
-          return previousHistory;
-        }
-
-        let targetIndex = -1;
-        for (let index = previousMessages.length - 1; index >= 0; index -= 1) {
-          if (isUserRole(previousMessages[index]?.role)) {
-            targetIndex = index;
-            break;
-          }
-        }
-        if (targetIndex < 0) {
-          return previousHistory;
-        }
-
-        const nextMessages = previousMessages.filter((_, index) => {
-          return index !== targetIndex;
-        });
-        return {
-          ...previousHistory,
-          messages: nextMessages,
-          total: nextMessages.length,
-          has_more: false,
-        };
+        return removeLastVisibleUserMessage(previousHistory) as ChatHistory | null;
       });
+      const visibleLastUserMessage = chatRef.current?.messages
+        .getMessages()
+        .slice()
+        .reverse()
+        .find((message) => message.role === "user");
+      if (visibleLastUserMessage?.id) {
+        chatRef.current?.messages.removeMessage({ id: visibleLastUserMessage.id });
+      }
+      sessionApi.removeLastUserMessage(sessionId);
+      const resolvedSessionId = sessionApi.getRealIdForSession(sessionId);
+      if (resolvedSessionId && resolvedSessionId !== sessionId) {
+        sessionApi.removeLastUserMessage(resolvedSessionId);
+      }
       setDraftInputValue(result.removed_text || recoveredTailUserDraft);
       setRecoveredTailUserDraft("");
       setTailUserActionHost(null);
       setTailUserActionMessageId("");
-      setRefreshKey((previous) => previous + 1);
       await loadChatHistory();
       if (runtimeStatusOpen) {
         runtimeStatusRetryCountRef.current = 0;
