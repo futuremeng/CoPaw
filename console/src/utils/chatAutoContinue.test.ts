@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { AgentScopeRuntimeRunStatus } from "@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/AgentScopeRuntime/types.js";
 import {
+  endsWithIncompleteVisibleOutput,
   endsWithLikelyInterruptedIntent,
   endsWithOnlyThinking,
   shouldAutoContinueResponse,
@@ -63,6 +64,40 @@ describe("chatAutoContinue", () => {
 
     it("does not trigger on a normal response with no thinking block", () => {
       expect(endsWithOnlyThinking("这是一个正常的回复。")).toBe(false);
+    });
+  });
+
+  describe("endsWithIncompleteVisibleOutput", () => {
+    it("detects thinking block + short mid-sentence visible text", () => {
+      const text = "<think>\n需要分析一下这个情况。\n</think>\n\n好的！我理解了，您要求严格按照 MCP";
+      expect(endsWithIncompleteVisibleOutput(text)).toBe(true);
+      expect(
+        shouldAutoContinueResponse({
+          status: AgentScopeRuntimeRunStatus.Completed,
+          sawFinalChunk: true,
+          assistantText: text,
+        }),
+      ).toBe(true);
+    });
+
+    it("detects thinking block + very short cutoff like '让我严格'", () => {
+      const text = "<think>\n长思考过程。\n</think>\n\n让我严格";
+      expect(endsWithIncompleteVisibleOutput(text)).toBe(true);
+    });
+
+    it("does not trigger when visible text ends with sentence punctuation", () => {
+      const text = "<think>\n思考中。\n</think>\n\n好的！";
+      expect(endsWithIncompleteVisibleOutput(text)).toBe(false);
+    });
+
+    it("does not trigger for response with no thinking block", () => {
+      const text = "好的，我明白了，按照规范操作";
+      expect(endsWithIncompleteVisibleOutput(text)).toBe(false);
+    });
+
+    it("does not trigger when visible text is long enough even without thinking", () => {
+      // No thinking block → rule should not apply
+      expect(endsWithIncompleteVisibleOutput("没有thinking块，但文字较短")).toBe(false);
     });
   });
 });

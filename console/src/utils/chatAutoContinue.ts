@@ -49,6 +49,27 @@ export function endsWithOnlyThinking(text: string): boolean {
   return false;
 }
 
+export function endsWithIncompleteVisibleOutput(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return false;
+  }
+  // Only applies when there is at least one thinking block
+  if (!/<think>/i.test(trimmed)) {
+    return false;
+  }
+  // Strip all complete thinking blocks to isolate the visible portion
+  const visible = trimmed.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  // No visible text → handled by endsWithOnlyThinking
+  if (!visible) {
+    return false;
+  }
+  // Visible text is short AND does not end with a proper sentence-ending punctuation
+  // → model produced a thinking block but then stopped mid-sentence
+  const completeSentenceEnders = /[。！？.!?]$/;
+  return visible.length < 120 && !completeSentenceEnders.test(visible);
+}
+
 export function endsWithLikelyInterruptedIntent(text: string): boolean {
   const trimmed = text.trim();
   if (!trimmed) {
@@ -104,6 +125,11 @@ export function shouldAutoContinueResponse(params: {
 
   // Thinking-only: model produced a reasoning block but no visible output after it
   if (endsWithOnlyThinking(trimmedText)) {
+    return true;
+  }
+
+  // Thinking block present but visible output is short and incomplete (mid-sentence)
+  if (endsWithIncompleteVisibleOutput(trimmedText)) {
     return true;
   }
 
