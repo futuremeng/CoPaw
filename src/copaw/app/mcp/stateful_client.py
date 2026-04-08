@@ -34,6 +34,23 @@ from agentscope.mcp import StatefulClientBase
 logger = logging.getLogger(__name__)
 
 
+def _iter_leaf_exceptions(exc: BaseException):
+    """Yield leaf exceptions, unwrapping ExceptionGroup recursively."""
+    if isinstance(exc, BaseExceptionGroup):
+        for sub_exc in exc.exceptions:
+            yield from _iter_leaf_exceptions(sub_exc)
+        return
+    yield exc
+
+
+def _extract_http_status_error(exc: BaseException) -> httpx.HTTPStatusError | None:
+    """Extract first HTTPStatusError from nested/exception-group errors."""
+    for leaf in _iter_leaf_exceptions(exc):
+        if isinstance(leaf, httpx.HTTPStatusError):
+            return leaf
+    return None
+
+
 class StdIOStatefulClient(StatefulClientBase):
     """StdIO MCP client with proper cross-task lifecycle management.
 
@@ -520,15 +537,41 @@ class HttpStatefulClient(StatefulClientBase):
                 # Context manager exits cleanly in THIS task
 
             except Exception as e:
-                logger.error(
-                    f"Error in MCP client lifecycle for {self.name}: {e}",
-                    exc_info=True,
-                )
+                retry_delay = 1.0
+                http_status_error = _extract_http_status_error(e)
+                if http_status_error is not None:
+                    status_code = http_status_error.response.status_code
+                    request_url = str(http_status_error.request.url)
+                    reason = (
+                        http_status_error.response.reason_phrase
+                        or "HTTP error"
+                    )
+
+                    # Reduce noisy rapid retries when upstream MCP is unavailable.
+                    retry_delay = 5.0 if status_code >= 500 else 2.0
+                    logger.warning(
+                        "MCP HTTP client lifecycle error for %s: HTTP %s %s (%s); retrying in %.1fs",
+                        self.name,
+                        status_code,
+                        reason,
+                        request_url,
+                        retry_delay,
+                    )
+                    logger.debug(
+                        "Detailed MCP HTTP lifecycle exception for %s",
+                        self.name,
+                        exc_info=True,
+                    )
+                else:
+                    logger.error(
+                        f"Error in MCP client lifecycle for {self.name}: {e}",
+                        exc_info=True,
+                    )
                 self.session = None
                 self.is_connected = False
                 self._cached_tools = None
                 self._ready_event.clear()
-                await asyncio.sleep(1)
+                await asyncio.sleep(retry_delay)
 
         logger.info(f"MCP client lifecycle task exited: {self.name}")
 
