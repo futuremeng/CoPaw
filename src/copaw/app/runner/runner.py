@@ -207,12 +207,47 @@ def _extract_status_code_from_message(exc: Exception) -> int | None:
         return None
 
 
+def _is_transient_transport_error(exc: Exception) -> bool:
+    """Whether an exception is a retryable HTTP transport failure."""
+    transport_error_names = {
+        "TransportError",
+        "ReadError",
+        "ReadTimeout",
+        "ConnectError",
+        "ConnectTimeout",
+        "RemoteProtocolError",
+    }
+    transport_error_markers = (
+        "peer closed connection",
+        "incomplete chunked read",
+        "server disconnected",
+        "connection reset",
+        "broken pipe",
+    )
+
+    for item in _iter_exception_chain(exc):
+        name = item.__class__.__name__
+        module = item.__class__.__module__
+        text = str(item).lower()
+        if module.startswith(("httpx", "httpcore")) and name in transport_error_names:
+            return True
+        if name == "RemoteProtocolError" and any(
+            marker in text for marker in transport_error_markers
+        ):
+            return True
+
+    return False
+
+
 def _is_transient_upstream_error(exc: Exception) -> bool:
     """Whether an exception likely represents a transient model backend failure."""
     status = _extract_status_code(exc)
     if status is None:
         status = _extract_status_code_from_message(exc)
     if status in _TRANSIENT_UPSTREAM_STATUS_CODES:
+        return True
+
+    if _is_transient_transport_error(exc):
         return True
 
     # Some upstream OpenAI-compatible providers may return generic
