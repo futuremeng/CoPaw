@@ -51,6 +51,7 @@ import {
   extractRenderableAssistantText,
   materializeThinkingOnlyFallback,
 } from "../../utils/runtimeResponseFallback";
+import { shouldAutoContinueResponse } from "../../utils/chatAutoContinue";
 import {
   getLastVisibleUserState,
   loadMergedRawChatHistory,
@@ -89,7 +90,6 @@ type WelcomeConfigShape = {
 const RUNTIME_STATUS_RETRY_DELAY_MS = 1500;
 const RUNTIME_STATUS_MAX_RETRIES = 2;
 const AUTO_CONTINUE_MAX_ATTEMPTS = 2;
-const AUTO_CONTINUE_MIN_LENGTH = 120;
 const AUTO_CONTINUE_MIN_INCREMENT_CHARS = 32;
 
 interface AnywhereChatProps {
@@ -620,62 +620,6 @@ function hasRenderableOutput(response: StreamResponseData): boolean {
 
 function extractAssistantText(response: StreamResponseData | null): string {
   return extractRenderableAssistantText(response);
-}
-
-function hasUnclosedMarkdownCodeFence(text: string): boolean {
-  const count = (text.match(/```/g) || []).length;
-  return count % 2 === 1;
-}
-
-function endsWithLikelyInterruptedToken(text: string): boolean {
-  const trimmed = text.trimEnd();
-  if (!trimmed) {
-    return false;
-  }
-  const interruptedSuffixes = [
-    ",",
-    ":",
-    ";",
-    "，",
-    "、",
-    "：",
-    "；",
-    "-",
-    "(",
-    "[",
-    "{",
-    "（",
-  ];
-  return interruptedSuffixes.some((suffix) => trimmed.endsWith(suffix));
-}
-
-function shouldAutoContinueResponse(params: {
-  status?: string;
-  sawFinalChunk: boolean;
-  assistantText: string;
-}): boolean {
-  const { status, sawFinalChunk, assistantText } = params;
-  const trimmedText = assistantText.trim();
-  if (!trimmedText) {
-    return false;
-  }
-
-  if (!sawFinalChunk) {
-    return true;
-  }
-
-  if (status !== AgentScopeRuntimeRunStatus.Completed) {
-    return false;
-  }
-
-  if (hasUnclosedMarkdownCodeFence(trimmedText)) {
-    return true;
-  }
-
-  return (
-    trimmedText.length >= AUTO_CONTINUE_MIN_LENGTH &&
-    endsWithLikelyInterruptedToken(trimmedText)
-  );
 }
 
 function buildAssistantTailFingerprint(text: string): string {

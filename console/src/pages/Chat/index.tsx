@@ -48,6 +48,7 @@ import {
   type RuntimeLoadingBridgeApi,
 } from "./utils";
 import { materializeThinkingOnlyFallback } from "../../utils/runtimeResponseFallback";
+import { shouldAutoContinueResponse } from "../../utils/chatAutoContinue";
 
 type CopyableContent = {
   type?: string;
@@ -83,7 +84,6 @@ type StreamResponseData = {
 
 const CHAT_ATTACHMENT_MAX_MB = 10;
 const AUTO_CONTINUE_MAX_ATTEMPTS = 2;
-const AUTO_CONTINUE_MIN_LENGTH = 120;
 const AUTO_CONTINUE_MIN_INCREMENT_CHARS = 32;
 
 interface SessionInfo {
@@ -466,62 +466,6 @@ function extractAssistantTextFromResponse(
   return chunks.join("\n").trim();
 }
 
-function hasUnclosedMarkdownCodeFence(text: string): boolean {
-  const count = (text.match(/```/g) || []).length;
-  return count % 2 === 1;
-}
-
-function endsWithLikelyInterruptedToken(text: string): boolean {
-  const trimmed = text.trimEnd();
-  if (!trimmed) {
-    return false;
-  }
-  const interruptedSuffixes = [
-    ",",
-    ":",
-    ";",
-    "，",
-    "、",
-    "：",
-    "；",
-    "-",
-    "(",
-    "[",
-    "{",
-    "（",
-  ];
-  return interruptedSuffixes.some((suffix) => trimmed.endsWith(suffix));
-}
-
-function shouldAutoContinueResponse(params: {
-  status?: string;
-  sawFinalChunk: boolean;
-  assistantText: string;
-}): boolean {
-  const { status, sawFinalChunk, assistantText } = params;
-  const trimmedText = assistantText.trim();
-  if (!trimmedText) {
-    return false;
-  }
-
-  if (!sawFinalChunk) {
-    return true;
-  }
-
-  if (status !== AgentScopeRuntimeRunStatus.Completed) {
-    return false;
-  }
-
-  if (hasUnclosedMarkdownCodeFence(trimmedText)) {
-    return true;
-  }
-
-  return (
-    trimmedText.length >= AUTO_CONTINUE_MIN_LENGTH &&
-    endsWithLikelyInterruptedToken(trimmedText)
-  );
-}
-
 function buildAssistantTailFingerprint(text: string): string {
   return text.replace(/\s+/g, " ").trim().slice(-240);
 }
@@ -583,30 +527,33 @@ function useMessageHistoryNavigation(
     text: string;
   }
 
-  const findMessageInDirection = (
-    messages: string[],
-    startIndex: number,
-    direction: 1 | -1,
-  ): MessageResult | null => {
-    const MAX_LOOKUP = 100;
-    let lookupIndex = startIndex;
-    let steps = 0;
+  const findMessageInDirection = useCallback(
+    (
+      messages: string[],
+      startIndex: number,
+      direction: 1 | -1,
+    ): MessageResult | null => {
+      const MAX_LOOKUP = 100;
+      let lookupIndex = startIndex;
+      let steps = 0;
 
-    while (
-      lookupIndex >= 0 &&
-      lookupIndex < messages.length &&
-      steps < MAX_LOOKUP
-    ) {
-      const messageText = messages[messages.length - 1 - lookupIndex];
-      if (messageText) {
-        return { index: lookupIndex, text: messageText };
+      while (
+        lookupIndex >= 0 &&
+        lookupIndex < messages.length &&
+        steps < MAX_LOOKUP
+      ) {
+        const messageText = messages[messages.length - 1 - lookupIndex];
+        if (messageText) {
+          return { index: lookupIndex, text: messageText };
+        }
+        lookupIndex += direction;
+        steps += 1;
       }
-      lookupIndex += direction;
-      steps += 1;
-    }
 
-    return null;
-  };
+      return null;
+    },
+    [],
+  );
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -618,7 +565,8 @@ function useMessageHistoryNavigation(
         target?.closest('[class*="sender"]') !== null;
 
       if (!isChatSender) return;
-      if (isComposingRef.current || (e as any).isComposing) return;
+      const composingEvent = e as KeyboardEvent & { isComposing?: boolean };
+      if (isComposingRef.current || composingEvent.isComposing) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       const textarea = target as HTMLTextAreaElement;
@@ -692,7 +640,12 @@ function useMessageHistoryNavigation(
       document.removeEventListener("keydown", handleKeyDown, true);
       document.removeEventListener("focusin", handleFocus, true);
     };
-  }, [isChatActive, isComposingRef, getUserMessagesWithText]);
+  }, [
+    isChatActive,
+    isComposingRef,
+    getUserMessagesWithText,
+    findMessageInDirection,
+  ]);
 }
 
 function RuntimeLoadingBridge({
@@ -2212,6 +2165,8 @@ export default function ChatPage() {
     scheduleReplaceNavigation,
     autoContinueEnabled,
     handleAutoContinueToggle,
+    runningConfigSnapshot,
+    savingAutoContinue,
   ]);
 
   return (
