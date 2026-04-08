@@ -1065,6 +1065,8 @@
     "title": "运行配置",
     "description": "配置智能体运行参数",
     "reactAgentTitle": "ReAct 智能体",
+    "autoContinueEnabled": "启用自动续写",
+    "autoContinueEnabledTooltip": "启用后，聊天端在检测到回答中断时可自动续写。关闭后仅允许手动续写。",
     "llmRetryTitle": "LLM 自动重试",
     "llmRetryEnabled": "启用自动重试",
     "llmRetryEnabledTooltip": "对限流、超时、连接中断等瞬时 LLM API 错误自动重试。保存后对新的请求生效。",

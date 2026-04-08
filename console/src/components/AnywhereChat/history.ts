@@ -6,6 +6,8 @@ import type { ChatHistory, ChatSpec, Message } from "../../api/types";
 const CHAT_HISTORY_PAGE_SIZE = 100;
 const RUNNING_EMPTY_HISTORY_RETRY_COUNT = 20;
 const RUNNING_EMPTY_HISTORY_RETRY_DELAY_MS = 500;
+const INTERNAL_AUTO_CONTINUE_PROMPT =
+  "请继续上一条回答，不要重复已输出内容，从中断处接着写，直到完整结束。";
 
 type StableMessageIdentity = {
   id?: unknown;
@@ -45,6 +47,17 @@ function normalizeMessageRole(role: unknown): string {
 export function isUserRole(role: unknown): boolean {
   const normalized = normalizeMessageRole(role);
   return normalized === "user" || normalized === "human";
+}
+
+function isInternalAutoContinueUserMessage(message: Message): boolean {
+  if (!isUserRole(message?.role)) {
+    return false;
+  }
+  return extractTextFromChatContent(message?.content) === INTERNAL_AUTO_CONTINUE_PROMPT;
+}
+
+function filterInternalAutoContinueUserMessages(messages: Message[]): Message[] {
+  return messages.filter((message) => !isInternalAutoContinueUserMessage(message));
 }
 
 function collectSessionLineageIds(chats: ChatSpec[], sessionId: string): string[] {
@@ -173,7 +186,9 @@ async function loadPagedChatHistory(chatId: string): Promise<ChatHistory> {
       leafHistory = history;
       latestStatus = history.status ?? latestStatus;
 
-      const pageMessages = Array.isArray(history.messages) ? history.messages : [];
+      const pageMessages = filterInternalAutoContinueUserMessages(
+        Array.isArray(history.messages) ? history.messages : [],
+      );
       allMessages.push(...pageMessages);
 
       const hasMoreByFlag = history.has_more === true;

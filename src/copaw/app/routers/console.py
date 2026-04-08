@@ -29,6 +29,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/console", tags=["console"])
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+AUTO_CONTINUE_PROMPT = (
+    "请继续上一条回答，不要重复已输出内容，从中断处接着写，直到完整结束。"
+)
 
 
 def _safe_filename(name: str) -> str:
@@ -37,7 +40,11 @@ def _safe_filename(name: str) -> str:
     return re.sub(r"[^\w.\-]", "_", base)[:200] or "file"
 
 
-def _extract_session_and_payload(request_data: Union[AgentRequest, dict]):
+def _extract_session_and_payload(
+    request_data: Union[AgentRequest, dict],
+    *,
+    auto_continue_enabled: bool = True,
+):
     """Extract run_key (ChatSpec.id), session_id, and native payload.
 
     run_key must be ChatSpec.id (chat_id) so it matches list_chats/get_chat.
@@ -53,6 +60,11 @@ def _extract_session_and_payload(request_data: Union[AgentRequest, dict]):
         channel_id = request_data.get("channel", "console")
         sender_id = request_data.get("user_id", "default")
         session_id = request_data.get("session_id", "default")
+        continue_mode = request_data.get("continue_mode") is True
+        auto_continue = request_data.get("auto_continue") is True
+        if continue_mode and not auto_continue_enabled:
+            continue_mode = False
+            auto_continue = False
         input_data = request_data.get("input", [])
         content_parts = []
         for content_part in input_data:
@@ -60,6 +72,11 @@ def _extract_session_and_payload(request_data: Union[AgentRequest, dict]):
                 content_parts.extend(list(content_part.content or []))
             elif isinstance(content_part, dict) and "content" in content_part:
                 content_parts.extend(content_part["content"] or [])
+        if continue_mode and not content_parts:
+            content_parts = [{"type": "text", "text": AUTO_CONTINUE_PROMPT}]
+    if isinstance(request_data, AgentRequest):
+        continue_mode = False
+        auto_continue = False
 
     native_payload = {
         "channel_id": channel_id,
@@ -68,6 +85,8 @@ def _extract_session_and_payload(request_data: Union[AgentRequest, dict]):
         "meta": {
             "session_id": session_id,
             "user_id": sender_id,
+            "continue_mode": continue_mode,
+            "auto_continue": auto_continue,
         },
     }
     return native_payload
@@ -95,7 +114,12 @@ async def post_console_chat(
             detail="Channel Console not found",
         )
     try:
-        native_payload = _extract_session_and_payload(request_data)
+        native_payload = _extract_session_and_payload(
+            request_data,
+            auto_continue_enabled=bool(
+                getattr(workspace.config.running, "auto_continue_enabled", True),
+            ),
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     session_id = console_channel.resolve_session_id(

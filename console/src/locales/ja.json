@@ -1062,6 +1062,8 @@
     "title": "設定",
     "description": "エージェントのランタイムパラメーターを設定します",
     "reactAgentTitle": "ReActエージェント",
+    "autoContinueEnabled": "自動続きを有効化",
+    "autoContinueEnabledTooltip": "有効にすると、回答が途中で中断されたと判定された場合にチャット側で自動続きを実行できます。無効にすると手動続行のみになります。",
     "llmRetryTitle": "LLM自動再試行",
     "llmRetryEnabled": "自動再試行を有効化",
     "llmRetryEnabledTooltip": "レート制限、タイムアウト、接続エラーなどの一時的なLLM API失敗を自動で再試行します。保存後、新しいリクエストに適用されます。",

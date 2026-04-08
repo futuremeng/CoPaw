@@ -88,6 +88,9 @@ type WelcomeConfigShape = {
 
 const RUNTIME_STATUS_RETRY_DELAY_MS = 1500;
 const RUNTIME_STATUS_MAX_RETRIES = 2;
+const AUTO_CONTINUE_MAX_ATTEMPTS = 2;
+const AUTO_CONTINUE_MIN_LENGTH = 120;
+const AUTO_CONTINUE_MIN_INCREMENT_CHARS = 32;
 
 interface AnywhereChatProps {
   sessionId: string;
@@ -619,6 +622,66 @@ function extractAssistantText(response: StreamResponseData | null): string {
   return extractRenderableAssistantText(response);
 }
 
+function hasUnclosedMarkdownCodeFence(text: string): boolean {
+  const count = (text.match(/```/g) || []).length;
+  return count % 2 === 1;
+}
+
+function endsWithLikelyInterruptedToken(text: string): boolean {
+  const trimmed = text.trimEnd();
+  if (!trimmed) {
+    return false;
+  }
+  const interruptedSuffixes = [
+    ",",
+    ":",
+    ";",
+    "，",
+    "、",
+    "：",
+    "；",
+    "-",
+    "(",
+    "[",
+    "{",
+    "（",
+  ];
+  return interruptedSuffixes.some((suffix) => trimmed.endsWith(suffix));
+}
+
+function shouldAutoContinueResponse(params: {
+  status?: string;
+  sawFinalChunk: boolean;
+  assistantText: string;
+}): boolean {
+  const { status, sawFinalChunk, assistantText } = params;
+  const trimmedText = assistantText.trim();
+  if (!trimmedText) {
+    return false;
+  }
+
+  if (!sawFinalChunk) {
+    return true;
+  }
+
+  if (status !== AgentScopeRuntimeRunStatus.Completed) {
+    return false;
+  }
+
+  if (hasUnclosedMarkdownCodeFence(trimmedText)) {
+    return true;
+  }
+
+  return (
+    trimmedText.length >= AUTO_CONTINUE_MIN_LENGTH &&
+    endsWithLikelyInterruptedToken(trimmedText)
+  );
+}
+
+function buildAssistantTailFingerprint(text: string): string {
+  return text.replace(/\s+/g, " ").trim().slice(-240);
+}
+
 function extractRawMarkdownText(response: CopyableResponse): string {
   const normalized = materializeThinkingOnlyFallback(
     response as CopyableResponse & StreamResponseData,
@@ -717,6 +780,9 @@ export default function AnywhereChat({
   const handledAutoAttachIdRef = useRef("");
   const recoveredTailUserKeyRef = useRef("");
   const dismissedTailUserKeyRef = useRef("");
+  const autoContinueAttemptsRef = useRef<Record<string, number>>({});
+  const autoContinueInFlightRef = useRef<Record<string, boolean>>({});
+  const autoContinueTailRef = useRef<Record<string, string>>({});
 
   const multimodalCaps = useMemo(() => {
     const providerId = activeModels?.active_llm?.provider_id;
@@ -1828,6 +1894,8 @@ export default function AnywhereChat({
       reconnect?: boolean;
       biz_params?: {
         reconnect?: boolean;
+        continue_mode?: boolean;
+        auto_continue?: boolean;
       };
     }) => {
       if (!sessionId) {
@@ -1955,6 +2023,9 @@ export default function AnywhereChat({
       }
 
       const input = data.input || [];
+      const isAutoContinueRequest =
+        data.biz_params?.continue_mode === true ||
+        data.biz_params?.auto_continue === true;
       const lastInput = input.slice(-1);
       const latestUserText = extractLatestUserText(input);
       const bootstrapText = isPipelineDesignBootstrapText(latestUserText);
@@ -2028,15 +2099,19 @@ export default function AnywhereChat({
         }
       }
 
+      const requestSessionId =
+        backendSessionId || data.session_id || session?.session_id || "";
+      const requestUserId = data.user_id || session?.user_id || "default";
+      const requestChannel = data.channel || session?.channel || "console";
       const response = await fetch(getApiUrl("/console/chat"), {
         method: "POST",
         headers,
         signal: data.signal,
         body: JSON.stringify({
           input: rewrittenInput,
-          session_id: backendSessionId || data.session_id || session?.session_id || "",
-          user_id: data.user_id || session?.user_id || "default",
-          channel: data.channel || session?.channel || "console",
+          session_id: requestSessionId,
+          user_id: requestUserId,
+          channel: requestChannel,
           stream: true,
         }),
       });
@@ -2053,8 +2128,20 @@ export default function AnywhereChat({
       const sanitizedStream = sanitizeConsoleChatSseStream(response.body);
       const [uiStream, observerStream] = sanitizedStream.tee();
       const [cacheStream, persistStream] = observerStream.tee();
-      const persistedSessionId = backendSessionId || data.session_id || session?.session_id || "";
+      let cacheMonitorStream: ReadableStream<Uint8Array> = cacheStream;
+      let callbackStream: ReadableStream<Uint8Array> | null = null;
+      if (onAssistantTurnCompleted) {
+        const [forCallback, forMonitor] = cacheStream.tee();
+        callbackStream = forCallback;
+        cacheMonitorStream = forMonitor;
+      }
+      const persistedSessionId = requestSessionId;
       persistStreamSession(persistedSessionId, persistStream);
+
+      if (persistedSessionId && !isAutoContinueRequest) {
+        autoContinueAttemptsRef.current[persistedSessionId] = 0;
+        autoContinueInFlightRef.current[persistedSessionId] = false;
+      }
 
       let finalized = false;
       const finalize = () => {
@@ -2073,6 +2160,10 @@ export default function AnywhereChat({
 
       if (onAssistantTurnCompleted) {
         void (async () => {
+          const callbackReadable = callbackStream;
+          if (!callbackReadable) {
+            return;
+          }
           const responseBuilder = new AgentScopeRuntimeResponseBuilder({
             id: "",
             status: AgentScopeRuntimeRunStatus.Created,
@@ -2081,7 +2172,7 @@ export default function AnywhereChat({
           let latestRenderable: StreamResponseData | null = null;
 
           try {
-            for await (const chunk of Stream({ readableStream: cacheStream })) {
+            for await (const chunk of Stream({ readableStream: callbackReadable })) {
               let chunkData: unknown;
               try {
                 chunkData = JSON.parse(chunk.data);
@@ -2132,6 +2223,123 @@ export default function AnywhereChat({
         })();
       }
 
+      void (async () => {
+        const responseBuilder = new AgentScopeRuntimeResponseBuilder({
+          id: "",
+          status: AgentScopeRuntimeRunStatus.Created,
+          created_at: 0,
+        });
+        let sawFinalChunk = false;
+        let lastStatus: string | undefined;
+        let latestRenderable: StreamResponseData | null = null;
+
+        try {
+          for await (const chunk of Stream({ readableStream: cacheMonitorStream })) {
+            let chunkData: unknown;
+            try {
+              chunkData = JSON.parse(chunk.data);
+            } catch {
+              continue;
+            }
+
+            const responseData = responseBuilder.handle(
+              chunkData as never,
+            ) as unknown as StreamResponseData;
+            const renderableResponse = materializeThinkingOnlyFallback(responseData);
+            lastStatus = responseData.status;
+            if (hasRenderableOutput(renderableResponse)) {
+              latestRenderable = JSON.parse(
+                JSON.stringify(renderableResponse),
+              ) as StreamResponseData;
+            }
+            if (isFinalResponseStatus(responseData.status)) {
+              sawFinalChunk = true;
+            }
+          }
+        } catch {
+          // Ignore monitor-side parse errors.
+        }
+
+        if (
+          !persistedSessionId
+          || runningConfig?.auto_continue_enabled === false
+        ) {
+          return;
+        }
+        if (sessionIdRef.current !== sessionId) {
+          return;
+        }
+
+        const assistantText = extractAssistantText(latestRenderable);
+        const shouldContinue = shouldAutoContinueResponse({
+          status: lastStatus,
+          sawFinalChunk,
+          assistantText,
+        });
+        const tail = buildAssistantTailFingerprint(assistantText);
+        const previousTail = autoContinueTailRef.current[persistedSessionId] || "";
+
+        if (!shouldContinue) {
+          autoContinueAttemptsRef.current[persistedSessionId] = 0;
+          autoContinueTailRef.current[persistedSessionId] = tail;
+          return;
+        }
+
+        const attempts = autoContinueAttemptsRef.current[persistedSessionId] || 0;
+        if (attempts >= AUTO_CONTINUE_MAX_ATTEMPTS) {
+          return;
+        }
+
+        if (
+          isAutoContinueRequest &&
+          tail &&
+          previousTail &&
+          tail.length >= previousTail.length &&
+          tail.slice(-AUTO_CONTINUE_MIN_INCREMENT_CHARS) ===
+            previousTail.slice(-AUTO_CONTINUE_MIN_INCREMENT_CHARS)
+        ) {
+          return;
+        }
+
+        if (autoContinueInFlightRef.current[persistedSessionId]) {
+          return;
+        }
+
+        autoContinueAttemptsRef.current[persistedSessionId] = attempts + 1;
+        autoContinueInFlightRef.current[persistedSessionId] = true;
+        autoContinueTailRef.current[persistedSessionId] = tail;
+
+        message.info(
+          t(
+            "chat.autoContinue.triggered",
+            "检测到回答可能未完成，已自动继续生成。",
+          ),
+        );
+
+        try {
+          const continueResponse = await fetch(getApiUrl("/console/chat"), {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              input: [],
+              session_id: persistedSessionId,
+              user_id: requestUserId,
+              channel: requestChannel,
+              stream: true,
+              continue_mode: true,
+              auto_continue: true,
+            }),
+          });
+          if (!continueResponse.ok || !continueResponse.body) {
+            return;
+          }
+          const continueStream = sanitizeConsoleChatSseStream(continueResponse.body);
+          persistStreamSession(persistedSessionId, continueStream);
+        } finally {
+          autoContinueInFlightRef.current[persistedSessionId] = false;
+        }
+      })();
+
       const forwardedUiStream = new ReadableStream<Uint8Array>({
         start(controller) {
           const reader = uiStream.getReader();
@@ -2167,8 +2375,10 @@ export default function AnywhereChat({
       onAssistantTurnCompleted,
       persistStreamSession,
       runtimeStatusOpen,
+      runningConfig?.auto_continue_enabled,
       selectedAgent,
       sessionId,
+      t,
       updateTransientMessages,
     ],
   );

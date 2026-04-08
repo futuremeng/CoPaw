@@ -31,6 +31,8 @@ const CARD_RESPONSE = "AgentScopeRuntimeResponseCard";
 const CHAT_HISTORY_PAGE_SIZE = 80;
 const RUNNING_EMPTY_HISTORY_RETRY_COUNT = 40;
 const RUNNING_EMPTY_HISTORY_RETRY_DELAY_MS = 500;
+const INTERNAL_AUTO_CONTINUE_PROMPT =
+  "请继续上一条回答，不要重复已输出内容，从中断处接着写，直到完整结束。";
 
 type ChatsListPayload =
   | ChatSpec[]
@@ -200,6 +202,17 @@ function isMeaningfulOutputMessage(message: OutputMessage): boolean {
   return hasVisibleTextContent(message.content);
 }
 
+function isInternalAutoContinueUserMessage(message: Message): boolean {
+  if (message.role !== ROLE_USER) {
+    return false;
+  }
+  return extractTextFromContent(message.content) === INTERNAL_AUTO_CONTINUE_PROMPT;
+}
+
+function filterInternalAutoContinueUserMessages(messages: Message[]): Message[] {
+  return messages.filter((message) => !isInternalAutoContinueUserMessage(message));
+}
+
 function getStableMessageId(message: unknown): string | null {
   if (!message || typeof message !== "object") {
     return null;
@@ -345,16 +358,17 @@ function splitOutputMessagesIntoTurns(outputMsgs: OutputMessage[]): OutputMessag
 const convertMessages = (
   messages: Message[],
 ): IAgentScopeRuntimeWebUIMessage[] => {
+  const filteredMessages = filterInternalAutoContinueUserMessages(messages);
   const result: IAgentScopeRuntimeWebUIMessage[] = [];
   let i = 0;
 
-  while (i < messages.length) {
-    if (messages[i].role === ROLE_USER) {
-      result.push(buildUserCard(messages[i++]));
+  while (i < filteredMessages.length) {
+    if (filteredMessages[i].role === ROLE_USER) {
+      result.push(buildUserCard(filteredMessages[i++]));
     } else {
       const outputMsgs: OutputMessage[] = [];
-      while (i < messages.length && messages[i].role !== ROLE_USER) {
-        const outputMsg = toOutputMessage(messages[i++]);
+      while (i < filteredMessages.length && filteredMessages[i].role !== ROLE_USER) {
+        const outputMsg = toOutputMessage(filteredMessages[i++]);
         if (isMeaningfulOutputMessage(outputMsg)) {
           outputMsgs.push(outputMsg);
         }

@@ -521,6 +521,14 @@ class AgentsRunningConfig(BaseModel):
         ),
     )
 
+    auto_continue_enabled: bool = Field(
+        default=True,
+        description=(
+            "Whether chat auto-continue is enabled when the assistant response "
+            "is detected as likely incomplete."
+        ),
+    )
+
     @model_validator(mode="after")
     def validate_llm_retry_backoff(self) -> "AgentsRunningConfig":
         """Validate LLM retry backoff relationships."""

@@ -1138,6 +1138,8 @@
     "title": "Configuration",
     "description": "Configure agent runtime parameters",
     "reactAgentTitle": "ReAct Agent",
+    "autoContinueEnabled": "Enable Auto Continue",
+    "autoContinueEnabledTooltip": "When enabled, interrupted assistant responses can be auto-continued by chat clients. Disable to force manual continuation.",
     "llmRetryTitle": "LLM Auto Retry",
     "llmRetryEnabled": "Enable Auto Retry",
     "llmRetryEnabledTooltip": "Automatically retry transient LLM API failures such as rate limits, timeouts, or connection errors. Applies to new requests after saving.",

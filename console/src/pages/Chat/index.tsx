@@ -7,7 +7,7 @@ import {
   Stream,
 } from "@agentscope-ai/chat";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Button, Empty, Modal, Popover, Result, Spin, Tooltip } from "antd";
+import { Button, Empty, Modal, Popover, Result, Spin, Switch, Tooltip } from "antd";
 import { useAppMessage } from "../../hooks/useAppMessage";
 import { ExclamationCircleOutlined, SettingOutlined } from "@ant-design/icons";
 import {
@@ -21,9 +21,11 @@ import { useLocation, useNavigate } from "react-router-dom";
 import sessionApi from "./sessionApi";
 import defaultConfig, { getDefaultConfig } from "./OptionsPanel/defaultConfig";
 import { chatApi } from "../../api/modules/chat";
+import { agentApi } from "../../api/modules/agent";
 import { buildAuthHeaders } from "../../api/authHeaders";
 import { getApiUrl } from "../../api/config";
 import { providerApi } from "../../api/modules/provider";
+import type { AgentsRunningConfig } from "../../api/types";
 import type { ProviderInfo, ModelInfo } from "../../api/types";
 import ModelSelector from "./ModelSelector";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -80,6 +82,9 @@ type StreamResponseData = {
 };
 
 const CHAT_ATTACHMENT_MAX_MB = 10;
+const AUTO_CONTINUE_MAX_ATTEMPTS = 2;
+const AUTO_CONTINUE_MIN_LENGTH = 120;
+const AUTO_CONTINUE_MIN_INCREMENT_CHARS = 32;
 
 interface SessionInfo {
   session_id?: string;
@@ -116,6 +121,8 @@ type RequestInputMessage = ChatInputItem & {
 
 type BizParams = Record<string, unknown> & {
   reconnect?: boolean;
+  continue_mode?: boolean;
+  auto_continue?: boolean;
 };
 
 type CustomFetchData = {
@@ -432,6 +439,93 @@ function hasRenderableOutput(response: StreamResponseData): boolean {
   );
 }
 
+function extractAssistantTextFromResponse(
+  response: StreamResponseData | null,
+): string {
+  if (!response?.output?.length) {
+    return "";
+  }
+
+  const chunks: string[] = [];
+  for (const message of response.output) {
+    if (!Array.isArray(message?.content)) {
+      continue;
+    }
+    for (const part of message.content as Array<Record<string, unknown>>) {
+      const text =
+        typeof part?.text === "string"
+          ? part.text
+          : typeof part?.refusal === "string"
+            ? part.refusal
+            : "";
+      if (text) {
+        chunks.push(text);
+      }
+    }
+  }
+  return chunks.join("\n").trim();
+}
+
+function hasUnclosedMarkdownCodeFence(text: string): boolean {
+  const count = (text.match(/```/g) || []).length;
+  return count % 2 === 1;
+}
+
+function endsWithLikelyInterruptedToken(text: string): boolean {
+  const trimmed = text.trimEnd();
+  if (!trimmed) {
+    return false;
+  }
+  const interruptedSuffixes = [
+    ",",
+    ":",
+    ";",
+    "，",
+    "、",
+    "：",
+    "；",
+    "-",
+    "(",
+    "[",
+    "{",
+    "（",
+  ];
+  return interruptedSuffixes.some((suffix) => trimmed.endsWith(suffix));
+}
+
+function shouldAutoContinueResponse(params: {
+  status?: string;
+  sawFinalChunk: boolean;
+  assistantText: string;
+}): boolean {
+  const { status, sawFinalChunk, assistantText } = params;
+  const trimmedText = assistantText.trim();
+  if (!trimmedText) {
+    return false;
+  }
+
+  if (!sawFinalChunk) {
+    return true;
+  }
+
+  if (status !== AgentScopeRuntimeRunStatus.Completed) {
+    return false;
+  }
+
+  if (hasUnclosedMarkdownCodeFence(trimmedText)) {
+    return true;
+  }
+
+  return (
+    trimmedText.length >= AUTO_CONTINUE_MIN_LENGTH &&
+    endsWithLikelyInterruptedToken(trimmedText)
+  );
+}
+
+function buildAssistantTailFingerprint(text: string): string {
+  return text.replace(/\s+/g, " ").trim().slice(-240);
+}
+
 function getResponseCardData(
   message?: RuntimeUiMessage,
 ): StreamResponseData | null {
@@ -704,10 +798,18 @@ export default function ChatPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historySessions, setHistorySessions] = useState<HeaderSession[]>([]);
   const [currentChatNameOverride, setCurrentChatNameOverride] = useState("");
+  const [autoContinueEnabled, setAutoContinueEnabled] = useState<boolean>(true);
+  const [runningConfigSnapshot, setRunningConfigSnapshot] =
+    useState<AgentsRunningConfig | null>(null);
+  const [savingAutoContinue, setSavingAutoContinue] = useState(false);
   const [, setChatStatus] = useState<"idle" | "running">("idle");
   const [, setReconnectStreaming] = useState(false);
   const runtimeLoadingBridgeRef = useRef<RuntimeLoadingBridgeApi | null>(null);
   const { message } = useAppMessage();
+  const autoContinueEnabledRef = useRef(autoContinueEnabled);
+  const autoContinueAttemptsRef = useRef<Record<string, number>>({});
+  const autoContinueInFlightRef = useRef<Record<string, boolean>>({});
+  const autoContinueTailRef = useRef<Record<string, string>>({});
 
   const isChatActiveRef = useRef(false);
   isChatActiveRef.current =
@@ -736,6 +838,65 @@ export default function ChatPage() {
   useMessageHistoryNavigation(chatRef, isChatActive, isComposingRef);
   chatIdRef.current = chatId;
   navigateRef.current = navigate;
+
+  useEffect(() => {
+    autoContinueEnabledRef.current = autoContinueEnabled;
+  }, [autoContinueEnabled]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadRunningConfig = async () => {
+      try {
+        const runtimeConfig = await agentApi.getAgentRunningConfig();
+        if (!cancelled) {
+          setRunningConfigSnapshot(runtimeConfig ?? null);
+          setAutoContinueEnabled(runtimeConfig?.auto_continue_enabled ?? true);
+        }
+      } catch {
+        if (!cancelled) {
+          setRunningConfigSnapshot(null);
+          setAutoContinueEnabled(true);
+        }
+      }
+    };
+
+    void loadRunningConfig();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedAgent]);
+
+  const handleAutoContinueToggle = useCallback(
+    async (checked: boolean) => {
+      if (!runningConfigSnapshot || savingAutoContinue) {
+        return;
+      }
+
+      setSavingAutoContinue(true);
+      try {
+        const savedConfig = await agentApi.updateAgentRunningConfig({
+          ...runningConfigSnapshot,
+          auto_continue_enabled: checked,
+        });
+        setRunningConfigSnapshot(savedConfig);
+        setAutoContinueEnabled(savedConfig?.auto_continue_enabled ?? checked);
+        message.success(
+          checked
+            ? t("chat.autoContinue.enabled", "自动继续生成已开启")
+            : t("chat.autoContinue.disabled", "自动继续生成已关闭"),
+        );
+      } catch (error) {
+        message.error(
+          error instanceof Error
+            ? error.message
+            : t("agentConfig.saveFailed", "配置保存失败"),
+        );
+      } finally {
+        setSavingAutoContinue(false);
+      }
+    },
+    [message, runningConfigSnapshot, savingAutoContinue, t],
+  );
 
   const scheduleReplaceNavigation = useCallback((target: string) => {
     pendingNavigationTargetRef.current = target;
@@ -1498,6 +1659,8 @@ export default function ChatPage() {
       }
 
       const { input = [], biz_params } = data;
+      const isAutoContinueRequest =
+        biz_params?.continue_mode === true || biz_params?.auto_continue === true;
       const latestUserText = extractLatestUserText(input);
       const bootstrapText = isPipelineDesignBootstrapText(latestUserText);
       const shouldInlinePipelineGuide =
@@ -1544,6 +1707,11 @@ export default function ChatPage() {
         ...biz_params,
       };
 
+      if (requestBody.session_id && !isAutoContinueRequest) {
+        autoContinueAttemptsRef.current[requestBody.session_id] = 0;
+        autoContinueInFlightRef.current[requestBody.session_id] = false;
+      }
+
       const backendChatId =
         sessionApi.getRealIdForSession(requestBody.session_id) ??
         chatIdRef.current ??
@@ -1576,15 +1744,130 @@ export default function ChatPage() {
       }
 
       const [uiStream, cacheStream] = response.body.tee();
+      const [uiReadable, monitorStream] = uiStream.tee();
       persistStreamSession(requestBody.session_id, cacheStream);
 
-      return new Response(uiStream, {
+      void (async () => {
+        const responseBuilder = new AgentScopeRuntimeResponseBuilder({
+          id: "",
+          status: AgentScopeRuntimeRunStatus.Created,
+          created_at: 0,
+        });
+
+        let sawFinalChunk = false;
+        let lastStatus: string | undefined;
+        let latestRenderable: StreamResponseData | null = null;
+
+        try {
+          for await (const chunk of Stream({ readableStream: monitorStream })) {
+            let chunkData: unknown;
+            try {
+              chunkData = JSON.parse(chunk.data);
+            } catch {
+              continue;
+            }
+
+            const responseData = responseBuilder.handle(
+              chunkData as never,
+            ) as StreamResponseData;
+            const renderableResponse = materializeThinkingOnlyFallback(responseData);
+            lastStatus = responseData.status;
+            if (hasRenderableOutput(renderableResponse)) {
+              latestRenderable = cloneValue(renderableResponse);
+            }
+            if (isFinalResponseStatus(responseData.status)) {
+              sawFinalChunk = true;
+            }
+          }
+        } catch {
+          // Ignore monitor-side stream/parser errors.
+        }
+
+        const currentSessionId = window.currentSessionId || "";
+        if (
+          !autoContinueEnabledRef.current ||
+          !requestBody.session_id ||
+          requestBody.session_id !== currentSessionId
+        ) {
+          return;
+        }
+
+        const assistantText = extractAssistantTextFromResponse(latestRenderable);
+        const shouldContinue = shouldAutoContinueResponse({
+          status: lastStatus,
+          sawFinalChunk,
+          assistantText,
+        });
+        const tail = buildAssistantTailFingerprint(assistantText);
+        const previousTail = autoContinueTailRef.current[requestBody.session_id] || "";
+
+        if (!shouldContinue) {
+          autoContinueAttemptsRef.current[requestBody.session_id] = 0;
+          autoContinueTailRef.current[requestBody.session_id] = tail;
+          return;
+        }
+
+        const attempts = autoContinueAttemptsRef.current[requestBody.session_id] || 0;
+        if (attempts >= AUTO_CONTINUE_MAX_ATTEMPTS) {
+          return;
+        }
+
+        if (
+          isAutoContinueRequest &&
+          tail &&
+          previousTail &&
+          tail.length >= previousTail.length &&
+          tail.slice(-AUTO_CONTINUE_MIN_INCREMENT_CHARS) ===
+            previousTail.slice(-AUTO_CONTINUE_MIN_INCREMENT_CHARS)
+        ) {
+          return;
+        }
+
+        if (autoContinueInFlightRef.current[requestBody.session_id]) {
+          return;
+        }
+
+        autoContinueAttemptsRef.current[requestBody.session_id] = attempts + 1;
+        autoContinueInFlightRef.current[requestBody.session_id] = true;
+        autoContinueTailRef.current[requestBody.session_id] = tail;
+
+        message.info(
+          t(
+            "chat.autoContinue.triggered",
+            "检测到回答可能未完成，已自动继续生成。",
+          ),
+        );
+
+        try {
+          const continueResponse = await fetch(getApiUrl("/console/chat"), {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              input: [],
+              session_id: requestBody.session_id,
+              user_id: requestBody.user_id,
+              channel: requestBody.channel,
+              stream: true,
+              continue_mode: true,
+              auto_continue: true,
+            }),
+          });
+          if (!continueResponse.ok || !continueResponse.body) {
+            return;
+          }
+          persistStreamSession(requestBody.session_id, continueResponse.body);
+        } finally {
+          autoContinueInFlightRef.current[requestBody.session_id] = false;
+        }
+      })();
+
+      return new Response(uiReadable, {
         status: response.status,
         statusText: response.statusText,
         headers: response.headers,
       });
     },
-    [persistStreamSession, selectedAgent, setChatStatus, setReconnectStreaming],
+    [message, persistStreamSession, selectedAgent, setChatStatus, setReconnectStreaming, t],
   );
 
   const handleFileUpload = useCallback(
@@ -1678,6 +1961,63 @@ export default function ChatPage() {
             </span>
             <span style={{ flex: 1 }} />
             <ModelSelector />
+            <Popover
+              trigger="click"
+              placement="bottomRight"
+              content={
+                <div style={{ minWidth: 280 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 8 }}>
+                    {t("chat.autoContinue.title", "自动继续生成")}
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 12,
+                    }}
+                  >
+                    <span>
+                      {t(
+                        "chat.autoContinue.switchLabel",
+                        "检测到回答中断时自动续写",
+                      )}
+                    </span>
+                    <Switch
+                      checked={autoContinueEnabled}
+                      onChange={handleAutoContinueToggle}
+                      size="small"
+                      disabled={!runningConfigSnapshot || savingAutoContinue}
+                      loading={savingAutoContinue}
+                    />
+                  </div>
+                  <div
+                    style={{
+                      marginTop: 8,
+                      color: "rgba(0, 0, 0, 0.45)",
+                      fontSize: 12,
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {t(
+                      "chat.autoContinue.help",
+                      "默认最多自动续写 2 次，避免循环续写。",
+                    )}
+                  </div>
+                </div>
+              }
+            >
+              <Tooltip
+                title={t("chat.autoContinue.title", "自动继续生成")}
+                mouseEnterDelay={0.3}
+              >
+                <IconButton
+                  bordered={false}
+                  icon={<SettingOutlined />}
+                  aria-label={t("chat.autoContinue.title", "自动继续生成")}
+                />
+              </Tooltip>
+            </Popover>
             <Tooltip title={t("chat.newChat", "New Chat")} mouseEnterDelay={0.3}>
               <IconButton
                 bordered={false}
@@ -1870,6 +2210,8 @@ export default function ChatPage() {
     loadHistorySessions,
     chatId,
     scheduleReplaceNavigation,
+    autoContinueEnabled,
+    handleAutoContinueToggle,
   ]);
 
   return (

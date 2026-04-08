@@ -47,6 +47,7 @@ export interface EmbeddingConfig {
 
 export interface AgentsRunningConfig {
   max_iters: number;
+  auto_continue_enabled?: boolean;
   llm_retry_enabled: boolean;
   llm_max_retries: number;
   llm_backoff_base: number;
