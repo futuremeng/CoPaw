@@ -18,13 +18,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import shutil
 from contextlib import AsyncExitStack
 from typing import Any, Literal
 
+import httpx
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters
 from mcp.client.sse import sse_client
 from mcp.client.streamable_http import streamable_http_client
+from mcp.shared._httpx_utils import create_mcp_http_client
 
 from agentscope.mcp import StatefulClientBase
 
@@ -98,7 +101,9 @@ class StdIOStatefulClient(StatefulClientBase):
         self._lifecycle_task: asyncio.Task | None = None
         self._reload_event = asyncio.Event()
         self._ready_event = asyncio.Event()
+        self._failed_event = asyncio.Event()
         self._stop_event = asyncio.Event()
+        self._last_error: RuntimeError | None = None
 
         # Session state
         self.session: ClientSession | None = None
@@ -116,6 +121,8 @@ class StdIOStatefulClient(StatefulClientBase):
         from mcp.client.stdio import stdio_client
 
         while not self._stop_event.is_set():
+            self._failed_event.clear()
+            self._last_error = None
             try:
                 logger.debug(f"Connecting MCP client: {self.name}")
 
@@ -159,6 +166,38 @@ class StdIOStatefulClient(StatefulClientBase):
 
                 # Context manager exits cleanly in THIS task
 
+            except FileNotFoundError as e:
+                command = self.server_params.command
+                message = (
+                    f"MCP stdio command not found for '{self.name}': {command!r}. "
+                    "Install the command or update the MCP client config."
+                )
+                if command in {"uvx", "uv"}:
+                    message += " Hint: install uv first, then retry."
+                elif shutil.which(command) is None:
+                    message += " Ensure the command exists in PATH."
+
+                self.session = None
+                self.is_connected = False
+                self._cached_tools = None
+                self._ready_event.clear()
+                self._last_error = RuntimeError(message)
+                self._failed_event.set()
+
+                logger.error(message, exc_info=True)
+
+                # Treat missing executable as permanent until reload/stop.
+                while (
+                    not self._reload_event.is_set()
+                    and not self._stop_event.is_set()
+                ):
+                    await asyncio.sleep(0.1)
+
+                if self._reload_event.is_set():
+                    self._reload_event.clear()
+                    self._ready_event.clear()
+                    self._failed_event.clear()
+
             except Exception as e:
                 logger.error(
                     f"Error in MCP client lifecycle for {self.name}: {e}",
@@ -190,11 +229,33 @@ class StdIOStatefulClient(StatefulClientBase):
 
         # Start lifecycle task
         self._stop_event.clear()
+        self._failed_event.clear()
+        self._last_error = None
         self._lifecycle_task = asyncio.create_task(self._run_lifecycle())
 
         # Wait for initial connection
+        ready_wait_task: asyncio.Task | None = None
+        failed_wait_task: asyncio.Task | None = None
         try:
-            await asyncio.wait_for(self._ready_event.wait(), timeout=timeout)
+            ready_wait_task = asyncio.create_task(self._ready_event.wait())
+            failed_wait_task = asyncio.create_task(self._failed_event.wait())
+
+            done, pending = await asyncio.wait(
+                {ready_wait_task, failed_wait_task},
+                timeout=timeout,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+
+            for task in pending:
+                task.cancel()
+
+            if not done:
+                raise asyncio.TimeoutError
+
+            if failed_wait_task in done and self._failed_event.is_set():
+                raise self._last_error or RuntimeError(
+                    f"MCP client '{self.name}' failed to connect",
+                )
         except asyncio.TimeoutError:
             logger.error(
                 f"Timeout waiting for MCP client '{self.name}' to connect",
@@ -204,6 +265,11 @@ class StdIOStatefulClient(StatefulClientBase):
             if self._lifecycle_task:
                 await self._lifecycle_task
             raise
+        finally:
+            if ready_wait_task is not None and not ready_wait_task.done():
+                ready_wait_task.cancel()
+            if failed_wait_task is not None and not failed_wait_task.done():
+                failed_wait_task.cancel()
 
     async def close(self, ignore_errors: bool = True) -> None:
         """Close MCP client and clean up resources.
@@ -389,33 +455,37 @@ class HttpStatefulClient(StatefulClientBase):
 
     async def _run_lifecycle(self) -> None:
         """Run MCP client lifecycle in a dedicated task."""
-        # Select client based on transport
-        if self.transport == "streamable_http":
-            client_factory = lambda: streamable_http_client(
-                url=self.url,
-                headers=self.headers,
-                timeout=self.timeout,
-                sse_read_timeout=self.sse_read_timeout,
-                **self.client_kwargs,
-            )
-        else:
-            client_factory = lambda: sse_client(
-                url=self.url,
-                headers=self.headers,
-                timeout=self.timeout,
-                sse_read_timeout=self.sse_read_timeout,
-                **self.client_kwargs,
-            )
-
         while not self._stop_event.is_set():
             try:
                 logger.debug(f"Connecting MCP client: {self.name}")
 
                 # Enter context manager in THIS task
                 async with AsyncExitStack() as stack:
-                    context = await stack.enter_async_context(
-                        client_factory(),
-                    )
+                    if self.transport == "streamable_http":
+                        timeout = httpx.Timeout(self.timeout)
+                        http_client = create_mcp_http_client(
+                            headers=self.headers,
+                            timeout=timeout,
+                        )
+                        http_client = await stack.enter_async_context(
+                            http_client,
+                        )
+                        context = await stack.enter_async_context(
+                            streamable_http_client(
+                                url=self.url,
+                                http_client=http_client,
+                            ),
+                        )
+                    else:
+                        context = await stack.enter_async_context(
+                            sse_client(
+                                url=self.url,
+                                headers=self.headers,
+                                timeout=self.timeout,
+                                sse_read_timeout=self.sse_read_timeout,
+                                **self.client_kwargs,
+                            ),
+                        )
                     read_stream, write_stream = context[0], context[1]
 
                     # Initialize session
