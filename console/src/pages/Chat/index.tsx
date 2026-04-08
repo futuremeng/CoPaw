@@ -829,6 +829,10 @@ export default function ChatPage() {
   }, [chatId, loadHistorySessions]);
 
   useEffect(() => {
+    setCurrentChatNameOverride("");
+  }, [chatId]);
+
+  useEffect(() => {
     let cancelled = false;
 
     const hydrateCurrentTitle = async () => {
