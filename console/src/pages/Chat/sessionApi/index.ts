@@ -146,6 +146,38 @@ function normalizeOutputMessageContent(content: unknown): unknown {
   return (content as ContentItem[]).map(resolveContentItemUrl);
 }
 
+function hasVisibleTextContent(content: unknown): boolean {
+  if (typeof content === "string") {
+    return content.trim().length > 0;
+  }
+
+  if (!Array.isArray(content)) {
+    return false;
+  }
+
+  return content.some((item) => {
+    if (!item || typeof item !== "object") {
+      return false;
+    }
+    const record = item as Record<string, unknown>;
+
+    const text = record.text;
+    if (typeof text === "string" && text.trim().length > 0) {
+      return true;
+    }
+
+    const data = record.data;
+    if (data && typeof data === "object") {
+      const output = (data as Record<string, unknown>).output;
+      if (typeof output === "string" && output.trim().length > 0) {
+        return true;
+      }
+    }
+
+    return false;
+  });
+}
+
 /**
  * Convert a backend message to a response output message.
  * Maps system + plugin_call_output → role "tool" and strips metadata.
@@ -158,6 +190,15 @@ const toOutputMessage = (msg: Message): OutputMessage => ({
       : msg.role,
   metadata: null,
 });
+
+function isMeaningfulOutputMessage(message: OutputMessage): boolean {
+  // Always keep explicit errors so retry actions remain available.
+  if (message.error) {
+    return true;
+  }
+
+  return hasVisibleTextContent(message.content);
+}
 
 function getStableMessageId(message: unknown): string | null {
   if (!message || typeof message !== "object") {
@@ -273,13 +314,33 @@ const buildResponseCard = (
   };
 };
 
+function splitOutputMessagesIntoTurns(outputMsgs: OutputMessage[]): OutputMessage[][] {
+  const groups: OutputMessage[][] = [];
+  let current: OutputMessage[] = [];
+
+  for (const outputMsg of outputMsgs) {
+    current.push(outputMsg);
+    // Treat a visible assistant message as one turn boundary.
+    if (outputMsg.type === "message") {
+      groups.push(current);
+      current = [];
+    }
+  }
+
+  if (current.length > 0) {
+    groups.push(current);
+  }
+
+  return groups;
+}
+
 /**
  * Convert flat backend messages into the card-based format expected by
  * the @agentscope-ai/chat component.
  *
  * - User messages → AgentScopeRuntimeRequestCard
- * - Consecutive non-user messages (assistant / system / tool) → grouped
- *   into a single AgentScopeRuntimeResponseCard with all output messages.
+ * - Consecutive non-user messages → split into turn-like response cards
+ *   so action buttons stay near their corresponding assistant outputs.
  */
 const convertMessages = (
   messages: Message[],
@@ -293,9 +354,18 @@ const convertMessages = (
     } else {
       const outputMsgs: OutputMessage[] = [];
       while (i < messages.length && messages[i].role !== ROLE_USER) {
-        outputMsgs.push(toOutputMessage(messages[i++]));
+        const outputMsg = toOutputMessage(messages[i++]);
+        if (isMeaningfulOutputMessage(outputMsg)) {
+          outputMsgs.push(outputMsg);
+        }
       }
-      if (outputMsgs.length) result.push(buildResponseCard(outputMsgs));
+
+      const turnGroups = splitOutputMessagesIntoTurns(outputMsgs);
+      for (const group of turnGroups) {
+        if (group.length > 0) {
+          result.push(buildResponseCard(group));
+        }
+      }
     }
   }
 
