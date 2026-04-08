@@ -54,6 +54,13 @@ def _extract_http_status_error(exc: BaseException) -> httpx.HTTPStatusError | No
     return None
 
 
+def _is_mineru_stdio(args: list[str] | None) -> bool:
+    """Return whether stdio args target mineru-mcp launcher."""
+    if not args:
+        return False
+    return any(str(arg).strip() == "mineru-mcp" for arg in args)
+
+
 def _resolve_stdio_command(command: str) -> str:
     """Resolve stdio executable robustly across mixed Python environments.
 
@@ -185,6 +192,39 @@ class StdIOStatefulClient(StatefulClientBase):
             self._failed_event.clear()
             self._last_error = None
             try:
+                if _is_mineru_stdio(self.server_params.args):
+                    mineru_api_key = (self.server_params.env or {}).get(
+                        "MINERU_API_KEY",
+                    )
+                    if not mineru_api_key:
+                        message = (
+                            "MCP stdio precheck failed for 'mineru-mcp': "
+                            "MINERU_API_KEY is missing in runtime environment. "
+                            "Set the variable where CoPaw process starts, "
+                            "then restart or reload MCP config."
+                        )
+                        self.session = None
+                        self.is_connected = False
+                        self._cached_tools = None
+                        self._ready_event.clear()
+                        self._last_error = RuntimeError(message)
+                        self._failed_event.set()
+
+                        logger.warning(message)
+
+                        # Permanent until env/config is fixed and client reloads.
+                        while (
+                            not self._reload_event.is_set()
+                            and not self._stop_event.is_set()
+                        ):
+                            await asyncio.sleep(0.2)
+
+                        if self._reload_event.is_set():
+                            self._reload_event.clear()
+                            self._ready_event.clear()
+                            self._failed_event.clear()
+                        continue
+
                 logger.debug(f"Connecting MCP client: {self.name}")
 
                 # Enter context manager in THIS task
@@ -592,7 +632,12 @@ class HttpStatefulClient(StatefulClientBase):
                     )
 
                     # Reduce noisy rapid retries when upstream MCP is unavailable.
-                    retry_delay = 5.0 if status_code >= 500 else 2.0
+                    if status_code in {401, 403}:
+                        retry_delay = 15.0
+                    elif status_code >= 500:
+                        retry_delay = 5.0
+                    else:
+                        retry_delay = 2.0
                     logger.warning(
                         "MCP HTTP client lifecycle error for %s: HTTP %s %s (%s); retrying in %.1fs",
                         self.name,
@@ -601,6 +646,12 @@ class HttpStatefulClient(StatefulClientBase):
                         request_url,
                         retry_delay,
                     )
+                    if status_code in {401, 403}:
+                        logger.warning(
+                            "MCP HTTP auth check for %s: verify token/Authorization header for %s",
+                            self.name,
+                            request_url,
+                        )
                     logger.debug(
                         "Detailed MCP HTTP lifecycle exception for %s",
                         self.name,
