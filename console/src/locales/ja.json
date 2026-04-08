@@ -172,6 +172,7 @@
     "invalidSkillUrlSource": "スキルURLは https://skills.sh/、https://clawhub.ai/、https://skillsmp.com/、https://lobehub.com/、https://market.lobehub.com/、https://github.com/、または https://modelscope.cn/skills/ で始まる必要があります",
     "type": "タイプ",
     "skillDescription": "説明",
+    "tags": "タグ",
     "builtin": "組み込み",
     "custom": "カスタム",
     "createSkill": "スキルを作成",
@@ -483,11 +484,8 @@
     "edit": "編集",
     "delete": "削除",
     "descriptionLabel": "説明",
-    "categories": "カテゴリ",
     "tags": "タグ",
-    "categoriesPlaceholder": "カテゴリを選択または入力",
     "tagsPlaceholder": "タグを選択または入力",
-    "filterByCategory": "カテゴリで絞り込む",
     "filterByTag": "タグで絞り込む",
     "version": "バージョン",
     "createTitle": "スキルプール項目を作成",
@@ -765,6 +763,9 @@
     "welcomeTextTooltip": "Message automatically sent when a user enters a single chat session with the bot for the first time that day",
     "welcomeTextPlaceholder": "e.g. Hello! I'm CoPaw. How can I help you?",
     "xiaoyiSetupGuide": "Please create an agent on Huawei Developer Platform and get AK/SK and Agent ID. AK/SK can be found in the credential management page."
+,
+    "onebotShareSessionInGroup": "グループでセッション共有",
+    "onebotShareSessionInGroupTooltip": "有効にすると、グループの全メンバーが同じ会話セッションを共有します。無効にすると、各メンバーが独自のセッションを持ちます。"
   },
   "sessions": {
     "title": "セッション",
@@ -1311,6 +1312,7 @@
   "chat": {
     "modelSelectTooltip": "モデルを選択",
     "newChatTooltip": "新しいチャット",
+    "searchTooltip": "すべてのチャットを検索",
     "chatHistoryTooltip": "チャット履歴",
     "allChats": "すべてのチャット",
     "createNewChat": "新しいチャットを作成",
@@ -1324,7 +1326,7 @@
     "description": "私はあなたの質問をサポートするAIアシスタントです。",
     "prompt1": "新しい旅を始めましょう！",
     "prompt2": "あなたのスキルを教えてください。",
-    "inputPlaceholder": "/ を入力してコマンドを表示。承認時は /approve または /deny を使えます...",
+    "inputPlaceholder": "\"↑↓\"でメッセージ移動 · \"/\"でクイックコマンド（承認時は\"/approve\"または\"/deny\"）",
     "commands": {
       "clear": {
         "description": "会話のコンテキストをクリア"
@@ -1348,6 +1350,15 @@
       "multimodalWarning": "現在のモデルにマルチモーダル機能が検出されていません。画像や動画が正しく処理されない場合があります",
       "imageOnlyAccept": "現在のモデルは画像ファイルのみ対応しています",
       "imageOnlyWarning": "現在のモデルは画像のみ対応しています。動画などの非画像ファイルは正しく処理されない場合があります"
+    },
+    "search": {
+      "title": "チャットを検索",
+      "tooltip": "現在のチャットを検索",
+      "placeholder": "メッセージを検索...",
+      "noResults": "結果が見つかりません",
+      "resultsCount": "{{count}} 件の結果が見つかりました",
+      "userMessage": "ユーザー",
+      "assistantMessage": "アシスタント"
     }
   },
   "security": {

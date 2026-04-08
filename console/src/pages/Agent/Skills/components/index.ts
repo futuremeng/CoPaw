@@ -11,27 +11,13 @@ export {
   getSkillDisplaySource,
   getPoolBuiltinStatusLabel,
   getPoolBuiltinStatusTone,
-} from "./skillMetadata";
+} from "@/utils/skill";
 export { useConflictRenameModal } from "./useConflictRenameModal";
 export { ImportHubModal } from "./ImportHubModal";
 export { PoolTransferModal } from "./PoolTransferModal";
 export { MarketplaceDrawer } from "./MarketplaceDrawer";
+export { SkillFilterDropdown, TAG_PREFIX } from "./SkillFilterDropdown";
 export {
-  SkillFilterDropdown,
-  CATEGORY_PREFIX,
-  TAG_PREFIX,
-} from "./SkillFilterDropdown";
-
-export const SUPPORTED_SKILL_URL_PREFIXES = [
-  "https://skills.sh/",
-  "https://clawhub.ai/",
-  "https://skillsmp.com/",
-  "https://lobehub.com/",
-  "https://market.lobehub.com/",
-  "https://github.com/",
-  "https://modelscope.cn/skills/",
-];
-
-export function isSupportedSkillUrl(url: string): boolean {
-  return SUPPORTED_SKILL_URL_PREFIXES.some((prefix) => url.startsWith(prefix));
-}
+  SUPPORTED_SKILL_URL_PREFIXES,
+  isSupportedSkillUrl,
+} from "@/constants/skill";

@@ -40,8 +40,8 @@ import {
   PoolTransferModal,
   SkillFilterDropdown,
   getSkillVisual,
-  getSkillDisplaySource,
 } from "./components";
+import { isSkillBuiltin } from "@/utils/skill";
 import { useSkills } from "./useSkills";
 import { useSkillFilter } from "./useSkillFilter";
 import { useTranslation } from "react-i18next";
@@ -78,7 +78,6 @@ function SkillsPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [editingSkill, setEditingSkill] = useState<SkillSpec | null>(null);
-  const [hoverKey, setHoverKey] = useState<string | null>(null);
   const [form] = Form.useForm<SkillDrawerFormValues>();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [poolSkills, setPoolSkills] = useState<PoolSkillSpec[]>([]);
@@ -110,7 +109,6 @@ function SkillsPage() {
     setSearchQuery,
     searchTags,
     setSearchTags,
-    allCategories,
     allTags,
     filteredSkills,
   } = useSkillFilter(skills);
@@ -1014,7 +1012,6 @@ function SkillsPage() {
               notFoundContent={<></>}
               dropdownRender={() => (
                 <SkillFilterDropdown
-                  allCategories={allCategories}
                   allTags={allTags}
                   searchTags={searchTags}
                   setSearchTags={setSearchTags}
@@ -1078,14 +1075,13 @@ function SkillsPage() {
             <SkillCard
               key={skill.name}
               skill={skill}
-              isHover={hoverKey === skill.name}
               selected={
                 batchModeEnabled ? selectedSkills.has(skill.name) : undefined
               }
               onSelect={() => toggleSelect(skill.name)}
               onClick={() => handleEdit(skill)}
-              onMouseEnter={() => setHoverKey(skill.name)}
-              onMouseLeave={() => setHoverKey(null)}
+              onMouseEnter={() => {}}
+              onMouseLeave={() => {}}
               onToggleEnabled={(e) => handleToggleEnabled(skill, e)}
               onDelete={(e) => handleDelete(skill, e)}
             />
@@ -1094,8 +1090,10 @@ function SkillsPage() {
       ) : (
         <div className={styles.skillsList}>
           {sortedSkills.map((skill) => {
-            const isBuiltin = getSkillDisplaySource(skill.source) === "builtin";
-            const channels = skill.channels?.join(", ") || "all";
+            const isBuiltin = isSkillBuiltin(skill.source);
+            const channels = (skill.channels || ["all"])
+              .map((ch) => (ch === "all" ? t("skills.allChannels") : ch))
+              .join(", ");
             const isSelected = selectedSkills.has(skill.name);
             return (
               <div
@@ -1141,6 +1139,15 @@ function SkillsPage() {
                     <p className={styles.listItemDesc}>
                       {skill.description || "-"}
                     </p>
+                    {!!skill.tags?.length && (
+                      <div className={styles.listItemTags}>
+                        {skill.tags.map((tag) => (
+                          <span key={tag} className={styles.tagChip}>
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className={styles.listItemRight}>

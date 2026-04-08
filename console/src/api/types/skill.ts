@@ -14,7 +14,6 @@ export interface SkillSpec {
   path?: string;
   enabled?: boolean;
   channels?: string[];
-  categories?: string[];
   tags?: string[];
   config?: Record<string, unknown>;
   last_updated?: string;
@@ -31,7 +30,6 @@ export interface PoolSkillSpec {
   commit_text?: string;
   sync_status?: SkillSyncStatus | "";
   latest_version_text?: string;
-  categories?: string[];
   tags?: string[];
   config?: Record<string, unknown>;
   last_updated?: string;

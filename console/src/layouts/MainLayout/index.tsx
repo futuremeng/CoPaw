@@ -12,7 +12,7 @@ import HeartbeatPage from "../../pages/Control/Heartbeat";
 import AgentConfigPage from "../../pages/Agent/Config";
 import KnowledgePage from "../../pages/Agent/Knowledge";
 import SkillsPage from "../../pages/Agent/Skills";
-import SkillPoolPage from "../../pages/Agent/SkillPool";
+import SkillPoolPage from "../../pages/Settings/SkillPool";
 import ToolsPage from "../../pages/Agent/Tools";
 import WorkspacePage from "../../pages/Agent/Workspace";
 import ProjectsListPage from "../../pages/Agent/Projects/ProjectsListPage";
