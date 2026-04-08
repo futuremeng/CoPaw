@@ -18,8 +18,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import shutil
+import sys
 from contextlib import AsyncExitStack
+from pathlib import Path
 from typing import Any, Literal
 
 import httpx
@@ -49,6 +52,43 @@ def _extract_http_status_error(exc: BaseException) -> httpx.HTTPStatusError | No
         if isinstance(leaf, httpx.HTTPStatusError):
             return leaf
     return None
+
+
+def _resolve_stdio_command(command: str) -> str:
+    """Resolve stdio executable robustly across mixed Python environments.
+
+    Priority:
+    1) As-is if explicit path provided.
+    2) PATH lookup via shutil.which.
+    3) Current interpreter's scripts/bin directory (sys.executable sibling).
+    """
+    if not command:
+        return command
+
+    command_path = Path(command).expanduser()
+    if command_path.is_absolute() or command_path.parent != Path("."):
+        return str(command_path)
+
+    path_match = shutil.which(command)
+    if path_match:
+        return path_match
+
+    interpreter_dir = Path(sys.executable).resolve().parent
+    candidates = [interpreter_dir / command]
+    if os.name == "nt":
+        candidates.extend(
+            [
+                interpreter_dir / f"{command}.exe",
+                interpreter_dir / f"{command}.cmd",
+                interpreter_dir / f"{command}.bat",
+            ],
+        )
+
+    for candidate in candidates:
+        if candidate.exists() and os.access(candidate, os.X_OK):
+            return str(candidate)
+
+    return command
 
 
 class StdIOStatefulClient(StatefulClientBase):
@@ -105,8 +145,9 @@ class StdIOStatefulClient(StatefulClientBase):
             )
 
         self.name = name
+        resolved_command = _resolve_stdio_command(command)
         self.server_params = StdioServerParameters(
-            command=command,
+            command=resolved_command,
             args=args or [],
             env=env,
             cwd=cwd,
@@ -201,7 +242,7 @@ class StdIOStatefulClient(StatefulClientBase):
                 self._last_error = RuntimeError(message)
                 self._failed_event.set()
 
-                logger.error(message, exc_info=True)
+                logger.warning(message)
 
                 # Treat missing executable as permanent until reload/stop.
                 while (
