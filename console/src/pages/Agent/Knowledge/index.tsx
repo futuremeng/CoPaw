@@ -147,6 +147,9 @@ function KnowledgePage() {
     useState<GraphQueryResponse | null>(null);
   const [graphQueryLoading, setGraphQueryLoading] = useState(false);
   const [graphQueryError, setGraphQueryError] = useState<string | null>(null);
+  const [graphQueryTopK, setGraphQueryTopK] = useState(20);
+  const [graphQueryTimeoutSec, setGraphQueryTimeoutSec] = useState(20);
+  const [graphQueryClickedNode, setGraphQueryClickedNode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [enableModalOpen, setEnableModalOpen] = useState(false);
@@ -827,10 +830,11 @@ function KnowledgePage() {
       const result = await api.graphQuery({
         query,
         mode: graphQueryMode,
-        topK: 20,
-        timeoutSec: 20,
+        topK: graphQueryTopK,
+        timeoutSec: graphQueryTimeoutSec,
       });
       setGraphQueryResults(result);
+      setGraphQueryClickedNode(null);
     } catch (error) {
       const message_text =
         error instanceof Error ? error.message : "Graph query failed";
@@ -840,12 +844,13 @@ function KnowledgePage() {
     } finally {
       setGraphQueryLoading(false);
     }
-  }, [graphQueryText, graphQueryMode, knowledgePageDisabled, t]);
+  }, [graphQueryText, graphQueryMode, graphQueryTopK, graphQueryTimeoutSec, knowledgePageDisabled, t]);
 
   const handleResetGraphQuery = useCallback(() => {
     setGraphQueryText("");
     setGraphQueryResults(null);
     setGraphQueryError(null);
+    setGraphQueryClickedNode(null);
   }, []);
 
   const hasSearchQuery = searchQuery.trim().length > 0;
@@ -1612,6 +1617,34 @@ function KnowledgePage() {
                 disabled={knowledgePageDisabled}
               >
                 {t("knowledge.graphQuery.execute") || "Execute Query"}
+                        <div className={styles.searchParams}>
+                          <Space size="small" wrap>
+                            <div className={styles.paramControl}>
+                              <Typography.Text type="secondary" className={styles.paramLabel}>
+                                {t("knowledge.graphQuery.topK") || "Top K"}:
+                              </Typography.Text>
+                              <InputNumber
+                                min={1}
+                                max={100}
+                                value={graphQueryTopK}
+                                onChange={(value) => setGraphQueryTopK(value || 20)}
+                                style={{ width: 80 }}
+                              />
+                            </div>
+                            <div className={styles.paramControl}>
+                              <Typography.Text type="secondary" className={styles.paramLabel}>
+                                {t("knowledge.graphQuery.timeout") || "Timeout (s)"}:
+                              </Typography.Text>
+                              <InputNumber
+                                min={1}
+                                max={300}
+                                value={graphQueryTimeoutSec}
+                                onChange={(value) => setGraphQueryTimeoutSec(value || 20)}
+                                style={{ width: 80 }}
+                              />
+                            </div>
+                          </Space>
+                        </div>
               </Button>
             </div>
           </div>
@@ -1640,7 +1673,25 @@ function KnowledgePage() {
                 graphQueryResults.provenance,
               )}
               loading={graphQueryLoading}
+              onNodeClick={(node) => setGraphQueryClickedNode(node.id)}
             />
+          </div>
+        )}
+
+        {graphQueryResults && graphQueryClickedNode && (
+          <div style={{ marginTop: 20 }}>
+            <Card title={t("knowledge.graphQuery.nodeDetail") || "Node Details"}>
+              <div style={{ padding: "12px 0" }}>
+                <Typography.Text strong>Node ID:</Typography.Text>{" "}
+                <Typography.Text code>{graphQueryClickedNode}</Typography.Text>
+              </div>
+              <Button
+                onClick={() => setGraphQueryClickedNode(null)}
+                style={{ marginTop: 12 }}
+              >
+                {t("common.close") || "Close"}
+              </Button>
+            </Card>
           </div>
         )}
 
