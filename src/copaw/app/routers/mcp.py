@@ -149,6 +149,45 @@ def _restore_original_values(
     return restored
 
 
+def _looks_masked_secret(value: str) -> bool:
+    """Detect common masked-placeholder secret patterns.
+
+    We reject values that are likely UI-masked placeholders (e.g. ``sk-***1234``)
+    to prevent persisting unusable credentials into runtime config.
+    """
+    if not value:
+        return False
+    star_count = value.count("*")
+    if star_count == 0:
+        return False
+    # Fully masked short strings: "********"
+    if set(value) == {"*"}:
+        return True
+    # Prefix + long star run + suffix style mask
+    if star_count >= 4 and star_count >= len(value) // 3:
+        return True
+    return False
+
+
+def _ensure_no_masked_placeholders(
+    data: Dict[str, str] | None,
+    *,
+    field_name: str,
+) -> None:
+    """Raise 400 when incoming secret-like values are masked placeholders."""
+    if not data:
+        return
+    masked_keys = [k for k, v in data.items() if _looks_masked_secret(v)]
+    if masked_keys:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"{field_name} contains masked placeholder value(s): "
+                f"{', '.join(masked_keys)}. Please provide full original value."
+            ),
+        )
+
+
 def _mask_env_value(value: str) -> str:
     """
     Mask environment variable value showing first 2-3 chars and last 4 chars.
@@ -334,6 +373,9 @@ async def create_mcp_client(
         )
 
     # Create new client config
+    _ensure_no_masked_placeholders(client.headers, field_name="headers")
+    _ensure_no_masked_placeholders(client.env, field_name="env")
+
     new_client = MCPClientConfig(
         name=client.name,
         description=client.description,
@@ -387,11 +429,16 @@ async def update_mcp_client(
             update_data["env"],
             existing.env or {},
         )
+        _ensure_no_masked_placeholders(update_data["env"], field_name="env")
 
     if "headers" in update_data and update_data["headers"] is not None:
         update_data["headers"] = _restore_original_values(
             update_data["headers"],
             existing.headers or {},
+        )
+        _ensure_no_masked_placeholders(
+            update_data["headers"],
+            field_name="headers",
         )
 
     merged_data = existing.model_dump(mode="json")
