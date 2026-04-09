@@ -12,8 +12,10 @@ import {
   Typography,
   message,
 } from "antd";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import api, { type GraphQueryResponse } from "../../../api";
+import type { KnowledgeSourceItem } from "../../../api/types";
 import { recordsToVisualizationData } from "../Knowledge/graphQuery";
 import { GraphQueryResults, GraphVisualization } from "../Knowledge/graphVisualization";
 import styles from "./index.module.less";
@@ -29,6 +31,7 @@ const PROJECT_GRAPH_TIMEOUT_SEC = 20;
 
 export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [queryText, setQueryText] = useState("");
   const [includeGlobal, setIncludeGlobal] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -37,6 +40,7 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
   const [registering, setRegistering] = useState(false);
   const [sourceLoaded, setSourceLoaded] = useState(false);
   const [sourceRegistered, setSourceRegistered] = useState(false);
+  const [projectSource, setProjectSource] = useState<KnowledgeSourceItem | null>(null);
 
   const projectSourceId = useMemo(() => {
     const safeId = props.projectId
@@ -50,14 +54,34 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
   const loadProjectSourceStatus = useCallback(async () => {
     try {
       const response = await api.listKnowledgeSources();
-      const matched = response.sources.some((source) => source.id === projectSourceId);
-      setSourceRegistered(matched);
+      const matched = response.sources.find((source) => source.id === projectSourceId) || null;
+      setProjectSource(matched);
+      setSourceRegistered(Boolean(matched));
     } catch {
       setSourceRegistered(false);
+      setProjectSource(null);
     } finally {
       setSourceLoaded(true);
     }
   }, [projectSourceId]);
+
+  const indexedAtLabel = useMemo(() => {
+    const raw = projectSource?.status?.indexed_at;
+    if (!raw) {
+      return "-";
+    }
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) {
+      return raw;
+    }
+    const y = parsed.getFullYear();
+    const m = String(parsed.getMonth() + 1).padStart(2, "0");
+    const d = String(parsed.getDate()).padStart(2, "0");
+    const hh = String(parsed.getHours()).padStart(2, "0");
+    const mm = String(parsed.getMinutes()).padStart(2, "0");
+    const ss = String(parsed.getSeconds()).padStart(2, "0");
+    return `${y}-${m}-${d} ${hh}:${mm}:${ss}`;
+  }, [projectSource?.status?.indexed_at]);
 
   useEffect(() => {
     void loadProjectSourceStatus();
@@ -177,6 +201,26 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
             : t("projects.knowledge.sourceRegister")}
         </Button>
       </div>
+
+      <div className={styles.projectKnowledgeMetaRow}>
+        <Typography.Text type="secondary">
+          {t("projects.knowledge.sourceId")} {projectSourceId}
+        </Typography.Text>
+        <Typography.Text type="secondary">
+          {t("projects.knowledge.lastIndexed")} {indexedAtLabel}
+        </Typography.Text>
+      </div>
+
+      <Space wrap>
+        <Button
+          size="small"
+          onClick={() => {
+            navigate(`/knowledge?focus_source=${encodeURIComponent(projectSourceId)}`);
+          }}
+        >
+          {t("projects.knowledge.openKnowledge")}
+        </Button>
+      </Space>
 
       <div className={styles.projectKnowledgeControls}>
         <Input.Search

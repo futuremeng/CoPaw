@@ -14,7 +14,7 @@ import {
   message,
 } from "@agentscope-ai/design";
 import { Divider, Progress, Space, Spin, Typography } from "antd";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   DatabaseOutlined,
   DownloadOutlined,
@@ -128,6 +128,7 @@ function formatRemoteStatus(
 
 function KnowledgePage() {
   const { t } = useTranslation();
+  const location = useLocation();
   const navigate = useNavigate();
   const [form] = Form.useForm<KnowledgeSourceSpec>();
   const [enableConfigForm] = Form.useForm<AgentsRunningConfig>();
@@ -1144,6 +1145,29 @@ function KnowledgePage() {
       .catch(() => setSourceContent({ indexed: false, documents: [] }))
       .finally(() => setSourceContentLoading(false));
   }, []);
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search || "");
+    const focusSourceId = (searchParams.get("focus_source") || "").trim();
+    if (!focusSourceId || sources.length === 0) {
+      return;
+    }
+    const matched = sources.find((item) => item.id === focusSourceId);
+    if (!matched) {
+      return;
+    }
+    openDetailDrawer(matched);
+
+    searchParams.delete("focus_source");
+    const nextSearch = searchParams.toString();
+    navigate(
+      {
+        pathname: location.pathname,
+        search: nextSearch ? `?${nextSearch}` : "",
+      },
+      { replace: true },
+    );
+  }, [location.pathname, location.search, navigate, openDetailDrawer, sources]);
 
   const handleDetailDrawerValueKeyDown = useCallback(
     (
