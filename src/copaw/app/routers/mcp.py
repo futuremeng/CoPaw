@@ -253,6 +253,38 @@ def _build_client_info(
     )
 
 
+async def _sync_client_runtime_now(
+    agent,
+    client_key: str,
+    client: MCPClientConfig | None,
+) -> None:
+    """Best-effort immediate runtime sync for a single MCP client.
+
+    This avoids waiting for watcher polling when users update MCP config
+    through API/UI and expect changes to take effect right away.
+    """
+    mcp_manager = getattr(agent, "mcp_manager", None)
+    if mcp_manager is None:
+        return
+
+    try:
+        if client is None:
+            await mcp_manager.remove_client(client_key)
+            return
+
+        if not client.enabled:
+            await mcp_manager.remove_client(client_key)
+            return
+
+        await mcp_manager.refresh_client_status(client_key, client)
+    except Exception:
+        logger.debug(
+            "Immediate MCP runtime sync failed for '%s'",
+            client_key,
+            exc_info=True,
+        )
+
+
 def _get_active_keys(mcp_manager) -> set:
     return mcp_manager.active_keys() if mcp_manager is not None else set()
 
@@ -393,6 +425,9 @@ async def create_mcp_client(
     agent.config.mcp.clients[client_key] = new_client
     save_agent_config(agent.agent_id, agent.config)
 
+    # Apply runtime update immediately for better UX.
+    await _sync_client_runtime_now(agent, client_key, new_client)
+
     # Hot reload config (async, non-blocking)
     schedule_agent_reload(request, agent.agent_id)
 
@@ -449,6 +484,9 @@ async def update_mcp_client(
     # Save updated config
     save_agent_config(agent.agent_id, agent.config)
 
+    # Apply runtime update immediately for better UX.
+    await _sync_client_runtime_now(agent, client_key, updated_client)
+
     # Hot reload config (async, non-blocking)
     schedule_agent_reload(request, agent.agent_id)
 
@@ -479,6 +517,9 @@ async def toggle_mcp_client(
     client.enabled = not client.enabled
     save_agent_config(agent.agent_id, agent.config)
 
+    # Apply runtime update immediately for better UX.
+    await _sync_client_runtime_now(agent, client_key, client)
+
     # Hot reload config (async, non-blocking)
     schedule_agent_reload(request, agent.agent_id)
 
@@ -506,6 +547,9 @@ async def delete_mcp_client(
     # Remove client
     del agent.config.mcp.clients[client_key]
     save_agent_config(agent.agent_id, agent.config)
+
+    # Apply runtime update immediately for better UX.
+    await _sync_client_runtime_now(agent, client_key, None)
 
     # Hot reload config (async, non-blocking)
     schedule_agent_reload(request, agent.agent_id)
