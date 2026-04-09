@@ -13,6 +13,7 @@ export interface KnowledgeSourceSpec {
   content: string;
   enabled: boolean;
   recursive: boolean;
+  project_id?: string;
   tags: string[];
   summary: string;
 }

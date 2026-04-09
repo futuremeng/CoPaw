@@ -1719,6 +1719,17 @@
     "filesDerived": "Derived Files",
     "knowledgePanelTitle": "Knowledge Quant Panel",
     "knowledgePanelHint": "Quickly observe project knowledge density and freshness",
+    "knowledge": {
+      "title": "Project Knowledge Query",
+      "hint": "Run graph knowledge query scoped to this project: {{project}}",
+      "query": "Query",
+      "queryPlaceholder": "Enter a question or keyword, for example: architecture decision",
+      "includeGlobal": "Include global knowledge",
+      "reset": "Reset",
+      "emptyQuery": "Please enter a query first.",
+      "emptyResult": "No project knowledge query yet.",
+      "queryFailed": "Project knowledge query failed"
+    },
     "quantStatusHealthy": "Healthy",
     "quantStatusAttention": "Needs attention",
     "quantStatusNeutral": "No signal",

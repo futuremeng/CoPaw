@@ -1678,6 +1678,17 @@
     "filesDerived": "衍生文件",
     "knowledgePanelTitle": "知识量化面板",
     "knowledgePanelHint": "快速观察项目知识密度与新鲜度",
+    "knowledge": {
+      "title": "项目知识查询",
+      "hint": "在当前项目范围内执行图谱知识查询：{{project}}",
+      "query": "查询",
+      "queryPlaceholder": "请输入问题或关键词，例如：架构决策",
+      "includeGlobal": "包含全局知识",
+      "reset": "重置",
+      "emptyQuery": "请先输入查询内容。",
+      "emptyResult": "尚未进行项目知识查询。",
+      "queryFailed": "项目知识查询失败"
+    },
     "quantStatusHealthy": "健康",
     "quantStatusAttention": "需关注",
     "quantStatusNeutral": "无明显信号",

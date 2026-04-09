@@ -128,6 +128,8 @@ export const knowledgeApi = {
     limit?: number;
     sourceIds?: string[];
     sourceTypes?: string[];
+    projectScope?: string[];
+    includeGlobal?: boolean;
   }) => {
     const searchParams = new URLSearchParams({
       q: params.query,
@@ -138,6 +140,12 @@ export const knowledgeApi = {
     }
     if (params.sourceTypes?.length) {
       searchParams.set("source_types", params.sourceTypes.join(","));
+    }
+    if (params.projectScope?.length) {
+      searchParams.set("project_scope", params.projectScope.join(","));
+    }
+    if (params.includeGlobal !== undefined) {
+      searchParams.set("include_global", String(params.includeGlobal));
     }
     return request<KnowledgeSearchResponse>(
       `/knowledge/search?${searchParams.toString()}`,
@@ -150,6 +158,8 @@ export const knowledgeApi = {
     datasetScope?: string[];
     topK?: number;
     timeoutSec?: number;
+    projectScope?: string[];
+    includeGlobal?: boolean;
   }) => {
     const searchParams = new URLSearchParams({
       q: params.query,
@@ -159,6 +169,12 @@ export const knowledgeApi = {
     });
     if (params.datasetScope?.length) {
       searchParams.set("dataset_scope", params.datasetScope.join(","));
+    }
+    if (params.projectScope?.length) {
+      searchParams.set("project_scope", params.projectScope.join(","));
+    }
+    if (params.includeGlobal !== undefined) {
+      searchParams.set("include_global", String(params.includeGlobal));
     }
     return request<GraphQueryResponse>(`/knowledge/graph-query?${searchParams.toString()}`);
   },

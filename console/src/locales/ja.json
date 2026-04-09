@@ -1674,6 +1674,17 @@
     "filesDerived": "派生ファイル",
     "knowledgePanelTitle": "ナレッジ定量パネル",
     "knowledgePanelHint": "プロジェクトの知識密度と鮮度をすばやく把握",
+    "knowledge": {
+      "title": "プロジェクトナレッジ検索",
+      "hint": "このプロジェクト範囲でグラフナレッジ検索を実行: {{project}}",
+      "query": "検索",
+      "queryPlaceholder": "質問またはキーワードを入力（例: アーキテクチャ判断）",
+      "includeGlobal": "グローバルナレッジを含める",
+      "reset": "リセット",
+      "emptyQuery": "先に検索内容を入力してください。",
+      "emptyResult": "まだプロジェクトナレッジ検索は実行されていません。",
+      "queryFailed": "プロジェクトナレッジ検索に失敗しました"
+    },
     "quantStatusHealthy": "良好",
     "quantStatusAttention": "要確認",
     "quantStatusNeutral": "判断材料なし",

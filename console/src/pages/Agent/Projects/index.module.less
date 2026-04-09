@@ -133,6 +133,36 @@
   flex-shrink: 0;
 }
 
+.projectKnowledgeCard {
+  flex-shrink: 0;
+
+  :global(.ant-card-body) {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 56vh;
+    overflow: auto;
+  }
+}
+
+.projectKnowledgeControls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.projectKnowledgeEmpty {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0;
+}
+
+.projectKnowledgeResults {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .automationSummaryMeta {
   display: flex;
   flex-direction: column;

@@ -1180,6 +1180,10 @@ class KnowledgeSourceSpec(BaseModel):
     recursive: bool = Field(default=False)
     tags: List[str] = Field(default_factory=list)
     summary: str = Field(default="")
+    project_id: str = Field(
+        default="",
+        description="Optional project scope id. Empty means global source.",
+    )
 
     @model_validator(mode="after")
     def validate_source(self):

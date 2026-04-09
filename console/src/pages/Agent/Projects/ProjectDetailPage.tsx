@@ -27,6 +27,7 @@ import ProjectUploadModal from "./ProjectUploadModal";
 import ProjectWorkbenchPanel from "./ProjectWorkbenchPanel";
 import ProjectMetricsPanel from "./ProjectMetricsPanel";
 import ProjectEvidencePanel from "./ProjectEvidencePanel";
+import ProjectKnowledgePanel from "./ProjectKnowledgePanel";
 import useArtifactSelectionGuards from "./useArtifactSelectionGuards";
 import useProjectChatEnsureController from "./useProjectChatEnsureController";
 import useProjectChatFocusEffects from "./useProjectChatFocusEffects";
@@ -1827,6 +1828,11 @@ export default function ProjectDetailPage() {
                   void handleAttachArtifactToChat(path);
                 }}
                 onToggleHideBuiltInFiles={setHideBuiltInFiles}
+              />
+
+              <ProjectKnowledgePanel
+                projectId={selectedProject.id}
+                projectName={selectedProject.name}
               />
 
               <Card

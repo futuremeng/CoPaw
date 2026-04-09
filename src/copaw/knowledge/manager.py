@@ -285,6 +285,8 @@ class KnowledgeManager:
         limit: int = 10,
         source_ids: list[str] | None = None,
         source_types: list[str] | None = None,
+        project_scope: list[str] | None = None,
+        include_global: bool = True,
     ) -> dict[str, Any]:
         """Search indexed chunks with a lightweight lexical scorer."""
         source_map = {source.id: source for source in config.sources}
@@ -293,11 +295,22 @@ class KnowledgeManager:
             return {"query": query, "hits": []}
 
         hits: list[dict[str, Any]] = []
+        project_scope_set = {
+            item.strip()
+            for item in (project_scope or [])
+            if item and item.strip()
+        }
         for source in config.sources:
             if source_ids and source.id not in source_ids:
                 continue
             if source_types and source.type not in source_types:
                 continue
+            if project_scope_set:
+                source_project_id = (getattr(source, "project_id", "") or "").strip()
+                in_project_scope = source_project_id in project_scope_set
+                is_global_source = not source_project_id
+                if not in_project_scope and not (include_global and is_global_source):
+                    continue
             payload = self._load_index_payload(source.id)
             if payload is None:
                 continue

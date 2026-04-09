@@ -275,6 +275,11 @@ async def upsert_source(
     manager = _manager_for_workspace(workspace_dir)
     source = manager.normalize_source_name(source, knowledge_config)
     existing = _find_source(config.knowledge, source.id)
+    project_id_is_explicit = "project_id" in source.model_fields_set
+    if existing is not None and not project_id_is_explicit:
+        source = source.model_copy(
+            update={"project_id": (existing.project_id or "").strip()}
+        )
     if existing is None:
         config.knowledge.sources.append(source)
     else:
@@ -411,17 +416,22 @@ async def search_knowledge(
     limit: int = Query(default=10, ge=1, le=50),
     source_ids: Optional[str] = Query(default=None),
     source_types: Optional[str] = Query(default=None),
+    project_scope: Optional[str] = Query(default=None),
+    include_global: bool = Query(default=True),
 ):
     config, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
     _ensure_knowledge_enabled_flag(knowledge_config.enabled)
     ids = [item for item in (source_ids or "").split(",") if item]
     types = [item for item in (source_types or "").split(",") if item]
+    projects = [item.strip() for item in (project_scope or "").split(",") if item.strip()]
     return _manager_for_workspace(workspace_dir).search(
         query=q,
         config=config.knowledge,
         limit=limit,
         source_ids=ids or None,
         source_types=types or None,
+        project_scope=projects or None,
+        include_global=include_global,
     )
 
 
@@ -431,6 +441,8 @@ async def query_knowledge_graph(
     q: str = Query(..., min_length=1),
     mode: str = Query(default="template"),
     dataset_scope: Optional[str] = Query(default=None),
+    project_scope: Optional[str] = Query(default=None),
+    include_global: bool = Query(default=True),
     top_k: int = Query(default=10, ge=1, le=50),
     timeout_sec: int = Query(default=20, ge=1, le=120),
 ):
@@ -452,12 +464,17 @@ async def query_knowledge_graph(
         raise HTTPException(status_code=400, detail="GRAPH_CYPHER_DISABLED")
 
     scope_items = [item for item in (dataset_scope or "").split(",") if item.strip()]
+    project_scope_items = [
+        item.strip() for item in (project_scope or "").split(",") if item.strip()
+    ]
     try:
         result = GraphOpsManager(workspace_dir).graph_query(
             config=config.knowledge,
             query_mode=query_mode,
             query_text=query_text,
             dataset_scope=scope_items or None,
+            project_scope=project_scope_items or None,
+            include_global=include_global,
             top_k=top_k,
             timeout_sec=timeout_sec,
         )

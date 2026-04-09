@@ -49,6 +49,8 @@ class GraphOpsManager:
         query_mode: str,
         query_text: str,
         dataset_scope: list[str] | None,
+        project_scope: list[str] | None,
+        include_global: bool,
         top_k: int,
         timeout_sec: int,
     ) -> GraphOpsResult:
@@ -89,6 +91,12 @@ class GraphOpsManager:
                     top_k=top_k,
                     dataset_scope=dataset_scope,
                 )
+                records = self._filter_records_by_project_scope(
+                    records=records,
+                    config=config,
+                    project_scope=project_scope,
+                    include_global=include_global,
+                )
                 if not records:
                     warnings.append("NO_GRAPH_RECORDS")
                 return GraphOpsResult(
@@ -97,6 +105,8 @@ class GraphOpsManager:
                     provenance={
                         "engine": engine,
                         "dataset_scope": dataset_scope or [],
+                        "project_scope": project_scope or [],
+                        "include_global": include_global,
                         "query_mode": query_mode,
                     },
                     warnings=warnings,
@@ -121,6 +131,8 @@ class GraphOpsManager:
             query=query_text,
             config=config,
             limit=max(1, min(top_k, 50)),
+            project_scope=project_scope,
+            include_global=include_global,
         )
         records: list[dict[str, Any]] = []
         for hit in search_result.get("hits") or []:
@@ -149,10 +161,45 @@ class GraphOpsManager:
             provenance={
                 "engine": engine,
                 "dataset_scope": dataset_scope or [],
+                "project_scope": project_scope or [],
+                "include_global": include_global,
                 "query_mode": query_mode,
             },
             warnings=warnings,
         )
+
+    @staticmethod
+    def _filter_records_by_project_scope(
+        *,
+        records: list[dict[str, Any]],
+        config: KnowledgeConfig,
+        project_scope: list[str] | None,
+        include_global: bool,
+    ) -> list[dict[str, Any]]:
+        scope_set = {
+            item.strip()
+            for item in (project_scope or [])
+            if item and item.strip()
+        }
+        if not scope_set:
+            return records
+
+        source_project_map: dict[str, str] = {}
+        for source in config.sources:
+            source_project_map[source.id] = (getattr(source, "project_id", "") or "").strip()
+
+        filtered: list[dict[str, Any]] = []
+        for record in records:
+            source_id = str(record.get("source_id") or "").strip()
+            if not source_id:
+                # Unknown source cannot be safely scoped when project filter is requested.
+                continue
+            source_project_id = source_project_map.get(source_id, "")
+            in_scope = source_project_id in scope_set
+            is_global = not source_project_id
+            if in_scope or (include_global and is_global):
+                filtered.append(record)
+        return filtered
 
     def run_memify(
         self,
