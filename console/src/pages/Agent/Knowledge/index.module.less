@@ -92,6 +92,83 @@
   color: #8c8c8c;
 }
 
+.quantHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.quantGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.quantCard {
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  background: #fafafa;
+  padding: 10px;
+  min-height: 68px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.quantCardPositive {
+  border-color: #b7eb8f;
+  background: #f6ffed;
+}
+
+.quantCardWarning {
+  border-color: #ffd591;
+  background: #fff7e6;
+}
+
+.quantCardNeutral {
+  border-color: #e8e8e8;
+  background: #fafafa;
+}
+
+.quantLabel {
+  color: #8c8c8c;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.quantValue {
+  color: #262626;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.quantNote {
+  color: #8c8c8c;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.quantReason {
+  color: #595959;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.quantActionRow {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 2px;
+}
+
+.quantActionButton {
+  padding: 0;
+  height: auto;
+  font-size: 12px;
+}
+
 .documentList {
   display: flex;
   flex-direction: column;
@@ -587,6 +664,10 @@
     justify-content: flex-end;
   }
 
+  .quantGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .filterBar {
     flex-direction: column;
     align-items: stretch;
@@ -626,6 +707,10 @@
 
   .cardContainer {
     padding: 12px 12px 0;
+  }
+
+  .quantGrid {
+    grid-template-columns: 1fr;
   }
 
   .cardFooter {

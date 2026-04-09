@@ -13,18 +13,27 @@ import {
   PlusOutlined,
 } from "@ant-design/icons";
 import { Button, Card, Empty, Tree, Typography } from "antd";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type {
   AgentProjectFileInfo,
   AgentProjectSummary,
 } from "../../../api/types/agents";
+import {
+  buildProjectKnowledgeCardModels,
+  computeProjectKnowledgeMetrics,
+  getProjectKnowledgeQuantStatusLabel,
+  isProjectKnowledgeFilterKey,
+  matchesProjectKnowledgeFilter,
+  type ProjectKnowledgeFilterKey,
+} from "./metrics";
 import styles from "./index.module.less";
 
 const { Text } = Typography;
 
 type FileMetricFilterKey = "original" | "derived" | "skills" | "scripts" | "flows" | "cases";
+type ProjectFileFilterKey = FileMetricFilterKey | ProjectKnowledgeFilterKey;
 
 interface ProjectOverviewCardProps {
   selectedProject?: AgentProjectSummary;
@@ -268,7 +277,7 @@ export default function ProjectOverviewCard({
   void _pipelineTemplateCount;
   const { t } = useTranslation();
   const [workspaceSummaryExpanded, setWorkspaceSummaryExpanded] = useState(false);
-  const [selectedMetricFilter, setSelectedMetricFilter] = useState<FileMetricFilterKey | "">("");
+  const [selectedMetricFilter, setSelectedMetricFilter] = useState<ProjectFileFilterKey | "">("");
   const updatedDateParts = formatUpdatedDateParts(selectedProject?.updated_time);
 
   const visibleFiles = hideBuiltInFiles
@@ -292,6 +301,7 @@ export default function ProjectOverviewCard({
   ).length;
   const filteredFiles = visibleFiles.filter((item) => {
     const normalizedPath = normalizeProjectPath(item.path);
+    const nowMs = Date.now();
     switch (selectedMetricFilter) {
       case "original":
         return isOriginalInputFile(normalizedPath);
@@ -305,11 +315,23 @@ export default function ProjectOverviewCard({
         return isPathInStandardDir(normalizedPath, "flows");
       case "cases":
         return isPathInStandardDir(normalizedPath, "cases");
+      case "knowledgeCandidates":
+        return matchesProjectKnowledgeFilter("knowledgeCandidates", item, nowMs);
+      case "markdown":
+        return matchesProjectKnowledgeFilter("markdown", item, nowMs);
+      case "textLike":
+        return matchesProjectKnowledgeFilter("textLike", item, nowMs);
+      case "recent":
+        return matchesProjectKnowledgeFilter("recent", item, nowMs);
       default:
         return true;
     }
   });
   const filteredFilePaths = filteredFiles.map((item) => item.path);
+  const projectKnowledgeMetrics = useMemo(
+    () => computeProjectKnowledgeMetrics(visibleFiles),
+    [visibleFiles],
+  );
   const treeData = buildFileTree(
     filteredFilePaths,
     priorityFileSet,
@@ -331,7 +353,18 @@ export default function ProjectOverviewCard({
               ? t("projects.artifacts.flow", "Flows")
               : selectedMetricFilter === "cases"
                 ? t("projects.artifacts.case", "Cases")
+                : selectedMetricFilter === "knowledgeCandidates"
+                  ? t("projects.quantKnowledgeCandidates", "Knowledge Candidates")
+                  : selectedMetricFilter === "markdown"
+                    ? t("projects.quantMarkdownFiles", "Markdown Files")
+                    : selectedMetricFilter === "textLike"
+                      ? t("projects.quantTextLikeFiles", "Text-like Files")
+                      : selectedMetricFilter === "recent"
+                        ? t("projects.quantRecentlyUpdated", "Updated in 7d")
                 : "";
+      const knowledgeFilterActive = Boolean(
+        selectedMetricFilter && isProjectKnowledgeFilterKey(selectedMetricFilter),
+      );
 
   useEffect(() => {
     if (!selectedMetricFilter) {
@@ -377,6 +410,11 @@ export default function ProjectOverviewCard({
       value: artifactCounts.cases,
     },
   ];
+
+  const knowledgeMetricCards = buildProjectKnowledgeCardModels(projectKnowledgeMetrics).map((item) => ({
+    ...item,
+    label: t(item.labelI18nKey, item.defaultLabel),
+  }));
 
   return (
     <Card
@@ -425,6 +463,68 @@ export default function ProjectOverviewCard({
             </div>
           </div>
         ) : null}
+
+        <div className={styles.overviewSection}>
+          <div className={styles.quantPanelHeader}>
+            <div>
+              <div className={styles.subSectionTitle}>{t("projects.knowledgePanelTitle", "Knowledge Quant Panel")}</div>
+              <Text type="secondary" className={styles.itemMeta}>
+                {t("projects.knowledgePanelHint", "Quickly observe project knowledge density and freshness")}
+              </Text>
+            </div>
+            {knowledgeFilterActive ? (
+              <Button
+                size="small"
+                type="text"
+                onClick={() => setSelectedMetricFilter("")}
+              >
+                {t("common.reset", "Reset")}
+              </Button>
+            ) : null}
+          </div>
+          <div className={styles.metricSummaryGrid}>
+            {knowledgeMetricCards.map((item) => {
+              const filterKey = item.filterKey;
+              const active = filterKey ? selectedMetricFilter === filterKey : false;
+              const statusLabel = getProjectKnowledgeQuantStatusLabel(item.assessment.status);
+              const className = `${styles.metricSummaryCard} ${item.assessment.tone === "positive" ? styles.metricSummaryCardPositive : item.assessment.tone === "warning" ? styles.metricSummaryCardWarning : styles.metricSummaryCardNeutral} ${item.filterKey ? styles.metricFilterCard : ""} ${active ? styles.metricFilterCardActive : ""}`;
+
+              if (filterKey) {
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    className={className}
+                    onClick={() => setSelectedMetricFilter((prev) => (prev === filterKey ? "" : filterKey))}
+                    aria-pressed={active}
+                  >
+                    <div className={styles.itemMeta}>{item.label}</div>
+                    <div className={styles.metricSummaryValue}>{item.value}</div>
+                    <div className={styles.metricSummaryNote}>
+                      {t(statusLabel.i18nKey, statusLabel.defaultLabel)}
+                    </div>
+                    <div className={styles.metricSummaryReason}>
+                      {t(`projects.quantReason.${item.reason.key}`, item.reason.params || {})}
+                    </div>
+                  </button>
+                );
+              }
+
+              return (
+                <div key={item.key} className={className}>
+                  <div className={styles.itemMeta}>{item.label}</div>
+                  <div className={styles.metricSummaryValue}>{item.value}</div>
+                  <div className={styles.metricSummaryNote}>
+                    {t(statusLabel.i18nKey, statusLabel.defaultLabel)}
+                  </div>
+                  <div className={styles.metricSummaryReason}>
+                    {t(`projects.quantReason.${item.reason.key}`, item.reason.params || {})}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
 
         <div className={styles.overviewSection}>
           <div className={styles.subSectionTitle}>

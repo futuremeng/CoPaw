@@ -39,6 +39,14 @@ import type {
   KnowledgeSourceType,
 } from "../../../api/types";
 import { MarkdownCopy } from "../../../components/MarkdownCopy/MarkdownCopy";
+import {
+  buildKnowledgeQuantCardModels,
+  computeKnowledgeQuantMetrics,
+  getKnowledgeQuantActionDescriptor,
+  getKnowledgeQuantStatusLabel,
+  type KnowledgeQuantActionKey,
+  summarizeRemoteRetryResults,
+} from "./metrics";
 import styles from "./index.module.less";
 
 const SOURCE_TYPE_OPTIONS: Array<{
@@ -148,6 +156,7 @@ function KnowledgePage() {
     useState<KnowledgeSourceContent | null>(null);
   const [sourceContentLoading, setSourceContentLoading] = useState(false);
   const [backfillingHistory, setBackfillingHistory] = useState(false);
+  const [retryingRemoteSources, setRetryingRemoteSources] = useState(false);
   const [selectedType, setSelectedType] = useState<KnowledgeSourceType>("file");
   const [isFileDragActive, setIsFileDragActive] = useState(false);
   const [selectedUploadFile, setSelectedUploadFile] = useState<File | null>(null);
@@ -607,6 +616,58 @@ function KnowledgePage() {
     }
   };
 
+  const remoteRetrySources = useMemo(
+    () => sources
+      .filter((source) => {
+        const state = source.status.remote_cache_state;
+        return typeof state === "string" && state.length > 0 && state !== "cached";
+      })
+      .map((source) => ({ id: source.id, name: source.name || source.id })),
+    [sources],
+  );
+
+  const handleRetryRemoteSources = useCallback(async () => {
+    if (knowledgePageDisabled) {
+      return;
+    }
+    if (remoteRetrySources.length === 0) {
+      message.info(t("knowledge.remoteRetryNone"));
+      return;
+    }
+    try {
+      setRetryingRemoteSources(true);
+      const settled = await Promise.allSettled(
+        remoteRetrySources.map((source) => api.indexKnowledgeSource(source.id)),
+      );
+      const summary = summarizeRemoteRetryResults(remoteRetrySources, settled);
+
+      if (summary.failedCount === 0) {
+        message.success(t("knowledge.remoteRetrySuccess", { count: summary.successCount }));
+      } else if (summary.successCount > 0) {
+        message.warning(
+          t("knowledge.remoteRetryPartial", {
+            success: summary.successCount,
+            failed: summary.failedCount,
+            failedNames: summary.failedNames.slice(0, 3).join(", "),
+          }),
+        );
+      } else {
+        message.error(
+          t("knowledge.remoteRetryAllFailed", {
+            failed: summary.failedCount,
+            failedNames: summary.failedNames.slice(0, 3).join(", "),
+          }),
+        );
+      }
+      await loadData();
+    } catch (error) {
+      console.error("Failed to retry remote sources", error);
+      message.error(t("knowledge.remoteRetryFailed"));
+    } finally {
+      setRetryingRemoteSources(false);
+    }
+  }, [knowledgePageDisabled, loadData, remoteRetrySources, t]);
+
   const triggerBlobDownload = useCallback((blob: Blob, filename: string) => {
     const objectUrl = window.URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -998,6 +1059,40 @@ function KnowledgePage() {
     t,
   ]);
 
+  const knowledgeQuantMetrics = useMemo(
+    () => computeKnowledgeQuantMetrics(sources, hits, backfillStatus),
+    [backfillStatus, hits, sources],
+  );
+  const quantCards = buildKnowledgeQuantCardModels(knowledgeQuantMetrics).map((item) => {
+    const actionKey = item.actionKey;
+    const actionDescriptor = actionKey
+      ? getKnowledgeQuantActionDescriptor(actionKey)
+      : undefined;
+    const actionHandlers: Record<KnowledgeQuantActionKey, () => void> = {
+      addSource: () => setModalOpen(true),
+      rebuildIndex: handleIndexAll,
+      backfillHistory: handleRunHistoryBackfillNow,
+      retryRemote: handleRetryRemoteSources,
+    };
+    const actionLoading: Record<KnowledgeQuantActionKey, boolean> = {
+      addSource: false,
+      rebuildIndex: indexingAll,
+      backfillHistory: backfillingHistory,
+      retryRemote: retryingRemoteSources,
+    };
+    return {
+      ...item,
+      label: t(item.labelI18nKey, item.defaultLabel),
+      action: actionDescriptor
+        ? {
+            label: t(actionDescriptor.labelI18nKey, actionDescriptor.defaultLabel),
+            onClick: actionHandlers[actionDescriptor.key],
+            loading: actionLoading[actionDescriptor.key],
+          }
+        : undefined,
+    };
+  });
+
   return (
     <div className={styles.knowledgePage}>
       <div className={styles.header}>
@@ -1096,6 +1191,51 @@ function KnowledgePage() {
         size={16}
         className={`${styles.contentStack} ${knowledgePageDisabled ? styles.disabledPanel : ""}`}
       >
+
+      <Card>
+        <Space className={styles.fullWidth} direction="vertical" size={12}>
+          <div className={styles.quantHeader}>
+            <Typography.Text>{t("knowledge.quantPanelTitle", "Knowledge Quant Panel")}</Typography.Text>
+            <Typography.Text type="secondary">
+              {t("knowledge.quantPanelHint", "Realtime index and source coverage")}
+            </Typography.Text>
+          </div>
+          <div className={styles.quantGrid}>
+            {quantCards.map((item) => {
+              const statusLabel = getKnowledgeQuantStatusLabel(item.assessment.status);
+              return (
+                <div
+                  key={item.key}
+                  className={`${styles.quantCard} ${item.assessment.tone === "positive" ? styles.quantCardPositive : item.assessment.tone === "warning" ? styles.quantCardWarning : styles.quantCardNeutral}`}
+                >
+                  <Typography.Text className={styles.quantLabel}>{item.label}</Typography.Text>
+                  <Typography.Text className={styles.quantValue}>{item.value}</Typography.Text>
+                  <Typography.Text className={styles.quantNote}>
+                    {t(statusLabel.i18nKey, statusLabel.defaultLabel)}
+                  </Typography.Text>
+                  <Typography.Text className={styles.quantReason}>
+                    {t(`knowledge.quantReason.${item.reason.key}`, item.reason.params || {})}
+                  </Typography.Text>
+                  {item.action ? (
+                    <div className={styles.quantActionRow}>
+                      <Button
+                        size="small"
+                        type="link"
+                        onClick={item.action.onClick}
+                        loading={item.action.loading}
+                        disabled={knowledgePageDisabled}
+                        className={styles.quantActionButton}
+                      >
+                        {item.action.label}
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        </Space>
+      </Card>
 
       <Card>
         <Space className={styles.fullWidth} direction="vertical" size={12}>
