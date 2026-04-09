@@ -582,8 +582,23 @@ class HttpStatefulClient(StatefulClientBase):
                 async with AsyncExitStack() as stack:
                     if self.transport == "streamable_http":
                         timeout = httpx.Timeout(self.timeout)
+                        
+                        # Log headers for debugging
+                        if self.headers:
+                            safe_headers = {
+                                k: (v[:20] + "..." if len(v) > 20 else v)
+                                for k, v in self.headers.items()
+                            }
+                            logger.debug(
+                                f"MCP client {self.name} using headers: {safe_headers}"
+                            )
+                        else:
+                            logger.debug(
+                                f"MCP client {self.name} has no custom headers"
+                            )
+                        
                         http_client = create_mcp_http_client(
-                            headers=self.headers,
+                            headers=self.headers or {},
                             timeout=timeout,
                         )
                         http_client = await stack.enter_async_context(
@@ -665,11 +680,26 @@ class HttpStatefulClient(StatefulClientBase):
                         retry_delay,
                     )
                     if status_code in {401, 403}:
-                        logger.warning(
-                            "MCP HTTP auth check for %s: verify token/Authorization header for %s",
-                            self.name,
-                            request_url,
+                        # Provide detailed guidance for auth errors
+                        has_auth = any(
+                            k.lower() == "authorization"
+                            for k in (self.headers or {}).keys()
                         )
+                        if has_auth:
+                            logger.warning(
+                                "MCP HTTP auth error for %s (401/403): Authorization header is configured but rejected. "
+                                "Possible causes: (1) token is expired/invalid, (2) nginx proxy not forwarding auth header, "
+                                "(3) server doesn't support configured token format. URL: %s",
+                                self.name,
+                                request_url,
+                            )
+                        else:
+                            logger.warning(
+                                "MCP HTTP auth error for %s (401/403): NO Authorization header configured. "
+                                "Please add 'headers' with 'Authorization' to your MCP client config. URL: %s",
+                                self.name,
+                                request_url,
+                            )
                     logger.debug(
                         "Detailed MCP HTTP lifecycle exception for %s",
                         self.name,

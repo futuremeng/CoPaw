@@ -389,6 +389,21 @@ class MCPClientManager:
         headers = client_config.headers
         if headers:
             headers = {k: os.path.expandvars(v) for k, v in headers.items()}
+            # Log headers for debugging auth issues
+            safe_headers = {
+                k: (v[:30] + "..." if len(v) > 30 else v)
+                for k, v in headers.items()
+            }
+            logger.debug(
+                "MCP client '%s' configured with headers: %s",
+                client_config.name,
+                safe_headers,
+            )
+        else:
+            logger.debug(
+                "MCP client '%s' has no custom headers",
+                client_config.name,
+            )
 
         transport = client_config.transport
         if transport == "sse":
