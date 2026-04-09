@@ -210,7 +210,7 @@ export function GraphQueryResults(props: GraphQueryResultsProps) {
           ) : null}
 
           <Typography.Text type="secondary">
-            {t("knowledge.graphQuery.resultsSummary", { count: viewModels.recordCount }) || `${viewModels.recordCount} results`}
+            {t("knowledge.graphQuery.resultsSummary", { count: viewModels.recordCount })}
             {props.summary ? ` - ${props.summary}` : ""}
           </Typography.Text>
         </Space>

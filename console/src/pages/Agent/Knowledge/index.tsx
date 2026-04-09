@@ -848,7 +848,7 @@ function KnowledgePage() {
       .map((item) => item.trim())
       .filter(Boolean);
     if (!query) {
-      message.warning(t("knowledge.graphQuery.emptyQuery") || "Please enter a query");
+      message.warning(t("knowledge.graphQuery.emptyQuery"));
       return;
     }
     try {
@@ -931,7 +931,7 @@ function KnowledgePage() {
     graphNodeDetails.outgoing.forEach((item) => predicates.add(item.predicate));
     graphNodeDetails.incoming.forEach((item) => predicates.add(item.predicate));
     return [
-      { label: t("knowledge.graphQuery.allPredicates") || "All predicates", value: "all" },
+      { label: t("knowledge.graphQuery.allPredicates"), value: "all" },
       ...Array.from(predicates)
         .sort((a, b) => a.localeCompare(b))
         .map((predicate) => ({ label: predicate, value: predicate })),
@@ -940,9 +940,9 @@ function KnowledgePage() {
 
   const graphRelationSortOptions = useMemo(
     () => [
-      { label: t("knowledge.graphQuery.sortScoreDesc") || "Score: high to low", value: "score_desc" },
-      { label: t("knowledge.graphQuery.sortScoreAsc") || "Score: low to high", value: "score_asc" },
-      { label: t("knowledge.graphQuery.sortPredicate") || "Predicate: A-Z", value: "predicate_asc" },
+      { label: t("knowledge.graphQuery.sortScoreDesc"), value: "score_desc" },
+      { label: t("knowledge.graphQuery.sortScoreAsc"), value: "score_asc" },
+      { label: t("knowledge.graphQuery.sortPredicate"), value: "predicate_asc" },
     ],
     [t],
   );
@@ -1724,9 +1724,9 @@ function KnowledgePage() {
       <Card>
         <Space className={styles.fullWidth} direction="vertical" size={12}>
           <div className={styles.searchHeader}>
-            <Typography.Text>{t("knowledge.graphQuery.title") || "Graph Query"}</Typography.Text>
+            <Typography.Text>{t("knowledge.graphQuery.title")}</Typography.Text>
             <Typography.Text type="secondary">
-              {t("knowledge.graphQuery.subtitle") || "Execute structured queries over knowledge graph"}
+              {t("knowledge.graphQuery.subtitle")}
             </Typography.Text>
           </div>
           <div className={styles.searchControls}>
@@ -1735,15 +1735,15 @@ function KnowledgePage() {
                 value={graphQueryMode}
                 onChange={(value) => setGraphQueryMode(value as "template" | "cypher")}
                 options={[
-                  { label: t("knowledge.graphQuery.template") || "Template", value: "template" },
-                  { label: t("knowledge.graphQuery.cypher") || "Cypher", value: "cypher" },
+                  { label: t("knowledge.graphQuery.template"), value: "template" },
+                  { label: t("knowledge.graphQuery.cypher"), value: "cypher" },
                 ]}
                 className={styles.searchTypeSelect}
               />
               <Input
                 value={graphQueryText}
                 onChange={(e) => setGraphQueryText(e.target.value)}
-                placeholder={t("knowledge.graphQuery.placeholder") || "Enter a knowledge query..."}
+                placeholder={t("knowledge.graphQuery.placeholder")}
                 onPressEnter={handleGraphQuery}
               />
             </Space.Compact>
@@ -1756,7 +1756,7 @@ function KnowledgePage() {
                 onClick={handleGraphQuery}
                 disabled={knowledgePageDisabled}
               >
-                {t("knowledge.graphQuery.execute") || "Execute Query"}
+                {t("knowledge.graphQuery.execute")}
               </Button>
             </div>
           </div>
@@ -1764,7 +1764,7 @@ function KnowledgePage() {
             <Space size="small" wrap>
               <div className={styles.paramControl}>
                 <Typography.Text type="secondary" className={styles.paramLabel}>
-                  {t("knowledge.graphQuery.topK") || "Top K"}:
+                  {t("knowledge.graphQuery.topK")}:
                 </Typography.Text>
                 <InputNumber
                   min={1}
@@ -1776,7 +1776,7 @@ function KnowledgePage() {
               </div>
               <div className={styles.paramControl}>
                 <Typography.Text type="secondary" className={styles.paramLabel}>
-                  {t("knowledge.graphQuery.timeout") || "Timeout (s)"}:
+                  {t("knowledge.graphQuery.timeout")}:
                 </Typography.Text>
                 <InputNumber
                   min={1}
@@ -1788,12 +1788,12 @@ function KnowledgePage() {
               </div>
               <div className={styles.paramControl}>
                 <Typography.Text type="secondary" className={styles.paramLabel}>
-                  {t("knowledge.graphQuery.datasetScope") || "Dataset Scope"}:
+                  {t("knowledge.graphQuery.datasetScope")}:
                 </Typography.Text>
                 <Input
                   value={graphQueryDatasetScopeText}
                   onChange={(e) => setGraphQueryDatasetScopeText(e.target.value)}
-                  placeholder={t("knowledge.graphQuery.datasetScopePlaceholder") || "dataset_a,dataset_b"}
+                  placeholder={t("knowledge.graphQuery.datasetScopePlaceholder")}
                   style={{ width: 220 }}
                 />
               </div>
@@ -2123,7 +2123,7 @@ function KnowledgePage() {
       <Drawer
         width={560}
         placement="right"
-        title={t("knowledge.graphQuery.nodeDetail") || "Node Details"}
+        title={t("knowledge.graphQuery.nodeDetail")}
         open={graphQueryNodeDrawerOpen && Boolean(graphQueryClickedNode)}
         onClose={() => setGraphQueryNodeDrawerOpen(false)}
         destroyOnClose
@@ -2152,7 +2152,7 @@ function KnowledgePage() {
             {graphQueryNodePath.length > 0 ? (
               <div className={styles.graphNodePathWrap}>
                 <Typography.Text type="secondary" className={styles.graphNodePathLabel}>
-                  {t("knowledge.graphQuery.path") || "Path"}:
+                  {t("knowledge.graphQuery.path")}:
                 </Typography.Text>
                 <Space size={6} wrap>
                   {graphQueryNodePath.map((nodeId, idx) => (
@@ -2178,7 +2178,7 @@ function KnowledgePage() {
 
             <div className={styles.infoSection}>
               <div className={styles.infoLabel}>
-                {t("knowledge.graphQuery.outgoingRelations") || "Outgoing Relations"}
+                {t("knowledge.graphQuery.outgoingRelations")}
               </div>
               {filteredOutgoingRelations.length ? (
                 <Space direction="vertical" size={8} className={styles.fullWidth}>
@@ -2197,7 +2197,7 @@ function KnowledgePage() {
                             disabled={!canHop}
                             onClick={() => canHop && handleGraphNodeHop(hopNodeId)}
                           >
-                            {t("knowledge.graphQuery.hop") || "Hop"}
+                            {t("knowledge.graphQuery.hop")}
                           </Button>
                         </Space>
                       </div>
@@ -2205,13 +2205,13 @@ function KnowledgePage() {
                   })}
                 </Space>
               ) : (
-                <Empty description={t("knowledge.graphQuery.noOutgoing") || "No outgoing relations"} />
+                <Empty description={t("knowledge.graphQuery.noOutgoing")} />
               )}
             </div>
 
             <div className={styles.infoSection}>
               <div className={styles.infoLabel}>
-                {t("knowledge.graphQuery.incomingRelations") || "Incoming Relations"}
+                {t("knowledge.graphQuery.incomingRelations")}
               </div>
               {filteredIncomingRelations.length ? (
                 <Space direction="vertical" size={8} className={styles.fullWidth}>
@@ -2230,7 +2230,7 @@ function KnowledgePage() {
                             disabled={!canHop}
                             onClick={() => canHop && handleGraphNodeHop(sourceNodeId)}
                           >
-                            {t("knowledge.graphQuery.hop") || "Hop"}
+                            {t("knowledge.graphQuery.hop")}
                           </Button>
                         </Space>
                       </div>
@@ -2238,7 +2238,7 @@ function KnowledgePage() {
                   })}
                 </Space>
               ) : (
-                <Empty description={t("knowledge.graphQuery.noIncoming") || "No incoming relations"} />
+                <Empty description={t("knowledge.graphQuery.noIncoming")} />
               )}
             </div>
           </Space>
