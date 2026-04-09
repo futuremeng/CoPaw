@@ -1227,7 +1227,7 @@ class KnowledgeConfig(BaseModel):
 
     version: int = Field(default=1, ge=1)
     enabled: bool = Field(default=False)
-    engine: Literal["local_lexical", "cognee"] = Field(
+    engine: Literal["local_lexical", "cognee", "graphify"] = Field(
         default="local_lexical",
     )
     sources: List[KnowledgeSourceSpec] = Field(default_factory=list)

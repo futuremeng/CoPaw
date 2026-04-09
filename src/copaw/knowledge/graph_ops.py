@@ -3,7 +3,7 @@
 
 This module provides a lightweight manager used by graph tools. It keeps
 current MVP behavior compatible while reserving integration points for
-Cognee-backed implementations.
+graph-provider implementations (for example, Cognee/Graphify).
 """
 
 from __future__ import annotations
@@ -55,7 +55,7 @@ class GraphOpsManager:
         engine = getattr(config, "engine", "local_lexical")
         warnings: list[str] = []
 
-        if query_mode == "cypher" and engine != "cognee":
+        if query_mode == "cypher" and engine == "local_lexical":
             return GraphOpsResult(
                 records=[],
                 summary="Cypher mode is not available on local_lexical engine.",
@@ -63,8 +63,19 @@ class GraphOpsManager:
                 warnings=["CYPHER_UNAVAILABLE_ON_LOCAL_ENGINE"],
             )
 
+        if query_mode == "cypher" and engine == "graphify":
+            return GraphOpsResult(
+                records=[],
+                summary="Cypher mode is not available until Graphify provider is wired.",
+                provenance={"engine": engine, "dataset_scope": dataset_scope or []},
+                warnings=["GRAPHIFY_CYPHER_NOT_READY"],
+            )
+
         if engine == "cognee":
             raise RuntimeError("Cognee graph provider is not wired yet.")
+
+        if engine == "graphify":
+            warnings.append("GRAPHIFY_FALLBACK_TO_LOCAL_LEXICAL")
 
         manager = KnowledgeManager(self.working_dir)
         search_result = manager.search(
@@ -116,7 +127,8 @@ class GraphOpsManager:
         """Create a memify job record.
 
         The local lexical engine stores a no-op success job so tool contracts
-        and job observability can be validated before real Cognee wiring.
+        and job observability can be validated before real graph-provider
+        wiring.
         """
         jobs = self._load_memify_jobs()
 
@@ -146,6 +158,10 @@ class GraphOpsManager:
             status = "failed"
             error = "Cognee memify provider is not wired yet."
             warnings = ["COGNEE_PROVIDER_NOT_READY"]
+        elif engine == "graphify":
+            status = "failed"
+            error = "Graphify memify provider is not wired yet."
+            warnings = ["GRAPHIFY_PROVIDER_NOT_READY"]
         else:
             status = "succeeded"
             error = None

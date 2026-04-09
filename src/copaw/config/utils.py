@@ -510,7 +510,7 @@ def load_config(config_path: Optional[Path] = None) -> Config:
         legacy_engine = knowledge.get("engine") or {}
         provider = str(legacy_engine.get("provider", "")).strip().lower()
         knowledge["engine"] = (
-            "cognee" if provider == "cognee" else "local_lexical"
+            provider if provider in {"cognee", "graphify"} else "local_lexical"
         )
 
     try:

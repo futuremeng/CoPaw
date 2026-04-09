@@ -44,6 +44,7 @@ import {
   getKnowledgeQuantStatusLabel,
   summarizeRemoteRetryResults,
 } from "./metrics";
+import { buildUnifiedBatchProgress } from "./progress";
 import { buildKnowledgeQuantCardViewModels } from "./quantCards";
 import { buildRemoteRetryNotice, collectRemoteRetrySources } from "./remoteRetry";
 import styles from "./index.module.less";
@@ -978,55 +979,22 @@ function KnowledgePage() {
       backfillStatus?.has_pending_history,
   );
   const unifiedBatchProgress = useMemo(() => {
-    if (indexingAll) {
-      return {
-        visible: true,
-        percent: 0,
-        status: "active" as const,
-        label: t("knowledge.unifiedProgressIndexAll"),
-      };
-    }
-
-    if (backfillProgress?.running) {
-      const total = Math.max(1, backfillProgress.total_sessions || 1);
-      const traversed = Math.max(
-        0,
-        Math.min(total, backfillProgress.traversed_sessions || 0),
-      );
-      return {
-        visible: true,
-        percent: Math.round((traversed / total) * 100),
-        status: "active" as const,
-        label: t("knowledge.unifiedProgressBackfill", {
-          traversed,
-          total,
-        }),
-      };
-    }
-
-    if (backfillingHistory) {
-      return {
-        visible: true,
-        percent: 0,
-        status: "active" as const,
-        label: t("knowledge.unifiedProgressBackfillStarting"),
-      };
-    }
-
-    if (clearingKnowledge) {
-      return {
-        visible: true,
-        percent: 0,
-        status: "active" as const,
-        label: t("knowledge.unifiedProgressClearing"),
-      };
-    }
+    const progress = buildUnifiedBatchProgress({
+      indexingAll,
+      backfillProgress,
+      backfillingHistory,
+      clearingKnowledge,
+    });
 
     return {
-      visible: false,
-      percent: 0,
-      status: "normal" as const,
-      label: "",
+      visible: progress.visible,
+      percent: progress.percent,
+      status: progress.status,
+      label: progress.labelI18nKey
+        ? progress.labelDefault
+          ? t(progress.labelI18nKey, progress.labelDefault, progress.labelParams)
+          : t(progress.labelI18nKey, progress.labelParams)
+        : "",
     };
   }, [
     backfillProgress,
