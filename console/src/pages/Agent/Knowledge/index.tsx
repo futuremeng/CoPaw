@@ -1328,9 +1328,9 @@ function KnowledgePage() {
       <Card>
         <Space className={styles.fullWidth} direction="vertical" size={12}>
           <div className={styles.quantHeader}>
-            <Typography.Text>{t("knowledge.quantPanelTitle", "Knowledge Quant Panel")}</Typography.Text>
+            <Typography.Text>{t("knowledge.quantPanelTitle")}</Typography.Text>
             <Typography.Text type="secondary">
-              {t("knowledge.quantPanelHint", "Realtime index and source coverage")}
+              {t("knowledge.quantPanelHint")}
             </Typography.Text>
           </div>
           <div className={styles.quantGrid}>
