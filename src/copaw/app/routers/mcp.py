@@ -348,13 +348,21 @@ async def refresh_mcp_client_status(
     from ..agent_context import get_agent_for_request
 
     agent = await get_agent_for_request(request)
-    mcp_config = agent.config.mcp
-    if mcp_config is None:
+
+    # Always prefer latest persisted config for explicit status checks.
+    from ...config.config import load_agent_config
+
+    latest_agent_config = load_agent_config(agent.agent_id)
+    latest_mcp_config = latest_agent_config.mcp
+    if latest_mcp_config is None:
         raise HTTPException(404, detail=f"MCP client '{client_key}' not found")
 
-    client = mcp_config.clients.get(client_key)
+    client = latest_mcp_config.clients.get(client_key)
     if client is None:
         raise HTTPException(404, detail=f"MCP client '{client_key}' not found")
+
+    # Keep in-memory config aligned so subsequent APIs reflect what we just used.
+    agent.config.mcp = latest_mcp_config
 
     mcp_manager = agent.mcp_manager
     if mcp_manager is None:
