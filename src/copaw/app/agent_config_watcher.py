@@ -69,7 +69,7 @@ class AgentConfigWatcher:
         self._last_channels_hash: Optional[int] = None
         self._last_heartbeat_hash: Optional[int] = None
         # mtime of agent.json at last check
-        self._last_mtime: float = 0.0
+        self._last_mtime_ns: int = 0
 
     async def start(self) -> None:
         """Take initial snapshot and start the polling task."""
@@ -101,9 +101,9 @@ class AgentConfigWatcher:
     def _snapshot(self) -> None:
         """Load current agent config; record mtime and hashes."""
         try:
-            self._last_mtime = self._config_path.stat().st_mtime
+            self._last_mtime_ns = self._config_path.stat().st_mtime_ns
         except FileNotFoundError:
-            self._last_mtime = 0.0
+            self._last_mtime_ns = 0
 
         try:
             agent_config = load_agent_config(self._agent_id)
@@ -252,14 +252,12 @@ class AgentConfigWatcher:
     async def _check(self) -> None:
         """Check for config changes and reload if needed."""
         try:
-            mtime = self._config_path.stat().st_mtime
+            mtime_ns = self._config_path.stat().st_mtime_ns
         except FileNotFoundError:
             return
 
-        if mtime == self._last_mtime:
+        if mtime_ns == self._last_mtime_ns:
             return
-
-        self._last_mtime = mtime
 
         try:
             agent_config = load_agent_config(self._agent_id)
@@ -269,6 +267,10 @@ class AgentConfigWatcher:
                 f"failed to parse agent.json",
             )
             return
+
+        # Only advance mtime after successful parse so transient partial
+        # writes can be retried automatically on the next poll.
+        self._last_mtime_ns = mtime_ns
 
         # Apply changes
         if self._channel_manager:

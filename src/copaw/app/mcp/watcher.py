@@ -66,7 +66,7 @@ class MCPConfigWatcher:
         self._last_mcp: Optional["MCPConfig"] = None
         self._last_mcp_hash: Optional[int] = None
         # mtime of config file at last check
-        self._last_mtime: float = 0.0
+        self._last_mtime_ns: int = 0
 
         # Track ongoing reload tasks to prevent blocking
         self._reload_task: Optional[asyncio.Task] = None
@@ -130,9 +130,9 @@ class MCPConfigWatcher:
         """Load current MCP config and record mtime + hash."""
         if self._config_path:
             try:
-                self._last_mtime = self._config_path.stat().st_mtime
+                self._last_mtime_ns = self._config_path.stat().st_mtime_ns
             except FileNotFoundError:
-                self._last_mtime = 0.0
+                self._last_mtime_ns = 0
 
         try:
             mcp_config = self._load_mcp_config()
@@ -171,12 +171,11 @@ class MCPConfigWatcher:
         # 1) Check mtime if config path is provided
         if self._config_path:
             try:
-                mtime = self._config_path.stat().st_mtime
+                mtime_ns = self._config_path.stat().st_mtime_ns
             except FileNotFoundError:
                 return
-            if mtime == self._last_mtime:
+            if mtime_ns == self._last_mtime_ns:
                 return
-            self._last_mtime = mtime
 
         # 2) Load new config; quick-reject if MCP section unchanged
         try:
@@ -184,6 +183,11 @@ class MCPConfigWatcher:
         except Exception:
             logger.debug("MCPConfigWatcher: failed to parse config")
             return
+
+        # Only advance mtime after a successful parse so transient partial
+        # writes do not suppress future reload attempts.
+        if self._config_path:
+            self._last_mtime_ns = mtime_ns
 
         new_hash = self._mcp_hash(new_mcp)
         if new_hash == self._last_mcp_hash:
