@@ -37,6 +37,7 @@ import type {
   KnowledgeSourceItem,
   KnowledgeSourceSpec,
   KnowledgeSourceType,
+  GraphQueryResponse,
 } from "../../../api/types";
 import { MarkdownCopy } from "../../../components/MarkdownCopy/MarkdownCopy";
 import {
@@ -47,6 +48,8 @@ import {
 import { buildUnifiedBatchProgress } from "./progress";
 import { buildKnowledgeQuantCardViewModels } from "./quantCards";
 import { buildRemoteRetryNotice, collectRemoteRetrySources } from "./remoteRetry";
+import { recordsToVisualizationData } from "./graphQuery";
+import { GraphQueryResults, GraphVisualization } from "./graphVisualization";
 import styles from "./index.module.less";
 
 const SOURCE_TYPE_OPTIONS: Array<{
@@ -136,6 +139,14 @@ function KnowledgePage() {
   const [sourceTypeFilter, setSourceTypeFilter] = useState<
     KnowledgeSourceType | "all"
   >("all");
+  const [graphQueryText, setGraphQueryText] = useState("");
+  const [graphQueryMode, setGraphQueryMode] = useState<"template" | "cypher">(
+    "template",
+  );
+  const [graphQueryResults, setGraphQueryResults] =
+    useState<GraphQueryResponse | null>(null);
+  const [graphQueryLoading, setGraphQueryLoading] = useState(false);
+  const [graphQueryError, setGraphQueryError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [enableModalOpen, setEnableModalOpen] = useState(false);
@@ -799,6 +810,42 @@ function KnowledgePage() {
     setSearchQuery("");
     setSearchTypeFilter("all");
     setHits([]);
+  }, []);
+
+  const handleGraphQuery = useCallback(async () => {
+    if (knowledgePageDisabled) {
+      return;
+    }
+    const query = graphQueryText.trim();
+    if (!query) {
+      message.warning(t("knowledge.graphQuery.emptyQuery") || "Please enter a query");
+      return;
+    }
+    try {
+      setGraphQueryLoading(true);
+      setGraphQueryError(null);
+      const result = await api.graphQuery({
+        query,
+        mode: graphQueryMode,
+        topK: 20,
+        timeoutSec: 20,
+      });
+      setGraphQueryResults(result);
+    } catch (error) {
+      const message_text =
+        error instanceof Error ? error.message : "Graph query failed";
+      setGraphQueryError(message_text);
+      console.error("Failed to execute graph query", error);
+      message.error(message_text);
+    } finally {
+      setGraphQueryLoading(false);
+    }
+  }, [graphQueryText, graphQueryMode, knowledgePageDisabled, t]);
+
+  const handleResetGraphQuery = useCallback(() => {
+    setGraphQueryText("");
+    setGraphQueryResults(null);
+    setGraphQueryError(null);
   }, []);
 
   const hasSearchQuery = searchQuery.trim().length > 0;
@@ -1527,6 +1574,92 @@ function KnowledgePage() {
         )}
       </Card>
       </div>
+
+      {/* Graph Query Section */}
+      <Card>
+        <Space className={styles.fullWidth} direction="vertical" size={12}>
+          <div className={styles.searchHeader}>
+            <Typography.Text>{t("knowledge.graphQuery.title") || "Graph Query"}</Typography.Text>
+            <Typography.Text type="secondary">
+              {t("knowledge.graphQuery.subtitle") || "Execute structured queries over knowledge graph"}
+            </Typography.Text>
+          </div>
+          <div className={styles.searchControls}>
+            <Space.Compact className={styles.searchCompact}>
+              <Select
+                value={graphQueryMode}
+                onChange={(value) => setGraphQueryMode(value as "template" | "cypher")}
+                options={[
+                  { label: t("knowledge.graphQuery.template") || "Template", value: "template" },
+                  { label: t("knowledge.graphQuery.cypher") || "Cypher", value: "cypher" },
+                ]}
+                className={styles.searchTypeSelect}
+              />
+              <Input
+                value={graphQueryText}
+                onChange={(e) => setGraphQueryText(e.target.value)}
+                placeholder={t("knowledge.graphQuery.placeholder") || "Enter a knowledge query..."}
+                onPressEnter={handleGraphQuery}
+              />
+            </Space.Compact>
+            <div className={styles.searchButtons}>
+              <Button onClick={handleResetGraphQuery}>{t("common.reset")}</Button>
+              <Button
+                type="primary"
+                icon={<SearchOutlined />}
+                loading={graphQueryLoading}
+                onClick={handleGraphQuery}
+                disabled={knowledgePageDisabled}
+              >
+                {t("knowledge.graphQuery.execute") || "Execute Query"}
+              </Button>
+            </div>
+          </div>
+        </Space>
+
+        {graphQueryResults && (
+          <div style={{ marginTop: 20 }}>
+            <GraphQueryResults
+              records={graphQueryResults.records}
+              summary={graphQueryResults.summary}
+              warnings={graphQueryResults.warnings}
+              provenance={graphQueryResults.provenance}
+              query={graphQueryText}
+              loading={graphQueryLoading}
+              onRefresh={handleGraphQuery}
+            />
+          </div>
+        )}
+
+        {graphQueryResults && (
+          <div style={{ marginTop: 20 }}>
+            <GraphVisualization
+              data={recordsToVisualizationData(
+                graphQueryResults.records,
+                graphQueryResults.summary,
+                graphQueryResults.provenance,
+              )}
+              loading={graphQueryLoading}
+            />
+          </div>
+        )}
+
+        {graphQueryError && (
+          <div
+            style={{
+              marginTop: 16,
+              padding: "12px 16px",
+              backgroundColor: "#fff1f0",
+              border: "1px solid #ffccc7",
+              borderRadius: 4,
+            }}
+          >
+            <Typography.Text type="danger">
+              <strong>{t("common.error")}:</strong> {graphQueryError}
+            </Typography.Text>
+          </div>
+        )}
+      </Card>
 
       </Space>
 

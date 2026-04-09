@@ -12,6 +12,7 @@ import type {
   KnowledgeSourceContent,
   KnowledgeSourceSpec,
   KnowledgeSourcesResponse,
+  GraphQueryResponse,
 } from "../types";
 
 export const knowledgeApi = {
@@ -141,6 +142,25 @@ export const knowledgeApi = {
     return request<KnowledgeSearchResponse>(
       `/knowledge/search?${searchParams.toString()}`,
     );
+  },
+
+  graphQuery: (params: {
+    query: string;
+    mode?: "template" | "cypher";
+    datasetScope?: string[];
+    topK?: number;
+    timeoutSec?: number;
+  }) => {
+    const searchParams = new URLSearchParams({
+      q: params.query,
+      mode: params.mode ?? "template",
+      top_k: String(params.topK ?? 10),
+      timeout_sec: String(params.timeoutSec ?? 20),
+    });
+    if (params.datasetScope?.length) {
+      searchParams.set("dataset_scope", params.datasetScope.join(","));
+    }
+    return request<GraphQueryResponse>(`/knowledge/graph-query?${searchParams.toString()}`);
   },
 
   downloadKnowledgeBackup: async (): Promise<Blob> => {

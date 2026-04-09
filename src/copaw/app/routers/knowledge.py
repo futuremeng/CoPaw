@@ -425,6 +425,57 @@ async def search_knowledge(
     )
 
 
+@router.get("/graph-query")
+async def query_knowledge_graph(
+    request: Request,
+    q: str = Query(..., min_length=1),
+    mode: str = Query(default="template"),
+    dataset_scope: Optional[str] = Query(default=None),
+    top_k: int = Query(default=10, ge=1, le=50),
+    timeout_sec: int = Query(default=20, ge=1, le=120),
+):
+    config, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    _ensure_knowledge_enabled_flag(knowledge_config.enabled)
+
+    query_text = (q or "").strip()
+    if not query_text:
+        raise HTTPException(status_code=400, detail="GRAPH_QUERY_TEXT_REQUIRED")
+
+    query_mode = (mode or "template").strip().lower()
+    if query_mode not in {"template", "cypher"}:
+        raise HTTPException(status_code=400, detail="GRAPH_QUERY_MODE_INVALID")
+
+    if not bool(getattr(knowledge_config, "graph_query_enabled", False)):
+        raise HTTPException(status_code=400, detail="GRAPH_QUERY_DISABLED")
+
+    if query_mode == "cypher" and not bool(getattr(knowledge_config, "allow_cypher_query", False)):
+        raise HTTPException(status_code=400, detail="GRAPH_CYPHER_DISABLED")
+
+    scope_items = [item for item in (dataset_scope or "").split(",") if item.strip()]
+    try:
+        result = GraphOpsManager(workspace_dir).graph_query(
+            config=config.knowledge,
+            query_mode=query_mode,
+            query_text=query_text,
+            dataset_scope=scope_items or None,
+            top_k=top_k,
+            timeout_sec=timeout_sec,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {
+        "records": result.records,
+        "summary": result.summary,
+        "provenance": result.provenance,
+        "warnings": result.warnings,
+    }
+
+
 @router.get("/history-backfill/status")
 async def get_history_backfill_status(request: Request):
     """Get history backfill status for knowledge enable flow and CTA display."""

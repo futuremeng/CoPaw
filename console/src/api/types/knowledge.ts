@@ -148,6 +148,65 @@ export interface KnowledgeClearResponse {
   removed_source_configs: boolean;
 }
 
+/**
+ * Graph query record from graph knowledge engine.
+ * Compatible with Graphify/Cognee graph records.
+ */
+export interface GraphQueryRecord {
+  subject: string;
+  predicate: string;
+  object: string;
+  score: number;
+  source_id: string;
+  source_type: string;
+  document_path: string;
+  document_title: string;
+}
+
+/**
+ * Graph provenance metadata (engine, dataset scope, etc.)
+ */
+export type GraphProvenance = Record<string, unknown>;
+
+/**
+ * Response from graph query operation.
+ */
+export interface GraphQueryResponse {
+  records: GraphQueryRecord[];
+  summary: string;
+  provenance: GraphProvenance;
+  warnings: string[];
+}
+
+/**
+ * Graph visualization data model.
+ * Used to convert query records into node/edge structure for rendering.
+ */
+export interface GraphNode {
+  id: string;
+  label: string;
+  title: string;
+  type: string;
+  score: number;
+  source_id: string;
+  document_path: string;
+}
+
+export interface GraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  label: string;
+  confidence?: string;
+}
+
+export interface GraphVisualizationData {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  summary: string;
+  provenance: GraphProvenance;
+}
+
 export interface KnowledgeRestoreResponse {
   success: boolean;
   replace_existing: boolean;
