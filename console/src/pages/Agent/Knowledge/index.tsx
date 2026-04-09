@@ -38,6 +38,7 @@ import type {
   KnowledgeSourceSpec,
   KnowledgeSourceType,
   GraphQueryResponse,
+  GraphQueryRecord,
 } from "../../../api/types";
 import { MarkdownCopy } from "../../../components/MarkdownCopy/MarkdownCopy";
 import {
@@ -48,7 +49,7 @@ import {
 import { buildUnifiedBatchProgress } from "./progress";
 import { buildKnowledgeQuantCardViewModels } from "./quantCards";
 import { buildRemoteRetryNotice, collectRemoteRetrySources } from "./remoteRetry";
-import { recordsToVisualizationData } from "./graphQuery";
+import { recordsToVisualizationData, formatScore } from "./graphQuery";
 import { GraphQueryResults, GraphVisualization } from "./graphVisualization";
 import styles from "./index.module.less";
 
@@ -149,6 +150,7 @@ function KnowledgePage() {
   const [graphQueryError, setGraphQueryError] = useState<string | null>(null);
   const [graphQueryTopK, setGraphQueryTopK] = useState(20);
   const [graphQueryTimeoutSec, setGraphQueryTimeoutSec] = useState(20);
+  const [graphQueryDatasetScopeText, setGraphQueryDatasetScopeText] = useState("");
   const [graphQueryClickedNode, setGraphQueryClickedNode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -820,6 +822,10 @@ function KnowledgePage() {
       return;
     }
     const query = graphQueryText.trim();
+    const datasetScope = graphQueryDatasetScopeText
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
     if (!query) {
       message.warning(t("knowledge.graphQuery.emptyQuery") || "Please enter a query");
       return;
@@ -832,6 +838,7 @@ function KnowledgePage() {
         mode: graphQueryMode,
         topK: graphQueryTopK,
         timeoutSec: graphQueryTimeoutSec,
+        datasetScope: datasetScope.length ? datasetScope : undefined,
       });
       setGraphQueryResults(result);
       setGraphQueryClickedNode(null);
@@ -844,12 +851,21 @@ function KnowledgePage() {
     } finally {
       setGraphQueryLoading(false);
     }
-  }, [graphQueryText, graphQueryMode, graphQueryTopK, graphQueryTimeoutSec, knowledgePageDisabled, t]);
+  }, [
+    graphQueryText,
+    graphQueryMode,
+    graphQueryTopK,
+    graphQueryTimeoutSec,
+    graphQueryDatasetScopeText,
+    knowledgePageDisabled,
+    t,
+  ]);
 
   const handleResetGraphQuery = useCallback(() => {
     setGraphQueryText("");
     setGraphQueryResults(null);
     setGraphQueryError(null);
+    setGraphQueryDatasetScopeText("");
     setGraphQueryClickedNode(null);
   }, []);
 
@@ -1617,36 +1633,47 @@ function KnowledgePage() {
                 disabled={knowledgePageDisabled}
               >
                 {t("knowledge.graphQuery.execute") || "Execute Query"}
-                        <div className={styles.searchParams}>
-                          <Space size="small" wrap>
-                            <div className={styles.paramControl}>
-                              <Typography.Text type="secondary" className={styles.paramLabel}>
-                                {t("knowledge.graphQuery.topK") || "Top K"}:
-                              </Typography.Text>
-                              <InputNumber
-                                min={1}
-                                max={100}
-                                value={graphQueryTopK}
-                                onChange={(value) => setGraphQueryTopK(value || 20)}
-                                style={{ width: 80 }}
-                              />
-                            </div>
-                            <div className={styles.paramControl}>
-                              <Typography.Text type="secondary" className={styles.paramLabel}>
-                                {t("knowledge.graphQuery.timeout") || "Timeout (s)"}:
-                              </Typography.Text>
-                              <InputNumber
-                                min={1}
-                                max={300}
-                                value={graphQueryTimeoutSec}
-                                onChange={(value) => setGraphQueryTimeoutSec(value || 20)}
-                                style={{ width: 80 }}
-                              />
-                            </div>
-                          </Space>
-                        </div>
               </Button>
             </div>
+          </div>
+          <div className={styles.searchParams}>
+            <Space size="small" wrap>
+              <div className={styles.paramControl}>
+                <Typography.Text type="secondary" className={styles.paramLabel}>
+                  {t("knowledge.graphQuery.topK") || "Top K"}:
+                </Typography.Text>
+                <InputNumber
+                  min={1}
+                  max={100}
+                  value={graphQueryTopK}
+                  onChange={(value) => setGraphQueryTopK(value || 20)}
+                  style={{ width: 88 }}
+                />
+              </div>
+              <div className={styles.paramControl}>
+                <Typography.Text type="secondary" className={styles.paramLabel}>
+                  {t("knowledge.graphQuery.timeout") || "Timeout (s)"}:
+                </Typography.Text>
+                <InputNumber
+                  min={1}
+                  max={300}
+                  value={graphQueryTimeoutSec}
+                  onChange={(value) => setGraphQueryTimeoutSec(value || 20)}
+                  style={{ width: 88 }}
+                />
+              </div>
+              <div className={styles.paramControl}>
+                <Typography.Text type="secondary" className={styles.paramLabel}>
+                  {t("knowledge.graphQuery.datasetScope") || "Dataset Scope"}:
+                </Typography.Text>
+                <Input
+                  value={graphQueryDatasetScopeText}
+                  onChange={(e) => setGraphQueryDatasetScopeText(e.target.value)}
+                  placeholder={t("knowledge.graphQuery.datasetScopePlaceholder") || "dataset_a,dataset_b"}
+                  style={{ width: 220 }}
+                />
+              </div>
+            </Space>
           </div>
         </Space>
 
@@ -1678,22 +1705,109 @@ function KnowledgePage() {
           </div>
         )}
 
-        {graphQueryResults && graphQueryClickedNode && (
-          <div style={{ marginTop: 20 }}>
-            <Card title={t("knowledge.graphQuery.nodeDetail") || "Node Details"}>
-              <div style={{ padding: "12px 0" }}>
-                <Typography.Text strong>Node ID:</Typography.Text>{" "}
-                <Typography.Text code>{graphQueryClickedNode}</Typography.Text>
-              </div>
-              <Button
-                onClick={() => setGraphQueryClickedNode(null)}
-                style={{ marginTop: 12 }}
+        {graphQueryResults && graphQueryClickedNode && (() => {
+          const safeNodeIdFn = (raw: string) =>
+            raw
+              .toLowerCase()
+              .replace(/[^a-z0-9_-]+/g, "-")
+              .replace(/-+/g, "-")
+              .replace(/^-|-$/g, "");
+          const deriveHopNodeId = (rawObject: string) => {
+            const head = rawObject.split(";")[0]?.trim() || "";
+            return safeNodeIdFn(head.replace(/--\[[^\]]+\]--/g, " "));
+          };
+          const nodeRelations = graphQueryResults.records.filter(
+            (r) => safeNodeIdFn(r.subject) === graphQueryClickedNode,
+          );
+          const nodeIdSet = new Set(
+            graphQueryResults.records.map((r) => safeNodeIdFn(r.subject)),
+          );
+          return (
+            <div style={{ marginTop: 20 }}>
+              <Card
+                title={t("knowledge.graphQuery.nodeDetail") || "Node Details"}
+                extra={
+                  <Button
+                    size="small"
+                    onClick={() => setGraphQueryClickedNode(null)}
+                  >
+                    {t("common.close") || "Close"}
+                  </Button>
+                }
               >
-                {t("common.close") || "Close"}
-              </Button>
-            </Card>
-          </div>
-        )}
+                <Space direction="vertical" style={{ width: "100%" }} size={16}>
+                  <div>
+                    <Typography.Text strong>Node ID:</Typography.Text>{" "}
+                    <Typography.Text code style={{ fontSize: 12 }}>
+                      {graphQueryClickedNode}
+                    </Typography.Text>
+                  </div>
+                  {nodeRelations.length > 0 && (
+                    <div>
+                      <Typography.Text strong>
+                        {t("knowledge.graphQuery.outgoingRelations") ||
+                          "Outgoing Relations"} ({nodeRelations.length})
+                      </Typography.Text>
+                      <div style={{ marginTop: 8 }}>
+                        {nodeRelations.slice(0, 5).map((rel: GraphQueryRecord, idx: number) => {
+                          const hopNodeId = deriveHopNodeId(rel.object);
+                          const canHop = Boolean(hopNodeId) && nodeIdSet.has(hopNodeId);
+                          return (
+                          <div
+                            key={idx}
+                            style={{
+                              padding: "8px",
+                              marginBottom: "4px",
+                              backgroundColor: "#f5f5f5",
+                              borderRadius: "4px",
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                            }}
+                          >
+                            <div style={{ flex: 1 }}>
+                              <Typography.Text
+                                type="secondary"
+                                style={{ fontSize: 12 }}
+                              >
+                                {rel.predicate}
+                              </Typography.Text>
+                              <br />
+                              <Typography.Text style={{ fontSize: 12 }}>
+                                → {rel.object.substring(0, 60)}
+                                {rel.object.length > 60 ? "..." : ""}
+                              </Typography.Text>
+                            </div>
+                            <Tag color="blue" style={{ marginLeft: 8 }}>
+                              {formatScore(rel.score).value}
+                            </Tag>
+                            <Button
+                              size="small"
+                              type="link"
+                              disabled={!canHop}
+                              onClick={() => canHop && setGraphQueryClickedNode(hopNodeId)}
+                            >
+                              {t("knowledge.graphQuery.hop") || "Hop"}
+                            </Button>
+                          </div>
+                          );
+                        })}
+                        {nodeRelations.length > 5 && (
+                          <Typography.Text
+                            type="secondary"
+                            style={{ fontSize: 12 }}
+                          >
+                            +{nodeRelations.length - 5} more relations
+                          </Typography.Text>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </Space>
+              </Card>
+            </div>
+          );
+        })()}
 
         {graphQueryError && (
           <div
