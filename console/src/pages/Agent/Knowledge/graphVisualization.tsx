@@ -89,7 +89,7 @@ export function GraphQueryResults(props: GraphQueryResultsProps) {
 
   const columns: ColumnType<GraphQueryRecordViewModel>[] = [
     {
-      title: t("knowledge.graphQuery.subject", "Subject"),
+      title: t("knowledge.graphQuery.subject"),
       dataIndex: "subject",
       key: "subject",
       width: "20%",
@@ -101,14 +101,14 @@ export function GraphQueryResults(props: GraphQueryResultsProps) {
       ),
     },
     {
-      title: t("knowledge.graphQuery.predicate", "Relation"),
+      title: t("knowledge.graphQuery.predicate"),
       dataIndex: "predicate",
       key: "predicate",
       width: "10%",
       render: (text: string) => <Tag color="blue">{text}</Tag>,
     },
     {
-      title: t("knowledge.graphQuery.object", "Target"),
+      title: t("knowledge.graphQuery.object"),
       dataIndex: "object",
       key: "object",
       width: "30%",
@@ -120,7 +120,7 @@ export function GraphQueryResults(props: GraphQueryResultsProps) {
       ),
     },
     {
-      title: t("knowledge.graphQuery.score", "Score"),
+      title: t("knowledge.graphQuery.score"),
       dataIndex: "score",
       key: "score",
       width: "10%",
@@ -131,7 +131,7 @@ export function GraphQueryResults(props: GraphQueryResultsProps) {
       },
     },
     {
-      title: t("knowledge.graphQuery.source", "Source"),
+      title: t("knowledge.graphQuery.source"),
       dataIndex: "sourceId",
       key: "sourceId",
       width: "15%",
@@ -143,7 +143,7 @@ export function GraphQueryResults(props: GraphQueryResultsProps) {
       ),
     },
     {
-      title: t("knowledge.graphQuery.type", "Type"),
+      title: t("knowledge.graphQuery.type"),
       dataIndex: "sourceType",
       key: "sourceType",
       width: "10%",
@@ -154,10 +154,10 @@ export function GraphQueryResults(props: GraphQueryResultsProps) {
   return (
     <div className={styles.graphQueryResults}>
       <Card
-        title={t("knowledge.graphQuery.results", "Query Results")}
+        title={t("knowledge.graphQuery.results")}
         extra={
           <Space>
-            <Tooltip title={t("knowledge.graphQuery.refresh", "Refresh")}>
+            <Tooltip title={t("knowledge.graphQuery.refresh")}>
               <Button
                 icon={<ReloadOutlined />}
                 loading={props.loading}
@@ -171,14 +171,14 @@ export function GraphQueryResults(props: GraphQueryResultsProps) {
       >
         <Space direction="vertical" style={{ width: "100%", marginBottom: 16 }}>
           <Space wrap>
-            <span>{t("knowledge.graphQuery.filter", "Filter")}:</span>
+            <span>{t("knowledge.graphQuery.filter")}:</span>
             <Input
               value={filterText}
               onChange={(event) => setFilterText(event.target.value)}
-              placeholder={t("knowledge.graphQuery.filterPlaceholder", "Search...")}
+              placeholder={t("knowledge.graphQuery.filterPlaceholder")}
               style={{ width: 260 }}
             />
-            <span>{t("knowledge.graphQuery.sortBy", "Sort")}:</span>
+            <span>{t("knowledge.graphQuery.sortBy")}:</span>
             <Select
               value={sortBy}
               onChange={setSortBy}
@@ -202,7 +202,7 @@ export function GraphQueryResults(props: GraphQueryResultsProps) {
 
           {props.warnings.length > 0 ? (
             <div className={styles.graphQueryWarningBox}>
-              <strong>{t("knowledge.graphQuery.warnings", "Warnings")}:</strong>
+              <strong>{t("knowledge.graphQuery.warnings")}:</strong>
               {props.warnings.map((warning) => (
                 <div key={warning}>- {warning}</div>
               ))}
@@ -216,7 +216,7 @@ export function GraphQueryResults(props: GraphQueryResultsProps) {
         </Space>
 
         {viewModels.records.length === 0 ? (
-          <Empty description={t("knowledge.graphQuery.noResults", "No results")} />
+          <Empty description={t("knowledge.graphQuery.noResults")} />
         ) : (
           <Table
             columns={columns}
@@ -488,19 +488,19 @@ export function GraphVisualization(props: GraphVisualizationProps) {
 
   if (!data.nodes.length) {
     return (
-      <Card title={t("knowledge.graphQuery.visualization", "Graph Visualization")} loading={loading}>
-        <Empty description={t("knowledge.graphQuery.noVisualization", "No graph data available")} />
+      <Card title={t("knowledge.graphQuery.visualization")} loading={loading}>
+        <Empty description={t("knowledge.graphQuery.noVisualization")} />
       </Card>
     );
   }
 
   return (
     <Card
-      title={t("knowledge.graphQuery.visualization", "Graph Visualization")}
+      title={t("knowledge.graphQuery.visualization")}
       extra={
         <Space>
           <Button icon={<ExportOutlined />} onClick={handleExport}>
-            {t("knowledge.graphQuery.export", "Export")}
+            {t("knowledge.graphQuery.export")}
           </Button>
         </Space>
       }
@@ -510,7 +510,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
         <div ref={containerRef} className={styles.graphCanvas} />
       </div>
       <Typography.Text type="secondary" className={styles.graphSummaryText}>
-        {t("knowledge.graphQuery.nodes", "Nodes")}: {data.nodes.length} | {t("knowledge.graphQuery.edges", "Edges")}: {data.edges.length}
+        {t("knowledge.graphQuery.nodes")}: {data.nodes.length} | {t("knowledge.graphQuery.edges")}: {data.edges.length}
       </Typography.Text>
     </Card>
   );
