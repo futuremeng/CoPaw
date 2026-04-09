@@ -308,9 +308,27 @@ class StdIOStatefulClient(StatefulClientBase):
                 self.is_connected = False
                 self._cached_tools = None
                 self._ready_event.clear()
-                await asyncio.sleep(1)
+                await self._wait_before_retry(1.0)
 
         logger.info(f"MCP client lifecycle task exited: {self.name}")
+
+    async def _wait_before_retry(self, delay: float) -> None:
+        """Sleep up to *delay* seconds, returning early if stop is requested.
+
+        This ensures that disabling a client (which sets _stop_event via
+        close()) takes effect immediately instead of waiting the full retry
+        delay.
+        """
+        stop_task = asyncio.ensure_future(self._stop_event.wait())
+        try:
+            await asyncio.wait({stop_task}, timeout=delay)
+        finally:
+            if not stop_task.done():
+                stop_task.cancel()
+                try:
+                    await stop_task
+                except asyncio.CancelledError:
+                    pass
 
     async def connect(self, timeout: float = 30.0) -> None:
         """Connect to MCP server.
@@ -666,9 +684,27 @@ class HttpStatefulClient(StatefulClientBase):
                 self.is_connected = False
                 self._cached_tools = None
                 self._ready_event.clear()
-                await asyncio.sleep(retry_delay)
+                await self._wait_before_retry(retry_delay)
 
         logger.info(f"MCP client lifecycle task exited: {self.name}")
+
+    async def _wait_before_retry(self, delay: float) -> None:
+        """Sleep up to *delay* seconds, returning early if stop is requested.
+
+        This ensures that disabling a client (which sets _stop_event via
+        close()) takes effect immediately instead of waiting the full retry
+        delay.
+        """
+        stop_task = asyncio.ensure_future(self._stop_event.wait())
+        try:
+            await asyncio.wait({stop_task}, timeout=delay)
+        finally:
+            if not stop_task.done():
+                stop_task.cancel()
+                try:
+                    await stop_task
+                except asyncio.CancelledError:
+                    pass
 
     async def connect(self, timeout: float = 30.0) -> None:
         """Connect to MCP server.
