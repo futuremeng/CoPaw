@@ -10,7 +10,7 @@ from copaw.config.config import GraphifyConfig
 from copaw.knowledge.graphify_provider import (
     GraphifyLoadError,
     GraphifyNotConfiguredError,
-    GraphifyRemoteNotImplementedError,
+    GraphifyRemoteError,
     graphify_memify,
     graphify_query,
 )
@@ -38,9 +38,64 @@ def test_graphify_query_not_configured_raises():
         graphify_query(cfg, "agent uses graph", top_k=5, dataset_scope=[])
 
 
-def test_graphify_query_remote_endpoint_raises():
-    cfg = GraphifyConfig(endpoint="http://localhost:9000")
-    with pytest.raises(GraphifyRemoteNotImplementedError):
+def test_graphify_query_remote_endpoint_success(monkeypatch):
+    class _DummyResponse:
+        status_code = 200
+        text = ""
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "records": [
+                    {
+                        "subject": "RemoteNode",
+                        "predicate": "relates_to",
+                        "object": "OtherNode",
+                        "score": 0.9,
+                        "source_id": "remote",
+                    }
+                ]
+            }
+
+    def _fake_post(url, json, headers, timeout):
+        _ = json, headers, timeout
+        assert url in {
+            "https://graph.example.com/query",
+            "https://graph.example.com/graph/query",
+        }
+        return _DummyResponse()
+
+    import httpx
+
+    monkeypatch.setattr(httpx, "post", _fake_post)
+    cfg = GraphifyConfig(endpoint="https://graph.example.com", api_key="secret")
+    records = graphify_query(cfg, "test query", top_k=5, dataset_scope=["repo"])
+    assert len(records) == 1
+    assert records[0]["subject"] == "RemoteNode"
+
+
+def test_graphify_query_remote_endpoint_http_error(monkeypatch):
+    import httpx
+
+    req = httpx.Request("POST", "https://graph.example.com/query")
+    resp = httpx.Response(500, request=req, text="boom")
+
+    class _DummyResponse:
+        status_code = 500
+        text = "boom"
+
+        def raise_for_status(self):
+            raise httpx.HTTPStatusError("server error", request=req, response=resp)
+
+        def json(self):
+            return {}
+
+    monkeypatch.setattr(httpx, "post", lambda *a, **kw: _DummyResponse())
+
+    cfg = GraphifyConfig(endpoint="https://graph.example.com")
+    with pytest.raises(GraphifyRemoteError, match=r"failed \(500\)"):
         graphify_query(cfg, "test query", top_k=5, dataset_scope=[])
 
 
@@ -115,10 +170,12 @@ def test_graphify_config_env_injection(tmp_path, monkeypatch):
     )
     monkeypatch.setenv("COPAW_GRAPHIFY_GRAPH_PATH", str(graph_json))
     monkeypatch.setenv("COPAW_GRAPHIFY_FALLBACK", "false")
+    monkeypatch.setenv("COPAW_GRAPHIFY_REQUEST_TIMEOUT_SEC", "22")
 
     cfg = GraphifyConfig()  # env should override empty defaults
     assert cfg.graph_path == str(graph_json)
     assert cfg.fallback_to_local is False
+    assert cfg.request_timeout_sec == 22.0
 
 
 def test_graphify_config_env_not_set_leaves_defaults(monkeypatch):
@@ -128,6 +185,7 @@ def test_graphify_config_env_not_set_leaves_defaults(monkeypatch):
         "COPAW_GRAPHIFY_ENDPOINT",
         "COPAW_GRAPHIFY_API_KEY",
         "COPAW_GRAPHIFY_FALLBACK",
+        "COPAW_GRAPHIFY_REQUEST_TIMEOUT_SEC",
     ):
         monkeypatch.delenv(key, raising=False)
 
@@ -135,6 +193,7 @@ def test_graphify_config_env_not_set_leaves_defaults(monkeypatch):
     assert cfg.graph_path == ""
     assert cfg.fallback_to_local is True
     assert cfg.dataset == "copaw"
+    assert cfg.request_timeout_sec == 15.0
 
 
 # ---------------------------------------------------------------------------
@@ -213,3 +272,46 @@ def test_graphify_memify_timeout(tmp_path, monkeypatch):
     result = graphify_memify(cfg, pipeline_type="default", dataset_scope=[], dry_run=False)
     assert result["status"] == "failed"
     assert "GRAPHIFY_MEMIFY_TIMEOUT" in result["warnings"]
+
+
+def test_graphify_memify_remote_success(monkeypatch):
+    class _DummyResponse:
+        status_code = 200
+        text = ""
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"accepted": True}
+
+    import httpx
+
+    monkeypatch.setattr(httpx, "post", lambda *a, **kw: _DummyResponse())
+    cfg = GraphifyConfig(endpoint="https://graph.example.com")
+    result = graphify_memify(cfg, pipeline_type="default", dataset_scope=["repo"], dry_run=False)
+    assert result["status"] == "running"
+    assert "GRAPHIFY_REMOTE_MEMIFY_ACCEPTED" in result["warnings"]
+
+
+def test_graphify_memify_remote_http_error(monkeypatch):
+    import httpx
+
+    req = httpx.Request("POST", "https://graph.example.com/memify")
+    resp = httpx.Response(502, request=req, text="bad gateway")
+
+    class _DummyResponse:
+        status_code = 502
+        text = "bad gateway"
+
+        def raise_for_status(self):
+            raise httpx.HTTPStatusError("bad gateway", request=req, response=resp)
+
+        def json(self):
+            return {}
+
+    monkeypatch.setattr(httpx, "post", lambda *a, **kw: _DummyResponse())
+    cfg = GraphifyConfig(endpoint="https://graph.example.com")
+    result = graphify_memify(cfg, pipeline_type="default", dataset_scope=[], dry_run=False)
+    assert result["status"] == "failed"
+    assert "GRAPHIFY_REMOTE_MEMIFY_HTTP_ERROR" in result["warnings"]

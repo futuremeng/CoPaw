@@ -1228,15 +1228,16 @@ class GraphifyConfig(BaseModel):
     Local file mode (primary): point graph_path at graphify-out/graph.json
     built by running ``graphify <dataset_dir>`` in advance.
 
-    Remote mode (future): set endpoint to a hosted Graphify service URL.
+    Remote mode: set endpoint to a hosted Graphify service URL.
 
     Environment overrides (take precedence over config file values):
       COPAW_GRAPHIFY_GRAPH_PATH   – path to graph.json
       COPAW_GRAPHIFY_DATASET_DIR  – directory to build graph from
-      COPAW_GRAPHIFY_ENDPOINT     – remote service URL (future)
-      COPAW_GRAPHIFY_API_KEY      – remote service API key (future)
+    COPAW_GRAPHIFY_ENDPOINT     – remote service URL
+    COPAW_GRAPHIFY_API_KEY      – remote service API key
       COPAW_GRAPHIFY_DATASET      – dataset name for remote service
       COPAW_GRAPHIFY_FALLBACK     – "0"/"false" disables local fallback
+    COPAW_GRAPHIFY_REQUEST_TIMEOUT_SEC – remote HTTP timeout seconds
     """
 
     # --- local file mode ---
@@ -1249,7 +1250,7 @@ class GraphifyConfig(BaseModel):
         description="Directory to run graphify on for memify (build graph).",
     )
 
-    # --- remote service / future hosted mode ---
+    # --- remote service mode ---
     endpoint: str = Field(
         default="",
         description="Graphify service endpoint URL (future hosted mode).",
@@ -1282,6 +1283,12 @@ class GraphifyConfig(BaseModel):
         ge=100,
         description="Max output token budget for graph query results.",
     )
+    request_timeout_sec: float = Field(
+        default=15.0,
+        ge=1.0,
+        le=120.0,
+        description="Timeout in seconds for Graphify remote HTTP calls.",
+    )
 
     @model_validator(mode="after")
     def _inject_from_env(self) -> "GraphifyConfig":
@@ -1300,6 +1307,12 @@ class GraphifyConfig(BaseModel):
         fallback_raw = os.environ.get("COPAW_GRAPHIFY_FALLBACK", "").strip()
         if fallback_raw:
             self.fallback_to_local = fallback_raw.lower() not in {"0", "false", "no"}
+        timeout_raw = os.environ.get("COPAW_GRAPHIFY_REQUEST_TIMEOUT_SEC", "").strip()
+        if timeout_raw:
+            try:
+                self.request_timeout_sec = max(1.0, min(float(timeout_raw), 120.0))
+            except ValueError:
+                pass
         return self
 
 

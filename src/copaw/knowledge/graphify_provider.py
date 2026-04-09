@@ -27,6 +27,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import httpx
+
 from ..config.config import GraphifyConfig
 
 
@@ -47,8 +49,8 @@ class GraphifyLoadError(GraphifyError):
     """Raised when graph.json cannot be loaded or parsed."""
 
 
-class GraphifyRemoteNotImplementedError(GraphifyError):
-    """Raised when remote endpoint mode is invoked (not yet implemented)."""
+class GraphifyRemoteError(GraphifyError):
+    """Raised when remote Graphify endpoint returns an error."""
 
 
 # ---------------------------------------------------------------------------
@@ -179,6 +181,175 @@ def _subgraph_to_records(
 # ---------------------------------------------------------------------------
 
 
+def _build_remote_base_url(endpoint: str) -> str:
+    return endpoint.strip().rstrip("/")
+
+
+def _build_remote_headers(api_key: str) -> dict[str, str]:
+    headers = {"Content-Type": "application/json"}
+    token = (api_key or "").strip()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
+def _normalize_remote_query_records(payload: Any) -> list[dict[str, Any]]:
+    """Normalize remote response payload into GraphOps-compatible records."""
+    if isinstance(payload, dict):
+        if isinstance(payload.get("records"), list):
+            raw_records = payload.get("records")
+        elif isinstance(payload.get("data"), list):
+            raw_records = payload.get("data")
+        else:
+            raise GraphifyRemoteError(
+                "Graphify remote query response missing records/data list."
+            )
+    elif isinstance(payload, list):
+        raw_records = payload
+    else:
+        raise GraphifyRemoteError("Graphify remote query response is invalid JSON.")
+
+    records: list[dict[str, Any]] = []
+    for idx, item in enumerate(raw_records):
+        if not isinstance(item, dict):
+            continue
+        subject = item.get("subject") or item.get("node") or f"node-{idx}"
+        predicate = item.get("predicate") or item.get("relation") or "graph_node"
+        obj = item.get("object") or item.get("snippet") or item.get("text") or ""
+        records.append(
+            {
+                "subject": str(subject),
+                "predicate": str(predicate),
+                "object": str(obj),
+                "score": float(item.get("score", 0) or 0),
+                "source_id": item.get("source_id") or item.get("source") or "",
+                "source_type": item.get("source_type") or "graph",
+                "document_path": item.get("document_path") or "",
+                "document_title": item.get("document_title") or str(subject),
+            }
+        )
+    return records
+
+
+def _graphify_query_remote(
+    config: GraphifyConfig,
+    query_text: str,
+    top_k: int,
+    dataset_scope: list[str] | None,
+) -> list[dict[str, Any]]:
+    base_url = _build_remote_base_url(config.endpoint)
+    if not base_url:
+        raise GraphifyNotConfiguredError("Graphify endpoint is empty.")
+
+    payload = {
+        "query": query_text,
+        "top_k": max(1, min(int(top_k), 50)),
+        "dataset": config.dataset,
+        "dataset_scope": dataset_scope or [],
+        "bfs_depth": config.bfs_depth,
+        "token_budget": config.token_budget,
+    }
+    headers = _build_remote_headers(config.api_key)
+    timeout_sec = max(1.0, float(getattr(config, "request_timeout_sec", 15.0)))
+
+    last_error: Exception | None = None
+    for path in ("/query", "/graph/query"):
+        url = f"{base_url}{path}"
+        try:
+            response = httpx.post(url, json=payload, headers=headers, timeout=timeout_sec)
+            response.raise_for_status()
+            return _normalize_remote_query_records(response.json())
+        except httpx.TimeoutException as exc:
+            last_error = exc
+            continue
+        except httpx.HTTPStatusError as exc:
+            detail = (exc.response.text or "")[:300]
+            raise GraphifyRemoteError(
+                f"Graphify remote query failed ({exc.response.status_code}): {detail}"
+            ) from exc
+        except httpx.HTTPError as exc:
+            last_error = exc
+            continue
+        except ValueError as exc:
+            raise GraphifyRemoteError(
+                "Graphify remote query returned invalid JSON payload."
+            ) from exc
+
+    raise GraphifyRemoteError(
+        f"Graphify remote query request failed: {last_error}"
+    )
+
+
+def _graphify_memify_remote(
+    config: GraphifyConfig,
+    pipeline_type: str,
+    dataset_scope: list[str] | None,
+    dry_run: bool,
+) -> dict[str, Any]:
+    base_url = _build_remote_base_url(config.endpoint)
+    if not base_url:
+        raise GraphifyNotConfiguredError("Graphify endpoint is empty.")
+
+    payload = {
+        "dataset": config.dataset,
+        "dataset_scope": dataset_scope or [],
+        "pipeline_type": pipeline_type,
+        "dry_run": bool(dry_run),
+    }
+    headers = _build_remote_headers(config.api_key)
+    timeout_sec = max(1.0, float(getattr(config, "request_timeout_sec", 15.0)))
+
+    last_error: Exception | None = None
+    for path in ("/memify", "/graph/memify"):
+        url = f"{base_url}{path}"
+        try:
+            response = httpx.post(url, json=payload, headers=headers, timeout=timeout_sec)
+            response.raise_for_status()
+            body = response.json()
+            if isinstance(body, dict):
+                if "status" in body and isinstance(body["status"], str):
+                    status = body["status"]
+                elif body.get("accepted") is True:
+                    status = "running"
+                else:
+                    status = "succeeded" if dry_run else "running"
+                warnings = body.get("warnings") if isinstance(body.get("warnings"), list) else []
+                error = body.get("error") if isinstance(body.get("error"), str) else None
+                if status == "running":
+                    warnings = [*warnings, "GRAPHIFY_REMOTE_MEMIFY_ACCEPTED"]
+                return {
+                    "status": status,
+                    "error": error,
+                    "warnings": warnings,
+                }
+            raise GraphifyRemoteError("Graphify remote memify returned invalid JSON payload.")
+        except httpx.TimeoutException as exc:
+            last_error = exc
+            continue
+        except httpx.HTTPStatusError as exc:
+            detail = (exc.response.text or "")[:300]
+            return {
+                "status": "failed",
+                "error": f"Graphify remote memify failed ({exc.response.status_code}): {detail}",
+                "warnings": ["GRAPHIFY_REMOTE_MEMIFY_HTTP_ERROR"],
+            }
+        except httpx.HTTPError as exc:
+            last_error = exc
+            continue
+        except ValueError:
+            return {
+                "status": "failed",
+                "error": "Graphify remote memify returned invalid JSON payload.",
+                "warnings": ["GRAPHIFY_REMOTE_MEMIFY_BAD_JSON"],
+            }
+
+    return {
+        "status": "failed",
+        "error": f"Graphify remote memify request failed: {last_error}",
+        "warnings": ["GRAPHIFY_REMOTE_MEMIFY_REQUEST_FAILED"],
+    }
+
+
 def graphify_query(
     config: GraphifyConfig,
     query_text: str,
@@ -199,12 +370,14 @@ def graphify_query(
     Raises:
         GraphifyNotConfiguredError: graph_path and endpoint are both empty.
         GraphifyLoadError:          graph.json cannot be loaded or parsed.
-        GraphifyRemoteNotImplementedError: endpoint mode is not yet implemented.
+        GraphifyRemoteError:        remote endpoint returned an error.
     """
     if config.endpoint:
-        raise GraphifyRemoteNotImplementedError(
-            "Graphify remote endpoint mode is not yet implemented. "
-            "Configure graph_path for local file mode instead."
+        return _graphify_query_remote(
+            config=config,
+            query_text=query_text,
+            top_k=top_k,
+            dataset_scope=dataset_scope,
         )
 
     if not config.graph_path:
@@ -257,6 +430,14 @@ def graphify_memify(
     Raises:
         GraphifyNotConfiguredError: dataset_dir is empty.
     """
+    if config.endpoint:
+        return _graphify_memify_remote(
+            config=config,
+            pipeline_type=pipeline_type,
+            dataset_scope=dataset_scope,
+            dry_run=dry_run,
+        )
+
     if not config.dataset_dir:
         raise GraphifyNotConfiguredError(
             "GraphifyConfig.dataset_dir is empty. "
