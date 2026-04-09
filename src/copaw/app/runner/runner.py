@@ -71,6 +71,320 @@ _APPROVE_EXACT = frozenset(
     },
 )
 
+_REFERENCE_SECTION_PATTERN = re.compile(
+    r"(^|\n)#{1,6}\s*(references|引文清单)\b",
+    re.IGNORECASE,
+)
+
+_COMPACTION_STATUS_PATTERN = re.compile(
+    r"^(?:[🔄✅⚠️]\s*)?context\s+compaction\s+(?:started|failed|completed|skipped)\.?$",
+    re.IGNORECASE,
+)
+
+
+def _is_compaction_status_message(text: str) -> bool:
+    """Best-effort matcher for transient compaction status updates."""
+    normalized = (text or "").strip()
+    if not normalized:
+        return False
+
+    # Preserve the strict legacy matcher first.
+    if _COMPACTION_STATUS_PATTERN.fullmatch(normalized):
+        return True
+
+    # Only inspect the first visible line to tolerate appended hints.
+    first_line = normalized.splitlines()[0].strip().lower()
+    first_line = re.sub(r"^[🔄✅⚠️\s]+", "", first_line)
+    first_line = re.sub(r"\s+", " ", first_line)
+
+    return first_line.startswith("context compaction started") or first_line.startswith(
+        "context compaction failed"
+    ) or first_line.startswith("context compaction completed") or first_line.startswith(
+        "context compaction skipped"
+    )
+
+
+def _block_get(block: Any, key: str, default: Any = None) -> Any:
+    if isinstance(block, dict):
+        return block.get(key, default)
+    return getattr(block, key, default)
+
+
+def _block_set_text(block: Any, text: str) -> bool:
+    if isinstance(block, dict):
+        block["text"] = text
+        return True
+    if hasattr(block, "text"):
+        setattr(block, "text", text)
+        return True
+    return False
+
+
+def _flatten_for_reference(value: Any, limit: int = 220) -> str:
+    if value is None:
+        return "-"
+    if isinstance(value, str):
+        raw = value
+    else:
+        try:
+            raw = json.dumps(value, ensure_ascii=False)
+        except Exception:
+            raw = str(value)
+    compact = re.sub(r"\s+", " ", raw).strip()
+    if len(compact) <= limit:
+        return compact
+    return compact[: limit - 3].rstrip() + "..."
+
+
+def _parse_reference_record(record: str) -> dict[str, str]:
+    pairs: dict[str, str] = {}
+    for match in re.finditer(r"([a-zA-Z_]+)=(.*?)(?=\s+[a-zA-Z_]+=|$)", record):
+        key = match.group(1).strip().lower()
+        value = match.group(2).strip()
+        if key and value:
+            pairs[key] = value
+    return pairs
+
+
+def _truncate_visual_value(
+    text: str,
+    *,
+    max_len: int,
+    keep_tail: bool = False,
+) -> str:
+    value = (text or "").strip()
+    if not value:
+        return "-"
+    if len(value) <= max_len:
+        return value
+    if keep_tail and max_len >= 16:
+        head = max_len // 2 - 2
+        tail = max_len - head - 3
+        return f"{value[:head]}...{value[-tail:]}"
+    return value[: max_len - 3].rstrip() + "..."
+
+
+def _visualize_reference_record(index: int, record: str) -> str:
+    """Render a single citation line in academic style (no icons)."""
+    fields = _parse_reference_record(record)
+    source = fields.get("source", "runtime")
+    tool = fields.get("tool", "")
+
+    if source == "tool_call":
+        args_str = fields.get("arguments", "")
+        raw_path = ""
+        extra_kv = ""
+        try:
+            if args_str and args_str not in ("{}", "null", "-"):
+                args_dict = json.loads(args_str) if args_str.startswith("{") else {}
+                for pkey in ("file_path", "path", "filename", "filepath", "command"):
+                    if pkey in args_dict and args_dict[pkey]:
+                        raw_path = str(args_dict[pkey])
+                        break
+                other = {
+                    k: v for k, v in args_dict.items()
+                    if k not in ("file_path", "path", "filename", "filepath", "command")
+                }
+                if other:
+                    extra_kv = ", ".join(
+                        f"{k}: {_flatten_for_reference(v, limit=30)}"
+                        for k, v in list(other.items())[:2]
+                    )
+        except Exception:
+            pass
+        label = f"`{tool}`" + (f" ({extra_kv})" if extra_kv else "")
+        if raw_path:
+            path_vis = _truncate_visual_value(raw_path, max_len=72, keep_tail=True)
+            return f"- [R{index}] {label}: `{path_vis}`"
+        return f"- [R{index}] {label}"
+
+    if source == "knowledge":
+        path = _truncate_visual_value(fields.get("path", "-"), max_len=72, keep_tail=True)
+        title = fields.get("title", "")
+        snippet = fields.get("snippet", "")
+        loc = f"`{path}`"
+        if title and title not in ("-", ""):
+            loc += f', "{_truncate_visual_value(title, max_len=40)}"'
+        if snippet and snippet not in ("-", ""):
+            snip = _truncate_visual_value(snippet, max_len=100)
+            return f'- [R{index}] Knowledge {loc}: "{snip}"'
+        return f"- [R{index}] Knowledge {loc}"
+
+    if source == "memory":
+        path = _truncate_visual_value(fields.get("path", "-"), max_len=72, keep_tail=True)
+        line = fields.get("line", "")
+        snippet = fields.get("snippet", "")
+        loc = f"`{path}`" + (f":{line}" if line and line != "-" else "")
+        if snippet and snippet not in ("-", ""):
+            snip = _truncate_visual_value(snippet, max_len=100)
+            return f'- [R{index}] Memory {loc}: "{snip}"'
+        return f"- [R{index}] Memory {loc}"
+
+    if source == "tool_result":
+        output = fields.get("output", "-")
+        out_vis = _truncate_visual_value(
+            _flatten_for_reference(output, limit=200), max_len=120
+        )
+        if out_vis and out_vis != "-":
+            return f'- [R{index}] `{tool}` (result): "{out_vis}"'
+        return f"- [R{index}] `{tool}` (result)"
+
+    # runtime / other
+    snip = _truncate_visual_value(record, max_len=100)
+    return f"- [R{index}] {source}: {snip}"
+
+
+def _tool_name_of_block(block: Any) -> str:
+    return str(_block_get(block, "name", "") or "unknown").strip()
+
+
+def _extract_kv_lines(text: str) -> dict[str, str]:
+    pairs: dict[str, str] = {}
+    for raw_line in (text or "").splitlines():
+        line = raw_line.strip()
+        if not line or ":" not in line:
+            continue
+        key, val = line.split(":", 1)
+        key = key.strip().lower()
+        val = val.strip()
+        if not key or not val:
+            continue
+        if key not in pairs:
+            pairs[key] = val
+    return pairs
+
+
+def _build_tool_output_reference(tool_name: str, call_id: str, output: Any) -> str:
+    output_text = _flatten_for_reference(output, limit=360)
+    output_str = output if isinstance(output, str) else ""
+    fields = _extract_kv_lines(output_str)
+
+    if tool_name == "knowledge_search":
+        path = fields.get("path", "-")
+        title = fields.get("title", "-")
+        snippet = _flatten_for_reference(fields.get("snippet", output_text), limit=180)
+        return (
+            f"source=knowledge tool={tool_name} call_id={call_id} "
+            f"path={path} title={title} snippet={snippet}"
+        )
+
+    if tool_name == "memory_search":
+        path = fields.get("path", fields.get("file", "-"))
+        line = fields.get("line", fields.get("line_number", "-"))
+        snippet = _flatten_for_reference(fields.get("snippet", output_text), limit=180)
+        return (
+            f"source=memory tool={tool_name} call_id={call_id} "
+            f"path={path} line={line} snippet={snippet}"
+        )
+
+    return (
+        f"source=tool_result tool={tool_name} call_id={call_id} "
+        f"output={output_text}"
+    )
+
+
+def _collect_runtime_references(
+    msg: Msg,
+    records: list[str],
+    seen: set[str],
+    tool_use_idx: dict[str, int] | None = None,
+) -> None:
+    content = getattr(msg, "content", None)
+    if not isinstance(content, list):
+        return
+
+    for block in content:
+        btype = str(_block_get(block, "type", "")).strip().lower()
+        if btype == "tool_use":
+            tool_name = _tool_name_of_block(block)
+            call_id = str(_block_get(block, "id", "") or "-")
+            args = _flatten_for_reference(_block_get(block, "input"))
+            source_type = "tool_call"
+            if tool_name == "knowledge_search":
+                source_type = "knowledge"
+            elif tool_name == "memory_search":
+                source_type = "memory"
+            record = f"source={source_type} tool={tool_name} call_id={call_id} arguments={args}"
+            # Deduplicate tool_use by call_id; streaming may emit the same block
+            # twice — first with empty input, then with the full arguments.
+            if tool_use_idx is not None:
+                existing = tool_use_idx.get(call_id)
+                if existing is not None:
+                    if args not in ("{}", "null", "-", ""):
+                        old_parts = records[existing].split(" arguments=", 1)
+                        old_args = old_parts[1] if len(old_parts) > 1 else ""
+                        if old_args in ("{}", "null", "-", ""):
+                            records[existing] = record
+                    continue
+                tool_use_idx[call_id] = len(records)
+        elif btype == "tool_result":
+            tool_name = _tool_name_of_block(block)
+            call_id = str(_block_get(block, "id", "") or "-")
+            record = _build_tool_output_reference(
+                tool_name=tool_name,
+                call_id=call_id,
+                output=_block_get(block, "output"),
+            )
+        else:
+            continue
+
+        if record in seen:
+            continue
+        seen.add(record)
+        records.append(record)
+
+
+def _append_references_footer_if_needed(msg: Msg, records: list[str]) -> Msg:
+    if not records:
+        return msg
+
+    if str(getattr(msg, "role", "")).strip().lower() != "assistant":
+        return msg
+
+    content = getattr(msg, "content", None)
+    if not isinstance(content, list) or not content:
+        return msg
+
+    text_block: Any | None = None
+    text_value = ""
+    for block in reversed(content):
+        if str(_block_get(block, "type", "")).strip().lower() != "text":
+            continue
+        candidate = _block_get(block, "text")
+        if isinstance(candidate, str) and candidate.strip():
+            text_block = block
+            text_value = candidate
+            break
+
+    if text_block is None:
+        return msg
+
+    # Keep compaction status messages clean (no citation footer).
+    if _is_compaction_status_message(text_value):
+        return msg
+
+    if _REFERENCE_SECTION_PATTERN.search(text_value):
+        return msg
+
+    footer_lines = ["", "---", "", "### References"]
+    for idx, record in enumerate(records[:12], 1):
+        footer_lines.append(_visualize_reference_record(idx, record))
+
+    footer_lines.extend(
+        [
+            "",
+            "<!-- COPAW_REFERENCES_FULL_BEGIN",
+        ],
+    )
+    for idx, record in enumerate(records[:12], 1):
+        footer_lines.append(f"[R{idx}] {record}")
+    footer_lines.append("COPAW_REFERENCES_FULL_END -->")
+
+    footer = "\n".join(footer_lines)
+    next_text = text_value.rstrip() + "\n" + footer + "\n"
+    _block_set_text(text_block, next_text)
+    return msg
+
 
 @dataclass
 class FocusContext:
@@ -823,11 +1137,27 @@ class AgentRunner(Runner):
             stream_retry_budget = 1
             while True:
                 try:
+                    citation_records: list[str] = []
+                    citation_seen: set[str] = set()
+                    citation_tool_use_idx: dict[str, int] = {}
                     async for stream_item in stream_printing_messages(
                         agents=[agent],
                         coroutine_task=agent(msgs),
                     ):
-                        yield stream_item[0], stream_item[1]
+                        out_msg, is_last = stream_item[0], stream_item[1]
+                        if isinstance(out_msg, Msg):
+                            _collect_runtime_references(
+                                out_msg,
+                                citation_records,
+                                citation_seen,
+                                citation_tool_use_idx,
+                            )
+                            if is_last:
+                                out_msg = _append_references_footer_if_needed(
+                                    out_msg,
+                                    citation_records,
+                                )
+                        yield out_msg, is_last
                     break
                 except Exception as stream_err:
                     if (

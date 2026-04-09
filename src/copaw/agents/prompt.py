@@ -18,6 +18,34 @@ DEFAULT_SYS_PROMPT = """
 You are a helpful assistant.
 """
 
+
+_CITATION_POLICY_BLOCK = """
+# Citation Policy
+
+For factual answers (configuration, environment, database, API behavior,
+code behavior, and troubleshooting conclusions), you must provide explicit
+citations in the final response.
+
+Output contract:
+1. Put citation markers in-line for key claims, such as [R1], [R2].
+2. End with a "References" section that lists every cited source.
+3. Prefer real-time evidence over memory: config files, runtime API/tool
+    output, and current workspace content.
+4. If old memory conflicts with current evidence, mark old memory as stale
+    and explain the conflict.
+5. If no verifiable evidence exists, explicitly say the claim is unverified.
+
+Recommended reference line format:
+- [R1] source=file path=<path> key=<field> value=<value>
+- [R2] source=tool tool=<name> call_id=<id> summary=<short summary>
+- [R3] source=runtime_api endpoint=<endpoint> status=<status>
+
+When memory_search or knowledge_search is used, references must explicitly
+identify memory/knowledge provenance:
+- memory: source=memory path=<path> line=<line> snippet=<snippet>
+- knowledge: source=knowledge path=<path> title=<title> snippet=<snippet>
+"""
+
 # Backward compatibility alias
 SYS_PROMPT = DEFAULT_SYS_PROMPT
 
@@ -166,6 +194,9 @@ class PromptBuilder:
 
         # Join all parts with double newlines
         final_prompt = "\n\n".join(self.prompt_parts)
+
+        # Always append citation policy so answers remain auditable.
+        final_prompt = f"{final_prompt}\n\n{_CITATION_POLICY_BLOCK.strip()}"
 
         logger.debug(
             "System prompt built from %d file(s), total length: %d chars",

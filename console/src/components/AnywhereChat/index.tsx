@@ -177,6 +177,20 @@ type RuntimeUiMessage = IAgentScopeRuntimeWebUIMessage & {
 
 const CHAT_ATTACHMENT_MAX_MB = 10;
 
+const COPAW_FULL_REFERENCES_BLOCK_RE =
+  /<!--\s*COPAW_REFERENCES_FULL_BEGIN[\s\S]*?COPAW_REFERENCES_FULL_END\s*-->/gi;
+
+function stripHiddenReferencesForDisplay(markdown: string): string {
+  if (!markdown) {
+    return "";
+  }
+
+  return markdown
+    .replace(COPAW_FULL_REFERENCES_BLOCK_RE, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trimEnd();
+}
+
 function cloneValue<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
@@ -358,6 +372,24 @@ function sanitizeStreamEventPayload(rawData: string): string {
       const record = node as Record<string, unknown>;
       let changed = false;
       const next: Record<string, unknown> = { ...record };
+
+      const nodeType = typeof record.type === "string" ? record.type : "";
+      if (nodeType === "text" && typeof record.text === "string") {
+        const stripped = stripHiddenReferencesForDisplay(record.text);
+        if (stripped !== record.text) {
+          next.copaw_raw_text = record.text;
+          next.text = stripped;
+          changed = true;
+        }
+      }
+      if (nodeType === "refusal" && typeof record.refusal === "string") {
+        const stripped = stripHiddenReferencesForDisplay(record.refusal);
+        if (stripped !== record.refusal) {
+          next.copaw_raw_refusal = record.refusal;
+          next.refusal = stripped;
+          changed = true;
+        }
+      }
 
       for (const [key, value] of Object.entries(record)) {
         if (key === "output" && Array.isArray(value) && value.length > 1) {
@@ -642,18 +674,56 @@ function extractRawMarkdownText(response: CopyableResponse): string {
 
     for (const part of message.content) {
       if (part.type === "text" && typeof part.text === "string") {
-        textBlocks.push(part.text);
+        const rawText =
+          typeof (part as { copaw_raw_text?: unknown }).copaw_raw_text === "string"
+            ? ((part as { copaw_raw_text: string }).copaw_raw_text)
+            : part.text;
+        textBlocks.push(rawText);
         continue;
       }
 
       if (part.type === "refusal" && typeof part.refusal === "string") {
-        textBlocks.push(part.refusal);
+        const rawRefusal =
+          typeof (part as { copaw_raw_refusal?: unknown }).copaw_raw_refusal === "string"
+            ? ((part as { copaw_raw_refusal: string }).copaw_raw_refusal)
+            : part.refusal;
+        textBlocks.push(rawRefusal);
         continue;
       }
     }
   }
 
   return textBlocks.join("\n\n").trim();
+}
+
+function expandFullReferencesForMarkdownCopy(markdown: string): string {
+  if (!markdown) {
+    return "";
+  }
+
+  const fullBlockRe = /<!--\s*COPAW_REFERENCES_FULL_BEGIN([\s\S]*?)COPAW_REFERENCES_FULL_END\s*-->/i;
+  const match = markdown.match(fullBlockRe);
+  if (!match) {
+    return markdown;
+  }
+
+  const fullLines = (match[1] || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => /^\[R\d+\]\s+/.test(line));
+
+  const withoutHidden = markdown.replace(fullBlockRe, "").trimEnd();
+  if (fullLines.length === 0) {
+    return withoutHidden;
+  }
+
+  const fullSection = `\n---\n\n### References\n${fullLines.map((line) => `- ${line}`).join("\n")}\n`;
+  const visualSectionRe = /\n---\n\n### References[\s\S]*$/;
+  if (visualSectionRe.test(withoutHidden)) {
+    return withoutHidden.replace(visualSectionRe, fullSection).trim();
+  }
+
+  return `${withoutHidden}${fullSection}`.trim();
 }
 
 function stripMarkdownSyntax(markdown: string): string {
@@ -1199,7 +1269,9 @@ export default function AnywhereChat({
 
   const copyAsMarkdown = useCallback(async (response: CopyableResponse) => {
     const raw = extractRawMarkdownText(response);
-    const payload = raw || extractAssistantText(response as StreamResponseData | null);
+    const payload = expandFullReferencesForMarkdownCopy(
+      raw || extractAssistantText(response as StreamResponseData | null),
+    );
     if (!payload) {
       message.warning(t("common.nothingToCopy", "No copyable content."));
       return;

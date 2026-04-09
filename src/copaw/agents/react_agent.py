@@ -8,6 +8,7 @@ with integrated tools, skills, and memory management.
 import asyncio
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any, List, Literal, Optional, Type, TYPE_CHECKING
 
@@ -86,6 +87,48 @@ def _interrupt_reply_text(language: str) -> str:
     if lang == "ru":
         return "Принял, я остановил предыдущий ответ. Продолжайте, пожалуйста."
     return "Got it. I have stopped the previous response. Please continue with your question."
+
+
+_EVIDENCE_QUERY_PATTERN = re.compile(
+    r"(配置|数据库|db|database|host|port|url|endpoint|env|环境|密钥|api\s*key|"
+    r"连接串|connection|schema|迁移|migration|索引|index|版本|version|为什么|why|"
+    r"依据|来源|source|cite|引用)",
+    re.IGNORECASE,
+)
+
+
+def _is_evidence_required_query(query: str | None) -> bool:
+    if not query:
+        return False
+    text = query.strip()
+    if not text:
+        return False
+    if text.startswith("/"):
+        return False
+    return bool(_EVIDENCE_QUERY_PATTERN.search(text))
+
+
+def _extract_text_blocks(content: Any) -> list[str]:
+    if not isinstance(content, list):
+        return []
+    out: list[str] = []
+    for block in content:
+        if isinstance(block, dict):
+            text = block.get("text")
+        else:
+            text = getattr(block, "text", None)
+        if isinstance(text, str) and text.strip():
+            out.append(text.strip())
+    return out
+
+
+def _summarize_evidence_section(title: str, text: str) -> str:
+    compact = re.sub(r"\s+", " ", text or "").strip()
+    if not compact:
+        return ""
+    if len(compact) > 1200:
+        compact = compact[:1200].rstrip() + "..."
+    return f"### {title}\n{compact}"
 
 
 class CoPawAgent(ToolGuardMixin, ReActAgent):
@@ -1131,6 +1174,68 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
 
         # Normal message processing
         logger.info("CoPawAgent.reply: max_iters=%s", self.max_iters)
+
+        evidence_sections: list[str] = []
+        if _is_evidence_required_query(query):
+            running = self._agent_config.running
+
+            # Proactively pull memory evidence for factual/config questions.
+            if self.memory_manager is not None:
+                timeout_s = float(
+                    getattr(running.memory_summary, "force_memory_search_timeout", 8.0),
+                )
+                try:
+                    mem_resp = await asyncio.wait_for(
+                        self.memory_manager.memory_search(
+                            query=query[:160],
+                            max_results=min(
+                                int(getattr(running.memory_summary, "force_max_results", 5)),
+                                8,
+                            ),
+                            min_score=float(
+                                getattr(running.memory_summary, "force_min_score", 0.1),
+                            ),
+                        ),
+                        timeout=timeout_s,
+                    )
+                    memory_text = "\n".join(_extract_text_blocks(getattr(mem_resp, "content", None)))
+                    section = _summarize_evidence_section("Memory Evidence", memory_text)
+                    if section:
+                        evidence_sections.append(section)
+                except BaseException as e:
+                    logger.warning("proactive memory evidence fetch failed: %s", e)
+
+            # Pull knowledge evidence when retrieval is enabled.
+            if bool(getattr(running, "knowledge_enabled", True)) and bool(
+                getattr(running, "knowledge_retrieval_enabled", True),
+            ):
+                try:
+                    know_resp = await asyncio.wait_for(
+                        knowledge_search(
+                            query=query[:160],
+                            max_results=5,
+                            min_score=1.0,
+                        ),
+                        timeout=8.0,
+                    )
+                    knowledge_text = "\n".join(_extract_text_blocks(getattr(know_resp, "content", None)))
+                    section = _summarize_evidence_section("Knowledge Evidence", knowledge_text)
+                    if section:
+                        evidence_sections.append(section)
+                except BaseException as e:
+                    logger.warning("proactive knowledge evidence fetch failed: %s", e)
+
+            if evidence_sections and hasattr(self.memory, "_long_term_memory"):
+                joined = "\n\n".join(evidence_sections)
+                existing = getattr(self.memory, "_long_term_memory", "") or ""
+                if existing:
+                    self.memory._long_term_memory = (
+                        f"{existing}\n\n## Proactive Evidence Context\n\n{joined}"
+                    )
+                else:
+                    self.memory._long_term_memory = (
+                        f"## Proactive Evidence Context\n\n{joined}"
+                    )
 
         if hasattr(self.memory, "_long_term_memory"):
             running = self._agent_config.running
