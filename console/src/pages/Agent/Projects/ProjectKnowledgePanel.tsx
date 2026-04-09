@@ -1,6 +1,7 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  Badge,
   Button,
   Card,
   Checkbox,
@@ -20,6 +21,7 @@ import styles from "./index.module.less";
 interface ProjectKnowledgePanelProps {
   projectId: string;
   projectName: string;
+  projectWorkspaceDir: string;
 }
 
 const PROJECT_GRAPH_TOP_K = 12;
@@ -32,6 +34,73 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<GraphQueryResponse | null>(null);
+  const [registering, setRegistering] = useState(false);
+  const [sourceLoaded, setSourceLoaded] = useState(false);
+  const [sourceRegistered, setSourceRegistered] = useState(false);
+
+  const projectSourceId = useMemo(() => {
+    const safeId = props.projectId
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "");
+    return `project-${safeId || "default"}-workspace`;
+  }, [props.projectId]);
+
+  const loadProjectSourceStatus = useCallback(async () => {
+    try {
+      const response = await api.listKnowledgeSources();
+      const matched = response.sources.some((source) => source.id === projectSourceId);
+      setSourceRegistered(matched);
+    } catch {
+      setSourceRegistered(false);
+    } finally {
+      setSourceLoaded(true);
+    }
+  }, [projectSourceId]);
+
+  useEffect(() => {
+    void loadProjectSourceStatus();
+  }, [loadProjectSourceStatus]);
+
+  const handleRegisterProjectSource = useCallback(async () => {
+    const location = (props.projectWorkspaceDir || "").trim();
+    if (!location) {
+      message.error(t("projects.knowledge.sourcePathMissing"));
+      return;
+    }
+    try {
+      setRegistering(true);
+      await api.upsertKnowledgeSource({
+        id: projectSourceId,
+        name: `Project Workspace: ${props.projectName || props.projectId}`,
+        type: "directory",
+        location,
+        content: "",
+        enabled: true,
+        recursive: true,
+        project_id: props.projectId,
+        tags: ["project", `project:${props.projectId}`, "scope:project"],
+        summary: `Project-scoped knowledge source for ${props.projectName || props.projectId}`,
+      });
+      await api.indexKnowledgeSource(projectSourceId);
+      message.success(t("projects.knowledge.sourceRegisterSuccess"));
+      await loadProjectSourceStatus();
+    } catch (err) {
+      const messageText =
+        err instanceof Error ? err.message : t("projects.knowledge.sourceRegisterFailed");
+      message.error(messageText);
+    } finally {
+      setRegistering(false);
+    }
+  }, [
+    loadProjectSourceStatus,
+    projectSourceId,
+    props.projectId,
+    props.projectName,
+    props.projectWorkspaceDir,
+    t,
+  ]);
 
   const handleQuery = useCallback(
     async (overrideQuery?: string) => {
@@ -83,6 +152,31 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
           project: props.projectName || props.projectId,
         })}
       </Typography.Text>
+
+      <div className={styles.projectKnowledgeSourceRow}>
+        <Badge
+          status={sourceRegistered ? "success" : "default"}
+          text={
+            sourceLoaded
+              ? sourceRegistered
+                ? t("projects.knowledge.sourceRegistered")
+                : t("projects.knowledge.sourceNotRegistered")
+              : t("common.loading", "Loading")
+          }
+        />
+        <Button
+          size="small"
+          type={sourceRegistered ? "default" : "primary"}
+          loading={registering}
+          onClick={() => {
+            void handleRegisterProjectSource();
+          }}
+        >
+          {sourceRegistered
+            ? t("projects.knowledge.sourceReindex")
+            : t("projects.knowledge.sourceRegister")}
+        </Button>
+      </div>
 
       <div className={styles.projectKnowledgeControls}>
         <Input.Search

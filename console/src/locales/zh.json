@@ -1681,6 +1681,13 @@
     "knowledge": {
       "title": "项目知识查询",
       "hint": "在当前项目范围内执行图谱知识查询：{{project}}",
+      "sourceRegister": "注册项目知识源",
+      "sourceReindex": "重新索引项目知识源",
+      "sourceRegistered": "项目知识源已注册",
+      "sourceNotRegistered": "项目知识源未注册",
+      "sourceRegisterSuccess": "项目知识源已注册并完成索引",
+      "sourceRegisterFailed": "注册项目知识源失败",
+      "sourcePathMissing": "缺少项目工作目录路径",
       "query": "查询",
       "queryPlaceholder": "请输入问题或关键词，例如：架构决策",
       "includeGlobal": "包含全局知识",

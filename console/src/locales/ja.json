@@ -1677,6 +1677,13 @@
     "knowledge": {
       "title": "プロジェクトナレッジ検索",
       "hint": "このプロジェクト範囲でグラフナレッジ検索を実行: {{project}}",
+      "sourceRegister": "プロジェクトソースを登録",
+      "sourceReindex": "プロジェクトソースを再インデックス",
+      "sourceRegistered": "プロジェクトソースは登録済み",
+      "sourceNotRegistered": "プロジェクトソースは未登録",
+      "sourceRegisterSuccess": "プロジェクトソースを登録してインデックスしました",
+      "sourceRegisterFailed": "プロジェクトソースの登録に失敗しました",
+      "sourcePathMissing": "プロジェクトのワークスペースパスがありません",
       "query": "検索",
       "queryPlaceholder": "質問またはキーワードを入力（例: アーキテクチャ判断）",
       "includeGlobal": "グローバルナレッジを含める",

@@ -1833,6 +1833,7 @@ export default function ProjectDetailPage() {
               <ProjectKnowledgePanel
                 projectId={selectedProject.id}
                 projectName={selectedProject.name}
+                projectWorkspaceDir={selectedProject.workspace_dir}
               />
 
               <Card

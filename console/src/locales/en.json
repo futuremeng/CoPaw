@@ -1722,6 +1722,13 @@
     "knowledge": {
       "title": "Project Knowledge Query",
       "hint": "Run graph knowledge query scoped to this project: {{project}}",
+      "sourceRegister": "Register Project Source",
+      "sourceReindex": "Reindex Project Source",
+      "sourceRegistered": "Project source registered",
+      "sourceNotRegistered": "Project source not registered",
+      "sourceRegisterSuccess": "Project source registered and indexed",
+      "sourceRegisterFailed": "Failed to register project source",
+      "sourcePathMissing": "Project workspace path is missing",
       "query": "Query",
       "queryPlaceholder": "Enter a question or keyword, for example: architecture decision",
       "includeGlobal": "Include global knowledge",
