@@ -1240,8 +1240,8 @@ export default function PipelinesPage() {
         "pipelines.unsavedExitConfirm",
         "当前流程草稿尚未保存，退出编辑后改动可能丢失。是否继续？",
       ),
-      okText: t("common.confirm", "确认"),
-      cancelText: t("common.cancel", "取消"),
+      okText: t("common.confirm"),
+      cancelText: t("common.cancel"),
       onOk: () => {
         closeEditMode();
       },
@@ -1261,8 +1261,8 @@ export default function PipelinesPage() {
         "pipelines.unsavedSwitchConfirm",
         "当前流程草稿尚未保存，切换流程后改动可能丢失。是否继续切换？",
       ),
-      okText: t("common.confirm", "确认"),
-      cancelText: t("common.cancel", "取消"),
+      okText: t("common.confirm"),
+      cancelText: t("common.cancel"),
       onOk: () => {
         closeEditMode();
         setSelectedPipelineKey(nextPipelineKey);
