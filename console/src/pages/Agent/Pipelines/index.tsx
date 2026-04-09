@@ -821,7 +821,7 @@ export default function PipelinesPage() {
     [currentAgent?.projects],
   );
 
-  const independentScopeLabel = t("pipelines.independentScope", "独立流程");
+  const independentScopeLabel = t("pipelines.independentScope");
 
   useEffect(() => {
     let mounted = true;
@@ -1172,10 +1172,10 @@ export default function PipelinesPage() {
         hasLocalBackup && hasRemoteBackup && localFingerprint !== remoteFingerprint,
       );
 
-      message.success(t("pipelines.conflictRefreshed", "已刷新到最新流程版本，请检查后重试保存。"));
+      message.success(t("pipelines.conflictRefreshed"));
     } catch (error) {
       console.error("failed to refresh pipelines after conflict", error);
-      message.error(t("pipelines.conflictRefreshFailed", "刷新流程失败，请稍后重试。"));
+      message.error(t("pipelines.conflictRefreshFailed"));
     }
   }, [
     conflictLocalDraftBackup,
@@ -1195,7 +1195,7 @@ export default function PipelinesPage() {
     setDraftParseError("");
     setExpandedDraftDiffKeys([]);
     setConflictRestoreAvailable(false);
-    message.success(t("pipelines.conflictLocalRestored", "已恢复本地草稿，请确认后重新保存。"));
+    message.success(t("pipelines.conflictLocalRestored"));
   }, [conflictLocalDraftBackup, t]);
 
   const handleUseRemoteDraftAfterConflict = useCallback(() => {
@@ -1208,7 +1208,7 @@ export default function PipelinesPage() {
     setExpandedDraftDiffKeys([]);
     setConflictRestoreAvailable(true);
     setConflictMergeAvailable(false);
-    message.success(t("pipelines.conflictRemoteApplied", "已采用远端草稿。"));
+    message.success(t("pipelines.conflictRemoteApplied"));
   }, [conflictRemoteDraftBackup, t]);
 
   const handleMergeDraftAfterConflict = useCallback(() => {
@@ -1225,7 +1225,7 @@ export default function PipelinesPage() {
     setExpandedDraftDiffKeys([]);
     setConflictRestoreAvailable(true);
     setConflictMergeAvailable(false);
-    message.success(t("pipelines.conflictMerged", "已按 step_id 合并本地与远端草稿。"));
+    message.success(t("pipelines.conflictMerged"));
   }, [conflictLocalDraftBackup, conflictRemoteDraftBackup, t]);
 
   const requestCloseEditMode = () => {
@@ -1235,7 +1235,7 @@ export default function PipelinesPage() {
     }
 
     Modal.confirm({
-      title: t("pipelines.unsavedDraftTitle", "存在未保存草稿"),
+      title: t("pipelines.unsavedDraftTitle"),
       content: t(
         "pipelines.unsavedExitConfirm",
         "当前流程草稿尚未保存，退出编辑后改动可能丢失。是否继续？",
@@ -1256,7 +1256,7 @@ export default function PipelinesPage() {
     }
 
     Modal.confirm({
-      title: t("pipelines.unsavedDraftTitle", "存在未保存草稿"),
+      title: t("pipelines.unsavedDraftTitle"),
       content: t(
         "pipelines.unsavedSwitchConfirm",
         "当前流程草稿尚未保存，切换流程后改动可能丢失。是否继续切换？",
@@ -1558,7 +1558,7 @@ export default function PipelinesPage() {
             parseRetryCount: 0,
           });
           message.success(
-            t("pipelines.boundSessionRestored", "已恢复流程绑定会话。"),
+            t("pipelines.boundSessionRestored"),
           );
           return;
         }
@@ -1578,7 +1578,7 @@ export default function PipelinesPage() {
       });
 
       const created = await chatApi.createChat({
-        name: t("pipelines.designSessionName", "Pipeline Design"),
+        name: t("pipelines.designSessionName"),
         session_id: buildPipelineEntrySessionId(),
         user_id: "default",
         channel: "console",
@@ -1620,7 +1620,7 @@ export default function PipelinesPage() {
           parseRetryCount: 0,
         });
         message.success(
-          t("pipelines.boundSessionCreated", "已创建流程绑定会话。"),
+          t("pipelines.boundSessionCreated"),
         );
         return;
       }
@@ -1667,7 +1667,7 @@ export default function PipelinesPage() {
 
   const handleCreatePipelineAndEnterEdit = async () => {
     if (!selectedAgent) {
-      message.warning(t("pipelines.noAgent", "No active agent selected."));
+      message.warning(t("pipelines.noAgent"));
       return;
     }
 
@@ -1676,12 +1676,12 @@ export default function PipelinesPage() {
     const draftVersion = "0.1.0";
     const draftTemplate: TemplateItem = {
       id: draftId,
-      name: t("pipelines.newPipelineName", "新流程"),
+      name: t("pipelines.newPipelineName"),
       version: draftVersion,
-      description: t("pipelines.newPipelineDescription", "待补充流程说明"),
+      description: t("pipelines.newPipelineDescription"),
       steps: [],
       projectId: INDEPENDENT_PIPELINE_SCOPE_ID,
-      projectName: t("pipelines.independentScope", "独立流程"),
+      projectName: t("pipelines.independentScope"),
     };
 
     const draftGroupKey = buildPipelineGroupKey(draftTemplate.id, "independent");
@@ -1756,7 +1756,7 @@ export default function PipelinesPage() {
 
       message.loading({
         key: saveToastKey,
-        content: t("pipelines.saveDraftPending", "正在校验并保存流程..."),
+        content: t("pipelines.saveDraftPending"),
         duration: 0,
       });
 
@@ -1786,7 +1786,7 @@ export default function PipelinesPage() {
             if (event.event === "saved") {
               message.loading({
                 key: saveToastKey,
-                content: t("pipelines.saveDraftSaved", "保存成功，正在刷新数据..."),
+                content: t("pipelines.saveDraftSaved"),
                 duration: 0,
               });
             } else if (event.event === "validation_failed" || event.event === "save_failed") {
@@ -1884,7 +1884,7 @@ export default function PipelinesPage() {
       setConflictMergeAvailable(false);
 
       message.destroy(saveToastKey);
-      message.success(t("pipelines.saveDraftSuccess", "流程已保存"));
+      message.success(t("pipelines.saveDraftSuccess"));
     } catch (error) {
       console.error("failed to save draft pipeline", error);
       message.destroy(saveToastKey);
@@ -1899,7 +1899,7 @@ export default function PipelinesPage() {
       if (!saveStreamError) {
         setSaveStreamError(String(error));
       }
-      message.error(t("pipelines.saveDraftFailed", "保存流程失败，请重试。"));
+      message.error(t("pipelines.saveDraftFailed"));
     } finally {
       setDraftSaving(false);
     }
@@ -1907,7 +1907,7 @@ export default function PipelinesPage() {
 
   const handleEnterEditMode = async () => {
     if (!selectedPipeline || !currentTemplate) {
-      message.warning(t("pipelines.selectPipelineFirst", "Please select a pipeline first."));
+      message.warning(t("pipelines.selectPipelineFirst"));
       return;
     }
 
@@ -1953,7 +1953,7 @@ export default function PipelinesPage() {
           active: false,
         }));
         message.warning(
-          t("pipelines.incrementalProposalEmpty", "当前没有可写入的节点方案，请先重新生成。"),
+          t("pipelines.incrementalProposalEmpty"),
         );
         return;
       }
@@ -2001,7 +2001,7 @@ export default function PipelinesPage() {
           }));
 
           message.success(
-            t("pipelines.incrementalStepSaved", "已生成第 {{current}} / {{total}} 步。", {
+            t("pipelines.incrementalStepSaved", {
               current: index + 1,
               total: plannedSteps.length,
             }),
@@ -2018,18 +2018,18 @@ export default function PipelinesPage() {
         }));
         setEditWelcomeMode("default");
         message.success(
-          t("pipelines.incrementalGenerationDone", "流程节点已逐步生成完成。"),
+          t("pipelines.incrementalGenerationDone"),
         );
       } catch (error) {
         console.error("failed to apply confirmed pipeline proposal", error);
         setDraftParseStatus("error");
-        setDraftParseError(t("pipelines.stepSaveFailed", "节点保存失败，请检查后重试。"));
+        setDraftParseError(t("pipelines.stepSaveFailed"));
         setIncrementalGeneration((prev) => ({
           ...prev,
           createStage: "await_confirm",
           parseRetryCount: 0,
         }));
-        message.error(t("pipelines.stepSaveFailed", "节点保存失败，请检查后重试。"));
+        message.error(t("pipelines.stepSaveFailed"));
       }
     },
     [
@@ -2059,8 +2059,8 @@ export default function PipelinesPage() {
       const strategyInput = strategy === "stepwise" ? "1" : "2";
       const strategyLabel =
         strategy === "stepwise"
-          ? t("pipelines.strategyStepwise", "一个节点一个节点加")
-          : t("pipelines.strategyPlanThenRefine", "先整体规划再逐个改");
+          ? t("pipelines.strategyStepwise")
+          : t("pipelines.strategyPlanThenRefine");
 
       try {
         sessionApi.setLastUserMessage(designChatSessionId, strategyInput);
@@ -2071,14 +2071,14 @@ export default function PipelinesPage() {
           channel: "console",
         });
         message.info(
-          t("pipelines.strategySelectedHint", "已选择：{{strategy}}，正在进入对应创建路径。", {
+          t("pipelines.strategySelectedHint", {
             strategy: strategyLabel,
           }),
         );
       } catch (error) {
         console.error("failed to submit strategy selection", error);
         message.error(
-          t("pipelines.strategySubmitFailed", "提交策略失败，请重试或直接输入 1 / 2。"),
+          t("pipelines.strategySubmitFailed"),
         );
       }
     },
@@ -2128,12 +2128,12 @@ export default function PipelinesPage() {
         channel: "console",
       });
       message.info(
-        t("pipelines.reenterTopicHint", "已切换到主题重填模式，请输入新的流程主题。"),
+        t("pipelines.reenterTopicHint"),
       );
     } catch (error) {
       console.error("failed to request topic re-entry", error);
       message.warning(
-        t("pipelines.reenterTopicFailed", "请直接在输入框重新描述流程主题。"),
+        t("pipelines.reenterTopicFailed"),
       );
     }
   }, [designChatSessionId, editMode, t]);
@@ -2193,7 +2193,7 @@ export default function PipelinesPage() {
           });
 
           message.info(
-            t("pipelines.incrementalTopicCaptured", "已记录流程主题，请先选择创建策略。"),
+            t("pipelines.incrementalTopicCaptured"),
           );
           await dispatchSyntheticPrompt(firstPrompt);
           return;
@@ -2224,7 +2224,7 @@ export default function PipelinesPage() {
         });
 
         message.info(
-          t("pipelines.incrementalEditStart", "开始按节点逐步应用这次修改请求。"),
+          t("pipelines.incrementalEditStart"),
         );
         await dispatchSyntheticPrompt(firstPrompt);
       };
@@ -2298,7 +2298,7 @@ export default function PipelinesPage() {
             }));
 
             message.info(
-              t("pipelines.incrementalGenerationStart", "已切换到逐步生成模式，开始生成第 1 步。"),
+              t("pipelines.incrementalGenerationStart"),
             );
             await dispatchSyntheticPrompt(firstPrompt);
             return;
@@ -2323,7 +2323,7 @@ export default function PipelinesPage() {
           }));
 
           message.info(
-            t("pipelines.incrementalProposalStart", "先生成一个节点组合初步方案，确认后再逐个写入流程。"),
+            t("pipelines.incrementalProposalStart"),
           );
           await dispatchSyntheticPrompt(proposalPrompt);
           return;
@@ -2342,7 +2342,7 @@ export default function PipelinesPage() {
             }));
             setEditWelcomeMode("default");
             message.success(
-              t("pipelines.incrementalGenerationDone", "流程节点已逐步生成完成。"),
+              t("pipelines.incrementalGenerationDone"),
             );
             return;
           }
@@ -2361,15 +2361,15 @@ export default function PipelinesPage() {
                 lastSyntheticPrompt: repairPrompt,
               }));
               message.info(
-                t("pipelines.stepParseRepairing", "模型返回格式不稳定，正在请求一次更严格的 JSON 重试。"),
+                t("pipelines.stepParseRepairing"),
               );
               return;
             }
 
             setDraftParseStatus("error");
-            setDraftParseError(parsed.error || t("pipelines.stepParseFailed", "无法解析节点 JSON。"));
+            setDraftParseError(parsed.error || t("pipelines.stepParseFailed"));
             message.warning(
-              parsed.error || t("pipelines.stepParseFailed", "无法解析节点 JSON。"),
+              parsed.error || t("pipelines.stepParseFailed"),
             );
             return;
           }
@@ -2403,7 +2403,7 @@ export default function PipelinesPage() {
             const totalSteps = incrementalGeneration.totalStepsExpected;
 
             message.success(
-              t("pipelines.incrementalStepSaved", "已生成第 {{current}} / {{total}} 步。", {
+              t("pipelines.incrementalStepSaved", {
                 current: Math.min(generatedCount, totalSteps),
                 total: totalSteps,
               }),
@@ -2447,8 +2447,8 @@ export default function PipelinesPage() {
           } catch (error) {
             console.error("failed to save incremental pipeline step", error);
             setDraftParseStatus("error");
-            setDraftParseError(t("pipelines.stepSaveFailed", "节点保存失败，请检查后重试。"));
-            message.error(t("pipelines.stepSaveFailed", "节点保存失败，请检查后重试。"));
+            setDraftParseError(t("pipelines.stepSaveFailed"));
+            message.error(t("pipelines.stepSaveFailed"));
             return;
           }
         }
@@ -2470,15 +2470,15 @@ export default function PipelinesPage() {
                 lastSyntheticPrompt: repairPrompt,
               }));
               message.info(
-                t("pipelines.stepParseRepairing", "模型返回格式不稳定，正在请求一次更严格的 JSON 重试。"),
+                t("pipelines.stepParseRepairing"),
               );
               return;
             }
 
             setDraftParseStatus("error");
-            setDraftParseError(parsedProposal.error || t("pipelines.stepParseFailed", "无法解析节点 JSON。"));
+            setDraftParseError(parsedProposal.error || t("pipelines.stepParseFailed"));
             message.warning(
-              parsedProposal.error || t("pipelines.stepParseFailed", "无法解析节点 JSON。"),
+              parsedProposal.error || t("pipelines.stepParseFailed"),
             );
             return;
           }
@@ -2529,7 +2529,7 @@ export default function PipelinesPage() {
                 lastSyntheticPrompt: refreshedPrompt,
               }));
               message.info(
-                t("pipelines.incrementalProposalRefresh", "已根据你的补充重新生成节点组合方案。"),
+                t("pipelines.incrementalProposalRefresh"),
               );
             } else {
               message.info(
@@ -2558,7 +2558,7 @@ export default function PipelinesPage() {
             active: false,
           }));
           message.success(
-            parsed.message || t("pipelines.incrementalEditDone", "节点级修改已完成。"),
+            parsed.message || t("pipelines.incrementalEditDone"),
           );
           return;
         }
@@ -2569,7 +2569,7 @@ export default function PipelinesPage() {
             active: false,
           }));
           message.info(
-            parsed.message || t("pipelines.incrementalNeedsUserInput", "继续修改前需要你补充一些信息。"),
+            parsed.message || t("pipelines.incrementalNeedsUserInput"),
           );
           return;
         }
@@ -2588,7 +2588,7 @@ export default function PipelinesPage() {
               lastSyntheticPrompt: repairPrompt,
             }));
             message.info(
-              t("pipelines.stepParseRepairing", "模型返回格式不稳定，正在请求一次更严格的 JSON 重试。"),
+              t("pipelines.stepParseRepairing"),
             );
             return;
           }
@@ -2598,8 +2598,8 @@ export default function PipelinesPage() {
             active: false,
           }));
           setDraftParseStatus("error");
-          setDraftParseError(parsed.error || t("pipelines.stepParseFailed", "无法解析节点 JSON。"));
-          message.warning(parsed.error || t("pipelines.stepParseFailed", "无法解析节点 JSON。"));
+          setDraftParseError(parsed.error || t("pipelines.stepParseFailed"));
+          message.warning(parsed.error || t("pipelines.stepParseFailed"));
           return;
         }
 
@@ -2628,8 +2628,8 @@ export default function PipelinesPage() {
 
           message.success(
             parsed.operation === "delete"
-              ? t("pipelines.incrementalDeleteApplied", "已删除 1 个节点，继续处理剩余变更。")
-              : t("pipelines.incrementalEditApplied", "已应用 1 个节点级修改，继续处理剩余变更。"),
+              ? t("pipelines.incrementalDeleteApplied")
+              : t("pipelines.incrementalEditApplied"),
           );
 
           // Check operation budget before continuing auto-loop
@@ -2679,8 +2679,8 @@ export default function PipelinesPage() {
             active: false,
           }));
           setDraftParseStatus("error");
-          setDraftParseError(t("pipelines.stepSaveFailed", "节点保存失败，请检查后重试。"));
-          message.error(t("pipelines.stepSaveFailed", "节点保存失败，请检查后重试。"));
+          setDraftParseError(t("pipelines.stepSaveFailed"));
+          message.error(t("pipelines.stepSaveFailed"));
           return;
         }
       }
@@ -2841,7 +2841,7 @@ export default function PipelinesPage() {
           <div className={styles.diffPairGrid}>
             <div className={`${styles.diffPairColumn} ${styles.diffPairOld}`}>
               <Text type="secondary" className={styles.diffPairLabel}>
-                {t("pipelines.diffOldValue", "旧值")}
+                {t("pipelines.diffOldValue")}
               </Text>
               <Text className={styles.diffOldText}>
                 {renderDiffTokenText(
@@ -2853,7 +2853,7 @@ export default function PipelinesPage() {
             </div>
             <div className={`${styles.diffPairColumn} ${styles.diffPairNew}`}>
               <Text type="secondary" className={styles.diffPairLabel}>
-                {t("pipelines.diffNewValue", "新值")}
+                {t("pipelines.diffNewValue")}
               </Text>
               <Text className={styles.diffNewText}>
                 {renderDiffTokenText(
@@ -2881,7 +2881,7 @@ export default function PipelinesPage() {
       <div className={styles.header}>
         <div>
           <Title level={3} className={styles.title}>
-            {t("pipelines.title", "Pipelines")}
+            {t("pipelines.title")}
           </Title>
           <Text className={styles.subtitle}>
             {t(
@@ -2897,9 +2897,9 @@ export default function PipelinesPage() {
             style={{ width: 180 }}
             onChange={(value) => setSourceFilter(value)}
             options={[
-              { value: "all", label: t("pipelines.sourceFilterAll", "全部来源") },
-              { value: "independent", label: t("pipelines.sourceFilterIndependent", "仅独立模板") },
-              { value: "project", label: t("pipelines.sourceFilterProject", "仅项目模板") },
+              { value: "all", label: t("pipelines.sourceFilterAll") },
+              { value: "independent", label: t("pipelines.sourceFilterIndependent") },
+              { value: "project", label: t("pipelines.sourceFilterProject") },
             ]}
           />
           <Button
@@ -2908,10 +2908,10 @@ export default function PipelinesPage() {
             disabled={designChatStarting}
             onClick={() => void handleCreatePipelineAndEnterEdit()}
           >
-            {t("pipelines.create", "新建")}
+            {t("pipelines.create")}
           </Button>
           <Button type="primary" onClick={() => navigate("/projects")}>
-            {t("pipelines.openProjects", "Open Projects to Run")}
+            {t("pipelines.openProjects")}
           </Button>
         </div>
       </div>
@@ -2930,19 +2930,19 @@ export default function PipelinesPage() {
       <div className={styles.metrics}>
         <Card size="small" className={styles.metricCard}>
           <Text className={styles.metricLabel}>
-            {t("pipelines.totalTemplates", "Template Variants")}
+            {t("pipelines.totalTemplates")}
           </Text>
           <div className={styles.metricValue}>{templates.length}</div>
         </Card>
         <Card size="small" className={styles.metricCard}>
           <Text className={styles.metricLabel}>
-            {t("pipelines.totalRuns", "Total Runs")}
+            {t("pipelines.totalRuns")}
           </Text>
           <div className={styles.metricValue}>{runs.length}</div>
         </Card>
         <Card size="small" className={styles.metricCard}>
           <Text className={styles.metricLabel}>
-            {t("pipelines.runningRuns", "Running")}
+            {t("pipelines.runningRuns")}
           </Text>
           <div className={styles.metricValue}>{runningCount}</div>
         </Card>
@@ -2960,7 +2960,7 @@ export default function PipelinesPage() {
         ) : !currentAgent ? (
           <Card>
             <Empty
-              description={t("pipelines.noAgent", "No active agent selected.")}
+              description={t("pipelines.noAgent")}
             />
           </Card>
         ) : projects.length === 0 && templates.length === 0 ? (
@@ -2975,7 +2975,7 @@ export default function PipelinesPage() {
         ) : (
           <div className={styles.columns}>
             <Card
-              title={t("pipelines.library", "Pipeline Library")}
+              title={t("pipelines.library")}
               className={styles.columnCard}
             >
               {pipelineGroups.length === 0 ? (
@@ -3001,23 +3001,23 @@ export default function PipelinesPage() {
                           <Tag>{item.versions.length}</Tag>
                           <Tag color={item.source === "independent" ? "cyan" : "gold"}>
                             {item.source === "independent"
-                              ? t("pipelines.sourceIndependent", "独立")
-                              : t("pipelines.sourceProject", "项目")}
+                              ? t("pipelines.sourceIndependent")
+                              : t("pipelines.sourceProject")}
                           </Tag>
                           {draftPipelineKeys.includes(item.key) ? (
                             <Tag color="warning">
-                              {t("pipelines.draftBadge", "未保存")}
+                              {t("pipelines.draftBadge")}
                             </Tag>
                           ) : null}
                         </div>
                         <Text type="secondary">{item.description || item.id}</Text>
                         <Text type="secondary" className={styles.helperText}>
-                          {t("pipelines.versionCount", "Versions: {{count}}", {
+                          {t("pipelines.versionCount", {
                             count: item.versions.length,
                           })}
                         </Text>
                         <Text type="secondary" className={styles.helperText}>
-                          {t("pipelines.usedIn", "Used in {{count}} projects", {
+                          {t("pipelines.usedIn", {
                             count: item.projects.length,
                           })}
                         </Text>
@@ -3029,7 +3029,7 @@ export default function PipelinesPage() {
             </Card>
 
             <Card
-              title={t("pipelines.nodes", "Current Nodes")}
+              title={t("pipelines.nodes")}
               className={styles.columnCard}
               extra={
                 <div className={styles.nodesActions}>
@@ -3037,7 +3037,7 @@ export default function PipelinesPage() {
                     size="small"
                     className={styles.versionSelect}
                     value={selectedCurrentVersion || undefined}
-                    placeholder={t("pipelines.currentVersion", "Current version")}
+                    placeholder={t("pipelines.currentVersion")}
                     options={(selectedPipeline?.versions || []).map((item) => ({
                       label: item.version || "0",
                       value: normalizeVersion(item.version),
@@ -3059,14 +3059,14 @@ export default function PipelinesPage() {
                           disabled={draftSaving}
                           onClick={() => void handleSaveDraftPipeline()}
                         >
-                          {t("pipelines.saveDraft", "保存")}
+                          {t("pipelines.saveDraft")}
                         </Button>
                       ) : null}
                       <Button
                         size="small"
                         onClick={requestCloseEditMode}
                       >
-                        {t("pipelines.exitEdit", "Exit Edit")}
+                        {t("pipelines.exitEdit")}
                       </Button>
                     </>
                   ) : (
@@ -3077,7 +3077,7 @@ export default function PipelinesPage() {
                       disabled={!currentTemplate || designChatStarting}
                       onClick={() => void handleEnterEditMode()}
                     >
-                      {t("pipelines.enterEdit", "Edit Pipeline")}
+                      {t("pipelines.enterEdit")}
                     </Button>
                   )}
                 </div>
@@ -3116,7 +3116,7 @@ export default function PipelinesPage() {
             </Card>
 
             <Card
-              title={t("pipelines.newVersionNodes", "New Version Nodes")}
+              title={t("pipelines.newVersionNodes")}
               className={styles.columnCard}
               extra={
                 <div className={styles.newVersionActions}>
@@ -3130,15 +3130,15 @@ export default function PipelinesPage() {
                       }
                     >
                       {draftDiffViewMode === "changedOnly"
-                        ? t("pipelines.diffViewFull", "显示全文")
-                        : t("pipelines.diffViewChangedOnly", "只看变化")}
+                        ? t("pipelines.diffViewFull")
+                        : t("pipelines.diffViewChangedOnly")}
                     </Button>
                   ) : null}
                   {editMode && draftParseStatus === "ready" && realtimeDraftDiffItems.length > 0 ? (
                     <Button size="small" onClick={toggleAllDraftDiffDetails}>
                       {allDraftDiffExpanded
-                        ? t("pipelines.diffCollapseAll", "收起全部")
-                        : t("pipelines.diffExpandAll", "展开全部")}
+                        ? t("pipelines.diffCollapseAll")
+                        : t("pipelines.diffExpandAll")}
                     </Button>
                   ) : null}
                   <Select
@@ -3146,7 +3146,7 @@ export default function PipelinesPage() {
                     className={styles.versionSelect}
                     value={selectedCompareVersion || undefined}
                     allowClear
-                    placeholder={t("pipelines.compareVersion", "Select history version")}
+                    placeholder={t("pipelines.compareVersion")}
                     options={(selectedPipeline?.versions || [])
                       .filter((item) => normalizeVersion(item.version) !== selectedCurrentVersion)
                       .map((item) => ({
@@ -3161,7 +3161,7 @@ export default function PipelinesPage() {
               {editMode && (saveStreamEvents.length > 0 || saveStreamError) ? (
                 <div className={styles.saveStreamPanel}>
                   <Text type="secondary" className={styles.saveStreamTitle}>
-                    {t("pipelines.saveStreamTimeline", "保存事件")}
+                    {t("pipelines.saveStreamTimeline")}
                   </Text>
                   {saveStreamEvents.map((item, index) => (
                     <Text key={`${item.event}-${item.ts}-${index}`} type="secondary" className={styles.saveStreamItem}>
@@ -3171,7 +3171,7 @@ export default function PipelinesPage() {
                   ))}
                   {saveStreamError ? (
                     <Text type="danger" className={styles.saveStreamError}>
-                      {t("pipelines.saveStreamError", "保存失败：{{detail}}", {
+                      {t("pipelines.saveStreamError", {
                         detail: saveStreamError,
                       })}
                     </Text>
@@ -3203,7 +3203,7 @@ export default function PipelinesPage() {
                   {saveConflictInfo ? (
                     <div className={styles.conflictPanel}>
                       <Text type="warning" className={styles.conflictTitle}>
-                        {t("pipelines.conflictTitle", "检测到并发冲突")}
+                        {t("pipelines.conflictTitle")}
                       </Text>
                       <Text type="secondary" className={styles.validationErrorText}>
                         {t(
@@ -3221,21 +3221,21 @@ export default function PipelinesPage() {
                         </Text>
                       ) : null}
                       <Button size="small" onClick={() => void handleRefreshAfterConflict()}>
-                        {t("pipelines.conflictRefresh", "刷新后重试")}
+                        {t("pipelines.conflictRefresh")}
                       </Button>
                       {conflictRemoteDraftBackup.length > 0 ? (
                         <Button size="small" onClick={() => void handleUseRemoteDraftAfterConflict()}>
-                          {t("pipelines.conflictUseRemote", "采用远端草稿")}
+                          {t("pipelines.conflictUseRemote")}
                         </Button>
                       ) : null}
                       {conflictMergeAvailable ? (
                         <Button size="small" onClick={() => void handleMergeDraftAfterConflict()}>
-                          {t("pipelines.conflictMerge", "按 step_id 合并")}
+                          {t("pipelines.conflictMerge")}
                         </Button>
                       ) : null}
                       {conflictRestoreAvailable ? (
                         <Button size="small" onClick={() => void handleRestoreLocalDraftAfterConflict()}>
-                          {t("pipelines.conflictRestoreLocal", "恢复本地草稿")}
+                          {t("pipelines.conflictRestoreLocal")}
                         </Button>
                       ) : null}
                     </div>
@@ -3246,7 +3246,7 @@ export default function PipelinesPage() {
               {editMode && draftParseStatus === "ready" && draftNewVersionSteps.length > 0 ? (
                 <>
                   <Text type="secondary" className={styles.draftStatusText}>
-                    {t("pipelines.draftRealtimeReady", "已根据最新对话更新节点草稿")}
+                    {t("pipelines.draftRealtimeReady")}
                   </Text>
                   <div className={styles.list}>
                     {realtimeDraftDiffItems.map((item) => (
@@ -3265,12 +3265,12 @@ export default function PipelinesPage() {
                             }
                           >
                             {item.kind === "added"
-                              ? t("pipelines.diffAdded", "Added")
+                              ? t("pipelines.diffAdded")
                               : item.kind === "removed"
-                                ? t("pipelines.diffRemoved", "Removed")
+                                ? t("pipelines.diffRemoved")
                                 : item.kind === "changed"
-                                  ? t("pipelines.diffChanged", "Changed")
-                                  : t("pipelines.diffUnchanged", "Unchanged")}
+                                  ? t("pipelines.diffChanged")
+                                  : t("pipelines.diffUnchanged")}
                           </Tag>
                           {item.current?.kind ? <Tag color="processing">{item.current.kind}</Tag> : null}
                         </div>
@@ -3290,8 +3290,8 @@ export default function PipelinesPage() {
                                 onClick={() => toggleDraftDiffDetails(detailKey)}
                               >
                                 {expanded
-                                  ? t("pipelines.diffDetailHide", "收起详情")
-                                  : t("pipelines.diffDetailShow", "查看详情")}
+                                  ? t("pipelines.diffDetailHide")
+                                  : t("pipelines.diffDetailShow")}
                               </Button>
                               {expanded ? (
                                 <div className={styles.diffDetailPanel}>
@@ -3331,7 +3331,7 @@ export default function PipelinesPage() {
                         })()}
                         {item.kind === "changed" && item.changedFields.length > 0 ? (
                           <Text type="secondary" className={styles.helperText}>
-                            {t("pipelines.diffFields", "Changed: {{fields}}", {
+                            {t("pipelines.diffFields", {
                               fields: item.changedFields.join(", "),
                             })}
                           </Text>
@@ -3341,7 +3341,7 @@ export default function PipelinesPage() {
                   </div>
                 </>
               ) : editMode && draftParseStatus === "error" ? (
-                <Empty description={draftParseError || t("pipelines.draftParseError", "节点草稿解析失败")} />
+                <Empty description={draftParseError || t("pipelines.draftParseError")} />
               ) : editMode ? (
                 <Empty
                   description={t(
@@ -3381,12 +3381,12 @@ export default function PipelinesPage() {
                           }
                         >
                           {item.kind === "added"
-                            ? t("pipelines.diffAdded", "Added")
+                            ? t("pipelines.diffAdded")
                             : item.kind === "removed"
-                              ? t("pipelines.diffRemoved", "Removed")
+                              ? t("pipelines.diffRemoved")
                               : item.kind === "changed"
-                                ? t("pipelines.diffChanged", "Changed")
-                                : t("pipelines.diffUnchanged", "Unchanged")}
+                                ? t("pipelines.diffChanged")
+                                : t("pipelines.diffUnchanged")}
                         </Tag>
                       </div>
                       <Text type="secondary">{item.id}</Text>
@@ -3395,7 +3395,7 @@ export default function PipelinesPage() {
                       </Text>
                       {item.kind === "changed" && item.changedFields.length > 0 && (
                         <Text type="secondary" className={styles.helperText}>
-                          {t("pipelines.diffFields", "Changed: {{fields}}", {
+                          {t("pipelines.diffFields", {
                             fields: item.changedFields.join(", "),
                           })}
                         </Text>
@@ -3407,12 +3407,12 @@ export default function PipelinesPage() {
             </Card>
 
             <Card
-              title={editMode ? t("pipelines.editChat", "Pipeline Edit Chat") : t("pipelines.recentRuns", "Recent Runs")}
+              title={editMode ? t("pipelines.editChat") : t("pipelines.recentRuns")}
               className={`${styles.columnCard} ${editMode ? styles.chatColumn : ""}`}
               extra={
                 editMode && designChatSessionId ? (
                   <Button size="small" onClick={() => navigate(`/chat/${designChatSessionId}`)}>
-                    {t("pipelines.openInFullChat", "Open Full Chat")}
+                    {t("pipelines.openInFullChat")}
                   </Button>
                 ) : undefined
               }
@@ -3430,7 +3430,7 @@ export default function PipelinesPage() {
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                           <Text type="secondary">
                             {incrementalGeneration.createStage === "applying"
-                              ? t("pipelines.incrementalProgress", "逐步生成中：第 {{current}} / {{total}} 步", {
+                              ? t("pipelines.incrementalProgress", {
                                 current: incrementalGeneration.currentStep,
                                 total: incrementalGeneration.totalStepsExpected,
                               })
@@ -3461,7 +3461,7 @@ export default function PipelinesPage() {
                               type="primary"
                               onClick={() => void applyConfirmedCreatePlan("确认创建流程")}
                             >
-                              {t("pipelines.confirmAndCreate", "确认并创建节点")}
+                              {t("pipelines.confirmAndCreate")}
                             </Button>
                           ) : incrementalGeneration.createStage === "ask_strategy" ? (
                             <div style={{ display: "flex", gap: 8 }}>
@@ -3469,14 +3469,14 @@ export default function PipelinesPage() {
                                 size="small"
                                 onClick={() => void handleSelectCreateStrategyByButton("stepwise")}
                               >
-                                {t("pipelines.strategyStepwise", "逐节点添加")}
+                                {t("pipelines.strategyStepwise")}
                               </Button>
                               <Button
                                 size="small"
                                 type="primary"
                                 onClick={() => void handleSelectCreateStrategyByButton("plan_then_refine")}
                               >
-                                {t("pipelines.strategyPlanThenRefine", "先规划后逐个改")}
+                                {t("pipelines.strategyPlanThenRefine")}
                               </Button>
                             </div>
                           ) : null}
@@ -3484,10 +3484,10 @@ export default function PipelinesPage() {
                         {incrementalGeneration.userRequirements ? (
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                             <Text type="secondary" style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                              {t("pipelines.topicSummaryLabel", "流程主题")}: {incrementalGeneration.userRequirements}
+                              {t("pipelines.topicSummaryLabel")}: {incrementalGeneration.userRequirements}
                             </Text>
                             <Button size="small" type="link" onClick={() => void handleEditCreateTopic()}>
-                              {t("pipelines.editTopic", "编辑主题")}
+                              {t("pipelines.editTopic")}
                             </Button>
                           </div>
                         ) : null}
@@ -3567,7 +3567,7 @@ export default function PipelinesPage() {
                         <Tag color={statusTagColor(run.status)}>{run.status}</Tag>
                       </div>
                       <Text type="secondary">
-                        {t("pipelines.projectLabel", "Project: {{name}}", {
+                        {t("pipelines.projectLabel", {
                           name: run.projectName,
                         })}
                       </Text>
@@ -3587,7 +3587,7 @@ export default function PipelinesPage() {
                             setSelectedCompareVersion("");
                           }}
                         >
-                          {t("pipelines.focusPipeline", "Focus Pipeline")}
+                          {t("pipelines.focusPipeline")}
                         </Button>
                         <Button
                           size="small"
@@ -3595,7 +3595,7 @@ export default function PipelinesPage() {
                           className={styles.runLink}
                           onClick={() => navigate("/projects")}
                         >
-                          {t("pipelines.goToProjects", "Go to Projects")}
+                          {t("pipelines.goToProjects")}
                         </Button>
                       </div>
                     </div>
