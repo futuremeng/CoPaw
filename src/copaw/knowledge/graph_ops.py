@@ -17,6 +17,12 @@ from typing import Any
 
 from ..config.config import KnowledgeConfig
 from ..constant import WORKING_DIR
+from .graphify_provider import (
+    GraphifyError,
+    GraphifyNotConfiguredError,
+    graphify_memify,
+    graphify_query,
+)
 from .manager import KnowledgeManager
 
 
@@ -75,7 +81,40 @@ class GraphOpsManager:
             raise RuntimeError("Cognee graph provider is not wired yet.")
 
         if engine == "graphify":
-            warnings.append("GRAPHIFY_FALLBACK_TO_LOCAL_LEXICAL")
+            graphify_cfg = getattr(config, "graphify", None)
+            try:
+                records = graphify_query(
+                    config=graphify_cfg,  # type: ignore[arg-type]
+                    query_text=query_text,
+                    top_k=top_k,
+                    dataset_scope=dataset_scope,
+                )
+                if not records:
+                    warnings.append("NO_GRAPH_RECORDS")
+                return GraphOpsResult(
+                    records=records,
+                    summary=f"Returned {len(records)} graph-like records via Graphify.",
+                    provenance={
+                        "engine": engine,
+                        "dataset_scope": dataset_scope or [],
+                        "query_mode": query_mode,
+                    },
+                    warnings=warnings,
+                )
+            except GraphifyNotConfiguredError as exc:
+                fallback_ok = getattr(graphify_cfg, "fallback_to_local", True)
+                if not fallback_ok:
+                    raise
+                warnings.append("GRAPHIFY_NOT_CONFIGURED")
+                warnings.append(str(exc))
+                warnings.append("GRAPHIFY_FALLBACK_TO_LOCAL_LEXICAL")
+            except GraphifyError as exc:
+                fallback_ok = getattr(graphify_cfg, "fallback_to_local", True)
+                if not fallback_ok:
+                    raise
+                warnings.append("GRAPHIFY_RUNTIME_ERROR")
+                warnings.append(str(exc))
+                warnings.append("GRAPHIFY_FALLBACK_TO_LOCAL_LEXICAL")
 
         manager = KnowledgeManager(self.working_dir)
         search_result = manager.search(
@@ -159,9 +198,21 @@ class GraphOpsManager:
             error = "Cognee memify provider is not wired yet."
             warnings = ["COGNEE_PROVIDER_NOT_READY"]
         elif engine == "graphify":
-            status = "failed"
-            error = "Graphify memify provider is not wired yet."
-            warnings = ["GRAPHIFY_PROVIDER_NOT_READY"]
+            graphify_cfg = getattr(config, "graphify", None)
+            try:
+                memify_result = graphify_memify(
+                    config=graphify_cfg,  # type: ignore[arg-type]
+                    pipeline_type=pipeline_type,
+                    dataset_scope=dataset_scope,
+                    dry_run=dry_run,
+                )
+                status = memify_result["status"]
+                error = memify_result.get("error")
+                warnings = memify_result.get("warnings", [])
+            except GraphifyError as exc:
+                status = "failed"
+                error = str(exc)
+                warnings = ["GRAPHIFY_MEMIFY_ERROR"]
         else:
             status = "succeeded"
             error = None

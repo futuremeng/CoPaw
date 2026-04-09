@@ -1222,6 +1222,87 @@ class KnowledgeAutomationConfig(BaseModel):
     url_exclude_patterns: List[str] = Field(default_factory=list)
 
 
+class GraphifyConfig(BaseModel):
+    """Graphify knowledge graph engine configuration.
+
+    Local file mode (primary): point graph_path at graphify-out/graph.json
+    built by running ``graphify <dataset_dir>`` in advance.
+
+    Remote mode (future): set endpoint to a hosted Graphify service URL.
+
+    Environment overrides (take precedence over config file values):
+      COPAW_GRAPHIFY_GRAPH_PATH   – path to graph.json
+      COPAW_GRAPHIFY_DATASET_DIR  – directory to build graph from
+      COPAW_GRAPHIFY_ENDPOINT     – remote service URL (future)
+      COPAW_GRAPHIFY_API_KEY      – remote service API key (future)
+      COPAW_GRAPHIFY_DATASET      – dataset name for remote service
+      COPAW_GRAPHIFY_FALLBACK     – "0"/"false" disables local fallback
+    """
+
+    # --- local file mode ---
+    graph_path: str = Field(
+        default="",
+        description="Path to graphify-out/graph.json (local file mode).",
+    )
+    dataset_dir: str = Field(
+        default="",
+        description="Directory to run graphify on for memify (build graph).",
+    )
+
+    # --- remote service / future hosted mode ---
+    endpoint: str = Field(
+        default="",
+        description="Graphify service endpoint URL (future hosted mode).",
+    )
+    api_key: str = Field(
+        default="",
+        description="API key for hosted Graphify service.",
+    )
+    dataset: str = Field(
+        default="copaw",
+        description="Dataset name for hosted Graphify service.",
+    )
+
+    # --- behaviour ---
+    fallback_to_local: bool = Field(
+        default=True,
+        description=(
+            "Fall back to local_lexical engine when Graphify fails. "
+            "Set to False to surface errors instead."
+        ),
+    )
+    bfs_depth: int = Field(
+        default=3,
+        ge=1,
+        le=6,
+        description="BFS traversal depth for graph queries.",
+    )
+    token_budget: int = Field(
+        default=2000,
+        ge=100,
+        description="Max output token budget for graph query results.",
+    )
+
+    @model_validator(mode="after")
+    def _inject_from_env(self) -> "GraphifyConfig":
+        """Override string fields from environment variables when set."""
+        str_map = {
+            "COPAW_GRAPHIFY_GRAPH_PATH": "graph_path",
+            "COPAW_GRAPHIFY_DATASET_DIR": "dataset_dir",
+            "COPAW_GRAPHIFY_ENDPOINT": "endpoint",
+            "COPAW_GRAPHIFY_API_KEY": "api_key",
+            "COPAW_GRAPHIFY_DATASET": "dataset",
+        }
+        for env_var, field_name in str_map.items():
+            val = os.environ.get(env_var, "").strip()
+            if val:
+                setattr(self, field_name, val)
+        fallback_raw = os.environ.get("COPAW_GRAPHIFY_FALLBACK", "").strip()
+        if fallback_raw:
+            self.fallback_to_local = fallback_raw.lower() not in {"0", "false", "no"}
+        return self
+
+
 class KnowledgeConfig(BaseModel):
     """Knowledge feature configuration."""
 
@@ -1234,6 +1315,10 @@ class KnowledgeConfig(BaseModel):
     index: KnowledgeIndexConfig = Field(default_factory=KnowledgeIndexConfig)
     automation: KnowledgeAutomationConfig = Field(
         default_factory=KnowledgeAutomationConfig,
+    )
+    graphify: GraphifyConfig = Field(
+        default_factory=GraphifyConfig,
+        description="Graphify engine configuration.",
     )
     graph_query_enabled: bool = Field(default=False)
     allow_cypher_query: bool = Field(default=False)
