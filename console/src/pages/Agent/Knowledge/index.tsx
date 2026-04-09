@@ -37,8 +37,8 @@ import type {
   KnowledgeSourceItem,
   KnowledgeSourceSpec,
   KnowledgeSourceType,
-  GraphQueryResponse,
   GraphQueryRecord,
+  GraphQueryResponse,
 } from "../../../api/types";
 import { MarkdownCopy } from "../../../components/MarkdownCopy/MarkdownCopy";
 import {
@@ -65,6 +65,19 @@ const SOURCE_TYPE_OPTIONS: Array<{
 ];
 
 type SourceOriginFilter = "all" | "manual" | "auto";
+
+function safeGraphNodeId(raw: string): string {
+  return raw
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function extractHopNodeId(rawObject: string): string {
+  const head = rawObject.split(";")[0]?.trim() || "";
+  return safeGraphNodeId(head.replace(/--\[[^\]]+\]--/g, " "));
+}
 
 function inferSourceOrigin(source: KnowledgeSourceItem): Exclude<
   SourceOriginFilter,
@@ -152,6 +165,8 @@ function KnowledgePage() {
   const [graphQueryTimeoutSec, setGraphQueryTimeoutSec] = useState(20);
   const [graphQueryDatasetScopeText, setGraphQueryDatasetScopeText] = useState("");
   const [graphQueryClickedNode, setGraphQueryClickedNode] = useState<string | null>(null);
+  const [graphQueryNodeDrawerOpen, setGraphQueryNodeDrawerOpen] =
+    useState(false);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [enableModalOpen, setEnableModalOpen] = useState(false);
@@ -842,6 +857,7 @@ function KnowledgePage() {
       });
       setGraphQueryResults(result);
       setGraphQueryClickedNode(null);
+      setGraphQueryNodeDrawerOpen(false);
     } catch (error) {
       const message_text =
         error instanceof Error ? error.message : "Graph query failed";
@@ -867,10 +883,36 @@ function KnowledgePage() {
     setGraphQueryError(null);
     setGraphQueryDatasetScopeText("");
     setGraphQueryClickedNode(null);
+    setGraphQueryNodeDrawerOpen(false);
   }, []);
 
   const hasSearchQuery = searchQuery.trim().length > 0;
   const showSearchPanel = searching || hasSearchQuery || hits.length > 0;
+
+  const graphNodeDetails = useMemo(() => {
+    if (!graphQueryResults || !graphQueryClickedNode) {
+      return {
+        outgoing: [] as GraphQueryRecord[],
+        incoming: [] as GraphQueryRecord[],
+        nodeIdSet: new Set<string>(),
+      };
+    }
+
+    const nodeIdSet = new Set(
+      graphQueryResults.records.map((record) => safeGraphNodeId(record.subject)),
+    );
+
+    const outgoing = graphQueryResults.records.filter(
+      (record) => safeGraphNodeId(record.subject) === graphQueryClickedNode,
+    );
+
+    const incoming = graphQueryResults.records.filter((record) => {
+      const targetId = extractHopNodeId(record.object);
+      return Boolean(targetId) && targetId === graphQueryClickedNode;
+    });
+
+    return { outgoing, incoming, nodeIdSet };
+  }, [graphQueryResults, graphQueryClickedNode]);
 
   const handleDeleteSource = useCallback(async (sourceId: string) => {
     try {
@@ -1700,114 +1742,13 @@ function KnowledgePage() {
                 graphQueryResults.provenance,
               )}
               loading={graphQueryLoading}
-              onNodeClick={(node) => setGraphQueryClickedNode(node.id)}
+              onNodeClick={(node) => {
+                setGraphQueryClickedNode(node.id);
+                setGraphQueryNodeDrawerOpen(true);
+              }}
             />
           </div>
         )}
-
-        {graphQueryResults && graphQueryClickedNode && (() => {
-          const safeNodeIdFn = (raw: string) =>
-            raw
-              .toLowerCase()
-              .replace(/[^a-z0-9_-]+/g, "-")
-              .replace(/-+/g, "-")
-              .replace(/^-|-$/g, "");
-          const deriveHopNodeId = (rawObject: string) => {
-            const head = rawObject.split(";")[0]?.trim() || "";
-            return safeNodeIdFn(head.replace(/--\[[^\]]+\]--/g, " "));
-          };
-          const nodeRelations = graphQueryResults.records.filter(
-            (r) => safeNodeIdFn(r.subject) === graphQueryClickedNode,
-          );
-          const nodeIdSet = new Set(
-            graphQueryResults.records.map((r) => safeNodeIdFn(r.subject)),
-          );
-          return (
-            <div style={{ marginTop: 20 }}>
-              <Card
-                title={t("knowledge.graphQuery.nodeDetail") || "Node Details"}
-                extra={
-                  <Button
-                    size="small"
-                    onClick={() => setGraphQueryClickedNode(null)}
-                  >
-                    {t("common.close") || "Close"}
-                  </Button>
-                }
-              >
-                <Space direction="vertical" style={{ width: "100%" }} size={16}>
-                  <div>
-                    <Typography.Text strong>Node ID:</Typography.Text>{" "}
-                    <Typography.Text code style={{ fontSize: 12 }}>
-                      {graphQueryClickedNode}
-                    </Typography.Text>
-                  </div>
-                  {nodeRelations.length > 0 && (
-                    <div>
-                      <Typography.Text strong>
-                        {t("knowledge.graphQuery.outgoingRelations") ||
-                          "Outgoing Relations"} ({nodeRelations.length})
-                      </Typography.Text>
-                      <div style={{ marginTop: 8 }}>
-                        {nodeRelations.slice(0, 5).map((rel: GraphQueryRecord, idx: number) => {
-                          const hopNodeId = deriveHopNodeId(rel.object);
-                          const canHop = Boolean(hopNodeId) && nodeIdSet.has(hopNodeId);
-                          return (
-                          <div
-                            key={idx}
-                            style={{
-                              padding: "8px",
-                              marginBottom: "4px",
-                              backgroundColor: "#f5f5f5",
-                              borderRadius: "4px",
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "center",
-                            }}
-                          >
-                            <div style={{ flex: 1 }}>
-                              <Typography.Text
-                                type="secondary"
-                                style={{ fontSize: 12 }}
-                              >
-                                {rel.predicate}
-                              </Typography.Text>
-                              <br />
-                              <Typography.Text style={{ fontSize: 12 }}>
-                                → {rel.object.substring(0, 60)}
-                                {rel.object.length > 60 ? "..." : ""}
-                              </Typography.Text>
-                            </div>
-                            <Tag color="blue" style={{ marginLeft: 8 }}>
-                              {formatScore(rel.score).value}
-                            </Tag>
-                            <Button
-                              size="small"
-                              type="link"
-                              disabled={!canHop}
-                              onClick={() => canHop && setGraphQueryClickedNode(hopNodeId)}
-                            >
-                              {t("knowledge.graphQuery.hop") || "Hop"}
-                            </Button>
-                          </div>
-                          );
-                        })}
-                        {nodeRelations.length > 5 && (
-                          <Typography.Text
-                            type="secondary"
-                            style={{ fontSize: 12 }}
-                          >
-                            +{nodeRelations.length - 5} more relations
-                          </Typography.Text>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </Space>
-              </Card>
-            </div>
-          );
-        })()}
 
         {graphQueryError && (
           <div
@@ -2100,6 +2041,91 @@ function KnowledgePage() {
           )}
         </Space>
       </Modal>
+      <Drawer
+        width={560}
+        placement="right"
+        title={t("knowledge.graphQuery.nodeDetail") || "Node Details"}
+        open={graphQueryNodeDrawerOpen && Boolean(graphQueryClickedNode)}
+        onClose={() => setGraphQueryNodeDrawerOpen(false)}
+        destroyOnClose
+      >
+        {graphQueryClickedNode ? (
+          <Space direction="vertical" size={14} className={styles.fullWidth}>
+            <div className={styles.infoSection}>
+              <div className={styles.infoLabel}>Node ID</div>
+              <div className={`${styles.infoBlock} ${styles.singleLineValue}`}>
+                {graphQueryClickedNode}
+              </div>
+            </div>
+
+            <div className={styles.infoSection}>
+              <div className={styles.infoLabel}>
+                {t("knowledge.graphQuery.outgoingRelations") || "Outgoing Relations"}
+              </div>
+              {graphNodeDetails.outgoing.length ? (
+                <Space direction="vertical" size={8} className={styles.fullWidth}>
+                  {graphNodeDetails.outgoing.slice(0, 8).map((rel, idx) => {
+                    const hopNodeId = extractHopNodeId(rel.object);
+                    const canHop = Boolean(hopNodeId) && graphNodeDetails.nodeIdSet.has(hopNodeId);
+                    return (
+                      <div key={`out-${idx}`} className={styles.infoBlock}>
+                        <Typography.Text type="secondary">{rel.predicate}</Typography.Text>
+                        <div>{rel.object}</div>
+                        <Space size={8} style={{ marginTop: 6 }}>
+                          <Tag color="blue">{formatScore(rel.score).value}</Tag>
+                          <Button
+                            size="small"
+                            type="link"
+                            disabled={!canHop}
+                            onClick={() => canHop && setGraphQueryClickedNode(hopNodeId)}
+                          >
+                            {t("knowledge.graphQuery.hop") || "Hop"}
+                          </Button>
+                        </Space>
+                      </div>
+                    );
+                  })}
+                </Space>
+              ) : (
+                <Empty description={t("knowledge.graphQuery.noOutgoing") || "No outgoing relations"} />
+              )}
+            </div>
+
+            <div className={styles.infoSection}>
+              <div className={styles.infoLabel}>
+                {t("knowledge.graphQuery.incomingRelations") || "Incoming Relations"}
+              </div>
+              {graphNodeDetails.incoming.length ? (
+                <Space direction="vertical" size={8} className={styles.fullWidth}>
+                  {graphNodeDetails.incoming.slice(0, 8).map((rel, idx) => {
+                    const sourceNodeId = safeGraphNodeId(rel.subject);
+                    const canHop = Boolean(sourceNodeId) && graphNodeDetails.nodeIdSet.has(sourceNodeId);
+                    return (
+                      <div key={`in-${idx}`} className={styles.infoBlock}>
+                        <Typography.Text type="secondary">{rel.subject}</Typography.Text>
+                        <div>{rel.predicate}</div>
+                        <Space size={8} style={{ marginTop: 6 }}>
+                          <Tag color="purple">{formatScore(rel.score).value}</Tag>
+                          <Button
+                            size="small"
+                            type="link"
+                            disabled={!canHop}
+                            onClick={() => canHop && setGraphQueryClickedNode(sourceNodeId)}
+                          >
+                            {t("knowledge.graphQuery.hop") || "Hop"}
+                          </Button>
+                        </Space>
+                      </div>
+                    );
+                  })}
+                </Space>
+              ) : (
+                <Empty description={t("knowledge.graphQuery.noIncoming") || "No incoming relations"} />
+              )}
+            </div>
+          </Space>
+        ) : null}
+      </Drawer>
       <Drawer
         width={520}
         placement="right"
