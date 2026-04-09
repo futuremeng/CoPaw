@@ -167,6 +167,12 @@ function KnowledgePage() {
   const [graphQueryClickedNode, setGraphQueryClickedNode] = useState<string | null>(null);
   const [graphQueryNodeDrawerOpen, setGraphQueryNodeDrawerOpen] =
     useState(false);
+  const [graphQueryNodePath, setGraphQueryNodePath] = useState<string[]>([]);
+  const [graphRelationPredicateFilter, setGraphRelationPredicateFilter] =
+    useState<string>("all");
+  const [graphRelationSortMode, setGraphRelationSortMode] = useState<
+    "score_desc" | "score_asc" | "predicate_asc"
+  >("score_desc");
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [enableModalOpen, setEnableModalOpen] = useState(false);
@@ -858,6 +864,9 @@ function KnowledgePage() {
       setGraphQueryResults(result);
       setGraphQueryClickedNode(null);
       setGraphQueryNodeDrawerOpen(false);
+      setGraphQueryNodePath([]);
+      setGraphRelationPredicateFilter("all");
+      setGraphRelationSortMode("score_desc");
     } catch (error) {
       const message_text =
         error instanceof Error ? error.message : "Graph query failed";
@@ -884,6 +893,9 @@ function KnowledgePage() {
     setGraphQueryDatasetScopeText("");
     setGraphQueryClickedNode(null);
     setGraphQueryNodeDrawerOpen(false);
+    setGraphQueryNodePath([]);
+    setGraphRelationPredicateFilter("all");
+    setGraphRelationSortMode("score_desc");
   }, []);
 
   const hasSearchQuery = searchQuery.trim().length > 0;
@@ -913,6 +925,76 @@ function KnowledgePage() {
 
     return { outgoing, incoming, nodeIdSet };
   }, [graphQueryResults, graphQueryClickedNode]);
+
+  const graphRelationPredicateOptions = useMemo(() => {
+    const predicates = new Set<string>();
+    graphNodeDetails.outgoing.forEach((item) => predicates.add(item.predicate));
+    graphNodeDetails.incoming.forEach((item) => predicates.add(item.predicate));
+    return [
+      { label: t("knowledge.graphQuery.allPredicates") || "All predicates", value: "all" },
+      ...Array.from(predicates)
+        .sort((a, b) => a.localeCompare(b))
+        .map((predicate) => ({ label: predicate, value: predicate })),
+    ];
+  }, [graphNodeDetails.incoming, graphNodeDetails.outgoing, t]);
+
+  const graphRelationSortOptions = useMemo(
+    () => [
+      { label: t("knowledge.graphQuery.sortScoreDesc") || "Score: high to low", value: "score_desc" },
+      { label: t("knowledge.graphQuery.sortScoreAsc") || "Score: low to high", value: "score_asc" },
+      { label: t("knowledge.graphQuery.sortPredicate") || "Predicate: A-Z", value: "predicate_asc" },
+    ],
+    [t],
+  );
+
+  const applyGraphRelationFilterAndSort = useCallback(
+    (records: GraphQueryRecord[]) => {
+      const filtered =
+        graphRelationPredicateFilter === "all"
+          ? records
+          : records.filter((record) => record.predicate === graphRelationPredicateFilter);
+
+      const sorted = [...filtered];
+      sorted.sort((a, b) => {
+        if (graphRelationSortMode === "score_asc") {
+          return a.score - b.score;
+        }
+        if (graphRelationSortMode === "predicate_asc") {
+          return a.predicate.localeCompare(b.predicate);
+        }
+        return b.score - a.score;
+      });
+      return sorted;
+    },
+    [graphRelationPredicateFilter, graphRelationSortMode],
+  );
+
+  const filteredOutgoingRelations = useMemo(
+    () => applyGraphRelationFilterAndSort(graphNodeDetails.outgoing),
+    [applyGraphRelationFilterAndSort, graphNodeDetails.outgoing],
+  );
+
+  const filteredIncomingRelations = useMemo(
+    () => applyGraphRelationFilterAndSort(graphNodeDetails.incoming),
+    [applyGraphRelationFilterAndSort, graphNodeDetails.incoming],
+  );
+
+  const handleGraphNodeOpen = useCallback((nodeId: string) => {
+    setGraphQueryClickedNode(nodeId);
+    setGraphQueryNodePath([nodeId]);
+    setGraphQueryNodeDrawerOpen(true);
+  }, []);
+
+  const handleGraphNodeHop = useCallback((nodeId: string) => {
+    setGraphQueryClickedNode(nodeId);
+    setGraphQueryNodePath((prev) => {
+      const existsIndex = prev.indexOf(nodeId);
+      if (existsIndex >= 0) {
+        return prev.slice(0, existsIndex + 1);
+      }
+      return [...prev, nodeId];
+    });
+  }, []);
 
   const handleDeleteSource = useCallback(async (sourceId: string) => {
     try {
@@ -1742,10 +1824,7 @@ function KnowledgePage() {
                 graphQueryResults.provenance,
               )}
               loading={graphQueryLoading}
-              onNodeClick={(node) => {
-                setGraphQueryClickedNode(node.id);
-                setGraphQueryNodeDrawerOpen(true);
-              }}
+              onNodeClick={(node) => handleGraphNodeOpen(node.id)}
             />
           </div>
         )}
@@ -2051,6 +2130,45 @@ function KnowledgePage() {
       >
         {graphQueryClickedNode ? (
           <Space direction="vertical" size={14} className={styles.fullWidth}>
+            <div className={styles.graphNodeToolbarRow}>
+              <Select
+                value={graphRelationPredicateFilter}
+                options={graphRelationPredicateOptions}
+                onChange={(value) => setGraphRelationPredicateFilter(String(value))}
+                className={styles.graphNodeToolbarSelect}
+              />
+              <Select
+                value={graphRelationSortMode}
+                options={graphRelationSortOptions}
+                onChange={(value) =>
+                  setGraphRelationSortMode(
+                    value as "score_desc" | "score_asc" | "predicate_asc",
+                  )
+                }
+                className={styles.graphNodeToolbarSelect}
+              />
+            </div>
+
+            {graphQueryNodePath.length > 0 ? (
+              <div className={styles.graphNodePathWrap}>
+                <Typography.Text type="secondary" className={styles.graphNodePathLabel}>
+                  {t("knowledge.graphQuery.path") || "Path"}:
+                </Typography.Text>
+                <Space size={6} wrap>
+                  {graphQueryNodePath.map((nodeId, idx) => (
+                    <Button
+                      key={`${nodeId}-${idx}`}
+                      type={nodeId === graphQueryClickedNode ? "primary" : "default"}
+                      size="small"
+                      onClick={() => handleGraphNodeHop(nodeId)}
+                    >
+                      {nodeId}
+                    </Button>
+                  ))}
+                </Space>
+              </div>
+            ) : null}
+
             <div className={styles.infoSection}>
               <div className={styles.infoLabel}>Node ID</div>
               <div className={`${styles.infoBlock} ${styles.singleLineValue}`}>
@@ -2062,9 +2180,9 @@ function KnowledgePage() {
               <div className={styles.infoLabel}>
                 {t("knowledge.graphQuery.outgoingRelations") || "Outgoing Relations"}
               </div>
-              {graphNodeDetails.outgoing.length ? (
+              {filteredOutgoingRelations.length ? (
                 <Space direction="vertical" size={8} className={styles.fullWidth}>
-                  {graphNodeDetails.outgoing.slice(0, 8).map((rel, idx) => {
+                  {filteredOutgoingRelations.slice(0, 8).map((rel, idx) => {
                     const hopNodeId = extractHopNodeId(rel.object);
                     const canHop = Boolean(hopNodeId) && graphNodeDetails.nodeIdSet.has(hopNodeId);
                     return (
@@ -2077,7 +2195,7 @@ function KnowledgePage() {
                             size="small"
                             type="link"
                             disabled={!canHop}
-                            onClick={() => canHop && setGraphQueryClickedNode(hopNodeId)}
+                            onClick={() => canHop && handleGraphNodeHop(hopNodeId)}
                           >
                             {t("knowledge.graphQuery.hop") || "Hop"}
                           </Button>
@@ -2095,9 +2213,9 @@ function KnowledgePage() {
               <div className={styles.infoLabel}>
                 {t("knowledge.graphQuery.incomingRelations") || "Incoming Relations"}
               </div>
-              {graphNodeDetails.incoming.length ? (
+              {filteredIncomingRelations.length ? (
                 <Space direction="vertical" size={8} className={styles.fullWidth}>
-                  {graphNodeDetails.incoming.slice(0, 8).map((rel, idx) => {
+                  {filteredIncomingRelations.slice(0, 8).map((rel, idx) => {
                     const sourceNodeId = safeGraphNodeId(rel.subject);
                     const canHop = Boolean(sourceNodeId) && graphNodeDetails.nodeIdSet.has(sourceNodeId);
                     return (
@@ -2110,7 +2228,7 @@ function KnowledgePage() {
                             size="small"
                             type="link"
                             disabled={!canHop}
-                            onClick={() => canHop && setGraphQueryClickedNode(sourceNodeId)}
+                            onClick={() => canHop && handleGraphNodeHop(sourceNodeId)}
                           >
                             {t("knowledge.graphQuery.hop") || "Hop"}
                           </Button>
