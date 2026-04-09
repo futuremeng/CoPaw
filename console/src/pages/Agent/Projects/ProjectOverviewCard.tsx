@@ -26,14 +26,16 @@ import {
   getProjectKnowledgeQuantStatusLabel,
   isProjectKnowledgeFilterKey,
   matchesProjectKnowledgeFilter,
-  type ProjectKnowledgeFilterKey,
 } from "./metrics";
+import {
+  getProjectFilterLabelDescriptor,
+  toggleProjectFileFilter,
+  type FileMetricFilterKey,
+  type ProjectFileFilterKey,
+} from "./filtering";
 import styles from "./index.module.less";
 
 const { Text } = Typography;
-
-type FileMetricFilterKey = "original" | "derived" | "skills" | "scripts" | "flows" | "cases";
-type ProjectFileFilterKey = FileMetricFilterKey | ProjectKnowledgeFilterKey;
 
 interface ProjectOverviewCardProps {
   selectedProject?: AgentProjectSummary;
@@ -340,31 +342,15 @@ export default function ProjectOverviewCard({
     attachTitle,
     detachTitle,
   );
-  const selectedFilterLabel =
-    selectedMetricFilter === "original"
-      ? t("projects.filesOriginal", "Original Files")
-      : selectedMetricFilter === "derived"
-        ? t("projects.filesDerived", "Derived Files")
-        : selectedMetricFilter === "skills"
-          ? t("projects.artifacts.skill", "Skills")
-          : selectedMetricFilter === "scripts"
-            ? t("projects.artifacts.script", "Scripts")
-            : selectedMetricFilter === "flows"
-              ? t("projects.artifacts.flow", "Flows")
-              : selectedMetricFilter === "cases"
-                ? t("projects.artifacts.case", "Cases")
-                : selectedMetricFilter === "knowledgeCandidates"
-                  ? t("projects.quantKnowledgeCandidates", "Knowledge Candidates")
-                  : selectedMetricFilter === "markdown"
-                    ? t("projects.quantMarkdownFiles", "Markdown Files")
-                    : selectedMetricFilter === "textLike"
-                      ? t("projects.quantTextLikeFiles", "Text-like Files")
-                      : selectedMetricFilter === "recent"
-                        ? t("projects.quantRecentlyUpdated", "Updated in 7d")
-                : "";
-      const knowledgeFilterActive = Boolean(
-        selectedMetricFilter && isProjectKnowledgeFilterKey(selectedMetricFilter),
-      );
+  const selectedFilterLabelDescriptor = selectedMetricFilter
+    ? getProjectFilterLabelDescriptor(selectedMetricFilter)
+    : undefined;
+  const selectedFilterLabel = selectedFilterLabelDescriptor
+    ? t(selectedFilterLabelDescriptor.i18nKey, selectedFilterLabelDescriptor.defaultLabel)
+    : "";
+  const knowledgeFilterActive = Boolean(
+    selectedMetricFilter && isProjectKnowledgeFilterKey(selectedMetricFilter),
+  );
 
   useEffect(() => {
     if (!selectedMetricFilter) {
@@ -495,7 +481,7 @@ export default function ProjectOverviewCard({
                     key={item.key}
                     type="button"
                     className={className}
-                    onClick={() => setSelectedMetricFilter((prev) => (prev === filterKey ? "" : filterKey))}
+                    onClick={() => setSelectedMetricFilter((prev) => toggleProjectFileFilter(prev, filterKey))}
                     aria-pressed={active}
                   >
                     <div className={styles.itemMeta}>{item.label}</div>
@@ -539,7 +525,7 @@ export default function ProjectOverviewCard({
                   type="button"
                   className={`${styles.metricSummaryCard} ${styles.metricFilterCard} ${active ? styles.metricFilterCardActive : ""}`}
                   onClick={() => {
-                    setSelectedMetricFilter((prev) => (prev === item.key ? "" : item.key));
+                    setSelectedMetricFilter((prev) => toggleProjectFileFilter(prev, item.key));
                   }}
                   aria-pressed={active}
                 >
