@@ -40,13 +40,12 @@ import type {
 } from "../../../api/types";
 import { MarkdownCopy } from "../../../components/MarkdownCopy/MarkdownCopy";
 import {
-  buildKnowledgeQuantCardModels,
   computeKnowledgeQuantMetrics,
-  getKnowledgeQuantActionDescriptor,
   getKnowledgeQuantStatusLabel,
-  type KnowledgeQuantActionKey,
   summarizeRemoteRetryResults,
 } from "./metrics";
+import { buildKnowledgeQuantCardViewModels } from "./quantCards";
+import { buildRemoteRetryNotice, collectRemoteRetrySources } from "./remoteRetry";
 import styles from "./index.module.less";
 
 const SOURCE_TYPE_OPTIONS: Array<{
@@ -617,12 +616,7 @@ function KnowledgePage() {
   };
 
   const remoteRetrySources = useMemo(
-    () => sources
-      .filter((source) => {
-        const state = source.status.remote_cache_state;
-        return typeof state === "string" && state.length > 0 && state !== "cached";
-      })
-      .map((source) => ({ id: source.id, name: source.name || source.id })),
+    () => collectRemoteRetrySources(sources),
     [sources],
   );
 
@@ -640,25 +634,8 @@ function KnowledgePage() {
         remoteRetrySources.map((source) => api.indexKnowledgeSource(source.id)),
       );
       const summary = summarizeRemoteRetryResults(remoteRetrySources, settled);
-
-      if (summary.failedCount === 0) {
-        message.success(t("knowledge.remoteRetrySuccess", { count: summary.successCount }));
-      } else if (summary.successCount > 0) {
-        message.warning(
-          t("knowledge.remoteRetryPartial", {
-            success: summary.successCount,
-            failed: summary.failedCount,
-            failedNames: summary.failedNames.slice(0, 3).join(", "),
-          }),
-        );
-      } else {
-        message.error(
-          t("knowledge.remoteRetryAllFailed", {
-            failed: summary.failedCount,
-            failedNames: summary.failedNames.slice(0, 3).join(", "),
-          }),
-        );
-      }
+      const notice = buildRemoteRetryNotice(summary);
+      message[notice.level](t(notice.i18nKey, notice.params));
       await loadData();
     } catch (error) {
       console.error("Failed to retry remote sources", error);
@@ -1063,35 +1040,31 @@ function KnowledgePage() {
     () => computeKnowledgeQuantMetrics(sources, hits, backfillStatus),
     [backfillStatus, hits, sources],
   );
-  const quantCards = buildKnowledgeQuantCardModels(knowledgeQuantMetrics).map((item) => {
-    const actionKey = item.actionKey;
-    const actionDescriptor = actionKey
-      ? getKnowledgeQuantActionDescriptor(actionKey)
-      : undefined;
-    const actionHandlers: Record<KnowledgeQuantActionKey, () => void> = {
+  const quantCards = buildKnowledgeQuantCardViewModels({
+    metrics: knowledgeQuantMetrics,
+    handlers: {
       addSource: () => setModalOpen(true),
       rebuildIndex: handleIndexAll,
       backfillHistory: handleRunHistoryBackfillNow,
       retryRemote: handleRetryRemoteSources,
-    };
-    const actionLoading: Record<KnowledgeQuantActionKey, boolean> = {
+    },
+    loading: {
       addSource: false,
       rebuildIndex: indexingAll,
       backfillHistory: backfillingHistory,
       retryRemote: retryingRemoteSources,
-    };
-    return {
-      ...item,
-      label: t(item.labelI18nKey, item.defaultLabel),
-      action: actionDescriptor
-        ? {
-            label: t(actionDescriptor.labelI18nKey, actionDescriptor.defaultLabel),
-            onClick: actionHandlers[actionDescriptor.key],
-            loading: actionLoading[actionDescriptor.key],
-          }
-        : undefined,
-    };
-  });
+    },
+  }).map((item) => ({
+    ...item,
+    label: t(item.labelI18nKey, item.defaultLabel),
+    action: item.action
+      ? {
+          label: t(item.action.labelI18nKey, item.action.defaultLabel),
+          onClick: item.action.onClick,
+          loading: item.action.loading,
+        }
+      : undefined,
+  }));
 
   return (
     <div className={styles.knowledgePage}>
