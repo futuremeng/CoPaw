@@ -23,6 +23,7 @@ import shutil
 import sys
 from contextlib import AsyncExitStack
 from pathlib import Path
+from datetime import timedelta
 from typing import Any, Literal
 
 import httpx
@@ -581,29 +582,29 @@ class HttpStatefulClient(StatefulClientBase):
                 # Enter context manager in THIS task
                 async with AsyncExitStack() as stack:
                     if self.transport == "streamable_http":
-                        timeout = httpx.Timeout(self.timeout)
-                        
-                        # Log headers for debugging
-                        if self.headers:
-                            safe_headers = {
-                                k: (v[:20] + "..." if len(v) > 20 else v)
-                                for k, v in self.headers.items()
-                            }
-                            logger.debug(
-                                f"MCP client {self.name} using headers: {safe_headers}"
-                            )
-                        else:
-                            logger.debug(
-                                f"MCP client {self.name} has no custom headers"
-                            )
-                        
+                        timeout_seconds = (
+                            self.timeout.total_seconds()
+                            if isinstance(self.timeout, timedelta)
+                            else self.timeout
+                        )
+                        sse_read_timeout_seconds = (
+                            self.sse_read_timeout.total_seconds()
+                            if isinstance(self.sse_read_timeout, timedelta)
+                            else self.sse_read_timeout
+                        )
+
                         http_client = create_mcp_http_client(
                             headers=self.headers or {},
-                            timeout=timeout,
+                            timeout=httpx.Timeout(
+                                connect=timeout_seconds,
+                                read=sse_read_timeout_seconds,
+                                write=timeout_seconds,
+                                pool=timeout_seconds,
+                            ),
+                            **self.client_kwargs,
                         )
-                        http_client = await stack.enter_async_context(
-                            http_client,
-                        )
+
+                        http_client = await stack.enter_async_context(http_client)
                         context = await stack.enter_async_context(
                             streamable_http_client(
                                 url=self.url,

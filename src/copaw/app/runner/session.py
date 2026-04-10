@@ -20,6 +20,8 @@ import aiofiles
 from agentscope.memory import InMemoryMemory
 from agentscope.message import Msg
 from agentscope.session import SessionBase
+from agentscope_runtime.engine.schemas.exception import ConfigurationException
+from ...exceptions import AgentStateError
 
 logger = logging.getLogger(__name__)
 
@@ -328,9 +330,12 @@ class SafeJSONSession(SessionBase):
             )
 
         else:
-            raise ValueError(
-                f"Failed to load session state for file {session_save_path} "
-                "because it does not exist.",
+            raise AgentStateError(
+                session_id=session_id,
+                message=(
+                    f"Failed to load session state for file "
+                    f"{session_save_path} because it does not exist"
+                ),
             )
 
     async def update_session_state(
@@ -344,7 +349,9 @@ class SafeJSONSession(SessionBase):
         session_save_path = self._get_save_path(session_id, user_id=user_id)
         path = key.split(".") if isinstance(key, str) else list(key)
         if not path:
-            raise ValueError("key path is empty")
+            raise ConfigurationException(
+                message="key path is empty",
+            )
 
         async with self._get_file_lock(session_save_path):
             if os.path.exists(session_save_path):
@@ -417,7 +424,10 @@ class SafeJSONSession(SessionBase):
             )
             return {}
 
-        raise ValueError(
-            f"Failed to get session state for file {session_save_path} "
-            "because it does not exist.",
+        raise AgentStateError(
+            session_id=session_id,
+            message=(
+                f"Failed to get session state for file {session_save_path} "
+                f"because it does not exist"
+            ),
         )

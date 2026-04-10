@@ -22,6 +22,9 @@ from urllib.parse import unquote, urlparse
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from agentscope_runtime.engine.schemas.exception import (
+    AppBaseException,
+)
 
 from ...agents.skills_hub import (
     SkillImportCancelled,
@@ -1132,7 +1135,7 @@ async def _run_hub_install_task(
             error=str(exc),
             result=_scan_error_payload(exc),
         )
-    except ValueError as exc:
+    except (ValueError, AppBaseException) as exc:
         await _hub_task_set_status(
             task_id,
             HubInstallTaskStatus.FAILED,
@@ -1368,7 +1371,7 @@ async def create_skill(
         )
     except SkillScanError as exc:
         return _scan_error_response(exc)
-    except ValueError as exc:
+    except (ValueError, AppBaseException) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not created:
         raise HTTPException(
@@ -1422,7 +1425,7 @@ async def upload_skill_zip(
         )
     except SkillScanError as exc:
         return _scan_error_response(exc)
-    except ValueError as exc:
+    except (ValueError, AppBaseException) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if result.get("conflicts"):
         raise HTTPException(status_code=409, detail=result)
@@ -1443,7 +1446,7 @@ async def create_pool_skill(body: CreateSkillRequest) -> dict[str, Any]:
         )
     except SkillScanError as exc:
         return _scan_error_response(exc)
-    except ValueError as exc:
+    except (ValueError, AppBaseException) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not created:
         raise HTTPException(
@@ -1476,7 +1479,7 @@ async def save_pool_skill(body: SavePoolSkillRequest) -> dict[str, Any]:
         )
     except SkillScanError as exc:
         return _scan_error_response(exc)
-    except ValueError as exc:
+    except (ValueError, AppBaseException) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not result.get("success"):
         reason = result.get("reason")
@@ -1517,7 +1520,7 @@ async def upload_skill_pool_zip(
         )
     except SkillScanError as exc:
         return _scan_error_response(exc)
-    except ValueError as exc:
+    except (ValueError, AppBaseException) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if result.get("conflicts"):
         raise HTTPException(status_code=409, detail=result)
@@ -1536,7 +1539,7 @@ async def import_skill_pool_from_hub(
         )
     except SkillScanError as exc:
         return _scan_error_response(exc)
-    except ValueError as exc:
+    except (ValueError, AppBaseException) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except SkillConflictError as exc:
         raise HTTPException(status_code=409, detail=exc.detail) from exc
@@ -1564,7 +1567,7 @@ async def upload_workspace_skill_to_pool(
         )
     except SkillScanError as exc:
         return _scan_error_response(exc)
-    except ValueError as exc:
+    except (ValueError, AppBaseException) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not result.get("success"):
         status = 404 if result.get("reason") == "not_found" else 409
@@ -1616,7 +1619,7 @@ def _resolve_and_preflight(
             body.skill_name,
             body.overwrite,
         )
-    except ValueError as exc:
+    except (ValueError, AppBaseException) as exc:
         raise HTTPException(
             status_code=400,
             detail=str(exc),
@@ -1731,7 +1734,7 @@ async def import_pool_builtins(
 async def update_pool_builtin(skill_name: str) -> dict[str, Any]:
     try:
         return update_single_builtin(skill_name)
-    except ValueError as exc:
+    except (ValueError, AppBaseException) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
@@ -1996,7 +1999,7 @@ async def save_workspace_skill(
         )
     except SkillScanError as exc:
         return _scan_error_response(exc)
-    except ValueError as exc:
+    except (ValueError, AppBaseException) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not result.get("success"):
         if result.get("reason") == "conflict":

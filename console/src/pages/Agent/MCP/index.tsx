@@ -65,7 +65,6 @@ function MCPPage() {
     createClient,
     updateClient,
   } = useMCP();
-  const [hoverKey, setHoverKey] = useState<string | null>(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const probingCount = queuedRefreshKeys.length + refreshingKeys.length;
   const hasEnabledClients = clients.some((client) => client.enabled);
@@ -218,9 +217,6 @@ function MCPPage() {
               onUpdate={updateClient}
               isRefreshing={refreshingKeys.includes(client.key)}
               isQueued={queuedRefreshKeys.includes(client.key)}
-              isHovered={hoverKey === client.key}
-              onMouseEnter={() => setHoverKey(client.key)}
-              onMouseLeave={() => setHoverKey(null)}
             />
           ))}
         </div>

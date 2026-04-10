@@ -11,11 +11,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import frontmatter as fm
 from agentscope.message import Msg, TextBlock
 from agentscope.pipeline import stream_printing_messages
 from agentscope_runtime.engine.runner import Runner
 from agentscope_runtime.engine.schemas.agent_schemas import AgentRequest
-from agentscope_runtime.engine.schemas.exception import AgentException
+from agentscope_runtime.engine.schemas.exception import (
+    AgentException,
+    AppBaseException,
+)
 from dotenv import load_dotenv
 
 from .command_dispatch import (
@@ -34,8 +38,11 @@ from .utils import build_env_context
 from ..channels.schema import DEFAULT_CHANNEL
 from ...agents.react_agent import CoPawAgent
 from ...agents.hooks import MemoryCompactionHook
-from ...security.tool_guard.models import TOOL_GUARD_DENIED_MARK
 from ...config import load_config
+from ...exceptions import convert_model_exception
+from ...agents.utils.file_handling import (
+    read_text_file_with_encoding_fallback,
+)
 from ...config.config import load_agent_config
 from ...constant import (
     LLM_MAX_RETRIES,
@@ -43,6 +50,7 @@ from ...constant import (
     WORKING_DIR,
 )
 from ...security.tool_guard.approval import ApprovalDecision
+from ...security.tool_guard.models import TOOL_GUARD_DENIED_MARK
 
 if TYPE_CHECKING:
     from ...agents.memory import BaseMemoryManager
@@ -754,6 +762,142 @@ class AgentRunner(Runner):
         """
         self._workspace = workspace
 
+    @staticmethod
+    def _parse_skill_query(
+        query: str,
+    ) -> tuple[str, str] | None:
+        """Parse ``/name [input]`` or ``/[name with spaces] [input]``.
+
+        Bracket form ``/[...]`` handles spaces in skill names and
+        bypasses built-in command priority.
+
+        Returns ``(skill_name, user_input)`` or ``None``.
+        """
+        stripped = query.strip()
+        if not stripped.startswith("/"):
+            return None
+
+        rest = stripped[1:]  # drop leading /
+
+        # /[skill name] input — bracket form
+        if rest.startswith("["):
+            close = rest.find("]")
+            if close < 0:
+                return None
+            name = rest[1:close].strip().lower()
+            user_input = rest[close + 1 :].strip()
+            return (name, user_input) if name else None
+
+        # /name input — plain form
+        parts = rest.split(None, 1)
+        if not parts:
+            return None
+        name = parts[0].lower()
+        user_input = parts[1] if len(parts) > 1 else ""
+        return (name, user_input) if name else None
+
+    @staticmethod
+    def _maybe_inject_skill(
+        query: str | None,
+        msgs: list,
+        skills: dict,
+    ) -> Msg | None:
+        """Handle ``/<skill_name> [input]`` or ``/[skill name] [input]``.
+
+        *skills* is ``agent.toolkit.skills`` — already resolved for
+        the current channel during agent init.  Hot-reload safe because
+        the agent is recreated on every query.
+
+        Returns a ``Msg`` to short-circuit (skill info), or ``None``
+        to continue to the LLM with rewritten ``msgs``.
+        """
+        if not query or not query.startswith("/") or not msgs:
+            return None
+
+        parsed = AgentRunner._parse_skill_query(query)
+        if not parsed:
+            return None
+        name, user_input = parsed
+
+        # Lookup by folder name
+        skill = next(
+            (
+                s
+                for s in skills.values()
+                if Path(s["dir"]).name.lower() == name
+            ),
+            None,
+        )
+        if not skill:
+            return None
+
+        skill_dir = Path(skill["dir"])
+        skill_md = skill_dir / "SKILL.md"
+        if not skill_md.exists():
+            return None
+
+        raw = read_text_file_with_encoding_fallback(skill_md)
+        post = fm.loads(raw)
+        display_name = post.get("name") or name
+
+        # /<name> without input → return skill info.
+        if not user_input:
+            desc = post.get("description") or "No description."
+            logger.info("Skill info: %s", name)
+            return Msg(
+                name="Friday",
+                role="assistant",
+                content=[
+                    TextBlock(
+                        type="text",
+                        text=(
+                            f"**{name}**\n\n"
+                            f"- **command**: `/{name}`, "
+                            f"`/[{name}]`\n"
+                            f"- **name**: {display_name}\n"
+                            f"- **description**: {desc}\n"
+                            f"- **path**: `{skill_dir}`"
+                        ),
+                    ),
+                ],
+            )
+
+        # /<name> <input> → rewrite user message with skill body.
+        merged = (
+            f"Use the [{display_name}] skill in "
+            f"`{skill_dir}` to fulfill "
+            f"user's task: {user_input}\n\n"
+            f"{post.content}"
+        )
+        AgentRunner._rewrite_last_message_text(msgs, merged)
+        logger.info("Skill invocation: %s", name)
+        return None
+
+    @staticmethod
+    def _rewrite_last_message_text(
+        msgs: list,
+        new_text: str,
+    ) -> None:
+        """Rewrite the text content of the last message in-place."""
+        if not msgs:
+            return
+        last = msgs[-1]
+        content = getattr(last, "content", None)
+        if isinstance(content, list):
+            for i, block in enumerate(content):
+                if isinstance(block, dict) and block.get("type") == "text":
+                    content[i] = TextBlock(
+                        type="text",
+                        text=new_text,
+                    )
+                    return
+            content.insert(
+                0,
+                TextBlock(type="text", text=new_text),
+            )
+        elif isinstance(content, str):
+            last.content = new_text
+
     _APPROVAL_TIMEOUT_SECONDS = TOOL_GUARD_APPROVAL_TIMEOUT_SECONDS
 
     async def _force_context_compaction(self, agent: CoPawAgent) -> bool:
@@ -1105,6 +1249,17 @@ class AgentRunner(Runner):
                     f"session_id={session_id}",
                 )
 
+            # Skill info (/<name> without input) is display-only:
+            # persisted in chat history but not in agent memory.
+            skill_response = self._maybe_inject_skill(
+                query,
+                msgs,
+                agent.toolkit.skills,
+            )
+            if skill_response is not None:
+                yield skill_response, True
+                return
+
             try:
                 await self.session.load_session_state(
                     session_id=session_id,
@@ -1184,10 +1339,22 @@ class AgentRunner(Runner):
             if agent is not None:
                 await agent.interrupt()
             return
+        except AppBaseException:
+            raise
+            return
+        except AppBaseException:
+            raise
         except Exception as e:
+            model_name = None
+            if agent and hasattr(agent, "model"):
+                model_name = getattr(agent.model, "model_name", None)
+
+            converted = convert_model_exception(e, model_name)
+
+            # Preserve all original error dump logic
             debug_dump_path = write_query_error_dump(
                 request=request,
-                exc=e,
+                exc=converted,
                 locals_=locals(),
             )
             path_hint = (
@@ -1209,15 +1376,21 @@ class AgentRunner(Runner):
                 return
 
             if debug_dump_path:
-                setattr(e, "debug_dump_path", debug_dump_path)
-                if hasattr(e, "add_note"):
-                    e.add_note(
+                setattr(converted, "debug_dump_path", debug_dump_path)
+                if hasattr(converted, "add_note"):
+                    converted.add_note(
                         f"(Details:  {debug_dump_path})",
                     )
                 suffix = f"\n(Details:  {debug_dump_path})"
-                e.args = (
-                    (f"{e.args[0]}{suffix}" if e.args else suffix.strip()),
-                ) + e.args[1:]
+                if hasattr(converted, "message") and isinstance(
+                    converted.message,
+                    str,
+                ):
+                    converted.message += suffix
+                elif converted.args:
+                    converted.args = (
+                        f"{converted.args[0]}{suffix}",
+                    ) + converted.args[1:]
 
             if _is_transient_upstream_error(e):
                 status = _extract_status_code(e)
@@ -1292,7 +1465,7 @@ class AgentRunner(Runner):
                     True,
                 )
                 return
-            raise
+            raise converted from e
         finally:
             if runtime_status_token is not None:
                 reset_current_runtime_status_context(runtime_status_token)

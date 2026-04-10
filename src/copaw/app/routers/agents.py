@@ -31,6 +31,10 @@ from fastapi import (
 from fastapi import Path as PathParam
 from pydantic import BaseModel, Field, field_validator
 
+from agentscope_runtime.engine.schemas.exception import (
+    AppBaseException,
+)
+
 from ...agents.utils.file_handling import read_text_file_with_encoding_fallback
 from ...agents.skills_hub import install_skill_from_hub
 from ...agents.skills_manager import SkillConflictError
@@ -3196,7 +3200,7 @@ async def get_agent(agentId: str = PathParam(...)) -> AgentProfileConfig:
     try:
         agent_config = load_agent_config(agentId)
         return agent_config
-    except ValueError as e:
+    except (ValueError, AppBaseException) as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -3411,7 +3415,7 @@ async def list_agent_files(
 
     try:
         workspace = await manager.get_agent(agentId)
-    except ValueError as e:
+    except (ValueError, AppBaseException) as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
 
     workspace_manager = AgentMdManager(str(workspace.workspace_dir))
@@ -3442,7 +3446,7 @@ async def read_agent_file(
 
     try:
         workspace = await manager.get_agent(agentId)
-    except ValueError as e:
+    except (ValueError, AppBaseException) as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
 
     workspace_manager = AgentMdManager(str(workspace.workspace_dir))
@@ -3476,7 +3480,7 @@ async def write_agent_file(
 
     try:
         workspace = await manager.get_agent(agentId)
-    except ValueError as e:
+    except (ValueError, AppBaseException) as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
 
     workspace_manager = AgentMdManager(str(workspace.workspace_dir))
@@ -3503,7 +3507,7 @@ async def list_agent_memory(
 
     try:
         workspace = await manager.get_agent(agentId)
-    except ValueError as e:
+    except (ValueError, AppBaseException) as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
 
     workspace_manager = AgentMdManager(str(workspace.workspace_dir))
