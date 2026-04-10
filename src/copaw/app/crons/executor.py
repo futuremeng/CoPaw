@@ -15,6 +15,13 @@ class CronExecutor:
         self._runner = runner
         self._channel_manager = channel_manager
 
+    async def _assert_channel_available(self, channel: str) -> str:
+        normalized_channel = (channel or "").lower()
+        ch = await self._channel_manager.get_channel(normalized_channel)
+        if not ch:
+            raise KeyError(f"channel not found: {normalized_channel}")
+        return normalized_channel
+
     async def execute(self, job: CronJobSpec) -> None:
         """Execute one job once.
 
@@ -24,12 +31,13 @@ class CronExecutor:
         """
         target_user_id = job.dispatch.target.user_id
         target_session_id = job.dispatch.target.session_id
+        channel = await self._assert_channel_available(job.dispatch.channel)
         dispatch_meta: Dict[str, Any] = dict(job.dispatch.meta or {})
         logger.info(
             "cron execute: job_id=%s channel=%s task_type=%s "
             "target_user_id=%s target_session_id=%s",
             job.id,
-            job.dispatch.channel,
+            channel,
             job.task_type,
             target_user_id[:40] if target_user_id else "",
             target_session_id[:40] if target_session_id else "",
@@ -39,11 +47,11 @@ class CronExecutor:
             logger.info(
                 "cron send_text: job_id=%s channel=%s len=%s",
                 job.id,
-                job.dispatch.channel,
+                channel,
                 len(job.text or ""),
             )
             await self._channel_manager.send_text(
-                channel=job.dispatch.channel,
+                channel=channel,
                 user_id=target_user_id,
                 session_id=target_session_id,
                 text=job.text.strip(),
@@ -55,7 +63,7 @@ class CronExecutor:
         logger.info(
             "cron agent: job_id=%s channel=%s stream_query then send_event",
             job.id,
-            job.dispatch.channel,
+            channel,
         )
         assert job.request is not None
         req: Dict[str, Any] = job.request.model_dump(mode="json")
@@ -65,7 +73,7 @@ class CronExecutor:
         async def _run() -> None:
             async for event in self._runner.stream_query(req):
                 await self._channel_manager.send_event(
-                    channel=job.dispatch.channel,
+                    channel=channel,
                     user_id=target_user_id,
                     session_id=target_session_id,
                     event=event,

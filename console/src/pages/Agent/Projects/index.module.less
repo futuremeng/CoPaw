@@ -825,6 +825,36 @@
   flex-shrink: 0;
 }
 
+.knowledgeModuleHeaderMain {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.knowledgeModuleHeaderSignals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
+  gap: 4px;
+  min-width: min(100%, 420px);
+  flex: 1;
+}
+
+.knowledgeModuleHeaderSignal {
+  border: 1px solid #edf2ff;
+  background: #f9fbff;
+  border-radius: 6px;
+  padding: 3px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+
+  :global(.ant-typography) {
+    line-height: 1.2;
+  }
+}
+
 .knowledgeDockPanelCollapsed {
   padding-top: 0;
 }

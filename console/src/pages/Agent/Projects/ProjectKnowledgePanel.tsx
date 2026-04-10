@@ -28,6 +28,14 @@ interface ProjectKnowledgePanelProps {
   projectId: string;
   projectName: string;
   onOpenSettings?: () => void;
+  onSignalsChange?: (signals: ProjectKnowledgeHeaderSignals) => void;
+}
+
+export interface ProjectKnowledgeHeaderSignals {
+  indexedRatio: number;
+  documentCount: number;
+  chunkCount: number;
+  relationCount: number;
 }
 
 const PROJECT_GRAPH_TOP_K = 12;
@@ -185,6 +193,7 @@ function buildSparklinePath(values: number[], width: number, height: number): st
 
 export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
   const { t } = useTranslation();
+  const { onOpenSettings, onSignalsChange } = props;
   const [queryText, setQueryText] = useState("");
   const [queryMode, setQueryMode] = useState<"template" | "cypher">("template");
   const [internalIncludeGlobal] = useState(true);
@@ -315,37 +324,20 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
     };
   }, [projectSources, result?.records]);
 
-  const headerSignals = useMemo(
-    () => [
-      {
-        key: "coverage",
-        label: t("projects.knowledge.signalIndexedCoverage"),
-        value: `${Math.round(quantMetrics.indexedRatio * 100)}%`,
-      },
-      {
-        key: "docs",
-        label: t("projects.knowledge.signalDocuments"),
-        value: String(quantMetrics.documentCount),
-      },
-      {
-        key: "chunks",
-        label: t("projects.knowledge.signalChunks"),
-        value: String(quantMetrics.chunkCount),
-      },
-      {
-        key: "relations",
-        label: t("projects.knowledge.signalRelations"),
-        value: String(quantMetrics.relationCount),
-      },
-    ],
-    [
-      quantMetrics.chunkCount,
-      quantMetrics.documentCount,
-      quantMetrics.indexedRatio,
-      quantMetrics.relationCount,
-      t,
-    ],
-  );
+  useEffect(() => {
+    onSignalsChange?.({
+      indexedRatio: quantMetrics.indexedRatio,
+      documentCount: quantMetrics.documentCount,
+      chunkCount: quantMetrics.chunkCount,
+      relationCount: quantMetrics.relationCount,
+    });
+  }, [
+    onSignalsChange,
+    quantMetrics.chunkCount,
+    quantMetrics.documentCount,
+    quantMetrics.indexedRatio,
+    quantMetrics.relationCount,
+  ]);
 
   useEffect(() => {
     setTrendSnapshots((prev) => {
@@ -447,7 +439,7 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
 
   const handleInsightAction = useCallback(() => {
     if (insightAction === "settings") {
-      props.onOpenSettings?.();
+      onOpenSettings?.();
       return;
     }
     if (insightAction === "query") {
@@ -459,7 +451,7 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
   }, [
     handleQuery,
     insightAction,
-    props.onOpenSettings,
+    onOpenSettings,
     suggestedQuery,
   ]);
 
@@ -471,14 +463,6 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
           <Typography.Text strong className={styles.projectKnowledgeCardTitle}>
             {t("projects.knowledge.title")}
           </Typography.Text>
-          <div className={styles.projectKnowledgeHeaderStats}>
-            {headerSignals.map((item) => (
-              <div key={item.key} className={styles.projectKnowledgeHeaderStat}>
-                <Typography.Text type="secondary">{item.label}</Typography.Text>
-                <Typography.Text strong>{item.value}</Typography.Text>
-              </div>
-            ))}
-          </div>
         </div>
       )}
       className={styles.projectKnowledgeCard}

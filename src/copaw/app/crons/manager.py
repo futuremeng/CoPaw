@@ -238,7 +238,7 @@ class CronManager:
             (job.dispatch.target.session_id or "")[:40],
         )
         task = asyncio.create_task(
-            self._execute_once(job),
+            self._execute_once(job, propagate_exceptions=True),
             name=f"cron-run-{job_id}",
         )
         task.add_done_callback(lambda t: self._task_done_cb(t, job))
@@ -349,7 +349,9 @@ class CronManager:
         if not job:
             return
 
-        await self._execute_once(job)
+        # Scheduled jobs should record failure in runtime state/logs
+        # without bubbling to APScheduler as an executor-level exception.
+        await self._execute_once(job, propagate_exceptions=False)
 
         # refresh next_run
         aps_job = self._scheduler.get_job(job_id)
@@ -377,7 +379,12 @@ class CronManager:
         except Exception:  # pylint: disable=broad-except
             logger.exception("heartbeat run failed")
 
-    async def _execute_once(self, job: CronJobSpec) -> None:
+    async def _execute_once(
+        self,
+        job: CronJobSpec,
+        *,
+        propagate_exceptions: bool = False,
+    ) -> None:
         rt = self._rt.get(job.id)
         if not rt:
             rt = _Runtime(sem=asyncio.Semaphore(job.runtime.max_concurrency))
@@ -412,7 +419,8 @@ class CronManager:
                     job.id,
                     repr(e),
                 )
-                raise
+                if propagate_exceptions:
+                    raise
             finally:
                 st.last_run_at = datetime.now(timezone.utc)
                 self._states[job.id] = st

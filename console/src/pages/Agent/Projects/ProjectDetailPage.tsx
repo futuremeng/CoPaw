@@ -42,7 +42,9 @@ import ProjectChatPanel, {
   type ProjectChatAutoAttachRequest,
   type ProjectChatMode,
 } from "./ProjectChatPanel";
-import ProjectKnowledgePanel from "./ProjectKnowledgePanel";
+import ProjectKnowledgePanel, {
+  type ProjectKnowledgeHeaderSignals,
+} from "./ProjectKnowledgePanel";
 import ProjectKnowledgeSettingsPanel from "./ProjectKnowledgeSettingsPanel";
 import ProjectOverviewCard from "./ProjectOverviewCard";
 import ProjectUploadModal from "./ProjectUploadModal";
@@ -112,6 +114,13 @@ const CHAT_PANE_MIN_SIZE = 420;
 const KNOWLEDGE_DOCK_DEFAULT_SIZE = 320;
 const KNOWLEDGE_DOCK_COLLAPSED_SIZE = 56;
 const KNOWLEDGE_DOCK_MIN_SIZE = 240;
+
+const DEFAULT_KNOWLEDGE_HEADER_SIGNALS: ProjectKnowledgeHeaderSignals = {
+  indexedRatio: 0,
+  documentCount: 0,
+  chunkCount: 0,
+  relationCount: 0,
+};
 
 const STAGE_FILTERS: Record<ProjectStageKey, ProjectFileFilterKey[]> = {
   source: ["original", "derived"],
@@ -330,6 +339,8 @@ export default function ProjectDetailPage() {
   const [knowledgeModuleCollapsed, setKnowledgeModuleCollapsed] = useState(false);
   const [knowledgeDockTab, setKnowledgeDockTab] = useState<KnowledgeDockTabKey>("explore");
   const [projectKnowledgeIncludeGlobal, setProjectKnowledgeIncludeGlobal] = useState(true);
+  const [knowledgeHeaderSignals, setKnowledgeHeaderSignals] =
+    useState<ProjectKnowledgeHeaderSignals>(DEFAULT_KNOWLEDGE_HEADER_SIGNALS);
   const [selectedMetricFilter, setSelectedMetricFilter] = useState<ProjectFileFilterKey | "">("");
   const [treeDisplayMode, setTreeDisplayMode] = useState<TreeDisplayMode>("filter");
   const [leftPaneSize, setLeftPaneSize] = useState(LEFT_PANE_EXPANDED_SIZE);
@@ -357,6 +368,10 @@ export default function ProjectDetailPage() {
     () => projects.find((project) => matchesRouteProject(project, routeProjectId)),
     [projects, routeProjectId],
   );
+
+  useEffect(() => {
+    setKnowledgeHeaderSignals(DEFAULT_KNOWLEDGE_HEADER_SIGNALS);
+  }, [selectedProject?.id]);
 
   const leaveConfirmText = useMemo(
     () =>
@@ -2546,7 +2561,29 @@ export default function ProjectDetailPage() {
                 <div className={styles.splitterPanel}>
                   <div className={`${styles.knowledgeModuleShell} ${knowledgeModuleCollapsed ? styles.knowledgeDockPanelCollapsed : ""}`}>
                     <div className={styles.knowledgeModuleHeader}>
-                      <Text strong>{t("projects.knowledgePanelTitle")}</Text>
+                      <div className={styles.knowledgeModuleHeaderMain}>
+                        <Text strong>{t("projects.knowledgePanelTitle")}</Text>
+                        <div className={styles.knowledgeModuleHeaderSignals}>
+                          <div className={styles.knowledgeModuleHeaderSignal}>
+                            <Text type="secondary">
+                              {t("projects.knowledge.signalIndexedCoverage")}
+                            </Text>
+                            <Text strong>{`${Math.round(knowledgeHeaderSignals.indexedRatio * 100)}%`}</Text>
+                          </div>
+                          <div className={styles.knowledgeModuleHeaderSignal}>
+                            <Text type="secondary">{t("projects.knowledge.signalDocuments")}</Text>
+                            <Text strong>{String(knowledgeHeaderSignals.documentCount)}</Text>
+                          </div>
+                          <div className={styles.knowledgeModuleHeaderSignal}>
+                            <Text type="secondary">{t("projects.knowledge.signalChunks")}</Text>
+                            <Text strong>{String(knowledgeHeaderSignals.chunkCount)}</Text>
+                          </div>
+                          <div className={styles.knowledgeModuleHeaderSignal}>
+                            <Text type="secondary">{t("projects.knowledge.signalRelations")}</Text>
+                            <Text strong>{String(knowledgeHeaderSignals.relationCount)}</Text>
+                          </div>
+                        </div>
+                      </div>
                       <Button
                         size="small"
                         type="text"
@@ -2574,6 +2611,7 @@ export default function ProjectDetailPage() {
                                   includeGlobal={projectKnowledgeIncludeGlobal}
                                   onIncludeGlobalChange={setProjectKnowledgeIncludeGlobal}
                                   onOpenSettings={() => setKnowledgeDockTab("settings")}
+                                  onSignalsChange={setKnowledgeHeaderSignals}
                                 />
                               ),
                             },
