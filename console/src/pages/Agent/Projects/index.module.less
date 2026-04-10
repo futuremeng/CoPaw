@@ -520,6 +520,42 @@
   }
 }
 
+.projectKnowledgeCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.projectKnowledgeCardTitle {
+  flex-shrink: 0;
+}
+
+.projectKnowledgeHeaderStats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: 4px;
+  flex: 1;
+  min-width: min(100%, 420px);
+}
+
+.projectKnowledgeHeaderStat {
+  border: 1px solid #edf2ff;
+  background: #f9fbff;
+  border-radius: 6px;
+  padding: 4px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+
+  :global(.ant-typography) {
+    line-height: 1.2;
+  }
+}
+
 .projectKnowledgeControls {
   display: flex;
   align-items: center;
@@ -671,6 +707,16 @@
   justify-content: space-between;
   color: #8c8c8c;
   font-size: 11px;
+}
+
+.projectKnowledgeTrendDeltaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+
+  :global(.ant-typography) {
+    font-size: 12px;
+  }
 }
 
 .projectKnowledgeInsightBox,

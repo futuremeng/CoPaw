@@ -315,6 +315,38 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
     };
   }, [projectSources, result?.records]);
 
+  const headerSignals = useMemo(
+    () => [
+      {
+        key: "coverage",
+        label: t("projects.knowledge.signalIndexedCoverage"),
+        value: `${Math.round(quantMetrics.indexedRatio * 100)}%`,
+      },
+      {
+        key: "docs",
+        label: t("projects.knowledge.signalDocuments"),
+        value: String(quantMetrics.documentCount),
+      },
+      {
+        key: "chunks",
+        label: t("projects.knowledge.signalChunks"),
+        value: String(quantMetrics.chunkCount),
+      },
+      {
+        key: "relations",
+        label: t("projects.knowledge.signalRelations"),
+        value: String(quantMetrics.relationCount),
+      },
+    ],
+    [
+      quantMetrics.chunkCount,
+      quantMetrics.documentCount,
+      quantMetrics.indexedRatio,
+      quantMetrics.relationCount,
+      t,
+    ],
+  );
+
   useEffect(() => {
     setTrendSnapshots((prev) => {
       const now = Date.now();
@@ -434,7 +466,21 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
   return (
     <Card
       size="small"
-      title={t("projects.knowledge.title")}
+      title={(
+        <div className={styles.projectKnowledgeCardHeader}>
+          <Typography.Text strong className={styles.projectKnowledgeCardTitle}>
+            {t("projects.knowledge.title")}
+          </Typography.Text>
+          <div className={styles.projectKnowledgeHeaderStats}>
+            {headerSignals.map((item) => (
+              <div key={item.key} className={styles.projectKnowledgeHeaderStat}>
+                <Typography.Text type="secondary">{item.label}</Typography.Text>
+                <Typography.Text strong>{item.value}</Typography.Text>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       className={styles.projectKnowledgeCard}
     >
       <Typography.Text type="secondary">
@@ -477,44 +523,6 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
           </Space>
         </div>
 
-        <div className={styles.projectKnowledgeSignalGrid}>
-          <div className={styles.projectKnowledgeSignalCard}>
-            <Typography.Text type="secondary">
-              {t("projects.knowledge.signalIndexedCoverage")}
-            </Typography.Text>
-            <Typography.Text strong>
-              {Math.round(quantMetrics.indexedRatio * 100)}%
-            </Typography.Text>
-          </div>
-          <div className={styles.projectKnowledgeSignalCard}>
-            <Typography.Text type="secondary">
-              {t("projects.knowledge.signalDocuments")}
-            </Typography.Text>
-            <Typography.Text strong>{quantMetrics.documentCount}</Typography.Text>
-            <Typography.Text type="secondary">
-              {t("projects.knowledge.signalDelta", { value: trendDelta.documentDelta })}
-            </Typography.Text>
-          </div>
-          <div className={styles.projectKnowledgeSignalCard}>
-            <Typography.Text type="secondary">
-              {t("projects.knowledge.signalChunks")}
-            </Typography.Text>
-            <Typography.Text strong>{quantMetrics.chunkCount}</Typography.Text>
-            <Typography.Text type="secondary">
-              {t("projects.knowledge.signalDelta", { value: trendDelta.chunkDelta })}
-            </Typography.Text>
-          </div>
-          <div className={styles.projectKnowledgeSignalCard}>
-            <Typography.Text type="secondary">
-              {t("projects.knowledge.signalRelations")}
-            </Typography.Text>
-            <Typography.Text strong>{quantMetrics.relationCount}</Typography.Text>
-            <Typography.Text type="secondary">
-              {t("projects.knowledge.signalDelta", { value: trendDelta.relationDelta })}
-            </Typography.Text>
-          </div>
-        </div>
-
         {trendExpanded && filteredTrendSnapshots.length > 1 ? (
           <div className={styles.projectKnowledgeTrendChart}>
             <svg viewBox="0 0 300 70" preserveAspectRatio="none">
@@ -531,6 +539,18 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
             {t("projects.knowledge.trendNotEnough")}
           </Typography.Text>
         ) : null}
+
+        <div className={styles.projectKnowledgeTrendDeltaRow}>
+          <Typography.Text type="secondary">
+            {t("projects.knowledge.signalDocuments")}: {t("projects.knowledge.signalDelta", { value: trendDelta.documentDelta })}
+          </Typography.Text>
+          <Typography.Text type="secondary">
+            {t("projects.knowledge.signalChunks")}: {t("projects.knowledge.signalDelta", { value: trendDelta.chunkDelta })}
+          </Typography.Text>
+          <Typography.Text type="secondary">
+            {t("projects.knowledge.signalRelations")}: {t("projects.knowledge.signalDelta", { value: trendDelta.relationDelta })}
+          </Typography.Text>
+        </div>
 
         <div className={styles.projectKnowledgeInsightBar}>
           <Typography.Text type="secondary">{t(insightMessageKey)}</Typography.Text>
