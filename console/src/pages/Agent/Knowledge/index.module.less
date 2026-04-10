@@ -249,6 +249,10 @@
   width: 100%;
 }
 
+.graphTableRowSelected :global(td) {
+  background: #e6f4ff !important;
+}
+
 .graphQueryWarningBox {
   padding: 8px 12px;
   background: #fff7e6;
@@ -274,6 +278,49 @@
 .graphSummaryText {
   margin-top: 10px;
   display: inline-block;
+}
+
+.graphFocusBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.graphHotNodesRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.graphPathBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.graphPathHintRow {
+  display: inline-flex;
+  align-items: center;
+}
+
+.graphPathHintTag {
+  margin-inline-end: 0;
+}
+
+.graphPathSummaryRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.graphPathNodeLink {
+  padding: 0;
+  height: auto;
+}
+
+.graphHotNodeTag {
+  cursor: pointer;
+  user-select: none;
 }
 
 .addSourceRow {

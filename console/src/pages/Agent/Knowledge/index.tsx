@@ -39,6 +39,7 @@ import type {
   KnowledgeSourceType,
   GraphQueryRecord,
   GraphQueryResponse,
+  GraphNode,
 } from "../../../api/types";
 import { MarkdownCopy } from "../../../components/MarkdownCopy/MarkdownCopy";
 import {
@@ -46,11 +47,12 @@ import {
   getKnowledgeQuantStatusLabel,
   summarizeRemoteRetryResults,
 } from "./metrics";
+import { appendUniqueContextLine, buildPathContextLine } from "./pathContext";
 import { buildUnifiedBatchProgress } from "./progress";
 import { buildKnowledgeQuantCardViewModels } from "./quantCards";
 import { buildRemoteRetryNotice, collectRemoteRetrySources } from "./remoteRetry";
 import { recordsToVisualizationData, formatScore } from "./graphQuery";
-import { GraphQueryResults, GraphVisualization } from "./graphVisualization";
+import { GraphQueryResults, GraphVisualization } from "./graphVisualization.tsx";
 import styles from "./index.module.less";
 
 const SOURCE_TYPE_OPTIONS: Array<{
@@ -839,11 +841,11 @@ function KnowledgePage() {
     setHits([]);
   }, []);
 
-  const handleGraphQuery = useCallback(async () => {
+  const handleGraphQuery = useCallback(async (overrideQuery?: string) => {
     if (knowledgePageDisabled) {
       return;
     }
-    const query = graphQueryText.trim();
+    const query = (overrideQuery ?? graphQueryText).trim();
     const datasetScope = graphQueryDatasetScopeText
       .split(",")
       .map((item) => item.trim())
@@ -1768,7 +1770,9 @@ function KnowledgePage() {
                 value={graphQueryText}
                 onChange={(e) => setGraphQueryText(e.target.value)}
                 placeholder={t("knowledge.graphQuery.placeholder")}
-                onPressEnter={handleGraphQuery}
+                onPressEnter={() => {
+                  void handleGraphQuery();
+                }}
               />
             </Space.Compact>
             <div className={styles.searchButtons}>
@@ -1777,7 +1781,9 @@ function KnowledgePage() {
                 type="primary"
                 icon={<SearchOutlined />}
                 loading={graphQueryLoading}
-                onClick={handleGraphQuery}
+                onClick={() => {
+                  void handleGraphQuery();
+                }}
                 disabled={knowledgePageDisabled}
               >
                 {t("knowledge.graphQuery.execute")}
@@ -1835,6 +1841,8 @@ function KnowledgePage() {
               query={graphQueryText}
               loading={graphQueryLoading}
               onRefresh={handleGraphQuery}
+              activeNodeId={graphQueryClickedNode}
+              onRecordClick={(nodeId: string) => handleGraphNodeOpen(nodeId)}
             />
           </div>
         )}
@@ -1848,7 +1856,19 @@ function KnowledgePage() {
                 graphQueryResults.provenance,
               )}
               loading={graphQueryLoading}
-              onNodeClick={(node) => handleGraphNodeOpen(node.id)}
+              activeNodeId={graphQueryClickedNode}
+              onActiveNodeChange={setGraphQueryClickedNode}
+              onNodeClick={(node: GraphNode) => handleGraphNodeOpen(node.id)}
+              onUsePathContext={(pathSummary, runNow) => {
+                const contextLine = buildPathContextLine(pathSummary);
+                setGraphQueryText((prev) => {
+                  const nextQuery = appendUniqueContextLine(prev, contextLine);
+                  if (runNow) {
+                    void handleGraphQuery(nextQuery);
+                  }
+                  return nextQuery;
+                });
+              }}
             />
           </div>
         )}
