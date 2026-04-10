@@ -309,9 +309,10 @@ async def list_sources(request: Request):
         workspace_dir,
         project_id=_resolve_project_id(request),
     )
+    sources = await asyncio.to_thread(manager.list_sources, knowledge_config)
     return {
         "enabled": bool(knowledge_config.enabled),
-        "sources": manager.list_sources(knowledge_config),
+        "sources": sources,
     }
 
 
@@ -325,7 +326,11 @@ async def upsert_source(
         workspace_dir,
         project_id=_resolve_project_id(request, source.project_id),
     )
-    source = manager.normalize_source_name(source, knowledge_config)
+    source = await asyncio.to_thread(
+        manager.normalize_source_name,
+        source,
+        knowledge_config,
+    )
     existing = _find_source(config.knowledge, source.id)
     project_id_is_explicit = "project_id" in source.model_fields_set
     if existing is not None and not project_id_is_explicit:

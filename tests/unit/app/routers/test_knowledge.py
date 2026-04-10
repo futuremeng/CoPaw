@@ -159,6 +159,77 @@ def test_list_sources_returns_structured_summary_keywords(
     assert isinstance(source.get("keywords"), list)
 
 
+def test_list_sources_offloads_processing_to_thread(
+    knowledge_api_client: TestClient,
+    monkeypatch,
+):
+    original_to_thread = knowledge_router_module.asyncio.to_thread
+    manager = KnowledgeManager(knowledge_router_module.WORKING_DIR)
+    config = knowledge_router_module.load_config().knowledge
+    config.sources.append(
+        manager.normalize_source_name(
+            knowledge_router_module.KnowledgeSourceSpec(
+                id="threaded-list-source",
+                name="Manual Name",
+                type="text",
+                content="支付系统 风控规则 更新。支付系统 对账流程 优化。",
+                enabled=True,
+                recursive=False,
+                tags=[],
+                summary="",
+            ),
+            config,
+        )
+    )
+    calls: list[tuple[object, tuple[object, ...]]] = []
+
+    async def fake_to_thread(func, /, *args, **kwargs):
+        calls.append((func, args))
+        return await original_to_thread(func, *args, **kwargs)
+
+    monkeypatch.setattr(knowledge_router_module.asyncio, "to_thread", fake_to_thread)
+
+    response = knowledge_api_client.get("/knowledge/sources")
+
+    assert response.status_code == 200
+    assert calls
+    assert calls[0][0].__name__ == "list_sources"
+    assert any(source.id == "threaded-list-source" for source in calls[0][1][0].sources)
+
+
+def test_upsert_source_offloads_name_normalization_to_thread(
+    knowledge_api_client: TestClient,
+    monkeypatch,
+):
+    original_to_thread = knowledge_router_module.asyncio.to_thread
+    calls: list[tuple[object, tuple[object, ...]]] = []
+
+    async def fake_to_thread(func, /, *args, **kwargs):
+        calls.append((func, args))
+        return await original_to_thread(func, *args, **kwargs)
+
+    monkeypatch.setattr(knowledge_router_module.asyncio, "to_thread", fake_to_thread)
+
+    response = knowledge_api_client.put(
+        "/knowledge/sources",
+        json={
+            "id": "threaded-upsert-source",
+            "name": "Manual Name",
+            "type": "text",
+            "content": "Release checklist summary for sprint handoff and milestone review.",
+            "enabled": True,
+            "recursive": False,
+            "tags": [],
+            "summary": "",
+        },
+    )
+
+    assert response.status_code == 200
+    assert calls
+    assert calls[0][0].__name__ == "normalize_source_name"
+    assert calls[0][1][0].id == "threaded-upsert-source"
+
+
 def test_history_backfill_status_includes_progress(
     knowledge_api_client: TestClient,
 ):
