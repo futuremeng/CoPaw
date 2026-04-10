@@ -9,6 +9,8 @@ graph-provider implementations (for example, Cognee/Graphify).
 from __future__ import annotations
 
 import json
+import re
+import threading
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -41,6 +43,62 @@ class GraphOpsManager:
         self.working_dir = Path(working_dir)
         self.knowledge_root = self.working_dir / "knowledge"
         self.memify_jobs_path = self.knowledge_root / "memify-jobs.json"
+        self._jobs_lock = threading.Lock()
+
+    @staticmethod
+    def _translate_cypher_query_text(raw_query: str) -> str:
+        """Translate a constrained Cypher-like query into search terms.
+
+        MVP behavior: extract quoted literals and identifier tokens and join
+        them into a lexical query string.
+        """
+        query = (raw_query or "").strip()
+        if not query:
+            return ""
+
+        quoted_terms = [
+            token.strip()
+            for token in re.findall(r"['\"]([^'\"]{2,})['\"]", query)
+            if token.strip()
+        ]
+
+        keyword_block = {
+            "match",
+            "return",
+            "where",
+            "with",
+            "limit",
+            "order",
+            "by",
+            "asc",
+            "desc",
+            "and",
+            "or",
+            "not",
+            "contains",
+            "starts",
+            "ends",
+            "optional",
+            "call",
+            "as",
+            "distinct",
+            "count",
+        }
+        identifiers = [
+            token
+            for token in re.findall(r"[A-Za-z_][A-Za-z0-9_]{2,}", query)
+            if token.lower() not in keyword_block
+        ]
+
+        merged: list[str] = []
+        seen: set[str] = set()
+        for token in [*quoted_terms, *identifiers]:
+            norm = token.lower()
+            if norm in seen:
+                continue
+            seen.add(norm)
+            merged.append(token)
+        return " ".join(merged)
 
     def graph_query(
         self,
@@ -62,22 +120,16 @@ class GraphOpsManager:
         _ = timeout_sec
         engine = getattr(config, "engine", "local_lexical")
         warnings: list[str] = []
+        effective_query_text = query_text
 
-        if query_mode == "cypher" and engine == "local_lexical":
-            return GraphOpsResult(
-                records=[],
-                summary="Cypher mode is not available on local_lexical engine.",
-                provenance={"engine": engine, "dataset_scope": dataset_scope or []},
-                warnings=["CYPHER_UNAVAILABLE_ON_LOCAL_ENGINE"],
-            )
-
-        if query_mode == "cypher" and engine == "graphify":
-            return GraphOpsResult(
-                records=[],
-                summary="Cypher mode is not available until Graphify provider is wired.",
-                provenance={"engine": engine, "dataset_scope": dataset_scope or []},
-                warnings=["GRAPHIFY_CYPHER_NOT_READY"],
-            )
+        if query_mode == "cypher":
+            translated = self._translate_cypher_query_text(query_text)
+            if not translated:
+                raise ValueError(
+                    "Cypher query is empty or unsupported for MVP translation."
+                )
+            effective_query_text = translated
+            warnings.append("CYPHER_MVP_TRANSLATED")
 
         if engine == "cognee":
             raise RuntimeError("Cognee graph provider is not wired yet.")
@@ -87,7 +139,7 @@ class GraphOpsManager:
             try:
                 records = graphify_query(
                     config=graphify_cfg,  # type: ignore[arg-type]
-                    query_text=query_text,
+                    query_text=effective_query_text,
                     top_k=top_k,
                     dataset_scope=dataset_scope,
                 )
@@ -128,7 +180,7 @@ class GraphOpsManager:
 
         manager = KnowledgeManager(self.working_dir)
         search_result = manager.search(
-            query=query_text,
+            query=effective_query_text,
             config=config,
             limit=max(1, min(top_k, 50)),
             project_scope=project_scope,
@@ -210,38 +262,89 @@ class GraphOpsManager:
         idempotency_key: str,
         dry_run: bool,
     ) -> dict[str, Any]:
-        """Create a memify job record.
+        """Create and run a memify job asynchronously."""
+        with self._jobs_lock:
+            jobs = self._load_memify_jobs()
 
-        The local lexical engine stores a no-op success job so tool contracts
-        and job observability can be validated before real graph-provider
-        wiring.
-        """
-        jobs = self._load_memify_jobs()
+            normalized_key = (idempotency_key or "").strip()
+            if normalized_key:
+                existing = next(
+                    (
+                        item
+                        for item in jobs.values()
+                        if item.get("idempotency_key") == normalized_key
+                    ),
+                    None,
+                )
+                if existing is not None:
+                    return {
+                        "accepted": False,
+                        "job_id": existing["job_id"],
+                        "status_url": f"/knowledge/memify/jobs/{existing['job_id']}",
+                        "reason": "IDEMPOTENT_REUSE",
+                    }
 
-        normalized_key = (idempotency_key or "").strip()
-        if normalized_key:
-            existing = next(
-                (
-                    item
-                    for item in jobs.values()
-                    if item.get("idempotency_key") == normalized_key
-                ),
-                None,
-            )
-            if existing is not None:
-                return {
-                    "accepted": False,
-                    "job_id": existing["job_id"],
-                    "status_url": f"/knowledge/memify/jobs/{existing['job_id']}",
-                    "reason": "IDEMPOTENT_REUSE",
-                }
+            job_id = uuid.uuid4().hex[:12]
+            now = datetime.now(UTC).isoformat()
+            engine = getattr(config, "engine", "local_lexical")
 
-        job_id = uuid.uuid4().hex[:12]
-        now = datetime.now(UTC).isoformat()
+            job_payload = {
+                "job_id": job_id,
+                "pipeline_type": pipeline_type,
+                "dataset_scope": dataset_scope or [],
+                "idempotency_key": normalized_key,
+                "dry_run": bool(dry_run),
+                "status": "pending",
+                "progress": 0,
+                "estimated_steps": 1,
+                "started_at": None,
+                "finished_at": None,
+                "error": None,
+                "warnings": [],
+                "engine": engine,
+                "updated_at": now,
+            }
+            jobs[job_id] = job_payload
+            self._save_memify_jobs(jobs)
+
+        worker = threading.Thread(
+            target=self._run_memify_job,
+            args=(job_id, config, pipeline_type, dataset_scope, dry_run),
+            daemon=True,
+        )
+        worker.start()
+
+        return {
+            "accepted": True,
+            "job_id": job_id,
+            "estimated_steps": 1,
+            "status_url": f"/knowledge/memify/jobs/{job_id}",
+        }
+
+    def _run_memify_job(
+        self,
+        job_id: str,
+        config: KnowledgeConfig,
+        pipeline_type: str,
+        dataset_scope: list[str] | None,
+        dry_run: bool,
+    ) -> None:
+        self._patch_memify_job(
+            job_id,
+            {
+                "status": "running",
+                "progress": 20,
+                "started_at": datetime.now(UTC).isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
+            },
+        )
+
         engine = getattr(config, "engine", "local_lexical")
+        status = "failed"
+        error: str | None = None
+        warnings: list[str] = []
 
         if engine == "cognee":
-            status = "failed"
             error = "Cognee memify provider is not wired yet."
             warnings = ["COGNEE_PROVIDER_NOT_READY"]
         elif engine == "graphify":
@@ -253,43 +356,45 @@ class GraphOpsManager:
                     dataset_scope=dataset_scope,
                     dry_run=dry_run,
                 )
-                status = memify_result["status"]
-                error = memify_result.get("error")
-                warnings = memify_result.get("warnings", [])
+                status = str(memify_result.get("status") or "failed")
+                error = (
+                    str(memify_result.get("error") or "").strip() or None
+                )
+                warnings = [
+                    str(item)
+                    for item in (memify_result.get("warnings") or [])
+                    if str(item).strip()
+                ]
             except GraphifyError as exc:
                 status = "failed"
                 error = str(exc)
                 warnings = ["GRAPHIFY_MEMIFY_ERROR"]
         else:
             status = "succeeded"
-            error = None
             warnings = ["LOCAL_ENGINE_MEMIFY_NOOP"]
 
-        job_payload = {
-            "job_id": job_id,
-            "pipeline_type": pipeline_type,
-            "dataset_scope": dataset_scope or [],
-            "idempotency_key": normalized_key,
-            "dry_run": bool(dry_run),
-            "status": status,
-            "progress": 100 if status == "succeeded" else 0,
-            "estimated_steps": 1,
-            "started_at": now,
-            "finished_at": now,
-            "error": error,
-            "warnings": warnings,
-            "engine": engine,
-            "updated_at": now,
-        }
-        jobs[job_id] = job_payload
-        self._save_memify_jobs(jobs)
+        now = datetime.now(UTC).isoformat()
+        self._patch_memify_job(
+            job_id,
+            {
+                "status": status,
+                "progress": 100 if status == "succeeded" else 0,
+                "error": error,
+                "warnings": warnings,
+                "finished_at": now,
+                "updated_at": now,
+            },
+        )
 
-        return {
-            "accepted": True,
-            "job_id": job_id,
-            "estimated_steps": 1,
-            "status_url": f"/knowledge/memify/jobs/{job_id}",
-        }
+    def _patch_memify_job(self, job_id: str, patch: dict[str, Any]) -> None:
+        with self._jobs_lock:
+            jobs = self._load_memify_jobs()
+            job = jobs.get(job_id)
+            if not isinstance(job, dict):
+                return
+            job.update(patch)
+            jobs[job_id] = job
+            self._save_memify_jobs(jobs)
 
     def get_memify_status(self, job_id: str) -> dict[str, Any] | None:
         jobs = self._load_memify_jobs()

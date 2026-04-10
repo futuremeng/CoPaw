@@ -208,6 +208,38 @@ export interface GraphVisualizationData {
   provenance: GraphProvenance;
 }
 
+export interface MemifyStartRequest {
+  pipeline_type?: string;
+  dataset_scope?: string[];
+  idempotency_key?: string;
+  dry_run?: boolean;
+}
+
+export interface MemifyStartResponse {
+  accepted: boolean;
+  job_id: string;
+  estimated_steps?: number;
+  status_url: string;
+  reason?: string;
+}
+
+export interface MemifyJobStatus {
+  job_id: string;
+  pipeline_type: string;
+  dataset_scope: string[];
+  idempotency_key: string;
+  dry_run: boolean;
+  status: "pending" | "running" | "succeeded" | "failed";
+  progress: number;
+  estimated_steps: number;
+  started_at?: string | null;
+  finished_at?: string | null;
+  error?: string | null;
+  warnings: string[];
+  engine: string;
+  updated_at?: string | null;
+}
+
 export interface KnowledgeRestoreResponse {
   success: boolean;
   replace_existing: boolean;

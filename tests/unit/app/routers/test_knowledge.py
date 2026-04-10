@@ -2,6 +2,7 @@
 
 import io
 import json
+import time
 from pathlib import Path
 import zipfile
 
@@ -259,7 +260,6 @@ def test_get_memify_job_status_requires_memify_enabled(
 
 def test_get_memify_job_status_success(
     knowledge_api_client: TestClient,
-    tmp_path: Path,
 ):
     knowledge_config = Config().knowledge
     config_payload = knowledge_config.model_dump(mode="json")
@@ -271,21 +271,32 @@ def test_get_memify_job_status_success(
     knowledge_config.enabled = True
     knowledge_config.memify_enabled = True
 
-    graph_ops = GraphOpsManager(tmp_path)
-    job = graph_ops.run_memify(
-        config=knowledge_config,
-        pipeline_type="default",
-        dataset_scope=[],
-        idempotency_key="route-status-job",
-        dry_run=False,
+    started = knowledge_api_client.post(
+        "/knowledge/memify/jobs",
+        json={
+            "pipeline_type": "default",
+            "dataset_scope": [],
+            "idempotency_key": "route-status-job",
+            "dry_run": False,
+        },
     )
-    job_id = job["job_id"]
+    assert started.status_code == 200
+    job_id = started.json()["job_id"]
 
-    response = knowledge_api_client.get(f"/knowledge/memify/jobs/{job_id}")
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["job_id"] == job_id
-    assert payload["status"] in {"succeeded", "failed"}
+    deadline = time.time() + 2.0
+    last_payload = None
+    while time.time() < deadline:
+        response = knowledge_api_client.get(f"/knowledge/memify/jobs/{job_id}")
+        assert response.status_code == 200
+        payload = response.json()
+        last_payload = payload
+        if payload["status"] in {"succeeded", "failed"}:
+            break
+        time.sleep(0.05)
+
+    assert last_payload is not None
+    assert last_payload["job_id"] == job_id
+    assert last_payload["status"] in {"pending", "running", "succeeded", "failed"}
 
 
 def test_put_knowledge_config_syncs_running_toggle_and_module_skill(

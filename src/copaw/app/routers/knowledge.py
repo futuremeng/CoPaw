@@ -547,6 +547,43 @@ async def get_memify_job_status(job_id: str, request: Request):
     return payload
 
 
+@router.post("/memify/jobs")
+async def start_memify_job(
+    request: Request,
+    pipeline_type: str = Body(default="full"),
+    dataset_scope: list[str] | None = Body(default=None),
+    idempotency_key: str = Body(default=""),
+    dry_run: bool = Body(default=False),
+):
+    """Start a memify enrichment job asynchronously."""
+    _, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    _ensure_knowledge_enabled_flag(knowledge_config.enabled)
+    if not bool(getattr(knowledge_config, "memify_enabled", False)):
+        raise HTTPException(status_code=400, detail="MEMIFY_DISABLED")
+
+    normalized_pipeline_type = (pipeline_type or "full").strip() or "full"
+    normalized_scope = [
+        item.strip()
+        for item in (dataset_scope or [])
+        if isinstance(item, str) and item.strip()
+    ]
+    manager = GraphOpsManager(workspace_dir)
+    try:
+        return manager.run_memify(
+            config=knowledge_config,
+            pipeline_type=normalized_pipeline_type,
+            dataset_scope=normalized_scope or None,
+            idempotency_key=(idempotency_key or "").strip(),
+            dry_run=bool(dry_run),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
 @router.websocket("/history-backfill/progress/ws")
 async def stream_history_backfill_progress(websocket: WebSocket):
     """Stream history backfill progress to console with WebSocket."""

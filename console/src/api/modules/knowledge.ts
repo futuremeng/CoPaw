@@ -13,6 +13,9 @@ import type {
   KnowledgeSourceSpec,
   KnowledgeSourcesResponse,
   GraphQueryResponse,
+  MemifyJobStatus,
+  MemifyStartRequest,
+  MemifyStartResponse,
 } from "../types";
 
 export const knowledgeApi = {
@@ -178,6 +181,22 @@ export const knowledgeApi = {
     }
     return request<GraphQueryResponse>(`/knowledge/graph-query?${searchParams.toString()}`);
   },
+
+  startMemifyJob: (payload?: MemifyStartRequest) =>
+    request<MemifyStartResponse>("/knowledge/memify/jobs", {
+      method: "POST",
+      body: JSON.stringify({
+        pipeline_type: payload?.pipeline_type ?? "full",
+        dataset_scope: payload?.dataset_scope ?? [],
+        idempotency_key: payload?.idempotency_key ?? "",
+        dry_run: payload?.dry_run ?? false,
+      }),
+    }),
+
+  getMemifyJobStatus: (jobId: string) =>
+    request<MemifyJobStatus>(
+      `/knowledge/memify/jobs/${encodeURIComponent(jobId)}`,
+    ),
 
   downloadKnowledgeBackup: async (): Promise<Blob> => {
     const response = await fetch(getApiUrl("/knowledge/backup"), {

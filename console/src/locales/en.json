@@ -1735,6 +1735,8 @@
     },
     "knowledgePanelTitle": "Knowledge Quant Panel",
     "knowledgePanelHint": "Quickly observe project knowledge density and freshness",
+    "knowledgeModuleExpand": "Expand knowledge module",
+    "knowledgeModuleCollapse": "Collapse knowledge module",
     "knowledge": {
       "title": "Project Knowledge Query",
       "hint": "Run graph knowledge query scoped to this project: {{project}}",
@@ -1760,7 +1762,19 @@
       "indexError": "Indexing error",
       "retryIndex": "Retry",
       "retryIndexSuccess": "Reindex started",
-      "retryIndexFailed": "Failed to retry indexing"
+      "retryIndexFailed": "Failed to retry indexing",
+      "autoSinkLabel": "Auto sink",
+      "manualSink": "Sink now",
+      "queryMode": "Query mode",
+      "queryModeTemplate": "Template",
+      "queryModeCypherMvp": "Cypher (MVP)",
+      "sinkJob": "Sink job",
+      "autoSinkAgentMissing": "No active agent",
+      "autoSinkEnabled": "Auto knowledge sink enabled",
+      "autoSinkDisabled": "Auto knowledge sink disabled",
+      "autoSinkUpdateFailed": "Failed to update auto sink setting",
+      "manualSinkStarted": "Knowledge sink started",
+      "manualSinkFailed": "Failed to start knowledge sink"
     },
     "stage": {
       "source": "Source",

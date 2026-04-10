@@ -22,6 +22,7 @@ import type {
   PromoteProjectArtifactRequest,
   PromoteProjectArtifactResponse,
   UpdateProjectArtifactDistillModeRequest,
+  UpdateProjectKnowledgeSinkRequest,
   UpdateProjectWorkspaceChatBindingRequest,
   AutoDistillProjectSkillsDraftRequest,
   DistillProjectSkillsDraftResponse,
@@ -173,6 +174,19 @@ export const agentsApi = {
   ) =>
     request<AgentProjectSummary>(
       `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/workspace-chat-binding`,
+      {
+        method: "PUT",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  updateProjectKnowledgeSink: (
+    agentId: string,
+    projectId: string,
+    body: UpdateProjectKnowledgeSinkRequest,
+  ) =>
+    request<AgentProjectSummary>(
+      `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/knowledge-sink`,
       {
         method: "PUT",
         body: JSON.stringify(body),

@@ -37,12 +37,17 @@ export interface AgentProjectSummary {
   tags: string[];
   artifact_distill_mode: "file_scan" | "conversation_evidence";
   artifact_profile: ProjectArtifactProfile;
+  project_auto_knowledge_sink: boolean;
   preferred_workspace_chat_id?: string;
   updated_time: string;
 }
 
 export interface UpdateProjectWorkspaceChatBindingRequest {
   preferred_workspace_chat_id: string;
+}
+
+export interface UpdateProjectKnowledgeSinkRequest {
+  project_auto_knowledge_sink: boolean;
 }
 
 export interface AgentProjectFileInfo {
@@ -69,6 +74,7 @@ export interface CreateProjectRequest {
   status?: string;
   data_dir?: string;
   tags?: string[];
+  project_auto_knowledge_sink?: boolean;
   artifact_profile?: ProjectArtifactProfile;
 }
 

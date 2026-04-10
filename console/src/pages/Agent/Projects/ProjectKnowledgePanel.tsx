@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Badge,
@@ -7,8 +7,10 @@ import {
   Checkbox,
   Empty,
   Input,
+  Select,
   Space,
   Spin,
+  Switch,
   Typography,
   message,
 } from "antd";
@@ -16,14 +18,18 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import api, { type GraphQueryResponse } from "../../../api";
 import type { KnowledgeSourceItem } from "../../../api/types";
+import { agentsApi } from "../../../api/modules/agents";
 import { recordsToVisualizationData } from "../Knowledge/graphQuery";
 import { GraphQueryResults, GraphVisualization } from "../Knowledge/graphVisualization";
 import styles from "./index.module.less";
 
 interface ProjectKnowledgePanelProps {
+  agentId?: string;
   projectId: string;
   projectName: string;
   projectWorkspaceDir: string;
+  projectAutoKnowledgeSink: boolean;
+  onProjectAutoKnowledgeSinkChange?: (enabled: boolean) => void;
 }
 
 const PROJECT_GRAPH_TOP_K = 12;
@@ -33,15 +39,25 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [queryText, setQueryText] = useState("");
+  const [queryMode, setQueryMode] = useState<"template" | "cypher">("template");
   const [includeGlobal, setIncludeGlobal] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<GraphQueryResponse | null>(null);
+  const [autoSinkEnabled, setAutoSinkEnabled] = useState(
+    props.projectAutoKnowledgeSink !== false,
+  );
+  const [updatingAutoSink, setUpdatingAutoSink] = useState(false);
+  const [manualSinking, setManualSinking] = useState(false);
+  const [memifyJobId, setMemifyJobId] = useState("");
+  const [memifyStatus, setMemifyStatus] = useState<string>("");
+  const [memifyError, setMemifyError] = useState("");
   const [registering, setRegistering] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [sourceLoaded, setSourceLoaded] = useState(false);
   const [sourceRegistered, setSourceRegistered] = useState(false);
   const [projectSource, setProjectSource] = useState<KnowledgeSourceItem | null>(null);
+  const autoSinkTriggerRef = useRef("");
 
   const projectSourceId = useMemo(() => {
     const safeId = props.projectId
@@ -88,6 +104,10 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
     void loadProjectSourceStatus();
   }, [loadProjectSourceStatus]);
 
+  useEffect(() => {
+    setAutoSinkEnabled(props.projectAutoKnowledgeSink !== false);
+  }, [props.projectAutoKnowledgeSink]);
+
   const handleRegisterProjectSource = useCallback(async () => {
     const location = (props.projectWorkspaceDir || "").trim();
     if (!location) {
@@ -124,6 +144,7 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
     props.projectId,
     props.projectName,
     props.projectWorkspaceDir,
+    autoSinkEnabled,
     t,
   ]);
 
@@ -142,6 +163,108 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
     }
   }, [loadProjectSourceStatus, projectSourceId, t]);
 
+  const handleToggleAutoSink = useCallback(async (enabled: boolean) => {
+    if (!props.agentId) {
+      message.error(t("projects.knowledge.autoSinkAgentMissing"));
+      return;
+    }
+    try {
+      setUpdatingAutoSink(true);
+      await agentsApi.updateProjectKnowledgeSink(props.agentId, props.projectId, {
+        project_auto_knowledge_sink: enabled,
+      });
+      setAutoSinkEnabled(enabled);
+      props.onProjectAutoKnowledgeSinkChange?.(enabled);
+      message.success(
+        enabled
+          ? t("projects.knowledge.autoSinkEnabled")
+          : t("projects.knowledge.autoSinkDisabled"),
+      );
+    } catch (err) {
+      const messageText = err instanceof Error ? err.message : t("projects.knowledge.autoSinkUpdateFailed");
+      message.error(messageText);
+    } finally {
+      setUpdatingAutoSink(false);
+    }
+  }, [props.agentId, props.projectId, props.onProjectAutoKnowledgeSinkChange, t]);
+
+  const handleManualSink = useCallback(async () => {
+    if (!sourceRegistered) {
+      message.warning(t("projects.knowledge.sourceNotRegistered"));
+      return;
+    }
+    try {
+      setManualSinking(true);
+      setMemifyError("");
+      const response = await api.startMemifyJob({
+        pipeline_type: "project-manual",
+        dataset_scope: [projectSourceId],
+        idempotency_key: `${props.projectId}:manual:${Date.now()}`,
+      });
+      setMemifyJobId(response.job_id);
+      message.success(t("projects.knowledge.manualSinkStarted"));
+    } catch (err) {
+      const messageText = err instanceof Error ? err.message : t("projects.knowledge.manualSinkFailed");
+      setMemifyError(messageText);
+      message.error(messageText);
+    } finally {
+      setManualSinking(false);
+    }
+  }, [projectSourceId, props.projectId, sourceRegistered, t]);
+
+  useEffect(() => {
+    if (!memifyJobId) {
+      return;
+    }
+    let disposed = false;
+    const timer = window.setInterval(() => {
+      void api.getMemifyJobStatus(memifyJobId)
+        .then((status) => {
+          if (disposed) {
+            return;
+          }
+          setMemifyStatus(status.status);
+          setMemifyError((status.error || "").trim());
+          if (status.status === "succeeded" || status.status === "failed") {
+            window.clearInterval(timer);
+            void loadProjectSourceStatus();
+          }
+        })
+        .catch(() => {
+          // keep polling on transient failures
+        });
+    }, 2000);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+    };
+  }, [loadProjectSourceStatus, memifyJobId]);
+
+  useEffect(() => {
+    if (!autoSinkEnabled || !sourceRegistered) {
+      return;
+    }
+    const indexedAt = (projectSource?.status?.indexed_at || "").trim();
+    if (!indexedAt) {
+      return;
+    }
+    const triggerKey = `${projectSourceId}:${indexedAt}`;
+    if (autoSinkTriggerRef.current === triggerKey) {
+      return;
+    }
+    autoSinkTriggerRef.current = triggerKey;
+    void api.startMemifyJob({
+      pipeline_type: "project-auto",
+      dataset_scope: [projectSourceId],
+      idempotency_key: `${props.projectId}:auto:${triggerKey}`,
+    }).then((response) => {
+      setMemifyJobId(response.job_id);
+    }).catch(() => {
+      // best-effort auto trigger
+    });
+  }, [autoSinkEnabled, projectSource?.status?.indexed_at, projectSourceId, props.projectId, sourceRegistered]);
+
   const handleQuery = useCallback(
     async (overrideQuery?: string) => {
       const query = (overrideQuery ?? queryText).trim();
@@ -155,7 +278,7 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
         setError("");
         const response = await api.graphQuery({
           query,
-          mode: "template",
+          mode: queryMode,
           topK: PROJECT_GRAPH_TOP_K,
           timeoutSec: PROJECT_GRAPH_TIMEOUT_SEC,
           projectScope: [props.projectId],
@@ -171,7 +294,7 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
         setLoading(false);
       }
     },
-    [includeGlobal, props.projectId, queryText, t],
+    [includeGlobal, props.projectId, queryMode, queryText, t],
   );
 
   const visualizationData = useMemo(() => {
@@ -236,6 +359,28 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
         >
           {t("projects.knowledge.openKnowledge")}
         </Button>
+        <Space size={6}>
+          <Typography.Text type="secondary">
+            {t("projects.knowledge.autoSinkLabel")}
+          </Typography.Text>
+          <Switch
+            checked={autoSinkEnabled}
+            loading={updatingAutoSink}
+            onChange={(checked) => {
+              void handleToggleAutoSink(checked);
+            }}
+          />
+        </Space>
+        <Button
+          size="small"
+          loading={manualSinking}
+          disabled={!sourceRegistered}
+          onClick={() => {
+            void handleManualSink();
+          }}
+        >
+          {t("projects.knowledge.manualSink")}
+        </Button>
       </Space>
 
       {sourceRegistered ? (
@@ -275,6 +420,21 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
       ) : null}
 
       <div className={styles.projectKnowledgeControls}>
+        <Space wrap>
+          <Typography.Text type="secondary">
+            {t("projects.knowledge.queryMode")}
+          </Typography.Text>
+          <Select
+            size="small"
+            value={queryMode}
+            onChange={(value) => setQueryMode(value as "template" | "cypher")}
+            options={[
+              { label: t("projects.knowledge.queryModeTemplate"), value: "template" },
+              { label: t("projects.knowledge.queryModeCypherMvp"), value: "cypher" },
+            ]}
+            style={{ width: 160 }}
+          />
+        </Space>
         <Input.Search
           value={queryText}
           onChange={(event) => setQueryText(event.target.value)}
@@ -306,6 +466,14 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
       </div>
 
       {error ? <Alert type="error" showIcon message={error} /> : null}
+      {memifyJobId ? (
+        <Alert
+          type={memifyStatus === "failed" ? "error" : "info"}
+          showIcon
+          message={t("projects.knowledge.sinkJob")}
+          description={`${memifyJobId} · ${memifyStatus || "pending"}${memifyError ? ` · ${memifyError}` : ""}`}
+        />
+      ) : null}
 
       {loading && !result ? (
         <div className={styles.projectKnowledgeEmpty}>

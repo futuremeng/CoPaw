@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import json
+import time
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -28,6 +29,27 @@ def _build_graphify_text_source() -> KnowledgeSourceSpec:
 def _write_graph_json(path, nodes, edges):
     data = {"directed": False, "multigraph": False, "nodes": nodes, "links": edges}
     path.write_text(json.dumps(data), encoding="utf-8")
+
+
+def _await_terminal_memify_status(
+    graph_ops: GraphOpsManager,
+    job_id: str,
+    timeout_sec: float = 3.0,
+) -> dict:
+    deadline = time.time() + timeout_sec
+    last_job: dict | None = None
+    while time.time() < deadline:
+        job = graph_ops.get_memify_status(job_id)
+        if job is not None:
+            last_job = job
+            if job.get("status") in {"succeeded", "failed"}:
+                return job
+        time.sleep(0.05)
+    if last_job is None:
+        raise AssertionError(f"memify job {job_id} not found")
+    raise AssertionError(
+        f"memify job {job_id} did not reach terminal status, got {last_job.get('status')}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -58,6 +80,8 @@ def test_graph_query_graphify_with_real_provider(tmp_path):
         query_mode="template",
         query_text="agent runner graphtool",
         dataset_scope=[],
+        project_scope=None,
+        include_global=True,
         top_k=5,
         timeout_sec=30,
     )
@@ -96,6 +120,8 @@ def test_graph_query_graphify_fallback_when_not_configured(tmp_path):
         query_mode="template",
         query_text="Agent uses graph tool",
         dataset_scope=[],
+        project_scope=None,
+        include_global=True,
         top_k=5,
         timeout_sec=30,
     )
@@ -121,6 +147,8 @@ def test_graph_query_graphify_no_fallback_raises_when_not_configured(tmp_path):
             query_mode="template",
             query_text="something",
             dataset_scope=[],
+            project_scope=None,
+            include_global=True,
             top_k=5,
             timeout_sec=30,
         )
@@ -154,6 +182,8 @@ def test_graph_query_graphify_fallback_on_runtime_error(tmp_path):
         query_mode="template",
         query_text="Agent uses graph tool",
         dataset_scope=[],
+        project_scope=None,
+        include_global=True,
         top_k=5,
         timeout_sec=30,
     )
@@ -167,7 +197,7 @@ def test_graph_query_graphify_fallback_on_runtime_error(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_graph_query_graphify_cypher_not_ready(tmp_path):
+def test_graph_query_graphify_cypher_mvp_translation(tmp_path):
     knowledge_config = Config().knowledge
     knowledge_config.enabled = True
     knowledge_config.engine = "graphify"
@@ -176,14 +206,15 @@ def test_graph_query_graphify_cypher_not_ready(tmp_path):
     result = graph_ops.graph_query(
         config=knowledge_config,
         query_mode="cypher",
-        query_text="MATCH (n) RETURN n LIMIT 5",
+        query_text="MATCH (node)-[:RELATES_TO]->(tool) RETURN node LIMIT 5",
         dataset_scope=[],
+        project_scope=None,
+        include_global=True,
         top_k=5,
         timeout_sec=30,
     )
 
-    assert result.records == []
-    assert "GRAPHIFY_CYPHER_NOT_READY" in result.warnings
+    assert "CYPHER_MVP_TRANSLATED" in result.warnings
 
 
 # ---------------------------------------------------------------------------
@@ -208,8 +239,7 @@ def test_run_memify_graphify_dry_run_succeeds(tmp_path):
     )
 
     assert payload["accepted"] is True
-    job = graph_ops.get_memify_status(payload["job_id"])
-    assert job is not None
+    job = _await_terminal_memify_status(graph_ops, payload["job_id"])
     assert job["status"] == "succeeded"
     assert "GRAPHIFY_MEMIFY_DRY_RUN" in job["warnings"]
 
@@ -231,6 +261,5 @@ def test_run_memify_graphify_no_dataset_dir_gives_failed_status(tmp_path):
     )
 
     assert payload["accepted"] is True
-    job = graph_ops.get_memify_status(payload["job_id"])
-    assert job is not None
+    job = _await_terminal_memify_status(graph_ops, payload["job_id"])
     assert job["status"] == "failed"

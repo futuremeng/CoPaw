@@ -139,6 +139,28 @@ def test_update_artifact_distill_mode_endpoint(
     assert summary.artifact_distill_mode == "conversation_evidence"
 
 
+def test_update_project_knowledge_sink_endpoint(
+    project_artifact_router_client: tuple[TestClient, Path, str],
+):
+    client, workspace_dir, project_id = project_artifact_router_client
+
+    before = _load_project_summary(workspace_dir / "projects" / project_id)
+    assert before is not None
+    assert before.project_auto_knowledge_sink is True
+
+    updated = client.put(
+        f"/agents/default/projects/{project_id}/knowledge-sink",
+        json={"project_auto_knowledge_sink": False},
+    )
+    assert updated.status_code == 200
+    payload = updated.json()
+    assert payload["project_auto_knowledge_sink"] is False
+
+    after = _load_project_summary(workspace_dir / "projects" / project_id)
+    assert after is not None
+    assert after.project_auto_knowledge_sink is False
+
+
 def test_create_project_uses_builtin_template_fallbacks(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -177,6 +199,20 @@ def test_create_project_uses_builtin_template_fallbacks(
         / "project-artifact-governor"
         / "SKILL.md"
     ).exists()
+
+
+def test_create_project_defaults_auto_knowledge_sink_enabled(tmp_path: Path):
+    project = _create_project(
+        tmp_path,
+        CreateProjectRequest(
+            name="Auto Sink Default",
+            description="Default auto sink should be on",
+        ),
+    )
+
+    summary = _load_project_summary(tmp_path / "projects" / project.id)
+    assert summary is not None
+    assert summary.project_auto_knowledge_sink is True
 
 
 def test_distill_draft_uses_conversation_evidence_mode(

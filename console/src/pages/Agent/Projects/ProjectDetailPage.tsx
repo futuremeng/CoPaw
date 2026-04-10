@@ -41,6 +41,7 @@ import ProjectChatPanel, {
   type ProjectChatAutoAttachRequest,
   type ProjectChatMode,
 } from "./ProjectChatPanel";
+import ProjectKnowledgePanel from "./ProjectKnowledgePanel";
 import ProjectOverviewCard from "./ProjectOverviewCard";
 import ProjectUploadModal from "./ProjectUploadModal";
 import ProjectWorkbenchPanel from "./ProjectWorkbenchPanel";
@@ -70,6 +71,13 @@ import {
   buildProjectIdCandidates,
   matchesRouteProject,
 } from "./projectIdUtils";
+import {
+  buildProjectLayoutStorageKey,
+  parseProjectLayoutPrefs,
+  type ProjectDetailLayoutPrefs,
+  type ProjectStageKey,
+  type TreeDisplayMode,
+} from "./projectLayoutPrefs";
 import type { ProjectFileFilterKey } from "./filtering";
 import { computeProjectKnowledgeMetrics } from "./metrics";
 import type {
@@ -89,17 +97,6 @@ import styles from "./index.module.less";
 
 const { Text } = Typography;
 
-type ProjectStageKey = "source" | "knowledge" | "output";
-type TreeDisplayMode = "filter" | "highlight";
-
-interface ProjectDetailLayoutPrefs {
-  leftPanelCollapsed: boolean;
-  activeStage: ProjectStageKey;
-  selectedMetricFilter: ProjectFileFilterKey | "";
-  treeDisplayMode: TreeDisplayMode;
-}
-
-const PROJECT_LAYOUT_PREFS_PREFIX = "copaw:projects:detail:layout:";
 const LEFT_STAGE_RAIL_TRANSITION_MS = 220;
 
 const STAGE_FILTERS: Record<ProjectStageKey, ProjectFileFilterKey[]> = {
@@ -319,6 +316,7 @@ export default function ProjectDetailPage() {
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(true);
   const [leftPanelExpandedMenuReady, setLeftPanelExpandedMenuReady] = useState(false);
   const [activeStage, setActiveStage] = useState<ProjectStageKey>("source");
+  const [knowledgeModuleCollapsed, setKnowledgeModuleCollapsed] = useState(false);
   const [selectedMetricFilter, setSelectedMetricFilter] = useState<ProjectFileFilterKey | "">("");
   const [treeDisplayMode, setTreeDisplayMode] = useState<TreeDisplayMode>("filter");
   const runFocusChatIdRef = useRef("");
@@ -1571,26 +1569,22 @@ export default function ProjectDetailPage() {
 
   useEffect(() => {
     layoutPrefsLoadedRef.current = false;
-    const storageKey = `${PROJECT_LAYOUT_PREFS_PREFIX}${routeProjectId || "default"}`;
+    const storageKey = buildProjectLayoutStorageKey(routeProjectId);
     try {
       const raw = window.localStorage.getItem(storageKey);
-      if (raw) {
-        const parsed = JSON.parse(raw) as Partial<ProjectDetailLayoutPrefs>;
-        setLeftPanelCollapsed(parsed.leftPanelCollapsed ?? true);
-        setActiveStage(parsed.activeStage ?? "source");
-        setSelectedMetricFilter(parsed.selectedMetricFilter ?? "");
-        setTreeDisplayMode(parsed.treeDisplayMode ?? "filter");
-      } else {
-        setLeftPanelCollapsed(true);
-        setActiveStage("source");
-        setSelectedMetricFilter("");
-        setTreeDisplayMode("filter");
-      }
+      const parsed = parseProjectLayoutPrefs(raw);
+      setLeftPanelCollapsed(parsed.leftPanelCollapsed);
+      setActiveStage(parsed.activeStage);
+      setKnowledgeModuleCollapsed(parsed.knowledgeModuleCollapsed);
+      setSelectedMetricFilter(parsed.selectedMetricFilter);
+      setTreeDisplayMode(parsed.treeDisplayMode);
     } catch {
-      setLeftPanelCollapsed(true);
-      setActiveStage("source");
-      setSelectedMetricFilter("");
-      setTreeDisplayMode("filter");
+      const parsed = parseProjectLayoutPrefs(null);
+      setLeftPanelCollapsed(parsed.leftPanelCollapsed);
+      setActiveStage(parsed.activeStage);
+      setKnowledgeModuleCollapsed(parsed.knowledgeModuleCollapsed);
+      setSelectedMetricFilter(parsed.selectedMetricFilter);
+      setTreeDisplayMode(parsed.treeDisplayMode);
     } finally {
       layoutPrefsLoadedRef.current = true;
     }
@@ -1623,10 +1617,11 @@ export default function ProjectDetailPage() {
     if (!layoutPrefsLoadedRef.current) {
       return;
     }
-    const storageKey = `${PROJECT_LAYOUT_PREFS_PREFIX}${routeProjectId || "default"}`;
+    const storageKey = buildProjectLayoutStorageKey(routeProjectId);
     const payload: ProjectDetailLayoutPrefs = {
       leftPanelCollapsed,
       activeStage,
+      knowledgeModuleCollapsed,
       selectedMetricFilter,
       treeDisplayMode,
     };
@@ -1635,7 +1630,14 @@ export default function ProjectDetailPage() {
     } catch {
       // Ignore storage quota and privacy mode errors.
     }
-  }, [activeStage, leftPanelCollapsed, routeProjectId, selectedMetricFilter, treeDisplayMode]);
+  }, [
+    activeStage,
+    knowledgeModuleCollapsed,
+    leftPanelCollapsed,
+    routeProjectId,
+    selectedMetricFilter,
+    treeDisplayMode,
+  ]);
 
   useOpenUploadQuery({
     pathname: location.pathname,
@@ -1809,6 +1811,26 @@ export default function ProjectDetailPage() {
   }, [
     setSelectedAttachPaths,
   ]);
+
+  const handleProjectAutoKnowledgeSinkChange = useCallback((enabled: boolean) => {
+    if (!currentAgent || !selectedProject) {
+      return;
+    }
+    const nextAgents = agents.map((agent) => {
+      if (agent.id !== currentAgent.id) {
+        return agent;
+      }
+      return {
+        ...agent,
+        projects: (agent.projects || []).map((project) => (
+          project.id === selectedProject.id
+            ? { ...project, project_auto_knowledge_sink: enabled }
+            : project
+        )),
+      };
+    });
+    setAgents(nextAgents);
+  }, [agents, currentAgent, selectedProject, setAgents]);
 
   const handleSendSelectedFilesToChat = useCallback(async () => {
     if (!currentAgent || !selectedProject || selectedAttachPaths.length === 0) {
@@ -2286,24 +2308,56 @@ export default function ProjectDetailPage() {
           </div>
 
           <div className={styles.columnRight}>
-            <ProjectWorkbenchPanel
-              projectLabel={selectedProject?.id || routeProjectId}
-              filesLoading={filesLoading}
-              contentLoading={contentLoading}
-              artifactRecords={artifactRecords}
-              selectedArtifactRecord={selectedArtifactRecord}
-              selectedFilePath={selectedFilePath}
-              projectFiles={projectFiles}
-              fileContent={fileContent}
-              selectedAttachPaths={selectedAttachPaths}
-              autoAnalyzeOnAttach={autoAnalyzeOnAttach}
-              sendingSelectedFiles={sendingSelectedFiles}
-              onToggleAutoAnalyze={setAutoAnalyzeOnAttach}
-              onSendSelectedFilesToChat={() => {
-                void handleSendSelectedFilesToChat();
-              }}
-              formatBytes={formatBytes}
-            />
+            <div className={styles.rightWorkbenchPrimary}>
+              <ProjectWorkbenchPanel
+                projectLabel={selectedProject?.id || routeProjectId}
+                filesLoading={filesLoading}
+                contentLoading={contentLoading}
+                artifactRecords={artifactRecords}
+                selectedArtifactRecord={selectedArtifactRecord}
+                selectedFilePath={selectedFilePath}
+                projectFiles={projectFiles}
+                fileContent={fileContent}
+                selectedAttachPaths={selectedAttachPaths}
+                autoAnalyzeOnAttach={autoAnalyzeOnAttach}
+                sendingSelectedFiles={sendingSelectedFiles}
+                onToggleAutoAnalyze={setAutoAnalyzeOnAttach}
+                onSendSelectedFilesToChat={() => {
+                  void handleSendSelectedFilesToChat();
+                }}
+                formatBytes={formatBytes}
+              />
+            </div>
+            {activeStage === "knowledge" ? (
+              <div className={styles.knowledgeModuleShell}>
+                <div className={styles.knowledgeModuleHeader}>
+                  <Text strong>{t("projects.knowledgePanelTitle")}</Text>
+                  <Button
+                    size="small"
+                    type="text"
+                    onClick={() => {
+                      setKnowledgeModuleCollapsed((prev) => !prev);
+                    }}
+                  >
+                    {knowledgeModuleCollapsed
+                      ? t("projects.knowledgeModuleExpand", "Expand knowledge module")
+                      : t("projects.knowledgeModuleCollapse", "Collapse knowledge module")}
+                  </Button>
+                </div>
+                {knowledgeModuleCollapsed ? null : (
+                  <ProjectKnowledgePanel
+                    agentId={currentAgent?.id}
+                    projectId={selectedProject.id}
+                    projectName={selectedProject.name}
+                    projectWorkspaceDir={selectedProject.workspace_dir}
+                    projectAutoKnowledgeSink={
+                      selectedProject.project_auto_knowledge_sink !== false
+                    }
+                    onProjectAutoKnowledgeSinkChange={handleProjectAutoKnowledgeSinkChange}
+                  />
+                )}
+              </div>
+            ) : null}
           </div>
 
           <div className={styles.columnChat}>

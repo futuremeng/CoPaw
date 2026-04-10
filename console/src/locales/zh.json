@@ -1694,6 +1694,8 @@
     },
     "knowledgePanelTitle": "知识量化面板",
     "knowledgePanelHint": "快速观察项目知识密度与新鲜度",
+    "knowledgeModuleExpand": "展开知识模块",
+    "knowledgeModuleCollapse": "收起知识模块",
     "knowledge": {
       "title": "项目知识查询",
       "hint": "在当前项目范围内执行图谱知识查询：{{project}}",
@@ -1719,7 +1721,19 @@
       "indexError": "索引错误",
       "retryIndex": "重试",
       "retryIndexSuccess": "已重新触发索引",
-      "retryIndexFailed": "重试索引失败"
+      "retryIndexFailed": "重试索引失败",
+      "autoSinkLabel": "自动沉淀",
+      "manualSink": "立即沉淀",
+      "queryMode": "查询模式",
+      "queryModeTemplate": "模板",
+      "queryModeCypherMvp": "Cypher（MVP）",
+      "sinkJob": "沉淀任务",
+      "autoSinkAgentMissing": "当前没有可用智能体",
+      "autoSinkEnabled": "已开启自动知识沉淀",
+      "autoSinkDisabled": "已关闭自动知识沉淀",
+      "autoSinkUpdateFailed": "更新自动沉淀设置失败",
+      "manualSinkStarted": "已启动知识沉淀任务",
+      "manualSinkFailed": "启动知识沉淀任务失败"
     },
     "stage": {
       "source": "源文件",

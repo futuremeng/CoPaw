@@ -1690,6 +1690,8 @@
     },
     "knowledgePanelTitle": "Панель количественных метрик знаний",
     "knowledgePanelHint": "Быстро оценивайте плотность знаний и актуальность проекта",
+    "knowledgeModuleExpand": "Развернуть модуль знаний",
+    "knowledgeModuleCollapse": "Свернуть модуль знаний",
     "knowledge": {
       "title": "Поиск знаний проекта",
       "hint": "Выполните графовый запрос знаний в пределах проекта: {{project}}",
@@ -1715,7 +1717,19 @@
       "indexError": "Ошибка индексации",
       "retryIndex": "Повторить",
       "retryIndexSuccess": "Переиндексация запущена",
-      "retryIndexFailed": "Не удалось повторить индексацию"
+      "retryIndexFailed": "Не удалось повторить индексацию",
+      "autoSinkLabel": "Автопогружение",
+      "manualSink": "Погрузить сейчас",
+      "queryMode": "Режим запроса",
+      "queryModeTemplate": "Шаблон",
+      "queryModeCypherMvp": "Cypher (MVP)",
+      "sinkJob": "Задача погружения",
+      "autoSinkAgentMissing": "Нет активного агента",
+      "autoSinkEnabled": "Автоматическое погружение знаний включено",
+      "autoSinkDisabled": "Автоматическое погружение знаний выключено",
+      "autoSinkUpdateFailed": "Не удалось обновить настройку автопогружения",
+      "manualSinkStarted": "Погружение знаний запущено",
+      "manualSinkFailed": "Не удалось запустить погружение знаний"
     },
     "stage": {
       "source": "Исходники",

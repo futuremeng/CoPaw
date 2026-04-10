@@ -1690,6 +1690,8 @@
     },
     "knowledgePanelTitle": "ナレッジ定量パネル",
     "knowledgePanelHint": "プロジェクトの知識密度と鮮度をすばやく把握",
+    "knowledgeModuleExpand": "ナレッジモジュールを展開",
+    "knowledgeModuleCollapse": "ナレッジモジュールを折りたたむ",
     "knowledge": {
       "title": "プロジェクトナレッジ検索",
       "hint": "このプロジェクト範囲でグラフナレッジ検索を実行: {{project}}",
@@ -1715,7 +1717,19 @@
       "indexError": "インデックスエラー",
       "retryIndex": "再試行",
       "retryIndexSuccess": "再インデックスを開始しました",
-      "retryIndexFailed": "再インデックスの再試行に失敗しました"
+      "retryIndexFailed": "再インデックスの再試行に失敗しました",
+      "autoSinkLabel": "自動取り込み",
+      "manualSink": "今すぐ取り込み",
+      "queryMode": "検索モード",
+      "queryModeTemplate": "テンプレート",
+      "queryModeCypherMvp": "Cypher（MVP）",
+      "sinkJob": "取り込みジョブ",
+      "autoSinkAgentMissing": "有効なエージェントがありません",
+      "autoSinkEnabled": "自動ナレッジ取り込みを有効化しました",
+      "autoSinkDisabled": "自動ナレッジ取り込みを無効化しました",
+      "autoSinkUpdateFailed": "自動取り込み設定の更新に失敗しました",
+      "manualSinkStarted": "ナレッジ取り込みを開始しました",
+      "manualSinkFailed": "ナレッジ取り込みの開始に失敗しました"
     },
     "stage": {
       "source": "ソース",

@@ -159,6 +159,7 @@ class ProjectSummary(BaseModel):
     artifact_profile: "ProjectArtifactProfile" = Field(
         default_factory=lambda: ProjectArtifactProfile(),
     )
+    project_auto_knowledge_sink: bool = True
     preferred_workspace_chat_id: str = ""
     updated_time: str
 
@@ -272,6 +273,7 @@ class CreateProjectRequest(BaseModel):
     data_dir: str = "data"
     tags: list[str] = Field(default_factory=list)
     artifact_distill_mode: str = "file_scan"
+    project_auto_knowledge_sink: bool = True
     artifact_profile: ProjectArtifactProfile = Field(
         default_factory=lambda: ProjectArtifactProfile(),
     )
@@ -287,6 +289,12 @@ class UpdateProjectWorkspaceChatBindingRequest(BaseModel):
     """Request body for updating preferred project workspace chat binding."""
 
     preferred_workspace_chat_id: str = ""
+
+
+class UpdateProjectKnowledgeSinkRequest(BaseModel):
+    """Request body for updating project auto knowledge sink switch."""
+
+    project_auto_knowledge_sink: bool = True
 
 
 class DeleteProjectResponse(BaseModel):
@@ -451,6 +459,21 @@ def _normalize_project_artifact_distill_mode(raw_value: Any) -> str:
     if mode in _PROJECT_ARTIFACT_DISTILL_MODES:
         return mode
     return "file_scan"
+
+
+def _normalize_project_auto_knowledge_sink(raw_value: Any) -> bool:
+    if isinstance(raw_value, bool):
+        return raw_value
+    if isinstance(raw_value, (int, float)):
+        return bool(raw_value)
+    text = str(raw_value or "").strip().lower()
+    if not text:
+        return True
+    if text in {"1", "true", "yes", "on", "enabled"}:
+        return True
+    if text in {"0", "false", "no", "off", "disabled"}:
+        return False
+    return True
 
 
 def _ensure_square_config_initialized() -> None:
@@ -952,6 +975,9 @@ def _load_project_summary(project_dir: Path) -> ProjectSummary | None:
         metadata.get("artifact_distill_mode") or metadata.get("distill_mode"),
     )
     artifact_profile = _parse_project_artifact_profile(metadata)
+    project_auto_knowledge_sink = _normalize_project_auto_knowledge_sink(
+        metadata.get("project_auto_knowledge_sink"),
+    )
     preferred_workspace_chat_id = str(
         metadata.get("preferred_workspace_chat_id")
         or metadata.get("preferred_workspace_chat")
@@ -970,6 +996,7 @@ def _load_project_summary(project_dir: Path) -> ProjectSummary | None:
         tags=tags,
         artifact_distill_mode=artifact_distill_mode,
         artifact_profile=artifact_profile,
+        project_auto_knowledge_sink=project_auto_knowledge_sink,
         preferred_workspace_chat_id=preferred_workspace_chat_id,
         updated_time=updated_time,
     )
@@ -1244,6 +1271,33 @@ def _update_project_workspace_chat_binding(
     metadata["preferred_workspace_chat_id"] = (
         preferred_workspace_chat_id.strip()
     )
+    _write_project_frontmatter(metadata_file, metadata, body)
+
+    updated = _load_project_summary(project_dir)
+    if updated is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to load updated project summary",
+        )
+    return updated
+
+
+def _update_project_auto_knowledge_sink(
+    workspace_dir: Path,
+    project_id: str,
+    project_auto_knowledge_sink: bool,
+) -> ProjectSummary:
+    project_dir = _resolve_project_dir(workspace_dir, project_id)
+    summary = _load_project_summary(project_dir)
+    if summary is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Project '{project_id}' metadata not found",
+        )
+
+    metadata_file = Path(summary.metadata_file)
+    metadata, body = _read_project_frontmatter_with_body(metadata_file)
+    metadata["project_auto_knowledge_sink"] = bool(project_auto_knowledge_sink)
     _write_project_frontmatter(metadata_file, metadata, body)
 
     updated = _load_project_summary(project_dir)
@@ -1883,6 +1937,7 @@ def _create_project(
         "artifact_distill_mode": _normalize_project_artifact_distill_mode(
             body.artifact_distill_mode,
         ),
+        "project_auto_knowledge_sink": bool(body.project_auto_knowledge_sink),
         "artifact_profile": normalized_profile.model_dump(
             mode="json",
             exclude_none=True,
@@ -3702,6 +3757,40 @@ async def update_project_workspace_chat_binding(
             Path(workspace.workspace_dir),
             projectId,
             body.preferred_workspace_chat_id,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.put(
+    "/{agentId}/projects/{projectId}/knowledge-sink",
+    response_model=ProjectSummary,
+    summary="Update project auto knowledge sink",
+    description=(
+        "Persist project-level auto knowledge sink switch in project metadata"
+    ),
+)
+async def update_project_knowledge_sink(
+    request: Request,
+    body: UpdateProjectKnowledgeSinkRequest = Body(...),
+    agentId: str = PathParam(...),
+    projectId: str = PathParam(...),
+) -> ProjectSummary:
+    """Update project auto knowledge sink switch."""
+    manager = _get_multi_agent_manager(request)
+
+    try:
+        workspace = await manager.get_agent(agentId)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    try:
+        return _update_project_auto_knowledge_sink(
+            Path(workspace.workspace_dir),
+            projectId,
+            body.project_auto_knowledge_sink,
         )
     except HTTPException:
         raise
