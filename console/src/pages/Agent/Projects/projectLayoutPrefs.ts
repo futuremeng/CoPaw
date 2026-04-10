@@ -3,12 +3,22 @@ import type { ProjectFileFilterKey } from "./filtering";
 export type ProjectStageKey = "source" | "knowledge" | "output" | "builtin";
 export type TreeDisplayMode = "filter" | "highlight";
 
+function parsePaneSize(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? value
+    : fallback;
+}
+
 export interface ProjectDetailLayoutPrefs {
   leftPanelCollapsed: boolean;
   activeStage: ProjectStageKey;
   knowledgeModuleCollapsed: boolean;
   selectedMetricFilter: ProjectFileFilterKey | "";
   treeDisplayMode: TreeDisplayMode;
+  leftPaneSize: number;
+  workbenchPaneSize: number;
+  chatPaneSize: number;
+  knowledgeDockSize: number;
 }
 
 export const PROJECT_LAYOUT_PREFS_PREFIX = "copaw:projects:detail:layout:";
@@ -38,6 +48,10 @@ export function defaultProjectLayoutPrefs(): ProjectDetailLayoutPrefs {
     knowledgeModuleCollapsed: false,
     selectedMetricFilter: "",
     treeDisplayMode: "filter",
+    leftPaneSize: 440,
+    workbenchPaneSize: 620,
+    chatPaneSize: 520,
+    knowledgeDockSize: 320,
   };
 }
 
@@ -57,6 +71,16 @@ export function parseProjectLayoutPrefs(raw: string | null): ProjectDetailLayout
       selectedMetricFilter:
         parsed.selectedMetricFilter ?? fallback.selectedMetricFilter,
       treeDisplayMode: parseTreeMode(parsed.treeDisplayMode, fallback.treeDisplayMode),
+      leftPaneSize: parsePaneSize(parsed.leftPaneSize, fallback.leftPaneSize),
+      workbenchPaneSize: parsePaneSize(
+        parsed.workbenchPaneSize,
+        fallback.workbenchPaneSize,
+      ),
+      chatPaneSize: parsePaneSize(parsed.chatPaneSize, fallback.chatPaneSize),
+      knowledgeDockSize: parsePaneSize(
+        parsed.knowledgeDockSize,
+        fallback.knowledgeDockSize,
+      ),
     };
   } catch {
     return fallback;

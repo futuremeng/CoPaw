@@ -25,6 +25,7 @@ import {
   Modal,
   Popconfirm,
   Select,
+  Splitter,
   Spin,
   Tabs,
   Typography,
@@ -99,6 +100,16 @@ import styles from "./index.module.less";
 const { Text } = Typography;
 
 const LEFT_STAGE_RAIL_TRANSITION_MS = 220;
+const LEFT_PANE_EXPANDED_SIZE = 440;
+const LEFT_PANE_COLLAPSED_SIZE = 360;
+const LEFT_PANE_MIN_SIZE = 320;
+const WORKBENCH_PANE_DEFAULT_SIZE = 620;
+const WORKBENCH_PANE_MIN_SIZE = 360;
+const CHAT_PANE_DEFAULT_SIZE = 520;
+const CHAT_PANE_MIN_SIZE = 420;
+const KNOWLEDGE_DOCK_DEFAULT_SIZE = 320;
+const KNOWLEDGE_DOCK_COLLAPSED_SIZE = 56;
+const KNOWLEDGE_DOCK_MIN_SIZE = 240;
 
 const STAGE_FILTERS: Record<ProjectStageKey, ProjectFileFilterKey[]> = {
   source: ["original", "derived"],
@@ -317,6 +328,10 @@ export default function ProjectDetailPage() {
   const [knowledgeModuleCollapsed, setKnowledgeModuleCollapsed] = useState(false);
   const [selectedMetricFilter, setSelectedMetricFilter] = useState<ProjectFileFilterKey | "">("");
   const [treeDisplayMode, setTreeDisplayMode] = useState<TreeDisplayMode>("filter");
+  const [leftPaneSize, setLeftPaneSize] = useState(LEFT_PANE_EXPANDED_SIZE);
+  const [workbenchPaneSize, setWorkbenchPaneSize] = useState(WORKBENCH_PANE_DEFAULT_SIZE);
+  const [chatPaneSize, setChatPaneSize] = useState(CHAT_PANE_DEFAULT_SIZE);
+  const [knowledgeDockSize, setKnowledgeDockSize] = useState(KNOWLEDGE_DOCK_DEFAULT_SIZE);
   const runFocusChatIdRef = useRef("");
   const workspaceFocusChatIdRef = useRef("");
   const designFocusChatIdRef = useRef("");
@@ -789,6 +804,52 @@ export default function ProjectDetailPage() {
       setLeftPanelCollapsed(false);
     }
   }, [leftPanelCollapsed]);
+
+  const handleWorkspaceResize = useCallback((sizes: number[]) => {
+    if (sizes.length !== 3) {
+      return;
+    }
+    const [nextLeftSize, nextWorkbenchSize, nextChatSize] = sizes;
+    setLeftPaneSize(nextLeftSize);
+    setWorkbenchPaneSize(nextWorkbenchSize);
+    setChatPaneSize(nextChatSize);
+  }, []);
+
+  const handleKnowledgeDockResize = useCallback((sizes: number[]) => {
+    if (sizes.length !== 2) {
+      return;
+    }
+    const nextDockSize = sizes[1];
+    if (Number.isFinite(nextDockSize) && nextDockSize > 0) {
+      setKnowledgeDockSize(nextDockSize);
+    }
+  }, []);
+
+  const handleToggleLeftPanel = useCallback(() => {
+    setLeftPanelCollapsed((prev) => {
+      const next = !prev;
+      setLeftPaneSize((current) => {
+        if (next) {
+          return Math.min(current, LEFT_PANE_COLLAPSED_SIZE);
+        }
+        return Math.max(current, LEFT_PANE_EXPANDED_SIZE);
+      });
+      return next;
+    });
+  }, []);
+
+  const handleToggleKnowledgeDock = useCallback(() => {
+    setKnowledgeModuleCollapsed((prev) => {
+      const next = !prev;
+      setKnowledgeDockSize((current) => {
+        if (next) {
+          return KNOWLEDGE_DOCK_COLLAPSED_SIZE;
+        }
+        return Math.max(current, KNOWLEDGE_DOCK_DEFAULT_SIZE);
+      });
+      return next;
+    });
+  }, []);
 
   const projectWorkspaceSummary = useMemo(
     () => buildProjectWorkspaceSummary({
@@ -1616,6 +1677,18 @@ export default function ProjectDetailPage() {
       setKnowledgeModuleCollapsed(parsed.knowledgeModuleCollapsed);
       setSelectedMetricFilter(parsed.selectedMetricFilter);
       setTreeDisplayMode(parsed.treeDisplayMode);
+      setLeftPaneSize(
+        parsed.leftPanelCollapsed
+          ? Math.min(parsed.leftPaneSize, LEFT_PANE_COLLAPSED_SIZE)
+          : Math.max(parsed.leftPaneSize, LEFT_PANE_MIN_SIZE),
+      );
+      setWorkbenchPaneSize(Math.max(parsed.workbenchPaneSize, WORKBENCH_PANE_MIN_SIZE));
+      setChatPaneSize(Math.max(parsed.chatPaneSize, CHAT_PANE_MIN_SIZE));
+      setKnowledgeDockSize(
+        parsed.knowledgeModuleCollapsed
+          ? KNOWLEDGE_DOCK_COLLAPSED_SIZE
+          : Math.max(parsed.knowledgeDockSize, KNOWLEDGE_DOCK_MIN_SIZE),
+      );
     } catch {
       const parsed = parseProjectLayoutPrefs(null);
       setLeftPanelCollapsed(parsed.leftPanelCollapsed);
@@ -1623,6 +1696,18 @@ export default function ProjectDetailPage() {
       setKnowledgeModuleCollapsed(parsed.knowledgeModuleCollapsed);
       setSelectedMetricFilter(parsed.selectedMetricFilter);
       setTreeDisplayMode(parsed.treeDisplayMode);
+      setLeftPaneSize(
+        parsed.leftPanelCollapsed
+          ? Math.min(parsed.leftPaneSize, LEFT_PANE_COLLAPSED_SIZE)
+          : Math.max(parsed.leftPaneSize, LEFT_PANE_MIN_SIZE),
+      );
+      setWorkbenchPaneSize(Math.max(parsed.workbenchPaneSize, WORKBENCH_PANE_MIN_SIZE));
+      setChatPaneSize(Math.max(parsed.chatPaneSize, CHAT_PANE_MIN_SIZE));
+      setKnowledgeDockSize(
+        parsed.knowledgeModuleCollapsed
+          ? KNOWLEDGE_DOCK_COLLAPSED_SIZE
+          : Math.max(parsed.knowledgeDockSize, KNOWLEDGE_DOCK_MIN_SIZE),
+      );
     } finally {
       layoutPrefsLoadedRef.current = true;
     }
@@ -1662,6 +1747,10 @@ export default function ProjectDetailPage() {
       knowledgeModuleCollapsed,
       selectedMetricFilter,
       treeDisplayMode,
+      leftPaneSize,
+      workbenchPaneSize,
+      chatPaneSize,
+      knowledgeDockSize,
     };
     try {
       window.localStorage.setItem(storageKey, JSON.stringify(payload));
@@ -1670,11 +1759,15 @@ export default function ProjectDetailPage() {
     }
   }, [
     activeStage,
+    chatPaneSize,
     knowledgeModuleCollapsed,
+    knowledgeDockSize,
+    leftPaneSize,
     leftPanelCollapsed,
     routeProjectId,
     selectedMetricFilter,
     treeDisplayMode,
+    workbenchPaneSize,
   ]);
 
   useOpenUploadQuery({
@@ -2276,155 +2369,204 @@ export default function ProjectDetailPage() {
           </Empty>
         </Card>
       ) : (
-        <div className={styles.content}>
-          <div className={`${styles.columnLeft} ${leftPanelCollapsed ? styles.columnLeftCollapsed : ""}`}>
-            <div className={`${styles.leftStageRail} ${leftPanelCollapsed ? styles.leftStageRailCollapsed : ""}`}>
-              <Button
-                size="small"
-                block
-                className={styles.leftRailToggle}
-                icon={leftPanelCollapsed ? <RightOutlined /> : <LeftOutlined />}
-                onClick={() => setLeftPanelCollapsed((prev) => !prev)}
-                title={leftPanelCollapsed
-                  ? t("projects.layout.expandLeft", "Expand left panel")
-                  : t("projects.layout.collapseLeft", "Collapse left panel")}
-              />
-              <Menu
-                mode="inline"
-                className={styles.leftStageMenu}
-                inlineCollapsed={!showExpandedStageMenu}
-                items={showExpandedStageMenu ? stageMenuItems : collapsedLeafMenuItems}
-                selectedKeys={selectedMetricFilter ? [selectedMetricFilter] : []}
-                openKeys={stageMenuOpenKeys}
-                onClick={({ key }) => {
-                  const keyValue = String(key);
-                  if (keyValue === "stage:source") {
-                    handleSelectStage("source");
-                    return;
-                  }
-                  if (keyValue === "stage:knowledge") {
-                    handleSelectStage("knowledge");
-                    return;
-                  }
-                  if (keyValue === "stage:output") {
-                    handleSelectStage("output");
-                    return;
-                  }
-                  if (keyValue === "stage:builtin") {
-                    handleSelectStage("builtin");
-                    return;
-                  }
-                  setSelectedMetricFilter(keyValue as ProjectFileFilterKey);
-                }}
-              />
-            </div>
-
-            <div className={styles.columnStack}>
-              <ProjectOverviewCard
-                selectedProject={selectedProject}
-                projectFileCount={projectFileCount}
-                pipelineTemplateCount={pipelineTemplates.length}
-                pipelineRunCount={pipelineRuns.length}
-                projectWorkspaceSummary={projectWorkspaceSummary}
-                projectFiles={projectFiles}
-                priorityFilePaths={priorityFilePaths}
-                selectedFilePath={selectedFilePath}
-                selectedAttachPaths={selectedAttachPaths}
-                activeStage={activeStage}
-                selectedMetricFilter={selectedMetricFilter}
-                onMetricFilterChange={setSelectedMetricFilter}
-                treeDisplayMode={treeDisplayMode}
-                onTreeDisplayModeChange={setTreeDisplayMode}
-                treeOnly
-                onUploadFiles={openProjectUploadModal}
-                onSelectFileFromTree={(path) => {
-                  void handleSelectArtifactFile(path);
-                }}
-                onAttachArtifactToChat={(path) => {
-                  void handleAttachArtifactToChat(path);
-                }}
-              />
-            </div>
-          </div>
-
-          <div className={styles.columnRight}>
-            <div className={styles.rightWorkbenchPrimary}>
-              <ProjectWorkbenchPanel
-                projectLabel={selectedProject?.id || routeProjectId}
-                filesLoading={filesLoading}
-                contentLoading={contentLoading}
-                artifactRecords={artifactRecords}
-                selectedArtifactRecord={selectedArtifactRecord}
-                selectedFilePath={selectedFilePath}
-                projectFiles={projectFiles}
-                fileContent={fileContent}
-                selectedAttachPaths={selectedAttachPaths}
-                autoAnalyzeOnAttach={autoAnalyzeOnAttach}
-                sendingSelectedFiles={sendingSelectedFiles}
-                onToggleAutoAnalyze={setAutoAnalyzeOnAttach}
-                onSendSelectedFilesToChat={() => {
-                  void handleSendSelectedFilesToChat();
-                }}
-                formatBytes={formatBytes}
-              />
-            </div>
-            {activeStage === "knowledge" ? (
-              <div className={styles.knowledgeModuleShell}>
-                <div className={styles.knowledgeModuleHeader}>
-                  <Text strong>{t("projects.knowledgePanelTitle")}</Text>
-                  <Button
-                    size="small"
-                    type="text"
-                    onClick={() => {
-                      setKnowledgeModuleCollapsed((prev) => !prev);
-                    }}
+        <>
+          <div className={styles.content}>
+            <Splitter
+              layout="vertical"
+              className={styles.contentSplitter}
+              onResize={handleKnowledgeDockResize}
+              onResizeEnd={handleKnowledgeDockResize}
+            >
+              <Splitter.Panel min={420}>
+                <Splitter
+                  className={styles.workspaceSplitter}
+                  onResize={handleWorkspaceResize}
+                  onResizeEnd={handleWorkspaceResize}
+                >
+                  <Splitter.Panel
+                    size={leftPaneSize}
+                    min={LEFT_PANE_MIN_SIZE}
+                    defaultSize={LEFT_PANE_EXPANDED_SIZE}
                   >
-                    {knowledgeModuleCollapsed
-                      ? t("projects.knowledgeModuleExpand", "Expand knowledge module")
-                      : t("projects.knowledgeModuleCollapse", "Collapse knowledge module")}
-                  </Button>
-                </div>
-                {knowledgeModuleCollapsed ? null : (
-                  <ProjectKnowledgePanel
-                    agentId={currentAgent?.id}
-                    projectId={selectedProject.id}
-                    projectName={selectedProject.name}
-                    projectWorkspaceDir={selectedProject.workspace_dir}
-                    projectAutoKnowledgeSink={
-                      selectedProject.project_auto_knowledge_sink !== false
-                    }
-                    onProjectAutoKnowledgeSinkChange={handleProjectAutoKnowledgeSinkChange}
-                  />
-                )}
-              </div>
-            ) : null}
-          </div>
+                    <div className={styles.splitterPanel}>
+                      <div className={`${styles.columnLeft} ${leftPanelCollapsed ? styles.columnLeftCollapsed : ""}`}>
+                        <div className={`${styles.leftStageRail} ${leftPanelCollapsed ? styles.leftStageRailCollapsed : ""}`}>
+                          <Button
+                            size="small"
+                            block
+                            className={styles.leftRailToggle}
+                            icon={leftPanelCollapsed ? <RightOutlined /> : <LeftOutlined />}
+                            onClick={handleToggleLeftPanel}
+                            title={leftPanelCollapsed
+                              ? t("projects.layout.expandLeft", "Expand left panel")
+                              : t("projects.layout.collapseLeft", "Collapse left panel")}
+                          />
+                          <Menu
+                            mode="inline"
+                            className={styles.leftStageMenu}
+                            inlineCollapsed={!showExpandedStageMenu}
+                            items={showExpandedStageMenu ? stageMenuItems : collapsedLeafMenuItems}
+                            selectedKeys={selectedMetricFilter ? [selectedMetricFilter] : []}
+                            openKeys={stageMenuOpenKeys}
+                            onClick={({ key }) => {
+                              const keyValue = String(key);
+                              if (keyValue === "stage:source") {
+                                handleSelectStage("source");
+                                return;
+                              }
+                              if (keyValue === "stage:knowledge") {
+                                handleSelectStage("knowledge");
+                                return;
+                              }
+                              if (keyValue === "stage:output") {
+                                handleSelectStage("output");
+                                return;
+                              }
+                              if (keyValue === "stage:builtin") {
+                                handleSelectStage("builtin");
+                                return;
+                              }
+                              setSelectedMetricFilter(keyValue as ProjectFileFilterKey);
+                            }}
+                          />
+                        </div>
 
-          <div className={styles.columnChat}>
-            <ProjectChatPanel
-              projectFileCount={projectFileCount}
-              chatMode={projectChatMode}
-              selectedRunId={selectedRunId}
-              chatStarting={chatStarting}
-              activeWorkspaceChatId={activeWorkspaceChatId}
-              activeDesignChatId={activeDesignChatId}
-              activeRunChatId={activeRunChatId}
-              autoAttachRequest={autoAttachRequest}
-              onAutoAttachHandled={(payload) => {
-                window.requestAnimationFrame(() => {
-                  setAutoAttachRequest((prev) => (prev?.id === payload.id ? null : prev));
-                });
-              }}
-              onStartWorkspaceChat={handleStartWorkspaceChat}
-              onStartDesignChat={handleStartDesignChat}
-              onStartRunChat={handleStartRunChat}
-              onSelectWorkspaceHistoryChat={applyWorkspaceChatFocus}
-              onSelectDesignHistoryChat={selectDesignChatSession}
-              onSelectRunHistoryChat={selectRunChatSession}
-              onOpenManualRecoverDialog={() => {
-                void handleOpenManualRecoverDialog();
-              }}
-            />
+                        <div className={styles.columnStack}>
+                          <ProjectOverviewCard
+                            selectedProject={selectedProject}
+                            projectFileCount={projectFileCount}
+                            pipelineTemplateCount={pipelineTemplates.length}
+                            pipelineRunCount={pipelineRuns.length}
+                            projectWorkspaceSummary={projectWorkspaceSummary}
+                            projectFiles={projectFiles}
+                            priorityFilePaths={priorityFilePaths}
+                            selectedFilePath={selectedFilePath}
+                            selectedAttachPaths={selectedAttachPaths}
+                            activeStage={activeStage}
+                            selectedMetricFilter={selectedMetricFilter}
+                            onMetricFilterChange={setSelectedMetricFilter}
+                            treeDisplayMode={treeDisplayMode}
+                            onTreeDisplayModeChange={setTreeDisplayMode}
+                            treeOnly
+                            onUploadFiles={openProjectUploadModal}
+                            onSelectFileFromTree={(path) => {
+                              void handleSelectArtifactFile(path);
+                            }}
+                            onAttachArtifactToChat={(path) => {
+                              void handleAttachArtifactToChat(path);
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </Splitter.Panel>
+
+                  <Splitter.Panel
+                    size={workbenchPaneSize}
+                    min={WORKBENCH_PANE_MIN_SIZE}
+                    defaultSize={WORKBENCH_PANE_DEFAULT_SIZE}
+                  >
+                    <div className={styles.splitterPanel}>
+                      <div className={styles.columnRight}>
+                        <div className={styles.rightWorkbenchPrimary}>
+                          <ProjectWorkbenchPanel
+                            projectLabel={selectedProject?.id || routeProjectId}
+                            filesLoading={filesLoading}
+                            contentLoading={contentLoading}
+                            artifactRecords={artifactRecords}
+                            selectedArtifactRecord={selectedArtifactRecord}
+                            selectedFilePath={selectedFilePath}
+                            projectFiles={projectFiles}
+                            fileContent={fileContent}
+                            selectedAttachPaths={selectedAttachPaths}
+                            autoAnalyzeOnAttach={autoAnalyzeOnAttach}
+                            sendingSelectedFiles={sendingSelectedFiles}
+                            onToggleAutoAnalyze={setAutoAnalyzeOnAttach}
+                            onSendSelectedFilesToChat={() => {
+                              void handleSendSelectedFilesToChat();
+                            }}
+                            formatBytes={formatBytes}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </Splitter.Panel>
+
+                  <Splitter.Panel
+                    size={chatPaneSize}
+                    min={CHAT_PANE_MIN_SIZE}
+                    defaultSize={CHAT_PANE_DEFAULT_SIZE}
+                  >
+                    <div className={styles.splitterPanel}>
+                      <div className={styles.columnChat}>
+                        <ProjectChatPanel
+                          projectFileCount={projectFileCount}
+                          chatMode={projectChatMode}
+                          selectedRunId={selectedRunId}
+                          chatStarting={chatStarting}
+                          activeWorkspaceChatId={activeWorkspaceChatId}
+                          activeDesignChatId={activeDesignChatId}
+                          activeRunChatId={activeRunChatId}
+                          autoAttachRequest={autoAttachRequest}
+                          onAutoAttachHandled={(payload) => {
+                            window.requestAnimationFrame(() => {
+                              setAutoAttachRequest((prev) => (prev?.id === payload.id ? null : prev));
+                            });
+                          }}
+                          onStartWorkspaceChat={handleStartWorkspaceChat}
+                          onStartDesignChat={handleStartDesignChat}
+                          onStartRunChat={handleStartRunChat}
+                          onSelectWorkspaceHistoryChat={applyWorkspaceChatFocus}
+                          onSelectDesignHistoryChat={selectDesignChatSession}
+                          onSelectRunHistoryChat={selectRunChatSession}
+                          onOpenManualRecoverDialog={() => {
+                            void handleOpenManualRecoverDialog();
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </Splitter.Panel>
+                </Splitter>
+              </Splitter.Panel>
+
+              <Splitter.Panel
+                size={knowledgeDockSize}
+                min={knowledgeModuleCollapsed ? KNOWLEDGE_DOCK_COLLAPSED_SIZE : KNOWLEDGE_DOCK_MIN_SIZE}
+                max="52%"
+                defaultSize={KNOWLEDGE_DOCK_DEFAULT_SIZE}
+              >
+                <div className={styles.splitterPanel}>
+                  <div className={`${styles.knowledgeModuleShell} ${knowledgeModuleCollapsed ? styles.knowledgeDockPanelCollapsed : ""}`}>
+                    <div className={styles.knowledgeModuleHeader}>
+                      <Text strong>{t("projects.knowledgePanelTitle")}</Text>
+                      <Button
+                        size="small"
+                        type="text"
+                        onClick={handleToggleKnowledgeDock}
+                      >
+                        {knowledgeModuleCollapsed
+                          ? t("projects.knowledgeModuleExpand", "Expand knowledge module")
+                          : t("projects.knowledgeModuleCollapse", "Collapse knowledge module")}
+                      </Button>
+                    </div>
+                    {knowledgeModuleCollapsed ? null : (
+                      <div className={styles.knowledgeDockBody}>
+                        <ProjectKnowledgePanel
+                          agentId={currentAgent?.id}
+                          projectId={selectedProject.id}
+                          projectName={selectedProject.name}
+                          projectWorkspaceDir={selectedProject.workspace_dir}
+                          projectAutoKnowledgeSink={
+                            selectedProject.project_auto_knowledge_sink !== false
+                          }
+                          onProjectAutoKnowledgeSinkChange={handleProjectAutoKnowledgeSinkChange}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </Splitter.Panel>
+            </Splitter>
           </div>
 
           <Drawer
@@ -2626,7 +2768,7 @@ export default function ProjectDetailPage() {
               ))}
             </div>
           </Modal>
-        </div>
+        </>
       )}
     </div>
   );
