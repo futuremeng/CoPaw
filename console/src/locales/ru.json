@@ -1684,6 +1684,7 @@
     "updated": "Обновлено",
     "filesOriginal": "Исходные файлы",
     "filesDerived": "Производные файлы",
+    "filesBuiltIn": "Встроенные файлы",
     "treeViewMode": {
       "filter": "Фильтр",
       "highlight": "Подсветка"
@@ -1734,7 +1735,8 @@
     "stage": {
       "source": "Исходники",
       "knowledge": "Знания",
-      "output": "Выход"
+      "output": "Выход",
+      "builtin": "Встроенное"
     },
     "layout": {
       "expandLeft": "Развернуть левую панель",

@@ -1,7 +1,5 @@
 import {
   CodeOutlined,
-  EyeInvisibleOutlined,
-  EyeOutlined,
   FileExcelOutlined,
   FileImageOutlined,
   FileMarkdownOutlined,
@@ -34,12 +32,14 @@ import {
   type FileMetricFilterKey,
   type ProjectFileFilterKey,
 } from "./filtering";
+import type { ProjectStageKey } from "./projectLayoutPrefs";
+import { isBuiltInProjectFile } from "./builtInFiles";
 import styles from "./index.module.less";
 
 const { Text } = Typography;
 
 interface ProjectOverviewCardProps {
-  activeStage: "source" | "knowledge" | "output";
+  activeStage: ProjectStageKey;
   selectedMetricFilter: ProjectFileFilterKey | "";
   onMetricFilterChange: (next: ProjectFileFilterKey | "") => void;
   treeDisplayMode: TreeDisplayMode;
@@ -54,11 +54,9 @@ interface ProjectOverviewCardProps {
   priorityFilePaths: string[];
   selectedFilePath: string;
   selectedAttachPaths: string[];
-  hideBuiltInFiles: boolean;
   onUploadFiles: () => void;
   onSelectFileFromTree: (path: string) => void;
   onAttachArtifactToChat: (path: string) => void;
-  onToggleHideBuiltInFiles: (value: boolean) => void;
 }
 
 interface TreeNode {
@@ -86,12 +84,6 @@ function formatUpdatedDateParts(updatedTime?: string): { day: string; month: str
   }
 
   return { day: updatedTime.slice(5, 10), month: "" };
-}
-
-function isBuiltInProjectFile(path: string): boolean {
-  const normalized = path.replace(/\\/g, "/").toLowerCase();
-  const fileName = normalized.split("/").pop() || "";
-  return fileName === "project.md" || fileName === "heartbeat.md";
 }
 
 function normalizeProjectPath(path: string): string {
@@ -292,11 +284,9 @@ export default function ProjectOverviewCard({
   priorityFilePaths,
   selectedFilePath,
   selectedAttachPaths,
-  hideBuiltInFiles,
   onUploadFiles,
   onSelectFileFromTree,
   onAttachArtifactToChat,
-  onToggleHideBuiltInFiles,
 }: ProjectOverviewCardProps) {
   void _projectFileCount;
   void _pipelineTemplateCount;
@@ -305,9 +295,18 @@ export default function ProjectOverviewCard({
   const [treeTransitioning, setTreeTransitioning] = useState(false);
   const updatedDateParts = formatUpdatedDateParts(selectedProject?.updated_time);
 
-  const visibleFiles = hideBuiltInFiles
-    ? projectFiles.filter((item) => !isBuiltInProjectFile(item.path))
-    : projectFiles;
+  const builtInFiles = useMemo(
+    () => projectFiles.filter((item) => isBuiltInProjectFile(item.path)),
+    [projectFiles],
+  );
+  const nonBuiltInFiles = useMemo(
+    () => projectFiles.filter((item) => !isBuiltInProjectFile(item.path)),
+    [projectFiles],
+  );
+  const stageScopedFiles =
+    activeStage === "builtin" || selectedMetricFilter === "builtin"
+      ? builtInFiles
+      : nonBuiltInFiles;
   const attachTitle = t("projects.chat.addAttachment", "Add to chat attachments");
   const detachTitle = t("projects.chat.removeAttachment", "Remove from chat attachments");
   const priorityFileSet = new Set(priorityFilePaths);
@@ -319,12 +318,12 @@ export default function ProjectOverviewCard({
     flows: artifactProfile?.flows.length || 0,
     cases: artifactProfile?.cases.length || 0,
   };
-  const normalizedVisibleFiles = visibleFiles.map((item) => normalizeProjectPath(item.path));
+  const normalizedVisibleFiles = nonBuiltInFiles.map((item) => normalizeProjectPath(item.path));
   const originalFileCount = normalizedVisibleFiles.filter((path) => isOriginalInputFile(path)).length;
   const derivedFileCount = normalizedVisibleFiles.filter(
     (path) => !isOriginalInputFile(path) && !isStandardArtifactDirPath(path),
   ).length;
-  const filteredFiles = visibleFiles.filter((item) => {
+  const filteredFiles = stageScopedFiles.filter((item) => {
     const normalizedPath = normalizeProjectPath(item.path);
     const nowMs = Date.now();
     switch (selectedMetricFilter) {
@@ -340,6 +339,8 @@ export default function ProjectOverviewCard({
         return isPathInStandardDir(normalizedPath, "flows");
       case "cases":
         return isPathInStandardDir(normalizedPath, "cases");
+      case "builtin":
+        return isBuiltInProjectFile(item.path);
       case "knowledgeCandidates":
         return matchesProjectKnowledgeFilter("knowledgeCandidates", item, nowMs);
       case "markdown":
@@ -356,14 +357,14 @@ export default function ProjectOverviewCard({
   const highlightedFilePaths = selectedMetricFilter
     ? filteredFilePaths
     : [];
-  const treeFiles = treeDisplayMode === "highlight" ? visibleFiles : filteredFiles;
+  const treeFiles = treeDisplayMode === "highlight" ? stageScopedFiles : filteredFiles;
   const treeFilePaths = treeFiles.map((item) => item.path);
   const highlightedFileSet = new Set(
     treeDisplayMode === "highlight" ? highlightedFilePaths : [],
   );
   const projectKnowledgeMetrics = useMemo(
-    () => computeProjectKnowledgeMetrics(visibleFiles),
-    [visibleFiles],
+    () => computeProjectKnowledgeMetrics(nonBuiltInFiles),
+    [nonBuiltInFiles],
   );
   const treeData = buildFileTree(
     treeFilePaths,
@@ -448,7 +449,9 @@ export default function ProjectOverviewCard({
         ? t("projects.stage.knowledge", "Knowledge")
         : activeStage === "output"
           ? t("projects.stage.output", "Output")
-          : t("projects.stage.source", "Source");
+          : activeStage === "builtin"
+            ? t("projects.stage.builtin", "Built-in")
+            : t("projects.stage.source", "Source");
 
     return (
       <Card
@@ -463,17 +466,7 @@ export default function ProjectOverviewCard({
             </Button>
           </div>
           <div className={`${styles.overviewTreeToolbar} ${styles.treeToolbarSticky}`}>
-            <div className={styles.treeToolbarLeft}>
-              <Button
-                size="small"
-                className={styles.hideBuiltInToggle}
-                type={hideBuiltInFiles ? "default" : "text"}
-                icon={hideBuiltInFiles ? <EyeInvisibleOutlined /> : <EyeOutlined />}
-                onClick={() => onToggleHideBuiltInFiles(!hideBuiltInFiles)}
-              >
-                {t("projects.artifacts.hideBuiltins", "built-in")}
-              </Button>
-            </div>
+            <div className={styles.treeToolbarLeft} />
             <div className={styles.treeToolbarRight}>
               <Segmented
                 size="small"
@@ -674,17 +667,7 @@ export default function ProjectOverviewCard({
             </Button>
           </div>
           <div className={styles.overviewTreeToolbar}>
-            <div className={styles.treeToolbarLeft}>
-              <Button
-                size="small"
-                className={styles.hideBuiltInToggle}
-                type={hideBuiltInFiles ? "default" : "text"}
-                icon={hideBuiltInFiles ? <EyeInvisibleOutlined /> : <EyeOutlined />}
-                onClick={() => onToggleHideBuiltInFiles(!hideBuiltInFiles)}
-              >
-                {t("projects.artifacts.hideBuiltins", "built-in")}
-              </Button>
-            </div>
+            <div className={styles.treeToolbarLeft} />
             <div className={styles.treeToolbarRight}>
               <Segmented
                 size="small"

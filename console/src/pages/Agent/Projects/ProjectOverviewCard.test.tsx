@@ -7,6 +7,7 @@ import type {
   AgentProjectSummary,
 } from "../../../api/types/agents";
 import ProjectOverviewCard from "./ProjectOverviewCard";
+import type { ProjectStageKey } from "./projectLayoutPrefs";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -55,21 +56,23 @@ function buildProjectSummary(): AgentProjectSummary {
   };
 }
 
-function renderCard(projectFiles: AgentProjectFileInfo[]) {
+function renderCard(
+  projectFiles: AgentProjectFileInfo[],
+  options?: { activeStage?: ProjectStageKey; initialFilter?: "" | "original" | "derived" | "skills" | "scripts" | "flows" | "cases" | "builtin" | "knowledgeCandidates" | "markdown" | "textLike" | "recent" },
+) {
   const onUploadFiles = vi.fn();
   const onSelectFileFromTree = vi.fn();
   const onAttachArtifactToChat = vi.fn();
-  const onToggleHideBuiltInFiles = vi.fn();
 
   function TestHarness() {
     const [selectedMetricFilter, setSelectedMetricFilter] = useState<
-      "" | "original" | "derived" | "skills" | "scripts" | "flows" | "cases" | "knowledgeCandidates" | "markdown" | "textLike" | "recent"
-    >("");
+      "" | "original" | "derived" | "skills" | "scripts" | "flows" | "cases" | "builtin" | "knowledgeCandidates" | "markdown" | "textLike" | "recent"
+    >(options?.initialFilter ?? "");
     const [treeDisplayMode, setTreeDisplayMode] = useState<"filter" | "highlight">("filter");
 
     return (
       <ProjectOverviewCard
-        activeStage="source"
+        activeStage={options?.activeStage ?? "source"}
         selectedMetricFilter={selectedMetricFilter}
         onMetricFilterChange={setSelectedMetricFilter}
         treeDisplayMode={treeDisplayMode}
@@ -83,11 +86,9 @@ function renderCard(projectFiles: AgentProjectFileInfo[]) {
         priorityFilePaths={[]}
         selectedFilePath=""
         selectedAttachPaths={[]}
-        hideBuiltInFiles={false}
         onUploadFiles={onUploadFiles}
         onSelectFileFromTree={onSelectFileFromTree}
         onAttachArtifactToChat={onAttachArtifactToChat}
-        onToggleHideBuiltInFiles={onToggleHideBuiltInFiles}
       />
     );
   }
@@ -152,5 +153,42 @@ describe("ProjectOverviewCard interactions", () => {
 
     expect(screen.getByText("No related files under the current filter")).toBeDefined();
     expect(screen.getByRole("button", { name: /Text-like Files/i }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("shows only built-in files when builtin stage/filter is active", () => {
+    renderCard(
+      [
+        {
+          filename: "AGENTS.md",
+          path: "AGENTS.md",
+          size: 10,
+          modified_time: "2026-04-09T00:00:00Z",
+        },
+        {
+          filename: ".env",
+          path: ".env",
+          size: 10,
+          modified_time: "2026-04-09T00:00:00Z",
+        },
+        {
+          filename: "config.json",
+          path: ".cursor/config.json",
+          size: 10,
+          modified_time: "2026-04-09T00:00:00Z",
+        },
+        {
+          filename: "guide.md",
+          path: "original/guide.md",
+          size: 10,
+          modified_time: "2026-04-09T00:00:00Z",
+        },
+      ],
+      { activeStage: "builtin", initialFilter: "builtin" },
+    );
+
+    expect(screen.getByText("AGENTS.md")).toBeDefined();
+    expect(screen.getByText(".env")).toBeDefined();
+    expect(screen.getByText(".cursor")).toBeDefined();
+    expect(screen.queryByText("guide.md")).toBeNull();
   });
 });

@@ -1729,6 +1729,7 @@
     "updated": "Updated",
     "filesOriginal": "Original Files",
     "filesDerived": "Derived Files",
+    "filesBuiltIn": "Built-in Files",
     "treeViewMode": {
       "filter": "Filter",
       "highlight": "Highlight"
@@ -1779,7 +1780,8 @@
     "stage": {
       "source": "Source",
       "knowledge": "Knowledge",
-      "output": "Output"
+      "output": "Output",
+      "builtin": "Built-in"
     },
     "layout": {
       "expandLeft": "Expand left panel",

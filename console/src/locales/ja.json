@@ -1684,6 +1684,7 @@
     "updated": "更新",
     "filesOriginal": "原本ファイル",
     "filesDerived": "派生ファイル",
+    "filesBuiltIn": "内蔵ファイル",
     "treeViewMode": {
       "filter": "絞り込み",
       "highlight": "ハイライト"
@@ -1734,7 +1735,8 @@
     "stage": {
       "source": "ソース",
       "knowledge": "ナレッジ",
-      "output": "出力"
+      "output": "出力",
+      "builtin": "内蔵"
     },
     "layout": {
       "expandLeft": "左パネルを展開",

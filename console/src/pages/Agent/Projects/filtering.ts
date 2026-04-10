@@ -1,6 +1,6 @@
 import type { ProjectKnowledgeFilterKey } from "./metrics";
 
-export type FileMetricFilterKey = "original" | "derived" | "skills" | "scripts" | "flows" | "cases";
+export type FileMetricFilterKey = "original" | "derived" | "skills" | "scripts" | "flows" | "cases" | "builtin";
 export type ProjectFileFilterKey = FileMetricFilterKey | ProjectKnowledgeFilterKey;
 
 export interface FilterLabelDescriptor {
@@ -31,6 +31,8 @@ export function getProjectFilterLabelDescriptor(
       return { i18nKey: "projects.artifacts.flow", defaultLabel: "Flows" };
     case "cases":
       return { i18nKey: "projects.artifacts.case", defaultLabel: "Cases" };
+    case "builtin":
+      return { i18nKey: "projects.filesBuiltIn", defaultLabel: "Built-in Files" };
     case "knowledgeCandidates":
       return { i18nKey: "projects.quantKnowledgeCandidates", defaultLabel: "Knowledge Candidates" };
     case "markdown":

@@ -80,6 +80,7 @@ import {
 } from "./projectLayoutPrefs";
 import type { ProjectFileFilterKey } from "./filtering";
 import { computeProjectKnowledgeMetrics } from "./metrics";
+import { isBuiltInProjectFile } from "./builtInFiles";
 import type {
   AgentProjectSummary,
   AgentProjectFileInfo,
@@ -103,12 +104,14 @@ const STAGE_FILTERS: Record<ProjectStageKey, ProjectFileFilterKey[]> = {
   source: ["original", "derived"],
   knowledge: ["knowledgeCandidates", "markdown", "textLike", "recent"],
   output: ["skills", "scripts", "flows", "cases"],
+  builtin: ["builtin"],
 };
 
 const DEFAULT_STAGE_FILTER: Record<ProjectStageKey, ProjectFileFilterKey> = {
   source: "original",
   knowledge: "knowledgeCandidates",
   output: "skills",
+  builtin: "builtin",
 };
 
 function resolveStageFromFilter(filter: ProjectFileFilterKey | ""): ProjectStageKey {
@@ -120,6 +123,9 @@ function resolveStageFromFilter(filter: ProjectFileFilterKey | ""): ProjectStage
   }
   if (STAGE_FILTERS.output.includes(filter)) {
     return "output";
+  }
+  if (STAGE_FILTERS.builtin.includes(filter)) {
+    return "builtin";
   }
   return "source";
 }
@@ -146,6 +152,8 @@ function getLeafFilterIcon(filterKey: ProjectFileFilterKey): ReactNode {
       return <ApartmentOutlined />;
     case "cases":
       return <CheckSquareOutlined />;
+    case "builtin":
+      return <FileOutlined />;
     default:
       return <FileOutlined />;
   }
@@ -215,15 +223,6 @@ function buildProjectWorkspaceSummary(params: {
   ].join("\n");
 }
 
-function isBuiltInProjectFile(path: string): boolean {
-  const normalized = path.replace(/\\/g, "/").toLowerCase();
-  const fileName = normalized.split("/").pop() || "";
-  if (fileName === "project.md" || fileName === "heartbeat.md") {
-    return true;
-  }
-  return false;
-}
-
 function normalizeProjectPath(path: string): string {
   return path.replace(/\\/g, "/").replace(/^\.\//, "").toLowerCase();
 }
@@ -276,7 +275,6 @@ export default function ProjectDetailPage() {
   const [resolvedProjectRequestId, setResolvedProjectRequestId] = useState("");
   const [projectFiles, setProjectFiles] = useState<AgentProjectFileInfo[]>([]);
   const [selectedFilePath, setSelectedFilePath] = useState("");
-  const [hideBuiltInFiles, setHideBuiltInFiles] = useState(true);
   const [fileContent, setFileContent] = useState("");
   const [filesLoading, setFilesLoading] = useState(false);
   const [contentLoading, setContentLoading] = useState(false);
@@ -357,7 +355,6 @@ export default function ProjectDetailPage() {
 
     return projectFiles
       .filter((file) => isPreviewablePath(file.path))
-      .filter((file) => !hideBuiltInFiles || !isBuiltInProjectFile(file.path))
       .map((file) => ({
         artifact_id: `source:${file.path}`,
         path: file.path,
@@ -372,7 +369,7 @@ export default function ProjectDetailPage() {
         consumer_step_names: [],
         created_at: file.modified_time,
       }));
-  }, [hideBuiltInFiles, projectFiles, runDetail?.artifact_records, selectedRunId]);
+  }, [projectFiles, runDetail?.artifact_records, selectedRunId]);
 
   const relatedArtifactPathsForSelectedStep = useMemo(() => {
     if (!selectedStepId) {
@@ -508,11 +505,14 @@ export default function ProjectDetailPage() {
     [projectFiles],
   );
 
+  const builtInProjectFiles = useMemo(
+    () => projectFiles.filter((item) => isBuiltInProjectFile(item.path)),
+    [projectFiles],
+  );
+
   const visibleProjectFiles = useMemo(
-    () => (hideBuiltInFiles
-      ? projectFiles.filter((item) => !isBuiltInProjectFile(item.path))
-      : projectFiles),
-    [hideBuiltInFiles, projectFiles],
+    () => projectFiles.filter((item) => !isBuiltInProjectFile(item.path)),
+    [projectFiles],
   );
 
   const knowledgeMetrics = useMemo(
@@ -540,8 +540,9 @@ export default function ProjectDetailPage() {
       scripts: artifactProfile?.scripts.length || 0,
       flows: artifactProfile?.flows.length || 0,
       cases: artifactProfile?.cases.length || 0,
+      builtin: builtInProjectFiles.length,
     };
-  }, [knowledgeMetrics, normalizedVisibleFiles, selectedProject?.artifact_profile]);
+  }, [builtInProjectFiles.length, knowledgeMetrics, normalizedVisibleFiles, selectedProject?.artifact_profile]);
 
   const stageCounts = useMemo(() => {
     const artifactProfile = selectedProject?.artifact_profile;
@@ -554,8 +555,9 @@ export default function ProjectDetailPage() {
         + (artifactProfile?.flows.length || 0)
         + (artifactProfile?.cases.length || 0),
       outputRuns: pipelineRuns.length,
+      builtin: builtInProjectFiles.length,
     };
-  }, [knowledgeMetrics.knowledgeCandidateFiles, pipelineRuns.length, selectedProject?.artifact_profile, visibleProjectFiles.length]);
+  }, [builtInProjectFiles.length, knowledgeMetrics.knowledgeCandidateFiles, pipelineRuns.length, selectedProject?.artifact_profile, visibleProjectFiles.length]);
 
   const stageLeafFilters = useMemo(
     () => ({
@@ -574,6 +576,9 @@ export default function ProjectDetailPage() {
         { key: "scripts" as const, label: t("projects.artifacts.script", "Scripts"), count: leafCounts.scripts },
         { key: "flows" as const, label: t("projects.artifacts.flow", "Flows"), count: leafCounts.flows },
         { key: "cases" as const, label: t("projects.artifacts.case", "Cases"), count: leafCounts.cases },
+      ],
+      builtin: [
+        { key: "builtin" as const, label: t("projects.filesBuiltIn", "Built-in Files"), count: leafCounts.builtin },
       ],
     }),
     [leafCounts, t],
@@ -665,8 +670,36 @@ export default function ProjectDetailPage() {
           ),
         })),
       },
+      {
+        key: "stage:builtin",
+        icon: <FileOutlined />,
+        label: (
+          <span className={styles.stageMenuLabel}>
+            <span>{t("projects.stage.builtin", "Built-in")}</span>
+            <span
+              className={`${styles.stageMenuCount} ${activeStage === "builtin" ? styles.stageMenuCountActive : styles.stageMenuCountMuted}`}
+            >
+              {stageCounts.builtin}
+            </span>
+          </span>
+        ),
+        children: stageLeafFilters.builtin.map((item) => ({
+          key: item.key,
+          icon: getLeafFilterIcon(item.key),
+          label: (
+            <span className={styles.stageLeafMenuLabel}>
+              <span>{item.label}</span>
+              <span
+                className={`${styles.stageLeafMenuCount} ${selectedMetricFilter === item.key ? styles.stageLeafMenuCountActive : styles.stageLeafMenuCountMuted}`}
+              >
+                {item.count}
+              </span>
+            </span>
+          ),
+        })),
+      },
     ],
-    [activeStage, selectedMetricFilter, stageCounts.knowledge, stageCounts.output, stageCounts.outputRuns, stageCounts.source, stageLeafFilters.knowledge, stageLeafFilters.output, stageLeafFilters.source, t],
+    [activeStage, selectedMetricFilter, stageCounts.builtin, stageCounts.knowledge, stageCounts.output, stageCounts.outputRuns, stageCounts.source, stageLeafFilters.builtin, stageLeafFilters.knowledge, stageLeafFilters.output, stageLeafFilters.source, t],
   );
 
   const renderCollapsedLeafIcon = useCallback((itemKey: ProjectFileFilterKey, itemCount: number) => {
@@ -727,14 +760,19 @@ export default function ProjectDetailPage() {
         icon: renderCollapsedLeafIcon(item.key, item.count),
         label: item.label,
       })),
+      ...stageLeafFilters.builtin.map((item) => ({
+        key: item.key,
+        icon: renderCollapsedLeafIcon(item.key, item.count),
+        label: item.label,
+      })),
     ],
-    [renderCollapsedLeafIcon, stageLeafFilters.knowledge, stageLeafFilters.output, stageLeafFilters.source],
+    [renderCollapsedLeafIcon, stageLeafFilters.builtin, stageLeafFilters.knowledge, stageLeafFilters.output, stageLeafFilters.source],
   );
 
   const showExpandedStageMenu = !leftPanelCollapsed && leftPanelExpandedMenuReady;
 
   const stageMenuOpenKeys = useMemo(
-    () => (showExpandedStageMenu ? ["stage:source", "stage:knowledge", "stage:output"] : []),
+    () => (showExpandedStageMenu ? ["stage:source", "stage:knowledge", "stage:output", "stage:builtin"] : []),
     [showExpandedStageMenu],
   );
 
@@ -2272,6 +2310,10 @@ export default function ProjectDetailPage() {
                     handleSelectStage("output");
                     return;
                   }
+                  if (keyValue === "stage:builtin") {
+                    handleSelectStage("builtin");
+                    return;
+                  }
                   setSelectedMetricFilter(keyValue as ProjectFileFilterKey);
                 }}
               />
@@ -2288,7 +2330,6 @@ export default function ProjectDetailPage() {
                 priorityFilePaths={priorityFilePaths}
                 selectedFilePath={selectedFilePath}
                 selectedAttachPaths={selectedAttachPaths}
-                hideBuiltInFiles={hideBuiltInFiles}
                 activeStage={activeStage}
                 selectedMetricFilter={selectedMetricFilter}
                 onMetricFilterChange={setSelectedMetricFilter}
@@ -2302,7 +2343,6 @@ export default function ProjectDetailPage() {
                 onAttachArtifactToChat={(path) => {
                   void handleAttachArtifactToChat(path);
                 }}
-                onToggleHideBuiltInFiles={setHideBuiltInFiles}
               />
             </div>
           </div>
