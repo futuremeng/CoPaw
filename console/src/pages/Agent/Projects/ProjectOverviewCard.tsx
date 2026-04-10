@@ -13,7 +13,7 @@ import {
   PlusOutlined,
 } from "@ant-design/icons";
 import { Button, Card, Empty, Segmented, Tree, Typography } from "antd";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type {
@@ -268,6 +268,20 @@ function buildFileTree(
   return toTreeNodes(root);
 }
 
+function collectDirectoryKeys(nodes: TreeNode[]): string[] {
+  const keys: string[] = [];
+  const walk = (items: TreeNode[]) => {
+    for (const item of items) {
+      if (item.children && item.children.length > 0) {
+        keys.push(item.key);
+        walk(item.children);
+      }
+    }
+  };
+  walk(nodes);
+  return keys;
+}
+
 export default function ProjectOverviewCard({
   activeStage,
   selectedMetricFilter,
@@ -293,6 +307,8 @@ export default function ProjectOverviewCard({
   const { t } = useTranslation();
   const [workspaceSummaryExpanded, setWorkspaceSummaryExpanded] = useState(false);
   const [treeTransitioning, setTreeTransitioning] = useState(false);
+  const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
+  const treeExpandedInitializedRef = useRef(false);
   const updatedDateParts = formatUpdatedDateParts(selectedProject?.updated_time);
 
   const builtInFiles = useMemo(
@@ -379,6 +395,22 @@ export default function ProjectOverviewCard({
   const knowledgeFilterActive = Boolean(
     selectedMetricFilter && isProjectKnowledgeFilterKey(selectedMetricFilter),
   );
+
+  useEffect(() => {
+    treeExpandedInitializedRef.current = false;
+    setExpandedKeys([]);
+  }, [selectedProject?.id]);
+
+  useEffect(() => {
+    if (treeExpandedInitializedRef.current) {
+      return;
+    }
+    if (treeData.length === 0) {
+      return;
+    }
+    setExpandedKeys(collectDirectoryKeys(treeData));
+    treeExpandedInitializedRef.current = true;
+  }, [treeData]);
 
   useEffect(() => {
     if (treeDisplayMode !== "filter") {
@@ -497,6 +529,8 @@ export default function ProjectOverviewCard({
                 className={`${styles.overviewCompactTree} ${styles.overviewCompactTreeFullHeight}`}
                 selectedKeys={selectedFilePath && treeFilePaths.includes(selectedFilePath) ? [selectedFilePath] : []}
                 treeData={treeData}
+                expandedKeys={expandedKeys}
+                onExpand={(keys) => setExpandedKeys(keys as string[])}
                 onSelect={(keys) => {
                   const key = String(keys[0] || "");
                   if (key) {
@@ -698,6 +732,8 @@ export default function ProjectOverviewCard({
                 className={styles.overviewCompactTree}
                 selectedKeys={selectedFilePath && treeFilePaths.includes(selectedFilePath) ? [selectedFilePath] : []}
                 treeData={treeData}
+                expandedKeys={expandedKeys}
+                onExpand={(keys) => setExpandedKeys(keys as string[])}
                 onSelect={(keys) => {
                   const key = String(keys[0] || "");
                   if (key) {
