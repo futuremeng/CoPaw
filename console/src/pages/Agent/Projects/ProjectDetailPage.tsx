@@ -2562,12 +2562,12 @@ export default function ProjectDetailPage() {
                   <div className={`${styles.knowledgeModuleShell} ${knowledgeModuleCollapsed ? styles.knowledgeDockPanelCollapsed : ""}`}>
                     <div className={styles.knowledgeModuleHeader}>
                       <div className={styles.knowledgeModuleHeaderMain}>
-                        <Text strong>{t("projects.knowledgePanelTitle")}</Text>
+                        <Text strong className={styles.knowledgeModuleHeaderTitle}>
+                          {t("projects.knowledgePanelTitle")}
+                        </Text>
                         <div className={styles.knowledgeModuleHeaderSignals}>
                           <div className={styles.knowledgeModuleHeaderSignal}>
-                            <Text type="secondary">
-                              {t("projects.knowledge.signalIndexedCoverage")}
-                            </Text>
+                            <Text type="secondary">{t("projects.knowledge.signalIndexedCoverage")}</Text>
                             <Text strong>{`${Math.round(knowledgeHeaderSignals.indexedRatio * 100)}%`}</Text>
                           </div>
                           <div className={styles.knowledgeModuleHeaderSignal}>
@@ -2585,6 +2585,7 @@ export default function ProjectDetailPage() {
                         </div>
                       </div>
                       <Button
+                        className={styles.knowledgeModuleHeaderToggle}
                         size="small"
                         type="text"
                         onClick={handleToggleKnowledgeDock}
