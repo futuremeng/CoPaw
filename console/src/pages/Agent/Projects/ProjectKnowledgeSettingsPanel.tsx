@@ -251,7 +251,7 @@ export default function ProjectKnowledgeSettingsPanel(
       title={t("projects.knowledgeDock.tabSettings", "Settings")}
       className={styles.projectKnowledgeSettingsCard}
     >
-      <div className={styles.projectKnowledgeSettingsRow}>
+      <div className={styles.projectKnowledgeSettingsHeader}>
         <Badge
           status={sourceRegistered ? "success" : "default"}
           text={
@@ -262,75 +262,79 @@ export default function ProjectKnowledgeSettingsPanel(
               : t("common.loading", "Loading")
           }
         />
-        <Button
-          size="small"
-          type={sourceRegistered ? "default" : "primary"}
-          loading={registering}
-          onClick={() => {
-            void handleRegisterProjectSource();
-          }}
-        >
-          {sourceRegistered
-            ? t("projects.knowledge.sourceReindex")
-            : t("projects.knowledge.sourceRegister")}
-        </Button>
+
+        <div className={styles.projectKnowledgeSettingsActions}>
+          <Space size={6}>
+            <Typography.Text type="secondary">
+              {t("projects.knowledge.autoSinkLabel")}
+            </Typography.Text>
+            <Switch
+              checked={autoSinkEnabled}
+              loading={updatingAutoSink}
+              onChange={(checked) => {
+                void handleToggleAutoSink(checked);
+              }}
+            />
+          </Space>
+
+          <Button
+            size="small"
+            loading={manualSinking}
+            disabled={!sourceRegistered}
+            onClick={() => {
+              void handleManualSink();
+            }}
+          >
+            {t("projects.knowledge.manualSink")}
+          </Button>
+
+          <Button
+            size="small"
+            type={sourceRegistered ? "default" : "primary"}
+            loading={registering}
+            onClick={() => {
+              void handleRegisterProjectSource();
+            }}
+          >
+            {sourceRegistered
+              ? t("projects.knowledge.sourceReindex")
+              : t("projects.knowledge.sourceRegister")}
+          </Button>
+        </div>
       </div>
 
-      <div className={styles.projectKnowledgeMetaRow}>
-        <Typography.Text type="secondary">
+      <div className={styles.projectKnowledgeSettingsRowCompact}>
+        <Checkbox
+          checked={includeGlobal}
+          onChange={(event) => onIncludeGlobalChange(event.target.checked)}
+        >
+          {t("projects.knowledge.includeGlobal")}
+        </Checkbox>
+
+        {sourceRegistered ? (
+          <Space size={10} className={styles.projectKnowledgeStatsInline}>
+            <Typography.Text type="secondary">
+              {t("projects.knowledge.docCount", {
+                count: projectSource?.status?.document_count ?? 0,
+              })}
+            </Typography.Text>
+            <Typography.Text type="secondary">
+              {t("projects.knowledge.chunkCount", {
+                count: projectSource?.status?.chunk_count ?? 0,
+              })}
+            </Typography.Text>
+          </Space>
+        ) : null}
+      </div>
+
+      <div className={styles.projectKnowledgeMetaRowCompact}>
+        <Typography.Text type="secondary" ellipsis={{ tooltip: `${t("projects.knowledge.sourceId")} ${projectSourceId}` }}>
           {t("projects.knowledge.sourceId")} {projectSourceId}
         </Typography.Text>
         <Typography.Text type="secondary">
           {t("projects.knowledge.lastIndexed")} {indexedAtLabel}
         </Typography.Text>
       </div>
-
-      <div className={styles.projectKnowledgeSettingsRow}>
-        <Space size={6}>
-          <Typography.Text type="secondary">
-            {t("projects.knowledge.autoSinkLabel")}
-          </Typography.Text>
-          <Switch
-            checked={autoSinkEnabled}
-            loading={updatingAutoSink}
-            onChange={(checked) => {
-              void handleToggleAutoSink(checked);
-            }}
-          />
-        </Space>
-        <Button
-          size="small"
-          loading={manualSinking}
-          disabled={!sourceRegistered}
-          onClick={() => {
-            void handleManualSink();
-          }}
-        >
-          {t("projects.knowledge.manualSink")}
-        </Button>
-      </div>
-
-      <Checkbox
-        checked={includeGlobal}
-        onChange={(event) => onIncludeGlobalChange(event.target.checked)}
-      >
-        {t("projects.knowledge.includeGlobal")}
-      </Checkbox>
-
-      {sourceRegistered ? (
-        <div className={styles.projectKnowledgeOpsRow}>
-          <Typography.Text type="secondary">
-            {t("projects.knowledge.docCount", {
-              count: projectSource?.status?.document_count ?? 0,
-            })}
-          </Typography.Text>
-          <Typography.Text type="secondary">
-            {t("projects.knowledge.chunkCount", {
-              count: projectSource?.status?.chunk_count ?? 0,
-            })}
-          </Typography.Text>
-        </div>
-      ) : null}
 
       {projectSource?.status?.error ? (
         <Alert

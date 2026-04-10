@@ -45,6 +45,57 @@ interface ProjectKnowledgeTrendSnapshot {
 
 type ProjectKnowledgeInsightAction = "settings" | "query" | "healthy";
 
+interface ProjectKnowledgeUiPrefs {
+  trendExpanded: boolean;
+  queryExpanded: boolean;
+  resultExpanded: boolean;
+}
+
+const PROJECT_KNOWLEDGE_UI_PREFS_PREFIX = "copaw.project.knowledge.ui.v1";
+
+function uiPrefsStorageKey(projectId: string): string {
+  return `${PROJECT_KNOWLEDGE_UI_PREFS_PREFIX}.${projectId || "default"}`;
+}
+
+function loadUiPrefs(projectId: string): ProjectKnowledgeUiPrefs {
+  const fallback: ProjectKnowledgeUiPrefs = {
+    trendExpanded: true,
+    queryExpanded: true,
+    resultExpanded: true,
+  };
+  try {
+    const raw = window.localStorage.getItem(uiPrefsStorageKey(projectId));
+    if (!raw) {
+      return fallback;
+    }
+    const parsed = JSON.parse(raw) as Partial<ProjectKnowledgeUiPrefs>;
+    return {
+      trendExpanded:
+        typeof parsed.trendExpanded === "boolean"
+          ? parsed.trendExpanded
+          : fallback.trendExpanded,
+      queryExpanded:
+        typeof parsed.queryExpanded === "boolean"
+          ? parsed.queryExpanded
+          : fallback.queryExpanded,
+      resultExpanded:
+        typeof parsed.resultExpanded === "boolean"
+          ? parsed.resultExpanded
+          : fallback.resultExpanded,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+function saveUiPrefs(projectId: string, prefs: ProjectKnowledgeUiPrefs): void {
+  try {
+    window.localStorage.setItem(uiPrefsStorageKey(projectId), JSON.stringify(prefs));
+  } catch {
+    // Ignore localStorage quota or availability issues.
+  }
+}
+
 function trendStorageKey(projectId: string): string {
   return `${PROJECT_TREND_STORAGE_PREFIX}.${projectId}`;
 }
@@ -145,6 +196,9 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
   const [projectSources, setProjectSources] = useState<KnowledgeSourceItem[]>([]);
   const [trendRangeDays, setTrendRangeDays] = useState<7 | 30>(7);
   const [trendSnapshots, setTrendSnapshots] = useState<ProjectKnowledgeTrendSnapshot[]>([]);
+  const [trendExpanded, setTrendExpanded] = useState(true);
+  const [queryExpanded, setQueryExpanded] = useState(true);
+  const [resultExpanded, setResultExpanded] = useState(true);
 
   const includeGlobal = props.includeGlobal ?? internalIncludeGlobal;
 
@@ -181,6 +235,21 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
     setTrendSnapshots(loadTrendSnapshots(props.projectId));
   }, [props.projectId]);
 
+  useEffect(() => {
+    const prefs = loadUiPrefs(props.projectId);
+    setTrendExpanded(prefs.trendExpanded);
+    setQueryExpanded(prefs.queryExpanded);
+    setResultExpanded(prefs.resultExpanded);
+  }, [props.projectId]);
+
+  useEffect(() => {
+    saveUiPrefs(props.projectId, {
+      trendExpanded,
+      queryExpanded,
+      resultExpanded,
+    });
+  }, [props.projectId, queryExpanded, resultExpanded, trendExpanded]);
+
   const handleQuery = useCallback(
     async (overrideQuery?: string) => {
       const query = (overrideQuery ?? queryText).trim();
@@ -203,6 +272,7 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
         });
         setResult(response);
         setActiveGraphNodeId(null);
+        setResultExpanded(true);
       } catch (err) {
         const messageText =
           err instanceof Error ? err.message : t("projects.knowledge.queryFailed");
@@ -350,6 +420,8 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
     }
     if (insightAction === "query") {
       setQueryText(suggestedQuery);
+      setQueryExpanded(true);
+      setResultExpanded(true);
       void handleQuery(suggestedQuery);
     }
   }, [
@@ -376,16 +448,33 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
           <Typography.Text strong>
             {t("projects.knowledge.signalsTitle")}
           </Typography.Text>
-          <Select
-            size="small"
-            value={trendRangeDays}
-            options={[
-              { value: 7, label: t("projects.knowledge.trendRange7d") },
-              { value: 30, label: t("projects.knowledge.trendRange30d") },
-            ]}
-            onChange={(value) => setTrendRangeDays(value as 7 | 30)}
-            style={{ width: 96 }}
-          />
+          <Space size={6} wrap>
+            <Select
+              size="small"
+              value={trendRangeDays}
+              options={[
+                { value: 7, label: t("projects.knowledge.trendRange7d") },
+                { value: 30, label: t("projects.knowledge.trendRange30d") },
+              ]}
+              onChange={(value) => setTrendRangeDays(value as 7 | 30)}
+              style={{ width: 96 }}
+            />
+            <Button
+              size="small"
+              onClick={() => {
+                void loadProjectSourceStatus();
+              }}
+            >
+              {t("projects.knowledge.actionRefreshSignals")}
+            </Button>
+            <Button
+              size="small"
+              type="text"
+              onClick={() => setTrendExpanded((prev) => !prev)}
+            >
+              {trendExpanded ? t("common.collapse", "Collapse") : t("common.expand", "Expand")}
+            </Button>
+          </Space>
         </div>
 
         <div className={styles.projectKnowledgeSignalGrid}>
@@ -426,7 +515,7 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
           </div>
         </div>
 
-        {filteredTrendSnapshots.length > 1 ? (
+        {trendExpanded && filteredTrendSnapshots.length > 1 ? (
           <div className={styles.projectKnowledgeTrendChart}>
             <svg viewBox="0 0 300 70" preserveAspectRatio="none">
               <path d={trendDocumentPath} fill="none" stroke="#1677ff" strokeWidth="2" />
@@ -437,14 +526,13 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
               <span>{t("projects.knowledge.signalChunks")}</span>
             </div>
           </div>
-        ) : (
+        ) : trendExpanded ? (
           <Typography.Text type="secondary">
             {t("projects.knowledge.trendNotEnough")}
           </Typography.Text>
-        )}
+        ) : null}
 
-        <div className={styles.projectKnowledgeInsightBox}>
-          <Typography.Text strong>{t("projects.knowledge.insightTitle")}</Typography.Text>
+        <div className={styles.projectKnowledgeInsightBar}>
           <Typography.Text type="secondary">{t(insightMessageKey)}</Typography.Text>
           <Space wrap className={styles.projectKnowledgeInsightActions}>
             {insightAction !== "healthy" ? (
@@ -458,20 +546,12 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
                   : t("projects.knowledge.actionRunSuggestedQuery")}
               </Button>
             ) : null}
-            <Button
-              size="small"
-              onClick={() => {
-                void loadProjectSourceStatus();
-              }}
-            >
-              {t("projects.knowledge.actionRefreshSignals")}
-            </Button>
           </Space>
         </div>
       </div>
 
-      <div className={styles.projectKnowledgeControls}>
-        <Space wrap>
+      <div className={styles.projectKnowledgeQueryHeader}>
+        <Space size={6} wrap>
           <Typography.Text type="secondary">
             {t("projects.knowledge.queryMode")}
           </Typography.Text>
@@ -486,28 +566,41 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
             style={{ width: 160 }}
           />
         </Space>
-        <Input.Search
-          value={queryText}
-          onChange={(event) => setQueryText(event.target.value)}
-          onSearch={(value) => {
-            void handleQuery(value);
-          }}
-          placeholder={t("projects.knowledge.queryPlaceholder")}
-          enterButton={t("projects.knowledge.query")}
-          loading={loading}
-          allowClear
-        />
         <Button
-          disabled={!result}
-          onClick={() => {
-            setError("");
-            setResult(null);
-            setActiveGraphNodeId(null);
-          }}
+          size="small"
+          type="text"
+          onClick={() => setQueryExpanded((prev) => !prev)}
         >
-          {t("projects.knowledge.reset")}
+          {queryExpanded ? t("common.collapse", "Collapse") : t("common.expand", "Expand")}
         </Button>
       </div>
+
+      {queryExpanded ? (
+        <div className={styles.projectKnowledgeControls}>
+          <Input.Search
+            value={queryText}
+            onChange={(event) => setQueryText(event.target.value)}
+            onSearch={(value) => {
+              void handleQuery(value);
+            }}
+            placeholder={t("projects.knowledge.queryPlaceholder")}
+            enterButton={t("projects.knowledge.query")}
+            loading={loading}
+            allowClear
+          />
+          <Button
+            size="small"
+            disabled={!result}
+            onClick={() => {
+              setError("");
+              setResult(null);
+              setActiveGraphNodeId(null);
+            }}
+          >
+            {t("projects.knowledge.reset")}
+          </Button>
+        </div>
+      ) : null}
 
       {error ? <Alert type="error" showIcon message={error} /> : null}
 
@@ -524,6 +617,19 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
       ) : null}
 
       {result ? (
+        <div className={styles.projectKnowledgeResultHeader}>
+          <Typography.Text type="secondary">{t("projects.knowledge.query")}</Typography.Text>
+          <Button
+            size="small"
+            type="text"
+            onClick={() => setResultExpanded((prev) => !prev)}
+          >
+            {resultExpanded ? t("common.collapse", "Collapse") : t("common.expand", "Expand")}
+          </Button>
+        </div>
+      ) : null}
+
+      {result && resultExpanded ? (
         <div className={styles.projectKnowledgeResults}>
           <GraphQueryResults
             records={result.records}
@@ -550,6 +656,8 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
                 setQueryText((prev) => {
                   const nextQuery = appendUniqueContextLine(prev, contextLine);
                   if (runNow) {
+                    setQueryExpanded(true);
+                    setResultExpanded(true);
                     void handleQuery(nextQuery);
                   }
                   return nextQuery;

@@ -514,7 +514,7 @@
   :global(.ant-card-body) {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
     max-height: 56vh;
     overflow: auto;
   }
@@ -522,8 +522,13 @@
 
 .projectKnowledgeControls {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  align-items: center;
+  gap: 6px;
+
+  :global(.ant-input-search) {
+    flex: 1;
+    min-width: 0;
+  }
 }
 
 .projectKnowledgeSourceRow {
@@ -552,8 +557,23 @@
   :global(.ant-card-body) {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
   }
+}
+
+.projectKnowledgeSettingsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.projectKnowledgeSettingsActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .projectKnowledgeSettingsRow {
@@ -562,6 +582,28 @@
   justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.projectKnowledgeSettingsRowCompact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.projectKnowledgeStatsInline {
+  gap: 10px;
+}
+
+.projectKnowledgeMetaRowCompact {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+
+  :global(.ant-typography) {
+    font-size: 12px;
+  }
 }
 
 .projectKnowledgeEmpty {
@@ -573,17 +615,17 @@
 .projectKnowledgeResults {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 .projectKnowledgeTrendSection {
   border: 1px solid #f0f0f0;
   border-radius: 8px;
-  padding: 10px;
+  padding: 8px;
   background: #fafcff;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .projectKnowledgeTrendHeader {
@@ -591,29 +633,30 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .projectKnowledgeSignalGrid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 6px;
 }
 
 .projectKnowledgeSignalCard {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   border: 1px solid #e6edf9;
   border-radius: 6px;
   background: #ffffff;
-  padding: 8px;
+  padding: 6px;
 }
 
 .projectKnowledgeTrendChart {
   border: 1px solid #e6edf9;
   border-radius: 6px;
   background: #ffffff;
-  padding: 6px 8px;
+  padding: 4px 6px;
 
   svg {
     width: 100%;
@@ -623,25 +666,42 @@
 }
 
 .projectKnowledgeTrendLegend {
-  margin-top: 4px;
+  margin-top: 2px;
   display: flex;
   justify-content: space-between;
   color: #8c8c8c;
-  font-size: 12px;
+  font-size: 11px;
 }
 
-.projectKnowledgeInsightBox {
-  border: 1px dashed #d6e4ff;
+.projectKnowledgeInsightBox,
+.projectKnowledgeInsightBar {
+  border: 1px solid #e6edf9;
   border-radius: 6px;
   background: #ffffff;
-  padding: 8px;
+  padding: 6px 8px;
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
 .projectKnowledgeInsightActions {
-  margin-top: 2px;
+  margin-top: 0;
+}
+
+.projectKnowledgeQueryHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.projectKnowledgeResultHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .automationSummaryMeta {
