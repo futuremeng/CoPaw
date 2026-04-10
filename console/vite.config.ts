@@ -56,6 +56,22 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           manualChunks(id) {
+            // Heavy graph/rendering engines should be isolated from UI vendor bundle.
+            if (
+              id.includes("node_modules/@antv/g6/") ||
+              id.includes("node_modules/@antv/g6-pc/") ||
+              id.includes("node_modules/@antv/layout/") ||
+              id.includes("node_modules/@antv/graphlib/")
+            ) {
+              return "graph-vendor";
+            }
+            // Math rendering stack can be split independently.
+            if (
+              id.includes("node_modules/katex/") ||
+              id.includes("node_modules/hast-util-to-html/")
+            ) {
+              return "katex-vendor";
+            }
             // React core
             if (
               id.includes("node_modules/react/") ||
