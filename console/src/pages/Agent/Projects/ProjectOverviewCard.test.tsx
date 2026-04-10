@@ -58,7 +58,11 @@ function buildProjectSummary(): AgentProjectSummary {
 
 function renderCard(
   projectFiles: AgentProjectFileInfo[],
-  options?: { activeStage?: ProjectStageKey; initialFilter?: "" | "original" | "derived" | "skills" | "scripts" | "flows" | "cases" | "builtin" | "knowledgeCandidates" | "markdown" | "textLike" | "recent" },
+  options?: {
+    activeStage?: ProjectStageKey;
+    initialFilter?: "" | "original" | "derived" | "skills" | "scripts" | "flows" | "cases" | "builtin" | "knowledgeCandidates" | "markdown" | "textLike" | "recent";
+    initialTreeDisplayMode?: "filter" | "highlight";
+  },
 ) {
   const onUploadFiles = vi.fn();
   const onSelectFileFromTree = vi.fn();
@@ -68,7 +72,7 @@ function renderCard(
     const [selectedMetricFilter, setSelectedMetricFilter] = useState<
       "" | "original" | "derived" | "skills" | "scripts" | "flows" | "cases" | "builtin" | "knowledgeCandidates" | "markdown" | "textLike" | "recent"
     >(options?.initialFilter ?? "");
-    const [treeDisplayMode, setTreeDisplayMode] = useState<"filter" | "highlight">("filter");
+    const [treeDisplayMode, setTreeDisplayMode] = useState<"filter" | "highlight">(options?.initialTreeDisplayMode ?? "filter");
 
     return (
       <ProjectOverviewCard
@@ -190,5 +194,28 @@ describe("ProjectOverviewCard interactions", () => {
     expect(screen.getByText(".env")).toBeDefined();
     expect(screen.getByText(".cursor")).toBeDefined();
     expect(screen.queryByText("guide.md")).toBeNull();
+  });
+
+  it("loads non-built-in files in highlight mode for builtin filter", () => {
+    renderCard(
+      [
+        {
+          filename: "AGENTS.md",
+          path: "AGENTS.md",
+          size: 10,
+          modified_time: "2026-04-09T00:00:00Z",
+        },
+        {
+          filename: "guide.md",
+          path: "original/guide.md",
+          size: 10,
+          modified_time: "2026-04-09T00:00:00Z",
+        },
+      ],
+      { activeStage: "builtin", initialFilter: "builtin", initialTreeDisplayMode: "highlight" },
+    );
+
+    expect(screen.getByText("AGENTS.md")).toBeDefined();
+    expect(screen.getByText("guide.md")).toBeDefined();
   });
 });

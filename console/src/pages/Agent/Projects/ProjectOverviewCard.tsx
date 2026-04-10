@@ -373,7 +373,9 @@ export default function ProjectOverviewCard({
   const highlightedFilePaths = selectedMetricFilter
     ? filteredFilePaths
     : [];
-  const treeFiles = treeDisplayMode === "highlight" ? stageScopedFiles : filteredFiles;
+  const treeFiles = treeDisplayMode === "highlight"
+    ? (selectedMetricFilter === "builtin" ? projectFiles : stageScopedFiles)
+    : filteredFiles;
   const treeFilePaths = treeFiles.map((item) => item.path);
   const highlightedFileSet = new Set(
     treeDisplayMode === "highlight" ? highlightedFilePaths : [],
