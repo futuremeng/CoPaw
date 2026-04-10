@@ -43,6 +43,7 @@ import ProjectChatPanel, {
   type ProjectChatMode,
 } from "./ProjectChatPanel";
 import ProjectKnowledgePanel from "./ProjectKnowledgePanel";
+import ProjectKnowledgeSettingsPanel from "./ProjectKnowledgeSettingsPanel";
 import ProjectOverviewCard from "./ProjectOverviewCard";
 import ProjectUploadModal from "./ProjectUploadModal";
 import ProjectWorkbenchPanel from "./ProjectWorkbenchPanel";
@@ -328,6 +329,7 @@ export default function ProjectDetailPage() {
   const [activeStage, setActiveStage] = useState<ProjectStageKey>("source");
   const [knowledgeModuleCollapsed, setKnowledgeModuleCollapsed] = useState(false);
   const [knowledgeDockTab, setKnowledgeDockTab] = useState<KnowledgeDockTabKey>("explore");
+  const [projectKnowledgeIncludeGlobal, setProjectKnowledgeIncludeGlobal] = useState(true);
   const [selectedMetricFilter, setSelectedMetricFilter] = useState<ProjectFileFilterKey | "">("");
   const [treeDisplayMode, setTreeDisplayMode] = useState<TreeDisplayMode>("filter");
   const [leftPaneSize, setLeftPaneSize] = useState(LEFT_PANE_EXPANDED_SIZE);
@@ -2567,6 +2569,19 @@ export default function ProjectDetailPage() {
                               label: t("projects.knowledgeDock.tabExplore", "Explore"),
                               children: (
                                 <ProjectKnowledgePanel
+                                  projectId={selectedProject.id}
+                                  projectName={selectedProject.name}
+                                  includeGlobal={projectKnowledgeIncludeGlobal}
+                                  onIncludeGlobalChange={setProjectKnowledgeIncludeGlobal}
+                                  onOpenSettings={() => setKnowledgeDockTab("settings")}
+                                />
+                              ),
+                            },
+                            {
+                              key: "settings",
+                              label: t("projects.knowledgeDock.tabSettings", "Settings"),
+                              children: (
+                                <ProjectKnowledgeSettingsPanel
                                   agentId={currentAgent?.id}
                                   projectId={selectedProject.id}
                                   projectName={selectedProject.name}
@@ -2574,6 +2589,8 @@ export default function ProjectDetailPage() {
                                   projectAutoKnowledgeSink={
                                     selectedProject.project_auto_knowledge_sink !== false
                                   }
+                                  includeGlobal={projectKnowledgeIncludeGlobal}
+                                  onIncludeGlobalChange={setProjectKnowledgeIncludeGlobal}
                                   onProjectAutoKnowledgeSinkChange={handleProjectAutoKnowledgeSinkChange}
                                 />
                               ),
