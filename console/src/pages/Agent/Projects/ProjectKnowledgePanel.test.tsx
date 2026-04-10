@@ -120,6 +120,9 @@ describe("ProjectKnowledgePanel interactions", () => {
     await user.click(autoSinkSwitch);
 
     await waitFor(() => {
+      expect(mockedApi.listKnowledgeSources).toHaveBeenCalledWith({
+        projectId,
+      });
       expect(agentsApi.updateProjectKnowledgeSink).toHaveBeenCalledWith(
         "default",
         projectId,
@@ -150,7 +153,47 @@ describe("ProjectKnowledgePanel interactions", () => {
         expect.objectContaining({
           pipeline_type: "project-manual",
           dataset_scope: ["project-project-abc-workspace"],
+          project_id: projectId,
         }),
+      );
+    });
+  });
+
+  it("passes project namespace for source register/reindex", async () => {
+    const user = userEvent.setup();
+    mockedApi.upsertKnowledgeSource.mockResolvedValue({});
+    mockedApi.indexKnowledgeSource.mockResolvedValue({
+      source_id: "project-project-abc-workspace",
+      document_count: 1,
+      chunk_count: 1,
+      indexed_at: "2026-04-10T00:00:00Z",
+    });
+
+    render(
+      <ProjectKnowledgePanel
+        agentId="default"
+        projectId={projectId}
+        projectName="Project ABC"
+        projectWorkspaceDir="/tmp/workspace"
+        projectAutoKnowledgeSink
+      />,
+    );
+
+    const registerOrReindex = await screen.findByRole("button", {
+      name: "projects.knowledge.sourceReindex",
+    });
+    await user.click(registerOrReindex);
+
+    await waitFor(() => {
+      expect(mockedApi.upsertKnowledgeSource).toHaveBeenCalledWith(
+        expect.objectContaining({
+          project_id: projectId,
+        }),
+        { projectId },
+      );
+      expect(mockedApi.indexKnowledgeSource).toHaveBeenCalledWith(
+        "project-project-abc-workspace",
+        { projectId },
       );
     });
   });
@@ -182,6 +225,7 @@ describe("ProjectKnowledgePanel interactions", () => {
         expect.objectContaining({
           mode: "cypher",
           projectScope: [projectId],
+          projectId,
         }),
       );
     });

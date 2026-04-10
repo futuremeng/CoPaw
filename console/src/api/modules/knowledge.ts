@@ -18,6 +18,15 @@ import type {
   MemifyStartResponse,
 } from "../types";
 
+const withProjectId = (path: string, projectId?: string) => {
+  const normalized = (projectId || "").trim();
+  if (!normalized) {
+    return path;
+  }
+  const sep = path.includes("?") ? "&" : "?";
+  return `${path}${sep}project_id=${encodeURIComponent(normalized)}`;
+};
+
 export const knowledgeApi = {
   getKnowledgeConfig: () => request<KnowledgeConfig>("/knowledge/config"),
 
@@ -27,14 +36,22 @@ export const knowledgeApi = {
       body: JSON.stringify(payload),
     }),
 
-  listKnowledgeSources: () =>
-    request<KnowledgeSourcesResponse>("/knowledge/sources"),
+  listKnowledgeSources: (options?: { projectId?: string }) =>
+    request<KnowledgeSourcesResponse>(
+      withProjectId("/knowledge/sources", options?.projectId),
+    ),
 
-  upsertKnowledgeSource: (payload: KnowledgeSourceSpec) =>
-    request<KnowledgeSourceSpec>("/knowledge/sources", {
+  upsertKnowledgeSource: (
+    payload: KnowledgeSourceSpec,
+    options?: { projectId?: string },
+  ) =>
+    request<KnowledgeSourceSpec>(
+      withProjectId("/knowledge/sources", options?.projectId),
+      {
       method: "PUT",
       body: JSON.stringify(payload),
-    }),
+      },
+    ),
 
   uploadKnowledgeFile: async (sourceId: string, file: File) => {
     const formData = new FormData();
@@ -82,34 +99,43 @@ export const knowledgeApi = {
     return (await response.json()) as { location: string; file_count: number };
   },
 
-  deleteKnowledgeSource: (sourceId: string) =>
+  deleteKnowledgeSource: (sourceId: string, options?: { projectId?: string }) =>
     request<{ deleted: boolean; source_id: string }>(
-      `/knowledge/sources/${encodeURIComponent(sourceId)}`,
+      withProjectId(
+        `/knowledge/sources/${encodeURIComponent(sourceId)}`,
+        options?.projectId,
+      ),
       {
         method: "DELETE",
       },
     ),
 
-  clearKnowledge: (params?: { removeSources?: boolean }) =>
+  clearKnowledge: (params?: { removeSources?: boolean; projectId?: string }) =>
     request<KnowledgeClearResponse>(
-      `/knowledge/clear?confirm=true&remove_sources=${
-        params?.removeSources === false ? "false" : "true"
-      }`,
+      withProjectId(
+        `/knowledge/clear?confirm=true&remove_sources=${
+          params?.removeSources === false ? "false" : "true"
+        }`,
+        params?.projectId,
+      ),
       {
         method: "DELETE",
       },
     ),
 
-  indexKnowledgeSource: (sourceId: string) =>
+  indexKnowledgeSource: (sourceId: string, options?: { projectId?: string }) =>
     request<KnowledgeIndexResult>(
-      `/knowledge/sources/${encodeURIComponent(sourceId)}/index`,
+      withProjectId(
+        `/knowledge/sources/${encodeURIComponent(sourceId)}/index`,
+        options?.projectId,
+      ),
       {
         method: "POST",
       },
     ),
 
-  indexAllKnowledgeSources: () =>
-    request<KnowledgeBulkIndexResult>("/knowledge/index", {
+  indexAllKnowledgeSources: (options?: { projectId?: string }) =>
+    request<KnowledgeBulkIndexResult>(withProjectId("/knowledge/index", options?.projectId), {
       method: "POST",
     }),
 
@@ -121,9 +147,12 @@ export const knowledgeApi = {
       method: "POST",
     }),
 
-  getKnowledgeSourceContent: (sourceId: string) =>
+  getKnowledgeSourceContent: (sourceId: string, options?: { projectId?: string }) =>
     request<KnowledgeSourceContent>(
-      `/knowledge/sources/${encodeURIComponent(sourceId)}/content`,
+      withProjectId(
+        `/knowledge/sources/${encodeURIComponent(sourceId)}/content`,
+        options?.projectId,
+      ),
     ),
 
   searchKnowledge: (params: {
@@ -133,6 +162,7 @@ export const knowledgeApi = {
     sourceTypes?: string[];
     projectScope?: string[];
     includeGlobal?: boolean;
+    projectId?: string;
   }) => {
     const searchParams = new URLSearchParams({
       q: params.query,
@@ -151,7 +181,7 @@ export const knowledgeApi = {
       searchParams.set("include_global", String(params.includeGlobal));
     }
     return request<KnowledgeSearchResponse>(
-      `/knowledge/search?${searchParams.toString()}`,
+      withProjectId(`/knowledge/search?${searchParams.toString()}`, params.projectId),
     );
   },
 
@@ -163,6 +193,7 @@ export const knowledgeApi = {
     timeoutSec?: number;
     projectScope?: string[];
     includeGlobal?: boolean;
+    projectId?: string;
   }) => {
     const searchParams = new URLSearchParams({
       q: params.query,
@@ -179,27 +210,36 @@ export const knowledgeApi = {
     if (params.includeGlobal !== undefined) {
       searchParams.set("include_global", String(params.includeGlobal));
     }
-    return request<GraphQueryResponse>(`/knowledge/graph-query?${searchParams.toString()}`);
+    return request<GraphQueryResponse>(
+      withProjectId(`/knowledge/graph-query?${searchParams.toString()}`, params.projectId),
+    );
   },
 
   startMemifyJob: (payload?: MemifyStartRequest) =>
-    request<MemifyStartResponse>("/knowledge/memify/jobs", {
+    request<MemifyStartResponse>(
+      withProjectId("/knowledge/memify/jobs", payload?.project_id),
+      {
       method: "POST",
       body: JSON.stringify({
         pipeline_type: payload?.pipeline_type ?? "full",
         dataset_scope: payload?.dataset_scope ?? [],
         idempotency_key: payload?.idempotency_key ?? "",
         dry_run: payload?.dry_run ?? false,
+        project_id: payload?.project_id ?? "",
       }),
-    }),
-
-  getMemifyJobStatus: (jobId: string) =>
-    request<MemifyJobStatus>(
-      `/knowledge/memify/jobs/${encodeURIComponent(jobId)}`,
+      },
     ),
 
-  downloadKnowledgeBackup: async (): Promise<Blob> => {
-    const response = await fetch(getApiUrl("/knowledge/backup"), {
+  getMemifyJobStatus: (jobId: string, options?: { projectId?: string }) =>
+    request<MemifyJobStatus>(
+      withProjectId(
+        `/knowledge/memify/jobs/${encodeURIComponent(jobId)}`,
+        options?.projectId,
+      ),
+    ),
+
+  downloadKnowledgeBackup: async (options?: { projectId?: string }): Promise<Blob> => {
+    const response = await fetch(getApiUrl(withProjectId("/knowledge/backup", options?.projectId)), {
       method: "GET",
     });
     if (!response.ok) {
@@ -210,9 +250,17 @@ export const knowledgeApi = {
     return await response.blob();
   },
 
-  downloadKnowledgeSourceBackup: async (sourceId: string): Promise<Blob> => {
+  downloadKnowledgeSourceBackup: async (
+    sourceId: string,
+    options?: { projectId?: string },
+  ): Promise<Blob> => {
     const response = await fetch(
-      getApiUrl(`/knowledge/backup/${encodeURIComponent(sourceId)}`),
+      getApiUrl(
+        withProjectId(
+          `/knowledge/backup/${encodeURIComponent(sourceId)}`,
+          options?.projectId,
+        ),
+      ),
       {
         method: "GET",
       },
@@ -228,13 +276,17 @@ export const knowledgeApi = {
   restoreKnowledgeBackup: async (
     file: File,
     replaceExisting = true,
+    options?: { projectId?: string },
   ): Promise<KnowledgeRestoreResponse> => {
     const formData = new FormData();
     formData.append("file", file);
 
     const response = await fetch(
       getApiUrl(
-        `/knowledge/restore?replace_existing=${replaceExisting ? "true" : "false"}`,
+        withProjectId(
+          `/knowledge/restore?replace_existing=${replaceExisting ? "true" : "false"}`,
+          options?.projectId,
+        ),
       ),
       {
         method: "POST",

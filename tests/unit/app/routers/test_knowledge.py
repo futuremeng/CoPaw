@@ -473,3 +473,86 @@ def test_restore_knowledge_backup_rejects_unsafe_zip_path(
 
     assert response.status_code == 400
     assert "unsafe path" in response.json()["detail"]
+
+
+def test_project_scoped_index_storage_isolated(
+    knowledge_api_client: TestClient,
+    tmp_path: Path,
+):
+    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload["enabled"] = True
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    source_payload = {
+        "id": "proj-source-a",
+        "name": "Project A Source",
+        "type": "text",
+        "location": "",
+        "content": "project-a knowledge content",
+        "enabled": True,
+        "recursive": False,
+        "tags": ["project"],
+        "summary": "",
+    }
+
+    upsert = knowledge_api_client.put(
+        "/knowledge/sources?project_id=project-a",
+        json=source_payload,
+    )
+    assert upsert.status_code == 200
+
+    indexed = knowledge_api_client.post(
+        "/knowledge/sources/proj-source-a/index?project_id=project-a"
+    )
+    assert indexed.status_code == 200
+
+    project_index = (
+        tmp_path
+        / "projects"
+        / "project-a"
+        / ".knowledge"
+        / "sources"
+        / "proj-source-a"
+        / "index.json"
+    )
+    global_index = tmp_path / "knowledge" / "sources" / "proj-source-a" / "index.json"
+
+    assert project_index.exists()
+    assert not global_index.exists()
+
+
+def test_project_scoped_memify_jobs_are_isolated(
+    knowledge_api_client: TestClient,
+    tmp_path: Path,
+):
+    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload["enabled"] = True
+    config_payload["memify_enabled"] = True
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    started = knowledge_api_client.post(
+        "/knowledge/memify/jobs?project_id=project-b",
+        json={
+            "pipeline_type": "project-manual",
+            "dataset_scope": [],
+            "idempotency_key": "project-b-job",
+            "dry_run": True,
+            "project_id": "project-b",
+        },
+    )
+    assert started.status_code == 200
+    job_id = started.json()["job_id"]
+
+    status = knowledge_api_client.get(
+        f"/knowledge/memify/jobs/{job_id}?project_id=project-b"
+    )
+    assert status.status_code == 200
+    assert status.json()["job_id"] == job_id
+
+    project_jobs = tmp_path / "projects" / "project-b" / ".knowledge" / "memify-jobs.json"
+    global_jobs = tmp_path / "knowledge" / "memify-jobs.json"
+
+    assert project_jobs.exists()
+    assert not global_jobs.exists()

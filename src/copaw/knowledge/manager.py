@@ -131,9 +131,14 @@ def _sanitize_filename(name: str) -> str:
 class KnowledgeManager:
     """Manage knowledge source indexing within the CoPaw working directory."""
 
-    def __init__(self, working_dir: str | Path):
+    def __init__(
+        self,
+        working_dir: str | Path,
+        *,
+        knowledge_dirname: str = "knowledge",
+    ):
         self.working_dir = Path(working_dir).expanduser().resolve()
-        self.root_dir = self.working_dir / "knowledge"
+        self.root_dir = self.working_dir / knowledge_dirname
         self.sources_dir = self.root_dir / "sources"
         self.catalog_path = self.root_dir / "catalog.json"
         self.uploads_dir = self.root_dir / "uploads"

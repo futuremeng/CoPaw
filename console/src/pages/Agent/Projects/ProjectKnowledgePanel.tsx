@@ -70,7 +70,9 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
 
   const loadProjectSourceStatus = useCallback(async () => {
     try {
-      const response = await api.listKnowledgeSources();
+      const response = await api.listKnowledgeSources({
+        projectId: props.projectId,
+      });
       const matched = response.sources.find((source) => source.id === projectSourceId) || null;
       setProjectSource(matched);
       setSourceRegistered(Boolean(matched));
@@ -80,7 +82,7 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
     } finally {
       setSourceLoaded(true);
     }
-  }, [projectSourceId]);
+  }, [projectSourceId, props.projectId]);
 
   const indexedAtLabel = useMemo(() => {
     const raw = projectSource?.status?.indexed_at;
@@ -127,8 +129,12 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
         project_id: props.projectId,
         tags: ["project", `project:${props.projectId}`, "scope:project"],
         summary: `Project-scoped knowledge source for ${props.projectName || props.projectId}`,
+      }, {
+        projectId: props.projectId,
       });
-      await api.indexKnowledgeSource(projectSourceId);
+      await api.indexKnowledgeSource(projectSourceId, {
+        projectId: props.projectId,
+      });
       message.success(t("projects.knowledge.sourceRegisterSuccess"));
       await loadProjectSourceStatus();
     } catch (err) {
@@ -151,7 +157,9 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
   const handleRetryIndex = useCallback(async () => {
     try {
       setRetrying(true);
-      await api.indexKnowledgeSource(projectSourceId);
+      await api.indexKnowledgeSource(projectSourceId, {
+        projectId: props.projectId,
+      });
       message.success(t("projects.knowledge.retryIndexSuccess"));
       await loadProjectSourceStatus();
     } catch (err) {
@@ -200,6 +208,7 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
         pipeline_type: "project-manual",
         dataset_scope: [projectSourceId],
         idempotency_key: `${props.projectId}:manual:${Date.now()}`,
+        project_id: props.projectId,
       });
       setMemifyJobId(response.job_id);
       message.success(t("projects.knowledge.manualSinkStarted"));
@@ -218,7 +227,7 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
     }
     let disposed = false;
     const timer = window.setInterval(() => {
-      void api.getMemifyJobStatus(memifyJobId)
+      void api.getMemifyJobStatus(memifyJobId, { projectId: props.projectId })
         .then((status) => {
           if (disposed) {
             return;
@@ -258,6 +267,7 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
       pipeline_type: "project-auto",
       dataset_scope: [projectSourceId],
       idempotency_key: `${props.projectId}:auto:${triggerKey}`,
+      project_id: props.projectId,
     }).then((response) => {
       setMemifyJobId(response.job_id);
     }).catch(() => {
@@ -283,6 +293,7 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
           timeoutSec: PROJECT_GRAPH_TIMEOUT_SEC,
           projectScope: [props.projectId],
           includeGlobal,
+          projectId: props.projectId,
         });
         setResult(response);
       } catch (err) {

@@ -213,6 +213,7 @@ export interface MemifyStartRequest {
   dataset_scope?: string[];
   idempotency_key?: string;
   dry_run?: boolean;
+  project_id?: string;
 }
 
 export interface MemifyStartResponse {

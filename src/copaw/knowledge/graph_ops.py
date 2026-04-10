@@ -39,9 +39,15 @@ class GraphOpsResult:
 class GraphOpsManager:
     """Graph operation facade for tool-layer usage."""
 
-    def __init__(self, working_dir: Path | str = WORKING_DIR) -> None:
+    def __init__(
+        self,
+        working_dir: Path | str = WORKING_DIR,
+        *,
+        knowledge_dirname: str = "knowledge",
+    ) -> None:
         self.working_dir = Path(working_dir)
-        self.knowledge_root = self.working_dir / "knowledge"
+        self.knowledge_dirname = knowledge_dirname
+        self.knowledge_root = self.working_dir / knowledge_dirname
         self.memify_jobs_path = self.knowledge_root / "memify-jobs.json"
         self._jobs_lock = threading.Lock()
 
@@ -178,7 +184,10 @@ class GraphOpsManager:
                 warnings.append(str(exc))
                 warnings.append("GRAPHIFY_FALLBACK_TO_LOCAL_LEXICAL")
 
-        manager = KnowledgeManager(self.working_dir)
+        manager = KnowledgeManager(
+            self.working_dir,
+            knowledge_dirname=self.knowledge_dirname,
+        )
         search_result = manager.search(
             query=effective_query_text,
             config=config,
