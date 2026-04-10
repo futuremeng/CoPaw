@@ -1,5 +1,7 @@
 import {
   CodeOutlined,
+  EyeInvisibleOutlined,
+  EyeOutlined,
   FileExcelOutlined,
   FileImageOutlined,
   FileMarkdownOutlined,
@@ -28,7 +30,6 @@ import {
   matchesProjectKnowledgeFilter,
 } from "./metrics";
 import {
-  getProjectFilterLabelDescriptor,
   toggleProjectFileFilter,
   type FileMetricFilterKey,
   type ProjectFileFilterKey,
@@ -373,12 +374,7 @@ export default function ProjectOverviewCard({
     attachTitle,
     detachTitle,
   );
-  const selectedFilterLabelDescriptor = selectedMetricFilter
-    ? getProjectFilterLabelDescriptor(selectedMetricFilter)
-    : undefined;
-  const selectedFilterLabel = selectedFilterLabelDescriptor
-    ? t(selectedFilterLabelDescriptor.i18nKey, selectedFilterLabelDescriptor.defaultLabel)
-    : "";
+  const hasActiveFilter = Boolean(selectedMetricFilter);
   const knowledgeFilterActive = Boolean(
     selectedMetricFilter && isProjectKnowledgeFilterKey(selectedMetricFilter),
   );
@@ -460,55 +456,52 @@ export default function ProjectOverviewCard({
         styles={{ body: { padding: 12 } }}
         extra={<Text type="secondary" className={styles.panelExtraText}>{stageTitle}</Text>}
       >
-        <div className={styles.scrollContainer}>
-          {selectedFilterLabel ? (
-            <div className={styles.treeFilterIndicator}>
-              <Text type="secondary" className={styles.itemMeta}>
-                {t("projects.workspaceSummaryFilterLabel", "Current filter: {{label}}", {
-                  label: selectedFilterLabel,
-                })}
-              </Text>
-            </div>
-          ) : null}
-          <div className={styles.overviewTreeToolbar}>
+        <div className={`${styles.scrollContainer} ${styles.treeOnlyScrollContainer}`}>
+          <div className={styles.treeUploadRow}>
+            <Button type="primary" className={styles.treeUploadButton} onClick={onUploadFiles}>
+              {t("projects.upload.button", "Upload Files")}
+            </Button>
+          </div>
+          <div className={`${styles.overviewTreeToolbar} ${styles.treeToolbarSticky}`}>
             <div className={styles.treeToolbarLeft}>
-              <Text type="secondary" className={styles.itemMeta}>
-                {t("projects.artifacts.hideBuiltins", "Hide built-in files")}
-              </Text>
               <Button
                 size="small"
+                className={styles.hideBuiltInToggle}
                 type={hideBuiltInFiles ? "default" : "text"}
+                icon={hideBuiltInFiles ? <EyeInvisibleOutlined /> : <EyeOutlined />}
                 onClick={() => onToggleHideBuiltInFiles(!hideBuiltInFiles)}
               >
-                {hideBuiltInFiles ? t("common.on", "On") : t("common.off", "Off")}
+                {t("projects.artifacts.hideBuiltins", "built-in")}
               </Button>
             </div>
-            <Segmented
-              size="small"
-              className={styles.treeModeSegment}
-              value={treeDisplayMode}
-              onChange={(value) => onTreeDisplayModeChange(value as TreeDisplayMode)}
-              options={[
-                { label: t("projects.treeViewMode.filter", "Filter"), value: "filter" },
-                { label: t("projects.treeViewMode.highlight", "Highlight"), value: "highlight" },
-              ]}
-            />
+            <div className={styles.treeToolbarRight}>
+              <Segmented
+                size="small"
+                className={styles.treeModeSegment}
+                value={treeDisplayMode}
+                onChange={(value) => onTreeDisplayModeChange(value as TreeDisplayMode)}
+                options={[
+                  { label: t("projects.treeViewMode.filter", "Filter"), value: "filter" },
+                  { label: t("projects.treeViewMode.highlight", "Highlight"), value: "highlight" },
+                ]}
+              />
+            </div>
           </div>
           <div
-            className={`${styles.treeTransitionShell} ${treeTransitioning ? styles.treeTransitionEnter : ""}`}
+            className={`${styles.treeTransitionShell} ${styles.treeTransitionShellFullHeight} ${treeTransitioning ? styles.treeTransitionEnter : ""}`}
           >
             {treeData.length === 0 ? (
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description={
-                  selectedFilterLabel
+                  hasActiveFilter
                     ? t("projects.noFilteredFiles", "No related files under the current filter")
                     : t("projects.noFiles", "No files in this project")
                 }
               />
             ) : (
               <Tree
-                className={styles.overviewCompactTree}
+                className={`${styles.overviewCompactTree} ${styles.overviewCompactTreeFullHeight}`}
                 selectedKeys={selectedFilePath && treeFilePaths.includes(selectedFilePath) ? [selectedFilePath] : []}
                 treeData={treeData}
                 onSelect={(keys) => {
@@ -519,9 +512,6 @@ export default function ProjectOverviewCard({
                 }}
               />
             )}
-          </div>
-          <div className={styles.overviewActions}>
-            <Button onClick={onUploadFiles}>{t("projects.upload.button", "Upload Files")}</Button>
           </div>
         </div>
       </Card>
@@ -678,38 +668,35 @@ export default function ProjectOverviewCard({
 
         <div className={styles.overviewSection}>
           <div className={styles.subSectionTitle}>{t("projects.workspaceSummaryFiles", "Workspace Files")}</div>
-          {selectedFilterLabel ? (
-            <div className={styles.treeFilterIndicator}>
-              <Text type="secondary" className={styles.itemMeta}>
-                {t("projects.workspaceSummaryFilterLabel", "Current filter: {{label}}", {
-                  label: selectedFilterLabel,
-                })}
-              </Text>
-            </div>
-          ) : null}
+          <div className={styles.treeUploadRow}>
+            <Button type="primary" className={styles.treeUploadButton} onClick={onUploadFiles}>
+              {t("projects.upload.button", "Upload Files")}
+            </Button>
+          </div>
           <div className={styles.overviewTreeToolbar}>
             <div className={styles.treeToolbarLeft}>
-              <Text type="secondary" className={styles.itemMeta}>
-                {t("projects.artifacts.hideBuiltins", "Hide built-in files")}
-              </Text>
               <Button
                 size="small"
+                className={styles.hideBuiltInToggle}
                 type={hideBuiltInFiles ? "default" : "text"}
+                icon={hideBuiltInFiles ? <EyeInvisibleOutlined /> : <EyeOutlined />}
                 onClick={() => onToggleHideBuiltInFiles(!hideBuiltInFiles)}
               >
-                {hideBuiltInFiles ? t("common.on", "On") : t("common.off", "Off")}
+                {t("projects.artifacts.hideBuiltins", "built-in")}
               </Button>
             </div>
-            <Segmented
-              size="small"
-              className={styles.treeModeSegment}
-              value={treeDisplayMode}
-              onChange={(value) => onTreeDisplayModeChange(value as TreeDisplayMode)}
-              options={[
-                { label: t("projects.treeViewMode.filter", "Filter"), value: "filter" },
-                { label: t("projects.treeViewMode.highlight", "Highlight"), value: "highlight" },
-              ]}
-            />
+            <div className={styles.treeToolbarRight}>
+              <Segmented
+                size="small"
+                className={styles.treeModeSegment}
+                value={treeDisplayMode}
+                onChange={(value) => onTreeDisplayModeChange(value as TreeDisplayMode)}
+                options={[
+                  { label: t("projects.treeViewMode.filter", "Filter"), value: "filter" },
+                  { label: t("projects.treeViewMode.highlight", "Highlight"), value: "highlight" },
+                ]}
+              />
+            </div>
           </div>
           <div
             className={`${styles.treeTransitionShell} ${treeTransitioning ? styles.treeTransitionEnter : ""}`}
@@ -718,7 +705,7 @@ export default function ProjectOverviewCard({
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description={
-                  selectedFilterLabel
+                  hasActiveFilter
                     ? t("projects.noFilteredFiles", "No related files under the current filter")
                     : t("projects.noFiles", "No files in this project")
                 }
@@ -737,10 +724,6 @@ export default function ProjectOverviewCard({
               />
             )}
           </div>
-        </div>
-
-        <div className={styles.overviewActions}>
-          <Button onClick={onUploadFiles}>{t("projects.upload.button", "Upload Files")}</Button>
         </div>
       </div>
     </Card>

@@ -126,11 +126,12 @@
   border-radius: 12px;
   background: #fff;
   height: fit-content;
+  overflow: hidden;
   transition: width 0.2s ease, padding 0.2s ease;
 }
 
 .leftStageRailCollapsed {
-  width: 78px;
+  width: 76px;
   padding: 6px 4px;
 }
 
@@ -139,15 +140,49 @@
 }
 
 .leftStageMenu {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
   border-inline-end: none !important;
   background: transparent;
+
+  :global(.ant-menu-inline-collapsed),
+  :global(.copaw-menu-inline-collapsed) {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
 
   :global(.ant-menu-submenu-title) {
     border-radius: 8px;
     margin: 2px 0;
   }
 
+  :global(.copaw-menu-submenu-title) {
+    border-radius: 8px;
+    margin: 2px 0;
+  }
+
   :global(.ant-menu-item) {
+    border-radius: 8px;
+    margin: 2px 0;
+  }
+
+  :global(.ant-menu-inline .ant-menu-item),
+  :global(.ant-menu-inline .ant-menu-item-selected),
+  :global(.copaw-menu-inline .copaw-menu-item),
+  :global(.copaw-menu-inline .copaw-menu-item-selected) {
+    width: 100% !important;
+    margin-inline: 0 !important;
+    padding-inline: 12px !important;
+    inset-inline-start: 0 !important;
+  }
+
+  :global(.ant-menu-inline .ant-menu-item::after),
+  :global(.copaw-menu-inline .copaw-menu-item::after) {
+    border-inline-end: none !important;
+  }
+
+  :global(.copaw-menu-item) {
     border-radius: 8px;
     margin: 2px 0;
   }
@@ -158,14 +193,39 @@
     justify-content: center;
   }
 
+  :global(.copaw-menu-inline-collapsed .copaw-menu-submenu-title) {
+    padding-inline: 0 !important;
+    display: flex;
+    justify-content: center;
+  }
+
   :global(.ant-menu-inline-collapsed .ant-menu-item) {
     padding-inline: 0 !important;
     display: flex;
     justify-content: center;
+    align-items: center;
     overflow: visible;
   }
 
-  :global(.ant-menu-item-icon) {
+  :global(.copaw-menu-inline-collapsed .copaw-menu-item) {
+    padding-inline: 0 !important;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: visible;
+  }
+
+  :global(.ant-menu-inline-collapsed .ant-menu-item .ant-menu-title-content),
+  :global(.copaw-menu-inline-collapsed .copaw-menu-item .copaw-menu-title-content) {
+    margin-inline-start: 0 !important;
+    width: 100%;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  :global(.ant-menu-item-icon),
+  :global(.copaw-menu-item-icon) {
     overflow: visible;
   }
 }
@@ -390,6 +450,13 @@
   opacity: 1;
   transform: translateY(0);
   max-height: 360px;
+}
+
+.treeTransitionShellFullHeight {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
 }
 
 .treeTransitionEnter {
@@ -652,16 +719,82 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  flex-wrap: nowrap;
   margin: 10px 0 8px;
+}
+
+.treeUploadRow {
+  display: flex;
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.treeUploadButton {
+  width: 100%;
 }
 
 .treeToolbarLeft {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.treeFilterChip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 220px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid #d6e4ff;
+  background: #f0f7ff;
+  color: #0958d9;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.treeFilterChipMuted {
+  border-color: #eceff3;
+  background: #f7f8fa;
+  color: #7b8794;
+}
+
+.hideBuiltInToggle {
+  flex-shrink: 0;
+  white-space: nowrap;
+
+  :global(.anticon) {
+    font-size: 12px;
+  }
+}
+
+.treeToolbarRight {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 8px;
+  margin-left: auto;
+  flex: 0 1 auto;
+}
+
+.treeToolbarSticky {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin-top: 0;
+  padding: 6px 0;
+  background: #fff;
+  border-bottom: 1px solid #f0f0f0;
 }
 
 .treeModeSegment {
+  flex-shrink: 0;
+
   :global(.ant-segmented-item-label) {
     font-size: 12px;
     padding: 0 8px;
@@ -713,6 +846,11 @@
   :global(.ant-tree-node-content-wrapper.ant-tree-node-selected) .treeNodeActions {
     background: linear-gradient(90deg, rgba(230, 244, 255, 0), #e6f4ff 18px, #e6f4ff 100%);
   }
+}
+
+.overviewCompactTreeFullHeight {
+  height: 100%;
+  max-height: none;
 }
 
 .treeNodeRow {
@@ -913,6 +1051,12 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
+}
+
+.treeOnlyScrollContainer {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .automationResponsiveTop {

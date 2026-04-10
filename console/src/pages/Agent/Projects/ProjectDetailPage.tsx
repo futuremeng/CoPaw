@@ -100,6 +100,7 @@ interface ProjectDetailLayoutPrefs {
 }
 
 const PROJECT_LAYOUT_PREFS_PREFIX = "copaw:projects:detail:layout:";
+const LEFT_STAGE_RAIL_TRANSITION_MS = 220;
 
 const STAGE_FILTERS: Record<ProjectStageKey, ProjectFileFilterKey[]> = {
   source: ["original", "derived"],
@@ -316,6 +317,7 @@ export default function ProjectDetailPage() {
   const [sendingSelectedFiles, setSendingSelectedFiles] = useState(false);
   const [autoAnalyzeOnAttach, setAutoAnalyzeOnAttach] = useState(true);
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(true);
+  const [leftPanelExpandedMenuReady, setLeftPanelExpandedMenuReady] = useState(false);
   const [activeStage, setActiveStage] = useState<ProjectStageKey>("source");
   const [selectedMetricFilter, setSelectedMetricFilter] = useState<ProjectFileFilterKey | "">("");
   const [treeDisplayMode, setTreeDisplayMode] = useState<TreeDisplayMode>("filter");
@@ -731,9 +733,11 @@ export default function ProjectDetailPage() {
     [renderCollapsedLeafIcon, stageLeafFilters.knowledge, stageLeafFilters.output, stageLeafFilters.source],
   );
 
+  const showExpandedStageMenu = !leftPanelCollapsed && leftPanelExpandedMenuReady;
+
   const stageMenuOpenKeys = useMemo(
-    () => (leftPanelCollapsed ? [] : ["stage:source", "stage:knowledge", "stage:output"]),
-    [leftPanelCollapsed],
+    () => (showExpandedStageMenu ? ["stage:source", "stage:knowledge", "stage:output"] : []),
+    [showExpandedStageMenu],
   );
 
   const handleSelectStage = useCallback((stage: ProjectStageKey) => {
@@ -1603,6 +1607,19 @@ export default function ProjectDetailPage() {
   }, [activeStage, selectedMetricFilter]);
 
   useEffect(() => {
+    if (leftPanelCollapsed) {
+      setLeftPanelExpandedMenuReady(false);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setLeftPanelExpandedMenuReady(true);
+    }, LEFT_STAGE_RAIL_TRANSITION_MS);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [leftPanelCollapsed]);
+
+  useEffect(() => {
     if (!layoutPrefsLoadedRef.current) {
       return;
     }
@@ -2204,6 +2221,7 @@ export default function ProjectDetailPage() {
             <div className={`${styles.leftStageRail} ${leftPanelCollapsed ? styles.leftStageRailCollapsed : ""}`}>
               <Button
                 size="small"
+                block
                 className={styles.leftRailToggle}
                 icon={leftPanelCollapsed ? <RightOutlined /> : <LeftOutlined />}
                 onClick={() => setLeftPanelCollapsed((prev) => !prev)}
@@ -2214,8 +2232,8 @@ export default function ProjectDetailPage() {
               <Menu
                 mode="inline"
                 className={styles.leftStageMenu}
-                inlineCollapsed={leftPanelCollapsed}
-                items={leftPanelCollapsed ? collapsedLeafMenuItems : stageMenuItems}
+                inlineCollapsed={!showExpandedStageMenu}
+                items={showExpandedStageMenu ? stageMenuItems : collapsedLeafMenuItems}
                 selectedKeys={selectedMetricFilter ? [selectedMetricFilter] : []}
                 openKeys={stageMenuOpenKeys}
                 onClick={({ key }) => {

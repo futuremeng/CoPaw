@@ -109,11 +109,11 @@ describe("ProjectOverviewCard interactions", () => {
     const knowledgeButton = screen.getByRole("button", { name: /Knowledge Candidates/i });
     await user.click(knowledgeButton);
 
-    expect(screen.getByText("Current filter: Knowledge Candidates")).toBeDefined();
+    expect(knowledgeButton.getAttribute("aria-pressed")).toBe("true");
 
     await user.click(knowledgeButton);
 
-    expect(screen.queryByText("Current filter: Knowledge Candidates")).toBeNull();
+    expect(knowledgeButton.getAttribute("aria-pressed")).toBe("false");
   });
 
   it("shows reset action for active knowledge filter and clears it", async () => {
@@ -133,7 +133,7 @@ describe("ProjectOverviewCard interactions", () => {
 
     await user.click(resetButton);
 
-    expect(screen.queryByText("Current filter: Knowledge Candidates")).toBeNull();
+    expect(screen.getByRole("button", { name: /Knowledge Candidates/i }).getAttribute("aria-pressed")).toBe("false");
   });
 
   it("shows empty filtered hint when no files match selected knowledge filter", async () => {
@@ -150,6 +150,6 @@ describe("ProjectOverviewCard interactions", () => {
     await user.click(screen.getByRole("button", { name: /Text-like Files/i }));
 
     expect(screen.getByText("No related files under the current filter")).toBeDefined();
-    expect(screen.getByText("Current filter: Text-like Files")).toBeDefined();
+    expect(screen.getByRole("button", { name: /Text-like Files/i }).getAttribute("aria-pressed")).toBe("true");
   });
 });
