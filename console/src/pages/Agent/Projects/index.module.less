@@ -457,6 +457,8 @@
   min-height: 0;
   max-height: none;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .treeTransitionEnter {
@@ -473,12 +475,17 @@
   gap: 12px;
 
   :global(.ant-card:first-child) {
+    display: flex;
+    flex-direction: column;
     flex: 1;
     min-height: 0;
   }
 
   :global(.ant-card:first-child .ant-card-body) {
+    display: flex;
+    flex-direction: column;
     flex: 1;
+    min-height: 0;
     overflow: hidden;
   }
 }
@@ -872,7 +879,9 @@
 }
 
 .overviewCompactTreeFullHeight {
-  height: 100%;
+  flex: 1;
+  min-height: 0;
+  height: auto;
   max-height: none;
 }
 
@@ -1079,6 +1088,8 @@
 .treeOnlyScrollContainer {
   display: flex;
   flex-direction: column;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
 }
 

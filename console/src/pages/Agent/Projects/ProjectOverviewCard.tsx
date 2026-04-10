@@ -489,8 +489,24 @@ export default function ProjectOverviewCard({
 
     return (
       <Card
+        style={{
+          height: "100%",
+          display: "flex",
+          flexDirection: "column",
+          minHeight: 0,
+          overflow: "hidden",
+        }}
         title={<span className={styles.sectionTitle}>{t("projects.workspaceSummaryFiles", "Workspace Files")}</span>}
-        styles={{ body: { padding: 12 } }}
+        styles={{
+          body: {
+            padding: 12,
+            display: "flex",
+            flexDirection: "column",
+            flex: 1,
+            minHeight: 0,
+            overflow: "hidden",
+          },
+        }}
         extra={<Text type="secondary" className={styles.panelExtraText}>{stageTitle}</Text>}
       >
         <div className={`${styles.scrollContainer} ${styles.treeOnlyScrollContainer}`}>
