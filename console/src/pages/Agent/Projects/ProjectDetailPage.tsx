@@ -74,6 +74,7 @@ import {
 } from "./projectIdUtils";
 import {
   buildProjectLayoutStorageKey,
+  type KnowledgeDockTabKey,
   parseProjectLayoutPrefs,
   type ProjectDetailLayoutPrefs,
   type ProjectStageKey,
@@ -326,6 +327,7 @@ export default function ProjectDetailPage() {
   const [leftPanelExpandedMenuReady, setLeftPanelExpandedMenuReady] = useState(false);
   const [activeStage, setActiveStage] = useState<ProjectStageKey>("source");
   const [knowledgeModuleCollapsed, setKnowledgeModuleCollapsed] = useState(false);
+  const [knowledgeDockTab, setKnowledgeDockTab] = useState<KnowledgeDockTabKey>("explore");
   const [selectedMetricFilter, setSelectedMetricFilter] = useState<ProjectFileFilterKey | "">("");
   const [treeDisplayMode, setTreeDisplayMode] = useState<TreeDisplayMode>("filter");
   const [leftPaneSize, setLeftPaneSize] = useState(LEFT_PANE_EXPANDED_SIZE);
@@ -1675,6 +1677,7 @@ export default function ProjectDetailPage() {
       setLeftPanelCollapsed(parsed.leftPanelCollapsed);
       setActiveStage(parsed.activeStage);
       setKnowledgeModuleCollapsed(parsed.knowledgeModuleCollapsed);
+      setKnowledgeDockTab(parsed.knowledgeDockTab);
       setSelectedMetricFilter(parsed.selectedMetricFilter);
       setTreeDisplayMode(parsed.treeDisplayMode);
       setLeftPaneSize(
@@ -1694,6 +1697,7 @@ export default function ProjectDetailPage() {
       setLeftPanelCollapsed(parsed.leftPanelCollapsed);
       setActiveStage(parsed.activeStage);
       setKnowledgeModuleCollapsed(parsed.knowledgeModuleCollapsed);
+      setKnowledgeDockTab(parsed.knowledgeDockTab);
       setSelectedMetricFilter(parsed.selectedMetricFilter);
       setTreeDisplayMode(parsed.treeDisplayMode);
       setLeftPaneSize(
@@ -1745,6 +1749,7 @@ export default function ProjectDetailPage() {
       leftPanelCollapsed,
       activeStage,
       knowledgeModuleCollapsed,
+      knowledgeDockTab,
       selectedMetricFilter,
       treeDisplayMode,
       leftPaneSize,
@@ -1760,6 +1765,7 @@ export default function ProjectDetailPage() {
   }, [
     activeStage,
     chatPaneSize,
+    knowledgeDockTab,
     knowledgeModuleCollapsed,
     knowledgeDockSize,
     leftPaneSize,
@@ -2551,15 +2557,67 @@ export default function ProjectDetailPage() {
                     </div>
                     {knowledgeModuleCollapsed ? null : (
                       <div className={styles.knowledgeDockBody}>
-                        <ProjectKnowledgePanel
-                          agentId={currentAgent?.id}
-                          projectId={selectedProject.id}
-                          projectName={selectedProject.name}
-                          projectWorkspaceDir={selectedProject.workspace_dir}
-                          projectAutoKnowledgeSink={
-                            selectedProject.project_auto_knowledge_sink !== false
-                          }
-                          onProjectAutoKnowledgeSinkChange={handleProjectAutoKnowledgeSinkChange}
+                        <Tabs
+                          className={styles.knowledgeDockTabs}
+                          activeKey={knowledgeDockTab}
+                          onChange={(key) => setKnowledgeDockTab(key as KnowledgeDockTabKey)}
+                          items={[
+                            {
+                              key: "explore",
+                              label: t("projects.knowledgeDock.tabExplore", "Explore"),
+                              children: (
+                                <ProjectKnowledgePanel
+                                  agentId={currentAgent?.id}
+                                  projectId={selectedProject.id}
+                                  projectName={selectedProject.name}
+                                  projectWorkspaceDir={selectedProject.workspace_dir}
+                                  projectAutoKnowledgeSink={
+                                    selectedProject.project_auto_knowledge_sink !== false
+                                  }
+                                  onProjectAutoKnowledgeSinkChange={handleProjectAutoKnowledgeSinkChange}
+                                />
+                              ),
+                            },
+                            {
+                              key: "signals",
+                              label: t("projects.knowledgeDock.tabSignals", "Signals"),
+                              children: (
+                                <Empty
+                                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                                  description={t(
+                                    "projects.knowledgeDock.placeholderSignals",
+                                    "Signals view will be refined in the next iteration.",
+                                  )}
+                                />
+                              ),
+                            },
+                            {
+                              key: "sources",
+                              label: t("projects.knowledgeDock.tabSources", "Sources"),
+                              children: (
+                                <Empty
+                                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                                  description={t(
+                                    "projects.knowledgeDock.placeholderSources",
+                                    "Sources management view will be refined in the next iteration.",
+                                  )}
+                                />
+                              ),
+                            },
+                            {
+                              key: "insights",
+                              label: t("projects.knowledgeDock.tabInsights", "Insights"),
+                              children: (
+                                <Empty
+                                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                                  description={t(
+                                    "projects.knowledgeDock.placeholderInsights",
+                                    "Insights view will be refined in the next iteration.",
+                                  )}
+                                />
+                              ),
+                            },
+                          ]}
                         />
                       </div>
                     )}

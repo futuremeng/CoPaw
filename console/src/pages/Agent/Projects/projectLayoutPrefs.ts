@@ -2,6 +2,7 @@ import type { ProjectFileFilterKey } from "./filtering";
 
 export type ProjectStageKey = "source" | "knowledge" | "output" | "builtin";
 export type TreeDisplayMode = "filter" | "highlight";
+export type KnowledgeDockTabKey = "explore" | "signals" | "sources" | "insights";
 
 function parsePaneSize(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) && value > 0
@@ -13,6 +14,7 @@ export interface ProjectDetailLayoutPrefs {
   leftPanelCollapsed: boolean;
   activeStage: ProjectStageKey;
   knowledgeModuleCollapsed: boolean;
+  knowledgeDockTab: KnowledgeDockTabKey;
   selectedMetricFilter: ProjectFileFilterKey | "";
   treeDisplayMode: TreeDisplayMode;
   leftPaneSize: number;
@@ -46,6 +48,7 @@ export function defaultProjectLayoutPrefs(): ProjectDetailLayoutPrefs {
     leftPanelCollapsed: true,
     activeStage: "source",
     knowledgeModuleCollapsed: false,
+    knowledgeDockTab: "explore",
     selectedMetricFilter: "",
     treeDisplayMode: "filter",
     leftPaneSize: 440,
@@ -68,6 +71,12 @@ export function parseProjectLayoutPrefs(raw: string | null): ProjectDetailLayout
       activeStage: parseStageKey(parsed.activeStage, fallback.activeStage),
       knowledgeModuleCollapsed:
         parsed.knowledgeModuleCollapsed ?? fallback.knowledgeModuleCollapsed,
+      knowledgeDockTab:
+        parsed.knowledgeDockTab === "signals"
+        || parsed.knowledgeDockTab === "sources"
+        || parsed.knowledgeDockTab === "insights"
+          ? parsed.knowledgeDockTab
+          : fallback.knowledgeDockTab,
       selectedMetricFilter:
         parsed.selectedMetricFilter ?? fallback.selectedMetricFilter,
       treeDisplayMode: parseTreeMode(parsed.treeDisplayMode, fallback.treeDisplayMode),

@@ -715,6 +715,25 @@
   }
 }
 
+.knowledgeDockTabs {
+  height: 100%;
+
+  :global(.ant-tabs-content-holder) {
+    min-height: 0;
+    height: 100%;
+  }
+
+  :global(.ant-tabs-content) {
+    height: 100%;
+  }
+
+  :global(.ant-tabs-tabpane) {
+    height: 100%;
+    overflow: auto;
+    padding-right: 4px;
+  }
+}
+
 .columnChat {
   width: 100%;
   height: 100%;
