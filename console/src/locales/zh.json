@@ -1705,6 +1705,15 @@
       "retryIndexSuccess": "已重新触发索引",
       "retryIndexFailed": "重试索引失败"
     },
+    "stage": {
+      "source": "源文件",
+      "knowledge": "知识成果",
+      "output": "流程输出"
+    },
+    "layout": {
+      "expandLeft": "展开左侧面板",
+      "collapseLeft": "折叠左侧面板"
+    },
     "quantStatusHealthy": "健康",
     "quantStatusAttention": "需关注",
     "quantStatusNeutral": "无明显信号",

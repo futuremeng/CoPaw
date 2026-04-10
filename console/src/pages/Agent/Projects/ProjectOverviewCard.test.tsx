@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type {
   AgentProjectFileInfo,
@@ -59,24 +60,35 @@ function renderCard(projectFiles: AgentProjectFileInfo[]) {
   const onAttachArtifactToChat = vi.fn();
   const onToggleHideBuiltInFiles = vi.fn();
 
-  render(
-    <ProjectOverviewCard
-      selectedProject={buildProjectSummary()}
-      projectFileCount={projectFiles.length}
-      pipelineTemplateCount={0}
-      pipelineRunCount={0}
-      projectWorkspaceSummary="snapshot"
-      projectFiles={projectFiles}
-      priorityFilePaths={[]}
-      selectedFilePath=""
-      selectedAttachPaths={[]}
-      hideBuiltInFiles={false}
-      onUploadFiles={onUploadFiles}
-      onSelectFileFromTree={onSelectFileFromTree}
-      onAttachArtifactToChat={onAttachArtifactToChat}
-      onToggleHideBuiltInFiles={onToggleHideBuiltInFiles}
-    />,
-  );
+  function TestHarness() {
+    const [selectedMetricFilter, setSelectedMetricFilter] = useState<
+      "" | "original" | "derived" | "skills" | "scripts" | "flows" | "cases" | "knowledgeCandidates" | "markdown" | "textLike" | "recent"
+    >("");
+
+    return (
+      <ProjectOverviewCard
+        activeStage="source"
+        selectedMetricFilter={selectedMetricFilter}
+        onMetricFilterChange={setSelectedMetricFilter}
+        selectedProject={buildProjectSummary()}
+        projectFileCount={projectFiles.length}
+        pipelineTemplateCount={0}
+        pipelineRunCount={0}
+        projectWorkspaceSummary="snapshot"
+        projectFiles={projectFiles}
+        priorityFilePaths={[]}
+        selectedFilePath=""
+        selectedAttachPaths={[]}
+        hideBuiltInFiles={false}
+        onUploadFiles={onUploadFiles}
+        onSelectFileFromTree={onSelectFileFromTree}
+        onAttachArtifactToChat={onAttachArtifactToChat}
+        onToggleHideBuiltInFiles={onToggleHideBuiltInFiles}
+      />
+    );
+  }
+
+  render(<TestHarness />);
 }
 
 describe("ProjectOverviewCard interactions", () => {

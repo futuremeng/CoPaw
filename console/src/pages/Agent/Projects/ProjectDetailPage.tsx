@@ -1,10 +1,27 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  CheckSquareOutlined,
+  ClockCircleOutlined,
+  CodeOutlined,
+  CopyOutlined,
+  FileMarkdownOutlined,
+  FileOutlined,
+  ApartmentOutlined,
+  DatabaseOutlined,
+  FolderOpenOutlined,
+  FileSearchOutlined,
+  LeftOutlined,
+  RightOutlined,
+  ToolOutlined,
+} from "@ant-design/icons";
+import {
   Alert,
+  Badge,
   Button,
   Card,
   Drawer,
   Empty,
+  Menu,
   Modal,
   Popconfirm,
   Select,
@@ -15,6 +32,8 @@ import {
 } from "antd";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import type { MenuProps } from "antd";
+import type { ReactNode } from "react";
 import { agentsApi } from "../../../api/modules/agents";
 import { chatApi } from "../../../api/modules/chat";
 import ProjectAutomationPanel from "./ProjectAutomationPanel";
@@ -27,7 +46,6 @@ import ProjectUploadModal from "./ProjectUploadModal";
 import ProjectWorkbenchPanel from "./ProjectWorkbenchPanel";
 import ProjectMetricsPanel from "./ProjectMetricsPanel";
 import ProjectEvidencePanel from "./ProjectEvidencePanel";
-import ProjectKnowledgePanel from "./ProjectKnowledgePanel";
 import useArtifactSelectionGuards from "./useArtifactSelectionGuards";
 import useProjectChatEnsureController from "./useProjectChatEnsureController";
 import useProjectChatFocusEffects from "./useProjectChatFocusEffects";
@@ -52,6 +70,8 @@ import {
   buildProjectIdCandidates,
   matchesRouteProject,
 } from "./projectIdUtils";
+import type { ProjectFileFilterKey } from "./filtering";
+import { computeProjectKnowledgeMetrics } from "./metrics";
 import type {
   AgentProjectSummary,
   AgentProjectFileInfo,
@@ -68,6 +88,68 @@ import { useAgentStore } from "../../../stores/agentStore";
 import styles from "./index.module.less";
 
 const { Text } = Typography;
+
+type ProjectStageKey = "source" | "knowledge" | "output";
+
+interface ProjectDetailLayoutPrefs {
+  leftPanelCollapsed: boolean;
+  activeStage: ProjectStageKey;
+  selectedMetricFilter: ProjectFileFilterKey | "";
+}
+
+const PROJECT_LAYOUT_PREFS_PREFIX = "copaw:projects:detail:layout:";
+
+const STAGE_FILTERS: Record<ProjectStageKey, ProjectFileFilterKey[]> = {
+  source: ["original", "derived"],
+  knowledge: ["knowledgeCandidates", "markdown", "textLike", "recent"],
+  output: ["skills", "scripts", "flows", "cases"],
+};
+
+const DEFAULT_STAGE_FILTER: Record<ProjectStageKey, ProjectFileFilterKey> = {
+  source: "original",
+  knowledge: "knowledgeCandidates",
+  output: "skills",
+};
+
+function resolveStageFromFilter(filter: ProjectFileFilterKey | ""): ProjectStageKey {
+  if (!filter) {
+    return "source";
+  }
+  if (STAGE_FILTERS.knowledge.includes(filter)) {
+    return "knowledge";
+  }
+  if (STAGE_FILTERS.output.includes(filter)) {
+    return "output";
+  }
+  return "source";
+}
+
+function getLeafFilterIcon(filterKey: ProjectFileFilterKey): ReactNode {
+  switch (filterKey) {
+    case "original":
+      return <FolderOpenOutlined />;
+    case "derived":
+      return <FileOutlined />;
+    case "knowledgeCandidates":
+      return <CopyOutlined />;
+    case "markdown":
+      return <FileMarkdownOutlined />;
+    case "textLike":
+      return <FileSearchOutlined />;
+    case "recent":
+      return <ClockCircleOutlined />;
+    case "skills":
+      return <ToolOutlined />;
+    case "scripts":
+      return <CodeOutlined />;
+    case "flows":
+      return <ApartmentOutlined />;
+    case "cases":
+      return <CheckSquareOutlined />;
+    default:
+      return <FileOutlined />;
+  }
+}
 
 function getCurrentAgent(
   agents: AgentSummary[],
@@ -142,6 +224,29 @@ function isBuiltInProjectFile(path: string): boolean {
   return false;
 }
 
+function normalizeProjectPath(path: string): string {
+  return path.replace(/\\/g, "/").replace(/^\.\//, "").toLowerCase();
+}
+
+function isOriginalInputFile(path: string): boolean {
+  const normalized = normalizeProjectPath(path);
+  return normalized === "original" || normalized.startsWith("original/");
+}
+
+function isPathInStandardDir(path: string, dir: "skills" | "scripts" | "flows" | "cases"): boolean {
+  const normalized = normalizeProjectPath(path);
+  return normalized === dir || normalized.startsWith(`${dir}/`);
+}
+
+function isStandardArtifactDirPath(path: string): boolean {
+  return (
+    isPathInStandardDir(path, "skills")
+    || isPathInStandardDir(path, "scripts")
+    || isPathInStandardDir(path, "flows")
+    || isPathInStandardDir(path, "cases")
+  );
+}
+
 function isSucceededStatus(status: string): boolean {
   return status === "succeeded" || status === "completed";
 }
@@ -208,11 +313,15 @@ export default function ProjectDetailPage() {
   const [selectedAttachPaths, setSelectedAttachPaths] = useState<string[]>([]);
   const [sendingSelectedFiles, setSendingSelectedFiles] = useState(false);
   const [autoAnalyzeOnAttach, setAutoAnalyzeOnAttach] = useState(true);
+  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(true);
+  const [activeStage, setActiveStage] = useState<ProjectStageKey>("source");
+  const [selectedMetricFilter, setSelectedMetricFilter] = useState<ProjectFileFilterKey | "">("");
   const runFocusChatIdRef = useRef("");
   const workspaceFocusChatIdRef = useRef("");
   const designFocusChatIdRef = useRef("");
   const runRestoreAttemptKeyRef = useRef("");
   const automationDrawerAutoOpenKeyRef = useRef("");
+  const layoutPrefsLoadedRef = useRef(false);
 
   const currentAgent = useMemo(
     () => getCurrentAgent(agents, selectedAgent),
@@ -391,26 +500,252 @@ export default function ProjectDetailPage() {
     [runsForSelectedTemplate],
   );
 
-  const automationSummaryText = useMemo(() => {
-    if (pipelineLoading) {
-      return t("projects.automationSummary.loading");
-    }
-    if (!selectedTemplateId) {
-      return t("projects.automationSummary.noTemplate");
-    }
-    if (!selectedRunSummary) {
-      return t("projects.automationSummary.noRun");
-    }
-    return t("projects.automationSummary.latest", {
-      runId: selectedRunSummary.id,
-      status: selectedRunSummary.status || "unknown",
-    });
-  }, [pipelineLoading, selectedRunSummary, selectedTemplateId, t]);
-
   const projectFileCount = useMemo(
     () => projectFiles.filter((file) => !isBuiltInProjectFile(file.path)).length,
     [projectFiles],
   );
+
+  const visibleProjectFiles = useMemo(
+    () => (hideBuiltInFiles
+      ? projectFiles.filter((item) => !isBuiltInProjectFile(item.path))
+      : projectFiles),
+    [hideBuiltInFiles, projectFiles],
+  );
+
+  const knowledgeMetrics = useMemo(
+    () => computeProjectKnowledgeMetrics(visibleProjectFiles),
+    [visibleProjectFiles],
+  );
+
+  const normalizedVisibleFiles = useMemo(
+    () => visibleProjectFiles.map((item) => normalizeProjectPath(item.path)),
+    [visibleProjectFiles],
+  );
+
+  const leafCounts = useMemo(() => {
+    const artifactProfile = selectedProject?.artifact_profile;
+    return {
+      original: normalizedVisibleFiles.filter((path) => isOriginalInputFile(path)).length,
+      derived: normalizedVisibleFiles.filter(
+        (path) => !isOriginalInputFile(path) && !isStandardArtifactDirPath(path),
+      ).length,
+      knowledgeCandidates: knowledgeMetrics.knowledgeCandidateFiles,
+      markdown: knowledgeMetrics.markdownFiles,
+      textLike: knowledgeMetrics.textLikeFiles,
+      recent: knowledgeMetrics.recentlyUpdatedFiles,
+      skills: artifactProfile?.skills.length || 0,
+      scripts: artifactProfile?.scripts.length || 0,
+      flows: artifactProfile?.flows.length || 0,
+      cases: artifactProfile?.cases.length || 0,
+    };
+  }, [knowledgeMetrics, normalizedVisibleFiles, selectedProject?.artifact_profile]);
+
+  const stageCounts = useMemo(() => {
+    const artifactProfile = selectedProject?.artifact_profile;
+    return {
+      source: visibleProjectFiles.length,
+      knowledge: knowledgeMetrics.knowledgeCandidateFiles,
+      output:
+        (artifactProfile?.skills.length || 0)
+        + (artifactProfile?.scripts.length || 0)
+        + (artifactProfile?.flows.length || 0)
+        + (artifactProfile?.cases.length || 0),
+      outputRuns: pipelineRuns.length,
+    };
+  }, [knowledgeMetrics.knowledgeCandidateFiles, pipelineRuns.length, selectedProject?.artifact_profile, visibleProjectFiles.length]);
+
+  const stageLeafFilters = useMemo(
+    () => ({
+      source: [
+        { key: "original" as const, label: t("projects.filesOriginal", "Original Files"), count: leafCounts.original },
+        { key: "derived" as const, label: t("projects.filesDerived", "Derived Files"), count: leafCounts.derived },
+      ],
+      knowledge: [
+        { key: "knowledgeCandidates" as const, label: t("projects.quantKnowledgeCandidates", "Knowledge Candidates"), count: leafCounts.knowledgeCandidates },
+        { key: "markdown" as const, label: t("projects.quantMarkdownFiles", "Markdown Files"), count: leafCounts.markdown },
+        { key: "textLike" as const, label: t("projects.quantTextLikeFiles", "Text-like Files"), count: leafCounts.textLike },
+        { key: "recent" as const, label: t("projects.quantRecentlyUpdated", "Updated in 7d"), count: leafCounts.recent },
+      ],
+      output: [
+        { key: "skills" as const, label: t("projects.artifacts.skill", "Skills"), count: leafCounts.skills },
+        { key: "scripts" as const, label: t("projects.artifacts.script", "Scripts"), count: leafCounts.scripts },
+        { key: "flows" as const, label: t("projects.artifacts.flow", "Flows"), count: leafCounts.flows },
+        { key: "cases" as const, label: t("projects.artifacts.case", "Cases"), count: leafCounts.cases },
+      ],
+    }),
+    [leafCounts, t],
+  );
+
+  const stageMenuItems = useMemo<MenuProps["items"]>(
+    () => [
+      {
+        key: "stage:source",
+        icon: <FileSearchOutlined />,
+        label: (
+          <span className={styles.stageMenuLabel}>
+            <span>{t("projects.stage.source", "Source")}</span>
+            <span
+              className={`${styles.stageMenuCount} ${activeStage === "source" ? styles.stageMenuCountActive : styles.stageMenuCountMuted}`}
+            >
+              {stageCounts.source}
+            </span>
+          </span>
+        ),
+        children: stageLeafFilters.source.map((item) => ({
+          key: item.key,
+          icon: getLeafFilterIcon(item.key),
+          label: (
+            <span className={styles.stageLeafMenuLabel}>
+              <span>{item.label}</span>
+              <span
+                className={`${styles.stageLeafMenuCount} ${selectedMetricFilter === item.key ? styles.stageLeafMenuCountActive : styles.stageLeafMenuCountMuted}`}
+              >
+                {item.count}
+              </span>
+            </span>
+          ),
+        })),
+      },
+      {
+        key: "stage:knowledge",
+        icon: <DatabaseOutlined />,
+        label: (
+          <span className={styles.stageMenuLabel}>
+            <span>{t("projects.stage.knowledge", "Knowledge")}</span>
+            <span
+              className={`${styles.stageMenuCount} ${activeStage === "knowledge" ? styles.stageMenuCountActive : styles.stageMenuCountMuted}`}
+            >
+              {stageCounts.knowledge}
+            </span>
+          </span>
+        ),
+        children: stageLeafFilters.knowledge.map((item) => ({
+          key: item.key,
+          icon: getLeafFilterIcon(item.key),
+          label: (
+            <span className={styles.stageLeafMenuLabel}>
+              <span>{item.label}</span>
+              <span
+                className={`${styles.stageLeafMenuCount} ${selectedMetricFilter === item.key ? styles.stageLeafMenuCountActive : styles.stageLeafMenuCountMuted}`}
+              >
+                {item.count}
+              </span>
+            </span>
+          ),
+        })),
+      },
+      {
+        key: "stage:output",
+        icon: <ApartmentOutlined />,
+        label: (
+          <span className={styles.stageMenuLabel}>
+            <span>{t("projects.stage.output", "Output")}</span>
+            <span
+              className={`${styles.stageMenuCount} ${activeStage === "output" ? styles.stageMenuCountActive : styles.stageMenuCountMuted}`}
+            >
+              {stageCounts.outputRuns || stageCounts.output}
+            </span>
+          </span>
+        ),
+        children: stageLeafFilters.output.map((item) => ({
+          key: item.key,
+          icon: getLeafFilterIcon(item.key),
+          label: (
+            <span className={styles.stageLeafMenuLabel}>
+              <span>{item.label}</span>
+              <span
+                className={`${styles.stageLeafMenuCount} ${selectedMetricFilter === item.key ? styles.stageLeafMenuCountActive : styles.stageLeafMenuCountMuted}`}
+              >
+                {item.count}
+              </span>
+            </span>
+          ),
+        })),
+      },
+    ],
+    [activeStage, selectedMetricFilter, stageCounts.knowledge, stageCounts.output, stageCounts.outputRuns, stageCounts.source, stageLeafFilters.knowledge, stageLeafFilters.output, stageLeafFilters.source, t],
+  );
+
+  const renderCollapsedLeafIcon = useCallback((itemKey: ProjectFileFilterKey, itemCount: number) => {
+    const isActive = selectedMetricFilter === itemKey;
+    if (itemCount > 0) {
+      return (
+        <Badge
+          count={itemCount}
+          size="small"
+          overflowCount={99}
+          offset={[4, -1]}
+          className={`${styles.collapsedLeafBadge} ${isActive ? styles.collapsedLeafBadgeActive : styles.collapsedLeafBadgeMuted}`}
+          styles={{
+            indicator: {
+              minWidth: 14,
+              width: "auto",
+              height: 14,
+              lineHeight: "14px",
+              padding: "0 2px",
+              fontSize: 8,
+              fontWeight: 600,
+              color: isActive ? "#ffffff" : "#5f7fc7",
+              background: isActive ? "#2f66e8" : "#eef3ff",
+              border: isActive ? "1px solid #ffffff" : "1px solid #d4def8",
+              boxShadow: isActive ? "0 1px 2px rgba(15, 23, 42, 0.16)" : "none",
+            },
+          }}
+        >
+          <span className={styles.collapsedLeafIconWrap}>{getLeafFilterIcon(itemKey)}</span>
+        </Badge>
+      );
+    }
+    return (
+      <Badge
+        dot
+        offset={[2, -1]}
+        className={`${styles.collapsedLeafBadgeDot} ${isActive ? styles.collapsedLeafBadgeDotActive : styles.collapsedLeafBadgeDotMuted}`}
+      >
+        <span className={styles.collapsedLeafIconWrap}>{getLeafFilterIcon(itemKey)}</span>
+      </Badge>
+    );
+  }, [selectedMetricFilter]);
+
+  const collapsedLeafMenuItems = useMemo<MenuProps["items"]>(
+    () => [
+      ...stageLeafFilters.source.map((item) => ({
+        key: item.key,
+        icon: renderCollapsedLeafIcon(item.key, item.count),
+        label: item.label,
+      })),
+      ...stageLeafFilters.knowledge.map((item) => ({
+        key: item.key,
+        icon: renderCollapsedLeafIcon(item.key, item.count),
+        label: item.label,
+      })),
+      ...stageLeafFilters.output.map((item) => ({
+        key: item.key,
+        icon: renderCollapsedLeafIcon(item.key, item.count),
+        label: item.label,
+      })),
+    ],
+    [renderCollapsedLeafIcon, stageLeafFilters.knowledge, stageLeafFilters.output, stageLeafFilters.source],
+  );
+
+  const stageMenuOpenKeys = useMemo(
+    () => (leftPanelCollapsed ? [] : ["stage:source", "stage:knowledge", "stage:output"]),
+    [leftPanelCollapsed],
+  );
+
+  const handleSelectStage = useCallback((stage: ProjectStageKey) => {
+    setActiveStage(stage);
+    const stageFilters = STAGE_FILTERS[stage];
+    setSelectedMetricFilter((prev) => {
+      if (prev && stageFilters.includes(prev)) {
+        return prev;
+      }
+      return DEFAULT_STAGE_FILTER[stage];
+    });
+    if (leftPanelCollapsed) {
+      setLeftPanelCollapsed(false);
+    }
+  }, [leftPanelCollapsed]);
 
   const projectWorkspaceSummary = useMemo(
     () => buildProjectWorkspaceSummary({
@@ -1227,6 +1562,57 @@ export default function ProjectDetailPage() {
     resetPreferredWorkspaceChatBinding();
   }, [resetPreferredWorkspaceChatBinding, resetUploadState, routeProjectId]);
 
+  useEffect(() => {
+    layoutPrefsLoadedRef.current = false;
+    const storageKey = `${PROJECT_LAYOUT_PREFS_PREFIX}${routeProjectId || "default"}`;
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<ProjectDetailLayoutPrefs>;
+        setLeftPanelCollapsed(parsed.leftPanelCollapsed ?? true);
+        setActiveStage(parsed.activeStage ?? "source");
+        setSelectedMetricFilter(parsed.selectedMetricFilter ?? "");
+      } else {
+        setLeftPanelCollapsed(true);
+        setActiveStage("source");
+        setSelectedMetricFilter("");
+      }
+    } catch {
+      setLeftPanelCollapsed(true);
+      setActiveStage("source");
+      setSelectedMetricFilter("");
+    } finally {
+      layoutPrefsLoadedRef.current = true;
+    }
+  }, [routeProjectId]);
+
+  useEffect(() => {
+    if (!selectedMetricFilter) {
+      return;
+    }
+    const nextStage = resolveStageFromFilter(selectedMetricFilter);
+    if (nextStage !== activeStage) {
+      setActiveStage(nextStage);
+    }
+  }, [activeStage, selectedMetricFilter]);
+
+  useEffect(() => {
+    if (!layoutPrefsLoadedRef.current) {
+      return;
+    }
+    const storageKey = `${PROJECT_LAYOUT_PREFS_PREFIX}${routeProjectId || "default"}`;
+    const payload: ProjectDetailLayoutPrefs = {
+      leftPanelCollapsed,
+      activeStage,
+      selectedMetricFilter,
+    };
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(payload));
+    } catch {
+      // Ignore storage quota and privacy mode errors.
+    }
+  }, [activeStage, leftPanelCollapsed, routeProjectId, selectedMetricFilter]);
+
   useOpenUploadQuery({
     pathname: location.pathname,
     search: location.search,
@@ -1807,7 +2193,43 @@ export default function ProjectDetailPage() {
         </Card>
       ) : (
         <div className={styles.content}>
-          <div className={styles.columnLeft}>
+          <div className={`${styles.columnLeft} ${leftPanelCollapsed ? styles.columnLeftCollapsed : ""}`}>
+            <div className={`${styles.leftStageRail} ${leftPanelCollapsed ? styles.leftStageRailCollapsed : ""}`}>
+              <Button
+                size="small"
+                className={styles.leftRailToggle}
+                icon={leftPanelCollapsed ? <RightOutlined /> : <LeftOutlined />}
+                onClick={() => setLeftPanelCollapsed((prev) => !prev)}
+                title={leftPanelCollapsed
+                  ? t("projects.layout.expandLeft", "Expand left panel")
+                  : t("projects.layout.collapseLeft", "Collapse left panel")}
+              />
+              <Menu
+                mode="inline"
+                className={styles.leftStageMenu}
+                inlineCollapsed={leftPanelCollapsed}
+                items={leftPanelCollapsed ? collapsedLeafMenuItems : stageMenuItems}
+                selectedKeys={selectedMetricFilter ? [selectedMetricFilter] : []}
+                openKeys={stageMenuOpenKeys}
+                onClick={({ key }) => {
+                  const keyValue = String(key);
+                  if (keyValue === "stage:source") {
+                    handleSelectStage("source");
+                    return;
+                  }
+                  if (keyValue === "stage:knowledge") {
+                    handleSelectStage("knowledge");
+                    return;
+                  }
+                  if (keyValue === "stage:output") {
+                    handleSelectStage("output");
+                    return;
+                  }
+                  setSelectedMetricFilter(keyValue as ProjectFileFilterKey);
+                }}
+              />
+            </div>
+
             <div className={styles.columnStack}>
               <ProjectOverviewCard
                 selectedProject={selectedProject}
@@ -1820,6 +2242,10 @@ export default function ProjectDetailPage() {
                 selectedFilePath={selectedFilePath}
                 selectedAttachPaths={selectedAttachPaths}
                 hideBuiltInFiles={hideBuiltInFiles}
+                activeStage={activeStage}
+                selectedMetricFilter={selectedMetricFilter}
+                onMetricFilterChange={setSelectedMetricFilter}
+                treeOnly
                 onUploadFiles={openProjectUploadModal}
                 onSelectFileFromTree={(path) => {
                   void handleSelectArtifactFile(path);
@@ -1829,37 +2255,6 @@ export default function ProjectDetailPage() {
                 }}
                 onToggleHideBuiltInFiles={setHideBuiltInFiles}
               />
-
-              <ProjectKnowledgePanel
-                projectId={selectedProject.id}
-                projectName={selectedProject.name}
-                projectWorkspaceDir={selectedProject.workspace_dir}
-              />
-
-              <Card
-                size="small"
-                title={t("projects.automationDrawer.title")}
-                className={styles.automationSummaryCard}
-                extra={(
-                  <Button
-                    size="small"
-                    type="primary"
-                    onClick={() => setAutomationDrawerOpen(true)}
-                  >
-                    {t("projects.automationDrawer.open")}
-                  </Button>
-                )}
-              >
-                <div className={styles.automationSummaryMeta}>
-                  <Text type="secondary">{automationSummaryText}</Text>
-                  <Text type="secondary">
-                    {t("projects.automationSummary.counts", {
-                      templateCount: pipelineTemplates.length,
-                      runCount: pipelineRuns.length,
-                    })}
-                  </Text>
-                </div>
-              </Card>
             </div>
           </div>
 

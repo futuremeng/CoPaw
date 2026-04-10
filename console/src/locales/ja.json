@@ -1701,6 +1701,15 @@
       "retryIndexSuccess": "再インデックスを開始しました",
       "retryIndexFailed": "再インデックスの再試行に失敗しました"
     },
+    "stage": {
+      "source": "ソース",
+      "knowledge": "ナレッジ",
+      "output": "出力"
+    },
+    "layout": {
+      "expandLeft": "左パネルを展開",
+      "collapseLeft": "左パネルを折りたたむ"
+    },
     "quantStatusHealthy": "良好",
     "quantStatusAttention": "要確認",
     "quantStatusNeutral": "判断材料なし",

@@ -1746,6 +1746,15 @@
       "retryIndexSuccess": "Reindex started",
       "retryIndexFailed": "Failed to retry indexing"
     },
+    "stage": {
+      "source": "Source",
+      "knowledge": "Knowledge",
+      "output": "Output"
+    },
+    "layout": {
+      "expandLeft": "Expand left panel",
+      "collapseLeft": "Collapse left panel"
+    },
     "quantStatusHealthy": "Healthy",
     "quantStatusAttention": "Needs attention",
     "quantStatusNeutral": "No signal",

@@ -95,25 +95,312 @@
 }
 
 .columnLeft {
-  width: 320px;
+  width: 460px;
   flex-shrink: 0;
   min-height: 0;
+  display: flex;
+  gap: 10px;
+  transition: width 0.2s ease;
 
   :global(.ant-card) {
-    display: flex;
-    flex-direction: column;
+    min-width: 0;
   }
 
   :global(.ant-card-body) {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
+    min-width: 0;
   }
 }
 
+.columnLeftCollapsed {
+  width: 340px;
+}
+
+.leftStageRail {
+  width: 210px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid #f0f0f0;
+  border-radius: 12px;
+  background: #fff;
+  height: fit-content;
+  transition: width 0.2s ease, padding 0.2s ease;
+}
+
+.leftStageRailCollapsed {
+  width: 78px;
+  padding: 6px 4px;
+}
+
+.leftRailToggle {
+  width: 100%;
+}
+
+.leftStageMenu {
+  border-inline-end: none !important;
+  background: transparent;
+
+  :global(.ant-menu-submenu-title) {
+    border-radius: 8px;
+    margin: 2px 0;
+  }
+
+  :global(.ant-menu-item) {
+    border-radius: 8px;
+    margin: 2px 0;
+  }
+
+  :global(.ant-menu-inline-collapsed .ant-menu-submenu-title) {
+    padding-inline: 0 !important;
+    display: flex;
+    justify-content: center;
+  }
+
+  :global(.ant-menu-inline-collapsed .ant-menu-item) {
+    padding-inline: 0 !important;
+    display: flex;
+    justify-content: center;
+    overflow: visible;
+  }
+
+  :global(.ant-menu-item-icon) {
+    overflow: visible;
+  }
+}
+
+.stageMenuLabel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.stageMenuCount {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.stageMenuCountActive {
+  color: #1677ff;
+}
+
+.stageMenuCountMuted {
+  color: #9aa4b2;
+}
+
+.stageLeafMenuLabel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.stageLeafMenuCount {
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.stageLeafMenuCountActive {
+  color: #1677ff;
+}
+
+.stageLeafMenuCountMuted {
+  color: #9aa4b2;
+}
+
+.collapsedLeafIconWrap {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.collapsedLeafBadge {
+  :global(.ant-badge-count),
+  :global(.copaw-badge-count) {
+    min-width: 14px;
+    height: 14px;
+    line-height: 14px;
+    padding: 0 2px;
+    font-size: 8px !important;
+    font-weight: 600;
+    border: 1px solid #fff;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.16);
+    letter-spacing: 0;
+  }
+
+  :global(.ant-scroll-number-only-unit),
+  :global(.copaw-scroll-number-only-unit) {
+    font-size: 8px !important;
+    line-height: 14px !important;
+  }
+
+  :global(.ant-badge-count-sm),
+  :global(.copaw-badge-count-sm) {
+    font-size: 8px !important;
+  }
+}
+
+.collapsedLeafBadgeActive {
+  :global(.ant-badge-count),
+  :global(.copaw-badge-count) {
+    background: #2f66e8 !important;
+    color: #fff !important;
+    border-color: #ffffff;
+  }
+}
+
+.collapsedLeafBadgeMuted {
+  :global(.ant-badge-count),
+  :global(.copaw-badge-count) {
+    background: #eef3ff !important;
+    color: #5f7fc7 !important;
+    border-color: #d4def8;
+    box-shadow: none;
+    opacity: 1;
+  }
+}
+
+.collapsedLeafBadgeDot {
+  :global(.ant-badge-dot),
+  :global(.copaw-badge-dot) {
+    width: 6px;
+    min-width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    box-shadow: none;
+  }
+}
+
+.collapsedLeafBadgeDotActive {
+  :global(.ant-badge-dot),
+  :global(.copaw-badge-dot) {
+    background: #4c7df0;
+    border: 1px solid #ffffff;
+  }
+}
+
+.collapsedLeafBadgeDotMuted {
+  :global(.ant-badge-dot),
+  :global(.copaw-badge-dot) {
+    background: #ffffff;
+    border: 1px solid #b8c9f5;
+    opacity: 0.75;
+  }
+}
+
+.leftRailItem {
+  border: 1px solid #f0f0f0;
+  border-radius: 10px;
+  background: #fff;
+  color: #595959;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 6px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+
+  &:hover {
+    border-color: #91caff;
+    color: #0958d9;
+    background: #f5faff;
+  }
+}
+
+.leftRailItemActive {
+  border-color: #1677ff;
+  color: #0958d9;
+  background: #e6f4ff;
+}
+
+.leftRailValue {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.leftRailLabel {
+  font-size: 11px;
+  line-height: 1.1;
+  text-align: center;
+  word-break: break-word;
+}
+
+.leftRailLeafList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: -2px;
+  margin-bottom: 2px;
+}
+
+.leftRailLeafButton {
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 5px 6px;
+  cursor: pointer;
+  transition: all 0.16s ease;
+
+  &:hover {
+    border-color: #d6e4ff;
+    background: #f8fbff;
+  }
+}
+
+.leftRailLeafButtonActive {
+  border-color: #1677ff;
+  background: #e6f4ff;
+}
+
+.leftRailLeafName {
+  font-size: 11px;
+  color: #595959;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.leftRailLeafCount {
+  font-size: 11px;
+  font-weight: 700;
+  color: #1677ff;
+  flex-shrink: 0;
+}
+
+.treeTransitionShell {
+  transition: opacity 0.2s ease, transform 0.2s ease, max-height 0.2s ease;
+  transform-origin: top;
+  opacity: 1;
+  transform: translateY(0);
+  max-height: 360px;
+}
+
+.treeTransitionEnter {
+  opacity: 0.56;
+  transform: translateY(4px);
+}
+
 .columnStack {
+  flex: 1;
+  min-width: 0;
   height: 100%;
-  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;

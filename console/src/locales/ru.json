@@ -1701,6 +1701,15 @@
       "retryIndexSuccess": "Переиндексация запущена",
       "retryIndexFailed": "Не удалось повторить индексацию"
     },
+    "stage": {
+      "source": "Исходники",
+      "knowledge": "Знания",
+      "output": "Выход"
+    },
+    "layout": {
+      "expandLeft": "Развернуть левую панель",
+      "collapseLeft": "Свернуть левую панель"
+    },
     "quantStatusHealthy": "Норма",
     "quantStatusAttention": "Требует внимания",
     "quantStatusNeutral": "Нет сигнала",

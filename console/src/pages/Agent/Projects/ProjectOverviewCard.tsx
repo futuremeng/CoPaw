@@ -38,6 +38,10 @@ import styles from "./index.module.less";
 const { Text } = Typography;
 
 interface ProjectOverviewCardProps {
+  activeStage: "source" | "knowledge" | "output";
+  selectedMetricFilter: ProjectFileFilterKey | "";
+  onMetricFilterChange: (next: ProjectFileFilterKey | "") => void;
+  treeOnly?: boolean;
   selectedProject?: AgentProjectSummary;
   projectFileCount: number;
   pipelineTemplateCount: number;
@@ -260,6 +264,10 @@ function buildFileTree(
 }
 
 export default function ProjectOverviewCard({
+  activeStage,
+  selectedMetricFilter,
+  onMetricFilterChange,
+  treeOnly = false,
   selectedProject,
   projectFileCount: _projectFileCount,
   pipelineTemplateCount: _pipelineTemplateCount,
@@ -279,7 +287,7 @@ export default function ProjectOverviewCard({
   void _pipelineTemplateCount;
   const { t } = useTranslation();
   const [workspaceSummaryExpanded, setWorkspaceSummaryExpanded] = useState(false);
-  const [selectedMetricFilter, setSelectedMetricFilter] = useState<ProjectFileFilterKey | "">("");
+  const [treeTransitioning, setTreeTransitioning] = useState(false);
   const updatedDateParts = formatUpdatedDateParts(selectedProject?.updated_time);
 
   const visibleFiles = hideBuiltInFiles
@@ -364,6 +372,16 @@ export default function ProjectOverviewCard({
     }
   }, [filteredFilePaths, onSelectFileFromTree, selectedFilePath, selectedMetricFilter]);
 
+  useEffect(() => {
+    setTreeTransitioning(true);
+    const timer = window.setTimeout(() => {
+      setTreeTransitioning(false);
+    }, 220);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [activeStage, selectedMetricFilter]);
+
   const metricCards: Array<{ key: FileMetricFilterKey; label: string; value: number }> = [
     {
       key: "original",
@@ -401,6 +419,76 @@ export default function ProjectOverviewCard({
     ...item,
     label: t(item.labelI18nKey, item.defaultLabel),
   }));
+
+  if (treeOnly) {
+    const stageTitle =
+      activeStage === "knowledge"
+        ? t("projects.stage.knowledge", "Knowledge")
+        : activeStage === "output"
+          ? t("projects.stage.output", "Output")
+          : t("projects.stage.source", "Source");
+
+    return (
+      <Card
+        title={<span className={styles.sectionTitle}>{t("projects.workspaceSummaryFiles", "Workspace Files")}</span>}
+        styles={{ body: { padding: 12 } }}
+        extra={<Text type="secondary" className={styles.panelExtraText}>{stageTitle}</Text>}
+      >
+        <div className={styles.scrollContainer}>
+          {selectedFilterLabel ? (
+            <div className={styles.treeFilterIndicator}>
+              <Text type="secondary" className={styles.itemMeta}>
+                {t("projects.workspaceSummaryFilterLabel", "Current filter: {{label}}", {
+                  label: selectedFilterLabel,
+                })}
+              </Text>
+            </div>
+          ) : null}
+          <div className={styles.overviewTreeToolbar}>
+            <Text type="secondary" className={styles.itemMeta}>
+              {t("projects.artifacts.hideBuiltins", "Hide built-in files")}
+            </Text>
+            <Button
+              size="small"
+              type={hideBuiltInFiles ? "default" : "text"}
+              onClick={() => onToggleHideBuiltInFiles(!hideBuiltInFiles)}
+            >
+              {hideBuiltInFiles ? t("common.on", "On") : t("common.off", "Off")}
+            </Button>
+          </div>
+          <div
+            className={`${styles.treeTransitionShell} ${treeTransitioning ? styles.treeTransitionEnter : ""}`}
+          >
+            {treeData.length === 0 ? (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={
+                  selectedFilterLabel
+                    ? t("projects.noFilteredFiles", "No related files under the current filter")
+                    : t("projects.noFiles", "No files in this project")
+                }
+              />
+            ) : (
+              <Tree
+                className={styles.overviewCompactTree}
+                selectedKeys={selectedFilePath && filteredFilePaths.includes(selectedFilePath) ? [selectedFilePath] : []}
+                treeData={treeData}
+                onSelect={(keys) => {
+                  const key = String(keys[0] || "");
+                  if (key) {
+                    onSelectFileFromTree(key);
+                  }
+                }}
+              />
+            )}
+          </div>
+          <div className={styles.overviewActions}>
+            <Button onClick={onUploadFiles}>{t("projects.upload.button", "Upload Files")}</Button>
+          </div>
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <Card
@@ -462,7 +550,7 @@ export default function ProjectOverviewCard({
               <Button
                 size="small"
                 type="text"
-                onClick={() => setSelectedMetricFilter("")}
+                onClick={() => onMetricFilterChange("")}
               >
                 {t("common.reset", "Reset")}
               </Button>
@@ -481,7 +569,7 @@ export default function ProjectOverviewCard({
                     key={item.key}
                     type="button"
                     className={className}
-                    onClick={() => setSelectedMetricFilter((prev) => toggleProjectFileFilter(prev, filterKey))}
+                    onClick={() => onMetricFilterChange(toggleProjectFileFilter(selectedMetricFilter, filterKey))}
                     aria-pressed={active}
                   >
                     <div className={styles.itemMeta}>{item.label}</div>
@@ -525,7 +613,7 @@ export default function ProjectOverviewCard({
                   type="button"
                   className={`${styles.metricSummaryCard} ${styles.metricFilterCard} ${active ? styles.metricFilterCardActive : ""}`}
                   onClick={() => {
-                    setSelectedMetricFilter((prev) => toggleProjectFileFilter(prev, item.key));
+                    onMetricFilterChange(toggleProjectFileFilter(selectedMetricFilter, item.key));
                   }}
                   aria-pressed={active}
                 >
@@ -573,28 +661,32 @@ export default function ProjectOverviewCard({
               {hideBuiltInFiles ? t("common.on", "On") : t("common.off", "Off")}
             </Button>
           </div>
-          {treeData.length === 0 ? (
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={
-                selectedFilterLabel
-                  ? t("projects.noFilteredFiles", "No related files under the current filter")
-                  : t("projects.noFiles", "No files in this project")
-              }
-            />
-          ) : (
-            <Tree
-              className={styles.overviewCompactTree}
-              selectedKeys={selectedFilePath && filteredFilePaths.includes(selectedFilePath) ? [selectedFilePath] : []}
-              treeData={treeData}
-              onSelect={(keys) => {
-                const key = String(keys[0] || "");
-                if (key) {
-                  onSelectFileFromTree(key);
+          <div
+            className={`${styles.treeTransitionShell} ${treeTransitioning ? styles.treeTransitionEnter : ""}`}
+          >
+            {treeData.length === 0 ? (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={
+                  selectedFilterLabel
+                    ? t("projects.noFilteredFiles", "No related files under the current filter")
+                    : t("projects.noFiles", "No files in this project")
                 }
-              }}
-            />
-          )}
+              />
+            ) : (
+              <Tree
+                className={styles.overviewCompactTree}
+                selectedKeys={selectedFilePath && filteredFilePaths.includes(selectedFilePath) ? [selectedFilePath] : []}
+                treeData={treeData}
+                onSelect={(keys) => {
+                  const key = String(keys[0] || "");
+                  if (key) {
+                    onSelectFileFromTree(key);
+                  }
+                }}
+              />
+            )}
+          </div>
         </div>
 
         <div className={styles.overviewActions}>
