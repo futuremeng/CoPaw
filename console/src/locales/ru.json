@@ -1672,6 +1672,10 @@
     "updated": "Обновлено",
     "filesOriginal": "Исходные файлы",
     "filesDerived": "Производные файлы",
+    "treeViewMode": {
+      "filter": "Фильтр",
+      "highlight": "Подсветка"
+    },
     "knowledgePanelTitle": "Панель количественных метрик знаний",
     "knowledgePanelHint": "Быстро оценивайте плотность знаний и актуальность проекта",
     "knowledge": {

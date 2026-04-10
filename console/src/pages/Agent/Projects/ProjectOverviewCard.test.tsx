@@ -64,12 +64,15 @@ function renderCard(projectFiles: AgentProjectFileInfo[]) {
     const [selectedMetricFilter, setSelectedMetricFilter] = useState<
       "" | "original" | "derived" | "skills" | "scripts" | "flows" | "cases" | "knowledgeCandidates" | "markdown" | "textLike" | "recent"
     >("");
+    const [treeDisplayMode, setTreeDisplayMode] = useState<"filter" | "highlight">("filter");
 
     return (
       <ProjectOverviewCard
         activeStage="source"
         selectedMetricFilter={selectedMetricFilter}
         onMetricFilterChange={setSelectedMetricFilter}
+        treeDisplayMode={treeDisplayMode}
+        onTreeDisplayModeChange={setTreeDisplayMode}
         selectedProject={buildProjectSummary()}
         projectFileCount={projectFiles.length}
         pipelineTemplateCount={0}

@@ -1672,6 +1672,10 @@
     "updated": "更新",
     "filesOriginal": "原本ファイル",
     "filesDerived": "派生ファイル",
+    "treeViewMode": {
+      "filter": "絞り込み",
+      "highlight": "ハイライト"
+    },
     "knowledgePanelTitle": "ナレッジ定量パネル",
     "knowledgePanelHint": "プロジェクトの知識密度と鮮度をすばやく把握",
     "knowledge": {

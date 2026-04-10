@@ -1717,6 +1717,10 @@
     "updated": "Updated",
     "filesOriginal": "Original Files",
     "filesDerived": "Derived Files",
+    "treeViewMode": {
+      "filter": "Filter",
+      "highlight": "Highlight"
+    },
     "knowledgePanelTitle": "Knowledge Quant Panel",
     "knowledgePanelHint": "Quickly observe project knowledge density and freshness",
     "knowledge": {

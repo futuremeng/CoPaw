@@ -90,11 +90,13 @@ import styles from "./index.module.less";
 const { Text } = Typography;
 
 type ProjectStageKey = "source" | "knowledge" | "output";
+type TreeDisplayMode = "filter" | "highlight";
 
 interface ProjectDetailLayoutPrefs {
   leftPanelCollapsed: boolean;
   activeStage: ProjectStageKey;
   selectedMetricFilter: ProjectFileFilterKey | "";
+  treeDisplayMode: TreeDisplayMode;
 }
 
 const PROJECT_LAYOUT_PREFS_PREFIX = "copaw:projects:detail:layout:";
@@ -316,6 +318,7 @@ export default function ProjectDetailPage() {
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(true);
   const [activeStage, setActiveStage] = useState<ProjectStageKey>("source");
   const [selectedMetricFilter, setSelectedMetricFilter] = useState<ProjectFileFilterKey | "">("");
+  const [treeDisplayMode, setTreeDisplayMode] = useState<TreeDisplayMode>("filter");
   const runFocusChatIdRef = useRef("");
   const workspaceFocusChatIdRef = useRef("");
   const designFocusChatIdRef = useRef("");
@@ -1572,15 +1575,18 @@ export default function ProjectDetailPage() {
         setLeftPanelCollapsed(parsed.leftPanelCollapsed ?? true);
         setActiveStage(parsed.activeStage ?? "source");
         setSelectedMetricFilter(parsed.selectedMetricFilter ?? "");
+        setTreeDisplayMode(parsed.treeDisplayMode ?? "filter");
       } else {
         setLeftPanelCollapsed(true);
         setActiveStage("source");
         setSelectedMetricFilter("");
+        setTreeDisplayMode("filter");
       }
     } catch {
       setLeftPanelCollapsed(true);
       setActiveStage("source");
       setSelectedMetricFilter("");
+      setTreeDisplayMode("filter");
     } finally {
       layoutPrefsLoadedRef.current = true;
     }
@@ -1605,13 +1611,14 @@ export default function ProjectDetailPage() {
       leftPanelCollapsed,
       activeStage,
       selectedMetricFilter,
+      treeDisplayMode,
     };
     try {
       window.localStorage.setItem(storageKey, JSON.stringify(payload));
     } catch {
       // Ignore storage quota and privacy mode errors.
     }
-  }, [activeStage, leftPanelCollapsed, routeProjectId, selectedMetricFilter]);
+  }, [activeStage, leftPanelCollapsed, routeProjectId, selectedMetricFilter, treeDisplayMode]);
 
   useOpenUploadQuery({
     pathname: location.pathname,
@@ -2245,6 +2252,8 @@ export default function ProjectDetailPage() {
                 activeStage={activeStage}
                 selectedMetricFilter={selectedMetricFilter}
                 onMetricFilterChange={setSelectedMetricFilter}
+                treeDisplayMode={treeDisplayMode}
+                onTreeDisplayModeChange={setTreeDisplayMode}
                 treeOnly
                 onUploadFiles={openProjectUploadModal}
                 onSelectFileFromTree={(path) => {

@@ -12,7 +12,7 @@ import {
   MinusOutlined,
   PlusOutlined,
 } from "@ant-design/icons";
-import { Button, Card, Empty, Tree, Typography } from "antd";
+import { Button, Card, Empty, Segmented, Tree, Typography } from "antd";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
@@ -41,6 +41,8 @@ interface ProjectOverviewCardProps {
   activeStage: "source" | "knowledge" | "output";
   selectedMetricFilter: ProjectFileFilterKey | "";
   onMetricFilterChange: (next: ProjectFileFilterKey | "") => void;
+  treeDisplayMode: TreeDisplayMode;
+  onTreeDisplayModeChange: (next: TreeDisplayMode) => void;
   treeOnly?: boolean;
   selectedProject?: AgentProjectSummary;
   projectFileCount: number;
@@ -64,6 +66,8 @@ interface TreeNode {
   children?: TreeNode[];
   isLeaf?: boolean;
 }
+
+type TreeDisplayMode = "filter" | "highlight";
 
 function formatUpdatedDateParts(updatedTime?: string): { day: string; month: string } {
   if (!updatedTime) {
@@ -169,6 +173,7 @@ function buildFileTree(
   paths: string[],
   priorityFileSet: Set<string>,
   selectedAttachSet: Set<string>,
+  highlightedFileSet: Set<string>,
   onAttachArtifactToChat: (path: string) => void,
   attachTitle: string,
   detachTitle: string,
@@ -225,6 +230,7 @@ function buildFileTree(
         const isDirectory = children.length > 0;
         const isPriority = !isDirectory && priorityFileSet.has(node.key);
         const isAttached = !isDirectory && selectedAttachSet.has(node.key);
+        const isHighlighted = !isDirectory && highlightedFileSet.has(node.key);
         return {
           key: node.key,
           title: (
@@ -235,7 +241,13 @@ function buildFileTree(
                 }
               >
                 {renderNodeIcon(node.title, isDirectory, isPriority)}
-                <span className={styles.treeNodeText}>{node.title}</span>
+                <span
+                  className={isHighlighted
+                    ? `${styles.treeNodeText} ${styles.treeNodeTextHighlighted}`
+                    : styles.treeNodeText}
+                >
+                  {node.title}
+                </span>
               </span>
               {!isDirectory ? (
                 <span className={styles.treeNodeActions}>
@@ -267,6 +279,8 @@ export default function ProjectOverviewCard({
   activeStage,
   selectedMetricFilter,
   onMetricFilterChange,
+  treeDisplayMode,
+  onTreeDisplayModeChange,
   treeOnly = false,
   selectedProject,
   projectFileCount: _projectFileCount,
@@ -338,14 +352,23 @@ export default function ProjectOverviewCard({
     }
   });
   const filteredFilePaths = filteredFiles.map((item) => item.path);
+  const highlightedFilePaths = selectedMetricFilter
+    ? filteredFilePaths
+    : [];
+  const treeFiles = treeDisplayMode === "highlight" ? visibleFiles : filteredFiles;
+  const treeFilePaths = treeFiles.map((item) => item.path);
+  const highlightedFileSet = new Set(
+    treeDisplayMode === "highlight" ? highlightedFilePaths : [],
+  );
   const projectKnowledgeMetrics = useMemo(
     () => computeProjectKnowledgeMetrics(visibleFiles),
     [visibleFiles],
   );
   const treeData = buildFileTree(
-    filteredFilePaths,
+    treeFilePaths,
     priorityFileSet,
     selectedAttachSet,
+    highlightedFileSet,
     onAttachArtifactToChat,
     attachTitle,
     detachTitle,
@@ -361,16 +384,19 @@ export default function ProjectOverviewCard({
   );
 
   useEffect(() => {
+    if (treeDisplayMode !== "filter") {
+      return;
+    }
     if (!selectedMetricFilter) {
       return;
     }
     if (filteredFilePaths.length === 0) {
       return;
     }
-    if (!selectedFilePath) {
+    if (!selectedFilePath || !filteredFilePaths.includes(selectedFilePath)) {
       onSelectFileFromTree(filteredFilePaths[0]);
     }
-  }, [filteredFilePaths, onSelectFileFromTree, selectedFilePath, selectedMetricFilter]);
+  }, [filteredFilePaths, onSelectFileFromTree, selectedFilePath, selectedMetricFilter, treeDisplayMode]);
 
   useEffect(() => {
     setTreeTransitioning(true);
@@ -445,16 +471,28 @@ export default function ProjectOverviewCard({
             </div>
           ) : null}
           <div className={styles.overviewTreeToolbar}>
-            <Text type="secondary" className={styles.itemMeta}>
-              {t("projects.artifacts.hideBuiltins", "Hide built-in files")}
-            </Text>
-            <Button
+            <div className={styles.treeToolbarLeft}>
+              <Text type="secondary" className={styles.itemMeta}>
+                {t("projects.artifacts.hideBuiltins", "Hide built-in files")}
+              </Text>
+              <Button
+                size="small"
+                type={hideBuiltInFiles ? "default" : "text"}
+                onClick={() => onToggleHideBuiltInFiles(!hideBuiltInFiles)}
+              >
+                {hideBuiltInFiles ? t("common.on", "On") : t("common.off", "Off")}
+              </Button>
+            </div>
+            <Segmented
               size="small"
-              type={hideBuiltInFiles ? "default" : "text"}
-              onClick={() => onToggleHideBuiltInFiles(!hideBuiltInFiles)}
-            >
-              {hideBuiltInFiles ? t("common.on", "On") : t("common.off", "Off")}
-            </Button>
+              className={styles.treeModeSegment}
+              value={treeDisplayMode}
+              onChange={(value) => onTreeDisplayModeChange(value as TreeDisplayMode)}
+              options={[
+                { label: t("projects.treeViewMode.filter", "Filter"), value: "filter" },
+                { label: t("projects.treeViewMode.highlight", "Highlight"), value: "highlight" },
+              ]}
+            />
           </div>
           <div
             className={`${styles.treeTransitionShell} ${treeTransitioning ? styles.treeTransitionEnter : ""}`}
@@ -471,7 +509,7 @@ export default function ProjectOverviewCard({
             ) : (
               <Tree
                 className={styles.overviewCompactTree}
-                selectedKeys={selectedFilePath && filteredFilePaths.includes(selectedFilePath) ? [selectedFilePath] : []}
+                selectedKeys={selectedFilePath && treeFilePaths.includes(selectedFilePath) ? [selectedFilePath] : []}
                 treeData={treeData}
                 onSelect={(keys) => {
                   const key = String(keys[0] || "");
@@ -650,16 +688,28 @@ export default function ProjectOverviewCard({
             </div>
           ) : null}
           <div className={styles.overviewTreeToolbar}>
-            <Text type="secondary" className={styles.itemMeta}>
-              {t("projects.artifacts.hideBuiltins", "Hide built-in files")}
-            </Text>
-            <Button
+            <div className={styles.treeToolbarLeft}>
+              <Text type="secondary" className={styles.itemMeta}>
+                {t("projects.artifacts.hideBuiltins", "Hide built-in files")}
+              </Text>
+              <Button
+                size="small"
+                type={hideBuiltInFiles ? "default" : "text"}
+                onClick={() => onToggleHideBuiltInFiles(!hideBuiltInFiles)}
+              >
+                {hideBuiltInFiles ? t("common.on", "On") : t("common.off", "Off")}
+              </Button>
+            </div>
+            <Segmented
               size="small"
-              type={hideBuiltInFiles ? "default" : "text"}
-              onClick={() => onToggleHideBuiltInFiles(!hideBuiltInFiles)}
-            >
-              {hideBuiltInFiles ? t("common.on", "On") : t("common.off", "Off")}
-            </Button>
+              className={styles.treeModeSegment}
+              value={treeDisplayMode}
+              onChange={(value) => onTreeDisplayModeChange(value as TreeDisplayMode)}
+              options={[
+                { label: t("projects.treeViewMode.filter", "Filter"), value: "filter" },
+                { label: t("projects.treeViewMode.highlight", "Highlight"), value: "highlight" },
+              ]}
+            />
           </div>
           <div
             className={`${styles.treeTransitionShell} ${treeTransitioning ? styles.treeTransitionEnter : ""}`}
@@ -676,7 +726,7 @@ export default function ProjectOverviewCard({
             ) : (
               <Tree
                 className={styles.overviewCompactTree}
-                selectedKeys={selectedFilePath && filteredFilePaths.includes(selectedFilePath) ? [selectedFilePath] : []}
+                selectedKeys={selectedFilePath && treeFilePaths.includes(selectedFilePath) ? [selectedFilePath] : []}
                 treeData={treeData}
                 onSelect={(keys) => {
                   const key = String(keys[0] || "");

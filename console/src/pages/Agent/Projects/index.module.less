@@ -655,6 +655,20 @@
   margin: 10px 0 8px;
 }
 
+.treeToolbarLeft {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.treeModeSegment {
+  :global(.ant-segmented-item-label) {
+    font-size: 12px;
+    padding: 0 8px;
+    line-height: 24px;
+  }
+}
+
 .overviewCompactTree {
   border: 1px solid #f0f0f0;
   border-radius: 8px;
@@ -723,6 +737,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.treeNodeTextHighlighted {
+  color: #0958d9;
+  font-weight: 600;
 }
 
 .treeNodeActions {

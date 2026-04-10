@@ -1676,6 +1676,10 @@
     "updated": "更新",
     "filesOriginal": "原件文件",
     "filesDerived": "衍生文件",
+    "treeViewMode": {
+      "filter": "筛选",
+      "highlight": "高亮"
+    },
     "knowledgePanelTitle": "知识量化面板",
     "knowledgePanelHint": "快速观察项目知识密度与新鲜度",
     "knowledge": {
