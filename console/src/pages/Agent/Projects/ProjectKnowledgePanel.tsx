@@ -38,6 +38,7 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
   const [error, setError] = useState("");
   const [result, setResult] = useState<GraphQueryResponse | null>(null);
   const [registering, setRegistering] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const [sourceLoaded, setSourceLoaded] = useState(false);
   const [sourceRegistered, setSourceRegistered] = useState(false);
   const [projectSource, setProjectSource] = useState<KnowledgeSourceItem | null>(null);
@@ -125,6 +126,21 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
     props.projectWorkspaceDir,
     t,
   ]);
+
+  const handleRetryIndex = useCallback(async () => {
+    try {
+      setRetrying(true);
+      await api.indexKnowledgeSource(projectSourceId);
+      message.success(t("projects.knowledge.retryIndexSuccess"));
+      await loadProjectSourceStatus();
+    } catch (err) {
+      const messageText =
+        err instanceof Error ? err.message : t("projects.knowledge.retryIndexFailed");
+      message.error(messageText);
+    } finally {
+      setRetrying(false);
+    }
+  }, [loadProjectSourceStatus, projectSourceId, t]);
 
   const handleQuery = useCallback(
     async (overrideQuery?: string) => {
@@ -221,6 +237,42 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
           {t("projects.knowledge.openKnowledge")}
         </Button>
       </Space>
+
+      {sourceRegistered ? (
+        <div className={styles.projectKnowledgeOpsRow}>
+          <Typography.Text type="secondary">
+            {t("projects.knowledge.docCount", {
+              count: projectSource?.status?.document_count ?? 0,
+            })}
+          </Typography.Text>
+          <Typography.Text type="secondary">
+            {t("projects.knowledge.chunkCount", {
+              count: projectSource?.status?.chunk_count ?? 0,
+            })}
+          </Typography.Text>
+        </div>
+      ) : null}
+
+      {projectSource?.status?.error ? (
+        <Alert
+          type="error"
+          showIcon
+          message={t("projects.knowledge.indexError")}
+          description={projectSource.status.error}
+          action={
+            <Button
+              size="small"
+              danger
+              loading={retrying}
+              onClick={() => {
+                void handleRetryIndex();
+              }}
+            >
+              {t("projects.knowledge.retryIndex")}
+            </Button>
+          }
+        />
+      ) : null}
 
       <div className={styles.projectKnowledgeControls}>
         <Input.Search

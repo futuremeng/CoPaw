@@ -1693,7 +1693,13 @@
       "reset": "リセット",
       "emptyQuery": "先に検索内容を入力してください。",
       "emptyResult": "まだプロジェクトナレッジ検索は実行されていません。",
-      "queryFailed": "プロジェクトナレッジ検索に失敗しました"
+      "queryFailed": "プロジェクトナレッジ検索に失敗しました",
+      "docCount": "ドキュメント数: {{count}}",
+      "chunkCount": "チャンク数: {{count}}",
+      "indexError": "インデックスエラー",
+      "retryIndex": "再試行",
+      "retryIndexSuccess": "再インデックスを開始しました",
+      "retryIndexFailed": "再インデックスの再試行に失敗しました"
     },
     "quantStatusHealthy": "良好",
     "quantStatusAttention": "要確認",

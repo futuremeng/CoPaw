@@ -1738,7 +1738,13 @@
       "reset": "Reset",
       "emptyQuery": "Please enter a query first.",
       "emptyResult": "No project knowledge query yet.",
-      "queryFailed": "Project knowledge query failed"
+      "queryFailed": "Project knowledge query failed",
+      "docCount": "Docs: {{count}}",
+      "chunkCount": "Chunks: {{count}}",
+      "indexError": "Indexing error",
+      "retryIndex": "Retry",
+      "retryIndexSuccess": "Reindex started",
+      "retryIndexFailed": "Failed to retry indexing"
     },
     "quantStatusHealthy": "Healthy",
     "quantStatusAttention": "Needs attention",

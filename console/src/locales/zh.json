@@ -1697,7 +1697,13 @@
       "reset": "重置",
       "emptyQuery": "请先输入查询内容。",
       "emptyResult": "尚未进行项目知识查询。",
-      "queryFailed": "项目知识查询失败"
+      "queryFailed": "项目知识查询失败",
+      "docCount": "文档数：{{count}}",
+      "chunkCount": "分块数：{{count}}",
+      "indexError": "索引错误",
+      "retryIndex": "重试",
+      "retryIndexSuccess": "已重新触发索引",
+      "retryIndexFailed": "重试索引失败"
     },
     "quantStatusHealthy": "健康",
     "quantStatusAttention": "需关注",

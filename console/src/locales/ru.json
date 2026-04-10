@@ -1693,7 +1693,13 @@
       "reset": "Сброс",
       "emptyQuery": "Сначала введите запрос.",
       "emptyResult": "Поиск знаний проекта ещё не выполнялся.",
-      "queryFailed": "Не удалось выполнить поиск знаний проекта"
+      "queryFailed": "Не удалось выполнить поиск знаний проекта",
+      "docCount": "Документов: {{count}}",
+      "chunkCount": "Чанков: {{count}}",
+      "indexError": "Ошибка индексации",
+      "retryIndex": "Повторить",
+      "retryIndexSuccess": "Переиндексация запущена",
+      "retryIndexFailed": "Не удалось повторить индексацию"
     },
     "quantStatusHealthy": "Норма",
     "quantStatusAttention": "Требует внимания",
