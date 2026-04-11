@@ -627,3 +627,77 @@ def test_project_scoped_memify_jobs_are_isolated(
 
     assert project_jobs.exists()
     assert not global_jobs.exists()
+
+
+def test_project_sync_status_ws_snapshot(
+    knowledge_api_client: TestClient,
+):
+    with knowledge_api_client.websocket_connect(
+        "/knowledge/project-sync/ws?project_id=project-sync-demo&interval_ms=300",
+    ) as ws:
+        payload = ws.receive_json()
+
+    assert payload["type"] == "snapshot"
+    assert payload["state"]["project_id"] == "project-sync-demo"
+    assert payload["state"]["status"] == "idle"
+
+
+def test_project_sync_run_auto_registers_source_and_persists_state(
+    knowledge_api_client: TestClient,
+    tmp_path: Path,
+):
+    project_id = "project-sync-demo"
+    project_dir = tmp_path / "projects" / project_id
+    project_dir.mkdir(parents=True, exist_ok=True)
+    (project_dir / "notes.md").write_text(
+        "project sync content for graphify bootstrap",
+        encoding="utf-8",
+    )
+
+    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload["enabled"] = True
+    config_payload["memify_enabled"] = True
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    started = knowledge_api_client.post(
+        f"/knowledge/project-sync/run?project_id={project_id}",
+        json={
+            "trigger": "manual-test",
+            "changed_paths": ["notes.md"],
+            "force": True,
+        },
+    )
+    assert started.status_code == 200
+    assert started.json()["accepted"] is True
+
+    deadline = time.time() + 2.0
+    last_payload = None
+    while time.time() < deadline:
+        response = knowledge_api_client.get(
+            f"/knowledge/project-sync/status?project_id={project_id}"
+        )
+        assert response.status_code == 200
+        last_payload = response.json()
+        if last_payload["status"] in {"succeeded", "failed"}:
+            break
+        time.sleep(0.05)
+
+    assert last_payload is not None
+    assert last_payload["project_id"] == project_id
+    assert last_payload["status"] == "succeeded"
+    assert last_payload["latest_source_id"] == "project-project-sync-demo-workspace"
+
+    source_ids = {
+        source.id for source in knowledge_router_module.load_config().knowledge.sources
+    }
+    assert "project-project-sync-demo-workspace" in source_ids
+
+    state_path = (
+        tmp_path
+        / "projects"
+        / project_id
+        / ".knowledge"
+        / "project-sync-state.json"
+    )
+    assert state_path.exists()

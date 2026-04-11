@@ -56,6 +56,12 @@ from ...agents.utils import copy_builtin_qa_md_files
 from ...agents.skills_manager import SkillPoolService, get_workspace_skills_dir
 from ..multi_agent_manager import MultiAgentManager
 from ...constant import WORKING_DIR
+from ...knowledge import ProjectKnowledgeSyncManager
+from ...knowledge.project_sync import (
+    DEFAULT_PROJECT_SYNC_COOLDOWN_SECONDS,
+    DEFAULT_PROJECT_SYNC_DEBOUNCE_SECONDS,
+    ensure_project_source_registered,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1307,6 +1313,56 @@ def _update_project_auto_knowledge_sink(
             detail="Failed to load updated project summary",
         )
     return updated
+
+
+def _maybe_start_project_auto_knowledge_sync(
+    workspace: Any,
+    project_id: str,
+    changed_paths: list[str] | None,
+    *,
+    trigger: str,
+) -> dict[str, Any] | None:
+    workspace_dir = Path(str(getattr(workspace, "workspace_dir", "") or "")).resolve()
+    if not workspace_dir.exists():
+        return None
+
+    project_dir = _resolve_project_dir(workspace_dir, project_id)
+    summary = _load_project_summary(project_dir)
+    if summary is None or not summary.project_auto_knowledge_sink:
+        return None
+
+    config = load_config()
+    knowledge_config = config.knowledge
+    if not knowledge_config.enabled or not bool(getattr(knowledge_config, "memify_enabled", False)):
+        return None
+
+    source, _ = ensure_project_source_registered(
+        config.knowledge,
+        project_id=project_id,
+        project_name=summary.name or project_id,
+        project_workspace_dir=str(project_dir),
+        persist=lambda: save_config(config),
+    )
+    running_config = (
+        getattr(getattr(workspace, "config", None), "running", None)
+        or config.agents.running
+    )
+    manager = ProjectKnowledgeSyncManager(
+        workspace_dir,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+    return manager.start_sync(
+        project_id=project_id,
+        config=knowledge_config,
+        running_config=running_config,
+        source=source,
+        trigger=(trigger or "project_upload").strip() or "project_upload",
+        changed_paths=changed_paths,
+        auto_enabled=True,
+        force=False,
+        debounce_seconds=DEFAULT_PROJECT_SYNC_DEBOUNCE_SECONDS,
+        cooldown_seconds=DEFAULT_PROJECT_SYNC_COOLDOWN_SECONDS,
+    )
 
 
 def _build_promoted_skill_markdown(
@@ -4024,7 +4080,20 @@ async def upload_agent_project_file(
         project_dir = _resolve_project_dir(
             Path(workspace.workspace_dir), projectId
         )
-        return _upload_project_file(project_dir, file, target_dir)
+        uploaded = _upload_project_file(project_dir, file, target_dir)
+        try:
+            _maybe_start_project_auto_knowledge_sync(
+                workspace,
+                projectId,
+                [uploaded.path],
+                trigger="project_upload",
+            )
+        except Exception:
+            logger.exception(
+                "Failed to start project auto knowledge sync after upload: %s",
+                projectId,
+            )
+        return uploaded
     except HTTPException:
         raise
     except Exception as e:

@@ -25,6 +25,7 @@ from .graphify_provider import (
     graphify_memify,
     graphify_query,
 )
+from .local_graph_provider import persist_local_graph, query_local_graph
 from .manager import KnowledgeManager
 
 
@@ -49,6 +50,7 @@ class GraphOpsManager:
         self.knowledge_dirname = knowledge_dirname
         self.knowledge_root = self.working_dir / knowledge_dirname
         self.memify_jobs_path = self.knowledge_root / "memify-jobs.json"
+        self.local_graph_path = self.knowledge_root / "graphify-out" / "graph.json"
         self._jobs_lock = threading.Lock()
 
     @staticmethod
@@ -188,6 +190,33 @@ class GraphOpsManager:
             self.working_dir,
             knowledge_dirname=self.knowledge_dirname,
         )
+
+        if engine == "local_lexical":
+            local_graph_records = query_local_graph(
+                self.local_graph_path,
+                effective_query_text,
+                top_k,
+            )
+            local_graph_records = self._filter_records_by_project_scope(
+                records=local_graph_records,
+                config=config,
+                project_scope=project_scope,
+                include_global=include_global,
+            )
+            if local_graph_records:
+                return GraphOpsResult(
+                    records=local_graph_records,
+                    summary=f"Returned {len(local_graph_records)} graph relations via local graph.",
+                    provenance={
+                        "engine": "local_graph",
+                        "dataset_scope": dataset_scope or [],
+                        "project_scope": project_scope or [],
+                        "include_global": include_global,
+                        "query_mode": query_mode,
+                    },
+                    warnings=warnings,
+                )
+
         search_result = manager.search(
             query=effective_query_text,
             config=config,
@@ -348,10 +377,42 @@ class GraphOpsManager:
             },
         )
 
+        memify_result = self.execute_memify_once(
+            config=config,
+            pipeline_type=pipeline_type,
+            dataset_scope=dataset_scope,
+            dry_run=dry_run,
+            job_id=job_id,
+        )
+
+        now = datetime.now(UTC).isoformat()
+        self._patch_memify_job(
+            job_id,
+            {
+                "status": str(memify_result.get("status") or "failed"),
+                "progress": 100 if str(memify_result.get("status") or "") == "succeeded" else 0,
+                "error": memify_result.get("error"),
+                "warnings": memify_result.get("warnings") or [],
+                "finished_at": now,
+                "updated_at": now,
+            },
+        )
+
+    def execute_memify_once(
+        self,
+        *,
+        config: KnowledgeConfig,
+        pipeline_type: str,
+        dataset_scope: list[str] | None,
+        dry_run: bool,
+        job_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Execute one memify run synchronously and return the normalized result."""
         engine = getattr(config, "engine", "local_lexical")
         status = "failed"
         error: str | None = None
         warnings: list[str] = []
+        result_engine = engine
 
         if engine == "cognee":
             error = "Cognee memify provider is not wired yet."
@@ -374,26 +435,51 @@ class GraphOpsManager:
                     for item in (memify_result.get("warnings") or [])
                     if str(item).strip()
                 ]
+                result_engine = str(memify_result.get("engine") or engine)
             except GraphifyError as exc:
                 status = "failed"
                 error = str(exc)
                 warnings = ["GRAPHIFY_MEMIFY_ERROR"]
         else:
-            status = "succeeded"
-            warnings = ["LOCAL_ENGINE_MEMIFY_NOOP"]
+            manager = KnowledgeManager(
+                self.working_dir,
+                knowledge_dirname=self.knowledge_dirname,
+            )
+            memify_result = persist_local_graph(
+                manager,
+                config,
+                dataset_scope,
+                self.local_graph_path,
+            )
+            status = str(memify_result.get("status") or "failed")
+            error = str(memify_result.get("error") or "").strip() or None
+            warnings = [
+                str(item)
+                for item in (memify_result.get("warnings") or [])
+                if str(item).strip()
+            ]
+            result_engine = "local_graph"
 
-        now = datetime.now(UTC).isoformat()
-        self._patch_memify_job(
-            job_id,
-            {
-                "status": status,
-                "progress": 100 if status == "succeeded" else 0,
-                "error": error,
-                "warnings": warnings,
-                "finished_at": now,
-                "updated_at": now,
-            },
-        )
+        response = {
+            "job_id": job_id or "",
+            "status": status,
+            "error": error,
+            "warnings": warnings,
+            "engine": result_engine,
+            "pipeline_type": pipeline_type,
+            "dataset_scope": dataset_scope or [],
+            "dry_run": bool(dry_run),
+        }
+        if engine == "local_lexical":
+            response.update(
+                {
+                    "graph_path": str(self.local_graph_path),
+                    "relation_count": int(memify_result.get("relation_count") or 0),
+                    "node_count": int(memify_result.get("node_count") or 0),
+                    "document_count": int(memify_result.get("document_count") or 0),
+                }
+            )
+        return response
 
     def _patch_memify_job(self, job_id: str, patch: dict[str, Any]) -> None:
         with self._jobs_lock:

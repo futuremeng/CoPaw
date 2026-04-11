@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ProjectKnowledgePanel from "./ProjectKnowledgePanel";
@@ -7,12 +7,15 @@ const { mockedApi } = vi.hoisted(() => ({
   mockedApi: {
     listKnowledgeSources: vi.fn(),
     graphQuery: vi.fn(),
+    getProjectKnowledgeSyncStatus: vi.fn(),
   },
 }));
 
 vi.mock("../../../api", () => ({
   __esModule: true,
   default: mockedApi,
+  getApiUrl: (path: string) => path,
+  getApiToken: () => "",
 }));
 
 vi.mock("../Knowledge/graphVisualization", () => ({
@@ -79,11 +82,53 @@ function buildRegisteredSource(projectId: string) {
 
 describe("ProjectKnowledgePanel interactions", () => {
   const projectId = "project-abc";
+  let originalWebSocket: typeof WebSocket | undefined;
+
+  class FakeWebSocket {
+    static instances: FakeWebSocket[] = [];
+
+    onmessage: ((event: { data: string }) => void) | null = null;
+    onclose: (() => void) | null = null;
+    onopen: (() => void) | null = null;
+    readyState = 1;
+
+    constructor(_url: string) {
+      FakeWebSocket.instances.push(this);
+    }
+
+    close() {
+      this.readyState = 3;
+    }
+
+    emit(payload: unknown) {
+      this.onmessage?.({ data: JSON.stringify(payload) });
+    }
+  }
 
   beforeEach(() => {
     vi.clearAllMocks();
+    originalWebSocket = globalThis.WebSocket;
+    globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
+    FakeWebSocket.instances = [];
     mockedApi.listKnowledgeSources.mockResolvedValue({
       sources: [buildRegisteredSource(projectId)],
+    });
+    mockedApi.getProjectKnowledgeSyncStatus.mockResolvedValue({
+      project_id: projectId,
+      status: "idle",
+      current_stage: "idle",
+      progress: 0,
+      auto_enabled: true,
+      dirty: false,
+      dirty_after_run: false,
+      last_trigger: "",
+      changed_paths: [],
+      pending_changed_paths: [],
+      changed_count: 0,
+      last_error: "",
+      latest_job_id: "",
+      latest_source_id: `project-${projectId.toLowerCase()}-workspace`,
+      last_result: {},
     });
     mockedApi.graphQuery.mockResolvedValue({
       records: [],
@@ -91,6 +136,10 @@ describe("ProjectKnowledgePanel interactions", () => {
       warnings: [],
       provenance: { engine: "local_lexical" },
     });
+  });
+
+  afterEach(() => {
+    globalThis.WebSocket = originalWebSocket as typeof WebSocket;
   });
 
   it("queries graph in cypher mode when selected", async () => {
@@ -190,5 +239,134 @@ describe("ProjectKnowledgePanel interactions", () => {
       const occurrences = lastQuery.match(/Path context: node-a -> node-b/g)?.length || 0;
       expect(occurrences).toBe(1);
     });
+  });
+
+  it("refreshes sources and query when sync finishes", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <ProjectKnowledgePanel
+        projectId={projectId}
+        projectName="Project ABC"
+      />,
+    );
+
+    const queryInput = await screen.findByPlaceholderText("projects.knowledge.queryPlaceholder");
+    fireEvent.change(queryInput, {
+      target: { value: "Refresh me" },
+    });
+    await user.click(screen.getByRole("button", { name: "projects.knowledge.query" }));
+
+    await waitFor(() => {
+      expect(mockedApi.graphQuery).toHaveBeenCalledTimes(1);
+    });
+
+    const ws = FakeWebSocket.instances[0];
+    expect(ws).toBeTruthy();
+
+    act(() => {
+      ws.emit({
+        type: "snapshot",
+        state: {
+          project_id: projectId,
+          status: "succeeded",
+          current_stage: "completed",
+          progress: 100,
+          auto_enabled: true,
+          dirty: false,
+          dirty_after_run: false,
+          last_trigger: "project_watcher_change",
+          changed_paths: ["original/brief.md"],
+          pending_changed_paths: [],
+          changed_count: 1,
+          last_error: "",
+          last_finished_at: "2026-04-11T23:30:00+00:00",
+          latest_job_id: "",
+          latest_source_id: `project-${projectId.toLowerCase()}-workspace`,
+          last_result: {},
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(mockedApi.listKnowledgeSources).toHaveBeenCalledTimes(2);
+      expect(mockedApi.graphQuery).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("renders explicit queued sync status", async () => {
+    mockedApi.getProjectKnowledgeSyncStatus.mockResolvedValueOnce({
+      project_id: projectId,
+      status: "queued",
+      current_stage: "debouncing",
+      progress: 1,
+      auto_enabled: true,
+      dirty: true,
+      dirty_after_run: false,
+      last_trigger: "project_upload",
+      changed_paths: ["upload/file.md"],
+      pending_changed_paths: [],
+      changed_count: 1,
+      scheduled_for: "2026-04-11T23:31:00+00:00",
+      last_error: "",
+      latest_job_id: "",
+      latest_source_id: `project-${projectId.toLowerCase()}-workspace`,
+      last_result: {},
+    });
+
+    render(
+      <ProjectKnowledgePanel
+        projectId={projectId}
+        projectName="Project ABC"
+      />,
+    );
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent || "").toContain("projects.knowledge.syncStage.debouncing");
+  });
+
+  it("reports relation count from memify sync result", async () => {
+    const onSignalsChange = vi.fn();
+    mockedApi.getProjectKnowledgeSyncStatus.mockResolvedValueOnce({
+      project_id: projectId,
+      status: "succeeded",
+      current_stage: "completed",
+      progress: 100,
+      auto_enabled: true,
+      dirty: false,
+      dirty_after_run: false,
+      last_trigger: "project_watcher_change",
+      changed_paths: [],
+      pending_changed_paths: [],
+      changed_count: 0,
+      last_error: "",
+      latest_job_id: "",
+      latest_source_id: `project-${projectId.toLowerCase()}-workspace`,
+      last_result: {
+        memify: {
+          node_count: 12,
+          relation_count: 24,
+        },
+      },
+    });
+
+    render(
+      <ProjectKnowledgePanel
+        projectId={projectId}
+        projectName="Project ABC"
+        onSignalsChange={onSignalsChange}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(onSignalsChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          relationCount: 24,
+        }),
+      );
+    });
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent || "").toContain("projects.knowledge.syncGraphStats");
   });
 });

@@ -161,6 +161,33 @@ def test_update_project_knowledge_sink_endpoint(
     assert after.project_auto_knowledge_sink is False
 
 
+def test_upload_project_file_triggers_auto_knowledge_sync(
+    project_artifact_router_client: tuple[TestClient, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+):
+    client, _workspace_dir, project_id = project_artifact_router_client
+    calls: list[tuple[str, list[str] | None, str]] = []
+
+    monkeypatch.setattr(
+        agents_router_module,
+        "_maybe_start_project_auto_knowledge_sync",
+        lambda workspace, target_project_id, changed_paths, *, trigger: calls.append(
+            (target_project_id, changed_paths, trigger)
+        ),
+    )
+
+    response = client.post(
+        f"/agents/default/projects/{project_id}/files/upload",
+        data={"target_dir": "original"},
+        files={"file": ("brief.txt", b"hello knowledge", "text/plain")},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["path"] == "original/brief.txt"
+    assert calls == [(project_id, ["original/brief.txt"], "project_upload")]
+
+
 def test_create_project_uses_builtin_template_fallbacks(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

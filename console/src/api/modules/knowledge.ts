@@ -16,6 +16,9 @@ import type {
   MemifyJobStatus,
   MemifyStartRequest,
   MemifyStartResponse,
+  ProjectKnowledgeSyncRunRequest,
+  ProjectKnowledgeSyncRunResponse,
+  ProjectKnowledgeSyncState,
 } from "../types";
 
 const withProjectId = (path: string, projectId?: string) => {
@@ -236,6 +239,24 @@ export const knowledgeApi = {
         `/knowledge/memify/jobs/${encodeURIComponent(jobId)}`,
         options?.projectId,
       ),
+    ),
+
+  getProjectKnowledgeSyncStatus: (options: { projectId: string }) =>
+    request<ProjectKnowledgeSyncState>(
+      withProjectId("/knowledge/project-sync/status", options.projectId),
+    ),
+
+  runProjectKnowledgeSync: (payload: ProjectKnowledgeSyncRunRequest) =>
+    request<ProjectKnowledgeSyncRunResponse>(
+      withProjectId("/knowledge/project-sync/run", payload.projectId),
+      {
+        method: "POST",
+        body: JSON.stringify({
+          trigger: payload.trigger ?? "manual",
+          changed_paths: payload.changedPaths ?? [],
+          force: payload.force ?? false,
+        }),
+      },
     ),
 
   downloadKnowledgeBackup: async (options?: { projectId?: string }): Promise<Blob> => {

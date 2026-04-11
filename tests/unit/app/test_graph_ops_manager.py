@@ -263,3 +263,58 @@ def test_run_memify_graphify_no_dataset_dir_gives_failed_status(tmp_path):
     assert payload["accepted"] is True
     job = _await_terminal_memify_status(graph_ops, payload["job_id"])
     assert job["status"] == "failed"
+
+
+def test_local_memify_builds_queryable_graph(tmp_path):
+    knowledge_config = Config().knowledge
+    knowledge_config.enabled = True
+    knowledge_config.engine = "local_lexical"
+
+    manager = KnowledgeManager(tmp_path)
+    source = KnowledgeSourceSpec(
+        id="local-graph-source",
+        name="Local Graph Source",
+        type="text",
+        location="",
+        content=(
+            "AgentRunner uses ToolDispatcher. "
+            "ToolDispatcher calls FileSearch. "
+            "FileSearch indexes ProjectKnowledgePanel."
+        ),
+        enabled=True,
+        recursive=False,
+        tags=["graph"],
+        summary="",
+    )
+    knowledge_config.sources.append(source)
+    manager.index_source(
+        source,
+        knowledge_config,
+        SimpleNamespace(knowledge_chunk_size=knowledge_config.index.chunk_size),
+    )
+
+    graph_ops = GraphOpsManager(tmp_path)
+    memify_result = graph_ops.execute_memify_once(
+        config=knowledge_config,
+        pipeline_type="project-auto",
+        dataset_scope=[source.id],
+        dry_run=False,
+    )
+
+    assert memify_result["status"] == "succeeded"
+    assert memify_result["engine"] == "local_graph"
+    assert memify_result["relation_count"] > 0
+
+    result = graph_ops.graph_query(
+        config=knowledge_config,
+        query_mode="template",
+        query_text="ToolDispatcher FileSearch",
+        dataset_scope=[source.id],
+        project_scope=None,
+        include_global=True,
+        top_k=5,
+        timeout_sec=30,
+    )
+
+    assert result.provenance.get("engine") == "local_graph"
+    assert len(result.records) >= 1

@@ -119,6 +119,18 @@ _TEXTUAL_CONTENT_TYPE_MARKERS = (
     "application/x-javascript",
     "application/ld+json",
 )
+_INTERNAL_EXCLUDED_DIRS = {
+    ".knowledge",
+    ".git",
+    "__pycache__",
+    "node_modules",
+    ".pytest_cache",
+    ".mypy_cache",
+}
+_INTERNAL_EXCLUDED_FILENAMES = {
+    ".ds_store",
+    "thumbs.db",
+}
 
 logger = logging.getLogger(__name__)
 _AUTO_COLLECT_URL_MIN_CONTENT_CHARS = 1000
@@ -2448,6 +2460,13 @@ class KnowledgeManager:
     @staticmethod
     def _is_allowed_path(relative_path: str, config: KnowledgeConfig) -> bool:
         normalized = relative_path.strip("/")
+        path_parts = Path(normalized).parts
+        if any(part.startswith(".") for part in path_parts):
+            return False
+        if any(part in _INTERNAL_EXCLUDED_DIRS for part in path_parts):
+            return False
+        if path_parts and path_parts[-1].lower() in _INTERNAL_EXCLUDED_FILENAMES:
+            return False
         if any(
             fnmatch.fnmatch(normalized, pattern)
             for pattern in config.index.exclude_globs

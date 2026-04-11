@@ -9,8 +9,8 @@ const { mockedApi, mockedAgentsApi } = vi.hoisted(() => ({
     listKnowledgeSources: vi.fn(),
     upsertKnowledgeSource: vi.fn(),
     indexKnowledgeSource: vi.fn(),
-    startMemifyJob: vi.fn(),
-    getMemifyJobStatus: vi.fn(),
+    getProjectKnowledgeSyncStatus: vi.fn(),
+    runProjectKnowledgeSync: vi.fn(),
   },
   mockedAgentsApi: {
     updateProjectKnowledgeSink: vi.fn(),
@@ -20,6 +20,8 @@ const { mockedApi, mockedAgentsApi } = vi.hoisted(() => ({
 vi.mock("../../../api", () => ({
   __esModule: true,
   default: mockedApi,
+  getApiUrl: (path: string) => path,
+  getApiToken: () => "",
 }));
 
 vi.mock("../../../api/modules/agents", () => ({
@@ -28,7 +30,8 @@ vi.mock("../../../api/modules/agents", () => ({
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (key: string, maybeFallback?: string) => maybeFallback || key,
+    t: (key: string, maybeFallback?: string | Record<string, unknown>) =>
+      typeof maybeFallback === "string" ? maybeFallback : key,
   }),
 }));
 
@@ -61,12 +64,44 @@ describe("ProjectKnowledgeSettingsPanel", () => {
     mockedApi.listKnowledgeSources.mockResolvedValue({
       sources: [buildRegisteredSource(projectId)],
     });
-    mockedApi.startMemifyJob.mockResolvedValue({
-      accepted: true,
-      job_id: "job-1",
-      status_url: "/api/knowledge/memify/jobs/job-1",
+    mockedApi.getProjectKnowledgeSyncStatus.mockResolvedValue({
+      project_id: projectId,
+      status: "idle",
+      current_stage: "idle",
+      progress: 0,
+      auto_enabled: true,
+      dirty: false,
+      dirty_after_run: false,
+      last_trigger: "",
+      changed_paths: [],
+      pending_changed_paths: [],
+      changed_count: 0,
+      last_error: "",
+      latest_job_id: "",
+      latest_source_id: `project-${projectId.toLowerCase()}-workspace`,
+      last_result: {},
     });
-    mockedApi.getMemifyJobStatus.mockResolvedValue({ status: "succeeded", error: "" });
+    mockedApi.runProjectKnowledgeSync.mockResolvedValue({
+      accepted: true,
+      reason: "STARTED",
+      state: {
+        project_id: projectId,
+        status: "pending",
+        current_stage: "pending",
+        progress: 1,
+        auto_enabled: true,
+        dirty: false,
+        dirty_after_run: false,
+        last_trigger: "manual-panel",
+        changed_paths: [],
+        pending_changed_paths: [],
+        changed_count: 0,
+        last_error: "",
+        latest_job_id: "",
+        latest_source_id: `project-${projectId.toLowerCase()}-workspace`,
+        last_result: {},
+      },
+    });
     mockedApi.upsertKnowledgeSource.mockResolvedValue({});
     mockedApi.indexKnowledgeSource.mockResolvedValue({});
   });
@@ -140,12 +175,49 @@ describe("ProjectKnowledgeSettingsPanel", () => {
     await user.click(await screen.findByRole("button", { name: "projects.knowledge.manualSink" }));
 
     await waitFor(() => {
-      expect(mockedApi.startMemifyJob).toHaveBeenCalledWith(
+      expect(mockedApi.runProjectKnowledgeSync).toHaveBeenCalledWith(
         expect.objectContaining({
-          pipeline_type: "project-manual",
-          project_id: projectId,
+          projectId,
+          trigger: "manual-panel",
+          force: true,
         }),
       );
     });
+  });
+
+  it("renders queued sync stage summary", async () => {
+    mockedApi.getProjectKnowledgeSyncStatus.mockResolvedValueOnce({
+      project_id: projectId,
+      status: "queued",
+      current_stage: "cooldown",
+      progress: 1,
+      auto_enabled: true,
+      dirty: true,
+      dirty_after_run: false,
+      last_trigger: "project_watcher_change",
+      changed_paths: ["original/a.md"],
+      pending_changed_paths: [],
+      changed_count: 1,
+      scheduled_for: "2026-04-11T23:31:00+00:00",
+      last_error: "",
+      latest_job_id: "",
+      latest_source_id: `project-${projectId.toLowerCase()}-workspace`,
+      last_result: {},
+    });
+
+    render(
+      <ProjectKnowledgeSettingsPanel
+        agentId="default"
+        projectId={projectId}
+        projectName="Project ABC"
+        projectWorkspaceDir="/tmp/workspace"
+        projectAutoKnowledgeSink
+        includeGlobal
+        onIncludeGlobalChange={vi.fn()}
+      />,
+    );
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent || "").toContain("projects.knowledge.syncStage.cooldown");
   });
 });

@@ -168,3 +168,17 @@ async def create_mcp_config_watcher(ws: "Workspace", _):
     ws._service_manager.services["mcp_config_watcher"] = watcher
     return watcher
     # pylint: enable=protected-access
+
+
+async def create_project_knowledge_watcher(ws: "Workspace", _):
+    """Create project knowledge watcher for automatic project sync."""
+    # pylint: disable=protected-access
+    from ..project_knowledge_watcher import ProjectKnowledgeWatcher
+
+    watcher = ProjectKnowledgeWatcher(
+        agent_id=ws.agent_id,
+        workspace_dir=ws.workspace_dir,
+    )
+    ws._service_manager.services["project_knowledge_watcher"] = watcher
+    return watcher
+    # pylint: enable=protected-access

@@ -10,11 +10,15 @@ import {
   Typography,
   message,
 } from "antd";
-import api from "../../../api";
-import type { KnowledgeSourceItem } from "../../../api/types";
+import api, { getApiToken, getApiUrl } from "../../../api";
+import type { KnowledgeSourceItem, ProjectKnowledgeSyncState } from "../../../api/types";
 import { agentsApi } from "../../../api/modules/agents";
 import styles from "./index.module.less";
 import { useTranslation } from "react-i18next";
+import {
+  getProjectKnowledgeSyncAlertDescription,
+  getProjectKnowledgeSyncAlertType,
+} from "./projectKnowledgeSyncUi";
 
 interface ProjectKnowledgeSettingsPanelProps {
   agentId?: string;
@@ -51,9 +55,7 @@ export default function ProjectKnowledgeSettingsPanel(
   const [sourceLoaded, setSourceLoaded] = useState(false);
   const [sourceRegistered, setSourceRegistered] = useState(false);
   const [projectSource, setProjectSource] = useState<KnowledgeSourceItem | null>(null);
-  const [memifyJobId, setMemifyJobId] = useState("");
-  const [memifyStatus, setMemifyStatus] = useState<string>("");
-  const [memifyError, setMemifyError] = useState("");
+  const [syncState, setSyncState] = useState<ProjectKnowledgeSyncState | null>(null);
 
   const projectSourceId = useMemo(() => {
     const safeId = projectId
@@ -105,6 +107,107 @@ export default function ProjectKnowledgeSettingsPanel(
   useEffect(() => {
     setAutoSinkEnabled(projectAutoKnowledgeSink !== false);
   }, [projectAutoKnowledgeSink]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void api.getProjectKnowledgeSyncStatus({ projectId })
+      .then((state) => {
+        if (!cancelled) {
+          setSyncState(state);
+        }
+      })
+      .catch(() => {
+        // best-effort initial status load
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  useEffect(() => {
+    if (typeof WebSocket === "undefined") {
+      return;
+    }
+    let disposed = false;
+    let reconnectTimer: number | null = null;
+    let activeSocket: WebSocket | null = null;
+
+    const connect = () => {
+      if (disposed) {
+        return;
+      }
+      try {
+        const baseUrl = getApiUrl("/knowledge/project-sync/ws");
+        const wsUrl = new URL(baseUrl, window.location.origin);
+        wsUrl.protocol = wsUrl.protocol === "https:" ? "wss:" : "ws:";
+        wsUrl.searchParams.set("project_id", projectId);
+        wsUrl.searchParams.set("interval_ms", "1000");
+        const token = getApiToken();
+        if (token) {
+          wsUrl.searchParams.set("token", token);
+        }
+
+        const ws = new WebSocket(wsUrl.toString());
+        activeSocket = ws;
+        ws.onmessage = (event) => {
+          if (disposed) {
+            return;
+          }
+          try {
+            const payload = JSON.parse(event.data || "{}");
+            const nextState = payload?.state;
+            if (!nextState || typeof nextState !== "object") {
+              return;
+            }
+            setSyncState(nextState as ProjectKnowledgeSyncState);
+          } catch {
+            // ignore malformed websocket messages
+          }
+        };
+        ws.onclose = () => {
+          if (disposed) {
+            return;
+          }
+          reconnectTimer = window.setTimeout(() => {
+            connect();
+          }, 1500);
+        };
+      } catch {
+        // ignore websocket construction failure in unsupported environments
+      }
+    };
+
+    connect();
+
+    return () => {
+      disposed = true;
+      if (reconnectTimer) {
+        window.clearTimeout(reconnectTimer);
+      }
+      if (activeSocket) {
+        if (activeSocket.readyState === WebSocket.CONNECTING) {
+          activeSocket.onopen = () => {
+            activeSocket?.close();
+          };
+        } else if (activeSocket.readyState === WebSocket.OPEN) {
+          activeSocket.close();
+        }
+      }
+    };
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!syncState) {
+      return;
+    }
+    if (syncState.latest_source_id !== projectSourceId) {
+      return;
+    }
+    if (!["pending", "indexing", "graphifying", "succeeded", "failed"].includes(syncState.status)) {
+      return;
+    }
+    void loadProjectSourceStatus();
+  }, [loadProjectSourceStatus, projectSourceId, syncState]);
 
   const handleRegisterProjectSource = useCallback(async () => {
     const location = (projectWorkspaceDir || "").trim();
@@ -192,58 +295,38 @@ export default function ProjectKnowledgeSettingsPanel(
   }, [agentId, onProjectAutoKnowledgeSinkChange, projectId, t]);
 
   const handleManualSink = useCallback(async () => {
-    if (!sourceRegistered) {
-      message.warning(t("projects.knowledge.sourceNotRegistered"));
+    if (!(projectWorkspaceDir || "").trim()) {
+      message.error(t("projects.knowledge.sourcePathMissing"));
       return;
     }
     try {
       setManualSinking(true);
-      setMemifyError("");
-      const response = await api.startMemifyJob({
-        pipeline_type: "project-manual",
-        dataset_scope: [projectSourceId],
-        idempotency_key: `${projectId}:manual:${Date.now()}`,
-        project_id: projectId,
+      const response = await api.runProjectKnowledgeSync({
+        projectId,
+        trigger: "manual-panel",
+        force: true,
       });
-      setMemifyJobId(response.job_id);
+      setSyncState(response.state);
       message.success(t("projects.knowledge.manualSinkStarted"));
     } catch (err) {
       const messageText = err instanceof Error ? err.message : t("projects.knowledge.manualSinkFailed");
-      setMemifyError(messageText);
       message.error(messageText);
     } finally {
       setManualSinking(false);
     }
-  }, [projectId, projectSourceId, sourceRegistered, t]);
+  }, [projectId, projectWorkspaceDir, t]);
 
-  useEffect(() => {
-    if (!memifyJobId) {
-      return;
+  const syncAlertType = useMemo(
+    () => getProjectKnowledgeSyncAlertType(syncState),
+    [syncState],
+  );
+
+  const syncAlertDescription = useMemo(() => {
+    if (!syncState) {
+      return "";
     }
-    let disposed = false;
-    const timer = window.setInterval(() => {
-      void api.getMemifyJobStatus(memifyJobId, { projectId })
-        .then((status) => {
-          if (disposed) {
-            return;
-          }
-          setMemifyStatus(status.status);
-          setMemifyError((status.error || "").trim());
-          if (status.status === "succeeded" || status.status === "failed") {
-            window.clearInterval(timer);
-            void loadProjectSourceStatus();
-          }
-        })
-        .catch(() => {
-          // keep polling on transient failures
-        });
-    }, 2000);
-
-    return () => {
-      disposed = true;
-      window.clearInterval(timer);
-    };
-  }, [loadProjectSourceStatus, memifyJobId, projectId]);
+    return getProjectKnowledgeSyncAlertDescription(syncState, t);
+  }, [syncState, t]);
 
   return (
     <Card
@@ -280,7 +363,6 @@ export default function ProjectKnowledgeSettingsPanel(
           <Button
             size="small"
             loading={manualSinking}
-            disabled={!sourceRegistered}
             onClick={() => {
               void handleManualSink();
             }}
@@ -357,12 +439,12 @@ export default function ProjectKnowledgeSettingsPanel(
         />
       ) : null}
 
-      {memifyJobId ? (
+      {syncState && (syncState.status !== "idle" || Boolean(syncState.last_error) || Boolean(syncState.last_finished_at)) ? (
         <Alert
-          type={memifyStatus === "failed" ? "error" : "info"}
+          type={syncAlertType}
           showIcon
-          message={t("projects.knowledge.sinkJob")}
-          description={`${memifyJobId} · ${memifyStatus || "pending"}${memifyError ? ` · ${memifyError}` : ""}`}
+          message={t("projects.knowledge.sinkJob", "Knowledge Sync")}
+          description={syncAlertDescription}
         />
       ) : null}
     </Card>

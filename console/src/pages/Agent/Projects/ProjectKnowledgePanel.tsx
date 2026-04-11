@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Button,
@@ -12,14 +12,18 @@ import {
   message,
 } from "antd";
 import { useTranslation } from "react-i18next";
-import api, { type GraphQueryResponse } from "../../../api";
-import type { KnowledgeSourceItem } from "../../../api/types";
+import api, { getApiToken, getApiUrl, type GraphQueryResponse } from "../../../api";
+import type { KnowledgeSourceItem, ProjectKnowledgeSyncState } from "../../../api/types";
 import { recordsToVisualizationData } from "../Knowledge/graphQuery";
 import {
   appendUniqueContextLine,
   buildPathContextLine,
 } from "../Knowledge/pathContext";
 import { GraphQueryResults, GraphVisualization } from "../Knowledge/graphVisualization";
+import {
+  getProjectKnowledgeSyncAlertDescription,
+  getProjectKnowledgeSyncAlertType,
+} from "./projectKnowledgeSyncUi";
 import styles from "./index.module.less";
 
 interface ProjectKnowledgePanelProps {
@@ -191,6 +195,15 @@ function buildSparklinePath(values: number[], width: number, height: number): st
     .join(" ");
 }
 
+function getSyncRelationCount(syncState: ProjectKnowledgeSyncState | null): number {
+  const memify = syncState?.last_result?.memify;
+  if (!memify || typeof memify !== "object") {
+    return 0;
+  }
+  const relationCount = (memify as { relation_count?: unknown }).relation_count;
+  return Number.isFinite(Number(relationCount)) ? Number(relationCount) : 0;
+}
+
 export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
   const { t } = useTranslation();
   const { onOpenSettings, onSignalsChange } = props;
@@ -208,6 +221,8 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
   const [trendExpanded, setTrendExpanded] = useState(true);
   const [queryExpanded, setQueryExpanded] = useState(true);
   const [resultExpanded, setResultExpanded] = useState(true);
+  const [syncState, setSyncState] = useState<ProjectKnowledgeSyncState | null>(null);
+  const handledSyncFinishRef = useRef("");
 
   const includeGlobal = props.includeGlobal ?? internalIncludeGlobal;
 
@@ -239,6 +254,94 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
   useEffect(() => {
     void loadProjectSourceStatus();
   }, [loadProjectSourceStatus]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void api.getProjectKnowledgeSyncStatus({ projectId: props.projectId })
+      .then((state) => {
+        if (!cancelled) {
+          setSyncState(state);
+        }
+      })
+      .catch(() => {
+        // best-effort status preload
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [props.projectId]);
+
+  useEffect(() => {
+    if (typeof WebSocket === "undefined") {
+      return;
+    }
+    let disposed = false;
+    let reconnectTimer: number | null = null;
+    let activeSocket: WebSocket | null = null;
+
+    const connect = () => {
+      if (disposed) {
+        return;
+      }
+      try {
+        const baseUrl = getApiUrl("/knowledge/project-sync/ws");
+        const wsUrl = new URL(baseUrl, window.location.origin);
+        wsUrl.protocol = wsUrl.protocol === "https:" ? "wss:" : "ws:";
+        wsUrl.searchParams.set("project_id", props.projectId);
+        wsUrl.searchParams.set("interval_ms", "1000");
+        const token = getApiToken();
+        if (token) {
+          wsUrl.searchParams.set("token", token);
+        }
+
+        const ws = new WebSocket(wsUrl.toString());
+        activeSocket = ws;
+        ws.onmessage = (event) => {
+          if (disposed) {
+            return;
+          }
+          try {
+            const payload = JSON.parse(event.data || "{}");
+            const nextState = payload?.state;
+            if (!nextState || typeof nextState !== "object") {
+              return;
+            }
+            setSyncState(nextState as ProjectKnowledgeSyncState);
+          } catch {
+            // ignore malformed websocket messages
+          }
+        };
+        ws.onclose = () => {
+          if (disposed) {
+            return;
+          }
+          reconnectTimer = window.setTimeout(() => {
+            connect();
+          }, 1500);
+        };
+      } catch {
+        // ignore websocket construction failure in test or unsupported env
+      }
+    };
+
+    connect();
+
+    return () => {
+      disposed = true;
+      if (reconnectTimer) {
+        window.clearTimeout(reconnectTimer);
+      }
+      if (activeSocket) {
+        if (activeSocket.readyState === WebSocket.CONNECTING) {
+          activeSocket.onopen = () => {
+            activeSocket?.close();
+          };
+        } else if (activeSocket.readyState === WebSocket.OPEN) {
+          activeSocket.close();
+        }
+      }
+    };
+  }, [props.projectId]);
 
   useEffect(() => {
     setTrendSnapshots(loadTrendSnapshots(props.projectId));
@@ -294,6 +397,18 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
     [includeGlobal, props.projectId, queryMode, queryText, t],
   );
 
+  useEffect(() => {
+    const finishToken = syncState?.last_finished_at || "";
+    if (!finishToken || handledSyncFinishRef.current === finishToken) {
+      return;
+    }
+    handledSyncFinishRef.current = finishToken;
+    void loadProjectSourceStatus();
+    if ((queryText || "").trim()) {
+      void handleQuery();
+    }
+  }, [handleQuery, loadProjectSourceStatus, queryText, syncState?.last_finished_at]);
+
   const visualizationData = useMemo(() => {
     if (!result) {
       return null;
@@ -313,7 +428,7 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
       (sum, item) => sum + Math.max(0, item.status.chunk_count || 0),
       0,
     );
-    const relationCount = result?.records?.length || 0;
+    const relationCount = Math.max(result?.records?.length || 0, getSyncRelationCount(syncState));
     return {
       totalSources,
       indexedSources,
@@ -322,7 +437,19 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
       chunkCount,
       relationCount,
     };
-  }, [projectSources, result?.records]);
+  }, [projectSources, result?.records, syncState]);
+
+  const syncAlertType = useMemo(
+    () => getProjectKnowledgeSyncAlertType(syncState),
+    [syncState],
+  );
+
+  const syncAlertDescription = useMemo(() => {
+    if (!syncState) {
+      return "";
+    }
+    return getProjectKnowledgeSyncAlertDescription(syncState, t);
+  }, [syncState, t]);
 
   useEffect(() => {
     onSignalsChange?.({
@@ -472,6 +599,15 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
           project: props.projectName || props.projectId,
         })}
       </Typography.Text>
+
+      {syncState && (syncState.status !== "idle" || Boolean(syncState.last_error) || Boolean(syncState.last_finished_at)) ? (
+        <Alert
+          type={syncAlertType}
+          showIcon
+          message={t("projects.knowledge.sinkJob", "Knowledge Sync")}
+          description={syncAlertDescription}
+        />
+      ) : null}
 
       <div className={styles.projectKnowledgeTrendSection}>
         <div className={styles.projectKnowledgeTrendHeader}>

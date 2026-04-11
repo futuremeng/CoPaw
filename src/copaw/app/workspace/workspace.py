@@ -22,6 +22,7 @@ from .service_factories import (
     create_channel_service,
     create_agent_config_watcher,
     create_mcp_config_watcher,
+    create_project_knowledge_watcher,
 )
 from ..runner.task_tracker import TaskTracker
 from ..mcp import MCPClientManager
@@ -290,6 +291,18 @@ class Workspace:
                 start_method="start",
                 stop_method="stop",
                 priority=51,
+                concurrent_init=False,
+            ),
+        )
+
+        sm.register(
+            ServiceDescriptor(
+                name="project_knowledge_watcher",
+                service_class=None,
+                post_init=create_project_knowledge_watcher,
+                start_method="start",
+                stop_method="stop",
+                priority=52,
                 concurrent_init=False,
             ),
         )

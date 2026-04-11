@@ -20,7 +20,8 @@ from fastapi.responses import StreamingResponse
 from ...config import load_config, save_config
 from ...config.config import KnowledgeConfig, KnowledgeSourceSpec, load_agent_config, save_agent_config
 from ...constant import WORKING_DIR
-from ...knowledge import GraphOpsManager, KnowledgeManager
+from ...knowledge import GraphOpsManager, KnowledgeManager, ProjectKnowledgeSyncManager
+from ...knowledge.project_sync import ensure_project_source_registered
 from ...knowledge.module_skills import sync_knowledge_module_skills
 from ..agent_context import get_agent_for_request
 
@@ -131,6 +132,17 @@ def _graph_ops_for_workspace(
     project_id: str | None = None,
 ) -> GraphOpsManager:
     return GraphOpsManager(
+        workspace_dir,
+        knowledge_dirname=_knowledge_dirname_for_project(project_id),
+    )
+
+
+def _project_sync_for_workspace(
+    workspace_dir: Path | str,
+    *,
+    project_id: str | None = None,
+) -> ProjectKnowledgeSyncManager:
+    return ProjectKnowledgeSyncManager(
         workspace_dir,
         knowledge_dirname=_knowledge_dirname_for_project(project_id),
     )
@@ -681,6 +693,69 @@ async def start_memify_job(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
+@router.get("/project-sync/status")
+async def get_project_sync_status(request: Request):
+    """Get project-scoped automatic knowledge synchronization status."""
+    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    project_id = _resolve_project_id(request)
+    if not project_id:
+        raise HTTPException(status_code=400, detail="PROJECT_ID_REQUIRED")
+    manager = _project_sync_for_workspace(
+        workspace_dir,
+        project_id=project_id,
+    )
+    return manager.get_state(project_id)
+
+
+@router.post("/project-sync/run")
+async def run_project_sync(
+    request: Request,
+    trigger: str = Body(default="manual"),
+    changed_paths: list[str] | None = Body(default=None),
+    force: bool = Body(default=False),
+):
+    """Start project-scoped automatic knowledge synchronization."""
+    config, knowledge_config, running_config, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    _ensure_knowledge_enabled_flag(knowledge_config.enabled)
+    if not bool(getattr(knowledge_config, "memify_enabled", False)):
+        raise HTTPException(status_code=400, detail="MEMIFY_DISABLED")
+
+    project_id = _resolve_project_id(request)
+    if not project_id:
+        raise HTTPException(status_code=400, detail="PROJECT_ID_REQUIRED")
+
+    project_workspace_dir = (Path(workspace_dir) / "projects" / project_id).resolve()
+    if not project_workspace_dir.exists() or not project_workspace_dir.is_dir():
+        raise HTTPException(status_code=404, detail="PROJECT_WORKSPACE_NOT_FOUND")
+
+    source, _ = ensure_project_source_registered(
+        config.knowledge,
+        project_id=project_id,
+        project_name=project_id,
+        project_workspace_dir=str(project_workspace_dir),
+        persist=lambda: save_config(config),
+    )
+    manager = _project_sync_for_workspace(
+        workspace_dir,
+        project_id=project_id,
+    )
+    try:
+        return manager.start_sync(
+            project_id=project_id,
+            config=knowledge_config,
+            running_config=running_config,
+            source=source,
+            trigger=(trigger or "manual").strip() or "manual",
+            changed_paths=changed_paths,
+            auto_enabled=True,
+            force=bool(force),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
 @router.websocket("/history-backfill/progress/ws")
 async def stream_history_backfill_progress(websocket: WebSocket):
     """Stream history backfill progress to console with WebSocket."""
@@ -718,6 +793,50 @@ async def stream_history_backfill_progress(websocket: WebSocket):
                         "progress": progress,
                     }
                 )
+                last_fingerprint = fingerprint
+            await asyncio.sleep(interval_ms / 1000)
+    except WebSocketDisconnect:
+        return
+
+
+@router.websocket("/project-sync/ws")
+async def stream_project_sync(websocket: WebSocket):
+    """Stream project-scoped knowledge sync snapshots with WebSocket."""
+    await websocket.accept()
+    interval_ms = _clamp_int(
+        websocket.query_params.get("interval_ms"),
+        default=1000,
+        minimum=300,
+        maximum=3000,
+    )
+
+    project_id = _normalize_project_id(
+        websocket.query_params.get("project_id")
+        or websocket.headers.get("X-Project-Id")
+    )
+    if not project_id:
+        await websocket.send_json({"type": "error", "detail": "PROJECT_ID_REQUIRED"})
+        await websocket.close(code=1008)
+        return
+
+    _, _, _, workspace_dir = await _resolve_knowledge_ws_context(websocket)
+    manager = _project_sync_for_workspace(
+        workspace_dir,
+        project_id=project_id,
+    )
+
+    last_fingerprint: str | None = None
+    try:
+        while True:
+            snapshot = manager.get_state(project_id)
+            fingerprint = json.dumps(
+                snapshot,
+                ensure_ascii=False,
+                sort_keys=True,
+                default=str,
+            )
+            if fingerprint != last_fingerprint:
+                await websocket.send_json({"type": "snapshot", "state": snapshot})
                 last_fingerprint = fingerprint
             await asyncio.sleep(interval_ms / 1000)
     except WebSocketDisconnect:

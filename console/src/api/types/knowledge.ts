@@ -19,11 +19,60 @@ export interface KnowledgeSourceSpec {
 }
 
 export interface KnowledgeIndexConfig {
+  engine: string;
   chunk_size: number;
   chunk_overlap: number;
   max_file_size: number;
   include_globs: string[];
   exclude_globs: string[];
+  updated_at?: string | null;
+}
+
+export interface ProjectKnowledgeSyncState {
+  project_id: string;
+  status:
+    | "idle"
+    | "queued"
+    | "pending"
+    | "indexing"
+    | "graphifying"
+    | "succeeded"
+    | "failed";
+  current_stage: string;
+  progress: number;
+  auto_enabled: boolean;
+  dirty: boolean;
+  dirty_after_run: boolean;
+  last_trigger: string;
+  changed_paths: string[];
+  pending_changed_paths: string[];
+  changed_count: number;
+  scheduled_for?: string | null;
+  queued_at?: string | null;
+  last_change_at?: string | null;
+  debounce_seconds?: number;
+  cooldown_seconds?: number;
+  last_error: string;
+  last_started_at?: string | null;
+  last_finished_at?: string | null;
+  last_success_at?: string | null;
+  updated_at?: string | null;
+  latest_job_id: string;
+  latest_source_id: string;
+  last_result: Record<string, unknown>;
+}
+
+export interface ProjectKnowledgeSyncRunRequest {
+  projectId: string;
+  trigger?: string;
+  changedPaths?: string[];
+  force?: boolean;
+}
+
+export interface ProjectKnowledgeSyncRunResponse {
+  accepted: boolean;
+  reason: string;
+  state: ProjectKnowledgeSyncState;
 }
 
 export interface KnowledgeAutomationConfig {
