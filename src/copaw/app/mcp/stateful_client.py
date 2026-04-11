@@ -55,6 +55,125 @@ def _extract_http_status_error(exc: BaseException) -> httpx.HTTPStatusError | No
     return None
 
 
+def _iter_exception_chain(exc: BaseException):
+    """Yield exception chain via cause/context without duplicates."""
+    current: BaseException | None = exc
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        yield current
+        current = current.__cause__ or current.__context__
+
+
+def _summarize_exception_chain(exc: BaseException, *, limit: int = 6) -> str:
+    """Return a compact one-line summary for nested exceptions."""
+    parts: list[str] = []
+    for item in _iter_exception_chain(exc):
+        message = str(item).strip()
+        label = type(item).__name__
+        if message:
+            label = f"{label}({message})"
+        parts.append(label)
+        if len(parts) >= limit:
+            break
+    return " <- ".join(parts)
+
+
+def _extract_request_url(exc: BaseException) -> str | None:
+    """Extract first request URL from nested HTTPX errors if available."""
+    for leaf in _iter_leaf_exceptions(exc):
+        request = getattr(leaf, "request", None)
+        url = getattr(request, "url", None)
+        if url is not None:
+            return str(url)
+    return None
+
+
+def _log_http_lifecycle_exception(
+    *,
+    name: str,
+    transport: str,
+    url: str,
+    headers: dict[str, str] | None,
+    exc: BaseException,
+) -> float:
+    """Log an HTTP MCP lifecycle exception with useful context."""
+    retry_delay = 1.0
+    request_url = _extract_request_url(exc) or url
+    exception_chain = _summarize_exception_chain(exc)
+    http_status_error = _extract_http_status_error(exc)
+    if http_status_error is not None:
+        status_code = http_status_error.response.status_code
+        reason = http_status_error.response.reason_phrase or "HTTP error"
+
+        if status_code in {401, 403}:
+            retry_delay = 15.0
+        elif status_code >= 500:
+            retry_delay = 5.0
+        else:
+            retry_delay = 2.0
+        logger.warning(
+            "MCP HTTP client lifecycle error for %s: HTTP %s %s (%s, transport=%s); retrying in %.1fs; chain=%s",
+            name,
+            status_code,
+            reason,
+            request_url,
+            transport,
+            retry_delay,
+            exception_chain,
+        )
+        if status_code in {401, 403}:
+            has_auth = any(
+                k.lower() == "authorization" for k in (headers or {}).keys()
+            )
+            if has_auth:
+                logger.warning(
+                    "MCP HTTP auth error for %s (401/403): Authorization header is configured but rejected. Possible causes: (1) token is expired/invalid, (2) nginx proxy not forwarding auth header, (3) server doesn't support configured token format. URL: %s",
+                    name,
+                    request_url,
+                )
+            else:
+                logger.warning(
+                    "MCP HTTP auth error for %s (401/403): NO Authorization header configured. Please add 'headers' with 'Authorization' to your MCP client config. URL: %s",
+                    name,
+                    request_url,
+                )
+        logger.debug(
+            "Detailed MCP HTTP lifecycle exception for %s",
+            name,
+            exc_info=True,
+        )
+        return retry_delay
+
+    if any(isinstance(leaf, httpx.RequestError) for leaf in _iter_leaf_exceptions(exc)):
+        retry_delay = 2.0
+        logger.warning(
+            "MCP HTTP transport error for %s (%s %s): request failed before a usable response was read; retrying in %.1fs; chain=%s",
+            name,
+            transport,
+            request_url,
+            retry_delay,
+            exception_chain,
+        )
+        logger.debug(
+            "Detailed MCP HTTP transport exception for %s",
+            name,
+            exc_info=True,
+        )
+        return retry_delay
+
+    logger.error(
+        "Error in MCP client lifecycle for %s (%s %s): %s; chain=%s",
+        name,
+        transport,
+        request_url,
+        exc,
+        exception_chain,
+        exc_info=True,
+    )
+    return retry_delay
+
+
 def _is_mineru_stdio(args: list[str] | None) -> bool:
     """Return whether stdio args target mineru-mcp launcher."""
     if not args:
@@ -655,62 +774,13 @@ class HttpStatefulClient(StatefulClientBase):
                 # Context manager exits cleanly in THIS task
 
             except Exception as e:
-                retry_delay = 1.0
-                http_status_error = _extract_http_status_error(e)
-                if http_status_error is not None:
-                    status_code = http_status_error.response.status_code
-                    request_url = str(http_status_error.request.url)
-                    reason = (
-                        http_status_error.response.reason_phrase
-                        or "HTTP error"
-                    )
-
-                    # Reduce noisy rapid retries when upstream MCP is unavailable.
-                    if status_code in {401, 403}:
-                        retry_delay = 15.0
-                    elif status_code >= 500:
-                        retry_delay = 5.0
-                    else:
-                        retry_delay = 2.0
-                    logger.warning(
-                        "MCP HTTP client lifecycle error for %s: HTTP %s %s (%s); retrying in %.1fs",
-                        self.name,
-                        status_code,
-                        reason,
-                        request_url,
-                        retry_delay,
-                    )
-                    if status_code in {401, 403}:
-                        # Provide detailed guidance for auth errors
-                        has_auth = any(
-                            k.lower() == "authorization"
-                            for k in (self.headers or {}).keys()
-                        )
-                        if has_auth:
-                            logger.warning(
-                                "MCP HTTP auth error for %s (401/403): Authorization header is configured but rejected. "
-                                "Possible causes: (1) token is expired/invalid, (2) nginx proxy not forwarding auth header, "
-                                "(3) server doesn't support configured token format. URL: %s",
-                                self.name,
-                                request_url,
-                            )
-                        else:
-                            logger.warning(
-                                "MCP HTTP auth error for %s (401/403): NO Authorization header configured. "
-                                "Please add 'headers' with 'Authorization' to your MCP client config. URL: %s",
-                                self.name,
-                                request_url,
-                            )
-                    logger.debug(
-                        "Detailed MCP HTTP lifecycle exception for %s",
-                        self.name,
-                        exc_info=True,
-                    )
-                else:
-                    logger.error(
-                        f"Error in MCP client lifecycle for {self.name}: {e}",
-                        exc_info=True,
-                    )
+                retry_delay = _log_http_lifecycle_exception(
+                    name=self.name,
+                    transport=self.transport,
+                    url=self.url,
+                    headers=self.headers,
+                    exc=e,
+                )
                 self.session = None
                 self.is_connected = False
                 self._cached_tools = None
