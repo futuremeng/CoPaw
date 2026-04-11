@@ -1,6 +1,6 @@
 import type { ProjectKnowledgeSyncState } from "../../../api/types";
 
-type Translate = (key: string, options?: Record<string, unknown> | string) => string;
+type Translate = (key: string, options?: Record<string, unknown>) => string;
 
 function formatSyncTime(raw: string | null | undefined): string {
   if (!raw) {

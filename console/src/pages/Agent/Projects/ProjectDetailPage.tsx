@@ -42,9 +42,10 @@ import ProjectChatPanel, {
   type ProjectChatAutoAttachRequest,
   type ProjectChatMode,
 } from "./ProjectChatPanel";
-import ProjectKnowledgePanel, {
-  type ProjectKnowledgeHeaderSignals,
-} from "./ProjectKnowledgePanel";
+import ProjectKnowledgeInsightsPanel from "./ProjectKnowledgeInsightsPanel";
+import ProjectKnowledgePanel from "./ProjectKnowledgePanel";
+import ProjectKnowledgeSignalsPanel from "./ProjectKnowledgeSignalsPanel";
+import ProjectKnowledgeSourcesPanel from "./ProjectKnowledgeSourcesPanel";
 import ProjectKnowledgeSettingsPanel from "./ProjectKnowledgeSettingsPanel";
 import ProjectOverviewCard from "./ProjectOverviewCard";
 import ProjectUploadModal from "./ProjectUploadModal";
@@ -59,6 +60,10 @@ import useProjectDesignChatController from "./useProjectDesignChatController";
 import useLeaveConfirmGuard from "./useLeaveConfirmGuard";
 import useOpenUploadQuery from "./useOpenUploadQuery";
 import useProjectUploadController from "./useProjectUploadController";
+import {
+  type ProjectKnowledgeHeaderSignals,
+  useProjectKnowledgeState,
+} from "./useProjectKnowledgeState";
 import {
   buildAttachDraftPrompt,
   buildAutoAttachAnalysisPrompt,
@@ -341,6 +346,7 @@ export default function ProjectDetailPage() {
   const [projectKnowledgeIncludeGlobal, setProjectKnowledgeIncludeGlobal] = useState(true);
   const [knowledgeHeaderSignals, setKnowledgeHeaderSignals] =
     useState<ProjectKnowledgeHeaderSignals>(DEFAULT_KNOWLEDGE_HEADER_SIGNALS);
+  const [pendingKnowledgeQuery, setPendingKnowledgeQuery] = useState("");
   const [selectedMetricFilter, setSelectedMetricFilter] = useState<ProjectFileFilterKey | "">("");
   const [treeDisplayMode, setTreeDisplayMode] = useState<TreeDisplayMode>("filter");
   const [leftPaneSize, setLeftPaneSize] = useState(LEFT_PANE_EXPANDED_SIZE);
@@ -369,8 +375,15 @@ export default function ProjectDetailPage() {
     [projects, routeProjectId],
   );
 
+  const projectKnowledgeState = useProjectKnowledgeState({
+    projectId: selectedProject?.id || "",
+    projectName: selectedProject?.name || "",
+    onSignalsChange: setKnowledgeHeaderSignals,
+  });
+
   useEffect(() => {
     setKnowledgeHeaderSignals(DEFAULT_KNOWLEDGE_HEADER_SIGNALS);
+    setPendingKnowledgeQuery("");
   }, [selectedProject?.id]);
 
   const leaveConfirmText = useMemo(
@@ -2600,6 +2613,7 @@ export default function ProjectDetailPage() {
                         <Tabs
                           className={styles.knowledgeDockTabs}
                           activeKey={knowledgeDockTab}
+                          destroyOnHidden
                           onChange={(key) => setKnowledgeDockTab(key as KnowledgeDockTabKey)}
                           items={[
                             {
@@ -2609,10 +2623,43 @@ export default function ProjectDetailPage() {
                                 <ProjectKnowledgePanel
                                   projectId={selectedProject.id}
                                   projectName={selectedProject.name}
+                                  knowledgeState={projectKnowledgeState}
                                   includeGlobal={projectKnowledgeIncludeGlobal}
-                                  onIncludeGlobalChange={setProjectKnowledgeIncludeGlobal}
+                                  requestedQuery={pendingKnowledgeQuery}
+                                  onRequestedQueryHandled={() => setPendingKnowledgeQuery("")}
+                                />
+                              ),
+                            },
+                            {
+                              key: "signals",
+                              label: t("projects.knowledgeDock.tabSignals", "Signals"),
+                              children: (
+                                <ProjectKnowledgeSignalsPanel
+                                  knowledgeState={projectKnowledgeState}
+                                />
+                              ),
+                            },
+                            {
+                              key: "sources",
+                              label: t("projects.knowledgeDock.tabSources", "Sources"),
+                              children: (
+                                <ProjectKnowledgeSourcesPanel
+                                  knowledgeState={projectKnowledgeState}
                                   onOpenSettings={() => setKnowledgeDockTab("settings")}
-                                  onSignalsChange={setKnowledgeHeaderSignals}
+                                />
+                              ),
+                            },
+                            {
+                              key: "insights",
+                              label: t("projects.knowledgeDock.tabInsights", "Insights"),
+                              children: (
+                                <ProjectKnowledgeInsightsPanel
+                                  knowledgeState={projectKnowledgeState}
+                                  onOpenSettings={() => setKnowledgeDockTab("settings")}
+                                  onRunSuggestedQuery={(query) => {
+                                    setPendingKnowledgeQuery(query);
+                                    setKnowledgeDockTab("explore");
+                                  }}
                                 />
                               ),
                             },
@@ -2634,45 +2681,6 @@ export default function ProjectDetailPage() {
                                 />
                               ),
                             },
-                            {
-                              key: "signals",
-                              label: t("projects.knowledgeDock.tabSignals", "Signals"),
-                              children: (
-                                <Empty
-                                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                                  description={t(
-                                    "projects.knowledgeDock.placeholderSignals",
-                                    "Signals view will be refined in the next iteration.",
-                                  )}
-                                />
-                              ),
-                            },
-                            {
-                              key: "sources",
-                              label: t("projects.knowledgeDock.tabSources", "Sources"),
-                              children: (
-                                <Empty
-                                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                                  description={t(
-                                    "projects.knowledgeDock.placeholderSources",
-                                    "Sources management view will be refined in the next iteration.",
-                                  )}
-                                />
-                              ),
-                            },
-                            {
-                              key: "insights",
-                              label: t("projects.knowledgeDock.tabInsights", "Insights"),
-                              children: (
-                                <Empty
-                                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                                  description={t(
-                                    "projects.knowledgeDock.placeholderInsights",
-                                    "Insights view will be refined in the next iteration.",
-                                  )}
-                                />
-                              ),
-                            },
                           ]}
                         />
                       </div>
@@ -2689,9 +2697,10 @@ export default function ProjectDetailPage() {
             width="min(80vw, 1280px)"
             open={automationDrawerOpen}
             onClose={() => setAutomationDrawerOpen(false)}
-            destroyOnHidden={false}
+            destroyOnHidden
           >
-            <div className={styles.automationDrawerBody}>
+            {automationDrawerOpen ? (
+              <div className={styles.automationDrawerBody}>
               <ProjectAutomationPanel
                 selectedRunStatus={selectedRunSummary?.status}
                 selectedTemplateId={selectedTemplateId}
@@ -2754,6 +2763,7 @@ export default function ProjectDetailPage() {
 
               <Tabs
                 className={styles.automationDrawerTabs}
+                destroyOnHidden
                 items={[
                   {
                     key: "metrics",
@@ -2799,7 +2809,8 @@ export default function ProjectDetailPage() {
                   },
                 ]}
               />
-            </div>
+              </div>
+            ) : null}
           </Drawer>
 
           <ProjectUploadModal

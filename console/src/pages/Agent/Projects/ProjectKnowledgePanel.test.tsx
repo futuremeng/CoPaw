@@ -1,47 +1,22 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ProjectKnowledgePanel from "./ProjectKnowledgePanel";
+import type { ProjectKnowledgeState } from "./useProjectKnowledgeState";
 
 const { mockedApi } = vi.hoisted(() => ({
   mockedApi: {
-    listKnowledgeSources: vi.fn(),
     graphQuery: vi.fn(),
-    getProjectKnowledgeSyncStatus: vi.fn(),
   },
 }));
 
 vi.mock("../../../api", () => ({
   __esModule: true,
   default: mockedApi,
-  getApiUrl: (path: string) => path,
-  getApiToken: () => "",
-}));
-
-vi.mock("../Knowledge/graphVisualization", () => ({
-  GraphQueryResults: () => <div data-testid="graph-query-results" />,
-  GraphVisualization: (props: {
-    onUsePathContext?: (pathSummary: string, runNow?: boolean) => void;
-  }) => (
-    <button
-      data-testid="graph-visualization"
-      type="button"
-      onClick={() => {
-        props.onUsePathContext?.("node-a -> node-b", true);
-        props.onUsePathContext?.("node-a -> node-b", true);
-      }}
-    >
-      graph-visualization
-    </button>
-  ),
 }));
 
 vi.mock("../Knowledge/graphQuery", () => ({
   recordsToVisualizationData: () => ({ nodes: [], edges: [] }),
-}));
-
-vi.mock("react-router-dom", () => ({
-  useNavigate: () => vi.fn(),
 }));
 
 vi.mock("react-i18next", () => ({
@@ -49,7 +24,6 @@ vi.mock("react-i18next", () => ({
     t: (
       key: string,
       maybeFallbackOrOptions?: string | { project?: string },
-      _maybeOptions?: { project?: string },
     ) => {
       if (typeof maybeFallbackOrOptions === "string") {
         return maybeFallbackOrOptions;
@@ -59,61 +33,13 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-function buildRegisteredSource(projectId: string) {
+function buildKnowledgeState(projectId: string): ProjectKnowledgeState {
   return {
-    id: `project-${projectId.toLowerCase()}-workspace`,
-    name: "Project Source",
-    type: "directory",
-    location: "/tmp/workspace",
-    content: "",
-    enabled: true,
-    recursive: true,
-    tags: ["project"],
-    summary: "",
-    status: {
-      indexed: true,
-      indexed_at: null,
-      document_count: 1,
-      chunk_count: 2,
-      error: null,
-    },
-  };
-}
-
-describe("ProjectKnowledgePanel interactions", () => {
-  const projectId = "project-abc";
-  let originalWebSocket: typeof WebSocket | undefined;
-
-  class FakeWebSocket {
-    static instances: FakeWebSocket[] = [];
-
-    onmessage: ((event: { data: string }) => void) | null = null;
-    onclose: (() => void) | null = null;
-    onopen: (() => void) | null = null;
-    readyState = 1;
-
-    constructor(_url: string) {
-      FakeWebSocket.instances.push(this);
-    }
-
-    close() {
-      this.readyState = 3;
-    }
-
-    emit(payload: unknown) {
-      this.onmessage?.({ data: JSON.stringify(payload) });
-    }
-  }
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    originalWebSocket = globalThis.WebSocket;
-    globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
-    FakeWebSocket.instances = [];
-    mockedApi.listKnowledgeSources.mockResolvedValue({
-      sources: [buildRegisteredSource(projectId)],
-    });
-    mockedApi.getProjectKnowledgeSyncStatus.mockResolvedValue({
+    projectSourceId: `project-${projectId.toLowerCase()}-workspace`,
+    sourceLoaded: true,
+    sourceRegistered: true,
+    projectSources: [],
+    syncState: {
       project_id: projectId,
       status: "idle",
       current_stage: "idle",
@@ -129,17 +55,65 @@ describe("ProjectKnowledgePanel interactions", () => {
       latest_job_id: "",
       latest_source_id: `project-${projectId.toLowerCase()}-workspace`,
       last_result: {},
-    });
+    },
+    quantMetrics: {
+      totalSources: 1,
+      indexedSources: 1,
+      indexedRatio: 1,
+      documentCount: 1,
+      chunkCount: 2,
+      relationCount: 0,
+    },
+    trendRangeDays: 7,
+    setTrendRangeDays: vi.fn(),
+    trendExpanded: true,
+    setTrendExpanded: vi.fn(),
+    filteredTrendSnapshots: [],
+    trendDocumentPath: "",
+    trendChunkPath: "",
+    trendDelta: {
+      documentDelta: 0,
+      chunkDelta: 0,
+      relationDelta: 0,
+    },
+    syncAlertType: "info",
+    syncAlertDescription: "",
+    suggestedQuery: `Summarize key entities, modules, and relations in project ${projectId}`,
+    insightAction: "healthy",
+    insightMessageKey: "projects.knowledge.insightHealthy",
+    loadProjectSourceStatus: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+const testGraphComponents = {
+  GraphQueryResults: () => <div data-testid="graph-query-results" />,
+  GraphVisualization: (props: {
+    onUsePathContext?: (pathSummary: string, runNow?: boolean) => void;
+  }) => (
+    <button
+      data-testid="graph-visualization"
+      type="button"
+      onClick={() => {
+        props.onUsePathContext?.("node-a -> node-b", true);
+        props.onUsePathContext?.("node-a -> node-b", true);
+      }}
+    >
+      graph-visualization
+    </button>
+  ),
+};
+
+describe("ProjectKnowledgePanel interactions", () => {
+  const projectId = "project-abc";
+
+  beforeEach(() => {
+    vi.clearAllMocks();
     mockedApi.graphQuery.mockResolvedValue({
       records: [],
       summary: "ok",
       warnings: [],
       provenance: { engine: "local_lexical" },
     });
-  });
-
-  afterEach(() => {
-    globalThis.WebSocket = originalWebSocket as typeof WebSocket;
   });
 
   it("queries graph in cypher mode when selected", async () => {
@@ -149,6 +123,8 @@ describe("ProjectKnowledgePanel interactions", () => {
       <ProjectKnowledgePanel
         projectId={projectId}
         projectName="Project ABC"
+        knowledgeState={buildKnowledgeState(projectId)}
+        graphComponents={testGraphComponents}
       />,
     );
 
@@ -172,41 +148,20 @@ describe("ProjectKnowledgePanel interactions", () => {
     });
   });
 
-  it("renders knowledge signals section", async () => {
+  it("no longer renders signals content inside explore", () => {
     render(
       <ProjectKnowledgePanel
         projectId={projectId}
         projectName="Project ABC"
+        knowledgeState={buildKnowledgeState(projectId)}
+        graphComponents={testGraphComponents}
       />,
     );
 
-    expect(await screen.findByText("projects.knowledge.signalsTitle")).not.toBeNull();
-  });
-
-  it("runs suggested query from insight action", async () => {
-    const user = userEvent.setup();
-
-    render(
-      <ProjectKnowledgePanel
-        projectId={projectId}
-        projectName="Project ABC"
-      />,
-    );
-
-    const actionButton = await screen.findByRole("button", {
+    expect(screen.queryByText("projects.knowledge.signalsTitle")).toBeNull();
+    expect(screen.queryByRole("button", {
       name: "projects.knowledge.actionRunSuggestedQuery",
-    });
-    await user.click(actionButton);
-
-    await waitFor(() => {
-      expect(mockedApi.graphQuery).toHaveBeenCalledWith(
-        expect.objectContaining({
-          query: expect.stringContaining("Project ABC"),
-          projectScope: [projectId],
-          projectId,
-        }),
-      );
-    });
+    })).toBeNull();
   });
 
   it("deduplicates repeated path context when apply-and-run is clicked repeatedly", async () => {
@@ -217,6 +172,8 @@ describe("ProjectKnowledgePanel interactions", () => {
       <ProjectKnowledgePanel
         projectId={projectId}
         projectName="Project ABC"
+        knowledgeState={buildKnowledgeState(projectId)}
+        graphComponents={testGraphComponents}
       />,
     );
 
@@ -241,13 +198,16 @@ describe("ProjectKnowledgePanel interactions", () => {
     });
   });
 
-  it("refreshes sources and query when sync finishes", async () => {
+  it("refreshes query when sync finishes", async () => {
     const user = userEvent.setup();
-
-    render(
+    const knowledgeState = buildKnowledgeState(projectId);
+    const existingSyncState = knowledgeState.syncState;
+    const { rerender } = render(
       <ProjectKnowledgePanel
         projectId={projectId}
         projectName="Project ABC"
+        knowledgeState={knowledgeState}
+        graphComponents={testGraphComponents}
       />,
     );
 
@@ -261,112 +221,51 @@ describe("ProjectKnowledgePanel interactions", () => {
       expect(mockedApi.graphQuery).toHaveBeenCalledTimes(1);
     });
 
-    const ws = FakeWebSocket.instances[0];
-    expect(ws).toBeTruthy();
-
-    act(() => {
-      ws.emit({
-        type: "snapshot",
-        state: {
-          project_id: projectId,
-          status: "succeeded",
-          current_stage: "completed",
-          progress: 100,
-          auto_enabled: true,
-          dirty: false,
-          dirty_after_run: false,
-          last_trigger: "project_watcher_change",
-          changed_paths: ["original/brief.md"],
-          pending_changed_paths: [],
-          changed_count: 1,
-          last_error: "",
-          last_finished_at: "2026-04-11T23:30:00+00:00",
-          latest_job_id: "",
-          latest_source_id: `project-${projectId.toLowerCase()}-workspace`,
-          last_result: {},
-        },
-      });
-    });
+    rerender(
+      <ProjectKnowledgePanel
+        projectId={projectId}
+        projectName="Project ABC"
+        knowledgeState={{
+          ...knowledgeState,
+          syncState: existingSyncState
+            ? {
+                ...existingSyncState,
+                status: "succeeded",
+                current_stage: "completed",
+                last_finished_at: "2026-04-11T23:30:00+00:00",
+              }
+            : null,
+        }}
+        graphComponents={testGraphComponents}
+      />,
+    );
 
     await waitFor(() => {
-      expect(mockedApi.listKnowledgeSources).toHaveBeenCalledTimes(2);
       expect(mockedApi.graphQuery).toHaveBeenCalledTimes(2);
     });
   });
 
-  it("renders explicit queued sync status", async () => {
-    mockedApi.getProjectKnowledgeSyncStatus.mockResolvedValueOnce({
-      project_id: projectId,
-      status: "queued",
-      current_stage: "debouncing",
-      progress: 1,
-      auto_enabled: true,
-      dirty: true,
-      dirty_after_run: false,
-      last_trigger: "project_upload",
-      changed_paths: ["upload/file.md"],
-      pending_changed_paths: [],
-      changed_count: 1,
-      scheduled_for: "2026-04-11T23:31:00+00:00",
-      last_error: "",
-      latest_job_id: "",
-      latest_source_id: `project-${projectId.toLowerCase()}-workspace`,
-      last_result: {},
-    });
+  it("runs requested query from insights handoff", async () => {
+    const onRequestedQueryHandled = vi.fn();
 
     render(
       <ProjectKnowledgePanel
         projectId={projectId}
         projectName="Project ABC"
-      />,
-    );
-
-    const alert = await screen.findByRole("alert");
-    expect(alert.textContent || "").toContain("projects.knowledge.syncStage.debouncing");
-  });
-
-  it("reports relation count from memify sync result", async () => {
-    const onSignalsChange = vi.fn();
-    mockedApi.getProjectKnowledgeSyncStatus.mockResolvedValueOnce({
-      project_id: projectId,
-      status: "succeeded",
-      current_stage: "completed",
-      progress: 100,
-      auto_enabled: true,
-      dirty: false,
-      dirty_after_run: false,
-      last_trigger: "project_watcher_change",
-      changed_paths: [],
-      pending_changed_paths: [],
-      changed_count: 0,
-      last_error: "",
-      latest_job_id: "",
-      latest_source_id: `project-${projectId.toLowerCase()}-workspace`,
-      last_result: {
-        memify: {
-          node_count: 12,
-          relation_count: 24,
-        },
-      },
-    });
-
-    render(
-      <ProjectKnowledgePanel
-        projectId={projectId}
-        projectName="Project ABC"
-        onSignalsChange={onSignalsChange}
+        knowledgeState={buildKnowledgeState(projectId)}
+        requestedQuery="Summarize project ABC"
+        onRequestedQueryHandled={onRequestedQueryHandled}
+        graphComponents={testGraphComponents}
       />,
     );
 
     await waitFor(() => {
-      expect(onSignalsChange).toHaveBeenCalledWith(
+      expect(mockedApi.graphQuery).toHaveBeenCalledWith(
         expect.objectContaining({
-          relationCount: 24,
+          query: "Summarize project ABC",
         }),
       );
     });
-
-    const alert = await screen.findByRole("alert");
-    expect(alert.textContent || "").toContain("projects.knowledge.syncGraphStats");
+    expect(onRequestedQueryHandled).toHaveBeenCalledTimes(1);
   });
 });
