@@ -4,6 +4,7 @@ import io
 import json
 import time
 from pathlib import Path
+from types import SimpleNamespace
 import zipfile
 
 import pytest
@@ -228,6 +229,179 @@ def test_upsert_source_offloads_name_normalization_to_thread(
     assert calls
     assert calls[0][0].__name__ == "normalize_source_name"
     assert calls[0][1][0].id == "threaded-upsert-source"
+
+
+def test_index_source_offloads_indexing_to_thread(
+    knowledge_api_client: TestClient,
+    monkeypatch,
+):
+    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload["enabled"] = True
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    upsert = knowledge_api_client.put(
+        "/knowledge/sources",
+        json={
+            "id": "threaded-index-source",
+            "name": "Threaded Index Source",
+            "type": "text",
+            "content": "knowledge index content",
+            "enabled": True,
+            "recursive": False,
+            "tags": [],
+            "summary": "",
+        },
+    )
+    assert upsert.status_code == 200
+
+    original_to_thread = knowledge_router_module.asyncio.to_thread
+    calls: list[tuple[object, tuple[object, ...]]] = []
+
+    async def fake_to_thread(func, /, *args, **kwargs):
+        calls.append((func, args))
+        return await original_to_thread(func, *args, **kwargs)
+
+    monkeypatch.setattr(knowledge_router_module.asyncio, "to_thread", fake_to_thread)
+
+    response = knowledge_api_client.post("/knowledge/sources/threaded-index-source/index")
+
+    assert response.status_code == 200
+    assert calls
+    assert calls[0][0].__name__ == "index_source"
+    assert calls[0][1][0].id == "threaded-index-source"
+
+
+def test_search_knowledge_offloads_search_to_thread(
+    knowledge_api_client: TestClient,
+    monkeypatch,
+):
+    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload["enabled"] = True
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    class _FakeManager:
+        def search(self, **kwargs):
+            return {"items": [{"query": kwargs["query"]}], "total": 1}
+
+    original_to_thread = knowledge_router_module.asyncio.to_thread
+    calls: list[tuple[object, tuple[object, ...]]] = []
+
+    async def fake_to_thread(func, /, *args, **kwargs):
+        calls.append((func, args))
+        return await original_to_thread(func, *args, **kwargs)
+
+    monkeypatch.setattr(knowledge_router_module, "_manager_for_workspace", lambda *_args, **_kwargs: _FakeManager())
+    monkeypatch.setattr(knowledge_router_module.asyncio, "to_thread", fake_to_thread)
+
+    response = knowledge_api_client.get("/knowledge/search?q=threaded-search")
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["query"] == "threaded-search"
+    assert calls
+    assert calls[0][0].__name__ == "search"
+
+
+def test_graph_query_offloads_query_to_thread(
+    knowledge_api_client: TestClient,
+    monkeypatch,
+):
+    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload["enabled"] = True
+    config_payload["graph_query_enabled"] = True
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    class _FakeGraphOps:
+        def graph_query(self, **kwargs):
+            return SimpleNamespace(
+                records=[{"query": kwargs["query_text"]}],
+                summary={"mode": kwargs["query_mode"]},
+                provenance=[],
+                warnings=[],
+            )
+
+    original_to_thread = knowledge_router_module.asyncio.to_thread
+    calls: list[tuple[object, tuple[object, ...]]] = []
+
+    async def fake_to_thread(func, /, *args, **kwargs):
+        calls.append((func, args))
+        return await original_to_thread(func, *args, **kwargs)
+
+    monkeypatch.setattr(knowledge_router_module, "_graph_ops_for_workspace", lambda *_args, **_kwargs: _FakeGraphOps())
+    monkeypatch.setattr(knowledge_router_module.asyncio, "to_thread", fake_to_thread)
+
+    response = knowledge_api_client.get("/knowledge/graph-query?q=threaded-graph")
+
+    assert response.status_code == 200
+    assert response.json()["records"][0]["query"] == "threaded-graph"
+    assert calls
+    assert calls[0][0].__name__ == "graph_query"
+
+
+def test_get_memify_job_status_offloads_status_read_to_thread(
+    knowledge_api_client: TestClient,
+    monkeypatch,
+):
+    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload["enabled"] = True
+    config_payload["memify_enabled"] = True
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    class _FakeGraphOps:
+        def get_memify_status(self, job_id):
+            return {"job_id": job_id, "status": "succeeded"}
+
+    original_to_thread = knowledge_router_module.asyncio.to_thread
+    calls: list[tuple[object, tuple[object, ...]]] = []
+
+    async def fake_to_thread(func, /, *args, **kwargs):
+        calls.append((func, args))
+        return await original_to_thread(func, *args, **kwargs)
+
+    monkeypatch.setattr(knowledge_router_module, "_graph_ops_for_workspace", lambda *_args, **_kwargs: _FakeGraphOps())
+    monkeypatch.setattr(knowledge_router_module.asyncio, "to_thread", fake_to_thread)
+
+    response = knowledge_api_client.get("/knowledge/memify/jobs/job-threaded")
+
+    assert response.status_code == 200
+    assert response.json()["job_id"] == "job-threaded"
+    assert calls
+    assert calls[0][0].__name__ == "get_memify_status"
+
+
+def test_restore_knowledge_backup_offloads_filesystem_copy_to_thread(
+    knowledge_api_client: TestClient,
+    monkeypatch,
+):
+    zip_data = _build_knowledge_zip(
+        {
+            "sources/new-source/index.json": _source_index_payload(
+                "new-source",
+                "new content",
+            ),
+            "sources/new-source/content.md": "# new-source\n\nnew content\n",
+        }
+    )
+
+    original_to_thread = knowledge_router_module.asyncio.to_thread
+    calls: list[tuple[object, tuple[object, ...]]] = []
+
+    async def fake_to_thread(func, /, *args, **kwargs):
+        calls.append((func, args))
+        return await original_to_thread(func, *args, **kwargs)
+
+    monkeypatch.setattr(knowledge_router_module.asyncio, "to_thread", fake_to_thread)
+
+    response = knowledge_api_client.post(
+        "/knowledge/restore",
+        files={"file": ("knowledge.zip", zip_data, "application/zip")},
+    )
+
+    assert response.status_code == 200
+    assert any(call[0].__name__ == "_restore_backup_tree" for call in calls)
 
 
 def test_history_backfill_status_includes_progress(

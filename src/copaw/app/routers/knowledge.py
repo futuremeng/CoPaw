@@ -76,6 +76,33 @@ def _detect_extract_root(tmp_dir: Path) -> Path:
     return tmp_dir
 
 
+def _restore_backup_tree(
+    manager: KnowledgeManager,
+    extract_root: Path,
+    *,
+    replace_existing: bool,
+) -> list[KnowledgeSourceSpec]:
+    if replace_existing and manager.root_dir.exists():
+        shutil.rmtree(manager.root_dir, ignore_errors=True)
+
+    manager.root_dir.mkdir(parents=True, exist_ok=True)
+    for item in extract_root.iterdir():
+        dest = manager.root_dir / item.name
+        if item.is_file():
+            shutil.copy2(item, dest)
+        else:
+            if dest.exists() and dest.is_file():
+                dest.unlink()
+            shutil.copytree(item, dest, dirs_exist_ok=True)
+
+    manager.sources_dir.mkdir(parents=True, exist_ok=True)
+    manager.uploads_dir.mkdir(parents=True, exist_ok=True)
+    manager.remote_blob_dir.mkdir(parents=True, exist_ok=True)
+    manager.remote_meta_dir.mkdir(parents=True, exist_ok=True)
+
+    return manager.list_sources_from_storage()
+
+
 def _clamp_int(value: str | None, default: int, minimum: int, maximum: int) -> int:
     try:
         parsed = int((value or "").strip())
@@ -368,10 +395,12 @@ async def upload_knowledge_file(
     if not data:
         raise HTTPException(status_code=400, detail="Uploaded file is empty")
     _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
-    saved_path = _manager_for_workspace(
+    manager = _manager_for_workspace(
         workspace_dir,
         project_id=_resolve_project_id(request),
-    ).save_uploaded_file(
+    )
+    saved_path = await asyncio.to_thread(
+        manager.save_uploaded_file,
         source_id=source_id,
         filename=file.filename or "knowledge-upload",
         data=data,
@@ -398,10 +427,15 @@ async def upload_knowledge_directory(
     for relative_path, upload in zip(relative_paths, files):
         saved_pairs.append((relative_path, await upload.read()))
     _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
-    saved_root = _manager_for_workspace(
+    manager = _manager_for_workspace(
         workspace_dir,
         project_id=_resolve_project_id(request),
-    ).save_uploaded_directory(source_id, saved_pairs)
+    )
+    saved_root = await asyncio.to_thread(
+        manager.save_uploaded_directory,
+        source_id,
+        saved_pairs,
+    )
     return {
         "location": str(saved_root),
         "file_count": len(saved_pairs),
@@ -419,10 +453,11 @@ async def delete_source(source_id: str, request: Request):
         item for item in config.knowledge.sources if item.id != source_id
     ]
     save_config(config)
-    _manager_for_workspace(
+    manager = _manager_for_workspace(
         workspace_dir,
         project_id=_resolve_project_id(request),
-    ).delete_index(source_id)
+    )
+    await asyncio.to_thread(manager.delete_index, source_id)
     return {"deleted": True, "source_id": source_id}
 
 
@@ -438,10 +473,12 @@ async def clear_knowledge(
 
     config, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
     _ensure_knowledge_enabled_flag(knowledge_config.enabled)
-    result = _manager_for_workspace(
+    manager = _manager_for_workspace(
         workspace_dir,
         project_id=_resolve_project_id(request),
-    ).clear_knowledge(
+    )
+    result = await asyncio.to_thread(
+        manager.clear_knowledge,
         config.knowledge,
         remove_sources=remove_sources,
     )
@@ -457,10 +494,12 @@ async def index_source(source_id: str, request: Request):
     if source is None:
         raise HTTPException(status_code=404, detail="KNOWLEDGE_SOURCE_NOT_FOUND")
     try:
-        result = _manager_for_workspace(
+        manager = _manager_for_workspace(
             workspace_dir,
             project_id=_resolve_project_id(request),
-        ).index_source(
+        )
+        result = await asyncio.to_thread(
+            manager.index_source,
             source,
             config.knowledge,
             running_config,
@@ -478,10 +517,11 @@ async def get_source_content(source_id: str, request: Request):
     source = _find_source(config.knowledge, source_id)
     if source is None:
         raise HTTPException(status_code=404, detail="KNOWLEDGE_SOURCE_NOT_FOUND")
-    return _manager_for_workspace(
+    manager = _manager_for_workspace(
         workspace_dir,
         project_id=_resolve_project_id(request),
-    ).get_source_documents(source_id)
+    )
+    return await asyncio.to_thread(manager.get_source_documents, source_id)
 
 
 @router.post("/index")
@@ -489,10 +529,15 @@ async def index_all_sources(request: Request):
     config, knowledge_config, running_config, workspace_dir, _ = await _resolve_knowledge_request_context(request)
     _ensure_knowledge_enabled_flag(knowledge_config.enabled)
     try:
-        return _manager_for_workspace(
+        manager = _manager_for_workspace(
             workspace_dir,
             project_id=_resolve_project_id(request),
-        ).index_all(config.knowledge, running_config)
+        )
+        return await asyncio.to_thread(
+            manager.index_all,
+            config.knowledge,
+            running_config,
+        )
     except (FileNotFoundError, ValueError, OSError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
@@ -514,10 +559,12 @@ async def search_knowledge(
     ids = [item for item in (source_ids or "").split(",") if item]
     types = [item for item in (source_types or "").split(",") if item]
     projects = [item.strip() for item in (project_scope or "").split(",") if item.strip()]
-    return _manager_for_workspace(
+    manager = _manager_for_workspace(
         workspace_dir,
         project_id=_resolve_project_id(request),
-    ).search(
+    )
+    return await asyncio.to_thread(
+        manager.search,
         query=q,
         config=config.knowledge,
         limit=limit,
@@ -561,10 +608,12 @@ async def query_knowledge_graph(
         item.strip() for item in (project_scope or "").split(",") if item.strip()
     ]
     try:
-        result = _graph_ops_for_workspace(
+        graph_ops = _graph_ops_for_workspace(
             workspace_dir,
             project_id=_resolve_project_id(request),
-        ).graph_query(
+        )
+        result = await asyncio.to_thread(
+            graph_ops.graph_query,
             config=config.knowledge,
             query_mode=query_mode,
             query_text=query_text,
@@ -593,10 +642,11 @@ async def query_knowledge_graph(
 async def get_history_backfill_status(request: Request):
     """Get history backfill status for knowledge enable flow and CTA display."""
     _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
-    return _manager_for_workspace(
+    manager = _manager_for_workspace(
         workspace_dir,
         project_id=_resolve_project_id(request),
-    ).history_backfill_status()
+    )
+    return await asyncio.to_thread(manager.history_backfill_status)
 
 
 @router.post("/history-backfill/run")
@@ -622,9 +672,10 @@ async def run_history_backfill_now(request: Request):
     )
     if result.get("changed"):
         save_config(config)
+    status = await asyncio.to_thread(manager.history_backfill_status)
     return {
         "result": result,
-        "status": manager.history_backfill_status(),
+        "status": status,
     }
 
 
@@ -646,7 +697,7 @@ async def get_memify_job_status(job_id: str, request: Request):
         workspace_dir,
         project_id=_resolve_project_id(request),
     )
-    payload = manager.get_memify_status(normalized_job_id)
+    payload = await asyncio.to_thread(manager.get_memify_status, normalized_job_id)
     if payload is None:
         raise HTTPException(status_code=404, detail="MEMIFY_JOB_NOT_FOUND")
     return payload
@@ -678,7 +729,8 @@ async def start_memify_job(
         project_id=_resolve_project_id(request, project_id),
     )
     try:
-        return manager.run_memify(
+        return await asyncio.to_thread(
+            manager.run_memify,
             config=knowledge_config,
             pipeline_type=normalized_pipeline_type,
             dataset_scope=normalized_scope or None,
@@ -704,7 +756,7 @@ async def get_project_sync_status(request: Request):
         workspace_dir,
         project_id=project_id,
     )
-    return manager.get_state(project_id)
+    return await asyncio.to_thread(manager.get_state, project_id)
 
 
 @router.post("/project-sync/run")
@@ -740,7 +792,8 @@ async def run_project_sync(
         project_id=project_id,
     )
     try:
-        return manager.start_sync(
+        return await asyncio.to_thread(
+            manager.start_sync,
             project_id=project_id,
             config=knowledge_config,
             running_config=running_config,
@@ -779,7 +832,7 @@ async def stream_history_backfill_progress(websocket: WebSocket):
     last_fingerprint: str | None = None
     try:
         while True:
-            progress = manager.get_history_backfill_progress()
+            progress = await asyncio.to_thread(manager.get_history_backfill_progress)
             fingerprint = json.dumps(
                 progress,
                 ensure_ascii=False,
@@ -828,7 +881,7 @@ async def stream_project_sync(websocket: WebSocket):
     last_fingerprint: str | None = None
     try:
         while True:
-            snapshot = manager.get_state(project_id)
+            snapshot = await asyncio.to_thread(manager.get_state, project_id)
             fingerprint = json.dumps(
                 snapshot,
                 ensure_ascii=False,
@@ -916,32 +969,19 @@ async def restore_knowledge_backup(
     tmp_dir: Path | None = None
     try:
         tmp_dir = await asyncio.to_thread(_extract_zip_to_temp, data)
-        extract_root = _detect_extract_root(tmp_dir)
+        extract_root = await asyncio.to_thread(_detect_extract_root, tmp_dir)
         if not (extract_root / "sources").is_dir():
             raise HTTPException(
                 status_code=400,
                 detail="Invalid knowledge backup: missing sources directory",
             )
 
-        if replace_existing and manager.root_dir.exists():
-            shutil.rmtree(manager.root_dir, ignore_errors=True)
-
-        manager.root_dir.mkdir(parents=True, exist_ok=True)
-        for item in extract_root.iterdir():
-            dest = manager.root_dir / item.name
-            if item.is_file():
-                shutil.copy2(item, dest)
-            else:
-                if dest.exists() and dest.is_file():
-                    dest.unlink()
-                shutil.copytree(item, dest, dirs_exist_ok=True)
-
-        manager.sources_dir.mkdir(parents=True, exist_ok=True)
-        manager.uploads_dir.mkdir(parents=True, exist_ok=True)
-        manager.remote_blob_dir.mkdir(parents=True, exist_ok=True)
-        manager.remote_meta_dir.mkdir(parents=True, exist_ok=True)
-
-        config.knowledge.sources = manager.list_sources_from_storage()
+        config.knowledge.sources = await asyncio.to_thread(
+            _restore_backup_tree,
+            manager,
+            extract_root,
+            replace_existing=replace_existing,
+        )
         save_config(config)
 
         return {
