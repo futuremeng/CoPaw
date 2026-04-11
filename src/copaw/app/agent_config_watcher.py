@@ -71,9 +71,16 @@ class AgentConfigWatcher:
         # mtime of agent.json at last check
         self._last_mtime_ns: int = 0
 
+    @staticmethod
+    def _read_mtime_ns(path: Path) -> int:
+        return path.stat().st_mtime_ns
+
+    async def _snapshot_async(self) -> None:
+        await asyncio.to_thread(self._snapshot)
+
     async def start(self) -> None:
         """Take initial snapshot and start the polling task."""
-        self._snapshot()
+        await self._snapshot_async()
         self._task = asyncio.create_task(
             self._poll_loop(),
             name=f"agent_config_watcher_{self._agent_id}",
@@ -187,11 +194,11 @@ class AgentConfigWatcher:
         new_channels = agent_config.channels
         old_channels = self._last_channels
         extra_new = getattr(new_channels, "__pydantic_extra__", None) or {}
-        extra_old = (
+        extra_old: dict[str, Any] = (
             getattr(old_channels, "__pydantic_extra__", None)
             if old_channels
             else {}
-        )
+        ) or {}
 
         for name in get_available_channels():
             new_ch = getattr(new_channels, name, None) or extra_new.get(name)
@@ -252,7 +259,10 @@ class AgentConfigWatcher:
     async def _check(self) -> None:
         """Check for config changes and reload if needed."""
         try:
-            mtime_ns = self._config_path.stat().st_mtime_ns
+            mtime_ns = await asyncio.to_thread(
+                self._read_mtime_ns,
+                self._config_path,
+            )
         except FileNotFoundError:
             return
 
@@ -260,7 +270,10 @@ class AgentConfigWatcher:
             return
 
         try:
-            agent_config = load_agent_config(self._agent_id)
+            agent_config = await asyncio.to_thread(
+                load_agent_config,
+                self._agent_id,
+            )
         except Exception:
             logger.exception(
                 f"AgentConfigWatcher ({self._agent_id}): "

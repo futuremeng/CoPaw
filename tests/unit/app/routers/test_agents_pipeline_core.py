@@ -28,12 +28,14 @@ def _build_template(template_id: str = "demo-pipeline") -> PipelineTemplateInfo:
                 name="Collect",
                 kind="ingest",
                 description="collect source",
+                prompt="Collect source inputs and normalize them.",
             ),
             PipelineTemplateStep(
                 id="step-2",
                 name="Validate",
                 kind="validation",
                 description="check schema",
+                prompt="Validate schema and report mismatches.",
             ),
         ],
     )

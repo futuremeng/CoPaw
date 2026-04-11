@@ -89,6 +89,31 @@ async def test_list_agents_appends_missing_ids(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_list_agents_offloads_summary_scan_to_thread(monkeypatch):
+    """Agent list should build disk-backed summaries outside the event loop."""
+    config = _build_config(["default"], agent_order=["default"])
+    calls: list[tuple[object, tuple[object, ...]]] = []
+    original_to_thread = agents_router.asyncio.to_thread
+
+    monkeypatch.setattr(agents_router, "load_config", lambda: config)
+    monkeypatch.setattr(agents_router, "load_agent_config", _agent_config)
+    monkeypatch.setattr(agents_router, "_ensure_projects_layout", lambda _path: None)
+    monkeypatch.setattr(agents_router, "_list_agent_projects", lambda _path: [])
+
+    async def fake_to_thread(func, /, *args, **kwargs):
+        calls.append((func, args))
+        return await original_to_thread(func, *args, **kwargs)
+
+    monkeypatch.setattr(agents_router.asyncio, "to_thread", fake_to_thread)
+
+    response = await agents_router.list_agents()
+
+    assert [agent.id for agent in response.agents] == ["default"]
+    assert calls
+    assert calls[0][0] is agents_router._collect_agent_summaries
+
+
+@pytest.mark.asyncio
 async def test_reorder_agents_rejects_incomplete_payload(monkeypatch):
     """Reorder should reject lists that omit configured agents."""
     config = _build_config(
@@ -193,8 +218,8 @@ async def test_delete_agent_removes_id_from_order(monkeypatch):
     )
 
     await agents_router.delete_agent(
+        SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace())),
         "beta",
-        request=SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace())),
     )
 
     assert config.agents.agent_order == ["alpha", "default"]

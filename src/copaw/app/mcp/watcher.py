@@ -83,9 +83,19 @@ class MCPConfigWatcher:
         self._reconnect_base_delay: float = MCP_RECONNECT_BASE
         self._reconnect_max_delay: float = MCP_RECONNECT_CAP
 
+    @staticmethod
+    def _read_mtime_ns(path: Path) -> int:
+        return path.stat().st_mtime_ns
+
+    async def _snapshot_async(self) -> None:
+        await asyncio.to_thread(self._snapshot)
+
+    async def _load_mcp_config_async(self) -> MCPConfig:
+        return await asyncio.to_thread(self._load_mcp_config)
+
     async def start(self) -> None:
         """Take initial snapshot and start the polling task."""
-        self._snapshot()
+        await self._snapshot_async()
         self._task = asyncio.create_task(
             self._poll_loop(),
             name="mcp_config_watcher",
@@ -169,9 +179,13 @@ class MCPConfigWatcher:
     async def _check(self) -> None:
         """Check for config changes and reload if needed."""
         # 1) Check mtime if config path is provided
+        mtime_ns: int | None = None
         if self._config_path:
             try:
-                mtime_ns = self._config_path.stat().st_mtime_ns
+                mtime_ns = await asyncio.to_thread(
+                    self._read_mtime_ns,
+                    self._config_path,
+                )
             except FileNotFoundError:
                 return
             if mtime_ns == self._last_mtime_ns:
@@ -179,14 +193,14 @@ class MCPConfigWatcher:
 
         # 2) Load new config; quick-reject if MCP section unchanged
         try:
-            new_mcp = self._load_mcp_config()
+            new_mcp = await self._load_mcp_config_async()
         except Exception:
             logger.debug("MCPConfigWatcher: failed to parse config")
             return
 
         # Only advance mtime after a successful parse so transient partial
         # writes do not suppress future reload attempts.
-        if self._config_path:
+        if self._config_path and mtime_ns is not None:
             self._last_mtime_ns = mtime_ns
 
         new_hash = self._mcp_hash(new_mcp)

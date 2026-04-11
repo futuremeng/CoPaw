@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Project pipeline APIs split from agents router to reduce merge conflicts."""
+import asyncio
 from pathlib import Path
 import json
 
@@ -40,6 +41,40 @@ from .agents_pipeline_core import (
 )
 
 router = APIRouter(prefix="/agents", tags=["agents"])
+
+
+def _list_project_pipeline_templates_for_workspace(
+    workspace_dir: Path,
+    project_id: str,
+) -> list[PipelineTemplateInfo]:
+    project_dir = agents_router_impl._resolve_project_dir(
+        workspace_dir,
+        project_id,
+    )
+    return _list_project_pipeline_templates(project_dir)
+
+
+def _list_project_pipeline_runs_for_workspace(
+    workspace_dir: Path,
+    project_id: str,
+) -> list[PipelineRunSummary]:
+    project_dir = agents_router_impl._resolve_project_dir(
+        workspace_dir,
+        project_id,
+    )
+    return _list_project_pipeline_runs(project_dir)
+
+
+def _load_project_pipeline_run_for_workspace(
+    workspace_dir: Path,
+    project_id: str,
+    run_id: str,
+) -> PipelineRunDetail:
+    project_dir = agents_router_impl._resolve_project_dir(
+        workspace_dir,
+        project_id,
+    )
+    return _load_project_pipeline_run(project_dir, run_id)
 
 
 @router.get(
@@ -320,8 +355,11 @@ async def list_project_pipeline_templates(
         raise HTTPException(status_code=404, detail=str(e)) from e
 
     try:
-        project_dir = agents_router_impl._resolve_project_dir(Path(workspace.workspace_dir), projectId)
-        return _list_project_pipeline_templates(project_dir)
+        return await asyncio.to_thread(
+            _list_project_pipeline_templates_for_workspace,
+            Path(workspace.workspace_dir),
+            projectId,
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -449,8 +487,11 @@ async def list_project_pipeline_runs(
         raise HTTPException(status_code=404, detail=str(e)) from e
 
     try:
-        project_dir = agents_router_impl._resolve_project_dir(Path(workspace.workspace_dir), projectId)
-        return _list_project_pipeline_runs(project_dir)
+        return await asyncio.to_thread(
+            _list_project_pipeline_runs_for_workspace,
+            Path(workspace.workspace_dir),
+            projectId,
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -478,8 +519,12 @@ async def get_project_pipeline_run(
         raise HTTPException(status_code=404, detail=str(e)) from e
 
     try:
-        project_dir = agents_router_impl._resolve_project_dir(Path(workspace.workspace_dir), projectId)
-        return _load_project_pipeline_run(project_dir, runId)
+        return await asyncio.to_thread(
+            _load_project_pipeline_run_for_workspace,
+            Path(workspace.workspace_dir),
+            projectId,
+            runId,
+        )
     except HTTPException:
         raise
     except Exception as e:

@@ -188,6 +188,81 @@ def test_upload_project_file_triggers_auto_knowledge_sync(
     assert calls == [(project_id, ["original/brief.txt"], "project_upload")]
 
 
+def test_list_project_files_endpoint_offloads_to_thread(
+    project_artifact_router_client: tuple[TestClient, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+):
+    client, _workspace_dir, project_id = project_artifact_router_client
+    original_to_thread = agents_router_module.asyncio.to_thread
+    calls: list[tuple[object, tuple[object, ...]]] = []
+
+    async def fake_to_thread(func, /, *args, **kwargs):
+        calls.append((func, args))
+        return await original_to_thread(func, *args, **kwargs)
+
+    monkeypatch.setattr(agents_router_module.asyncio, "to_thread", fake_to_thread)
+
+    response = client.get(f"/agents/default/projects/{project_id}/files")
+
+    assert response.status_code == 200
+    assert calls
+    assert calls[0][0] is agents_router_module._list_project_files_for_workspace
+
+
+def test_read_project_file_endpoint_offloads_to_thread(
+    project_artifact_router_client: tuple[TestClient, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+):
+    client, workspace_dir, project_id = project_artifact_router_client
+    project_dir = workspace_dir / "projects" / project_id
+    target_file = project_dir / "original" / "notes.md"
+    target_file.parent.mkdir(parents=True, exist_ok=True)
+    target_file.write_text("hello", encoding="utf-8")
+
+    original_to_thread = agents_router_module.asyncio.to_thread
+    calls: list[tuple[object, tuple[object, ...]]] = []
+
+    async def fake_to_thread(func, /, *args, **kwargs):
+        calls.append((func, args))
+        return await original_to_thread(func, *args, **kwargs)
+
+    monkeypatch.setattr(agents_router_module.asyncio, "to_thread", fake_to_thread)
+
+    response = client.get(
+        f"/agents/default/projects/{project_id}/files/original/notes.md"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["content"] == "hello"
+    assert calls
+    assert calls[0][0] is agents_router_module._read_project_text_file_for_workspace
+
+
+def test_list_project_files_avoids_per_file_resolve(
+    project_artifact_router_client: tuple[TestClient, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _client, workspace_dir, project_id = project_artifact_router_client
+    project_dir = workspace_dir / "projects" / project_id
+    nested_file = project_dir / "original" / "nested.txt"
+    nested_file.parent.mkdir(parents=True, exist_ok=True)
+    nested_file.write_text("nested", encoding="utf-8")
+
+    path_type = type(project_dir)
+    original_resolve = path_type.resolve
+
+    def fake_resolve(self, *args, **kwargs):
+        if self != project_dir:
+            raise AssertionError("per-file resolve should not be called")
+        return original_resolve(self, *args, **kwargs)
+
+    monkeypatch.setattr(path_type, "resolve", fake_resolve)
+
+    files = agents_router_module._list_project_files(project_dir)
+
+    assert any(item.path == "original/nested.txt" for item in files)
+
+
 def test_create_project_uses_builtin_template_fallbacks(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

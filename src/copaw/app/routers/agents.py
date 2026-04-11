@@ -1027,7 +1027,7 @@ def _list_agent_projects(workspace_dir: Path) -> list[ProjectSummary]:
 
 def _ensure_projects_layout(workspace_dir: Path) -> None:
     projects_dir = workspace_dir / _PROJECTS_DIRNAME
-    projects_dir.mkdir(exist_ok=True)
+    projects_dir.mkdir(parents=True, exist_ok=True)
     readme_path = projects_dir / "README.md"
     if readme_path.exists():
         return
@@ -2045,14 +2045,15 @@ def _list_project_files(project_dir: Path) -> list[ProjectFileInfo]:
     for path in sorted(
         project_root.rglob("*"), key=lambda item: item.as_posix().lower()
     ):
-        if not path.is_file():
+        try:
+            if not path.is_file():
+                continue
+            rel = path.relative_to(project_root).as_posix()
+            stat = path.stat()
+        except (OSError, ValueError):
             continue
-
-        rel = path.resolve().relative_to(project_root).as_posix()
         if rel.startswith(".git/") or "/.git/" in rel:
             continue
-
-        stat = path.stat()
         files.append(
             ProjectFileInfo(
                 filename=path.name,
@@ -2063,6 +2064,14 @@ def _list_project_files(project_dir: Path) -> list[ProjectFileInfo]:
         )
 
     return files
+
+
+def _list_project_files_for_workspace(
+    workspace_dir: Path,
+    project_id: str,
+) -> list[ProjectFileInfo]:
+    project_dir = _resolve_project_dir(workspace_dir, project_id)
+    return _list_project_files(project_dir)
 
 
 def _read_project_text_file(project_dir: Path, rel_path: str) -> str:
@@ -2092,6 +2101,15 @@ def _read_project_text_file(project_dir: Path, rel_path: str) -> str:
             status_code=400, detail="Binary file preview is not supported"
         )
     return raw.decode("utf-8", errors="replace")
+
+
+def _read_project_text_file_for_workspace(
+    workspace_dir: Path,
+    project_id: str,
+    rel_path: str,
+) -> str:
+    project_dir = _resolve_project_dir(workspace_dir, project_id)
+    return _read_project_text_file(project_dir, rel_path)
 
 
 def _upload_project_file(
@@ -2903,25 +2921,19 @@ def _read_profile_description(workspace_dir: str) -> str:
         return ""
 
 
-@router.get(
-    "",
-    response_model=AgentListResponse,
-    summary="List all agents",
-    description="Get list of all configured agents",
-)
-async def list_agents() -> AgentListResponse:
-    """List all configured agents."""
-    config = load_config()
-    ordered_agent_ids = _normalized_agent_order(config)
+def _collect_agent_summaries(
+    config: Any,
+    ordered_agent_ids: list[str],
+) -> list[AgentSummary]:
+    """Build agent summaries with project metadata from disk."""
+    agents: list[AgentSummary] = []
 
-    agents = []
     for agent_id in ordered_agent_ids:
         agent_ref = config.agents.profiles[agent_id]
         workspace_dir = Path(agent_ref.workspace_dir)
         _ensure_projects_layout(workspace_dir)
         projects = _list_agent_projects(workspace_dir)
 
-        # Load agent config to get name and description
         try:
             agent_config = load_agent_config(agent_id)
             description = agent_config.description or ""
@@ -2957,6 +2969,24 @@ async def list_agents() -> AgentListResponse:
                 ),
             )
 
+    return agents
+
+
+@router.get(
+    "",
+    response_model=AgentListResponse,
+    summary="List all agents",
+    description="Get list of all configured agents",
+)
+async def list_agents() -> AgentListResponse:
+    """List all configured agents."""
+    config = load_config()
+    ordered_agent_ids = _normalized_agent_order(config)
+    agents = await asyncio.to_thread(
+        _collect_agent_summaries,
+        config,
+        ordered_agent_ids,
+    )
     return AgentListResponse(agents=agents)
 
 
@@ -3653,10 +3683,11 @@ async def list_agent_project_files(
         raise HTTPException(status_code=404, detail=str(e)) from e
 
     try:
-        project_dir = _resolve_project_dir(
-            Path(workspace.workspace_dir), projectId
+        return await asyncio.to_thread(
+            _list_project_files_for_workspace,
+            Path(workspace.workspace_dir),
+            projectId,
         )
-        return _list_project_files(project_dir)
     except HTTPException:
         raise
     except Exception as e:
@@ -4044,10 +4075,12 @@ async def read_agent_project_file(
         raise HTTPException(status_code=404, detail=str(e)) from e
 
     try:
-        project_dir = _resolve_project_dir(
-            Path(workspace.workspace_dir), projectId
+        content = await asyncio.to_thread(
+            _read_project_text_file_for_workspace,
+            Path(workspace.workspace_dir),
+            projectId,
+            filePath,
         )
-        content = _read_project_text_file(project_dir, filePath)
         return ProjectFileContent(content=content)
     except HTTPException:
         raise

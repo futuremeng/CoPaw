@@ -90,8 +90,11 @@ class ProjectKnowledgeWatcher:
         self._task: asyncio.Task | None = None
         self._snapshots: dict[str, dict[str, Any]] = {}
 
+    async def _collect_snapshots_async(self) -> dict[str, dict[str, Any]]:
+        return await asyncio.to_thread(self._collect_snapshots)
+
     async def start(self) -> None:
-        self._snapshots = self._collect_snapshots()
+        self._snapshots = await self._collect_snapshots_async()
         self._task = asyncio.create_task(
             self._poll_loop(),
             name=f"project_knowledge_watcher_{self._agent_id}",
@@ -116,7 +119,7 @@ class ProjectKnowledgeWatcher:
         while True:
             try:
                 await asyncio.sleep(self._poll_interval)
-                current = self._collect_snapshots()
+                current = await self._collect_snapshots_async()
                 await self._handle_snapshot_changes(current)
                 self._snapshots = current
             except asyncio.CancelledError:

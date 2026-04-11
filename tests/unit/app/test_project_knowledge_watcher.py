@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -124,3 +125,82 @@ async def test_project_knowledge_watcher_triggers_on_file_change(
     assert calls[0]["debounce_seconds"] == watcher_module.DEFAULT_CHANGE_DEBOUNCE_SECONDS
     assert calls[0]["cooldown_seconds"] == watcher_module.DEFAULT_SYNC_COOLDOWN_SECONDS
     assert "original/note.md" in calls[0]["changed_paths"]
+
+
+@pytest.mark.asyncio
+async def test_project_knowledge_watcher_start_offloads_snapshot_collection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    watcher = watcher_module.ProjectKnowledgeWatcher(
+        agent_id="default",
+        workspace_dir=tmp_path,
+        poll_interval=0.01,
+    )
+
+    original_to_thread = watcher_module.asyncio.to_thread
+    calls: list[tuple[object, tuple[object, ...]]] = []
+
+    async def fake_to_thread(func, /, *args, **kwargs):
+        calls.append((func, args))
+        return await original_to_thread(func, *args, **kwargs)
+
+    monkeypatch.setattr(
+        watcher,
+        "_collect_snapshots",
+        lambda: {"project-a": {"project_id": "project-a"}},
+    )
+    monkeypatch.setattr(watcher_module.asyncio, "to_thread", fake_to_thread)
+
+    await watcher.start()
+    await watcher.stop()
+
+    assert watcher._snapshots == {"project-a": {"project_id": "project-a"}}
+    assert calls
+    assert callable(calls[0][0])
+    assert calls[0][1] == ()
+
+
+@pytest.mark.asyncio
+async def test_project_knowledge_watcher_poll_loop_offloads_snapshot_collection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    watcher = watcher_module.ProjectKnowledgeWatcher(
+        agent_id="default",
+        workspace_dir=tmp_path,
+        poll_interval=0,
+    )
+
+    snapshots = iter(
+        [
+            {"project-a": {"project_id": "project-a", "files": {}, "auto_enabled": True}},
+            {"project-a": {"project_id": "project-a", "files": {}, "auto_enabled": True}},
+        ]
+    )
+    original_to_thread = watcher_module.asyncio.to_thread
+    calls: list[tuple[object, tuple[object, ...]]] = []
+
+    async def fake_to_thread(func, /, *args, **kwargs):
+        calls.append((func, args))
+        return await original_to_thread(func, *args, **kwargs)
+
+    monkeypatch.setattr(watcher, "_collect_snapshots", lambda: next(snapshots))
+
+    handled: list[dict[str, dict]] = []
+
+    async def fake_handle(current):
+        handled.append(current)
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr(watcher, "_handle_snapshot_changes", fake_handle)
+    monkeypatch.setattr(watcher_module.asyncio, "to_thread", fake_to_thread)
+    watcher._snapshots = {}
+
+    with pytest.raises(asyncio.CancelledError):
+        await watcher._poll_loop()
+
+    assert handled
+    assert calls
+    assert callable(calls[0][0])
+    assert calls[0][1] == ()
