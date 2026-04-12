@@ -51,6 +51,8 @@ function buildKnowledgeState(projectId: string): ProjectKnowledgeState {
     graphError: "",
     graphResult: null,
     relationRecords: [],
+    relationKeywordSeed: "",
+    setRelationKeywordSeed: vi.fn(),
     activeGraphNodeId: null,
     setActiveGraphNodeId: vi.fn(),
     runGraphQuery: vi.fn().mockResolvedValue(undefined),

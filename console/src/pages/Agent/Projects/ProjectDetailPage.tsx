@@ -3437,6 +3437,7 @@ export default function ProjectDetailPage() {
                                   knowledgeState={projectKnowledgeState}
                                   requestedQuery={pendingKnowledgeQuery}
                                   onRequestedQueryHandled={() => setPendingKnowledgeQuery("")}
+                                  onOpenRelations={() => setKnowledgeDockTab("relations")}
                                 />
                               ),
                             },

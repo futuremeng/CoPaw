@@ -32,6 +32,7 @@ interface ProjectKnowledgePanelProps {
   knowledgeState: ProjectKnowledgeState;
   requestedQuery?: string;
   onRequestedQueryHandled?: () => void;
+  onOpenRelations?: () => void;
   graphComponents?: {
     GraphQueryResults: React.ComponentType<any>;
     GraphVisualization: React.ComponentType<any>;
@@ -123,6 +124,12 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
                   activeNodeId={props.knowledgeState.activeGraphNodeId}
                   onActiveNodeChange={props.knowledgeState.setActiveGraphNodeId}
                   onNodeClick={(node) => props.knowledgeState.setActiveGraphNodeId(node.id)}
+                  onInsightFocusChange={(payload) => {
+                    props.knowledgeState.setRelationKeywordSeed(payload.active ? payload.keyword : "");
+                    if (payload.active && payload.keyword.trim()) {
+                      props.onOpenRelations?.();
+                    }
+                  }}
                   onUsePathContext={(pathSummary, runNow) => {
                     const contextLine = buildPathContextLine(pathSummary);
                     const nextQuery = appendUniqueContextLine(

@@ -63,6 +63,8 @@ export interface ProjectKnowledgeState {
   graphError: string;
   graphResult: GraphQueryResponse | null;
   relationRecords: GraphQueryRecord[];
+  relationKeywordSeed: string;
+  setRelationKeywordSeed: (value: string) => void;
   activeGraphNodeId: string | null;
   setActiveGraphNodeId: (value: string | null) => void;
   runGraphQuery: (
@@ -261,6 +263,7 @@ export function useProjectKnowledgeState(
   const [graphLoading, setGraphLoading] = useState(false);
   const [graphError, setGraphError] = useState("");
   const [graphResult, setGraphResult] = useState<GraphQueryResponse | null>(null);
+  const [relationKeywordSeed, setRelationKeywordSeed] = useState("");
   const [activeGraphNodeId, setActiveGraphNodeId] = useState<string | null>(null);
   const [trendRangeDays, setTrendRangeDays] = useState<7 | 30>(7);
   const [trendSnapshots, setTrendSnapshots] = useState<ProjectKnowledgeTrendSnapshot[]>([]);
@@ -380,6 +383,7 @@ export function useProjectKnowledgeState(
     setGraphLoading(false);
     setGraphError("");
     setGraphResult(null);
+    setRelationKeywordSeed("");
     setActiveGraphNodeId(null);
     defaultExploreTokenRef.current = "";
     graphRefreshReasonRef.current = "";
@@ -749,6 +753,8 @@ export function useProjectKnowledgeState(
     graphError,
     graphResult,
     relationRecords,
+    relationKeywordSeed,
+    setRelationKeywordSeed,
     activeGraphNodeId,
     setActiveGraphNodeId,
     runGraphQuery,

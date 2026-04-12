@@ -1,5 +1,5 @@
 import { Alert, Button, Empty, Input, Select, Typography } from "antd";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import styles from "./index.module.less";
 import type { ProjectKnowledgeState } from "./useProjectKnowledgeState";
@@ -15,6 +15,14 @@ export default function ProjectKnowledgeRelationsPanel(
   const { t } = useTranslation();
   const [keyword, setKeyword] = useState("");
   const [predicateFilter, setPredicateFilter] = useState("");
+
+  useEffect(() => {
+    const seeded = (props.knowledgeState.relationKeywordSeed || "").trim();
+    if (!seeded) {
+      return;
+    }
+    setKeyword(seeded);
+  }, [props.knowledgeState.relationKeywordSeed]);
 
   const predicateOptions = useMemo(
     () => Array.from(new Set(props.knowledgeState.relationRecords.map((item) => item.predicate))).sort(),

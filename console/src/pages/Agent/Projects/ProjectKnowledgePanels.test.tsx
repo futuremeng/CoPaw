@@ -111,6 +111,8 @@ function buildKnowledgeState(): ProjectKnowledgeState {
         document_title: "guide.md",
       },
     ],
+    relationKeywordSeed: "",
+    setRelationKeywordSeed: vi.fn(),
     activeGraphNodeId: null,
     setActiveGraphNodeId: vi.fn(),
     runGraphQuery: vi.fn().mockResolvedValue(undefined),
