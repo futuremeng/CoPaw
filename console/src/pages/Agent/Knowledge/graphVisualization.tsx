@@ -1164,7 +1164,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
       }
 
       const width = containerRef.current.clientWidth || 800;
-      const height = 440;
+      const height = Math.max(320, containerRef.current.clientHeight || 440);
       const initialPositions = buildInitialSpreadPositions(
         graphData.nodes.length,
         width,
@@ -1399,7 +1399,10 @@ export function GraphVisualization(props: GraphVisualizationProps) {
             return;
           }
           const box = entries[0].contentRect;
-          graphRef.current.setSize(Math.max(320, box.width), 440);
+          graphRef.current.setSize(
+            Math.max(320, box.width),
+            Math.max(320, box.height || containerRef.current?.clientHeight || 440),
+          );
         });
         resizeObserverRef.current.observe(containerRef.current);
       }
@@ -1558,7 +1561,6 @@ export function GraphVisualization(props: GraphVisualizationProps) {
               </Typography.Text>
               <Slider
                 min={Math.max(20, minTopK ?? 20)}
-                onTopKCommit,
                 max={Math.max(Math.max(20, minTopK ?? 20), maxTopK ?? topK)}
                 step={1}
                 value={topK}
