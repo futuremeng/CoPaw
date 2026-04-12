@@ -121,6 +121,12 @@
   overflow: hidden;
 }
 
+.knowledgeDockSplitterPanel {
+  height: min(500px, calc(100vh - 140px));
+  max-height: 100%;
+  align-self: flex-start;
+}
+
 .columnLeft {
   width: 100%;
   height: 100%;
@@ -542,7 +548,7 @@
 }
 
 .projectKnowledgeWorkbenchCompact {
-  gap: 8px;
+  gap: 4px;
 }
 
 .projectKnowledgeTabHeader {
@@ -586,7 +592,7 @@
 .projectKnowledgeWorkbenchSplit {
   display: grid;
   grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
-  gap: 10px;
+  gap: 6px;
   min-height: 0;
 
   @media (max-width: 1280px) {
@@ -609,6 +615,10 @@
   border: none;
   border-radius: 0;
   background: transparent;
+}
+
+.projectKnowledgeExplorePane {
+  overflow: hidden;
 }
 
 .projectKnowledgePanelHeader {
@@ -778,8 +788,15 @@
   height: 100%;
 }
 
+.projectKnowledgeExploreQueryPane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
 .projectKnowledgeQueryTop {
-  padding: 0 0 8px;
+  padding: 0 0 4px;
   border-bottom: 1px solid #eef2fb;
 }
 
@@ -787,7 +804,7 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding-top: 8px;
+  padding-top: 4px;
 }
 
 .projectKnowledgeSourceRow {
@@ -868,7 +885,7 @@
 .projectKnowledgeEmpty {
   display: flex;
   justify-content: center;
-  padding: 8px 0;
+  padding: 4px 0;
 }
 
 .projectKnowledgeResults {
@@ -1038,6 +1055,7 @@
   height: 100%;
   min-height: 0;
   padding-top: 4px;
+  overflow: hidden;
 }
 
 .knowledgeModuleHeader {
@@ -1173,7 +1191,7 @@
 .knowledgeDockBody {
   flex: 1;
   min-height: 0;
-  overflow: hidden;
+  overflow: auto;
 
   > * {
     height: 100%;

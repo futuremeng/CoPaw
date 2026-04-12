@@ -3382,7 +3382,7 @@ export default function ProjectDetailPage() {
                 max="52%"
                 defaultSize={KNOWLEDGE_DOCK_DEFAULT_SIZE}
               >
-                <div className={styles.splitterPanel}>
+                <div className={`${styles.splitterPanel} ${styles.knowledgeDockSplitterPanel}`}>
                   <div className={`${styles.knowledgeModuleShell} ${knowledgeModuleCollapsed ? styles.knowledgeDockPanelCollapsed : ""}`}>
                     <div className={styles.knowledgeModuleHeader}>
                       <div className={styles.knowledgeModuleHeaderMain}>

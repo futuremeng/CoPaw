@@ -112,81 +112,77 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
       ) : null}
 
       <div className={styles.projectKnowledgeWorkbenchSplit}>
-        <div className={`${styles.projectKnowledgePrimaryPanel} ${styles.projectKnowledgeSurfaceFlat}`}>
-          <div className={styles.projectKnowledgePanelBody}>
-            {props.knowledgeState.graphLoading && !visualizationData ? (
+        <div className={`${styles.projectKnowledgePrimaryPanel} ${styles.projectKnowledgeSurfaceFlat} ${styles.projectKnowledgeExplorePane}`}>
+          {props.knowledgeState.graphLoading && !visualizationData ? (
+            <div className={styles.projectKnowledgeEmpty}><Spin /></div>
+          ) : visualizationData ? (
+            <Suspense fallback={<div className={styles.projectKnowledgeEmpty}><Spin size="small" /></div>}>
+              <GraphVisualizationComponent
+                compact
+                data={visualizationData}
+                loading={props.knowledgeState.graphLoading}
+                activeNodeId={props.knowledgeState.activeGraphNodeId}
+                onActiveNodeChange={props.knowledgeState.setActiveGraphNodeId}
+                onNodeClick={(node) => props.knowledgeState.setActiveGraphNodeId(node.id)}
+                onInsightFocusChange={(payload) => {
+                  props.knowledgeState.setRelationKeywordSeed(payload.active ? payload.keyword : "");
+                  if (payload.active && payload.keyword.trim()) {
+                    props.onOpenRelations?.();
+                  }
+                }}
+                onUsePathContext={(pathSummary, runNow) => {
+                  const contextLine = buildPathContextLine(pathSummary);
+                  const nextQuery = appendUniqueContextLine(
+                    props.knowledgeState.graphQueryText,
+                    contextLine,
+                  );
+                  props.knowledgeState.setGraphQueryText(nextQuery);
+                  if (runNow) {
+                    void props.knowledgeState.runGraphQuery(nextQuery);
+                  }
+                }}
+              />
+            </Suspense>
+          ) : (
+            <div className={styles.projectKnowledgeEmpty}>
+              <Empty description={t("projects.knowledge.emptyResult")} />
+            </div>
+          )}
+        </div>
+
+        <div className={`${styles.projectKnowledgeSecondaryPanel} ${styles.projectKnowledgeSurfaceFlat} ${styles.projectKnowledgeExplorePane}`}>
+          {props.knowledgeState.graphLoading && !props.knowledgeState.graphResult ? (
+            <div className={styles.projectKnowledgeExploreQueryPane}>
+              {queryControls}
               <div className={styles.projectKnowledgeEmpty}><Spin /></div>
-            ) : visualizationData ? (
-              <Suspense fallback={<div className={styles.projectKnowledgeEmpty}><Spin size="small" /></div>}>
-                <GraphVisualizationComponent
-                  data={visualizationData}
-                  loading={props.knowledgeState.graphLoading}
-                  activeNodeId={props.knowledgeState.activeGraphNodeId}
-                  onActiveNodeChange={props.knowledgeState.setActiveGraphNodeId}
-                  onNodeClick={(node) => props.knowledgeState.setActiveGraphNodeId(node.id)}
-                  onInsightFocusChange={(payload) => {
-                    props.knowledgeState.setRelationKeywordSeed(payload.active ? payload.keyword : "");
-                    if (payload.active && payload.keyword.trim()) {
-                      props.onOpenRelations?.();
-                    }
-                  }}
-                  onUsePathContext={(pathSummary, runNow) => {
-                    const contextLine = buildPathContextLine(pathSummary);
-                    const nextQuery = appendUniqueContextLine(
-                      props.knowledgeState.graphQueryText,
-                      contextLine,
-                    );
-                    props.knowledgeState.setGraphQueryText(nextQuery);
-                    if (runNow) {
-                      void props.knowledgeState.runGraphQuery(nextQuery);
-                    }
-                  }}
-                />
-              </Suspense>
-            ) : (
+            </div>
+          ) : props.knowledgeState.graphResult ? (
+            <Suspense fallback={<div className={styles.projectKnowledgeEmpty}><Spin size="small" /></div>}>
+              <GraphQueryResultsComponent
+                compact
+                title={t("projects.knowledge.query", "查询")}
+                queryHeader={queryControls}
+                records={props.knowledgeState.graphResult.records}
+                summary={props.knowledgeState.graphResult.summary}
+                warnings={props.knowledgeState.graphResult.warnings}
+                provenance={props.knowledgeState.graphResult.provenance}
+                query={props.knowledgeState.graphQueryText}
+                loading={props.knowledgeState.graphLoading}
+                activeNodeId={props.knowledgeState.activeGraphNodeId}
+                onRecordClick={props.knowledgeState.setActiveGraphNodeId}
+                onRefresh={() => {
+                  void props.knowledgeState.runGraphQuery();
+                }}
+              />
+            </Suspense>
+          ) : (
+            <div className={styles.projectKnowledgeExploreQueryPane}>
+              {queryControls}
               <div className={styles.projectKnowledgeEmpty}>
                 <Empty description={t("projects.knowledge.emptyResult")} />
               </div>
-            )}
-          </div>
-        </div>
-
-        <div className={`${styles.projectKnowledgeSecondaryPanel} ${styles.projectKnowledgeSurfaceFlat}`}>
-          <div className={styles.projectKnowledgeQueryCard}>
-            <div className={styles.projectKnowledgeQueryBottom}>
-              {props.knowledgeState.graphLoading && !props.knowledgeState.graphResult ? (
-                <>
-                  {queryControls}
-                  <div className={styles.projectKnowledgeEmpty}><Spin /></div>
-                </>
-              ) : props.knowledgeState.graphResult ? (
-                <Suspense fallback={<div className={styles.projectKnowledgeEmpty}><Spin size="small" /></div>}>
-                  <GraphQueryResultsComponent
-                    title={t("projects.knowledge.query", "查询")}
-                    queryHeader={queryControls}
-                    records={props.knowledgeState.graphResult.records}
-                    summary={props.knowledgeState.graphResult.summary}
-                    warnings={props.knowledgeState.graphResult.warnings}
-                    provenance={props.knowledgeState.graphResult.provenance}
-                    query={props.knowledgeState.graphQueryText}
-                    loading={props.knowledgeState.graphLoading}
-                    activeNodeId={props.knowledgeState.activeGraphNodeId}
-                    onRecordClick={props.knowledgeState.setActiveGraphNodeId}
-                    onRefresh={() => {
-                      void props.knowledgeState.runGraphQuery();
-                    }}
-                  />
-                </Suspense>
-              ) : (
-                <>
-                  {queryControls}
-                  <div className={styles.projectKnowledgeEmpty}>
-                    <Empty description={t("projects.knowledge.emptyResult")} />
-                  </div>
-                </>
-              )}
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
