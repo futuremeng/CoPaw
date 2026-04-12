@@ -28,6 +28,88 @@ from ..agent_context import get_agent_for_request
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
 
+def _task_sort_key(payload: dict[str, object]) -> tuple[int, str]:
+    status = str(payload.get("status") or "")
+    active_rank = 0 if status in {"pending", "running", "queued", "indexing", "graphifying"} else 1
+    return (active_rank, str(payload.get("updated_at") or ""))
+
+
+def _coerce_int(value: object, default: int = 0) -> int:
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
+
+
+def _collect_knowledge_tasks_snapshot(
+    workspace_dir: str | Path,
+    *,
+    project_id: str | None = None,
+) -> dict[str, object]:
+    tasks: list[dict[str, object]] = []
+
+    graph_ops = _graph_ops_for_workspace(
+        workspace_dir,
+        project_id=project_id,
+    )
+    tasks.extend(graph_ops.list_memify_jobs(active_only=True, limit=5))
+
+    knowledge_manager = _manager_for_workspace(
+        workspace_dir,
+        project_id=project_id,
+    )
+    backfill_progress = knowledge_manager.get_history_backfill_progress()
+    if bool(backfill_progress.get("running")):
+        tasks.append(
+            {
+                "task_id": "history-backfill",
+                "job_id": "history-backfill",
+                "status": "running",
+                **backfill_progress,
+            }
+        )
+
+    if project_id:
+        project_sync = _project_sync_for_workspace(
+            workspace_dir,
+            project_id=project_id,
+        ).get_state(project_id)
+        if str(project_sync.get("status") or "") in {
+            "queued",
+            "pending",
+            "indexing",
+            "graphifying",
+        }:
+            tasks.append(
+                {
+                    "task_id": f"project-sync:{project_id}",
+                    **project_sync,
+                }
+            )
+
+    normalized_tasks = []
+    for index, task in enumerate(tasks):
+        payload = dict(task)
+        payload.setdefault("task_id", str(payload.get("job_id") or f"knowledge-task-{index}"))
+        payload.setdefault("task_type", "knowledge")
+        payload.setdefault("status", "running")
+        payload.setdefault("stage", str(payload.get("current_stage") or "running"))
+        payload.setdefault("current_stage", str(payload.get("stage") or payload.get("current_stage") or "running"))
+        payload.setdefault("stage_message", "")
+        payload.setdefault("percent", _coerce_int(payload.get("progress") or payload.get("percent") or 0))
+        payload.setdefault("progress", _coerce_int(payload.get("percent") or payload.get("progress") or 0))
+        payload.setdefault("current", 0)
+        payload.setdefault("total", 0)
+        normalized_tasks.append(payload)
+
+    normalized_tasks.sort(key=_task_sort_key)
+    return {
+        "tasks": normalized_tasks,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "project_id": project_id or "",
+    }
+
+
 def _ensure_knowledge_enabled_flag(enabled: bool) -> None:
     if not bool(enabled):
         raise HTTPException(status_code=400, detail="KNOWLEDGE_DISABLED")
@@ -649,6 +731,16 @@ async def get_history_backfill_status(request: Request):
     return await asyncio.to_thread(manager.history_backfill_status)
 
 
+@router.get("/tasks/snapshot")
+async def get_knowledge_tasks_snapshot(request: Request):
+    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    return await asyncio.to_thread(
+        _collect_knowledge_tasks_snapshot,
+        workspace_dir,
+        project_id=_resolve_project_id(request),
+    )
+
+
 @router.post("/history-backfill/run")
 async def run_history_backfill_now(request: Request):
     """Run history backfill immediately regardless of runtime auto-backfill toggle."""
@@ -890,6 +982,45 @@ async def stream_project_sync(websocket: WebSocket):
             )
             if fingerprint != last_fingerprint:
                 await websocket.send_json({"type": "snapshot", "state": snapshot})
+                last_fingerprint = fingerprint
+            await asyncio.sleep(interval_ms / 1000)
+    except WebSocketDisconnect:
+        return
+
+
+@router.websocket("/tasks/ws")
+async def stream_knowledge_tasks(websocket: WebSocket):
+    """Stream aggregated knowledge task snapshots with WebSocket."""
+    await websocket.accept()
+    interval_ms = _clamp_int(
+        websocket.query_params.get("interval_ms"),
+        default=1000,
+        minimum=300,
+        maximum=3000,
+    )
+
+    project_id = _normalize_project_id(
+        websocket.query_params.get("project_id")
+        or websocket.headers.get("X-Project-Id")
+    )
+    _, _, _, workspace_dir = await _resolve_knowledge_ws_context(websocket)
+
+    last_fingerprint: str | None = None
+    try:
+        while True:
+            snapshot = await asyncio.to_thread(
+                _collect_knowledge_tasks_snapshot,
+                workspace_dir,
+                project_id=project_id,
+            )
+            fingerprint = json.dumps(
+                snapshot,
+                ensure_ascii=False,
+                sort_keys=True,
+                default=str,
+            )
+            if fingerprint != last_fingerprint:
+                await websocket.send_json({"type": "snapshot", "snapshot": snapshot})
                 last_fingerprint = fingerprint
             await asyncio.sleep(interval_ms / 1000)
     except WebSocketDisconnect:

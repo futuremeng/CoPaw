@@ -32,6 +32,7 @@ import type {
   KnowledgeConfig,
   KnowledgeHistoryBackfillProgress,
   KnowledgeHistoryBackfillStatus,
+  KnowledgeTaskProgress,
   KnowledgeSearchHit,
   KnowledgeSourceContent,
   KnowledgeSourceItem,
@@ -144,6 +145,8 @@ function KnowledgePage() {
     useState<KnowledgeHistoryBackfillStatus | null>(null);
   const [backfillProgress, setBackfillProgress] =
     useState<KnowledgeHistoryBackfillProgress | null>(null);
+  const [activeKnowledgeTasks, setActiveKnowledgeTasks] =
+    useState<KnowledgeTaskProgress[]>([]);
   const [sources, setSources] = useState<KnowledgeSourceItem[]>([]);
   const [hits, setHits] = useState<KnowledgeSearchHit[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -210,17 +213,18 @@ function KnowledgePage() {
   const backupImportInputRef = useRef<HTMLInputElement>(null);
   const remoteStateRef = useRef<Record<string, string | undefined>>({});
   const hasLoadedOnceRef = useRef(false);
-  const backfillProgressWsRef = useRef<WebSocket | null>(null);
-  const backfillProgressReconnectTimerRef = useRef<number | null>(null);
+  const tasksWsRef = useRef<WebSocket | null>(null);
+  const tasksReconnectTimerRef = useRef<number | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [knowledgeConfig, sourceData, runtimeConfig, historyStatus] = await Promise.all([
+      const [knowledgeConfig, sourceData, runtimeConfig, historyStatus, taskSnapshot] = await Promise.all([
         api.getKnowledgeConfig(),
         api.listKnowledgeSources(),
         api.getAgentRunningConfig(),
         api.getKnowledgeHistoryBackfillStatus(),
+        api.getKnowledgeTasksSnapshot(),
       ]);
 
       const nextRemoteStateMap: Record<string, string | undefined> = {};
@@ -254,6 +258,7 @@ function KnowledgePage() {
       setRunningConfig(runtimeConfig);
       setBackfillStatus(historyStatus);
       setBackfillProgress(historyStatus.progress ?? null);
+      setActiveKnowledgeTasks(taskSnapshot.tasks || []);
     } catch (error) {
       console.error("Failed to load knowledge data", error);
       message.error(t("knowledge.loadFailed"));
@@ -282,7 +287,7 @@ function KnowledgePage() {
 
   // While history backfill is running, poll existing sources API to refresh cards.
   useEffect(() => {
-    if (!backfillProgress?.running) {
+    if (!activeKnowledgeTasks.length) {
       return;
     }
 
@@ -294,7 +299,7 @@ function KnowledgePage() {
     return () => {
       window.clearInterval(id);
     };
-  }, [backfillProgress?.running, refreshKnowledgeCards]);
+  }, [activeKnowledgeTasks.length, refreshKnowledgeCards]);
 
   useEffect(() => {
     let disposed = false;
@@ -303,7 +308,7 @@ function KnowledgePage() {
       if (disposed) {
         return;
       }
-      const baseUrl = getApiUrl("/knowledge/history-backfill/progress/ws");
+      const baseUrl = getApiUrl("/knowledge/tasks/ws");
       const wsUrl = new URL(baseUrl, window.location.origin);
       wsUrl.protocol = wsUrl.protocol === "https:" ? "wss:" : "ws:";
       wsUrl.searchParams.set("interval_ms", "1000");
@@ -313,7 +318,7 @@ function KnowledgePage() {
       }
 
       const ws = new WebSocket(wsUrl.toString());
-      backfillProgressWsRef.current = ws;
+      tasksWsRef.current = ws;
 
       ws.onmessage = (event) => {
         if (disposed) {
@@ -321,11 +326,16 @@ function KnowledgePage() {
         }
         try {
           const payload = JSON.parse(event.data || "{}");
-          const progress = payload?.progress;
-          if (!progress || typeof progress !== "object") {
+          const snapshot = payload?.snapshot;
+          if (!snapshot || typeof snapshot !== "object") {
             return;
           }
-          setBackfillProgress(progress as KnowledgeHistoryBackfillProgress);
+          const tasks = Array.isArray((snapshot as { tasks?: unknown }).tasks)
+            ? ((snapshot as { tasks: KnowledgeTaskProgress[] }).tasks || [])
+            : [];
+          setActiveKnowledgeTasks(tasks);
+          const backfillTask = tasks.find((task) => task.task_type === "history_backfill");
+          setBackfillProgress((backfillTask as KnowledgeHistoryBackfillProgress | undefined) || null);
         } catch {
           // ignore malformed websocket messages
         }
@@ -335,7 +345,7 @@ function KnowledgePage() {
         if (disposed) {
           return;
         }
-        backfillProgressReconnectTimerRef.current = window.setTimeout(() => {
+        tasksReconnectTimerRef.current = window.setTimeout(() => {
           connect();
         }, 1500);
       };
@@ -345,12 +355,12 @@ function KnowledgePage() {
 
     return () => {
       disposed = true;
-      if (backfillProgressReconnectTimerRef.current) {
-        window.clearTimeout(backfillProgressReconnectTimerRef.current);
-        backfillProgressReconnectTimerRef.current = null;
+      if (tasksReconnectTimerRef.current) {
+        window.clearTimeout(tasksReconnectTimerRef.current);
+        tasksReconnectTimerRef.current = null;
       }
-      if (backfillProgressWsRef.current) {
-        const ws = backfillProgressWsRef.current;
+      if (tasksWsRef.current) {
+        const ws = tasksWsRef.current;
         if (ws.readyState === WebSocket.CONNECTING) {
           ws.onopen = () => {
             ws.close();
@@ -358,7 +368,7 @@ function KnowledgePage() {
         } else if (ws.readyState === WebSocket.OPEN) {
           ws.close();
         }
-        backfillProgressWsRef.current = null;
+        tasksWsRef.current = null;
       }
     };
   }, []);
@@ -1200,6 +1210,7 @@ function KnowledgePage() {
     const progress = buildUnifiedBatchProgress({
       indexingAll,
       backfillProgress,
+      activeTasks: activeKnowledgeTasks,
       backfillingHistory,
       clearingKnowledge,
     });
@@ -1216,6 +1227,7 @@ function KnowledgePage() {
     };
   }, [
     backfillProgress,
+    activeKnowledgeTasks,
     backfillingHistory,
     clearingKnowledge,
     indexingAll,

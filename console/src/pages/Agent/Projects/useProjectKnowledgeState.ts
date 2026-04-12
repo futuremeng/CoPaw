@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import api, { type GraphQueryResponse, getApiToken, getApiUrl } from "../../../api";
 import type {
   GraphQueryRecord,
+  KnowledgeTaskProgress,
   KnowledgeSourceContent,
   KnowledgeSourceItem,
   ProjectKnowledgeSyncState,
@@ -56,6 +57,7 @@ export interface ProjectKnowledgeState {
     options?: { force?: boolean },
   ) => Promise<KnowledgeSourceContent | null>;
   syncState: ProjectKnowledgeSyncState | null;
+  activeKnowledgeTask: KnowledgeTaskProgress | null;
   quantMetrics: ProjectKnowledgeMetrics;
   graphQueryText: string;
   setGraphQueryText: (value: string) => void;
@@ -114,6 +116,44 @@ const PROJECT_TREND_STORAGE_PREFIX = "copaw.project.knowledge.trend.v1";
 const PROJECT_KNOWLEDGE_UI_PREFS_PREFIX = "copaw.project.knowledge.ui.v1";
 const DAY_MS = 24 * 60 * 60 * 1000;
 const PROJECT_GRAPH_QUERY_TOP_K = 200;
+
+const ACTIVE_KNOWLEDGE_STATUSES = new Set([
+  "pending",
+  "running",
+  "queued",
+  "indexing",
+  "graphifying",
+]);
+
+function pickActiveKnowledgeTask(tasks: KnowledgeTaskProgress[]): KnowledgeTaskProgress | null {
+  if (!tasks.length) {
+    return null;
+  }
+  const priority = (task: KnowledgeTaskProgress): number => {
+    const type = String(task.task_type || "");
+    if (type === "project_sync") {
+      return 0;
+    }
+    if (type === "memify") {
+      return 1;
+    }
+    if (type === "history_backfill") {
+      return 2;
+    }
+    return 9;
+  };
+
+  const active = tasks
+    .filter((task) => ACTIVE_KNOWLEDGE_STATUSES.has(String(task.status || "")))
+    .sort((left, right) => {
+      const p = priority(left) - priority(right);
+      if (p !== 0) {
+        return p;
+      }
+      return String(right.updated_at || "").localeCompare(String(left.updated_at || ""));
+    });
+  return active[0] || null;
+}
 
 function uiPrefsStorageKey(projectId: string): string {
   return `${PROJECT_KNOWLEDGE_UI_PREFS_PREFIX}.${projectId || "default"}`;
@@ -285,6 +325,7 @@ export function useProjectKnowledgeState(
   const [trendSnapshots, setTrendSnapshots] = useState<ProjectKnowledgeTrendSnapshot[]>([]);
   const [trendExpanded, setTrendExpanded] = useState(true);
   const [syncState, setSyncState] = useState<ProjectKnowledgeSyncState | null>(null);
+  const [activeKnowledgeTask, setActiveKnowledgeTask] = useState<KnowledgeTaskProgress | null>(null);
   const refreshReasonRef = useRef("");
   const graphRefreshReasonRef = useRef("");
   const defaultExploreTokenRef = useRef("");
@@ -406,6 +447,7 @@ export function useProjectKnowledgeState(
     setGraphResult(null);
     setRelationKeywordSeed("");
     setActiveGraphNodeId(null);
+    setActiveKnowledgeTask(null);
     defaultExploreTokenRef.current = "";
     graphRefreshReasonRef.current = "";
   }, [params.projectId]);
@@ -452,6 +494,27 @@ export function useProjectKnowledgeState(
   }, [params.projectId]);
 
   useEffect(() => {
+    if (!params.projectId) {
+      setActiveKnowledgeTask(null);
+      return;
+    }
+    let cancelled = false;
+    void api.getKnowledgeTasksSnapshot({ projectId: params.projectId })
+      .then((snapshot) => {
+        if (!cancelled) {
+          const tasks = Array.isArray(snapshot.tasks) ? snapshot.tasks : [];
+          setActiveKnowledgeTask(pickActiveKnowledgeTask(tasks));
+        }
+      })
+      .catch(() => {
+        // best-effort task preload
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [params.projectId]);
+
+  useEffect(() => {
     if (!params.projectId || typeof WebSocket === "undefined") {
       return;
     }
@@ -487,6 +550,78 @@ export function useProjectKnowledgeState(
               return;
             }
             setSyncState(nextState as ProjectKnowledgeSyncState);
+          } catch {
+            // ignore malformed websocket messages
+          }
+        };
+        ws.onclose = () => {
+          if (disposed) {
+            return;
+          }
+          reconnectTimer = window.setTimeout(() => {
+            connect();
+          }, 1500);
+        };
+      } catch {
+        // ignore websocket construction failure in unsupported env
+      }
+    };
+
+    connect();
+
+    return () => {
+      disposed = true;
+      if (reconnectTimer) {
+        window.clearTimeout(reconnectTimer);
+      }
+      if (activeSocket) {
+        if (activeSocket.readyState === WebSocket.CONNECTING) {
+          activeSocket.onopen = () => {
+            activeSocket?.close();
+          };
+        } else if (activeSocket.readyState === WebSocket.OPEN) {
+          activeSocket.close();
+        }
+      }
+    };
+  }, [params.projectId]);
+
+  useEffect(() => {
+    if (!params.projectId || typeof WebSocket === "undefined") {
+      return;
+    }
+    let disposed = false;
+    let reconnectTimer: number | null = null;
+    let activeSocket: WebSocket | null = null;
+
+    const connect = () => {
+      if (disposed) {
+        return;
+      }
+      try {
+        const baseUrl = getApiUrl("/knowledge/tasks/ws");
+        const wsUrl = new URL(baseUrl, window.location.origin);
+        wsUrl.protocol = wsUrl.protocol === "https:" ? "wss:" : "ws:";
+        wsUrl.searchParams.set("project_id", params.projectId);
+        wsUrl.searchParams.set("interval_ms", "1000");
+        const token = getApiToken();
+        if (token) {
+          wsUrl.searchParams.set("token", token);
+        }
+
+        const ws = new WebSocket(wsUrl.toString());
+        activeSocket = ws;
+        ws.onmessage = (event) => {
+          if (disposed) {
+            return;
+          }
+          try {
+            const payload = JSON.parse(event.data || "{}");
+            const snapshot = payload?.snapshot;
+            const tasks = Array.isArray(snapshot?.tasks)
+              ? (snapshot.tasks as KnowledgeTaskProgress[])
+              : [];
+            setActiveKnowledgeTask(pickActiveKnowledgeTask(tasks));
           } catch {
             // ignore malformed websocket messages
           }
@@ -637,11 +772,26 @@ export function useProjectKnowledgeState(
   );
 
   const syncAlertDescription = useMemo(() => {
+    const activeTaskText = activeKnowledgeTask
+      ? [
+          String(activeKnowledgeTask.stage_message || activeKnowledgeTask.current_stage || activeKnowledgeTask.task_type || "").trim(),
+          typeof activeKnowledgeTask.percent === "number"
+            ? `${Math.max(0, Math.min(100, activeKnowledgeTask.percent))}%`
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" · ")
+      : "";
+
     if (!syncState) {
-      return "";
+      return activeTaskText;
     }
-    return getProjectKnowledgeSyncAlertDescription(syncState, t);
-  }, [syncState, t]);
+    const syncText = getProjectKnowledgeSyncAlertDescription(syncState, t);
+    if (!activeTaskText || activeKnowledgeTask?.task_type === "project_sync") {
+      return syncText;
+    }
+    return [syncText, activeTaskText].filter(Boolean).join(" · ");
+  }, [activeKnowledgeTask, syncState, t]);
 
   useEffect(() => {
     params.onSignalsChange?.({
@@ -774,6 +924,7 @@ export function useProjectKnowledgeState(
     sourceContentLoadingById,
     loadSourceContent,
     syncState,
+    activeKnowledgeTask,
     quantMetrics,
     graphQueryText,
     setGraphQueryText,

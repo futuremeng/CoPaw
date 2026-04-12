@@ -1920,12 +1920,39 @@ class KnowledgeManager:
 
     def get_history_backfill_progress(self) -> dict[str, Any]:
         payload = self._load_backfill_progress_state()
+        running = bool(payload.get("running"))
+        completed = bool(payload.get("completed"))
+        failed = bool(payload.get("failed"))
+        total_sessions = int(payload.get("total_sessions", 0) or 0)
+        traversed_sessions = int(payload.get("traversed_sessions", 0) or 0)
+        safe_total = max(total_sessions, 1)
+        percent = 100 if completed else int(max(0, min(100, (traversed_sessions / safe_total) * 100)))
+
+        stage = "idle"
+        if running:
+            stage = "processing"
+        elif completed:
+            stage = "completed"
+        elif failed:
+            stage = "failed"
+
         return {
-            "running": bool(payload.get("running")),
-            "completed": bool(payload.get("completed")),
-            "failed": bool(payload.get("failed")),
-            "total_sessions": int(payload.get("total_sessions", 0) or 0),
-            "traversed_sessions": int(payload.get("traversed_sessions", 0) or 0),
+            "task_type": "history_backfill",
+            "running": running,
+            "completed": completed,
+            "failed": failed,
+            "stage": stage,
+            "current_stage": stage,
+            "stage_message": str(payload.get("reason") or "").strip() or (
+                "Backfilling history sessions" if running else ""
+            ),
+            "progress": percent,
+            "percent": percent,
+            "current": traversed_sessions,
+            "total": total_sessions,
+            "eta_seconds": None,
+            "total_sessions": total_sessions,
+            "traversed_sessions": traversed_sessions,
             "processed_sessions": int(payload.get("processed_sessions", 0) or 0),
             "current_session_id": payload.get("current_session_id"),
             "error": payload.get("error"),

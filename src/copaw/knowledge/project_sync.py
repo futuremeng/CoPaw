@@ -145,9 +145,16 @@ class ProjectKnowledgeSyncManager:
     def _default_state(self, project_id: str) -> dict[str, Any]:
         return {
             "project_id": project_id,
+            "task_type": "project_sync",
             "status": "idle",
             "current_stage": "idle",
+            "stage": "idle",
+            "stage_message": "Idle",
             "progress": 0,
+            "percent": 0,
+            "current": 0,
+            "total": 0,
+            "eta_seconds": None,
             "auto_enabled": True,
             "dirty": False,
             "dirty_after_run": False,
@@ -224,6 +231,38 @@ class ProjectKnowledgeSyncManager:
             encoding="utf-8",
         )
 
+    @staticmethod
+    def _normalize_sync_patch(patch: dict[str, Any]) -> dict[str, Any]:
+        stage = str(patch.get("stage") or patch.get("current_stage") or "idle").strip() or "idle"
+        raw_progress = patch.get("progress", patch.get("percent", 0))
+        try:
+            progress = int(float(raw_progress or 0))
+        except (TypeError, ValueError):
+            progress = 0
+        progress = max(0, min(100, progress))
+
+        current = patch.get("current")
+        total = patch.get("total")
+        eta_seconds = patch.get("eta_seconds")
+        if not isinstance(current, (int, float)):
+            current = 0
+        if not isinstance(total, (int, float)):
+            total = 0
+        if not isinstance(eta_seconds, (int, float)):
+            eta_seconds = None
+
+        return {
+            **patch,
+            "task_type": "project_sync",
+            "stage": stage,
+            "current_stage": stage,
+            "progress": progress,
+            "percent": progress,
+            "current": int(current),
+            "total": int(total),
+            "eta_seconds": int(eta_seconds) if eta_seconds is not None else None,
+        }
+
     def get_state(self, project_id: str) -> dict[str, Any]:
         with self._lock:
             return self._load_state(project_id)
@@ -249,9 +288,19 @@ class ProjectKnowledgeSyncManager:
     def _recover_stale_active_state(self, state: dict[str, Any]) -> dict[str, Any]:
         if not self._is_stale_active_state(state):
             return state
-        state["status"] = "failed"
-        state["current_stage"] = "failed"
-        state["progress"] = 0
+        state.update(
+            self._normalize_sync_patch(
+                {
+                    "status": "failed",
+                    "stage": "failed",
+                    "stage_message": "Recovered from stale project sync state",
+                    "progress": 0,
+                    "current": 0,
+                    "total": 0,
+                    "eta_seconds": None,
+                }
+            )
+        )
         state["dirty"] = False
         state["dirty_after_run"] = False
         state["pending_changed_paths"] = []
@@ -364,8 +413,17 @@ class ProjectKnowledgeSyncManager:
         if run_at is not None:
             state["dirty"] = True
             state["status"] = "queued"
-            state["current_stage"] = queued_stage or "queued"
-            state["progress"] = 1
+            state.update(
+                self._normalize_sync_patch(
+                    {
+                        "stage": queued_stage or "queued",
+                        "stage_message": "Waiting for debounce/cooldown window",
+                        "progress": 1,
+                        "current": 0,
+                        "total": 2,
+                    }
+                )
+            )
             state["last_trigger"] = trigger
             state["scheduled_for"] = run_at.isoformat()
             state["queued_at"] = state.get("queued_at") or self._now_iso()
@@ -382,8 +440,17 @@ class ProjectKnowledgeSyncManager:
         self._cancel_timer()
         state["dirty"] = False
         state["status"] = "pending"
-        state["current_stage"] = "pending"
-        state["progress"] = 1
+        state.update(
+            self._normalize_sync_patch(
+                {
+                    "stage": "pending",
+                    "stage_message": "Project sync pending",
+                    "progress": 1,
+                    "current": 0,
+                    "total": 2,
+                }
+            )
+        )
         state["last_trigger"] = trigger
         state["last_error"] = ""
         state["latest_source_id"] = source.id
@@ -565,13 +632,17 @@ class ProjectKnowledgeSyncManager:
             try:
                 self._patch_state(
                     project_id,
-                    {
+                    self._normalize_sync_patch({
                         "status": "indexing",
-                        "current_stage": "indexing",
+                        "stage": "indexing",
+                        "stage_message": "Indexing project source",
                         "progress": 20,
+                        "current": 1,
+                        "total": 3,
+                        "eta_seconds": 5,
                         "last_started_at": self._now_iso(),
                         "last_error": "",
-                    },
+                    }),
                 )
                 index_result = self._knowledge_manager.index_source(
                     source,
@@ -581,29 +652,62 @@ class ProjectKnowledgeSyncManager:
 
                 self._patch_state(
                     project_id,
-                    {
+                    self._normalize_sync_patch({
                         "status": "graphifying",
-                        "current_stage": "graphifying",
+                        "stage": "graphifying",
+                        "stage_message": "Building knowledge graph",
                         "progress": 70,
+                        "current": 2,
+                        "total": 3,
+                        "eta_seconds": 3,
                         "last_result": {
                             "index": index_result,
                         },
-                    },
+                    }),
                 )
+
+                def _on_memify_progress(payload: dict[str, Any]) -> None:
+                    stage = str(payload.get("stage") or "graphifying").strip() or "graphifying"
+                    stage_message = str(payload.get("stage_message") or "").strip()
+                    raw_progress = payload.get("progress", payload.get("percent", 70))
+                    try:
+                        progress = int(float(raw_progress or 70))
+                    except (TypeError, ValueError):
+                        progress = 70
+                    self._patch_state(
+                        project_id,
+                        self._normalize_sync_patch(
+                            {
+                                "status": "graphifying",
+                                "stage": f"graphify_{stage}",
+                                "stage_message": stage_message or "Graph building in progress",
+                                "progress": max(20, min(95, progress)),
+                                "current": payload.get("current") if isinstance(payload.get("current"), (int, float)) else 0,
+                                "total": payload.get("total") if isinstance(payload.get("total"), (int, float)) else 0,
+                                "eta_seconds": payload.get("eta_seconds") if isinstance(payload.get("eta_seconds"), (int, float)) else None,
+                            }
+                        ),
+                    )
+
                 memify_result = self._graph_ops.execute_memify_once(
                     config=config,
                     pipeline_type="project-auto",
                     dataset_scope=[source.id],
                     dry_run=False,
+                    progress_callback=_on_memify_progress,
                 )
                 succeeded = str(memify_result.get("status") or "") == "succeeded"
                 now = self._now_iso()
                 self._patch_state(
                     project_id,
-                    {
+                    self._normalize_sync_patch({
                         "status": "succeeded" if succeeded else "failed",
-                        "current_stage": "completed" if succeeded else "failed",
+                        "stage": "completed" if succeeded else "failed",
+                        "stage_message": "Project sync completed" if succeeded else "Project sync failed",
                         "progress": 100 if succeeded else 0,
+                        "current": 3,
+                        "total": 3,
+                        "eta_seconds": 0,
                         "last_finished_at": now,
                         "last_success_at": now if succeeded else None,
                         "last_error": str(memify_result.get("error") or "").strip(),
@@ -612,7 +716,7 @@ class ProjectKnowledgeSyncManager:
                             "index": index_result,
                             "memify": memify_result,
                         },
-                    },
+                    }),
                 )
             except Exception as exc:
                 logger.exception(
@@ -621,13 +725,17 @@ class ProjectKnowledgeSyncManager:
                 )
                 self._patch_state(
                     project_id,
-                    {
+                    self._normalize_sync_patch({
                         "status": "failed",
-                        "current_stage": "failed",
+                        "stage": "failed",
+                        "stage_message": "Project sync exception",
                         "progress": 0,
+                        "current": 0,
+                        "total": 3,
+                        "eta_seconds": None,
                         "last_finished_at": self._now_iso(),
                         "last_error": str(exc),
-                    },
+                    }),
                 )
 
             should_start = False
@@ -665,6 +773,6 @@ class ProjectKnowledgeSyncManager:
     def _patch_state(self, project_id: str, patch: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
             state = self._load_state(project_id)
-            state.update(patch)
+            state.update(self._normalize_sync_patch(patch))
             self._save_state(state)
             return dict(state)

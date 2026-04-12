@@ -50,7 +50,14 @@ export function getProjectKnowledgeSyncAlertDescription(
   const graphStats = getGraphStats(syncState);
   const segments = [
     getProjectKnowledgeSyncStageLabel(syncState, t),
-    `${syncState.progress ?? 0}%`,
+    `${syncState.percent ?? syncState.progress ?? 0}%`,
+    syncState.stage_message || "",
+    typeof syncState.current === "number" && typeof syncState.total === "number" && syncState.total > 0
+      ? `${syncState.current}/${syncState.total}`
+      : "",
+    typeof syncState.eta_seconds === "number" && syncState.eta_seconds > 0
+      ? `ETA ${syncState.eta_seconds}s`
+      : "",
     graphStats
       ? t("projects.knowledge.syncGraphStats", {
           nodes: graphStats.nodeCount,

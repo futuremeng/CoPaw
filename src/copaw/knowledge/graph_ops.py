@@ -15,7 +15,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from ..config.config import KnowledgeConfig
 from ..constant import WORKING_DIR
@@ -79,7 +79,45 @@ class GraphOpsManager:
             return str(self.enriched_graph_path), "l2_enriched"
         if configured_graph_path:
             return configured_graph_path, "l1_raw"
+        if self.local_graph_path.exists():
+            return str(self.local_graph_path), "l1_raw"
         return "", "l1_raw"
+
+    @staticmethod
+    def _normalize_progress_patch(patch: dict[str, Any]) -> dict[str, Any]:
+        stage = str(patch.get("stage") or patch.get("current_stage") or "pending").strip() or "pending"
+        percent = int(max(0, min(100, int(patch.get("progress", patch.get("percent", 0)) or 0))))
+        current = patch.get("current")
+        total = patch.get("total")
+        eta_seconds = patch.get("eta_seconds")
+        stage_message = str(patch.get("stage_message") or "").strip()
+        normalized = {
+            **patch,
+            "task_type": "memify",
+            "current_stage": stage,
+            "stage": stage,
+            "progress": percent,
+            "percent": percent,
+            "current": int(current) if isinstance(current, (int, float)) else 0,
+            "total": int(total) if isinstance(total, (int, float)) else 0,
+            "eta_seconds": int(eta_seconds) if isinstance(eta_seconds, (int, float)) else None,
+            "stage_message": stage_message,
+        }
+        return normalized
+
+    def _build_memify_progress_callback(self, job_id: str) -> Callable[[dict[str, Any]], None]:
+        def _callback(payload: dict[str, Any]) -> None:
+            now = datetime.now(UTC).isoformat()
+            patch = self._normalize_progress_patch(
+                {
+                    **payload,
+                    "status": "running",
+                    "updated_at": now,
+                }
+            )
+            self._patch_memify_job(job_id, patch)
+
+        return _callback
 
     @staticmethod
     def _translate_cypher_query_text(raw_query: str) -> str:
@@ -376,7 +414,15 @@ class GraphOpsManager:
                 "dry_run": bool(dry_run),
                 "status": "pending",
                 "progress": 0,
-                "estimated_steps": 1,
+                "percent": 0,
+                "estimated_steps": 5,
+                "task_type": "memify",
+                "stage": "pending",
+                "current_stage": "pending",
+                "stage_message": "Waiting to start",
+                "current": 0,
+                "total": 0,
+                "eta_seconds": None,
                 "started_at": None,
                 "finished_at": None,
                 "error": None,
@@ -397,7 +443,7 @@ class GraphOpsManager:
         return {
             "accepted": True,
             "job_id": job_id,
-            "estimated_steps": 1,
+            "estimated_steps": 5,
             "status_url": f"/knowledge/memify/jobs/{job_id}",
         }
 
@@ -411,13 +457,19 @@ class GraphOpsManager:
     ) -> None:
         self._patch_memify_job(
             job_id,
-            {
+            self._normalize_progress_patch({
                 "status": "running",
-                "progress": 20,
+                "progress": 3,
+                "stage": "prepare",
+                "stage_message": "Preparing memify task",
+                "current": 0,
+                "total": 0,
                 "started_at": datetime.now(UTC).isoformat(),
                 "updated_at": datetime.now(UTC).isoformat(),
-            },
+            }),
         )
+
+        progress_callback = self._build_memify_progress_callback(job_id)
 
         memify_result = self.execute_memify_once(
             config=config,
@@ -425,14 +477,20 @@ class GraphOpsManager:
             dataset_scope=dataset_scope,
             dry_run=dry_run,
             job_id=job_id,
+            progress_callback=progress_callback,
         )
 
         now = datetime.now(UTC).isoformat()
         self._patch_memify_job(
             job_id,
-            {
+            self._normalize_progress_patch({
                 "status": str(memify_result.get("status") or "failed"),
                 "progress": 100 if str(memify_result.get("status") or "") == "succeeded" else 0,
+                "stage": "completed" if str(memify_result.get("status") or "") == "succeeded" else "failed",
+                "stage_message": "Memify completed" if str(memify_result.get("status") or "") == "succeeded" else "Memify failed",
+                "current": memify_result.get("current") or 0,
+                "total": memify_result.get("total") or 0,
+                "eta_seconds": 0,
                 "error": memify_result.get("error"),
                 "warnings": memify_result.get("warnings") or [],
                 "engine": memify_result.get("engine"),
@@ -449,7 +507,7 @@ class GraphOpsManager:
                 "enrichment_metrics": memify_result.get("enrichment_metrics"),
                 "finished_at": now,
                 "updated_at": now,
-            },
+            }),
         )
 
     def execute_memify_once(
@@ -460,6 +518,7 @@ class GraphOpsManager:
         dataset_scope: list[str] | None,
         dry_run: bool,
         job_id: str | None = None,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> dict[str, Any]:
         """Execute one memify run synchronously and return the normalized result."""
         engine = getattr(config, "engine", "local_lexical")
@@ -467,6 +526,7 @@ class GraphOpsManager:
         error: str | None = None
         warnings: list[str] = []
         result_engine = engine
+        memify_result: dict[str, Any] = {}
 
         if engine == "cognee":
             error = "Cognee memify provider is not wired yet."
@@ -479,6 +539,7 @@ class GraphOpsManager:
                     pipeline_type=pipeline_type,
                     dataset_scope=dataset_scope,
                     dry_run=dry_run,
+                    progress_callback=progress_callback,
                 )
                 status = str(memify_result.get("status") or "failed")
                 error = (
@@ -495,6 +556,17 @@ class GraphOpsManager:
                 error = str(exc)
                 warnings = ["GRAPHIFY_MEMIFY_ERROR"]
         else:
+            if progress_callback is not None:
+                progress_callback(
+                    {
+                        "stage": "extract",
+                        "stage_message": "Building local lexical graph",
+                        "progress": 50,
+                        "current": 1,
+                        "total": 2,
+                        "eta_seconds": 1,
+                    }
+                )
             manager = KnowledgeManager(
                 self.working_dir,
                 knowledge_dirname=self.knowledge_dirname,
@@ -513,6 +585,17 @@ class GraphOpsManager:
                 if str(item).strip()
             ]
             result_engine = "local_graph"
+            if progress_callback is not None:
+                progress_callback(
+                    {
+                        "stage": "build",
+                        "stage_message": "Local graph persisted",
+                        "progress": 85,
+                        "current": 2,
+                        "total": 2,
+                        "eta_seconds": 0,
+                    }
+                )
 
         response = {
             "job_id": job_id or "",
@@ -594,6 +677,27 @@ class GraphOpsManager:
                     "document_count": int(memify_result.get("document_count") or 0),
                 }
             )
+        elif engine == "graphify":
+            response.update(
+                {
+                    "graph_path": str(memify_result.get("graph_path") or ""),
+                    "relation_count": int(memify_result.get("relation_count") or 0),
+                    "node_count": int(memify_result.get("node_count") or 0),
+                    "document_count": int(memify_result.get("document_count") or 0),
+                }
+            )
+
+        if progress_callback is not None:
+            progress_callback(
+                {
+                    "stage": "finalize",
+                    "stage_message": "Finalizing memify result",
+                    "progress": 95,
+                    "current": 1,
+                    "total": 1,
+                    "eta_seconds": 0,
+                }
+            )
         return response
 
     def _patch_memify_job(self, job_id: str, patch: dict[str, Any]) -> None:
@@ -608,7 +712,30 @@ class GraphOpsManager:
 
     def get_memify_status(self, job_id: str) -> dict[str, Any] | None:
         jobs = self._load_memify_jobs()
-        return jobs.get(job_id)
+        job = jobs.get(job_id)
+        if not isinstance(job, dict):
+            return None
+        return self._normalize_progress_patch(job)
+
+    def list_memify_jobs(
+        self,
+        *,
+        active_only: bool = False,
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
+        jobs = [
+            self._normalize_progress_patch(job)
+            for job in self._load_memify_jobs().values()
+            if isinstance(job, dict)
+        ]
+        if active_only:
+            jobs = [
+                job for job in jobs if str(job.get("status") or "") in {"pending", "running"}
+            ]
+        jobs.sort(key=lambda item: str(item.get("updated_at") or ""), reverse=True)
+        if isinstance(limit, int) and limit > 0:
+            jobs = jobs[:limit]
+        return jobs
 
     def _load_memify_jobs(self) -> dict[str, dict[str, Any]]:
         if not self.memify_jobs_path.exists():

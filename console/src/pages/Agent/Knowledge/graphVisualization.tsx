@@ -573,6 +573,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     minTopK,
     maxTopK,
     onTopKChange,
+    onTopKCommit,
     compact,
   } = props;
 

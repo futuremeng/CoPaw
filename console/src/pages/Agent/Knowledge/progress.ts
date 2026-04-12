@@ -1,4 +1,7 @@
-import type { KnowledgeHistoryBackfillProgress } from "../../../api/types";
+import type {
+  KnowledgeHistoryBackfillProgress,
+  KnowledgeTaskProgress,
+} from "../../../api/types";
 
 export interface UnifiedBatchProgressViewModel {
   visible: boolean;
@@ -12,6 +15,7 @@ export interface UnifiedBatchProgressViewModel {
 export interface BuildUnifiedBatchProgressInput {
   indexingAll: boolean;
   backfillProgress: KnowledgeHistoryBackfillProgress | null;
+  activeTasks?: KnowledgeTaskProgress[];
   backfillingHistory: boolean;
   clearingKnowledge: boolean;
 }
@@ -26,6 +30,27 @@ export function buildUnifiedBatchProgress(
       status: "active",
       labelI18nKey: "knowledge.unifiedProgressIndexAll",
       labelDefault: "Rebuilding all indexes...",
+    };
+  }
+
+  const activeTask = (input.activeTasks || []).find((task) =>
+    ["pending", "running", "queued", "indexing", "graphifying"].includes(
+      String(task.status || ""),
+    ),
+  );
+  if (activeTask) {
+    const percent = Math.max(
+      0,
+      Math.min(100, Math.round(Number(activeTask.percent ?? activeTask.progress ?? 0))),
+    );
+    const current = Number(activeTask.current ?? 0);
+    const total = Number(activeTask.total ?? 0);
+    const detail = total > 0 ? ` (${current}/${total})` : "";
+    return {
+      visible: true,
+      percent,
+      status: "active",
+      labelDefault: `${activeTask.stage_message || activeTask.current_stage || activeTask.task_type || "Knowledge task running"}${detail}`,
     };
   }
 

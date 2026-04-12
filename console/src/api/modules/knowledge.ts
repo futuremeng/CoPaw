@@ -13,6 +13,7 @@ import type {
   KnowledgeSourceSpec,
   KnowledgeSourcesResponse,
   GraphQueryResponse,
+  KnowledgeTasksSnapshot,
   MemifyJobStatus,
   MemifyStartRequest,
   MemifyStartResponse,
@@ -144,6 +145,11 @@ export const knowledgeApi = {
 
   getKnowledgeHistoryBackfillStatus: () =>
     request<KnowledgeHistoryBackfillStatus>("/knowledge/history-backfill/status"),
+
+  getKnowledgeTasksSnapshot: (options?: { projectId?: string }) =>
+    request<KnowledgeTasksSnapshot>(
+      withProjectId("/knowledge/tasks/snapshot", options?.projectId),
+    ),
 
   runKnowledgeHistoryBackfillNow: () =>
     request<KnowledgeHistoryBackfillRunResponse>("/knowledge/history-backfill/run", {

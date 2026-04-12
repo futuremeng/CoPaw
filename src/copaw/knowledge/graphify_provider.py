@@ -22,8 +22,10 @@ Memify (graph build)
 from __future__ import annotations
 
 import json
-import subprocess
-import sys
+import re
+import time
+from collections import defaultdict
+from itertools import combinations
 from pathlib import Path
 from typing import Any
 
@@ -51,6 +53,19 @@ class GraphifyLoadError(GraphifyError):
 
 class GraphifyRemoteError(GraphifyError):
     """Raised when remote Graphify endpoint returns an error."""
+
+
+def _safe_progress_emit(
+    progress_callback: Any | None,
+    payload: dict[str, Any],
+) -> None:
+    if progress_callback is None:
+        return
+    try:
+        progress_callback(payload)
+    except Exception:
+        # Progress emission failure must not break the memify flow.
+        return
 
 
 # ---------------------------------------------------------------------------
@@ -174,6 +189,191 @@ def _subgraph_to_records(
             }
         )
     return records
+
+
+_GRAPHIFY_INTERNAL_ALLOWED_EXTENSIONS = {
+    ".py",
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx",
+    ".md",
+    ".txt",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".toml",
+}
+
+_GRAPHIFY_INTERNAL_STOPWORDS = {
+    "the",
+    "and",
+    "for",
+    "with",
+    "that",
+    "this",
+    "from",
+    "into",
+    "true",
+    "false",
+    "none",
+    "null",
+    "class",
+    "function",
+    "return",
+    "import",
+    "const",
+    "let",
+    "var",
+    "def",
+    "async",
+    "await",
+}
+
+
+def _iter_internal_corpus_files(dataset_path: Path) -> list[Path]:
+    files: list[Path] = []
+    for path in dataset_path.rglob("*"):
+        if not path.is_file():
+            continue
+        if path.suffix.lower() not in _GRAPHIFY_INTERNAL_ALLOWED_EXTENSIONS:
+            continue
+        files.append(path)
+    return files
+
+
+def _extract_terms_from_text(text: str, *, limit: int = 60) -> list[str]:
+    tokens = [
+        t.lower()
+        for t in re.findall(r"[A-Za-z][A-Za-z0-9_]{2,}", text)
+        if t and t.lower() not in _GRAPHIFY_INTERNAL_STOPWORDS
+    ]
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for token in tokens:
+        if token in seen:
+            continue
+        seen.add(token)
+        deduped.append(token)
+        if len(deduped) >= limit:
+            break
+    return deduped
+
+
+def _build_internal_graph(
+    dataset_path: Path,
+    *,
+    progress_callback: Any | None,
+) -> tuple[dict[str, Any], int, int, int, list[str]]:
+    warnings: list[str] = []
+    files = _iter_internal_corpus_files(dataset_path)
+    total_files = len(files)
+    if total_files == 0:
+        raise GraphifyLoadError(
+            f"No eligible source files found under '{dataset_path}'."
+        )
+
+    node_labels: dict[str, dict[str, Any]] = {}
+    edge_weights: dict[tuple[str, str], int] = defaultdict(int)
+    started_at = time.time()
+
+    _safe_progress_emit(
+        progress_callback,
+        {
+            "stage": "extract",
+            "stage_message": "Scanning source files",
+            "percent": 10,
+            "current": 0,
+            "total": total_files,
+            "eta_seconds": None,
+        },
+    )
+
+    for idx, path in enumerate(files, start=1):
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            warnings.append(f"GRAPHIFY_INTERNAL_READ_FAILED:{path.name}")
+            continue
+
+        if len(text) > 1_500_000:
+            text = text[:1_500_000]
+            warnings.append(f"GRAPHIFY_INTERNAL_TRUNCATED:{path.name}")
+
+        rel_path = path.relative_to(dataset_path).as_posix()
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        if not lines:
+            continue
+
+        for line in lines[:1200]:
+            line_terms = _extract_terms_from_text(line, limit=10)
+            if not line_terms:
+                continue
+            for term in line_terms:
+                existing = node_labels.get(term)
+                if existing is None:
+                    node_labels[term] = {
+                        "id": term,
+                        "label": term,
+                        "source_file": rel_path,
+                        "source_location": "",
+                        "file_type": path.suffix.lower().lstrip("."),
+                    }
+                elif not existing.get("source_file"):
+                    existing["source_file"] = rel_path
+
+            # Co-occurrence inside one line is treated as a lightweight relation.
+            for left, right in combinations(sorted(set(line_terms)), 2):
+                edge_weights[(left, right)] += 1
+
+        elapsed = max(time.time() - started_at, 0.001)
+        rate = idx / elapsed
+        remaining = max(total_files - idx, 0)
+        eta_seconds = int(remaining / rate) if rate > 0 else None
+        percent = 10 + int((idx / max(total_files, 1)) * 75)
+        _safe_progress_emit(
+            progress_callback,
+            {
+                "stage": "extract",
+                "stage_message": f"Processed file {idx}/{total_files}",
+                "percent": min(85, max(10, percent)),
+                "current": idx,
+                "total": total_files,
+                "eta_seconds": eta_seconds,
+            },
+        )
+
+    _safe_progress_emit(
+        progress_callback,
+        {
+            "stage": "build",
+            "stage_message": "Building graph structure",
+            "percent": 90,
+            "current": len(node_labels),
+            "total": max(len(node_labels), 1),
+            "eta_seconds": 1,
+        },
+    )
+
+    links = [
+        {
+            "source": src,
+            "target": dst,
+            "relation": "co_occurs_with",
+            "confidence": "EXTRACTED",
+            "weight": weight,
+        }
+        for (src, dst), weight in edge_weights.items()
+        if weight >= 1
+    ]
+
+    graph_payload = {
+        "directed": False,
+        "multigraph": False,
+        "nodes": list(node_labels.values()),
+        "links": links,
+    }
+    return graph_payload, len(node_labels), len(links), total_files, warnings
 
 
 # ---------------------------------------------------------------------------
@@ -412,11 +612,11 @@ def graphify_memify(
     pipeline_type: str,
     dataset_scope: list[str] | None,
     dry_run: bool,
+    progress_callback: Any | None = None,
 ) -> dict[str, Any]:
     """Build / update the Graphify knowledge graph.
 
-    Runs ``graphify <dataset_dir> --no-viz`` as a subprocess using the same
-    Python interpreter (so the installed ``graphifyy`` package is found).
+    Runs an in-process graph construction pipeline in local mode.
 
     Args:
         config:        GraphifyConfig (dataset_dir must be set).
@@ -454,43 +654,68 @@ def graphify_memify(
         }
 
     if dry_run:
+        _safe_progress_emit(
+            progress_callback,
+            {
+                "stage": "prepare",
+                "stage_message": "Dry-run validation completed",
+                "percent": 100,
+                "current": 1,
+                "total": 1,
+                "eta_seconds": 0,
+            },
+        )
         return {
             "status": "succeeded",
             "error": None,
             "warnings": ["GRAPHIFY_MEMIFY_DRY_RUN"],
+            "engine": "graphify_internal",
         }
 
-    cmd = [sys.executable, "-m", "graphify", str(dataset_path), "--no-viz"]
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=config.token_budget,  # repurpose as rough time cap in seconds
+        graph_payload, node_count, relation_count, document_count, warnings = _build_internal_graph(
+            dataset_path,
+            progress_callback=progress_callback,
         )
-    except FileNotFoundError as exc:
+        graph_path_text = str(config.graph_path or "").strip()
+        graph_path = Path(graph_path_text) if graph_path_text else dataset_path / "graphify-out" / "graph.json"
+        graph_path.parent.mkdir(parents=True, exist_ok=True)
+        graph_path.write_text(
+            json.dumps(graph_payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        _safe_progress_emit(
+            progress_callback,
+            {
+                "stage": "finalize",
+                "stage_message": "Graph build completed",
+                "percent": 100,
+                "current": 1,
+                "total": 1,
+                "eta_seconds": 0,
+            },
+        )
+        return {
+            "status": "succeeded",
+            "error": None,
+            "warnings": warnings,
+            "engine": "graphify_internal",
+            "graph_path": str(graph_path),
+            "relation_count": relation_count,
+            "node_count": node_count,
+            "document_count": document_count,
+        }
+    except GraphifyLoadError as exc:
         return {
             "status": "failed",
-            "error": f"graphify CLI not found: {exc}. Run: pip install graphifyy",
-            "warnings": ["GRAPHIFY_CLI_NOT_FOUND"],
+            "error": str(exc),
+            "warnings": ["GRAPHIFY_MEMIFY_NO_ELIGIBLE_FILES"],
+            "engine": "graphify_internal",
         }
-    except subprocess.TimeoutExpired:
+    except Exception as exc:
         return {
             "status": "failed",
-            "error": "graphify memify timed out.",
-            "warnings": ["GRAPHIFY_MEMIFY_TIMEOUT"],
+            "error": f"graphify internal memify failed: {exc}",
+            "warnings": ["GRAPHIFY_MEMIFY_INTERNAL_ERROR"],
+            "engine": "graphify_internal",
         }
-
-    if result.returncode != 0:
-        stderr_snippet = (result.stderr or "")[:500]
-        return {
-            "status": "failed",
-            "error": f"graphify exited with code {result.returncode}: {stderr_snippet}",
-            "warnings": ["GRAPHIFY_MEMIFY_NONZERO_EXIT"],
-        }
-
-    return {
-        "status": "succeeded",
-        "error": None,
-        "warnings": [],
-    }

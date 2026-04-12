@@ -30,6 +30,7 @@ export interface KnowledgeIndexConfig {
 
 export interface ProjectKnowledgeSyncState {
   project_id: string;
+  task_type?: string;
   status:
     | "idle"
     | "queued"
@@ -39,7 +40,13 @@ export interface ProjectKnowledgeSyncState {
     | "succeeded"
     | "failed";
   current_stage: string;
+  stage?: string;
+  stage_message?: string;
   progress: number;
+  percent?: number;
+  current?: number;
+  total?: number;
+  eta_seconds?: number | null;
   auto_enabled: boolean;
   dirty: boolean;
   dirty_after_run: boolean;
@@ -152,9 +159,18 @@ export interface KnowledgeHistoryBackfillStatus {
 }
 
 export interface KnowledgeHistoryBackfillProgress {
+  task_type?: string;
   running: boolean;
   completed: boolean;
   failed: boolean;
+  stage?: string;
+  current_stage?: string;
+  stage_message?: string;
+  progress?: number;
+  percent?: number;
+  current?: number;
+  total?: number;
+  eta_seconds?: number | null;
   total_sessions: number;
   traversed_sessions: number;
   processed_sessions: number;
@@ -275,12 +291,20 @@ export interface MemifyStartResponse {
 
 export interface MemifyJobStatus {
   job_id: string;
+  task_type?: string;
   pipeline_type: string;
   dataset_scope: string[];
   idempotency_key: string;
   dry_run: boolean;
   status: "pending" | "running" | "succeeded" | "failed";
   progress: number;
+  percent?: number;
+  stage?: string;
+  current_stage?: string;
+  stage_message?: string;
+  current?: number;
+  total?: number;
+  eta_seconds?: number | null;
   estimated_steps: number;
   started_at?: string | null;
   finished_at?: string | null;
@@ -288,6 +312,30 @@ export interface MemifyJobStatus {
   warnings: string[];
   engine: string;
   updated_at?: string | null;
+}
+
+export interface KnowledgeTaskProgress {
+  task_id: string;
+  task_type?: string;
+  job_id?: string;
+  status: string;
+  stage?: string;
+  current_stage?: string;
+  stage_message?: string;
+  progress?: number;
+  percent?: number;
+  current?: number;
+  total?: number;
+  eta_seconds?: number | null;
+  updated_at?: string | null;
+  warnings?: string[];
+  error?: string | null;
+}
+
+export interface KnowledgeTasksSnapshot {
+  tasks: KnowledgeTaskProgress[];
+  updated_at?: string | null;
+  project_id?: string;
 }
 
 export interface KnowledgeRestoreResponse {

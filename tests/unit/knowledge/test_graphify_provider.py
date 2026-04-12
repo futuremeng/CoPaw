@@ -2,7 +2,7 @@
 """Unit tests for the Graphify knowledge provider adapter."""
 
 import json
-import os
+from pathlib import Path
 
 import pytest
 
@@ -221,57 +221,42 @@ def test_graphify_memify_dry_run(tmp_path):
     assert "GRAPHIFY_MEMIFY_DRY_RUN" in result["warnings"]
 
 
-def test_graphify_memify_cli_not_installed(tmp_path, monkeypatch):
-    """When graphify CLI is not installed the result should be a failed status."""
-    import sys
-    cfg = GraphifyConfig(dataset_dir=str(tmp_path))
-
-    # Patch subprocess.run to simulate FileNotFoundError
-    import subprocess
-    monkeypatch.setattr(
-        subprocess,
-        "run",
-        lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError("graphify not found")),
+def test_graphify_memify_internal_success(tmp_path):
+    corpus = tmp_path / "corpus"
+    corpus.mkdir(parents=True, exist_ok=True)
+    (corpus / "sample.py").write_text(
+        "AgentRunner calls ToolDispatcher and FileSearch.\nToolDispatcher builds graph output.",
+        encoding="utf-8",
     )
+    cfg = GraphifyConfig(dataset_dir=str(corpus))
+    progress_events = []
+
+    result = graphify_memify(
+        cfg,
+        pipeline_type="default",
+        dataset_scope=[],
+        dry_run=False,
+        progress_callback=lambda payload: progress_events.append(dict(payload)),
+    )
+
+    assert result["status"] == "succeeded"
+    assert result["engine"] == "graphify_internal"
+    assert result["node_count"] > 0
+    assert result["relation_count"] > 0
+    assert Path(result["graph_path"]).exists()
+    assert any(evt.get("stage") == "extract" for evt in progress_events)
+    assert any(evt.get("stage") == "finalize" for evt in progress_events)
+
+
+def test_graphify_memify_internal_no_eligible_files(tmp_path):
+    corpus = tmp_path / "corpus"
+    corpus.mkdir(parents=True, exist_ok=True)
+    (corpus / "image.bin").write_bytes(b"\x00\x01")
+    cfg = GraphifyConfig(dataset_dir=str(corpus))
+
     result = graphify_memify(cfg, pipeline_type="default", dataset_scope=[], dry_run=False)
     assert result["status"] == "failed"
-    assert "GRAPHIFY_CLI_NOT_FOUND" in result["warnings"]
-
-
-def test_graphify_memify_nonzero_exit(tmp_path, monkeypatch):
-    """Nonzero exit code from graphify CLI should produce a failed status."""
-    import subprocess
-    from types import SimpleNamespace
-
-    cfg = GraphifyConfig(dataset_dir=str(tmp_path))
-    monkeypatch.setattr(
-        subprocess,
-        "run",
-        lambda *a, **kw: SimpleNamespace(
-            returncode=1,
-            stderr="fatal: cannot read directory",
-            stdout="",
-        ),
-    )
-    result = graphify_memify(cfg, pipeline_type="default", dataset_scope=[], dry_run=False)
-    assert result["status"] == "failed"
-    assert "GRAPHIFY_MEMIFY_NONZERO_EXIT" in result["warnings"]
-    assert "fatal: cannot read directory" in (result["error"] or "")
-
-
-def test_graphify_memify_timeout(tmp_path, monkeypatch):
-    """Subprocess timeout should produce a failed status with TIMEOUT warning."""
-    import subprocess
-
-    cfg = GraphifyConfig(dataset_dir=str(tmp_path))
-    monkeypatch.setattr(
-        subprocess,
-        "run",
-        lambda *a, **kw: (_ for _ in ()).throw(subprocess.TimeoutExpired(cmd="graphify", timeout=60)),
-    )
-    result = graphify_memify(cfg, pipeline_type="default", dataset_scope=[], dry_run=False)
-    assert result["status"] == "failed"
-    assert "GRAPHIFY_MEMIFY_TIMEOUT" in result["warnings"]
+    assert "GRAPHIFY_MEMIFY_NO_ELIGIBLE_FILES" in result["warnings"]
 
 
 def test_graphify_memify_remote_success(monkeypatch):
