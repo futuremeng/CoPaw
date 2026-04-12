@@ -19,6 +19,7 @@ export interface ProjectKnowledgeHeaderSignals {
   documentCount: number;
   chunkCount: number;
   relationCount: number;
+  entityCount: number;
 }
 
 export interface ProjectKnowledgeTrendSnapshot {
@@ -36,6 +37,7 @@ export interface ProjectKnowledgeMetrics {
   documentCount: number;
   chunkCount: number;
   relationCount: number;
+  entityCount: number;
 }
 
 export type ProjectKnowledgeInsightAction = "settings" | "query" | "healthy";
@@ -234,6 +236,15 @@ function getSyncRelationCount(syncState: ProjectKnowledgeSyncState | null): numb
   }
   const relationCount = (memify as { relation_count?: unknown }).relation_count;
   return Number.isFinite(Number(relationCount)) ? Number(relationCount) : Number(relationCount || 0);
+}
+
+function getSyncNodeCount(syncState: ProjectKnowledgeSyncState | null): number {
+  const memify = syncState?.last_result?.memify;
+  if (!memify || typeof memify !== "object") {
+    return 0;
+  }
+  const nodeCount = (memify as { node_count?: unknown }).node_count;
+  return Number.isFinite(Number(nodeCount)) ? Number(nodeCount) : Number(nodeCount || 0);
 }
 
 function getSyncIndexCount(
@@ -593,6 +604,12 @@ export function useProjectKnowledgeState(
       graphResult?.records?.length || 0,
       getSyncRelationCount(syncState),
     );
+    const graphEntityCount = new Set(
+      (graphResult?.records || []).flatMap((record) => [record.subject, record.object])
+        .map((item) => String(item || "").trim())
+        .filter(Boolean),
+    ).size;
+    const entityCount = Math.max(graphEntityCount, getSyncNodeCount(syncState));
     return {
       totalSources: effectiveTotalSources,
       indexedSources: effectiveIndexedSources,
@@ -600,6 +617,7 @@ export function useProjectKnowledgeState(
       documentCount,
       chunkCount,
       relationCount,
+      entityCount,
     };
   }, [graphResult?.records?.length, projectSources, sourceRegistered, syncState]);
 
@@ -621,9 +639,11 @@ export function useProjectKnowledgeState(
       documentCount: quantMetrics.documentCount,
       chunkCount: quantMetrics.chunkCount,
       relationCount: quantMetrics.relationCount,
+      entityCount: quantMetrics.entityCount,
     });
   }, [
     params.onSignalsChange,
+    quantMetrics.entityCount,
     quantMetrics.chunkCount,
     quantMetrics.documentCount,
     quantMetrics.indexedRatio,

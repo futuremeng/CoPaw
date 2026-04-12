@@ -75,6 +75,7 @@ function buildKnowledgeState(): ProjectKnowledgeState {
       documentCount: 3,
       chunkCount: 7,
       relationCount: 12,
+      entityCount: 2,
     },
     graphQueryText: "Summarize key entities",
     setGraphQueryText: vi.fn(),
@@ -155,10 +156,22 @@ function buildKnowledgeState(): ProjectKnowledgeState {
 
 describe("project knowledge supporting panels", () => {
   it("renders health content outside explore", () => {
-    render(<ProjectKnowledgeSignalsPanel knowledgeState={buildKnowledgeState()} />);
+    const { container } = render(<ProjectKnowledgeSignalsPanel knowledgeState={buildKnowledgeState()} />);
 
     expect(screen.getByText("projects.knowledge.signalsTitle")).not.toBeNull();
     expect(screen.getByText("projects.knowledge.signalRelations")).not.toBeNull();
+    expect(screen.getByText("实体数")).not.toBeNull();
+
+    const signalLabels = Array.from(
+      container.querySelectorAll("._projectKnowledgeSignalCard_209b2b .ant-typography-secondary"),
+    ).map((element) => element.textContent);
+    expect(signalLabels).toEqual([
+      "projects.knowledge.signalDocuments",
+      "projects.knowledge.signalChunks",
+      "Coverage",
+      "projects.knowledge.signalRelations",
+      "实体数",
+    ]);
   });
 
   it("renders source inventory", () => {

@@ -42,6 +42,7 @@ function buildKnowledgeState(projectId: string): ProjectKnowledgeState {
       documentCount: 1,
       chunkCount: 2,
       relationCount: 0,
+      entityCount: 0,
     },
     graphQueryText: "",
     setGraphQueryText: vi.fn(),

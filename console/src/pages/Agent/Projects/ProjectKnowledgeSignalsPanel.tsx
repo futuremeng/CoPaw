@@ -49,12 +49,6 @@ export default function ProjectKnowledgeSignalsPanel(
 
       <div className={styles.projectKnowledgeSignalGrid}>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("projects.knowledge.signalCoverage", "Coverage")}</Typography.Text>
-          <Typography.Text strong>
-            {Math.round(knowledgeState.quantMetrics.indexedRatio * 100)}%
-          </Typography.Text>
-        </div>
-        <div className={styles.projectKnowledgeSignalCard}>
           <Typography.Text type="secondary">{t("projects.knowledge.signalDocuments")}</Typography.Text>
           <Typography.Text strong>{knowledgeState.quantMetrics.documentCount}</Typography.Text>
         </div>
@@ -63,8 +57,18 @@ export default function ProjectKnowledgeSignalsPanel(
           <Typography.Text strong>{knowledgeState.quantMetrics.chunkCount}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
+          <Typography.Text type="secondary">{t("projects.knowledge.signalCoverage", "Coverage")}</Typography.Text>
+          <Typography.Text strong>
+            {Math.round(knowledgeState.quantMetrics.indexedRatio * 100)}%
+          </Typography.Text>
+        </div>
+        <div className={styles.projectKnowledgeSignalCard}>
           <Typography.Text type="secondary">{t("projects.knowledge.signalRelations")}</Typography.Text>
           <Typography.Text strong>{knowledgeState.quantMetrics.relationCount}</Typography.Text>
+        </div>
+        <div className={styles.projectKnowledgeSignalCard}>
+          <Typography.Text type="secondary">{t("projects.knowledge.entities", "实体数")}</Typography.Text>
+          <Typography.Text strong>{knowledgeState.quantMetrics.entityCount}</Typography.Text>
         </div>
       </div>
 
