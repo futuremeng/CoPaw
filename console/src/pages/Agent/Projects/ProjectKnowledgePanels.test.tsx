@@ -79,6 +79,8 @@ function buildKnowledgeState(): ProjectKnowledgeState {
     },
     graphQueryText: "Summarize key entities",
     setGraphQueryText: vi.fn(),
+    graphQueryTopK: 200,
+    setGraphQueryTopK: vi.fn(),
     graphQueryMode: "template",
     setGraphQueryMode: vi.fn(),
     graphLoading: false,

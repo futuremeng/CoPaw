@@ -61,6 +61,8 @@ export interface ProjectKnowledgeState {
   setGraphQueryText: (value: string) => void;
   graphQueryMode: ProjectGraphQueryMode;
   setGraphQueryMode: (value: ProjectGraphQueryMode) => void;
+  graphQueryTopK: number;
+  setGraphQueryTopK: (value: number) => void;
   graphLoading: boolean;
   graphError: string;
   graphResult: GraphQueryResponse | null;
@@ -72,6 +74,7 @@ export interface ProjectKnowledgeState {
   runGraphQuery: (
     overrideQuery?: string,
     overrideMode?: ProjectGraphQueryMode,
+    overrideTopK?: number,
   ) => Promise<void>;
   resetGraphQuery: () => void;
   trendRangeDays: 7 | 30;
@@ -110,7 +113,7 @@ interface ProjectKnowledgeUiPrefs {
 const PROJECT_TREND_STORAGE_PREFIX = "copaw.project.knowledge.trend.v1";
 const PROJECT_KNOWLEDGE_UI_PREFS_PREFIX = "copaw.project.knowledge.ui.v1";
 const DAY_MS = 24 * 60 * 60 * 1000;
-const PROJECT_GRAPH_QUERY_TOP_K = 10000;
+const PROJECT_GRAPH_QUERY_TOP_K = 200;
 
 function uiPrefsStorageKey(projectId: string): string {
   return `${PROJECT_KNOWLEDGE_UI_PREFS_PREFIX}.${projectId || "default"}`;
@@ -272,6 +275,7 @@ export function useProjectKnowledgeState(
     useState<Record<string, boolean>>({});
   const [graphQueryText, setGraphQueryText] = useState("");
   const [graphQueryMode, setGraphQueryMode] = useState<ProjectGraphQueryMode>("template");
+  const [graphQueryTopK, setGraphQueryTopK] = useState(PROJECT_GRAPH_QUERY_TOP_K);
   const [graphLoading, setGraphLoading] = useState(false);
   const [graphError, setGraphError] = useState("");
   const [graphResult, setGraphResult] = useState<GraphQueryResponse | null>(null);
@@ -348,6 +352,7 @@ export function useProjectKnowledgeState(
   const runGraphQuery = useCallback(async (
     overrideQuery?: string,
     overrideMode?: ProjectGraphQueryMode,
+    overrideTopK?: number,
   ) => {
     const query = (overrideQuery ?? graphQueryText).trim();
     const mode = overrideMode ?? graphQueryMode;
@@ -362,7 +367,10 @@ export function useProjectKnowledgeState(
       const response = await api.graphQuery({
         query,
         mode,
-        topK: PROJECT_GRAPH_QUERY_TOP_K,
+        topK: Math.max(
+          20,
+          Number(overrideTopK ?? graphQueryTopK) || PROJECT_GRAPH_QUERY_TOP_K,
+        ),
         timeoutSec: 20,
         projectScope: [params.projectId],
         includeGlobal: params.includeGlobal,
@@ -378,7 +386,7 @@ export function useProjectKnowledgeState(
     } finally {
       setGraphLoading(false);
     }
-  }, [graphQueryMode, graphQueryText, params.includeGlobal, params.projectId, t]);
+  }, [graphQueryMode, graphQueryText, graphQueryTopK, params.includeGlobal, params.projectId, t]);
 
   const resetGraphQuery = useCallback(() => {
     setGraphError("");
@@ -392,6 +400,7 @@ export function useProjectKnowledgeState(
     setSourceContentLoadingById({});
     setGraphQueryText("");
     setGraphQueryMode("template");
+    setGraphQueryTopK(PROJECT_GRAPH_QUERY_TOP_K);
     setGraphLoading(false);
     setGraphError("");
     setGraphResult(null);
@@ -770,6 +779,8 @@ export function useProjectKnowledgeState(
     setGraphQueryText,
     graphQueryMode,
     setGraphQueryMode,
+    graphQueryTopK,
+    setGraphQueryTopK,
     graphLoading,
     graphError,
     graphResult,

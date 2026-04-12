@@ -583,7 +583,7 @@ async def query_knowledge_graph(
     dataset_scope: Optional[str] = Query(default=None),
     project_scope: Optional[str] = Query(default=None),
     include_global: bool = Query(default=True),
-    top_k: int = Query(default=10, ge=1, le=10000),
+    top_k: int = Query(default=10, ge=1),
     timeout_sec: int = Query(default=20, ge=1, le=120),
 ):
     config, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)

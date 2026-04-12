@@ -85,7 +85,7 @@ async def triplet_focus_search(
             query_mode="template",
             query_text=effective_query,
             dataset_scope=dataset_scope,
-            top_k=max(1, min(int(top_k), 10000)),
+            top_k=max(1, int(top_k)),
             timeout_sec=20,
         )
 

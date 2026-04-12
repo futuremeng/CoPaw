@@ -99,7 +99,7 @@ async def graph_query(
             query_mode=mode,
             query_text=text,
             dataset_scope=dataset_scope,
-            top_k=max(1, min(int(top_k), 10000)),
+            top_k=max(1, int(top_k)),
             timeout_sec=max(1, min(int(timeout_sec), 120)),
         )
         payload = {

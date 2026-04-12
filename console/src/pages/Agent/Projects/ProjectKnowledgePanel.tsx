@@ -121,6 +121,22 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
                 compact
                 data={visualizationData}
                 loading={props.knowledgeState.graphLoading}
+                topK={props.knowledgeState.graphQueryTopK}
+                minTopK={20}
+                maxTopK={Math.max(20, props.knowledgeState.quantMetrics.entityCount || 200)}
+                onTopKChange={(value) => {
+                  const maxByEntity = Math.max(20, props.knowledgeState.quantMetrics.entityCount || 200);
+                  const next = Math.max(20, Math.min(maxByEntity, Math.round(value)));
+                  props.knowledgeState.setGraphQueryTopK(next);
+                }}
+                onTopKCommit={(value) => {
+                  const maxByEntity = Math.max(20, props.knowledgeState.quantMetrics.entityCount || 200);
+                  const next = Math.max(20, Math.min(maxByEntity, Math.round(value)));
+                  props.knowledgeState.setGraphQueryTopK(next);
+                  if (props.knowledgeState.graphQueryText.trim()) {
+                    void props.knowledgeState.runGraphQuery(undefined, undefined, next);
+                  }
+                }}
                 activeNodeId={props.knowledgeState.activeGraphNodeId}
                 onActiveNodeChange={props.knowledgeState.setActiveGraphNodeId}
                 onNodeClick={(node) => props.knowledgeState.setActiveGraphNodeId(node.id)}

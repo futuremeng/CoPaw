@@ -72,6 +72,11 @@ interface GraphVisualizationProps {
   onActiveNodeChange?: (nodeId: string | null) => void;
   onUsePathContext?: (pathSummary: string, runNow?: boolean) => void;
   onInsightFocusChange?: (payload: { keyword: string; active: boolean }) => void;
+  topK?: number;
+  minTopK?: number;
+  maxTopK?: number;
+  onTopKChange?: (value: number) => void;
+  onTopKCommit?: (value: number) => void;
   compact?: boolean;
 }
 
@@ -564,6 +569,10 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     onActiveNodeChange,
     onUsePathContext,
     onInsightFocusChange,
+    topK,
+    minTopK,
+    maxTopK,
+    onTopKChange,
     compact,
   } = props;
 
@@ -1542,6 +1551,37 @@ export function GraphVisualization(props: GraphVisualizationProps) {
               {compact ? null : t("knowledge.graphQuery.fitView")}
             </Button>
           </Tooltip>
+          {typeof topK === "number" ? (
+            <Space size={6} align="center">
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                TopK
+              </Typography.Text>
+              <Slider
+                min={Math.max(20, minTopK ?? 20)}
+                onTopKCommit,
+                max={Math.max(Math.max(20, minTopK ?? 20), maxTopK ?? topK)}
+                step={1}
+                value={topK}
+                onChange={(value) => {
+                  const next = Number(value);
+                  if (Number.isFinite(next)) {
+                    onTopKChange?.(next);
+                  }
+                }}
+                onChangeComplete={(value) => {
+                  const next = Number(value);
+                  if (Number.isFinite(next)) {
+                    onTopKCommit?.(next);
+                  }
+                }}
+                style={{ width: compact ? 120 : 180, margin: 0 }}
+                tooltip={{ open: false }}
+              />
+              <Typography.Text style={{ fontSize: 12, minWidth: 36, textAlign: "right" }}>
+                {topK}
+              </Typography.Text>
+            </Space>
+          ) : null}
           <Popover
             trigger="hover"
             placement="bottomRight"

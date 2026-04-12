@@ -46,6 +46,8 @@ function buildKnowledgeState(projectId: string): ProjectKnowledgeState {
     },
     graphQueryText: "",
     setGraphQueryText: vi.fn(),
+    graphQueryTopK: 200,
+    setGraphQueryTopK: vi.fn(),
     graphQueryMode: "template",
     setGraphQueryMode: vi.fn(),
     graphLoading: false,
