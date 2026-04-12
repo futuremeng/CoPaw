@@ -350,7 +350,7 @@ export function useProjectKnowledgeState(
       const response = await api.graphQuery({
         query,
         mode,
-        topK: 12,
+        topK: 24,
         timeoutSec: 20,
         projectScope: [params.projectId],
         includeGlobal: params.includeGlobal,

@@ -192,6 +192,49 @@ function safeNodeId(raw: string): string {
     .replace(/^-|-$/g, "");
 }
 
+function normalizeEntityLabel(raw: string): string {
+  return String(raw || "")
+    .replace(/\s+/g, " ")
+    .replace(/^["'`“”‘’]+|["'`“”‘’]+$/g, "")
+    .replace(/^[\-•·]+|[\-•·]+$/g, "")
+    .trim();
+}
+
+function isMeaningfulEntityLabel(raw: string): boolean {
+  const normalized = normalizeEntityLabel(raw);
+  if (!normalized) {
+    return false;
+  }
+
+  const lower = normalized.toLowerCase();
+  if (["none", "null", "undefined", "n/a", "na", "unknown"].includes(lower)) {
+    return false;
+  }
+
+  return !/^[^a-z0-9\u4e00-\u9fff]+$/i.test(normalized);
+}
+
+export function graphEntityNodeId(label: string, fallback: string = "unknown"): string {
+  const normalized = normalizeEntityLabel(label) || fallback;
+  const safe = safeNodeId(normalized) || safeNodeId(fallback) || "unknown";
+  return `entity-${safe}`;
+}
+
+function parseFallbackTargets(input: string): string[] {
+  const raw = String(input || "").replace(/\r/g, "\n");
+  const parts = raw
+    .split(/[\n;；|、]+/)
+    .map((item) => normalizeEntityLabel(item))
+    .filter((item) => isMeaningfulEntityLabel(item));
+
+  if (parts.length > 0) {
+    return Array.from(new Set(parts));
+  }
+
+  const single = normalizeEntityLabel(raw);
+  return isMeaningfulEntityLabel(single) ? [single] : [];
+}
+
 function parseObjectTriples(
   input: string,
 ): Array<{ relation: string; target: string; confidence: string }> {
@@ -206,12 +249,12 @@ function parseObjectTriples(
     if (arrowIndex <= 0) {
       return;
     }
-    const target = part.slice(arrowIndex + 3).trim();
+    const target = normalizeEntityLabel(part.slice(arrowIndex + 3));
     const left = part.slice(0, arrowIndex).trim();
     const relMatch = left.match(/--([^[]+)(\[([^\]]*)\])?$/);
-    const relation = relMatch?.[1]?.trim() || "related";
+    const relation = normalizeEntityLabel(relMatch?.[1] || "") || "related";
     const confidence = relMatch?.[3]?.trim() || "";
-    if (target) {
+    if (isMeaningfulEntityLabel(target)) {
       triples.push({ relation, target, confidence });
     }
   });
@@ -229,13 +272,14 @@ export function recordsToVisualizationData(
   let edgeCounter = 0;
 
   records.forEach((record, index) => {
-    const subjectId = `subject-${safeNodeId(record.subject || `n-${index}`)}`;
+    const subjectLabel = normalizeEntityLabel(record.subject) || `Entity ${index + 1}`;
+    const subjectId = graphEntityNodeId(subjectLabel, `n-${index}`);
     if (!nodes.has(subjectId)) {
       nodes.set(subjectId, {
         id: subjectId,
-        label: record.subject,
+        label: subjectLabel,
         title: record.document_title,
-        type: record.source_type,
+        type: record.source_type || "entity",
         score: Number.isFinite(record.score) ? record.score : 0,
         source_id: record.source_id,
         document_path: record.document_path,
@@ -243,18 +287,30 @@ export function recordsToVisualizationData(
     }
 
     const triples = parseObjectTriples(record.object);
-    if (!triples.length) {
+    const normalizedTriples = triples.length
+      ? triples
+      : parseFallbackTargets(record.object).map((target) => ({
+        relation: normalizeEntityLabel(record.predicate) || "related",
+        target,
+        confidence: Number.isFinite(record.score) ? `${Math.round(record.score * 100)}%` : "",
+      }));
+    if (!normalizedTriples.length) {
       return;
     }
 
-    triples.forEach((triple) => {
-      const targetId = `target-${safeNodeId(triple.target)}`;
+    normalizedTriples.forEach((triple) => {
+      const targetLabel = normalizeEntityLabel(triple.target);
+      if (!isMeaningfulEntityLabel(targetLabel)) {
+        return;
+      }
+
+      const targetId = graphEntityNodeId(targetLabel, `${subjectId}-${edgeCounter}`);
       if (!nodes.has(targetId)) {
         nodes.set(targetId, {
           id: targetId,
-          label: triple.target,
+          label: targetLabel,
           title: record.document_title,
-          type: record.source_type,
+          type: record.source_type || "entity",
           score: Math.max(
             0.05,
             (Number.isFinite(record.score) ? record.score : 0) * 0.85,

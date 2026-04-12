@@ -35,10 +35,16 @@ import {
   buildGraphQueryRecordViewModels,
   filterGraphQueryRecords,
   formatScore,
+  graphEntityNodeId,
   getScoreColor,
   sortGraphQueryRecords,
   type GraphQueryRecordViewModel,
 } from "./graphQuery";
+import {
+  buildGraphDisplayData,
+  parseEdgeStrength,
+  summarizeGraphEntities,
+} from "./graphVisualizationData";
 import styles from "./index.module.less";
 
 interface GraphQueryResultsProps {
@@ -109,12 +115,7 @@ const TYPE_COLOR_PALETTE = [
 ];
 
 function subjectToNodeId(subject: string): string {
-  const normalized = (subject || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
-  return `subject-${normalized || "unknown"}`;
+  return graphEntityNodeId(subject);
 }
 
 function resolveEventElementId(evt: unknown): string | null {
@@ -180,39 +181,47 @@ function buildStateMap(
   return stateMap;
 }
 
-function clamp01(value: number): number {
-  if (!Number.isFinite(value)) {
-    return 0;
-  }
-  if (value <= 0) {
-    return 0;
-  }
-  if (value >= 1) {
-    return 1;
-  }
-  return value;
-}
+function buildHoverStateMap(
+  data: GraphTopologyData,
+  hoveredNodeId: string,
+  neighborIds: Set<string>,
+  pathNodeIds: Set<string>,
+  pathEdgeIds: Set<string>,
+  insightNodeIds: Set<string>,
+  insightEdgeIds: Set<string>,
+): Record<string, string[]> {
+  const stateMap: Record<string, string[]> = {};
 
-function parseEdgeStrength(raw: unknown): number {
-  if (typeof raw === "number" && Number.isFinite(raw)) {
-    return clamp01(raw > 1 ? raw / 100 : raw);
-  }
-  const text = String(raw ?? "").trim();
-  if (!text) {
-    return 0.5;
-  }
-  const matched = text.match(/\d+(\.\d+)?/);
-  if (!matched) {
-    return 0.5;
-  }
-  const parsed = Number(matched[0]);
-  if (!Number.isFinite(parsed)) {
-    return 0.5;
-  }
-  if (text.includes("%") || parsed > 1) {
-    return clamp01(parsed / 100);
-  }
-  return clamp01(parsed);
+  data.nodes.forEach((node) => {
+    if (pathNodeIds.has(node.id)) {
+      stateMap[node.id] = ["path"];
+      return;
+    }
+    if (node.id === hoveredNodeId) {
+      stateMap[node.id] = ["hover"];
+      return;
+    }
+    if (neighborIds.has(node.id)) {
+      stateMap[node.id] = ["active"];
+      return;
+    }
+    stateMap[node.id] = insightNodeIds.has(node.id) ? ["insight"] : [];
+  });
+
+  data.edges.forEach((edge) => {
+    if (pathEdgeIds.has(edge.id)) {
+      stateMap[edge.id] = ["path"];
+      return;
+    }
+    const isConnected = edge.source === hoveredNodeId || edge.target === hoveredNodeId;
+    if (isConnected) {
+      stateMap[edge.id] = ["active"];
+      return;
+    }
+    stateMap[edge.id] = insightEdgeIds.has(edge.id) ? ["insight"] : [];
+  });
+
+  return stateMap;
 }
 
 function getNodeGroupId(nodeId: string, nodeType: string): string {
@@ -233,7 +242,7 @@ function colorByIndex(index: number): string {
 }
 
 function buildWeightColor(weight: number): string {
-  const w = clamp01(weight);
+  const w = Math.max(0, Math.min(1, weight));
   if (w < 0.25) {
     return "#d9d9d9";
   }
@@ -247,7 +256,7 @@ function buildWeightColor(weight: number): string {
 }
 
 function buildEdgeColor(weight: number): string {
-  const w = clamp01(weight);
+  const w = Math.max(0, Math.min(1, weight));
   if (w < 0.25) {
     return "#d9d9d9";
   }
@@ -469,6 +478,11 @@ export function GraphVisualization(props: GraphVisualizationProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<G6Graph | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const focusedNodeIdRef = useRef<string | null>(activeNodeId || null);
+  const nodeMapRef = useRef<Map<string, GraphNode>>(new Map());
+  const onNodeClickRef = useRef(onNodeClick);
+  const onNodeHoverRef = useRef(onNodeHover);
+  const onActiveNodeChangeRef = useRef(onActiveNodeChange);
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(
     activeNodeId || null,
   );
@@ -481,6 +495,8 @@ export function GraphVisualization(props: GraphVisualizationProps) {
   const [colorMode, setColorMode] = useState<GraphColorMode>("type");
   const [edgeStrengthThreshold, setEdgeStrengthThreshold] = useState(0);
   const [activeInsightKey, setActiveInsightKey] = useState("");
+  const colorModeRef = useRef<GraphColorMode>("type");
+  const nodeTypeColorMapRef = useRef<Map<string, string>>(new Map());
 
   const nodeTypeColorMap = useMemo(() => {
     const groups = Array.from(new Set(data.nodes.map((node) => getNodeGroupId(node.id, String(node.type || "")))));
@@ -491,29 +507,15 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     return map;
   }, [data.nodes]);
 
-  const graphData = useMemo(() => {
-    const filteredEdges = data.edges.filter((edge) => {
-      const strength = parseEdgeStrength(edge.confidence);
-      return strength >= edgeStrengthThreshold;
-    });
-    if (!filteredEdges.length) {
-      return {
-        nodes: data.nodes,
-        edges: filteredEdges,
-      };
-    }
+  const graphData = useMemo(
+    () => buildGraphDisplayData(data, edgeStrengthThreshold),
+    [data, edgeStrengthThreshold],
+  );
 
-    const connectedNodeIds = new Set<string>();
-    filteredEdges.forEach((edge) => {
-      connectedNodeIds.add(edge.source);
-      connectedNodeIds.add(edge.target);
-    });
-    const filteredNodes = data.nodes.filter((node) => connectedNodeIds.has(node.id));
-    return {
-      nodes: filteredNodes,
-      edges: filteredEdges,
-    };
-  }, [data.edges, data.nodes, edgeStrengthThreshold]);
+  const graphEntitySummary = useMemo(
+    () => summarizeGraphEntities(graphData),
+    [graphData],
+  );
 
   const nodeOptions = useMemo(
     () =>
@@ -527,7 +529,10 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     [graphData.nodes],
   );
 
-  const hotNodes = useMemo(() => nodeOptions.slice(0, 6), [nodeOptions]);
+  const topEntities = useMemo(
+    () => graphEntitySummary.topEntities,
+    [graphEntitySummary.topEntities],
+  );
 
   const edgeLookup = useMemo(() => {
     const map = new Map<string, string>();
@@ -678,6 +683,34 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     [activeInsightKey, insightCards],
   );
 
+  useEffect(() => {
+    focusedNodeIdRef.current = focusedNodeId;
+  }, [focusedNodeId]);
+
+  useEffect(() => {
+    nodeMapRef.current = nodeMap;
+  }, [nodeMap]);
+
+  useEffect(() => {
+    onNodeClickRef.current = onNodeClick;
+  }, [onNodeClick]);
+
+  useEffect(() => {
+    onNodeHoverRef.current = onNodeHover;
+  }, [onNodeHover]);
+
+  useEffect(() => {
+    onActiveNodeChangeRef.current = onActiveNodeChange;
+  }, [onActiveNodeChange]);
+
+  useEffect(() => {
+    colorModeRef.current = colorMode;
+  }, [colorMode]);
+
+  useEffect(() => {
+    nodeTypeColorMapRef.current = nodeTypeColorMap;
+  }, [nodeTypeColorMap]);
+
   const autoFillTargetKey = useMemo(() => {
     if (!pathStartNodeId) {
       return "knowledge.graphQuery.pathAutoTargetStart";
@@ -749,6 +782,49 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     },
     [activeInsight?.edgeIds, activeInsight?.nodeIds, graphData, pathEdgeIds, pathNodeIds],
   );
+
+  const updateFocusStateRef = useRef(updateFocusState);
+
+  useEffect(() => {
+    updateFocusStateRef.current = updateFocusState;
+  }, [updateFocusState]);
+
+  const updateHoverState = useCallback(async (nodeId: string | null) => {
+    if (!graphRef.current) {
+      return;
+    }
+    if (!nodeId) {
+      await updateFocusStateRef.current(focusedNodeIdRef.current, false);
+      return;
+    }
+
+    const pathNodeSet = new Set(pathNodeIds);
+    const pathEdgeSet = new Set(pathEdgeIds);
+    const insightNodeSet = new Set(activeInsight?.nodeIds || []);
+    const insightEdgeSet = new Set(activeInsight?.edgeIds || []);
+    const neighbors = new Set(
+      graphRef.current
+        .getNeighborNodesData(nodeId)
+        .map((item) => String(item.id || ""))
+        .filter(Boolean),
+    );
+    const stateMap = buildHoverStateMap(
+      graphData,
+      nodeId,
+      neighbors,
+      pathNodeSet,
+      pathEdgeSet,
+      insightNodeSet,
+      insightEdgeSet,
+    );
+    await graphRef.current.setElementState(stateMap, false);
+  }, [activeInsight?.edgeIds, activeInsight?.nodeIds, graphData, pathEdgeIds, pathNodeIds]);
+
+  const updateHoverStateRef = useRef(updateHoverState);
+
+  useEffect(() => {
+    updateHoverStateRef.current = updateHoverState;
+  }, [updateHoverState]);
 
   const handleExport = () => {
     const blob = new Blob([JSON.stringify(data, null, 2)], {
@@ -919,6 +995,12 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     }
   }, [autoFillPathEndpoints, pathEndNodeId, pathStartNodeId]);
 
+  const handleAutoFillPathFromClickRef = useRef(handleAutoFillPathFromClick);
+
+  useEffect(() => {
+    handleAutoFillPathFromClickRef.current = handleAutoFillPathFromClick;
+  }, [handleAutoFillPathFromClick]);
+
   const handleCopyPathSummary = useCallback(async () => {
     if (!pathSummary) {
       message.info(t("knowledge.graphQuery.pathSummaryEmpty"));
@@ -960,7 +1042,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
       const width = containerRef.current.clientWidth || 800;
       const height = 440;
       const g6Data = {
-        nodes: graphData.nodes.map((node) => ({
+          nodes: graphData.nodes.map((node) => ({
           id: node.id,
           data: {
             label: node.label,
@@ -968,6 +1050,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
             type: node.type,
             source_id: node.source_id,
             document_path: node.document_path,
+              isIsolated: graphData.isolatedNodeIds.includes(node.id),
           },
         })),
         edges: graphData.edges.map((edge) => ({
@@ -1006,23 +1089,27 @@ export function GraphVisualization(props: GraphVisualizationProps) {
           node: {
             type: "circle",
             style: (datum: {
-              data?: { label?: string; score?: number; type?: string };
+              data?: { label?: string; score?: number; type?: string; isIsolated?: boolean };
             }) => {
               const score = Number(datum?.data?.score || 0);
               const group = getNodeGroupId("", String(datum?.data?.type || ""));
+              const isIsolated = Boolean(datum?.data?.isIsolated);
+              const currentColorMode = colorModeRef.current;
               const baseFill =
-                colorMode === "type"
-                  ? nodeTypeColorMap.get(group) || "#1677ff"
+                currentColorMode === "type"
+                  ? nodeTypeColorMapRef.current.get(group) || "#1677ff"
                   : buildWeightColor(score);
               const size = 22 + Math.min(30, Math.max(0, score * 20));
               return {
                 size,
                 lineWidth: 1,
-                fill: `${baseFill}22`,
+                fill: `${baseFill}${isIsolated ? "14" : "22"}`,
                 stroke: baseFill,
                 labelText: datum?.data?.label || "",
                 labelPlacement: "bottom",
                 labelFontSize: 11,
+                opacity: isIsolated ? 0.55 : 1,
+                lineDash: isIsolated ? [4, 3] : undefined,
                 cursor: "pointer",
               };
             },
@@ -1092,16 +1179,16 @@ export function GraphVisualization(props: GraphVisualizationProps) {
 
         graph.on("node:mouseenter", async (evt: unknown) => {
           const nodeId = resolveEventElementId(evt);
-          onNodeHover?.(nodeId);
-          if (!nodeId) {
+          onNodeHoverRef.current?.(nodeId);
+          if (!nodeId || focusedNodeIdRef.current) {
             return;
           }
-          await updateFocusState(nodeId, false);
+          await updateHoverStateRef.current(nodeId);
         });
 
         graph.on("node:mouseleave", async () => {
-          onNodeHover?.(null);
-          await updateFocusState(focusedNodeId, false);
+          onNodeHoverRef.current?.(null);
+          await updateHoverStateRef.current(null);
         });
 
         graph.on("node:click", async (evt: unknown) => {
@@ -1109,13 +1196,13 @@ export function GraphVisualization(props: GraphVisualizationProps) {
           if (!nodeId) {
             return;
           }
-          handleAutoFillPathFromClick(nodeId);
+          handleAutoFillPathFromClickRef.current(nodeId);
           setFocusedNodeId(nodeId);
-          onActiveNodeChange?.(nodeId);
-          await updateFocusState(nodeId, true);
-          const found = nodeMap.get(nodeId);
+          onActiveNodeChangeRef.current?.(nodeId);
+          await updateFocusStateRef.current(nodeId, true);
+          const found = nodeMapRef.current.get(nodeId);
           if (found) {
-            onNodeClick?.(found);
+            onNodeClickRef.current?.(found);
           }
         });
 
@@ -1146,14 +1233,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
   }, [
     graphData,
     colorMode,
-    focusedNodeId,
-    handleAutoFillPathFromClick,
-    nodeMap,
     nodeTypeColorMap,
-    onActiveNodeChange,
-    onNodeClick,
-    onNodeHover,
-    updateFocusState,
   ]);
 
   useEffect(() => {
@@ -1229,8 +1309,41 @@ export function GraphVisualization(props: GraphVisualizationProps) {
         </div>
       </div>
       <Typography.Text type="secondary" className={styles.graphSummaryText}>
-        {t("knowledge.graphQuery.nodes")}: {graphData.nodes.length} | {t("knowledge.graphQuery.edges")}: {graphData.edges.length}
+        {t("knowledge.graphQuery.nodes")}: {graphEntitySummary.totalNodes} | {t("knowledge.graphQuery.edges")}: {graphData.edges.length}
       </Typography.Text>
+      <div className={styles.graphEntityStatsRow}>
+        <span className={styles.graphEntityStatPill}>
+          {t("knowledge.graphQuery.totalEntities", "Total Entities")}: {graphEntitySummary.totalNodes}
+        </span>
+        <span className={styles.graphEntityStatPill}>
+          {t("knowledge.graphQuery.connectedEntities", "Connected")}: {graphEntitySummary.connectedNodes}
+        </span>
+        <span className={styles.graphEntityStatPill}>
+          {t("knowledge.graphQuery.isolatedEntities", "Isolated")}: {graphEntitySummary.isolatedNodes}
+        </span>
+        {edgeStrengthThreshold > 0 ? (
+          <span className={styles.graphEntityStatPill}>
+            {t("knowledge.graphQuery.thresholdApplied", "Threshold")}: {Math.round(edgeStrengthThreshold * 100)}%
+          </span>
+        ) : null}
+      </div>
+      {topEntities.length > 0 ? (
+        <Space wrap className={styles.graphHotNodesRow}>
+          <Typography.Text type="secondary">
+            {t("knowledge.graphQuery.topEntities", "Top Entities")}
+          </Typography.Text>
+          {topEntities.map((item) => (
+            <Tag
+              key={item.id}
+              className={styles.graphHotNodeTag}
+              color={focusedNodeId === item.id ? "processing" : "default"}
+              onClick={() => handleSelectNode(item.id)}
+            >
+              {item.label} · {item.degree}
+            </Tag>
+          ))}
+        </Space>
+      ) : null}
       <div className={styles.graphInsightRow}>
         {insightCards.map((card) => {
           const active = card.key === activeInsightKey;
@@ -1511,17 +1624,17 @@ export function GraphVisualization(props: GraphVisualizationProps) {
               </Button>
             </Space>
           ) : null}
-          {hotNodes.length > 0 ? (
+          {topEntities.length > 0 ? (
             <Space wrap className={styles.graphHotNodesRow}>
-              <Typography.Text type="secondary">{t("knowledge.graphQuery.hotNodes")}</Typography.Text>
-              {hotNodes.map((item) => (
+              <Typography.Text type="secondary">{t("knowledge.graphQuery.topEntities", "Top Entities")}</Typography.Text>
+              {topEntities.map((item) => (
                 <Tag
-                  key={item.value}
+                  key={item.id}
                   className={styles.graphHotNodeTag}
-                  color={focusedNodeId === item.value ? "processing" : "default"}
-                  onClick={() => handleSelectNode(item.value)}
+                  color={focusedNodeId === item.id ? "processing" : "default"}
+                  onClick={() => handleSelectNode(item.id)}
                 >
-                  {item.label}
+                  {item.label} · {item.degree}
                 </Tag>
               ))}
             </Space>
