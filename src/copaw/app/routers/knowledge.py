@@ -52,7 +52,21 @@ def _collect_knowledge_tasks_snapshot(
         workspace_dir,
         project_id=project_id,
     )
-    tasks.extend(graph_ops.list_memify_jobs(active_only=True, limit=5))
+    active_memify_jobs = graph_ops.list_memify_jobs(active_only=True, limit=5)
+    tasks.extend(active_memify_jobs)
+    recent_memify_jobs = graph_ops.list_memify_jobs(active_only=False, limit=10)
+    latest_terminal_memify = next(
+        (
+            job
+            for job in recent_memify_jobs
+            if str(job.get("status") or "") in {"succeeded", "failed"}
+        ),
+        None,
+    )
+    if latest_terminal_memify is not None:
+        latest_job_id = str(latest_terminal_memify.get("job_id") or "")
+        if all(str(item.get("job_id") or "") != latest_job_id for item in active_memify_jobs):
+            tasks.append(latest_terminal_memify)
 
     knowledge_manager = _manager_for_workspace(
         workspace_dir,

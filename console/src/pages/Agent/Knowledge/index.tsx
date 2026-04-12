@@ -1235,8 +1235,8 @@ function KnowledgePage() {
   ]);
 
   const knowledgeQuantMetrics = useMemo(
-    () => computeKnowledgeQuantMetrics(sources, hits, backfillStatus),
-    [backfillStatus, hits, sources],
+    () => computeKnowledgeQuantMetrics(sources, hits, backfillStatus, activeKnowledgeTasks),
+    [activeKnowledgeTasks, backfillStatus, hits, sources],
   );
   const quantCards = buildKnowledgeQuantCardViewModels({
     metrics: knowledgeQuantMetrics,
@@ -1344,19 +1344,6 @@ function KnowledgePage() {
         </div>
       </div>
 
-      {unifiedBatchProgress.visible ? (
-        <div className={styles.unifiedProgressRow}>
-          <Typography.Text className={styles.unifiedProgressLabel}>
-            {unifiedBatchProgress.label}
-          </Typography.Text>
-          <Progress
-            percent={unifiedBatchProgress.percent}
-            size="small"
-            status={unifiedBatchProgress.status}
-          />
-        </div>
-      ) : null}
-
       <Space
         direction="vertical"
         size={16}
@@ -1385,7 +1372,11 @@ function KnowledgePage() {
                     {t(statusLabel.i18nKey, statusLabel.defaultLabel)}
                   </Typography.Text>
                   <Typography.Text className={styles.quantReason}>
-                    {t(`knowledge.quantReason.${item.reason.key}`, item.reason.params || {})}
+                    {t(
+                      `knowledge.quantReason.${item.reason.key}`,
+                      item.reason.defaultLabel || "",
+                      item.reason.params || {},
+                    )}
                   </Typography.Text>
                   {item.action ? (
                     <div className={styles.quantActionRow}>
@@ -1407,6 +1398,34 @@ function KnowledgePage() {
           </div>
         </Space>
       </Card>
+
+      {unifiedBatchProgress.visible ? (
+        <Card>
+          <div className={styles.unifiedProgressRowAfterMetrics}>
+            <Typography.Text className={styles.unifiedProgressLabel}>
+              {unifiedBatchProgress.label}
+            </Typography.Text>
+            <Progress
+              percent={unifiedBatchProgress.percent}
+              size="small"
+              status={unifiedBatchProgress.status}
+            />
+            {activeKnowledgeTasks.length > 0 ? (
+              <Space direction="vertical" size={4} className={styles.taskStateList}>
+                {activeKnowledgeTasks.slice(0, 3).map((task) => (
+                  <Typography.Text key={task.task_id} type="secondary" className={styles.taskStateItem}>
+                    {`${String(task.task_type || "knowledge")} · ${String(task.stage_message || task.current_stage || task.status || "running")}`}
+                    {typeof task.percent === "number" ? ` · ${Math.max(0, Math.min(100, task.percent))}%` : ""}
+                    {typeof task.current === "number" && typeof task.total === "number" && task.total > 0
+                      ? ` (${task.current}/${task.total})`
+                      : ""}
+                  </Typography.Text>
+                ))}
+              </Space>
+            ) : null}
+          </div>
+        </Card>
+      ) : null}
 
       <Card>
         <Space className={styles.fullWidth} direction="vertical" size={12}>

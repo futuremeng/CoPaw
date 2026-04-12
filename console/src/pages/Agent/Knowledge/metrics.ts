@@ -2,6 +2,7 @@ import type {
   KnowledgeHistoryBackfillStatus,
   KnowledgeSearchHit,
   KnowledgeSourceItem,
+  KnowledgeTaskProgress,
 } from "../../../api/types";
 
 export interface KnowledgeQuantMetrics {
@@ -10,10 +11,12 @@ export interface KnowledgeQuantMetrics {
   indexedRatio: number;
   totalDocuments: number;
   totalChunks: number;
-  autoSources: number;
-  sourceTypeCount: number;
-  remoteTrackedSources: number;
-  remoteCachedSources: number;
+  totalEntities: number;
+  totalRelations: number;
+  relationNormalizationCoverage: number;
+  entityCanonicalCoverage: number;
+  lowConfidenceRatio: number;
+  missingEvidenceRatio: number;
   pendingHistorySessions: number;
   searchHits: number;
 }
@@ -21,15 +24,15 @@ export interface KnowledgeQuantMetrics {
 export type QuantTone = "neutral" | "positive" | "warning";
 
 export type KnowledgeQuantMetricKey =
-  | "sources"
   | "indexed"
   | "documents"
   | "chunks"
-  | "auto"
-  | "types"
-  | "remote"
-  | "pending"
-  | "hits";
+  | "entities"
+  | "relations"
+  | "relationNormCoverage"
+  | "entityNormCoverage"
+  | "lowConfidenceRatio"
+  | "missingEvidenceRatio";
 
 export interface QuantAssessment {
   tone: QuantTone;
@@ -67,16 +70,17 @@ export interface QuantReason {
   key:
     | "indexedCoverageLow"
     | "indexedCoverageHealthy"
-    | "remoteCachePartial"
-    | "remoteCacheHealthy"
     | "pendingHistoryExists"
     | "pendingHistoryClear"
-    | "sourceTypesNarrow"
-    | "sourceTypesDiverse"
     | "emptyState"
     | "activityPresent"
-    | "noActivity";
+    | "noActivity"
+    | "qualityCoverageHealthy"
+    | "qualityCoverageLow"
+    | "riskRatioHealthy"
+    | "riskRatioHigh";
   params?: Record<string, number | string>;
+  defaultLabel?: string;
 }
 
 export interface RemoteRetrySource {
@@ -90,27 +94,76 @@ export interface RemoteRetrySummary {
   failedNames: string[];
 }
 
-function isAutoSource(source: KnowledgeSourceItem): boolean {
-  const tags = source.tags || [];
-  return tags.includes("auto") || tags.includes("origin:auto") || source.id.startsWith("auto-");
+function pickLatestMemifyTask(tasks: KnowledgeTaskProgress[]): KnowledgeTaskProgress | null {
+  const memifyJobs = tasks
+    .filter((task) => String(task.task_type || "") === "memify")
+    .sort((left, right) => String(right.updated_at || "").localeCompare(String(left.updated_at || "")));
+  return memifyJobs[0] || null;
+}
+
+function toFiniteNumber(value: unknown, fallback = 0): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function safeRatio(numerator: number, denominator: number): number {
+  if (!Number.isFinite(denominator) || denominator <= 0) {
+    return 0;
+  }
+  return Math.max(0, Math.min(1, numerator / denominator));
+}
+
+function ratioToPercent(ratio: number): string {
+  return `${Math.round(Math.max(0, Math.min(1, ratio)) * 100)}%`;
 }
 
 export function computeKnowledgeQuantMetrics(
   sources: KnowledgeSourceItem[],
   hits: KnowledgeSearchHit[],
   backfillStatus: KnowledgeHistoryBackfillStatus | null,
+  tasks: KnowledgeTaskProgress[] = [],
 ): KnowledgeQuantMetrics {
   const totalSources = sources.length;
   const indexedSources = sources.filter((source) => source.status.indexed).length;
   const indexedRatio = totalSources > 0 ? indexedSources / totalSources : 0;
-  const totalDocuments = sources.reduce((sum, source) => sum + Math.max(0, source.status.document_count || 0), 0);
-  const totalChunks = sources.reduce((sum, source) => sum + Math.max(0, source.status.chunk_count || 0), 0);
-  const autoSources = sources.filter((source) => isAutoSource(source)).length;
-  const sourceTypeCount = new Set(sources.map((source) => source.type)).size;
-  const remoteTrackedSources = sources.filter(
-    (source) => typeof source.status.remote_cache_state === "string" && source.status.remote_cache_state.length > 0,
-  ).length;
-  const remoteCachedSources = sources.filter((source) => source.status.remote_cache_state === "cached").length;
+  const sourceDocuments = sources.reduce(
+    (sum, source) => sum + Math.max(0, source.status.document_count || 0),
+    0,
+  );
+  const sourceChunks = sources.reduce(
+    (sum, source) => sum + Math.max(0, source.status.chunk_count || 0),
+    0,
+  );
+
+  const latestMemifyTask = pickLatestMemifyTask(tasks);
+  const enrichmentMetrics = (latestMemifyTask?.enrichment_metrics || {}) as Record<string, unknown>;
+  const memifyDocumentCount = toFiniteNumber(latestMemifyTask?.document_count, 0);
+  const memifyEntityCount = toFiniteNumber(latestMemifyTask?.node_count, 0);
+  const memifyRelationCount = toFiniteNumber(latestMemifyTask?.relation_count, 0);
+
+  const totalDocuments = Math.max(sourceDocuments, memifyDocumentCount);
+  const totalChunks = sourceChunks;
+  const totalEntities = memifyEntityCount;
+  const totalRelations = memifyRelationCount;
+
+  const edgeCount = toFiniteNumber(enrichmentMetrics.edge_count, totalRelations);
+  const nodeCount = toFiniteNumber(enrichmentMetrics.node_count, totalEntities);
+  const relationNormalizedCount = toFiniteNumber(
+    enrichmentMetrics.relation_normalized_count,
+    0,
+  );
+  const entityCanonicalizedCount = toFiniteNumber(
+    enrichmentMetrics.entity_canonicalized_count,
+    0,
+  );
+  const lowConfidenceEdges = toFiniteNumber(enrichmentMetrics.low_confidence_edges, 0);
+  const missingEvidenceEdges = toFiniteNumber(enrichmentMetrics.missing_evidence_edges, 0);
+
+  const relationNormalizationCoverage = safeRatio(relationNormalizedCount, edgeCount);
+  const entityCanonicalCoverage = safeRatio(entityCanonicalizedCount, nodeCount);
+  const lowConfidenceRatio = safeRatio(lowConfidenceEdges, edgeCount);
+  const missingEvidenceRatio = safeRatio(missingEvidenceEdges, edgeCount);
+
   const pendingHistorySessions = backfillStatus?.has_pending_history
     ? Math.max(0, backfillStatus.history_chat_count || 0)
     : 0;
@@ -121,10 +174,12 @@ export function computeKnowledgeQuantMetrics(
     indexedRatio,
     totalDocuments,
     totalChunks,
-    autoSources,
-    sourceTypeCount,
-    remoteTrackedSources,
-    remoteCachedSources,
+    totalEntities,
+    totalRelations,
+    relationNormalizationCoverage,
+    entityCanonicalCoverage,
+    lowConfidenceRatio,
+    missingEvidenceRatio,
     pendingHistorySessions,
     searchHits: hits.length,
   };
@@ -135,48 +190,77 @@ export function getKnowledgeQuantAssessment(
   metrics: KnowledgeQuantMetrics,
 ): QuantAssessment {
   switch (key) {
-    case "sources":
-      return metrics.totalSources > 0
-        ? { tone: "positive", status: "healthy" }
-        : { tone: "neutral", status: "neutral" };
     case "indexed":
       if (metrics.totalSources === 0) {
         return { tone: "neutral", status: "neutral" };
       }
-      return metrics.indexedRatio >= 0.8
-        ? { tone: "positive", status: "healthy" }
-        : { tone: "warning", status: "attention" };
-    case "documents":
-    case "chunks":
-    case "auto":
-    case "hits":
-      return metrics[key === "documents"
-        ? "totalDocuments"
-        : key === "chunks"
-          ? "totalChunks"
-          : key === "auto"
-            ? "autoSources"
-            : "searchHits"] > 0
-        ? { tone: "positive", status: "healthy" }
-        : { tone: "neutral", status: "neutral" };
-    case "types":
-      if (metrics.sourceTypeCount >= 3) {
+      if (metrics.indexedRatio >= 0.9) {
         return { tone: "positive", status: "healthy" };
       }
-      return metrics.sourceTypeCount > 0
-        ? { tone: "neutral", status: "neutral" }
-        : { tone: "neutral", status: "neutral" };
-    case "remote":
-      if (metrics.remoteTrackedSources === 0) {
+      if (metrics.indexedRatio >= 0.6) {
         return { tone: "neutral", status: "neutral" };
       }
-      return metrics.remoteCachedSources === metrics.remoteTrackedSources
+      return { tone: "warning", status: "attention" };
+    case "documents":
+      return metrics.totalDocuments > 0
         ? { tone: "positive", status: "healthy" }
-        : { tone: "warning", status: "attention" };
-    case "pending":
-      return metrics.pendingHistorySessions > 0
-        ? { tone: "warning", status: "attention" }
-        : { tone: "positive", status: "healthy" };
+        : { tone: "neutral", status: "neutral" };
+    case "chunks":
+      return metrics.totalChunks > 0
+        ? { tone: "positive", status: "healthy" }
+        : { tone: "neutral", status: "neutral" };
+    case "entities":
+      return metrics.totalEntities > 0
+        ? { tone: "positive", status: "healthy" }
+        : { tone: "neutral", status: "neutral" };
+    case "relations":
+      return metrics.totalRelations > 0
+        ? { tone: "positive", status: "healthy" }
+        : { tone: "neutral", status: "neutral" };
+    case "relationNormCoverage":
+      if (metrics.totalRelations <= 0) {
+        return { tone: "neutral", status: "neutral" };
+      }
+      if (metrics.relationNormalizationCoverage >= 0.7) {
+        return { tone: "positive", status: "healthy" };
+      }
+      if (metrics.relationNormalizationCoverage >= 0.4) {
+        return { tone: "neutral", status: "neutral" };
+      }
+      return { tone: "warning", status: "attention" };
+    case "entityNormCoverage":
+      if (metrics.totalEntities <= 0) {
+        return { tone: "neutral", status: "neutral" };
+      }
+      if (metrics.entityCanonicalCoverage >= 0.7) {
+        return { tone: "positive", status: "healthy" };
+      }
+      if (metrics.entityCanonicalCoverage >= 0.4) {
+        return { tone: "neutral", status: "neutral" };
+      }
+      return { tone: "warning", status: "attention" };
+    case "lowConfidenceRatio":
+      if (metrics.totalRelations <= 0) {
+        return { tone: "neutral", status: "neutral" };
+      }
+      if (metrics.lowConfidenceRatio <= 0.1) {
+        return { tone: "positive", status: "healthy" };
+      }
+      if (metrics.lowConfidenceRatio <= 0.25) {
+        return { tone: "neutral", status: "neutral" };
+      }
+      return { tone: "warning", status: "attention" };
+    case "missingEvidenceRatio":
+      if (metrics.totalRelations <= 0) {
+        return { tone: "neutral", status: "neutral" };
+      }
+      if (metrics.missingEvidenceRatio <= 0.1) {
+        return { tone: "positive", status: "healthy" };
+      }
+      if (metrics.missingEvidenceRatio <= 0.25) {
+        return { tone: "neutral", status: "neutral" };
+      }
+      return { tone: "warning", status: "attention" };
     default:
       return { tone: "neutral", status: "neutral" };
   }
@@ -189,74 +273,98 @@ export function getKnowledgeQuantReason(
   switch (key) {
     case "indexed":
       if (metrics.totalSources === 0) {
-        return { key: "emptyState" };
+        return {
+          key: "emptyState",
+          defaultLabel: "No indexed sources yet",
+        };
       }
-      return metrics.indexedRatio >= 0.8
+      return metrics.indexedRatio >= 0.9
         ? {
             key: "indexedCoverageHealthy",
             params: { percent: Math.round(metrics.indexedRatio * 100) },
+            defaultLabel: "Indexed coverage is healthy ({{percent}}%)",
           }
         : {
             key: "indexedCoverageLow",
             params: { percent: Math.round(metrics.indexedRatio * 100) },
+            defaultLabel: "Indexed coverage is low ({{percent}}%)",
           };
-    case "remote":
-      if (metrics.remoteTrackedSources === 0) {
-        return { key: "emptyState" };
-      }
-      return metrics.remoteCachedSources === metrics.remoteTrackedSources
-        ? {
-            key: "remoteCacheHealthy",
-            params: {
-              cached: metrics.remoteCachedSources,
-              tracked: metrics.remoteTrackedSources,
-            },
-          }
-        : {
-            key: "remoteCachePartial",
-            params: {
-              cached: metrics.remoteCachedSources,
-              tracked: metrics.remoteTrackedSources,
-            },
-          };
-    case "pending":
-      return metrics.pendingHistorySessions > 0
-        ? {
-            key: "pendingHistoryExists",
-            params: { count: metrics.pendingHistorySessions },
-          }
-        : { key: "pendingHistoryClear" };
-    case "types":
-      if (metrics.sourceTypeCount === 0) {
-        return { key: "emptyState" };
-      }
-      return metrics.sourceTypeCount >= 3
-        ? {
-            key: "sourceTypesDiverse",
-            params: { count: metrics.sourceTypeCount },
-          }
-        : {
-            key: "sourceTypesNarrow",
-            params: { count: metrics.sourceTypeCount },
-          };
-    case "sources":
     case "documents":
     case "chunks":
-    case "auto":
-    case "hits": {
-      const value = key === "sources"
-        ? metrics.totalSources
-        : key === "documents"
-          ? metrics.totalDocuments
-          : key === "chunks"
-            ? metrics.totalChunks
-            : key === "auto"
-              ? metrics.autoSources
-              : metrics.searchHits;
-      return value > 0 ? { key: "activityPresent" } : { key: "noActivity" };
+    case "entities":
+    case "relations": {
+      const value = key === "documents"
+        ? metrics.totalDocuments
+        : key === "chunks"
+          ? metrics.totalChunks
+          : key === "entities"
+            ? metrics.totalEntities
+            : metrics.totalRelations;
+      return value > 0
+        ? { key: "activityPresent", defaultLabel: "Sufficient observed activity" }
+        : { key: "noActivity", defaultLabel: "No activity observed yet" };
+    }
+    case "relationNormCoverage": {
+      const percent = Math.round(metrics.relationNormalizationCoverage * 100);
+      return metrics.relationNormalizationCoverage >= 0.4
+        ? {
+            key: "qualityCoverageHealthy",
+            params: { percent },
+            defaultLabel: "Coverage is acceptable ({{percent}}%)",
+          }
+        : {
+            key: "qualityCoverageLow",
+            params: { percent },
+            defaultLabel: "Coverage is low ({{percent}}%)",
+          };
+    }
+    case "entityNormCoverage": {
+      const percent = Math.round(metrics.entityCanonicalCoverage * 100);
+      return metrics.entityCanonicalCoverage >= 0.4
+        ? {
+            key: "qualityCoverageHealthy",
+            params: { percent },
+            defaultLabel: "Coverage is acceptable ({{percent}}%)",
+          }
+        : {
+            key: "qualityCoverageLow",
+            params: { percent },
+            defaultLabel: "Coverage is low ({{percent}}%)",
+          };
+    }
+    case "lowConfidenceRatio": {
+      const percent = Math.round(metrics.lowConfidenceRatio * 100);
+      return metrics.lowConfidenceRatio <= 0.25
+        ? {
+            key: "riskRatioHealthy",
+            params: { percent },
+            defaultLabel: "Risk ratio is controlled ({{percent}}%)",
+          }
+        : {
+            key: "riskRatioHigh",
+            params: { percent },
+            defaultLabel: "Risk ratio is high ({{percent}}%)",
+          };
+    }
+    case "missingEvidenceRatio": {
+      const percent = Math.round(metrics.missingEvidenceRatio * 100);
+      return metrics.missingEvidenceRatio <= 0.25
+        ? {
+            key: "riskRatioHealthy",
+            params: { percent },
+            defaultLabel: "Risk ratio is controlled ({{percent}}%)",
+          }
+        : {
+            key: "riskRatioHigh",
+            params: { percent },
+            defaultLabel: "Risk ratio is high ({{percent}}%)",
+          };
     }
     default:
-      return { key: "emptyState" };
+      return {
+        key: "emptyState",
+        defaultLabel: "No signal",
+      };
   }
 }
 
@@ -283,20 +391,11 @@ export function getKnowledgeQuantActionKey(
 ): KnowledgeQuantActionKey | undefined {
   const assessment = getKnowledgeQuantAssessment(key, metrics);
 
-  if (key === "sources" && metrics.totalSources === 0) {
-    return "addSource";
-  }
-  if (key === "types" && metrics.sourceTypeCount === 0) {
-    return "addSource";
-  }
   if (key === "indexed" && assessment.status === "attention") {
     return "rebuildIndex";
   }
-  if (key === "pending" && metrics.pendingHistorySessions > 0) {
-    return "backfillHistory";
-  }
-  if (key === "remote" && assessment.status === "attention") {
-    return "retryRemote";
+  if (metrics.totalSources === 0 && key === "documents") {
+    return "addSource";
   }
   return undefined;
 }
@@ -359,11 +458,6 @@ export function getKnowledgeQuantStatusLabel(
 export function buildKnowledgeQuantCardModels(
   metrics: KnowledgeQuantMetrics,
 ): KnowledgeQuantCardModel[] {
-  const coverage = `${Math.round(metrics.indexedRatio * 100)}%`;
-  const remoteCache = metrics.remoteTrackedSources > 0
-    ? `${metrics.remoteCachedSources}/${metrics.remoteTrackedSources}`
-    : "-";
-
   const base: Array<{
     key: KnowledgeQuantMetricKey;
     labelI18nKey: string;
@@ -371,16 +465,10 @@ export function buildKnowledgeQuantCardModels(
     value: string | number;
   }> = [
     {
-      key: "sources",
-      labelI18nKey: "knowledge.quantSourcesTotal",
-      defaultLabel: "Sources",
-      value: metrics.totalSources,
-    },
-    {
       key: "indexed",
       labelI18nKey: "knowledge.quantSourcesIndexed",
       defaultLabel: "Index Coverage",
-      value: coverage,
+      value: ratioToPercent(metrics.indexedRatio),
     },
     {
       key: "documents",
@@ -395,34 +483,40 @@ export function buildKnowledgeQuantCardModels(
       value: metrics.totalChunks,
     },
     {
-      key: "auto",
-      labelI18nKey: "knowledge.quantAutoSources",
-      defaultLabel: "Auto Sources",
-      value: metrics.autoSources,
+      key: "entities",
+      labelI18nKey: "knowledge.quantEntities",
+      defaultLabel: "Entities",
+      value: metrics.totalEntities,
     },
     {
-      key: "types",
-      labelI18nKey: "knowledge.quantSourceTypes",
-      defaultLabel: "Source Types",
-      value: metrics.sourceTypeCount,
+      key: "relations",
+      labelI18nKey: "knowledge.quantRelations",
+      defaultLabel: "Relations",
+      value: metrics.totalRelations,
     },
     {
-      key: "remote",
-      labelI18nKey: "knowledge.quantRemoteCache",
-      defaultLabel: "Remote Cache",
-      value: remoteCache,
+      key: "relationNormCoverage",
+      labelI18nKey: "knowledge.quantRelationNormalizationCoverage",
+      defaultLabel: "Relation Normalization Coverage",
+      value: ratioToPercent(metrics.relationNormalizationCoverage),
     },
     {
-      key: "pending",
-      labelI18nKey: "knowledge.quantPendingHistory",
-      defaultLabel: "Pending History",
-      value: metrics.pendingHistorySessions,
+      key: "entityNormCoverage",
+      labelI18nKey: "knowledge.quantEntityCanonicalCoverage",
+      defaultLabel: "Entity Canonical Coverage",
+      value: ratioToPercent(metrics.entityCanonicalCoverage),
     },
     {
-      key: "hits",
-      labelI18nKey: "knowledge.quantSearchHits",
-      defaultLabel: "Last Search Hits",
-      value: metrics.searchHits,
+      key: "lowConfidenceRatio",
+      labelI18nKey: "knowledge.quantLowConfidenceRatio",
+      defaultLabel: "Low-confidence Edge Ratio",
+      value: ratioToPercent(metrics.lowConfidenceRatio),
+    },
+    {
+      key: "missingEvidenceRatio",
+      labelI18nKey: "knowledge.quantMissingEvidenceRatio",
+      defaultLabel: "Missing Evidence Ratio",
+      value: ratioToPercent(metrics.missingEvidenceRatio),
     },
   ];
 

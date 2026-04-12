@@ -59,10 +59,7 @@ class GraphOpsManager:
         self._jobs_lock = threading.Lock()
 
     def _resolve_query_graph_path(self, config: KnowledgeConfig) -> tuple[Path, str]:
-        if (
-            bool(getattr(config, "enrichment_pipeline_enabled", False))
-            and self.enriched_graph_path.exists()
-        ):
+        if self.enriched_graph_path.exists():
             return self.enriched_graph_path, "l2_enriched"
         return self.local_graph_path, "l1_raw"
 
@@ -72,10 +69,7 @@ class GraphOpsManager:
         graphify_cfg: Any,
     ) -> tuple[str, str]:
         configured_graph_path = str(getattr(graphify_cfg, "graph_path", "") or "").strip()
-        if (
-            bool(getattr(config, "enrichment_pipeline_enabled", False))
-            and self.enriched_graph_path.exists()
-        ):
+        if self.enriched_graph_path.exists():
             return str(self.enriched_graph_path), "l2_enriched"
         if configured_graph_path:
             return configured_graph_path, "l1_raw"
@@ -608,11 +602,7 @@ class GraphOpsManager:
             "dry_run": bool(dry_run),
         }
 
-        if (
-            status == "succeeded"
-            and not dry_run
-            and bool(getattr(config, "enrichment_pipeline_enabled", False))
-        ):
+        if status == "succeeded" and not dry_run:
             source_graph_path: Path | None = None
             if engine == "local_lexical":
                 source_graph_path = self.local_graph_path

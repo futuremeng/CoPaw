@@ -27,13 +27,7 @@ describe("knowledge quant cards view models", () => {
         },
       ],
       [],
-      {
-        has_backfill_record: false,
-        backfill_completed: false,
-        marked_unbackfilled: true,
-        history_chat_count: 5,
-        has_pending_history: true,
-      },
+        null,
     );
 
     const onAddSource = vi.fn();
@@ -58,23 +52,18 @@ describe("knowledge quant cards view models", () => {
     });
 
     const indexed = cards.find((item) => item.key === "indexed");
-    const pending = cards.find((item) => item.key === "pending");
-    const remote = cards.find((item) => item.key === "remote");
+      const documents = cards.find((item) => item.key === "documents");
 
     expect(indexed?.action?.defaultLabel).toBe("Rebuild Index");
     expect(indexed?.action?.loading).toBe(true);
     indexed?.action?.onClick();
     expect(onRebuildIndex).toHaveBeenCalledTimes(1);
 
-    expect(pending?.action?.defaultLabel).toBe("Backfill History");
-    expect(pending?.action?.loading).toBe(false);
-    pending?.action?.onClick();
-    expect(onBackfillHistory).toHaveBeenCalledTimes(1);
-
-    expect(remote?.action?.defaultLabel).toBe("Retry Remote Sources");
-    expect(remote?.action?.loading).toBe(true);
-    remote?.action?.onClick();
-    expect(onRetryRemote).toHaveBeenCalledTimes(1);
+      expect(documents?.action).toBeUndefined();
+      expect(cards).toHaveLength(9);
+      expect(onAddSource).not.toHaveBeenCalled();
+      expect(onBackfillHistory).not.toHaveBeenCalled();
+      expect(onRetryRemote).not.toHaveBeenCalled();
   });
 
   it("provides add-source action on empty sources metrics", () => {
@@ -97,9 +86,9 @@ describe("knowledge quant cards view models", () => {
       },
     });
 
-    const sourceCard = cards.find((item) => item.key === "sources");
-    expect(sourceCard?.action?.defaultLabel).toBe("Add Source");
-    sourceCard?.action?.onClick();
+      const documentsCard = cards.find((item) => item.key === "documents");
+      expect(documentsCard?.action?.defaultLabel).toBe("Add Source");
+      documentsCard?.action?.onClick();
     expect(onAddSource).toHaveBeenCalledTimes(1);
   });
 });
