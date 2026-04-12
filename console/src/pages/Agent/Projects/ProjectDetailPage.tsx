@@ -144,6 +144,10 @@ const DEFAULT_KNOWLEDGE_HEADER_SIGNALS: ProjectKnowledgeHeaderSignals = {
   chunkCount: 0,
   relationCount: 0,
   entityCount: 0,
+  relationNormalizationCoverage: 0,
+  entityCanonicalCoverage: 0,
+  lowConfidenceRatio: 0,
+  missingEvidenceRatio: 0,
 };
 
 const STAGE_FILTERS: Record<ProjectStageKey, ProjectFileFilterKey[]> = {
@@ -3391,6 +3395,10 @@ export default function ProjectDetailPage() {
                         </Text>
                         <div className={styles.knowledgeModuleHeaderSignals}>
                           <div className={styles.knowledgeModuleHeaderSignal}>
+                            <Text type="secondary">{t("projects.knowledge.signalIndexedCoverage")}</Text>
+                            <Text strong>{`${Math.round(knowledgeHeaderSignals.indexedRatio * 100)}%`}</Text>
+                          </div>
+                          <div className={styles.knowledgeModuleHeaderSignal}>
                             <Text type="secondary">{t("projects.knowledge.signalDocuments")}</Text>
                             <Text strong>{String(knowledgeHeaderSignals.documentCount)}</Text>
                           </div>
@@ -3399,16 +3407,28 @@ export default function ProjectDetailPage() {
                             <Text strong>{String(knowledgeHeaderSignals.chunkCount)}</Text>
                           </div>
                           <div className={styles.knowledgeModuleHeaderSignal}>
-                            <Text type="secondary">{t("projects.knowledge.signalIndexedCoverage")}</Text>
-                            <Text strong>{`${Math.round(knowledgeHeaderSignals.indexedRatio * 100)}%`}</Text>
-                          </div>
-                          <div className={styles.knowledgeModuleHeaderSignal}>
                             <Text type="secondary">{t("projects.knowledge.signalRelations")}</Text>
                             <Text strong>{String(knowledgeHeaderSignals.relationCount)}</Text>
                           </div>
                           <div className={styles.knowledgeModuleHeaderSignal}>
                             <Text type="secondary">{t("projects.knowledge.entities", "实体数")}</Text>
                             <Text strong>{String(knowledgeHeaderSignals.entityCount)}</Text>
+                          </div>
+                          <div className={styles.knowledgeModuleHeaderSignal}>
+                            <Text type="secondary">{t("knowledge.quantRelationNormalizationCoverage")}</Text>
+                            <Text strong>{`${Math.round(knowledgeHeaderSignals.relationNormalizationCoverage * 100)}%`}</Text>
+                          </div>
+                          <div className={styles.knowledgeModuleHeaderSignal}>
+                            <Text type="secondary">{t("knowledge.quantEntityCanonicalCoverage")}</Text>
+                            <Text strong>{`${Math.round(knowledgeHeaderSignals.entityCanonicalCoverage * 100)}%`}</Text>
+                          </div>
+                          <div className={styles.knowledgeModuleHeaderSignal}>
+                            <Text type="secondary">{t("knowledge.quantLowConfidenceRatio")}</Text>
+                            <Text strong>{`${Math.round(knowledgeHeaderSignals.lowConfidenceRatio * 100)}%`}</Text>
+                          </div>
+                          <div className={styles.knowledgeModuleHeaderSignal}>
+                            <Text type="secondary">{t("knowledge.quantMissingEvidenceRatio")}</Text>
+                            <Text strong>{`${Math.round(knowledgeHeaderSignals.missingEvidenceRatio * 100)}%`}</Text>
                           </div>
                         </div>
                       </div>

@@ -21,6 +21,10 @@ export interface ProjectKnowledgeHeaderSignals {
   chunkCount: number;
   relationCount: number;
   entityCount: number;
+  relationNormalizationCoverage: number;
+  entityCanonicalCoverage: number;
+  lowConfidenceRatio: number;
+  missingEvidenceRatio: number;
 }
 
 export interface ProjectKnowledgeTrendSnapshot {
@@ -39,6 +43,10 @@ export interface ProjectKnowledgeMetrics {
   chunkCount: number;
   relationCount: number;
   entityCount: number;
+  relationNormalizationCoverage: number;
+  entityCanonicalCoverage: number;
+  lowConfidenceRatio: number;
+  missingEvidenceRatio: number;
 }
 
 export type ProjectKnowledgeInsightAction = "settings" | "query" | "healthy";
@@ -301,6 +309,34 @@ function getSyncIndexCount(
   }
   const rawValue = (indexResult as Record<string, unknown>)[key];
   return Number.isFinite(Number(rawValue)) ? Number(rawValue) : Number(rawValue || 0);
+}
+
+function getSyncEnrichmentMetric(
+  syncState: ProjectKnowledgeSyncState | null,
+  key: string,
+): number {
+  const memify = syncState?.last_result?.memify;
+  if (!memify || typeof memify !== "object") {
+    return 0;
+  }
+  const enrichment = (memify as { enrichment_metrics?: unknown }).enrichment_metrics;
+  if (!enrichment || typeof enrichment !== "object") {
+    return 0;
+  }
+  const rawValue = (enrichment as Record<string, unknown>)[key];
+  return Number.isFinite(Number(rawValue)) ? Number(rawValue) : Number(rawValue || 0);
+}
+
+function toFiniteNumber(value: unknown, fallback = 0): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function safeRatio(numerator: number, denominator: number): number {
+  if (!Number.isFinite(denominator) || denominator <= 0) {
+    return 0;
+  }
+  return Math.max(0, Math.min(1, numerator / denominator));
 }
 
 export function useProjectKnowledgeState(
@@ -755,6 +791,41 @@ export function useProjectKnowledgeState(
         .filter(Boolean),
     ).size;
     const entityCount = Math.max(graphEntityCount, getSyncNodeCount(syncState));
+    const activeEnrichmentMetrics = (activeKnowledgeTask?.enrichment_metrics || {}) as Record<string, unknown>;
+
+    const edgeCount = Math.max(
+      getSyncEnrichmentMetric(syncState, "edge_count"),
+      toFiniteNumber(activeEnrichmentMetrics.edge_count, 0),
+      relationCount,
+    );
+    const nodeCount = Math.max(
+      getSyncEnrichmentMetric(syncState, "node_count"),
+      toFiniteNumber(activeEnrichmentMetrics.node_count, 0),
+      entityCount,
+    );
+
+    const relationNormalizedCount = Math.max(
+      getSyncEnrichmentMetric(syncState, "relation_normalized_count"),
+      toFiniteNumber(activeEnrichmentMetrics.relation_normalized_count, 0),
+    );
+    const entityCanonicalizedCount = Math.max(
+      getSyncEnrichmentMetric(syncState, "entity_canonicalized_count"),
+      toFiniteNumber(activeEnrichmentMetrics.entity_canonicalized_count, 0),
+    );
+    const lowConfidenceEdges = Math.max(
+      getSyncEnrichmentMetric(syncState, "low_confidence_edges"),
+      toFiniteNumber(activeEnrichmentMetrics.low_confidence_edges, 0),
+    );
+    const missingEvidenceEdges = Math.max(
+      getSyncEnrichmentMetric(syncState, "missing_evidence_edges"),
+      toFiniteNumber(activeEnrichmentMetrics.missing_evidence_edges, 0),
+    );
+
+    const relationNormalizationCoverage = safeRatio(relationNormalizedCount, edgeCount);
+    const entityCanonicalCoverage = safeRatio(entityCanonicalizedCount, nodeCount);
+    const lowConfidenceRatio = safeRatio(lowConfidenceEdges, edgeCount);
+    const missingEvidenceRatio = safeRatio(missingEvidenceEdges, edgeCount);
+
     return {
       totalSources: effectiveTotalSources,
       indexedSources: effectiveIndexedSources,
@@ -763,8 +834,18 @@ export function useProjectKnowledgeState(
       chunkCount,
       relationCount,
       entityCount,
+      relationNormalizationCoverage,
+      entityCanonicalCoverage,
+      lowConfidenceRatio,
+      missingEvidenceRatio,
     };
-  }, [graphResult?.records?.length, projectSources, sourceRegistered, syncState]);
+  }, [
+    activeKnowledgeTask?.enrichment_metrics,
+    graphResult?.records,
+    projectSources,
+    sourceRegistered,
+    syncState,
+  ]);
 
   const syncAlertType = useMemo(
     () => getProjectKnowledgeSyncAlertType(syncState),
@@ -800,13 +881,21 @@ export function useProjectKnowledgeState(
       chunkCount: quantMetrics.chunkCount,
       relationCount: quantMetrics.relationCount,
       entityCount: quantMetrics.entityCount,
+      relationNormalizationCoverage: quantMetrics.relationNormalizationCoverage,
+      entityCanonicalCoverage: quantMetrics.entityCanonicalCoverage,
+      lowConfidenceRatio: quantMetrics.lowConfidenceRatio,
+      missingEvidenceRatio: quantMetrics.missingEvidenceRatio,
     });
   }, [
     params.onSignalsChange,
     quantMetrics.entityCount,
+    quantMetrics.entityCanonicalCoverage,
     quantMetrics.chunkCount,
     quantMetrics.documentCount,
     quantMetrics.indexedRatio,
+    quantMetrics.lowConfidenceRatio,
+    quantMetrics.missingEvidenceRatio,
+    quantMetrics.relationNormalizationCoverage,
     quantMetrics.relationCount,
   ]);
 

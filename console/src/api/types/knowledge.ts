@@ -330,6 +330,19 @@ export interface KnowledgeTaskProgress {
   updated_at?: string | null;
   warnings?: string[];
   error?: string | null;
+  document_count?: number;
+  chunk_count?: number;
+  node_count?: number;
+  relation_count?: number;
+  enrichment_metrics?: {
+    edge_count?: number;
+    node_count?: number;
+    relation_normalized_count?: number;
+    entity_canonicalized_count?: number;
+    low_confidence_edges?: number;
+    missing_evidence_edges?: number;
+    [key: string]: unknown;
+  };
 }
 
 export interface KnowledgeTasksSnapshot {

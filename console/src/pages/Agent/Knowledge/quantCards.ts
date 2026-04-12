@@ -18,7 +18,7 @@ export interface KnowledgeQuantCardViewModel {
   defaultLabel: string;
   value: string | number;
   assessment: { tone: "neutral" | "positive" | "warning"; status: "healthy" | "attention" | "neutral" };
-  reason: { key: string; params?: Record<string, number | string> };
+  reason: { key: string; params?: Record<string, number | string>; defaultLabel?: string };
   action?: KnowledgeQuantCardActionViewModel;
 }
 
