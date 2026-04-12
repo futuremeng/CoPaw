@@ -3,7 +3,6 @@ import {
   Alert,
   Badge,
   Button,
-  Card,
   Checkbox,
   Space,
   Switch,
@@ -329,12 +328,18 @@ export default function ProjectKnowledgeSettingsPanel(
   }, [syncState, t]);
 
   return (
-    <Card
-      size="small"
-      title={t("projects.knowledgeDock.tabSettings", "Settings")}
-      className={styles.projectKnowledgeSettingsCard}
-    >
-      <div className={styles.projectKnowledgeSettingsHeader}>
+    <div className={styles.projectKnowledgeWorkbench}>
+      <div className={styles.projectKnowledgeTabHeader}>
+        <div>
+          <Typography.Title level={5} className={styles.projectKnowledgeSectionTitle}>
+            {t("projects.knowledgeDock.tabSettings", "Settings")}
+          </Typography.Title>
+          <Typography.Text type="secondary">
+            {syncState?.status && syncState.status !== "idle"
+              ? syncAlertDescription
+              : t("projects.knowledge.settingsHint", "Control project knowledge registration and sync behavior.")}
+          </Typography.Text>
+        </div>
         <Badge
           status={sourceRegistered ? "success" : "default"}
           text={
@@ -345,44 +350,44 @@ export default function ProjectKnowledgeSettingsPanel(
               : t("common.loading", "Loading")
           }
         />
+      </div>
 
-        <div className={styles.projectKnowledgeSettingsActions}>
-          <Space size={6}>
-            <Typography.Text type="secondary">
-              {t("projects.knowledge.autoSinkLabel")}
-            </Typography.Text>
-            <Switch
-              checked={autoSinkEnabled}
-              loading={updatingAutoSink}
-              onChange={(checked) => {
-                void handleToggleAutoSink(checked);
-              }}
-            />
-          </Space>
-
-          <Button
-            size="small"
-            loading={manualSinking}
-            onClick={() => {
-              void handleManualSink();
+      <div className={styles.projectKnowledgeSettingsActions}>
+        <Space size={6}>
+          <Typography.Text type="secondary">
+            {t("projects.knowledge.autoSinkLabel")}
+          </Typography.Text>
+          <Switch
+            checked={autoSinkEnabled}
+            loading={updatingAutoSink}
+            onChange={(checked) => {
+              void handleToggleAutoSink(checked);
             }}
-          >
-            {t("projects.knowledge.manualSink")}
-          </Button>
+          />
+        </Space>
 
-          <Button
-            size="small"
-            type={sourceRegistered ? "default" : "primary"}
-            loading={registering}
-            onClick={() => {
-              void handleRegisterProjectSource();
-            }}
-          >
-            {sourceRegistered
-              ? t("projects.knowledge.sourceReindex")
-              : t("projects.knowledge.sourceRegister")}
-          </Button>
-        </div>
+        <Button
+          size="small"
+          loading={manualSinking}
+          onClick={() => {
+            void handleManualSink();
+          }}
+        >
+          {t("projects.knowledge.manualSink")}
+        </Button>
+
+        <Button
+          size="small"
+          type={sourceRegistered ? "default" : "primary"}
+          loading={registering}
+          onClick={() => {
+            void handleRegisterProjectSource();
+          }}
+        >
+          {sourceRegistered
+            ? t("projects.knowledge.sourceReindex")
+            : t("projects.knowledge.sourceRegister")}
+        </Button>
       </div>
 
       <div className={styles.projectKnowledgeSettingsRowCompact}>
@@ -439,7 +444,7 @@ export default function ProjectKnowledgeSettingsPanel(
         />
       ) : null}
 
-      {syncState && (syncState.status !== "idle" || Boolean(syncState.last_error) || Boolean(syncState.last_finished_at)) ? (
+      {syncState && Boolean(syncState.last_error) ? (
         <Alert
           type={syncAlertType}
           showIcon
@@ -447,6 +452,6 @@ export default function ProjectKnowledgeSettingsPanel(
           description={syncAlertDescription}
         />
       ) : null}
-    </Card>
+    </div>
   );
 }

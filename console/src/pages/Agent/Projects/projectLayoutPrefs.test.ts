@@ -33,7 +33,10 @@ describe("project layout prefs", () => {
       treeDisplayMode: "highlight",
     };
 
-    expect(parseProjectLayoutPrefs(JSON.stringify(payload))).toEqual(payload);
+    expect(parseProjectLayoutPrefs(JSON.stringify(payload))).toEqual({
+      ...defaultProjectLayoutPrefs(),
+      ...payload,
+    });
   });
 
   it("fills missing fields with defaults for backward compatibility", () => {

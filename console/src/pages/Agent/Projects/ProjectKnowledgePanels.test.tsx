@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import ProjectKnowledgeInsightsPanel from "./ProjectKnowledgeInsightsPanel";
+import ProjectKnowledgeRelationsPanel from "./ProjectKnowledgeRelationsPanel";
 import ProjectKnowledgeSignalsPanel from "./ProjectKnowledgeSignalsPanel";
 import ProjectKnowledgeSourcesPanel from "./ProjectKnowledgeSourcesPanel";
 import type { ProjectKnowledgeState } from "./useProjectKnowledgeState";
@@ -48,6 +48,25 @@ function buildKnowledgeState(): ProjectKnowledgeState {
         },
       },
     ],
+    selectedSourceId: "project-project-abc-workspace",
+    setSelectedSourceId: vi.fn(),
+    sourceContentById: {
+      "project-project-abc-workspace": {
+        indexed: true,
+        indexed_at: "2026-04-11T23:30:00+00:00",
+        document_count: 3,
+        chunk_count: 7,
+        documents: [
+          {
+            path: "original/guide.md",
+            title: "guide.md",
+            text: "guide body",
+          },
+        ],
+      },
+    },
+    sourceContentLoadingById: {},
+    loadSourceContent: vi.fn().mockResolvedValue(null),
     syncState: null,
     quantMetrics: {
       totalSources: 1,
@@ -57,6 +76,45 @@ function buildKnowledgeState(): ProjectKnowledgeState {
       chunkCount: 7,
       relationCount: 12,
     },
+    graphQueryText: "Summarize key entities",
+    setGraphQueryText: vi.fn(),
+    graphQueryMode: "template",
+    setGraphQueryMode: vi.fn(),
+    graphLoading: false,
+    graphError: "",
+    graphResult: {
+      records: [
+        {
+          subject: "Agent",
+          predicate: "uses",
+          object: "Workflow",
+          score: 0.9,
+          source_id: "project-project-abc-workspace",
+          source_type: "directory",
+          document_path: "original/guide.md",
+          document_title: "guide.md",
+        },
+      ],
+      summary: "1 record",
+      provenance: {},
+      warnings: [],
+    },
+    relationRecords: [
+      {
+        subject: "Agent",
+        predicate: "uses",
+        object: "Workflow",
+        score: 0.9,
+        source_id: "project-project-abc-workspace",
+        source_type: "directory",
+        document_path: "original/guide.md",
+        document_title: "guide.md",
+      },
+    ],
+    activeGraphNodeId: null,
+    setActiveGraphNodeId: vi.fn(),
+    runGraphQuery: vi.fn().mockResolvedValue(undefined),
+    resetGraphQuery: vi.fn(),
     trendRangeDays: 7,
     setTrendRangeDays: vi.fn(),
     trendExpanded: true,
@@ -94,7 +152,7 @@ function buildKnowledgeState(): ProjectKnowledgeState {
 }
 
 describe("project knowledge supporting panels", () => {
-  it("renders signals content outside explore", () => {
+  it("renders health content outside explore", () => {
     render(<ProjectKnowledgeSignalsPanel knowledgeState={buildKnowledgeState()} />);
 
     expect(screen.getByText("projects.knowledge.signalsTitle")).not.toBeNull();
@@ -104,25 +162,29 @@ describe("project knowledge supporting panels", () => {
   it("renders source inventory", () => {
     render(<ProjectKnowledgeSourcesPanel knowledgeState={buildKnowledgeState()} />);
 
-    expect(screen.getByText("Project Source")).not.toBeNull();
-    expect(screen.getByText("/tmp/workspace")).not.toBeNull();
+    expect(screen.getAllByText("Project Source").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("/tmp/workspace").length).toBeGreaterThan(0);
   });
 
-  it("runs suggested query from insights panel", async () => {
+  it("renders direct relation records", async () => {
     const user = userEvent.setup();
     const onRunSuggestedQuery = vi.fn();
 
     render(
-      <ProjectKnowledgeInsightsPanel
+      <ProjectKnowledgeRelationsPanel
         knowledgeState={buildKnowledgeState()}
         onRunSuggestedQuery={onRunSuggestedQuery}
       />,
     );
 
-    await user.click(screen.getByRole("button", {
-      name: "projects.knowledge.actionRunSuggestedQuery",
-    }));
+    expect(screen.getByText("Agent")).not.toBeNull();
+    expect(screen.getByText("Workflow")).not.toBeNull();
 
-    expect(onRunSuggestedQuery).toHaveBeenCalledWith("Summarize key entities");
+    await user.type(
+      screen.getByPlaceholderText("Search entities, relations, or document paths"),
+      "missing",
+    );
+
+    expect(screen.getByText("projects.knowledge.emptyResult")).not.toBeNull();
   });
 });

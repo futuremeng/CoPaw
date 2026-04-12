@@ -42,8 +42,8 @@ import ProjectChatPanel, {
   type ProjectChatAutoAttachRequest,
   type ProjectChatMode,
 } from "./ProjectChatPanel";
-import ProjectKnowledgeInsightsPanel from "./ProjectKnowledgeInsightsPanel";
 import ProjectKnowledgePanel from "./ProjectKnowledgePanel";
+import ProjectKnowledgeRelationsPanel from "./ProjectKnowledgeRelationsPanel";
 import ProjectKnowledgeSignalsPanel from "./ProjectKnowledgeSignalsPanel";
 import ProjectKnowledgeSourcesPanel from "./ProjectKnowledgeSourcesPanel";
 import ProjectKnowledgeSettingsPanel from "./ProjectKnowledgeSettingsPanel";
@@ -522,8 +522,10 @@ export default function ProjectDetailPage() {
   const projectKnowledgeState = useProjectKnowledgeState({
     projectId: selectedProject?.id || "",
     projectName: selectedProject?.name || "",
+    includeGlobal: projectKnowledgeIncludeGlobal,
     onSignalsChange: setKnowledgeHeaderSignals,
-    eagerSourceLoad: knowledgeDockTab === "sources",
+    eagerSourceLoad: knowledgeDockTab === "sources" || knowledgeDockTab === "health",
+    eagerExploreLoad: knowledgeDockTab === "explore",
   });
 
   useEffect(() => {
@@ -3432,18 +3434,8 @@ export default function ProjectDetailPage() {
                                   projectId={selectedProject.id}
                                   projectName={selectedProject.name}
                                   knowledgeState={projectKnowledgeState}
-                                  includeGlobal={projectKnowledgeIncludeGlobal}
                                   requestedQuery={pendingKnowledgeQuery}
                                   onRequestedQueryHandled={() => setPendingKnowledgeQuery("")}
-                                />
-                              ),
-                            },
-                            {
-                              key: "signals",
-                              label: t("projects.knowledgeDock.tabSignals", "Signals"),
-                              children: (
-                                <ProjectKnowledgeSignalsPanel
-                                  knowledgeState={projectKnowledgeState}
                                 />
                               ),
                             },
@@ -3458,10 +3450,23 @@ export default function ProjectDetailPage() {
                               ),
                             },
                             {
-                              key: "insights",
-                              label: t("projects.knowledgeDock.tabInsights", "Insights"),
+                              key: "relations",
+                              label: t("projects.knowledgeDock.tabRelations", "Relations"),
                               children: (
-                                <ProjectKnowledgeInsightsPanel
+                                <ProjectKnowledgeRelationsPanel
+                                  knowledgeState={projectKnowledgeState}
+                                  onRunSuggestedQuery={(query) => {
+                                    setPendingKnowledgeQuery(query);
+                                    setKnowledgeDockTab("explore");
+                                  }}
+                                />
+                              ),
+                            },
+                            {
+                              key: "health",
+                              label: t("projects.knowledgeDock.tabHealth", "Health"),
+                              children: (
+                                <ProjectKnowledgeSignalsPanel
                                   knowledgeState={projectKnowledgeState}
                                   onOpenSettings={() => setKnowledgeDockTab("settings")}
                                   onRunSuggestedQuery={(query) => {

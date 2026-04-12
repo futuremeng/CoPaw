@@ -2,7 +2,7 @@ import type { ProjectFileFilterKey } from "./filtering";
 
 export type ProjectStageKey = "source" | "knowledge" | "output" | "builtin";
 export type TreeDisplayMode = "filter" | "highlight";
-export type KnowledgeDockTabKey = "explore" | "settings" | "signals" | "sources" | "insights";
+export type KnowledgeDockTabKey = "explore" | "sources" | "relations" | "health" | "settings";
 
 function parsePaneSize(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) && value > 0
@@ -66,18 +66,21 @@ export function parseProjectLayoutPrefs(raw: string | null): ProjectDetailLayout
 
   try {
     const parsed = JSON.parse(raw) as Partial<ProjectDetailLayoutPrefs>;
+    const parsedKnowledgeDockTab = parsed.knowledgeDockTab as string | undefined;
     return {
       leftPanelCollapsed: parsed.leftPanelCollapsed ?? fallback.leftPanelCollapsed,
       activeStage: parseStageKey(parsed.activeStage, fallback.activeStage),
       knowledgeModuleCollapsed:
         parsed.knowledgeModuleCollapsed ?? fallback.knowledgeModuleCollapsed,
       knowledgeDockTab:
-        parsed.knowledgeDockTab === "settings"
-        || parsed.knowledgeDockTab === "signals"
-        || parsed.knowledgeDockTab === "sources"
-        || parsed.knowledgeDockTab === "insights"
-          ? parsed.knowledgeDockTab
-          : fallback.knowledgeDockTab,
+        parsedKnowledgeDockTab === "settings"
+        || parsedKnowledgeDockTab === "sources"
+        || parsedKnowledgeDockTab === "relations"
+        || parsedKnowledgeDockTab === "health"
+          ? parsedKnowledgeDockTab
+          : parsedKnowledgeDockTab === "signals" || parsedKnowledgeDockTab === "insights"
+            ? "health"
+            : fallback.knowledgeDockTab,
       selectedMetricFilter:
         parsed.selectedMetricFilter ?? fallback.selectedMetricFilter,
       treeDisplayMode: parseTreeMode(parsed.treeDisplayMode, fallback.treeDisplayMode),

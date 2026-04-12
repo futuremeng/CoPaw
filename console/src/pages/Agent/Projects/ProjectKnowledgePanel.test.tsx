@@ -1,23 +1,9 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useState } from "react";
+import { describe, expect, it, vi } from "vitest";
 import ProjectKnowledgePanel from "./ProjectKnowledgePanel";
 import type { ProjectKnowledgeState } from "./useProjectKnowledgeState";
-
-const { mockedApi } = vi.hoisted(() => ({
-  mockedApi: {
-    graphQuery: vi.fn(),
-  },
-}));
-
-vi.mock("../../../api", () => ({
-  __esModule: true,
-  default: mockedApi,
-}));
-
-vi.mock("../Knowledge/graphQuery", () => ({
-  recordsToVisualizationData: () => ({ nodes: [], edges: [] }),
-}));
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -33,29 +19,22 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
+vi.mock("../Knowledge/graphQuery", () => ({
+  recordsToVisualizationData: () => ({ nodes: [], edges: [] }),
+}));
+
 function buildKnowledgeState(projectId: string): ProjectKnowledgeState {
   return {
     projectSourceId: `project-${projectId.toLowerCase()}-workspace`,
     sourceLoaded: true,
     sourceRegistered: true,
     projectSources: [],
-    syncState: {
-      project_id: projectId,
-      status: "idle",
-      current_stage: "idle",
-      progress: 0,
-      auto_enabled: true,
-      dirty: false,
-      dirty_after_run: false,
-      last_trigger: "",
-      changed_paths: [],
-      pending_changed_paths: [],
-      changed_count: 0,
-      last_error: "",
-      latest_job_id: "",
-      latest_source_id: `project-${projectId.toLowerCase()}-workspace`,
-      last_result: {},
-    },
+    selectedSourceId: "",
+    setSelectedSourceId: vi.fn(),
+    sourceContentById: {},
+    sourceContentLoadingById: {},
+    loadSourceContent: vi.fn().mockResolvedValue(null),
+    syncState: null,
     quantMetrics: {
       totalSources: 1,
       indexedSources: 1,
@@ -64,6 +43,18 @@ function buildKnowledgeState(projectId: string): ProjectKnowledgeState {
       chunkCount: 2,
       relationCount: 0,
     },
+    graphQueryText: "",
+    setGraphQueryText: vi.fn(),
+    graphQueryMode: "template",
+    setGraphQueryMode: vi.fn(),
+    graphLoading: false,
+    graphError: "",
+    graphResult: null,
+    relationRecords: [],
+    activeGraphNodeId: null,
+    setActiveGraphNodeId: vi.fn(),
+    runGraphQuery: vi.fn().mockResolvedValue(undefined),
+    resetGraphQuery: vi.fn(),
     trendRangeDays: 7,
     setTrendRangeDays: vi.fn(),
     trendExpanded: true,
@@ -85,6 +76,30 @@ function buildKnowledgeState(projectId: string): ProjectKnowledgeState {
   };
 }
 
+function StatefulPanel(props: {
+  projectId: string;
+  knowledgeState?: ProjectKnowledgeState;
+}) {
+  const [queryText, setQueryText] = useState(props.knowledgeState?.graphQueryText || "");
+  const knowledgeState = props.knowledgeState ?? buildKnowledgeState(props.projectId);
+
+  return (
+    <ProjectKnowledgePanel
+      projectId={props.projectId}
+      projectName="Project ABC"
+      knowledgeState={{
+        ...knowledgeState,
+        graphQueryText: queryText,
+        setGraphQueryText: (value) => {
+          knowledgeState.setGraphQueryText(value);
+          setQueryText(value);
+        },
+      }}
+      graphComponents={testGraphComponents}
+    />
+  );
+}
+
 const testGraphComponents = {
   GraphQueryResults: () => <div data-testid="graph-query-results" />,
   GraphVisualization: (props: {
@@ -94,7 +109,6 @@ const testGraphComponents = {
       data-testid="graph-visualization"
       type="button"
       onClick={() => {
-        props.onUsePathContext?.("node-a -> node-b", true);
         props.onUsePathContext?.("node-a -> node-b", true);
       }}
     >
@@ -106,24 +120,15 @@ const testGraphComponents = {
 describe("ProjectKnowledgePanel interactions", () => {
   const projectId = "project-abc";
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockedApi.graphQuery.mockResolvedValue({
-      records: [],
-      summary: "ok",
-      warnings: [],
-      provenance: { engine: "local_lexical" },
-    });
-  });
-
-  it("queries graph in cypher mode when selected", async () => {
+  it("dispatches query mode changes to shared knowledge state", async () => {
     const user = userEvent.setup();
+    const knowledgeState = buildKnowledgeState(projectId);
 
     render(
       <ProjectKnowledgePanel
         projectId={projectId}
         projectName="Project ABC"
-        knowledgeState={buildKnowledgeState(projectId)}
+        knowledgeState={knowledgeState}
         graphComponents={testGraphComponents}
       />,
     );
@@ -131,24 +136,30 @@ describe("ProjectKnowledgePanel interactions", () => {
     await user.click(await screen.findByText("projects.knowledge.queryModeTemplate"));
     await user.click(await screen.findByText("projects.knowledge.queryModeCypherMvp"));
 
+    expect(knowledgeState.setGraphQueryMode).toHaveBeenCalledWith("cypher");
+  });
+
+  it("submits search queries through the shared knowledge state", async () => {
+    const knowledgeState = buildKnowledgeState(projectId);
+
+    render(<StatefulPanel projectId={projectId} knowledgeState={knowledgeState} />);
+
     const queryInput = screen.getByPlaceholderText("projects.knowledge.queryPlaceholder");
     fireEvent.change(queryInput, {
       target: { value: "MATCH (node)-[:RELATES_TO]->(tool) RETURN node LIMIT 5" },
     });
-    await user.click(screen.getByRole("button", { name: "projects.knowledge.query" }));
 
+    fireEvent.keyDown(queryInput, { key: "Enter", code: "Enter", charCode: 13 });
+
+    expect(knowledgeState.setGraphQueryText).toHaveBeenCalled();
     await waitFor(() => {
-      expect(mockedApi.graphQuery).toHaveBeenCalledWith(
-        expect.objectContaining({
-          mode: "cypher",
-          projectScope: [projectId],
-          projectId,
-        }),
+      expect(knowledgeState.runGraphQuery).toHaveBeenCalledWith(
+        "MATCH (node)-[:RELATES_TO]->(tool) RETURN node LIMIT 5",
       );
     });
   });
 
-  it("no longer renders signals content inside explore", () => {
+  it("keeps signals and health actions out of explore", () => {
     render(
       <ProjectKnowledgePanel
         projectId={projectId}
@@ -164,45 +175,18 @@ describe("ProjectKnowledgePanel interactions", () => {
     })).toBeNull();
   });
 
-  it("deduplicates repeated path context when apply-and-run is clicked repeatedly", async () => {
-    const user = userEvent.setup();
-    mockedApi.graphQuery.mockClear();
-
-    render(
-      <ProjectKnowledgePanel
-        projectId={projectId}
-        projectName="Project ABC"
-        knowledgeState={buildKnowledgeState(projectId)}
-        graphComponents={testGraphComponents}
-      />,
-    );
-
-    const queryInput = await screen.findByPlaceholderText("projects.knowledge.queryPlaceholder");
-    fireEvent.change(queryInput, {
-      target: { value: "Seed query" },
-    });
-
-    await user.click(screen.getByRole("button", { name: "projects.knowledge.query" }));
-    await waitFor(() => {
-      expect(mockedApi.graphQuery).toHaveBeenCalledTimes(1);
-    });
-
-    await user.click(await screen.findByTestId("graph-visualization"));
-
-    await waitFor(() => {
-      expect(mockedApi.graphQuery).toHaveBeenCalledTimes(3);
-      const lastQuery = mockedApi.graphQuery.mock.calls[2][0]?.query as string;
-      expect(lastQuery.includes("Path context: node-a -> node-b")).toBe(true);
-      const occurrences = lastQuery.match(/Path context: node-a -> node-b/g)?.length || 0;
-      expect(occurrences).toBe(1);
-    });
-  });
-
-  it("refreshes query when sync finishes", async () => {
+  it("applies path context through shared state actions", async () => {
     const user = userEvent.setup();
     const knowledgeState = buildKnowledgeState(projectId);
-    const existingSyncState = knowledgeState.syncState;
-    const { rerender } = render(
+    knowledgeState.graphQueryText = "Seed query";
+    knowledgeState.graphResult = {
+      records: [],
+      summary: "ok",
+      warnings: [],
+      provenance: { engine: "local_lexical" },
+    };
+
+    render(
       <ProjectKnowledgePanel
         projectId={projectId}
         projectName="Project ABC"
@@ -211,48 +195,27 @@ describe("ProjectKnowledgePanel interactions", () => {
       />,
     );
 
-    const queryInput = await screen.findByPlaceholderText("projects.knowledge.queryPlaceholder");
-    fireEvent.change(queryInput, {
-      target: { value: "Refresh me" },
-    });
-    await user.click(screen.getByRole("button", { name: "projects.knowledge.query" }));
+    await user.click(await screen.findByTestId("graph-visualization"));
 
     await waitFor(() => {
-      expect(mockedApi.graphQuery).toHaveBeenCalledTimes(1);
-    });
-
-    rerender(
-      <ProjectKnowledgePanel
-        projectId={projectId}
-        projectName="Project ABC"
-        knowledgeState={{
-          ...knowledgeState,
-          syncState: existingSyncState
-            ? {
-                ...existingSyncState,
-                status: "succeeded",
-                current_stage: "completed",
-                last_finished_at: "2026-04-11T23:30:00+00:00",
-              }
-            : null,
-        }}
-        graphComponents={testGraphComponents}
-      />,
-    );
-
-    await waitFor(() => {
-      expect(mockedApi.graphQuery).toHaveBeenCalledTimes(2);
+      expect(knowledgeState.setGraphQueryText).toHaveBeenCalledWith(
+        expect.stringContaining("Path context: node-a -> node-b"),
+      );
+      expect(knowledgeState.runGraphQuery).toHaveBeenCalledWith(
+        expect.stringContaining("Path context: node-a -> node-b"),
+      );
     });
   });
 
-  it("runs requested query from insights handoff", async () => {
+  it("runs requested query handoff through shared state", async () => {
+    const knowledgeState = buildKnowledgeState(projectId);
     const onRequestedQueryHandled = vi.fn();
 
     render(
       <ProjectKnowledgePanel
         projectId={projectId}
         projectName="Project ABC"
-        knowledgeState={buildKnowledgeState(projectId)}
+        knowledgeState={knowledgeState}
         requestedQuery="Summarize project ABC"
         onRequestedQueryHandled={onRequestedQueryHandled}
         graphComponents={testGraphComponents}
@@ -260,10 +223,10 @@ describe("ProjectKnowledgePanel interactions", () => {
     );
 
     await waitFor(() => {
-      expect(mockedApi.graphQuery).toHaveBeenCalledWith(
-        expect.objectContaining({
-          query: "Summarize project ABC",
-        }),
+      expect(knowledgeState.setGraphQueryText).toHaveBeenCalledWith("Summarize project ABC");
+      expect(knowledgeState.runGraphQuery).toHaveBeenCalledWith(
+        "Summarize project ABC",
+        "template",
       );
     });
     expect(onRequestedQueryHandled).toHaveBeenCalledTimes(1);

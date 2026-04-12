@@ -1,11 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import api, { type GraphQueryResponse, getApiToken, getApiUrl } from "../../../api";
-import type { KnowledgeSourceItem, ProjectKnowledgeSyncState } from "../../../api/types";
+import type {
+  GraphQueryRecord,
+  KnowledgeSourceContent,
+  KnowledgeSourceItem,
+  ProjectKnowledgeSyncState,
+} from "../../../api/types";
 import {
   getProjectKnowledgeSyncAlertDescription,
   getProjectKnowledgeSyncAlertType,
 } from "./projectKnowledgeSyncUi";
+
+type ProjectGraphQueryMode = "template" | "cypher";
 
 export interface ProjectKnowledgeHeaderSignals {
   indexedRatio: number;
@@ -38,8 +45,31 @@ export interface ProjectKnowledgeState {
   sourceLoaded: boolean;
   sourceRegistered: boolean;
   projectSources: KnowledgeSourceItem[];
+  selectedSourceId: string;
+  setSelectedSourceId: (value: string) => void;
+  sourceContentById: Record<string, KnowledgeSourceContent>;
+  sourceContentLoadingById: Record<string, boolean>;
+  loadSourceContent: (
+    sourceId: string,
+    options?: { force?: boolean },
+  ) => Promise<KnowledgeSourceContent | null>;
   syncState: ProjectKnowledgeSyncState | null;
   quantMetrics: ProjectKnowledgeMetrics;
+  graphQueryText: string;
+  setGraphQueryText: (value: string) => void;
+  graphQueryMode: ProjectGraphQueryMode;
+  setGraphQueryMode: (value: ProjectGraphQueryMode) => void;
+  graphLoading: boolean;
+  graphError: string;
+  graphResult: GraphQueryResponse | null;
+  relationRecords: GraphQueryRecord[];
+  activeGraphNodeId: string | null;
+  setActiveGraphNodeId: (value: string | null) => void;
+  runGraphQuery: (
+    overrideQuery?: string,
+    overrideMode?: ProjectGraphQueryMode,
+  ) => Promise<void>;
+  resetGraphQuery: () => void;
   trendRangeDays: 7 | 30;
   setTrendRangeDays: (value: 7 | 30) => void;
   trendExpanded: boolean;
@@ -63,9 +93,10 @@ export interface ProjectKnowledgeState {
 interface UseProjectKnowledgeStateParams {
   projectId: string;
   projectName: string;
-  graphResult?: GraphQueryResponse | null;
+  includeGlobal?: boolean;
   onSignalsChange?: (signals: ProjectKnowledgeHeaderSignals) => void;
   eagerSourceLoad?: boolean;
+  eagerExploreLoad?: boolean;
 }
 
 interface ProjectKnowledgeUiPrefs {
@@ -221,11 +252,23 @@ export function useProjectKnowledgeState(
   const { t } = useTranslation();
   const [sourceLoaded, setSourceLoaded] = useState(false);
   const [projectSources, setProjectSources] = useState<KnowledgeSourceItem[]>([]);
+  const [selectedSourceId, setSelectedSourceId] = useState("");
+  const [sourceContentById, setSourceContentById] = useState<Record<string, KnowledgeSourceContent>>({});
+  const [sourceContentLoadingById, setSourceContentLoadingById] =
+    useState<Record<string, boolean>>({});
+  const [graphQueryText, setGraphQueryText] = useState("");
+  const [graphQueryMode, setGraphQueryMode] = useState<ProjectGraphQueryMode>("template");
+  const [graphLoading, setGraphLoading] = useState(false);
+  const [graphError, setGraphError] = useState("");
+  const [graphResult, setGraphResult] = useState<GraphQueryResponse | null>(null);
+  const [activeGraphNodeId, setActiveGraphNodeId] = useState<string | null>(null);
   const [trendRangeDays, setTrendRangeDays] = useState<7 | 30>(7);
   const [trendSnapshots, setTrendSnapshots] = useState<ProjectKnowledgeTrendSnapshot[]>([]);
   const [trendExpanded, setTrendExpanded] = useState(true);
   const [syncState, setSyncState] = useState<ProjectKnowledgeSyncState | null>(null);
   const refreshReasonRef = useRef("");
+  const graphRefreshReasonRef = useRef("");
+  const defaultExploreTokenRef = useRef("");
 
   const projectSourceId = useMemo(() => {
     const safeId = params.projectId
@@ -252,6 +295,96 @@ export function useProjectKnowledgeState(
     }
   }, [params.projectId]);
 
+  const loadSourceContent = useCallback(async (
+    sourceId: string,
+    options?: { force?: boolean },
+  ) => {
+    const normalizedSourceId = sourceId.trim();
+    if (!normalizedSourceId || !params.projectId) {
+      return null;
+    }
+    if (!options?.force && sourceContentById[normalizedSourceId]) {
+      return sourceContentById[normalizedSourceId];
+    }
+
+    setSourceContentLoadingById((prev) => ({
+      ...prev,
+      [normalizedSourceId]: true,
+    }));
+    try {
+      const response = await api.getKnowledgeSourceContent(normalizedSourceId, {
+        projectId: params.projectId,
+      });
+      setSourceContentById((prev) => ({
+        ...prev,
+        [normalizedSourceId]: response,
+      }));
+      return response;
+    } catch {
+      return null;
+    } finally {
+      setSourceContentLoadingById((prev) => ({
+        ...prev,
+        [normalizedSourceId]: false,
+      }));
+    }
+  }, [params.projectId, sourceContentById]);
+
+  const runGraphQuery = useCallback(async (
+    overrideQuery?: string,
+    overrideMode?: ProjectGraphQueryMode,
+  ) => {
+    const query = (overrideQuery ?? graphQueryText).trim();
+    const mode = overrideMode ?? graphQueryMode;
+    if (!query || !params.projectId) {
+      setGraphError(t("projects.knowledge.emptyQuery"));
+      return;
+    }
+
+    setGraphLoading(true);
+    setGraphError("");
+    try {
+      const response = await api.graphQuery({
+        query,
+        mode,
+        topK: 12,
+        timeoutSec: 20,
+        projectScope: [params.projectId],
+        includeGlobal: params.includeGlobal,
+        projectId: params.projectId,
+      });
+      setGraphQueryText(query);
+      setGraphQueryMode(mode);
+      setGraphResult(response);
+      setActiveGraphNodeId(null);
+    } catch (err) {
+      const messageText = err instanceof Error ? err.message : t("projects.knowledge.queryFailed");
+      setGraphError(messageText);
+    } finally {
+      setGraphLoading(false);
+    }
+  }, [graphQueryMode, graphQueryText, params.includeGlobal, params.projectId, t]);
+
+  const resetGraphQuery = useCallback(() => {
+    setGraphError("");
+    setGraphResult(null);
+    setActiveGraphNodeId(null);
+  }, []);
+
+  useEffect(() => {
+    setSelectedSourceId("");
+    setSourceContentById({});
+    setSourceContentLoadingById({});
+    setGraphQueryText("");
+    setGraphQueryMode("template");
+    setGraphLoading(false);
+    setGraphError("");
+    setGraphResult(null);
+    setActiveGraphNodeId(null);
+    defaultExploreTokenRef.current = "";
+    graphRefreshReasonRef.current = "";
+  }, [params.projectId]);
+
   useEffect(() => {
     if (!params.projectId) {
       setProjectSources([]);
@@ -265,6 +398,13 @@ export function useProjectKnowledgeState(
     }
     void loadProjectSourceStatus();
   }, [loadProjectSourceStatus, params.eagerSourceLoad, params.projectId]);
+
+  useEffect(() => {
+    if (selectedSourceId && projectSources.some((source) => source.id === selectedSourceId)) {
+      return;
+    }
+    setSelectedSourceId(projectSources[0]?.id || "");
+  }, [projectSources, selectedSourceId]);
 
   useEffect(() => {
     if (!params.projectId) {
@@ -375,6 +515,33 @@ export function useProjectKnowledgeState(
     }
   }, [loadProjectSourceStatus, params.eagerSourceLoad, syncState]);
 
+  const suggestedQuery = useMemo(() => {
+    const projectLabel = params.projectName || params.projectId;
+    return `Summarize key entities, modules, and relations in project ${projectLabel}`;
+  }, [params.projectId, params.projectName]);
+
+  useEffect(() => {
+    if (!params.projectId || !params.eagerExploreLoad) {
+      return;
+    }
+    const defaultToken = `${params.projectId}:${String(params.includeGlobal)}:${suggestedQuery}`;
+    if (defaultExploreTokenRef.current === defaultToken || graphLoading || graphResult) {
+      return;
+    }
+    defaultExploreTokenRef.current = defaultToken;
+    setGraphQueryText((prev) => prev.trim() || suggestedQuery);
+    void runGraphQuery(suggestedQuery, "template");
+  }, [graphLoading, graphResult, params.eagerExploreLoad, params.includeGlobal, params.projectId, runGraphQuery, suggestedQuery]);
+
+  useEffect(() => {
+    const finishToken = syncState?.last_finished_at || "";
+    if (!finishToken || graphRefreshReasonRef.current === finishToken || !graphQueryText.trim()) {
+      return;
+    }
+    graphRefreshReasonRef.current = finishToken;
+    void runGraphQuery(graphQueryText);
+  }, [graphQueryText, runGraphQuery, syncState?.last_finished_at]);
+
   useEffect(() => {
     setTrendSnapshots(loadTrendSnapshots(params.projectId));
   }, [params.projectId]);
@@ -419,7 +586,7 @@ export function useProjectKnowledgeState(
     const documentCount = totalSources > 0 ? sourceDocumentCount : fallbackDocumentCount;
     const chunkCount = totalSources > 0 ? sourceChunkCount : fallbackChunkCount;
     const relationCount = Math.max(
-      params.graphResult?.records?.length || 0,
+      graphResult?.records?.length || 0,
       getSyncRelationCount(syncState),
     );
     return {
@@ -430,7 +597,7 @@ export function useProjectKnowledgeState(
       chunkCount,
       relationCount,
     };
-  }, [params.graphResult?.records?.length, projectSources, sourceRegistered, syncState]);
+  }, [graphResult?.records?.length, projectSources, sourceRegistered, syncState]);
 
   const syncAlertType = useMemo(
     () => getProjectKnowledgeSyncAlertType(syncState),
@@ -526,10 +693,10 @@ export function useProjectKnowledgeState(
     };
   }, [filteredTrendSnapshots]);
 
-  const suggestedQuery = useMemo(() => {
-    const projectLabel = params.projectName || params.projectId;
-    return `Summarize key entities, modules, and relations in project ${projectLabel}`;
-  }, [params.projectId, params.projectName]);
+  const relationRecords = useMemo(
+    () => graphResult?.records || [],
+    [graphResult?.records],
+  );
 
   const insightAction = useMemo<ProjectKnowledgeInsightAction>(() => {
     if (
@@ -567,8 +734,25 @@ export function useProjectKnowledgeState(
     sourceLoaded,
     sourceRegistered,
     projectSources,
+    selectedSourceId,
+    setSelectedSourceId,
+    sourceContentById,
+    sourceContentLoadingById,
+    loadSourceContent,
     syncState,
     quantMetrics,
+    graphQueryText,
+    setGraphQueryText,
+    graphQueryMode,
+    setGraphQueryMode,
+    graphLoading,
+    graphError,
+    graphResult,
+    relationRecords,
+    activeGraphNodeId,
+    setActiveGraphNodeId,
+    runGraphQuery,
+    resetGraphQuery,
     trendRangeDays,
     setTrendRangeDays,
     trendExpanded,
