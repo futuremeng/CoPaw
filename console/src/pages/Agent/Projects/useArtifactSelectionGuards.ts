@@ -10,6 +10,8 @@ interface UseArtifactSelectionGuardsParams {
   setSelectedFilePath: (value: string) => void;
   relatedArtifactPathsForSelectedStep: Set<string>;
   artifactRecords: ProjectPipelineArtifactRecord[];
+  filesLoading: boolean;
+  knownProjectFilePaths: Set<string>;
   projectFiles: AgentProjectFileInfo[];
 }
 
@@ -21,6 +23,8 @@ export default function useArtifactSelectionGuards({
   setSelectedFilePath,
   relatedArtifactPathsForSelectedStep,
   artifactRecords,
+  filesLoading,
+  knownProjectFilePaths,
   projectFiles,
 }: UseArtifactSelectionGuardsParams) {
   useEffect(() => {
@@ -57,11 +61,22 @@ export default function useArtifactSelectionGuards({
     if (!isPreviewablePath(selectedFilePath)) {
       return;
     }
+    if (filesLoading) {
+      return;
+    }
     const stillVisible =
       artifactRecords.some((item) => item.path === selectedFilePath)
+      || knownProjectFilePaths.has(selectedFilePath)
       || projectFiles.some((item) => item.path === selectedFilePath);
     if (!stillVisible) {
       setSelectedFilePath("");
     }
-  }, [artifactRecords, projectFiles, selectedFilePath, setSelectedFilePath]);
+  }, [
+    artifactRecords,
+    filesLoading,
+    knownProjectFilePaths,
+    projectFiles,
+    selectedFilePath,
+    setSelectedFilePath,
+  ]);
 }

@@ -92,11 +92,13 @@ import {
   type TreeDisplayMode,
 } from "./projectLayoutPrefs";
 import type { ProjectFileFilterKey } from "./filtering";
-import { computeProjectKnowledgeMetrics } from "./metrics";
+import { computeProjectFileInventorySummary } from "./metrics";
 import { isBuiltInProjectFile } from "./builtInFiles";
 import type {
   AgentProjectSummary,
   AgentProjectFileInfo,
+  AgentProjectFileSummary,
+  AgentProjectFileTreeNode,
   ProjectPipelineArtifactRecord,
   ProjectPipelineNextAction,
   ProjectPipelineRunDetail,
@@ -122,6 +124,19 @@ const CHAT_PANE_MIN_SIZE = 420;
 const KNOWLEDGE_DOCK_DEFAULT_SIZE = 320;
 const KNOWLEDGE_DOCK_COLLAPSED_SIZE = 56;
 const KNOWLEDGE_DOCK_MIN_SIZE = 240;
+const PROJECT_FILES_DEFER_MS = 420;
+const INITIAL_PROJECT_FILES_IDLE_TIMEOUT_MS = 1200;
+const PIPELINE_CONTEXT_DEFER_MS = 260;
+const ASSISTANT_TURN_REALTIME_FALLBACK_MS = 900;
+const PROJECT_TREE_PREFETCH_DIR_LIMIT = 3;
+const PROJECT_TREE_PREVIEW_DIR_PRIORITY = [
+  "original",
+  "data",
+  "skills",
+  "flows",
+  "scripts",
+  "cases",
+];
 
 const DEFAULT_KNOWLEDGE_HEADER_SIGNALS: ProjectKnowledgeHeaderSignals = {
   indexedRatio: 0,
@@ -206,6 +221,76 @@ function formatBytes(size: number): string {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function toProjectFileInfo(node: AgentProjectFileTreeNode): AgentProjectFileInfo {
+  return {
+    filename: node.filename,
+    path: node.path,
+    size: node.size,
+    modified_time: node.modified_time,
+  };
+}
+
+function buildProjectFilesByPath(
+  files: AgentProjectFileInfo[],
+): Record<string, AgentProjectFileInfo> {
+  const next: Record<string, AgentProjectFileInfo> = {};
+  for (const file of files) {
+    next[file.path] = file;
+  }
+  return next;
+}
+
+function reconcileProjectFilesByPath(
+  current: Record<string, AgentProjectFileInfo>,
+  files: AgentProjectFileInfo[],
+  requestedPaths: string[],
+): Record<string, AgentProjectFileInfo> {
+  const next = { ...current };
+  for (const path of requestedPaths) {
+    delete next[path];
+  }
+  for (const file of files) {
+    next[file.path] = file;
+  }
+  return next;
+}
+
+function reconcileProjectFilesList(
+  current: AgentProjectFileInfo[],
+  files: AgentProjectFileInfo[],
+  requestedPaths: string[],
+): AgentProjectFileInfo[] {
+  const requestedPathSet = new Set(requestedPaths);
+  const next = new Map<string, AgentProjectFileInfo>();
+  for (const file of current) {
+    if (!requestedPathSet.has(file.path)) {
+      next.set(file.path, file);
+    }
+  }
+  for (const file of files) {
+    next.set(file.path, file);
+  }
+  return Array.from(next.values()).sort((left, right) =>
+    left.path.localeCompare(right.path),
+  );
+}
+
+function mergeProjectTreeNodesByPath(
+  current: Record<string, AgentProjectFileInfo>,
+  nodes: AgentProjectFileTreeNode[],
+): Record<string, AgentProjectFileInfo> {
+  if (nodes.length === 0) {
+    return current;
+  }
+  const next = { ...current };
+  for (const node of nodes) {
+    if (!node.is_directory) {
+      next[node.path] = toProjectFileInfo(node);
+    }
+  }
+  return next;
+}
+
 function statusTagColor(status: string): string {
   switch (status) {
     case "running":
@@ -257,23 +342,55 @@ function normalizeProjectPath(path: string): string {
   return path.replace(/\\/g, "/").replace(/^\.\//, "").toLowerCase();
 }
 
-function isOriginalInputFile(path: string): boolean {
-  const normalized = normalizeProjectPath(path);
-  return normalized === "original" || normalized.startsWith("original/");
-}
-
-function isPathInStandardDir(path: string, dir: "skills" | "scripts" | "flows" | "cases"): boolean {
-  const normalized = normalizeProjectPath(path);
-  return normalized === dir || normalized.startsWith(`${dir}/`);
-}
-
-function isStandardArtifactDirPath(path: string): boolean {
-  return (
-    isPathInStandardDir(path, "skills")
-    || isPathInStandardDir(path, "scripts")
-    || isPathInStandardDir(path, "flows")
-    || isPathInStandardDir(path, "cases")
+function compareProjectTreePreviewPriority(
+  left: AgentProjectFileTreeNode,
+  right: AgentProjectFileTreeNode,
+): number {
+  const leftIndex = PROJECT_TREE_PREVIEW_DIR_PRIORITY.indexOf(
+    normalizeProjectPath(left.path),
   );
+  const rightIndex = PROJECT_TREE_PREVIEW_DIR_PRIORITY.indexOf(
+    normalizeProjectPath(right.path),
+  );
+  const normalizedLeft = leftIndex >= 0 ? leftIndex : PROJECT_TREE_PREVIEW_DIR_PRIORITY.length;
+  const normalizedRight = rightIndex >= 0 ? rightIndex : PROJECT_TREE_PREVIEW_DIR_PRIORITY.length;
+  if (normalizedLeft !== normalizedRight) {
+    return normalizedLeft - normalizedRight;
+  }
+  return left.path.localeCompare(right.path);
+}
+
+function isProjectPipelineTemplatePath(path: string): boolean {
+  const normalized = normalizeProjectPath(path);
+  return normalized.startsWith("pipelines/templates/");
+}
+
+function isProjectPipelineRunPath(path: string): boolean {
+  const normalized = normalizeProjectPath(path);
+  return normalized.startsWith("pipelines/runs/");
+}
+
+function getProjectPipelineRunIdFromPath(path: string): string {
+  const normalized = normalizeProjectPath(path);
+  const segments = normalized.split("/").filter(Boolean);
+  if (segments.length < 3 || segments[0] !== "pipelines" || segments[1] !== "runs") {
+    return "";
+  }
+  return segments[2] || "";
+}
+
+function getProjectTreeRootDirectoryFileCount(
+  nodes: AgentProjectFileTreeNode[],
+  dirName: string,
+): number | null {
+  const normalizedDirName = normalizeProjectPath(dirName);
+  const matched = nodes.find(
+    (item) => item.is_directory && normalizeProjectPath(item.path) === normalizedDirName,
+  );
+  if (!matched) {
+    return null;
+  }
+  return matched.descendant_file_count;
 }
 
 function isSucceededStatus(status: string): boolean {
@@ -317,9 +434,14 @@ export default function ProjectDetailPage() {
 
   const [resolvedProjectRequestId, setResolvedProjectRequestId] = useState("");
   const [projectFiles, setProjectFiles] = useState<AgentProjectFileInfo[]>([]);
+  const [projectTreeNodes, setProjectTreeNodes] = useState<AgentProjectFileTreeNode[]>([]);
+  const [projectFileSummary, setProjectFileSummary] = useState<AgentProjectFileSummary | null>(null);
+  const [knownProjectFilesByPath, setKnownProjectFilesByPath] =
+    useState<Record<string, AgentProjectFileInfo>>({});
   const [selectedFilePath, setSelectedFilePath] = useState("");
   const [fileContent, setFileContent] = useState("");
   const [filesLoading, setFilesLoading] = useState(false);
+  const [projectTreeLoading, setProjectTreeLoading] = useState(false);
   const [contentLoading, setContentLoading] = useState(false);
 
   const [pipelineTemplates, setPipelineTemplates] = useState<
@@ -372,6 +494,12 @@ export default function ProjectDetailPage() {
   const runFocusChatIdRef = useRef("");
   const workspaceFocusChatIdRef = useRef("");
   const designFocusChatIdRef = useRef("");
+  const projectFilesRefreshTimerRef = useRef<number | null>(null);
+  const assistantTurnFileSyncTimerRef = useRef<number | null>(null);
+  const assistantTurnPipelineSyncTimerRef = useRef<number | null>(null);
+  const lastFileTreeInvalidationAtRef = useRef(0);
+  const lastPipelineInvalidationAtRef = useRef(0);
+  const realtimeConnectionStatusRef = useRef<ProjectRealtimeConnectionStatus>("idle");
   const runRestoreAttemptKeyRef = useRef("");
   const automationDrawerAutoOpenKeyRef = useRef("");
   const layoutPrefsLoadedRef = useRef(false);
@@ -395,6 +523,7 @@ export default function ProjectDetailPage() {
     projectId: selectedProject?.id || "",
     projectName: selectedProject?.name || "",
     onSignalsChange: setKnowledgeHeaderSignals,
+    eagerSourceLoad: knowledgeDockTab === "sources",
   });
 
   useEffect(() => {
@@ -411,12 +540,24 @@ export default function ProjectDetailPage() {
     [t],
   );
 
+  const effectiveProjectFiles = useMemo(() => {
+    if (projectFiles.length === 0) {
+      return Object.values(knownProjectFilesByPath).sort((left, right) =>
+        left.path.localeCompare(right.path),
+      );
+    }
+    return Object.values({
+      ...buildProjectFilesByPath(projectFiles),
+      ...knownProjectFilesByPath,
+    }).sort((left, right) => left.path.localeCompare(right.path));
+  }, [knownProjectFilesByPath, projectFiles]);
+
   const artifactRecords = useMemo<ProjectPipelineArtifactRecord[]>(() => {
     if (runDetail?.artifact_records?.length) {
       return runDetail.artifact_records.filter((item) => isPreviewablePath(item.path));
     }
 
-    return projectFiles
+    return effectiveProjectFiles
       .filter((file) => isPreviewablePath(file.path))
       .map((file) => ({
         artifact_id: `source:${file.path}`,
@@ -432,7 +573,7 @@ export default function ProjectDetailPage() {
         consumer_step_names: [],
         created_at: file.modified_time,
       }));
-  }, [projectFiles, runDetail?.artifact_records, selectedRunId]);
+  }, [effectiveProjectFiles, runDetail?.artifact_records, selectedRunId]);
 
   const relatedArtifactPathsForSelectedStep = useMemo(() => {
     if (!selectedStepId) {
@@ -563,64 +704,104 @@ export default function ProjectDetailPage() {
     [runsForSelectedTemplate],
   );
 
+  const knownProjectFilePaths = useMemo(
+    () => new Set(Object.keys(knownProjectFilesByPath)),
+    [knownProjectFilesByPath],
+  );
+
   const projectFileCount = useMemo(
-    () => projectFiles.filter((file) => !isBuiltInProjectFile(file.path)).length,
-    [projectFiles],
+    () => projectFileSummary?.visible_files ?? effectiveProjectFiles.filter((file) => !isBuiltInProjectFile(file.path)).length,
+    [effectiveProjectFiles, projectFileSummary?.visible_files],
   );
 
   const builtInProjectFiles = useMemo(
-    () => projectFiles.filter((item) => isBuiltInProjectFile(item.path)),
-    [projectFiles],
+    () => effectiveProjectFiles.filter((item) => isBuiltInProjectFile(item.path)),
+    [effectiveProjectFiles],
   );
 
   const visibleProjectFiles = useMemo(
-    () => projectFiles.filter((item) => !isBuiltInProjectFile(item.path)),
-    [projectFiles],
+    () => effectiveProjectFiles.filter((item) => !isBuiltInProjectFile(item.path)),
+    [effectiveProjectFiles],
   );
 
-  const knowledgeMetrics = useMemo(
-    () => computeProjectKnowledgeMetrics(visibleProjectFiles),
+  const visibleProjectSummary = useMemo(
+    () => computeProjectFileInventorySummary(visibleProjectFiles),
     [visibleProjectFiles],
   );
 
-  const normalizedVisibleFiles = useMemo(
-    () => visibleProjectFiles.map((item) => normalizeProjectPath(item.path)),
-    [visibleProjectFiles],
+  const knowledgeMetrics = visibleProjectSummary.knowledgeMetrics;
+
+  const projectTreeRootDirCounts = useMemo(
+    () => ({
+      original: getProjectTreeRootDirectoryFileCount(projectTreeNodes, "original"),
+      skills: getProjectTreeRootDirectoryFileCount(projectTreeNodes, "skills"),
+      scripts: getProjectTreeRootDirectoryFileCount(projectTreeNodes, "scripts"),
+      flows: getProjectTreeRootDirectoryFileCount(projectTreeNodes, "flows"),
+      cases: getProjectTreeRootDirectoryFileCount(projectTreeNodes, "cases"),
+    }),
+    [projectTreeNodes],
   );
 
   const leafCounts = useMemo(() => {
     const artifactProfile = selectedProject?.artifact_profile;
     return {
-      original: normalizedVisibleFiles.filter((path) => isOriginalInputFile(path)).length,
-      derived: normalizedVisibleFiles.filter(
-        (path) => !isOriginalInputFile(path) && !isStandardArtifactDirPath(path),
-      ).length,
-      knowledgeCandidates: knowledgeMetrics.knowledgeCandidateFiles,
-      markdown: knowledgeMetrics.markdownFiles,
-      textLike: knowledgeMetrics.textLikeFiles,
-      recent: knowledgeMetrics.recentlyUpdatedFiles,
-      skills: artifactProfile?.skills.length || 0,
-      scripts: artifactProfile?.scripts.length || 0,
-      flows: artifactProfile?.flows.length || 0,
-      cases: artifactProfile?.cases.length || 0,
-      builtin: builtInProjectFiles.length,
+      original:
+        projectFileSummary?.original_files
+        ?? projectTreeRootDirCounts.original
+        ?? visibleProjectSummary.originalFiles,
+      derived: visibleProjectSummary.derivedFiles,
+      knowledgeCandidates:
+        projectFileSummary?.knowledge_candidate_files ?? knowledgeMetrics.knowledgeCandidateFiles,
+      markdown: projectFileSummary?.markdown_files ?? knowledgeMetrics.markdownFiles,
+      textLike: projectFileSummary?.text_like_files ?? knowledgeMetrics.textLikeFiles,
+      recent: projectFileSummary?.recently_updated_files ?? knowledgeMetrics.recentlyUpdatedFiles,
+        skills: projectTreeRootDirCounts.skills ?? artifactProfile?.skills.length ?? 0,
+        scripts: projectTreeRootDirCounts.scripts ?? artifactProfile?.scripts.length ?? 0,
+        flows: projectTreeRootDirCounts.flows ?? artifactProfile?.flows.length ?? 0,
+        cases: projectTreeRootDirCounts.cases ?? artifactProfile?.cases.length ?? 0,
+      builtin: projectFileSummary?.builtin_files ?? builtInProjectFiles.length,
     };
-  }, [builtInProjectFiles.length, knowledgeMetrics, normalizedVisibleFiles, selectedProject?.artifact_profile]);
+  }, [
+    builtInProjectFiles.length,
+    knowledgeMetrics,
+    projectFileSummary?.builtin_files,
+    projectFileSummary?.knowledge_candidate_files,
+    projectFileSummary?.markdown_files,
+    projectFileSummary?.original_files,
+    projectFileSummary?.recently_updated_files,
+    projectFileSummary?.text_like_files,
+    projectTreeRootDirCounts.cases,
+    projectTreeRootDirCounts.flows,
+    projectTreeRootDirCounts.original,
+    projectTreeRootDirCounts.scripts,
+    projectTreeRootDirCounts.skills,
+    selectedProject?.artifact_profile,
+    visibleProjectSummary.derivedFiles,
+    visibleProjectSummary.originalFiles,
+  ]);
 
   const stageCounts = useMemo(() => {
-    const artifactProfile = selectedProject?.artifact_profile;
     return {
-      source: visibleProjectFiles.length,
-      knowledge: knowledgeMetrics.knowledgeCandidateFiles,
-      output:
-        (artifactProfile?.skills.length || 0)
-        + (artifactProfile?.scripts.length || 0)
-        + (artifactProfile?.flows.length || 0)
-        + (artifactProfile?.cases.length || 0),
+      source: projectFileSummary?.visible_files ?? visibleProjectSummary.totalFiles,
+      knowledge:
+        projectFileSummary?.knowledge_candidate_files ?? knowledgeMetrics.knowledgeCandidateFiles,
+      output: leafCounts.skills + leafCounts.scripts + leafCounts.flows + leafCounts.cases,
       outputRuns: pipelineRuns.length,
-      builtin: builtInProjectFiles.length,
+      builtin: projectFileSummary?.builtin_files ?? builtInProjectFiles.length,
     };
-  }, [builtInProjectFiles.length, knowledgeMetrics.knowledgeCandidateFiles, pipelineRuns.length, selectedProject?.artifact_profile, visibleProjectFiles.length]);
+  }, [
+    builtInProjectFiles.length,
+    leafCounts.cases,
+    leafCounts.flows,
+    leafCounts.scripts,
+    leafCounts.skills,
+    knowledgeMetrics.knowledgeCandidateFiles,
+    pipelineRuns.length,
+    projectFileSummary?.builtin_files,
+    projectFileSummary?.knowledge_candidate_files,
+    projectFileSummary?.visible_files,
+    visibleProjectSummary.totalFiles,
+  ]);
 
   const stageLeafFilters = useMemo(
     () => ({
@@ -915,8 +1096,8 @@ export default function ProjectDetailPage() {
   );
 
   const priorityFilePaths = useMemo(
-    () => selectSeedSourceFiles(projectFiles.map((item) => item.path)),
-    [projectFiles],
+    () => selectSeedSourceFiles(effectiveProjectFiles.map((item) => item.path)),
+    [effectiveProjectFiles],
   );
 
   const selectedRunAllStepsSucceeded = useMemo(() => {
@@ -988,6 +1169,7 @@ export default function ProjectDetailPage() {
             (item) => !isIgnoredProjectFile(item.path),
           );
           setProjectFiles(filteredFiles);
+          setKnownProjectFilesByPath(buildProjectFilesByPath(filteredFiles));
           setResolvedProjectRequestId(projectRequestId);
           const preservedFile = previousSelection
             ? filteredFiles.find((item) => item.path === previousSelection)
@@ -1019,6 +1201,178 @@ export default function ProjectDetailPage() {
       setFilesLoading(false);
     }
   }, [selectedFilePath, t]);
+
+  const loadProjectTreeDirectory = useCallback(async (
+    agentId: string,
+    project: AgentProjectSummary,
+    dirPath = "",
+  ): Promise<AgentProjectFileTreeNode[]> => {
+    const projectIds = [resolvedProjectRequestId, ...buildProjectIdCandidates(project)]
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const uniqueProjectIds = Array.from(new Set(projectIds));
+
+    for (const projectRequestId of uniqueProjectIds) {
+      try {
+        const nodes = await agentsApi.listProjectFileTree(
+          agentId,
+          projectRequestId,
+          dirPath,
+        );
+        const visibleNodes = nodes.filter((item) => !isIgnoredProjectFile(item.path));
+        setKnownProjectFilesByPath((prev) => mergeProjectTreeNodesByPath(prev, visibleNodes));
+        setResolvedProjectRequestId(projectRequestId);
+        return visibleNodes;
+      } catch {
+        // Try next candidate id.
+      }
+    }
+
+    throw new Error("project_file_tree_not_found");
+  }, [resolvedProjectRequestId]);
+
+  const loadProjectFileSummary = useCallback(async (
+    agentId: string,
+    project: AgentProjectSummary,
+  ) => {
+    const projectIds = [resolvedProjectRequestId, ...buildProjectIdCandidates(project)]
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const uniqueProjectIds = Array.from(new Set(projectIds));
+
+    for (const projectRequestId of uniqueProjectIds) {
+      try {
+        const summary = await agentsApi.getProjectFileSummary(agentId, projectRequestId);
+        setProjectFileSummary(summary);
+        setResolvedProjectRequestId(projectRequestId);
+        return summary;
+      } catch {
+        // Try next candidate id.
+      }
+    }
+
+    throw new Error("project_file_summary_not_found");
+  }, [resolvedProjectRequestId]);
+
+  const loadProjectFilesMetadata = useCallback(async (
+    agentId: string,
+    project: AgentProjectSummary,
+    paths: string[],
+  ) => {
+    const requestedPaths = Array.from(
+      new Set(
+        paths
+          .map((item) => item.trim())
+          .filter((item) => item && !isIgnoredProjectFile(item)),
+      ),
+    );
+    if (requestedPaths.length === 0) {
+      return [] as AgentProjectFileInfo[];
+    }
+
+    const projectIds = [resolvedProjectRequestId, ...buildProjectIdCandidates(project)]
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const uniqueProjectIds = Array.from(new Set(projectIds));
+
+    for (const projectRequestId of uniqueProjectIds) {
+      try {
+        const files = await agentsApi.getProjectFilesMetadata(
+          agentId,
+          projectRequestId,
+          requestedPaths,
+        );
+        const filteredFiles = files.filter((item) => !isIgnoredProjectFile(item.path));
+        setResolvedProjectRequestId(projectRequestId);
+        return filteredFiles;
+      } catch {
+        // Try next candidate id.
+      }
+    }
+
+    throw new Error("project_file_metadata_not_found");
+  }, [resolvedProjectRequestId]);
+
+  const applyProjectFilesMetadataPatch = useCallback((
+    requestedPaths: string[],
+    files: AgentProjectFileInfo[],
+  ) => {
+    if (requestedPaths.length === 0) {
+      return;
+    }
+    setKnownProjectFilesByPath((prev) =>
+      reconcileProjectFilesByPath(prev, files, requestedPaths),
+    );
+    setProjectFiles((prev) => {
+      if (prev.length === 0) {
+        return prev;
+      }
+      return reconcileProjectFilesList(prev, files, requestedPaths);
+    });
+  }, []);
+
+  const scheduleProjectFilesRefresh = useCallback((
+    agentId: string,
+    project: AgentProjectSummary,
+    options?: { preserveSelection?: boolean },
+    delay = PROJECT_FILES_DEFER_MS,
+  ) => {
+    if (projectFilesRefreshTimerRef.current !== null) {
+      window.clearTimeout(projectFilesRefreshTimerRef.current);
+    }
+    projectFilesRefreshTimerRef.current = window.setTimeout(() => {
+      projectFilesRefreshTimerRef.current = null;
+      void loadProjectFiles(agentId, project, options);
+    }, delay);
+  }, [loadProjectFiles]);
+
+  const loadProjectTreeRoot = useCallback(async (
+    agentId: string,
+    project: AgentProjectSummary,
+  ) => {
+    setProjectTreeLoading(true);
+    try {
+      const nodes = await loadProjectTreeDirectory(agentId, project, "");
+      setProjectTreeNodes(nodes);
+
+      if (!selectedFilePath) {
+        const previewDirs = nodes
+          .filter((item) => item.is_directory && item.child_count > 0)
+          .sort(compareProjectTreePreviewPriority)
+          .slice(0, PROJECT_TREE_PREFETCH_DIR_LIMIT);
+        let previewPath = "";
+        for (const dir of previewDirs) {
+          try {
+            const children = await loadProjectTreeDirectory(agentId, project, dir.path);
+            const previewableChild = children.find(
+              (item) => !item.is_directory && isPreviewablePath(item.path),
+            );
+            if (previewableChild) {
+              previewPath = previewableChild.path;
+              break;
+            }
+          } catch {
+            // best-effort prefetch only
+          }
+        }
+
+        if (!previewPath) {
+          previewPath = nodes.find(
+            (item) => !item.is_directory && isPreviewablePath(item.path),
+          )?.path || "";
+        }
+
+        if (previewPath) {
+          setSelectedFilePath((prev) => prev || previewPath);
+        }
+      }
+    } catch (err) {
+      console.error("failed to load project tree root", err);
+      setProjectTreeNodes([]);
+    } finally {
+      setProjectTreeLoading(false);
+    }
+  }, [loadProjectTreeDirectory, selectedFilePath]);
 
   const {
     uploadModalOpen,
@@ -1268,30 +1622,106 @@ export default function ProjectDetailPage() {
     }
   }, [t]);
 
+  const loadProjectPipelineRuns = useCallback(async (
+    agentId: string,
+    project: AgentProjectSummary,
+  ) => {
+    setPipelineLoading(true);
+    const projectIds = [resolvedProjectRequestId, ...buildProjectIdCandidates(project)]
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const uniqueProjectIds = Array.from(new Set(projectIds));
+    try {
+      for (const projectRequestId of uniqueProjectIds) {
+        try {
+          const runs = await agentsApi.listProjectPipelineRuns(agentId, projectRequestId);
+          setPipelineRuns(runs);
+          setResolvedProjectRequestId(projectRequestId);
+          setError("");
+          return runs;
+        } catch {
+          // Try next candidate id.
+        }
+      }
+      throw new Error("project_pipeline_runs_not_found");
+    } catch (err) {
+      console.error("failed to load pipeline runs", err);
+      setPipelineRuns([]);
+      setError(
+        `${t("projects.pipeline.loadFailed")} ${(err as Error)?.message || ""}`.trim(),
+      );
+      return [] as ProjectPipelineRunSummary[];
+    } finally {
+      setPipelineLoading(false);
+    }
+  }, [resolvedProjectRequestId, t]);
+
   const handleRealtimeFileTreeInvalidated = useCallback(async (payload?: {
     changedPaths: string[];
     reason: string;
+    fileSummary?: AgentProjectFileSummary;
   }) => {
     if (!currentAgent || !selectedProject) {
       return;
     }
-    await loadProjectFiles(currentAgent.id, selectedProject, {
-      preserveSelection: true,
-    });
+    lastFileTreeInvalidationAtRef.current = Date.now();
+    if (payload?.fileSummary) {
+      setProjectFileSummary(payload.fileSummary);
+    } else {
+      void loadProjectFileSummary(currentAgent.id, selectedProject).catch((err) => {
+        console.error("failed to load project file summary", err);
+        setProjectFileSummary(null);
+      });
+    }
+    const changedPaths = Array.from(
+      new Set(
+        (payload?.changedPaths || [])
+          .map((item) => item.trim())
+          .filter((item) => item && !isIgnoredProjectFile(item)),
+      ),
+    );
+    const shouldPatchIncrementally = Boolean(
+      payload
+      && payload.reason !== "resync"
+      && changedPaths.length > 0,
+    );
+    let patchedIncrementally = false;
+
+    if (shouldPatchIncrementally) {
+      await Promise.all([
+        loadProjectTreeRoot(currentAgent.id, selectedProject),
+        loadProjectFilesMetadata(currentAgent.id, selectedProject, changedPaths)
+          .then((files) => {
+            applyProjectFilesMetadataPatch(changedPaths, files);
+            patchedIncrementally = true;
+          })
+          .catch((err) => {
+            console.error("failed to patch project file metadata", err);
+          }),
+      ]);
+    } else {
+      await loadProjectTreeRoot(currentAgent.id, selectedProject);
+    }
+
+    if (!patchedIncrementally) {
+      scheduleProjectFilesRefresh(currentAgent.id, selectedProject, {
+        preserveSelection: true,
+      });
+    }
     const shouldRefreshSelectedContent = Boolean(
       selectedFilePath
       && isPreviewablePath(selectedFilePath)
       && (
         !payload
         || payload.reason === "resync"
-        || payload.changedPaths.length === 0
-        || payload.changedPaths.includes(selectedFilePath)
+        || changedPaths.length === 0
+        || changedPaths.includes(selectedFilePath)
       ),
     );
     if (shouldRefreshSelectedContent) {
       await loadFileContent(currentAgent.id, selectedProject, selectedFilePath);
     }
-  }, [currentAgent, loadFileContent, loadProjectFiles, selectedFilePath, selectedProject]);
+  }, [applyProjectFilesMetadataPatch, currentAgent, loadFileContent, loadProjectFileSummary, loadProjectFilesMetadata, loadProjectTreeRoot, scheduleProjectFilesRefresh, selectedFilePath, selectedProject]);
 
   const handleRealtimePipelineInvalidated = useCallback(async (_payload?: {
     changedPaths: string[];
@@ -1300,37 +1730,120 @@ export default function ProjectDetailPage() {
     if (!currentAgent || !selectedProject) {
       return;
     }
-    await loadPipelineContext(currentAgent.id, selectedProject);
-    if (selectedRunId) {
+    lastPipelineInvalidationAtRef.current = Date.now();
+    const changedPaths = Array.from(
+      new Set(
+        (_payload?.changedPaths || [])
+          .map((item) => item.trim())
+          .filter(Boolean),
+      ),
+    );
+    const templateChanged = Boolean(
+      !_payload
+      || _payload.reason === "resync"
+      || changedPaths.length === 0
+      || changedPaths.some((item) => isProjectPipelineTemplatePath(item))
+      || changedPaths.some((item) => !isProjectPipelineRunPath(item)),
+    );
+
+    if (templateChanged) {
+      await loadPipelineContext(currentAgent.id, selectedProject);
+      if (selectedRunId) {
+        await loadRunDetail(currentAgent.id, selectedProject, selectedRunId);
+      }
+      return;
+    }
+
+    const runs = await loadProjectPipelineRuns(currentAgent.id, selectedProject);
+    const changedRunIds = Array.from(
+      new Set(
+        changedPaths
+          .map((item) => getProjectPipelineRunIdFromPath(item))
+          .filter(Boolean),
+      ),
+    );
+
+    if (
+      selectedRunId
+      && runs.some((item) => item.id === selectedRunId)
+      && (changedRunIds.length === 0 || changedRunIds.includes(selectedRunId))
+    ) {
       await loadRunDetail(currentAgent.id, selectedProject, selectedRunId);
     }
-  }, [currentAgent, loadPipelineContext, loadRunDetail, selectedProject, selectedRunId]);
+  }, [currentAgent, loadPipelineContext, loadProjectPipelineRuns, loadRunDetail, selectedProject, selectedRunId]);
 
   const handleAssistantTurnCompleted = useCallback(async () => {
     if (!currentAgent || !selectedProject) {
       return;
     }
 
-    await Promise.all([
-      loadProjectFiles(currentAgent.id, selectedProject, {
-        preserveSelection: true,
-      }),
-      loadPipelineContext(currentAgent.id, selectedProject),
-    ]);
-
-    if (selectedFilePath && isPreviewablePath(selectedFilePath)) {
-      await loadFileContent(currentAgent.id, selectedProject, selectedFilePath);
+    if (assistantTurnFileSyncTimerRef.current !== null) {
+      window.clearTimeout(assistantTurnFileSyncTimerRef.current);
+      assistantTurnFileSyncTimerRef.current = null;
+    }
+    if (assistantTurnPipelineSyncTimerRef.current !== null) {
+      window.clearTimeout(assistantTurnPipelineSyncTimerRef.current);
+      assistantTurnPipelineSyncTimerRef.current = null;
     }
 
-    if (selectedRunId) {
-      await loadRunDetail(currentAgent.id, selectedProject, selectedRunId);
+    const isRealtimeLikelyToDeliver =
+      realtimeConnectionStatusRef.current === "connected"
+      || realtimeConnectionStatusRef.current === "connecting"
+      || realtimeConnectionStatusRef.current === "reconnecting";
+
+    const performFileFallbackSync = () => {
+      void Promise.all([
+        loadProjectFileSummary(currentAgent.id, selectedProject).catch(() => null),
+        loadProjectTreeRoot(currentAgent.id, selectedProject),
+      ]).then(async () => {
+        scheduleProjectFilesRefresh(currentAgent.id, selectedProject, {
+          preserveSelection: true,
+        }, 120);
+
+        if (selectedFilePath && isPreviewablePath(selectedFilePath)) {
+          await loadFileContent(currentAgent.id, selectedProject, selectedFilePath);
+        }
+
+      });
+    };
+
+    const performPipelineFallbackSync = () => {
+      void loadPipelineContext(currentAgent.id, selectedProject).then(async () => {
+        if (selectedRunId) {
+          await loadRunDetail(currentAgent.id, selectedProject, selectedRunId);
+        }
+      });
+    };
+
+    if (isRealtimeLikelyToDeliver) {
+      const completedAt = Date.now();
+      assistantTurnFileSyncTimerRef.current = window.setTimeout(() => {
+        assistantTurnFileSyncTimerRef.current = null;
+        const fileTreeDelivered = lastFileTreeInvalidationAtRef.current >= completedAt;
+        if (!fileTreeDelivered) {
+          performFileFallbackSync();
+        }
+      }, ASSISTANT_TURN_REALTIME_FALLBACK_MS);
+      assistantTurnPipelineSyncTimerRef.current = window.setTimeout(() => {
+        assistantTurnPipelineSyncTimerRef.current = null;
+        const pipelineDelivered = lastPipelineInvalidationAtRef.current >= completedAt;
+        if (!pipelineDelivered) {
+          performPipelineFallbackSync();
+        }
+      }, ASSISTANT_TURN_REALTIME_FALLBACK_MS);
+      return;
     }
+
+    performFileFallbackSync();
+    performPipelineFallbackSync();
   }, [
     currentAgent,
     loadFileContent,
     loadPipelineContext,
-    loadProjectFiles,
+    loadProjectFileSummary,
+    loadProjectTreeRoot,
     loadRunDetail,
+    scheduleProjectFilesRefresh,
     selectedFilePath,
     selectedProject,
     selectedRunId,
@@ -1569,7 +2082,7 @@ export default function ProjectDetailPage() {
     selectedTemplateName: selectedTemplate?.name || selectedProject?.name || "",
     selectedTemplateVersion: selectedTemplate?.version || "0",
     resolvedProjectRequestId,
-    projectFiles,
+    projectFiles: effectiveProjectFiles,
     designFocusChatIdRef,
     setDesignFocusChatId,
     setChatStarting,
@@ -1771,6 +2284,10 @@ export default function ProjectDetailPage() {
     onPipelineInvalidated: handleRealtimePipelineInvalidated,
   });
 
+  useEffect(() => {
+    realtimeConnectionStatusRef.current = realtimeConnectionState.status;
+  }, [realtimeConnectionState.status]);
+
   const realtimeConnectionText = useMemo(() => {
     if (realtimeConnectionState.status === "connected") {
       return t("projects.realtime.connected", "Realtime connected");
@@ -1794,8 +2311,23 @@ export default function ProjectDetailPage() {
   }, [currentAgent, loadAgents]);
 
   useEffect(() => {
+    if (projectFilesRefreshTimerRef.current !== null) {
+      window.clearTimeout(projectFilesRefreshTimerRef.current);
+      projectFilesRefreshTimerRef.current = null;
+    }
+    if (assistantTurnFileSyncTimerRef.current !== null) {
+      window.clearTimeout(assistantTurnFileSyncTimerRef.current);
+      assistantTurnFileSyncTimerRef.current = null;
+    }
+    if (assistantTurnPipelineSyncTimerRef.current !== null) {
+      window.clearTimeout(assistantTurnPipelineSyncTimerRef.current);
+      assistantTurnPipelineSyncTimerRef.current = null;
+    }
     setResolvedProjectRequestId("");
     setProjectFiles([]);
+    setProjectTreeNodes([]);
+    setProjectFileSummary(null);
+    setKnownProjectFilesByPath({});
     setSelectedFilePath("");
     setFileContent("");
     setPipelineTemplates([]);
@@ -1937,16 +2469,147 @@ export default function ProjectDetailPage() {
     setSelectedFilePath,
     relatedArtifactPathsForSelectedStep,
     artifactRecords,
-    projectFiles,
+    filesLoading,
+    knownProjectFilePaths,
+    projectFiles: effectiveProjectFiles,
   });
 
   useEffect(() => {
     if (!currentAgent || !selectedProject) {
       return;
     }
-    void loadProjectFiles(currentAgent.id, selectedProject);
+    void loadProjectTreeRoot(currentAgent.id, selectedProject);
+
+    let cancelled = false;
+    let fileTimer: number | null = null;
+    let pipelineTimer: number | null = null;
+    const idleCallback = (window as Window & {
+      requestIdleCallback?: (
+        callback: () => void,
+        options?: { timeout: number },
+      ) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    }).requestIdleCallback;
+    const cancelIdleCallback = (window as Window & {
+      cancelIdleCallback?: (handle: number) => void;
+    }).cancelIdleCallback;
+    let fileIdleHandle: number | null = null;
+    let idleHandle: number | null = null;
+
+    const loadDeferredProjectFiles = () => {
+      if (cancelled) {
+        return;
+      }
+      scheduleProjectFilesRefresh(currentAgent.id, selectedProject, {
+        preserveSelection: true,
+      });
+    };
+
+    const loadDeferredPipelineContext = () => {
+      if (cancelled) {
+        return;
+      }
+      void loadPipelineContext(currentAgent.id, selectedProject);
+    };
+
+    if (typeof idleCallback === "function") {
+      fileIdleHandle = idleCallback(loadDeferredProjectFiles, {
+        timeout: INITIAL_PROJECT_FILES_IDLE_TIMEOUT_MS,
+      });
+      idleHandle = idleCallback(loadDeferredPipelineContext, {
+        timeout: PIPELINE_CONTEXT_DEFER_MS,
+      });
+    } else {
+      fileTimer = window.setTimeout(
+        loadDeferredProjectFiles,
+        INITIAL_PROJECT_FILES_IDLE_TIMEOUT_MS,
+      );
+      pipelineTimer = window.setTimeout(
+        loadDeferredPipelineContext,
+        PIPELINE_CONTEXT_DEFER_MS,
+      );
+    }
+
+    return () => {
+      cancelled = true;
+      if (projectFilesRefreshTimerRef.current !== null) {
+        window.clearTimeout(projectFilesRefreshTimerRef.current);
+        projectFilesRefreshTimerRef.current = null;
+      }
+      if (assistantTurnFileSyncTimerRef.current !== null) {
+        window.clearTimeout(assistantTurnFileSyncTimerRef.current);
+        assistantTurnFileSyncTimerRef.current = null;
+      }
+      if (assistantTurnPipelineSyncTimerRef.current !== null) {
+        window.clearTimeout(assistantTurnPipelineSyncTimerRef.current);
+        assistantTurnPipelineSyncTimerRef.current = null;
+      }
+      if (fileTimer !== null) {
+        window.clearTimeout(fileTimer);
+      }
+      if (pipelineTimer !== null) {
+        window.clearTimeout(pipelineTimer);
+      }
+      if (fileIdleHandle !== null && typeof cancelIdleCallback === "function") {
+        cancelIdleCallback(fileIdleHandle);
+      }
+      if (idleHandle !== null && typeof cancelIdleCallback === "function") {
+        cancelIdleCallback(idleHandle);
+      }
+    };
+  }, [currentAgent, selectedProject, loadProjectTreeRoot, loadPipelineContext, scheduleProjectFilesRefresh]);
+
+  useEffect(() => {
+    if (!currentAgent || !selectedProject || projectFileSummary) {
+      return;
+    }
+    if (
+      realtimeConnectionState.status === "connected"
+      || realtimeConnectionState.status === "connecting"
+      || realtimeConnectionState.status === "reconnecting"
+    ) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void loadProjectFileSummary(currentAgent.id, selectedProject).catch((err) => {
+        console.error("failed to load project file summary", err);
+        setProjectFileSummary(null);
+      });
+    }, 400);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [
+    currentAgent,
+    loadProjectFileSummary,
+    projectFileSummary,
+    realtimeConnectionState.status,
+    selectedProject,
+  ]);
+
+  useEffect(() => {
+    if (!currentAgent || !selectedProject) {
+      return;
+    }
+    if (pipelineLoading || pipelineTemplates.length > 0 || pipelineRuns.length > 0) {
+      return;
+    }
+    if (activeStage !== "output" && !automationDrawerOpen) {
+      return;
+    }
     void loadPipelineContext(currentAgent.id, selectedProject);
-  }, [currentAgent, selectedProject, loadProjectFiles, loadPipelineContext]);
+  }, [
+    activeStage,
+    automationDrawerOpen,
+    currentAgent,
+    loadPipelineContext,
+    pipelineLoading,
+    pipelineRuns.length,
+    pipelineTemplates.length,
+    selectedProject,
+  ]);
 
   useEffect(() => {
     if (!currentAgent || !selectedProject || !selectedFilePath) {
@@ -2129,7 +2792,8 @@ export default function ProjectDetailPage() {
       }
 
       const selectedFiles = selectedAttachPaths.map((path) => {
-        const fileInfo = projectFiles.find((file) => file.path === path);
+        const fileInfo = knownProjectFilesByPath[path]
+          || effectiveProjectFiles.find((file) => file.path === path);
         return {
           path,
           size: fileInfo?.size || 0,
@@ -2199,7 +2863,8 @@ export default function ProjectDetailPage() {
     ensureVisibleProjectChat,
     currentAgent,
     fetchProjectFileSnippet,
-    projectFiles,
+    effectiveProjectFiles,
+    knownProjectFilesByPath,
     prepareDraftInChat,
     selectedAttachPaths,
     selectedProject,
@@ -2603,7 +3268,11 @@ export default function ProjectDetailPage() {
                             pipelineTemplateCount={pipelineTemplates.length}
                             pipelineRunCount={pipelineRuns.length}
                             projectWorkspaceSummary={projectWorkspaceSummary}
-                            projectFiles={projectFiles}
+                            projectFiles={effectiveProjectFiles}
+                            projectFileSummary={projectFileSummary}
+                            projectVisibleSummary={visibleProjectSummary}
+                            projectTreeNodes={projectTreeNodes}
+                            projectTreeLoading={projectTreeLoading}
                             priorityFilePaths={priorityFilePaths}
                             selectedFilePath={selectedFilePath}
                             selectedAttachPaths={selectedAttachPaths}
@@ -2614,6 +3283,12 @@ export default function ProjectDetailPage() {
                             onTreeDisplayModeChange={setTreeDisplayMode}
                             treeOnly
                             onUploadFiles={openProjectUploadModal}
+                            onLoadProjectTreeChildren={(path) => {
+                              if (!currentAgent || !selectedProject) {
+                                return Promise.resolve([]);
+                              }
+                              return loadProjectTreeDirectory(currentAgent.id, selectedProject, path);
+                            }}
                             onSelectFileFromTree={(path) => {
                               void handleSelectArtifactFile(path);
                             }}
@@ -2641,7 +3316,8 @@ export default function ProjectDetailPage() {
                             artifactRecords={artifactRecords}
                             selectedArtifactRecord={selectedArtifactRecord}
                             selectedFilePath={selectedFilePath}
-                            projectFiles={projectFiles}
+                            knownProjectFilesByPath={knownProjectFilesByPath}
+                            projectFiles={effectiveProjectFiles}
                             fileContent={fileContent}
                             selectedAttachPaths={selectedAttachPaths}
                             autoAnalyzeOnAttach={autoAnalyzeOnAttach}

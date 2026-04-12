@@ -16,6 +16,7 @@ interface ProjectWorkbenchPanelProps {
   artifactRecords: ProjectPipelineArtifactRecord[];
   selectedArtifactRecord: ProjectPipelineArtifactRecord | undefined;
   selectedFilePath: string;
+  knownProjectFilesByPath: Record<string, AgentProjectFileInfo>;
   projectFiles: AgentProjectFileInfo[];
   fileContent: string;
   selectedAttachPaths: string[];
@@ -33,6 +34,7 @@ export default function ProjectWorkbenchPanel({
   artifactRecords,
   selectedArtifactRecord,
   selectedFilePath,
+  knownProjectFilesByPath,
   projectFiles,
   fileContent,
   selectedAttachPaths,
@@ -75,6 +77,7 @@ export default function ProjectWorkbenchPanel({
         artifactRecords={artifactRecords}
         selectedArtifactRecord={selectedArtifactRecord}
         selectedFilePath={selectedFilePath}
+        knownProjectFilesByPath={knownProjectFilesByPath}
         projectFiles={projectFiles}
         fileContent={fileContent}
         selectedAttachPaths={selectedAttachPaths}

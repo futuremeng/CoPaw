@@ -11,6 +11,7 @@ from copaw.app.routers import agents as agents_router_module
 from copaw.app.routers.agents import (
     CreateProjectRequest,
     _create_project,
+    _build_project_file_summary,
     _load_project_summary,
     _write_project_frontmatter,
 )
@@ -230,6 +231,174 @@ def test_list_project_files_endpoint_offloads_to_thread(
     assert response.status_code == 200
     assert calls
     assert calls[0][0] is agents_router_module._list_project_files_for_workspace
+
+
+def test_list_project_file_tree_endpoint_returns_shallow_nodes(
+    project_artifact_router_client: tuple[TestClient, Path, str],
+):
+    client, workspace_dir, project_id = project_artifact_router_client
+    project_dir = workspace_dir / "projects" / project_id
+    nested_dir = project_dir / "original" / "batch-a"
+    nested_dir.mkdir(parents=True, exist_ok=True)
+    (nested_dir / "note.txt").write_text("hello", encoding="utf-8")
+
+    root_response = client.get(
+        f"/agents/default/projects/{project_id}/file-tree"
+    )
+    assert root_response.status_code == 200
+    root_paths = [item["path"] for item in root_response.json()]
+    assert "PROJECT.md" in root_paths
+    assert "original" in root_paths
+
+    original_response = client.get(
+        f"/agents/default/projects/{project_id}/file-tree",
+        params={"dir_path": "original"},
+    )
+    assert original_response.status_code == 200
+    payload = original_response.json()
+    assert payload == [
+        {
+            "filename": "batch-a",
+            "path": "original/batch-a",
+            "size": 0,
+            "modified_time": payload[0]["modified_time"],
+            "is_directory": True,
+            "child_count": 1,
+            "descendant_file_count": 1,
+        }
+    ]
+
+
+def test_list_project_file_tree_endpoint_offloads_to_thread(
+    project_artifact_router_client: tuple[TestClient, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+):
+    client, _workspace_dir, project_id = project_artifact_router_client
+    original_to_thread = agents_router_module.asyncio.to_thread
+    calls: list[tuple[object, tuple[object, ...]]] = []
+
+    async def fake_to_thread(func, /, *args, **kwargs):
+        calls.append((func, args))
+        return await original_to_thread(func, *args, **kwargs)
+
+    monkeypatch.setattr(agents_router_module.asyncio, "to_thread", fake_to_thread)
+
+    response = client.get(
+        f"/agents/default/projects/{project_id}/file-tree",
+        params={"dir_path": "skills"},
+    )
+
+    assert response.status_code == 200
+    assert calls
+    assert calls[0][0] is agents_router_module._list_project_file_tree_nodes_for_workspace
+
+
+def test_project_file_summary_endpoint_returns_aggregated_counts(
+    project_artifact_router_client: tuple[TestClient, Path, str],
+):
+    client, workspace_dir, project_id = project_artifact_router_client
+    project_dir = workspace_dir / "projects" / project_id
+    (project_dir / "original").mkdir(parents=True, exist_ok=True)
+    (project_dir / "data").mkdir(parents=True, exist_ok=True)
+    (project_dir / "scripts").mkdir(parents=True, exist_ok=True)
+    (project_dir / ".cache").mkdir(parents=True, exist_ok=True)
+    (project_dir / "original" / "brief.md").write_text("brief", encoding="utf-8")
+    (project_dir / "data" / "notes.txt").write_text("notes", encoding="utf-8")
+    (project_dir / "scripts" / "run.py").write_text("print('ok')", encoding="utf-8")
+    (project_dir / ".cache" / "session.log").write_text("noop", encoding="utf-8")
+    (project_dir / ".gitkeep").write_text("", encoding="utf-8")
+    (project_dir / "AGENTS.md").write_text("# agent", encoding="utf-8")
+
+    response = client.get(f"/agents/default/projects/{project_id}/summary")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["builtin_files"] >= 2
+    assert payload["visible_files"] >= 5
+    assert payload["original_files"] == 1
+    assert payload["derived_files"] >= 1
+    assert payload["knowledge_candidate_files"] >= 5
+    assert payload["markdown_files"] >= 4
+    assert payload["text_like_files"] >= 6
+    assert payload["recently_updated_files"] == payload["total_files"]
+
+    summary = _build_project_file_summary(project_dir)
+    assert payload == summary.model_dump()
+
+
+def test_project_file_summary_endpoint_offloads_to_thread(
+    project_artifact_router_client: tuple[TestClient, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+):
+    client, _workspace_dir, project_id = project_artifact_router_client
+    original_to_thread = agents_router_module.asyncio.to_thread
+    calls: list[tuple[object, tuple[object, ...]]] = []
+
+    async def fake_to_thread(func, /, *args, **kwargs):
+        calls.append((func, args))
+        return await original_to_thread(func, *args, **kwargs)
+
+    monkeypatch.setattr(agents_router_module.asyncio, "to_thread", fake_to_thread)
+
+    response = client.get(f"/agents/default/projects/{project_id}/summary")
+
+    assert response.status_code == 200
+    assert calls
+    assert calls[0][0] is agents_router_module._build_project_file_summary_for_workspace
+
+
+def test_project_file_metadata_endpoint_returns_existing_files_only(
+    project_artifact_router_client: tuple[TestClient, Path, str],
+):
+    client, workspace_dir, project_id = project_artifact_router_client
+    project_dir = workspace_dir / "projects" / project_id
+    (project_dir / "original").mkdir(parents=True, exist_ok=True)
+    (project_dir / "data").mkdir(parents=True, exist_ok=True)
+    (project_dir / "original" / "brief.md").write_text("brief", encoding="utf-8")
+    (project_dir / "data" / "notes.txt").write_text("notes", encoding="utf-8")
+
+    response = client.post(
+        f"/agents/default/projects/{project_id}/files/metadata",
+        json={
+            "paths": [
+                "original/brief.md",
+                "data/notes.txt",
+                "data/missing.txt",
+                "original/brief.md",
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [item["path"] for item in payload] == [
+        "original/brief.md",
+        "data/notes.txt",
+    ]
+
+
+def test_project_file_metadata_endpoint_offloads_to_thread(
+    project_artifact_router_client: tuple[TestClient, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+):
+    client, _workspace_dir, project_id = project_artifact_router_client
+    original_to_thread = agents_router_module.asyncio.to_thread
+    calls: list[tuple[object, tuple[object, ...]]] = []
+
+    async def fake_to_thread(func, /, *args, **kwargs):
+        calls.append((func, args))
+        return await original_to_thread(func, *args, **kwargs)
+
+    monkeypatch.setattr(agents_router_module.asyncio, "to_thread", fake_to_thread)
+
+    response = client.post(
+        f"/agents/default/projects/{project_id}/files/metadata",
+        json={"paths": ["PROJECT.md"]},
+    )
+
+    assert response.status_code == 200
+    assert calls
+    assert calls[0][0] is agents_router_module._get_project_files_metadata_for_workspace
 
 
 def test_read_project_file_endpoint_offloads_to_thread(

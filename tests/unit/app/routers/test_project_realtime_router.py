@@ -65,6 +65,7 @@ def test_project_realtime_ws_emits_file_tree_updates(tmp_path: Path):
             assert first["event_id"] == 1
             assert first["reason"] == "initial_sync"
             assert first["changed_paths"] == []
+            assert first["snapshot"]["file_tree"]["summary"]["builtin_files"] >= 1
             first_fingerprint = first["snapshot"]["file_tree"]["fingerprint"]
 
             target_file = tmp_path / "projects" / project_id / "original" / "note.md"
@@ -78,6 +79,8 @@ def test_project_realtime_ws_emits_file_tree_updates(tmp_path: Path):
             assert "original/note.md" in second["changed_paths"]
             assert second["snapshot"]["file_tree"]["fingerprint"] != first_fingerprint
             assert second["snapshot"]["file_tree"]["file_count"] >= 2
+            assert second["snapshot"]["file_tree"]["summary"]["original_files"] == 1
+            assert second["snapshot"]["file_tree"]["summary"]["visible_files"] >= 1
 
 
 def test_project_realtime_ws_emits_pipeline_updates(tmp_path: Path):

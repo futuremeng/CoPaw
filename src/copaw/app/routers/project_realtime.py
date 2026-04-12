@@ -66,6 +66,14 @@ def _build_file_tree_signal(
     entries: dict[str, str] = {}
     file_count = 0
     latest_mtime_ns = 0
+    builtin_files = 0
+    visible_files = 0
+    original_files = 0
+    derived_files = 0
+    knowledge_candidate_files = 0
+    markdown_files = 0
+    text_like_files = 0
+    recently_updated_files = 0
 
     for path in sorted(project_dir.rglob("*"), key=lambda item: item.as_posix().lower()):
         try:
@@ -73,6 +81,8 @@ def _build_file_tree_signal(
                 continue
             rel = path.relative_to(project_dir).as_posix()
             if any(part in _IGNORED_PROJECT_PARTS for part in Path(rel).parts):
+                continue
+            if agents_router_impl._is_ignored_project_metric_file(rel):
                 continue
             stat = path.stat()
         except (OSError, ValueError):
@@ -82,12 +92,43 @@ def _build_file_tree_signal(
         latest_mtime_ns = max(latest_mtime_ns, stat.st_mtime_ns)
         entries[rel] = f"{stat.st_mtime_ns}:{stat.st_size}"
 
+        extension = agents_router_impl._extension_of_project_path(rel)
+        is_builtin = agents_router_impl._is_builtin_project_metric_file(rel)
+        if is_builtin:
+            builtin_files += 1
+        else:
+            visible_files += 1
+            if agents_router_impl._is_original_project_metric_file(rel):
+                original_files += 1
+            elif not agents_router_impl._is_standard_artifact_metric_file(rel):
+                derived_files += 1
+
+        if extension in agents_router_impl._PROJECT_KNOWLEDGE_EXTENSIONS:
+            knowledge_candidate_files += 1
+        if extension in agents_router_impl._PROJECT_MARKDOWN_EXTENSIONS:
+            markdown_files += 1
+        if extension in agents_router_impl._PROJECT_TEXT_LIKE_EXTENSIONS:
+            text_like_files += 1
+        if agents_router_impl._is_recent_project_metric_file(stat.st_mtime):
+            recently_updated_files += 1
+
     signal = {
         "fingerprint": _hash_entries(
             [f"{path}:{fingerprint}" for path, fingerprint in entries.items()]
         ),
         "file_count": file_count,
         "latest_mtime_ns": latest_mtime_ns,
+        "summary": {
+            "total_files": file_count,
+            "builtin_files": builtin_files,
+            "visible_files": visible_files,
+            "original_files": original_files,
+            "derived_files": derived_files,
+            "knowledge_candidate_files": knowledge_candidate_files,
+            "markdown_files": markdown_files,
+            "text_like_files": text_like_files,
+            "recently_updated_files": recently_updated_files,
+        },
     }
     return signal, entries
 

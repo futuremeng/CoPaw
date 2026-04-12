@@ -4,6 +4,7 @@ import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type {
   AgentProjectFileInfo,
+  AgentProjectFileSummary,
   AgentProjectSummary,
 } from "../../../api/types/agents";
 import ProjectOverviewCard from "./ProjectOverviewCard";
@@ -62,6 +63,7 @@ function renderCard(
     activeStage?: ProjectStageKey;
     initialFilter?: "" | "original" | "derived" | "skills" | "scripts" | "flows" | "cases" | "builtin" | "knowledgeCandidates" | "markdown" | "textLike" | "recent";
     initialTreeDisplayMode?: "filter" | "highlight";
+    projectFileSummary?: AgentProjectFileSummary | null;
   },
 ) {
   const onUploadFiles = vi.fn();
@@ -87,6 +89,7 @@ function renderCard(
         pipelineRunCount={0}
         projectWorkspaceSummary="snapshot"
         projectFiles={projectFiles}
+        projectFileSummary={options?.projectFileSummary ?? null}
         priorityFilePaths={[]}
         selectedFilePath=""
         selectedAttachPaths={[]}
@@ -217,5 +220,36 @@ describe("ProjectOverviewCard interactions", () => {
 
     expect(screen.getByText("AGENTS.md")).toBeDefined();
     expect(screen.getByText("guide.md")).toBeDefined();
+  });
+
+  it("prefers server summary counts in overview cards when provided", () => {
+    renderCard(
+      [
+        {
+          filename: "guide.md",
+          path: "original/guide.md",
+          size: 10,
+          modified_time: "2026-04-09T00:00:00Z",
+        },
+      ],
+      {
+        projectFileSummary: {
+          total_files: 10,
+          builtin_files: 2,
+          visible_files: 8,
+          original_files: 5,
+          derived_files: 3,
+          knowledge_candidate_files: 7,
+          markdown_files: 6,
+          text_like_files: 8,
+          recently_updated_files: 4,
+        },
+      },
+    );
+
+    expect(screen.getByRole("button", { name: /Original Files/i }).textContent).toContain("5");
+    expect(screen.getByRole("button", { name: /Derived Files/i }).textContent).toContain("3");
+    expect(screen.getByRole("button", { name: /Knowledge Candidates/i }).textContent).toContain("7");
+    expect(screen.getByRole("button", { name: /Markdown Files/i }).textContent).toContain("6");
   });
 });

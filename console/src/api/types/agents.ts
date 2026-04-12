@@ -57,6 +57,28 @@ export interface AgentProjectFileInfo {
   modified_time: string;
 }
 
+export interface AgentProjectFileTreeNode {
+  filename: string;
+  path: string;
+  size: number;
+  modified_time: string;
+  is_directory: boolean;
+  child_count: number;
+  descendant_file_count: number;
+}
+
+export interface AgentProjectFileSummary {
+  total_files: number;
+  builtin_files: number;
+  visible_files: number;
+  original_files: number;
+  derived_files: number;
+  knowledge_candidate_files: number;
+  markdown_files: number;
+  text_like_files: number;
+  recently_updated_files: number;
+}
+
 export interface AgentProjectFileContent {
   content: string;
 }

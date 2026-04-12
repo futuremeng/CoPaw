@@ -25,6 +25,7 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Query,
     Request,
     UploadFile,
 )
@@ -256,6 +257,38 @@ class ProjectFileInfo(BaseModel):
     modified_time: str
 
 
+class ProjectFileTreeNode(BaseModel):
+    """Single shallow file-tree node under a project directory."""
+
+    filename: str
+    path: str
+    size: int
+    modified_time: str
+    is_directory: bool = False
+    child_count: int = 0
+    descendant_file_count: int = 0
+
+
+class ProjectFileSummary(BaseModel):
+    """Aggregated project file counts for lightweight overview rendering."""
+
+    total_files: int
+    builtin_files: int
+    visible_files: int
+    original_files: int
+    derived_files: int
+    knowledge_candidate_files: int
+    markdown_files: int
+    text_like_files: int
+    recently_updated_files: int
+
+
+class ProjectFileMetadataRequest(BaseModel):
+    """Request body for fetching project file metadata by relative path."""
+
+    paths: list[str] = Field(default_factory=list)
+
+
 class ProjectFileContent(BaseModel):
     """Project file content."""
 
@@ -455,6 +488,52 @@ _PROJECT_ARTIFACT_DIR_BY_KIND = {
     "flow": "flows",
     "case": "cases",
 }
+_PROJECT_TREE_IGNORED_NAMES = {
+    ".git",
+    "__pycache__",
+}
+_PROJECT_IGNORED_FILE_NAMES = {
+    ".ds_store",
+    ".gitkeep",
+    "thumbs.db",
+}
+_PROJECT_BUILTIN_FILE_NAMES = {
+    "agents.md",
+    "project.md",
+    "plan.md",
+    "heartbeat.md",
+}
+_PROJECT_KNOWLEDGE_EXTENSIONS = {
+    "md",
+    "mdx",
+    "txt",
+    "pdf",
+    "doc",
+    "docx",
+    "rtf",
+    "csv",
+    "json",
+    "yaml",
+    "yml",
+    "xml",
+    "html",
+    "htm",
+}
+_PROJECT_TEXT_LIKE_EXTENSIONS = _PROJECT_KNOWLEDGE_EXTENSIONS | {
+    "js",
+    "jsx",
+    "ts",
+    "tsx",
+    "py",
+    "sh",
+    "sql",
+    "toml",
+    "ini",
+    "css",
+    "scss",
+    "less",
+}
+_PROJECT_MARKDOWN_EXTENSIONS = {"md", "mdx"}
 _PROJECT_ARTIFACT_DISTILL_MODES = {
     "file_scan",
     "conversation_evidence",
@@ -2048,6 +2127,109 @@ def _rewrite_original_to_data_path(rel_path: str) -> str | None:
     return f"data/{remainder}"
 
 
+def _normalize_project_tree_dir_path(raw_value: str) -> str:
+    candidate = str(raw_value or "").strip().replace("\\", "/")
+    if not candidate or candidate == ".":
+        return ""
+    normalized = Path(candidate).as_posix().strip("/")
+    if normalized == ".":
+        return ""
+    return normalized
+
+
+def _is_visible_project_tree_path(rel_path: str) -> bool:
+    if not rel_path:
+        return True
+    parts = Path(rel_path).parts
+    return not any(part in _PROJECT_TREE_IGNORED_NAMES for part in parts)
+
+
+def _count_visible_project_tree_children(target_dir: Path) -> int:
+    count = 0
+    for child in target_dir.iterdir():
+        if not _is_visible_project_tree_path(child.name):
+            continue
+        count += 1
+    return count
+
+
+def _count_visible_project_tree_descendant_files(target_dir: Path) -> int:
+    count = 0
+    try:
+        for path in target_dir.rglob("*"):
+            if not path.is_file():
+                continue
+            rel_path = path.relative_to(target_dir).as_posix()
+            if not _is_visible_project_tree_path(rel_path):
+                continue
+            count += 1
+    except OSError:
+        return 0
+    return count
+
+
+def _list_project_file_tree_nodes(
+    project_dir: Path,
+    dir_path: str = "",
+) -> list[ProjectFileTreeNode]:
+    project_root = project_dir.resolve()
+    normalized_dir_path = _normalize_project_tree_dir_path(dir_path)
+    if normalized_dir_path and not _is_safe_relative_path(normalized_dir_path):
+        raise HTTPException(status_code=400, detail="Invalid directory path")
+    if normalized_dir_path and not _is_visible_project_tree_path(normalized_dir_path):
+        raise HTTPException(status_code=404, detail="Directory not found")
+
+    target_dir = (
+        project_root
+        if not normalized_dir_path
+        else (project_root / normalized_dir_path).resolve()
+    )
+    if not str(target_dir).startswith(str(project_root)):
+        raise HTTPException(status_code=400, detail="Invalid directory path")
+    if not target_dir.exists() or not target_dir.is_dir():
+        raise HTTPException(status_code=404, detail="Directory not found")
+
+    nodes: list[ProjectFileTreeNode] = []
+    try:
+        children = sorted(
+            target_dir.iterdir(),
+            key=lambda item: (not item.is_dir(), item.name.lower()),
+        )
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    for child in children:
+        rel_path = child.relative_to(project_root).as_posix()
+        if not _is_visible_project_tree_path(rel_path):
+            continue
+        try:
+            stat = child.stat()
+        except OSError:
+            continue
+        is_directory = child.is_dir()
+        nodes.append(
+            ProjectFileTreeNode(
+                filename=child.name,
+                path=rel_path,
+                size=0 if is_directory else stat.st_size,
+                modified_time=_format_iso_time(stat.st_mtime),
+                is_directory=is_directory,
+                child_count=(
+                    _count_visible_project_tree_children(child)
+                    if is_directory
+                    else 0
+                ),
+                descendant_file_count=(
+                    _count_visible_project_tree_descendant_files(child)
+                    if is_directory
+                    else 0
+                ),
+            )
+        )
+
+    return nodes
+
+
 def _list_project_files(project_dir: Path) -> list[ProjectFileInfo]:
     project_root = project_dir.resolve()
     files: list[ProjectFileInfo] = []
@@ -2076,12 +2258,178 @@ def _list_project_files(project_dir: Path) -> list[ProjectFileInfo]:
     return files
 
 
+def _normalize_project_metric_path(rel_path: str) -> str:
+    return str(rel_path or "").replace("\\", "/").lstrip("./").lower()
+
+
+def _extension_of_project_path(rel_path: str) -> str:
+    normalized = _normalize_project_metric_path(rel_path)
+    file_name = normalized.split("/")[-1] if normalized else ""
+    if "." not in file_name:
+        return ""
+    return file_name.rsplit(".", 1)[-1]
+
+
+def _is_ignored_project_metric_file(rel_path: str) -> bool:
+    file_name = (_normalize_project_metric_path(rel_path).split("/")[-1] or "")
+    return file_name in _PROJECT_IGNORED_FILE_NAMES
+
+
+def _is_builtin_project_metric_file(rel_path: str) -> bool:
+    normalized = _normalize_project_metric_path(rel_path)
+    segments = [segment for segment in normalized.split("/") if segment]
+    if not segments:
+        return False
+    file_name = segments[-1]
+    if file_name in _PROJECT_BUILTIN_FILE_NAMES:
+        return True
+    if len(segments) == 1 and file_name.startswith("."):
+        return True
+    return any(segment.startswith(".") for segment in segments[:-1])
+
+
+def _is_original_project_metric_file(rel_path: str) -> bool:
+    normalized = _normalize_project_metric_path(rel_path)
+    return normalized == "original" or normalized.startswith("original/")
+
+
+def _is_standard_artifact_metric_file(rel_path: str) -> bool:
+    normalized = _normalize_project_metric_path(rel_path)
+    return any(
+        normalized.startswith(f"{prefix}/")
+        for prefix in ("skills", "scripts", "flows", "cases")
+    )
+
+
+def _is_recent_project_metric_file(mtime: float) -> bool:
+    return (time.time() - float(mtime)) <= (7 * 24 * 60 * 60)
+
+
+def _build_project_file_summary(project_dir: Path) -> ProjectFileSummary:
+    project_root = project_dir.resolve()
+    total_files = 0
+    builtin_files = 0
+    visible_files = 0
+    original_files = 0
+    derived_files = 0
+    knowledge_candidate_files = 0
+    markdown_files = 0
+    text_like_files = 0
+    recently_updated_files = 0
+
+    for path in project_root.rglob("*"):
+        if not path.is_file():
+            continue
+        rel_path = path.relative_to(project_root).as_posix()
+        if _is_ignored_project_metric_file(rel_path):
+            continue
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+
+        total_files += 1
+        extension = _extension_of_project_path(rel_path)
+        is_builtin = _is_builtin_project_metric_file(rel_path)
+        if is_builtin:
+            builtin_files += 1
+        else:
+            visible_files += 1
+            if _is_original_project_metric_file(rel_path):
+                original_files += 1
+            elif not _is_standard_artifact_metric_file(rel_path):
+                derived_files += 1
+
+        if extension in _PROJECT_KNOWLEDGE_EXTENSIONS:
+            knowledge_candidate_files += 1
+        if extension in _PROJECT_MARKDOWN_EXTENSIONS:
+            markdown_files += 1
+        if extension in _PROJECT_TEXT_LIKE_EXTENSIONS:
+            text_like_files += 1
+        if _is_recent_project_metric_file(stat.st_mtime):
+            recently_updated_files += 1
+
+    return ProjectFileSummary(
+        total_files=total_files,
+        builtin_files=builtin_files,
+        visible_files=visible_files,
+        original_files=original_files,
+        derived_files=derived_files,
+        knowledge_candidate_files=knowledge_candidate_files,
+        markdown_files=markdown_files,
+        text_like_files=text_like_files,
+        recently_updated_files=recently_updated_files,
+    )
+
+
+def _build_project_file_summary_for_workspace(
+    workspace_dir: Path,
+    project_id: str,
+) -> ProjectFileSummary:
+    project_dir = _resolve_project_dir(workspace_dir, project_id)
+    return _build_project_file_summary(project_dir)
+
+
 def _list_project_files_for_workspace(
     workspace_dir: Path,
     project_id: str,
 ) -> list[ProjectFileInfo]:
     project_dir = _resolve_project_dir(workspace_dir, project_id)
     return _list_project_files(project_dir)
+
+
+def _list_project_file_tree_nodes_for_workspace(
+    workspace_dir: Path,
+    project_id: str,
+    dir_path: str = "",
+) -> list[ProjectFileTreeNode]:
+    project_dir = _resolve_project_dir(workspace_dir, project_id)
+    return _list_project_file_tree_nodes(project_dir, dir_path)
+
+
+def _get_project_files_metadata(
+    project_dir: Path,
+    rel_paths: list[str],
+) -> list[ProjectFileInfo]:
+    project_root = project_dir.resolve()
+    results: list[ProjectFileInfo] = []
+    seen_paths: set[str] = set()
+
+    for rel_path in rel_paths:
+        normalized_rel_path = str(rel_path or "").replace("\\", "/").strip()
+        if not normalized_rel_path or normalized_rel_path in seen_paths:
+            continue
+        if not _is_safe_relative_path(normalized_rel_path):
+            raise HTTPException(status_code=400, detail="Invalid file path")
+        target = (project_dir / normalized_rel_path).resolve()
+        if not str(target).startswith(str(project_root)):
+            raise HTTPException(status_code=400, detail="Invalid file path")
+        if not target.exists() or not target.is_file():
+            continue
+        try:
+            stat = target.stat()
+        except OSError:
+            continue
+        results.append(
+            ProjectFileInfo(
+                filename=target.name,
+                path=normalized_rel_path,
+                size=stat.st_size,
+                modified_time=_format_iso_time(stat.st_mtime),
+            )
+        )
+        seen_paths.add(normalized_rel_path)
+
+    return results
+
+
+def _get_project_files_metadata_for_workspace(
+    workspace_dir: Path,
+    project_id: str,
+    rel_paths: list[str],
+) -> list[ProjectFileInfo]:
+    project_dir = _resolve_project_dir(workspace_dir, project_id)
+    return _get_project_files_metadata(project_dir, rel_paths)
 
 
 def _read_project_text_file(project_dir: Path, rel_path: str) -> str:
@@ -3698,6 +4046,103 @@ async def list_agent_project_files(
             _list_project_files_for_workspace,
             Path(workspace.workspace_dir),
             projectId,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get(
+    "/{agentId}/projects/{projectId}/file-tree",
+    response_model=list[ProjectFileTreeNode],
+    summary="List shallow project file tree nodes",
+    description="List one directory level under a project for lazy file tree loading",
+)
+async def list_agent_project_file_tree(
+    request: Request,
+    agentId: str = PathParam(...),
+    projectId: str = PathParam(...),
+    dirPath: str = Query(default="", alias="dir_path"),
+) -> list[ProjectFileTreeNode]:
+    """List one directory level under a project for lazy file tree loading."""
+    manager = _get_multi_agent_manager(request)
+
+    try:
+        workspace = await manager.get_agent(agentId)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    try:
+        return await asyncio.to_thread(
+            _list_project_file_tree_nodes_for_workspace,
+            Path(workspace.workspace_dir),
+            projectId,
+            dirPath,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get(
+    "/{agentId}/projects/{projectId}/summary",
+    response_model=ProjectFileSummary,
+    summary="Get project file summary",
+    description="Get lightweight aggregated project file counts for overview rendering",
+)
+async def get_agent_project_file_summary(
+    request: Request,
+    agentId: str = PathParam(...),
+    projectId: str = PathParam(...),
+) -> ProjectFileSummary:
+    """Get lightweight aggregated project file counts for a project."""
+    manager = _get_multi_agent_manager(request)
+
+    try:
+        workspace = await manager.get_agent(agentId)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    try:
+        return await asyncio.to_thread(
+            _build_project_file_summary_for_workspace,
+            Path(workspace.workspace_dir),
+            projectId,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post(
+    "/{agentId}/projects/{projectId}/files/metadata",
+    response_model=list[ProjectFileInfo],
+    summary="Fetch project file metadata by path",
+    description="Fetch lightweight metadata for selected project file paths",
+)
+async def get_agent_project_files_metadata(
+    request: Request,
+    payload: ProjectFileMetadataRequest = Body(...),
+    agentId: str = PathParam(...),
+    projectId: str = PathParam(...),
+) -> list[ProjectFileInfo]:
+    """Fetch project file metadata for selected relative paths."""
+    manager = _get_multi_agent_manager(request)
+
+    try:
+        workspace = await manager.get_agent(agentId)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    try:
+        return await asyncio.to_thread(
+            _get_project_files_metadata_for_workspace,
+            Path(workspace.workspace_dir),
+            projectId,
+            payload.paths,
         )
     except HTTPException:
         raise

@@ -11,6 +11,13 @@ export interface ProjectKnowledgeMetrics {
   totalFileBytes: number;
 }
 
+export interface ProjectFileInventorySummary {
+  totalFiles: number;
+  originalFiles: number;
+  derivedFiles: number;
+  knowledgeMetrics: ProjectKnowledgeMetrics;
+}
+
 export type ProjectKnowledgeMetricKey =
   | "knowledgeCandidates"
   | "markdown"
@@ -159,6 +166,21 @@ function isArtifactPath(path: string): boolean {
   );
 }
 
+function isOriginalInputPath(path: string): boolean {
+  const normalized = normalizePath(path);
+  return normalized === "original" || normalized.startsWith("original/");
+}
+
+function isStandardArtifactDirPath(path: string): boolean {
+  const normalized = normalizePath(path);
+  return (
+    normalized.startsWith("skills/")
+    || normalized.startsWith("scripts/")
+    || normalized.startsWith("flows/")
+    || normalized.startsWith("cases/")
+  );
+}
+
 function isRecentlyUpdated(modifiedTime: string, nowMs: number): boolean {
   const modifiedMs = Date.parse(modifiedTime);
   if (Number.isNaN(modifiedMs)) {
@@ -207,25 +229,63 @@ export function formatFileSize(bytes: number): string {
 export function computeProjectKnowledgeMetrics(
   files: AgentProjectFileInfo[],
 ): ProjectKnowledgeMetrics {
+  return computeProjectFileInventorySummary(files).knowledgeMetrics;
+}
+
+export function computeProjectFileInventorySummary(
+  files: AgentProjectFileInfo[],
+): ProjectFileInventorySummary {
   const nowMs = Date.now();
   const totalFiles = files.length;
-  const totalFileBytes = files.reduce((sum, file) => sum + Math.max(0, file.size || 0), 0);
+  let totalFileBytes = 0;
+  let knowledgeCandidateFiles = 0;
+  let markdownFiles = 0;
+  let textLikeFiles = 0;
+  let artifactFiles = 0;
+  let recentlyUpdatedFiles = 0;
+  let originalFiles = 0;
+  let derivedFiles = 0;
+
+  for (const file of files) {
+    totalFileBytes += Math.max(0, file.size || 0);
+    if (isKnowledgeCandidatePath(file.path)) {
+      knowledgeCandidateFiles += 1;
+    }
+    if (isMarkdownPath(file.path)) {
+      markdownFiles += 1;
+    }
+    if (isTextLikePath(file.path)) {
+      textLikeFiles += 1;
+    }
+    if (isArtifactPath(file.path)) {
+      artifactFiles += 1;
+    }
+    if (isRecentlyUpdatedFile(file.modified_time, nowMs)) {
+      recentlyUpdatedFiles += 1;
+    }
+    if (isOriginalInputPath(file.path)) {
+      originalFiles += 1;
+    } else if (!isStandardArtifactDirPath(file.path)) {
+      derivedFiles += 1;
+    }
+  }
+
   const averageFileBytes = totalFiles > 0 ? totalFileBytes / totalFiles : 0;
-  const knowledgeCandidateFiles = files.filter((file) => isKnowledgeCandidatePath(file.path)).length;
-  const markdownFiles = files.filter((file) => isMarkdownPath(file.path)).length;
-  const textLikeFiles = files.filter((file) => isTextLikePath(file.path)).length;
-  const artifactFiles = files.filter((file) => isArtifactPath(file.path)).length;
-  const recentlyUpdatedFiles = files.filter((file) => isRecentlyUpdatedFile(file.modified_time, nowMs)).length;
 
   return {
     totalFiles,
-    knowledgeCandidateFiles,
-    markdownFiles,
-    textLikeFiles,
-    artifactFiles,
-    recentlyUpdatedFiles,
-    averageFileBytes,
-    totalFileBytes,
+    originalFiles,
+    derivedFiles,
+    knowledgeMetrics: {
+      totalFiles,
+      knowledgeCandidateFiles,
+      markdownFiles,
+      textLikeFiles,
+      artifactFiles,
+      recentlyUpdatedFiles,
+      averageFileBytes,
+      totalFileBytes,
+    },
   };
 }
 

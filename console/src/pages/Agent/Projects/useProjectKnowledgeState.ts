@@ -65,6 +65,7 @@ interface UseProjectKnowledgeStateParams {
   projectName: string;
   graphResult?: GraphQueryResponse | null;
   onSignalsChange?: (signals: ProjectKnowledgeHeaderSignals) => void;
+  eagerSourceLoad?: boolean;
 }
 
 interface ProjectKnowledgeUiPrefs {
@@ -202,6 +203,18 @@ function getSyncRelationCount(syncState: ProjectKnowledgeSyncState | null): numb
   return Number.isFinite(Number(relationCount)) ? Number(relationCount) : Number(relationCount || 0);
 }
 
+function getSyncIndexCount(
+  syncState: ProjectKnowledgeSyncState | null,
+  key: "document_count" | "chunk_count",
+): number {
+  const indexResult = syncState?.last_result?.index;
+  if (!indexResult || typeof indexResult !== "object") {
+    return 0;
+  }
+  const rawValue = (indexResult as Record<string, unknown>)[key];
+  return Number.isFinite(Number(rawValue)) ? Number(rawValue) : Number(rawValue || 0);
+}
+
 export function useProjectKnowledgeState(
   params: UseProjectKnowledgeStateParams,
 ): ProjectKnowledgeState {
@@ -224,6 +237,11 @@ export function useProjectKnowledgeState(
   }, [params.projectId]);
 
   const loadProjectSourceStatus = useCallback(async () => {
+    if (!params.projectId) {
+      setProjectSources([]);
+      setSourceLoaded(false);
+      return;
+    }
     try {
       const response = await api.listKnowledgeSources({ projectId: params.projectId });
       setProjectSources(response.sources || []);
@@ -240,8 +258,13 @@ export function useProjectKnowledgeState(
       setSourceLoaded(false);
       return;
     }
+    if (!params.eagerSourceLoad) {
+      setProjectSources([]);
+      setSourceLoaded(false);
+      return;
+    }
     void loadProjectSourceStatus();
-  }, [loadProjectSourceStatus, params.projectId]);
+  }, [loadProjectSourceStatus, params.eagerSourceLoad, params.projectId]);
 
   useEffect(() => {
     if (!params.projectId) {
@@ -339,6 +362,9 @@ export function useProjectKnowledgeState(
     if (!syncState) {
       return;
     }
+    if (!params.eagerSourceLoad) {
+      return;
+    }
     const refreshReason = `${syncState.status}:${syncState.last_finished_at || ""}:${syncState.latest_job_id || ""}`;
     if (refreshReasonRef.current === refreshReason) {
       return;
@@ -347,7 +373,7 @@ export function useProjectKnowledgeState(
     if (["pending", "queued", "indexing", "graphifying", "succeeded", "failed"].includes(syncState.status)) {
       void loadProjectSourceStatus();
     }
-  }, [loadProjectSourceStatus, syncState]);
+  }, [loadProjectSourceStatus, params.eagerSourceLoad, syncState]);
 
   useEffect(() => {
     setTrendSnapshots(loadTrendSnapshots(params.projectId));
@@ -363,35 +389,48 @@ export function useProjectKnowledgeState(
   }, [params.projectId, trendExpanded]);
 
   const sourceRegistered = useMemo(
-    () => projectSources.some((source) => source.id === projectSourceId),
-    [projectSourceId, projectSources],
+    () => (
+      projectSources.some((source) => source.id === projectSourceId)
+      || syncState?.latest_source_id === projectSourceId
+    ),
+    [projectSourceId, projectSources, syncState?.latest_source_id],
   );
 
   const quantMetrics = useMemo(() => {
     const totalSources = projectSources.length;
     const indexedSources = projectSources.filter((item) => item.status.indexed).length;
-    const indexedRatio = totalSources > 0 ? indexedSources / totalSources : 0;
-    const documentCount = projectSources.reduce(
+    const sourceDocumentCount = projectSources.reduce(
       (sum, item) => sum + Math.max(0, item.status.document_count || 0),
       0,
     );
-    const chunkCount = projectSources.reduce(
+    const sourceChunkCount = projectSources.reduce(
       (sum, item) => sum + Math.max(0, item.status.chunk_count || 0),
       0,
     );
+    const fallbackDocumentCount = getSyncIndexCount(syncState, "document_count");
+    const fallbackChunkCount = getSyncIndexCount(syncState, "chunk_count");
+    const effectiveTotalSources = totalSources > 0 ? totalSources : (sourceRegistered ? 1 : 0);
+    const effectiveIndexedSources = totalSources > 0
+      ? indexedSources
+      : (fallbackDocumentCount > 0 || fallbackChunkCount > 0 ? 1 : 0);
+    const indexedRatio = effectiveTotalSources > 0
+      ? effectiveIndexedSources / effectiveTotalSources
+      : 0;
+    const documentCount = totalSources > 0 ? sourceDocumentCount : fallbackDocumentCount;
+    const chunkCount = totalSources > 0 ? sourceChunkCount : fallbackChunkCount;
     const relationCount = Math.max(
       params.graphResult?.records?.length || 0,
       getSyncRelationCount(syncState),
     );
     return {
-      totalSources,
-      indexedSources,
+      totalSources: effectiveTotalSources,
+      indexedSources: effectiveIndexedSources,
       indexedRatio,
       documentCount,
       chunkCount,
       relationCount,
     };
-  }, [params.graphResult?.records?.length, projectSources, syncState]);
+  }, [params.graphResult?.records?.length, projectSources, sourceRegistered, syncState]);
 
   const syncAlertType = useMemo(
     () => getProjectKnowledgeSyncAlertType(syncState),

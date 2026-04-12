@@ -12,21 +12,24 @@ import {
   MinusOutlined,
   PlusOutlined,
 } from "@ant-design/icons";
-import { Button, Card, Empty, Segmented, Tree, Typography } from "antd";
+import { Button, Card, Empty, Segmented, Spin, Tree, Typography } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type {
   AgentProjectFileInfo,
+  AgentProjectFileSummary,
+  AgentProjectFileTreeNode,
   AgentProjectSummary,
 } from "../../../api/types/agents";
 import {
   buildProjectKnowledgeCardModels,
-  computeProjectKnowledgeMetrics,
+  computeProjectFileInventorySummary,
   getProjectKnowledgeQuantStatusLabel,
   isProjectKnowledgeFilterKey,
   matchesProjectKnowledgeFilter,
 } from "./metrics";
+import type { ProjectFileInventorySummary } from "./metrics";
 import {
   toggleProjectFileFilter,
   type FileMetricFilterKey,
@@ -51,12 +54,17 @@ interface ProjectOverviewCardProps {
   pipelineRunCount: number;
   projectWorkspaceSummary: string;
   projectFiles: AgentProjectFileInfo[];
+  projectFileSummary?: AgentProjectFileSummary | null;
+  projectVisibleSummary?: ProjectFileInventorySummary;
+  projectTreeNodes?: AgentProjectFileTreeNode[];
+  projectTreeLoading?: boolean;
   priorityFilePaths: string[];
   selectedFilePath: string;
   selectedAttachPaths: string[];
   onUploadFiles: () => void;
   onSelectFileFromTree: (path: string) => void;
   onAttachArtifactToChat: (path: string) => void;
+  onLoadProjectTreeChildren?: (path: string) => Promise<AgentProjectFileTreeNode[]>;
 }
 
 interface TreeNode {
@@ -67,6 +75,11 @@ interface TreeNode {
 }
 
 type TreeDisplayMode = "filter" | "highlight";
+
+interface LazyTreeItem extends AgentProjectFileTreeNode {
+  loaded: boolean;
+  children?: LazyTreeItem[];
+}
 
 function formatUpdatedDateParts(updatedTime?: string): { day: string; month: string } {
   if (!updatedTime) {
@@ -282,6 +295,142 @@ function collectDirectoryKeys(nodes: TreeNode[]): string[] {
   return keys;
 }
 
+function toLazyTreeItems(nodes: AgentProjectFileTreeNode[]): LazyTreeItem[] {
+  return nodes.map((item) => ({
+    ...item,
+    loaded: !item.is_directory || item.child_count <= 0,
+    children: undefined,
+  }));
+}
+
+function updateLazyTreeChildren(
+  items: LazyTreeItem[],
+  targetPath: string,
+  children: LazyTreeItem[],
+): LazyTreeItem[] {
+  return items.map((item) => {
+    if (item.path === targetPath) {
+      return {
+        ...item,
+        loaded: true,
+        children,
+      };
+    }
+    if (!item.children || item.children.length === 0) {
+      return item;
+    }
+    return {
+      ...item,
+      children: updateLazyTreeChildren(item.children, targetPath, children),
+    };
+  });
+}
+
+function findLazyTreeItem(
+  items: LazyTreeItem[],
+  targetPath: string,
+): LazyTreeItem | null {
+  for (const item of items) {
+    if (item.path === targetPath) {
+      return item;
+    }
+    if (item.children && item.children.length > 0) {
+      const nested = findLazyTreeItem(item.children, targetPath);
+      if (nested) {
+        return nested;
+      }
+    }
+  }
+  return null;
+}
+
+function buildLazyTreeNodes(
+  items: LazyTreeItem[],
+  priorityFileSet: Set<string>,
+  selectedAttachSet: Set<string>,
+  highlightedFileSet: Set<string>,
+  onAttachArtifactToChat: (path: string) => void,
+  attachTitle: string,
+  detachTitle: string,
+): TreeNode[] {
+  return items.map((item) => {
+    const isPriority = !item.is_directory && priorityFileSet.has(item.path);
+    const isAttached = !item.is_directory && selectedAttachSet.has(item.path);
+    const isHighlighted = !item.is_directory && highlightedFileSet.has(item.path);
+    const directoryCountLabel = item.is_directory && item.descendant_file_count > 0
+      ? String(item.descendant_file_count)
+      : "";
+    const childNodes = item.children
+      ? buildLazyTreeNodes(
+          item.children,
+          priorityFileSet,
+          selectedAttachSet,
+          highlightedFileSet,
+          onAttachArtifactToChat,
+          attachTitle,
+          detachTitle,
+        )
+      : undefined;
+
+    return {
+      key: item.path,
+      title: (
+        <span className={styles.treeNodeRow}>
+          <span
+            className={
+              item.is_directory ? styles.compactTreeFolderLabel : styles.compactTreeLeafLabel
+            }
+          >
+            {renderNodeIcon(item.filename, item.is_directory, isPriority)}
+            <span
+              className={isHighlighted
+                ? `${styles.treeNodeText} ${styles.treeNodeTextHighlighted}`
+                : styles.treeNodeText}
+            >
+              {item.filename}
+            </span>
+            {directoryCountLabel ? (
+              <span className={styles.treeNodeMetaCount}>{directoryCountLabel}</span>
+            ) : null}
+          </span>
+          {!item.is_directory ? (
+            <span className={styles.treeNodeActions}>
+              <Button
+                size="small"
+                type="text"
+                icon={isAttached ? <MinusOutlined /> : <PlusOutlined />}
+                className={styles.attachActionButton}
+                title={isAttached ? detachTitle : attachTitle}
+                aria-label={isAttached ? detachTitle : attachTitle}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onAttachArtifactToChat(item.path);
+                }}
+              />
+            </span>
+          ) : null}
+        </span>
+      ),
+      isLeaf: !item.is_directory,
+      children: childNodes,
+    };
+  });
+}
+
+function getProjectTreeRootDirectoryFileCount(
+  nodes: AgentProjectFileTreeNode[] | undefined,
+  dirName: string,
+): number | null {
+  const normalizedDirName = normalizeProjectPath(dirName);
+  const matched = (nodes || []).find(
+    (item) => item.is_directory && normalizeProjectPath(item.path) === normalizedDirName,
+  );
+  if (!matched) {
+    return null;
+  }
+  return matched.descendant_file_count;
+}
+
 export default function ProjectOverviewCard({
   activeStage,
   selectedMetricFilter,
@@ -295,12 +444,17 @@ export default function ProjectOverviewCard({
   pipelineRunCount,
   projectWorkspaceSummary,
   projectFiles,
+  projectFileSummary,
+  projectVisibleSummary,
+  projectTreeNodes,
+  projectTreeLoading = false,
   priorityFilePaths,
   selectedFilePath,
   selectedAttachPaths,
   onUploadFiles,
   onSelectFileFromTree,
   onAttachArtifactToChat,
+  onLoadProjectTreeChildren,
 }: ProjectOverviewCardProps) {
   void _projectFileCount;
   void _pipelineTemplateCount;
@@ -308,6 +462,7 @@ export default function ProjectOverviewCard({
   const [workspaceSummaryExpanded, setWorkspaceSummaryExpanded] = useState(false);
   const [treeTransitioning, setTreeTransitioning] = useState(false);
   const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
+  const [lazyTreeItems, setLazyTreeItems] = useState<LazyTreeItem[]>([]);
   const treeExpandedInitializedRef = useRef(false);
   const updatedDateParts = formatUpdatedDateParts(selectedProject?.updated_time);
 
@@ -325,20 +480,29 @@ export default function ProjectOverviewCard({
       : nonBuiltInFiles;
   const attachTitle = t("projects.chat.addAttachment", "Add to chat attachments");
   const detachTitle = t("projects.chat.removeAttachment", "Remove from chat attachments");
-  const priorityFileSet = new Set(priorityFilePaths);
-  const selectedAttachSet = new Set(selectedAttachPaths);
+  const priorityFileSet = useMemo(() => new Set(priorityFilePaths), [priorityFilePaths]);
+  const selectedAttachSet = useMemo(() => new Set(selectedAttachPaths), [selectedAttachPaths]);
   const artifactProfile = selectedProject?.artifact_profile;
+  const treeRootDirCounts = useMemo(
+    () => ({
+      original: getProjectTreeRootDirectoryFileCount(projectTreeNodes, "original"),
+      skills: getProjectTreeRootDirectoryFileCount(projectTreeNodes, "skills"),
+      scripts: getProjectTreeRootDirectoryFileCount(projectTreeNodes, "scripts"),
+      flows: getProjectTreeRootDirectoryFileCount(projectTreeNodes, "flows"),
+      cases: getProjectTreeRootDirectoryFileCount(projectTreeNodes, "cases"),
+    }),
+    [projectTreeNodes],
+  );
   const artifactCounts = {
-    skills: artifactProfile?.skills.length || 0,
-    scripts: artifactProfile?.scripts.length || 0,
-    flows: artifactProfile?.flows.length || 0,
-    cases: artifactProfile?.cases.length || 0,
+    skills: treeRootDirCounts.skills ?? artifactProfile?.skills.length ?? 0,
+    scripts: treeRootDirCounts.scripts ?? artifactProfile?.scripts.length ?? 0,
+    flows: treeRootDirCounts.flows ?? artifactProfile?.flows.length ?? 0,
+    cases: treeRootDirCounts.cases ?? artifactProfile?.cases.length ?? 0,
   };
-  const normalizedVisibleFiles = nonBuiltInFiles.map((item) => normalizeProjectPath(item.path));
-  const originalFileCount = normalizedVisibleFiles.filter((path) => isOriginalInputFile(path)).length;
-  const derivedFileCount = normalizedVisibleFiles.filter(
-    (path) => !isOriginalInputFile(path) && !isStandardArtifactDirPath(path),
-  ).length;
+  const nonBuiltInSummary = useMemo(
+    () => projectVisibleSummary ?? computeProjectFileInventorySummary(nonBuiltInFiles),
+    [nonBuiltInFiles, projectVisibleSummary],
+  );
   const filteredFiles = stageScopedFiles.filter((item) => {
     const normalizedPath = normalizeProjectPath(item.path);
     const nowMs = Date.now();
@@ -370,19 +534,38 @@ export default function ProjectOverviewCard({
     }
   });
   const filteredFilePaths = filteredFiles.map((item) => item.path);
-  const highlightedFilePaths = selectedMetricFilter
-    ? filteredFilePaths
-    : [];
+  const highlightedFilePaths = useMemo(
+    () => (selectedMetricFilter ? filteredFilePaths : []),
+    [filteredFilePaths, selectedMetricFilter],
+  );
   const treeFiles = treeDisplayMode === "highlight"
     ? (selectedMetricFilter === "builtin" ? projectFiles : stageScopedFiles)
     : filteredFiles;
   const treeFilePaths = treeFiles.map((item) => item.path);
-  const highlightedFileSet = new Set(
-    treeDisplayMode === "highlight" ? highlightedFilePaths : [],
+  const highlightedFileSet = useMemo(
+    () => new Set(treeDisplayMode === "highlight" ? highlightedFilePaths : []),
+    [highlightedFilePaths, treeDisplayMode],
   );
-  const projectKnowledgeMetrics = useMemo(
-    () => computeProjectKnowledgeMetrics(nonBuiltInFiles),
-    [nonBuiltInFiles],
+  const projectKnowledgeMetrics = nonBuiltInSummary.knowledgeMetrics;
+  const effectiveKnowledgeMetrics = useMemo(
+    () => ({
+      ...projectKnowledgeMetrics,
+      totalFiles: projectFileSummary?.visible_files ?? projectKnowledgeMetrics.totalFiles,
+      knowledgeCandidateFiles:
+        projectFileSummary?.knowledge_candidate_files ?? projectKnowledgeMetrics.knowledgeCandidateFiles,
+      markdownFiles: projectFileSummary?.markdown_files ?? projectKnowledgeMetrics.markdownFiles,
+      textLikeFiles: projectFileSummary?.text_like_files ?? projectKnowledgeMetrics.textLikeFiles,
+      recentlyUpdatedFiles:
+        projectFileSummary?.recently_updated_files ?? projectKnowledgeMetrics.recentlyUpdatedFiles,
+    }),
+    [
+      projectFileSummary?.knowledge_candidate_files,
+      projectFileSummary?.markdown_files,
+      projectFileSummary?.recently_updated_files,
+      projectFileSummary?.text_like_files,
+      projectFileSummary?.visible_files,
+      projectKnowledgeMetrics,
+    ],
   );
   const treeData = buildFileTree(
     treeFilePaths,
@@ -397,22 +580,93 @@ export default function ProjectOverviewCard({
   const knowledgeFilterActive = Boolean(
     selectedMetricFilter && isProjectKnowledgeFilterKey(selectedMetricFilter),
   );
+  const useLazyTreeMode = Boolean(
+    treeOnly
+    && treeDisplayMode === "filter"
+    && (!selectedMetricFilter
+      || ["original", "skills", "scripts", "flows", "cases", "builtin"].includes(selectedMetricFilter)),
+  );
+
+  useEffect(() => {
+    if (!treeOnly) {
+      return;
+    }
+    setLazyTreeItems(toLazyTreeItems(projectTreeNodes || []));
+  }, [projectTreeNodes, treeOnly]);
+
+  const visibleLazyTreeItems = useMemo(() => {
+    if (!useLazyTreeMode) {
+      return [] as LazyTreeItem[];
+    }
+    if (!selectedMetricFilter) {
+      return lazyTreeItems;
+    }
+    return lazyTreeItems.filter((item) => {
+      const normalizedPath = normalizeProjectPath(item.path);
+      switch (selectedMetricFilter) {
+        case "original":
+          return normalizedPath === "original" || normalizedPath.startsWith("original/");
+        case "skills":
+          return normalizedPath === "skills" || normalizedPath.startsWith("skills/");
+        case "scripts":
+          return normalizedPath === "scripts" || normalizedPath.startsWith("scripts/");
+        case "flows":
+          return normalizedPath === "flows" || normalizedPath.startsWith("flows/");
+        case "cases":
+          return normalizedPath === "cases" || normalizedPath.startsWith("cases/");
+        case "builtin":
+          return isBuiltInProjectFile(item.path);
+        default:
+          return true;
+      }
+    });
+  }, [lazyTreeItems, selectedMetricFilter, useLazyTreeMode]);
+
+  const lazyTreeData = useMemo(
+    () => buildLazyTreeNodes(
+      visibleLazyTreeItems,
+      priorityFileSet,
+      selectedAttachSet,
+      highlightedFileSet,
+      onAttachArtifactToChat,
+      attachTitle,
+      detachTitle,
+    ),
+    [
+      attachTitle,
+      detachTitle,
+      highlightedFileSet,
+      onAttachArtifactToChat,
+      priorityFileSet,
+      selectedAttachSet,
+      visibleLazyTreeItems,
+    ],
+  );
 
   useEffect(() => {
     treeExpandedInitializedRef.current = false;
     setExpandedKeys([]);
-  }, [selectedProject?.id]);
+  }, [selectedProject?.id, useLazyTreeMode]);
 
   useEffect(() => {
     if (treeExpandedInitializedRef.current) {
       return;
     }
-    if (treeData.length === 0) {
+    const nextTreeData = useLazyTreeMode ? lazyTreeData : treeData;
+    if (nextTreeData.length === 0) {
       return;
     }
-    setExpandedKeys(collectDirectoryKeys(treeData));
+    if (useLazyTreeMode) {
+      setExpandedKeys(
+        nextTreeData.length === 1 && !nextTreeData[0].isLeaf
+          ? [String(nextTreeData[0].key)]
+          : [],
+      );
+    } else {
+      setExpandedKeys(collectDirectoryKeys(nextTreeData));
+    }
     treeExpandedInitializedRef.current = true;
-  }, [treeData]);
+  }, [lazyTreeData, treeData, useLazyTreeMode]);
 
   useEffect(() => {
     if (treeDisplayMode !== "filter") {
@@ -443,12 +697,12 @@ export default function ProjectOverviewCard({
     {
       key: "original",
       label: t("projects.filesOriginal", "Original Files"),
-      value: originalFileCount,
+      value: projectFileSummary?.original_files ?? treeRootDirCounts.original ?? nonBuiltInSummary.originalFiles,
     },
     {
       key: "derived",
       label: t("projects.filesDerived", "Derived Files"),
-      value: derivedFileCount,
+      value: projectFileSummary?.derived_files ?? nonBuiltInSummary.derivedFiles,
     },
     {
       key: "skills",
@@ -472,7 +726,7 @@ export default function ProjectOverviewCard({
     },
   ];
 
-  const knowledgeMetricCards = buildProjectKnowledgeCardModels(projectKnowledgeMetrics).map((item) => ({
+  const knowledgeMetricCards = buildProjectKnowledgeCardModels(effectiveKnowledgeMetrics).map((item) => ({
     ...item,
     label: t(item.labelI18nKey, item.defaultLabel),
   }));
@@ -533,7 +787,11 @@ export default function ProjectOverviewCard({
           <div
             className={`${styles.treeTransitionShell} ${styles.treeTransitionShellFullHeight} ${treeTransitioning ? styles.treeTransitionEnter : ""}`}
           >
-            {treeData.length === 0 ? (
+            {useLazyTreeMode && projectTreeLoading && lazyTreeData.length === 0 ? (
+              <div className={styles.centerState}>
+                <Spin />
+              </div>
+            ) : (useLazyTreeMode ? lazyTreeData : treeData).length === 0 ? (
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description={
@@ -545,13 +803,27 @@ export default function ProjectOverviewCard({
             ) : (
               <Tree
                 className={`${styles.overviewCompactTree} ${styles.overviewCompactTreeFullHeight}`}
-                selectedKeys={selectedFilePath && treeFilePaths.includes(selectedFilePath) ? [selectedFilePath] : []}
-                treeData={treeData}
+                selectedKeys={selectedFilePath ? [selectedFilePath] : []}
+                treeData={useLazyTreeMode ? lazyTreeData : treeData}
                 expandedKeys={expandedKeys}
                 onExpand={(keys) => setExpandedKeys(keys as string[])}
+                loadData={useLazyTreeMode && onLoadProjectTreeChildren
+                  ? async (treeNode) => {
+                    const key = String(treeNode.key || "");
+                    const currentNode = findLazyTreeItem(lazyTreeItems, key);
+                    if (!currentNode || !currentNode.is_directory || currentNode.loaded) {
+                      return;
+                    }
+                    const children = await onLoadProjectTreeChildren(key);
+                    setLazyTreeItems((prev) => updateLazyTreeChildren(prev, key, toLazyTreeItems(children)));
+                  }
+                  : undefined}
                 onSelect={(keys) => {
                   const key = String(keys[0] || "");
-                  if (key) {
+                  const selectedLazyNode = useLazyTreeMode
+                    ? findLazyTreeItem(lazyTreeItems, key)
+                    : null;
+                  if (key && (!selectedLazyNode || !selectedLazyNode.is_directory)) {
                     onSelectFileFromTree(key);
                   }
                 }}

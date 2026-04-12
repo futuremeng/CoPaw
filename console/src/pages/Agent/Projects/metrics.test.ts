@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { AgentProjectFileInfo } from "../../../api/types/agents";
 import {
   buildProjectKnowledgeCardModels,
+  computeProjectFileInventorySummary,
   computeProjectKnowledgeMetrics,
   formatFileSize,
   getProjectKnowledgeFilterKeyFromMetric,
@@ -64,6 +65,41 @@ describe("project metrics", () => {
     expect(metrics.recentlyUpdatedFiles).toBe(4);
     expect(metrics.totalFileBytes).toBe(15872);
     expect(metrics.averageFileBytes).toBeCloseTo(3174.4, 1);
+
+    vi.useRealTimers();
+  });
+
+  it("summarizes original and derived files in one pass", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-09T12:00:00Z"));
+
+    const summary = computeProjectFileInventorySummary([
+      {
+        filename: "brief.md",
+        path: "original/brief.md",
+        size: 1024,
+        modified_time: "2026-04-09T11:00:00Z",
+      },
+      {
+        filename: "outline.txt",
+        path: "data/outline.txt",
+        size: 512,
+        modified_time: "2026-04-08T11:00:00Z",
+      },
+      {
+        filename: "draft.py",
+        path: "scripts/draft.py",
+        size: 256,
+        modified_time: "2026-04-07T11:00:00Z",
+      },
+    ]);
+
+    expect(summary.totalFiles).toBe(3);
+    expect(summary.originalFiles).toBe(1);
+    expect(summary.derivedFiles).toBe(1);
+    expect(summary.knowledgeMetrics.knowledgeCandidateFiles).toBe(2);
+    expect(summary.knowledgeMetrics.textLikeFiles).toBe(3);
+    expect(summary.knowledgeMetrics.artifactFiles).toBe(1);
 
     vi.useRealTimers();
   });

@@ -14,8 +14,10 @@ import type {
   ImportAgentSquareResponse,
   AgentProjectFileInfo,
   AgentProjectFileContent,
+  AgentProjectFileSummary,
   AgentProjectSummary,
   ProjectArtifactProfile,
+  AgentProjectFileTreeNode,
   CloneProjectRequest,
   CreateProjectRequest,
   DeleteProjectResponse,
@@ -116,6 +118,33 @@ export const agentsApi = {
   listProjectFiles: (agentId: string, projectId: string) =>
     request<AgentProjectFileInfo[]>(
       `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/files`,
+    ),
+
+  listProjectFileTree: (
+    agentId: string,
+    projectId: string,
+    dirPath = "",
+  ) =>
+    request<AgentProjectFileTreeNode[]>(
+      `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/file-tree?dir_path=${encodeURIComponent(dirPath)}`,
+    ),
+
+  getProjectFileSummary: (agentId: string, projectId: string) =>
+    request<AgentProjectFileSummary>(
+      `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/summary`,
+    ),
+
+  getProjectFilesMetadata: (
+    agentId: string,
+    projectId: string,
+    paths: string[],
+  ) =>
+    request<AgentProjectFileInfo[]>(
+      `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/files/metadata`,
+      {
+        method: "POST",
+        body: JSON.stringify({ paths }),
+      },
     ),
 
   cloneProject: (agentId: string, projectId: string, body?: CloneProjectRequest) =>

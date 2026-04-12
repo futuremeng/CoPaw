@@ -13,6 +13,7 @@ interface ProjectArtifactsPanelProps {
   artifactRecords: ProjectPipelineArtifactRecord[];
   selectedArtifactRecord: ProjectPipelineArtifactRecord | undefined;
   selectedFilePath: string;
+  knownProjectFilesByPath: Record<string, AgentProjectFileInfo>;
   projectFiles: AgentProjectFileInfo[];
   fileContent: string;
   selectedAttachPaths: string[];
@@ -29,6 +30,7 @@ export default function ProjectArtifactsPanel({
   artifactRecords,
   selectedArtifactRecord,
   selectedFilePath,
+  knownProjectFilesByPath,
   projectFiles,
   fileContent,
   selectedAttachPaths,
@@ -39,15 +41,18 @@ export default function ProjectArtifactsPanel({
   formatBytes,
 }: ProjectArtifactsPanelProps) {
   const { t } = useTranslation();
-  const selectedFileInfo = projectFiles.find((item) => item.path === selectedFilePath);
+  const selectedFileInfo = knownProjectFilesByPath[selectedFilePath]
+    || projectFiles.find((item) => item.path === selectedFilePath);
+  const hasPreviewTarget = Boolean(selectedFilePath);
+  const shouldBlockOnFilesLoading = filesLoading && !hasPreviewTarget;
 
   return (
     <div className={`${styles.previewBody} ${styles.previewBodyArtifacts}`}>
-      {filesLoading ? (
+      {shouldBlockOnFilesLoading ? (
         <div className={styles.centerState}>
           <Spin />
         </div>
-      ) : artifactRecords.length === 0 ? (
+      ) : !hasPreviewTarget && artifactRecords.length === 0 ? (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
           description={t("projects.noFiles", "No files in this project")}

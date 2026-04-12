@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { getApiToken, getApiUrl } from "../../../api";
+import type { AgentProjectFileSummary } from "../../../api/types/agents";
 
 interface ProjectRealtimeSectionSnapshot {
   fingerprint: string;
   file_count?: number;
   run_count?: number;
   latest_mtime_ns: number;
+  summary?: AgentProjectFileSummary;
 }
 
 interface ProjectRealtimeSnapshot {
@@ -30,6 +32,7 @@ interface ProjectRealtimeEnvelope {
 interface ProjectRealtimeInvalidationPayload {
   changedPaths: string[];
   reason: string;
+  fileSummary?: AgentProjectFileSummary;
 }
 
 export type ProjectRealtimeConnectionStatus =
@@ -191,6 +194,7 @@ export default function useProjectRealtimeController({
             const reason = payload.reason || "change";
             const nextFileFingerprint = payload.snapshot.file_tree.fingerprint || "";
             const nextPipelineFingerprint = payload.snapshot.pipeline.fingerprint || "";
+            const fileSummary = payload.snapshot.file_tree.summary;
 
             if (!initializedRef.current) {
               fileFingerprintRef.current = nextFileFingerprint;
@@ -202,7 +206,11 @@ export default function useProjectRealtimeController({
               hasConnectedRef.current = true;
               setConnectionState({ status: "connected", reconnectAttempt: 0 });
               if (shouldResync) {
-                void fileCallbackRef.current?.({ changedPaths, reason: "resync" });
+                void fileCallbackRef.current?.({
+                  changedPaths,
+                  reason: "resync",
+                  fileSummary,
+                });
                 void pipelineCallbackRef.current?.({ changedPaths, reason: "resync" });
               }
               return;
@@ -210,7 +218,7 @@ export default function useProjectRealtimeController({
 
             if (nextFileFingerprint && nextFileFingerprint !== fileFingerprintRef.current) {
               fileFingerprintRef.current = nextFileFingerprint;
-              void fileCallbackRef.current?.({ changedPaths, reason });
+              void fileCallbackRef.current?.({ changedPaths, reason, fileSummary });
             }
 
             if (nextPipelineFingerprint && nextPipelineFingerprint !== pipelineFingerprintRef.current) {
