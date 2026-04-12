@@ -3423,6 +3423,7 @@ export default function ProjectDetailPage() {
                         <Tabs
                           className={styles.knowledgeDockTabs}
                           activeKey={knowledgeDockTab}
+                          tabPosition="left"
                           destroyOnHidden
                           onChange={(key) => setKnowledgeDockTab(key as KnowledgeDockTabKey)}
                           items={[

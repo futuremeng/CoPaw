@@ -1,13 +1,10 @@
 import { Suspense, lazy, useEffect, useMemo, useRef } from "react";
 import {
   Alert,
-  Button,
   Empty,
   Input,
   Select,
-  Space,
   Spin,
-  Typography,
   message,
 } from "antd";
 import { useTranslation } from "react-i18next";
@@ -75,33 +72,8 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
     );
   }, [props.knowledgeState.graphResult]);
 
-  const relationCount = props.knowledgeState.graphResult?.records.length || 0;
-
-  return (
-    <div className={styles.projectKnowledgeWorkbench}>
-      <div className={styles.projectKnowledgeTabHeader}>
-        <div>
-          <Typography.Title level={5} className={styles.projectKnowledgeSectionTitle}>
-            {t("projects.knowledgeDock.tabExplore", "Explore")}
-          </Typography.Title>
-          <Typography.Text type="secondary">
-            {t("projects.knowledge.hint", {
-              project: props.projectName || props.projectId,
-            })}
-          </Typography.Text>
-        </div>
-        <div className={styles.projectKnowledgeMetricStrip}>
-          <div className={styles.projectKnowledgeMetricPill}>
-            <Typography.Text type="secondary">{t("projects.knowledge.signalRelations")}</Typography.Text>
-            <Typography.Text strong>{relationCount}</Typography.Text>
-          </div>
-          <div className={styles.projectKnowledgeMetricPill}>
-            <Typography.Text type="secondary">{t("projects.knowledge.signalDocuments")}</Typography.Text>
-            <Typography.Text strong>{props.knowledgeState.quantMetrics.documentCount}</Typography.Text>
-          </div>
-        </div>
-      </div>
-
+  const queryControls = (
+    <div className={styles.projectKnowledgeQueryTop}>
       <div className={styles.projectKnowledgeControls}>
         <Select
           size="small"
@@ -128,44 +100,18 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
           loading={props.knowledgeState.graphLoading}
           allowClear
         />
-        <Space size={6}>
-          <Button
-            size="small"
-            onClick={() => {
-              void props.knowledgeState.runGraphQuery(
-                props.knowledgeState.graphQueryText || props.knowledgeState.suggestedQuery,
-              );
-            }}
-            loading={props.knowledgeState.graphLoading}
-          >
-            {t("projects.knowledge.actionRefreshSignals", "Refresh")}
-          </Button>
-          <Button
-            size="small"
-            disabled={!props.knowledgeState.graphResult && !props.knowledgeState.graphQueryText}
-            onClick={() => props.knowledgeState.resetGraphQuery()}
-          >
-            {t("projects.knowledge.reset")}
-          </Button>
-        </Space>
       </div>
+    </div>
+  );
 
+  return (
+    <div className={`${styles.projectKnowledgeWorkbench} ${styles.projectKnowledgeWorkbenchCompact}`}>
       {props.knowledgeState.graphError ? (
         <Alert type="error" showIcon message={props.knowledgeState.graphError} />
       ) : null}
 
       <div className={styles.projectKnowledgeWorkbenchSplit}>
-        <div className={styles.projectKnowledgePrimaryPanel}>
-          <div className={styles.projectKnowledgePanelHeader}>
-            <Typography.Text strong>
-              {t("projects.knowledge.graphView", "Knowledge Graph")}
-            </Typography.Text>
-            {props.knowledgeState.graphResult?.summary ? (
-              <Typography.Text type="secondary">
-                {props.knowledgeState.graphResult.summary}
-              </Typography.Text>
-            ) : null}
-          </div>
+        <div className={`${styles.projectKnowledgePrimaryPanel} ${styles.projectKnowledgeSurfaceFlat}`}>
           <div className={styles.projectKnowledgePanelBody}>
             {props.knowledgeState.graphLoading && !visualizationData ? (
               <div className={styles.projectKnowledgeEmpty}><Spin /></div>
@@ -198,39 +144,41 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
           </div>
         </div>
 
-        <div className={styles.projectKnowledgeSecondaryPanel}>
-          <div className={styles.projectKnowledgePanelHeader}>
-            <Typography.Text strong>
-              {t("projects.knowledge.queryResults", "Query Results")}
-            </Typography.Text>
-            <Typography.Text type="secondary">
-              {relationCount} records
-            </Typography.Text>
-          </div>
-          <div className={styles.projectKnowledgePanelBody}>
-            {props.knowledgeState.graphLoading && !props.knowledgeState.graphResult ? (
-              <div className={styles.projectKnowledgeEmpty}><Spin /></div>
-            ) : props.knowledgeState.graphResult ? (
-              <Suspense fallback={<div className={styles.projectKnowledgeEmpty}><Spin size="small" /></div>}>
-                <GraphQueryResultsComponent
-                  records={props.knowledgeState.graphResult.records}
-                  summary={props.knowledgeState.graphResult.summary}
-                  warnings={props.knowledgeState.graphResult.warnings}
-                  provenance={props.knowledgeState.graphResult.provenance}
-                  query={props.knowledgeState.graphQueryText}
-                  loading={props.knowledgeState.graphLoading}
-                  activeNodeId={props.knowledgeState.activeGraphNodeId}
-                  onRecordClick={props.knowledgeState.setActiveGraphNodeId}
-                  onRefresh={() => {
-                    void props.knowledgeState.runGraphQuery();
-                  }}
-                />
-              </Suspense>
-            ) : (
-              <div className={styles.projectKnowledgeEmpty}>
-                <Empty description={t("projects.knowledge.emptyResult")} />
-              </div>
-            )}
+        <div className={`${styles.projectKnowledgeSecondaryPanel} ${styles.projectKnowledgeSurfaceFlat}`}>
+          <div className={styles.projectKnowledgeQueryCard}>
+            <div className={styles.projectKnowledgeQueryBottom}>
+              {props.knowledgeState.graphLoading && !props.knowledgeState.graphResult ? (
+                <>
+                  {queryControls}
+                  <div className={styles.projectKnowledgeEmpty}><Spin /></div>
+                </>
+              ) : props.knowledgeState.graphResult ? (
+                <Suspense fallback={<div className={styles.projectKnowledgeEmpty}><Spin size="small" /></div>}>
+                  <GraphQueryResultsComponent
+                    title={t("projects.knowledge.query", "查询")}
+                    queryHeader={queryControls}
+                    records={props.knowledgeState.graphResult.records}
+                    summary={props.knowledgeState.graphResult.summary}
+                    warnings={props.knowledgeState.graphResult.warnings}
+                    provenance={props.knowledgeState.graphResult.provenance}
+                    query={props.knowledgeState.graphQueryText}
+                    loading={props.knowledgeState.graphLoading}
+                    activeNodeId={props.knowledgeState.activeGraphNodeId}
+                    onRecordClick={props.knowledgeState.setActiveGraphNodeId}
+                    onRefresh={() => {
+                      void props.knowledgeState.runGraphQuery();
+                    }}
+                  />
+                </Suspense>
+              ) : (
+                <>
+                  {queryControls}
+                  <div className={styles.projectKnowledgeEmpty}>
+                    <Empty description={t("projects.knowledge.emptyResult")} />
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>

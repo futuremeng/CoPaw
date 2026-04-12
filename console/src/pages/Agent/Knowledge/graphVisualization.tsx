@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Button,
   Card,
@@ -45,6 +45,8 @@ interface GraphQueryResultsProps {
   warnings: string[];
   provenance: Record<string, unknown>;
   query: string;
+  title?: string;
+  queryHeader?: ReactNode;
   loading?: boolean;
   onRefresh?: () => void;
   activeNodeId?: string | null;
@@ -236,7 +238,7 @@ export function GraphQueryResults(props: GraphQueryResultsProps) {
   return (
     <div className={styles.graphQueryResults}>
       <Card
-        title={t("knowledge.graphQuery.results")}
+        title={props.title || t("knowledge.graphQuery.results")}
         extra={
           <Space>
             <Tooltip title={t("knowledge.graphQuery.refresh")}>
@@ -251,6 +253,7 @@ export function GraphQueryResults(props: GraphQueryResultsProps) {
         loading={props.loading}
         style={{ marginBottom: 16 }}
       >
+        {props.queryHeader}
         <Space direction="vertical" style={{ width: "100%", marginBottom: 16 }}>
           <Space wrap>
             <span>{t("knowledge.graphQuery.filter")}:</span>
