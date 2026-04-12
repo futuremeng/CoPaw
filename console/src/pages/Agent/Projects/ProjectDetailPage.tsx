@@ -59,6 +59,9 @@ import usePreferredProjectWorkspaceChat from "./usePreferredProjectWorkspaceChat
 import useProjectDesignChatController from "./useProjectDesignChatController";
 import useLeaveConfirmGuard from "./useLeaveConfirmGuard";
 import useOpenUploadQuery from "./useOpenUploadQuery";
+import useProjectRealtimeController, {
+  type ProjectRealtimeConnectionStatus,
+} from "./useProjectRealtimeController";
 import useProjectUploadController from "./useProjectUploadController";
 import {
   type ProjectKnowledgeHeaderSignals,
@@ -283,6 +286,19 @@ function toTimestamp(raw?: string | null): number {
   }
   const ts = Date.parse(raw);
   return Number.isFinite(ts) ? ts : 0;
+}
+
+function getRealtimeBadgeStatus(status: ProjectRealtimeConnectionStatus) {
+  if (status === "connected") {
+    return "success" as const;
+  }
+  if (status === "degraded") {
+    return "warning" as const;
+  }
+  if (status === "paused" || status === "idle") {
+    return "default" as const;
+  }
+  return "processing" as const;
 }
 
 export default function ProjectDetailPage() {
@@ -953,10 +969,15 @@ export default function ProjectDetailPage() {
   const loadProjectFiles = useCallback(async (
     agentId: string,
     project: AgentProjectSummary,
+    options?: { preserveSelection?: boolean },
   ) => {
     setFilesLoading(true);
-    setSelectedFilePath("");
-    setFileContent("");
+    const preserveSelection = Boolean(options?.preserveSelection);
+    const previousSelection = preserveSelection ? selectedFilePath : "";
+    if (!preserveSelection) {
+      setSelectedFilePath("");
+      setFileContent("");
+    }
     const projectIds = buildProjectIdCandidates(project);
     let loaded = false;
     try {
@@ -968,11 +989,15 @@ export default function ProjectDetailPage() {
           );
           setProjectFiles(filteredFiles);
           setResolvedProjectRequestId(projectRequestId);
+          const preservedFile = previousSelection
+            ? filteredFiles.find((item) => item.path === previousSelection)
+            : undefined;
           const defaultFile = filteredFiles.find((item) =>
             isPreviewablePath(item.path),
           );
-          if (defaultFile) {
-            setSelectedFilePath(defaultFile.path);
+          const nextSelectedPath = preservedFile?.path || defaultFile?.path || "";
+          if (nextSelectedPath) {
+            setSelectedFilePath(nextSelectedPath);
           }
           loaded = true;
           break;
@@ -993,7 +1018,7 @@ export default function ProjectDetailPage() {
     } finally {
       setFilesLoading(false);
     }
-  }, [t]);
+  }, [selectedFilePath, t]);
 
   const {
     uploadModalOpen,
@@ -1242,6 +1267,74 @@ export default function ProjectDetailPage() {
       setPipelineLoading(false);
     }
   }, [t]);
+
+  const handleRealtimeFileTreeInvalidated = useCallback(async (payload?: {
+    changedPaths: string[];
+    reason: string;
+  }) => {
+    if (!currentAgent || !selectedProject) {
+      return;
+    }
+    await loadProjectFiles(currentAgent.id, selectedProject, {
+      preserveSelection: true,
+    });
+    const shouldRefreshSelectedContent = Boolean(
+      selectedFilePath
+      && isPreviewablePath(selectedFilePath)
+      && (
+        !payload
+        || payload.reason === "resync"
+        || payload.changedPaths.length === 0
+        || payload.changedPaths.includes(selectedFilePath)
+      ),
+    );
+    if (shouldRefreshSelectedContent) {
+      await loadFileContent(currentAgent.id, selectedProject, selectedFilePath);
+    }
+  }, [currentAgent, loadFileContent, loadProjectFiles, selectedFilePath, selectedProject]);
+
+  const handleRealtimePipelineInvalidated = useCallback(async (_payload?: {
+    changedPaths: string[];
+    reason: string;
+  }) => {
+    if (!currentAgent || !selectedProject) {
+      return;
+    }
+    await loadPipelineContext(currentAgent.id, selectedProject);
+    if (selectedRunId) {
+      await loadRunDetail(currentAgent.id, selectedProject, selectedRunId);
+    }
+  }, [currentAgent, loadPipelineContext, loadRunDetail, selectedProject, selectedRunId]);
+
+  const handleAssistantTurnCompleted = useCallback(async () => {
+    if (!currentAgent || !selectedProject) {
+      return;
+    }
+
+    await Promise.all([
+      loadProjectFiles(currentAgent.id, selectedProject, {
+        preserveSelection: true,
+      }),
+      loadPipelineContext(currentAgent.id, selectedProject),
+    ]);
+
+    if (selectedFilePath && isPreviewablePath(selectedFilePath)) {
+      await loadFileContent(currentAgent.id, selectedProject, selectedFilePath);
+    }
+
+    if (selectedRunId) {
+      await loadRunDetail(currentAgent.id, selectedProject, selectedRunId);
+    }
+  }, [
+    currentAgent,
+    loadFileContent,
+    loadPipelineContext,
+    loadProjectFiles,
+    loadRunDetail,
+    selectedFilePath,
+    selectedProject,
+    selectedRunId,
+  ]);
 
   const handleOpenImportModal = useCallback(async () => {
     if (!currentAgent) {
@@ -1670,6 +1763,29 @@ export default function ProjectDetailPage() {
     chatStarting,
     setError,
   });
+
+  const realtimeConnectionState = useProjectRealtimeController({
+    agentId: currentAgent?.id,
+    projectId: selectedProject?.id,
+    onFileTreeInvalidated: handleRealtimeFileTreeInvalidated,
+    onPipelineInvalidated: handleRealtimePipelineInvalidated,
+  });
+
+  const realtimeConnectionText = useMemo(() => {
+    if (realtimeConnectionState.status === "connected") {
+      return t("projects.realtime.connected", "Realtime connected");
+    }
+    if (realtimeConnectionState.status === "reconnecting") {
+      return t("projects.realtime.reconnecting", "Realtime reconnecting");
+    }
+    if (realtimeConnectionState.status === "degraded") {
+      return t("projects.realtime.degraded", "Realtime degraded");
+    }
+    if (realtimeConnectionState.status === "paused") {
+      return t("projects.realtime.paused", "Realtime paused");
+    }
+    return t("projects.realtime.connecting", "Realtime connecting");
+  }, [realtimeConnectionState.status, t]);
 
   useEffect(() => {
     if (!currentAgent) {
@@ -2348,6 +2464,19 @@ export default function ProjectDetailPage() {
               currentAgent?.workspace_dir ||
               t("projects.noAgent")}
           </Text>
+          <div className={styles.realtimeStatusRow}>
+            <Badge
+              status={getRealtimeBadgeStatus(realtimeConnectionState.status)}
+              text={realtimeConnectionText}
+            />
+            {realtimeConnectionState.reconnectAttempt > 0 ? (
+              <Text type="secondary" className={styles.realtimeStatusMeta}>
+                {t("projects.realtime.retryingAttempt", "Attempt {{count}}", {
+                  count: realtimeConnectionState.reconnectAttempt,
+                })}
+              </Text>
+            ) : null}
+          </div>
         </div>
         <div className={styles.headerActions}>
           {selectedProject ? (
@@ -2557,6 +2686,9 @@ export default function ProjectDetailPage() {
                           onSelectRunHistoryChat={selectRunChatSession}
                           onOpenManualRecoverDialog={() => {
                             void handleOpenManualRecoverDialog();
+                          }}
+                          onAssistantTurnCompleted={() => {
+                            void handleAssistantTurnCompleted();
                           }}
                         />
                       </div>

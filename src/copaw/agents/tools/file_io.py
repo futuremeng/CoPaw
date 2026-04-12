@@ -18,6 +18,7 @@ from ...config.context import (
     get_current_recent_max_bytes,
     get_current_focus_dir,
 )
+from ...app.project_realtime_events import record_project_realtime_paths
 from ...constant import WORKING_DIR, TRUNCATION_NOTICE_MARKER
 
 
@@ -89,6 +90,17 @@ def _get_encoding_for_file(file_path: str) -> str:
     # Default: UTF-8 without BOM (safe for all other files)
     # This includes: .sh, .yaml, .json, .py, .js, .md, etc.
     return "utf-8"
+
+
+def _record_project_realtime_write(file_path: str) -> None:
+    try:
+        record_project_realtime_paths(
+            get_current_workspace_dir(),
+            [file_path],
+        )
+    except Exception:
+        # Realtime hints should never break file writes.
+        return
 
 
 async def read_file(  # pylint: disable=too-many-return-statements
@@ -268,6 +280,7 @@ async def write_file(
     try:
         with open(file_path, "w", encoding=encoding) as file:
             file.write(content)
+        _record_project_realtime_write(file_path)
         return ToolResponse(
             content=[
                 TextBlock(
@@ -416,6 +429,7 @@ async def append_file(
     try:
         with open(file_path, "a", encoding=encoding) as file:
             file.write(content)
+        _record_project_realtime_write(file_path)
         return ToolResponse(
             content=[
                 TextBlock(

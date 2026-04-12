@@ -23,11 +23,13 @@ from .files import router as files_router
 from .settings import router as settings_router
 from .knowledge import router as knowledge_router
 from .agents_pipeline import router as agents_pipeline_router
+from .project_realtime import router as project_realtime_router
 
 router = APIRouter()
 
 router.include_router(agents_router)
 router.include_router(agents_pipeline_router)
+router.include_router(project_realtime_router)
 router.include_router(agent_router)
 router.include_router(config_router)
 router.include_router(console_router)

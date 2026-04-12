@@ -43,6 +43,7 @@ interface ProjectChatPanelProps {
   onSelectDesignHistoryChat: (chatId: string) => void;
   onSelectRunHistoryChat: (chatId: string) => void;
   onOpenManualRecoverDialog?: () => void;
+  onAssistantTurnCompleted?: () => void;
 }
 
 export default function ProjectChatPanel({
@@ -62,6 +63,7 @@ export default function ProjectChatPanel({
   onSelectDesignHistoryChat,
   onSelectRunHistoryChat,
   onOpenManualRecoverDialog,
+  onAssistantTurnCompleted,
 }: ProjectChatPanelProps) {
   const { t } = useTranslation();
   const hasUserFiles = projectFileCount > 0;
@@ -123,6 +125,7 @@ export default function ProjectChatPanel({
                       onSelectHistoryChat={onSelectRunHistoryChat}
                       historyMenuActionLabel={t("projects.chat.manualRecover", "手动恢复对话关联")}
                       onHistoryMenuAction={onOpenManualRecoverDialog}
+                      onAssistantTurnCompleted={onAssistantTurnCompleted}
                       inputPlaceholder={t(
                         "projects.chat.placeholder",
                         "Describe what you want to adjust in this run, and I will help iterate.",
@@ -176,6 +179,7 @@ export default function ProjectChatPanel({
                       onSelectHistoryChat={onSelectDesignHistoryChat}
                       historyMenuActionLabel={t("projects.chat.manualRecover", "手动恢复对话关联")}
                       onHistoryMenuAction={onOpenManualRecoverDialog}
+                      onAssistantTurnCompleted={onAssistantTurnCompleted}
                       inputPlaceholder={t(
                         "projects.chat.designPlaceholder",
                         "Describe your target workflow and constraints, and I will draft/refine the project flow.",
@@ -231,6 +235,7 @@ export default function ProjectChatPanel({
                     onSelectHistoryChat={onSelectWorkspaceHistoryChat}
                     historyMenuActionLabel={t("projects.chat.manualRecover", "手动恢复对话关联")}
                     onHistoryMenuAction={onOpenManualRecoverDialog}
+                    onAssistantTurnCompleted={onAssistantTurnCompleted}
                     welcomePromptClickBehavior="append"
                     inputPlaceholder={t(
                       "projects.chat.collaborationPlaceholder",
