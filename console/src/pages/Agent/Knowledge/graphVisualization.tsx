@@ -4,6 +4,7 @@ import {
   Card,
   Empty,
   Input,
+  Modal,
   message,
   Select,
   Space,
@@ -357,6 +358,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
   const [pathNodeIds, setPathNodeIds] = useState<string[]>([]);
   const [pathEdgeIds, setPathEdgeIds] = useState<string[]>([]);
   const [autoFillPathEndpoints, setAutoFillPathEndpoints] = useState(false);
+  const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState(false);
 
   const nodeOptions = useMemo(
     () =>
@@ -892,6 +894,9 @@ export function GraphVisualization(props: GraphVisualizationProps) {
           <Button icon={<AimOutlined />} onClick={handleFitView}>
             {t("knowledge.graphQuery.fitView")}
           </Button>
+          <Button onClick={() => setAdvancedSettingsOpen(true)}>
+            {t("knowledge.graphQuery.advancedSettings", "高级设置")}
+          </Button>
           <Button icon={<ExportOutlined />} onClick={handleExport}>
             {t("knowledge.graphQuery.export")}
           </Button>
@@ -899,192 +904,200 @@ export function GraphVisualization(props: GraphVisualizationProps) {
       }
       loading={loading}
     >
-      <Space direction="vertical" size={10} style={{ width: "100%", marginBottom: 12 }}>
-        <Space wrap className={styles.graphFocusBar}>
-          <Typography.Text type="secondary">{t("knowledge.graphQuery.focusNode")}</Typography.Text>
-          <Select
-            showSearch
-            allowClear
-            size="small"
-            value={focusedNodeId || undefined}
-            placeholder={t("knowledge.graphQuery.focusNodePlaceholder")}
-            options={nodeOptions.map((item) => ({
-              label: item.label,
-              value: item.value,
-            }))}
-            onChange={(value) => handleSelectNode((value as string) || null)}
-            style={{ minWidth: 240 }}
-            optionFilterProp="label"
-          />
-          <Button size="small" onClick={() => handleSelectNode(null)}>
-            {t("knowledge.graphQuery.clearFocus")}
-          </Button>
-          <Space size={6}>
-            <Typography.Text type="secondary">
-              {t("knowledge.graphQuery.pathAutoFillFromClick")}
-            </Typography.Text>
-            <Switch
-              size="small"
-              checked={autoFillPathEndpoints}
-              onChange={(checked) => setAutoFillPathEndpoints(checked)}
-            />
-          </Space>
-        </Space>
-        <Space wrap className={styles.graphPathBar}>
-          <Typography.Text type="secondary">{t("knowledge.graphQuery.path")}</Typography.Text>
-          {autoFillPathEndpoints ? (
-            <Space size={6} className={styles.graphPathHintRow} wrap>
-              {focusedNodeLabel ? (
-                <Tag className={styles.graphPathHintTag} color="processing">
-                  {t("knowledge.graphQuery.pathRecentClick", {
-                    node: focusedNodeLabel,
-                  })}
-                </Tag>
-              ) : null}
-              <Tag className={styles.graphPathHintTag} color="blue">
-                {t("knowledge.graphQuery.pathAutoTarget", {
-                  target: t(autoFillTargetKey),
-                })}
-              </Tag>
-            </Space>
-          ) : null}
-          <Select
-            showSearch
-            allowClear
-            size="small"
-            value={pathStartNodeId || undefined}
-            placeholder={t("knowledge.graphQuery.pathStart")}
-            options={nodeOptions.map((item) => ({
-              label: item.label,
-              value: item.value,
-            }))}
-            onChange={(value) => setPathStartNodeId((value as string) || null)}
-            style={{ minWidth: 180 }}
-            optionFilterProp="label"
-          />
-          <Button
-            size="small"
-            disabled={!focusedNodeId}
-            onClick={() => {
-              setPathStartNodeId(focusedNodeId);
-            }}
-          >
-            {t("knowledge.graphQuery.pathSetStartFromFocus")}
-          </Button>
-          <Select
-            showSearch
-            allowClear
-            size="small"
-            value={pathEndNodeId || undefined}
-            placeholder={t("knowledge.graphQuery.pathEnd")}
-            options={nodeOptions.map((item) => ({
-              label: item.label,
-              value: item.value,
-            }))}
-            onChange={(value) => setPathEndNodeId((value as string) || null)}
-            style={{ minWidth: 180 }}
-            optionFilterProp="label"
-          />
-          <Button
-            size="small"
-            disabled={!focusedNodeId}
-            onClick={() => {
-              setPathEndNodeId(focusedNodeId);
-            }}
-          >
-            {t("knowledge.graphQuery.pathSetEndFromFocus")}
-          </Button>
-          <Button
-            size="small"
-            icon={<SwapOutlined />}
-            disabled={!pathStartNodeId && !pathEndNodeId}
-            onClick={handleSwapPathEndpoints}
-          >
-            {t("knowledge.graphQuery.pathSwap")}
-          </Button>
-          <Button size="small" type="primary" onClick={handleFindPath}>
-            {t("knowledge.graphQuery.pathFind")}
-          </Button>
-          <Button size="small" onClick={handleClearPath}>
-            {t("knowledge.graphQuery.pathClear")}
-          </Button>
-        </Space>
-        {pathNodeIds.length > 0 ? (
-          <Space wrap className={styles.graphPathSummaryRow}>
-            <Typography.Text type="secondary">
-              {t("knowledge.graphQuery.pathSummaryLabel", {
-                hops: pathHopCount,
-              })}
-            </Typography.Text>
-            <Space size={4} wrap>
-              {pathNodeIds.map((nodeId, index) => (
-                <Space key={nodeId} size={4}>
-                  <Button
-                    size="small"
-                    type="link"
-                    className={styles.graphPathNodeLink}
-                    onClick={() => {
-                      handleSelectNode(nodeId);
-                    }}
-                  >
-                    {nodeMap.get(nodeId)?.label || nodeId}
-                  </Button>
-                  {index < pathNodeIds.length - 1 ? (
-                    <Typography.Text type="secondary">{">"}</Typography.Text>
-                  ) : null}
-                </Space>
-              ))}
-            </Space>
-            <Button
-              size="small"
-              icon={<CopyOutlined />}
-              onClick={() => {
-                void handleCopyPathSummary();
-              }}
-            >
-              {t("knowledge.graphQuery.pathCopy")}
-            </Button>
-            <Button
-              size="small"
-              onClick={() => {
-                handleUsePathContext(false);
-              }}
-            >
-              {t("knowledge.graphQuery.pathUseContext")}
-            </Button>
-            <Button
-              size="small"
-              type="primary"
-              onClick={() => {
-                handleUsePathContext(true);
-              }}
-            >
-              {t("knowledge.graphQuery.pathUseContextAndRun")}
-            </Button>
-          </Space>
-        ) : null}
-        {hotNodes.length > 0 ? (
-          <Space wrap className={styles.graphHotNodesRow}>
-            <Typography.Text type="secondary">{t("knowledge.graphQuery.hotNodes")}</Typography.Text>
-            {hotNodes.map((item) => (
-              <Tag
-                key={item.value}
-                className={styles.graphHotNodeTag}
-                color={focusedNodeId === item.value ? "processing" : "default"}
-                onClick={() => handleSelectNode(item.value)}
-              >
-                {item.label}
-              </Tag>
-            ))}
-          </Space>
-        ) : null}
-      </Space>
       <div className={styles.graphCanvasWrap}>
         <div ref={containerRef} className={styles.graphCanvas} />
       </div>
       <Typography.Text type="secondary" className={styles.graphSummaryText}>
         {t("knowledge.graphQuery.nodes")}: {data.nodes.length} | {t("knowledge.graphQuery.edges")}: {data.edges.length}
       </Typography.Text>
+      <Modal
+        title={t("knowledge.graphQuery.advancedSettings", "高级设置")}
+        open={advancedSettingsOpen}
+        onCancel={() => setAdvancedSettingsOpen(false)}
+        footer={null}
+        width={960}
+      >
+        <Space direction="vertical" size={10} style={{ width: "100%" }}>
+          <Space wrap className={styles.graphFocusBar}>
+            <Typography.Text type="secondary">{t("knowledge.graphQuery.focusNode")}</Typography.Text>
+            <Select
+              showSearch
+              allowClear
+              size="small"
+              value={focusedNodeId || undefined}
+              placeholder={t("knowledge.graphQuery.focusNodePlaceholder")}
+              options={nodeOptions.map((item) => ({
+                label: item.label,
+                value: item.value,
+              }))}
+              onChange={(value) => handleSelectNode((value as string) || null)}
+              style={{ minWidth: 240 }}
+              optionFilterProp="label"
+            />
+            <Button size="small" onClick={() => handleSelectNode(null)}>
+              {t("knowledge.graphQuery.clearFocus")}
+            </Button>
+            <Space size={6}>
+              <Typography.Text type="secondary">
+                {t("knowledge.graphQuery.pathAutoFillFromClick")}
+              </Typography.Text>
+              <Switch
+                size="small"
+                checked={autoFillPathEndpoints}
+                onChange={(checked) => setAutoFillPathEndpoints(checked)}
+              />
+            </Space>
+          </Space>
+          <Space wrap className={styles.graphPathBar}>
+            <Typography.Text type="secondary">{t("knowledge.graphQuery.path")}</Typography.Text>
+            {autoFillPathEndpoints ? (
+              <Space size={6} className={styles.graphPathHintRow} wrap>
+                {focusedNodeLabel ? (
+                  <Tag className={styles.graphPathHintTag} color="processing">
+                    {t("knowledge.graphQuery.pathRecentClick", {
+                      node: focusedNodeLabel,
+                    })}
+                  </Tag>
+                ) : null}
+                <Tag className={styles.graphPathHintTag} color="blue">
+                  {t("knowledge.graphQuery.pathAutoTarget", {
+                    target: t(autoFillTargetKey),
+                  })}
+                </Tag>
+              </Space>
+            ) : null}
+            <Select
+              showSearch
+              allowClear
+              size="small"
+              value={pathStartNodeId || undefined}
+              placeholder={t("knowledge.graphQuery.pathStart")}
+              options={nodeOptions.map((item) => ({
+                label: item.label,
+                value: item.value,
+              }))}
+              onChange={(value) => setPathStartNodeId((value as string) || null)}
+              style={{ minWidth: 180 }}
+              optionFilterProp="label"
+            />
+            <Button
+              size="small"
+              disabled={!focusedNodeId}
+              onClick={() => {
+                setPathStartNodeId(focusedNodeId);
+              }}
+            >
+              {t("knowledge.graphQuery.pathSetStartFromFocus")}
+            </Button>
+            <Select
+              showSearch
+              allowClear
+              size="small"
+              value={pathEndNodeId || undefined}
+              placeholder={t("knowledge.graphQuery.pathEnd")}
+              options={nodeOptions.map((item) => ({
+                label: item.label,
+                value: item.value,
+              }))}
+              onChange={(value) => setPathEndNodeId((value as string) || null)}
+              style={{ minWidth: 180 }}
+              optionFilterProp="label"
+            />
+            <Button
+              size="small"
+              disabled={!focusedNodeId}
+              onClick={() => {
+                setPathEndNodeId(focusedNodeId);
+              }}
+            >
+              {t("knowledge.graphQuery.pathSetEndFromFocus")}
+            </Button>
+            <Button
+              size="small"
+              icon={<SwapOutlined />}
+              disabled={!pathStartNodeId && !pathEndNodeId}
+              onClick={handleSwapPathEndpoints}
+            >
+              {t("knowledge.graphQuery.pathSwap")}
+            </Button>
+            <Button size="small" type="primary" onClick={handleFindPath}>
+              {t("knowledge.graphQuery.pathFind")}
+            </Button>
+            <Button size="small" onClick={handleClearPath}>
+              {t("knowledge.graphQuery.pathClear")}
+            </Button>
+          </Space>
+          {pathNodeIds.length > 0 ? (
+            <Space wrap className={styles.graphPathSummaryRow}>
+              <Typography.Text type="secondary">
+                {t("knowledge.graphQuery.pathSummaryLabel", {
+                  hops: pathHopCount,
+                })}
+              </Typography.Text>
+              <Space size={4} wrap>
+                {pathNodeIds.map((nodeId, index) => (
+                  <Space key={nodeId} size={4}>
+                    <Button
+                      size="small"
+                      type="link"
+                      className={styles.graphPathNodeLink}
+                      onClick={() => {
+                        handleSelectNode(nodeId);
+                      }}
+                    >
+                      {nodeMap.get(nodeId)?.label || nodeId}
+                    </Button>
+                    {index < pathNodeIds.length - 1 ? (
+                      <Typography.Text type="secondary">{">"}</Typography.Text>
+                    ) : null}
+                  </Space>
+                ))}
+              </Space>
+              <Button
+                size="small"
+                icon={<CopyOutlined />}
+                onClick={() => {
+                  void handleCopyPathSummary();
+                }}
+              >
+                {t("knowledge.graphQuery.pathCopy")}
+              </Button>
+              <Button
+                size="small"
+                onClick={() => {
+                  handleUsePathContext(false);
+                }}
+              >
+                {t("knowledge.graphQuery.pathUseContext")}
+              </Button>
+              <Button
+                size="small"
+                type="primary"
+                onClick={() => {
+                  handleUsePathContext(true);
+                }}
+              >
+                {t("knowledge.graphQuery.pathUseContextAndRun")}
+              </Button>
+            </Space>
+          ) : null}
+          {hotNodes.length > 0 ? (
+            <Space wrap className={styles.graphHotNodesRow}>
+              <Typography.Text type="secondary">{t("knowledge.graphQuery.hotNodes")}</Typography.Text>
+              {hotNodes.map((item) => (
+                <Tag
+                  key={item.value}
+                  className={styles.graphHotNodeTag}
+                  color={focusedNodeId === item.value ? "processing" : "default"}
+                  onClick={() => handleSelectNode(item.value)}
+                >
+                  {item.label}
+                </Tag>
+              ))}
+            </Space>
+          ) : null}
+        </Space>
+      </Modal>
     </Card>
   );
 }
