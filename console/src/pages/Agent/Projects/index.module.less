@@ -1268,8 +1268,23 @@
     display: flex;
     flex-direction: column;
     flex: 1;
+    height: 100%;
     min-height: 0;
     overflow: hidden;
+  }
+
+  :global(.copaw-tabs-content) {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  :global(.copaw-tabs-content-left) {
+    height: 100%;
+    min-height: 0;
   }
 
   :global(.ant-tabs-content-holder) {
@@ -1280,6 +1295,17 @@
   :global(.ant-tabs-tabpane) {
     display: flex;
     flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    padding: 0 4px 0 0;
+  }
+
+  :global(.copaw-tabs-tabpane),
+  :global(.copaw-tabs-tabpane-active) {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
     height: 100%;
     min-height: 0;
     overflow: hidden;

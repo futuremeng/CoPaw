@@ -133,6 +133,8 @@ function buildStateMap(
   data: GraphTopologyData,
   focusedNodeId: string | null,
   neighborIds: Set<string>,
+  filteredNodeIds: Set<string>,
+  filteredEdgeIds: Set<string>,
   pathNodeIds: Set<string>,
   pathEdgeIds: Set<string>,
   insightNodeIds: Set<string>,
@@ -146,7 +148,11 @@ function buildStateMap(
         stateMap[node.id] = ["path"];
         return;
       }
-      stateMap[node.id] = insightNodeIds.has(node.id) ? ["insight"] : [];
+      if (insightNodeIds.has(node.id)) {
+        stateMap[node.id] = ["insight"];
+        return;
+      }
+      stateMap[node.id] = filteredNodeIds.has(node.id) ? ["filtered"] : ["inactive"];
       return;
     }
     if (pathNodeIds.has(node.id)) {
@@ -170,7 +176,11 @@ function buildStateMap(
         stateMap[edge.id] = ["path"];
         return;
       }
-      stateMap[edge.id] = insightEdgeIds.has(edge.id) ? ["insight"] : [];
+      if (insightEdgeIds.has(edge.id)) {
+        stateMap[edge.id] = ["insight"];
+        return;
+      }
+      stateMap[edge.id] = filteredEdgeIds.has(edge.id) ? ["filtered"] : ["inactive"];
       return;
     }
     if (pathEdgeIds.has(edge.id)) {
@@ -188,6 +198,8 @@ function buildHoverStateMap(
   data: GraphTopologyData,
   hoveredNodeId: string,
   neighborIds: Set<string>,
+  filteredNodeIds: Set<string>,
+  filteredEdgeIds: Set<string>,
   pathNodeIds: Set<string>,
   pathEdgeIds: Set<string>,
   insightNodeIds: Set<string>,
@@ -208,7 +220,11 @@ function buildHoverStateMap(
       stateMap[node.id] = ["active"];
       return;
     }
-    stateMap[node.id] = insightNodeIds.has(node.id) ? ["insight"] : [];
+    if (insightNodeIds.has(node.id)) {
+      stateMap[node.id] = ["insight"];
+      return;
+    }
+    stateMap[node.id] = filteredNodeIds.has(node.id) ? ["filtered"] : ["inactive"];
   });
 
   data.edges.forEach((edge) => {
@@ -221,7 +237,11 @@ function buildHoverStateMap(
       stateMap[edge.id] = ["active"];
       return;
     }
-    stateMap[edge.id] = insightEdgeIds.has(edge.id) ? ["insight"] : [];
+    if (insightEdgeIds.has(edge.id)) {
+      stateMap[edge.id] = ["insight"];
+      return;
+    }
+    stateMap[edge.id] = filteredEdgeIds.has(edge.id) ? ["filtered"] : ["inactive"];
   });
 
   return stateMap;
@@ -580,14 +600,31 @@ export function GraphVisualization(props: GraphVisualizationProps) {
   }, [data.nodes]);
 
   const graphData = useMemo(
+    () => buildGraphDisplayData(data, 0),
+    [data],
+  );
+
+  const filteredGraphData = useMemo(
     () => buildGraphDisplayData(data, edgeStrengthThreshold),
     [data, edgeStrengthThreshold],
   );
 
   const graphEntitySummary = useMemo(
-    () => summarizeGraphEntities(graphData),
-    [graphData],
+    () => summarizeGraphEntities(filteredGraphData),
+    [filteredGraphData],
   );
+
+  const filteredEdgeIds = useMemo(
+    () => new Set(filteredGraphData.edges.map((edge) => edge.id)),
+    [filteredGraphData.edges],
+  );
+
+  const filteredNodeIds = useMemo(() => {
+    if (edgeStrengthThreshold <= 0) {
+      return new Set(graphData.nodes.map((node) => node.id));
+    }
+    return new Set(filteredGraphData.connectedNodeIds);
+  }, [edgeStrengthThreshold, filteredGraphData.connectedNodeIds, graphData.nodes]);
 
   const nodeOptions = useMemo(
     () =>
@@ -822,6 +859,8 @@ export function GraphVisualization(props: GraphVisualizationProps) {
           graphData,
           null,
           new Set<string>(),
+          filteredNodeIds,
+          filteredEdgeIds,
           pathNodeSet,
           pathEdgeSet,
           insightNodeSet,
@@ -841,6 +880,8 @@ export function GraphVisualization(props: GraphVisualizationProps) {
         graphData,
         nodeId,
         neighbors,
+        filteredNodeIds,
+        filteredEdgeIds,
         pathNodeSet,
         pathEdgeSet,
         insightNodeSet,
@@ -852,7 +893,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
         await graphRef.current.focusElement(nodeId, { duration: 300 });
       }
     },
-    [activeInsight?.edgeIds, activeInsight?.nodeIds, graphData, pathEdgeIds, pathNodeIds],
+    [activeInsight?.edgeIds, activeInsight?.nodeIds, filteredEdgeIds, filteredNodeIds, graphData, pathEdgeIds, pathNodeIds],
   );
 
   const updateFocusStateRef = useRef(updateFocusState);
@@ -884,13 +925,15 @@ export function GraphVisualization(props: GraphVisualizationProps) {
       graphData,
       nodeId,
       neighbors,
+      filteredNodeIds,
+      filteredEdgeIds,
       pathNodeSet,
       pathEdgeSet,
       insightNodeSet,
       insightEdgeSet,
     );
     await graphRef.current.setElementState(stateMap, false);
-  }, [activeInsight?.edgeIds, activeInsight?.nodeIds, graphData, pathEdgeIds, pathNodeIds]);
+  }, [activeInsight?.edgeIds, activeInsight?.nodeIds, filteredEdgeIds, filteredNodeIds, graphData, pathEdgeIds, pathNodeIds]);
 
   const updateHoverStateRef = useRef(updateHoverState);
 
@@ -1113,10 +1156,6 @@ export function GraphVisualization(props: GraphVisualizationProps) {
 
       const width = containerRef.current.clientWidth || 800;
       const height = 440;
-      const nodeCount = graphData.nodes.length;
-      const denseGraph = nodeCount > 70;
-      const hideNodeLabels = nodeCount > 48;
-      const hideEdgeLabels = nodeCount > 28;
       const initialPositions = buildInitialSpreadPositions(
         graphData.nodes.length,
         width,
@@ -1159,7 +1198,8 @@ export function GraphVisualization(props: GraphVisualizationProps) {
           container: containerRef.current,
           width,
           height,
-          autoFit: denseGraph ? "center" : "view",
+          autoFit: "view",
+          padding: 24,
           data: g6Data,
           layout: {
             type: "d3-force",
@@ -1195,7 +1235,6 @@ export function GraphVisualization(props: GraphVisualizationProps) {
               keyShape: true,
               label: true,
             },
-            "auto-adapt-label",
           ],
           animation: false,
           node: {
@@ -1213,7 +1252,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
                   : buildWeightColor(score);
               const size = Number(datum?.data?.visualSize || nodeVisualSizeFromScore(score));
               const rawLabel = String(datum?.data?.label || "");
-              const displayLabel = hideNodeLabels ? "" : shortenLabel(rawLabel, 24);
+              const displayLabel = shortenLabel(rawLabel, 24);
               return {
                 size,
                 lineWidth: 1,
@@ -1229,8 +1268,12 @@ export function GraphVisualization(props: GraphVisualizationProps) {
             },
             state: {
               inactive: {
-                opacity: 0.25,
-                label: false,
+                opacity: 0.6,
+              },
+              filtered: {
+                lineWidth: 2,
+                stroke: "#1677ff",
+                opacity: 1,
               },
               dim: {
                 opacity: 0.18,
@@ -1263,21 +1306,25 @@ export function GraphVisualization(props: GraphVisualizationProps) {
             style: (datum: { data?: { label?: string; strength?: number } }) => {
               const strength = Number(datum?.data?.strength || 0.5);
               const rawEdgeLabel = String(datum?.data?.label || "");
-              const displayEdgeLabel = hideEdgeLabels ? "" : shortenLabel(rawEdgeLabel, 18);
+              const displayEdgeLabel = shortenLabel(rawEdgeLabel, 18);
               return {
               stroke: buildEdgeColor(strength),
               lineWidth: 0.8 + strength * 2,
               endArrow: true,
               labelText: displayEdgeLabel,
-              labelBackground: !hideEdgeLabels,
+              labelBackground: true,
               labelFontSize: 10,
               labelFill: "#8c8c8c",
             };
             },
             state: {
               inactive: {
-                opacity: 0.08,
-                label: false,
+                opacity: 0.32,
+              },
+              filtered: {
+                stroke: "#1677ff",
+                lineWidth: 1.6,
+                opacity: 0.95,
               },
               dim: {
                 opacity: 0.12,
@@ -1412,7 +1459,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
         </div>
       </div>
       <Typography.Text type="secondary" className={styles.graphSummaryText}>
-        {t("knowledge.graphQuery.nodes")}: {graphEntitySummary.totalNodes} | {t("knowledge.graphQuery.edges")}: {graphData.edges.length}
+        {t("knowledge.graphQuery.nodes")}: {graphEntitySummary.totalNodes} | {t("knowledge.graphQuery.edges")}: {filteredGraphData.edges.length}/{graphData.edges.length}
       </Typography.Text>
       <div className={styles.graphEntityStatsRow}>
         <span className={styles.graphEntityStatPill}>

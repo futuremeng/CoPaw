@@ -110,6 +110,7 @@ interface ProjectKnowledgeUiPrefs {
 const PROJECT_TREND_STORAGE_PREFIX = "copaw.project.knowledge.trend.v1";
 const PROJECT_KNOWLEDGE_UI_PREFS_PREFIX = "copaw.project.knowledge.ui.v1";
 const DAY_MS = 24 * 60 * 60 * 1000;
+const PROJECT_GRAPH_QUERY_TOP_K = 10000;
 
 function uiPrefsStorageKey(projectId: string): string {
   return `${PROJECT_KNOWLEDGE_UI_PREFS_PREFIX}.${projectId || "default"}`;
@@ -361,7 +362,7 @@ export function useProjectKnowledgeState(
       const response = await api.graphQuery({
         query,
         mode,
-        topK: 24,
+        topK: PROJECT_GRAPH_QUERY_TOP_K,
         timeoutSec: 20,
         projectScope: [params.projectId],
         includeGlobal: params.includeGlobal,
@@ -532,7 +533,7 @@ export function useProjectKnowledgeState(
 
   const suggestedQuery = useMemo(() => {
     const projectLabel = params.projectName || params.projectId;
-    return `Summarize key entities, modules, and relations in project ${projectLabel}`;
+    return `List as many entities and relationships as possible from project ${projectLabel}, then summarize key clusters and links`;
   }, [params.projectId, params.projectName]);
 
   useEffect(() => {

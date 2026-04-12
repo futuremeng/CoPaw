@@ -502,4 +502,4 @@ def query_local_graph(
             }
         )
     records.sort(key=lambda item: item["score"], reverse=True)
-    return records[: max(1, min(int(top_k), 50))]
+    return records[: max(1, min(int(top_k), 10000))]

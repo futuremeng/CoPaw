@@ -243,7 +243,7 @@ def _graphify_query_remote(
 
     payload = {
         "query": query_text,
-        "top_k": max(1, min(int(top_k), 50)),
+        "top_k": max(1, min(int(top_k), 10000)),
         "dataset": config.dataset,
         "dataset_scope": dataset_scope or [],
         "bfs_depth": config.bfs_depth,

@@ -220,7 +220,7 @@ class GraphOpsManager:
         search_result = manager.search(
             query=effective_query_text,
             config=config,
-            limit=max(1, min(top_k, 50)),
+            limit=max(1, min(top_k, 10000)),
             project_scope=project_scope,
             include_global=include_global,
         )
