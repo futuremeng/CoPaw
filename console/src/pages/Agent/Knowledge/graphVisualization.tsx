@@ -652,6 +652,16 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     [graphEntitySummary.topEntities],
   );
 
+  const provenanceEngine = useMemo(
+    () => String((data.provenance as Record<string, unknown>)?.engine || ""),
+    [data.provenance],
+  );
+
+  const provenanceLayer = useMemo(
+    () => String((data.provenance as Record<string, unknown>)?.layer || ""),
+    [data.provenance],
+  );
+
   const edgeLookup = useMemo(() => {
     const map = new Map<string, string>();
     graphData.edges.forEach((edge) => {
@@ -1473,6 +1483,12 @@ export function GraphVisualization(props: GraphVisualizationProps) {
       <Typography.Text type="secondary" className={styles.graphSummaryText}>
         {t("knowledge.graphQuery.nodes")}: {graphEntitySummary.totalNodes} | {t("knowledge.graphQuery.edges")}: {filteredGraphData.edges.length}/{graphData.edges.length}
       </Typography.Text>
+      {(provenanceEngine || provenanceLayer) ? (
+        <Typography.Text type="secondary" className={styles.graphSummaryText}>
+          Engine: {provenanceEngine || "-"}
+          {provenanceLayer ? ` | Layer: ${provenanceLayer}` : ""}
+        </Typography.Text>
+      ) : null}
       <div className={styles.graphEntityStatsRow}>
         <span className={styles.graphEntityStatPill}>
           {t("knowledge.graphQuery.totalEntities", "Total Entities")}: {graphEntitySummary.totalNodes}

@@ -2,6 +2,7 @@
 
 import json
 import time
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -318,3 +319,163 @@ def test_local_memify_builds_queryable_graph(tmp_path):
 
     assert result.provenance.get("engine") == "local_graph"
     assert len(result.records) >= 1
+
+
+def test_local_memify_runs_enrichment_pipeline_and_query_prefers_l2(tmp_path):
+    knowledge_config = Config().knowledge
+    knowledge_config.enabled = True
+    knowledge_config.engine = "local_lexical"
+    knowledge_config.enrichment_pipeline_enabled = True
+
+    manager = KnowledgeManager(tmp_path)
+    source = KnowledgeSourceSpec(
+        id="local-enrich-source",
+        name="Local Enrich Source",
+        type="text",
+        location="",
+        content=(
+            "ToolDispatcher mentions FileSearch. "
+            "FileSearch co_occurs_with KnowledgeGraph."
+        ),
+        enabled=True,
+        recursive=False,
+        tags=["graph", "enrich"],
+        summary="",
+    )
+    knowledge_config.sources.append(source)
+    manager.index_source(
+        source,
+        knowledge_config,
+        SimpleNamespace(knowledge_chunk_size=knowledge_config.index.chunk_size),
+    )
+
+    graph_ops = GraphOpsManager(tmp_path)
+    memify_result = graph_ops.execute_memify_once(
+        config=knowledge_config,
+        pipeline_type="system-enrichment",
+        dataset_scope=[source.id],
+        dry_run=False,
+    )
+
+    assert memify_result["status"] == "succeeded"
+    assert memify_result.get("enrichment_status") == "succeeded"
+    assert Path(memify_result["enriched_graph_path"]).exists()
+    assert Path(memify_result["enrichment_quality_report_path"]).exists()
+
+    result = graph_ops.graph_query(
+        config=knowledge_config,
+        query_mode="template",
+        query_text="ToolDispatcher FileSearch",
+        dataset_scope=[source.id],
+        project_scope=None,
+        include_global=True,
+        top_k=5,
+        timeout_sec=30,
+    )
+
+    assert result.provenance.get("engine") == "local_graph"
+    assert result.provenance.get("layer") == "l2_enriched"
+    assert len(result.records) >= 1
+
+
+def test_graphify_query_prefers_enriched_graph_when_enabled(tmp_path):
+    knowledge_config = Config().knowledge
+    knowledge_config.enabled = True
+    knowledge_config.engine = "graphify"
+    knowledge_config.enrichment_pipeline_enabled = True
+
+    raw_graph_path = tmp_path / "raw_graph.json"
+    _write_graph_json(
+        raw_graph_path,
+        nodes=[{"id": "n1", "label": "RawNode", "source_file": "raw.md"}],
+        edges=[],
+    )
+    knowledge_config.graphify.graph_path = str(raw_graph_path)
+
+    graph_ops = GraphOpsManager(tmp_path)
+    graph_ops.enriched_graph_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_graph_json(
+        graph_ops.enriched_graph_path,
+        nodes=[{"id": "n2", "label": "EnrichedNode", "source_file": "enriched.md"}],
+        edges=[],
+    )
+
+    called_graph_path = ""
+
+    def _fake_graphify_query(config, query_text, top_k, dataset_scope):
+        nonlocal called_graph_path
+        _ = query_text, top_k, dataset_scope
+        called_graph_path = str(getattr(config, "graph_path", "") or "")
+        return [
+            {
+                "subject": "EnrichedNode",
+                "predicate": "related_to",
+                "object": "Other",
+                "score": 1.0,
+                "source_id": "graphify-source",
+                "source_type": "graph",
+                "document_path": "enriched.md",
+                "document_title": "enriched",
+            }
+        ]
+
+    with patch("copaw.knowledge.graph_ops.graphify_query", _fake_graphify_query):
+        result = graph_ops.graph_query(
+            config=knowledge_config,
+            query_mode="template",
+            query_text="enriched",
+            dataset_scope=[],
+            project_scope=None,
+            include_global=True,
+            top_k=5,
+            timeout_sec=30,
+        )
+
+    assert called_graph_path == str(graph_ops.enriched_graph_path)
+    assert result.provenance.get("engine") == "graphify"
+    assert result.provenance.get("layer") == "l2_enriched"
+    assert result.provenance.get("graph_path") == str(graph_ops.enriched_graph_path)
+    assert len(result.records) == 1
+
+
+def test_run_memify_job_exposes_enrichment_fields(tmp_path):
+    knowledge_config = Config().knowledge
+    knowledge_config.enabled = True
+    knowledge_config.engine = "local_lexical"
+    knowledge_config.enrichment_pipeline_enabled = True
+
+    manager = KnowledgeManager(tmp_path)
+    source = KnowledgeSourceSpec(
+        id="job-enrich-source",
+        name="Job Enrich Source",
+        type="text",
+        location="",
+        content="ToolDispatcher uses FileSearch in project knowledge graph.",
+        enabled=True,
+        recursive=False,
+        tags=["graph", "job"],
+        summary="",
+    )
+    knowledge_config.sources.append(source)
+    manager.index_source(
+        source,
+        knowledge_config,
+        SimpleNamespace(knowledge_chunk_size=knowledge_config.index.chunk_size),
+    )
+
+    graph_ops = GraphOpsManager(tmp_path)
+    payload = graph_ops.run_memify(
+        config=knowledge_config,
+        pipeline_type="system-enrichment",
+        dataset_scope=[source.id],
+        idempotency_key="job-enrichment-visible",
+        dry_run=False,
+    )
+
+    assert payload["accepted"] is True
+    job = _await_terminal_memify_status(graph_ops, payload["job_id"])
+    assert job["status"] == "succeeded"
+    assert job.get("enrichment_status") == "succeeded"
+    assert Path(str(job.get("enriched_graph_path") or "")).exists()
+    assert Path(str(job.get("enrichment_quality_report_path") or "")).exists()
+    assert isinstance(job.get("enrichment_metrics"), dict)

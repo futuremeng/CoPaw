@@ -25,6 +25,7 @@ from .graphify_provider import (
     graphify_memify,
     graphify_query,
 )
+from .enrichment_pipeline import run_system_knowledge_enrichment
 from .local_graph_provider import persist_local_graph, query_local_graph
 from .manager import KnowledgeManager
 
@@ -51,7 +52,34 @@ class GraphOpsManager:
         self.knowledge_root = self.working_dir / knowledge_dirname
         self.memify_jobs_path = self.knowledge_root / "memify-jobs.json"
         self.local_graph_path = self.knowledge_root / "graphify-out" / "graph.json"
+        self.enriched_graph_path = self.knowledge_root / "graphify-out" / "graph.enriched.json"
+        self.enrichment_quality_report_path = (
+            self.knowledge_root / "graphify-out" / "enrichment-quality-report.json"
+        )
         self._jobs_lock = threading.Lock()
+
+    def _resolve_query_graph_path(self, config: KnowledgeConfig) -> tuple[Path, str]:
+        if (
+            bool(getattr(config, "enrichment_pipeline_enabled", False))
+            and self.enriched_graph_path.exists()
+        ):
+            return self.enriched_graph_path, "l2_enriched"
+        return self.local_graph_path, "l1_raw"
+
+    def _resolve_graphify_query_graph_path(
+        self,
+        config: KnowledgeConfig,
+        graphify_cfg: Any,
+    ) -> tuple[str, str]:
+        configured_graph_path = str(getattr(graphify_cfg, "graph_path", "") or "").strip()
+        if (
+            bool(getattr(config, "enrichment_pipeline_enabled", False))
+            and self.enriched_graph_path.exists()
+        ):
+            return str(self.enriched_graph_path), "l2_enriched"
+        if configured_graph_path:
+            return configured_graph_path, "l1_raw"
+        return "", "l1_raw"
 
     @staticmethod
     def _translate_cypher_query_text(raw_query: str) -> str:
@@ -145,8 +173,17 @@ class GraphOpsManager:
         if engine == "graphify":
             graphify_cfg = getattr(config, "graphify", None)
             try:
+                graph_path_for_query, graph_layer = self._resolve_graphify_query_graph_path(
+                    config,
+                    graphify_cfg,
+                )
+                graphify_cfg_for_query = graphify_cfg
+                if graphify_cfg is not None and graph_path_for_query:
+                    graphify_cfg_for_query = graphify_cfg.model_copy(deep=True)
+                    graphify_cfg_for_query.graph_path = graph_path_for_query
+
                 records = graphify_query(
-                    config=graphify_cfg,  # type: ignore[arg-type]
+                    config=graphify_cfg_for_query,  # type: ignore[arg-type]
                     query_text=effective_query_text,
                     top_k=top_k,
                     dataset_scope=dataset_scope,
@@ -164,6 +201,8 @@ class GraphOpsManager:
                     summary=f"Returned {len(records)} graph-like records via Graphify.",
                     provenance={
                         "engine": engine,
+                        "layer": graph_layer,
+                        "graph_path": graph_path_for_query,
                         "dataset_scope": dataset_scope or [],
                         "project_scope": project_scope or [],
                         "include_global": include_global,
@@ -192,8 +231,9 @@ class GraphOpsManager:
         )
 
         if engine == "local_lexical":
+            graph_path, graph_layer = self._resolve_query_graph_path(config)
             local_graph_records = query_local_graph(
-                self.local_graph_path,
+                graph_path,
                 effective_query_text,
                 top_k,
             )
@@ -209,6 +249,8 @@ class GraphOpsManager:
                     summary=f"Returned {len(local_graph_records)} graph relations via local graph.",
                     provenance={
                         "engine": "local_graph",
+                        "layer": graph_layer,
+                        "graph_path": str(graph_path),
                         "dataset_scope": dataset_scope or [],
                         "project_scope": project_scope or [],
                         "include_global": include_global,
@@ -393,6 +435,18 @@ class GraphOpsManager:
                 "progress": 100 if str(memify_result.get("status") or "") == "succeeded" else 0,
                 "error": memify_result.get("error"),
                 "warnings": memify_result.get("warnings") or [],
+                "engine": memify_result.get("engine"),
+                "graph_path": memify_result.get("graph_path"),
+                "relation_count": memify_result.get("relation_count"),
+                "node_count": memify_result.get("node_count"),
+                "document_count": memify_result.get("document_count"),
+                "enrichment_status": memify_result.get("enrichment_status"),
+                "enrichment_warnings": memify_result.get("enrichment_warnings"),
+                "enriched_graph_path": memify_result.get("enriched_graph_path"),
+                "enrichment_quality_report_path": memify_result.get(
+                    "enrichment_quality_report_path",
+                ),
+                "enrichment_metrics": memify_result.get("enrichment_metrics"),
                 "finished_at": now,
                 "updated_at": now,
             },
@@ -470,6 +524,67 @@ class GraphOpsManager:
             "dataset_scope": dataset_scope or [],
             "dry_run": bool(dry_run),
         }
+
+        if (
+            status == "succeeded"
+            and not dry_run
+            and bool(getattr(config, "enrichment_pipeline_enabled", False))
+        ):
+            source_graph_path: Path | None = None
+            if engine == "local_lexical":
+                source_graph_path = self.local_graph_path
+            elif engine == "graphify":
+                graphify_cfg = getattr(config, "graphify", None)
+                configured_graph_path = str(getattr(graphify_cfg, "graph_path", "") or "").strip()
+                if configured_graph_path:
+                    source_graph_path = Path(configured_graph_path)
+
+            if source_graph_path is None or not source_graph_path.exists():
+                warnings.append("ENRICHMENT_SOURCE_GRAPH_NOT_FOUND")
+                response.update({
+                    "enrichment_status": "skipped",
+                    "enrichment_warnings": ["ENRICHMENT_SOURCE_GRAPH_NOT_FOUND"],
+                })
+            else:
+                try:
+                    enrichment_result = run_system_knowledge_enrichment(
+                        source_graph_path=source_graph_path,
+                        enriched_graph_path=self.enriched_graph_path,
+                        quality_report_path=self.enrichment_quality_report_path,
+                        pipeline_id=str(
+                            getattr(
+                                config,
+                                "enrichment_pipeline_id",
+                                "system-knowledge-enrichment-v1",
+                            )
+                            or "system-knowledge-enrichment-v1"
+                        ),
+                    )
+                    warnings.extend(enrichment_result.warnings)
+                    response.update(
+                        {
+                            "warnings": warnings,
+                            "enrichment_status": enrichment_result.status,
+                            "enrichment_warnings": enrichment_result.warnings,
+                            "enriched_graph_path": enrichment_result.enriched_graph_path,
+                            "enrichment_quality_report_path": enrichment_result.quality_report_path,
+                            "enrichment_metrics": enrichment_result.metrics,
+                        },
+                    )
+                except Exception as exc:
+                    warnings.append("ENRICHMENT_PIPELINE_FAILED")
+                    warnings.append(str(exc))
+                    response.update(
+                        {
+                            "warnings": warnings,
+                            "enrichment_status": "failed",
+                            "enrichment_warnings": [
+                                "ENRICHMENT_PIPELINE_FAILED",
+                                str(exc),
+                            ],
+                        },
+                    )
+
         if engine == "local_lexical":
             response.update(
                 {

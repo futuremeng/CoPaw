@@ -1351,6 +1351,10 @@ class KnowledgeConfig(BaseModel):
     allow_cypher_query: bool = Field(default=False)
     memify_enabled: bool = Field(default=False)
     triplet_search_enabled: bool = Field(default=False)
+    enrichment_pipeline_enabled: bool = Field(default=False)
+    enrichment_pipeline_id: str = Field(
+        default="system-knowledge-enrichment-v1",
+    )
 
 
 class SkillMarketSpec(BaseModel):
