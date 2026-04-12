@@ -122,9 +122,10 @@
 }
 
 .knowledgeDockSplitterPanel {
-  height: min(500px, calc(100vh - 140px));
+  height: 100%;
+  min-height: 0;
   max-height: 100%;
-  align-self: flex-start;
+  overflow: hidden;
 }
 
 .columnLeft {
@@ -619,6 +620,10 @@
 
 .projectKnowledgeExplorePane {
   overflow: hidden;
+}
+
+.projectKnowledgeSecondaryPanel.projectKnowledgeExplorePane {
+  overflow: auto;
 }
 
 .projectKnowledgePanelHeader {
@@ -1191,7 +1196,7 @@
 .knowledgeDockBody {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
 
   > * {
     height: 100%;
@@ -1268,7 +1273,7 @@
     flex-direction: column;
     height: 100%;
     min-height: 0;
-    overflow: auto;
+    overflow: hidden;
     padding: 0 4px 0 0;
   }
 }
