@@ -28,6 +28,7 @@ import {
   Splitter,
   Spin,
   Tabs,
+  Tooltip,
   Typography,
   message,
 } from "antd";
@@ -37,6 +38,7 @@ import type { MenuProps } from "antd";
 import type { ReactNode } from "react";
 import { agentsApi } from "../../../api/modules/agents";
 import { chatApi } from "../../../api/modules/chat";
+import { knowledgeApi } from "../../../api/modules/knowledge";
 import ProjectAutomationPanel from "./ProjectAutomationPanel";
 import ProjectChatPanel, {
   type ProjectChatAutoAttachRequest,
@@ -107,6 +109,12 @@ import type {
   PlatformFlowTemplateInfo,
   AgentSummary,
 } from "../../../api/types/agents";
+import type {
+  KnowledgeTaskProgress,
+  MemifyJobStatus,
+  ProjectKnowledgeSyncState,
+  QualityLoopJobStatus,
+} from "../../../api/types";
 import type { ChatSpec } from "../../../api/types/chat";
 import { useAgentStore } from "../../../stores/agentStore";
 import styles from "./index.module.less";
@@ -155,6 +163,8 @@ const DEFAULT_KNOWLEDGE_HEADER_SIGNALS: ProjectKnowledgeHeaderSignals = {
   qualityAssessmentScore: 0,
 };
 
+type RuntimeTaskDetail = MemifyJobStatus | QualityLoopJobStatus | ProjectKnowledgeSyncState | null;
+
 const STAGE_FILTERS: Record<ProjectStageKey, ProjectFileFilterKey[]> = {
   source: ["original", "derived"],
   knowledge: ["knowledgeCandidates", "markdown", "textLike", "recent"],
@@ -183,6 +193,81 @@ function resolveStageFromFilter(filter: ProjectFileFilterKey | ""): ProjectStage
     return "builtin";
   }
   return "source";
+}
+
+function getRuntimeTaskKey(task: KnowledgeTaskProgress): string {
+  return String(task.job_id || task.task_id || `${task.task_type || "task"}:${task.updated_at || ""}`);
+}
+
+function getRuntimeTaskLabel(taskType: string | undefined, translate: (key: string, fallback: string) => string): string {
+  switch (String(taskType || "")) {
+    case "project_sync":
+      return translate("projects.knowledge.runtimeTaskProjectSync", "Project Sync");
+    case "memify":
+      return translate("projects.knowledge.runtimeTaskMemify", "Graph Build");
+    case "quality_loop":
+      return translate("projects.knowledge.runtimeTaskQualityLoop", "Quality Loop");
+    case "history_backfill":
+      return translate("projects.knowledge.runtimeTaskHistoryBackfill", "History Backfill");
+    default:
+      return translate("projects.knowledge.runtimeTaskGeneric", "Knowledge Task");
+  }
+}
+
+function getRuntimeTaskStage(task: {
+  stage_message?: string;
+  current_stage?: string;
+  stage?: string;
+  status?: string;
+} | null | undefined): string {
+  return String(
+    task?.stage_message || task?.current_stage || task?.stage || task?.status || "",
+  ).trim();
+}
+
+function getRuntimeTaskPercent(task: {
+  percent?: number;
+  progress?: number;
+} | null | undefined): number | null {
+  if (typeof task?.percent === "number" && Number.isFinite(task.percent)) {
+    return Math.max(0, Math.min(100, Math.round(task.percent)));
+  }
+  if (typeof task?.progress === "number" && Number.isFinite(task.progress)) {
+    return Math.max(0, Math.min(100, Math.round(task.progress * 100)));
+  }
+  return null;
+}
+
+function getRuntimeBadgeStatus(status: string): "processing" | "success" | "warning" | "error" | "default" {
+  if (["running", "indexing", "graphifying", "pending", "queued"].includes(status)) {
+    return "processing";
+  }
+  if (["succeeded", "completed"].includes(status)) {
+    return "success";
+  }
+  if (status === "failed") {
+    return "error";
+  }
+  if (status === "idle") {
+    return "default";
+  }
+  return "warning";
+}
+
+function formatRuntimeTimestamp(value: string | null | undefined, locale: string): string {
+  if (!value) {
+    return "";
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+  return new Intl.DateTimeFormat(locale || undefined, {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(parsed);
 }
 
 function getLeafFilterIcon(filterKey: ProjectFileFilterKey): ReactNode {
@@ -429,7 +514,11 @@ function getRealtimeBadgeStatus(status: ProjectRealtimeConnectionStatus) {
 }
 
 export default function ProjectDetailPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const translateWithFallback = useCallback(
+    (key: string, fallback: string) => t(key, fallback),
+    [t],
+  );
   const location = useLocation();
   const navigate = useNavigate();
   const { projectId } = useParams<{ projectId?: string }>();
@@ -494,6 +583,10 @@ export default function ProjectDetailPage() {
   const [projectKnowledgeIncludeGlobal, setProjectKnowledgeIncludeGlobal] = useState(true);
   const [knowledgeHeaderSignals, setKnowledgeHeaderSignals] =
     useState<ProjectKnowledgeHeaderSignals>(DEFAULT_KNOWLEDGE_HEADER_SIGNALS);
+  const [runtimeSignalTooltipOpen, setRuntimeSignalTooltipOpen] = useState(false);
+  const [runtimeSignalLoading, setRuntimeSignalLoading] = useState(false);
+  const [runtimeSignalDetails, setRuntimeSignalDetails] =
+    useState<Record<string, RuntimeTaskDetail>>({});
   const [pendingKnowledgeQuery, setPendingKnowledgeQuery] = useState("");
   const [selectedMetricFilter, setSelectedMetricFilter] = useState<ProjectFileFilterKey | "">("");
   const [treeDisplayMode, setTreeDisplayMode] = useState<TreeDisplayMode>("filter");
@@ -541,7 +634,200 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     setKnowledgeHeaderSignals(DEFAULT_KNOWLEDGE_HEADER_SIGNALS);
     setPendingKnowledgeQuery("");
+    setRuntimeSignalTooltipOpen(false);
+    setRuntimeSignalLoading(false);
+    setRuntimeSignalDetails({});
   }, [selectedProject?.id]);
+
+  const fetchRuntimeSignalDetails = useCallback(async () => {
+    if (!selectedProject?.id || !projectKnowledgeState.activeKnowledgeTasks.length) {
+      setRuntimeSignalDetails({});
+      return;
+    }
+    setRuntimeSignalLoading(true);
+    try {
+      const entries = await Promise.all(
+        projectKnowledgeState.activeKnowledgeTasks.map(async (task) => {
+          const taskKey = getRuntimeTaskKey(task);
+          try {
+            if (task.task_type === "quality_loop" && task.job_id) {
+              return [
+                taskKey,
+                await knowledgeApi.getQualityLoopJobStatus(task.job_id, {
+                  projectId: selectedProject.id,
+                }),
+              ] as const;
+            }
+            if (task.task_type === "memify" && task.job_id) {
+              return [
+                taskKey,
+                await knowledgeApi.getMemifyJobStatus(task.job_id, {
+                  projectId: selectedProject.id,
+                }),
+              ] as const;
+            }
+            if (task.task_type === "project_sync") {
+              return [taskKey, projectKnowledgeState.syncState] as const;
+            }
+          } catch {
+            return [taskKey, null] as const;
+          }
+          return [taskKey, null] as const;
+        }),
+      );
+      setRuntimeSignalDetails(Object.fromEntries(entries));
+    } finally {
+      setRuntimeSignalLoading(false);
+    }
+  }, [projectKnowledgeState.activeKnowledgeTasks, projectKnowledgeState.syncState, selectedProject?.id]);
+
+  const runtimeSignalValue = useMemo(() => {
+    const primaryTask = projectKnowledgeState.activeKnowledgeTask;
+    if (!primaryTask) {
+      return t("projects.knowledge.runtimeStatusIdle", "Idle");
+    }
+    const taskLabel = getRuntimeTaskLabel(primaryTask.task_type, translateWithFallback);
+    const percent = getRuntimeTaskPercent(primaryTask);
+    const stageLabel = getRuntimeTaskStage(primaryTask);
+    return [
+      taskLabel,
+      typeof percent === "number" ? `${percent}%` : stageLabel,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }, [projectKnowledgeState.activeKnowledgeTask, t, translateWithFallback]);
+
+  const runtimeSignalTooltipContent = useMemo(() => {
+    const activeTasks = projectKnowledgeState.activeKnowledgeTasks;
+    if (!activeTasks.length) {
+      return (
+        <div className={styles.knowledgeRuntimeTooltip}>
+          <Text type="secondary">
+            {t("projects.knowledge.runtimeStatusNoDetails", "No active knowledge task.")}
+          </Text>
+        </div>
+      );
+    }
+
+    return (
+      <div className={styles.knowledgeRuntimeTooltip}>
+        <div className={styles.knowledgeRuntimeTooltipHeader}>
+          <Text strong>{t("projects.knowledge.signalRuntimeStatus", "Runtime")}</Text>
+          <Text type="secondary">
+            {t("projects.knowledge.runtimeStatusTaskCount", "{{count}} active", {
+              count: activeTasks.length,
+            })}
+          </Text>
+        </div>
+        {runtimeSignalLoading ? <Spin size="small" /> : null}
+        <div className={styles.knowledgeRuntimeTooltipList}>
+          {activeTasks.map((task) => {
+            const taskKey = getRuntimeTaskKey(task);
+            const detail = runtimeSignalDetails[taskKey];
+            const liveTask = detail || task;
+            const stageLabel = getRuntimeTaskStage(liveTask) || getRuntimeTaskStage(task);
+            const percent = getRuntimeTaskPercent(liveTask) ?? getRuntimeTaskPercent(task);
+            const current = typeof (liveTask as { current?: number }).current === "number"
+              ? (liveTask as { current?: number }).current
+              : task.current;
+            const total = typeof (liveTask as { total?: number }).total === "number"
+              ? (liveTask as { total?: number }).total
+              : task.total;
+            const updatedAt = formatRuntimeTimestamp(
+              (liveTask as { updated_at?: string | null }).updated_at || task.updated_at,
+              i18n.language,
+            );
+            const warnings = Array.isArray((liveTask as { warnings?: string[] }).warnings)
+              ? (liveTask as { warnings?: string[] }).warnings || []
+              : task.warnings || [];
+            const errorText = String(
+              (liveTask as { error?: string | null }).error
+                || ((detail as ProjectKnowledgeSyncState | null)?.last_error ?? "")
+                || task.error
+                || "",
+            ).trim();
+            const qualityLoopDetail = task.task_type === "quality_loop"
+              ? (detail as QualityLoopJobStatus | null)
+              : null;
+            const projectSyncDetail = task.task_type === "project_sync"
+              ? (detail as ProjectKnowledgeSyncState | null)
+              : null;
+            const scoreBefore = typeof qualityLoopDetail?.score_before === "number"
+              ? qualityLoopDetail.score_before
+              : null;
+            const scoreAfter = typeof qualityLoopDetail?.score_after === "number"
+              ? qualityLoopDetail.score_after
+              : null;
+            const delta = typeof qualityLoopDetail?.delta === "number"
+              ? qualityLoopDetail.delta
+              : null;
+            const stopReason = String(qualityLoopDetail?.stop_reason || "").trim();
+            const changedCount = typeof projectSyncDetail?.changed_count === "number"
+              ? projectSyncDetail.changed_count
+              : null;
+
+            return (
+              <div className={styles.knowledgeRuntimeTooltipItem} key={taskKey}>
+                <div className={styles.knowledgeRuntimeTooltipTitle}>
+                  <Text strong>{getRuntimeTaskLabel(task.task_type, translateWithFallback)}</Text>
+                  <Badge
+                    status={getRuntimeBadgeStatus(String(task.status || ""))}
+                    text={String(task.status || "")}
+                  />
+                </div>
+                {stageLabel ? (
+                  <Text className={styles.knowledgeRuntimeTooltipStage}>{stageLabel}</Text>
+                ) : null}
+                <div className={styles.knowledgeRuntimeTooltipMeta}>
+                  {typeof percent === "number" ? (
+                    <Text type="secondary">
+                      {t("projects.knowledge.runtimeStatusProgress", "Progress")}: {percent}%
+                    </Text>
+                  ) : null}
+                  {typeof current === "number" && typeof total === "number" ? (
+                    <Text type="secondary">{`${current}/${total}`}</Text>
+                  ) : null}
+                  {updatedAt ? (
+                    <Text type="secondary">
+                      {t("projects.knowledge.runtimeStatusUpdatedAt", "Updated")}: {updatedAt}
+                    </Text>
+                  ) : null}
+                  {typeof changedCount === "number" ? (
+                    <Text type="secondary">
+                      {t("projects.knowledge.syncChangedCount", "Changed files: {{count}}", { count: changedCount })}
+                    </Text>
+                  ) : null}
+                  {scoreBefore !== null && scoreAfter !== null ? (
+                    <Text type="secondary">{`${Math.round((scoreBefore ?? 0) * 100)} -> ${Math.round((scoreAfter ?? 0) * 100)}`}</Text>
+                  ) : null}
+                  {delta !== null ? (
+                    <Text type="secondary">
+                      {t("projects.knowledge.runtimeStatusScoreDelta", "Score delta")}: {(delta ?? 0) >= 0 ? "+" : ""}{Math.round((delta ?? 0) * 100)}
+                    </Text>
+                  ) : null}
+                </div>
+                {stopReason ? (
+                  <Text type="secondary">
+                    {t("projects.knowledge.runtimeStatusStopReason", "Stop reason")}: {stopReason}
+                  </Text>
+                ) : null}
+                {warnings.length ? (
+                  <Text type="secondary">
+                    {t("projects.knowledge.runtimeStatusWarnings", "Warnings")}: {warnings.join("; ")}
+                  </Text>
+                ) : null}
+                {errorText ? (
+                  <Text type="danger">
+                    {t("projects.knowledge.runtimeStatusError", "Error")}: {errorText}
+                  </Text>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }, [i18n.language, projectKnowledgeState.activeKnowledgeTasks, runtimeSignalDetails, runtimeSignalLoading, t, translateWithFallback]);
 
   const leaveConfirmText = useMemo(
     () =>
@@ -3399,6 +3685,25 @@ export default function ProjectDetailPage() {
                           {t("projects.knowledgePanelTitle")}
                         </Text>
                         <div className={styles.knowledgeModuleHeaderSignals}>
+                          <Tooltip
+                            title={runtimeSignalTooltipContent}
+                            trigger="hover"
+                            open={runtimeSignalTooltipOpen}
+                            onOpenChange={(open) => {
+                              setRuntimeSignalTooltipOpen(open);
+                              if (open) {
+                                void fetchRuntimeSignalDetails();
+                              }
+                            }}
+                            overlayClassName={styles.knowledgeRuntimeTooltipOverlay}
+                          >
+                            <div
+                              className={`${styles.knowledgeModuleHeaderSignal} ${projectKnowledgeState.activeKnowledgeTask ? styles.knowledgeModuleHeaderSignalActive : ""}`}
+                            >
+                              <Text type="secondary">{t("projects.knowledge.signalRuntimeStatus", "Runtime")}</Text>
+                              <Text strong>{runtimeSignalValue}</Text>
+                            </div>
+                          </Tooltip>
                           <div className={styles.knowledgeModuleHeaderSignal}>
                             <Text type="secondary">{t("projects.knowledge.signalIndexedCoverage")}</Text>
                             <Text strong>{`${Math.round(knowledgeHeaderSignals.indexedRatio * 100)}%`}</Text>

@@ -75,6 +75,7 @@ export interface ProjectKnowledgeState {
     options?: { force?: boolean },
   ) => Promise<KnowledgeSourceContent | null>;
   syncState: ProjectKnowledgeSyncState | null;
+  activeKnowledgeTasks: KnowledgeTaskProgress[];
   activeKnowledgeTask: KnowledgeTaskProgress | null;
   quantMetrics: ProjectKnowledgeMetrics;
   graphQueryText: string;
@@ -143,10 +144,7 @@ const ACTIVE_KNOWLEDGE_STATUSES = new Set([
   "graphifying",
 ]);
 
-function pickActiveKnowledgeTask(tasks: KnowledgeTaskProgress[]): KnowledgeTaskProgress | null {
-  if (!tasks.length) {
-    return null;
-  }
+function getActiveKnowledgeTasks(tasks: KnowledgeTaskProgress[]): KnowledgeTaskProgress[] {
   const priority = (task: KnowledgeTaskProgress): number => {
     const type = String(task.task_type || "");
     if (type === "project_sync") {
@@ -158,10 +156,13 @@ function pickActiveKnowledgeTask(tasks: KnowledgeTaskProgress[]): KnowledgeTaskP
     if (type === "history_backfill") {
       return 2;
     }
+    if (type === "quality_loop") {
+      return 3;
+    }
     return 9;
   };
 
-  const active = tasks
+  return tasks
     .filter((task) => ACTIVE_KNOWLEDGE_STATUSES.has(String(task.status || "")))
     .sort((left, right) => {
       const p = priority(left) - priority(right);
@@ -170,6 +171,10 @@ function pickActiveKnowledgeTask(tasks: KnowledgeTaskProgress[]): KnowledgeTaskP
       }
       return String(right.updated_at || "").localeCompare(String(left.updated_at || ""));
     });
+}
+
+function pickActiveKnowledgeTask(tasks: KnowledgeTaskProgress[]): KnowledgeTaskProgress | null {
+  const active = getActiveKnowledgeTasks(tasks);
   return active[0] || null;
 }
 
@@ -357,6 +362,7 @@ export function useProjectKnowledgeState(
   params: UseProjectKnowledgeStateParams,
 ): ProjectKnowledgeState {
   const { t } = useTranslation();
+  const { onSignalsChange } = params;
   const [sourceLoaded, setSourceLoaded] = useState(false);
   const [projectSources, setProjectSources] = useState<KnowledgeSourceItem[]>([]);
   const [selectedSourceId, setSelectedSourceId] = useState("");
@@ -375,6 +381,7 @@ export function useProjectKnowledgeState(
   const [trendSnapshots, setTrendSnapshots] = useState<ProjectKnowledgeTrendSnapshot[]>([]);
   const [trendExpanded, setTrendExpanded] = useState(true);
   const [syncState, setSyncState] = useState<ProjectKnowledgeSyncState | null>(null);
+  const [activeKnowledgeTasks, setActiveKnowledgeTasks] = useState<KnowledgeTaskProgress[]>([]);
   const [activeKnowledgeTask, setActiveKnowledgeTask] = useState<KnowledgeTaskProgress | null>(null);
   const refreshReasonRef = useRef("");
   const graphRefreshReasonRef = useRef("");
@@ -497,6 +504,7 @@ export function useProjectKnowledgeState(
     setGraphResult(null);
     setRelationKeywordSeed("");
     setActiveGraphNodeId(null);
+    setActiveKnowledgeTasks([]);
     setActiveKnowledgeTask(null);
     defaultExploreTokenRef.current = "";
     graphRefreshReasonRef.current = "";
@@ -545,6 +553,7 @@ export function useProjectKnowledgeState(
 
   useEffect(() => {
     if (!params.projectId) {
+      setActiveKnowledgeTasks([]);
       setActiveKnowledgeTask(null);
       return;
     }
@@ -553,6 +562,8 @@ export function useProjectKnowledgeState(
       .then((snapshot) => {
         if (!cancelled) {
           const tasks = Array.isArray(snapshot.tasks) ? snapshot.tasks : [];
+          const activeTasks = getActiveKnowledgeTasks(tasks);
+          setActiveKnowledgeTasks(activeTasks);
           setActiveKnowledgeTask(pickActiveKnowledgeTask(tasks));
         }
       })
@@ -671,6 +682,8 @@ export function useProjectKnowledgeState(
             const tasks = Array.isArray(snapshot?.tasks)
               ? (snapshot.tasks as KnowledgeTaskProgress[])
               : [];
+            const activeTasks = getActiveKnowledgeTasks(tasks);
+            setActiveKnowledgeTasks(activeTasks);
             setActiveKnowledgeTask(pickActiveKnowledgeTask(tasks));
           } catch {
             // ignore malformed websocket messages
@@ -914,7 +927,7 @@ export function useProjectKnowledgeState(
   }, [activeKnowledgeTask, syncState, t]);
 
   useEffect(() => {
-    params.onSignalsChange?.({
+    onSignalsChange?.({
       indexedRatio: quantMetrics.indexedRatio,
       documentCount: quantMetrics.documentCount,
       chunkCount: quantMetrics.chunkCount,
@@ -932,7 +945,7 @@ export function useProjectKnowledgeState(
     });
   }, [
     quantMetrics.entityCanonicalThreshold,
-    params.onSignalsChange,
+    onSignalsChange,
     quantMetrics.entityCount,
     quantMetrics.entityCanonicalCoverage,
     quantMetrics.chunkCount,
@@ -1062,6 +1075,7 @@ export function useProjectKnowledgeState(
     sourceContentLoadingById,
     loadSourceContent,
     syncState,
+    activeKnowledgeTasks,
     activeKnowledgeTask,
     quantMetrics,
     graphQueryText,

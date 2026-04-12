@@ -35,6 +35,7 @@ function buildKnowledgeState(projectId: string): ProjectKnowledgeState {
     sourceContentLoadingById: {},
     loadSourceContent: vi.fn().mockResolvedValue(null),
     syncState: null,
+    activeKnowledgeTasks: [],
     activeKnowledgeTask: null,
     quantMetrics: {
       totalSources: 1,

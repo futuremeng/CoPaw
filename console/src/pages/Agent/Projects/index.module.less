@@ -1180,6 +1180,61 @@
   }
 }
 
+.knowledgeModuleHeaderSignalActive {
+  border-color: rgba(95, 191, 159, 0.35);
+  background: linear-gradient(180deg, rgba(246, 255, 251, 0.98) 0%, rgba(236, 252, 245, 0.96) 100%);
+}
+
+.knowledgeRuntimeTooltipOverlay :global(.ant-tooltip-inner) {
+  max-width: 420px;
+}
+
+.knowledgeRuntimeTooltip {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.knowledgeRuntimeTooltipHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.knowledgeRuntimeTooltipList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.knowledgeRuntimeTooltipItem {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(167, 189, 255, 0.22);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(244, 248, 255, 0.95) 100%);
+}
+
+.knowledgeRuntimeTooltipTitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.knowledgeRuntimeTooltipStage {
+  color: #183153;
+}
+
+.knowledgeRuntimeTooltipMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
 .knowledgeModuleHeaderToggle {
   flex-shrink: 0;
   height: 28px;
