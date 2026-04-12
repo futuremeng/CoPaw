@@ -591,8 +591,11 @@
 }
 
 .projectKnowledgeWorkbenchSplit {
+  --project-knowledge-graph-head-height: 40px;
   display: grid;
   grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+  flex: 1;
+  height: 100%;
   gap: 6px;
   min-height: 0;
 
@@ -619,6 +622,9 @@
 }
 
 .projectKnowledgeExplorePane {
+  flex: 1;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -888,7 +894,10 @@
 }
 
 .projectKnowledgeEmpty {
+  flex: 1;
+  min-height: 0;
   display: flex;
+  align-items: center;
   justify-content: center;
   padding: 4px 0;
 }
@@ -2322,8 +2331,14 @@
     display: flex;
     flex-direction: column;
     flex: 1;
+    height: 100%;
     min-height: 0;
     overflow: hidden;
+  }
+
+  :global(.copaw-tabs-content-left) {
+    height: 100%;
+    min-height: 0;
   }
 
   :global(.ant-tabs-tabpane),
@@ -2331,6 +2346,7 @@
     display: flex;
     flex-direction: column;
     flex: 1;
+    height: 100%;
     min-height: 0;
     overflow: hidden;
   }
@@ -2340,6 +2356,7 @@
     display: flex;
     flex-direction: column;
     flex: 1;
+    height: 100%;
     min-height: 0;
     overflow: hidden;
   }

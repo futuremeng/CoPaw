@@ -253,6 +253,14 @@
   height: 100%;
 }
 
+.graphQueryTableWrap {
+  width: 100%;
+}
+
+.graphQueryTable {
+  width: 100%;
+}
+
 .graphQueryToolbarCompact {
   align-items: center;
 
@@ -263,7 +271,17 @@
 }
 
 .graphCardCompact {
+  --graph-card-head-height: var(--project-knowledge-graph-head-height, 40px);
   height: 100%;
+  display: flex;
+  flex-direction: column;
+
+  :global(.ant-card-head),
+  :global(.copaw-card-head) {
+    height: var(--graph-card-head-height);
+    flex: 0 0 var(--graph-card-head-height);
+    box-sizing: border-box;
+  }
 
   :global(.ant-card-head) {
     min-height: 40px;
@@ -278,12 +296,78 @@
     padding: 6px 0;
   }
 
-  :global(.ant-card-body) {
-    padding: 8px 10px 10px;
+  :global(.ant-card-body),
+  :global(.copaw-card-body) {
+    padding: 0;
+    height: calc(100% - var(--graph-card-head-height));
+    max-height: calc(100% - var(--graph-card-head-height));
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
 
   :global(.ant-table-pagination.ant-pagination) {
     margin: 8px 0 0;
+  }
+
+  .graphQueryTableWrap {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .graphQueryTable {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+
+    :global(.ant-table-wrapper),
+    :global(.copaw-table-wrapper),
+    :global(.ant-spin-nested-loading),
+    :global(.ant-spin-container),
+    :global(.ant-table),
+    :global(.copaw-table),
+    :global(.ant-table-container),
+    :global(.copaw-table-container) {
+      height: 100%;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    :global(.ant-table-header),
+    :global(.copaw-table-header) {
+      flex: 0 0 auto;
+    }
+
+    :global(.ant-table-body),
+    :global(.copaw-table-body) {
+      flex: 1;
+      min-height: 0;
+      overflow: auto !important;
+    }
+
+    :global(.ant-table-thead > tr > th),
+    :global(.copaw-table-thead > tr > th) {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: #fff;
+    }
+  }
+
+  .graphCanvasWrap {
+    flex: 1;
+    min-height: 0;
+    border-radius: 0;
+  }
+
+  .graphCanvas {
+    height: 100%;
+    min-height: 0;
   }
 }
 

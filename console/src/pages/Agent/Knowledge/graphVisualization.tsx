@@ -272,6 +272,59 @@ function buildEdgeColor(weight: number): string {
   return "#389e0d";
 }
 
+function basenameLike(input: string): string {
+  const text = String(input || "").trim();
+  if (!text) {
+    return "";
+  }
+  const slash = text.lastIndexOf("/");
+  const backslash = text.lastIndexOf("\\");
+  const splitIndex = Math.max(slash, backslash);
+  return splitIndex >= 0 ? text.slice(splitIndex + 1) : text;
+}
+
+function shortenLabel(input: string, maxLength: number): string {
+  const text = String(input || "").trim();
+  if (!text) {
+    return "";
+  }
+  const base = basenameLike(text);
+  if (base.length <= maxLength) {
+    return base;
+  }
+  return `${base.slice(0, Math.max(1, maxLength - 3))}...`;
+}
+
+function nodeVisualSizeFromScore(score: number): number {
+  const s = Number.isFinite(score) ? score : 0;
+  return 16 + Math.min(20, Math.max(0, s * 14));
+}
+
+function buildInitialSpreadPositions(
+  count: number,
+  width: number,
+  height: number,
+): Array<{ x: number; y: number }> {
+  if (count <= 0) {
+    return [];
+  }
+
+  const centerX = width / 2;
+  const centerY = height / 2;
+  const maxRadius = Math.max(80, Math.min(width, height) * 0.42);
+  const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+
+  return Array.from({ length: count }, (_, index) => {
+    const ratio = Math.sqrt((index + 1) / count);
+    const radius = maxRadius * ratio;
+    const theta = index * goldenAngle;
+    return {
+      x: centerX + Math.cos(theta) * radius,
+      y: centerY + Math.sin(theta) * radius,
+    };
+  });
+}
+
 export function GraphQueryResults(props: GraphQueryResultsProps) {
   const { t } = useTranslation();
   const [filterText, setFilterText] = useState("");
@@ -443,30 +496,37 @@ export function GraphQueryResults(props: GraphQueryResultsProps) {
         {viewModels.records.length === 0 ? (
           <Empty description={t("knowledge.graphQuery.noResults")} />
         ) : (
-          <Table
-            columns={columns}
-            dataSource={viewModels.records}
-            rowKey="id"
-            rowClassName={(record) =>
-              props.activeNodeId === subjectToNodeId(record.subject)
-                ? styles.graphTableRowSelected
-                : ""
-            }
-            onRow={(record) => ({
-              onClick: () => {
-                props.onRecordClick?.(subjectToNodeId(record.subject));
-              },
-            })}
-            pagination={{
-              size: "small",
-              pageSize,
-              onChange: (_, size) => setPageSize(size),
-              showSizeChanger: true,
-              pageSizeOptions: ["10", "20", "50", "100"],
-            }}
-            size="small"
-            scroll={{ x: 1200 }}
-          />
+          <div className={styles.graphQueryTableWrap}>
+            <Table
+              className={styles.graphQueryTable}
+              columns={columns}
+              dataSource={viewModels.records}
+              rowKey="id"
+              rowClassName={(record) =>
+                props.activeNodeId === subjectToNodeId(record.subject)
+                  ? styles.graphTableRowSelected
+                  : ""
+              }
+              onRow={(record) => ({
+                onClick: () => {
+                  props.onRecordClick?.(subjectToNodeId(record.subject));
+                },
+              })}
+              pagination={{
+                size: "small",
+                pageSize,
+                onChange: (_, size) => setPageSize(size),
+                showSizeChanger: true,
+                pageSizeOptions: ["10", "20", "50", "100"],
+              }}
+              sticky={props.compact}
+              size="small"
+              scroll={{
+                x: 1200,
+                y: props.compact ? "calc(100% - 52px)" : undefined,
+              }}
+            />
+          </div>
         )}
       </Card>
     </div>
@@ -1053,12 +1113,24 @@ export function GraphVisualization(props: GraphVisualizationProps) {
 
       const width = containerRef.current.clientWidth || 800;
       const height = 440;
+      const nodeCount = graphData.nodes.length;
+      const denseGraph = nodeCount > 70;
+      const hideNodeLabels = nodeCount > 48;
+      const hideEdgeLabels = nodeCount > 28;
+      const initialPositions = buildInitialSpreadPositions(
+        graphData.nodes.length,
+        width,
+        height,
+      );
       const g6Data = {
-          nodes: graphData.nodes.map((node) => ({
+          nodes: graphData.nodes.map((node, index) => ({
           id: node.id,
+          x: initialPositions[index]?.x,
+          y: initialPositions[index]?.y,
           data: {
             label: node.label,
             score: Number(node.score || 0),
+            visualSize: nodeVisualSizeFromScore(Number(node.score || 0)),
             type: node.type,
             source_id: node.source_id,
             document_path: node.document_path,
@@ -1087,21 +1159,49 @@ export function GraphVisualization(props: GraphVisualizationProps) {
           container: containerRef.current,
           width,
           height,
-          autoFit: "view",
+          autoFit: denseGraph ? "center" : "view",
           data: g6Data,
           layout: {
-            type: "force",
-            preventOverlap: true,
-            nodeStrength: -300,
-            edgeStrength: 0.08,
-            linkDistance: 160,
+            type: "d3-force",
+            center: { x: width / 2, y: height / 2 },
+            link: {
+              distance: (edge: { source?: { data?: { visualSize?: number } }; target?: { data?: { visualSize?: number } } }) => {
+                const sourceSize = Number(edge?.source?.data?.visualSize || 22);
+                const targetSize = Number(edge?.target?.data?.visualSize || 22);
+                return sourceSize + targetSize + 26;
+              },
+            },
+            collide: {
+              radius: (node: { data?: { visualSize?: number } }) => Number(node?.data?.visualSize || 22) + 8,
+            },
+            manyBody: {
+              strength: (node: { data?: { visualSize?: number } }) => -6 * Number(node?.data?.visualSize || 22),
+            },
+            animation: false,
+            iterations: 320,
           },
-          behaviors: ["drag-canvas", "zoom-canvas", "drag-element"],
+          behaviors: [
+            "drag-canvas",
+            "zoom-canvas",
+            "drag-element",
+            {
+              type: "hover-activate",
+              enable: (e: { targetType?: string }) => e?.targetType === "node",
+              degree: 1,
+              inactiveState: "inactive",
+            },
+            {
+              type: "fix-element-size",
+              keyShape: true,
+              label: true,
+            },
+            "auto-adapt-label",
+          ],
           animation: false,
           node: {
             type: "circle",
             style: (datum: {
-              data?: { label?: string; score?: number; type?: string; isIsolated?: boolean };
+              data?: { label?: string; score?: number; visualSize?: number; type?: string; isIsolated?: boolean };
             }) => {
               const score = Number(datum?.data?.score || 0);
               const group = getNodeGroupId("", String(datum?.data?.type || ""));
@@ -1111,13 +1211,15 @@ export function GraphVisualization(props: GraphVisualizationProps) {
                 currentColorMode === "type"
                   ? nodeTypeColorMapRef.current.get(group) || "#1677ff"
                   : buildWeightColor(score);
-              const size = 22 + Math.min(30, Math.max(0, score * 20));
+              const size = Number(datum?.data?.visualSize || nodeVisualSizeFromScore(score));
+              const rawLabel = String(datum?.data?.label || "");
+              const displayLabel = hideNodeLabels ? "" : shortenLabel(rawLabel, 24);
               return {
                 size,
                 lineWidth: 1,
                 fill: `${baseFill}${isIsolated ? "14" : "22"}`,
                 stroke: baseFill,
-                labelText: datum?.data?.label || "",
+                labelText: displayLabel,
                 labelPlacement: "bottom",
                 labelFontSize: 11,
                 opacity: isIsolated ? 0.55 : 1,
@@ -1126,6 +1228,10 @@ export function GraphVisualization(props: GraphVisualizationProps) {
               };
             },
             state: {
+              inactive: {
+                opacity: 0.25,
+                label: false,
+              },
               dim: {
                 opacity: 0.18,
               },
@@ -1156,17 +1262,23 @@ export function GraphVisualization(props: GraphVisualizationProps) {
             type: "line",
             style: (datum: { data?: { label?: string; strength?: number } }) => {
               const strength = Number(datum?.data?.strength || 0.5);
+              const rawEdgeLabel = String(datum?.data?.label || "");
+              const displayEdgeLabel = hideEdgeLabels ? "" : shortenLabel(rawEdgeLabel, 18);
               return {
               stroke: buildEdgeColor(strength),
               lineWidth: 0.8 + strength * 2,
               endArrow: true,
-              labelText: datum?.data?.label || "",
-              labelBackground: true,
+              labelText: displayEdgeLabel,
+              labelBackground: !hideEdgeLabels,
               labelFontSize: 10,
               labelFill: "#8c8c8c",
             };
             },
             state: {
+              inactive: {
+                opacity: 0.08,
+                label: false,
+              },
               dim: {
                 opacity: 0.12,
               },
