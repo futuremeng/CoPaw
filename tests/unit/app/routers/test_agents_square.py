@@ -7,6 +7,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from copaw.app.project_realtime_events import collect_project_realtime_changes
 from copaw.app.routers import agents as agents_router_module
 from copaw.config.config import (
     AgentProfileConfig,
@@ -753,6 +754,16 @@ def test_square_import_bundle_toggles_skip_skills_and_tools(
     assert activation_summary["builtin_tools_enabled"] == []
     assert activation_summary["flow_description_count"] == 1
     assert activation_summary["flow_count"] == 1
+
+    project_id = activation_summary["project_id"]
+    project_dir = workspace_dir / "projects" / project_id
+    latest_event_id, changed_paths = collect_project_realtime_changes(
+        project_dir,
+        project_id,
+        0,
+    )
+    assert latest_event_id >= 1
+    assert any(path.startswith("flows/") for path in changed_paths)
 
 
 def test_square_import_bundle_can_skip_flow_descriptions(

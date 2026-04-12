@@ -6,6 +6,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from copaw.app.project_realtime_events import collect_project_realtime_changes
 from copaw.app.routers import agents as agents_router_module
 from copaw.app.routers.agents import (
     CreateProjectRequest,
@@ -85,6 +86,12 @@ def test_distill_draft_endpoint_is_idempotent(
     project_artifact_router_client: tuple[TestClient, Path, str],
 ):
     client, workspace_dir, project_id = project_artifact_router_client
+    project_dir = workspace_dir / "projects" / project_id
+    baseline_event_id, _ = collect_project_realtime_changes(
+        project_dir,
+        project_id,
+        0,
+    )
 
     first = client.post(
         f"/agents/default/projects/{project_id}/artifacts/skills/distill-draft",
@@ -107,6 +114,14 @@ def test_distill_draft_endpoint_is_idempotent(
     assert len(summary.artifact_profile.skills) == 2
     for item in summary.artifact_profile.skills:
         assert item.status == "draft"
+
+    latest_event_id, changed_paths = collect_project_realtime_changes(
+        project_dir,
+        project_id,
+        baseline_event_id,
+    )
+    assert latest_event_id > baseline_event_id
+    assert "PROJECT.md" in changed_paths
 
 
 def test_confirm_stable_endpoint_returns_404_for_missing_artifact(
@@ -165,7 +180,7 @@ def test_upload_project_file_triggers_auto_knowledge_sync(
     project_artifact_router_client: tuple[TestClient, Path, str],
     monkeypatch: pytest.MonkeyPatch,
 ):
-    client, _workspace_dir, project_id = project_artifact_router_client
+    client, workspace_dir, project_id = project_artifact_router_client
     calls: list[tuple[str, list[str] | None, str]] = []
 
     monkeypatch.setattr(
@@ -186,6 +201,14 @@ def test_upload_project_file_triggers_auto_knowledge_sync(
     payload = response.json()
     assert payload["path"] == "original/brief.txt"
     assert calls == [(project_id, ["original/brief.txt"], "project_upload")]
+
+    latest_event_id, changed_paths = collect_project_realtime_changes(
+        workspace_dir / "projects" / project_id,
+        project_id,
+        0,
+    )
+    assert latest_event_id >= 1
+    assert "original/brief.txt" in changed_paths
 
 
 def test_list_project_files_endpoint_offloads_to_thread(
@@ -302,6 +325,16 @@ def test_create_project_uses_builtin_template_fallbacks(
         / "SKILL.md"
     ).exists()
 
+    latest_event_id, changed_paths = collect_project_realtime_changes(
+        project_dir,
+        project.id,
+        0,
+    )
+    assert latest_event_id >= 1
+    assert "PROJECT.md" in changed_paths
+    assert "AGENTS.md" in changed_paths
+    assert "data/README.md" in changed_paths
+
 
 def test_create_project_defaults_auto_knowledge_sink_enabled(tmp_path: Path):
     project = _create_project(
@@ -315,6 +348,33 @@ def test_create_project_defaults_auto_knowledge_sink_enabled(tmp_path: Path):
     summary = _load_project_summary(tmp_path / "projects" / project.id)
     assert summary is not None
     assert summary.project_auto_knowledge_sink is True
+
+
+def test_clone_project_records_realtime_event(
+    project_artifact_router_client: tuple[TestClient, Path, str],
+):
+    client, workspace_dir, project_id = project_artifact_router_client
+
+    response = client.post(
+        f"/agents/default/projects/{project_id}/clone",
+        json={"target_name": "Project Demo Clone"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    cloned_project_id = payload["id"]
+    cloned_project_dir = workspace_dir / "projects" / cloned_project_id
+
+    latest_event_id, changed_paths = collect_project_realtime_changes(
+        cloned_project_dir,
+        cloned_project_id,
+        0,
+    )
+
+    assert latest_event_id >= 1
+    assert "PROJECT.md" in changed_paths
+    assert "skills/quick_start.md" in changed_paths
+    assert (cloned_project_dir / "skills" / "quick_start.md").exists()
 
 
 def test_distill_draft_uses_conversation_evidence_mode(

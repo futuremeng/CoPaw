@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from collections.abc import Sequence
 from threading import Lock
 from typing import Any
 
@@ -113,36 +114,59 @@ def _resolve_project_path_context(
     workspace_dir: Path | str | None,
     target_path: Path | str,
 ) -> tuple[str, Path, str] | None:
-    if workspace_dir is None:
-        return None
-
-    workspace_path = Path(workspace_dir).expanduser().resolve()
-    projects_dir = workspace_path / "projects"
     target = Path(target_path).expanduser().resolve(strict=False)
 
-    try:
-        relative_to_projects = target.relative_to(projects_dir)
-    except Exception:
-        return None
+    if workspace_dir is not None:
+        workspace_path = Path(workspace_dir).expanduser().resolve()
+        projects_dir = workspace_path / "projects"
 
-    parts = relative_to_projects.parts
-    if len(parts) < 2:
-        return None
+        try:
+            relative_to_projects = target.relative_to(projects_dir)
+        except Exception:
+            return None
 
-    project_id = str(parts[0] or "").strip()
-    if not project_id:
-        return None
+        parts = relative_to_projects.parts
+        if len(parts) < 2:
+            return None
 
-    relative_path = Path(*parts[1:]).as_posix()
-    if not relative_path or relative_path.startswith(".knowledge/"):
-        return None
+        project_id = str(parts[0] or "").strip()
+        if not project_id:
+            return None
 
-    return project_id, projects_dir / project_id, relative_path
+        relative_path = Path(*parts[1:]).as_posix()
+        if not relative_path or relative_path.startswith(".knowledge/"):
+            return None
+
+        return project_id, projects_dir / project_id, relative_path
+
+    for projects_dir in target.parents:
+        if projects_dir.name != "projects":
+            continue
+        try:
+            relative_to_projects = target.relative_to(projects_dir)
+        except Exception:
+            continue
+
+        parts = relative_to_projects.parts
+        if len(parts) < 2:
+            continue
+
+        project_id = str(parts[0] or "").strip()
+        if not project_id:
+            continue
+
+        relative_path = Path(*parts[1:]).as_posix()
+        if not relative_path or relative_path.startswith(".knowledge/"):
+            continue
+
+        return project_id, projects_dir / project_id, relative_path
+
+    return None
 
 
 def record_project_realtime_paths(
     workspace_dir: Path | str | None,
-    absolute_paths: list[str | Path],
+    absolute_paths: Sequence[str | Path],
 ) -> None:
     grouped: dict[tuple[str, str], list[str]] = {}
 

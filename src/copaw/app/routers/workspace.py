@@ -14,6 +14,8 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, UploadFile, File, Request
 from fastapi.responses import StreamingResponse
 
+from ..project_realtime_events import record_project_realtime_paths
+
 
 router = APIRouter(prefix="/workspace", tags=["workspace"])
 
@@ -70,7 +72,19 @@ def _validate_zip_data(data: bytes, workspace_dir: Path) -> None:
                 )
 
 
-def _extract_and_merge_zip(data: bytes, workspace_dir: Path) -> None:
+def _collect_extracted_file_destinations(
+    extract_root: Path,
+    workspace_dir: Path,
+) -> list[Path]:
+    changed_paths: list[Path] = []
+    for source in extract_root.rglob("*"):
+        if not source.is_file():
+            continue
+        changed_paths.append(workspace_dir / source.relative_to(extract_root))
+    return changed_paths
+
+
+def _extract_and_merge_zip(data: bytes, workspace_dir: Path) -> list[Path]:
     """Extract zip data and merge into workspace_dir (blocking operation)."""
     tmp_dir = None
     try:
@@ -83,6 +97,11 @@ def _extract_and_merge_zip(data: bytes, workspace_dir: Path) -> None:
         if len(top_entries) == 1 and top_entries[0].is_dir():
             extract_root = top_entries[0]
 
+        changed_paths = _collect_extracted_file_destinations(
+            extract_root,
+            workspace_dir,
+        )
+
         workspace_dir.mkdir(parents=True, exist_ok=True)
 
         for item in extract_root.iterdir():
@@ -93,15 +112,16 @@ def _extract_and_merge_zip(data: bytes, workspace_dir: Path) -> None:
                 if dest.exists() and dest.is_file():
                     dest.unlink()
                 shutil.copytree(item, dest, dirs_exist_ok=True)
+        return changed_paths
     finally:
         if tmp_dir and tmp_dir.is_dir():
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
-def _validate_and_extract_zip(data: bytes, workspace_dir: Path) -> None:
+def _validate_and_extract_zip(data: bytes, workspace_dir: Path) -> list[Path]:
     """Validate and extract zip data (blocking operation)."""
     _validate_zip_data(data, workspace_dir)
-    _extract_and_merge_zip(data, workspace_dir)
+    return _extract_and_merge_zip(data, workspace_dir)
 
 
 # ---------------------------------------------------------------------------
@@ -191,7 +211,16 @@ async def upload_workspace(
     data = await file.read()
 
     try:
-        await asyncio.to_thread(_validate_and_extract_zip, data, workspace_dir)
+        changed_paths = await asyncio.to_thread(
+            _validate_and_extract_zip,
+            data,
+            workspace_dir,
+        )
+        await asyncio.to_thread(
+            record_project_realtime_paths,
+            workspace_dir,
+            changed_paths,
+        )
         return {"success": True}
     except HTTPException:
         raise

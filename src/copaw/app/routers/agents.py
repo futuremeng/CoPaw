@@ -62,6 +62,7 @@ from ...knowledge.project_sync import (
     DEFAULT_PROJECT_SYNC_DEBOUNCE_SECONDS,
     ensure_project_source_registered,
 )
+from ..project_realtime_events import record_project_realtime_paths
 
 logger = logging.getLogger(__name__)
 
@@ -1887,6 +1888,7 @@ def _write_project_frontmatter(
     ).strip()
     text = f"---\n{serialized}\n---\n\n{(body or '').strip()}\n"
     metadata_file.write_text(text, encoding="utf-8")
+    record_project_realtime_paths(None, [metadata_file])
 
 
 def _clone_project(
@@ -1945,6 +1947,10 @@ def _clone_project(
         tags.append("cloned")
     metadata["tags"] = tags
     _write_project_frontmatter(metadata_file, metadata, content_body)
+    record_project_realtime_paths(
+        None,
+        [path for path in target_dir.rglob("*") if path.is_file()],
+    )
 
     summary = _load_project_summary(target_dir)
     if summary is None:
@@ -2002,6 +2008,10 @@ def _create_project(
     body_text = (body.description or "").strip() or f"# {project_name}"
     _write_project_frontmatter(metadata_file, metadata, body_text)
     _scaffold_project_governance_files(project_dir, data_subdir)
+    record_project_realtime_paths(
+        None,
+        [path for path in project_dir.rglob("*") if path.is_file()],
+    )
 
     summary = _load_project_summary(project_dir)
     if summary is None:
@@ -2672,6 +2682,7 @@ def _activate_import_bundle(
             artifact_file = project_dir / flow_item.artifact_file_path
             artifact_file.parent.mkdir(parents=True, exist_ok=True)
             artifact_file.write_text(flow_content + "\n", encoding="utf-8")
+            record_project_realtime_paths(None, [artifact_file])
 
             if all(existing.id != flow_item.id for existing in profile.flows):
                 profile.flows.append(flow_item)
@@ -4114,6 +4125,10 @@ async def upload_agent_project_file(
             Path(workspace.workspace_dir), projectId
         )
         uploaded = _upload_project_file(project_dir, file, target_dir)
+        record_project_realtime_paths(
+            workspace.workspace_dir,
+            [project_dir / uploaded.path],
+        )
         try:
             _maybe_start_project_auto_knowledge_sync(
                 workspace,

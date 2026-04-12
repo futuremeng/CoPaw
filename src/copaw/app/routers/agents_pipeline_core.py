@@ -16,6 +16,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
 from ...config.config import generate_short_agent_id
+from ..project_realtime_events import record_project_realtime_paths
 
 logger = logging.getLogger(__name__)
 
@@ -254,7 +255,7 @@ class PlatformTemplateVersionRecord(BaseModel):
 
 
 def _pipeline_now_iso() -> str:
-    return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def _parse_pipeline_iso(ts: str | None) -> datetime | None:
@@ -1215,6 +1216,7 @@ def _import_platform_template_to_project(
         json.dumps(template_doc, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
+    record_project_realtime_paths(None, [target])
 
     return ProjectFlowInstanceInfo(
         id=instance_id,
@@ -2501,6 +2503,7 @@ def _persist_project_pipeline_run(project_dir: Path, run: PipelineRunDetail, tem
     run_dir.mkdir(parents=True, exist_ok=True)
 
     manifest_steps: list[dict[str, Any]] = []
+    changed_paths: list[Path] = []
     shared_artifacts = run.artifacts[:8]
     for idx, step in enumerate(run.steps):
         output_paths = shared_artifacts if idx == len(run.steps) - 1 else []
@@ -2510,6 +2513,12 @@ def _persist_project_pipeline_run(project_dir: Path, run: PipelineRunDetail, tem
             step,
             run.updated_at,
             output_paths,
+        )
+        changed_paths.extend(
+            [
+                run_dir / artifact_manifest_rel,
+                run_dir / metric_pack_rel,
+            ]
         )
 
         manifest_steps.append(
@@ -2556,6 +2565,8 @@ def _persist_project_pipeline_run(project_dir: Path, run: PipelineRunDetail, tem
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
+    changed_paths.append(manifest_path)
+    record_project_realtime_paths(None, changed_paths)
 
 
 def _build_pipeline_artifact_records(
