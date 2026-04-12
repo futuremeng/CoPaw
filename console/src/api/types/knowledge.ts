@@ -289,6 +289,49 @@ export interface MemifyStartResponse {
   reason?: string;
 }
 
+export interface QualityLoopStartRequest {
+  max_rounds?: number;
+  dry_run?: boolean;
+  dataset_scope?: string[];
+  project_id?: string;
+}
+
+export interface QualityLoopStartResponse {
+  accepted: boolean;
+  job_id: string;
+  status_url: string;
+  estimated_rounds?: number;
+  reason?: string;
+}
+
+export interface QualityLoopJobStatus {
+  job_id: string;
+  task_type?: string;
+  status: string;
+  stage?: string;
+  current_stage?: string;
+  stage_message?: string;
+  progress?: number;
+  percent?: number;
+  current?: number;
+  total?: number;
+  updated_at?: string | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+  stop_reason?: string;
+  score_before?: number | null;
+  score_after?: number | null;
+  delta?: number | null;
+  rounds?: Array<Record<string, unknown>>;
+  warnings?: string[];
+  error?: string | null;
+}
+
+export interface QualityLoopJobsListResponse {
+  items: QualityLoopJobStatus[];
+  count: number;
+}
+
 export interface MemifyJobStatus {
   job_id: string;
   task_type?: string;

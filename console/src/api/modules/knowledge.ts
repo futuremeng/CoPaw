@@ -17,6 +17,10 @@ import type {
   MemifyJobStatus,
   MemifyStartRequest,
   MemifyStartResponse,
+  QualityLoopJobStatus,
+  QualityLoopJobsListResponse,
+  QualityLoopStartRequest,
+  QualityLoopStartResponse,
   ProjectKnowledgeSyncRunRequest,
   ProjectKnowledgeSyncRunResponse,
   ProjectKnowledgeSyncState,
@@ -243,6 +247,39 @@ export const knowledgeApi = {
     request<MemifyJobStatus>(
       withProjectId(
         `/knowledge/memify/jobs/${encodeURIComponent(jobId)}`,
+        options?.projectId,
+      ),
+    ),
+
+  startQualityLoop: (payload?: QualityLoopStartRequest) =>
+    request<QualityLoopStartResponse>(
+      withProjectId("/knowledge/quality-loop/run", payload?.project_id),
+      {
+        method: "POST",
+        body: JSON.stringify({
+          max_rounds: payload?.max_rounds ?? 3,
+          dry_run: payload?.dry_run ?? false,
+          dataset_scope: payload?.dataset_scope ?? [],
+        }),
+      },
+    ),
+
+  getQualityLoopJobStatus: (jobId: string, options?: { projectId?: string }) =>
+    request<QualityLoopJobStatus>(
+      withProjectId(
+        `/knowledge/quality-loop/jobs/${encodeURIComponent(jobId)}`,
+        options?.projectId,
+      ),
+    ),
+
+  listQualityLoopJobs: (options?: {
+    projectId?: string;
+    activeOnly?: boolean;
+    limit?: number;
+  }) =>
+    request<QualityLoopJobsListResponse>(
+      withProjectId(
+        `/knowledge/quality-loop/jobs?active_only=${options?.activeOnly ? "true" : "false"}&limit=${Math.max(1, Math.min(50, Number(options?.limit) || 10))}`,
         options?.projectId,
       ),
     ),

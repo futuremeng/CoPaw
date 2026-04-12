@@ -372,6 +372,92 @@ def test_get_memify_job_status_offloads_status_read_to_thread(
     assert calls[0][0].__name__ == "get_memify_status"
 
 
+def test_run_quality_loop_offloads_run_to_thread(
+    knowledge_api_client: TestClient,
+    monkeypatch,
+):
+    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload["enabled"] = True
+    config_payload["memify_enabled"] = True
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    class _FakeGraphOps:
+        def run_quality_self_drive(self, **kwargs):
+            return {
+                "accepted": True,
+                "job_id": "quality-threaded",
+                "status_url": "/knowledge/quality-loop/jobs/quality-threaded",
+                "estimated_rounds": kwargs.get("max_rounds", 0),
+            }
+
+    original_to_thread = knowledge_router_module.asyncio.to_thread
+    calls: list[tuple[object, tuple[object, ...]]] = []
+
+    async def fake_to_thread(func, /, *args, **kwargs):
+        calls.append((func, args))
+        return await original_to_thread(func, *args, **kwargs)
+
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "_graph_ops_for_workspace",
+        lambda *_args, **_kwargs: _FakeGraphOps(),
+    )
+    monkeypatch.setattr(knowledge_router_module.asyncio, "to_thread", fake_to_thread)
+
+    response = knowledge_api_client.post(
+        "/knowledge/quality-loop/run",
+        json={"max_rounds": 4, "dry_run": True, "dataset_scope": ["project:demo"]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["job_id"] == "quality-threaded"
+    assert calls
+    assert calls[0][0].__name__ == "run_quality_self_drive"
+
+
+def test_get_quality_loop_job_status_offloads_status_read_to_thread(
+    knowledge_api_client: TestClient,
+    monkeypatch,
+):
+    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload["enabled"] = True
+    config_payload["memify_enabled"] = True
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    class _FakeGraphOps:
+        def get_quality_loop_status(self, job_id):
+            return {
+                "job_id": job_id,
+                "task_type": "quality_loop",
+                "status": "succeeded",
+                "progress": 100,
+                "stage": "completed",
+            }
+
+    original_to_thread = knowledge_router_module.asyncio.to_thread
+    calls: list[tuple[object, tuple[object, ...]]] = []
+
+    async def fake_to_thread(func, /, *args, **kwargs):
+        calls.append((func, args))
+        return await original_to_thread(func, *args, **kwargs)
+
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "_graph_ops_for_workspace",
+        lambda *_args, **_kwargs: _FakeGraphOps(),
+    )
+    monkeypatch.setattr(knowledge_router_module.asyncio, "to_thread", fake_to_thread)
+
+    response = knowledge_api_client.get("/knowledge/quality-loop/jobs/quality-threaded")
+
+    assert response.status_code == 200
+    assert response.json()["job_id"] == "quality-threaded"
+    assert calls
+    assert calls[0][0].__name__ == "get_quality_loop_status"
+
+
 def test_restore_knowledge_backup_offloads_filesystem_copy_to_thread(
     knowledge_api_client: TestClient,
     monkeypatch,

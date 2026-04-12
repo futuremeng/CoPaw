@@ -54,6 +54,8 @@ def _collect_knowledge_tasks_snapshot(
     )
     active_memify_jobs = graph_ops.list_memify_jobs(active_only=True, limit=5)
     tasks.extend(active_memify_jobs)
+    active_quality_jobs = graph_ops.list_quality_loop_jobs(active_only=True, limit=3)
+    tasks.extend(active_quality_jobs)
     recent_memify_jobs = graph_ops.list_memify_jobs(active_only=False, limit=10)
     latest_terminal_memify = next(
         (
@@ -806,6 +808,72 @@ async def get_memify_job_status(job_id: str, request: Request):
     payload = await asyncio.to_thread(manager.get_memify_status, normalized_job_id)
     if payload is None:
         raise HTTPException(status_code=404, detail="MEMIFY_JOB_NOT_FOUND")
+    return payload
+
+
+@router.post("/quality-loop/run")
+async def run_quality_loop(
+    request: Request,
+    max_rounds: int = Body(default=3),
+    dry_run: bool = Body(default=False),
+    dataset_scope: list[str] | None = Body(default=None),
+):
+    config, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    _ensure_knowledge_enabled_flag(knowledge_config.enabled)
+    if not bool(getattr(knowledge_config, "memify_enabled", False)):
+        raise HTTPException(status_code=400, detail="MEMIFY_DISABLED")
+
+    manager = _graph_ops_for_workspace(
+        workspace_dir,
+        project_id=_resolve_project_id(request),
+    )
+    return await asyncio.to_thread(
+        manager.run_quality_self_drive,
+        config=knowledge_config,
+        dataset_scope=dataset_scope,
+        project_id=_resolve_project_id(request),
+        max_rounds=max_rounds,
+        dry_run=bool(dry_run),
+    )
+
+
+@router.get("/quality-loop/jobs")
+async def list_quality_loop_jobs(
+    request: Request,
+    active_only: bool = Query(default=False),
+    limit: int = Query(default=10, ge=1, le=50),
+):
+    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    manager = _graph_ops_for_workspace(
+        workspace_dir,
+        project_id=_resolve_project_id(request),
+    )
+    jobs = await asyncio.to_thread(
+        manager.list_quality_loop_jobs,
+        active_only=bool(active_only),
+        limit=limit,
+    )
+    return {
+        "items": jobs,
+        "count": len(jobs),
+    }
+
+
+@router.get("/quality-loop/jobs/{job_id}")
+async def get_quality_loop_job_status(job_id: str, request: Request):
+    normalized_job_id = (job_id or "").strip()
+    if not normalized_job_id:
+        raise HTTPException(status_code=400, detail="QUALITY_LOOP_JOB_ID_REQUIRED")
+
+    _, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    _ensure_knowledge_enabled_flag(knowledge_config.enabled)
+    manager = _graph_ops_for_workspace(
+        workspace_dir,
+        project_id=_resolve_project_id(request),
+    )
+    payload = await asyncio.to_thread(manager.get_quality_loop_status, normalized_job_id)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="QUALITY_LOOP_JOB_NOT_FOUND")
     return payload
 
 

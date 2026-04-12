@@ -9,6 +9,7 @@ graph-provider implementations (for example, Cognee/Graphify).
 from __future__ import annotations
 
 import json
+import math
 import re
 import threading
 import uuid
@@ -51,12 +52,434 @@ class GraphOpsManager:
         self.knowledge_dirname = knowledge_dirname
         self.knowledge_root = self.working_dir / knowledge_dirname
         self.memify_jobs_path = self.knowledge_root / "memify-jobs.json"
+        self.quality_loop_jobs_path = self.knowledge_root / "quality-loop-jobs.json"
         self.local_graph_path = self.knowledge_root / "graphify-out" / "graph.json"
         self.enriched_graph_path = self.knowledge_root / "graphify-out" / "graph.enriched.json"
         self.enrichment_quality_report_path = (
             self.knowledge_root / "graphify-out" / "enrichment-quality-report.json"
         )
         self._jobs_lock = threading.Lock()
+        self._quality_jobs_lock = threading.Lock()
+
+    @staticmethod
+    def _normalize_quality_loop_patch(patch: dict[str, Any]) -> dict[str, Any]:
+        stage = str(patch.get("stage") or patch.get("current_stage") or "pending").strip() or "pending"
+        percent = int(max(0, min(100, int(patch.get("progress", patch.get("percent", 0)) or 0))))
+        normalized = {
+            **patch,
+            "task_type": "quality_loop",
+            "current_stage": stage,
+            "stage": stage,
+            "progress": percent,
+            "percent": percent,
+            "current": int(patch.get("current") or 0),
+            "total": int(patch.get("total") or 0),
+            "stage_message": str(patch.get("stage_message") or "").strip(),
+        }
+        return normalized
+
+    @staticmethod
+    def _clamp(value: float, minimum: float, maximum: float) -> float:
+        return max(minimum, min(maximum, value))
+
+    @classmethod
+    def _safe_ratio(cls, numerator: float, denominator: float) -> float:
+        if denominator <= 0:
+            return 0.0
+        return cls._clamp(numerator / denominator, 0.0, 1.0)
+
+    def _derive_adaptive_thresholds(
+        self,
+        *,
+        relation_count: int,
+        entity_count: int,
+    ) -> dict[str, float]:
+        relation_scale = math.log10(max(10, relation_count))
+        entity_scale = math.log10(max(10, entity_count))
+        return {
+            "relation_normalization_threshold": self._clamp(0.48 + relation_scale * 0.08, 0.5, 0.82),
+            "entity_canonical_threshold": self._clamp(0.45 + entity_scale * 0.08, 0.48, 0.8),
+            "low_confidence_threshold": self._clamp(0.28 - relation_scale * 0.03, 0.12, 0.28),
+            "missing_evidence_threshold": self._clamp(0.30 - relation_scale * 0.03, 0.15, 0.30),
+        }
+
+    def _build_quality_snapshot(self, payload: dict[str, Any]) -> dict[str, Any]:
+        relation_count = int(payload.get("relation_count") or 0)
+        entity_count = int(payload.get("node_count") or payload.get("entity_count") or 0)
+        document_count = int(payload.get("document_count") or 0)
+        enrichment_metrics = payload.get("enrichment_metrics") or {}
+        if not isinstance(enrichment_metrics, dict):
+            enrichment_metrics = {}
+
+        edge_count = int(enrichment_metrics.get("edge_count") or relation_count)
+        node_count = int(enrichment_metrics.get("node_count") or entity_count)
+        relation_normalized_count = int(enrichment_metrics.get("relation_normalized_count") or 0)
+        entity_canonicalized_count = int(enrichment_metrics.get("entity_canonicalized_count") or 0)
+        low_confidence_edges = int(enrichment_metrics.get("low_confidence_edges") or 0)
+        missing_evidence_edges = int(enrichment_metrics.get("missing_evidence_edges") or 0)
+
+        relation_normalization_coverage = self._safe_ratio(relation_normalized_count, edge_count)
+        entity_canonical_coverage = self._safe_ratio(entity_canonicalized_count, node_count)
+        low_confidence_ratio = self._safe_ratio(low_confidence_edges, edge_count)
+        missing_evidence_ratio = self._safe_ratio(missing_evidence_edges, edge_count)
+
+        thresholds = self._derive_adaptive_thresholds(
+            relation_count=relation_count,
+            entity_count=entity_count,
+        )
+        pass_flags = {
+            "relation_normalization": relation_normalization_coverage >= thresholds["relation_normalization_threshold"],
+            "entity_canonical": entity_canonical_coverage >= thresholds["entity_canonical_threshold"],
+            "low_confidence": low_confidence_ratio <= thresholds["low_confidence_threshold"],
+            "missing_evidence": missing_evidence_ratio <= thresholds["missing_evidence_threshold"],
+        }
+
+        normalized_scores = [
+            self._safe_ratio(relation_normalization_coverage, thresholds["relation_normalization_threshold"]),
+            self._safe_ratio(entity_canonical_coverage, thresholds["entity_canonical_threshold"]),
+            self._clamp(1 - self._safe_ratio(low_confidence_ratio, thresholds["low_confidence_threshold"]), 0.0, 1.0),
+            self._clamp(1 - self._safe_ratio(missing_evidence_ratio, thresholds["missing_evidence_threshold"]), 0.0, 1.0),
+        ]
+        quality_score = sum(normalized_scores) / len(normalized_scores)
+
+        return {
+            "document_count": document_count,
+            "relation_count": relation_count,
+            "entity_count": entity_count,
+            "relation_normalization_coverage": relation_normalization_coverage,
+            "entity_canonical_coverage": entity_canonical_coverage,
+            "low_confidence_ratio": low_confidence_ratio,
+            "missing_evidence_ratio": missing_evidence_ratio,
+            "thresholds": thresholds,
+            "pass_flags": pass_flags,
+            "quality_score": quality_score,
+        }
+
+    @staticmethod
+    def _build_quality_actions(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
+        thresholds = snapshot.get("thresholds") or {}
+        pass_flags = snapshot.get("pass_flags") or {}
+        actions: list[dict[str, Any]] = []
+        if not bool(pass_flags.get("relation_normalization")):
+            actions.append(
+                {
+                    "action": "strengthen_relation_normalization",
+                    "expected_metric": "relation_normalization_coverage",
+                    "target": thresholds.get("relation_normalization_threshold"),
+                }
+            )
+        if not bool(pass_flags.get("entity_canonical")):
+            actions.append(
+                {
+                    "action": "strengthen_entity_canonicalization",
+                    "expected_metric": "entity_canonical_coverage",
+                    "target": thresholds.get("entity_canonical_threshold"),
+                }
+            )
+        if not bool(pass_flags.get("low_confidence")):
+            actions.append(
+                {
+                    "action": "prune_low_confidence_edges",
+                    "expected_metric": "low_confidence_ratio",
+                    "target": thresholds.get("low_confidence_threshold"),
+                }
+            )
+        if not bool(pass_flags.get("missing_evidence")):
+            actions.append(
+                {
+                    "action": "backfill_missing_evidence",
+                    "expected_metric": "missing_evidence_ratio",
+                    "target": thresholds.get("missing_evidence_threshold"),
+                }
+            )
+        return actions
+
+    def _pick_latest_memify_result(self) -> dict[str, Any] | None:
+        jobs = self.list_memify_jobs(active_only=False, limit=20)
+        for job in jobs:
+            if str(job.get("status") or "") != "succeeded":
+                continue
+            if int(job.get("relation_count") or 0) <= 0 and int(job.get("node_count") or 0) <= 0:
+                continue
+            return job
+        return None
+
+    def run_quality_self_drive(
+        self,
+        *,
+        config: KnowledgeConfig,
+        dataset_scope: list[str] | None,
+        project_id: str | None,
+        max_rounds: int,
+        dry_run: bool,
+    ) -> dict[str, Any]:
+        with self._quality_jobs_lock:
+            jobs = self._load_quality_loop_jobs()
+            active = next(
+                (
+                    item
+                    for item in jobs.values()
+                    if str(item.get("status") or "") in {"pending", "running"}
+                ),
+                None,
+            )
+            if isinstance(active, dict):
+                return {
+                    "accepted": False,
+                    "job_id": str(active.get("job_id") or ""),
+                    "status_url": f"/knowledge/quality-loop/jobs/{active.get('job_id')}",
+                    "reason": "QUALITY_LOOP_ALREADY_RUNNING",
+                }
+
+            rounds = max(1, min(8, int(max_rounds or 1)))
+            job_id = uuid.uuid4().hex[:12]
+            now = datetime.now(UTC).isoformat()
+            payload = {
+                "job_id": job_id,
+                "task_type": "quality_loop",
+                "status": "pending",
+                "stage": "pending",
+                "current_stage": "pending",
+                "stage_message": "Waiting to start quality loop",
+                "progress": 0,
+                "percent": 0,
+                "current": 0,
+                "total": rounds,
+                "max_rounds": rounds,
+                "dry_run": bool(dry_run),
+                "dataset_scope": dataset_scope or [],
+                "project_id": str(project_id or ""),
+                "rounds": [],
+                "score_before": None,
+                "score_after": None,
+                "delta": None,
+                "stop_reason": "",
+                "warnings": [],
+                "error": None,
+                "updated_at": now,
+                "started_at": None,
+                "finished_at": None,
+            }
+            jobs[job_id] = payload
+            self._save_quality_loop_jobs(jobs)
+
+        worker = threading.Thread(
+            target=self._run_quality_loop_job,
+            args=(job_id, config, dataset_scope, rounds, dry_run),
+            daemon=True,
+        )
+        worker.start()
+        return {
+            "accepted": True,
+            "job_id": job_id,
+            "status_url": f"/knowledge/quality-loop/jobs/{job_id}",
+            "estimated_rounds": rounds,
+        }
+
+    def _run_quality_loop_job(
+        self,
+        job_id: str,
+        config: KnowledgeConfig,
+        dataset_scope: list[str] | None,
+        max_rounds: int,
+        dry_run: bool,
+    ) -> None:
+        now = datetime.now(UTC).isoformat()
+        self._patch_quality_loop_job(
+            job_id,
+            self._normalize_quality_loop_patch(
+                {
+                    "status": "running",
+                    "stage": "observe",
+                    "stage_message": "Collecting baseline quality snapshot",
+                    "started_at": now,
+                    "updated_at": now,
+                }
+            ),
+        )
+
+        rounds: list[dict[str, Any]] = []
+        warnings: list[str] = []
+        stop_reason = "MAX_ROUNDS_REACHED"
+        previous_score: float | None = None
+        stagnation_rounds = 0
+
+        baseline_payload = self._pick_latest_memify_result()
+        if baseline_payload is None:
+            warnings.append("NO_BASELINE_MEMIFY_RESULT")
+            baseline_snapshot = self._build_quality_snapshot({})
+        else:
+            baseline_snapshot = self._build_quality_snapshot(baseline_payload)
+
+        score_before = float(baseline_snapshot.get("quality_score") or 0.0)
+
+        for round_index in range(max_rounds):
+            round_no = round_index + 1
+            before_snapshot = baseline_snapshot if round_index == 0 else rounds[-1]["after"]
+            actions = self._build_quality_actions(before_snapshot)
+
+            stage_message = f"Round {round_no}: planning quality improvements"
+            progress = int((round_index / max_rounds) * 100)
+            self._patch_quality_loop_job(
+                job_id,
+                self._normalize_quality_loop_patch(
+                    {
+                        "status": "running",
+                        "stage": "plan",
+                        "stage_message": stage_message,
+                        "current": round_no,
+                        "total": max_rounds,
+                        "progress": progress,
+                        "updated_at": datetime.now(UTC).isoformat(),
+                    }
+                ),
+            )
+
+            if not actions:
+                after_snapshot = before_snapshot
+                stop_reason = "QUALITY_TARGET_MET"
+            elif dry_run:
+                after_snapshot = before_snapshot
+                warnings.append("QUALITY_LOOP_DRY_RUN_NO_EXECUTION")
+            else:
+                execution_result = self.execute_memify_once(
+                    config=config,
+                    pipeline_type="full",
+                    dataset_scope=dataset_scope,
+                    dry_run=False,
+                    job_id=None,
+                    progress_callback=None,
+                )
+                if str(execution_result.get("status") or "") != "succeeded":
+                    stop_reason = "MEMIFY_EXECUTION_FAILED"
+                    warnings.extend(
+                        [
+                            str(item)
+                            for item in (execution_result.get("warnings") or [])
+                            if str(item).strip()
+                        ]
+                    )
+                    rounds.append(
+                        {
+                            "round": round_no,
+                            "before": before_snapshot,
+                            "actions": actions,
+                            "after": before_snapshot,
+                            "delta": 0.0,
+                            "status": "failed",
+                            "error": execution_result.get("error") or "MEMIFY_EXECUTION_FAILED",
+                        }
+                    )
+                    break
+                after_snapshot = self._build_quality_snapshot(execution_result)
+
+            current_score = float(after_snapshot.get("quality_score") or 0.0)
+            before_score = float(before_snapshot.get("quality_score") or 0.0)
+            delta = current_score - before_score
+            rounds.append(
+                {
+                    "round": round_no,
+                    "before": before_snapshot,
+                    "actions": actions,
+                    "after": after_snapshot,
+                    "delta": delta,
+                    "status": "succeeded",
+                }
+            )
+
+            if all(bool(v) for v in (after_snapshot.get("pass_flags") or {}).values()):
+                stop_reason = "QUALITY_TARGET_MET"
+                break
+
+            if previous_score is not None and current_score <= previous_score + 0.005:
+                stagnation_rounds += 1
+            else:
+                stagnation_rounds = 0
+            previous_score = current_score
+            if stagnation_rounds >= 2:
+                stop_reason = "QUALITY_STAGNATED"
+                break
+
+        score_after = float((rounds[-1]["after"]["quality_score"] if rounds else score_before) or 0.0)
+        delta_total = score_after - score_before
+        final_status = "failed" if stop_reason == "MEMIFY_EXECUTION_FAILED" else "succeeded"
+        finished = datetime.now(UTC).isoformat()
+        self._patch_quality_loop_job(
+            job_id,
+            self._normalize_quality_loop_patch(
+                {
+                    "status": final_status,
+                    "stage": "completed" if final_status == "succeeded" else "failed",
+                    "stage_message": "Quality loop finished" if final_status == "succeeded" else "Quality loop failed",
+                    "current": len(rounds),
+                    "total": max_rounds,
+                    "progress": 100 if final_status == "succeeded" else max(0, min(95, int(len(rounds) * 100 / max_rounds))),
+                    "rounds": rounds,
+                    "score_before": score_before,
+                    "score_after": score_after,
+                    "delta": delta_total,
+                    "stop_reason": stop_reason,
+                    "warnings": warnings,
+                    "finished_at": finished,
+                    "updated_at": finished,
+                }
+            ),
+        )
+
+    def _patch_quality_loop_job(self, job_id: str, patch: dict[str, Any]) -> None:
+        with self._quality_jobs_lock:
+            jobs = self._load_quality_loop_jobs()
+            job = jobs.get(job_id)
+            if not isinstance(job, dict):
+                return
+            job.update(patch)
+            jobs[job_id] = job
+            self._save_quality_loop_jobs(jobs)
+
+    def get_quality_loop_status(self, job_id: str) -> dict[str, Any] | None:
+        jobs = self._load_quality_loop_jobs()
+        payload = jobs.get(job_id)
+        if not isinstance(payload, dict):
+            return None
+        return self._normalize_quality_loop_patch(payload)
+
+    def list_quality_loop_jobs(
+        self,
+        *,
+        active_only: bool = False,
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
+        jobs = [
+            self._normalize_quality_loop_patch(job)
+            for job in self._load_quality_loop_jobs().values()
+            if isinstance(job, dict)
+        ]
+        if active_only:
+            jobs = [
+                job for job in jobs if str(job.get("status") or "") in {"pending", "running"}
+            ]
+        jobs.sort(key=lambda item: str(item.get("updated_at") or ""), reverse=True)
+        if isinstance(limit, int) and limit > 0:
+            jobs = jobs[:limit]
+        return jobs
+
+    def _load_quality_loop_jobs(self) -> dict[str, dict[str, Any]]:
+        if not self.quality_loop_jobs_path.exists():
+            return {}
+        try:
+            payload = json.loads(self.quality_loop_jobs_path.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+        if not isinstance(payload, dict):
+            return {}
+        return {str(k): v for k, v in payload.items() if isinstance(v, dict)}
+
+    def _save_quality_loop_jobs(self, jobs: dict[str, dict[str, Any]]) -> None:
+        self.knowledge_root.mkdir(parents=True, exist_ok=True)
+        self.quality_loop_jobs_path.write_text(
+            json.dumps(jobs, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
 
     def _resolve_query_graph_path(self, config: KnowledgeConfig) -> tuple[Path, str]:
         if self.enriched_graph_path.exists():
