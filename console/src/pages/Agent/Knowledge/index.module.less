@@ -313,13 +313,25 @@
   height: 440px;
 }
 
+.graphStatusPopover {
+  :global(.ant-popover-inner) {
+    padding: 10px 12px;
+    border-radius: 10px;
+  }
+}
+
+.graphStatusPanel {
+  width: min(520px, calc(100vw - 48px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .graphSummaryText {
-  margin-top: 8px;
   display: inline-block;
 }
 
 .graphEntityStatsRow {
-  margin-top: 8px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -339,7 +351,6 @@
 }
 
 .graphLegendRow {
-  margin-top: 8px;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -384,7 +395,6 @@
 }
 
 .graphInsightRow {
-  margin-top: 8px;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 8px;
@@ -516,7 +526,6 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: 8px;
   flex-wrap: wrap;
 }
 

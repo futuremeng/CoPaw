@@ -6,6 +6,7 @@ import {
   Input,
   Modal,
   message,
+  Popover,
   Select,
   Slider,
   Space,
@@ -1272,44 +1273,8 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     );
   }
 
-  return (
-    <Card
-      className={compact ? styles.graphCardCompact : undefined}
-      title={t("knowledge.graphQuery.visualization")}
-      extra={
-        <Space size={compact ? 4 : 8}>
-          <Tooltip title={t("knowledge.graphQuery.zoomIn")}>
-            <Button size={compact ? "small" : "middle"} icon={<PlusOutlined />} onClick={handleZoomIn}>
-              {compact ? null : t("knowledge.graphQuery.zoomIn")}
-            </Button>
-          </Tooltip>
-          <Tooltip title={t("knowledge.graphQuery.zoomOut")}>
-            <Button size={compact ? "small" : "middle"} icon={<MinusOutlined />} onClick={handleZoomOut}>
-              {compact ? null : t("knowledge.graphQuery.zoomOut")}
-            </Button>
-          </Tooltip>
-          <Tooltip title={t("knowledge.graphQuery.fitView")}>
-            <Button size={compact ? "small" : "middle"} icon={<AimOutlined />} onClick={handleFitView}>
-              {compact ? null : t("knowledge.graphQuery.fitView")}
-            </Button>
-          </Tooltip>
-          <Tooltip title={t("knowledge.graphQuery.advancedSettings", "高级设置")}>
-            <Button size={compact ? "small" : "middle"} onClick={() => setAdvancedSettingsOpen(true)}>
-              {compact ? t("knowledge.graphQuery.advancedSettingsShort", "设置") : t("knowledge.graphQuery.advancedSettings", "高级设置")}
-            </Button>
-          </Tooltip>
-          <Tooltip title={t("knowledge.graphQuery.export")}>
-            <Button size={compact ? "small" : "middle"} icon={<ExportOutlined />} onClick={handleExport}>
-              {compact ? null : t("knowledge.graphQuery.export")}
-            </Button>
-          </Tooltip>
-        </Space>
-      }
-      loading={loading}
-    >
-      <div className={styles.graphCanvasWrap}>
-        <div ref={containerRef} className={styles.graphCanvas} />
-      </div>
+  const statusPopoverContent = (
+    <div className={styles.graphStatusPanel}>
       <div className={styles.graphLegendRow}>
         <Typography.Text type="secondary">
           {t("knowledge.graphQuery.colorMode", "Color Mode")}: {colorMode === "type" ? t("knowledge.graphQuery.colorModeType", "Type") : t("knowledge.graphQuery.colorModeWeight", "Weight")}
@@ -1393,6 +1358,57 @@ export function GraphVisualization(props: GraphVisualizationProps) {
             </button>
           );
         })}
+      </div>
+    </div>
+  );
+
+  return (
+    <Card
+      className={compact ? styles.graphCardCompact : undefined}
+      title={t("knowledge.graphQuery.visualization")}
+      extra={
+        <Space size={compact ? 4 : 8}>
+          <Tooltip title={t("knowledge.graphQuery.zoomIn")}>
+            <Button size={compact ? "small" : "middle"} icon={<PlusOutlined />} onClick={handleZoomIn}>
+              {compact ? null : t("knowledge.graphQuery.zoomIn")}
+            </Button>
+          </Tooltip>
+          <Tooltip title={t("knowledge.graphQuery.zoomOut")}>
+            <Button size={compact ? "small" : "middle"} icon={<MinusOutlined />} onClick={handleZoomOut}>
+              {compact ? null : t("knowledge.graphQuery.zoomOut")}
+            </Button>
+          </Tooltip>
+          <Tooltip title={t("knowledge.graphQuery.fitView")}>
+            <Button size={compact ? "small" : "middle"} icon={<AimOutlined />} onClick={handleFitView}>
+              {compact ? null : t("knowledge.graphQuery.fitView")}
+            </Button>
+          </Tooltip>
+          <Popover
+            trigger="hover"
+            placement="bottomRight"
+            overlayClassName={styles.graphStatusPopover}
+            content={statusPopoverContent}
+          >
+            <Button size={compact ? "small" : "middle"}>
+              {t("knowledge.graphQuery.status", "状态")}
+            </Button>
+          </Popover>
+          <Tooltip title={t("knowledge.graphQuery.advancedSettings", "高级设置")}>
+            <Button size={compact ? "small" : "middle"} onClick={() => setAdvancedSettingsOpen(true)}>
+              {compact ? t("knowledge.graphQuery.advancedSettingsShort", "设置") : t("knowledge.graphQuery.advancedSettings", "高级设置")}
+            </Button>
+          </Tooltip>
+          <Tooltip title={t("knowledge.graphQuery.export")}>
+            <Button size={compact ? "small" : "middle"} icon={<ExportOutlined />} onClick={handleExport}>
+              {compact ? null : t("knowledge.graphQuery.export")}
+            </Button>
+          </Tooltip>
+        </Space>
+      }
+      loading={loading}
+    >
+      <div className={styles.graphCanvasWrap}>
+        <div ref={containerRef} className={styles.graphCanvas} />
       </div>
       {focusedNodeId ? (
         <div className={styles.graphEntityPanel}>
