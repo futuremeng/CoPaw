@@ -148,6 +148,11 @@ const DEFAULT_KNOWLEDGE_HEADER_SIGNALS: ProjectKnowledgeHeaderSignals = {
   entityCanonicalCoverage: 0,
   lowConfidenceRatio: 0,
   missingEvidenceRatio: 0,
+  relationNormalizationThreshold: 0,
+  entityCanonicalThreshold: 0,
+  lowConfidenceThreshold: 0,
+  missingEvidenceThreshold: 0,
+  qualityAssessmentScore: 0,
 };
 
 const STAGE_FILTERS: Record<ProjectStageKey, ProjectFileFilterKey[]> = {
@@ -3415,20 +3420,32 @@ export default function ProjectDetailPage() {
                             <Text strong>{String(knowledgeHeaderSignals.entityCount)}</Text>
                           </div>
                           <div className={styles.knowledgeModuleHeaderSignal}>
+                            <Text type="secondary">{t("projects.knowledge.signalQualityScore", "Quality Score")}</Text>
+                            <Text strong>{`${Math.round(knowledgeHeaderSignals.qualityAssessmentScore * 100)}`}</Text>
+                          </div>
+                          <div className={styles.knowledgeModuleHeaderSignal}>
                             <Text type="secondary">{t("knowledge.quantRelationNormalizationCoverage")}</Text>
-                            <Text strong>{`${Math.round(knowledgeHeaderSignals.relationNormalizationCoverage * 100)}%`}</Text>
+                            <Text strong>
+                              {`${Math.round(knowledgeHeaderSignals.relationNormalizationCoverage * 100)}% / >=${Math.round(knowledgeHeaderSignals.relationNormalizationThreshold * 100)}%`}
+                            </Text>
                           </div>
                           <div className={styles.knowledgeModuleHeaderSignal}>
                             <Text type="secondary">{t("knowledge.quantEntityCanonicalCoverage")}</Text>
-                            <Text strong>{`${Math.round(knowledgeHeaderSignals.entityCanonicalCoverage * 100)}%`}</Text>
+                            <Text strong>
+                              {`${Math.round(knowledgeHeaderSignals.entityCanonicalCoverage * 100)}% / >=${Math.round(knowledgeHeaderSignals.entityCanonicalThreshold * 100)}%`}
+                            </Text>
                           </div>
                           <div className={styles.knowledgeModuleHeaderSignal}>
                             <Text type="secondary">{t("knowledge.quantLowConfidenceRatio")}</Text>
-                            <Text strong>{`${Math.round(knowledgeHeaderSignals.lowConfidenceRatio * 100)}%`}</Text>
+                            <Text strong>
+                              {`${Math.round(knowledgeHeaderSignals.lowConfidenceRatio * 100)}% / <=${Math.round(knowledgeHeaderSignals.lowConfidenceThreshold * 100)}%`}
+                            </Text>
                           </div>
                           <div className={styles.knowledgeModuleHeaderSignal}>
                             <Text type="secondary">{t("knowledge.quantMissingEvidenceRatio")}</Text>
-                            <Text strong>{`${Math.round(knowledgeHeaderSignals.missingEvidenceRatio * 100)}%`}</Text>
+                            <Text strong>
+                              {`${Math.round(knowledgeHeaderSignals.missingEvidenceRatio * 100)}% / <=${Math.round(knowledgeHeaderSignals.missingEvidenceThreshold * 100)}%`}
+                            </Text>
                           </div>
                         </div>
                       </div>

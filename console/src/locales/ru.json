@@ -1789,6 +1789,7 @@
       "signalDocuments": "Документы",
       "signalChunks": "Чанки",
       "signalCoverage": "Покрытие",
+      "signalQualityScore": "Оценка качества",
       "signalRelations": "Связи",
       "entities": "Сущности",
       "signalDelta": "Изменение: {{value}}",

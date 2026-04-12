@@ -1793,6 +1793,7 @@
       "signalDocuments": "文档数",
       "signalChunks": "切片数",
       "signalCoverage": "覆盖率",
+      "signalQualityScore": "质量评分",
       "signalRelations": "关系数",
       "entities": "实体数",
       "signalDelta": "变化：{{value}}",

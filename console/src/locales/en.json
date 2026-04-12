@@ -1834,6 +1834,7 @@
       "signalDocuments": "Documents",
       "signalChunks": "Chunks",
       "signalCoverage": "Coverage",
+      "signalQualityScore": "Quality Score",
       "signalRelations": "Relations",
       "entities": "Entities",
       "signalDelta": "Delta: {{value}}",

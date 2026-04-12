@@ -1789,6 +1789,7 @@
       "signalDocuments": "ドキュメント数",
       "signalChunks": "チャンク数",
       "signalCoverage": "カバレッジ",
+      "signalQualityScore": "品質スコア",
       "signalRelations": "関係数",
       "entities": "エンティティ数",
       "signalDelta": "変化: {{value}}",

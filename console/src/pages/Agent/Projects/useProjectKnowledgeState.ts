@@ -25,6 +25,11 @@ export interface ProjectKnowledgeHeaderSignals {
   entityCanonicalCoverage: number;
   lowConfidenceRatio: number;
   missingEvidenceRatio: number;
+  relationNormalizationThreshold: number;
+  entityCanonicalThreshold: number;
+  lowConfidenceThreshold: number;
+  missingEvidenceThreshold: number;
+  qualityAssessmentScore: number;
 }
 
 export interface ProjectKnowledgeTrendSnapshot {
@@ -47,6 +52,11 @@ export interface ProjectKnowledgeMetrics {
   entityCanonicalCoverage: number;
   lowConfidenceRatio: number;
   missingEvidenceRatio: number;
+  relationNormalizationThreshold: number;
+  entityCanonicalThreshold: number;
+  lowConfidenceThreshold: number;
+  missingEvidenceThreshold: number;
+  qualityAssessmentScore: number;
 }
 
 export type ProjectKnowledgeInsightAction = "settings" | "query" | "healthy";
@@ -337,6 +347,10 @@ function safeRatio(numerator: number, denominator: number): number {
     return 0;
   }
   return Math.max(0, Math.min(1, numerator / denominator));
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }
 
 export function useProjectKnowledgeState(
@@ -826,6 +840,26 @@ export function useProjectKnowledgeState(
     const lowConfidenceRatio = safeRatio(lowConfidenceEdges, edgeCount);
     const missingEvidenceRatio = safeRatio(missingEvidenceEdges, edgeCount);
 
+    const relationScale = Math.log10(Math.max(10, relationCount));
+    const entityScale = Math.log10(Math.max(10, entityCount));
+    const relationNormalizationThreshold = clamp(0.48 + relationScale * 0.08, 0.5, 0.82);
+    const entityCanonicalThreshold = clamp(0.45 + entityScale * 0.08, 0.48, 0.8);
+    const lowConfidenceThreshold = clamp(0.28 - relationScale * 0.03, 0.12, 0.28);
+    const missingEvidenceThreshold = clamp(0.3 - relationScale * 0.03, 0.15, 0.3);
+
+    const normalizedQualityScores = [
+      safeRatio(relationNormalizationCoverage, relationNormalizationThreshold),
+      safeRatio(entityCanonicalCoverage, entityCanonicalThreshold),
+      lowConfidenceThreshold > 0
+        ? clamp(1 - (lowConfidenceRatio / lowConfidenceThreshold), 0, 1)
+        : 0,
+      missingEvidenceThreshold > 0
+        ? clamp(1 - (missingEvidenceRatio / missingEvidenceThreshold), 0, 1)
+        : 0,
+    ];
+    const qualityAssessmentScore = normalizedQualityScores.reduce((sum, item) => sum + item, 0)
+      / normalizedQualityScores.length;
+
     return {
       totalSources: effectiveTotalSources,
       indexedSources: effectiveIndexedSources,
@@ -838,6 +872,11 @@ export function useProjectKnowledgeState(
       entityCanonicalCoverage,
       lowConfidenceRatio,
       missingEvidenceRatio,
+      relationNormalizationThreshold,
+      entityCanonicalThreshold,
+      lowConfidenceThreshold,
+      missingEvidenceThreshold,
+      qualityAssessmentScore,
     };
   }, [
     activeKnowledgeTask?.enrichment_metrics,
@@ -885,16 +924,26 @@ export function useProjectKnowledgeState(
       entityCanonicalCoverage: quantMetrics.entityCanonicalCoverage,
       lowConfidenceRatio: quantMetrics.lowConfidenceRatio,
       missingEvidenceRatio: quantMetrics.missingEvidenceRatio,
+      relationNormalizationThreshold: quantMetrics.relationNormalizationThreshold,
+      entityCanonicalThreshold: quantMetrics.entityCanonicalThreshold,
+      lowConfidenceThreshold: quantMetrics.lowConfidenceThreshold,
+      missingEvidenceThreshold: quantMetrics.missingEvidenceThreshold,
+      qualityAssessmentScore: quantMetrics.qualityAssessmentScore,
     });
   }, [
+    quantMetrics.entityCanonicalThreshold,
     params.onSignalsChange,
     quantMetrics.entityCount,
     quantMetrics.entityCanonicalCoverage,
     quantMetrics.chunkCount,
     quantMetrics.documentCount,
     quantMetrics.indexedRatio,
+    quantMetrics.lowConfidenceThreshold,
     quantMetrics.lowConfidenceRatio,
+    quantMetrics.missingEvidenceThreshold,
     quantMetrics.missingEvidenceRatio,
+    quantMetrics.qualityAssessmentScore,
+    quantMetrics.relationNormalizationThreshold,
     quantMetrics.relationNormalizationCoverage,
     quantMetrics.relationCount,
   ]);
