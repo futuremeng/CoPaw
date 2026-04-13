@@ -604,6 +604,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
   const graphRef = useRef<G6Graph | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const focusedNodeIdRef = useRef<string | null>(activeNodeId || null);
+  const hoveredNodeIdRef = useRef<string | null>(null);
   const nodeMapRef = useRef<Map<string, GraphNode>>(new Map());
   const onNodeClickRef = useRef(onNodeClick);
   const onNodeHoverRef = useRef(onNodeHover);
@@ -622,6 +623,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
   const [activeInsightKey, setActiveInsightKey] = useState("");
   const colorModeRef = useRef<GraphColorMode>("type");
   const nodeTypeColorMapRef = useRef<Map<string, string>>(new Map());
+  const lastFocusStateKeyRef = useRef("");
 
   const nodeTypeColorMap = useMemo(() => {
     const groups = Array.from(new Set(data.nodes.map((node) => getNodeGroupId(node.id, String(node.type || "")))));
@@ -916,12 +918,27 @@ export function GraphVisualization(props: GraphVisualizationProps) {
   }, [graphData.edges, graphData.nodes]);
 
   useEffect(() => {
-    setFocusedNodeId(activeNodeId || null);
+    setFocusedNodeId((prev) => {
+      const next = activeNodeId || null;
+      return prev === next ? prev : next;
+    });
   }, [activeNodeId]);
 
   const updateFocusState = useCallback(
     async (nodeId: string | null, shouldFocusElement: boolean) => {
       if (!graphRef.current) {
+        return;
+      }
+      const focusKey = [
+        nodeId || "",
+        pathNodeIds.join(","),
+        pathEdgeIds.join(","),
+        (activeInsight?.nodeIds || []).join(","),
+        (activeInsight?.edgeIds || []).join(","),
+        String(filteredNodeIds.size),
+        String(filteredEdgeIds.size),
+      ].join("|");
+      if (!shouldFocusElement && focusKey === lastFocusStateKeyRef.current) {
         return;
       }
       const pathNodeSet = new Set(pathNodeIds);
@@ -941,6 +958,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
           insightEdgeSet,
         );
         await graphRef.current.setElementState(resetState, false);
+        lastFocusStateKeyRef.current = focusKey;
         return;
       }
 
@@ -962,6 +980,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
         insightEdgeSet,
       );
       await graphRef.current.setElementState(stateMap, false);
+      lastFocusStateKeyRef.current = focusKey;
 
       if (shouldFocusElement) {
         await graphRef.current.focusElement(nodeId, { duration: 300 });
@@ -1044,7 +1063,6 @@ export function GraphVisualization(props: GraphVisualizationProps) {
       const nextNodeId = nodeId || null;
       setFocusedNodeId(nextNodeId);
       onActiveNodeChange?.(nextNodeId);
-      void updateFocusState(nextNodeId, Boolean(nextNodeId));
       if (!nextNodeId) {
         return;
       }
@@ -1053,7 +1071,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
         onNodeClick?.(found);
       }
     },
-    [nodeMap, onActiveNodeChange, onNodeClick, updateFocusState],
+    [nodeMap, onActiveNodeChange, onNodeClick],
   );
 
   const handleFindPath = useCallback(() => {
@@ -1066,7 +1084,6 @@ export function GraphVisualization(props: GraphVisualizationProps) {
       setPathEdgeIds([]);
       setFocusedNodeId(pathStartNodeId);
       onActiveNodeChange?.(pathStartNodeId);
-      void updateFocusState(pathStartNodeId, true);
       return;
     }
 
@@ -1140,7 +1157,6 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     setPathEdgeIds(edges);
     setFocusedNodeId(pathEndNodeId);
     onActiveNodeChange?.(pathEndNodeId);
-    void updateFocusState(pathEndNodeId, true);
   }, [
     graphData.edges,
     edgeLookup,
@@ -1148,7 +1164,6 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     pathEndNodeId,
     pathStartNodeId,
     t,
-    updateFocusState,
   ]);
 
   const handleClearPath = useCallback(() => {
@@ -1292,7 +1307,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
               strength: (node: { data?: { visualSize?: number } }) => -6 * Number(node?.data?.visualSize || 22),
             },
             animation: false,
-            iterations: 320,
+            iterations: Math.min(220, Math.max(80, Math.round(60 + graphData.nodes.length * 1.2))),
           },
           behaviors: [
             "drag-canvas",
@@ -1425,6 +1440,10 @@ export function GraphVisualization(props: GraphVisualizationProps) {
         graph.on("node:mouseenter", async (evt: unknown) => {
           const nodeId = resolveEventElementId(evt);
           onNodeHoverRef.current?.(nodeId);
+          if (!nodeId || hoveredNodeIdRef.current === nodeId) {
+            return;
+          }
+          hoveredNodeIdRef.current = nodeId;
           if (!nodeId || focusedNodeIdRef.current) {
             return;
           }
@@ -1432,6 +1451,10 @@ export function GraphVisualization(props: GraphVisualizationProps) {
         });
 
         graph.on("node:mouseleave", async () => {
+          if (!hoveredNodeIdRef.current) {
+            return;
+          }
+          hoveredNodeIdRef.current = null;
           onNodeHoverRef.current?.(null);
           await updateHoverStateRef.current(null);
         });
@@ -1444,7 +1467,6 @@ export function GraphVisualization(props: GraphVisualizationProps) {
           handleAutoFillPathFromClickRef.current(nodeId);
           setFocusedNodeId(nodeId);
           onActiveNodeChangeRef.current?.(nodeId);
-          await updateFocusStateRef.current(nodeId, true);
           const found = nodeMapRef.current.get(nodeId);
           if (found) {
             onNodeClickRef.current?.(found);

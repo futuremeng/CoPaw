@@ -389,6 +389,33 @@ function normalizeProjectId(value: unknown): string {
   return String(value || "").trim().toLowerCase();
 }
 
+function isSameHeaderSignals(
+  left: ProjectKnowledgeHeaderSignals,
+  right: ProjectKnowledgeHeaderSignals,
+): boolean {
+  return (
+    left.indexedRatio === right.indexedRatio
+    && left.documentCount === right.documentCount
+    && left.chunkCount === right.chunkCount
+    && left.sentenceCount === right.sentenceCount
+    && left.sentenceWithEntitiesCount === right.sentenceWithEntitiesCount
+    && left.entityMentionsCount === right.entityMentionsCount
+    && left.avgEntitiesPerSentence === right.avgEntitiesPerSentence
+    && left.avgEntityCharRatio === right.avgEntityCharRatio
+    && left.relationCount === right.relationCount
+    && left.entityCount === right.entityCount
+    && left.relationNormalizationCoverage === right.relationNormalizationCoverage
+    && left.entityCanonicalCoverage === right.entityCanonicalCoverage
+    && left.lowConfidenceRatio === right.lowConfidenceRatio
+    && left.missingEvidenceRatio === right.missingEvidenceRatio
+    && left.relationNormalizationThreshold === right.relationNormalizationThreshold
+    && left.entityCanonicalThreshold === right.entityCanonicalThreshold
+    && left.lowConfidenceThreshold === right.lowConfidenceThreshold
+    && left.missingEvidenceThreshold === right.missingEvidenceThreshold
+    && left.qualityAssessmentScore === right.qualityAssessmentScore
+  );
+}
+
 export function useProjectKnowledgeState(
   params: UseProjectKnowledgeStateParams,
 ): ProjectKnowledgeState {
@@ -420,6 +447,7 @@ export function useProjectKnowledgeState(
   const refreshReasonRef = useRef("");
   const graphRefreshReasonRef = useRef("");
   const defaultExploreTokenRef = useRef("");
+  const lastSignalsRef = useRef<ProjectKnowledgeHeaderSignals | null>(null);
 
   const projectSourceId = useMemo(() => {
     const safeId = params.projectId
@@ -1080,7 +1108,10 @@ export function useProjectKnowledgeState(
   }, [activeKnowledgeTask, syncState, t]);
 
   useEffect(() => {
-    onSignalsChange?.({
+    if (!onSignalsChange) {
+      return;
+    }
+    const nextSignals = {
       indexedRatio: quantMetrics.indexedRatio,
       documentCount: quantMetrics.documentCount,
       chunkCount: quantMetrics.chunkCount,
@@ -1100,7 +1131,13 @@ export function useProjectKnowledgeState(
       lowConfidenceThreshold: quantMetrics.lowConfidenceThreshold,
       missingEvidenceThreshold: quantMetrics.missingEvidenceThreshold,
       qualityAssessmentScore: quantMetrics.qualityAssessmentScore,
-    });
+    };
+    const previousSignals = lastSignalsRef.current;
+    if (previousSignals && isSameHeaderSignals(previousSignals, nextSignals)) {
+      return;
+    }
+    lastSignalsRef.current = nextSignals;
+    onSignalsChange(nextSignals);
   }, [
     quantMetrics.entityCanonicalThreshold,
     onSignalsChange,
@@ -1227,7 +1264,7 @@ export function useProjectKnowledgeState(
     return "projects.knowledge.insightHealthy";
   }, [insightAction]);
 
-  return {
+  const knowledgeState = useMemo<ProjectKnowledgeState>(() => ({
     projectSourceId,
     sourceLoaded,
     sourceRegistered,
@@ -1275,5 +1312,47 @@ export function useProjectKnowledgeState(
     semanticBySourceId,
     semanticLoadingBySourceId,
     loadSourceSemantic,
-  };
+  }), [
+    activeGraphNodeId,
+    activeKnowledgeTask,
+    activeKnowledgeTasks,
+    filteredTrendSnapshots,
+    graphError,
+    graphLoading,
+    graphQueryMode,
+    graphQueryText,
+    graphQueryTopK,
+    graphResult,
+    insightAction,
+    insightMessageKey,
+    latestQualityLoopJob,
+    loadProjectSourceStatus,
+    loadSourceContent,
+    loadSourceSemantic,
+    projectSourceId,
+    projectSources,
+    quantMetrics,
+    relationKeywordSeed,
+    relationRecords,
+    resetGraphQuery,
+    runGraphQuery,
+    selectedSourceId,
+    semanticBySourceId,
+    semanticLoadingBySourceId,
+    sourceContentById,
+    sourceContentLoadingById,
+    sourceLoaded,
+    sourceRegistered,
+    suggestedQuery,
+    syncAlertDescription,
+    syncAlertType,
+    syncState,
+    trendChunkPath,
+    trendDelta,
+    trendDocumentPath,
+    trendExpanded,
+    trendRangeDays,
+  ]);
+
+  return knowledgeState;
 }

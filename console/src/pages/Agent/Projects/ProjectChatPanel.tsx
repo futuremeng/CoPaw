@@ -1,3 +1,4 @@
+import { memo, useCallback } from "react";
 import { Button, Card, Empty, Spin, Typography, message } from "antd";
 import { useTranslation } from "react-i18next";
 import AnywhereChat from "../../../components/AnywhereChat";
@@ -46,7 +47,7 @@ interface ProjectChatPanelProps {
   onAssistantTurnCompleted?: () => void;
 }
 
-export default function ProjectChatPanel({
+function ProjectChatPanel({
   projectFileCount,
   chatMode,
   selectedRunId,
@@ -69,14 +70,14 @@ export default function ProjectChatPanel({
   const hasUserFiles = projectFileCount > 0;
   const isRunMode = chatMode === "run";
 
-  const handleAutoAttachHandled = (payload: AutoAttachHandledPayload) => {
+  const handleAutoAttachHandled = useCallback((payload: AutoAttachHandledPayload) => {
     if (!payload.ok) {
       message.error(
         t("projects.chat.autoAttachFailed", "Failed to attach selected file to chat."),
       );
     }
     onAutoAttachHandled(payload);
-  };
+  }, [onAutoAttachHandled, t]);
 
   return (
     <Card
@@ -298,3 +299,5 @@ export default function ProjectChatPanel({
     </Card>
   );
 }
+
+export default memo(ProjectChatPanel);

@@ -274,49 +274,6 @@ function formatRuntimeTimestamp(value: string | null | undefined, locale: string
   }).format(parsed);
 }
 
-function asObjectRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return null;
-  }
-  return value as Record<string, unknown>;
-}
-
-function asStringList(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value
-    .map((item) => String(item || "").trim())
-    .filter(Boolean);
-}
-
-function pickLatestQualityLoopRound(job: QualityLoopJobStatus | null): Record<string, unknown> | null {
-  if (!Array.isArray(job?.rounds) || job.rounds.length === 0) {
-    return null;
-  }
-  return asObjectRecord(job.rounds[job.rounds.length - 1]);
-}
-
-function getQualityLoopTone(params: {
-  status: string;
-  stopReason: string;
-  gateStatus: string;
-}): "success" | "processing" | "warning" | "error" | "default" {
-  if (params.stopReason === "REVIEW_REQUIRED" || params.gateStatus === "review_required") {
-    return "warning";
-  }
-  if (params.status === "failed") {
-    return "error";
-  }
-  if (["running", "pending"].includes(params.status)) {
-    return "processing";
-  }
-  if (params.status === "succeeded") {
-    return "success";
-  }
-  return "default";
-}
-
 function getLeafFilterIcon(filterKey: ProjectFileFilterKey): ReactNode {
   switch (filterKey) {
     case "original":
@@ -877,47 +834,6 @@ export default function ProjectDetailPage() {
       </div>
     );
   }, [i18n.language, projectKnowledgeState.activeKnowledgeTasks, runtimeSignalDetails, runtimeSignalLoading, t, translateWithFallback]);
-
-  const latestQualityLoopSummary = useMemo(() => {
-    const job = projectKnowledgeState.latestQualityLoopJob;
-    if (!job) {
-      return null;
-    }
-    const latestRound = pickLatestQualityLoopRound(job);
-    const roundSummary = asObjectRecord(latestRound?.summary);
-    const agentGate = asObjectRecord(latestRound?.agent_gate);
-    const roundNo = typeof latestRound?.round === "number"
-      ? latestRound.round
-      : typeof latestRound?.round === "string"
-        ? Number.parseInt(latestRound.round, 10)
-        : null;
-    const stopReason = String(job.stop_reason || roundSummary?.stop_or_continue_reason || "").trim();
-    const gateStatus = String(agentGate?.status || "").trim();
-    const gateReason = String(agentGate?.reason || "").trim();
-    const gateSummary = String(agentGate?.summary || "").trim();
-    const nextPlan = asStringList(roundSummary?.next_round_plan);
-    const hypotheses = asStringList(roundSummary?.problem_hypotheses);
-    const updatedAt = formatRuntimeTimestamp(job.updated_at, i18n.language);
-    const tone = getQualityLoopTone({
-      status: String(job.status || "").trim(),
-      stopReason,
-      gateStatus,
-    });
-    return {
-      jobStatus: String(job.status || "").trim(),
-      roundNo,
-      scoreAfter: typeof job.score_after === "number" ? job.score_after : null,
-      delta: typeof job.delta === "number" ? job.delta : null,
-      stopReason,
-      gateStatus,
-      gateReason,
-      gateSummary,
-      nextPlan,
-      hypotheses,
-      updatedAt,
-      tone,
-    };
-  }, [i18n.language, projectKnowledgeState.latestQualityLoopJob]);
 
   const leaveConfirmText = useMemo(
     () =>
@@ -3508,6 +3424,178 @@ export default function ProjectDetailPage() {
     t,
   ]);
 
+  const handleChatAutoAttachHandled = useCallback((payload: { id: string }) => {
+    window.requestAnimationFrame(() => {
+      setAutoAttachRequest((prev) => (prev?.id === payload.id ? null : prev));
+    });
+  }, []);
+
+  const handleOpenManualRecoverDialogFromChat = useCallback(() => {
+    void handleOpenManualRecoverDialog();
+  }, [handleOpenManualRecoverDialog]);
+
+  const handleAssistantTurnCompletedFromChat = useCallback(() => {
+    void handleAssistantTurnCompleted();
+  }, [handleAssistantTurnCompleted]);
+
+  const handleKnowledgeRequestedQueryHandled = useCallback(() => {
+    setPendingKnowledgeQuery("");
+  }, []);
+
+  const handleKnowledgeOpenRelations = useCallback(() => {
+    setKnowledgeDockTab("relations");
+  }, []);
+
+  const handleKnowledgeOpenSettings = useCallback(() => {
+    setKnowledgeDockTab("settings");
+  }, []);
+
+  const handleKnowledgeRunSuggestedQuery = useCallback((query: string) => {
+    setPendingKnowledgeQuery(query);
+    setKnowledgeDockTab("explore");
+  }, []);
+
+  const handleRuntimeSignalTooltipOpenChange = useCallback((open: boolean) => {
+    setRuntimeSignalTooltipOpen(open);
+    if (open) {
+      void fetchRuntimeSignalDetails();
+    }
+  }, [fetchRuntimeSignalDetails]);
+
+  const projectChatPanelNode = useMemo(() => (
+    <ProjectChatPanel
+      projectFileCount={projectFileCount}
+      chatMode={projectChatMode}
+      selectedRunId={selectedRunId}
+      chatStarting={chatStarting}
+      activeWorkspaceChatId={activeWorkspaceChatId}
+      activeDesignChatId={activeDesignChatId}
+      activeRunChatId={activeRunChatId}
+      autoAttachRequest={autoAttachRequest}
+      onAutoAttachHandled={handleChatAutoAttachHandled}
+      onStartWorkspaceChat={handleStartWorkspaceChat}
+      onStartDesignChat={handleStartDesignChat}
+      onStartRunChat={handleStartRunChat}
+      onSelectWorkspaceHistoryChat={applyWorkspaceChatFocus}
+      onSelectDesignHistoryChat={selectDesignChatSession}
+      onSelectRunHistoryChat={selectRunChatSession}
+      onOpenManualRecoverDialog={handleOpenManualRecoverDialogFromChat}
+      onAssistantTurnCompleted={handleAssistantTurnCompletedFromChat}
+    />
+  ), [
+    activeDesignChatId,
+    activeRunChatId,
+    activeWorkspaceChatId,
+    applyWorkspaceChatFocus,
+    autoAttachRequest,
+    chatStarting,
+    handleAssistantTurnCompletedFromChat,
+    handleChatAutoAttachHandled,
+    handleOpenManualRecoverDialogFromChat,
+    handleStartDesignChat,
+    handleStartRunChat,
+    handleStartWorkspaceChat,
+    projectChatMode,
+    projectFileCount,
+    selectDesignChatSession,
+    selectRunChatSession,
+    selectedRunId,
+  ]);
+
+  const knowledgeDockTabItems = useMemo(() => {
+    if (!selectedProject) {
+      return [];
+    }
+
+    return [
+      {
+        key: "explore",
+        label: t("projects.knowledgeDock.tabExplore", "Explore"),
+        children: (
+          <ProjectKnowledgePanel
+            projectId={selectedProject.id}
+            projectName={selectedProject.name}
+            knowledgeState={projectKnowledgeState}
+            requestedQuery={pendingKnowledgeQuery}
+            onRequestedQueryHandled={handleKnowledgeRequestedQueryHandled}
+            onOpenRelations={handleKnowledgeOpenRelations}
+          />
+        ),
+      },
+      {
+        key: "sources",
+        label: t("projects.knowledgeDock.tabSources", "Sources"),
+        children: (
+          <ProjectKnowledgeSourcesPanel
+            knowledgeState={projectKnowledgeState}
+            onOpenSettings={handleKnowledgeOpenSettings}
+          />
+        ),
+      },
+      {
+        key: "relations",
+        label: t("projects.knowledgeDock.tabRelations", "Relations"),
+        children: (
+          <ProjectKnowledgeRelationsPanel
+            knowledgeState={projectKnowledgeState}
+            onRunSuggestedQuery={handleKnowledgeRunSuggestedQuery}
+          />
+        ),
+      },
+      {
+        key: "health",
+        label: t("projects.knowledgeDock.tabHealth", "Health"),
+        children: (
+          <ProjectKnowledgeSignalsPanel
+            knowledgeState={projectKnowledgeState}
+            knowledgeHeaderSignals={knowledgeHeaderSignals}
+            runtimeSignalValue={runtimeSignalValue}
+            runtimeSignalTooltipContent={runtimeSignalTooltipContent}
+            runtimeSignalTooltipOpen={runtimeSignalTooltipOpen}
+            onRuntimeSignalTooltipOpenChange={handleRuntimeSignalTooltipOpenChange}
+            onRunSuggestedQuery={handleKnowledgeRunSuggestedQuery}
+          />
+        ),
+      },
+      {
+        key: "settings",
+        label: t("projects.knowledgeDock.tabSettings", "Settings"),
+        children: (
+          <ProjectKnowledgeSettingsPanel
+            agentId={currentAgent?.id}
+            projectId={selectedProject.id}
+            projectName={selectedProject.name}
+            projectWorkspaceDir={
+              selectedProject.workspace_dir || currentAgent?.workspace_dir || ""
+            }
+            projectAutoKnowledgeSink={selectedProject.project_auto_knowledge_sink !== false}
+            includeGlobal={projectKnowledgeIncludeGlobal}
+            onIncludeGlobalChange={setProjectKnowledgeIncludeGlobal}
+            onProjectAutoKnowledgeSinkChange={handleProjectAutoKnowledgeSinkChange}
+          />
+        ),
+      },
+    ];
+  }, [
+    currentAgent?.id,
+    currentAgent?.workspace_dir,
+    handleKnowledgeOpenRelations,
+    handleKnowledgeOpenSettings,
+    handleKnowledgeRequestedQueryHandled,
+    handleKnowledgeRunSuggestedQuery,
+    handleProjectAutoKnowledgeSinkChange,
+    handleRuntimeSignalTooltipOpenChange,
+    knowledgeHeaderSignals,
+    pendingKnowledgeQuery,
+    projectKnowledgeIncludeGlobal,
+    projectKnowledgeState,
+    runtimeSignalTooltipContent,
+    runtimeSignalTooltipOpen,
+    runtimeSignalValue,
+    selectedProject,
+    t,
+  ]);
+
   return (
     <div className={styles.agentsPage}>
       <div className={styles.header}>
@@ -3752,33 +3840,7 @@ export default function ProjectDetailPage() {
                   >
                     <div className={styles.splitterPanel}>
                       <div className={styles.columnChat}>
-                        <ProjectChatPanel
-                          projectFileCount={projectFileCount}
-                          chatMode={projectChatMode}
-                          selectedRunId={selectedRunId}
-                          chatStarting={chatStarting}
-                          activeWorkspaceChatId={activeWorkspaceChatId}
-                          activeDesignChatId={activeDesignChatId}
-                          activeRunChatId={activeRunChatId}
-                          autoAttachRequest={autoAttachRequest}
-                          onAutoAttachHandled={(payload) => {
-                            window.requestAnimationFrame(() => {
-                              setAutoAttachRequest((prev) => (prev?.id === payload.id ? null : prev));
-                            });
-                          }}
-                          onStartWorkspaceChat={handleStartWorkspaceChat}
-                          onStartDesignChat={handleStartDesignChat}
-                          onStartRunChat={handleStartRunChat}
-                          onSelectWorkspaceHistoryChat={applyWorkspaceChatFocus}
-                          onSelectDesignHistoryChat={selectDesignChatSession}
-                          onSelectRunHistoryChat={selectRunChatSession}
-                          onOpenManualRecoverDialog={() => {
-                            void handleOpenManualRecoverDialog();
-                          }}
-                          onAssistantTurnCompleted={() => {
-                            void handleAssistantTurnCompleted();
-                          }}
-                        />
+                        {projectChatPanelNode}
                       </div>
                     </div>
                   </Splitter.Panel>
@@ -3818,88 +3880,7 @@ export default function ProjectDetailPage() {
                           tabPosition="left"
                           destroyOnHidden
                           onChange={(key) => setKnowledgeDockTab(key as KnowledgeDockTabKey)}
-                          items={[
-                            {
-                              key: "explore",
-                              label: t("projects.knowledgeDock.tabExplore", "Explore"),
-                              children: (
-                                <ProjectKnowledgePanel
-                                  projectId={selectedProject.id}
-                                  projectName={selectedProject.name}
-                                  knowledgeState={projectKnowledgeState}
-                                  requestedQuery={pendingKnowledgeQuery}
-                                  onRequestedQueryHandled={() => setPendingKnowledgeQuery("")}
-                                  onOpenRelations={() => setKnowledgeDockTab("relations")}
-                                />
-                              ),
-                            },
-                            {
-                              key: "sources",
-                              label: t("projects.knowledgeDock.tabSources", "Sources"),
-                              children: (
-                                <ProjectKnowledgeSourcesPanel
-                                  knowledgeState={projectKnowledgeState}
-                                  onOpenSettings={() => setKnowledgeDockTab("settings")}
-                                />
-                              ),
-                            },
-                            {
-                              key: "relations",
-                              label: t("projects.knowledgeDock.tabRelations", "Relations"),
-                              children: (
-                                <ProjectKnowledgeRelationsPanel
-                                  knowledgeState={projectKnowledgeState}
-                                  onRunSuggestedQuery={(query) => {
-                                    setPendingKnowledgeQuery(query);
-                                    setKnowledgeDockTab("explore");
-                                  }}
-                                />
-                              ),
-                            },
-                            {
-                              key: "health",
-                              label: t("projects.knowledgeDock.tabHealth", "Health"),
-                              children: (
-                                <ProjectKnowledgeSignalsPanel
-                                  knowledgeState={projectKnowledgeState}
-                                  knowledgeHeaderSignals={knowledgeHeaderSignals}
-                                  runtimeSignalValue={runtimeSignalValue}
-                                  runtimeSignalTooltipContent={runtimeSignalTooltipContent}
-                                  runtimeSignalTooltipOpen={runtimeSignalTooltipOpen}
-                                  onRuntimeSignalTooltipOpenChange={(open) => {
-                                    setRuntimeSignalTooltipOpen(open);
-                                    if (open) {
-                                      void fetchRuntimeSignalDetails();
-                                    }
-                                  }}
-                                  latestQualityLoopSummary={latestQualityLoopSummary}
-                                  onOpenSettings={() => setKnowledgeDockTab("settings")}
-                                  onRunSuggestedQuery={(query) => {
-                                    setPendingKnowledgeQuery(query);
-                                    setKnowledgeDockTab("explore");
-                                  }}
-                                />
-                              ),
-                            },
-                            {
-                              key: "settings",
-                              label: t("projects.knowledgeDock.tabSettings", "Settings"),
-                              children: (
-                                <ProjectKnowledgeSettingsPanel
-                                  agentId={currentAgent?.id}
-                                  projectId={selectedProject.id}
-                                  projectName={selectedProject.name}
-                                  projectWorkspaceDir={selectedProject.workspace_dir}
-                                  projectAutoKnowledgeSink={
-                                    selectedProject.project_auto_knowledge_sink !== false
-                                  }
-                                  includeGlobal={projectKnowledgeIncludeGlobal}
-                                  onIncludeGlobalChange={setProjectKnowledgeIncludeGlobal}
-                                  onProjectAutoKnowledgeSinkChange={handleProjectAutoKnowledgeSinkChange}
-                                />
-                              ),
-                            },
-                          ]}
+                          items={knowledgeDockTabItems}
                         />
                       </div>
                     )}

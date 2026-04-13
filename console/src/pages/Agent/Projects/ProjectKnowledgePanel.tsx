@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useRef } from "react";
+import { Suspense, lazy, memo, useEffect, useMemo, useRef } from "react";
 import {
   Alert,
   Empty,
@@ -39,7 +39,7 @@ interface ProjectKnowledgePanelProps {
   };
 }
 
-export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
+function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
   const { t } = useTranslation();
   const handledRequestedQueryRef = useRef("");
   const lastAutoMaxTopKRef = useRef<number | null>(null);
@@ -51,6 +51,15 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
     projectId,
     requestedQuery,
   } = props;
+  const {
+    graphQueryMode,
+    graphQueryTopK,
+    graphResult,
+    quantMetrics,
+    runGraphQuery,
+    setGraphQueryText,
+    setGraphQueryTopK,
+  } = knowledgeState;
 
   const GraphQueryResultsComponent =
     graphComponents?.GraphQueryResults ?? GraphQueryResults;
@@ -63,32 +72,34 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
       return;
     }
     handledRequestedQueryRef.current = normalizedRequestedQuery;
-    knowledgeState.setGraphQueryText(normalizedRequestedQuery);
-    void knowledgeState.runGraphQuery(
+    setGraphQueryText(normalizedRequestedQuery);
+    void runGraphQuery(
       normalizedRequestedQuery,
-      knowledgeState.graphQueryMode,
+      graphQueryMode,
     );
     onRequestedQueryHandled?.();
   }, [
-    knowledgeState,
+    graphQueryMode,
     onRequestedQueryHandled,
     requestedQuery,
+    runGraphQuery,
+    setGraphQueryText,
   ]);
 
   const visualizationData = useMemo(() => {
-    if (!knowledgeState.graphResult) {
+    if (!graphResult) {
       return null;
     }
     return recordsToVisualizationData(
-      knowledgeState.graphResult.records,
-      knowledgeState.graphResult.summary,
-      knowledgeState.graphResult.provenance,
+      graphResult.records,
+      graphResult.summary,
+      graphResult.provenance,
     );
-  }, [knowledgeState.graphResult]);
+  }, [graphResult]);
 
   const maxByEntity = useMemo(
-    () => Math.max(20, knowledgeState.quantMetrics.entityCount || 200),
-    [knowledgeState.quantMetrics.entityCount],
+    () => Math.max(20, quantMetrics.entityCount || 200),
+    [quantMetrics.entityCount],
   );
 
   useEffect(() => {
@@ -96,15 +107,15 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
   }, [projectId]);
 
   useEffect(() => {
-    const current = knowledgeState.graphQueryTopK;
+    const current = graphQueryTopK;
     const prevAuto = lastAutoMaxTopKRef.current;
     const shouldAutoFollow = prevAuto === null || current === prevAuto;
     if (!shouldAutoFollow || current === maxByEntity) {
       return;
     }
-    knowledgeState.setGraphQueryTopK(maxByEntity);
+    setGraphQueryTopK(maxByEntity);
     lastAutoMaxTopKRef.current = maxByEntity;
-  }, [knowledgeState, maxByEntity]);
+  }, [graphQueryTopK, maxByEntity, setGraphQueryTopK]);
 
   const queryControls = (
     <div className={styles.projectKnowledgeQueryTop}>
@@ -235,3 +246,5 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
     </div>
   );
 }
+
+export default memo(ProjectKnowledgePanel);
