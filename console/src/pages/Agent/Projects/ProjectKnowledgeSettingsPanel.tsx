@@ -320,13 +320,25 @@ export default function ProjectKnowledgeSettingsPanel(
           ? t("projects.knowledge.memifyEnabled", "Entity extraction enabled")
           : t("projects.knowledge.memifyDisabled", "Entity extraction disabled"),
       );
+      if (enabled && (projectWorkspaceDir || "").trim()) {
+        try {
+          const response = await api.runProjectKnowledgeSync({
+            projectId,
+            trigger: "memify-enabled",
+            force: true,
+          });
+          setSyncState(response.state);
+        } catch {
+          // best-effort: sync trigger failure is non-fatal
+        }
+      }
     } catch (err) {
       const messageText = err instanceof Error ? err.message : t("projects.knowledge.memifyUpdateFailed", "Failed to update entity extraction setting");
       message.error(messageText);
     } finally {
       setMemifyUpdating(false);
     }
-  }, [t]);
+  }, [projectId, projectWorkspaceDir, t]);
 
   const handleManualSink = useCallback(async () => {
     if (!(projectWorkspaceDir || "").trim()) {

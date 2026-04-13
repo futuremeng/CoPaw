@@ -2550,7 +2550,8 @@ class KnowledgeManager:
         if not isinstance(chunk_size, int):
             chunk_size = config.index.chunk_size
         chunk_overlap = int(getattr(config.index, "chunk_overlap", 0) or 0)
-        raw = f"{KNOWLEDGE_PROCESSING_VERSION}:{chunk_size}:{chunk_overlap}"
+        memify_flag = 1 if bool(getattr(config, "memify_enabled", False)) else 0
+        raw = f"{KNOWLEDGE_PROCESSING_VERSION}:{chunk_size}:{chunk_overlap}:me{memify_flag}"
         return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
 
     @staticmethod
