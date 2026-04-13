@@ -1719,8 +1719,14 @@
     "runs": "実行",
     "updated": "更新",
     "filesOriginal": "原本ファイル",
+    "filesIntermediate": "中間ファイル",
+    "filesArtifact": "成果物ファイル",
     "filesDerived": "派生ファイル",
     "filesBuiltIn": "内蔵ファイル",
+    "filesAgent": "エージェント",
+    "filesSkill": "スキル",
+    "filesFlow": "フロー",
+    "filesCase": "ケース",
     "treeViewMode": {
       "filter": "絞り込み",
       "highlight": "ハイライト"
@@ -1821,6 +1827,8 @@
     },
     "stage": {
       "source": "ソース",
+      "fileTypes": "ファイルタイプ",
+      "projectFiles": "プロジェクトファイル",
       "knowledge": "ナレッジ",
       "output": "出力",
       "builtin": "内蔵"
@@ -1843,10 +1851,19 @@
       "artifactMissing": "成果物ファイルはまだありません。",
       "markdownPresent": "{{count}} 件の Markdown ファイルがあります。",
       "markdownMissing": "Markdown ファイルはまだありません。",
+      "textPresent": "{{count}} 件のテキストファイルがあります。",
+      "textMissing": "テキストファイルはまだありません。",
+      "scriptPresent": "{{count}} 件のスクリプトファイルがあります。",
+      "scriptMissing": "スクリプトファイルはまだありません。",
+      "otherTypePresent": "{{count}} 件のその他タイプのファイルがあります。",
+      "otherTypeMissing": "その他タイプのファイルはまだありません。",
       "neutralInfo": "この指標は情報表示用です。"
     },
     "quantKnowledgeCandidates": "ナレッジ候補ファイル",
     "quantMarkdownFiles": "Markdown ファイル",
+    "quantTextFiles": "テキストファイル",
+    "quantScriptFiles": "スクリプトファイル",
+    "quantOtherTypeFiles": "その他タイプ",
     "quantTextLikeFiles": "テキスト系ファイル",
     "quantArtifactFiles": "成果物ファイル",
     "quantRecentlyUpdated": "7日以内の更新",

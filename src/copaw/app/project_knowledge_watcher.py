@@ -22,7 +22,12 @@ logger = logging.getLogger(__name__)
 DEFAULT_POLL_INTERVAL = 2.0
 DEFAULT_CHANGE_DEBOUNCE_SECONDS = DEFAULT_PROJECT_SYNC_DEBOUNCE_SECONDS
 DEFAULT_SYNC_COOLDOWN_SECONDS = DEFAULT_PROJECT_SYNC_COOLDOWN_SECONDS
-_PROJECT_METADATA_FILENAMES = ("PROJECT.md", "project.md")
+_PROJECT_METADATA_RELATIVE_PATHS = (
+    ".agent/PROJECT.md",
+    ".agent/project.md",
+    "PROJECT.md",
+    "project.md",
+)
 _IGNORED_DIRS = {
     ".knowledge",
     ".git",
@@ -31,6 +36,20 @@ _IGNORED_DIRS = {
     ".pytest_cache",
     ".mypy_cache",
 }
+
+
+def _has_hidden_directory_segment(relative_path: str) -> bool:
+    normalized = relative_path.strip("/")
+    path_parts = Path(normalized).parts
+    if not path_parts:
+        return False
+    last_index = len(path_parts) - 1
+    for index, part in enumerate(path_parts):
+        if not part.startswith("."):
+            continue
+        if index < last_index:
+            return True
+    return False
 
 
 def _parse_frontmatter(path: Path) -> dict[str, Any]:
@@ -203,7 +222,11 @@ class ProjectKnowledgeWatcher:
 
     def _build_project_snapshot(self, project_dir: Path) -> dict[str, Any] | None:
         metadata_file = next(
-            (project_dir / name for name in _PROJECT_METADATA_FILENAMES if (project_dir / name).exists()),
+            (
+                project_dir / rel_path
+                for rel_path in _PROJECT_METADATA_RELATIVE_PATHS
+                if (project_dir / rel_path).exists()
+            ),
             None,
         )
         if metadata_file is None:
@@ -218,6 +241,8 @@ class ProjectKnowledgeWatcher:
             if not path.is_file():
                 continue
             rel = path.relative_to(project_dir).as_posix()
+            if _has_hidden_directory_segment(rel):
+                continue
             if any(part in _IGNORED_DIRS for part in Path(rel).parts):
                 continue
             try:

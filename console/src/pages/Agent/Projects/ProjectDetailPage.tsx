@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckSquareOutlined,
-  ClockCircleOutlined,
   CodeOutlined,
   CopyOutlined,
   FileMarkdownOutlined,
@@ -11,6 +10,7 @@ import {
   FolderOpenOutlined,
   FileSearchOutlined,
   LeftOutlined,
+  RobotOutlined,
   RightOutlined,
   ToolOutlined,
 } from "@ant-design/icons";
@@ -140,11 +140,11 @@ const ASSISTANT_TURN_REALTIME_FALLBACK_MS = 900;
 const PROJECT_TREE_PREFETCH_DIR_LIMIT = 3;
 const PROJECT_TREE_PREVIEW_DIR_PRIORITY = [
   "original",
-  "data",
-  "skills",
-  "flows",
-  "scripts",
-  "cases",
+  "intermediate",
+  "output",
+  "pipelines",
+  ".agent",
+  ".skills",
 ];
 
 const DEFAULT_KNOWLEDGE_HEADER_SIGNALS: ProjectKnowledgeHeaderSignals = {
@@ -167,16 +167,16 @@ const DEFAULT_KNOWLEDGE_HEADER_SIGNALS: ProjectKnowledgeHeaderSignals = {
 type RuntimeTaskDetail = MemifyJobStatus | QualityLoopJobStatus | ProjectKnowledgeSyncState | null;
 
 const STAGE_FILTERS: Record<ProjectStageKey, ProjectFileFilterKey[]> = {
-  source: ["original", "derived"],
-  knowledge: ["knowledgeCandidates", "markdown", "textLike", "recent"],
-  output: ["skills", "scripts", "flows", "cases"],
+  source: ["original", "intermediate", "artifact"],
+  knowledge: ["markdown", "text", "script", "otherType"],
+  output: ["agent", "skill", "flow", "case"],
   builtin: ["builtin"],
 };
 
 const DEFAULT_STAGE_FILTER: Record<ProjectStageKey, ProjectFileFilterKey> = {
   source: "original",
-  knowledge: "knowledgeCandidates",
-  output: "skills",
+  knowledge: "markdown",
+  output: "agent",
   builtin: "builtin",
 };
 
@@ -318,23 +318,25 @@ function getLeafFilterIcon(filterKey: ProjectFileFilterKey): ReactNode {
   switch (filterKey) {
     case "original":
       return <FolderOpenOutlined />;
-    case "derived":
+    case "intermediate":
       return <FileOutlined />;
-    case "knowledgeCandidates":
-      return <CopyOutlined />;
+    case "artifact":
+      return <CheckSquareOutlined />;
     case "markdown":
       return <FileMarkdownOutlined />;
-    case "textLike":
+    case "text":
       return <FileSearchOutlined />;
-    case "recent":
-      return <ClockCircleOutlined />;
-    case "skills":
-      return <ToolOutlined />;
-    case "scripts":
+    case "script":
       return <CodeOutlined />;
-    case "flows":
+    case "otherType":
+      return <CopyOutlined />;
+    case "agent":
+      return <RobotOutlined />;
+    case "skill":
+      return <ToolOutlined />;
+    case "flow":
       return <ApartmentOutlined />;
-    case "cases":
+    case "case":
       return <CheckSquareOutlined />;
     case "builtin":
       return <FileOutlined />;
@@ -1117,71 +1119,94 @@ export default function ProjectDetailPage() {
   const projectTreeRootDirCounts = useMemo(
     () => ({
       original: getProjectTreeRootDirectoryFileCount(projectTreeNodes, "original"),
-      skills: getProjectTreeRootDirectoryFileCount(projectTreeNodes, "skills"),
-      scripts: getProjectTreeRootDirectoryFileCount(projectTreeNodes, "scripts"),
-      flows: getProjectTreeRootDirectoryFileCount(projectTreeNodes, "flows"),
-      cases: getProjectTreeRootDirectoryFileCount(projectTreeNodes, "cases"),
+      intermediate: getProjectTreeRootDirectoryFileCount(projectTreeNodes, "intermediate"),
+      output: getProjectTreeRootDirectoryFileCount(projectTreeNodes, "output"),
     }),
     [projectTreeNodes],
   );
 
   const leafCounts = useMemo(() => {
-    const artifactProfile = selectedProject?.artifact_profile;
     return {
       original:
         projectFileSummary?.original_files
         ?? projectTreeRootDirCounts.original
         ?? visibleProjectSummary.originalFiles,
-      derived: visibleProjectSummary.derivedFiles,
-      knowledgeCandidates:
-        projectFileSummary?.knowledge_candidate_files ?? knowledgeMetrics.knowledgeCandidateFiles,
+      intermediate:
+        projectFileSummary?.intermediate_files
+        ?? projectTreeRootDirCounts.intermediate
+        ?? visibleProjectSummary.intermediateFiles,
+      artifact:
+        projectFileSummary?.artifact_files
+        ?? projectTreeRootDirCounts.output
+        ?? visibleProjectSummary.artifactFiles,
       markdown: projectFileSummary?.markdown_files ?? knowledgeMetrics.markdownFiles,
-      textLike: projectFileSummary?.text_like_files ?? knowledgeMetrics.textLikeFiles,
-      recent: projectFileSummary?.recently_updated_files ?? knowledgeMetrics.recentlyUpdatedFiles,
-        skills: projectTreeRootDirCounts.skills ?? artifactProfile?.skills.length ?? 0,
-        scripts: projectTreeRootDirCounts.scripts ?? artifactProfile?.scripts.length ?? 0,
-        flows: projectTreeRootDirCounts.flows ?? artifactProfile?.flows.length ?? 0,
-        cases: projectTreeRootDirCounts.cases ?? artifactProfile?.cases.length ?? 0,
+      text: projectFileSummary?.text_files ?? knowledgeMetrics.textFiles,
+      script: projectFileSummary?.script_files ?? knowledgeMetrics.scriptFiles,
+      otherType: projectFileSummary?.other_type_files ?? knowledgeMetrics.otherTypeFiles,
+      agent:
+        projectFileSummary?.agent_files
+        ?? effectiveProjectFiles.filter((item) => item.path.replace(/\\/g, "/").startsWith(".agent/")).length,
+      skill:
+        projectFileSummary?.skill_files
+        ?? effectiveProjectFiles.filter((item) => item.path.replace(/\\/g, "/").startsWith(".skills/")).length,
+      flow:
+        projectFileSummary?.flow_files
+        ?? effectiveProjectFiles.filter((item) => {
+          const parts = item.path.replace(/\\/g, "/").split("/").filter(Boolean);
+          return parts.length >= 4 && parts[0] === "pipelines" && parts[2] === "pipeline";
+        }).length,
+      case:
+        projectFileSummary?.case_files
+        ?? effectiveProjectFiles.filter((item) => {
+          const parts = item.path.replace(/\\/g, "/").split("/").filter(Boolean);
+          return parts.length >= 4 && parts[0] === "pipelines" && parts[2] === "runs";
+        }).length,
       builtin: projectFileSummary?.builtin_files ?? builtInProjectFiles.length,
     };
   }, [
+    effectiveProjectFiles,
     builtInProjectFiles.length,
     knowledgeMetrics,
+    projectFileSummary?.agent_files,
+    projectFileSummary?.artifact_files,
     projectFileSummary?.builtin_files,
-    projectFileSummary?.knowledge_candidate_files,
+    projectFileSummary?.case_files,
+    projectFileSummary?.flow_files,
+    projectFileSummary?.intermediate_files,
     projectFileSummary?.markdown_files,
+    projectFileSummary?.other_type_files,
     projectFileSummary?.original_files,
-    projectFileSummary?.recently_updated_files,
-    projectFileSummary?.text_like_files,
-    projectTreeRootDirCounts.cases,
-    projectTreeRootDirCounts.flows,
+    projectFileSummary?.script_files,
+    projectFileSummary?.skill_files,
+    projectFileSummary?.text_files,
+    projectTreeRootDirCounts.intermediate,
     projectTreeRootDirCounts.original,
-    projectTreeRootDirCounts.scripts,
-    projectTreeRootDirCounts.skills,
-    selectedProject?.artifact_profile,
-    visibleProjectSummary.derivedFiles,
+    projectTreeRootDirCounts.output,
+    visibleProjectSummary.artifactFiles,
+    visibleProjectSummary.intermediateFiles,
     visibleProjectSummary.originalFiles,
   ]);
 
   const stageCounts = useMemo(() => {
     return {
       source: projectFileSummary?.visible_files ?? visibleProjectSummary.totalFiles,
-      knowledge:
-        projectFileSummary?.knowledge_candidate_files ?? knowledgeMetrics.knowledgeCandidateFiles,
-      output: leafCounts.skills + leafCounts.scripts + leafCounts.flows + leafCounts.cases,
+      knowledge: leafCounts.markdown + leafCounts.text + leafCounts.script + leafCounts.otherType,
+      output: leafCounts.agent + leafCounts.skill + leafCounts.flow + leafCounts.case,
       outputRuns: pipelineRuns.length,
       builtin: projectFileSummary?.builtin_files ?? builtInProjectFiles.length,
     };
   }, [
     builtInProjectFiles.length,
-    leafCounts.cases,
-    leafCounts.flows,
-    leafCounts.scripts,
-    leafCounts.skills,
-    knowledgeMetrics.knowledgeCandidateFiles,
+    leafCounts.agent,
+    leafCounts.case,
+    leafCounts.flow,
+    leafCounts.markdown,
+    leafCounts.otherType,
+    leafCounts.script,
+    leafCounts.skill,
+    leafCounts.text,
     pipelineRuns.length,
     projectFileSummary?.builtin_files,
-    projectFileSummary?.knowledge_candidate_files,
     projectFileSummary?.visible_files,
     visibleProjectSummary.totalFiles,
   ]);
@@ -1190,19 +1215,20 @@ export default function ProjectDetailPage() {
     () => ({
       source: [
         { key: "original" as const, label: t("projects.filesOriginal", "Original Files"), count: leafCounts.original },
-        { key: "derived" as const, label: t("projects.filesDerived", "Derived Files"), count: leafCounts.derived },
+        { key: "intermediate" as const, label: t("projects.filesIntermediate", "Intermediate Files"), count: leafCounts.intermediate },
+        { key: "artifact" as const, label: t("projects.filesArtifact", "Artifact Files"), count: leafCounts.artifact },
       ],
       knowledge: [
-        { key: "knowledgeCandidates" as const, label: t("projects.quantKnowledgeCandidates", "Knowledge Candidates"), count: leafCounts.knowledgeCandidates },
-        { key: "markdown" as const, label: t("projects.quantMarkdownFiles", "Markdown Files"), count: leafCounts.markdown },
-        { key: "textLike" as const, label: t("projects.quantTextLikeFiles", "Text-like Files"), count: leafCounts.textLike },
-        { key: "recent" as const, label: t("projects.quantRecentlyUpdated", "Updated in 7d"), count: leafCounts.recent },
+        { key: "markdown" as const, label: t("projects.quantMarkdownFiles", "Markdown"), count: leafCounts.markdown },
+        { key: "text" as const, label: t("projects.quantTextFiles", "文本文件"), count: leafCounts.text },
+        { key: "script" as const, label: t("projects.quantScriptFiles", "脚本 (.py)"), count: leafCounts.script },
+        { key: "otherType" as const, label: t("projects.quantOtherTypeFiles", "其他类型"), count: leafCounts.otherType },
       ],
       output: [
-        { key: "skills" as const, label: t("projects.artifacts.skill", "Skills"), count: leafCounts.skills },
-        { key: "scripts" as const, label: t("projects.artifacts.script", "Scripts"), count: leafCounts.scripts },
-        { key: "flows" as const, label: t("projects.artifacts.flow", "Flows"), count: leafCounts.flows },
-        { key: "cases" as const, label: t("projects.artifacts.case", "Cases"), count: leafCounts.cases },
+        { key: "agent" as const, label: t("projects.filesAgent", "智能体"), count: leafCounts.agent },
+        { key: "skill" as const, label: t("projects.filesSkill", "技能"), count: leafCounts.skill },
+        { key: "flow" as const, label: t("projects.filesFlow", "流程"), count: leafCounts.flow },
+        { key: "case" as const, label: t("projects.filesCase", "案例"), count: leafCounts.case },
       ],
       builtin: [
         { key: "builtin" as const, label: t("projects.filesBuiltIn", "Built-in Files"), count: leafCounts.builtin },
@@ -1246,7 +1272,7 @@ export default function ProjectDetailPage() {
         icon: <DatabaseOutlined />,
         label: (
           <span className={styles.stageMenuLabel}>
-            <span>{t("projects.stage.knowledge", "Knowledge")}</span>
+            <span>{t("projects.stage.fileTypes", "文件类型")}</span>
             <span
               className={`${styles.stageMenuCount} ${activeStage === "knowledge" ? styles.stageMenuCountActive : styles.stageMenuCountMuted}`}
             >
@@ -1274,7 +1300,7 @@ export default function ProjectDetailPage() {
         icon: <ApartmentOutlined />,
         label: (
           <span className={styles.stageMenuLabel}>
-            <span>{t("projects.stage.output", "Output")}</span>
+            <span>{t("projects.stage.projectFiles", "项目文件")}</span>
             <span
               className={`${styles.stageMenuCount} ${activeStage === "output" ? styles.stageMenuCountActive : styles.stageMenuCountMuted}`}
             >

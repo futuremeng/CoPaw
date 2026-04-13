@@ -313,8 +313,8 @@ def test_project_file_summary_endpoint_returns_aggregated_counts(
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["builtin_files"] >= 2
-    assert payload["visible_files"] >= 5
+    assert payload["builtin_files"] >= 1
+    assert payload["visible_files"] >= 6
     assert payload["original_files"] == 1
     assert payload["derived_files"] >= 1
     assert payload["knowledge_candidate_files"] >= 5
@@ -483,7 +483,9 @@ def test_create_project_uses_builtin_template_fallbacks(
 
     project_dir = tmp_path / "projects" / project.id
     assert (tmp_path / "projects" / "README.md").exists()
-    assert (project_dir / "AGENTS.md").exists()
+    assert (project_dir / ".agent" / "AGENTS.md").exists()
+    assert (project_dir / ".agent" / "PLAN.md").exists()
+    assert (project_dir / ".agent" / "PROJECT.md").exists()
     assert (project_dir / "data" / "README.md").exists()
     assert (project_dir / "pipelines" / "templates" / "README.md").exists()
     assert (project_dir / "pipelines" / "runs" / "README.md").exists()
@@ -500,8 +502,9 @@ def test_create_project_uses_builtin_template_fallbacks(
         0,
     )
     assert latest_event_id >= 1
-    assert "PROJECT.md" in changed_paths
-    assert "AGENTS.md" in changed_paths
+    assert ".agent/PROJECT.md" in changed_paths
+    assert ".agent/AGENTS.md" in changed_paths
+    assert ".agent/PLAN.md" in changed_paths
     assert "data/README.md" in changed_paths
 
 

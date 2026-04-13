@@ -2485,10 +2485,24 @@ class KnowledgeManager:
         return text[start:end].strip()
 
     @staticmethod
+    def _has_hidden_directory_segment(relative_path: str) -> bool:
+        normalized = relative_path.strip("/")
+        path_parts = Path(normalized).parts
+        if not path_parts:
+            return False
+        last_index = len(path_parts) - 1
+        for index, part in enumerate(path_parts):
+            if not part.startswith("."):
+                continue
+            if index < last_index:
+                return True
+        return False
+
+    @staticmethod
     def _is_allowed_path(relative_path: str, config: KnowledgeConfig) -> bool:
         normalized = relative_path.strip("/")
         path_parts = Path(normalized).parts
-        if any(part.startswith(".") for part in path_parts):
+        if KnowledgeManager._has_hidden_directory_segment(normalized):
             return False
         if any(part in _INTERNAL_EXCLUDED_DIRS for part in path_parts):
             return False

@@ -1764,8 +1764,14 @@
     "runs": "Runs",
     "updated": "Updated",
     "filesOriginal": "Original Files",
+    "filesIntermediate": "Intermediate Files",
+    "filesArtifact": "Artifact Files",
     "filesDerived": "Derived Files",
     "filesBuiltIn": "Built-in Files",
+    "filesAgent": "Agent",
+    "filesSkill": "Skill",
+    "filesFlow": "Flow",
+    "filesCase": "Case",
     "treeViewMode": {
       "filter": "Filter",
       "highlight": "Highlight"
@@ -1866,6 +1872,8 @@
     },
     "stage": {
       "source": "Source",
+      "fileTypes": "File Types",
+      "projectFiles": "Project Files",
       "knowledge": "Knowledge",
       "output": "Output",
       "builtin": "Built-in"
@@ -1888,10 +1896,19 @@
       "artifactMissing": "No artifact files are present yet.",
       "markdownPresent": "{{count}} Markdown files are present.",
       "markdownMissing": "No Markdown files are present yet.",
+      "textPresent": "{{count}} text files are present.",
+      "textMissing": "No text files are present yet.",
+      "scriptPresent": "{{count}} script files are present.",
+      "scriptMissing": "No script files are present yet.",
+      "otherTypePresent": "{{count}} other-type files are present.",
+      "otherTypeMissing": "No other-type files are present yet.",
       "neutralInfo": "This metric is informational."
     },
     "quantKnowledgeCandidates": "Knowledge Candidates",
     "quantMarkdownFiles": "Markdown Files",
+    "quantTextFiles": "Text Files",
+    "quantScriptFiles": "Script Files",
+    "quantOtherTypeFiles": "Other Type Files",
     "quantTextLikeFiles": "Text-like Files",
     "quantArtifactFiles": "Artifact Files",
     "quantRecentlyUpdated": "Updated in 7d",

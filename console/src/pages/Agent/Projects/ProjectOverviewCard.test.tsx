@@ -61,7 +61,7 @@ function renderCard(
   projectFiles: AgentProjectFileInfo[],
   options?: {
     activeStage?: ProjectStageKey;
-    initialFilter?: "" | "original" | "derived" | "skills" | "scripts" | "flows" | "cases" | "builtin" | "knowledgeCandidates" | "markdown" | "textLike" | "recent";
+    initialFilter?: "" | "original" | "intermediate" | "artifact" | "agent" | "skill" | "flow" | "case" | "builtin" | "markdown" | "text" | "script" | "otherType";
     initialTreeDisplayMode?: "filter" | "highlight";
     projectFileSummary?: AgentProjectFileSummary | null;
   },
@@ -72,7 +72,7 @@ function renderCard(
 
   function TestHarness() {
     const [selectedMetricFilter, setSelectedMetricFilter] = useState<
-      "" | "original" | "derived" | "skills" | "scripts" | "flows" | "cases" | "builtin" | "knowledgeCandidates" | "markdown" | "textLike" | "recent"
+      "" | "original" | "intermediate" | "artifact" | "agent" | "skill" | "flow" | "case" | "builtin" | "markdown" | "text" | "script" | "otherType"
     >(options?.initialFilter ?? "");
     const [treeDisplayMode, setTreeDisplayMode] = useState<"filter" | "highlight">(options?.initialTreeDisplayMode ?? "filter");
 
@@ -104,7 +104,7 @@ function renderCard(
 }
 
 describe("ProjectOverviewCard interactions", () => {
-  it("toggles knowledge filter card and updates filter indicator", async () => {
+  it("toggles file-type filter card and updates filter indicator", async () => {
     const user = userEvent.setup();
     renderCard([
       {
@@ -115,17 +115,15 @@ describe("ProjectOverviewCard interactions", () => {
       },
     ]);
 
-    const knowledgeButton = screen.getByRole("button", { name: /Knowledge Candidates/i });
-    await user.click(knowledgeButton);
+    const markdownButton = screen.getByRole("button", { name: /Markdown/i });
+    await user.click(markdownButton);
+    expect(markdownButton.getAttribute("aria-pressed")).toBe("true");
 
-    expect(knowledgeButton.getAttribute("aria-pressed")).toBe("true");
-
-    await user.click(knowledgeButton);
-
-    expect(knowledgeButton.getAttribute("aria-pressed")).toBe("false");
+    await user.click(markdownButton);
+    expect(markdownButton.getAttribute("aria-pressed")).toBe("false");
   });
 
-  it("shows reset action for active knowledge filter and clears it", async () => {
+  it("shows reset action for active markdown filter and clears it", async () => {
     const user = userEvent.setup();
     renderCard([
       {
@@ -136,16 +134,15 @@ describe("ProjectOverviewCard interactions", () => {
       },
     ]);
 
-    await user.click(screen.getByRole("button", { name: /Knowledge Candidates/i }));
+    await user.click(screen.getByRole("button", { name: /Markdown/i }));
     const resetButton = screen.getByRole("button", { name: "Reset" });
     expect(resetButton).toBeDefined();
 
     await user.click(resetButton);
-
-    expect(screen.getByRole("button", { name: /Knowledge Candidates/i }).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByRole("button", { name: /Markdown/i }).getAttribute("aria-pressed")).toBe("false");
   });
 
-  it("shows empty filtered hint when no files match selected knowledge filter", async () => {
+  it("shows empty filtered hint when no files match selected script filter", async () => {
     const user = userEvent.setup();
     renderCard([
       {
@@ -156,10 +153,10 @@ describe("ProjectOverviewCard interactions", () => {
       },
     ]);
 
-    await user.click(screen.getByRole("button", { name: /Text-like Files/i }));
+    await user.click(screen.getByRole("button", { name: /脚本/i }));
 
     expect(screen.getByText("No related files under the current filter")).toBeDefined();
-    expect(screen.getByRole("button", { name: /Text-like Files/i }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: /脚本/i }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("shows only built-in files when builtin stage/filter is active", () => {
@@ -167,7 +164,7 @@ describe("ProjectOverviewCard interactions", () => {
       [
         {
           filename: "AGENTS.md",
-          path: "AGENTS.md",
+          path: ".agent/AGENTS.md",
           size: 10,
           modified_time: "2026-04-09T00:00:00Z",
         },
@@ -194,8 +191,8 @@ describe("ProjectOverviewCard interactions", () => {
     );
 
     expect(screen.getByText("AGENTS.md")).toBeDefined();
-    expect(screen.getByText(".env")).toBeDefined();
     expect(screen.getByText(".cursor")).toBeDefined();
+    expect(screen.queryByText(".env")).toBeNull();
     expect(screen.queryByText("guide.md")).toBeNull();
   });
 
@@ -204,7 +201,7 @@ describe("ProjectOverviewCard interactions", () => {
       [
         {
           filename: "AGENTS.md",
-          path: "AGENTS.md",
+          path: ".agent/AGENTS.md",
           size: 10,
           modified_time: "2026-04-09T00:00:00Z",
         },
@@ -238,18 +235,27 @@ describe("ProjectOverviewCard interactions", () => {
           builtin_files: 2,
           visible_files: 8,
           original_files: 5,
+          intermediate_files: 2,
+          artifact_files: 1,
           derived_files: 3,
           knowledge_candidate_files: 7,
           markdown_files: 6,
+          text_files: 4,
+          script_files: 2,
+          other_type_files: 1,
           text_like_files: 8,
+          agent_files: 1,
+          skill_files: 1,
+          flow_files: 1,
+          case_files: 1,
           recently_updated_files: 4,
         },
       },
     );
 
     expect(screen.getByRole("button", { name: /Original Files/i }).textContent).toContain("5");
-    expect(screen.getByRole("button", { name: /Derived Files/i }).textContent).toContain("3");
-    expect(screen.getByRole("button", { name: /Knowledge Candidates/i }).textContent).toContain("7");
-    expect(screen.getByRole("button", { name: /Markdown Files/i }).textContent).toContain("6");
+    expect(screen.getByRole("button", { name: /Intermediate Files/i }).textContent).toContain("2");
+    expect(screen.getByRole("button", { name: /Markdown/i }).textContent).toContain("6");
+    expect(screen.getByRole("button", { name: /文本文件/i }).textContent).toContain("4");
   });
 });

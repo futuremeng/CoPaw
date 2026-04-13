@@ -2,10 +2,10 @@ import type { AgentProjectFileInfo } from "../../../api/types/agents";
 
 export interface ProjectKnowledgeMetrics {
   totalFiles: number;
-  knowledgeCandidateFiles: number;
   markdownFiles: number;
-  textLikeFiles: number;
-  artifactFiles: number;
+  textFiles: number;
+  scriptFiles: number;
+  otherTypeFiles: number;
   recentlyUpdatedFiles: number;
   averageFileBytes: number;
   totalFileBytes: number;
@@ -14,31 +14,31 @@ export interface ProjectKnowledgeMetrics {
 export interface ProjectFileInventorySummary {
   totalFiles: number;
   originalFiles: number;
-  derivedFiles: number;
+  intermediateFiles: number;
+  artifactFiles: number;
   knowledgeMetrics: ProjectKnowledgeMetrics;
 }
 
 export type ProjectKnowledgeMetricKey =
-  | "knowledgeCandidates"
   | "markdown"
-  | "textLike"
-  | "artifact"
-  | "recent"
+  | "text"
+  | "script"
+  | "otherType"
   | "average"
   | "total"
   | "totalFiles";
 
 export type ProjectKnowledgeFilterKey =
-  | "knowledgeCandidates"
   | "markdown"
-  | "textLike"
-  | "recent";
+  | "text"
+  | "script"
+  | "otherType";
 
 const PROJECT_KNOWLEDGE_FILTER_KEYS: ProjectKnowledgeFilterKey[] = [
-  "knowledgeCandidates",
   "markdown",
-  "textLike",
-  "recent",
+  "text",
+  "script",
+  "otherType",
 ];
 
 export function isProjectKnowledgeFilterKey(value: string): value is ProjectKnowledgeFilterKey {
@@ -49,14 +49,14 @@ export function getProjectKnowledgeFilterKeyFromMetric(
   metricKey: ProjectKnowledgeMetricKey,
 ): ProjectKnowledgeFilterKey | undefined {
   switch (metricKey) {
-    case "knowledgeCandidates":
-      return "knowledgeCandidates";
     case "markdown":
       return "markdown";
-    case "textLike":
-      return "textLike";
-    case "recent":
-      return "recent";
+    case "text":
+      return "text";
+    case "script":
+      return "script";
+    case "otherType":
+      return "otherType";
     default:
       return undefined;
   }
@@ -74,16 +74,14 @@ export interface QuantStatusLabel {
 
 export interface QuantReason {
   key:
-    | "knowledgeCandidateLow"
-    | "knowledgeCandidateHealthy"
-    | "textDensityLow"
-    | "textDensityHealthy"
-    | "recentUpdatesLow"
-    | "recentUpdatesHealthy"
-    | "artifactPresent"
-    | "artifactMissing"
     | "markdownPresent"
     | "markdownMissing"
+    | "textPresent"
+    | "textMissing"
+    | "scriptPresent"
+    | "scriptMissing"
+    | "otherTypePresent"
+    | "otherTypeMissing"
     | "neutralInfo";
   params?: Record<string, number | string>;
 }
@@ -98,14 +96,8 @@ export interface ProjectKnowledgeCardModel {
   reason: QuantReason;
 }
 
-const KNOWLEDGE_EXTENSIONS = new Set([
-  "md",
-  "mdx",
+const TEXT_FILE_EXTENSIONS = new Set([
   "txt",
-  "pdf",
-  "doc",
-  "docx",
-  "rtf",
   "csv",
   "json",
   "yaml",
@@ -113,25 +105,14 @@ const KNOWLEDGE_EXTENSIONS = new Set([
   "xml",
   "html",
   "htm",
-]);
-
-const TEXT_LIKE_EXTENSIONS = new Set([
-  ...KNOWLEDGE_EXTENSIONS,
-  "js",
-  "jsx",
-  "ts",
-  "tsx",
-  "py",
-  "sh",
-  "sql",
+  "rtf",
   "toml",
   "ini",
-  "css",
-  "scss",
-  "less",
+  "sql",
 ]);
 
 const MARKDOWN_EXTENSIONS = new Set(["md", "mdx"]);
+const SCRIPT_EXTENSIONS = new Set(["py"]);
 
 function normalizePath(path: string): string {
   return path.replace(/\\/g, "/").replace(/^\.\//, "").toLowerCase();
@@ -144,26 +125,25 @@ function extensionOf(path: string): string {
   return dotIndex >= 0 ? fileName.slice(dotIndex + 1) : "";
 }
 
-export function isKnowledgeCandidatePath(path: string): boolean {
-  return KNOWLEDGE_EXTENSIONS.has(extensionOf(path));
-}
-
 export function isMarkdownPath(path: string): boolean {
   return MARKDOWN_EXTENSIONS.has(extensionOf(path));
 }
 
-export function isTextLikePath(path: string): boolean {
-  return TEXT_LIKE_EXTENSIONS.has(extensionOf(path));
+export function isTextPath(path: string): boolean {
+  return TEXT_FILE_EXTENSIONS.has(extensionOf(path));
+}
+
+export function isScriptPath(path: string): boolean {
+  return SCRIPT_EXTENSIONS.has(extensionOf(path));
+}
+
+export function isOtherTypePath(path: string): boolean {
+  return !isMarkdownPath(path) && !isTextPath(path) && !isScriptPath(path);
 }
 
 function isArtifactPath(path: string): boolean {
   const normalized = normalizePath(path);
-  return (
-    normalized.startsWith("skills/")
-    || normalized.startsWith("scripts/")
-    || normalized.startsWith("flows/")
-    || normalized.startsWith("cases/")
-  );
+  return normalized === "output" || normalized.startsWith("output/");
 }
 
 function isOriginalInputPath(path: string): boolean {
@@ -171,13 +151,15 @@ function isOriginalInputPath(path: string): boolean {
   return normalized === "original" || normalized.startsWith("original/");
 }
 
-function isStandardArtifactDirPath(path: string): boolean {
+function isIntermediatePath(path: string): boolean {
   const normalized = normalizePath(path);
   return (
-    normalized.startsWith("skills/")
-    || normalized.startsWith("scripts/")
-    || normalized.startsWith("flows/")
-    || normalized.startsWith("cases/")
+    normalized.startsWith("intermediate/")
+    || normalized.startsWith("data/")
+    || normalized.startsWith("metadata/")
+    || normalized.startsWith("cross-book/")
+    || normalized.startsWith("term-candidates/")
+    || normalized.startsWith("review/")
   );
 }
 
@@ -197,17 +179,16 @@ export function isRecentlyUpdatedFile(modifiedTime: string, nowMs: number = Date
 export function matchesProjectKnowledgeFilter(
   filter: ProjectKnowledgeFilterKey,
   file: Pick<AgentProjectFileInfo, "path" | "modified_time">,
-  nowMs: number = Date.now(),
 ): boolean {
   switch (filter) {
-    case "knowledgeCandidates":
-      return isKnowledgeCandidatePath(file.path);
     case "markdown":
       return isMarkdownPath(file.path);
-    case "textLike":
-      return isTextLikePath(file.path);
-    case "recent":
-      return isRecentlyUpdatedFile(file.modified_time, nowMs);
+    case "text":
+      return isTextPath(file.path);
+    case "script":
+      return isScriptPath(file.path);
+    case "otherType":
+      return isOtherTypePath(file.path);
     default:
       return false;
   }
@@ -238,24 +219,28 @@ export function computeProjectFileInventorySummary(
   const nowMs = Date.now();
   const totalFiles = files.length;
   let totalFileBytes = 0;
-  let knowledgeCandidateFiles = 0;
   let markdownFiles = 0;
-  let textLikeFiles = 0;
+  let textFiles = 0;
+  let scriptFiles = 0;
+  let otherTypeFiles = 0;
   let artifactFiles = 0;
   let recentlyUpdatedFiles = 0;
   let originalFiles = 0;
-  let derivedFiles = 0;
+  let intermediateFiles = 0;
 
   for (const file of files) {
     totalFileBytes += Math.max(0, file.size || 0);
-    if (isKnowledgeCandidatePath(file.path)) {
-      knowledgeCandidateFiles += 1;
-    }
     if (isMarkdownPath(file.path)) {
       markdownFiles += 1;
     }
-    if (isTextLikePath(file.path)) {
-      textLikeFiles += 1;
+    if (isTextPath(file.path)) {
+      textFiles += 1;
+    }
+    if (isScriptPath(file.path)) {
+      scriptFiles += 1;
+    }
+    if (isOtherTypePath(file.path)) {
+      otherTypeFiles += 1;
     }
     if (isArtifactPath(file.path)) {
       artifactFiles += 1;
@@ -265,8 +250,8 @@ export function computeProjectFileInventorySummary(
     }
     if (isOriginalInputPath(file.path)) {
       originalFiles += 1;
-    } else if (!isStandardArtifactDirPath(file.path)) {
-      derivedFiles += 1;
+    } else if (isIntermediatePath(file.path)) {
+      intermediateFiles += 1;
     }
   }
 
@@ -275,13 +260,14 @@ export function computeProjectFileInventorySummary(
   return {
     totalFiles,
     originalFiles,
-    derivedFiles,
+    intermediateFiles,
+    artifactFiles,
     knowledgeMetrics: {
       totalFiles,
-      knowledgeCandidateFiles,
       markdownFiles,
-      textLikeFiles,
-      artifactFiles,
+      textFiles,
+      scriptFiles,
+      otherTypeFiles,
       recentlyUpdatedFiles,
       averageFileBytes,
       totalFileBytes,
@@ -294,35 +280,22 @@ export function getProjectKnowledgeQuantAssessment(
   metrics: ProjectKnowledgeMetrics,
 ): QuantAssessment {
   switch (key) {
-    case "knowledgeCandidates":
-      if (metrics.totalFiles === 0) {
-        return { tone: "neutral", status: "neutral" };
-      }
-      return metrics.knowledgeCandidateFiles > 0
-        ? { tone: "positive", status: "healthy" }
-        : { tone: "warning", status: "attention" };
     case "markdown":
       return metrics.markdownFiles > 0
         ? { tone: "positive", status: "healthy" }
         : { tone: "neutral", status: "neutral" };
-    case "textLike":
-      if (metrics.totalFiles === 0) {
-        return { tone: "neutral", status: "neutral" };
-      }
-      return metrics.textLikeFiles / metrics.totalFiles >= 0.5
-        ? { tone: "positive", status: "healthy" }
-        : { tone: "warning", status: "attention" };
-    case "artifact":
-      return metrics.artifactFiles > 0
+    case "text":
+      return metrics.textFiles > 0
         ? { tone: "positive", status: "healthy" }
         : { tone: "neutral", status: "neutral" };
-    case "recent":
-      if (metrics.totalFiles === 0) {
-        return { tone: "neutral", status: "neutral" };
-      }
-      return metrics.recentlyUpdatedFiles > 0
+    case "script":
+      return metrics.scriptFiles > 0
         ? { tone: "positive", status: "healthy" }
-        : { tone: "warning", status: "attention" };
+        : { tone: "neutral", status: "neutral" };
+    case "otherType":
+      return metrics.otherTypeFiles > 0
+        ? { tone: "positive", status: "healthy" }
+        : { tone: "neutral", status: "neutral" };
     case "average":
     case "total":
     case "totalFiles":
@@ -336,47 +309,22 @@ export function getProjectKnowledgeQuantReason(
   metrics: ProjectKnowledgeMetrics,
 ): QuantReason {
   switch (key) {
-    case "knowledgeCandidates":
-      if (metrics.totalFiles === 0) {
-        return { key: "neutralInfo" };
-      }
-      return metrics.knowledgeCandidateFiles > 0
-        ? {
-            key: "knowledgeCandidateHealthy",
-            params: { count: metrics.knowledgeCandidateFiles },
-          }
-        : { key: "knowledgeCandidateLow" };
     case "markdown":
       return metrics.markdownFiles > 0
         ? { key: "markdownPresent", params: { count: metrics.markdownFiles } }
         : { key: "markdownMissing" };
-    case "textLike":
-      if (metrics.totalFiles === 0) {
-        return { key: "neutralInfo" };
-      }
-      return metrics.textLikeFiles / metrics.totalFiles >= 0.5
-        ? {
-            key: "textDensityHealthy",
-            params: { count: metrics.textLikeFiles, total: metrics.totalFiles },
-          }
-        : {
-            key: "textDensityLow",
-            params: { count: metrics.textLikeFiles, total: metrics.totalFiles },
-          };
-    case "artifact":
-      return metrics.artifactFiles > 0
-        ? { key: "artifactPresent", params: { count: metrics.artifactFiles } }
-        : { key: "artifactMissing" };
-    case "recent":
-      if (metrics.totalFiles === 0) {
-        return { key: "neutralInfo" };
-      }
-      return metrics.recentlyUpdatedFiles > 0
-        ? {
-            key: "recentUpdatesHealthy",
-            params: { count: metrics.recentlyUpdatedFiles },
-          }
-        : { key: "recentUpdatesLow" };
+    case "text":
+      return metrics.textFiles > 0
+        ? { key: "textPresent", params: { count: metrics.textFiles } }
+        : { key: "textMissing" };
+    case "script":
+      return metrics.scriptFiles > 0
+        ? { key: "scriptPresent", params: { count: metrics.scriptFiles } }
+        : { key: "scriptMissing" };
+    case "otherType":
+      return metrics.otherTypeFiles > 0
+        ? { key: "otherTypePresent", params: { count: metrics.otherTypeFiles } }
+        : { key: "otherTypeMissing" };
     default:
       return { key: "neutralInfo" };
   }
@@ -415,34 +363,28 @@ export function buildProjectKnowledgeCardModels(
     value: string | number;
   }> = [
     {
-      key: "knowledgeCandidates",
-      labelI18nKey: "projects.quantKnowledgeCandidates",
-      defaultLabel: "Knowledge Candidates",
-      value: metrics.knowledgeCandidateFiles,
-    },
-    {
       key: "markdown",
       labelI18nKey: "projects.quantMarkdownFiles",
-      defaultLabel: "Markdown Files",
+      defaultLabel: "Markdown",
       value: metrics.markdownFiles,
     },
     {
-      key: "textLike",
-      labelI18nKey: "projects.quantTextLikeFiles",
-      defaultLabel: "Text-like Files",
-      value: metrics.textLikeFiles,
+      key: "text",
+      labelI18nKey: "projects.quantTextFiles",
+      defaultLabel: "文本文件",
+      value: metrics.textFiles,
     },
     {
-      key: "artifact",
-      labelI18nKey: "projects.quantArtifactFiles",
-      defaultLabel: "Artifact Files",
-      value: metrics.artifactFiles,
+      key: "script",
+      labelI18nKey: "projects.quantScriptFiles",
+      defaultLabel: "脚本 (.py)",
+      value: metrics.scriptFiles,
     },
     {
-      key: "recent",
-      labelI18nKey: "projects.quantRecentlyUpdated",
-      defaultLabel: "Updated in 7d",
-      value: metrics.recentlyUpdatedFiles,
+      key: "otherType",
+      labelI18nKey: "projects.quantOtherTypeFiles",
+      defaultLabel: "其他类型",
+      value: metrics.otherTypeFiles,
     },
     {
       key: "average",

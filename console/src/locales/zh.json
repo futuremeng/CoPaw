@@ -1723,8 +1723,14 @@
     "runs": "运行",
     "updated": "更新",
     "filesOriginal": "原件文件",
+    "filesIntermediate": "中间文件",
+    "filesArtifact": "产物文件",
     "filesDerived": "衍生文件",
     "filesBuiltIn": "内建文件",
+    "filesAgent": "智能体",
+    "filesSkill": "技能",
+    "filesFlow": "流程",
+    "filesCase": "案例",
     "treeViewMode": {
       "filter": "筛选",
       "highlight": "高亮"
@@ -1825,6 +1831,8 @@
     },
     "stage": {
       "source": "源文件",
+      "fileTypes": "文件类型",
+      "projectFiles": "项目文件",
       "knowledge": "知识成果",
       "output": "流程输出",
       "builtin": "内建"
@@ -1847,10 +1855,19 @@
       "artifactMissing": "当前还没有产物文件。",
       "markdownPresent": "当前已有 {{count}} 个 Markdown 文件。",
       "markdownMissing": "当前还没有 Markdown 文件。",
+      "textPresent": "当前已有 {{count}} 个文本文件。",
+      "textMissing": "当前还没有文本文件。",
+      "scriptPresent": "当前已有 {{count}} 个脚本文件。",
+      "scriptMissing": "当前还没有脚本文件。",
+      "otherTypePresent": "当前已有 {{count}} 个其他类型文件。",
+      "otherTypeMissing": "当前还没有其他类型文件。",
       "neutralInfo": "该指标用于信息展示。"
     },
     "quantKnowledgeCandidates": "知识候选文件",
     "quantMarkdownFiles": "Markdown 文件",
+    "quantTextFiles": "文本文件",
+    "quantScriptFiles": "脚本文件",
+    "quantOtherTypeFiles": "其他类型文件",
     "quantTextLikeFiles": "文本类文件",
     "quantArtifactFiles": "产物文件",
     "quantRecentlyUpdated": "7 天内更新",

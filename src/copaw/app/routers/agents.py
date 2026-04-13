@@ -77,9 +77,9 @@ _DEFAULT_PROJECT_TEMPLATES = {
     "projects/README.md": "# Projects\n\n"
     "Store one project per subdirectory, for example:\n\n"
     "- project-abcde123/\n"
-    "  - PROJECT.md\n"
+    "  - .agent/PROJECT.md\n"
     "  - data/\n\n"
-    "The project metadata should be declared in PROJECT.md frontmatter:\n\n"
+    "The project metadata should be declared in .agent/PROJECT.md frontmatter:\n\n"
     "---\n"
     "id: project-abcde123\n"
     "name: Example project\n"
@@ -276,10 +276,19 @@ class ProjectFileSummary(BaseModel):
     builtin_files: int
     visible_files: int
     original_files: int
+    intermediate_files: int = 0
+    artifact_files: int = 0
     derived_files: int
     knowledge_candidate_files: int
     markdown_files: int
+    text_files: int = 0
+    script_files: int = 0
+    other_type_files: int = 0
     text_like_files: int
+    agent_files: int = 0
+    skill_files: int = 0
+    flow_files: int = 0
+    case_files: int = 0
     recently_updated_files: int
 
 
@@ -481,7 +490,13 @@ _AGENTS_SQUARE_DEFAULT_DIR = (
 _AGENTS_SQUARE_CONFIG_PATH = WORKING_DIR / "agents_square" / "config.json"
 _AGENTS_SQUARE_DEFAULT_PATH = _AGENTS_SQUARE_DEFAULT_DIR / "default.json"
 _PROJECTS_DIRNAME = "projects"
-_PROJECT_METADATA_FILENAMES = ("PROJECT.md", "project.md")
+_PROJECT_AGENT_CONFIG_DIR = ".agent"
+_PROJECT_METADATA_RELATIVE_PATHS = (
+    ".agent/PROJECT.md",
+    ".agent/project.md",
+    "PROJECT.md",
+    "project.md",
+)
 _PROJECT_ARTIFACT_DIR_BY_KIND = {
     "skill": "skills",
     "script": "scripts",
@@ -497,20 +512,9 @@ _PROJECT_IGNORED_FILE_NAMES = {
     ".gitkeep",
     "thumbs.db",
 }
-_PROJECT_BUILTIN_FILE_NAMES = {
-    "agents.md",
-    "project.md",
-    "plan.md",
-    "heartbeat.md",
-}
-_PROJECT_KNOWLEDGE_EXTENSIONS = {
-    "md",
-    "mdx",
+_PROJECT_MARKDOWN_EXTENSIONS = {"md", "mdx"}
+_PROJECT_TEXT_FILE_EXTENSIONS = {
     "txt",
-    "pdf",
-    "doc",
-    "docx",
-    "rtf",
     "csv",
     "json",
     "yaml",
@@ -518,22 +522,23 @@ _PROJECT_KNOWLEDGE_EXTENSIONS = {
     "xml",
     "html",
     "htm",
-}
-_PROJECT_TEXT_LIKE_EXTENSIONS = _PROJECT_KNOWLEDGE_EXTENSIONS | {
-    "js",
-    "jsx",
-    "ts",
-    "tsx",
-    "py",
-    "sh",
-    "sql",
+    "rtf",
     "toml",
     "ini",
-    "css",
-    "scss",
-    "less",
+    "sql",
 }
-_PROJECT_MARKDOWN_EXTENSIONS = {"md", "mdx"}
+_PROJECT_SCRIPT_EXTENSIONS = {"py"}
+_PROJECT_KNOWLEDGE_EXTENSIONS = (
+    _PROJECT_MARKDOWN_EXTENSIONS
+    | _PROJECT_TEXT_FILE_EXTENSIONS
+    | _PROJECT_SCRIPT_EXTENSIONS
+    | {"pdf", "doc", "docx"}
+)
+_PROJECT_TEXT_LIKE_EXTENSIONS = (
+    _PROJECT_MARKDOWN_EXTENSIONS
+    | _PROJECT_TEXT_FILE_EXTENSIONS
+    | _PROJECT_SCRIPT_EXTENSIONS
+)
 _PROJECT_ARTIFACT_DISTILL_MODES = {
     "file_scan",
     "conversation_evidence",
@@ -1022,15 +1027,39 @@ def _first_nonempty_line(text: str) -> str:
     return ""
 
 
+def _has_hidden_directory_segment(
+    rel_path: str,
+    *,
+    assume_last_segment_is_dir: bool = False,
+) -> bool:
+    normalized = str(rel_path or "").replace("\\", "/").strip("/")
+    if not normalized:
+        return False
+    segments = [segment for segment in normalized.split("/") if segment]
+    if not segments:
+        return False
+    last_index = len(segments) - 1
+    for index, segment in enumerate(segments):
+        if not segment.startswith("."):
+            continue
+        if index < last_index or assume_last_segment_is_dir:
+            return True
+    return False
+
+
+def _iter_project_metadata_files(project_dir: Path):
+    for rel_path in _PROJECT_METADATA_RELATIVE_PATHS:
+        candidate = project_dir / rel_path
+        if candidate.is_file():
+            yield candidate
+
+
+def _default_project_metadata_file(project_dir: Path) -> Path:
+    return project_dir / _PROJECT_METADATA_RELATIVE_PATHS[0]
+
+
 def _load_project_summary(project_dir: Path) -> ProjectSummary | None:
-    metadata_file = next(
-        (
-            project_dir / name
-            for name in _PROJECT_METADATA_FILENAMES
-            if (project_dir / name).is_file()
-        ),
-        None,
-    )
+    metadata_file = next(_iter_project_metadata_files(project_dir), None)
     if metadata_file is None:
         return None
 
@@ -1163,13 +1192,24 @@ def _scaffold_project_governance_files(
     Files are created only when missing, so callers can safely re-run this.
     """
 
-    agents_md = project_dir / "AGENTS.md"
+    agent_config_dir = project_dir / _PROJECT_AGENT_CONFIG_DIR
+    agent_config_dir.mkdir(parents=True, exist_ok=True)
+
+    agents_md = agent_config_dir / "AGENTS.md"
     if not agents_md.exists():
         agents_md.write_text(
             _load_project_template_text(
                 "project/AGENTS.md",
                 {"DATA_DIR": data_subdir},
             ),
+            encoding="utf-8",
+        )
+
+    plan_md = agent_config_dir / "PLAN.md"
+    if not plan_md.exists():
+        plan_md.write_text(
+            "# Project Plan\n\n"
+            "Track milestones, risks, and next actions here.\n",
             encoding="utf-8",
         )
 
@@ -1966,6 +2006,7 @@ def _write_project_frontmatter(
         sort_keys=False,
     ).strip()
     text = f"---\n{serialized}\n---\n\n{(body or '').strip()}\n"
+    metadata_file.parent.mkdir(parents=True, exist_ok=True)
     metadata_file.write_text(text, encoding="utf-8")
     record_project_realtime_paths(None, [metadata_file])
 
@@ -2001,12 +2042,8 @@ def _clone_project(
     _ensure_project_artifact_layout(target_dir)
 
     metadata_file = next(
-        (
-            target_dir / name
-            for name in _PROJECT_METADATA_FILENAMES
-            if (target_dir / name).is_file()
-        ),
-        target_dir / "PROJECT.md",
+        _iter_project_metadata_files(target_dir),
+        _default_project_metadata_file(target_dir),
     )
 
     parsed = _parse_markdown_frontmatter(metadata_file)
@@ -2064,7 +2101,8 @@ def _create_project(
     )
     _ensure_project_artifact_layout(project_dir)
 
-    metadata_file = project_dir / "PROJECT.md"
+    metadata_file = _default_project_metadata_file(project_dir)
+    metadata_file.parent.mkdir(parents=True, exist_ok=True)
     normalized_profile = _normalize_project_artifact_profile_storage(
         body.artifact_profile,
     )
@@ -2141,13 +2179,19 @@ def _is_visible_project_tree_path(rel_path: str) -> bool:
     if not rel_path:
         return True
     parts = Path(rel_path).parts
-    return not any(part in _PROJECT_TREE_IGNORED_NAMES for part in parts)
+    if any(part in _PROJECT_TREE_IGNORED_NAMES for part in parts):
+        return False
+    return not _has_hidden_directory_segment(
+        rel_path,
+        assume_last_segment_is_dir=rel_path.endswith("/"),
+    )
 
 
 def _count_visible_project_tree_children(target_dir: Path) -> int:
     count = 0
     for child in target_dir.iterdir():
-        if not _is_visible_project_tree_path(child.name):
+        candidate = f"{child.name}/" if child.is_dir() else child.name
+        if not _is_visible_project_tree_path(candidate):
             continue
         count += 1
     return count
@@ -2176,7 +2220,9 @@ def _list_project_file_tree_nodes(
     normalized_dir_path = _normalize_project_tree_dir_path(dir_path)
     if normalized_dir_path and not _is_safe_relative_path(normalized_dir_path):
         raise HTTPException(status_code=400, detail="Invalid directory path")
-    if normalized_dir_path and not _is_visible_project_tree_path(normalized_dir_path):
+    if normalized_dir_path and not _is_visible_project_tree_path(
+        f"{normalized_dir_path}/"
+    ):
         raise HTTPException(status_code=404, detail="Directory not found")
 
     target_dir = (
@@ -2200,7 +2246,8 @@ def _list_project_file_tree_nodes(
 
     for child in children:
         rel_path = child.relative_to(project_root).as_posix()
-        if not _is_visible_project_tree_path(rel_path):
+        candidate = f"{rel_path}/" if child.is_dir() else rel_path
+        if not _is_visible_project_tree_path(candidate):
             continue
         try:
             stat = child.stat()
@@ -2259,7 +2306,10 @@ def _list_project_files(project_dir: Path) -> list[ProjectFileInfo]:
 
 
 def _normalize_project_metric_path(rel_path: str) -> str:
-    return str(rel_path or "").replace("\\", "/").lstrip("./").lower()
+    normalized = str(rel_path or "").replace("\\", "/")
+    if normalized.startswith("./"):
+        normalized = normalized[2:]
+    return normalized.lower()
 
 
 def _extension_of_project_path(rel_path: str) -> str:
@@ -2277,15 +2327,7 @@ def _is_ignored_project_metric_file(rel_path: str) -> bool:
 
 def _is_builtin_project_metric_file(rel_path: str) -> bool:
     normalized = _normalize_project_metric_path(rel_path)
-    segments = [segment for segment in normalized.split("/") if segment]
-    if not segments:
-        return False
-    file_name = segments[-1]
-    if file_name in _PROJECT_BUILTIN_FILE_NAMES:
-        return True
-    if len(segments) == 1 and file_name.startswith("."):
-        return True
-    return any(segment.startswith(".") for segment in segments[:-1])
+    return _has_hidden_directory_segment(normalized)
 
 
 def _is_original_project_metric_file(rel_path: str) -> bool:
@@ -2293,12 +2335,46 @@ def _is_original_project_metric_file(rel_path: str) -> bool:
     return normalized == "original" or normalized.startswith("original/")
 
 
-def _is_standard_artifact_metric_file(rel_path: str) -> bool:
+def _is_intermediate_project_metric_file(rel_path: str) -> bool:
     normalized = _normalize_project_metric_path(rel_path)
     return any(
         normalized.startswith(f"{prefix}/")
-        for prefix in ("skills", "scripts", "flows", "cases")
+        for prefix in (
+            "intermediate",
+            "data",
+            "metadata",
+            "cross-book",
+            "term-candidates",
+            "review",
+        )
     )
+
+
+def _is_artifact_project_metric_file(rel_path: str) -> bool:
+    normalized = _normalize_project_metric_path(rel_path)
+    return normalized == "output" or normalized.startswith("output/")
+
+
+def _is_agent_project_metric_file(rel_path: str) -> bool:
+    normalized = _normalize_project_metric_path(rel_path)
+    return normalized.startswith(".agent/")
+
+
+def _is_skill_project_metric_file(rel_path: str) -> bool:
+    normalized = _normalize_project_metric_path(rel_path)
+    return normalized.startswith(".skills/")
+
+
+def _is_flow_project_metric_file(rel_path: str) -> bool:
+    normalized = _normalize_project_metric_path(rel_path)
+    parts = [part for part in normalized.split("/") if part]
+    return len(parts) >= 4 and parts[0] == "pipelines" and parts[2] == "pipeline"
+
+
+def _is_case_project_metric_file(rel_path: str) -> bool:
+    normalized = _normalize_project_metric_path(rel_path)
+    parts = [part for part in normalized.split("/") if part]
+    return len(parts) >= 4 and parts[0] == "pipelines" and parts[2] == "runs"
 
 
 def _is_recent_project_metric_file(mtime: float) -> bool:
@@ -2311,10 +2387,19 @@ def _build_project_file_summary(project_dir: Path) -> ProjectFileSummary:
     builtin_files = 0
     visible_files = 0
     original_files = 0
+    intermediate_files = 0
+    artifact_files = 0
     derived_files = 0
     knowledge_candidate_files = 0
     markdown_files = 0
+    text_files = 0
+    script_files = 0
+    other_type_files = 0
     text_like_files = 0
+    agent_files = 0
+    skill_files = 0
+    flow_files = 0
+    case_files = 0
     recently_updated_files = 0
 
     for path in project_root.rglob("*"):
@@ -2331,33 +2416,66 @@ def _build_project_file_summary(project_dir: Path) -> ProjectFileSummary:
         total_files += 1
         extension = _extension_of_project_path(rel_path)
         is_builtin = _is_builtin_project_metric_file(rel_path)
+        is_markdown = extension in _PROJECT_MARKDOWN_EXTENSIONS
+        is_text_file = extension in _PROJECT_TEXT_FILE_EXTENSIONS
+        is_script_file = extension in _PROJECT_SCRIPT_EXTENSIONS
+        is_text_like = is_markdown or is_text_file or is_script_file
         if is_builtin:
             builtin_files += 1
         else:
             visible_files += 1
             if _is_original_project_metric_file(rel_path):
                 original_files += 1
-            elif not _is_standard_artifact_metric_file(rel_path):
-                derived_files += 1
+            elif _is_intermediate_project_metric_file(rel_path):
+                intermediate_files += 1
+            elif _is_artifact_project_metric_file(rel_path):
+                artifact_files += 1
+
+        if _is_agent_project_metric_file(rel_path):
+            agent_files += 1
+        elif _is_skill_project_metric_file(rel_path):
+            skill_files += 1
+        elif _is_flow_project_metric_file(rel_path):
+            flow_files += 1
+        elif _is_case_project_metric_file(rel_path):
+            case_files += 1
 
         if extension in _PROJECT_KNOWLEDGE_EXTENSIONS:
-            knowledge_candidate_files += 1
-        if extension in _PROJECT_MARKDOWN_EXTENSIONS:
+            if not is_builtin:
+                knowledge_candidate_files += 1
+        if is_markdown:
             markdown_files += 1
-        if extension in _PROJECT_TEXT_LIKE_EXTENSIONS:
+        if is_text_file:
+            text_files += 1
+        if is_script_file:
+            script_files += 1
+        if not is_markdown and not is_text_file and not is_script_file:
+            other_type_files += 1
+        if is_text_like:
             text_like_files += 1
         if _is_recent_project_metric_file(stat.st_mtime):
             recently_updated_files += 1
+
+    derived_files = intermediate_files + artifact_files
 
     return ProjectFileSummary(
         total_files=total_files,
         builtin_files=builtin_files,
         visible_files=visible_files,
         original_files=original_files,
+        intermediate_files=intermediate_files,
+        artifact_files=artifact_files,
         derived_files=derived_files,
         knowledge_candidate_files=knowledge_candidate_files,
         markdown_files=markdown_files,
+        text_files=text_files,
+        script_files=script_files,
+        other_type_files=other_type_files,
         text_like_files=text_like_files,
+        agent_files=agent_files,
+        skill_files=skill_files,
+        flow_files=flow_files,
+        case_files=case_files,
         recently_updated_files=recently_updated_files,
     )
 

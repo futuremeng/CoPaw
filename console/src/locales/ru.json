@@ -1719,8 +1719,14 @@
     "runs": "Запуски",
     "updated": "Обновлено",
     "filesOriginal": "Исходные файлы",
+    "filesIntermediate": "Промежуточные файлы",
+    "filesArtifact": "Файлы артефактов",
     "filesDerived": "Производные файлы",
     "filesBuiltIn": "Встроенные файлы",
+    "filesAgent": "Агент",
+    "filesSkill": "Навык",
+    "filesFlow": "Поток",
+    "filesCase": "Кейс",
     "treeViewMode": {
       "filter": "Фильтр",
       "highlight": "Подсветка"
@@ -1821,6 +1827,8 @@
     },
     "stage": {
       "source": "Исходники",
+      "fileTypes": "Типы файлов",
+      "projectFiles": "Файлы проекта",
       "knowledge": "Знания",
       "output": "Выход",
       "builtin": "Встроенное"
@@ -1843,10 +1851,19 @@
       "artifactMissing": "Файлов артефактов пока нет.",
       "markdownPresent": "Доступно {{count}} Markdown-файлов.",
       "markdownMissing": "Markdown-файлов пока нет.",
+      "textPresent": "Доступно {{count}} текстовых файлов.",
+      "textMissing": "Текстовых файлов пока нет.",
+      "scriptPresent": "Доступно {{count}} файлов скриптов.",
+      "scriptMissing": "Файлов скриптов пока нет.",
+      "otherTypePresent": "Доступно {{count}} файлов других типов.",
+      "otherTypeMissing": "Файлов других типов пока нет.",
       "neutralInfo": "Эта метрика носит справочный характер."
     },
     "quantKnowledgeCandidates": "Файлы-кандидаты знаний",
     "quantMarkdownFiles": "Markdown-файлы",
+    "quantTextFiles": "Текстовые файлы",
+    "quantScriptFiles": "Файлы скриптов",
+    "quantOtherTypeFiles": "Файлы других типов",
     "quantTextLikeFiles": "Текстовые файлы",
     "quantArtifactFiles": "Файлы артефактов",
     "quantRecentlyUpdated": "Обновлено за 7 дней",

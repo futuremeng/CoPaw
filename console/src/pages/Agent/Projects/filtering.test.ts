@@ -8,7 +8,7 @@ describe("project filtering helpers", () => {
   it("toggles project file filter on repeated click", () => {
     expect(toggleProjectFileFilter("", "original")).toBe("original");
     expect(toggleProjectFileFilter("original", "original")).toBe("");
-    expect(toggleProjectFileFilter("original", "markdown")).toBe("markdown");
+    expect(toggleProjectFileFilter("original", "text")).toBe("text");
   });
 
   it("maps filter keys to i18n label descriptors", () => {
@@ -16,17 +16,17 @@ describe("project filtering helpers", () => {
       i18nKey: "projects.filesOriginal",
       defaultLabel: "Original Files",
     });
-    expect(getProjectFilterLabelDescriptor("skills")).toEqual({
-      i18nKey: "projects.artifacts.skill",
-      defaultLabel: "Skills",
+    expect(getProjectFilterLabelDescriptor("intermediate")).toEqual({
+      i18nKey: "projects.filesIntermediate",
+      defaultLabel: "Intermediate Files",
     });
-    expect(getProjectFilterLabelDescriptor("knowledgeCandidates")).toEqual({
-      i18nKey: "projects.quantKnowledgeCandidates",
-      defaultLabel: "Knowledge Candidates",
+    expect(getProjectFilterLabelDescriptor("script")).toEqual({
+      i18nKey: "projects.quantScriptFiles",
+      defaultLabel: "脚本 (.py)",
     });
-    expect(getProjectFilterLabelDescriptor("recent")).toEqual({
-      i18nKey: "projects.quantRecentlyUpdated",
-      defaultLabel: "Updated in 7d",
+    expect(getProjectFilterLabelDescriptor("agent")).toEqual({
+      i18nKey: "projects.filesAgent",
+      defaultLabel: "智能体",
     });
   });
 });

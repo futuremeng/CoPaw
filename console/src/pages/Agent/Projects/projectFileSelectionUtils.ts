@@ -2,12 +2,11 @@ export function isPreviewablePath(path: string): boolean {
   if (!path) {
     return false;
   }
-  const normalized = path.replace(/\\/g, "/");
-  if (normalized.startsWith(".")) {
-    return false;
-  }
-  if (normalized.split("/").some((part) => part.startsWith("."))) {
-    return false;
+  const segments = path.replace(/\\/g, "/").split("/").filter(Boolean);
+  for (let index = 0; index < segments.length - 1; index += 1) {
+    if ((segments[index] || "").startsWith(".")) {
+      return false;
+    }
   }
   return true;
 }

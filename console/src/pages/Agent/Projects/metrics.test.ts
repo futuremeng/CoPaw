@@ -10,11 +10,12 @@ import {
   getProjectKnowledgeQuantReason,
   getProjectKnowledgeQuantStatusLabel,
   isProjectKnowledgeFilterKey,
-  isKnowledgeCandidatePath,
   isMarkdownPath,
   matchesProjectKnowledgeFilter,
   isRecentlyUpdatedFile,
-  isTextLikePath,
+  isTextPath,
+  isScriptPath,
+  isOtherTypePath,
 } from "./metrics";
 
 describe("project metrics", () => {
@@ -58,10 +59,11 @@ describe("project metrics", () => {
     const metrics = computeProjectKnowledgeMetrics(files);
 
     expect(metrics.totalFiles).toBe(5);
-    expect(metrics.knowledgeCandidateFiles).toBe(4);
     expect(metrics.markdownFiles).toBe(2);
-    expect(metrics.textLikeFiles).toBe(4);
-    expect(metrics.artifactFiles).toBe(2);
+    expect(metrics.textFiles).toBe(2);
+    expect(metrics.scriptFiles).toBe(0);
+    expect(metrics.otherTypeFiles).toBe(1);
+    expect(metrics.markdownFiles).toBe(2);
     expect(metrics.recentlyUpdatedFiles).toBe(4);
     expect(metrics.totalFileBytes).toBe(15872);
     expect(metrics.averageFileBytes).toBeCloseTo(3174.4, 1);
@@ -96,10 +98,11 @@ describe("project metrics", () => {
 
     expect(summary.totalFiles).toBe(3);
     expect(summary.originalFiles).toBe(1);
-    expect(summary.derivedFiles).toBe(1);
-    expect(summary.knowledgeMetrics.knowledgeCandidateFiles).toBe(2);
-    expect(summary.knowledgeMetrics.textLikeFiles).toBe(3);
-    expect(summary.knowledgeMetrics.artifactFiles).toBe(1);
+    expect(summary.intermediateFiles).toBe(1);
+    expect(summary.artifactFiles).toBe(0);
+    expect(summary.knowledgeMetrics.textFiles).toBe(1);
+    expect(summary.knowledgeMetrics.scriptFiles).toBe(1);
+    expect(summary.knowledgeMetrics.otherTypeFiles).toBe(0);
 
     vi.useRealTimers();
   });
@@ -120,58 +123,50 @@ describe("project metrics", () => {
       },
     ]);
 
-    expect(getProjectKnowledgeQuantAssessment("knowledgeCandidates", metrics)).toEqual({
-      tone: "warning",
-      status: "attention",
+    expect(getProjectKnowledgeQuantAssessment("markdown", metrics)).toEqual({
+      tone: "neutral",
+      status: "neutral",
     });
-    expect(getProjectKnowledgeQuantAssessment("textLike", metrics)).toEqual({
-      tone: "warning",
-      status: "attention",
+    expect(getProjectKnowledgeQuantAssessment("text", metrics)).toEqual({
+      tone: "neutral",
+      status: "neutral",
     });
-    expect(getProjectKnowledgeQuantAssessment("recent", metrics)).toEqual({
-      tone: "warning",
-      status: "attention",
-    });
-    expect(getProjectKnowledgeQuantReason("knowledgeCandidates", metrics)).toEqual({
-      key: "knowledgeCandidateLow",
-    });
-    expect(getProjectKnowledgeQuantReason("recent", metrics)).toEqual({
-      key: "recentUpdatesLow",
+    expect(getProjectKnowledgeQuantReason("text", metrics)).toEqual({
+      key: "textMissing",
     });
   });
 
   it("exposes reusable file classification helpers", () => {
-    expect(isKnowledgeCandidatePath("original/doc.md")).toBe(true);
-    expect(isKnowledgeCandidatePath("data/image.png")).toBe(false);
     expect(isMarkdownPath("original/doc.mdx")).toBe(true);
     expect(isMarkdownPath("original/readme.txt")).toBe(false);
-    expect(isTextLikePath("scripts/run.py")).toBe(true);
-    expect(isTextLikePath("assets/photo.webp")).toBe(false);
+    expect(isTextPath("original/doc.txt")).toBe(true);
+    expect(isTextPath("assets/photo.webp")).toBe(false);
+    expect(isScriptPath("scripts/run.py")).toBe(true);
+    expect(isOtherTypePath("assets/photo.webp")).toBe(true);
     expect(isRecentlyUpdatedFile("2026-04-08T00:00:00Z", Date.parse("2026-04-09T00:00:00Z"))).toBe(true);
     expect(isRecentlyUpdatedFile("2026-03-20T00:00:00Z", Date.parse("2026-04-09T00:00:00Z"))).toBe(false);
-    expect(matchesProjectKnowledgeFilter("knowledgeCandidates", {
-      path: "original/doc.md",
-      modified_time: "2026-04-08T00:00:00Z",
-    })).toBe(true);
     expect(matchesProjectKnowledgeFilter("markdown", {
       path: "original/doc.txt",
       modified_time: "2026-04-08T00:00:00Z",
     })).toBe(false);
-    expect(matchesProjectKnowledgeFilter("textLike", {
+    expect(matchesProjectKnowledgeFilter("text", {
+      path: "original/doc.txt",
+      modified_time: "2026-04-08T00:00:00Z",
+    })).toBe(true);
+    expect(matchesProjectKnowledgeFilter("script", {
       path: "scripts/run.py",
       modified_time: "2026-04-08T00:00:00Z",
     })).toBe(true);
-    expect(matchesProjectKnowledgeFilter("recent", {
-      path: "original/doc.md",
+    expect(matchesProjectKnowledgeFilter("otherType", {
+      path: "assets/photo.webp",
       modified_time: "2026-03-20T00:00:00Z",
-    }, Date.parse("2026-04-09T00:00:00Z"))).toBe(false);
+    })).toBe(true);
     expect(isProjectKnowledgeFilterKey("markdown")).toBe(true);
     expect(isProjectKnowledgeFilterKey("skills")).toBe(false);
-    expect(getProjectKnowledgeFilterKeyFromMetric("knowledgeCandidates")).toBe("knowledgeCandidates");
     expect(getProjectKnowledgeFilterKeyFromMetric("markdown")).toBe("markdown");
-    expect(getProjectKnowledgeFilterKeyFromMetric("textLike")).toBe("textLike");
-    expect(getProjectKnowledgeFilterKeyFromMetric("recent")).toBe("recent");
-    expect(getProjectKnowledgeFilterKeyFromMetric("artifact")).toBeUndefined();
+    expect(getProjectKnowledgeFilterKeyFromMetric("text")).toBe("text");
+    expect(getProjectKnowledgeFilterKeyFromMetric("script")).toBe("script");
+    expect(getProjectKnowledgeFilterKeyFromMetric("otherType")).toBe("otherType");
     expect(getProjectKnowledgeQuantStatusLabel("attention")).toEqual({
       i18nKey: "projects.quantStatusAttention",
       defaultLabel: "Needs attention",
@@ -185,9 +180,9 @@ describe("project metrics", () => {
         modified_time: "2026-04-08T00:00:00Z",
       },
     ]));
-    expect(cards).toHaveLength(8);
-    expect(cards.find((card) => card.key === "knowledgeCandidates")?.value).toBe(1);
-    expect(cards.find((card) => card.key === "knowledgeCandidates")?.filterKey).toBe("knowledgeCandidates");
+    expect(cards).toHaveLength(7);
+    expect(cards.find((card) => card.key === "markdown")?.value).toBe(1);
+    expect(cards.find((card) => card.key === "markdown")?.filterKey).toBe("markdown");
     expect(cards.find((card) => card.key === "average")?.filterKey).toBeUndefined();
   });
 });

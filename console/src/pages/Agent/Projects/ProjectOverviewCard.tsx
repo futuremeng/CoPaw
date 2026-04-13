@@ -108,22 +108,47 @@ function isOriginalInputFile(path: string): boolean {
   return normalized === "original" || normalized.startsWith("original/");
 }
 
-function isPathInStandardDir(path: string, dir: "skills" | "scripts" | "flows" | "cases"): boolean {
+function isPathInStandardDir(path: string, dir: "original" | "intermediate" | "output"): boolean {
   const normalized = normalizeProjectPath(path);
   return normalized === dir || normalized.startsWith(`${dir}/`);
 }
 
-function isStandardArtifactDirPath(path: string): boolean {
+function isIntermediateFile(path: string): boolean {
+  const normalized = normalizeProjectPath(path);
   return (
-    isPathInStandardDir(path, "skills")
-    || isPathInStandardDir(path, "scripts")
-    || isPathInStandardDir(path, "flows")
-    || isPathInStandardDir(path, "cases")
+    isPathInStandardDir(path, "intermediate")
+    || normalized.startsWith("data/")
+    || normalized.startsWith("metadata/")
+    || normalized.startsWith("cross-book/")
+    || normalized.startsWith("term-candidates/")
+    || normalized.startsWith("review/")
   );
 }
 
+function isArtifactFile(path: string): boolean {
+  return isPathInStandardDir(path, "output");
+}
+
+function isAgentProjectFile(path: string): boolean {
+  return normalizeProjectPath(path).startsWith(".agent/");
+}
+
+function isSkillProjectFile(path: string): boolean {
+  return normalizeProjectPath(path).startsWith(".skills/");
+}
+
+function isFlowProjectFile(path: string): boolean {
+  const segments = normalizeProjectPath(path).split("/").filter(Boolean);
+  return segments.length >= 4 && segments[0] === "pipelines" && segments[2] === "pipeline";
+}
+
+function isCaseProjectFile(path: string): boolean {
+  const segments = normalizeProjectPath(path).split("/").filter(Boolean);
+  return segments.length >= 4 && segments[0] === "pipelines" && segments[2] === "runs";
+}
+
 function isStandardTreeRootDir(dir: string): boolean {
-  return ["original", "skills", "scripts", "flows", "cases", "data"].includes(dir);
+  return ["original", "intermediate", "output", "pipelines", "data", "metadata"].includes(dir);
 }
 
 function getFileNodeIcon(fileName: string, isDirectory: boolean): ReactNode {
@@ -482,53 +507,46 @@ export default function ProjectOverviewCard({
   const detachTitle = t("projects.chat.removeAttachment", "Remove from chat attachments");
   const priorityFileSet = useMemo(() => new Set(priorityFilePaths), [priorityFilePaths]);
   const selectedAttachSet = useMemo(() => new Set(selectedAttachPaths), [selectedAttachPaths]);
-  const artifactProfile = selectedProject?.artifact_profile;
   const treeRootDirCounts = useMemo(
     () => ({
       original: getProjectTreeRootDirectoryFileCount(projectTreeNodes, "original"),
-      skills: getProjectTreeRootDirectoryFileCount(projectTreeNodes, "skills"),
-      scripts: getProjectTreeRootDirectoryFileCount(projectTreeNodes, "scripts"),
-      flows: getProjectTreeRootDirectoryFileCount(projectTreeNodes, "flows"),
-      cases: getProjectTreeRootDirectoryFileCount(projectTreeNodes, "cases"),
+      intermediate: getProjectTreeRootDirectoryFileCount(projectTreeNodes, "intermediate"),
+      output: getProjectTreeRootDirectoryFileCount(projectTreeNodes, "output"),
+      pipelines: getProjectTreeRootDirectoryFileCount(projectTreeNodes, "pipelines"),
     }),
     [projectTreeNodes],
   );
-  const artifactCounts = {
-    skills: treeRootDirCounts.skills ?? artifactProfile?.skills.length ?? 0,
-    scripts: treeRootDirCounts.scripts ?? artifactProfile?.scripts.length ?? 0,
-    flows: treeRootDirCounts.flows ?? artifactProfile?.flows.length ?? 0,
-    cases: treeRootDirCounts.cases ?? artifactProfile?.cases.length ?? 0,
-  };
   const nonBuiltInSummary = useMemo(
     () => projectVisibleSummary ?? computeProjectFileInventorySummary(nonBuiltInFiles),
     [nonBuiltInFiles, projectVisibleSummary],
   );
   const filteredFiles = stageScopedFiles.filter((item) => {
     const normalizedPath = normalizeProjectPath(item.path);
-    const nowMs = Date.now();
     switch (selectedMetricFilter) {
       case "original":
         return isOriginalInputFile(normalizedPath);
-      case "derived":
-        return !isOriginalInputFile(normalizedPath) && !isStandardArtifactDirPath(normalizedPath);
-      case "skills":
-        return isPathInStandardDir(normalizedPath, "skills");
-      case "scripts":
-        return isPathInStandardDir(normalizedPath, "scripts");
-      case "flows":
-        return isPathInStandardDir(normalizedPath, "flows");
-      case "cases":
-        return isPathInStandardDir(normalizedPath, "cases");
+      case "intermediate":
+        return isIntermediateFile(normalizedPath);
+      case "artifact":
+        return isArtifactFile(normalizedPath);
+      case "agent":
+        return isAgentProjectFile(normalizedPath);
+      case "skill":
+        return isSkillProjectFile(normalizedPath);
+      case "flow":
+        return isFlowProjectFile(normalizedPath);
+      case "case":
+        return isCaseProjectFile(normalizedPath);
       case "builtin":
         return isBuiltInProjectFile(item.path);
-      case "knowledgeCandidates":
-        return matchesProjectKnowledgeFilter("knowledgeCandidates", item, nowMs);
       case "markdown":
-        return matchesProjectKnowledgeFilter("markdown", item, nowMs);
-      case "textLike":
-        return matchesProjectKnowledgeFilter("textLike", item, nowMs);
-      case "recent":
-        return matchesProjectKnowledgeFilter("recent", item, nowMs);
+        return matchesProjectKnowledgeFilter("markdown", item);
+      case "text":
+        return matchesProjectKnowledgeFilter("text", item);
+      case "script":
+        return matchesProjectKnowledgeFilter("script", item);
+      case "otherType":
+        return matchesProjectKnowledgeFilter("otherType", item);
       default:
         return true;
     }
@@ -551,18 +569,19 @@ export default function ProjectOverviewCard({
     () => ({
       ...projectKnowledgeMetrics,
       totalFiles: projectFileSummary?.visible_files ?? projectKnowledgeMetrics.totalFiles,
-      knowledgeCandidateFiles:
-        projectFileSummary?.knowledge_candidate_files ?? projectKnowledgeMetrics.knowledgeCandidateFiles,
       markdownFiles: projectFileSummary?.markdown_files ?? projectKnowledgeMetrics.markdownFiles,
-      textLikeFiles: projectFileSummary?.text_like_files ?? projectKnowledgeMetrics.textLikeFiles,
+      textFiles: projectFileSummary?.text_files ?? projectKnowledgeMetrics.textFiles,
+      scriptFiles: projectFileSummary?.script_files ?? projectKnowledgeMetrics.scriptFiles,
+      otherTypeFiles: projectFileSummary?.other_type_files ?? projectKnowledgeMetrics.otherTypeFiles,
       recentlyUpdatedFiles:
         projectFileSummary?.recently_updated_files ?? projectKnowledgeMetrics.recentlyUpdatedFiles,
     }),
     [
-      projectFileSummary?.knowledge_candidate_files,
       projectFileSummary?.markdown_files,
+      projectFileSummary?.other_type_files,
       projectFileSummary?.recently_updated_files,
-      projectFileSummary?.text_like_files,
+      projectFileSummary?.script_files,
+      projectFileSummary?.text_files,
       projectFileSummary?.visible_files,
       projectKnowledgeMetrics,
     ],
@@ -584,7 +603,7 @@ export default function ProjectOverviewCard({
     treeOnly
     && treeDisplayMode === "filter"
     && (!selectedMetricFilter
-      || ["original", "skills", "scripts", "flows", "cases", "builtin"].includes(selectedMetricFilter)),
+      || ["original", "intermediate", "artifact", "agent", "skill", "flow", "case", "builtin"].includes(selectedMetricFilter)),
   );
 
   useEffect(() => {
@@ -606,14 +625,18 @@ export default function ProjectOverviewCard({
       switch (selectedMetricFilter) {
         case "original":
           return normalizedPath === "original" || normalizedPath.startsWith("original/");
-        case "skills":
-          return normalizedPath === "skills" || normalizedPath.startsWith("skills/");
-        case "scripts":
-          return normalizedPath === "scripts" || normalizedPath.startsWith("scripts/");
-        case "flows":
-          return normalizedPath === "flows" || normalizedPath.startsWith("flows/");
-        case "cases":
-          return normalizedPath === "cases" || normalizedPath.startsWith("cases/");
+        case "intermediate":
+          return normalizedPath === "intermediate" || normalizedPath.startsWith("intermediate/");
+        case "artifact":
+          return normalizedPath === "output" || normalizedPath.startsWith("output/");
+        case "agent":
+          return normalizedPath === ".agent" || normalizedPath.startsWith(".agent/");
+        case "skill":
+          return normalizedPath === ".skills" || normalizedPath.startsWith(".skills/");
+        case "flow":
+          return normalizedPath === "pipelines" || normalizedPath.startsWith("pipelines/");
+        case "case":
+          return normalizedPath === "pipelines" || normalizedPath.startsWith("pipelines/");
         case "builtin":
           return isBuiltInProjectFile(item.path);
         default:
@@ -700,29 +723,34 @@ export default function ProjectOverviewCard({
       value: projectFileSummary?.original_files ?? treeRootDirCounts.original ?? nonBuiltInSummary.originalFiles,
     },
     {
-      key: "derived",
-      label: t("projects.filesDerived", "Derived Files"),
-      value: projectFileSummary?.derived_files ?? nonBuiltInSummary.derivedFiles,
+      key: "intermediate",
+      label: t("projects.filesIntermediate", "Intermediate Files"),
+      value: projectFileSummary?.intermediate_files ?? treeRootDirCounts.intermediate ?? nonBuiltInSummary.intermediateFiles,
     },
     {
-      key: "skills",
-      label: t("projects.artifacts.skill", "Skills"),
-      value: artifactCounts.skills,
+      key: "artifact",
+      label: t("projects.filesArtifact", "Artifact Files"),
+      value: projectFileSummary?.artifact_files ?? treeRootDirCounts.output ?? nonBuiltInSummary.artifactFiles,
     },
     {
-      key: "scripts",
-      label: t("projects.artifacts.script", "Scripts"),
-      value: artifactCounts.scripts,
+      key: "agent",
+      label: t("projects.filesAgent", "智能体"),
+      value: projectFileSummary?.agent_files ?? projectFiles.filter((item) => isAgentProjectFile(item.path)).length,
     },
     {
-      key: "flows",
-      label: t("projects.artifacts.flow", "Flows"),
-      value: artifactCounts.flows,
+      key: "skill",
+      label: t("projects.filesSkill", "技能"),
+      value: projectFileSummary?.skill_files ?? projectFiles.filter((item) => isSkillProjectFile(item.path)).length,
     },
     {
-      key: "cases",
-      label: t("projects.artifacts.case", "Cases"),
-      value: artifactCounts.cases,
+      key: "flow",
+      label: t("projects.filesFlow", "流程"),
+      value: projectFileSummary?.flow_files ?? projectFiles.filter((item) => isFlowProjectFile(item.path)).length,
+    },
+    {
+      key: "case",
+      label: t("projects.filesCase", "案例"),
+      value: projectFileSummary?.case_files ?? projectFiles.filter((item) => isCaseProjectFile(item.path)).length,
     },
   ];
 
@@ -734,9 +762,9 @@ export default function ProjectOverviewCard({
   if (treeOnly) {
     const stageTitle =
       activeStage === "knowledge"
-        ? t("projects.stage.knowledge", "Knowledge")
+        ? t("projects.stage.fileTypes", "文件类型")
         : activeStage === "output"
-          ? t("projects.stage.output", "Output")
+          ? t("projects.stage.projectFiles", "项目文件")
           : activeStage === "builtin"
             ? t("projects.stage.builtin", "Built-in")
             : t("projects.stage.source", "Source");

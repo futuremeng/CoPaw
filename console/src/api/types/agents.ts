@@ -72,10 +72,19 @@ export interface AgentProjectFileSummary {
   builtin_files: number;
   visible_files: number;
   original_files: number;
+  intermediate_files?: number;
+  artifact_files?: number;
   derived_files: number;
   knowledge_candidate_files: number;
   markdown_files: number;
+  text_files?: number;
+  script_files?: number;
+  other_type_files?: number;
   text_like_files: number;
+  agent_files?: number;
+  skill_files?: number;
+  flow_files?: number;
+  case_files?: number;
   recently_updated_files: number;
 }
 
