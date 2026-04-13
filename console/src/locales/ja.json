@@ -1795,6 +1795,7 @@
       "signalDocuments": "ドキュメント数",
       "signalChunks": "チャンク数",
       "signalSentences": "文数",
+      "signalNeedsReindex": "再索引が必要",
       "sourceSubject": "主題",
       "sourceKeywords": "キーワード",
       "signalCoverage": "カバレッジ",

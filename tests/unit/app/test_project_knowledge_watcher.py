@@ -204,3 +204,110 @@ async def test_project_knowledge_watcher_poll_loop_offloads_snapshot_collection(
     assert calls
     assert callable(calls[0][0])
     assert calls[0][1] == ()
+
+
+@pytest.mark.asyncio
+async def test_project_knowledge_watcher_triggers_on_processing_config_change(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    project_dir = tmp_path / "projects" / "project-c"
+    project_dir.mkdir(parents=True, exist_ok=True)
+    (project_dir / "PROJECT.md").write_text(
+        "---\nid: project-c\nname: Project C\nproject_auto_knowledge_sink: true\n---\n",
+        encoding="utf-8",
+    )
+    note_path = project_dir / "original" / "note.md"
+    note_path.parent.mkdir(parents=True, exist_ok=True)
+    note_path.write_text("stable", encoding="utf-8")
+
+    config = Config()
+    config.knowledge.enabled = True
+    config.knowledge.memify_enabled = True
+    monkeypatch.setattr(watcher_module, "load_config", lambda: config)
+    monkeypatch.setattr(
+        watcher_module,
+        "load_agent_config",
+        lambda _agent_id: type("AgentCfg", (), {"running": config.agents.running})(),
+    )
+    monkeypatch.setattr("copaw.config.utils.save_config", lambda _config: None)
+
+    calls: list[dict] = []
+
+    def fake_start_sync(self, **kwargs):
+        calls.append(kwargs)
+        return {"accepted": True, "reason": "STARTED", "state": {"project_id": kwargs["project_id"]}}
+
+    monkeypatch.setattr(
+        watcher_module.ProjectKnowledgeSyncManager,
+        "start_sync",
+        fake_start_sync,
+    )
+    monkeypatch.setattr(
+        watcher_module.ProjectKnowledgeSyncManager,
+        "check_needs_reindex",
+        lambda self, **_kwargs: True,
+    )
+
+    watcher = watcher_module.ProjectKnowledgeWatcher(
+        agent_id="default",
+        workspace_dir=tmp_path,
+        poll_interval=0.01,
+    )
+    initial = watcher._collect_snapshots()
+    watcher._snapshots = initial
+
+    # Keep file snapshot unchanged; trigger should come from processing config check.
+    current = watcher._collect_snapshots()
+    await watcher._handle_snapshot_changes(current)
+
+    assert len(calls) == 1
+    assert calls[0]["project_id"] == "project-c"
+    assert calls[0]["trigger"] == "project_watcher_config_change"
+    assert calls[0]["force"] is False
+    assert calls[0]["changed_paths"] == []
+
+
+@pytest.mark.asyncio
+async def test_runtime_context_load_is_offloaded_and_cached(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    config = Config()
+    config.knowledge.enabled = True
+    config.knowledge.memify_enabled = True
+    load_config_calls = {"count": 0}
+    load_agent_calls = {"count": 0}
+
+    def fake_load_config():
+        load_config_calls["count"] += 1
+        return config
+
+    def fake_load_agent_config(_agent_id: str):
+        load_agent_calls["count"] += 1
+        return type("AgentCfg", (), {"running": config.agents.running})()
+
+    original_to_thread = watcher_module.asyncio.to_thread
+    to_thread_calls: list[str] = []
+
+    async def fake_to_thread(func, /, *args, **kwargs):
+        to_thread_calls.append(getattr(func, "__name__", str(func)))
+        return await original_to_thread(func, *args, **kwargs)
+
+    monkeypatch.setattr(watcher_module, "load_config", fake_load_config)
+    monkeypatch.setattr(watcher_module, "load_agent_config", fake_load_agent_config)
+    monkeypatch.setattr(watcher_module.asyncio, "to_thread", fake_to_thread)
+
+    watcher = watcher_module.ProjectKnowledgeWatcher(
+        agent_id="default",
+        workspace_dir=tmp_path,
+        poll_interval=0.01,
+    )
+
+    ctx1 = await watcher._load_runtime_context()
+    ctx2 = await watcher._load_runtime_context()
+
+    assert ctx1[0] is ctx2[0]
+    assert load_config_calls["count"] == 1
+    assert load_agent_calls["count"] == 1
+    assert len(to_thread_calls) == 2

@@ -1795,6 +1795,7 @@
       "signalDocuments": "Документы",
       "signalChunks": "Чанки",
       "signalSentences": "Предложения",
+      "signalNeedsReindex": "Требуется переиндексация",
       "sourceSubject": "Тема",
       "sourceKeywords": "Ключевые слова",
       "signalCoverage": "Покрытие",

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from ..config.config import load_agent_config
-from ..config.utils import load_config
+from ..config.utils import get_config_path, load_config
 from ..knowledge import ProjectKnowledgeSyncManager
 from ..knowledge.project_sync import (
     DEFAULT_PROJECT_SYNC_COOLDOWN_SECONDS,
@@ -108,6 +108,62 @@ class ProjectKnowledgeWatcher:
         self._poll_interval = poll_interval
         self._task: asyncio.Task | None = None
         self._snapshots: dict[str, dict[str, Any]] = {}
+        self._sync_managers: dict[str, ProjectKnowledgeSyncManager] = {}
+        self._runtime_context_cache: dict[str, Any] = {
+            "global_mtime_ns": None,
+            "agent_mtime_ns": None,
+            "global_config": None,
+            "running_config": None,
+        }
+
+    @staticmethod
+    def _safe_mtime_ns(path: Path) -> int | None:
+        try:
+            if not path.exists() or not path.is_file():
+                return None
+            return path.stat().st_mtime_ns
+        except OSError:
+            return None
+
+    async def _load_runtime_context(self) -> tuple[Any, Any, Any]:
+        global_config_path = get_config_path()
+        agent_config_path = self._workspace_dir / "agent.json"
+        global_mtime_ns = self._safe_mtime_ns(global_config_path)
+        agent_mtime_ns = self._safe_mtime_ns(agent_config_path)
+        cache = self._runtime_context_cache
+
+        if (
+            cache.get("global_config") is not None
+            and cache.get("running_config") is not None
+            and cache.get("global_mtime_ns") == global_mtime_ns
+            and cache.get("agent_mtime_ns") == agent_mtime_ns
+        ):
+            global_config = cache["global_config"]
+            return global_config, global_config.knowledge, cache["running_config"]
+
+        global_config, agent_config = await asyncio.gather(
+            asyncio.to_thread(load_config),
+            asyncio.to_thread(load_agent_config, self._agent_id),
+        )
+        running_config = agent_config.running
+        self._runtime_context_cache = {
+            "global_mtime_ns": global_mtime_ns,
+            "agent_mtime_ns": agent_mtime_ns,
+            "global_config": global_config,
+            "running_config": running_config,
+        }
+        return global_config, global_config.knowledge, running_config
+
+    def _get_project_sync_manager(self, project_id: str) -> ProjectKnowledgeSyncManager:
+        manager = self._sync_managers.get(project_id)
+        if manager is not None:
+            return manager
+        manager = ProjectKnowledgeSyncManager(
+            self._workspace_dir,
+            knowledge_dirname=f"projects/{project_id}/.knowledge",
+        )
+        self._sync_managers[project_id] = manager
+        return manager
 
     async def _collect_snapshots_async(self) -> dict[str, dict[str, Any]]:
         return await asyncio.to_thread(self._collect_snapshots)
@@ -153,9 +209,7 @@ class ProjectKnowledgeWatcher:
         self,
         current: dict[str, dict[str, Any]],
     ) -> None:
-        global_config = load_config()
-        agent_config = load_agent_config(self._agent_id)
-        knowledge_config = global_config.knowledge
+        global_config, knowledge_config, running_config = await self._load_runtime_context()
         if not knowledge_config.enabled or not bool(getattr(knowledge_config, "memify_enabled", False)):
             return
 
@@ -167,8 +221,16 @@ class ProjectKnowledgeWatcher:
             previous = self._snapshots.get(project_id)
             changed_paths = self._diff_paths(previous, snapshot)
             should_bootstrap = previous is None
+            manager = self._get_project_sync_manager(project_id)
+            should_config_reindex = False
             if not should_bootstrap and not changed_paths:
-                continue
+                should_config_reindex = manager.check_needs_reindex(
+                    project_id=project_id,
+                    config=knowledge_config,
+                    running_config=running_config,
+                )
+                if not should_config_reindex:
+                    continue
 
             source, source_changed = ensure_project_source_registered(
                 global_config.knowledge,
@@ -178,16 +240,17 @@ class ProjectKnowledgeWatcher:
                 persist=lambda: None,
             )
             persist_needed = persist_needed or source_changed
-            manager = ProjectKnowledgeSyncManager(
-                self._workspace_dir,
-                knowledge_dirname=f"projects/{project_id}/.knowledge",
+            trigger = (
+                "project_watcher_bootstrap"
+                if should_bootstrap
+                else ("project_watcher_config_change" if should_config_reindex else "project_watcher_change")
             )
             result = manager.start_sync(
                 project_id=project_id,
                 config=knowledge_config,
-                running_config=agent_config.running,
+                running_config=running_config,
                 source=source,
-                trigger="project_watcher_bootstrap" if should_bootstrap else "project_watcher_change",
+                trigger=trigger,
                 changed_paths=changed_paths,
                 auto_enabled=True,
                 force=should_bootstrap,
@@ -198,7 +261,7 @@ class ProjectKnowledgeWatcher:
                 logger.info(
                     "ProjectKnowledgeWatcher triggered sync for %s (%s, %s paths)",
                     project_id,
-                    "bootstrap" if should_bootstrap else "change",
+                    "bootstrap" if should_bootstrap else ("config-change" if should_config_reindex else "change"),
                     len(changed_paths),
                 )
 

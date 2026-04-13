@@ -310,3 +310,60 @@ def test_project_sync_auto_triggers_quality_loop_after_memify_success(tmp_path: 
     assert quality_calls[0]["dataset_scope"] == [source.id]
     assert state["last_result"]["quality_loop"]["accepted"] is True
     assert state["last_result"]["quality_loop"]["job_id"] == "quality-job-1"
+
+
+def test_check_needs_reindex_true_when_no_recorded_fingerprint(tmp_path: Path):
+    project_id = "project-f"
+    project_dir = tmp_path / "projects" / project_id
+    project_dir.mkdir(parents=True, exist_ok=True)
+    manager = ProjectKnowledgeSyncManager(
+        tmp_path,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+    config = Config().knowledge
+
+    # No completed run yet: recorded fingerprint is empty.
+    assert manager.check_needs_reindex(
+        project_id=project_id,
+        config=config,
+        running_config=None,
+    ) is True
+
+
+def test_check_needs_reindex_false_after_fingerprint_recorded(tmp_path: Path, monkeypatch):
+    project_id = "project-g"
+    project_dir = tmp_path / "projects" / project_id
+    project_dir.mkdir(parents=True, exist_ok=True)
+    manager = ProjectKnowledgeSyncManager(
+        tmp_path,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+    config = Config().knowledge
+    source = _build_source(project_id, project_dir)
+
+    monkeypatch.setattr(
+        manager._knowledge_manager,
+        "index_source",
+        lambda *_args, **_kwargs: {"indexed": True},
+    )
+    monkeypatch.setattr(
+        manager._graph_ops,
+        "execute_memify_once",
+        lambda **_kwargs: {
+            "status": "succeeded",
+            "job_id": "memify-job-fp",
+        },
+    )
+
+    manager._run_sync_loop(
+        project_id=project_id,
+        config=config,
+        running_config=None,
+        source=source,
+    )
+
+    assert manager.check_needs_reindex(
+        project_id=project_id,
+        config=config,
+        running_config=None,
+    ) is False

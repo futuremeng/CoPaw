@@ -109,6 +109,10 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
           <Typography.Text type="secondary">{t("projects.knowledge.signalChunks")}</Typography.Text>
           <Typography.Text strong>{knowledgeState.quantMetrics.chunkCount}</Typography.Text>
         </div>
+        <div className={styles.projectKnowledgeSignalCard}>
+          <Typography.Text type="secondary">{t("projects.knowledge.signalSentences", "Sentences")}</Typography.Text>
+          <Typography.Text strong>{knowledgeState.quantMetrics.sentenceCount}</Typography.Text>
+        </div>
       </div>
 
       {sortedSources.length ? (
@@ -130,12 +134,19 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
                   >
                     <div className={styles.projectKnowledgeSelectableItemHeader}>
                       <Typography.Text strong>{source.name}</Typography.Text>
-                      <Badge
-                        status={source.status.indexed ? "success" : "default"}
-                        text={source.status.indexed
-                          ? t("projects.knowledge.signalIndexed", "Indexed")
-                          : t("projects.knowledge.signalPending", "Pending")}
-                      />
+                      <div className={styles.projectKnowledgeStatusGroup}>
+                        <Badge
+                          status={source.status.indexed ? "success" : "default"}
+                          text={source.status.indexed
+                            ? t("projects.knowledge.signalIndexed", "Indexed")
+                            : t("projects.knowledge.signalPending", "Pending")}
+                        />
+                        {source.status.needs_reindex ? (
+                          <Tag color="orange" bordered={false}>
+                            {t("projects.knowledge.signalNeedsReindex", "Re-index needed")}
+                          </Tag>
+                        ) : null}
+                      </div>
                     </div>
                     <Typography.Text type="secondary">{source.location || "-"}</Typography.Text>
                     <div className={styles.projectKnowledgeMetaLine}>

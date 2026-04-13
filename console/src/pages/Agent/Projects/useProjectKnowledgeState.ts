@@ -20,6 +20,7 @@ export interface ProjectKnowledgeHeaderSignals {
   indexedRatio: number;
   documentCount: number;
   chunkCount: number;
+  sentenceCount: number;
   relationCount: number;
   entityCount: number;
   relationNormalizationCoverage: number;
@@ -47,6 +48,7 @@ export interface ProjectKnowledgeMetrics {
   indexedRatio: number;
   documentCount: number;
   chunkCount: number;
+  sentenceCount: number;
   relationCount: number;
   entityCount: number;
   relationNormalizationCoverage: number;
@@ -321,7 +323,7 @@ function getSyncNodeCount(syncState: ProjectKnowledgeSyncState | null): number {
 
 function getSyncIndexCount(
   syncState: ProjectKnowledgeSyncState | null,
-  key: "document_count" | "chunk_count",
+  key: "document_count" | "chunk_count" | "sentence_count",
 ): number {
   const indexResult = syncState?.last_result?.index;
   if (!indexResult || typeof indexResult !== "object") {
@@ -893,8 +895,13 @@ export function useProjectKnowledgeState(
       (sum, item) => sum + Math.max(0, item.status.chunk_count || 0),
       0,
     );
+    const sourceSentenceCount = projectSources.reduce(
+      (sum, item) => sum + Math.max(0, item.status.sentence_count || 0),
+      0,
+    );
     const fallbackDocumentCount = getSyncIndexCount(syncState, "document_count");
     const fallbackChunkCount = getSyncIndexCount(syncState, "chunk_count");
+    const fallbackSentenceCount = getSyncIndexCount(syncState, "sentence_count");
     const effectiveTotalSources = totalSources > 0 ? totalSources : (sourceRegistered ? 1 : 0);
     const effectiveIndexedSources = totalSources > 0
       ? indexedSources
@@ -904,6 +911,7 @@ export function useProjectKnowledgeState(
       : 0;
     const documentCount = totalSources > 0 ? sourceDocumentCount : fallbackDocumentCount;
     const chunkCount = totalSources > 0 ? sourceChunkCount : fallbackChunkCount;
+    const sentenceCount = totalSources > 0 ? sourceSentenceCount : fallbackSentenceCount;
     const relationCount = Math.max(
       graphResult?.records?.length || 0,
       getSyncRelationCount(syncState),
@@ -994,6 +1002,7 @@ export function useProjectKnowledgeState(
       indexedRatio,
       documentCount,
       chunkCount,
+      sentenceCount,
       relationCount,
       entityCount: effectiveEntityCount,
       relationNormalizationCoverage: reflectedRelationNormalizationCoverage,
@@ -1047,6 +1056,7 @@ export function useProjectKnowledgeState(
       indexedRatio: quantMetrics.indexedRatio,
       documentCount: quantMetrics.documentCount,
       chunkCount: quantMetrics.chunkCount,
+      sentenceCount: quantMetrics.sentenceCount,
       relationCount: quantMetrics.relationCount,
       entityCount: quantMetrics.entityCount,
       relationNormalizationCoverage: quantMetrics.relationNormalizationCoverage,
@@ -1065,6 +1075,7 @@ export function useProjectKnowledgeState(
     quantMetrics.entityCount,
     quantMetrics.entityCanonicalCoverage,
     quantMetrics.chunkCount,
+    quantMetrics.sentenceCount,
     quantMetrics.documentCount,
     quantMetrics.indexedRatio,
     quantMetrics.lowConfidenceThreshold,

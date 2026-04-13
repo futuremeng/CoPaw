@@ -172,11 +172,28 @@ class ProjectKnowledgeSyncManager:
             "last_started_at": None,
             "last_finished_at": None,
             "last_success_at": None,
+            "indexed_processing_fingerprint": "",
             "updated_at": self._now_iso(),
             "latest_job_id": "",
             "latest_source_id": "",
             "last_result": {},
         }
+
+    def check_needs_reindex(
+        self,
+        *,
+        project_id: str,
+        config: KnowledgeConfig,
+        running_config: Any | None = None,
+    ) -> bool:
+        with self._lock:
+            state = self._load_state(project_id)
+            current_fingerprint = self._knowledge_manager.compute_processing_fingerprint(
+                config,
+                running_config,
+            )
+            indexed_fingerprint = str(state.get("indexed_processing_fingerprint") or "")
+            return current_fingerprint != indexed_fingerprint
 
     @staticmethod
     def _merge_paths(
@@ -720,6 +737,10 @@ class ProjectKnowledgeSyncManager:
                             "error": str(exc),
                         }
                 now = self._now_iso()
+                processing_fingerprint = self._knowledge_manager.compute_processing_fingerprint(
+                    config,
+                    running_config,
+                )
                 self._patch_state(
                     project_id,
                     self._normalize_sync_patch({
@@ -732,6 +753,7 @@ class ProjectKnowledgeSyncManager:
                         "eta_seconds": 0,
                         "last_finished_at": now,
                         "last_success_at": now if succeeded else None,
+                        "indexed_processing_fingerprint": processing_fingerprint,
                         "last_error": str(memify_result.get("error") or "").strip(),
                         "latest_job_id": str(memify_result.get("job_id") or "").strip(),
                         "last_result": {

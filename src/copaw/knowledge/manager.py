@@ -110,6 +110,9 @@ _SEMANTIC_STOP_WORDS = {
     "词",
 }
 _KEYWORD_DEFAULT_TOP_N = 3
+
+# Bump this version whenever chunking/normalization logic changes.
+KNOWLEDGE_PROCESSING_VERSION = "2"
 _TEXTUAL_CONTENT_TYPE_MARKERS = (
     "text/",
     "application/json",
@@ -185,7 +188,7 @@ class KnowledgeManager:
                 payload["subject"] = source.name
                 payload["summary"] = source.summary
                 payload["keywords"] = []
-            payload["status"] = self.get_source_status(source.id, source)
+            payload["status"] = self.get_source_status(source.id, source, config)
             results.append(payload)
         return results
 
@@ -201,6 +204,8 @@ class KnowledgeManager:
         self,
         source_id: str,
         source: KnowledgeSourceSpec | None = None,
+        config: KnowledgeConfig | None = None,
+        running_config: Any | None = None,
     ) -> dict[str, Any]:
         """Return persisted index metadata for a source."""
         source_index_path = self._source_index_path(source_id)
@@ -211,6 +216,7 @@ class KnowledgeManager:
                 "document_count": 0,
                 "chunk_count": 0,
                 "sentence_count": 0,
+                "needs_reindex": bool(config),
                 "error": None,
             }
             if source is not None:
@@ -219,6 +225,11 @@ class KnowledgeManager:
 
         payload = self._load_json(source_index_path)
         chunks = payload.get("chunks") or []
+        needs_reindex = False
+        if config is not None:
+            current_fingerprint = self.compute_processing_fingerprint(config, running_config)
+            stored_fingerprint = str(payload.get("processing_fingerprint") or "")
+            needs_reindex = current_fingerprint != stored_fingerprint
         status = {
             "indexed": True,
             "indexed_at": payload.get("indexed_at"),
@@ -228,6 +239,7 @@ class KnowledgeManager:
                 "sentence_count",
                 self._sum_chunk_sentence_count(chunks),
             ),
+            "needs_reindex": needs_reindex,
             "error": payload.get("error"),
         }
         if source is not None:
@@ -247,12 +259,14 @@ class KnowledgeManager:
             self._resolve_chunk_size(config, running_config),
         )
         sentence_count = self._sum_chunk_sentence_count(chunks)
+        processing_fingerprint = self.compute_processing_fingerprint(config, running_config)
         payload = {
             "source": source.model_dump(mode="json"),
             "indexed_at": datetime.now(UTC).isoformat(),
             "document_count": len(documents),
             "chunk_count": len(chunks),
             "sentence_count": sentence_count,
+            "processing_fingerprint": processing_fingerprint,
             "error": None,
             "chunks": chunks,
         }
@@ -669,7 +683,16 @@ class KnowledgeManager:
             relative = path.relative_to(root).as_posix()
             if not self._is_allowed_path(relative, config):
                 continue
-            documents.append(self._read_file_document(path, config))
+            try:
+                documents.append(self._read_file_document(path, config))
+            except ValueError as exc:
+                if "exceeds max size" not in str(exc):
+                    raise
+                logger.warning(
+                    "Skip oversized knowledge file: %s (max=%s bytes)",
+                    path,
+                    config.index.max_file_size,
+                )
         return documents
 
     def save_uploaded_file(self, source_id: str, filename: str, data: bytes) -> Path:
@@ -2517,6 +2540,18 @@ class KnowledgeManager:
                 count = 0
             total += max(0, count)
         return total
+
+    @staticmethod
+    def compute_processing_fingerprint(
+        config: KnowledgeConfig,
+        running_config: Any | None = None,
+    ) -> str:
+        chunk_size = getattr(running_config, "knowledge_chunk_size", None)
+        if not isinstance(chunk_size, int):
+            chunk_size = config.index.chunk_size
+        chunk_overlap = int(getattr(config.index, "chunk_overlap", 0) or 0)
+        raw = f"{KNOWLEDGE_PROCESSING_VERSION}:{chunk_size}:{chunk_overlap}"
+        return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
 
     @staticmethod
     def _score_chunk(text: str, terms: list[str]) -> int:

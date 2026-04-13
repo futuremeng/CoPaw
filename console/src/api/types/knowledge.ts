@@ -103,6 +103,7 @@ export interface KnowledgeSourceStatus {
   document_count: number;
   chunk_count: number;
   sentence_count?: number;
+  needs_reindex?: boolean;
   error: string | null;
   remote_status?: string;
   remote_cache_state?: string;

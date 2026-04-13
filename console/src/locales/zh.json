@@ -1799,6 +1799,7 @@
       "signalDocuments": "文档数",
       "signalChunks": "切片数",
       "signalSentences": "句子数",
+      "signalNeedsReindex": "需重新索引",
       "sourceSubject": "主题",
       "sourceKeywords": "关键词",
       "signalCoverage": "覆盖率",

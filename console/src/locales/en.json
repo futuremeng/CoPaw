@@ -1840,6 +1840,7 @@
       "signalDocuments": "Documents",
       "signalChunks": "Chunks",
       "signalSentences": "Sentences",
+      "signalNeedsReindex": "Re-index needed",
       "sourceSubject": "Subject",
       "sourceKeywords": "Keywords",
       "signalCoverage": "Coverage",
