@@ -458,6 +458,115 @@ def test_get_quality_loop_job_status_offloads_status_read_to_thread(
     assert calls[0][0].__name__ == "get_quality_loop_status"
 
 
+def test_get_knowledge_tasks_snapshot_offloads_collection_to_thread(
+    knowledge_api_client: TestClient,
+    monkeypatch,
+):
+    original_to_thread = knowledge_router_module.asyncio.to_thread
+    calls: list[tuple[object, tuple[object, ...]]] = []
+
+    async def fake_to_thread(func, /, *args, **kwargs):
+        calls.append((func, args))
+        return await original_to_thread(func, *args, **kwargs)
+
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "_collect_knowledge_tasks_snapshot",
+        lambda *_args, **_kwargs: {"tasks": [], "updated_at": "now", "project_id": ""},
+    )
+    monkeypatch.setattr(knowledge_router_module.asyncio, "to_thread", fake_to_thread)
+
+    response = knowledge_api_client.get("/knowledge/tasks/snapshot")
+
+    assert response.status_code == 200
+    assert response.json()["tasks"] == []
+    assert calls
+    assert calls[0][0].__name__ == "<lambda>"
+
+
+def test_get_project_sync_status_offloads_state_read_to_thread(
+    knowledge_api_client: TestClient,
+    monkeypatch,
+):
+    class _FakeProjectSyncManager:
+        def get_state(self, project_id):
+            return {"project_id": project_id, "status": "idle"}
+
+    original_to_thread = knowledge_router_module.asyncio.to_thread
+    calls: list[tuple[object, tuple[object, ...]]] = []
+
+    async def fake_to_thread(func, /, *args, **kwargs):
+        calls.append((func, args))
+        return await original_to_thread(func, *args, **kwargs)
+
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "_project_sync_for_workspace",
+        lambda *_args, **_kwargs: _FakeProjectSyncManager(),
+    )
+    monkeypatch.setattr(knowledge_router_module.asyncio, "to_thread", fake_to_thread)
+
+    response = knowledge_api_client.get("/knowledge/project-sync/status?project_id=threaded-project")
+
+    assert response.status_code == 200
+    assert response.json()["project_id"] == "threaded-project"
+    assert calls
+    assert calls[0][0].__name__ == "get_state"
+
+
+def test_run_project_sync_offloads_start_to_thread(
+    knowledge_api_client: TestClient,
+    tmp_path: Path,
+    monkeypatch,
+):
+    project_id = "threaded-project-sync"
+    project_dir = tmp_path / "projects" / project_id
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload["enabled"] = True
+    config_payload["memify_enabled"] = True
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    class _FakeProjectSyncManager:
+        def start_sync(self, **kwargs):
+            return {
+                "accepted": True,
+                "project_id": kwargs["project_id"],
+                "status": "queued",
+            }
+
+    original_to_thread = knowledge_router_module.asyncio.to_thread
+    calls: list[tuple[object, tuple[object, ...]]] = []
+
+    async def fake_to_thread(func, /, *args, **kwargs):
+        calls.append((func, args))
+        return await original_to_thread(func, *args, **kwargs)
+
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "_project_sync_for_workspace",
+        lambda *_args, **_kwargs: _FakeProjectSyncManager(),
+    )
+    monkeypatch.setattr(knowledge_router_module.asyncio, "to_thread", fake_to_thread)
+
+    response = knowledge_api_client.post(
+        f"/knowledge/project-sync/run?project_id={project_id}",
+        json={
+            "trigger": "manual-test",
+            "changed_paths": ["notes.md"],
+            "force": True,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["accepted"] is True
+    assert response.json()["project_id"] == project_id
+    assert calls
+    assert calls[0][0].__name__ == "start_sync"
+
+
 def test_restore_knowledge_backup_offloads_filesystem_copy_to_thread(
     knowledge_api_client: TestClient,
     monkeypatch,

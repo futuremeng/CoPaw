@@ -1,5 +1,31 @@
 import { getApiUrl } from "../config";
 
+const AUTH_REQUEST_TIMEOUT_MS = 8000;
+
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  timeoutMs: number = AUTH_REQUEST_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutHandle = window.setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: init.signal || controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("Request timeout");
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutHandle);
+  }
+}
+
 export interface LoginResponse {
   token: string;
   username: string;
@@ -13,7 +39,7 @@ export interface AuthStatusResponse {
 
 export const authApi = {
   login: async (username: string, password: string): Promise<LoginResponse> => {
-    const res = await fetch(getApiUrl("/auth/login"), {
+    const res = await fetchWithTimeout(getApiUrl("/auth/login"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password }),
@@ -29,7 +55,7 @@ export const authApi = {
     username: string,
     password: string,
   ): Promise<LoginResponse> => {
-    const res = await fetch(getApiUrl("/auth/register"), {
+    const res = await fetchWithTimeout(getApiUrl("/auth/register"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password }),
@@ -42,7 +68,7 @@ export const authApi = {
   },
 
   getStatus: async (): Promise<AuthStatusResponse> => {
-    const res = await fetch(getApiUrl("/auth/status"));
+    const res = await fetchWithTimeout(getApiUrl("/auth/status"));
     if (!res.ok) throw new Error("Failed to check auth status");
     return res.json();
   },
@@ -53,7 +79,7 @@ export const authApi = {
     newPassword?: string,
   ): Promise<LoginResponse> => {
     const token = localStorage.getItem("copaw_auth_token") || "";
-    const res = await fetch(getApiUrl("/auth/update-profile"), {
+    const res = await fetchWithTimeout(getApiUrl("/auth/update-profile"), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

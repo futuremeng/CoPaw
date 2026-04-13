@@ -194,15 +194,349 @@ class GraphOpsManager:
             )
         return actions
 
-    def _pick_latest_memify_result(self) -> dict[str, Any] | None:
+    @staticmethod
+    def _normalize_dataset_scope(dataset_scope: list[str] | None) -> list[str]:
+        return [
+            str(item or "").strip()
+            for item in (dataset_scope or [])
+            if str(item or "").strip()
+        ]
+
+    @staticmethod
+    def _normalize_project_id(project_id: str | None) -> str:
+        return str(project_id or "").strip().lower()
+
+    def _project_quality_skills_dir(self, project_id: str | None) -> Path | None:
+        normalized = self._normalize_project_id(project_id)
+        if not normalized:
+            return None
+        projects_dir = self.working_dir / "projects"
+        if projects_dir.exists() and projects_dir.is_dir():
+            exact_dir = projects_dir / str(project_id or "")
+            if exact_dir.exists() and exact_dir.is_dir():
+                return exact_dir / ".skills" / "quality-loop"
+            for child in sorted(projects_dir.iterdir()):
+                if not child.is_dir():
+                    continue
+                if child.name.lower() == normalized:
+                    return child / ".skills" / "quality-loop"
+        return projects_dir / normalized / ".skills" / "quality-loop"
+
+    def _load_quality_reflection_hints(self, project_id: str | None) -> dict[str, Any]:
+        skills_dir = self._project_quality_skills_dir(project_id)
+        if skills_dir is None:
+            return {}
+        params_path = skills_dir / "PARAMS.json"
+        if not params_path.exists():
+            return {}
+        try:
+            payload = json.loads(params_path.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+        if not isinstance(payload, dict):
+            return {}
+        return payload
+
+    def _save_quality_reflection_artifacts(
+        self,
+        *,
+        project_id: str | None,
+        job_id: str,
+        rounds: list[dict[str, Any]],
+        final_summary: dict[str, Any],
+        next_round_hints: dict[str, Any],
+    ) -> dict[str, str]:
+        skills_dir = self._project_quality_skills_dir(project_id)
+        if skills_dir is None:
+            return {}
+
+        skills_dir.mkdir(parents=True, exist_ok=True)
+        rounds_dir = skills_dir / "rounds"
+        rounds_dir.mkdir(parents=True, exist_ok=True)
+        lessons_path = skills_dir / "LESSONS.md"
+        params_path = skills_dir / "PARAMS.json"
+        skill_md_path = skills_dir / "SKILL.md"
+
+        lines = [
+            "# Quality Loop Lessons",
+            "",
+            f"- job_id: {job_id}",
+            f"- total_rounds: {len(rounds)}",
+            f"- stop_reason: {str(final_summary.get('stop_reason') or '')}",
+            f"- score_before: {final_summary.get('score_before')}",
+            f"- score_after: {final_summary.get('score_after')}",
+            f"- delta: {final_summary.get('delta')}",
+            "",
+            "## Round Summaries",
+            "",
+        ]
+
+        for round_item in rounds:
+            summary = round_item.get("summary") or {}
+            round_no = int(round_item.get("round") or 0)
+            lines.extend(
+                [
+                    f"### Round {round_no}",
+                    f"- status: {round_item.get('status')}",
+                    f"- delta: {round_item.get('delta')}",
+                    f"- agent_gate_status: {(round_item.get('agent_gate') or {}).get('status')}",
+                    f"- continue: {summary.get('continue')}",
+                    f"- reason: {summary.get('stop_or_continue_reason')}",
+                    f"- hypotheses: {', '.join(summary.get('problem_hypotheses') or [])}",
+                    f"- next_plan: {', '.join(summary.get('next_round_plan') or [])}",
+                    "",
+                ]
+            )
+            round_path = rounds_dir / f"round-{round_no:02d}.json"
+            round_payload = {
+                "job_id": job_id,
+                "round": round_no,
+                "artifact_version": 1,
+                "recorded_at": datetime.now(UTC).isoformat(),
+                **round_item,
+            }
+            round_path.write_text(
+                json.dumps(round_payload, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+
+        lessons_path.write_text("\n".join(lines).strip() + "\n", encoding="utf-8")
+        params_path.write_text(
+            json.dumps(next_round_hints, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        if not skill_md_path.exists():
+            skill_md_path.write_text(
+                """---
+name: quality-loop-reflection
+description: Reflection notes and execution hints for project quality loop
+---
+
+# Quality Loop Reflection Skill
+
+Read LESSONS.md and PARAMS.json before running the next quality loop round.
+Agent gate review is mandatory before automatic continuation.
+""",
+                encoding="utf-8",
+            )
+        return {
+            "lessons_path": str(lessons_path),
+            "params_path": str(params_path),
+            "skill_md_path": str(skill_md_path),
+            "rounds_dir": str(rounds_dir),
+        }
+
+    def _run_quality_agent_gate(
+        self,
+        *,
+        round_no: int,
+        actions: list[dict[str, Any]],
+        before_snapshot: dict[str, Any],
+        after_snapshot: dict[str, Any],
+        round_summary: dict[str, Any],
+        previous_hints: dict[str, Any],
+    ) -> dict[str, Any]:
+        action_names = [
+            str(item.get("action") or "").strip()
+            for item in actions
+            if str(item.get("action") or "").strip()
+        ]
+        failed_metrics = [
+            str(metric)
+            for metric, passed in (after_snapshot.get("pass_flags") or {}).items()
+            if not bool(passed)
+        ]
+        delta = float(round_summary.get("observed_delta") or 0.0)
+        should_continue = bool(round_summary.get("continue"))
+        suggestions = [
+            str(item)
+            for item in (round_summary.get("skill_patch_suggestions") or [])
+            if str(item).strip()
+        ]
+
+        # Keep gate strict for actionable next-round continuation.
+        if should_continue and not action_names:
+            return {
+                "status": "review_required",
+                "reason": "MISSING_ACTION_PLAN",
+                "summary": "No executable actions were produced for the next round.",
+                "next_round_hints": {},
+            }
+
+        pipeline_bias = str(previous_hints.get("pipeline_bias") or "").strip() or "balanced"
+        if any(name in {"strengthen_relation_normalization", "strengthen_entity_canonicalization"} for name in action_names):
+            pipeline_bias = "enrichment_focus"
+
+        next_round_hints = {
+            **previous_hints,
+            "version": 1,
+            "updated_at": datetime.now(UTC).isoformat(),
+            "round_no": round_no,
+            "pipeline_bias": pipeline_bias,
+            "focus_actions": action_names,
+            "agent_reflection": {
+                "failed_metrics": failed_metrics,
+                "observed_delta": delta,
+                "suggestions": suggestions,
+            },
+        }
+
+        return {
+            "status": "accepted",
+            "reason": "OK",
+            "summary": (
+                f"Round {round_no} reviewed with {len(action_names)} action(s); "
+                f"delta={delta:.4f}, continue={str(should_continue).lower()}"
+            ),
+            "next_round_hints": next_round_hints,
+        }
+
+    def _build_quality_round_summary(
+        self,
+        *,
+        round_no: int,
+        actions: list[dict[str, Any]],
+        before_snapshot: dict[str, Any],
+        after_snapshot: dict[str, Any],
+        delta: float,
+        stop_or_continue_reason: str,
+    ) -> dict[str, Any]:
+        failed_metrics = [
+            str(key)
+            for key, value in (after_snapshot.get("pass_flags") or {}).items()
+            if not bool(value)
+        ]
+        action_names = [str(item.get("action") or "") for item in actions if str(item.get("action") or "").strip()]
+        continue_next = bool(failed_metrics) and delta <= 0.02
+        return {
+            "round": round_no,
+            "problem_hypotheses": failed_metrics,
+            "applied_actions": action_names,
+            "observed_delta": delta,
+            "next_round_plan": action_names[:3],
+            "skill_patch_suggestions": [
+                f"Tune {metric} extraction policy"
+                for metric in failed_metrics[:3]
+            ],
+            "continue": continue_next,
+            "stop_or_continue_reason": stop_or_continue_reason,
+            "quality_score_before": before_snapshot.get("quality_score"),
+            "quality_score_after": after_snapshot.get("quality_score"),
+        }
+
+    def _derive_quality_execution_hints(
+        self,
+        *,
+        actions: list[dict[str, Any]],
+        previous_hints: dict[str, Any],
+        round_no: int,
+        before_snapshot: dict[str, Any],
+    ) -> dict[str, Any]:
+        action_names = [str(item.get("action") or "").strip() for item in actions if str(item.get("action") or "").strip()]
+        previous_bias = str(previous_hints.get("pipeline_bias") or "").strip()
+        low_conf_target = 0.35
+        thresholds = before_snapshot.get("thresholds") or {}
+        if isinstance(thresholds, dict):
+            try:
+                low_conf_target = max(0.2, min(0.6, float(thresholds.get("low_confidence_threshold", 0.35))))
+            except (TypeError, ValueError):
+                low_conf_target = 0.35
+        should_prune_low_conf = "prune_low_confidence_edges" in action_names
+        should_drop_missing = "backfill_missing_evidence" in action_names
+        bias = "enrichment_focus" if any(
+            name in {"strengthen_relation_normalization", "strengthen_entity_canonicalization"}
+            for name in action_names
+        ) else (previous_bias or "balanced")
+        return {
+            "version": 1,
+            "updated_at": datetime.now(UTC).isoformat(),
+            "round_no": round_no,
+            "pipeline_bias": bias,
+            "focus_actions": action_names,
+            "quality_policy": {
+                "prune_low_confidence": should_prune_low_conf,
+                "drop_missing_evidence": should_drop_missing,
+                "min_confidence_to_keep": low_conf_target,
+            },
+            "retry_policy": {
+                "max_stagnation_rounds": 2,
+                "delta_floor": 0.005,
+            },
+        }
+
+    def _pick_latest_memify_result(
+        self,
+        *,
+        dataset_scope: list[str] | None = None,
+        project_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        normalized_scope = set(self._normalize_dataset_scope(dataset_scope))
+        normalized_project_id = self._normalize_project_id(project_id)
         jobs = self.list_memify_jobs(active_only=False, limit=20)
         for job in jobs:
             if str(job.get("status") or "") != "succeeded":
                 continue
             if int(job.get("relation_count") or 0) <= 0 and int(job.get("node_count") or 0) <= 0:
                 continue
+            job_scope = set(self._normalize_dataset_scope(job.get("dataset_scope") if isinstance(job.get("dataset_scope"), list) else []))
+            if normalized_scope and job_scope and normalized_scope.isdisjoint(job_scope):
+                continue
+            if normalized_project_id:
+                if job_scope and not any(normalized_project_id in item.lower() for item in job_scope):
+                    continue
             return job
         return None
+
+    def maybe_start_quality_self_drive(
+        self,
+        *,
+        config: KnowledgeConfig,
+        dataset_scope: list[str] | None,
+        project_id: str | None,
+        max_rounds: int,
+        dry_run: bool,
+        baseline_result: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload = baseline_result if isinstance(baseline_result, dict) else self._pick_latest_memify_result(
+            dataset_scope=dataset_scope,
+            project_id=project_id,
+        )
+        if not isinstance(payload, dict):
+            return {
+                "accepted": False,
+                "reason": "NO_BASELINE_MEMIFY_RESULT",
+            }
+
+        snapshot = self._build_quality_snapshot(payload)
+        pass_flags = snapshot.get("pass_flags") or {}
+        relation_count = int(snapshot.get("relation_count") or 0)
+        entity_count = int(snapshot.get("entity_count") or 0)
+
+        if relation_count <= 0 and entity_count <= 0:
+            return {
+                "accepted": False,
+                "reason": "INSUFFICIENT_GRAPH_SIGNAL",
+                "snapshot": snapshot,
+            }
+
+        if pass_flags and all(bool(value) for value in pass_flags.values()):
+            return {
+                "accepted": False,
+                "reason": "QUALITY_TARGET_MET",
+                "snapshot": snapshot,
+            }
+
+        result = self.run_quality_self_drive(
+            config=config,
+            dataset_scope=dataset_scope,
+            project_id=project_id,
+            max_rounds=max_rounds,
+            dry_run=dry_run,
+        )
+        return {
+            **result,
+            "snapshot": snapshot,
+        }
 
     def run_quality_self_drive(
         self,
@@ -234,6 +568,10 @@ class GraphOpsManager:
             rounds = max(1, min(8, int(max_rounds or 1)))
             job_id = uuid.uuid4().hex[:12]
             now = datetime.now(UTC).isoformat()
+            baseline_payload = self._pick_latest_memify_result(
+                dataset_scope=dataset_scope,
+                project_id=project_id,
+            )
             payload = {
                 "job_id": job_id,
                 "task_type": "quality_loop",
@@ -249,6 +587,7 @@ class GraphOpsManager:
                 "dry_run": bool(dry_run),
                 "dataset_scope": dataset_scope or [],
                 "project_id": str(project_id or ""),
+                "baseline_result": baseline_payload if isinstance(baseline_payload, dict) else None,
                 "rounds": [],
                 "score_before": None,
                 "score_after": None,
@@ -265,7 +604,7 @@ class GraphOpsManager:
 
         worker = threading.Thread(
             target=self._run_quality_loop_job,
-            args=(job_id, config, dataset_scope, rounds, dry_run),
+            args=(job_id, config, dataset_scope, project_id, rounds, dry_run),
             daemon=True,
         )
         worker.start()
@@ -281,6 +620,7 @@ class GraphOpsManager:
         job_id: str,
         config: KnowledgeConfig,
         dataset_scope: list[str] | None,
+        project_id: str | None,
         max_rounds: int,
         dry_run: bool,
     ) -> None:
@@ -304,7 +644,17 @@ class GraphOpsManager:
         previous_score: float | None = None
         stagnation_rounds = 0
 
-        baseline_payload = self._pick_latest_memify_result()
+        job_payload = self.get_quality_loop_status(job_id) or {}
+        baseline_payload = (
+            job_payload.get("baseline_result")
+            if isinstance(job_payload.get("baseline_result"), dict)
+            else None
+        )
+        if baseline_payload is None:
+            baseline_payload = self._pick_latest_memify_result(
+                dataset_scope=dataset_scope,
+                project_id=project_id,
+            )
         if baseline_payload is None:
             warnings.append("NO_BASELINE_MEMIFY_RESULT")
             baseline_snapshot = self._build_quality_snapshot({})
@@ -312,6 +662,8 @@ class GraphOpsManager:
             baseline_snapshot = self._build_quality_snapshot(baseline_payload)
 
         score_before = float(baseline_snapshot.get("quality_score") or 0.0)
+        reflection_hints = self._load_quality_reflection_hints(project_id)
+        next_round_hints = dict(reflection_hints)
 
         for round_index in range(max_rounds):
             round_no = round_index + 1
@@ -342,13 +694,26 @@ class GraphOpsManager:
                 after_snapshot = before_snapshot
                 warnings.append("QUALITY_LOOP_DRY_RUN_NO_EXECUTION")
             else:
+                execution_hints = self._derive_quality_execution_hints(
+                    actions=actions,
+                    previous_hints=reflection_hints,
+                    round_no=round_no,
+                    before_snapshot=before_snapshot,
+                )
+                next_round_hints = dict(execution_hints)
+                effective_pipeline_type = (
+                    "system-enrichment"
+                    if str(execution_hints.get("pipeline_bias") or "") == "enrichment_focus"
+                    else "full"
+                )
                 execution_result = self.execute_memify_once(
                     config=config,
-                    pipeline_type="full",
+                    pipeline_type=effective_pipeline_type,
                     dataset_scope=dataset_scope,
                     dry_run=False,
                     job_id=None,
                     progress_callback=None,
+                    quality_hints=execution_hints,
                 )
                 if str(execution_result.get("status") or "") != "succeeded":
                     stop_reason = "MEMIFY_EXECUTION_FAILED"
@@ -376,6 +741,30 @@ class GraphOpsManager:
             current_score = float(after_snapshot.get("quality_score") or 0.0)
             before_score = float(before_snapshot.get("quality_score") or 0.0)
             delta = current_score - before_score
+            round_stop_reason = "CONTINUE"
+            if all(bool(v) for v in (after_snapshot.get("pass_flags") or {}).values()):
+                round_stop_reason = "QUALITY_TARGET_MET"
+            elif previous_score is not None and current_score <= previous_score + 0.005:
+                round_stop_reason = "LOW_GAIN"
+            round_summary = self._build_quality_round_summary(
+                round_no=round_no,
+                actions=actions,
+                before_snapshot=before_snapshot,
+                after_snapshot=after_snapshot,
+                delta=delta,
+                stop_or_continue_reason=round_stop_reason,
+            )
+            agent_gate = self._run_quality_agent_gate(
+                round_no=round_no,
+                actions=actions,
+                before_snapshot=before_snapshot,
+                after_snapshot=after_snapshot,
+                round_summary=round_summary,
+                previous_hints=next_round_hints,
+            )
+            gate_hints = agent_gate.get("next_round_hints")
+            if isinstance(gate_hints, dict) and gate_hints:
+                next_round_hints = dict(gate_hints)
             rounds.append(
                 {
                     "round": round_no,
@@ -384,8 +773,15 @@ class GraphOpsManager:
                     "after": after_snapshot,
                     "delta": delta,
                     "status": "succeeded",
+                    "summary": round_summary,
+                    "agent_gate": agent_gate,
                 }
             )
+
+            if str(agent_gate.get("status") or "") != "accepted":
+                stop_reason = "REVIEW_REQUIRED"
+                warnings.append(str(agent_gate.get("reason") or "AGENT_GATE_REVIEW_REQUIRED"))
+                break
 
             if all(bool(v) for v in (after_snapshot.get("pass_flags") or {}).values()):
                 stop_reason = "QUALITY_TARGET_MET"
@@ -403,6 +799,19 @@ class GraphOpsManager:
         score_after = float((rounds[-1]["after"]["quality_score"] if rounds else score_before) or 0.0)
         delta_total = score_after - score_before
         final_status = "failed" if stop_reason == "MEMIFY_EXECUTION_FAILED" else "succeeded"
+        final_summary = {
+            "score_before": score_before,
+            "score_after": score_after,
+            "delta": delta_total,
+            "stop_reason": stop_reason,
+        }
+        reflection_artifacts = self._save_quality_reflection_artifacts(
+            project_id=project_id,
+            job_id=job_id,
+            rounds=rounds,
+            final_summary=final_summary,
+            next_round_hints=next_round_hints,
+        )
         finished = datetime.now(UTC).isoformat()
         self._patch_quality_loop_job(
             job_id,
@@ -420,6 +829,9 @@ class GraphOpsManager:
                     "delta": delta_total,
                     "stop_reason": stop_reason,
                     "warnings": warnings,
+                    "final_summary": final_summary,
+                    "next_round_hints": next_round_hints,
+                    "reflection_artifacts": reflection_artifacts,
                     "finished_at": finished,
                     "updated_at": finished,
                 }
@@ -936,6 +1348,7 @@ class GraphOpsManager:
         dry_run: bool,
         job_id: str | None = None,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
+        quality_hints: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Execute one memify run synchronously and return the normalized result."""
         engine = getattr(config, "engine", "local_lexical")
@@ -1055,6 +1468,9 @@ class GraphOpsManager:
                             )
                             or "system-knowledge-enrichment-v1"
                         ),
+                        quality_policy=(quality_hints or {}).get("quality_policy")
+                        if isinstance(quality_hints, dict)
+                        else None,
                     )
                     warnings.extend(enrichment_result.warnings)
                     response.update(

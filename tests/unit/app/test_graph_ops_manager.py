@@ -10,6 +10,7 @@ import pytest
 
 from copaw.config.config import Config, GraphifyConfig, KnowledgeSourceSpec
 from copaw.knowledge import GraphOpsManager, KnowledgeManager
+from copaw.knowledge.enrichment_pipeline import run_system_knowledge_enrichment
 from copaw.knowledge.graphify_provider import GraphifyNotConfiguredError
 
 
@@ -50,6 +51,27 @@ def _await_terminal_memify_status(
         raise AssertionError(f"memify job {job_id} not found")
     raise AssertionError(
         f"memify job {job_id} did not reach terminal status, got {last_job.get('status')}"
+    )
+
+
+def _await_terminal_quality_status(
+    graph_ops: GraphOpsManager,
+    job_id: str,
+    timeout_sec: float = 5.0,
+) -> dict:
+    deadline = time.time() + timeout_sec
+    last_job: dict | None = None
+    while time.time() < deadline:
+        job = graph_ops.get_quality_loop_status(job_id)
+        if job is not None:
+            last_job = job
+            if job.get("status") in {"succeeded", "failed"}:
+                return job
+        time.sleep(0.05)
+    if last_job is None:
+        raise AssertionError(f"quality job {job_id} not found")
+    raise AssertionError(
+        f"quality job {job_id} did not reach terminal status, got {last_job.get('status')}"
     )
 
 
@@ -479,3 +501,277 @@ def test_run_memify_job_exposes_enrichment_fields(tmp_path):
     assert Path(str(job.get("enriched_graph_path") or "")).exists()
     assert Path(str(job.get("enrichment_quality_report_path") or "")).exists()
     assert isinstance(job.get("enrichment_metrics"), dict)
+
+
+def test_maybe_start_quality_self_drive_skips_when_quality_target_met(tmp_path):
+    knowledge_config = Config().knowledge
+    knowledge_config.enabled = True
+    knowledge_config.memify_enabled = True
+
+    graph_ops = GraphOpsManager(tmp_path)
+    baseline_result = {
+        "status": "succeeded",
+        "document_count": 4,
+        "relation_count": 100,
+        "node_count": 40,
+        "enrichment_metrics": {
+            "edge_count": 100,
+            "node_count": 40,
+            "relation_normalized_count": 100,
+            "entity_canonicalized_count": 40,
+            "low_confidence_edges": 0,
+            "missing_evidence_edges": 0,
+        },
+    }
+
+    result = graph_ops.maybe_start_quality_self_drive(
+        config=knowledge_config,
+        dataset_scope=["project-demo-workspace"],
+        project_id="project-demo",
+        max_rounds=3,
+        dry_run=False,
+        baseline_result=baseline_result,
+    )
+
+    assert result["accepted"] is False
+    assert result["reason"] == "QUALITY_TARGET_MET"
+    assert isinstance(result.get("snapshot"), dict)
+
+
+def test_pick_latest_memify_result_respects_dataset_scope(tmp_path):
+    graph_ops = GraphOpsManager(tmp_path)
+
+    graph_ops._save_memify_jobs(  # pylint: disable=protected-access
+        {
+            "job-a": {
+                "job_id": "job-a",
+                "status": "succeeded",
+                "relation_count": 10,
+                "node_count": 5,
+                "dataset_scope": ["project-a-workspace"],
+                "updated_at": "2026-04-13T10:00:00+00:00",
+            },
+            "job-b": {
+                "job_id": "job-b",
+                "status": "succeeded",
+                "relation_count": 12,
+                "node_count": 6,
+                "dataset_scope": ["project-b-workspace"],
+                "updated_at": "2026-04-13T11:00:00+00:00",
+            },
+        }
+    )
+
+    picked = graph_ops._pick_latest_memify_result(  # pylint: disable=protected-access
+        dataset_scope=["project-a-workspace"],
+        project_id="project-a",
+    )
+
+    assert picked is not None
+    assert picked["job_id"] == "job-a"
+
+
+def test_quality_loop_persists_reflection_artifacts(tmp_path):
+    knowledge_config = Config().knowledge
+    knowledge_config.enabled = True
+    knowledge_config.memify_enabled = True
+
+    graph_ops = GraphOpsManager(tmp_path)
+    project_id = "project-reflection"
+    dataset_scope = ["project-reflection-workspace"]
+
+    graph_ops._save_memify_jobs(  # pylint: disable=protected-access
+        {
+            "seed-job": {
+                "job_id": "seed-job",
+                "status": "succeeded",
+                "relation_count": 24,
+                "node_count": 12,
+                "document_count": 4,
+                "dataset_scope": dataset_scope,
+                "updated_at": "2026-04-13T09:00:00+00:00",
+                "enrichment_metrics": {
+                    "edge_count": 24,
+                    "node_count": 12,
+                    "relation_normalized_count": 0,
+                    "entity_canonicalized_count": 0,
+                    "low_confidence_edges": 8,
+                    "missing_evidence_edges": 0,
+                },
+            }
+        }
+    )
+
+    with patch.object(
+        graph_ops,
+        "execute_memify_once",
+        return_value={
+            "status": "succeeded",
+            "relation_count": 24,
+            "node_count": 12,
+            "document_count": 4,
+            "enrichment_metrics": {
+                "edge_count": 24,
+                "node_count": 12,
+                "relation_normalized_count": 1,
+                "entity_canonicalized_count": 1,
+                "low_confidence_edges": 8,
+                "missing_evidence_edges": 0,
+            },
+            "warnings": [],
+            "error": None,
+            "engine": "local_graph",
+        },
+    ):
+        response = graph_ops.run_quality_self_drive(
+            config=knowledge_config,
+            dataset_scope=dataset_scope,
+            project_id=project_id,
+            max_rounds=1,
+            dry_run=False,
+        )
+
+    assert response["accepted"] is True
+    status = _await_terminal_quality_status(graph_ops, response["job_id"], timeout_sec=5.0)
+    assert status["status"] == "succeeded"
+    artifacts = status.get("reflection_artifacts") or {}
+    assert artifacts.get("lessons_path")
+    assert artifacts.get("params_path")
+    assert artifacts.get("rounds_dir")
+    assert Path(artifacts["lessons_path"]).exists()
+    assert Path(artifacts["params_path"]).exists()
+    rounds_dir = Path(artifacts["rounds_dir"])
+    assert rounds_dir.exists()
+    round_files = sorted(rounds_dir.glob("round-*.json"))
+    assert len(round_files) == 1
+    round_payload = json.loads(round_files[0].read_text(encoding="utf-8"))
+    assert round_payload["round"] == 1
+    assert isinstance(round_payload.get("agent_gate"), dict)
+
+
+def test_quality_loop_stops_when_agent_gate_requires_review(tmp_path):
+    knowledge_config = Config().knowledge
+    knowledge_config.enabled = True
+    knowledge_config.memify_enabled = True
+
+    graph_ops = GraphOpsManager(tmp_path)
+    project_id = "project-gate-review"
+    dataset_scope = ["project-gate-review-workspace"]
+
+    graph_ops._save_memify_jobs(  # pylint: disable=protected-access
+        {
+            "seed-job": {
+                "job_id": "seed-job",
+                "status": "succeeded",
+                "relation_count": 24,
+                "node_count": 12,
+                "document_count": 4,
+                "dataset_scope": dataset_scope,
+                "updated_at": "2026-04-13T09:00:00+00:00",
+                "enrichment_metrics": {
+                    "edge_count": 24,
+                    "node_count": 12,
+                    "relation_normalized_count": 1,
+                    "entity_canonicalized_count": 1,
+                    "low_confidence_edges": 8,
+                    "missing_evidence_edges": 0,
+                },
+            }
+        }
+    )
+
+    with patch.object(
+        graph_ops,
+        "execute_memify_once",
+        return_value={
+            "status": "succeeded",
+            "relation_count": 24,
+            "node_count": 12,
+            "document_count": 4,
+            "enrichment_metrics": {
+                "edge_count": 24,
+                "node_count": 12,
+                "relation_normalized_count": 1,
+                "entity_canonicalized_count": 1,
+                "low_confidence_edges": 8,
+                "missing_evidence_edges": 0,
+            },
+            "warnings": [],
+            "error": None,
+            "engine": "local_graph",
+        },
+    ), patch.object(
+        graph_ops,
+        "_run_quality_agent_gate",
+        return_value={
+            "status": "review_required",
+            "reason": "MISSING_ACTION_PLAN",
+            "summary": "missing",
+            "next_round_hints": {},
+        },
+    ):
+        response = graph_ops.run_quality_self_drive(
+            config=knowledge_config,
+            dataset_scope=dataset_scope,
+            project_id=project_id,
+            max_rounds=2,
+            dry_run=False,
+        )
+        status = _await_terminal_quality_status(graph_ops, response["job_id"], timeout_sec=5.0)
+
+    assert response["accepted"] is True
+    assert status["status"] == "succeeded"
+    assert status["stop_reason"] == "REVIEW_REQUIRED"
+    warnings = status.get("warnings") or []
+    assert "MISSING_ACTION_PLAN" in warnings
+
+
+def test_enrichment_policy_prunes_low_confidence_edges(tmp_path):
+    source_graph = tmp_path / "source.json"
+    enriched_graph = tmp_path / "enriched.json"
+    quality_report = tmp_path / "quality.json"
+    source_graph.write_text(
+        json.dumps(
+            {
+                "nodes": [
+                    {"id": "n1", "label": "NodeA"},
+                    {"id": "n2", "label": "NodeB"},
+                ],
+                "links": [
+                    {
+                        "source": "n1",
+                        "target": "n2",
+                        "relation": "mentions",
+                        "confidence": 0.2,
+                        "document_path": "",
+                        "document_title": "",
+                    },
+                    {
+                        "source": "n2",
+                        "target": "n1",
+                        "relation": "mentions",
+                        "confidence": 0.9,
+                        "document_path": "doc.md",
+                        "document_title": "Doc",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = run_system_knowledge_enrichment(
+        source_graph_path=source_graph,
+        enriched_graph_path=enriched_graph,
+        quality_report_path=quality_report,
+        pipeline_id="quality-policy-test",
+        quality_policy={
+            "prune_low_confidence": True,
+            "min_confidence_to_keep": 0.35,
+        },
+    )
+
+    assert result.status == "succeeded"
+    assert result.metrics["pruned_low_confidence_edges"] == 1
+    assert result.metrics["edge_count"] == 1
+    assert "ENRICHMENT_PRUNED_LOW_CONFIDENCE_EDGES" in result.warnings

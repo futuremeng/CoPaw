@@ -27,6 +27,7 @@ import {
   Select,
   Splitter,
   Spin,
+  Tag,
   Tabs,
   Tooltip,
   Typography,
@@ -268,6 +269,49 @@ function formatRuntimeTimestamp(value: string | null | undefined, locale: string
     hour: "2-digit",
     minute: "2-digit",
   }).format(parsed);
+}
+
+function asObjectRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function asStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+}
+
+function pickLatestQualityLoopRound(job: QualityLoopJobStatus | null): Record<string, unknown> | null {
+  if (!Array.isArray(job?.rounds) || job.rounds.length === 0) {
+    return null;
+  }
+  return asObjectRecord(job.rounds[job.rounds.length - 1]);
+}
+
+function getQualityLoopTone(params: {
+  status: string;
+  stopReason: string;
+  gateStatus: string;
+}): "success" | "processing" | "warning" | "error" | "default" {
+  if (params.stopReason === "REVIEW_REQUIRED" || params.gateStatus === "review_required") {
+    return "warning";
+  }
+  if (params.status === "failed") {
+    return "error";
+  }
+  if (["running", "pending"].includes(params.status)) {
+    return "processing";
+  }
+  if (params.status === "succeeded") {
+    return "success";
+  }
+  return "default";
 }
 
 function getLeafFilterIcon(filterKey: ProjectFileFilterKey): ReactNode {
@@ -828,6 +872,47 @@ export default function ProjectDetailPage() {
       </div>
     );
   }, [i18n.language, projectKnowledgeState.activeKnowledgeTasks, runtimeSignalDetails, runtimeSignalLoading, t, translateWithFallback]);
+
+  const latestQualityLoopSummary = useMemo(() => {
+    const job = projectKnowledgeState.latestQualityLoopJob;
+    if (!job) {
+      return null;
+    }
+    const latestRound = pickLatestQualityLoopRound(job);
+    const roundSummary = asObjectRecord(latestRound?.summary);
+    const agentGate = asObjectRecord(latestRound?.agent_gate);
+    const roundNo = typeof latestRound?.round === "number"
+      ? latestRound.round
+      : typeof latestRound?.round === "string"
+        ? Number.parseInt(latestRound.round, 10)
+        : null;
+    const stopReason = String(job.stop_reason || roundSummary?.stop_or_continue_reason || "").trim();
+    const gateStatus = String(agentGate?.status || "").trim();
+    const gateReason = String(agentGate?.reason || "").trim();
+    const gateSummary = String(agentGate?.summary || "").trim();
+    const nextPlan = asStringList(roundSummary?.next_round_plan);
+    const hypotheses = asStringList(roundSummary?.problem_hypotheses);
+    const updatedAt = formatRuntimeTimestamp(job.updated_at, i18n.language);
+    const tone = getQualityLoopTone({
+      status: String(job.status || "").trim(),
+      stopReason,
+      gateStatus,
+    });
+    return {
+      jobStatus: String(job.status || "").trim(),
+      roundNo,
+      scoreAfter: typeof job.score_after === "number" ? job.score_after : null,
+      delta: typeof job.delta === "number" ? job.delta : null,
+      stopReason,
+      gateStatus,
+      gateReason,
+      gateSummary,
+      nextPlan,
+      hypotheses,
+      updatedAt,
+      tone,
+    };
+  }, [i18n.language, projectKnowledgeState.latestQualityLoopJob]);
 
   const leaveConfirmText = useMemo(
     () =>
@@ -3753,6 +3838,82 @@ export default function ProjectDetailPage() {
                             </Text>
                           </div>
                         </div>
+                        {latestQualityLoopSummary ? (
+                          <div
+                            className={[
+                              styles.knowledgeLoopSummary,
+                              latestQualityLoopSummary.tone === "warning"
+                                ? styles.knowledgeLoopSummaryWarning
+                                : "",
+                              latestQualityLoopSummary.tone === "success"
+                                ? styles.knowledgeLoopSummarySuccess
+                                : "",
+                              latestQualityLoopSummary.tone === "error"
+                                ? styles.knowledgeLoopSummaryError
+                                : "",
+                            ].filter(Boolean).join(" ")}
+                          >
+                            <div className={styles.knowledgeLoopSummaryHeaderRow}>
+                              <Text strong>
+                                {t("projects.knowledge.latestQualityLoop", "Latest Quality Loop")}
+                              </Text>
+                              <div className={styles.knowledgeLoopSummaryTags}>
+                                <Tag color={latestQualityLoopSummary.tone}>
+                                  {latestQualityLoopSummary.jobStatus || t("projects.statusUnknown", "unknown")}
+                                </Tag>
+                                {latestQualityLoopSummary.roundNo ? (
+                                  <Tag>{t("projects.knowledge.roundLabel", "Round")} {latestQualityLoopSummary.roundNo}</Tag>
+                                ) : null}
+                                {latestQualityLoopSummary.stopReason ? (
+                                  <Tag color={latestQualityLoopSummary.tone}>
+                                    {latestQualityLoopSummary.stopReason}
+                                  </Tag>
+                                ) : null}
+                                {latestQualityLoopSummary.gateStatus ? (
+                                  <Tag color={latestQualityLoopSummary.gateStatus === "accepted" ? "success" : "warning"}>
+                                    agent gate: {latestQualityLoopSummary.gateStatus}
+                                  </Tag>
+                                ) : null}
+                              </div>
+                            </div>
+                            <div className={styles.knowledgeLoopSummaryMetaRow}>
+                              {latestQualityLoopSummary.scoreAfter !== null ? (
+                                <Text type="secondary">
+                                  {t("projects.knowledge.signalQualityScore", "Quality Score")}: {Math.round(latestQualityLoopSummary.scoreAfter * 100)}
+                                </Text>
+                              ) : null}
+                              {latestQualityLoopSummary.delta !== null ? (
+                                <Text type="secondary">
+                                  {t("projects.knowledge.runtimeStatusScoreDelta", "Score delta")}: {latestQualityLoopSummary.delta >= 0 ? "+" : ""}{Math.round(latestQualityLoopSummary.delta * 100)}
+                                </Text>
+                              ) : null}
+                              {latestQualityLoopSummary.updatedAt ? (
+                                <Text type="secondary">
+                                  {t("projects.knowledge.runtimeStatusUpdatedAt", "Updated")}: {latestQualityLoopSummary.updatedAt}
+                                </Text>
+                              ) : null}
+                            </div>
+                            {latestQualityLoopSummary.gateSummary ? (
+                              <Text>
+                                {latestQualityLoopSummary.gateSummary}
+                              </Text>
+                            ) : latestQualityLoopSummary.gateReason ? (
+                              <Text>
+                                {latestQualityLoopSummary.gateReason}
+                              </Text>
+                            ) : null}
+                            {latestQualityLoopSummary.hypotheses.length ? (
+                              <Text type="secondary">
+                                {t("projects.knowledge.qualityLoopHypotheses", "Issues")}: {latestQualityLoopSummary.hypotheses.join(", ")}
+                              </Text>
+                            ) : null}
+                            {latestQualityLoopSummary.nextPlan.length ? (
+                              <Text type="secondary">
+                                {t("projects.knowledge.qualityLoopNextPlan", "Next plan")}: {latestQualityLoopSummary.nextPlan.join(", ")}
+                              </Text>
+                            ) : null}
+                          </div>
+                        ) : null}
                       </div>
                       <Button
                         className={styles.knowledgeModuleHeaderToggle}

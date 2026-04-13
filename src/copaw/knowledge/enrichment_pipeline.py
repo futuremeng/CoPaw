@@ -95,6 +95,7 @@ def run_system_knowledge_enrichment(
     enriched_graph_path: Path,
     quality_report_path: Path,
     pipeline_id: str,
+    quality_policy: dict[str, Any] | None = None,
 ) -> EnrichmentResult:
     """Run system-level graph enrichment and write enriched artifacts."""
     payload = json.loads(source_graph_path.read_text(encoding="utf-8"))
@@ -107,16 +108,32 @@ def run_system_knowledge_enrichment(
         raise ValueError("graph payload must contain nodes[] and links[]")
 
     relation_normalized_count = 0
+    relation_rewritten_count = 0
     low_confidence_edges = 0
     missing_evidence_edges = 0
+    pruned_low_confidence_edges = 0
+    pruned_missing_evidence_edges = 0
     canonicalized_nodes = 0
+    canonical_rewritten_nodes = 0
+    policy = quality_policy if isinstance(quality_policy, dict) else {}
+    prune_low_confidence = bool(policy.get("prune_low_confidence"))
+    drop_missing_evidence = bool(policy.get("drop_missing_evidence"))
+    raw_min_confidence = policy.get("min_confidence_to_keep", 0.35)
+    try:
+        min_confidence_to_keep = max(0.0, min(1.0, float(raw_min_confidence)))
+    except (TypeError, ValueError):
+        min_confidence_to_keep = 0.35
+
+    enriched_links: list[dict[str, Any]] = []
 
     for node in nodes:
         if not isinstance(node, dict):
             continue
         canonical = _canonical_key(node.get("label"))
-        if canonical and canonical != str(node.get("label") or "").strip().lower():
+        if canonical:
             canonicalized_nodes += 1
+        if canonical and canonical != str(node.get("label") or "").strip().lower():
+            canonical_rewritten_nodes += 1
         node["canonical_key"] = canonical
         node["canonical_label"] = str(node.get("label") or "").strip()
 
@@ -125,14 +142,17 @@ def run_system_knowledge_enrichment(
             continue
         original_relation = str(edge.get("relation") or "")
         normalized_relation = _normalize_relation(original_relation)
-        if normalized_relation != original_relation:
+        if normalized_relation:
             relation_normalized_count += 1
+        if normalized_relation != original_relation:
+            relation_rewritten_count += 1
         edge["relation_original"] = original_relation
         edge["relation"] = normalized_relation
 
         calibrated = _parse_confidence(edge.get("confidence"))
         edge["confidence_calibrated"] = round(calibrated, 4)
-        if calibrated < 0.35:
+        is_low_confidence = calibrated < 0.35
+        if is_low_confidence:
             low_confidence_edges += 1
 
         evidence = {
@@ -141,16 +161,32 @@ def run_system_knowledge_enrichment(
             "source_id": str(edge.get("source_id") or "").strip(),
         }
         edge["evidence"] = evidence
-        if not (evidence["document_path"] or evidence["document_title"]):
+        has_evidence = bool(evidence["document_path"] or evidence["document_title"])
+        if not has_evidence:
             missing_evidence_edges += 1
+
+        if prune_low_confidence and calibrated < min_confidence_to_keep:
+            pruned_low_confidence_edges += 1
+            continue
+        if drop_missing_evidence and not has_evidence:
+            pruned_missing_evidence_edges += 1
+            continue
+
+        enriched_links.append(edge)
+
+    payload["links"] = enriched_links
 
     metrics = {
         "node_count": len([n for n in nodes if isinstance(n, dict)]),
-        "edge_count": len([e for e in links if isinstance(e, dict)]),
+        "edge_count": len([e for e in enriched_links if isinstance(e, dict)]),
         "relation_normalized_count": relation_normalized_count,
         "entity_canonicalized_count": canonicalized_nodes,
+        "relation_rewritten_count": relation_rewritten_count,
+        "entity_canonical_rewritten_count": canonical_rewritten_nodes,
         "low_confidence_edges": low_confidence_edges,
         "missing_evidence_edges": missing_evidence_edges,
+        "pruned_low_confidence_edges": pruned_low_confidence_edges,
+        "pruned_missing_evidence_edges": pruned_missing_evidence_edges,
     }
 
     payload["_copaw_enrichment"] = {
@@ -159,6 +195,11 @@ def run_system_knowledge_enrichment(
         "generated_at": _now_iso(),
         "source_graph_path": str(source_graph_path),
         "metrics": metrics,
+        "quality_policy": {
+            "prune_low_confidence": prune_low_confidence,
+            "drop_missing_evidence": drop_missing_evidence,
+            "min_confidence_to_keep": min_confidence_to_keep,
+        },
     }
 
     enriched_graph_path.parent.mkdir(parents=True, exist_ok=True)
@@ -188,6 +229,10 @@ def run_system_knowledge_enrichment(
         warnings.append("ENRICHMENT_MISSING_EDGE_EVIDENCE")
     if low_confidence_edges > 0:
         warnings.append("ENRICHMENT_LOW_CONFIDENCE_EDGES")
+    if pruned_low_confidence_edges > 0:
+        warnings.append("ENRICHMENT_PRUNED_LOW_CONFIDENCE_EDGES")
+    if pruned_missing_evidence_edges > 0:
+        warnings.append("ENRICHMENT_PRUNED_MISSING_EVIDENCE_EDGES")
 
     return EnrichmentResult(
         status="succeeded",

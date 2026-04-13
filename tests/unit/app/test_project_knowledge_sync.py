@@ -241,3 +241,72 @@ def test_project_sync_recovers_stale_active_state_and_restarts(tmp_path: Path, m
     assert state["status"] == "pending"
     assert state["last_error"] == ""
     assert started
+
+
+def test_project_sync_auto_triggers_quality_loop_after_memify_success(tmp_path: Path, monkeypatch):
+    project_id = "project-e"
+    project_dir = tmp_path / "projects" / project_id
+    project_dir.mkdir(parents=True, exist_ok=True)
+    manager = ProjectKnowledgeSyncManager(
+        tmp_path,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+    config = Config().knowledge
+    config.memify_enabled = True
+    source = _build_source(project_id, project_dir)
+
+    monkeypatch.setattr(
+        manager._knowledge_manager,
+        "index_source",
+        lambda *_args, **_kwargs: {"indexed": True},
+    )
+    monkeypatch.setattr(
+        manager._graph_ops,
+        "execute_memify_once",
+        lambda **_kwargs: {
+            "status": "succeeded",
+            "job_id": "memify-job-1",
+            "relation_count": 24,
+            "node_count": 12,
+            "document_count": 4,
+            "enrichment_metrics": {
+                "edge_count": 24,
+                "node_count": 12,
+                "relation_normalized_count": 2,
+                "entity_canonicalized_count": 2,
+                "low_confidence_edges": 12,
+                "missing_evidence_edges": 10,
+            },
+        },
+    )
+
+    quality_calls: list[dict] = []
+
+    def _fake_quality_auto_trigger(**kwargs):
+        quality_calls.append(kwargs)
+        return {
+            "accepted": True,
+            "job_id": "quality-job-1",
+            "status_url": "/knowledge/quality-loop/jobs/quality-job-1",
+        }
+
+    monkeypatch.setattr(
+        manager._graph_ops,
+        "maybe_start_quality_self_drive",
+        _fake_quality_auto_trigger,
+    )
+
+    manager._run_sync_loop(
+        project_id=project_id,
+        config=config,
+        running_config=None,
+        source=source,
+    )
+
+    state = manager.get_state(project_id)
+    assert state["status"] == "succeeded"
+    assert quality_calls
+    assert quality_calls[0]["project_id"] == project_id
+    assert quality_calls[0]["dataset_scope"] == [source.id]
+    assert state["last_result"]["quality_loop"]["accepted"] is True
+    assert state["last_result"]["quality_loop"]["job_id"] == "quality-job-1"

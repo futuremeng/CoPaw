@@ -7,6 +7,7 @@ import type {
   KnowledgeSourceContent,
   KnowledgeSourceItem,
   ProjectKnowledgeSyncState,
+  QualityLoopJobStatus,
 } from "../../../api/types";
 import {
   getProjectKnowledgeSyncAlertDescription,
@@ -77,6 +78,7 @@ export interface ProjectKnowledgeState {
   syncState: ProjectKnowledgeSyncState | null;
   activeKnowledgeTasks: KnowledgeTaskProgress[];
   activeKnowledgeTask: KnowledgeTaskProgress | null;
+  latestQualityLoopJob?: QualityLoopJobStatus | null;
   quantMetrics: ProjectKnowledgeMetrics;
   graphQueryText: string;
   setGraphQueryText: (value: string) => void;
@@ -383,6 +385,7 @@ export function useProjectKnowledgeState(
   const [syncState, setSyncState] = useState<ProjectKnowledgeSyncState | null>(null);
   const [activeKnowledgeTasks, setActiveKnowledgeTasks] = useState<KnowledgeTaskProgress[]>([]);
   const [activeKnowledgeTask, setActiveKnowledgeTask] = useState<KnowledgeTaskProgress | null>(null);
+  const [latestQualityLoopJob, setLatestQualityLoopJob] = useState<QualityLoopJobStatus | null>(null);
   const refreshReasonRef = useRef("");
   const graphRefreshReasonRef = useRef("");
   const defaultExploreTokenRef = useRef("");
@@ -506,9 +509,43 @@ export function useProjectKnowledgeState(
     setActiveGraphNodeId(null);
     setActiveKnowledgeTasks([]);
     setActiveKnowledgeTask(null);
+    setLatestQualityLoopJob(null);
     defaultExploreTokenRef.current = "";
     graphRefreshReasonRef.current = "";
   }, [params.projectId]);
+
+  useEffect(() => {
+    if (!params.projectId) {
+      setLatestQualityLoopJob(null);
+      return;
+    }
+    let cancelled = false;
+    const loadLatestQualityLoop = async () => {
+      try {
+        const response = await api.listQualityLoopJobs({
+          projectId: params.projectId,
+          activeOnly: false,
+          limit: 5,
+        });
+        if (cancelled) {
+          return;
+        }
+        const items = Array.isArray(response.items) ? response.items : [];
+        const latest = items.find((item) =>
+          ["running", "pending", "succeeded", "failed"].includes(String(item.status || ""))
+        ) || null;
+        setLatestQualityLoopJob(latest);
+      } catch {
+        if (!cancelled) {
+          setLatestQualityLoopJob(null);
+        }
+      }
+    };
+    void loadLatestQualityLoop();
+    return () => {
+      cancelled = true;
+    };
+  }, [params.projectId, syncState?.last_finished_at, activeKnowledgeTask?.updated_at]);
 
   useEffect(() => {
     if (!params.projectId) {
@@ -787,6 +824,12 @@ export function useProjectKnowledgeState(
   );
 
   const quantMetrics = useMemo(() => {
+    const latestRound = Array.isArray(latestQualityLoopJob?.rounds)
+      ? latestQualityLoopJob.rounds[latestQualityLoopJob.rounds.length - 1] as Record<string, unknown> | undefined
+      : undefined;
+    const latestRoundAfter = latestRound && typeof latestRound.after === "object"
+      ? latestRound.after as Record<string, unknown>
+      : null;
     const totalSources = projectSources.length;
     const indexedSources = projectSources.filter((item) => item.status.indexed).length;
     const sourceDocumentCount = projectSources.reduce(
@@ -811,6 +854,7 @@ export function useProjectKnowledgeState(
     const relationCount = Math.max(
       graphResult?.records?.length || 0,
       getSyncRelationCount(syncState),
+      toFiniteNumber(latestRoundAfter?.relation_count, 0),
     );
     const graphEntityCount = new Set(
       (graphResult?.records || []).flatMap((record) => [record.subject, record.object])
@@ -818,6 +862,7 @@ export function useProjectKnowledgeState(
         .filter(Boolean),
     ).size;
     const entityCount = Math.max(graphEntityCount, getSyncNodeCount(syncState));
+    const effectiveEntityCount = Math.max(entityCount, toFiniteNumber(latestRoundAfter?.entity_count, 0));
     const activeEnrichmentMetrics = (activeKnowledgeTask?.enrichment_metrics || {}) as Record<string, unknown>;
 
     const edgeCount = Math.max(
@@ -828,7 +873,7 @@ export function useProjectKnowledgeState(
     const nodeCount = Math.max(
       getSyncEnrichmentMetric(syncState, "node_count"),
       toFiniteNumber(activeEnrichmentMetrics.node_count, 0),
-      entityCount,
+      effectiveEntityCount,
     );
 
     const relationNormalizedCount = Math.max(
@@ -853,21 +898,38 @@ export function useProjectKnowledgeState(
     const lowConfidenceRatio = safeRatio(lowConfidenceEdges, edgeCount);
     const missingEvidenceRatio = safeRatio(missingEvidenceEdges, edgeCount);
 
+    const reflectedRelationNormalizationCoverage = toFiniteNumber(
+      latestRoundAfter?.relation_normalization_coverage,
+      relationNormalizationCoverage,
+    );
+    const reflectedEntityCanonicalCoverage = toFiniteNumber(
+      latestRoundAfter?.entity_canonical_coverage,
+      entityCanonicalCoverage,
+    );
+    const reflectedLowConfidenceRatio = toFiniteNumber(
+      latestRoundAfter?.low_confidence_ratio,
+      lowConfidenceRatio,
+    );
+    const reflectedMissingEvidenceRatio = toFiniteNumber(
+      latestRoundAfter?.missing_evidence_ratio,
+      missingEvidenceRatio,
+    );
+
     const relationScale = Math.log10(Math.max(10, relationCount));
-    const entityScale = Math.log10(Math.max(10, entityCount));
+    const entityScale = Math.log10(Math.max(10, effectiveEntityCount));
     const relationNormalizationThreshold = clamp(0.48 + relationScale * 0.08, 0.5, 0.82);
     const entityCanonicalThreshold = clamp(0.45 + entityScale * 0.08, 0.48, 0.8);
     const lowConfidenceThreshold = clamp(0.28 - relationScale * 0.03, 0.12, 0.28);
     const missingEvidenceThreshold = clamp(0.3 - relationScale * 0.03, 0.15, 0.3);
 
     const normalizedQualityScores = [
-      safeRatio(relationNormalizationCoverage, relationNormalizationThreshold),
-      safeRatio(entityCanonicalCoverage, entityCanonicalThreshold),
+      safeRatio(reflectedRelationNormalizationCoverage, relationNormalizationThreshold),
+      safeRatio(reflectedEntityCanonicalCoverage, entityCanonicalThreshold),
       lowConfidenceThreshold > 0
-        ? clamp(1 - (lowConfidenceRatio / lowConfidenceThreshold), 0, 1)
+        ? clamp(1 - (reflectedLowConfidenceRatio / lowConfidenceThreshold), 0, 1)
         : 0,
       missingEvidenceThreshold > 0
-        ? clamp(1 - (missingEvidenceRatio / missingEvidenceThreshold), 0, 1)
+        ? clamp(1 - (reflectedMissingEvidenceRatio / missingEvidenceThreshold), 0, 1)
         : 0,
     ];
     const qualityAssessmentScore = normalizedQualityScores.reduce((sum, item) => sum + item, 0)
@@ -880,11 +942,11 @@ export function useProjectKnowledgeState(
       documentCount,
       chunkCount,
       relationCount,
-      entityCount,
-      relationNormalizationCoverage,
-      entityCanonicalCoverage,
-      lowConfidenceRatio,
-      missingEvidenceRatio,
+      entityCount: effectiveEntityCount,
+      relationNormalizationCoverage: reflectedRelationNormalizationCoverage,
+      entityCanonicalCoverage: reflectedEntityCanonicalCoverage,
+      lowConfidenceRatio: reflectedLowConfidenceRatio,
+      missingEvidenceRatio: reflectedMissingEvidenceRatio,
       relationNormalizationThreshold,
       entityCanonicalThreshold,
       lowConfidenceThreshold,
@@ -894,6 +956,7 @@ export function useProjectKnowledgeState(
   }, [
     activeKnowledgeTask?.enrichment_metrics,
     graphResult?.records,
+    latestQualityLoopJob?.rounds,
     projectSources,
     sourceRegistered,
     syncState,
@@ -1077,6 +1140,7 @@ export function useProjectKnowledgeState(
     syncState,
     activeKnowledgeTasks,
     activeKnowledgeTask,
+    latestQualityLoopJob,
     quantMetrics,
     graphQueryText,
     setGraphQueryText,

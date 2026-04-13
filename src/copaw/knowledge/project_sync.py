@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_PROJECT_SYNC_DEBOUNCE_SECONDS = 3.0
 DEFAULT_PROJECT_SYNC_COOLDOWN_SECONDS = 10.0
 DEFAULT_PROJECT_SYNC_STALE_AFTER_SECONDS = 120.0
+DEFAULT_PROJECT_SYNC_QUALITY_LOOP_ROUNDS = 3
 
 
 def build_project_source_id(project_id: str) -> str:
@@ -697,6 +698,27 @@ class ProjectKnowledgeSyncManager:
                     progress_callback=_on_memify_progress,
                 )
                 succeeded = str(memify_result.get("status") or "") == "succeeded"
+                quality_loop_result: dict[str, Any] | None = None
+                if succeeded and bool(getattr(config, "memify_enabled", False)):
+                    try:
+                        quality_loop_result = self._graph_ops.maybe_start_quality_self_drive(
+                            config=config,
+                            dataset_scope=[source.id],
+                            project_id=project_id,
+                            max_rounds=DEFAULT_PROJECT_SYNC_QUALITY_LOOP_ROUNDS,
+                            dry_run=False,
+                            baseline_result=memify_result,
+                        )
+                    except Exception as exc:
+                        logger.exception(
+                            "Project quality-loop auto-trigger failed for project %s",
+                            project_id,
+                        )
+                        quality_loop_result = {
+                            "accepted": False,
+                            "reason": "QUALITY_LOOP_TRIGGER_FAILED",
+                            "error": str(exc),
+                        }
                 now = self._now_iso()
                 self._patch_state(
                     project_id,
@@ -715,6 +737,7 @@ class ProjectKnowledgeSyncManager:
                         "last_result": {
                             "index": index_result,
                             "memify": memify_result,
+                            "quality_loop": quality_loop_result,
                         },
                     }),
                 )
