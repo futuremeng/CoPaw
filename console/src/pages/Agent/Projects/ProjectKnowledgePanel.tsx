@@ -34,44 +34,77 @@ interface ProjectKnowledgePanelProps {
   onRequestedQueryHandled?: () => void;
   onOpenRelations?: () => void;
   graphComponents?: {
-    GraphQueryResults: React.ComponentType<any>;
-    GraphVisualization: React.ComponentType<any>;
+    GraphQueryResults: React.ComponentType<Record<string, unknown>>;
+    GraphVisualization: React.ComponentType<Record<string, unknown>>;
   };
 }
 
 export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
   const { t } = useTranslation();
   const handledRequestedQueryRef = useRef("");
+  const lastAutoMaxTopKRef = useRef<number | null>(null);
+  const {
+    graphComponents,
+    knowledgeState,
+    onOpenRelations,
+    onRequestedQueryHandled,
+    projectId,
+    requestedQuery,
+  } = props;
 
   const GraphQueryResultsComponent =
-    props.graphComponents?.GraphQueryResults ?? GraphQueryResults;
+    graphComponents?.GraphQueryResults ?? GraphQueryResults;
   const GraphVisualizationComponent =
-    props.graphComponents?.GraphVisualization ?? GraphVisualization;
+    graphComponents?.GraphVisualization ?? GraphVisualization;
 
   useEffect(() => {
-    const requestedQuery = (props.requestedQuery || "").trim();
-    if (!requestedQuery || handledRequestedQueryRef.current === requestedQuery) {
+    const normalizedRequestedQuery = (requestedQuery || "").trim();
+    if (!normalizedRequestedQuery || handledRequestedQueryRef.current === normalizedRequestedQuery) {
       return;
     }
-    handledRequestedQueryRef.current = requestedQuery;
-    props.knowledgeState.setGraphQueryText(requestedQuery);
-    void props.knowledgeState.runGraphQuery(
-      requestedQuery,
-      props.knowledgeState.graphQueryMode,
+    handledRequestedQueryRef.current = normalizedRequestedQuery;
+    knowledgeState.setGraphQueryText(normalizedRequestedQuery);
+    void knowledgeState.runGraphQuery(
+      normalizedRequestedQuery,
+      knowledgeState.graphQueryMode,
     );
-    props.onRequestedQueryHandled?.();
-  }, [props]);
+    onRequestedQueryHandled?.();
+  }, [
+    knowledgeState,
+    onRequestedQueryHandled,
+    requestedQuery,
+  ]);
 
   const visualizationData = useMemo(() => {
-    if (!props.knowledgeState.graphResult) {
+    if (!knowledgeState.graphResult) {
       return null;
     }
     return recordsToVisualizationData(
-      props.knowledgeState.graphResult.records,
-      props.knowledgeState.graphResult.summary,
-      props.knowledgeState.graphResult.provenance,
+      knowledgeState.graphResult.records,
+      knowledgeState.graphResult.summary,
+      knowledgeState.graphResult.provenance,
     );
-  }, [props.knowledgeState.graphResult]);
+  }, [knowledgeState.graphResult]);
+
+  const maxByEntity = useMemo(
+    () => Math.max(20, knowledgeState.quantMetrics.entityCount || 200),
+    [knowledgeState.quantMetrics.entityCount],
+  );
+
+  useEffect(() => {
+    lastAutoMaxTopKRef.current = null;
+  }, [projectId]);
+
+  useEffect(() => {
+    const current = knowledgeState.graphQueryTopK;
+    const prevAuto = lastAutoMaxTopKRef.current;
+    const shouldAutoFollow = prevAuto === null || current === prevAuto;
+    if (!shouldAutoFollow || current === maxByEntity) {
+      return;
+    }
+    knowledgeState.setGraphQueryTopK(maxByEntity);
+    lastAutoMaxTopKRef.current = maxByEntity;
+  }, [knowledgeState, maxByEntity]);
 
   const queryControls = (
     <div className={styles.projectKnowledgeQueryTop}>
@@ -123,14 +156,12 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
                 loading={props.knowledgeState.graphLoading}
                 topK={props.knowledgeState.graphQueryTopK}
                 minTopK={20}
-                maxTopK={Math.max(20, props.knowledgeState.quantMetrics.entityCount || 200)}
+                maxTopK={maxByEntity}
                 onTopKChange={(value) => {
-                  const maxByEntity = Math.max(20, props.knowledgeState.quantMetrics.entityCount || 200);
                   const next = Math.max(20, Math.min(maxByEntity, Math.round(value)));
                   props.knowledgeState.setGraphQueryTopK(next);
                 }}
                 onTopKCommit={(value) => {
-                  const maxByEntity = Math.max(20, props.knowledgeState.quantMetrics.entityCount || 200);
                   const next = Math.max(20, Math.min(maxByEntity, Math.round(value)));
                   props.knowledgeState.setGraphQueryTopK(next);
                   if (props.knowledgeState.graphQueryText.trim()) {
@@ -143,7 +174,7 @@ export default function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps)
                 onInsightFocusChange={(payload) => {
                   props.knowledgeState.setRelationKeywordSeed(payload.active ? payload.keyword : "");
                   if (payload.active && payload.keyword.trim()) {
-                    props.onOpenRelations?.();
+                    onOpenRelations?.();
                   }
                 }}
                 onUsePathContext={(pathSummary, runNow) => {

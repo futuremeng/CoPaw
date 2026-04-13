@@ -350,6 +350,29 @@ function buildInitialSpreadPositions(
   });
 }
 
+function resolveTopKSegmentStep(value: number): number {
+  const v = Math.max(0, Math.floor(Number(value) || 0));
+  if (v <= 120) {
+    return 5;
+  }
+  if (v <= 320) {
+    return 10;
+  }
+  if (v <= 640) {
+    return 20;
+  }
+  if (v <= 1200) {
+    return 50;
+  }
+  return 100;
+}
+
+function snapTopKBySegment(value: number): number {
+  const safe = Math.max(0, Number(value) || 0);
+  const step = resolveTopKSegmentStep(safe);
+  return Math.round(safe / step) * step;
+}
+
 export function GraphQueryResults(props: GraphQueryResultsProps) {
   const { t } = useTranslation();
   const [filterText, setFilterText] = useState("");
@@ -623,6 +646,37 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     () => summarizeGraphEntities(filteredGraphData),
     [filteredGraphData],
   );
+
+  const topKControl = typeof topK === "number" ? (
+    <Space size={6} align="center">
+      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        TopK
+      </Typography.Text>
+      <Slider
+        min={Math.max(20, minTopK ?? 20)}
+        max={Math.max(Math.max(20, minTopK ?? 20), maxTopK ?? topK)}
+        step={1}
+        value={topK}
+        onChange={(value) => {
+          const next = snapTopKBySegment(Number(value));
+          if (Number.isFinite(next)) {
+            onTopKChange?.(next);
+          }
+        }}
+        onChangeComplete={(value) => {
+          const next = snapTopKBySegment(Number(value));
+          if (Number.isFinite(next)) {
+            onTopKCommit?.(next);
+          }
+        }}
+        style={{ width: compact ? 120 : 180, margin: 0 }}
+        tooltip={{ open: false }}
+      />
+      <Typography.Text style={{ fontSize: 12, minWidth: 36, textAlign: "right" }}>
+        {topK}
+      </Typography.Text>
+    </Space>
+  ) : null;
 
   const filteredEdgeIds = useMemo(
     () => new Set(filteredGraphData.edges.map((edge) => edge.id)),
@@ -1553,7 +1607,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
   return (
     <Card
       className={compact ? styles.graphCardCompact : undefined}
-      title={t("knowledge.graphQuery.visualization")}
+      title={compact ? topKControl : t("knowledge.graphQuery.visualization")}
       extra={
         <Space size={compact ? 4 : 8}>
           <Tooltip title={t("knowledge.graphQuery.zoomIn")}>
@@ -1571,36 +1625,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
               {compact ? null : t("knowledge.graphQuery.fitView")}
             </Button>
           </Tooltip>
-          {typeof topK === "number" ? (
-            <Space size={6} align="center">
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                TopK
-              </Typography.Text>
-              <Slider
-                min={Math.max(20, minTopK ?? 20)}
-                max={Math.max(Math.max(20, minTopK ?? 20), maxTopK ?? topK)}
-                step={1}
-                value={topK}
-                onChange={(value) => {
-                  const next = Number(value);
-                  if (Number.isFinite(next)) {
-                    onTopKChange?.(next);
-                  }
-                }}
-                onChangeComplete={(value) => {
-                  const next = Number(value);
-                  if (Number.isFinite(next)) {
-                    onTopKCommit?.(next);
-                  }
-                }}
-                style={{ width: compact ? 120 : 180, margin: 0 }}
-                tooltip={{ open: false }}
-              />
-              <Typography.Text style={{ fontSize: 12, minWidth: 36, textAlign: "right" }}>
-                {topK}
-              </Typography.Text>
-            </Space>
-          ) : null}
+          {!compact ? topKControl : null}
           <Popover
             trigger="hover"
             placement="bottomRight"
