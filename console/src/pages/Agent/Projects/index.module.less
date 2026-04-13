@@ -632,6 +632,109 @@
   overflow: auto;
 }
 
+.projectKnowledgeQuerySplitPanel {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr);
+  overflow: hidden !important;
+
+  @media (max-width: 1400px) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+  }
+}
+
+.projectKnowledgeEntityDetailCol {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #e8edf5;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.projectKnowledgeEntityDetailHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #eef2fb;
+  flex-shrink: 0;
+}
+
+.projectKnowledgeEntityDetailBody {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.projectKnowledgeEntitySection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.projectKnowledgeEntityRelationList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.projectKnowledgeEntityRelationItem {
+  border: 1px solid #dbe7ff;
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: #fff;
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+}
+
+.projectKnowledgeEntityRelationItem:hover {
+  border-color: #91caff;
+  background: #f7fbff;
+}
+
+.projectKnowledgeEntityRelationLabel {
+  color: #8c8c8c;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.projectKnowledgeEntityRelationTarget {
+  color: #262626;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.projectKnowledgeEntityRelationStrength {
+  color: #1677ff;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.projectKnowledgeEntityEmpty {
+  font-size: 12px;
+}
+
+.projectKnowledgeQueryCol {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
 .projectKnowledgePanelHeader {
   display: flex;
   align-items: flex-start;

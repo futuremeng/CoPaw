@@ -78,6 +78,7 @@ interface GraphVisualizationProps {
   onTopKChange?: (value: number) => void;
   onTopKCommit?: (value: number) => void;
   compact?: boolean;
+  hideEntityDetail?: boolean;
 }
 
 interface G6Graph {
@@ -598,6 +599,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     onTopKChange,
     onTopKCommit,
     compact,
+    hideEntityDetail,
   } = props;
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1675,7 +1677,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
       <div className={styles.graphCanvasWrap}>
         <div ref={containerRef} className={styles.graphCanvas} />
       </div>
-      {focusedNodeId ? (
+      {focusedNodeId && !hideEntityDetail ? (
         <div className={styles.graphEntityPanel}>
           <div className={styles.graphEntityPanelHeader}>
             <Typography.Text strong>
