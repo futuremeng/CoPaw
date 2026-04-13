@@ -1,10 +1,35 @@
-import { Alert, Button, Select, Space, Typography } from "antd";
+import type { ReactNode } from "react";
+import { Alert, Button, Select, Space, Tag, Tooltip, Typography } from "antd";
 import { useTranslation } from "react-i18next";
 import styles from "./index.module.less";
-import type { ProjectKnowledgeState } from "./useProjectKnowledgeState";
+import type {
+  ProjectKnowledgeHeaderSignals,
+  ProjectKnowledgeState,
+} from "./useProjectKnowledgeState";
+
+interface QualityLoopSummary {
+  jobStatus: string;
+  roundNo: number | null;
+  scoreAfter: number | null;
+  delta: number | null;
+  stopReason: string;
+  gateStatus: string;
+  gateReason: string;
+  gateSummary: string;
+  nextPlan: string[];
+  hypotheses: string[];
+  updatedAt: string;
+  tone: "warning" | "success" | "error" | "default" | "processing";
+}
 
 interface ProjectKnowledgeSignalsPanelProps {
   knowledgeState: ProjectKnowledgeState;
+  knowledgeHeaderSignals: ProjectKnowledgeHeaderSignals;
+  runtimeSignalValue: string;
+  runtimeSignalTooltipContent: ReactNode;
+  runtimeSignalTooltipOpen: boolean;
+  onRuntimeSignalTooltipOpenChange?: (open: boolean) => void;
+  latestQualityLoopSummary?: QualityLoopSummary | null;
   onOpenSettings?: () => void;
   onRunSuggestedQuery?: (query: string) => void;
 }
@@ -13,7 +38,15 @@ export default function ProjectKnowledgeSignalsPanel(
   props: ProjectKnowledgeSignalsPanelProps,
 ) {
   const { t } = useTranslation();
-  const { knowledgeState } = props;
+  const {
+    knowledgeState,
+    knowledgeHeaderSignals,
+    runtimeSignalValue,
+    runtimeSignalTooltipContent,
+    runtimeSignalTooltipOpen,
+    onRuntimeSignalTooltipOpenChange,
+    latestQualityLoopSummary,
+  } = props;
 
   return (
     <div className={styles.projectKnowledgeWorkbench}>
@@ -46,6 +79,168 @@ export default function ProjectKnowledgeSignalsPanel(
           </Button>
         </div>
       </div>
+
+      <div className={styles.knowledgeModuleHeaderSignals}>
+        <Tooltip
+          title={runtimeSignalTooltipContent}
+          trigger="hover"
+          open={runtimeSignalTooltipOpen}
+          onOpenChange={(open) => {
+            onRuntimeSignalTooltipOpenChange?.(open);
+          }}
+          overlayClassName={styles.knowledgeRuntimeTooltipOverlay}
+        >
+          <div
+            className={`${styles.knowledgeModuleHeaderSignal} ${knowledgeState.activeKnowledgeTask ? styles.knowledgeModuleHeaderSignalActive : ""}`}
+          >
+            <Typography.Text type="secondary">{t("projects.knowledge.signalRuntimeStatus", "Runtime")}</Typography.Text>
+            <Typography.Text strong>{runtimeSignalValue}</Typography.Text>
+          </div>
+        </Tooltip>
+        <div className={styles.knowledgeModuleHeaderSignal}>
+          <Typography.Text type="secondary">{t("projects.knowledge.signalIndexedCoverage")}</Typography.Text>
+          <Typography.Text strong>{`${Math.round(knowledgeHeaderSignals.indexedRatio * 100)}%`}</Typography.Text>
+        </div>
+        <div className={styles.knowledgeModuleHeaderSignal}>
+          <Typography.Text type="secondary">{t("projects.knowledge.signalDocuments")}</Typography.Text>
+          <Typography.Text strong>{String(knowledgeHeaderSignals.documentCount)}</Typography.Text>
+        </div>
+        <div className={styles.knowledgeModuleHeaderSignal}>
+          <Typography.Text type="secondary">{t("projects.knowledge.signalChunks")}</Typography.Text>
+          <Typography.Text strong>{String(knowledgeHeaderSignals.chunkCount)}</Typography.Text>
+        </div>
+        <div className={styles.knowledgeModuleHeaderSignal}>
+          <Typography.Text type="secondary">{t("projects.knowledge.signalSentences", "Sentences")}</Typography.Text>
+          <Typography.Text strong>{String(knowledgeHeaderSignals.sentenceCount)}</Typography.Text>
+        </div>
+        <div className={styles.knowledgeModuleHeaderSignal}>
+          <Typography.Text type="secondary">{t("projects.knowledge.signalEntityMentions", "Entity Mentions")}</Typography.Text>
+          <Typography.Text strong>{String(knowledgeHeaderSignals.entityMentionsCount)}</Typography.Text>
+        </div>
+        <div className={styles.knowledgeModuleHeaderSignal}>
+          <Typography.Text type="secondary">{t("projects.knowledge.signalAvgEntitiesPerSentence", "Entities/Sentence")}</Typography.Text>
+          <Typography.Text strong>{knowledgeHeaderSignals.avgEntitiesPerSentence.toFixed(2)}</Typography.Text>
+        </div>
+        <div className={styles.knowledgeModuleHeaderSignal}>
+          <Typography.Text type="secondary">{t("projects.knowledge.signalEntityCharRatio", "Entity Char Ratio")}</Typography.Text>
+          <Typography.Text strong>{`${Math.round(knowledgeHeaderSignals.avgEntityCharRatio * 100)}%`}</Typography.Text>
+        </div>
+        <div className={styles.knowledgeModuleHeaderSignal}>
+          <Typography.Text type="secondary">{t("projects.knowledge.signalRelations")}</Typography.Text>
+          <Typography.Text strong>{String(knowledgeHeaderSignals.relationCount)}</Typography.Text>
+        </div>
+        <div className={styles.knowledgeModuleHeaderSignal}>
+          <Typography.Text type="secondary">{t("projects.knowledge.entities", "实体数")}</Typography.Text>
+          <Typography.Text strong>{String(knowledgeHeaderSignals.entityCount)}</Typography.Text>
+        </div>
+        <div className={styles.knowledgeModuleHeaderSignal}>
+          <Typography.Text type="secondary">{t("projects.knowledge.signalQualityScore", "Quality Score")}</Typography.Text>
+          <Typography.Text strong>{`${Math.round(knowledgeHeaderSignals.qualityAssessmentScore * 100)}`}</Typography.Text>
+        </div>
+        <div className={styles.knowledgeModuleHeaderSignal}>
+          <Typography.Text type="secondary">{t("knowledge.quantRelationNormalizationCoverage")}</Typography.Text>
+          <Typography.Text strong>
+            {`${Math.round(knowledgeHeaderSignals.relationNormalizationCoverage * 100)}% / >=${Math.round(knowledgeHeaderSignals.relationNormalizationThreshold * 100)}%`}
+          </Typography.Text>
+        </div>
+        <div className={styles.knowledgeModuleHeaderSignal}>
+          <Typography.Text type="secondary">{t("knowledge.quantEntityCanonicalCoverage")}</Typography.Text>
+          <Typography.Text strong>
+            {`${Math.round(knowledgeHeaderSignals.entityCanonicalCoverage * 100)}% / >=${Math.round(knowledgeHeaderSignals.entityCanonicalThreshold * 100)}%`}
+          </Typography.Text>
+        </div>
+        <div className={styles.knowledgeModuleHeaderSignal}>
+          <Typography.Text type="secondary">{t("knowledge.quantLowConfidenceRatio")}</Typography.Text>
+          <Typography.Text strong>
+            {`${Math.round(knowledgeHeaderSignals.lowConfidenceRatio * 100)}% / <=${Math.round(knowledgeHeaderSignals.lowConfidenceThreshold * 100)}%`}
+          </Typography.Text>
+        </div>
+        <div className={styles.knowledgeModuleHeaderSignal}>
+          <Typography.Text type="secondary">{t("knowledge.quantMissingEvidenceRatio")}</Typography.Text>
+          <Typography.Text strong>
+            {`${Math.round(knowledgeHeaderSignals.missingEvidenceRatio * 100)}% / <=${Math.round(knowledgeHeaderSignals.missingEvidenceThreshold * 100)}%`}
+          </Typography.Text>
+        </div>
+      </div>
+
+      {latestQualityLoopSummary ? (
+        <div
+          className={[
+            styles.knowledgeLoopSummary,
+            latestQualityLoopSummary.tone === "warning"
+              ? styles.knowledgeLoopSummaryWarning
+              : "",
+            latestQualityLoopSummary.tone === "success"
+              ? styles.knowledgeLoopSummarySuccess
+              : "",
+            latestQualityLoopSummary.tone === "error"
+              ? styles.knowledgeLoopSummaryError
+              : "",
+          ].filter(Boolean).join(" ")}
+        >
+          <div className={styles.knowledgeLoopSummaryHeaderRow}>
+            <Typography.Text strong>
+              {t("projects.knowledge.latestQualityLoop", "Latest Quality Loop")}
+            </Typography.Text>
+            <div className={styles.knowledgeLoopSummaryTags}>
+              <Tag color={latestQualityLoopSummary.tone}>
+                {latestQualityLoopSummary.jobStatus || t("projects.statusUnknown", "unknown")}
+              </Tag>
+              {latestQualityLoopSummary.roundNo ? (
+                <Tag>{t("projects.knowledge.roundLabel", "Round")} {latestQualityLoopSummary.roundNo}</Tag>
+              ) : null}
+              {latestQualityLoopSummary.stopReason ? (
+                <Tag color={latestQualityLoopSummary.tone}>
+                  {latestQualityLoopSummary.stopReason}
+                </Tag>
+              ) : null}
+              {latestQualityLoopSummary.gateStatus ? (
+                <Tag color={latestQualityLoopSummary.gateStatus === "accepted" ? "success" : "warning"}>
+                  {t("projects.knowledge.agentGate", "agent gate: {{status}}", {
+                    status: latestQualityLoopSummary.gateStatus,
+                  })}
+                </Tag>
+              ) : null}
+            </div>
+          </div>
+          <div className={styles.knowledgeLoopSummaryMetaRow}>
+            {latestQualityLoopSummary.scoreAfter !== null ? (
+              <Typography.Text type="secondary">
+                {t("projects.knowledge.signalQualityScore", "Quality Score")}: {Math.round(latestQualityLoopSummary.scoreAfter * 100)}
+              </Typography.Text>
+            ) : null}
+            {latestQualityLoopSummary.delta !== null ? (
+              <Typography.Text type="secondary">
+                {t("projects.knowledge.runtimeStatusScoreDelta", "Score delta")}: {latestQualityLoopSummary.delta >= 0 ? "+" : ""}{Math.round(latestQualityLoopSummary.delta * 100)}
+              </Typography.Text>
+            ) : null}
+            {latestQualityLoopSummary.updatedAt ? (
+              <Typography.Text type="secondary">
+                {t("projects.knowledge.runtimeStatusUpdatedAt", "Updated")}: {latestQualityLoopSummary.updatedAt}
+              </Typography.Text>
+            ) : null}
+          </div>
+          {latestQualityLoopSummary.gateSummary ? (
+            <Typography.Text>
+              {latestQualityLoopSummary.gateSummary}
+            </Typography.Text>
+          ) : latestQualityLoopSummary.gateReason ? (
+            <Typography.Text>
+              {latestQualityLoopSummary.gateReason}
+            </Typography.Text>
+          ) : null}
+          {latestQualityLoopSummary.hypotheses.length ? (
+            <Typography.Text type="secondary">
+              {t("projects.knowledge.qualityLoopHypotheses", "Issues")}: {latestQualityLoopSummary.hypotheses.join(", ")}
+            </Typography.Text>
+          ) : null}
+          {latestQualityLoopSummary.nextPlan.length ? (
+            <Typography.Text type="secondary">
+              {t("projects.knowledge.qualityLoopNextPlan", "Next plan")}: {latestQualityLoopSummary.nextPlan.join(", ")}
+            </Typography.Text>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className={styles.projectKnowledgeSignalGrid}>
         <div className={styles.projectKnowledgeSignalCard}>

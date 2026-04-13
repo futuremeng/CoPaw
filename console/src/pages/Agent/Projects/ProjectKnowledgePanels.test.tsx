@@ -177,7 +177,36 @@ function buildKnowledgeState(): ProjectKnowledgeState {
 
 describe("project knowledge supporting panels", () => {
   it("renders health content outside explore", () => {
-    const { container } = render(<ProjectKnowledgeSignalsPanel knowledgeState={buildKnowledgeState()} />);
+    const knowledgeState = buildKnowledgeState();
+    const { container } = render(
+      <ProjectKnowledgeSignalsPanel
+        knowledgeState={knowledgeState}
+        knowledgeHeaderSignals={{
+          indexedRatio: knowledgeState.quantMetrics.indexedRatio,
+          documentCount: knowledgeState.quantMetrics.documentCount,
+          chunkCount: knowledgeState.quantMetrics.chunkCount,
+          sentenceCount: knowledgeState.quantMetrics.sentenceCount,
+          sentenceWithEntitiesCount: knowledgeState.quantMetrics.sentenceWithEntitiesCount,
+          entityMentionsCount: knowledgeState.quantMetrics.entityMentionsCount,
+          avgEntitiesPerSentence: knowledgeState.quantMetrics.avgEntitiesPerSentence,
+          avgEntityCharRatio: knowledgeState.quantMetrics.avgEntityCharRatio,
+          relationCount: knowledgeState.quantMetrics.relationCount,
+          entityCount: knowledgeState.quantMetrics.entityCount,
+          relationNormalizationCoverage: knowledgeState.quantMetrics.relationNormalizationCoverage,
+          entityCanonicalCoverage: knowledgeState.quantMetrics.entityCanonicalCoverage,
+          lowConfidenceRatio: knowledgeState.quantMetrics.lowConfidenceRatio,
+          missingEvidenceRatio: knowledgeState.quantMetrics.missingEvidenceRatio,
+          relationNormalizationThreshold: knowledgeState.quantMetrics.relationNormalizationThreshold,
+          entityCanonicalThreshold: knowledgeState.quantMetrics.entityCanonicalThreshold,
+          lowConfidenceThreshold: knowledgeState.quantMetrics.lowConfidenceThreshold,
+          missingEvidenceThreshold: knowledgeState.quantMetrics.missingEvidenceThreshold,
+          qualityAssessmentScore: knowledgeState.quantMetrics.qualityAssessmentScore,
+        }}
+        runtimeSignalValue="Idle"
+        runtimeSignalTooltipContent={"Runtime"}
+        runtimeSignalTooltipOpen={false}
+      />,
+    );
 
     expect(screen.getByText("projects.knowledge.signalsTitle")).not.toBeNull();
     expect(screen.getByText("projects.knowledge.signalRelations")).not.toBeNull();

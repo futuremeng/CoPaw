@@ -27,9 +27,7 @@ import {
   Select,
   Splitter,
   Spin,
-  Tag,
   Tabs,
-  Tooltip,
   Typography,
   message,
 } from "antd";
@@ -3800,167 +3798,6 @@ export default function ProjectDetailPage() {
                         <Text strong className={styles.knowledgeModuleHeaderTitle}>
                           {t("projects.knowledgePanelTitle")}
                         </Text>
-                        <div className={styles.knowledgeModuleHeaderSignals}>
-                          <Tooltip
-                            title={runtimeSignalTooltipContent}
-                            trigger="hover"
-                            open={runtimeSignalTooltipOpen}
-                            onOpenChange={(open) => {
-                              setRuntimeSignalTooltipOpen(open);
-                              if (open) {
-                                void fetchRuntimeSignalDetails();
-                              }
-                            }}
-                            overlayClassName={styles.knowledgeRuntimeTooltipOverlay}
-                          >
-                            <div
-                              className={`${styles.knowledgeModuleHeaderSignal} ${projectKnowledgeState.activeKnowledgeTask ? styles.knowledgeModuleHeaderSignalActive : ""}`}
-                            >
-                              <Text type="secondary">{t("projects.knowledge.signalRuntimeStatus", "Runtime")}</Text>
-                              <Text strong>{runtimeSignalValue}</Text>
-                            </div>
-                          </Tooltip>
-                          <div className={styles.knowledgeModuleHeaderSignal}>
-                            <Text type="secondary">{t("projects.knowledge.signalIndexedCoverage")}</Text>
-                            <Text strong>{`${Math.round(knowledgeHeaderSignals.indexedRatio * 100)}%`}</Text>
-                          </div>
-                          <div className={styles.knowledgeModuleHeaderSignal}>
-                            <Text type="secondary">{t("projects.knowledge.signalDocuments")}</Text>
-                            <Text strong>{String(knowledgeHeaderSignals.documentCount)}</Text>
-                          </div>
-                          <div className={styles.knowledgeModuleHeaderSignal}>
-                            <Text type="secondary">{t("projects.knowledge.signalChunks")}</Text>
-                            <Text strong>{String(knowledgeHeaderSignals.chunkCount)}</Text>
-                          </div>
-                          <div className={styles.knowledgeModuleHeaderSignal}>
-                            <Text type="secondary">{t("projects.knowledge.signalSentences", "Sentences")}</Text>
-                            <Text strong>{String(knowledgeHeaderSignals.sentenceCount)}</Text>
-                          </div>
-                          <div className={styles.knowledgeModuleHeaderSignal}>
-                            <Text type="secondary">{t("projects.knowledge.signalEntityMentions", "Entity Mentions")}</Text>
-                            <Text strong>{String(knowledgeHeaderSignals.entityMentionsCount)}</Text>
-                          </div>
-                          <div className={styles.knowledgeModuleHeaderSignal}>
-                            <Text type="secondary">{t("projects.knowledge.signalAvgEntitiesPerSentence", "Entities/Sentence")}</Text>
-                            <Text strong>{knowledgeHeaderSignals.avgEntitiesPerSentence.toFixed(2)}</Text>
-                          </div>
-                          <div className={styles.knowledgeModuleHeaderSignal}>
-                            <Text type="secondary">{t("projects.knowledge.signalEntityCharRatio", "Entity Char Ratio")}</Text>
-                            <Text strong>{`${Math.round(knowledgeHeaderSignals.avgEntityCharRatio * 100)}%`}</Text>
-                          </div>
-                          <div className={styles.knowledgeModuleHeaderSignal}>
-                            <Text type="secondary">{t("projects.knowledge.signalRelations")}</Text>
-                            <Text strong>{String(knowledgeHeaderSignals.relationCount)}</Text>
-                          </div>
-                          <div className={styles.knowledgeModuleHeaderSignal}>
-                            <Text type="secondary">{t("projects.knowledge.entities", "实体数")}</Text>
-                            <Text strong>{String(knowledgeHeaderSignals.entityCount)}</Text>
-                          </div>
-                          <div className={styles.knowledgeModuleHeaderSignal}>
-                            <Text type="secondary">{t("projects.knowledge.signalQualityScore", "Quality Score")}</Text>
-                            <Text strong>{`${Math.round(knowledgeHeaderSignals.qualityAssessmentScore * 100)}`}</Text>
-                          </div>
-                          <div className={styles.knowledgeModuleHeaderSignal}>
-                            <Text type="secondary">{t("knowledge.quantRelationNormalizationCoverage")}</Text>
-                            <Text strong>
-                              {`${Math.round(knowledgeHeaderSignals.relationNormalizationCoverage * 100)}% / >=${Math.round(knowledgeHeaderSignals.relationNormalizationThreshold * 100)}%`}
-                            </Text>
-                          </div>
-                          <div className={styles.knowledgeModuleHeaderSignal}>
-                            <Text type="secondary">{t("knowledge.quantEntityCanonicalCoverage")}</Text>
-                            <Text strong>
-                              {`${Math.round(knowledgeHeaderSignals.entityCanonicalCoverage * 100)}% / >=${Math.round(knowledgeHeaderSignals.entityCanonicalThreshold * 100)}%`}
-                            </Text>
-                          </div>
-                          <div className={styles.knowledgeModuleHeaderSignal}>
-                            <Text type="secondary">{t("knowledge.quantLowConfidenceRatio")}</Text>
-                            <Text strong>
-                              {`${Math.round(knowledgeHeaderSignals.lowConfidenceRatio * 100)}% / <=${Math.round(knowledgeHeaderSignals.lowConfidenceThreshold * 100)}%`}
-                            </Text>
-                          </div>
-                          <div className={styles.knowledgeModuleHeaderSignal}>
-                            <Text type="secondary">{t("knowledge.quantMissingEvidenceRatio")}</Text>
-                            <Text strong>
-                              {`${Math.round(knowledgeHeaderSignals.missingEvidenceRatio * 100)}% / <=${Math.round(knowledgeHeaderSignals.missingEvidenceThreshold * 100)}%`}
-                            </Text>
-                          </div>
-                        </div>
-                        {latestQualityLoopSummary ? (
-                          <div
-                            className={[
-                              styles.knowledgeLoopSummary,
-                              latestQualityLoopSummary.tone === "warning"
-                                ? styles.knowledgeLoopSummaryWarning
-                                : "",
-                              latestQualityLoopSummary.tone === "success"
-                                ? styles.knowledgeLoopSummarySuccess
-                                : "",
-                              latestQualityLoopSummary.tone === "error"
-                                ? styles.knowledgeLoopSummaryError
-                                : "",
-                            ].filter(Boolean).join(" ")}
-                          >
-                            <div className={styles.knowledgeLoopSummaryHeaderRow}>
-                              <Text strong>
-                                {t("projects.knowledge.latestQualityLoop", "Latest Quality Loop")}
-                              </Text>
-                              <div className={styles.knowledgeLoopSummaryTags}>
-                                <Tag color={latestQualityLoopSummary.tone}>
-                                  {latestQualityLoopSummary.jobStatus || t("projects.statusUnknown", "unknown")}
-                                </Tag>
-                                {latestQualityLoopSummary.roundNo ? (
-                                  <Tag>{t("projects.knowledge.roundLabel", "Round")} {latestQualityLoopSummary.roundNo}</Tag>
-                                ) : null}
-                                {latestQualityLoopSummary.stopReason ? (
-                                  <Tag color={latestQualityLoopSummary.tone}>
-                                    {latestQualityLoopSummary.stopReason}
-                                  </Tag>
-                                ) : null}
-                                {latestQualityLoopSummary.gateStatus ? (
-                                  <Tag color={latestQualityLoopSummary.gateStatus === "accepted" ? "success" : "warning"}>
-                                    agent gate: {latestQualityLoopSummary.gateStatus}
-                                  </Tag>
-                                ) : null}
-                              </div>
-                            </div>
-                            <div className={styles.knowledgeLoopSummaryMetaRow}>
-                              {latestQualityLoopSummary.scoreAfter !== null ? (
-                                <Text type="secondary">
-                                  {t("projects.knowledge.signalQualityScore", "Quality Score")}: {Math.round(latestQualityLoopSummary.scoreAfter * 100)}
-                                </Text>
-                              ) : null}
-                              {latestQualityLoopSummary.delta !== null ? (
-                                <Text type="secondary">
-                                  {t("projects.knowledge.runtimeStatusScoreDelta", "Score delta")}: {latestQualityLoopSummary.delta >= 0 ? "+" : ""}{Math.round(latestQualityLoopSummary.delta * 100)}
-                                </Text>
-                              ) : null}
-                              {latestQualityLoopSummary.updatedAt ? (
-                                <Text type="secondary">
-                                  {t("projects.knowledge.runtimeStatusUpdatedAt", "Updated")}: {latestQualityLoopSummary.updatedAt}
-                                </Text>
-                              ) : null}
-                            </div>
-                            {latestQualityLoopSummary.gateSummary ? (
-                              <Text>
-                                {latestQualityLoopSummary.gateSummary}
-                              </Text>
-                            ) : latestQualityLoopSummary.gateReason ? (
-                              <Text>
-                                {latestQualityLoopSummary.gateReason}
-                              </Text>
-                            ) : null}
-                            {latestQualityLoopSummary.hypotheses.length ? (
-                              <Text type="secondary">
-                                {t("projects.knowledge.qualityLoopHypotheses", "Issues")}: {latestQualityLoopSummary.hypotheses.join(", ")}
-                              </Text>
-                            ) : null}
-                            {latestQualityLoopSummary.nextPlan.length ? (
-                              <Text type="secondary">
-                                {t("projects.knowledge.qualityLoopNextPlan", "Next plan")}: {latestQualityLoopSummary.nextPlan.join(", ")}
-                              </Text>
-                            ) : null}
-                          </div>
-                        ) : null}
                       </div>
                       <Button
                         className={styles.knowledgeModuleHeaderToggle}
@@ -4025,6 +3862,17 @@ export default function ProjectDetailPage() {
                               children: (
                                 <ProjectKnowledgeSignalsPanel
                                   knowledgeState={projectKnowledgeState}
+                                  knowledgeHeaderSignals={knowledgeHeaderSignals}
+                                  runtimeSignalValue={runtimeSignalValue}
+                                  runtimeSignalTooltipContent={runtimeSignalTooltipContent}
+                                  runtimeSignalTooltipOpen={runtimeSignalTooltipOpen}
+                                  onRuntimeSignalTooltipOpenChange={(open) => {
+                                    setRuntimeSignalTooltipOpen(open);
+                                    if (open) {
+                                      void fetchRuntimeSignalDetails();
+                                    }
+                                  }}
+                                  latestQualityLoopSummary={latestQualityLoopSummary}
                                   onOpenSettings={() => setKnowledgeDockTab("settings")}
                                   onRunSuggestedQuery={(query) => {
                                     setPendingKnowledgeQuery(query);
