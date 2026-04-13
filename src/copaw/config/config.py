@@ -1349,7 +1349,7 @@ class KnowledgeConfig(BaseModel):
     )
     graph_query_enabled: bool = Field(default=False)
     allow_cypher_query: bool = Field(default=False)
-    memify_enabled: bool = Field(default=False)
+    memify_enabled: bool = Field(default=True)
     triplet_search_enabled: bool = Field(default=False)
     enrichment_pipeline_enabled: bool = Field(default=False)
     enrichment_pipeline_id: str = Field(

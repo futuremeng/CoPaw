@@ -95,6 +95,7 @@ export interface KnowledgeConfig {
   sources: KnowledgeSourceSpec[];
   index: KnowledgeIndexConfig;
   automation: KnowledgeAutomationConfig;
+  memify_enabled?: boolean;
 }
 
 export interface KnowledgeSourceStatus {

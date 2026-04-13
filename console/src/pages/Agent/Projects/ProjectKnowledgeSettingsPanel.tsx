@@ -12,6 +12,7 @@ import {
 import api, { getApiToken, getApiUrl } from "../../../api";
 import type { KnowledgeSourceItem, ProjectKnowledgeSyncState } from "../../../api/types";
 import { agentsApi } from "../../../api/modules/agents";
+import { knowledgeApi } from "../../../api/modules/knowledge";
 import styles from "./index.module.less";
 import { useTranslation } from "react-i18next";
 import {
@@ -55,6 +56,8 @@ export default function ProjectKnowledgeSettingsPanel(
   const [sourceRegistered, setSourceRegistered] = useState(false);
   const [projectSource, setProjectSource] = useState<KnowledgeSourceItem | null>(null);
   const [syncState, setSyncState] = useState<ProjectKnowledgeSyncState | null>(null);
+  const [memifyEnabled, setMemifyEnabled] = useState(false);
+  const [memifyUpdating, setMemifyUpdating] = useState(false);
 
   const projectSourceId = useMemo(() => {
     const safeId = projectId
@@ -102,6 +105,18 @@ export default function ProjectKnowledgeSettingsPanel(
   useEffect(() => {
     void loadProjectSourceStatus();
   }, [loadProjectSourceStatus]);
+
+  useEffect(() => {
+    const loadKnowledgeConfig = async () => {
+      try {
+        const config = await knowledgeApi.getKnowledgeConfig();
+        setMemifyEnabled(Boolean(config.memify_enabled));
+      } catch {
+        // best-effort config load
+      }
+    };
+    void loadKnowledgeConfig();
+  }, []);
 
   useEffect(() => {
     setAutoSinkEnabled(projectAutoKnowledgeSink !== false);
@@ -293,6 +308,26 @@ export default function ProjectKnowledgeSettingsPanel(
     }
   }, [agentId, onProjectAutoKnowledgeSinkChange, projectId, t]);
 
+  const handleToggleMemify = useCallback(async (enabled: boolean) => {
+    try {
+      setMemifyUpdating(true);
+      const config = await knowledgeApi.getKnowledgeConfig();
+      config.memify_enabled = enabled;
+      await knowledgeApi.updateKnowledgeConfig(config);
+      setMemifyEnabled(enabled);
+      message.success(
+        enabled
+          ? t("projects.knowledge.memifyEnabled", "Entity extraction enabled")
+          : t("projects.knowledge.memifyDisabled", "Entity extraction disabled"),
+      );
+    } catch (err) {
+      const messageText = err instanceof Error ? err.message : t("projects.knowledge.memifyUpdateFailed", "Failed to update entity extraction setting");
+      message.error(messageText);
+    } finally {
+      setMemifyUpdating(false);
+    }
+  }, [t]);
+
   const handleManualSink = useCallback(async () => {
     if (!(projectWorkspaceDir || "").trim()) {
       message.error(t("projects.knowledge.sourcePathMissing"));
@@ -362,6 +397,19 @@ export default function ProjectKnowledgeSettingsPanel(
             loading={updatingAutoSink}
             onChange={(checked) => {
               void handleToggleAutoSink(checked);
+            }}
+          />
+        </Space>
+
+        <Space size={6}>
+          <Typography.Text type="secondary">
+            {t("projects.knowledge.memifyLabel", "Entity Extraction")}
+          </Typography.Text>
+          <Switch
+            checked={memifyEnabled}
+            loading={memifyUpdating}
+            onChange={(checked) => {
+              void handleToggleMemify(checked);
             }}
           />
         </Space>
