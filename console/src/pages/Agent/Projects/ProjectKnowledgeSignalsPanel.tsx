@@ -57,6 +57,22 @@ export default function ProjectKnowledgeSignalsPanel(
           <Typography.Text strong>{knowledgeState.quantMetrics.chunkCount}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
+          <Typography.Text type="secondary">{t("projects.knowledge.signalSentences", "Sentences")}</Typography.Text>
+          <Typography.Text strong>{knowledgeState.quantMetrics.sentenceCount}</Typography.Text>
+        </div>
+        <div className={styles.projectKnowledgeSignalCard}>
+          <Typography.Text type="secondary">{t("projects.knowledge.signalEntityMentions", "Entity Mentions")}</Typography.Text>
+          <Typography.Text strong>{knowledgeState.quantMetrics.entityMentionsCount}</Typography.Text>
+        </div>
+        <div className={styles.projectKnowledgeSignalCard}>
+          <Typography.Text type="secondary">{t("projects.knowledge.signalAvgEntitiesPerSentence", "Entities/Sentence")}</Typography.Text>
+          <Typography.Text strong>{knowledgeState.quantMetrics.avgEntitiesPerSentence.toFixed(2)}</Typography.Text>
+        </div>
+        <div className={styles.projectKnowledgeSignalCard}>
+          <Typography.Text type="secondary">{t("projects.knowledge.signalEntityCharRatio", "Entity Char Ratio")}</Typography.Text>
+          <Typography.Text strong>{`${Math.round(knowledgeState.quantMetrics.avgEntityCharRatio * 100)}%`}</Typography.Text>
+        </div>
+        <div className={styles.projectKnowledgeSignalCard}>
           <Typography.Text type="secondary">{t("projects.knowledge.signalCoverage", "Coverage")}</Typography.Text>
           <Typography.Text strong>
             {Math.round(knowledgeState.quantMetrics.indexedRatio * 100)}%

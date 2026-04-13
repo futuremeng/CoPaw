@@ -359,6 +359,11 @@ export interface MemifyJobStatus {
   warnings: string[];
   engine: string;
   updated_at?: string | null;
+  sentence_count?: number;
+  sentence_with_entities_count?: number;
+  entity_mentions_count?: number;
+  avg_entities_per_sentence?: number;
+  avg_entity_char_ratio?: number;
 }
 
 export interface KnowledgeTaskProgress {
@@ -379,6 +384,11 @@ export interface KnowledgeTaskProgress {
   error?: string | null;
   document_count?: number;
   chunk_count?: number;
+  sentence_count?: number;
+  sentence_with_entities_count?: number;
+  entity_mentions_count?: number;
+  avg_entities_per_sentence?: number;
+  avg_entity_char_ratio?: number;
   node_count?: number;
   relation_count?: number;
   enrichment_metrics?: {

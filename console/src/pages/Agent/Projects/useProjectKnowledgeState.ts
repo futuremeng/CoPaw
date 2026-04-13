@@ -21,6 +21,10 @@ export interface ProjectKnowledgeHeaderSignals {
   documentCount: number;
   chunkCount: number;
   sentenceCount: number;
+  sentenceWithEntitiesCount: number;
+  entityMentionsCount: number;
+  avgEntitiesPerSentence: number;
+  avgEntityCharRatio: number;
   relationCount: number;
   entityCount: number;
   relationNormalizationCoverage: number;
@@ -49,6 +53,10 @@ export interface ProjectKnowledgeMetrics {
   documentCount: number;
   chunkCount: number;
   sentenceCount: number;
+  sentenceWithEntitiesCount: number;
+  entityMentionsCount: number;
+  avgEntitiesPerSentence: number;
+  avgEntityCharRatio: number;
   relationCount: number;
   entityCount: number;
   relationNormalizationCoverage: number;
@@ -346,6 +354,18 @@ function getSyncEnrichmentMetric(
     return 0;
   }
   const rawValue = (enrichment as Record<string, unknown>)[key];
+  return Number.isFinite(Number(rawValue)) ? Number(rawValue) : Number(rawValue || 0);
+}
+
+function getSyncMemifyMetric(
+  syncState: ProjectKnowledgeSyncState | null,
+  key: string,
+): number {
+  const memify = syncState?.last_result?.memify;
+  if (!memify || typeof memify !== "object") {
+    return 0;
+  }
+  const rawValue = (memify as Record<string, unknown>)[key];
   return Number.isFinite(Number(rawValue)) ? Number(rawValue) : Number(rawValue || 0);
 }
 
@@ -912,6 +932,10 @@ export function useProjectKnowledgeState(
     const documentCount = totalSources > 0 ? sourceDocumentCount : fallbackDocumentCount;
     const chunkCount = totalSources > 0 ? sourceChunkCount : fallbackChunkCount;
     const sentenceCount = totalSources > 0 ? sourceSentenceCount : fallbackSentenceCount;
+    const sentenceWithEntitiesCount = getSyncMemifyMetric(syncState, "sentence_with_entities_count");
+    const entityMentionsCount = getSyncMemifyMetric(syncState, "entity_mentions_count");
+    const avgEntitiesPerSentence = getSyncMemifyMetric(syncState, "avg_entities_per_sentence");
+    const avgEntityCharRatio = getSyncMemifyMetric(syncState, "avg_entity_char_ratio");
     const relationCount = Math.max(
       graphResult?.records?.length || 0,
       getSyncRelationCount(syncState),
@@ -1003,6 +1027,10 @@ export function useProjectKnowledgeState(
       documentCount,
       chunkCount,
       sentenceCount,
+      sentenceWithEntitiesCount,
+      entityMentionsCount,
+      avgEntitiesPerSentence,
+      avgEntityCharRatio,
       relationCount,
       entityCount: effectiveEntityCount,
       relationNormalizationCoverage: reflectedRelationNormalizationCoverage,
@@ -1057,6 +1085,10 @@ export function useProjectKnowledgeState(
       documentCount: quantMetrics.documentCount,
       chunkCount: quantMetrics.chunkCount,
       sentenceCount: quantMetrics.sentenceCount,
+      sentenceWithEntitiesCount: quantMetrics.sentenceWithEntitiesCount,
+      entityMentionsCount: quantMetrics.entityMentionsCount,
+      avgEntitiesPerSentence: quantMetrics.avgEntitiesPerSentence,
+      avgEntityCharRatio: quantMetrics.avgEntityCharRatio,
       relationCount: quantMetrics.relationCount,
       entityCount: quantMetrics.entityCount,
       relationNormalizationCoverage: quantMetrics.relationNormalizationCoverage,
@@ -1076,6 +1108,10 @@ export function useProjectKnowledgeState(
     quantMetrics.entityCanonicalCoverage,
     quantMetrics.chunkCount,
     quantMetrics.sentenceCount,
+    quantMetrics.sentenceWithEntitiesCount,
+    quantMetrics.entityMentionsCount,
+    quantMetrics.avgEntitiesPerSentence,
+    quantMetrics.avgEntityCharRatio,
     quantMetrics.documentCount,
     quantMetrics.indexedRatio,
     quantMetrics.lowConfidenceThreshold,

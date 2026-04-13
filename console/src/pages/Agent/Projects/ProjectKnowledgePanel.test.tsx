@@ -43,6 +43,11 @@ function buildKnowledgeState(projectId: string): ProjectKnowledgeState {
       indexedRatio: 1,
       documentCount: 1,
       chunkCount: 2,
+      sentenceCount: 3,
+      sentenceWithEntitiesCount: 2,
+      entityMentionsCount: 4,
+      avgEntitiesPerSentence: 1.33,
+      avgEntityCharRatio: 0.2,
       relationCount: 0,
       entityCount: 0,
       relationNormalizationCoverage: 0,
@@ -89,6 +94,9 @@ function buildKnowledgeState(projectId: string): ProjectKnowledgeState {
     insightAction: "healthy",
     insightMessageKey: "projects.knowledge.insightHealthy",
     loadProjectSourceStatus: vi.fn().mockResolvedValue(undefined),
+    semanticBySourceId: {},
+    semanticLoadingBySourceId: {},
+    loadSourceSemantic: vi.fn().mockResolvedValue(undefined),
   };
 }
 

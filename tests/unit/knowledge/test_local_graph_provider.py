@@ -321,3 +321,43 @@ def test_local_graph_allows_documents_under_hidden_parent_directories(tmp_path: 
     assert result["document_count"] == 1
     assert result["node_count"] > 0
     assert result["relation_count"] > 0
+
+
+def test_local_graph_emits_sentence_entity_stats(tmp_path: Path):
+    project_root = tmp_path / "project"
+    project_root.mkdir(parents=True, exist_ok=True)
+    (project_root / "stats.md").write_text(
+        "ToolDispatcher 调用 FileSearch。\n"
+        "FileSearch 处理 KnowledgeGraph 与 ToolDispatcher。\n",
+        encoding="utf-8",
+    )
+
+    config = Config().knowledge
+    source = KnowledgeSourceSpec(
+        id="project-demo-workspace",
+        name="Project Demo",
+        type="directory",
+        location=str(project_root),
+        content="",
+        enabled=True,
+        recursive=True,
+        tags=["project"],
+        summary="",
+    )
+    config.sources.append(source)
+
+    manager = KnowledgeManager(tmp_path)
+    manager.index_source(source, config)
+    graph_path = tmp_path / "knowledge" / "graphify-out" / "graph.json"
+    result = persist_local_graph(manager, config, [source.id], graph_path)
+    payload = json.loads(graph_path.read_text(encoding="utf-8"))
+    sentence_stats = payload.get("sentence_entity_stats") or []
+
+    assert result["sentence_count"] >= 2
+    assert result["entity_mentions_count"] >= 4
+    assert result["avg_entities_per_sentence"] > 0
+    assert result["avg_entity_char_ratio"] > 0
+    assert len(sentence_stats) >= 2
+    assert all("entity_count_total" in item for item in sentence_stats)
+    assert all("entity_char_ratio" in item for item in sentence_stats)
+    assert all(0 <= float(item.get("entity_char_ratio") or 0) <= 1 for item in sentence_stats)

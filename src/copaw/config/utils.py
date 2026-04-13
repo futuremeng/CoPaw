@@ -504,14 +504,25 @@ def load_config(config_path: Optional[Path] = None) -> Config:
             la["host"] = data.get("last_api_host")
         if "port" not in la and "last_api_port" in data:
             la["port"] = data.get("last_api_port")
-    # Backward compat: knowledge.engine object -> literal enum string
+    # Backward compat: knowledge.engine values are now coerced to local_lexical.
     knowledge = data.get("knowledge")
     if isinstance(knowledge, dict) and isinstance(knowledge.get("engine"), dict):
         legacy_engine = knowledge.get("engine") or {}
         provider = str(legacy_engine.get("provider", "")).strip().lower()
-        knowledge["engine"] = (
-            provider if provider in {"cognee", "graphify"} else "local_lexical"
-        )
+        if provider:
+            logger.warning(
+                "Knowledge engine '%s' is deprecated and will use local_lexical.",
+                provider,
+            )
+        knowledge["engine"] = "local_lexical"
+    elif isinstance(knowledge, dict) and "engine" in knowledge:
+        current_engine = str(knowledge.get("engine") or "").strip().lower()
+        if current_engine and current_engine != "local_lexical":
+            logger.warning(
+                "Knowledge engine '%s' is deprecated and will use local_lexical.",
+                current_engine,
+            )
+        knowledge["engine"] = "local_lexical"
 
     try:
         return Config.model_validate(data)

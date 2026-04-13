@@ -13,7 +13,7 @@ from typing import Any
 from ..config.config import KnowledgeConfig
 from .manager import KnowledgeManager
 
-_ENTITY_RE = re.compile(r"[A-Za-z][A-Za-z0-9_./-]{2,}|[\u4e00-\u9fff]{2,8}")
+_ENTITY_RE = re.compile(r"[A-Za-z][A-Za-z0-9_./-]{2,}|[\u4e00-\u9fff]{2,16}")
 _FILE_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]+\.(?:md|txt|json|ya?ml|csv|tsv|py|js|ts|tsx|jsx|html|xml|toml|ini|cfg)$", re.IGNORECASE)
 _MULTI_SUFFIX_FILE_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+$", re.IGNORECASE)
 _UUID_RE = re.compile(
@@ -232,6 +232,54 @@ def _extract_heading_text(document: dict[str, Any]) -> str:
     return "\n".join(item for item in headings if item)
 
 
+def _split_sentences(text: str) -> list[str]:
+    normalized = str(text or "").replace("\r\n", "\n").replace("\r", "\n")
+    delimiters = {"。", "！", "？", "!", "?", ";", "；", ".", "\n"}
+    sentences: list[str] = []
+    buffer: list[str] = []
+
+    for char in normalized:
+        buffer.append(char)
+        if char not in delimiters:
+            continue
+        sentence = "".join(buffer).strip()
+        if sentence:
+            sentences.append(sentence)
+        buffer = []
+
+    trailing = "".join(buffer).strip()
+    if trailing:
+        sentences.append(trailing)
+    return sentences
+
+
+def _collect_sentence_entity_stats(document: dict[str, Any]) -> list[dict[str, Any]]:
+    prepared_text = _prepare_entity_text(document)
+    sentence_stats: list[dict[str, Any]] = []
+    for sentence_index, sentence in enumerate(_split_sentences(prepared_text), start=1):
+        counter = _extract_entity_counter(sentence)
+        entity_count_total = int(sum(counter.values()))
+        entity_char_count = int(sum(len(term) * count for term, count in counter.items()))
+        sentence_char_count = int(len(re.sub(r"\s+", "", sentence)))
+        entity_char_ratio = (
+            float(entity_char_count / sentence_char_count)
+            if sentence_char_count > 0
+            else 0.0
+        )
+        sentence_stats.append(
+            {
+                "sentence_index": sentence_index,
+                "sentence": sentence,
+                "entity_count_total": entity_count_total,
+                "entity_count_unique": int(len(counter)),
+                "entity_char_count": entity_char_count,
+                "sentence_char_count": sentence_char_count,
+                "entity_char_ratio": entity_char_ratio,
+            }
+        )
+    return sentence_stats
+
+
 def _extract_entities(text: str, *, limit: int = 10) -> list[tuple[str, int]]:
     counter: Counter[str] = Counter()
     for raw in _ENTITY_RE.findall(text or ""):
@@ -267,7 +315,7 @@ def _is_high_signal_entity(raw_token: str) -> bool:
     return False
 
 
-def _collect_ranked_entities(document: dict[str, Any], *, limit: int = 10) -> list[tuple[str, int]]:
+def _collect_ranked_entities(document: dict[str, Any], *, limit: int = 64) -> list[tuple[str, int]]:
     title_text = str(document.get("title") or "").strip()
     heading_text = _extract_heading_text(document)
     body_text = _prepare_entity_text(document)
@@ -343,6 +391,11 @@ def build_local_graph_payload(
     nodes: dict[str, dict[str, Any]] = {}
     edges: dict[tuple[str, str, str], dict[str, Any]] = {}
     entity_sources: defaultdict[str, set[str]] = defaultdict(set)
+    sentence_entity_stats: list[dict[str, Any]] = []
+    sentence_count_total = 0
+    sentence_with_entities_count = 0
+    entity_mentions_count = 0
+    entity_char_ratio_sum = 0.0
 
     for document in documents:
         doc_path = document["path"] or document["title"]
@@ -361,8 +414,32 @@ def build_local_graph_payload(
             },
         )
 
+        sentence_stats = _collect_sentence_entity_stats(document)
+        sentence_count = len(sentence_stats)
+        sentence_count_total += sentence_count
+        mentions_for_document = 0
+        for stat in sentence_stats:
+            entity_count_total = int(stat.get("entity_count_total") or 0)
+            mentions_for_document += entity_count_total
+            entity_mentions_count += entity_count_total
+            if entity_count_total > 0:
+                sentence_with_entities_count += 1
+            entity_char_ratio_sum += float(stat.get("entity_char_ratio") or 0.0)
+            sentence_entity_stats.append(
+                {
+                    "source_id": document["source_id"],
+                    "project_id": document["project_id"],
+                    "document_path": doc_path,
+                    "document_title": document["title"],
+                    **stat,
+                }
+            )
+        if doc_id in nodes:
+            nodes[doc_id]["sentence_count"] = sentence_count
+            nodes[doc_id]["entity_mentions_count"] = mentions_for_document
+
         entity_pairs = _collect_ranked_entities(document)
-        entity_labels = [label for label, _ in entity_pairs[:8]]
+        entity_labels = [label for label, _ in entity_pairs[:16]]
         for label, weight in entity_pairs:
             entity_id = _safe_node_id("ent", label)
             nodes.setdefault(
@@ -425,10 +502,24 @@ def build_local_graph_payload(
         "multigraph": False,
         "nodes": list(nodes.values()),
         "links": list(edges.values()),
+        "sentence_entity_stats": sentence_entity_stats,
         "stats": {
             "document_count": len(documents),
             "node_count": len(nodes),
             "relation_count": len(edges),
+            "sentence_count": sentence_count_total,
+            "sentence_with_entities_count": sentence_with_entities_count,
+            "entity_mentions_count": entity_mentions_count,
+            "avg_entities_per_sentence": (
+                float(entity_mentions_count / sentence_count_total)
+                if sentence_count_total > 0
+                else 0.0
+            ),
+            "avg_entity_char_ratio": (
+                float(entity_char_ratio_sum / sentence_count_total)
+                if sentence_count_total > 0
+                else 0.0
+            ),
         },
     }
 
@@ -451,6 +542,11 @@ def persist_local_graph(
         "document_count": int(stats.get("document_count") or 0),
         "node_count": int(stats.get("node_count") or 0),
         "relation_count": int(stats.get("relation_count") or 0),
+        "sentence_count": int(stats.get("sentence_count") or 0),
+        "sentence_with_entities_count": int(stats.get("sentence_with_entities_count") or 0),
+        "entity_mentions_count": int(stats.get("entity_mentions_count") or 0),
+        "avg_entities_per_sentence": float(stats.get("avg_entities_per_sentence") or 0.0),
+        "avg_entity_char_ratio": float(stats.get("avg_entity_char_ratio") or 0.0),
     }
 
 

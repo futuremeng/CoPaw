@@ -151,6 +151,11 @@ const DEFAULT_KNOWLEDGE_HEADER_SIGNALS: ProjectKnowledgeHeaderSignals = {
   indexedRatio: 0,
   documentCount: 0,
   chunkCount: 0,
+  sentenceCount: 0,
+  sentenceWithEntitiesCount: 0,
+  entityMentionsCount: 0,
+  avgEntitiesPerSentence: 0,
+  avgEntityCharRatio: 0,
   relationCount: 0,
   entityCount: 0,
   relationNormalizationCoverage: 0,
@@ -3830,6 +3835,18 @@ export default function ProjectDetailPage() {
                           <div className={styles.knowledgeModuleHeaderSignal}>
                             <Text type="secondary">{t("projects.knowledge.signalSentences", "Sentences")}</Text>
                             <Text strong>{String(knowledgeHeaderSignals.sentenceCount)}</Text>
+                          </div>
+                          <div className={styles.knowledgeModuleHeaderSignal}>
+                            <Text type="secondary">{t("projects.knowledge.signalEntityMentions", "Entity Mentions")}</Text>
+                            <Text strong>{String(knowledgeHeaderSignals.entityMentionsCount)}</Text>
+                          </div>
+                          <div className={styles.knowledgeModuleHeaderSignal}>
+                            <Text type="secondary">{t("projects.knowledge.signalAvgEntitiesPerSentence", "Entities/Sentence")}</Text>
+                            <Text strong>{knowledgeHeaderSignals.avgEntitiesPerSentence.toFixed(2)}</Text>
+                          </div>
+                          <div className={styles.knowledgeModuleHeaderSignal}>
+                            <Text type="secondary">{t("projects.knowledge.signalEntityCharRatio", "Entity Char Ratio")}</Text>
+                            <Text strong>{`${Math.round(knowledgeHeaderSignals.avgEntityCharRatio * 100)}%`}</Text>
                           </div>
                           <div className={styles.knowledgeModuleHeaderSignal}>
                             <Text type="secondary">{t("projects.knowledge.signalRelations")}</Text>

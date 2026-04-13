@@ -1504,6 +1504,11 @@ Agent gate review is mandatory before automatic continuation.
                     "relation_count": int(memify_result.get("relation_count") or 0),
                     "node_count": int(memify_result.get("node_count") or 0),
                     "document_count": int(memify_result.get("document_count") or 0),
+                    "sentence_count": int(memify_result.get("sentence_count") or 0),
+                    "sentence_with_entities_count": int(memify_result.get("sentence_with_entities_count") or 0),
+                    "entity_mentions_count": int(memify_result.get("entity_mentions_count") or 0),
+                    "avg_entities_per_sentence": float(memify_result.get("avg_entities_per_sentence") or 0.0),
+                    "avg_entity_char_ratio": float(memify_result.get("avg_entity_char_ratio") or 0.0),
                 }
             )
         elif engine == "graphify":
@@ -1513,6 +1518,11 @@ Agent gate review is mandatory before automatic continuation.
                     "relation_count": int(memify_result.get("relation_count") or 0),
                     "node_count": int(memify_result.get("node_count") or 0),
                     "document_count": int(memify_result.get("document_count") or 0),
+                    "sentence_count": int(memify_result.get("sentence_count") or 0),
+                    "sentence_with_entities_count": int(memify_result.get("sentence_with_entities_count") or 0),
+                    "entity_mentions_count": int(memify_result.get("entity_mentions_count") or 0),
+                    "avg_entities_per_sentence": float(memify_result.get("avg_entities_per_sentence") or 0.0),
+                    "avg_entity_char_ratio": float(memify_result.get("avg_entity_char_ratio") or 0.0),
                 }
             )
 
