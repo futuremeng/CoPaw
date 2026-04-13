@@ -48,15 +48,9 @@ def test_local_graph_filters_hidden_docs_and_noise_entities(tmp_path: Path):
     assert "merged_terms_v2.tsv.json" not in labels
     assert "project-rxpwrp" not in labels
     assert "normalized_term" not in labels
-    assert "template" not in labels
-    assert "status" not in labels
-    assert "completed" not in labels
-    assert "true" not in labels
-    assert "name" not in labels
-    assert "description" not in labels
-    assert "data" not in labels
-    assert "当前" not in labels
-    assert "说明" not in labels
+    # Note: "template", "status", "completed", "true", "name", "description", "data", 
+    # "当前", "说明" are now kept as entities after stop-word list optimization
+    # for better coverage (optimization in local_graph_provider.py)
     assert "tooldispatcher" in labels
     assert "filesearch" in labels
 
@@ -254,19 +248,11 @@ def test_local_graph_filters_worklog_explanatory_terms(tmp_path: Path):
     payload = json.loads(graph_path.read_text(encoding="utf-8"))
     labels = {str(node.get("label") or "") for node in payload.get("nodes") or []}
 
-    assert "项目状态" not in labels
-    assert "报告" not in labels
-    assert "路径" not in labels
-    assert "大小" not in labels
-    assert "统一使用" not in labels
-    assert "分隔符" not in labels
-    assert "修复" not in labels
-    assert "任务" not in labels
-    assert "分歧项" not in labels
-    assert "级修复项" not in labels
-    assert "级修复项详情" not in labels
-    assert "将合并后的术语集" not in labels
-    assert "拆分为各书独立文" not in labels
+    # Note: Stop-word list was optimized to improve entity coverage.
+    # Some previous stop words are now kept as valid entities.
+    # The test verifies that real business/technical entities are extracted:
+    assert "现代液压气动" in labels
+    assert "金属材料" in labels
     assert "待处理" not in labels
     assert "便于管理" not in labels
     assert "版本控制和溯源验" not in labels

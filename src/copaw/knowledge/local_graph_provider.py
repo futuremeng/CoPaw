@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 from collections import Counter, defaultdict
 from itertools import combinations
@@ -12,6 +13,8 @@ from typing import Any
 
 from ..config.config import KnowledgeConfig
 from .manager import KnowledgeManager
+
+logger = logging.getLogger(__name__)
 
 _ENTITY_RE = re.compile(r"[A-Za-z][A-Za-z0-9_./-]{2,}|[\u4e00-\u9fff]{2,16}")
 _FILE_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]+\.(?:md|txt|json|ya?ml|csv|tsv|py|js|ts|tsx|jsx|html|xml|toml|ini|cfg)$", re.IGNORECASE)
@@ -41,119 +44,34 @@ _ENTITY_STOP_WORDS = {
     "that",
     "from",
     "into",
-    "project",
-    "knowledge",
-    "document",
-    "documents",
-    "chunk",
-    "chunks",
-    "file",
-    "files",
-    "original",
-    "output",
-    "review",
-    "skill",
-    "skills",
-    "flow",
-    "flows",
-    "script",
-    "scripts",
-    "term",
-    "terms",
     "test",
     "content",
+    "data",
+    "name",
+    "description",
+    "status",
+    "output",
+    "term",
+    "terms",
+    "file",
+    "files",
+    "metadata",
     "json",
     "yaml",
     "yml",
     "csv",
     "tsv",
-    "payload",
-    "template",
-    "templates",
-    "phase",
-    "pipeline",
-    "dashboard",
-    "copaw",
-    "plus",
-    "status",
-    "completed",
-    "complete",
-    "step",
-    "steps",
-    "part",
-    "parts",
-    "print",
-    "source",
-    "sources",
-    "record",
-    "records",
-    "len",
+    "pdf",
     "true",
     "false",
     "null",
     "none",
-    "name",
-    "description",
-    "data",
-    "pdf",
-    "metadata",
-    "filename",
-    "tags",
-    "cases",
-    "用户",
-    "助手",
-    "项目",
-    "知识",
-    "文档",
-    "文件",
-    "输出",
-    "评审",
-    "术语",
+    "len",
     "当前",
-    "说明",
     "完成",
-    "核心功能",
-    "项目状态",
-    "说明文档",
-    "决议",
-    "选项",
-    "编号",
-    "一致率",
-    "报告",
-    "路径",
-    "大小",
-    "统一使用",
-    "分隔符",
     "修复",
-    "任务",
-    "分歧项",
-    "级修复项",
-    "级修复项详情",
-    "将合并后的术语集",
-    "拆分为各书独立文",
-    "待处理",
-    "便于管理",
-    "版本控制和溯源验",
-    "执行脚本",
     "输入",
-    "总计",
-    "项修复完成",
-    "合并度量集",
-    "个独立术语文件",
-    "条记录",
-    "书籍",
-    "源文件名",
-    "记录数",
-    "合并样本",
-    "可视化",
-    "括号标注",
-    "术语集拆分与归档",
-    "多书术语提取",
-    "冲突识别",
-    "质量门控与人工复",
-    "项目元数据",
-    "执行摘要",
-    "持久化记忆",
+    "输出",
 }
 
 
@@ -311,11 +229,11 @@ def _is_high_signal_entity(raw_token: str) -> bool:
     if _CAMEL_CASE_RE.fullmatch(token):
         return True
     if re.search(r"[\u4e00-\u9fff]", token):
-        return len(token) >= 4
+        return len(token) >= 2
     return False
 
 
-def _collect_ranked_entities(document: dict[str, Any], *, limit: int = 64) -> list[tuple[str, int]]:
+def _collect_ranked_entities(document: dict[str, Any], *, limit: int = 200) -> list[tuple[str, int]]:
     title_text = str(document.get("title") or "").strip()
     heading_text = _extract_heading_text(document)
     body_text = _prepare_entity_text(document)
@@ -396,6 +314,9 @@ def build_local_graph_payload(
     sentence_with_entities_count = 0
     entity_mentions_count = 0
     entity_char_ratio_sum = 0.0
+
+    # 调试统计变量
+    total_entity_pairs_processed = 0
 
     for document in documents:
         doc_path = document["path"] or document["title"]
@@ -496,6 +417,30 @@ def build_local_graph_payload(
     for node_id, source_ids in entity_sources.items():
         if node_id in nodes and source_ids:
             nodes[node_id]["source_id"] = sorted(source_ids)[0]
+
+    # 调试统计输出
+    total_entities = len([n for n in nodes.values() if n.get("node_type") == "entity"])
+    total_relations = len(edges)
+    entity_coverage_ratio = (
+        float(total_entities / sentence_count_total * 100)
+        if sentence_count_total > 0
+        else 0.0
+    )
+    avg_mentions_per_sentence = (
+        float(entity_mentions_count / sentence_count_total)
+        if sentence_count_total > 0
+        else 0.0
+    )
+    logger.info(
+        f"Entity extraction stats: "
+        f"documents={len(documents)}, "
+        f"sentences={sentence_count_total}, "
+        f"entities={total_entities}, "
+        f"coverage_ratio={entity_coverage_ratio:.2f}%, "
+        f"relations={total_relations}, "
+        f"entity_mentions={entity_mentions_count}, "
+        f"avg_mentions_per_sent={avg_mentions_per_sentence:.2f}"
+    )
 
     return {
         "directed": False,
