@@ -3828,6 +3828,10 @@ export default function ProjectDetailPage() {
                             <Text strong>{String(knowledgeHeaderSignals.chunkCount)}</Text>
                           </div>
                           <div className={styles.knowledgeModuleHeaderSignal}>
+                            <Text type="secondary">{t("projects.knowledge.signalSentences", "Sentences")}</Text>
+                            <Text strong>{String(knowledgeHeaderSignals.sentenceCount)}</Text>
+                          </div>
+                          <div className={styles.knowledgeModuleHeaderSignal}>
                             <Text type="secondary">{t("projects.knowledge.signalRelations")}</Text>
                             <Text strong>{String(knowledgeHeaderSignals.relationCount)}</Text>
                           </div>
