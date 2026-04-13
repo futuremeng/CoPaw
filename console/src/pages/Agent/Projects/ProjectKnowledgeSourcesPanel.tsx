@@ -1,4 +1,4 @@
-import { Badge, Button, Empty, Spin, Typography } from "antd";
+import { Badge, Button, Empty, Spin, Tag, Typography } from "antd";
 import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import styles from "./index.module.less";
@@ -59,6 +59,12 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
     : undefined;
   const selectedSourceLoading = selectedSource
     ? Boolean(knowledgeState.sourceContentLoadingById[selectedSource.id])
+    : false;
+  const selectedSemantic = selectedSource
+    ? knowledgeState.semanticBySourceId[selectedSource.id]
+    : undefined;
+  const selectedSemanticLoading = selectedSource
+    ? Boolean(knowledgeState.semanticLoadingBySourceId[selectedSource.id])
     : false;
 
   return (
@@ -135,6 +141,7 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
                     <div className={styles.projectKnowledgeMetaLine}>
                       <span>{t("projects.knowledge.signalDocuments")}: {source.status.document_count || 0}</span>
                       <span>{t("projects.knowledge.signalChunks")}: {source.status.chunk_count || 0}</span>
+                      <span>{t("projects.knowledge.signalSentences", "Sentences")}: {source.status.sentence_count || 0}</span>
                     </div>
                   </button>
                 );
@@ -171,7 +178,28 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
                   <span>{t("projects.knowledge.sourceIndexedAt", "Indexed at")}: {formatIndexedAt(selectedSource.status.indexed_at)}</span>
                   <span>{t("projects.knowledge.signalDocuments")}: {selectedSourceContent?.document_count ?? selectedSource.status.document_count ?? 0}</span>
                   <span>{t("projects.knowledge.signalChunks")}: {selectedSourceContent?.chunk_count ?? selectedSource.status.chunk_count ?? 0}</span>
+                  <span>{t("projects.knowledge.signalSentences", "Sentences")}: {selectedSourceContent?.sentence_count ?? selectedSource.status.sentence_count ?? 0}</span>
                 </div>
+                {selectedSemanticLoading ? (
+                  <div className={styles.projectKnowledgeMetaLine}><Spin size="small" /></div>
+                ) : selectedSemantic ? (
+                  <div className={styles.projectKnowledgeSemanticBlock}>
+                    {selectedSemantic.subject ? (
+                      <div className={styles.projectKnowledgeSemanticRow}>
+                        <Typography.Text type="secondary">{t("projects.knowledge.sourceSubject", "Subject")}: </Typography.Text>
+                        <Typography.Text>{selectedSemantic.subject}</Typography.Text>
+                      </div>
+                    ) : null}
+                    {selectedSemantic.keywords?.length ? (
+                      <div className={styles.projectKnowledgeSemanticRow}>
+                        <Typography.Text type="secondary">{t("projects.knowledge.sourceKeywords", "Keywords")}: </Typography.Text>
+                        {selectedSemantic.keywords.map((kw) => (
+                          <Tag key={kw} bordered={false}>{kw}</Tag>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
                 {selectedSourceLoading ? (
                   <div className={styles.projectKnowledgeEmpty}><Spin /></div>
                 ) : selectedSourceContent?.documents?.length ? (

@@ -102,6 +102,7 @@ export interface KnowledgeSourceStatus {
   indexed_at: string | null;
   document_count: number;
   chunk_count: number;
+  sentence_count?: number;
   error: string | null;
   remote_status?: string;
   remote_cache_state?: string;
@@ -126,6 +127,7 @@ export interface KnowledgeIndexResult {
   source_id: string;
   document_count: number;
   chunk_count: number;
+  sentence_count?: number;
   indexed_at: string;
 }
 
@@ -204,6 +206,7 @@ export interface KnowledgeSourceContent {
   indexed_at?: string | null;
   document_count?: number;
   chunk_count?: number;
+  sentence_count?: number;
   documents: KnowledgeSourceDocument[];
 }
 

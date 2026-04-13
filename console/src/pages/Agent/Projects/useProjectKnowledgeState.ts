@@ -118,6 +118,9 @@ export interface ProjectKnowledgeState {
   insightAction: ProjectKnowledgeInsightAction;
   insightMessageKey: string;
   loadProjectSourceStatus: () => Promise<void>;
+  semanticBySourceId: Record<string, { subject?: string; summary?: string; keywords?: string[] }>;
+  semanticLoadingBySourceId: Record<string, boolean>;
+  loadSourceSemantic: (sourceId: string) => Promise<void>;
 }
 
 interface UseProjectKnowledgeStateParams {
@@ -360,6 +363,10 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
+function normalizeProjectId(value: unknown): string {
+  return String(value || "").trim().toLowerCase();
+}
+
 export function useProjectKnowledgeState(
   params: UseProjectKnowledgeStateParams,
 ): ProjectKnowledgeState {
@@ -386,6 +393,8 @@ export function useProjectKnowledgeState(
   const [activeKnowledgeTasks, setActiveKnowledgeTasks] = useState<KnowledgeTaskProgress[]>([]);
   const [activeKnowledgeTask, setActiveKnowledgeTask] = useState<KnowledgeTaskProgress | null>(null);
   const [latestQualityLoopJob, setLatestQualityLoopJob] = useState<QualityLoopJobStatus | null>(null);
+  const [semanticBySourceId, setSemanticBySourceId] = useState<Record<string, { subject?: string; summary?: string; keywords?: string[] }>>({});
+  const [semanticLoadingBySourceId, setSemanticLoadingBySourceId] = useState<Record<string, boolean>>({});
   const refreshReasonRef = useRef("");
   const graphRefreshReasonRef = useRef("");
   const defaultExploreTokenRef = useRef("");
@@ -407,7 +416,11 @@ export function useProjectKnowledgeState(
     }
     try {
       const response = await api.listKnowledgeSources({ projectId: params.projectId });
-      setProjectSources(response.sources || []);
+      const currentProjectId = normalizeProjectId(params.projectId);
+      const scopedSources = (response.sources || []).filter((source) => (
+        normalizeProjectId(source.project_id) === currentProjectId
+      ));
+      setProjectSources(scopedSources);
     } catch {
       setProjectSources([]);
     } finally {
@@ -449,6 +462,44 @@ export function useProjectKnowledgeState(
       }));
     }
   }, [params.projectId, sourceContentById]);
+
+  const loadSourceSemantic = useCallback(async (sourceId: string) => {
+    const normalizedSourceId = sourceId.trim();
+    if (!normalizedSourceId || !params.projectId) {
+      return;
+    }
+    if (semanticBySourceId[normalizedSourceId] || semanticLoadingBySourceId[normalizedSourceId]) {
+      return;
+    }
+    setSemanticLoadingBySourceId((prev) => ({ ...prev, [normalizedSourceId]: true }));
+    try {
+      const response = await api.listKnowledgeSources({
+        projectId: params.projectId,
+        includeSemantic: true,
+      });
+      const match = (response.sources || []).find((source) => source.id === normalizedSourceId);
+      if (match) {
+        setSemanticBySourceId((prev) => ({
+          ...prev,
+          [normalizedSourceId]: {
+            subject: match.subject,
+            summary: match.summary,
+            keywords: match.keywords,
+          },
+        }));
+      }
+    } catch {
+      // best-effort semantic fetch
+    } finally {
+      setSemanticLoadingBySourceId((prev) => ({ ...prev, [normalizedSourceId]: false }));
+    }
+  }, [params.projectId, semanticBySourceId, semanticLoadingBySourceId]);
+
+  useEffect(() => {
+    if (selectedSourceId) {
+      void loadSourceSemantic(selectedSourceId);
+    }
+  }, [loadSourceSemantic, selectedSourceId]);
 
   const runGraphQuery = useCallback(async (
     overrideQuery?: string,
@@ -510,6 +561,8 @@ export function useProjectKnowledgeState(
     setActiveKnowledgeTasks([]);
     setActiveKnowledgeTask(null);
     setLatestQualityLoopJob(null);
+    setSemanticBySourceId({});
+    setSemanticLoadingBySourceId({});
     defaultExploreTokenRef.current = "";
     graphRefreshReasonRef.current = "";
   }, [params.projectId]);
@@ -1172,5 +1225,8 @@ export function useProjectKnowledgeState(
     insightAction,
     insightMessageKey,
     loadProjectSourceStatus,
+    semanticBySourceId,
+    semanticLoadingBySourceId,
+    loadSourceSemantic,
   };
 }

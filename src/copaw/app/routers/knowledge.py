@@ -440,13 +440,29 @@ async def put_knowledge_config(
 
 
 @router.get("/sources")
-async def list_sources(request: Request):
+async def list_sources(
+    request: Request,
+    include_semantic: bool = Query(default=False),
+):
     _, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    project_id = _resolve_project_id(request)
+    scoped_knowledge_config = knowledge_config
+    if project_id:
+        scoped_knowledge_config = knowledge_config.model_copy(deep=True)
+        scoped_knowledge_config.sources = [
+            source
+            for source in knowledge_config.sources
+            if _normalize_project_id(getattr(source, "project_id", "")) == project_id
+        ]
     manager = _manager_for_workspace(
         workspace_dir,
-        project_id=_resolve_project_id(request),
+        project_id=project_id,
     )
-    sources = await asyncio.to_thread(manager.list_sources, knowledge_config)
+    sources = await asyncio.to_thread(
+        manager.list_sources,
+        scoped_knowledge_config,
+        bool(include_semantic),
+    )
     return {
         "enabled": bool(knowledge_config.enabled),
         "sources": sources,

@@ -164,6 +164,9 @@ function buildKnowledgeState(): ProjectKnowledgeState {
     insightAction: "query",
     insightMessageKey: "projects.knowledge.insightNeedExplore",
     loadProjectSourceStatus: vi.fn().mockResolvedValue(undefined),
+    semanticBySourceId: {},
+    semanticLoadingBySourceId: {},
+    loadSourceSemantic: vi.fn().mockResolvedValue(undefined),
   };
 }
 

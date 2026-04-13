@@ -44,9 +44,14 @@ export const knowledgeApi = {
       body: JSON.stringify(payload),
     }),
 
-  listKnowledgeSources: (options?: { projectId?: string }) =>
+  listKnowledgeSources: (options?: { projectId?: string; includeSemantic?: boolean }) =>
     request<KnowledgeSourcesResponse>(
-      withProjectId("/knowledge/sources", options?.projectId),
+      withProjectId(
+        options?.includeSemantic
+          ? "/knowledge/sources?include_semantic=true"
+          : "/knowledge/sources",
+        options?.projectId,
+      ),
     ),
 
   upsertKnowledgeSource: (

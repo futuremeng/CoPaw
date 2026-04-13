@@ -221,7 +221,7 @@ function KnowledgePage() {
     try {
       const [knowledgeConfig, sourceData, runtimeConfig, historyStatus, taskSnapshot] = await Promise.all([
         api.getKnowledgeConfig(),
-        api.listKnowledgeSources(),
+        api.listKnowledgeSources({ includeSemantic: true }),
         api.getAgentRunningConfig(),
         api.getKnowledgeHistoryBackfillStatus(),
         api.getKnowledgeTasksSnapshot(),
@@ -269,7 +269,7 @@ function KnowledgePage() {
 
   const refreshKnowledgeCards = useCallback(async () => {
     try {
-      const sourceData = await api.listKnowledgeSources();
+      const sourceData = await api.listKnowledgeSources({ includeSemantic: true });
       const nextRemoteStateMap: Record<string, string | undefined> = {};
       sourceData.sources.forEach((source) => {
         nextRemoteStateMap[source.id] = source.status.remote_cache_state;

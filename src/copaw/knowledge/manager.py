@@ -167,15 +167,24 @@ class KnowledgeManager:
         self.remote_blob_dir.mkdir(parents=True, exist_ok=True)
         self.remote_meta_dir.mkdir(parents=True, exist_ok=True)
 
-    def list_sources(self, config: KnowledgeConfig) -> list[dict[str, Any]]:
+    def list_sources(
+        self,
+        config: KnowledgeConfig,
+        include_semantic: bool = True,
+    ) -> list[dict[str, Any]]:
         """Return configured sources with index metadata when available."""
         results: list[dict[str, Any]] = []
         for source in config.sources:
             payload = source.model_dump(mode="json")
-            processed = self._process_source_knowledge(source, config)
-            payload["subject"] = processed.get("subject") or source.name
-            payload["summary"] = processed.get("summary") or source.summary
-            payload["keywords"] = processed.get("keywords") or []
+            if include_semantic:
+                processed = self._process_source_knowledge(source, config)
+                payload["subject"] = processed.get("subject") or source.name
+                payload["summary"] = processed.get("summary") or source.summary
+                payload["keywords"] = processed.get("keywords") or []
+            else:
+                payload["subject"] = source.name
+                payload["summary"] = source.summary
+                payload["keywords"] = []
             payload["status"] = self.get_source_status(source.id, source)
             results.append(payload)
         return results
@@ -201,6 +210,7 @@ class KnowledgeManager:
                 "indexed_at": None,
                 "document_count": 0,
                 "chunk_count": 0,
+                "sentence_count": 0,
                 "error": None,
             }
             if source is not None:
@@ -208,11 +218,16 @@ class KnowledgeManager:
             return status
 
         payload = self._load_json(source_index_path)
+        chunks = payload.get("chunks") or []
         status = {
             "indexed": True,
             "indexed_at": payload.get("indexed_at"),
             "document_count": payload.get("document_count", 0),
             "chunk_count": payload.get("chunk_count", 0),
+            "sentence_count": payload.get(
+                "sentence_count",
+                self._sum_chunk_sentence_count(chunks),
+            ),
             "error": payload.get("error"),
         }
         if source is not None:
@@ -231,11 +246,13 @@ class KnowledgeManager:
             documents,
             self._resolve_chunk_size(config, running_config),
         )
+        sentence_count = self._sum_chunk_sentence_count(chunks)
         payload = {
             "source": source.model_dump(mode="json"),
             "indexed_at": datetime.now(UTC).isoformat(),
             "document_count": len(documents),
             "chunk_count": len(chunks),
+            "sentence_count": sentence_count,
             "error": None,
             "chunks": chunks,
         }
@@ -244,6 +261,7 @@ class KnowledgeManager:
             "source_id": source.id,
             "document_count": len(documents),
             "chunk_count": len(chunks),
+            "sentence_count": sentence_count,
             "indexed_at": payload["indexed_at"],
         }
 
@@ -383,6 +401,10 @@ class KnowledgeManager:
             "indexed_at": payload.get("indexed_at"),
             "document_count": payload.get("document_count", len(documents)),
             "chunk_count": payload.get("chunk_count", len(chunks)),
+            "sentence_count": payload.get(
+                "sentence_count",
+                self._sum_chunk_sentence_count(chunks),
+            ),
             "documents": documents,
         }
 
@@ -472,6 +494,7 @@ class KnowledgeManager:
             "indexed_at": payload.get("indexed_at"),
             "document_count": payload.get("document_count", 0),
             "chunk_count": payload.get("chunk_count", 0),
+            "sentence_count": payload.get("sentence_count", 0),
             "path": str(self._source_dir(source.id)),
         }
 
@@ -2450,15 +2473,50 @@ class KnowledgeManager:
                 chunk_text = text[start : start + chunk_size]
                 if not chunk_text.strip():
                     continue
+                sentences = KnowledgeManager._split_chunk_sentences(chunk_text)
+                normalized_chunk_text = "\n".join(sentences) if sentences else chunk_text.strip()
                 chunks.append(
                     {
                         "chunk_id": f"{document['path']}::{index}",
                         "document_path": document["path"],
                         "document_title": document["title"],
-                        "text": chunk_text,
+                        "text": normalized_chunk_text,
+                        "sentence_count": len(sentences),
                     },
                 )
         return chunks
+
+    @staticmethod
+    def _split_chunk_sentences(text: str) -> list[str]:
+        normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+        delimiters = {"。", "！", "？", "!", "?", ";", "；", ".", "\n"}
+        sentences: list[str] = []
+        buffer: list[str] = []
+
+        for char in normalized:
+            buffer.append(char)
+            if char not in delimiters:
+                continue
+            sentence = "".join(buffer).strip()
+            if sentence:
+                sentences.append(sentence)
+            buffer = []
+
+        trailing = "".join(buffer).strip()
+        if trailing:
+            sentences.append(trailing)
+        return sentences
+
+    @staticmethod
+    def _sum_chunk_sentence_count(chunks: list[dict[str, Any]]) -> int:
+        total = 0
+        for chunk in chunks:
+            try:
+                count = int(chunk.get("sentence_count") or 0)
+            except (TypeError, ValueError):
+                count = 0
+            total += max(0, count)
+        return total
 
     @staticmethod
     def _score_chunk(text: str, terms: list[str]) -> int:

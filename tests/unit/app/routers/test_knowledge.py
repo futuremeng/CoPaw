@@ -160,6 +160,49 @@ def test_list_sources_returns_structured_summary_keywords(
     assert isinstance(source.get("keywords"), list)
 
 
+def test_list_sources_filters_by_project_id(
+    knowledge_api_client: TestClient,
+):
+    first = knowledge_api_client.put(
+        "/knowledge/sources",
+        json={
+            "id": "project-source-a",
+            "name": "Source A",
+            "type": "text",
+            "content": "alpha project knowledge",
+            "enabled": True,
+            "recursive": False,
+            "tags": [],
+            "summary": "",
+            "project_id": "project-A",
+        },
+    )
+    assert first.status_code == 200
+
+    second = knowledge_api_client.put(
+        "/knowledge/sources",
+        json={
+            "id": "project-source-b",
+            "name": "Source B",
+            "type": "text",
+            "content": "beta project knowledge",
+            "enabled": True,
+            "recursive": False,
+            "tags": [],
+            "summary": "",
+            "project_id": "project-B",
+        },
+    )
+    assert second.status_code == 200
+
+    listing = knowledge_api_client.get("/knowledge/sources?project_id=project-A")
+    assert listing.status_code == 200
+    sources = listing.json()["sources"]
+    assert len(sources) == 1
+    assert sources[0]["id"] == "project-source-a"
+    assert sources[0].get("project_id") == "project-A"
+
+
 def test_list_sources_offloads_processing_to_thread(
     knowledge_api_client: TestClient,
     monkeypatch,
@@ -196,6 +239,45 @@ def test_list_sources_offloads_processing_to_thread(
     assert calls
     assert calls[0][0].__name__ == "list_sources"
     assert any(source.id == "threaded-list-source" for source in calls[0][1][0].sources)
+    assert calls[0][1][1] is False
+
+
+def test_list_sources_include_semantic_true(
+    knowledge_api_client: TestClient,
+    monkeypatch,
+):
+    original_to_thread = knowledge_router_module.asyncio.to_thread
+    manager = KnowledgeManager(knowledge_router_module.WORKING_DIR)
+    config = knowledge_router_module.load_config().knowledge
+    config.sources.append(
+        manager.normalize_source_name(
+            knowledge_router_module.KnowledgeSourceSpec(
+                id="semantic-list-source",
+                name="Semantic Source",
+                type="text",
+                content="知识语义提取测试文本。",
+                enabled=True,
+                recursive=False,
+                tags=[],
+                summary="",
+            ),
+            config,
+        )
+    )
+    calls: list[tuple[object, tuple[object, ...]]] = []
+
+    async def fake_to_thread(func, /, *args, **kwargs):
+        calls.append((func, args))
+        return await original_to_thread(func, *args, **kwargs)
+
+    monkeypatch.setattr(knowledge_router_module.asyncio, "to_thread", fake_to_thread)
+
+    response = knowledge_api_client.get("/knowledge/sources?include_semantic=true")
+
+    assert response.status_code == 200
+    assert calls
+    assert calls[0][0].__name__ == "list_sources"
+    assert calls[0][1][1] is True
 
 
 def test_upsert_source_offloads_name_normalization_to_thread(

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import json
 from pathlib import Path
 
 from copaw.config.config import Config, KnowledgeSourceSpec
@@ -68,3 +69,37 @@ def test_directory_source_skips_hidden_files_and_hidden_directories(tmp_path: Pa
     assert result["document_count"] == 1
     assert len(paths) == 1
     assert paths[0].endswith("visible.md")
+
+
+def test_chunk_documents_split_sentences_and_count(tmp_path: Path):
+    config = Config().knowledge
+    config.index.chunk_size = 10_000
+    source = KnowledgeSourceSpec(
+        id="sentence-chunk-source",
+        name="Sentence Source",
+        type="text",
+        content="第一句。第二句! Third sentence?",
+        enabled=True,
+        recursive=False,
+        tags=[],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    result = manager.index_source(source, config)
+    index_path = manager.get_source_storage_dir(source.id) / "index.json"
+    payload = json.loads(index_path.read_text(encoding="utf-8"))
+    chunks = payload.get("chunks") or []
+    status = manager.get_source_status(source.id)
+    content = manager.get_source_documents(source.id)
+
+    assert len(chunks) == 1
+    first_chunk = chunks[0]
+    assert first_chunk.get("sentence_count") == 3
+    assert first_chunk.get("text") == "第一句。\n第二句!\nThird sentence?"
+    assert result.get("chunk_count") == 1
+    assert result.get("sentence_count") == 3
+    assert status.get("chunk_count") == 1
+    assert status.get("sentence_count") == 3
+    assert content.get("chunk_count") == 1
+    assert content.get("sentence_count") == 3
