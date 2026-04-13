@@ -4,6 +4,7 @@ import {
   Badge,
   Button,
   Checkbox,
+  Divider,
   Space,
   Switch,
   Typography,
@@ -374,6 +375,61 @@ export default function ProjectKnowledgeSettingsPanel(
     return getProjectKnowledgeSyncAlertDescription(syncState, t);
   }, [syncState, t]);
 
+  const memifyStats = useMemo(() => {
+    const empty = {
+      nodeCount: 0,
+      relationCount: 0,
+      sentenceCount: 0,
+      sentenceWithEntitiesCount: 0,
+      hasStats: false,
+    };
+
+    const lastResult = syncState?.last_result;
+    if (!lastResult || typeof lastResult !== "object") {
+      return empty;
+    }
+
+    const memify = (lastResult as Record<string, unknown>).memify;
+    if (!memify || typeof memify !== "object") {
+      return empty;
+    }
+
+    const payload = memify as Record<string, unknown>;
+    const readNumber = (value: unknown) => {
+      if (typeof value === "number" && Number.isFinite(value)) {
+        return value;
+      }
+      if (typeof value === "string") {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : 0;
+      }
+      return 0;
+    };
+
+    const nodeCount = readNumber(payload.node_count);
+    const relationCount = readNumber(payload.relation_count);
+    const sentenceCount = readNumber(payload.sentence_count);
+    const sentenceWithEntitiesCount = readNumber(payload.sentence_with_entities_count);
+    const hasStats =
+      nodeCount > 0 || relationCount > 0 || sentenceCount > 0 || sentenceWithEntitiesCount > 0;
+
+    return {
+      nodeCount,
+      relationCount,
+      sentenceCount,
+      sentenceWithEntitiesCount,
+      hasStats,
+    };
+  }, [syncState]);
+
+  const entityCoverageLabel = useMemo(() => {
+    if (memifyStats.sentenceCount <= 0) {
+      return "-";
+    }
+    const ratio = (memifyStats.sentenceWithEntitiesCount / memifyStats.sentenceCount) * 100;
+    return `${ratio.toFixed(1)}%`;
+  }, [memifyStats.sentenceCount, memifyStats.sentenceWithEntitiesCount]);
+
   return (
     <div className={styles.projectKnowledgeWorkbench}>
       <div className={styles.projectKnowledgeTabHeader}>
@@ -384,7 +440,7 @@ export default function ProjectKnowledgeSettingsPanel(
           <Typography.Text type="secondary">
             {syncState?.status && syncState.status !== "idle"
               ? syncAlertDescription
-              : t("projects.knowledge.settingsHint", "Control project knowledge registration and sync behavior.")}
+              : t("projects.knowledge.settingsHint", "Configure project knowledge indexing and extraction.")}
           </Typography.Text>
         </div>
         <Badge
@@ -399,66 +455,55 @@ export default function ProjectKnowledgeSettingsPanel(
         />
       </div>
 
-      <div className={styles.projectKnowledgeSettingsActions}>
-        <Space size={6}>
-          <Typography.Text type="secondary">
-            {t("projects.knowledge.autoSinkLabel")}
+      <section className={styles.projectKnowledgeLayerSection}>
+        <div className={styles.projectKnowledgeLayerHeader}>
+          <Typography.Text strong>
+            {t("projects.knowledge.layerIndexTitle", "Layer 1: Document Chunking & Indexing")}
           </Typography.Text>
-          <Switch
-            checked={autoSinkEnabled}
-            loading={updatingAutoSink}
-            onChange={(checked) => {
-              void handleToggleAutoSink(checked);
-            }}
-          />
-        </Space>
-
-        <Space size={6}>
           <Typography.Text type="secondary">
-            {t("projects.knowledge.memifyLabel", "Entity Extraction")}
+            {t("projects.knowledge.layerIndexDesc", "Raw project files are chunked first. Every chunk keeps source path for bidirectional traceability.")}
           </Typography.Text>
-          <Switch
-            checked={memifyEnabled}
-            loading={memifyUpdating}
-            onChange={(checked) => {
-              void handleToggleMemify(checked);
+        </div>
+
+        <div className={styles.projectKnowledgeSettingsActions}>
+          <Space size={6}>
+            <Typography.Text type="secondary">
+              {t("projects.knowledge.autoSyncLabel", "Auto Sync")}
+            </Typography.Text>
+            <Switch
+              checked={autoSinkEnabled}
+              loading={updatingAutoSink}
+              onChange={(checked) => {
+                void handleToggleAutoSink(checked);
+              }}
+            />
+          </Space>
+
+          <Button
+            size="small"
+            loading={manualSinking}
+            onClick={() => {
+              void handleManualSink();
             }}
-          />
-        </Space>
+          >
+            {t("projects.knowledge.manualSink", "Run Sync")}
+          </Button>
 
-        <Button
-          size="small"
-          loading={manualSinking}
-          onClick={() => {
-            void handleManualSink();
-          }}
-        >
-          {t("projects.knowledge.manualSink")}
-        </Button>
+          <Button
+            size="small"
+            type={sourceRegistered ? "default" : "primary"}
+            loading={registering}
+            onClick={() => {
+              void handleRegisterProjectSource();
+            }}
+          >
+            {sourceRegistered
+              ? t("projects.knowledge.sourceReindex", "Reindex")
+              : t("projects.knowledge.sourceRegister", "Register Source")}
+          </Button>
+        </div>
 
-        <Button
-          size="small"
-          type={sourceRegistered ? "default" : "primary"}
-          loading={registering}
-          onClick={() => {
-            void handleRegisterProjectSource();
-          }}
-        >
-          {sourceRegistered
-            ? t("projects.knowledge.sourceReindex")
-            : t("projects.knowledge.sourceRegister")}
-        </Button>
-      </div>
-
-      <div className={styles.projectKnowledgeSettingsRowCompact}>
-        <Checkbox
-          checked={includeGlobal}
-          onChange={(event) => onIncludeGlobalChange(event.target.checked)}
-        >
-          {t("projects.knowledge.includeGlobal")}
-        </Checkbox>
-
-        {sourceRegistered ? (
+        <div className={styles.projectKnowledgeSettingsRowCompact}>
           <Space size={10} className={styles.projectKnowledgeStatsInline}>
             <Typography.Text type="secondary">
               {t("projects.knowledge.docCount", {
@@ -471,17 +516,84 @@ export default function ProjectKnowledgeSettingsPanel(
               })}
             </Typography.Text>
           </Space>
-        ) : null}
-      </div>
+        </div>
 
-      <div className={styles.projectKnowledgeMetaRowCompact}>
-        <Typography.Text type="secondary" ellipsis={{ tooltip: `${t("projects.knowledge.sourceId")} ${projectSourceId}` }}>
-          {t("projects.knowledge.sourceId")} {projectSourceId}
-        </Typography.Text>
-        <Typography.Text type="secondary">
-          {t("projects.knowledge.lastIndexed")} {indexedAtLabel}
-        </Typography.Text>
-      </div>
+        <div className={styles.projectKnowledgeMetaRowCompact}>
+          <Typography.Text type="secondary" ellipsis={{ tooltip: `${t("projects.knowledge.sourceId")} ${projectSourceId}` }}>
+            {t("projects.knowledge.sourceId")} {projectSourceId}
+          </Typography.Text>
+          <Typography.Text type="secondary">
+            {t("projects.knowledge.lastIndexed")} {indexedAtLabel}
+          </Typography.Text>
+        </div>
+      </section>
+
+      <Divider className={styles.projectKnowledgeLayerDivider} />
+
+      <section className={styles.projectKnowledgeLayerSection}>
+        <div className={styles.projectKnowledgeLayerHeader}>
+          <Typography.Text strong>
+            {t("projects.knowledge.layerGraphTitle", "Layer 2: Entity & Relation Extraction")}
+          </Typography.Text>
+          <Typography.Text type="secondary">
+            {t("projects.knowledge.layerGraphDesc", "Entities and relations are extracted from chunks, then linked back to source documents.")}
+          </Typography.Text>
+        </div>
+
+        <div className={styles.projectKnowledgeSettingsActions}>
+          <Space size={6}>
+            <Typography.Text type="secondary">
+              {t("projects.knowledge.memifyLabel", "Entity Extraction")}
+            </Typography.Text>
+            <Switch
+              checked={memifyEnabled}
+              loading={memifyUpdating}
+              onChange={(checked) => {
+                void handleToggleMemify(checked);
+              }}
+            />
+          </Space>
+        </div>
+
+        {memifyEnabled ? (
+          <div className={styles.projectKnowledgeSettingsRowCompact}>
+            <Space size={10} className={styles.projectKnowledgeStatsInline}>
+              <Typography.Text type="secondary">
+                {t("projects.knowledge.entities", "Entities")}: {memifyStats.nodeCount}
+              </Typography.Text>
+              <Typography.Text type="secondary">
+                {t("projects.knowledge.signalRelations", "Relations")}: {memifyStats.relationCount}
+              </Typography.Text>
+              <Typography.Text type="secondary">
+                {t("projects.knowledge.entityCoverage", "Entity Coverage")}: {entityCoverageLabel}
+              </Typography.Text>
+            </Space>
+          </div>
+        ) : null}
+
+        {!memifyStats.hasStats && memifyEnabled ? (
+          <Typography.Text type="secondary">
+            {t("projects.knowledge.entityStatsHint", "Run a sync once to generate entity and relation stats.")}
+          </Typography.Text>
+        ) : null}
+      </section>
+
+      <details className={styles.projectKnowledgeCompatDetails}>
+        <summary className={styles.projectKnowledgeCompatSummary}>
+          {t("projects.knowledge.compatSettingsTitle", "Compatibility Settings")}
+        </summary>
+        <div className={styles.projectKnowledgeCompatBody}>
+          <Checkbox
+            checked={includeGlobal}
+            onChange={(event) => onIncludeGlobalChange(event.target.checked)}
+          >
+            {t("projects.knowledge.includeGlobal", "Include global knowledge during query")}
+          </Checkbox>
+          <Typography.Text type="secondary">
+            {t("projects.knowledge.includeGlobalHint", "This option affects query scope and will be moved to query controls in a later iteration.")}
+          </Typography.Text>
+        </div>
+      </details>
 
       {projectSource?.status?.error ? (
         <Alert
