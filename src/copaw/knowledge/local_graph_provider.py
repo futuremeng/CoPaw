@@ -233,7 +233,7 @@ def _is_high_signal_entity(raw_token: str) -> bool:
     return False
 
 
-def _collect_ranked_entities(document: dict[str, Any], *, limit: int = 200) -> list[tuple[str, int]]:
+def _collect_ranked_entities(document: dict[str, Any]) -> list[tuple[str, int]]:
     title_text = str(document.get("title") or "").strip()
     heading_text = _extract_heading_text(document)
     body_text = _prepare_entity_text(document)
@@ -263,7 +263,8 @@ def _collect_ranked_entities(document: dict[str, Any], *, limit: int = 200) -> l
         if _is_high_signal_entity(raw):
             ranked[normalized] += max(heading_counter.get(normalized, 0), 1)
 
-    return ranked.most_common(limit)
+    # Return all ranked entities without limit (let all valid candidates through)
+    return ranked.most_common()
 
 
 def _load_dataset_documents(
