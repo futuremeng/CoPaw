@@ -9,7 +9,7 @@ import pytest
 @pytest.mark.asyncio
 async def test_workspace_creation():
     """Test workspace instance creation."""
-    from copaw.app.workspace import Workspace
+    from qwenpaw.app.workspace import Workspace
 
     with tempfile.TemporaryDirectory() as tmpdir:
         workspace_dir = Path(tmpdir) / "test_agent"
@@ -27,7 +27,7 @@ async def test_workspace_creation():
 @pytest.mark.asyncio
 async def test_workspace_components_none_before_start():
     """Test that workspace components are None before start()."""
-    from copaw.app.workspace import Workspace
+    from qwenpaw.app.workspace import Workspace
 
     with tempfile.TemporaryDirectory() as tmpdir:
         workspace_dir = Path(tmpdir) / "test_agent"
@@ -47,7 +47,7 @@ async def test_workspace_components_none_before_start():
 @pytest.mark.asyncio
 async def test_workspace_default_agent():
     """Test workspace with 'default' agent ID."""
-    from copaw.app.workspace import Workspace
+    from qwenpaw.app.workspace import Workspace
 
     with tempfile.TemporaryDirectory() as tmpdir:
         workspace_dir = Path(tmpdir) / "default"
@@ -63,8 +63,8 @@ async def test_workspace_default_agent():
 @pytest.mark.asyncio
 async def test_workspace_short_uuid_agent():
     """Test workspace with short UUID agent ID."""
-    from copaw.app.workspace import Workspace
-    from copaw.config.config import generate_short_agent_id
+    from qwenpaw.app.workspace import Workspace
+    from qwenpaw.config.config import generate_short_agent_id
 
     short_id = generate_short_agent_id()
 
@@ -82,7 +82,7 @@ async def test_workspace_short_uuid_agent():
 
 def test_workspace_repr():
     """Test workspace string representation."""
-    from copaw.app.workspace import Workspace
+    from qwenpaw.app.workspace import Workspace
 
     with tempfile.TemporaryDirectory() as tmpdir:
         workspace_dir = Path(tmpdir) / "test_agent"

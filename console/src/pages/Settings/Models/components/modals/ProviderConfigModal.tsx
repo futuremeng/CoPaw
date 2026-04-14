@@ -337,6 +337,9 @@ export function ProviderConfigModal({
     if (provider.id === "openai") {
       return t("models.openAIEndpoint");
     }
+    if (provider.id === "opencode") {
+      return t("models.openAICompatibleEndpoint");
+    }
     if (provider.id === "ollama") {
       return t("models.ollamaEndpointHint");
     }
@@ -363,6 +366,9 @@ export function ProviderConfigModal({
     }
     if (provider.id === "openai") {
       return "https://api.openai.com/v1";
+    }
+    if (provider.id === "opencode") {
+      return "https://opencode.ai/zen/v1";
     }
     if (provider.id === "ollama") {
       return "http://localhost:11434";
@@ -590,6 +596,7 @@ export function ProviderConfigModal({
 
   return (
     <Modal
+      width={800}
       title={t("models.configureProvider", { name: provider.name })}
       open={open}
       onCancel={onClose}

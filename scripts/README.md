@@ -56,7 +56,7 @@ copaw rebuild
 bash scripts/wheel_build.sh
 ```
 
-- Builds the console frontend (`console/`), copies `console/dist` to `src/copaw/console/dist`, then builds the wheel. Output: `dist/*.whl`.
+- Builds the console frontend (`console/`), copies `console/dist` to `src/qwenpaw/console/dist`, then builds the wheel. Output: `dist/*.whl`.
 
 ## Build website
 
@@ -72,8 +72,8 @@ bash scripts/website_build.sh
 bash scripts/docker_build.sh [IMAGE_TAG] [EXTRA_ARGS...]
 ```
 
-- Default tag: `copaw:latest`. Uses `deploy/Dockerfile` (multi-stage: builds console then Python app).
-- Example: `bash scripts/docker_build.sh myreg/copaw:v1 --no-cache`.
+- Default tag: `qwenpaw:latest`. Uses `deploy/Dockerfile` (multi-stage: builds console then Python app).
+- Example: `bash scripts/docker_build.sh myreg/qwenpaw:v1 --no-cache`.
 
 ## Local merge gate
 
