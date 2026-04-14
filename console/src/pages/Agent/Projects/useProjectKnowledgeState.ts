@@ -144,6 +144,7 @@ export interface ProjectKnowledgeState {
   activeKnowledgeTasks: KnowledgeTaskProgress[];
   activeKnowledgeTask: KnowledgeTaskProgress | null;
   latestQualityLoopJob?: QualityLoopJobStatus | null;
+  memifyEnabled: boolean;
   processingModes: ProjectKnowledgeModeState[];
   activeOutputResolution: ProjectKnowledgeOutputResolution;
   processingScheduler: ProjectKnowledgeProcessingScheduler;
@@ -169,6 +170,11 @@ export interface ProjectKnowledgeState {
     overrideTopK?: number,
     overrideOutputMode?: ProjectKnowledgeProcessingMode,
   ) => Promise<void>;
+  startProcessingMode: (
+    mode: ProjectKnowledgeProcessingMode,
+    options?: { force?: boolean; trigger?: string },
+  ) => Promise<void>;
+  processingLaunchMode: ProjectKnowledgeProcessingMode | null;
   resetGraphQuery: () => void;
   trendRangeDays: 7 | 30;
   setTrendRangeDays: (value: 7 | 30) => void;
@@ -535,7 +541,7 @@ function parseBackendOutputResolution(
   const availableModes = Array.isArray(payload.available_modes)
     ? payload.available_modes.filter(isProcessingMode)
     : [];
-  const fallbackChain = Array.isArray(payload.fallback_chain)
+  const fallbackChain: ProjectKnowledgeProcessingMode[] = Array.isArray(payload.fallback_chain)
     ? payload.fallback_chain.filter(isProcessingMode)
     : ["agentic", "nlp", "fast"];
   const activeMode = processingModes.some((item) => item.mode === payload.active_mode)
@@ -560,7 +566,7 @@ function parseBackendProcessingScheduler(
     return null;
   }
 
-  const modeOrder = Array.isArray(payload.mode_order)
+  const modeOrder: ProjectKnowledgeProcessingMode[] = Array.isArray(payload.mode_order)
     ? payload.mode_order.filter(isProcessingMode)
     : ["agentic", "nlp", "fast"];
   const runningModes = Array.isArray(payload.running_modes)
@@ -751,6 +757,8 @@ export function useProjectKnowledgeState(
   const [graphLoading, setGraphLoading] = useState(false);
   const [graphError, setGraphError] = useState("");
   const [graphResult, setGraphResult] = useState<GraphQueryResponse | null>(null);
+  const [memifyEnabled, setMemifyEnabled] = useState(false);
+  const [processingLaunchMode, setProcessingLaunchMode] = useState<ProjectKnowledgeProcessingMode | null>(null);
   const [relationKeywordSeed, setRelationKeywordSeed] = useState("");
   const [activeGraphNodeId, setActiveGraphNodeId] = useState<string | null>(null);
   const [trendRangeDays, setTrendRangeDays] = useState<7 | 30>(7);
@@ -864,6 +872,22 @@ export function useProjectKnowledgeState(
   }, [params.projectId, semanticBySourceId, semanticLoadingBySourceId]);
 
   useEffect(() => {
+    let cancelled = false;
+    void api.getKnowledgeConfig()
+      .then((config) => {
+        if (!cancelled) {
+          setMemifyEnabled(Boolean(config.memify_enabled));
+        }
+      })
+      .catch(() => {
+        // best-effort config load
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (selectedSourceId) {
       void loadSourceSemantic(selectedSourceId);
     }
@@ -919,6 +943,27 @@ export function useProjectKnowledgeState(
     }
   }, [defaultOutputModeForQuery, graphQueryMode, graphQueryText, graphQueryTopK, params.includeGlobal, params.projectId, t]);
 
+  const startProcessingMode = useCallback(async (
+    mode: ProjectKnowledgeProcessingMode,
+    options?: { force?: boolean; trigger?: string },
+  ) => {
+    if (!params.projectId) {
+      return;
+    }
+    setProcessingLaunchMode(mode);
+    try {
+      const response = await api.runProjectKnowledgeSync({
+        projectId: params.projectId,
+        trigger: options?.trigger ?? `processing-panel:${mode}`,
+        force: options?.force ?? true,
+        processingMode: mode,
+      });
+      setSyncState(response.state);
+    } finally {
+      setProcessingLaunchMode(null);
+    }
+  }, [params.projectId]);
+
   const resetGraphQuery = useCallback(() => {
     setGraphError("");
     setGraphResult(null);
@@ -935,6 +980,7 @@ export function useProjectKnowledgeState(
     setGraphLoading(false);
     setGraphError("");
     setGraphResult(null);
+    setProcessingLaunchMode(null);
     setRelationKeywordSeed("");
     setActiveGraphNodeId(null);
     setActiveKnowledgeTasks([]);
@@ -1587,7 +1633,7 @@ export function useProjectKnowledgeState(
       fallbackChain,
       reason: "高阶产物尚不可用，当前回退到极速预览。",
     };
-  }, [processingModes]);
+  }, [processingModes, syncState]);
 
   const processingScheduler = useMemo<ProjectKnowledgeProcessingScheduler>(() => {
     const backendScheduler = parseBackendProcessingScheduler(
@@ -1802,6 +1848,7 @@ export function useProjectKnowledgeState(
     activeKnowledgeTasks,
     activeKnowledgeTask,
     latestQualityLoopJob,
+    memifyEnabled,
     processingModes,
     activeOutputResolution,
     processingScheduler,
@@ -1822,6 +1869,8 @@ export function useProjectKnowledgeState(
     activeGraphNodeId,
     setActiveGraphNodeId,
     runGraphQuery,
+    startProcessingMode,
+    processingLaunchMode,
     resetGraphQuery,
     trendRangeDays,
     setTrendRangeDays,
@@ -1855,6 +1904,7 @@ export function useProjectKnowledgeState(
     insightAction,
     insightMessageKey,
     latestQualityLoopJob,
+    memifyEnabled,
     loadProjectSourceStatus,
     loadSourceContent,
     loadSourceSemantic,
@@ -1868,6 +1918,8 @@ export function useProjectKnowledgeState(
     relationRecords,
     resetGraphQuery,
     runGraphQuery,
+    startProcessingMode,
+    processingLaunchMode,
     selectedSourceId,
     semanticBySourceId,
     semanticLoadingBySourceId,

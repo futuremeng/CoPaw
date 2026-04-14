@@ -38,6 +38,7 @@ function buildKnowledgeState(projectId: string): ProjectKnowledgeState {
     activeKnowledgeTasks: [],
     activeKnowledgeTask: null,
     latestQualityLoopJob: null,
+    memifyEnabled: true,
     processingModes: [
       {
         mode: "fast",
@@ -163,6 +164,8 @@ function buildKnowledgeState(projectId: string): ProjectKnowledgeState {
     activeGraphNodeId: null,
     setActiveGraphNodeId: vi.fn(),
     runGraphQuery: vi.fn().mockResolvedValue(undefined),
+    startProcessingMode: vi.fn().mockResolvedValue(undefined),
+    processingLaunchMode: null,
     resetGraphQuery: vi.fn(),
     trendRangeDays: 7,
     setTrendRangeDays: vi.fn(),

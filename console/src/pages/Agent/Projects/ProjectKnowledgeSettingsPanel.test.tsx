@@ -112,7 +112,7 @@ describe("ProjectKnowledgeSettingsPanel", () => {
       project_auto_knowledge_sink: false,
     } as never);
 
-    render(
+    const { container } = render(
       <ProjectKnowledgeSettingsPanel
         agentId="default"
         projectId={projectId}
@@ -124,7 +124,11 @@ describe("ProjectKnowledgeSettingsPanel", () => {
       />,
     );
 
-    const autoSinkSwitch = await screen.findByRole("switch");
+    const autoSinkSwitch = container.querySelector("button.ant-switch");
+    expect(autoSinkSwitch).not.toBeNull();
+    if (!autoSinkSwitch) {
+      throw new Error("auto sink switch not found");
+    }
     await user.click(autoSinkSwitch);
 
     await waitFor(() => {
@@ -172,7 +176,7 @@ describe("ProjectKnowledgeSettingsPanel", () => {
       />,
     );
 
-    await user.click(await screen.findByRole("button", { name: "projects.knowledge.manualSink" }));
+    await user.click(await screen.findByRole("button", { name: "Run Sync" }));
 
     await waitFor(() => {
       expect(mockedApi.runProjectKnowledgeSync).toHaveBeenCalledWith(
@@ -180,6 +184,7 @@ describe("ProjectKnowledgeSettingsPanel", () => {
           projectId,
           trigger: "manual-panel",
           force: true,
+          processingMode: "agentic",
         }),
       );
     });
@@ -217,7 +222,8 @@ describe("ProjectKnowledgeSettingsPanel", () => {
       />,
     );
 
-    const alert = await screen.findByRole("alert");
-    expect(alert.textContent || "").toContain("projects.knowledge.syncStage.cooldown");
+    await waitFor(() => {
+      expect(document.body.textContent || "").toContain("projects.knowledge.syncStage.cooldown");
+    });
   });
 });

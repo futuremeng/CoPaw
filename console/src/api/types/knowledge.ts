@@ -130,6 +130,7 @@ export interface ProjectKnowledgeSyncRunRequest {
   trigger?: string;
   changedPaths?: string[];
   force?: boolean;
+  processingMode?: ProjectKnowledgeProcessingMode;
 }
 
 export interface ProjectKnowledgeSyncRunResponse {

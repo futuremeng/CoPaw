@@ -11,6 +11,29 @@ interface ProjectKnowledgeProcessingPanelProps {
   onOpenSettings?: () => void;
 }
 
+function launchDisabledReason(
+  mode: ProjectKnowledgeModeState,
+  knowledgeState: ProjectKnowledgeState,
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
+  if (!knowledgeState.sourceRegistered) {
+    return t("projects.knowledge.processing.needSource", "需要先注册项目知识源");
+  }
+  if (knowledgeState.processingLaunchMode && knowledgeState.processingLaunchMode !== mode.mode) {
+    return t("projects.knowledge.processing.otherLaunchInFlight", "另一个模式正在发起，请稍候");
+  }
+  if (mode.status === "running") {
+    return t("projects.knowledge.processing.modeRunning", "当前模式正在运行");
+  }
+  if (mode.status === "queued") {
+    return t("projects.knowledge.processing.modeQueued", "当前模式已在队列中");
+  }
+  if (mode.mode !== "fast" && !knowledgeState.memifyEnabled) {
+    return t("projects.knowledge.processing.needMemify", "需要先在 Settings 中启用实体抽取");
+  }
+  return "";
+}
+
 function modeLabel(
   mode: ProjectKnowledgeModeState["mode"],
   t: ReturnType<typeof useTranslation>["t"],
@@ -65,6 +88,7 @@ export default function ProjectKnowledgeProcessingPanel(
   const { t } = useTranslation();
   const activeMode = props.knowledgeState.activeOutputResolution.activeMode;
   const scheduler = props.knowledgeState.processingScheduler;
+  const launchMode = props.knowledgeState.processingLaunchMode;
 
   const modeName = (mode: string | null | undefined): string => {
     if (mode === "fast" || mode === "nlp" || mode === "agentic") {
@@ -135,6 +159,10 @@ export default function ProjectKnowledgeProcessingPanel(
 
       <div className={styles.projectKnowledgeModeGrid}>
         {props.knowledgeState.processingModes.map((mode) => (
+          (() => {
+            const disabledReason = launchDisabledReason(mode, props.knowledgeState, t);
+            const launchDisabled = Boolean(disabledReason) && launchMode !== mode.mode;
+            return (
           <div
             key={mode.mode}
             className={`${styles.projectKnowledgeModeCard} ${activeMode === mode.mode ? styles.projectKnowledgeModeCardActive : ""}`}
@@ -179,6 +207,26 @@ export default function ProjectKnowledgeProcessingPanel(
               ) : null}
             </div>
 
+            <div className={styles.projectKnowledgeTabActions}>
+              <Button
+                size="small"
+                type={mode.mode === activeMode ? "primary" : "default"}
+                loading={launchMode === mode.mode}
+                disabled={launchDisabled}
+                onClick={() => void props.knowledgeState.startProcessingMode(mode.mode)}
+              >
+                {mode.mode === "fast"
+                  ? t("projects.knowledge.processing.runFast", "运行极速预览")
+                  : mode.mode === "nlp"
+                    ? t("projects.knowledge.processing.runNlp", "运行 NLP 结构化")
+                    : t("projects.knowledge.processing.runAgentic", "运行多智能体")}
+              </Button>
+            </div>
+
+            {disabledReason ? (
+              <Typography.Text type="secondary">{disabledReason}</Typography.Text>
+            ) : null}
+
             <div className={styles.projectKnowledgeModeMetrics}>
               <div className={styles.projectKnowledgeModeMetric}>
                 <Typography.Text type="secondary">{t("projects.knowledge.signalDocuments", "Documents")}</Typography.Text>
@@ -198,6 +246,8 @@ export default function ProjectKnowledgeProcessingPanel(
               </div>
             </div>
           </div>
+            );
+          })()
         ))}
       </div>
     </div>

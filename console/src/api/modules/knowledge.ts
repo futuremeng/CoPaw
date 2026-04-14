@@ -307,6 +307,7 @@ export const knowledgeApi = {
           trigger: payload.trigger ?? "manual",
           changed_paths: payload.changedPaths ?? [],
           force: payload.force ?? false,
+          processing_mode: payload.processingMode ?? "agentic",
         }),
       },
     ),

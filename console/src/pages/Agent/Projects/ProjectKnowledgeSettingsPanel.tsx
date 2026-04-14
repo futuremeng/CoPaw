@@ -327,6 +327,7 @@ export default function ProjectKnowledgeSettingsPanel(
             projectId,
             trigger: "memify-enabled",
             force: true,
+            processingMode: "nlp",
           });
           setSyncState(response.state);
         } catch {
@@ -352,6 +353,7 @@ export default function ProjectKnowledgeSettingsPanel(
         projectId,
         trigger: "manual-panel",
         force: true,
+        processingMode: "agentic",
       });
       setSyncState(response.state);
       message.success(t("projects.knowledge.manualSinkStarted"));
