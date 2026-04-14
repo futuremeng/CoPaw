@@ -400,6 +400,71 @@ def test_local_memify_runs_enrichment_pipeline_and_query_prefers_l2(tmp_path):
     assert len(result.records) >= 1
 
 
+def test_graph_query_respects_preferred_output_mode_for_local_engine(tmp_path):
+    knowledge_config = Config().knowledge
+    knowledge_config.enabled = True
+    knowledge_config.engine = "local_lexical"
+    knowledge_config.enrichment_pipeline_enabled = True
+
+    manager = KnowledgeManager(tmp_path)
+    source = KnowledgeSourceSpec(
+        id="local-mode-source",
+        name="Local Mode Source",
+        type="text",
+        location="",
+        content=(
+            "ToolDispatcher mentions FileSearch. "
+            "FileSearch co_occurs_with KnowledgeGraph."
+        ),
+        enabled=True,
+        recursive=False,
+        tags=["graph", "enrich"],
+        summary="",
+    )
+    knowledge_config.sources.append(source)
+    manager.index_source(
+        source,
+        knowledge_config,
+        SimpleNamespace(knowledge_chunk_size=knowledge_config.index.chunk_size),
+    )
+
+    graph_ops = GraphOpsManager(tmp_path)
+    graph_ops.execute_memify_once(
+        config=knowledge_config,
+        pipeline_type="system-enrichment",
+        dataset_scope=[source.id],
+        dry_run=False,
+    )
+
+    nlp_result = graph_ops.graph_query(
+        config=knowledge_config,
+        query_mode="template",
+        query_text="ToolDispatcher FileSearch",
+        dataset_scope=[source.id],
+        project_scope=None,
+        include_global=True,
+        top_k=5,
+        timeout_sec=30,
+        preferred_output_mode="nlp",
+    )
+    fast_result = graph_ops.graph_query(
+        config=knowledge_config,
+        query_mode="template",
+        query_text="ToolDispatcher FileSearch",
+        dataset_scope=[source.id],
+        project_scope=None,
+        include_global=True,
+        top_k=5,
+        timeout_sec=30,
+        preferred_output_mode="fast",
+    )
+
+    assert nlp_result.provenance.get("resolved_output_mode") == "nlp"
+    assert nlp_result.provenance.get("layer") == "l1_raw"
+    assert fast_result.provenance.get("resolved_output_mode") == "fast"
+    assert fast_result.provenance.get("engine") == "local_lexical"
+
+
 def test_graphify_query_prefers_enriched_graph_when_enabled(tmp_path):
     knowledge_config = Config().knowledge
     knowledge_config.enabled = True

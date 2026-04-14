@@ -20,6 +20,7 @@ DEFAULT_PROJECT_SYNC_DEBOUNCE_SECONDS = 3.0
 DEFAULT_PROJECT_SYNC_COOLDOWN_SECONDS = 10.0
 DEFAULT_PROJECT_SYNC_STALE_AFTER_SECONDS = 120.0
 DEFAULT_PROJECT_SYNC_QUALITY_LOOP_ROUNDS = 3
+KNOWLEDGE_PROCESSING_FALLBACK_CHAIN = ["agentic", "nlp", "fast"]
 
 
 def build_project_source_id(project_id: str) -> str:
@@ -84,6 +85,20 @@ def ensure_project_source_registered(
     return expected, changed
 
 
+def _safe_int(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _safe_float(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 class ProjectKnowledgeSyncManager:
     """Project-scoped background synchronization for knowledge indexing + memify."""
 
@@ -100,6 +115,7 @@ class ProjectKnowledgeSyncManager:
         knowledge_dirname: str = "knowledge",
     ) -> None:
         self.working_dir = Path(working_dir)
+        self.knowledge_dirname = knowledge_dirname
         self.knowledge_root = self.working_dir / knowledge_dirname
         self.state_path = self.knowledge_root / "project-sync-state.json"
         self._lock = self._get_lock(str(self.state_path.resolve()))
@@ -175,9 +191,460 @@ class ProjectKnowledgeSyncManager:
             "indexed_processing_fingerprint": "",
             "updated_at": self._now_iso(),
             "latest_job_id": "",
+            "latest_workflow_run_id": "",
             "latest_source_id": "",
             "last_result": {},
+            "processing_modes": [],
+            "processing_mode_overrides": {},
+            "active_output_resolution": {
+                "active_mode": "fast",
+                "available_modes": [],
+                "fallback_chain": KNOWLEDGE_PROCESSING_FALLBACK_CHAIN[:],
+                "reason": "High-order outputs are not ready yet; using fast preview.",
+            },
+            "processing_scheduler": {
+                "strategy": "parallel",
+                "mode_order": KNOWLEDGE_PROCESSING_FALLBACK_CHAIN[:],
+                "running_modes": [],
+                "queued_modes": [],
+                "ready_modes": [],
+                "failed_modes": [],
+                "next_mode": "fast",
+                "consumption_mode": "fast",
+                "reason": "Scheduler is waiting for the fast preview lane to start.",
+            },
+            "mode_outputs": {},
         }
+
+    def _relative_workspace_path(self, value: str | Path | None) -> str:
+        text = str(value or "").strip()
+        if not text:
+            return ""
+        candidate = Path(text)
+        try:
+            resolved = candidate.resolve()
+        except Exception:
+            return text.replace("\\", "/")
+        try:
+            return resolved.relative_to(self.working_dir.resolve()).as_posix()
+        except Exception:
+            return resolved.as_posix()
+
+    def _build_mode_outputs(self, state: dict[str, Any]) -> dict[str, Any]:
+        last_result = state.get("last_result") or {}
+        if not isinstance(last_result, dict):
+            last_result = {}
+        index_result = last_result.get("index") or {}
+        memify_result = last_result.get("memify") or {}
+        quality_loop_result = last_result.get("quality_loop") or {}
+        workflow_run = last_result.get("workflow_run") or {}
+        if not isinstance(index_result, dict):
+            index_result = {}
+        if not isinstance(memify_result, dict):
+            memify_result = {}
+        if not isinstance(quality_loop_result, dict):
+            quality_loop_result = {}
+        if not isinstance(workflow_run, dict):
+            workflow_run = {}
+
+        latest_source_id = str(state.get("latest_source_id") or "").strip()
+        fast_artifacts: list[dict[str, str]] = []
+        if latest_source_id:
+            index_path = self._knowledge_manager._source_index_path(latest_source_id)
+            content_path = self._knowledge_manager._source_content_md_path(latest_source_id)
+            if index_path.exists():
+                fast_artifacts.append(
+                    {
+                        "kind": "index",
+                        "label": "Indexed source payload",
+                        "path": self._relative_workspace_path(index_path),
+                    }
+                )
+            if content_path.exists():
+                fast_artifacts.append(
+                    {
+                        "kind": "preview",
+                        "label": "Rendered source preview",
+                        "path": self._relative_workspace_path(content_path),
+                    }
+                )
+
+        nlp_artifacts: list[dict[str, str]] = []
+        for kind, label, raw_path in [
+            ("graph", "Raw knowledge graph", memify_result.get("graph_path") or self._graph_ops.local_graph_path),
+            ("enriched_graph", "Enriched knowledge graph", memify_result.get("enriched_graph_path") or self._graph_ops.enriched_graph_path),
+            (
+                "quality_report",
+                "Knowledge quality report",
+                memify_result.get("enrichment_quality_report_path")
+                or quality_loop_result.get("enrichment_quality_report_path")
+                or self._graph_ops.enrichment_quality_report_path,
+            ),
+        ]:
+            rel_path = self._relative_workspace_path(raw_path)
+            if rel_path:
+                nlp_artifacts.append(
+                    {
+                        "kind": kind,
+                        "label": label,
+                        "path": rel_path,
+                    }
+                )
+
+        agentic_artifacts: list[dict[str, str]] = []
+        workflow_artifacts = workflow_run.get("artifacts")
+        if isinstance(workflow_artifacts, list):
+            for raw_path in workflow_artifacts:
+                rel_path = self._relative_workspace_path(raw_path)
+                if not rel_path:
+                    continue
+                agentic_artifacts.append(
+                    {
+                        "kind": "workflow_artifact",
+                        "label": Path(rel_path).name,
+                        "path": rel_path,
+                    }
+                )
+        if not agentic_artifacts:
+            agentic_artifacts = [*nlp_artifacts]
+
+        return {
+            "fast": {
+                "mode": "fast",
+                "source": "indexed-preview",
+                "summary_lines": [
+                    f"Documents: {_safe_int(index_result.get('document_count'))}",
+                    f"Chunks: {_safe_int(index_result.get('chunk_count'))}",
+                ],
+                "artifacts": fast_artifacts,
+            },
+            "nlp": {
+                "mode": "nlp",
+                "source": "graph-artifacts",
+                "summary_lines": [
+                    f"Entities: {_safe_int(memify_result.get('node_count'))}",
+                    f"Relations: {_safe_int(memify_result.get('relation_count'))}",
+                ],
+                "artifacts": nlp_artifacts,
+            },
+            "agentic": {
+                "mode": "agentic",
+                "source": "workflow-artifacts",
+                "summary_lines": [
+                    f"Run: {str(workflow_run.get('run_id') or '').strip()}",
+                    f"Status: {str(workflow_run.get('status') or '').strip()}",
+                ],
+                "artifacts": agentic_artifacts,
+            },
+        }
+
+    def _build_processing_modes(self, state: dict[str, Any]) -> list[dict[str, Any]]:
+        last_result = state.get("last_result") or {}
+        if not isinstance(last_result, dict):
+            last_result = {}
+        index_result = last_result.get("index") or {}
+        memify_result = last_result.get("memify") or {}
+        quality_loop_result = last_result.get("quality_loop") or {}
+        workflow_run = last_result.get("workflow_run") or {}
+        if not isinstance(index_result, dict):
+            index_result = {}
+        if not isinstance(memify_result, dict):
+            memify_result = {}
+        if not isinstance(quality_loop_result, dict):
+            quality_loop_result = {}
+        if not isinstance(workflow_run, dict):
+            workflow_run = {}
+
+        sync_status = str(state.get("status") or "").strip().lower()
+        sync_stage = str(state.get("current_stage") or state.get("stage") or "").strip().lower()
+        sync_percent = _safe_int(state.get("percent") if state.get("percent") is not None else state.get("progress"))
+        latest_updated_at = str(
+            state.get("last_finished_at")
+            or state.get("last_success_at")
+            or state.get("updated_at")
+            or ""
+        ).strip()
+
+        document_count = max(
+            _safe_int(index_result.get("document_count")),
+            _safe_int(memify_result.get("document_count")),
+        )
+        chunk_count = _safe_int(index_result.get("chunk_count"))
+        entity_count = max(
+            _safe_int(memify_result.get("node_count")),
+            _safe_int((memify_result.get("enrichment_metrics") or {}).get("node_count"))
+            if isinstance(memify_result.get("enrichment_metrics"), dict)
+            else 0,
+        )
+        relation_count = max(
+            _safe_int(memify_result.get("relation_count")),
+            _safe_int((memify_result.get("enrichment_metrics") or {}).get("edge_count"))
+            if isinstance(memify_result.get("enrichment_metrics"), dict)
+            else 0,
+        )
+        workflow_status = str(workflow_run.get("status") or "").strip().lower()
+        workflow_run_id = str(
+            workflow_run.get("run_id") or state.get("latest_workflow_run_id") or ""
+        ).strip()
+        quality_score = _safe_float(
+            quality_loop_result.get("score_after")
+            or quality_loop_result.get("score_before")
+            or quality_loop_result.get("quality_score_after")
+            or quality_loop_result.get("quality_score")
+        )
+
+        fast_available = document_count > 0 or chunk_count > 0
+        nlp_available = entity_count > 0 or relation_count > 0
+        agentic_available = workflow_status in {"succeeded", "completed"}
+
+        fast_running = sync_status in {"pending", "indexing"} or sync_stage in {"pending", "indexing"}
+        nlp_running = sync_status == "graphifying" or sync_stage == "graphifying" or sync_stage.startswith("graphify")
+        agentic_running = workflow_status in {"running", "pending"} or (
+            sync_status in {"pending", "indexing", "graphifying"} and bool(workflow_run_id)
+        )
+        agentic_queued = workflow_status == "queued"
+
+        fast_status = (
+            "failed"
+            if sync_status == "failed" and not fast_available
+            else "running"
+            if fast_running
+            else "ready"
+            if fast_available
+            else "queued"
+            if str(state.get("latest_source_id") or "").strip()
+            else "idle"
+        )
+        nlp_status = (
+            "failed"
+            if sync_status == "failed" and not nlp_available
+            else "running"
+            if nlp_running
+            else "ready"
+            if nlp_available
+            else "queued"
+            if fast_available
+            else "idle"
+        )
+        agentic_status = (
+            "failed"
+            if workflow_status in {"failed", "blocked", "cancelled"} or (sync_status == "failed" and not agentic_available)
+            else "queued"
+            if agentic_queued
+            else "running"
+            if agentic_running
+            else "ready"
+            if agentic_available
+            else "queued"
+            if nlp_available or bool(workflow_run_id)
+            else "idle"
+        )
+
+        modes = [
+            {
+                "mode": "fast",
+                "status": fast_status,
+                "available": fast_available,
+                "progress": sync_percent if fast_status == "running" else None,
+                "stage": (
+                    str(state.get("stage_message") or state.get("current_stage") or "Building fast preview")
+                    if fast_status == "running"
+                    else "Fast preview ready"
+                    if fast_available
+                    else "Waiting for source indexing"
+                ),
+                "summary": (
+                    "Fast preview is ready for quick consumption."
+                    if fast_available
+                    else "Fast preview is waiting for the base index."
+                ),
+                "last_updated_at": latest_updated_at,
+                "run_id": "",
+                "job_id": str(state.get("latest_job_id") or "").strip(),
+                "document_count": document_count,
+                "chunk_count": chunk_count,
+                "entity_count": 0,
+                "relation_count": 0,
+                "quality_score": None,
+            },
+            {
+                "mode": "nlp",
+                "status": nlp_status,
+                "available": nlp_available,
+                "progress": sync_percent if nlp_status == "running" else None,
+                "stage": (
+                    str(state.get("stage_message") or state.get("current_stage") or "Building NLP artifacts")
+                    if nlp_status == "running"
+                    else "NLP graph artifacts ready"
+                    if nlp_available
+                    else "Waiting for graph extraction"
+                ),
+                "summary": (
+                    "Structured graph artifacts are available as the fallback layer."
+                    if nlp_available
+                    else "Structured graph artifacts are not ready yet."
+                ),
+                "last_updated_at": latest_updated_at,
+                "run_id": "",
+                "job_id": str(state.get("latest_job_id") or "").strip(),
+                "document_count": document_count,
+                "chunk_count": chunk_count,
+                "entity_count": entity_count,
+                "relation_count": relation_count,
+                "quality_score": quality_score,
+            },
+            {
+                "mode": "agentic",
+                "status": agentic_status,
+                "available": agentic_available,
+                "progress": sync_percent if agentic_status == "running" else None,
+                "stage": (
+                    str(state.get("stage_message") or state.get("current_stage") or "Running multi-agent workflow")
+                    if agentic_status == "running"
+                    else "Multi-agent outputs ready"
+                    if agentic_available
+                    else "Workflow run exists but outputs are incomplete"
+                    if workflow_run_id
+                    else "Waiting for multi-agent workflow scheduling"
+                ),
+                "summary": (
+                    "Multi-agent knowledge outputs are ready and preferred for consumption."
+                    if agentic_available
+                    else "High-quality long-running processing continues in the background."
+                ),
+                "last_updated_at": str(workflow_run.get("updated_at") or latest_updated_at or "").strip(),
+                "run_id": workflow_run_id,
+                "job_id": str(state.get("latest_job_id") or "").strip(),
+                "document_count": document_count,
+                "chunk_count": chunk_count,
+                "entity_count": entity_count,
+                "relation_count": relation_count,
+                "quality_score": quality_score,
+            },
+        ]
+
+        overrides = state.get("processing_mode_overrides") or {}
+        if isinstance(overrides, dict):
+            for item in modes:
+                mode_key = str(item.get("mode") or "").strip()
+                override = overrides.get(mode_key)
+                if not isinstance(override, dict):
+                    continue
+                if override.get("status") in {"idle", "queued", "running", "ready", "failed"}:
+                    item["status"] = override.get("status")
+                if "available" in override:
+                    item["available"] = bool(override.get("available"))
+                if override.get("progress") is not None:
+                    item["progress"] = _safe_int(override.get("progress"))
+                if str(override.get("stage") or "").strip():
+                    item["stage"] = str(override.get("stage") or "").strip()
+                if str(override.get("summary") or "").strip():
+                    item["summary"] = str(override.get("summary") or "").strip()
+                if str(override.get("run_id") or "").strip():
+                    item["run_id"] = str(override.get("run_id") or "").strip()
+                if str(override.get("job_id") or "").strip():
+                    item["job_id"] = str(override.get("job_id") or "").strip()
+
+        return modes
+
+    def _build_output_resolution(self, processing_modes: list[dict[str, Any]]) -> dict[str, Any]:
+        available_modes = [
+            str(item.get("mode") or "").strip()
+            for item in processing_modes
+            if bool(item.get("available"))
+        ]
+        active_mode = "fast"
+        reason = "High-order outputs are not ready yet; using fast preview."
+        if "agentic" in available_modes:
+            active_mode = "agentic"
+            reason = "Multi-agent outputs are available and selected as the highest-quality layer."
+        elif "nlp" in available_modes:
+            active_mode = "nlp"
+            reason = "Multi-agent outputs are unavailable, automatically downgraded to NLP outputs."
+        return {
+            "active_mode": active_mode,
+            "available_modes": available_modes,
+            "fallback_chain": KNOWLEDGE_PROCESSING_FALLBACK_CHAIN[:],
+            "reason": reason,
+        }
+
+    def _build_processing_scheduler(
+        self,
+        processing_modes: list[dict[str, Any]],
+        output_resolution: dict[str, Any],
+    ) -> dict[str, Any]:
+        status_by_mode = {
+            str(item.get("mode") or "").strip(): str(item.get("status") or "idle").strip()
+            for item in processing_modes
+        }
+        running_modes = [
+            mode for mode in KNOWLEDGE_PROCESSING_FALLBACK_CHAIN
+            if status_by_mode.get(mode) == "running"
+        ]
+        queued_modes = [
+            mode for mode in KNOWLEDGE_PROCESSING_FALLBACK_CHAIN
+            if status_by_mode.get(mode) == "queued"
+        ]
+        ready_modes = [
+            mode for mode in KNOWLEDGE_PROCESSING_FALLBACK_CHAIN
+            if status_by_mode.get(mode) == "ready"
+        ]
+        failed_modes = [
+            mode for mode in KNOWLEDGE_PROCESSING_FALLBACK_CHAIN
+            if status_by_mode.get(mode) == "failed"
+        ]
+
+        next_mode = next(
+            (
+                mode
+                for mode in KNOWLEDGE_PROCESSING_FALLBACK_CHAIN
+                if status_by_mode.get(mode) in {"queued", "idle"}
+            ),
+            "",
+        )
+        consumption_mode = str(output_resolution.get("active_mode") or "fast").strip() or "fast"
+
+        if running_modes:
+            reason = (
+                f"Scheduler is actively advancing {', '.join(running_modes)} while consuming {consumption_mode} outputs."
+            )
+        elif queued_modes:
+            reason = (
+                f"Scheduler is waiting to start {queued_modes[0]} and will continue consuming {consumption_mode} outputs meanwhile."
+            )
+        elif failed_modes and ready_modes:
+            reason = (
+                f"Scheduler detected failed lanes ({', '.join(failed_modes)}) and is serving the best ready output from {consumption_mode}."
+            )
+        elif ready_modes:
+            reason = f"Scheduler has no active work and is serving the best available output from {consumption_mode}."
+        else:
+            reason = "Scheduler is waiting for the fast preview lane to start."
+
+        return {
+            "strategy": "parallel",
+            "mode_order": KNOWLEDGE_PROCESSING_FALLBACK_CHAIN[:],
+            "running_modes": running_modes,
+            "queued_modes": queued_modes,
+            "ready_modes": ready_modes,
+            "failed_modes": failed_modes,
+            "next_mode": next_mode or None,
+            "consumption_mode": consumption_mode,
+            "reason": reason,
+        }
+
+    def _hydrate_processing_view(self, state: dict[str, Any]) -> dict[str, Any]:
+        hydrated = dict(state)
+        processing_modes = self._build_processing_modes(hydrated)
+        output_resolution = self._build_output_resolution(processing_modes)
+        hydrated["processing_modes"] = processing_modes
+        hydrated["active_output_resolution"] = output_resolution
+        hydrated["processing_scheduler"] = self._build_processing_scheduler(
+            processing_modes,
+            output_resolution,
+        )
+        hydrated["mode_outputs"] = self._build_mode_outputs(hydrated)
+        return hydrated
 
     def check_needs_reindex(
         self,
@@ -216,13 +683,13 @@ class ProjectKnowledgeSyncManager:
 
     def _load_state(self, project_id: str) -> dict[str, Any]:
         if not self.state_path.exists():
-            return self._default_state(project_id)
+            return self._hydrate_processing_view(self._default_state(project_id))
         try:
             payload = json.loads(self.state_path.read_text(encoding="utf-8"))
         except Exception:
-            return self._default_state(project_id)
+            return self._hydrate_processing_view(self._default_state(project_id))
         if not isinstance(payload, dict):
-            return self._default_state(project_id)
+            return self._hydrate_processing_view(self._default_state(project_id))
         state = self._default_state(project_id)
         state.update(payload)
         state["project_id"] = project_id
@@ -238,14 +705,15 @@ class ProjectKnowledgeSyncManager:
             state.get("cooldown_seconds"),
         )
         state["changed_count"] = len(state["changed_paths"])
-        return state
+        return self._hydrate_processing_view(state)
 
     def _save_state(self, state: dict[str, Any]) -> None:
         self.knowledge_root.mkdir(parents=True, exist_ok=True)
-        state["updated_at"] = self._now_iso()
-        state["changed_count"] = len(state.get("changed_paths") or [])
+        normalized = self._hydrate_processing_view(state)
+        normalized["updated_at"] = self._now_iso()
+        normalized["changed_count"] = len(normalized.get("changed_paths") or [])
         self.state_path.write_text(
-            json.dumps(state, ensure_ascii=False, indent=2),
+            json.dumps(normalized, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
 
@@ -648,118 +1116,69 @@ class ProjectKnowledgeSyncManager:
     ) -> None:
         while True:
             try:
+                from qwenpaw.app.knowledge_workflow import KnowledgeWorkflowOrchestrator
+
                 self._patch_state(
                     project_id,
                     self._normalize_sync_patch({
-                        "status": "indexing",
-                        "stage": "indexing",
-                        "stage_message": "Indexing project source",
-                        "progress": 20,
-                        "current": 1,
-                        "total": 3,
+                        "status": "pending",
+                        "stage": "pending",
+                        "stage_message": "Starting knowledge workflow",
+                        "progress": 1,
+                        "current": 0,
+                        "total": 4,
                         "eta_seconds": 5,
                         "last_started_at": self._now_iso(),
                         "last_error": "",
                     }),
                 )
-                index_result = self._knowledge_manager.index_source(
-                    source,
-                    config,
-                    running_config,
+
+                orchestrator = KnowledgeWorkflowOrchestrator(
+                    workspace_dir=self.working_dir,
+                    project_id=project_id,
+                    knowledge_dirname=self.knowledge_dirname,
                 )
-
-                self._patch_state(
-                    project_id,
-                    self._normalize_sync_patch({
-                        "status": "graphifying",
-                        "stage": "graphifying",
-                        "stage_message": "Building knowledge graph",
-                        "progress": 70,
-                        "current": 2,
-                        "total": 3,
-                        "eta_seconds": 3,
-                        "last_result": {
-                            "index": index_result,
-                        },
-                    }),
-                )
-
-                def _on_memify_progress(payload: dict[str, Any]) -> None:
-                    stage = str(payload.get("stage") or "graphifying").strip() or "graphifying"
-                    stage_message = str(payload.get("stage_message") or "").strip()
-                    raw_progress = payload.get("progress", payload.get("percent", 70))
-                    try:
-                        progress = int(float(raw_progress or 70))
-                    except (TypeError, ValueError):
-                        progress = 70
-                    self._patch_state(
-                        project_id,
-                        self._normalize_sync_patch(
-                            {
-                                "status": "graphifying",
-                                "stage": f"graphify_{stage}",
-                                "stage_message": stage_message or "Graph building in progress",
-                                "progress": max(20, min(95, progress)),
-                                "current": payload.get("current") if isinstance(payload.get("current"), (int, float)) else 0,
-                                "total": payload.get("total") if isinstance(payload.get("total"), (int, float)) else 0,
-                                "eta_seconds": payload.get("eta_seconds") if isinstance(payload.get("eta_seconds"), (int, float)) else None,
-                            }
-                        ),
-                    )
-
-                memify_result = self._graph_ops.execute_memify_once(
+                current_state = self.get_state(project_id)
+                workflow_result = orchestrator.run(
                     config=config,
-                    pipeline_type="project-auto",
-                    dataset_scope=[source.id],
-                    dry_run=False,
-                    progress_callback=_on_memify_progress,
+                    running_config=running_config,
+                    source=source,
+                    trigger=str(current_state.get("last_trigger") or "project-sync"),
+                    changed_paths=list(current_state.get("changed_paths") or []),
+                    status_callback=lambda patch: self._patch_state(
+                        project_id,
+                        self._normalize_sync_patch(patch),
+                    ),
                 )
-                succeeded = str(memify_result.get("status") or "") == "succeeded"
-                quality_loop_result: dict[str, Any] | None = None
-                if succeeded and bool(getattr(config, "memify_enabled", False)):
-                    try:
-                        quality_loop_result = self._graph_ops.maybe_start_quality_self_drive(
-                            config=config,
-                            dataset_scope=[source.id],
-                            project_id=project_id,
-                            max_rounds=DEFAULT_PROJECT_SYNC_QUALITY_LOOP_ROUNDS,
-                            dry_run=False,
-                            baseline_result=memify_result,
-                        )
-                    except Exception as exc:
-                        logger.exception(
-                            "Project quality-loop auto-trigger failed for project %s",
-                            project_id,
-                        )
-                        quality_loop_result = {
-                            "accepted": False,
-                            "reason": "QUALITY_LOOP_TRIGGER_FAILED",
-                            "error": str(exc),
-                        }
+
                 now = self._now_iso()
-                processing_fingerprint = self._knowledge_manager.compute_processing_fingerprint(
-                    config,
-                    running_config,
-                )
                 self._patch_state(
                     project_id,
                     self._normalize_sync_patch({
-                        "status": "succeeded" if succeeded else "failed",
-                        "stage": "completed" if succeeded else "failed",
-                        "stage_message": "Project sync completed" if succeeded else "Project sync failed",
-                        "progress": 100 if succeeded else 0,
-                        "current": 3,
-                        "total": 3,
+                        "status": "succeeded",
+                        "stage": "completed",
+                        "stage_message": "Project sync completed",
+                        "progress": 100,
+                        "current": 4,
+                        "total": 4,
                         "eta_seconds": 0,
                         "last_finished_at": now,
-                        "last_success_at": now if succeeded else None,
-                        "indexed_processing_fingerprint": processing_fingerprint,
-                        "last_error": str(memify_result.get("error") or "").strip(),
-                        "latest_job_id": str(memify_result.get("job_id") or "").strip(),
+                        "last_success_at": now,
+                        "indexed_processing_fingerprint": str(workflow_result.get("processing_fingerprint") or ""),
+                        "last_error": "",
+                        "latest_job_id": str(workflow_result.get("latest_job_id") or "").strip(),
+                        "latest_workflow_run_id": str(workflow_result.get("run_id") or "").strip(),
+                        "processing_mode_overrides": {},
                         "last_result": {
-                            "index": index_result,
-                            "memify": memify_result,
-                            "quality_loop": quality_loop_result,
+                            "index": workflow_result.get("index") or {},
+                            "memify": workflow_result.get("memify") or {},
+                            "quality_loop": workflow_result.get("quality_loop") or {},
+                            "workflow_run": {
+                                "run_id": workflow_result.get("run_id") or "",
+                                "template_id": workflow_result.get("template_id") or "",
+                                "status": workflow_result.get("run_status") or "",
+                                "artifacts": workflow_result.get("artifacts") or [],
+                            },
                         },
                     }),
                 )
@@ -780,6 +1199,7 @@ class ProjectKnowledgeSyncManager:
                         "eta_seconds": None,
                         "last_finished_at": self._now_iso(),
                         "last_error": str(exc),
+                        "processing_mode_overrides": {},
                     }),
                 )
 

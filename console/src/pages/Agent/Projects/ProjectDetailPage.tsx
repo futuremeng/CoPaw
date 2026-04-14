@@ -44,7 +44,8 @@ import ProjectChatPanel, {
   type ProjectChatMode,
 } from "./ProjectChatPanel";
 import ProjectKnowledgePanel from "./ProjectKnowledgePanel";
-import ProjectKnowledgeRelationsPanel from "./ProjectKnowledgeRelationsPanel";
+import ProjectKnowledgeOutputsPanel from "./ProjectKnowledgeOutputsPanel";
+import ProjectKnowledgeProcessingPanel from "./ProjectKnowledgeProcessingPanel";
 import ProjectKnowledgeSignalsPanel from "./ProjectKnowledgeSignalsPanel";
 import ProjectKnowledgeSourcesPanel from "./ProjectKnowledgeSourcesPanel";
 import ProjectKnowledgeSettingsPanel from "./ProjectKnowledgeSettingsPanel";
@@ -633,8 +634,12 @@ export default function ProjectDetailPage() {
     projectName: selectedProject?.name || "",
     includeGlobal: projectKnowledgeIncludeGlobal,
     onSignalsChange: setKnowledgeHeaderSignals,
-    eagerSourceLoad: knowledgeDockTab === "sources" || knowledgeDockTab === "health",
-    eagerExploreLoad: knowledgeDockTab === "explore",
+    eagerSourceLoad:
+      knowledgeDockTab === "sources"
+      || knowledgeDockTab === "processing"
+      || knowledgeDockTab === "outputs"
+      || knowledgeDockTab === "health",
+    eagerExploreLoad: knowledgeDockTab === "explore" || knowledgeDockTab === "outputs",
   });
 
   useEffect(() => {
@@ -3442,8 +3447,8 @@ export default function ProjectDetailPage() {
     setPendingKnowledgeQuery("");
   }, []);
 
-  const handleKnowledgeOpenRelations = useCallback(() => {
-    setKnowledgeDockTab("relations");
+  const handleKnowledgeOpenOutputs = useCallback(() => {
+    setKnowledgeDockTab("outputs");
   }, []);
 
   const handleKnowledgeOpenSettings = useCallback(() => {
@@ -3518,7 +3523,7 @@ export default function ProjectDetailPage() {
             knowledgeState={projectKnowledgeState}
             requestedQuery={pendingKnowledgeQuery}
             onRequestedQueryHandled={handleKnowledgeRequestedQueryHandled}
-            onOpenRelations={handleKnowledgeOpenRelations}
+            onOpenOutputs={handleKnowledgeOpenOutputs}
           />
         ),
       },
@@ -3533,10 +3538,20 @@ export default function ProjectDetailPage() {
         ),
       },
       {
-        key: "relations",
-        label: t("projects.knowledgeDock.tabRelations", "Relations"),
+        key: "processing",
+        label: t("projects.knowledgeDock.tabProcessing", "Processing"),
         children: (
-          <ProjectKnowledgeRelationsPanel
+          <ProjectKnowledgeProcessingPanel
+            knowledgeState={projectKnowledgeState}
+            onOpenSettings={handleKnowledgeOpenSettings}
+          />
+        ),
+      },
+      {
+        key: "outputs",
+        label: t("projects.knowledgeDock.tabOutputs", "Outputs"),
+        children: (
+          <ProjectKnowledgeOutputsPanel
             knowledgeState={projectKnowledgeState}
             onRunSuggestedQuery={handleKnowledgeRunSuggestedQuery}
           />
@@ -3579,7 +3594,7 @@ export default function ProjectDetailPage() {
   }, [
     currentAgent?.id,
     currentAgent?.workspace_dir,
-    handleKnowledgeOpenRelations,
+    handleKnowledgeOpenOutputs,
     handleKnowledgeOpenSettings,
     handleKnowledgeRequestedQueryHandled,
     handleKnowledgeRunSuggestedQuery,
@@ -3986,7 +4001,7 @@ export default function ProjectDetailPage() {
                   },
                   {
                     key: "timeline",
-                    label: t("projects.pipeline.timeline"),
+                      label: t("projects.pipeline.timeline"),
                     children: (
                       <ProjectEvidencePanel
                         runDetail={runDetail}

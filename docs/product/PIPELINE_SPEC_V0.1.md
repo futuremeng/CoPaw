@@ -129,3 +129,71 @@ books-alignment-v1 可以映射为步骤：
 4. schemas/metric-pack.schema.json
 
 这些 schema 是下一阶段后端 API 与前端状态管理的统一契约。
+
+## 12. 当前知识加工内建工作流里程碑
+
+当前在 /projects 页面中，知识加工已经落到一版可交付的内建工作流，实现边界如下。
+
+### 12.1 内建工作流模板
+
+1. 模板 ID：builtin-knowledge-processing-v1。
+2. 入口位置：Project Knowledge Dock。
+3. 目标：围绕单个 Project 生成项目级索引、图谱产物、质量复核结果和可消费的工作流产物。
+
+### 12.2 当前步骤模型
+
+1. source_scan：确认项目知识输入边界与变更文件。
+2. file_analysis：生成项目级索引与快速预览产物。
+3. domain_graph_build：生成图谱与结构化知识产物。
+4. quality_review：执行质量复核与闭环补强。
+
+### 12.3 三模式并行与消费策略
+
+当前实现中，知识加工被建模为三条并行轨道，由 CoPaw 统一调度。
+
+1. fast：保证秒级预览，优先提供索引与预览产物。
+2. nlp：提供 raw graph、质量报告等结构化知识产物。
+3. agentic：提供更高质量的 enriched graph 与工作流级产物。
+
+消费端固定采用以下降级顺序：
+
+1. agentic
+2. nlp
+3. fast
+
+这意味着高阶产物缺失时，UI 和查询接口会自动回退到次优可用层，而不是等待长流程完成。
+
+### 12.4 前端落点
+
+Project Knowledge Dock 当前使用以下标签页承载该工作流：
+
+1. Explore：项目知识查询与探索。
+2. Sources：知识源注册与索引状态。
+3. Processing：三模式调度、运行态与优先级展示。
+4. Outputs：按模式查看产物，并切换消费来源。
+5. Health：质量与运行健康信号。
+6. Settings：知识加工配置入口。
+
+### 12.5 当前 API / 状态契约
+
+当前项目知识状态已补充以下关键字段，用于统一表达“调度”和“降级”而不是仅靠前端猜测：
+
+1. processing_modes
+2. active_output_resolution
+3. processing_scheduler
+4. mode_outputs
+5. latest_workflow_run_id
+
+此外，graph-query 已支持 output_mode，使 Explore 与 Outputs 在消费侧遵循同一模式语义。
+
+### 12.6 当前阶段的完成标准
+
+本阶段将“统一调度与降级”定义为以下能力已经成立：
+
+1. 三模式在状态层可独立表达运行、排队、就绪和失败。
+2. Project Sync 会持久化工作流 run 元数据与模式产物摘要。
+3. Processing 面板可展示调度策略与运行态。
+4. Outputs 面板可按模式查看产物。
+5. Explore / Graph Query 会按模式消费，并在高阶产物缺失时自动降级。
+
+下一阶段如果继续深化，重点将不再是“有没有模式切换”，而是是否需要把 fast、nlp、agentic 进一步拆成更独立的执行入口和查询语义。

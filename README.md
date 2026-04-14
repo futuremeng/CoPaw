@@ -36,6 +36,8 @@ Your personal AI assistant — easy to install, deploy locally or in the cloud, 
 >
 > **Multi-agent collaboration** — Create multiple independent agents, each with their own role; enable collaboration skills for inter-agent communication to tackle complex tasks together.
 >
+> **Project knowledge processing** — Inside each project, CoPaw now runs a built-in knowledge workflow with three parallel lanes: fast preview, NLP graph building, and multi-agent deep processing. The Console shows Processing and Outputs tabs, and consumers automatically downgrade from multi-agent to NLP to fast when higher-order artifacts are not ready.
+>
 > **Multi-layer security** — Tool guard, file access control, skill security scanning to ensure safe operation.
 >
 > **Every channel** — DingTalk, Feishu, WeChat, Discord, Telegram, and more. One CoPaw, connect as needed.
@@ -89,6 +91,7 @@ CoPaw will keep tracking upstream while staying recognizable to existing users.
 - [API Key](#api-key)
 - [Local Models](#local-models)
 - [Documentation](#documentation)
+- [Project Knowledge Processing](#project-knowledge-processing)
 - [Security Features](#security-features)
 - [FAQ](#faq)
 - [Staying ahead](#staying-ahead)
@@ -224,6 +227,27 @@ qwenpaw uninstall --purge  # removes everything
 
 </details>
 
+
+---
+
+## Project Knowledge Processing
+
+The Project page now includes a built-in knowledge workflow for project-scoped indexing, graph construction, and quality review.
+
+Current milestone behavior:
+
+1. Processing lanes run in parallel: `fast`, `nlp`, and `agentic`.
+2. The scheduler keeps fast preview available first, advances NLP graph artifacts next, and continues multi-agent deep processing in the background.
+3. The consumer side always prefers the best available output and automatically downgrades in this order: `agentic -> nlp -> fast`.
+4. The Console exposes this through the Knowledge dock tabs: `Explore`, `Sources`, `Processing`, `Outputs`, `Health`, and `Settings`.
+
+Mode semantics in the current implementation:
+
+1. `fast`: indexed preview artifacts for quick project exploration.
+2. `nlp`: structured graph artifacts such as `graph.json` and related quality outputs.
+3. `agentic`: workflow-level enriched outputs, preferring the highest-quality knowledge artifacts when available.
+
+Graph query consumers now follow the same mode selection. When the selected mode does not yet have a higher-order artifact, CoPaw falls back automatically instead of blocking the user on long-running processing.
 
 ---
 

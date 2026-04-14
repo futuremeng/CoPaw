@@ -898,6 +898,27 @@ Agent gate review is mandatory before automatic continuation.
             return self.enriched_graph_path, "l2_enriched"
         return self.local_graph_path, "l1_raw"
 
+    def _resolve_query_graph_path_for_mode(
+        self,
+        preferred_output_mode: str | None,
+    ) -> tuple[Path | None, str, str]:
+        normalized = str(preferred_output_mode or "").strip().lower()
+        if normalized == "agentic":
+            if self.enriched_graph_path.exists():
+                return self.enriched_graph_path, "l2_enriched", "agentic"
+            if self.local_graph_path.exists():
+                return self.local_graph_path, "l1_raw", "nlp"
+            return None, "lexical", "fast"
+        if normalized == "nlp":
+            if self.local_graph_path.exists():
+                return self.local_graph_path, "l1_raw", "nlp"
+            return None, "lexical", "fast"
+        if normalized == "fast":
+            return None, "lexical", "fast"
+        graph_path, layer = self._resolve_query_graph_path(KnowledgeConfig())
+        resolved_mode = "agentic" if layer == "l2_enriched" else "nlp"
+        return graph_path, layer, resolved_mode
+
     def _resolve_graphify_query_graph_path(
         self,
         config: KnowledgeConfig,
@@ -911,6 +932,33 @@ Agent gate review is mandatory before automatic continuation.
         if self.local_graph_path.exists():
             return str(self.local_graph_path), "l1_raw"
         return "", "l1_raw"
+
+    def _resolve_graphify_query_graph_path_for_mode(
+        self,
+        graphify_cfg: Any,
+        preferred_output_mode: str | None,
+    ) -> tuple[str, str, str]:
+        normalized = str(preferred_output_mode or "").strip().lower()
+        configured_graph_path = str(getattr(graphify_cfg, "graph_path", "") or "").strip()
+        if normalized == "agentic":
+            if self.enriched_graph_path.exists():
+                return str(self.enriched_graph_path), "l2_enriched", "agentic"
+            if configured_graph_path:
+                return configured_graph_path, "l1_raw", "nlp"
+            if self.local_graph_path.exists():
+                return str(self.local_graph_path), "l1_raw", "nlp"
+            return "", "lexical", "fast"
+        if normalized == "nlp":
+            if configured_graph_path:
+                return configured_graph_path, "l1_raw", "nlp"
+            if self.local_graph_path.exists():
+                return str(self.local_graph_path), "l1_raw", "nlp"
+            return "", "lexical", "fast"
+        if normalized == "fast":
+            return "", "lexical", "fast"
+        graph_path, layer = self._resolve_graphify_query_graph_path(KnowledgeConfig(), graphify_cfg)
+        resolved_mode = "agentic" if layer == "l2_enriched" else "nlp"
+        return graph_path, layer, resolved_mode
 
     @staticmethod
     def _normalize_progress_patch(patch: dict[str, Any]) -> dict[str, Any]:
@@ -1014,6 +1062,7 @@ Agent gate review is mandatory before automatic continuation.
         include_global: bool,
         top_k: int,
         timeout_sec: int,
+        preferred_output_mode: str | None = None,
     ) -> GraphOpsResult:
         """Run graph-like query over current knowledge backend.
 
@@ -1044,6 +1093,14 @@ Agent gate review is mandatory before automatic continuation.
                     config,
                     graphify_cfg,
                 )
+                resolved_mode = "agentic" if graph_layer == "l2_enriched" else "nlp"
+                if preferred_output_mode:
+                    graph_path_for_query, graph_layer, resolved_mode = self._resolve_graphify_query_graph_path_for_mode(
+                        graphify_cfg,
+                        preferred_output_mode,
+                    )
+                if graph_layer == "lexical":
+                    raise GraphifyNotConfiguredError("Preferred output mode resolved to lexical fallback")
                 graphify_cfg_for_query = graphify_cfg
                 if graphify_cfg is not None and graph_path_for_query:
                     graphify_cfg_for_query = graphify_cfg.model_copy(deep=True)
@@ -1074,6 +1131,8 @@ Agent gate review is mandatory before automatic continuation.
                         "project_scope": project_scope or [],
                         "include_global": include_global,
                         "query_mode": query_mode,
+                        "output_mode": str(preferred_output_mode or "").strip() or resolved_mode,
+                        "resolved_output_mode": resolved_mode,
                     },
                     warnings=warnings,
                 )
@@ -1098,33 +1157,38 @@ Agent gate review is mandatory before automatic continuation.
         )
 
         if engine == "local_lexical":
-            graph_path, graph_layer = self._resolve_query_graph_path(config)
-            local_graph_records = query_local_graph(
-                graph_path,
-                effective_query_text,
-                top_k,
+            graph_path, graph_layer, resolved_mode = self._resolve_query_graph_path_for_mode(
+                preferred_output_mode,
             )
-            local_graph_records = self._filter_records_by_project_scope(
-                records=local_graph_records,
-                config=config,
-                project_scope=project_scope,
-                include_global=include_global,
-            )
-            if local_graph_records:
-                return GraphOpsResult(
-                    records=local_graph_records,
-                    summary=f"Returned {len(local_graph_records)} graph relations via local graph.",
-                    provenance={
-                        "engine": "local_graph",
-                        "layer": graph_layer,
-                        "graph_path": str(graph_path),
-                        "dataset_scope": dataset_scope or [],
-                        "project_scope": project_scope or [],
-                        "include_global": include_global,
-                        "query_mode": query_mode,
-                    },
-                    warnings=warnings,
+            if graph_path is not None and graph_layer != "lexical":
+                local_graph_records = query_local_graph(
+                    graph_path,
+                    effective_query_text,
+                    top_k,
                 )
+                local_graph_records = self._filter_records_by_project_scope(
+                    records=local_graph_records,
+                    config=config,
+                    project_scope=project_scope,
+                    include_global=include_global,
+                )
+                if local_graph_records:
+                    return GraphOpsResult(
+                        records=local_graph_records,
+                        summary=f"Returned {len(local_graph_records)} graph relations via local graph.",
+                        provenance={
+                            "engine": "local_graph",
+                            "layer": graph_layer,
+                            "graph_path": str(graph_path),
+                            "dataset_scope": dataset_scope or [],
+                            "project_scope": project_scope or [],
+                            "include_global": include_global,
+                            "query_mode": query_mode,
+                            "output_mode": str(preferred_output_mode or "").strip() or resolved_mode,
+                            "resolved_output_mode": resolved_mode,
+                        },
+                        warnings=warnings,
+                    )
 
         search_result = manager.search(
             query=effective_query_text,
@@ -1163,6 +1227,8 @@ Agent gate review is mandatory before automatic continuation.
                 "project_scope": project_scope or [],
                 "include_global": include_global,
                 "query_mode": query_mode,
+                "output_mode": str(preferred_output_mode or "").strip() or "fast",
+                "resolved_output_mode": "fast",
             },
             warnings=warnings,
         )

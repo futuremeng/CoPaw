@@ -1,7 +1,8 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import ProjectKnowledgeRelationsPanel from "./ProjectKnowledgeRelationsPanel";
+import ProjectKnowledgeOutputsPanel from "./ProjectKnowledgeOutputsPanel";
+import ProjectKnowledgeProcessingPanel from "./ProjectKnowledgeProcessingPanel";
 import ProjectKnowledgeSignalsPanel from "./ProjectKnowledgeSignalsPanel";
 import ProjectKnowledgeSourcesPanel from "./ProjectKnowledgeSourcesPanel";
 import type { ProjectKnowledgeState } from "./useProjectKnowledgeState";
@@ -70,6 +71,112 @@ function buildKnowledgeState(): ProjectKnowledgeState {
     syncState: null,
     activeKnowledgeTasks: [],
     activeKnowledgeTask: null,
+    latestQualityLoopJob: null,
+    processingModes: [
+      {
+        mode: "fast",
+        status: "ready",
+        available: true,
+        progress: null,
+        stage: "Fast preview ready",
+        summary: "秒级预览，优先保障可用性。",
+        lastUpdatedAt: "2026-04-11T23:30:00+00:00",
+        runId: "",
+        jobId: "job-fast",
+        documentCount: 3,
+        chunkCount: 7,
+        entityCount: 0,
+        relationCount: 0,
+        qualityScore: null,
+      },
+      {
+        mode: "nlp",
+        status: "ready",
+        available: true,
+        progress: null,
+        stage: "NLP graph artifacts ready",
+        summary: "中等复杂度知识产物，可作为多智能体结果的回退层。",
+        lastUpdatedAt: "2026-04-11T23:30:00+00:00",
+        runId: "",
+        jobId: "job-nlp",
+        documentCount: 3,
+        chunkCount: 7,
+        entityCount: 2,
+        relationCount: 12,
+        qualityScore: 0.86,
+      },
+      {
+        mode: "agentic",
+        status: "queued",
+        available: false,
+        progress: 45,
+        stage: "Waiting for multi-agent workflow scheduling",
+        summary: "长耗时深加工轨道，产物缺失时将自动降级。",
+        lastUpdatedAt: "2026-04-11T23:30:00+00:00",
+        runId: "run-knowledge-1",
+        jobId: "job-agentic",
+        documentCount: 3,
+        chunkCount: 7,
+        entityCount: 2,
+        relationCount: 12,
+        qualityScore: 0.86,
+      },
+    ],
+    activeOutputResolution: {
+      activeMode: "nlp",
+      availableModes: ["fast", "nlp"],
+      fallbackChain: ["agentic", "nlp", "fast"],
+      reason: "多智能体产物缺失，已自动降级到 NLP 产物。",
+    },
+    processingScheduler: {
+      strategy: "parallel",
+      modeOrder: ["agentic", "nlp", "fast"],
+      runningModes: [],
+      queuedModes: ["agentic"],
+      readyModes: ["nlp", "fast"],
+      failedModes: [],
+      nextMode: "agentic",
+      consumptionMode: "nlp",
+      reason: "当前无活跃执行，下一条待推进轨道为 agentic。",
+    },
+    modeOutputs: {
+      fast: {
+        mode: "fast",
+        source: "indexed-preview",
+        summaryLines: ["Documents: 3", "Chunks: 7"],
+        artifacts: [
+          {
+            kind: "index",
+            label: "Indexed source payload",
+            path: "projects/project-abc/.knowledge/sources/project-project-abc-workspace/index.json",
+          },
+        ],
+      },
+      nlp: {
+        mode: "nlp",
+        source: "graph-artifacts",
+        summaryLines: ["Entities: 2", "Relations: 12"],
+        artifacts: [
+          {
+            kind: "graph",
+            label: "Raw knowledge graph",
+            path: "projects/project-abc/.knowledge/graphify-out/graph.json",
+          },
+        ],
+      },
+      agentic: {
+        mode: "agentic",
+        source: "workflow-artifacts",
+        summaryLines: ["Run: run-knowledge-1", "Status: queued"],
+        artifacts: [
+          {
+            kind: "workflow_artifact",
+            label: "graph.enriched.json",
+            path: "projects/project-abc/.knowledge/graphify-out/graph.enriched.json",
+          },
+        ],
+      },
+    },
     quantMetrics: {
       totalSources: 1,
       indexedSources: 1,
@@ -209,8 +316,8 @@ describe("project knowledge supporting panels", () => {
     );
 
     expect(screen.getByText("projects.knowledge.signalsTitle")).not.toBeNull();
-    expect(screen.getByText("projects.knowledge.signalRelations")).not.toBeNull();
-    expect(screen.getByText("实体数")).not.toBeNull();
+    expect(screen.getAllByText("projects.knowledge.signalRelations").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("实体数").length).toBeGreaterThan(0);
 
     const signalLabels = Array.from(
       container.querySelectorAll("._projectKnowledgeSignalCard_209b2b .ant-typography-secondary"),
@@ -235,17 +342,30 @@ describe("project knowledge supporting panels", () => {
     expect(screen.getAllByText("/tmp/workspace").length).toBeGreaterThan(0);
   });
 
-  it("renders direct relation records", async () => {
+  it("renders processing mode cards", () => {
+    render(<ProjectKnowledgeProcessingPanel knowledgeState={buildKnowledgeState()} />);
+
+    expect(screen.getByText("Processing")).not.toBeNull();
+    expect(screen.getAllByText("极速模式").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("NLP 模式").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("多智能体模式").length).toBeGreaterThan(0);
+    expect(screen.getByText("当前调度状态")).not.toBeNull();
+    expect(screen.getByText("当前无活跃执行，下一条待推进轨道为 agentic。")).not.toBeNull();
+  });
+
+  it("renders output records through the new outputs panel", async () => {
     const user = userEvent.setup();
     const onRunSuggestedQuery = vi.fn();
 
     render(
-      <ProjectKnowledgeRelationsPanel
+      <ProjectKnowledgeOutputsPanel
         knowledgeState={buildKnowledgeState()}
         onRunSuggestedQuery={onRunSuggestedQuery}
       />,
     );
 
+    expect(screen.getByText("Raw knowledge graph")).not.toBeNull();
+    expect(screen.getByText("projects/project-abc/.knowledge/graphify-out/graph.json")).not.toBeNull();
     expect(screen.getByText("Agent")).not.toBeNull();
     expect(screen.getByText("Workflow")).not.toBeNull();
 
@@ -254,6 +374,6 @@ describe("project knowledge supporting panels", () => {
       "missing",
     );
 
-    expect(screen.getByText("projects.knowledge.emptyResult")).not.toBeNull();
+    expect(screen.getByText("No result")).not.toBeNull();
   });
 });

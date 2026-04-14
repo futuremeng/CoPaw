@@ -30,6 +30,7 @@ _AGENT_PIPELINE_WORKSPACES_DIRNAME = "workspaces"
 _PIPELINE_MD_FILENAME = "pipeline.md"
 _PIPELINE_MEMORY_FILENAME = "pipeline-workspaces.md"
 _PIPELINE_FLOW_MEMORY_FILENAME = "flow-memory.md"
+_KNOWLEDGE_WORKFLOW_TEMPLATE_ID = "builtin-knowledge-processing-v1"
 
 
 class PipelineTemplateStep(BaseModel):
@@ -2292,6 +2293,10 @@ def _enrich_run_with_guidance(
     template: PipelineTemplateInfo,
 ) -> None:
     """Compute convergence and next actions from run state and produced artifacts."""
+    if template.id == _KNOWLEDGE_WORKFLOW_TEMPLATE_ID:
+        _enrich_knowledge_run_with_guidance(run, template)
+        return
+
     template_step_ids = [step.id for step in template.steps]
     step_status_by_id = {
         step.id: _normalize_step_status(step.status)
@@ -2464,6 +2469,165 @@ def _enrich_run_with_guidance(
                 status="suggested",
                 suggested_prompt="Create a follow-up run plan that improves quality metrics while keeping reproducibility.",
             ),
+        )
+
+    run.convergence = PipelineRunConvergence(
+        stage=stage,
+        score=score,
+        passed_checks=passed_checks,
+        total_checks=total_checks,
+        blocking_issues=blocking_issues[:20],
+        highlights=highlights[:20],
+    )
+    run.next_actions = next_actions[:12]
+
+
+def _enrich_knowledge_run_with_guidance(
+    run: PipelineRunDetail,
+    template: PipelineTemplateInfo,
+) -> None:
+    template_step_ids = [step.id for step in template.steps]
+    step_status_by_id = {
+        step.id: _normalize_step_status(step.status)
+        for step in run.steps
+    }
+    missing_steps = [step_id for step_id in template_step_ids if step_id not in step_status_by_id]
+    failed_steps = [
+        step_id for step_id, status in step_status_by_id.items() if status in {"failed", "blocked"}
+    ]
+    pending_steps = [
+        step_id for step_id, status in step_status_by_id.items() if status in {"pending", "running"}
+    ]
+
+    artifacts = run.artifacts or []
+    has_index = _has_artifact_match(artifacts, ".knowledge/sources/*/index.json")
+    has_graph = _has_artifact_match(artifacts, ".knowledge/graphify-out/graph.json")
+    has_enriched_graph = _has_artifact_match(artifacts, ".knowledge/graphify-out/graph.enriched.json")
+    has_quality_report = _has_artifact_match(
+        artifacts,
+        ".knowledge/graphify-out/enrichment-quality-report.json",
+    )
+
+    checks = [
+        ("steps_covered", not missing_steps),
+        ("steps_succeeded", not failed_steps and not pending_steps),
+        ("index_ready", has_index),
+        ("graph_ready", has_graph),
+        ("enriched_graph_ready", has_enriched_graph),
+        ("quality_report_ready", has_quality_report),
+    ]
+    passed_checks = sum(1 for _, ok in checks if ok)
+    total_checks = len(checks)
+    score = int(round((passed_checks / total_checks) * 100)) if total_checks else 0
+
+    blocking_issues: list[str] = []
+    highlights: list[str] = []
+    if missing_steps:
+        blocking_issues.append(f"Missing step records: {', '.join(missing_steps)}")
+    if failed_steps:
+        blocking_issues.append(f"Failed steps: {', '.join(failed_steps)}")
+    if pending_steps:
+        blocking_issues.append(f"Pending steps: {', '.join(pending_steps)}")
+    if not has_index:
+        blocking_issues.append("Knowledge index artifact is missing")
+    if not has_graph:
+        blocking_issues.append("Knowledge graph artifact is missing")
+    if not has_enriched_graph:
+        blocking_issues.append("Enriched knowledge graph artifact is missing")
+    if not has_quality_report:
+        blocking_issues.append("Knowledge quality report is missing")
+
+    if has_index:
+        highlights.append("Project knowledge index artifact detected")
+    if has_graph:
+        highlights.append("Knowledge graph artifact detected")
+    if has_enriched_graph:
+        highlights.append("Enriched graph artifact detected")
+    if has_quality_report:
+        highlights.append("Knowledge quality report detected")
+
+    run_status = _normalize_run_status(run.status)
+    if run_status in {"failed", "blocked", "cancelled"}:
+        stage = "blocked"
+    elif run_status in {"running", "pending"}:
+        stage = "executing"
+    elif has_quality_report:
+        stage = "closed-loop"
+    elif has_graph or has_enriched_graph:
+        stage = "analyzing"
+    else:
+        stage = "bootstrapping"
+
+    next_actions: list[PipelineRunNextAction] = []
+    if run_status in {"running", "pending"}:
+        next_actions.append(
+            PipelineRunNextAction(
+                id="wait_for_knowledge_workflow",
+                title="Wait for knowledge workflow completion",
+                description="The knowledge processing workflow is still running. Keep polling run detail until all steps settle.",
+                severity="info",
+                status="active",
+                suggested_prompt="Continue monitoring this knowledge processing workflow and summarize each stage when it completes.",
+            )
+        )
+    if failed_steps:
+        next_actions.append(
+            PipelineRunNextAction(
+                id="repair_failed_knowledge_step",
+                title="Repair failed knowledge step",
+                description=f"Failed steps: {', '.join(failed_steps)}. Inspect evidence and rerun after fixing input or provider issues.",
+                severity="high",
+                status="pending",
+                target_step_id=failed_steps[0],
+                suggested_prompt="Summarize why this knowledge workflow step failed and provide a rerun-ready fix checklist.",
+            )
+        )
+    if not has_index:
+        next_actions.append(
+            PipelineRunNextAction(
+                id="rebuild_knowledge_index",
+                title="Rebuild project knowledge index",
+                description="The project-scoped knowledge index was not produced. Verify source registration and file analysis outputs.",
+                severity="high",
+                status="pending",
+                target_step_id="file_analysis",
+                suggested_prompt="Check why the knowledge index was not produced and propose the minimal fix.",
+            )
+        )
+    if has_index and not has_graph:
+        next_actions.append(
+            PipelineRunNextAction(
+                id="rebuild_knowledge_graph",
+                title="Rebuild knowledge graph",
+                description="The knowledge index exists, but graph artifacts are missing. Re-run the graph build stage and inspect memify output.",
+                severity="medium",
+                status="pending",
+                target_step_id="domain_graph_build",
+                suggested_prompt="Rebuild the project knowledge graph and explain any missing graph output.",
+            )
+        )
+    if has_graph and not has_quality_report:
+        next_actions.append(
+            PipelineRunNextAction(
+                id="complete_quality_review",
+                title="Complete knowledge quality review",
+                description="Graph artifacts exist, but the quality review output is missing. Re-run the review loop and inspect the quality report.",
+                severity="medium",
+                status="pending",
+                target_step_id="quality_review",
+                suggested_prompt="Complete the graph quality review and summarize remaining risks.",
+            )
+        )
+    if run_status == "succeeded" and has_quality_report:
+        next_actions.append(
+            PipelineRunNextAction(
+                id="consume_knowledge_outputs",
+                title="Use the refreshed knowledge outputs",
+                description="Knowledge processing completed. You can now query the project-scoped index and graph with refreshed data.",
+                severity="info",
+                status="suggested",
+                suggested_prompt="Summarize the refreshed project knowledge graph and suggest the next downstream automation step.",
+            )
         )
 
     run.convergence = PipelineRunConvergence(

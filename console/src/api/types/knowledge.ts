@@ -28,6 +28,57 @@ export interface KnowledgeIndexConfig {
   updated_at?: string | null;
 }
 
+export type ProjectKnowledgeProcessingMode = "fast" | "nlp" | "agentic";
+
+export interface ProjectKnowledgeProcessingModeStatePayload {
+  mode: ProjectKnowledgeProcessingMode;
+  status: "idle" | "queued" | "running" | "ready" | "failed";
+  available: boolean;
+  progress?: number | null;
+  stage: string;
+  summary: string;
+  last_updated_at?: string;
+  run_id?: string;
+  job_id?: string;
+  document_count?: number;
+  chunk_count?: number;
+  entity_count?: number;
+  relation_count?: number;
+  quality_score?: number | null;
+}
+
+export interface ProjectKnowledgeOutputResolutionPayload {
+  active_mode: ProjectKnowledgeProcessingMode;
+  available_modes: ProjectKnowledgeProcessingMode[];
+  fallback_chain: ProjectKnowledgeProcessingMode[];
+  reason: string;
+}
+
+export interface ProjectKnowledgeProcessingSchedulerPayload {
+  strategy: "parallel";
+  mode_order: ProjectKnowledgeProcessingMode[];
+  running_modes: ProjectKnowledgeProcessingMode[];
+  queued_modes: ProjectKnowledgeProcessingMode[];
+  ready_modes: ProjectKnowledgeProcessingMode[];
+  failed_modes: ProjectKnowledgeProcessingMode[];
+  next_mode?: ProjectKnowledgeProcessingMode | null;
+  consumption_mode: ProjectKnowledgeProcessingMode;
+  reason: string;
+}
+
+export interface ProjectKnowledgeModeArtifactPayload {
+  kind: string;
+  label: string;
+  path: string;
+}
+
+export interface ProjectKnowledgeModeOutputPayload {
+  mode: ProjectKnowledgeProcessingMode;
+  source: string;
+  summary_lines: string[];
+  artifacts: ProjectKnowledgeModeArtifactPayload[];
+}
+
 export interface ProjectKnowledgeSyncState {
   project_id: string;
   task_type?: string;
@@ -65,8 +116,13 @@ export interface ProjectKnowledgeSyncState {
   last_success_at?: string | null;
   updated_at?: string | null;
   latest_job_id: string;
+  latest_workflow_run_id?: string;
   latest_source_id: string;
   last_result: Record<string, unknown>;
+  processing_modes?: ProjectKnowledgeProcessingModeStatePayload[];
+  active_output_resolution?: ProjectKnowledgeOutputResolutionPayload;
+  processing_scheduler?: ProjectKnowledgeProcessingSchedulerPayload;
+  mode_outputs?: Partial<Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeOutputPayload>>;
 }
 
 export interface ProjectKnowledgeSyncRunRequest {

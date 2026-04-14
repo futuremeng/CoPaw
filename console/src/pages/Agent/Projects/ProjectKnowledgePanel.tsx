@@ -34,7 +34,7 @@ interface ProjectKnowledgePanelProps {
   knowledgeState: ProjectKnowledgeState;
   requestedQuery?: string;
   onRequestedQueryHandled?: () => void;
-  onOpenRelations?: () => void;
+  onOpenOutputs?: () => void;
   graphComponents?: {
     GraphQueryResults: React.ComponentType<Record<string, unknown>>;
     GraphVisualization: React.ComponentType<Record<string, unknown>>;
@@ -48,7 +48,7 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
   const {
     graphComponents,
     knowledgeState,
-    onOpenRelations,
+    onOpenOutputs,
     onRequestedQueryHandled,
     projectId,
     requestedQuery,
@@ -218,7 +218,7 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
                 onInsightFocusChange={(payload) => {
                   props.knowledgeState.setRelationKeywordSeed(payload.active ? payload.keyword : "");
                   if (payload.active && payload.keyword.trim()) {
-                    onOpenRelations?.();
+                    onOpenOutputs?.();
                   }
                 }}
                 onUsePathContext={(pathSummary, runNow) => {

@@ -847,6 +847,71 @@
   gap: 6px;
 }
 
+.projectKnowledgeModeGrid,
+.projectKnowledgeOutputsCompareGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.projectKnowledgeModeCard,
+.projectKnowledgeOutputCard {
+  border: 1px solid #e8edf5;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.projectKnowledgeModeCardActive,
+.projectKnowledgeOutputCardActive {
+  border-color: #91caff;
+  box-shadow: 0 0 0 1px rgba(22, 119, 255, 0.12);
+  background: linear-gradient(180deg, #f9fcff 0%, #eef6ff 100%);
+}
+
+.projectKnowledgeModeHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.projectKnowledgeModeMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.projectKnowledgeModeSummary {
+  margin: 0 !important;
+}
+
+.projectKnowledgeModeDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.projectKnowledgeModeMetrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.projectKnowledgeModeMetric {
+  border: 1px solid #edf2ff;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.88);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .projectKnowledgeRelationMain {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);

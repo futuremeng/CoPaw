@@ -206,6 +206,7 @@ export const knowledgeApi = {
   graphQuery: (params: {
     query: string;
     mode?: "template" | "cypher";
+    outputMode?: "fast" | "nlp" | "agentic";
     datasetScope?: string[];
     topK?: number;
     timeoutSec?: number;
@@ -219,6 +220,9 @@ export const knowledgeApi = {
       top_k: String(params.topK ?? 10),
       timeout_sec: String(params.timeoutSec ?? 20),
     });
+    if (params.outputMode) {
+      searchParams.set("output_mode", params.outputMode);
+    }
     if (params.datasetScope?.length) {
       searchParams.set("dataset_scope", params.datasetScope.join(","));
     }

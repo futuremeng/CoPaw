@@ -422,6 +422,37 @@ def test_graph_query_offloads_query_to_thread(
     assert calls[0][0].__name__ == "graph_query"
 
 
+def test_graph_query_forwards_output_mode(
+    knowledge_api_client: TestClient,
+    monkeypatch,
+):
+    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload["enabled"] = True
+    config_payload["graph_query_enabled"] = True
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    captured: dict[str, object] = {}
+
+    class _FakeGraphOps:
+        def graph_query(self, **kwargs):
+            captured.update(kwargs)
+            return SimpleNamespace(
+                records=[{"query": kwargs["query_text"]}],
+                summary={"mode": kwargs["query_mode"]},
+                provenance={"resolved_output_mode": kwargs.get("preferred_output_mode")},
+                warnings=[],
+            )
+
+    monkeypatch.setattr(knowledge_router_module, "_graph_ops_for_workspace", lambda *_args, **_kwargs: _FakeGraphOps())
+
+    response = knowledge_api_client.get("/knowledge/graph-query?q=threaded-graph&output_mode=agentic")
+
+    assert response.status_code == 200
+    assert captured["preferred_output_mode"] == "agentic"
+    assert response.json()["provenance"]["resolved_output_mode"] == "agentic"
+
+
 def test_get_memify_job_status_offloads_status_read_to_thread(
     knowledge_api_client: TestClient,
     monkeypatch,

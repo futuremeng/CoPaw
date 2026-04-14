@@ -6,6 +6,10 @@ import type {
   KnowledgeTaskProgress,
   KnowledgeSourceContent,
   KnowledgeSourceItem,
+  ProjectKnowledgeOutputResolutionPayload,
+  ProjectKnowledgeModeOutputPayload,
+  ProjectKnowledgeProcessingSchedulerPayload,
+  ProjectKnowledgeProcessingModeStatePayload,
   ProjectKnowledgeSyncState,
   QualityLoopJobStatus,
 } from "../../../api/types";
@@ -70,6 +74,57 @@ export interface ProjectKnowledgeMetrics {
   qualityAssessmentScore: number;
 }
 
+export type ProjectKnowledgeProcessingMode = "fast" | "nlp" | "agentic";
+
+export interface ProjectKnowledgeModeState {
+  mode: ProjectKnowledgeProcessingMode;
+  status: "idle" | "queued" | "running" | "ready" | "failed";
+  available: boolean;
+  progress: number | null;
+  stage: string;
+  summary: string;
+  lastUpdatedAt: string;
+  runId: string;
+  jobId: string;
+  documentCount: number;
+  chunkCount: number;
+  entityCount: number;
+  relationCount: number;
+  qualityScore: number | null;
+}
+
+export interface ProjectKnowledgeOutputResolution {
+  activeMode: ProjectKnowledgeProcessingMode;
+  availableModes: ProjectKnowledgeProcessingMode[];
+  fallbackChain: ProjectKnowledgeProcessingMode[];
+  reason: string;
+}
+
+export interface ProjectKnowledgeProcessingScheduler {
+  strategy: "parallel";
+  modeOrder: ProjectKnowledgeProcessingMode[];
+  runningModes: ProjectKnowledgeProcessingMode[];
+  queuedModes: ProjectKnowledgeProcessingMode[];
+  readyModes: ProjectKnowledgeProcessingMode[];
+  failedModes: ProjectKnowledgeProcessingMode[];
+  nextMode: ProjectKnowledgeProcessingMode | null;
+  consumptionMode: ProjectKnowledgeProcessingMode;
+  reason: string;
+}
+
+export interface ProjectKnowledgeModeArtifact {
+  kind: string;
+  label: string;
+  path: string;
+}
+
+export interface ProjectKnowledgeModeOutput {
+  mode: ProjectKnowledgeProcessingMode;
+  source: string;
+  summaryLines: string[];
+  artifacts: ProjectKnowledgeModeArtifact[];
+}
+
 export type ProjectKnowledgeInsightAction = "settings" | "query" | "healthy";
 
 export interface ProjectKnowledgeState {
@@ -89,6 +144,10 @@ export interface ProjectKnowledgeState {
   activeKnowledgeTasks: KnowledgeTaskProgress[];
   activeKnowledgeTask: KnowledgeTaskProgress | null;
   latestQualityLoopJob?: QualityLoopJobStatus | null;
+  processingModes: ProjectKnowledgeModeState[];
+  activeOutputResolution: ProjectKnowledgeOutputResolution;
+  processingScheduler: ProjectKnowledgeProcessingScheduler;
+  modeOutputs: Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeOutput>;
   quantMetrics: ProjectKnowledgeMetrics;
   graphQueryText: string;
   setGraphQueryText: (value: string) => void;
@@ -108,6 +167,7 @@ export interface ProjectKnowledgeState {
     overrideQuery?: string,
     overrideMode?: ProjectGraphQueryMode,
     overrideTopK?: number,
+    overrideOutputMode?: ProjectKnowledgeProcessingMode,
   ) => Promise<void>;
   resetGraphQuery: () => void;
   trendRangeDays: 7 | 30;
@@ -385,6 +445,264 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
+function getWorkflowRunMeta(syncState: ProjectKnowledgeSyncState | null): Record<string, unknown> {
+  const workflowRun = syncState?.last_result?.workflow_run;
+  if (!workflowRun || typeof workflowRun !== "object") {
+    return {};
+  }
+  return workflowRun as Record<string, unknown>;
+}
+
+function isProcessingMode(
+  value: unknown,
+): value is ProjectKnowledgeProcessingMode {
+  return value === "fast" || value === "nlp" || value === "agentic";
+}
+
+function normalizeModeStatus(
+  value: unknown,
+): ProjectKnowledgeModeState["status"] {
+  return value === "queued"
+    || value === "running"
+    || value === "ready"
+    || value === "failed"
+    || value === "idle"
+    ? value
+    : "idle";
+}
+
+function normalizeNumber(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : typeof value === "string" && value.trim() && Number.isFinite(Number(value))
+      ? Number(value)
+      : 0;
+}
+
+function normalizeNullableNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : typeof value === "string" && value.trim() && Number.isFinite(Number(value))
+      ? Number(value)
+      : null;
+}
+
+function parseBackendProcessingModes(
+  syncState: ProjectKnowledgeSyncState | null,
+): ProjectKnowledgeModeState[] | null {
+  const payload = syncState?.processing_modes;
+  if (!Array.isArray(payload) || payload.length === 0) {
+    return null;
+  }
+
+  const parsed = payload
+    .map((item) => {
+      const modePayload = item as ProjectKnowledgeProcessingModeStatePayload;
+      if (!isProcessingMode(modePayload.mode)) {
+        return null;
+      }
+      return {
+        mode: modePayload.mode,
+        status: normalizeModeStatus(modePayload.status),
+        available: Boolean(modePayload.available),
+        progress: normalizeNullableNumber(modePayload.progress),
+        stage: String(modePayload.stage || "").trim(),
+        summary: String(modePayload.summary || "").trim(),
+        lastUpdatedAt: String(modePayload.last_updated_at || "").trim(),
+        runId: String(modePayload.run_id || "").trim(),
+        jobId: String(modePayload.job_id || "").trim(),
+        documentCount: normalizeNumber(modePayload.document_count),
+        chunkCount: normalizeNumber(modePayload.chunk_count),
+        entityCount: normalizeNumber(modePayload.entity_count),
+        relationCount: normalizeNumber(modePayload.relation_count),
+        qualityScore: normalizeNullableNumber(modePayload.quality_score),
+      } satisfies ProjectKnowledgeModeState;
+    })
+    .filter((item): item is ProjectKnowledgeModeState => Boolean(item));
+
+  return parsed.length > 0 ? parsed : null;
+}
+
+function parseBackendOutputResolution(
+  syncState: ProjectKnowledgeSyncState | null,
+  processingModes: ProjectKnowledgeModeState[],
+): ProjectKnowledgeOutputResolution | null {
+  const payload = syncState?.active_output_resolution as ProjectKnowledgeOutputResolutionPayload | undefined;
+  if (!payload || !isProcessingMode(payload.active_mode)) {
+    return null;
+  }
+
+  const availableModes = Array.isArray(payload.available_modes)
+    ? payload.available_modes.filter(isProcessingMode)
+    : [];
+  const fallbackChain = Array.isArray(payload.fallback_chain)
+    ? payload.fallback_chain.filter(isProcessingMode)
+    : ["agentic", "nlp", "fast"];
+  const activeMode = processingModes.some((item) => item.mode === payload.active_mode)
+    ? payload.active_mode
+    : processingModes[0]?.mode || "fast";
+
+  return {
+    activeMode,
+    availableModes,
+    fallbackChain,
+    reason: String(payload.reason || "").trim(),
+  };
+}
+
+function parseBackendProcessingScheduler(
+  syncState: ProjectKnowledgeSyncState | null,
+  processingModes: ProjectKnowledgeModeState[],
+  activeOutputResolution: ProjectKnowledgeOutputResolution,
+): ProjectKnowledgeProcessingScheduler | null {
+  const payload = syncState?.processing_scheduler as ProjectKnowledgeProcessingSchedulerPayload | undefined;
+  if (!payload || payload.strategy !== "parallel") {
+    return null;
+  }
+
+  const modeOrder = Array.isArray(payload.mode_order)
+    ? payload.mode_order.filter(isProcessingMode)
+    : ["agentic", "nlp", "fast"];
+  const runningModes = Array.isArray(payload.running_modes)
+    ? payload.running_modes.filter(isProcessingMode)
+    : [];
+  const queuedModes = Array.isArray(payload.queued_modes)
+    ? payload.queued_modes.filter(isProcessingMode)
+    : [];
+  const readyModes = Array.isArray(payload.ready_modes)
+    ? payload.ready_modes.filter(isProcessingMode)
+    : [];
+  const failedModes = Array.isArray(payload.failed_modes)
+    ? payload.failed_modes.filter(isProcessingMode)
+    : [];
+  const nextMode = isProcessingMode(payload.next_mode) ? payload.next_mode : null;
+  const consumptionMode = processingModes.some((item) => item.mode === payload.consumption_mode)
+    ? payload.consumption_mode
+    : activeOutputResolution.activeMode;
+
+  return {
+    strategy: "parallel",
+    modeOrder,
+    runningModes,
+    queuedModes,
+    readyModes,
+    failedModes,
+    nextMode,
+    consumptionMode,
+    reason: String(payload.reason || "").trim(),
+  };
+}
+
+function deriveProcessingScheduler(
+  processingModes: ProjectKnowledgeModeState[],
+  activeOutputResolution: ProjectKnowledgeOutputResolution,
+): ProjectKnowledgeProcessingScheduler {
+  const modeOrder: ProjectKnowledgeProcessingMode[] = ["agentic", "nlp", "fast"];
+  const runningModes = modeOrder.filter(
+    (mode) => processingModes.find((item) => item.mode === mode)?.status === "running",
+  );
+  const queuedModes = modeOrder.filter(
+    (mode) => processingModes.find((item) => item.mode === mode)?.status === "queued",
+  );
+  const readyModes = modeOrder.filter(
+    (mode) => processingModes.find((item) => item.mode === mode)?.status === "ready",
+  );
+  const failedModes = modeOrder.filter(
+    (mode) => processingModes.find((item) => item.mode === mode)?.status === "failed",
+  );
+  const nextMode = modeOrder.find((mode) => {
+    const status = processingModes.find((item) => item.mode === mode)?.status;
+    return status === "queued" || status === "idle";
+  }) || null;
+
+  let reason = `当前按 ${activeOutputResolution.activeMode} 输出消费。`;
+  if (runningModes.length > 0) {
+    reason = `当前正在推进 ${runningModes.join(" / ")}，消费侧继续读取 ${activeOutputResolution.activeMode}。`;
+  } else if (queuedModes.length > 0) {
+    reason = `当前无活跃执行，下一条待推进轨道为 ${queuedModes[0]}。`;
+  } else if (readyModes.length > 0) {
+    reason = `当前无待执行轨道，直接消费最佳可用输出 ${activeOutputResolution.activeMode}。`;
+  }
+
+  return {
+    strategy: "parallel",
+    modeOrder,
+    runningModes,
+    queuedModes,
+    readyModes,
+    failedModes,
+    nextMode,
+    consumptionMode: activeOutputResolution.activeMode,
+    reason,
+  };
+}
+
+function parseBackendModeOutputs(
+  syncState: ProjectKnowledgeSyncState | null,
+): Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeOutput> | null {
+  const payload = syncState?.mode_outputs;
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const modes: ProjectKnowledgeProcessingMode[] = ["fast", "nlp", "agentic"];
+  const parsed = {} as Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeOutput>;
+  for (const mode of modes) {
+    const item = payload[mode] as ProjectKnowledgeModeOutputPayload | undefined;
+    parsed[mode] = {
+      mode,
+      source: String(item?.source || "").trim(),
+      summaryLines: Array.isArray(item?.summary_lines)
+        ? item.summary_lines.map((entry) => String(entry || "").trim()).filter(Boolean)
+        : [],
+      artifacts: Array.isArray(item?.artifacts)
+        ? item.artifacts
+          .map((artifact) => ({
+            kind: String(artifact.kind || "").trim(),
+            label: String(artifact.label || "").trim(),
+            path: String(artifact.path || "").trim(),
+          }))
+          .filter((artifact) => artifact.path)
+        : [],
+    };
+  }
+  return parsed;
+}
+
+function deriveModeOutputs(
+  processingModes: ProjectKnowledgeModeState[],
+): Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeOutput> {
+  return {
+    fast: {
+      mode: "fast",
+      source: "indexed-preview",
+      summaryLines: [
+        `Documents: ${processingModes.find((item) => item.mode === "fast")?.documentCount || 0}`,
+        `Chunks: ${processingModes.find((item) => item.mode === "fast")?.chunkCount || 0}`,
+      ],
+      artifacts: [],
+    },
+    nlp: {
+      mode: "nlp",
+      source: "graph-artifacts",
+      summaryLines: [
+        `Entities: ${processingModes.find((item) => item.mode === "nlp")?.entityCount || 0}`,
+        `Relations: ${processingModes.find((item) => item.mode === "nlp")?.relationCount || 0}`,
+      ],
+      artifacts: [],
+    },
+    agentic: {
+      mode: "agentic",
+      source: "workflow-artifacts",
+      summaryLines: [
+        `Run: ${processingModes.find((item) => item.mode === "agentic")?.runId || ""}`,
+        `Status: ${processingModes.find((item) => item.mode === "agentic")?.status || "idle"}`,
+      ],
+      artifacts: [],
+    },
+  };
+}
+
 function normalizeProjectId(value: unknown): string {
   return String(value || "").trim().toLowerCase();
 }
@@ -551,13 +869,23 @@ export function useProjectKnowledgeState(
     }
   }, [loadSourceSemantic, selectedSourceId]);
 
+  const defaultOutputModeForQuery = useMemo<ProjectKnowledgeProcessingMode>(() => {
+    const payload = syncState?.active_output_resolution as ProjectKnowledgeOutputResolutionPayload | undefined;
+    if (payload && isProcessingMode(payload.active_mode)) {
+      return payload.active_mode;
+    }
+    return "fast";
+  }, [syncState]);
+
   const runGraphQuery = useCallback(async (
     overrideQuery?: string,
     overrideMode?: ProjectGraphQueryMode,
     overrideTopK?: number,
+    overrideOutputMode?: ProjectKnowledgeProcessingMode,
   ) => {
     const query = (overrideQuery ?? graphQueryText).trim();
     const mode = overrideMode ?? graphQueryMode;
+    const outputMode = overrideOutputMode ?? defaultOutputModeForQuery;
     if (!query || !params.projectId) {
       setGraphError(t("projects.knowledge.emptyQuery"));
       return;
@@ -573,6 +901,7 @@ export function useProjectKnowledgeState(
           20,
           Number(overrideTopK ?? graphQueryTopK) || PROJECT_GRAPH_QUERY_TOP_K,
         ),
+        outputMode,
         timeoutSec: 20,
         projectScope: [params.projectId],
         includeGlobal: params.includeGlobal,
@@ -588,7 +917,7 @@ export function useProjectKnowledgeState(
     } finally {
       setGraphLoading(false);
     }
-  }, [graphQueryMode, graphQueryText, graphQueryTopK, params.includeGlobal, params.projectId, t]);
+  }, [defaultOutputModeForQuery, graphQueryMode, graphQueryText, graphQueryTopK, params.includeGlobal, params.projectId, t]);
 
   const resetGraphQuery = useCallback(() => {
     setGraphError("");
@@ -1085,6 +1414,201 @@ export function useProjectKnowledgeState(
     [syncState],
   );
 
+  const processingModes = useMemo<ProjectKnowledgeModeState[]>(() => {
+    const backendModes = parseBackendProcessingModes(syncState);
+    if (backendModes) {
+      return backendModes;
+    }
+
+    const workflowRunMeta = getWorkflowRunMeta(syncState);
+    const workflowRunId = String(
+      workflowRunMeta.run_id || (syncState as Record<string, unknown> | null)?.latest_workflow_run_id || "",
+    ).trim();
+    const workflowStatus = String(workflowRunMeta.status || "").trim().toLowerCase();
+    const activeTaskType = String(activeKnowledgeTask?.task_type || "").trim().toLowerCase();
+    const syncPercent = typeof syncState?.percent === "number"
+      ? Math.max(0, Math.min(100, Math.round(syncState.percent)))
+      : typeof syncState?.progress === "number"
+        ? Math.max(0, Math.min(100, Math.round(syncState.progress * 100)))
+        : null;
+    const fastAvailable = quantMetrics.documentCount > 0 || quantMetrics.chunkCount > 0;
+    const nlpAvailable = quantMetrics.entityCount > 0 || quantMetrics.relationCount > 0;
+    const agenticAvailable = ["succeeded", "completed"].includes(workflowStatus);
+    const latestUpdatedAt = String(
+      latestQualityLoopJob?.updated_at
+      || syncState?.last_finished_at
+      || syncState?.updated_at
+      || "",
+    ).trim();
+
+    const fastStatus: ProjectKnowledgeModeState["status"] = !fastAvailable && syncState?.status === "failed"
+      ? "failed"
+      : ["project_sync", "history_backfill"].includes(activeTaskType)
+        ? "running"
+        : fastAvailable
+          ? "ready"
+          : sourceRegistered
+            ? "queued"
+            : "idle";
+    const nlpStatus: ProjectKnowledgeModeState["status"] = !nlpAvailable && String(syncState?.status || "") === "failed"
+      ? "failed"
+      : ["memify", "quality_loop"].includes(activeTaskType)
+        ? "running"
+        : nlpAvailable
+          ? "ready"
+          : fastAvailable
+            ? "queued"
+            : "idle";
+    const agenticStatus: ProjectKnowledgeModeState["status"] = ["running", "pending", "queued"].includes(workflowStatus)
+      ? (workflowStatus === "queued" ? "queued" : "running")
+      : ["failed", "blocked", "cancelled"].includes(workflowStatus)
+        ? "failed"
+        : agenticAvailable
+          ? "ready"
+          : nlpAvailable
+            ? "queued"
+            : "idle";
+
+    return [
+      {
+        mode: "fast",
+        status: fastStatus,
+        available: fastAvailable,
+        progress: fastStatus === "running" ? syncPercent : null,
+        stage: fastStatus === "running"
+          ? String(syncState?.stage_message || syncState?.current_stage || "Building fast preview")
+          : fastAvailable
+            ? "Fast preview ready"
+            : "Waiting for source indexing",
+        summary: fastAvailable
+          ? "秒级预览，优先保障可用性。"
+          : "基础索引尚未就绪，无法提供极速预览。",
+        lastUpdatedAt: String(syncState?.last_finished_at || syncState?.updated_at || "").trim(),
+        runId: "",
+        jobId: String(syncState?.latest_job_id || "").trim(),
+        documentCount: quantMetrics.documentCount,
+        chunkCount: quantMetrics.chunkCount,
+        entityCount: 0,
+        relationCount: 0,
+        qualityScore: null,
+      },
+      {
+        mode: "nlp",
+        status: nlpStatus,
+        available: nlpAvailable,
+        progress: nlpStatus === "running" ? syncPercent : null,
+        stage: nlpStatus === "running"
+          ? String(activeKnowledgeTask?.stage_message || activeKnowledgeTask?.current_stage || "Building NLP artifacts")
+          : nlpAvailable
+            ? "NLP graph artifacts ready"
+            : "Waiting for graph extraction",
+        summary: nlpAvailable
+          ? "中等复杂度知识产物，可作为多智能体结果的回退层。"
+          : "图谱与结构化产物尚未形成。",
+        lastUpdatedAt: latestUpdatedAt,
+        runId: "",
+        jobId: String(activeKnowledgeTask?.job_id || syncState?.latest_job_id || "").trim(),
+        documentCount: quantMetrics.documentCount,
+        chunkCount: quantMetrics.chunkCount,
+        entityCount: quantMetrics.entityCount,
+        relationCount: quantMetrics.relationCount,
+        qualityScore: quantMetrics.qualityAssessmentScore,
+      },
+      {
+        mode: "agentic",
+        status: agenticStatus,
+        available: agenticAvailable,
+        progress: agenticStatus === "running" ? syncPercent : null,
+        stage: agenticStatus === "running"
+          ? String(syncState?.stage_message || syncState?.current_stage || "Running multi-agent workflow")
+          : agenticAvailable
+            ? "Multi-agent outputs ready"
+            : workflowRunId
+              ? "Workflow run exists but outputs are incomplete"
+              : "Waiting for multi-agent workflow scheduling",
+        summary: agenticAvailable
+          ? "最高质量产物层，优先作为知识消费来源。"
+          : "长耗时深加工轨道，产物缺失时将自动降级。",
+        lastUpdatedAt: String(workflowRunMeta.updated_at || latestUpdatedAt || "").trim(),
+        runId: workflowRunId,
+        jobId: String(syncState?.latest_job_id || "").trim(),
+        documentCount: quantMetrics.documentCount,
+        chunkCount: quantMetrics.chunkCount,
+        entityCount: quantMetrics.entityCount,
+        relationCount: quantMetrics.relationCount,
+        qualityScore: quantMetrics.qualityAssessmentScore,
+      },
+    ];
+  }, [
+    activeKnowledgeTask?.current_stage,
+    activeKnowledgeTask?.job_id,
+    activeKnowledgeTask?.stage_message,
+    activeKnowledgeTask?.task_type,
+    latestQualityLoopJob?.updated_at,
+    quantMetrics.chunkCount,
+    quantMetrics.documentCount,
+    quantMetrics.entityCount,
+    quantMetrics.qualityAssessmentScore,
+    quantMetrics.relationCount,
+    sourceRegistered,
+    syncState,
+  ]);
+
+  const activeOutputResolution = useMemo<ProjectKnowledgeOutputResolution>(() => {
+    const backendResolution = parseBackendOutputResolution(syncState, processingModes);
+    if (backendResolution) {
+      return backendResolution;
+    }
+
+    const availableModes = processingModes
+      .filter((mode) => mode.available)
+      .map((mode) => mode.mode);
+    const fallbackChain: ProjectKnowledgeProcessingMode[] = ["agentic", "nlp", "fast"];
+
+    if (availableModes.includes("agentic")) {
+      return {
+        activeMode: "agentic",
+        availableModes,
+        fallbackChain,
+        reason: "多智能体产物可用，当前使用最高质量输出。",
+      };
+    }
+    if (availableModes.includes("nlp")) {
+      return {
+        activeMode: "nlp",
+        availableModes,
+        fallbackChain,
+        reason: "多智能体产物缺失，已自动降级到 NLP 产物。",
+      };
+    }
+    return {
+      activeMode: "fast",
+      availableModes,
+      fallbackChain,
+      reason: "高阶产物尚不可用，当前回退到极速预览。",
+    };
+  }, [processingModes]);
+
+  const processingScheduler = useMemo<ProjectKnowledgeProcessingScheduler>(() => {
+    const backendScheduler = parseBackendProcessingScheduler(
+      syncState,
+      processingModes,
+      activeOutputResolution,
+    );
+    if (backendScheduler) {
+      return backendScheduler;
+    }
+    return deriveProcessingScheduler(processingModes, activeOutputResolution);
+  }, [activeOutputResolution, processingModes, syncState]);
+
+  const modeOutputs = useMemo<Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeOutput>>(() => {
+    const backendModeOutputs = parseBackendModeOutputs(syncState);
+    if (backendModeOutputs) {
+      return backendModeOutputs;
+    }
+    return deriveModeOutputs(processingModes);
+  }, [processingModes, syncState]);
+
   const syncAlertDescription = useMemo(() => {
     const activeTaskText = activeKnowledgeTask
       ? [
@@ -1278,6 +1802,10 @@ export function useProjectKnowledgeState(
     activeKnowledgeTasks,
     activeKnowledgeTask,
     latestQualityLoopJob,
+    processingModes,
+    activeOutputResolution,
+    processingScheduler,
+    modeOutputs,
     quantMetrics,
     graphQueryText,
     setGraphQueryText,
@@ -1316,6 +1844,7 @@ export function useProjectKnowledgeState(
     activeGraphNodeId,
     activeKnowledgeTask,
     activeKnowledgeTasks,
+    activeOutputResolution,
     filteredTrendSnapshots,
     graphError,
     graphLoading,
@@ -1329,6 +1858,9 @@ export function useProjectKnowledgeState(
     loadProjectSourceStatus,
     loadSourceContent,
     loadSourceSemantic,
+    modeOutputs,
+    processingModes,
+    processingScheduler,
     projectSourceId,
     projectSources,
     quantMetrics,

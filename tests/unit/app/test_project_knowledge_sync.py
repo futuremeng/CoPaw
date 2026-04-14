@@ -255,45 +255,34 @@ def test_project_sync_auto_triggers_quality_loop_after_memify_success(tmp_path: 
     config.memify_enabled = True
     source = _build_source(project_id, project_dir)
 
+    orchestrator_calls: list[dict] = []
+
     monkeypatch.setattr(
-        manager._knowledge_manager,
-        "index_source",
-        lambda *_args, **_kwargs: {"indexed": True},
-    )
-    monkeypatch.setattr(
-        manager._graph_ops,
-        "execute_memify_once",
-        lambda **_kwargs: {
-            "status": "succeeded",
-            "job_id": "memify-job-1",
-            "relation_count": 24,
-            "node_count": 12,
-            "document_count": 4,
-            "enrichment_metrics": {
-                "edge_count": 24,
+        "qwenpaw.app.knowledge_workflow.KnowledgeWorkflowOrchestrator.run",
+        lambda self, **kwargs: orchestrator_calls.append(kwargs) or {
+            "run_id": "run-quality-1",
+            "run_status": "succeeded",
+            "template_id": "builtin-knowledge-processing-v1",
+            "processing_fingerprint": "fp-quality-1",
+            "latest_job_id": "quality-job-1",
+            "index": {"document_count": 4, "chunk_count": 8},
+            "memify": {
+                "status": "succeeded",
+                "job_id": "memify-job-1",
+                "relation_count": 24,
                 "node_count": 12,
-                "relation_normalized_count": 2,
-                "entity_canonicalized_count": 2,
-                "low_confidence_edges": 12,
-                "missing_evidence_edges": 10,
+                "document_count": 4,
+                "enrichment_metrics": {
+                    "edge_count": 24,
+                    "node_count": 12,
+                },
+            },
+            "quality_loop": {
+                "accepted": True,
+                "job_id": "quality-job-1",
+                "status_url": "/knowledge/quality-loop/jobs/quality-job-1",
             },
         },
-    )
-
-    quality_calls: list[dict] = []
-
-    def _fake_quality_auto_trigger(**kwargs):
-        quality_calls.append(kwargs)
-        return {
-            "accepted": True,
-            "job_id": "quality-job-1",
-            "status_url": "/knowledge/quality-loop/jobs/quality-job-1",
-        }
-
-    monkeypatch.setattr(
-        manager._graph_ops,
-        "maybe_start_quality_self_drive",
-        _fake_quality_auto_trigger,
     )
 
     manager._run_sync_loop(
@@ -305,9 +294,9 @@ def test_project_sync_auto_triggers_quality_loop_after_memify_success(tmp_path: 
 
     state = manager.get_state(project_id)
     assert state["status"] == "succeeded"
-    assert quality_calls
-    assert quality_calls[0]["project_id"] == project_id
-    assert quality_calls[0]["dataset_scope"] == [source.id]
+    assert orchestrator_calls
+    assert orchestrator_calls[0]["source"].id == source.id
+    assert orchestrator_calls[0]["trigger"] == "project-sync"
     assert state["last_result"]["quality_loop"]["accepted"] is True
     assert state["last_result"]["quality_loop"]["job_id"] == "quality-job-1"
 
@@ -367,3 +356,55 @@ def test_check_needs_reindex_false_after_fingerprint_recorded(tmp_path: Path, mo
         config=config,
         running_config=None,
     ) is False
+
+
+def test_processing_mode_overrides_take_precedence_during_active_run(tmp_path: Path):
+    project_id = "project-h"
+    project_dir = tmp_path / "projects" / project_id
+    project_dir.mkdir(parents=True, exist_ok=True)
+    manager = ProjectKnowledgeSyncManager(
+        tmp_path,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+
+    state = manager.get_state(project_id)
+    state.update(
+        {
+            "status": "graphifying",
+            "current_stage": "graphifying",
+            "last_result": {
+                "index": {"document_count": 3, "chunk_count": 7},
+                "memify": {"relation_count": 12, "node_count": 5},
+                "workflow_run": {"run_id": "run-h", "status": "pending"},
+            },
+            "processing_mode_overrides": {
+                "fast": {
+                    "status": "ready",
+                    "available": True,
+                    "stage": "Fast preview ready",
+                },
+                "nlp": {
+                    "status": "running",
+                    "available": False,
+                    "progress": 62,
+                    "stage": "Building NLP graph artifacts",
+                },
+                "agentic": {
+                    "status": "queued",
+                    "available": False,
+                    "stage": "Waiting for review stage",
+                },
+            },
+        }
+    )
+    manager._save_state(state)
+
+    hydrated = manager.get_state(project_id)
+    modes = {item["mode"]: item for item in hydrated["processing_modes"]}
+
+    assert modes["fast"]["status"] == "ready"
+    assert modes["nlp"]["status"] == "running"
+    assert modes["nlp"]["progress"] == 62
+    assert modes["agentic"]["status"] == "queued"
+    assert hydrated["processing_scheduler"]["running_modes"] == ["nlp"]
+    assert hydrated["processing_scheduler"]["queued_modes"] == ["agentic"]

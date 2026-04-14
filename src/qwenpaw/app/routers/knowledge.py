@@ -694,6 +694,7 @@ async def query_knowledge_graph(
     request: Request,
     q: str = Query(..., min_length=1),
     mode: str = Query(default="template"),
+    output_mode: str = Query(default=""),
     dataset_scope: Optional[str] = Query(default=None),
     project_scope: Optional[str] = Query(default=None),
     include_global: bool = Query(default=True),
@@ -736,6 +737,7 @@ async def query_knowledge_graph(
             include_global=include_global,
             top_k=top_k,
             timeout_sec=timeout_sec,
+            preferred_output_mode=(output_mode or "").strip() or None,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
