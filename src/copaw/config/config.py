@@ -678,6 +678,22 @@ class AgentProfileRef(BaseModel):
         default=True,
         description="Whether agent is enabled (controls instance loading)",
     )
+    is_builtin: bool = Field(
+        default=False,
+        description="Whether this agent is a system-managed builtin agent",
+    )
+    builtin_kind: str = Field(
+        default="",
+        description="Stable builtin agent kind identifier",
+    )
+    builtin_label: str = Field(
+        default="",
+        description="Short UI label for builtin agent families",
+    )
+    system_protected: bool = Field(
+        default=False,
+        description="Whether destructive management operations are blocked",
+    )
 
 
 class AgentProfileConfig(BaseModel):
@@ -689,6 +705,22 @@ class AgentProfileConfig(BaseModel):
     id: str = Field(..., description="Unique agent ID")
     name: str = Field(..., description="Human-readable agent name")
     description: str = Field(default="", description="Agent description")
+    is_builtin: bool = Field(
+        default=False,
+        description="Whether this agent is a system-managed builtin agent",
+    )
+    builtin_kind: str = Field(
+        default="",
+        description="Stable builtin agent kind identifier",
+    )
+    builtin_label: str = Field(
+        default="",
+        description="Short UI label for builtin agent families",
+    )
+    system_protected: bool = Field(
+        default=False,
+        description="Whether destructive management operations are blocked",
+    )
     workspace_dir: str = Field(
         default="",
         description="Path to agent's workspace (optional, for reference)",
@@ -1069,6 +1101,28 @@ def build_qa_agent_tools_config() -> ToolsConfig:
 
     Only these are enabled: execute_shell_command, read_file, edit_file,
     write_file, view_image. All other built-ins are disabled.
+    """
+    allow = frozenset(
+        {
+            "execute_shell_command",
+            "read_file",
+            "write_file",
+            "edit_file",
+            "view_image",
+        },
+    )
+    builtin_tools = {
+        name: tc.model_copy(update={"enabled": name in allow})
+        for name, tc in _default_builtin_tools().items()
+    }
+    return ToolsConfig(builtin_tools=builtin_tools)
+
+
+def build_understand_builtin_tools_config() -> ToolsConfig:
+    """Tools preset for builtin understand-analysis agents.
+
+    These agents are intended for repository analysis and future pipeline
+    orchestration, so the initial preset remains intentionally narrow.
     """
     allow = frozenset(
         {

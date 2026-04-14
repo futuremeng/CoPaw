@@ -42,6 +42,8 @@ export function AgentTable({
 }: AgentTableProps) {
   const { t } = useTranslation();
   const { isDark } = useTheme();
+  const isProtectedAgent = (record: AgentSummary) =>
+    record.id === "default" || record.system_protected;
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -107,6 +109,34 @@ export function AgentTable({
       key: "id",
     },
     {
+      title: t("agent.type", "类型"),
+      key: "agentType",
+      width: 120,
+      render: (_: any, record: AgentSummary) => (
+        <Tag color={record.is_builtin ? "processing" : "default"}>
+          {record.is_builtin
+            ? t("agent.typeBuiltin", "内建")
+            : t("agent.typeCustom", "自定义")}
+        </Tag>
+      ),
+    },
+    {
+      title: t("agent.feature", "特性"),
+      key: "feature",
+      width: 140,
+      render: (_: any, record: AgentSummary) => {
+        if (!record.is_builtin) {
+          return <span style={{ opacity: 0.6 }}>-</span>;
+        }
+
+        return record.builtin_label ? (
+          <Tag color="cyan">{record.builtin_label}</Tag>
+        ) : (
+          <span style={{ opacity: 0.6 }}>-</span>
+        );
+      },
+    },
+    {
       title: t("agent.description"),
       dataIndex: "description",
       key: "description",
@@ -121,74 +151,84 @@ export function AgentTable({
     {
       title: t("common.actions"),
       key: "actions",
-      render: (_: any, record: AgentSummary) => (
-        <Space>
-          <Button
-            type="text"
-            size="middle"
-            icon={<EditOutlined />}
-            onClick={() => onEdit(record)}
-            disabled={record.id === "default"}
-            style={record.id === "default" ? disabledStyle : iconStyle}
-            title={
-              record.id === "default"
-                ? t("agent.defaultNotEditable")
-                : undefined
-            }
-          />
-          <Popconfirm
-            title={
-              record.enabled
-                ? t("agent.disableConfirm")
-                : t("agent.enableConfirm")
-            }
-            description={
-              record.enabled
-                ? t("agent.disableConfirmDesc")
-                : t("agent.enableConfirmDesc")
-            }
-            onConfirm={() => onToggle(record.id, record.enabled)}
-            disabled={record.id === "default"}
-            okText={t("common.confirm")}
-            cancelText={t("common.cancel")}
-          >
+      render: (_: any, record: AgentSummary) => {
+        const isProtected = isProtectedAgent(record);
+        const blockedReason = record.system_protected
+          ? t("agent.systemAgentProtected", "系统内建智能体不可在此处修改")
+          : undefined;
+
+        return (
+          <Space>
             <Button
               type="text"
               size="middle"
-              icon={record.enabled ? <EyeOff size={14} /> : <Eye size={14} />}
-              disabled={record.id === "default"}
-              style={record.id === "default" ? disabledStyle : iconStyle}
+              icon={<EditOutlined />}
+              onClick={() => onEdit(record)}
+              disabled={isProtected}
+              style={isProtected ? disabledStyle : iconStyle}
               title={
-                record.id === "default"
-                  ? t("agent.defaultNotDisablable")
-                  : undefined
+                blockedReason ||
+                (record.id === "default"
+                  ? t("agent.defaultNotEditable")
+                  : undefined)
               }
             />
-          </Popconfirm>
-          <Popconfirm
-            title={t("agent.deleteConfirm")}
-            description={t("agent.deleteConfirmDesc")}
-            onConfirm={() => onDelete(record.id)}
-            disabled={record.id === "default"}
-            okText={t("common.confirm")}
-            cancelText={t("common.cancel")}
-          >
-            <Button
-              type="link"
-              size="middle"
-              danger
-              icon={<DeleteOutlined />}
-              disabled={record.id === "default"}
-              style={record.id === "default" ? disabledStyle : undefined}
+            <Popconfirm
               title={
-                record.id === "default"
-                  ? t("agent.defaultNotDeletable")
-                  : undefined
+                record.enabled
+                  ? t("agent.disableConfirm")
+                  : t("agent.enableConfirm")
               }
-            />
-          </Popconfirm>
-        </Space>
-      ),
+              description={
+                record.enabled
+                  ? t("agent.disableConfirmDesc")
+                  : t("agent.enableConfirmDesc")
+              }
+              onConfirm={() => onToggle(record.id, record.enabled)}
+              disabled={isProtected}
+              okText={t("common.confirm")}
+              cancelText={t("common.cancel")}
+            >
+              <Button
+                type="text"
+                size="middle"
+                icon={record.enabled ? <EyeOff size={14} /> : <Eye size={14} />}
+                disabled={isProtected}
+                style={isProtected ? disabledStyle : iconStyle}
+                title={
+                  blockedReason ||
+                  (record.id === "default"
+                    ? t("agent.defaultNotDisablable")
+                    : undefined)
+                }
+              />
+            </Popconfirm>
+            <Popconfirm
+              title={t("agent.deleteConfirm")}
+              description={t("agent.deleteConfirmDesc")}
+              onConfirm={() => onDelete(record.id)}
+              disabled={isProtected}
+              okText={t("common.confirm")}
+              cancelText={t("common.cancel")}
+            >
+              <Button
+                type="link"
+                size="middle"
+                danger
+                icon={<DeleteOutlined />}
+                disabled={isProtected}
+                style={isProtected ? disabledStyle : undefined}
+                title={
+                  blockedReason ||
+                  (record.id === "default"
+                    ? t("agent.defaultNotDeletable")
+                    : undefined)
+                }
+              />
+            </Popconfirm>
+          </Space>
+        );
+      },
     },
   ];
 

@@ -97,6 +97,42 @@ def _qa_fallback_language_order(language: str) -> list[str]:
     return ordered
 
 
+def _copy_builtin_persona_md(
+    template_root: Path,
+    fallback_langs: list[str],
+    workspace_dir: Path,
+    only_if_missing: bool,
+) -> list[str]:
+    copied: list[str] = []
+    for persona_name in ("AGENTS.md", "PROFILE.md", "SOUL.md"):
+        dst_p = workspace_dir / persona_name
+        if only_if_missing and dst_p.exists():
+            continue
+        source_p = None
+        for lang_opt in fallback_langs:
+            cand = template_root / lang_opt / persona_name
+            if cand.exists():
+                source_p = cand
+                break
+        if source_p is None:
+            logger.warning(
+                "Builtin template missing for %s (langs tried: %s)",
+                persona_name,
+                fallback_langs,
+            )
+            continue
+        try:
+            shutil.copy2(source_p, dst_p)
+            copied.append(persona_name)
+        except OSError as e:
+            logger.warning(
+                "Failed to copy builtin persona file %s: %s",
+                persona_name,
+                e,
+            )
+    return copied
+
+
 def _copy_qa_aux_md(
     md_lang_dir: Path,
     workspace_dir: Path,
@@ -125,34 +161,12 @@ def _copy_qa_persona_md(
     workspace_dir: Path,
     only_if_missing: bool,
 ) -> list[str]:
-    copied: list[str] = []
-    for persona_name in ("AGENTS.md", "PROFILE.md", "SOUL.md"):
-        dst_p = workspace_dir / persona_name
-        if only_if_missing and dst_p.exists():
-            continue
-        source_p = None
-        for lang_opt in fallback_langs:
-            cand = qa_root / lang_opt / persona_name
-            if cand.exists():
-                source_p = cand
-                break
-        if source_p is None:
-            logger.warning(
-                "Builtin QA template missing for %s (langs tried: %s)",
-                persona_name,
-                fallback_langs,
-            )
-            continue
-        try:
-            shutil.copy2(source_p, dst_p)
-            copied.append(persona_name)
-        except OSError as e:
-            logger.warning(
-                "Failed to copy QA persona file %s: %s",
-                persona_name,
-                e,
-            )
-    return copied
+    return _copy_builtin_persona_md(
+        qa_root,
+        fallback_langs,
+        workspace_dir,
+        only_if_missing,
+    )
 
 
 def _remove_bootstrap_from_workspace(workspace_dir: Path) -> None:
@@ -207,6 +221,50 @@ def copy_builtin_qa_md_files(
     copied_files.extend(
         _copy_qa_persona_md(
             qa_root,
+            fallback_langs,
+            workspace_dir,
+            only_if_missing,
+        ),
+    )
+    _remove_bootstrap_from_workspace(workspace_dir)
+    return copied_files
+
+
+def copy_builtin_agent_md_files(
+    template_key: str,
+    language: str,
+    workspace_dir: Path | str,
+    *,
+    only_if_missing: bool = True,
+) -> list[str]:
+    """Seed or refresh builtin agent markdown templates.
+
+    Copies MEMORY.md / HEARTBEAT.md from the common language pack and persona
+    files from agents/md_files/builtin_agents/<template_key>/<language>/.
+    """
+    workspace_dir = Path(workspace_dir).expanduser()
+    workspace_dir.mkdir(parents=True, exist_ok=True)
+
+    agents_root = Path(__file__).resolve().parent.parent
+    md_lang_dir = _resolve_md_lang_dir(agents_root, language)
+    copied_files = _copy_qa_aux_md(
+        md_lang_dir,
+        workspace_dir,
+        only_if_missing,
+    )
+
+    template_root = agents_root / "md_files" / "builtin_agents" / template_key
+    if not template_root.exists():
+        logger.warning(
+            "Builtin agent template root not found: %s",
+            template_root,
+        )
+        return copied_files
+
+    fallback_langs = _qa_fallback_language_order(language)
+    copied_files.extend(
+        _copy_builtin_persona_md(
+            template_root,
             fallback_langs,
             workspace_dir,
             only_if_missing,

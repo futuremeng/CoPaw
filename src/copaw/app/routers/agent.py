@@ -13,8 +13,12 @@ from ...config import (
 from ...config.config import load_agent_config, save_agent_config
 from ...knowledge.module_skills import sync_knowledge_module_skills
 from ...agents.memory.agent_md_manager import AgentMdManager
-from ...agents.utils import copy_builtin_qa_md_files, copy_md_files
-from ...constant import BUILTIN_QA_AGENT_ID
+from ...agents.utils import (
+    copy_builtin_agent_md_files,
+    copy_builtin_qa_md_files,
+    copy_md_files,
+)
+from ..builtin_agents import get_builtin_agent_spec
 from ..agent_context import get_agent_for_request
 
 router = APIRouter(prefix="/agent", tags=["agent"])
@@ -306,10 +310,16 @@ async def put_agent_language(
 
     copied_files: list[str] = []
     if old_language != language:
-        # Builtin QA: persona from md_files/qa/; MEMORY/HEARTBEAT from lang
-        # pack; never BOOTSTRAP (remove if wrongly copied earlier).
-        if agent_id == BUILTIN_QA_AGENT_ID:
+        builtin_spec = get_builtin_agent_spec(agent_id)
+        if builtin_spec and builtin_spec.template_key == "qa":
             copied_files = copy_builtin_qa_md_files(
+                language,
+                workspace.workspace_dir,
+                only_if_missing=False,
+            )
+        elif builtin_spec and builtin_spec.template_key:
+            copied_files = copy_builtin_agent_md_files(
+                builtin_spec.template_key,
                 language,
                 workspace.workspace_dir,
                 only_if_missing=False,

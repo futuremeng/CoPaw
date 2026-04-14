@@ -17,14 +17,12 @@ from ..config.config import (
     ChannelConfig,
     HeartbeatConfig,
     MCPConfig,
-    build_qa_agent_tools_config,
+    load_agent_config,
     save_agent_config,
 )
+from .builtin_agents import BUILTIN_AGENT_SPECS, BuiltinAgentSpec
 from ..constant import (
     BUILTIN_QA_AGENT_ID,
-    BUILTIN_QA_AGENT_NAME,
-    BUILTIN_QA_AGENT_SKILL_NAMES,
-    WORKING_DIR,
 )
 from ..config.utils import load_config, save_config
 
@@ -706,6 +704,13 @@ def _other_agent_owns_workspace(
     return None
 
 
+def _ensure_agent_order_contains(config, agent_id: str) -> bool:
+    if agent_id in config.agents.agent_order:
+        return False
+    config.agents.agent_order.append(agent_id)
+    return True
+
+
 def ensure_qa_agent_exists() -> None:
     """Ensure the builtin QA agent profile and workspace exist.
 
@@ -736,79 +741,148 @@ def ensure_qa_agent_exists() -> None:
 
 def _do_ensure_qa_agent() -> None:
     """Internal implementation of QA agent initialization."""
-    from .routers.agents import _initialize_agent_workspace
+    ensure_builtin_agents_exist(spec_ids=[BUILTIN_QA_AGENT_ID])
 
-    config = load_config()
-    qa_id = BUILTIN_QA_AGENT_ID
 
-    if qa_id in config.agents.profiles:
-        agent_ref = config.agents.profiles[qa_id]
-        qa_workspace = Path(agent_ref.workspace_dir).expanduser()
-        agent_existed = True
-    else:
-        qa_workspace = Path(
-            f"{WORKING_DIR}/workspaces/{qa_id}",
-        ).expanduser()
-        agent_existed = False
-
-    qa_workspace.mkdir(parents=True, exist_ok=True)
-
-    _ensure_workspace_json_files(qa_workspace, "QA agent")
-
-    if agent_existed:
-        return
-
-    other_id = _other_agent_owns_workspace(
-        config.agents.profiles,
-        qa_workspace,
-        qa_id,
-    )
-    if other_id is not None:
-        logger.warning(
-            "Skipping builtin QA profile %r: workspace %s is already "
-            "used by agent %r. Point that agent to another directory "
-            "or remove it from config before the builtin QA slot can "
-            "be created.",
-            qa_id,
-            qa_workspace,
-            other_id,
-        )
-        return
-
-    logger.info("Creating builtin QA agent...")
-    qa_skill_list = list(BUILTIN_QA_AGENT_SKILL_NAMES)
-
-    language = config.agents.language or "zh"
-    agent_config = AgentProfileConfig(
-        id=qa_id,
-        name=BUILTIN_QA_AGENT_NAME,
-        description=(
-            "Builtin Q&A helper for CoPaw setup, local config under "
-            "COPAW_WORKING_DIR, and documentation. Prefer reading files "
-            "before answering; use absolute paths for code outside this "
-            "workspace."
-        ),
-        workspace_dir=str(qa_workspace),
+def _build_builtin_agent_config(
+    spec: BuiltinAgentSpec,
+    language: str,
+) -> AgentProfileConfig:
+    return AgentProfileConfig(
+        id=spec.id,
+        name=spec.name,
+        description=spec.description,
+        is_builtin=True,
+        builtin_kind=spec.builtin_kind,
+        builtin_label=spec.builtin_label,
+        system_protected=spec.system_protected,
+        workspace_dir=str(spec.workspace_dir),
         language=language,
         channels=ChannelConfig(),
         mcp=MCPConfig(),
         heartbeat=HeartbeatConfig(),
-        tools=build_qa_agent_tools_config(),
+        tools=spec.tools_builder(),
     )
 
-    _initialize_agent_workspace(
-        qa_workspace,
-        skill_names=qa_skill_list,
-        builtin_qa_md_seed=True,
-    )
 
-    config.agents.profiles[qa_id] = AgentProfileRef(
-        id=qa_id,
-        workspace_dir=str(qa_workspace),
-    )
-    save_config(config)
-    save_agent_config(qa_id, agent_config)
-    logger.info(
-        "Created builtin QA agent with workspace: %s",
-        qa_workspace,
-    )
+def ensure_builtin_agents_exist(
+    spec_ids: list[str] | None = None,
+) -> None:
+    """Ensure all system builtin agents exist in config and workspaces."""
+    try:
+        _do_ensure_builtin_agents(spec_ids=spec_ids)
+    except Exception as e:
+        logger.error(
+            "Failed to ensure builtin agents exist: %s. "
+            "Some system agents may not be available.",
+            e,
+            exc_info=True,
+        )
+
+
+def _do_ensure_builtin_agents(spec_ids: list[str] | None = None) -> None:
+    from .builtin_agents import BUILTIN_AGENT_SPEC_BY_ID
+    from .routers.agents import _initialize_agent_workspace
+
+    config = load_config()
+    selected_specs = BUILTIN_AGENT_SPECS
+    if spec_ids is not None:
+        selected_specs = tuple(
+            BUILTIN_AGENT_SPEC_BY_ID[spec_id]
+            for spec_id in spec_ids
+            if spec_id in BUILTIN_AGENT_SPEC_BY_ID
+        )
+
+    language = config.agents.language or "zh"
+
+    for spec in selected_specs:
+        workspace = spec.workspace_dir
+        if spec.id in config.agents.profiles:
+            agent_ref = config.agents.profiles[spec.id]
+            workspace = Path(agent_ref.workspace_dir).expanduser()
+            workspace.mkdir(parents=True, exist_ok=True)
+            _ensure_workspace_json_files(workspace, f"builtin agent {spec.id}")
+            changed = False
+            if not getattr(agent_ref, "is_builtin", False):
+                agent_ref.is_builtin = True
+                changed = True
+            if getattr(agent_ref, "builtin_kind", "") != spec.builtin_kind:
+                agent_ref.builtin_kind = spec.builtin_kind
+                changed = True
+            if getattr(agent_ref, "builtin_label", "") != spec.builtin_label:
+                agent_ref.builtin_label = spec.builtin_label
+                changed = True
+            if getattr(agent_ref, "system_protected", False) != spec.system_protected:
+                agent_ref.system_protected = spec.system_protected
+                changed = True
+
+            try:
+                agent_config = load_agent_config(spec.id)
+                cfg_changed = False
+                if not agent_config.is_builtin:
+                    agent_config.is_builtin = True
+                    cfg_changed = True
+                if agent_config.builtin_kind != spec.builtin_kind:
+                    agent_config.builtin_kind = spec.builtin_kind
+                    cfg_changed = True
+                if agent_config.builtin_label != spec.builtin_label:
+                    agent_config.builtin_label = spec.builtin_label
+                    cfg_changed = True
+                if agent_config.system_protected != spec.system_protected:
+                    agent_config.system_protected = spec.system_protected
+                    cfg_changed = True
+                if cfg_changed:
+                    save_agent_config(spec.id, agent_config)
+            except Exception:
+                logger.warning(
+                    "Failed to backfill builtin metadata for agent config %s",
+                    spec.id,
+                    exc_info=True,
+                )
+
+            if _ensure_agent_order_contains(config, spec.id):
+                changed = True
+            if changed:
+                save_config(config)
+            continue
+
+        workspace.mkdir(parents=True, exist_ok=True)
+        _ensure_workspace_json_files(workspace, f"builtin agent {spec.id}")
+
+        other_id = _other_agent_owns_workspace(
+            config.agents.profiles,
+            workspace,
+            spec.id,
+        )
+        if other_id is not None:
+            logger.warning(
+                "Skipping builtin profile %r: workspace %s is already used "
+                "by agent %r.",
+                spec.id,
+                workspace,
+                other_id,
+            )
+            continue
+
+        logger.info("Creating builtin agent: %s", spec.id)
+        agent_config = _build_builtin_agent_config(spec, language)
+
+        _initialize_agent_workspace(
+            workspace,
+            skill_names=list(spec.skill_names),
+            builtin_template_key=spec.template_key,
+        )
+
+        config.agents.profiles[spec.id] = AgentProfileRef(
+            id=spec.id,
+            workspace_dir=str(workspace),
+            enabled=True,
+            is_builtin=True,
+            builtin_kind=spec.builtin_kind,
+            builtin_label=spec.builtin_label,
+            system_protected=spec.system_protected,
+        )
+        _ensure_agent_order_contains(config, spec.id)
+        save_config(config)
+        save_agent_config(spec.id, agent_config)
+        logger.info("Created builtin agent with workspace: %s", workspace)

@@ -439,6 +439,10 @@ export interface AgentSummary {
   description: string;
   workspace_dir: string;
   enabled: boolean;
+  is_builtin: boolean;
+  builtin_kind: string;
+  builtin_label: string;
+  system_protected: boolean;
   project_count?: number;
   projects?: AgentProjectSummary[];
 }
@@ -456,6 +460,10 @@ export interface AgentProfileConfig {
   id: string;
   name: string;
   description?: string;
+  is_builtin?: boolean;
+  builtin_kind?: string;
+  builtin_label?: string;
+  system_protected?: boolean;
   workspace_dir?: string;
   channels?: unknown;
   mcp?: unknown;
@@ -478,4 +486,9 @@ export interface CreateAgentRequest {
 export interface AgentProfileRef {
   id: string;
   workspace_dir: string;
+  enabled?: boolean;
+  is_builtin?: boolean;
+  builtin_kind?: string;
+  builtin_label?: string;
+  system_protected?: boolean;
 }

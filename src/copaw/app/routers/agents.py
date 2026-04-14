@@ -53,7 +53,11 @@ from ...config.config import (
 )
 from ...config.utils import load_config, save_config
 from ...agents.memory.agent_md_manager import AgentMdManager
-from ...agents.utils import copy_builtin_qa_md_files
+from ...agents.utils import (
+    copy_builtin_agent_md_files,
+    copy_builtin_qa_md_files,
+    copy_md_files,
+)
 from ...agents.skills_manager import SkillPoolService, get_workspace_skills_dir
 from ..multi_agent_manager import MultiAgentManager
 from ...constant import WORKING_DIR
@@ -148,6 +152,10 @@ class AgentSummary(BaseModel):
     description: str
     workspace_dir: str
     enabled: bool = True
+    is_builtin: bool = False
+    builtin_kind: str = ""
+    builtin_label: str = ""
+    system_protected: bool = False
     project_count: int = 0
     projects: list["ProjectSummary"] = Field(default_factory=list)
 
@@ -3429,6 +3437,22 @@ def _collect_agent_summaries(
                     description=description,
                     workspace_dir=agent_ref.workspace_dir,
                     enabled=getattr(agent_ref, "enabled", True),
+                    is_builtin=bool(
+                        getattr(agent_config, "is_builtin", False)
+                        or getattr(agent_ref, "is_builtin", False)
+                    ),
+                    builtin_kind=(
+                        getattr(agent_config, "builtin_kind", "")
+                        or getattr(agent_ref, "builtin_kind", "")
+                    ),
+                    builtin_label=(
+                        getattr(agent_config, "builtin_label", "")
+                        or getattr(agent_ref, "builtin_label", "")
+                    ),
+                    system_protected=bool(
+                        getattr(agent_config, "system_protected", False)
+                        or getattr(agent_ref, "system_protected", False)
+                    ),
                     project_count=len(projects),
                     projects=projects,
                 ),
@@ -3441,6 +3465,12 @@ def _collect_agent_summaries(
                     description="",
                     workspace_dir=agent_ref.workspace_dir,
                     enabled=getattr(agent_ref, "enabled", True),
+                    is_builtin=bool(getattr(agent_ref, "is_builtin", False)),
+                    builtin_kind=str(getattr(agent_ref, "builtin_kind", "") or ""),
+                    builtin_label=str(getattr(agent_ref, "builtin_label", "") or ""),
+                    system_protected=bool(
+                        getattr(agent_ref, "system_protected", False),
+                    ),
                     project_count=len(projects),
                     projects=projects,
                 ),
@@ -3918,6 +3948,13 @@ async def update_agent(
             detail=f"Agent '{agentId}' not found",
         )
 
+    agent_ref = config.agents.profiles[agentId]
+    if getattr(agent_ref, "system_protected", False):
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot update a system builtin agent",
+        )
+
     existing_config = load_agent_config(agentId)
 
     update_data = agent_config.model_dump(exclude_unset=True)
@@ -3956,6 +3993,13 @@ async def delete_agent(
             detail="Cannot delete the default agent",
         )
 
+    agent_ref = config.agents.profiles[agentId]
+    if getattr(agent_ref, "system_protected", False):
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete a system builtin agent",
+        )
+
     manager = _get_multi_agent_manager(request)
     await manager.stop_agent(agentId)
 
@@ -3992,6 +4036,11 @@ async def toggle_agent_enabled(
         )
 
     agent_ref = config.agents.profiles[agentId]
+    if getattr(agent_ref, "system_protected", False):
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot toggle a system builtin agent",
+        )
     manager = _get_multi_agent_manager(request)
 
     if not enabled and getattr(agent_ref, "enabled", True):
@@ -4804,7 +4853,7 @@ def _install_initial_skills(
 def _initialize_agent_workspace(
     workspace_dir: Path,
     skill_names: list[str] | None = None,
-    builtin_qa_md_seed: bool = False,
+    builtin_template_key: str | None = None,
 ) -> None:
     """Initialize agent workspace (similar to copaw init --defaults)."""
     from ...config import load_config as load_global_config
@@ -4820,12 +4869,26 @@ def _initialize_agent_workspace(
     config = load_global_config()
     language = config.agents.language or "zh"
 
-    _seed_workspace_md_files(
-        workspace_dir,
-        language,
-        builtin_qa_md_seed=builtin_qa_md_seed,
-    )
-    _ensure_heartbeat_file(workspace_dir, language)
+    if builtin_template_key == "qa":
+        copy_builtin_qa_md_files(
+            language,
+            workspace_dir,
+            only_if_missing=True,
+        )
+    elif builtin_template_key:
+        copy_builtin_agent_md_files(
+            builtin_template_key,
+            language,
+            workspace_dir,
+            only_if_missing=True,
+        )
+    else:
+        copy_md_files(
+            language,
+            skip_existing=True,
+            workspace_dir=workspace_dir,
+        )
+    _ensure_default_heartbeat_md(workspace_dir, language)
     _copy_builtin_skills(workspace_dir)
     _install_initial_skills(workspace_dir, skill_names)
 
