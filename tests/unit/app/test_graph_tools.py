@@ -27,13 +27,14 @@ async def test_graph_query_requires_graph_enabled(monkeypatch) -> None:
 
 async def test_graph_query_formats_payload(monkeypatch) -> None:
     module = importlib.import_module("copaw.agents.tools.graph_query")
+    captured: dict[str, object] = {}
 
     class _FakeGraphOpsManager:
         def __init__(self, working_dir) -> None:
             _ = working_dir
 
         def graph_query(self, **kwargs):
-            _ = kwargs
+            captured.update(kwargs)
             return SimpleNamespace(
                 records=[{"subject": "A", "predicate": "rel", "object": "B"}],
                 summary="ok",
@@ -54,10 +55,35 @@ async def test_graph_query_formats_payload(monkeypatch) -> None:
     )
     monkeypatch.setattr(module, "GraphOpsManager", _FakeGraphOpsManager)
 
-    result = await module.graph_query("find relation", query_mode="template")
+    result = await module.graph_query(
+        "find relation",
+        query_mode="template",
+        output_mode="nlp",
+    )
     payload = json.loads(result.content[0]["text"])
     assert payload["summary"] == "ok"
     assert payload["records"][0]["subject"] == "A"
+    assert captured["preferred_output_mode"] == "nlp"
+
+
+async def test_graph_query_rejects_invalid_output_mode(monkeypatch) -> None:
+    module = importlib.import_module("copaw.agents.tools.graph_query")
+
+    monkeypatch.setattr(
+        module,
+        "load_config",
+        lambda: SimpleNamespace(
+            knowledge=SimpleNamespace(
+                enabled=True,
+                graph_query_enabled=True,
+                allow_cypher_query=False,
+            ),
+        ),
+    )
+
+    result = await module.graph_query("find relation", output_mode="bad-mode")
+    text = result.content[0]["text"]
+    assert "output_mode must be 'fast', 'nlp', or 'agentic'" in text
 
 
 async def test_memify_run_requires_memify_enabled(monkeypatch) -> None:

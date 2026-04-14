@@ -152,6 +152,7 @@ def test_project_sync_manager_records_workflow_run_metadata(
         lambda self, **kwargs: {
             "run_id": "run-knowledge-123",
             "run_status": "succeeded",
+            "processing_mode": kwargs.get("processing_mode") or "agentic",
             "template_id": KNOWLEDGE_WORKFLOW_TEMPLATE_ID,
             "processing_fingerprint": "fp-123",
             "latest_job_id": "job-123",
@@ -178,6 +179,7 @@ def test_project_sync_manager_records_workflow_run_metadata(
     assert state["latest_workflow_run_id"] == "run-knowledge-123"
     assert state["indexed_processing_fingerprint"] == "fp-123"
     assert state["last_result"]["workflow_run"]["template_id"] == KNOWLEDGE_WORKFLOW_TEMPLATE_ID
+    assert state["last_result"]["workflow_run"]["mode"] == "agentic"
     assert [item["mode"] for item in state["processing_modes"]] == ["fast", "nlp", "agentic"]
     assert state["processing_modes"][0]["available"] is True
     assert state["processing_modes"][1]["available"] is False
@@ -191,6 +193,52 @@ def test_project_sync_manager_records_workflow_run_metadata(
     assert state["mode_outputs"]["fast"]["source"] == "indexed-preview"
     assert state["mode_outputs"]["nlp"]["source"] == "graph-artifacts"
     assert state["mode_outputs"]["agentic"]["source"] == "workflow-artifacts"
+
+
+def test_knowledge_workflow_orchestrator_fast_mode_stops_before_memify(
+    tmp_path: Path,
+    monkeypatch,
+):
+    project_id = "project-fast-only"
+    project_dir = tmp_path / "projects" / project_id
+    data_dir = project_dir / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    _write_project_metadata(project_dir, project_id)
+    (data_dir / "sample.md").write_text("# Sample\n\nKnowledge workflow content.", encoding="utf-8")
+
+    called = {"memify": False}
+
+    def fake_execute_memify_once(self, **kwargs):
+        called["memify"] = True
+        return {"status": "succeeded"}
+
+    monkeypatch.setattr(
+        "copaw.knowledge.graph_ops.GraphOpsManager.execute_memify_once",
+        fake_execute_memify_once,
+    )
+
+    orchestrator = KnowledgeWorkflowOrchestrator(
+        workspace_dir=tmp_path,
+        project_id=project_id,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+    source = _build_source(project_dir, project_id)
+    config = KnowledgeConfig(enabled=True, memify_enabled=True)
+    running_config = SimpleNamespace(knowledge_chunk_size=500)
+
+    result = orchestrator.run(
+        config=config,
+        running_config=running_config,
+        source=source,
+        trigger="manual-panel",
+        changed_paths=["data/sample.md"],
+        processing_mode="fast",
+    )
+
+    assert result["processing_mode"] == "fast"
+    assert result["memify"] == {}
+    assert result["quality_loop"] == {}
+    assert called["memify"] is False
 
 
 def test_knowledge_workflow_status_callback_emits_lane_ready_transitions(

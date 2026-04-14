@@ -1051,6 +1051,77 @@ Agent gate review is mandatory before automatic continuation.
             merged.append(token)
         return " ".join(merged)
 
+    def _preview_query(
+        self,
+        *,
+        manager: KnowledgeManager,
+        config: KnowledgeConfig,
+        query_text: str,
+        project_scope: list[str] | None,
+        include_global: bool,
+        top_k: int,
+        query_mode: str,
+        warnings: list[str],
+    ) -> GraphOpsResult:
+        search_result = manager.search(
+            query=query_text,
+            config=config,
+            limit=max(1, top_k),
+            project_scope=project_scope,
+            include_global=include_global,
+        )
+        records: list[dict[str, Any]] = []
+        for hit in search_result.get("hits") or []:
+            snippet = (hit.get("snippet") or "").strip()
+            records.append(
+                {
+                    "subject": hit.get("document_title") or hit.get("source_name") or hit.get("source_id") or "unknown",
+                    "predicate": "preview_match",
+                    "object": snippet or str(hit.get("document_path") or "preview"),
+                    "score": float(hit.get("score", 0) or 0),
+                    "source_id": hit.get("source_id"),
+                    "source_type": hit.get("source_type"),
+                    "document_path": hit.get("document_path"),
+                    "document_title": hit.get("document_title"),
+                }
+            )
+        if not records:
+            warnings.append("NO_PREVIEW_RECORDS")
+        return GraphOpsResult(
+            records=records,
+            summary=f"Returned {len(records)} preview matches.",
+            provenance={
+                "engine": "fast_preview",
+                "project_scope": project_scope or [],
+                "include_global": include_global,
+                "query_mode": query_mode,
+                "output_mode": "fast",
+                "resolved_output_mode": "fast",
+                "semantic_profile": "fast_preview",
+            },
+            warnings=warnings,
+        )
+
+    def _augment_agentic_result(
+        self,
+        *,
+        result: GraphOpsResult,
+    ) -> GraphOpsResult:
+        warnings = list(result.warnings)
+        quality_summary = ""
+        if self.enrichment_quality_report_path.exists():
+            try:
+                payload = json.loads(self.enrichment_quality_report_path.read_text(encoding="utf-8"))
+                score = payload.get("quality_score")
+                quality_summary = f" Quality score: {score}." if score is not None else ""
+                result.provenance["quality_report_path"] = str(self.enrichment_quality_report_path)
+            except Exception:
+                warnings.append("AGENTIC_QUALITY_REPORT_UNREADABLE")
+        result.summary = f"{result.summary} Agentic workflow semantics applied.{quality_summary}".strip()
+        result.provenance["semantic_profile"] = "agentic"
+        result.warnings = warnings
+        return result
+
     def graph_query(
         self,
         *,
@@ -1155,6 +1226,19 @@ Agent gate review is mandatory before automatic continuation.
             self.working_dir,
             knowledge_dirname=self.knowledge_dirname,
         )
+        normalized_mode = str(preferred_output_mode or "").strip().lower()
+
+        if normalized_mode == "fast":
+            return self._preview_query(
+                manager=manager,
+                config=config,
+                query_text=effective_query_text,
+                project_scope=project_scope,
+                include_global=include_global,
+                top_k=top_k,
+                query_mode=query_mode,
+                warnings=warnings,
+            )
 
         if engine == "local_lexical":
             graph_path, graph_layer, resolved_mode = self._resolve_query_graph_path_for_mode(
@@ -1190,48 +1274,21 @@ Agent gate review is mandatory before automatic continuation.
                         warnings=warnings,
                     )
 
-        search_result = manager.search(
-            query=effective_query_text,
+        preview_result = self._preview_query(
+            manager=manager,
             config=config,
-            limit=max(1, top_k),
+            query_text=effective_query_text,
             project_scope=project_scope,
             include_global=include_global,
-        )
-        records: list[dict[str, Any]] = []
-        for hit in search_result.get("hits") or []:
-            snippet = (hit.get("snippet") or "").strip()
-            if not snippet:
-                continue
-            records.append(
-                {
-                    "subject": hit.get("source_name") or hit.get("source_id") or "unknown",
-                    "predicate": "mentions",
-                    "object": snippet,
-                    "score": float(hit.get("score", 0) or 0),
-                    "source_id": hit.get("source_id"),
-                    "source_type": hit.get("source_type"),
-                    "document_path": hit.get("document_path"),
-                    "document_title": hit.get("document_title"),
-                }
-            )
-
-        if not records:
-            warnings.append("NO_GRAPH_RECORDS")
-
-        return GraphOpsResult(
-            records=records,
-            summary=f"Returned {len(records)} graph-like records.",
-            provenance={
-                "engine": engine,
-                "dataset_scope": dataset_scope or [],
-                "project_scope": project_scope or [],
-                "include_global": include_global,
-                "query_mode": query_mode,
-                "output_mode": str(preferred_output_mode or "").strip() or "fast",
-                "resolved_output_mode": "fast",
-            },
+            top_k=top_k,
+            query_mode=query_mode,
             warnings=warnings,
         )
+        preview_result.provenance["dataset_scope"] = dataset_scope or []
+        if normalized_mode == "agentic":
+            return self._augment_agentic_result(result=preview_result)
+        preview_result.provenance["semantic_profile"] = "nlp_fallback"
+        return preview_result
 
     @staticmethod
     def _filter_records_by_project_scope(

@@ -32,6 +32,7 @@ from .routers.agents_pipeline_core import (
 KNOWLEDGE_WORKFLOW_TEMPLATE_ID = "builtin-knowledge-processing-v1"
 KNOWLEDGE_WORKFLOW_TEMPLATE_NAME = "Knowledge Processing Workflow"
 KNOWLEDGE_WORKFLOW_TEMPLATE_VERSION = "0.1.0"
+KNOWLEDGE_PROCESSING_MODES = {"fast", "nlp", "agentic"}
 
 
 def _lane_overrides(
@@ -232,8 +233,12 @@ class KnowledgeWorkflowOrchestrator:
         source,
         trigger: str,
         changed_paths: list[str] | None = None,
+        processing_mode: str | None = None,
         status_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> dict[str, Any]:
+        normalized_mode = str(processing_mode or "agentic").strip().lower() or "agentic"
+        if normalized_mode not in KNOWLEDGE_PROCESSING_MODES:
+            raise ValueError(f"Unsupported knowledge processing mode: {normalized_mode}")
         normalized_changed_paths = [
             str(item or "").strip().replace("\\", "/")
             for item in (changed_paths or [])
@@ -245,6 +250,7 @@ class KnowledgeWorkflowOrchestrator:
             trigger=(trigger or "manual").strip() or "manual",
             changed_paths=normalized_changed_paths,
         )
+        run.parameters["processing_mode"] = normalized_mode
         self._append_run_event(
             run,
             event="workflow.started",
@@ -389,6 +395,17 @@ class KnowledgeWorkflowOrchestrator:
         )
         index_result = dict(run.steps[1].metrics.get("result") or {})
 
+        if normalized_mode == "fast":
+            return self._finalize_run(
+                run,
+                config=config,
+                running_config=running_config,
+                processing_mode=normalized_mode,
+                index_result=index_result,
+                memify_result=memify_result,
+                quality_loop_result=quality_loop_result,
+            )
+
         def _memify_progress(payload: dict[str, Any]) -> None:
             if status_callback is None:
                 return
@@ -496,6 +513,17 @@ class KnowledgeWorkflowOrchestrator:
         )
         memify_result = dict(run.steps[2].metrics.get("result") or {})
 
+        if normalized_mode == "nlp":
+            return self._finalize_run(
+                run,
+                config=config,
+                running_config=running_config,
+                processing_mode=normalized_mode,
+                index_result=index_result,
+                memify_result=memify_result,
+                quality_loop_result=quality_loop_result,
+            )
+
         self._patch_step(
             run,
             "quality_review",
@@ -566,6 +594,27 @@ class KnowledgeWorkflowOrchestrator:
         )
         quality_loop_result = dict(run.steps[3].metrics.get("result") or {})
 
+        return self._finalize_run(
+            run,
+            config=config,
+            running_config=running_config,
+            processing_mode=normalized_mode,
+            index_result=index_result,
+            memify_result=memify_result,
+            quality_loop_result=quality_loop_result,
+        )
+
+    def _finalize_run(
+        self,
+        run: PipelineRunDetail,
+        *,
+        config,
+        running_config: Any | None,
+        processing_mode: str,
+        index_result: dict[str, Any] | None,
+        memify_result: dict[str, Any] | None,
+        quality_loop_result: dict[str, Any] | None,
+    ) -> dict[str, Any]:
         run.status = "succeeded"
         run.updated_at = _pipeline_now_iso()
         self._append_run_event(
@@ -584,16 +633,17 @@ class KnowledgeWorkflowOrchestrator:
         return {
             "run_id": run.id,
             "run_status": run.status,
+            "processing_mode": processing_mode,
             "template_id": self.template.id,
             "processing_fingerprint": processing_fingerprint,
             "latest_job_id": str(
-                quality_loop_result.get("job_id")
-                or memify_result.get("job_id")
+                (quality_loop_result or {}).get("job_id")
+                or (memify_result or {}).get("job_id")
                 or ""
             ).strip(),
-            "index": index_result,
-            "memify": memify_result,
-            "quality_loop": quality_loop_result,
+            "index": index_result or {},
+            "memify": memify_result or {},
+            "quality_loop": quality_loop_result or {},
             "artifacts": run.artifacts[:],
         }
 

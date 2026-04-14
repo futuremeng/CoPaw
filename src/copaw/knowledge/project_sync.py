@@ -21,6 +21,7 @@ DEFAULT_PROJECT_SYNC_COOLDOWN_SECONDS = 10.0
 DEFAULT_PROJECT_SYNC_STALE_AFTER_SECONDS = 120.0
 DEFAULT_PROJECT_SYNC_QUALITY_LOOP_ROUNDS = 3
 KNOWLEDGE_PROCESSING_FALLBACK_CHAIN = ["agentic", "nlp", "fast"]
+KNOWLEDGE_PROCESSING_SUPPORTED_MODES = {"fast", "nlp", "agentic"}
 
 
 def build_project_source_id(project_id: str) -> str:
@@ -192,6 +193,7 @@ class ProjectKnowledgeSyncManager:
             "updated_at": self._now_iso(),
             "latest_job_id": "",
             "latest_workflow_run_id": "",
+            "latest_requested_mode": "agentic",
             "latest_source_id": "",
             "last_result": {},
             "processing_modes": [],
@@ -246,6 +248,9 @@ class ProjectKnowledgeSyncManager:
             quality_loop_result = {}
         if not isinstance(workflow_run, dict):
             workflow_run = {}
+        workflow_mode = str(
+            workflow_run.get("mode") or state.get("latest_requested_mode") or ""
+        ).strip().lower()
 
         latest_source_id = str(state.get("latest_source_id") or "").strip()
         fast_artifacts: list[dict[str, str]] = []
@@ -305,9 +310,6 @@ class ProjectKnowledgeSyncManager:
                         "path": rel_path,
                     }
                 )
-        if not agentic_artifacts:
-            agentic_artifacts = [*nlp_artifacts]
-
         return {
             "fast": {
                 "mode": "fast",
@@ -333,6 +335,7 @@ class ProjectKnowledgeSyncManager:
                 "summary_lines": [
                     f"Run: {str(workflow_run.get('run_id') or '').strip()}",
                     f"Status: {str(workflow_run.get('status') or '').strip()}",
+                    f"Mode: {workflow_mode or 'agentic'}",
                 ],
                 "artifacts": agentic_artifacts,
             },
@@ -383,6 +386,9 @@ class ProjectKnowledgeSyncManager:
             else 0,
         )
         workflow_status = str(workflow_run.get("status") or "").strip().lower()
+        workflow_mode = str(
+            workflow_run.get("mode") or state.get("latest_requested_mode") or ""
+        ).strip().lower()
         workflow_run_id = str(
             workflow_run.get("run_id") or state.get("latest_workflow_run_id") or ""
         ).strip()
@@ -395,7 +401,7 @@ class ProjectKnowledgeSyncManager:
 
         fast_available = document_count > 0 or chunk_count > 0
         nlp_available = entity_count > 0 or relation_count > 0
-        agentic_available = workflow_status in {"succeeded", "completed"}
+        agentic_available = workflow_status in {"succeeded", "completed"} and workflow_mode in {"", "agentic"}
 
         fast_running = sync_status in {"pending", "indexing"} or sync_stage in {"pending", "indexing"}
         nlp_running = sync_status == "graphifying" or sync_stage == "graphifying" or sync_stage.startswith("graphify")
@@ -812,6 +818,7 @@ class ProjectKnowledgeSyncManager:
         config: KnowledgeConfig,
         running_config: Any | None,
         source: KnowledgeSourceSpec,
+        processing_mode: str = "agentic",
     ) -> None:
         delay = max((run_at - datetime.now(UTC)).total_seconds(), 0.05)
 
@@ -822,6 +829,7 @@ class ProjectKnowledgeSyncManager:
                     config=config,
                     running_config=running_config,
                     source=source,
+                    processing_mode=processing_mode,
                 )
             except Exception:
                 logger.exception(
@@ -845,6 +853,7 @@ class ProjectKnowledgeSyncManager:
         config: KnowledgeConfig,
         running_config: Any | None,
         source: KnowledgeSourceSpec,
+        processing_mode: str = "agentic",
     ) -> None:
         worker = threading.Thread(
             target=self._run_sync_loop,
@@ -853,6 +862,7 @@ class ProjectKnowledgeSyncManager:
                 "config": config,
                 "running_config": running_config,
                 "source": source,
+                "processing_mode": processing_mode,
             },
             daemon=True,
         )
@@ -894,6 +904,7 @@ class ProjectKnowledgeSyncManager:
         source: KnowledgeSourceSpec,
         trigger: str,
         force: bool,
+        processing_mode: str,
     ) -> tuple[dict[str, Any], bool, str]:
         run_at, queued_stage = (None, None) if force else self._calculate_run_at(state)
         if run_at is not None:
@@ -911,6 +922,7 @@ class ProjectKnowledgeSyncManager:
                 )
             )
             state["last_trigger"] = trigger
+            state["latest_requested_mode"] = processing_mode
             state["scheduled_for"] = run_at.isoformat()
             state["queued_at"] = state.get("queued_at") or self._now_iso()
             self._save_state(state)
@@ -920,6 +932,7 @@ class ProjectKnowledgeSyncManager:
                 config=config,
                 running_config=running_config,
                 source=source,
+                processing_mode=processing_mode,
             )
             return dict(state), False, "QUEUED"
 
@@ -940,6 +953,7 @@ class ProjectKnowledgeSyncManager:
         state["last_trigger"] = trigger
         state["last_error"] = ""
         state["latest_source_id"] = source.id
+        state["latest_requested_mode"] = processing_mode
         state["scheduled_for"] = None
         state["queued_at"] = None
         self._save_state(state)
@@ -952,6 +966,7 @@ class ProjectKnowledgeSyncManager:
         config: KnowledgeConfig,
         running_config: Any | None,
         source: KnowledgeSourceSpec,
+        processing_mode: str = "agentic",
     ) -> None:
         should_start = False
         with self._lock:
@@ -973,6 +988,7 @@ class ProjectKnowledgeSyncManager:
                     config=config,
                     running_config=running_config,
                     source=source,
+                    processing_mode=processing_mode,
                 )
                 self._save_state(state)
                 return
@@ -989,6 +1005,7 @@ class ProjectKnowledgeSyncManager:
                 source=source,
                 trigger=str(state.get("last_trigger") or "auto"),
                 force=True,
+                processing_mode=str(state.get("latest_requested_mode") or processing_mode or "agentic"),
             )
 
         if should_start:
@@ -997,6 +1014,7 @@ class ProjectKnowledgeSyncManager:
                 config=config,
                 running_config=running_config,
                 source=source,
+                processing_mode=str(state.get("latest_requested_mode") or processing_mode or "agentic"),
             )
 
     def mark_dirty(
@@ -1048,18 +1066,24 @@ class ProjectKnowledgeSyncManager:
         force: bool = False,
         debounce_seconds: float = 0,
         cooldown_seconds: float = 0,
+        processing_mode: str = "agentic",
     ) -> dict[str, Any]:
+        normalized_mode = str(processing_mode or "agentic").strip().lower() or "agentic"
+        if normalized_mode not in KNOWLEDGE_PROCESSING_SUPPORTED_MODES:
+            raise ValueError(f"Unsupported knowledge processing mode: {normalized_mode}")
         should_start = False
         with self._lock:
             state = self._load_state(project_id)
             state = self._recover_stale_active_state(state)
             state["auto_enabled"] = bool(auto_enabled)
+            state["latest_requested_mode"] = normalized_mode
             state["debounce_seconds"] = self._normalize_seconds(debounce_seconds)
             state["cooldown_seconds"] = self._normalize_seconds(cooldown_seconds)
             active = self._is_active_state(state)
             if active:
                 state["dirty_after_run"] = True
                 state["last_trigger"] = (trigger or "manual").strip() or "manual"
+                state["latest_requested_mode"] = normalized_mode
                 state["pending_changed_paths"] = self._merge_paths(
                     state.get("pending_changed_paths"),
                     changed_paths,
@@ -1091,6 +1115,7 @@ class ProjectKnowledgeSyncManager:
                 source=source,
                 trigger=(trigger or "manual").strip() or "manual",
                 force=bool(force),
+                processing_mode=normalized_mode,
             )
 
         if should_start:
@@ -1099,6 +1124,7 @@ class ProjectKnowledgeSyncManager:
                 config=config,
                 running_config=running_config,
                 source=source,
+                processing_mode=normalized_mode,
             )
         return {
             "accepted": True,
@@ -1113,10 +1139,13 @@ class ProjectKnowledgeSyncManager:
         config: KnowledgeConfig,
         running_config: Any | None,
         source: KnowledgeSourceSpec,
+        processing_mode: str = "agentic",
     ) -> None:
         while True:
             try:
                 from qwenpaw.app.knowledge_workflow import KnowledgeWorkflowOrchestrator
+
+                normalized_mode = str(processing_mode or "agentic").strip().lower() or "agentic"
 
                 self._patch_state(
                     project_id,
@@ -1145,6 +1174,7 @@ class ProjectKnowledgeSyncManager:
                     source=source,
                     trigger=str(current_state.get("last_trigger") or "project-sync"),
                     changed_paths=list(current_state.get("changed_paths") or []),
+                    processing_mode=normalized_mode,
                     status_callback=lambda patch: self._patch_state(
                         project_id,
                         self._normalize_sync_patch(patch),
@@ -1168,6 +1198,7 @@ class ProjectKnowledgeSyncManager:
                         "last_error": "",
                         "latest_job_id": str(workflow_result.get("latest_job_id") or "").strip(),
                         "latest_workflow_run_id": str(workflow_result.get("run_id") or "").strip(),
+                        "latest_requested_mode": normalized_mode,
                         "processing_mode_overrides": {},
                         "last_result": {
                             "index": workflow_result.get("index") or {},
@@ -1177,6 +1208,7 @@ class ProjectKnowledgeSyncManager:
                                 "run_id": workflow_result.get("run_id") or "",
                                 "template_id": workflow_result.get("template_id") or "",
                                 "status": workflow_result.get("run_status") or "",
+                                "mode": workflow_result.get("processing_mode") or normalized_mode,
                                 "artifacts": workflow_result.get("artifacts") or [],
                             },
                         },

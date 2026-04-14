@@ -670,6 +670,7 @@ def test_run_project_sync_offloads_start_to_thread(
             "trigger": "manual-test",
             "changed_paths": ["notes.md"],
             "force": True,
+            "processing_mode": "nlp",
         },
     )
 
@@ -678,6 +679,44 @@ def test_run_project_sync_offloads_start_to_thread(
     assert response.json()["project_id"] == project_id
     assert calls
     assert calls[0][0].__name__ == "start_sync"
+    assert calls[0][1] == ()
+
+
+def test_run_project_sync_allows_fast_mode_when_memify_disabled(
+    knowledge_api_client: TestClient,
+    tmp_path: Path,
+    monkeypatch,
+):
+    project_id = "fast-only-project-sync"
+    project_dir = tmp_path / "projects" / project_id
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload["enabled"] = True
+    config_payload["memify_enabled"] = False
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    captured: dict[str, object] = {}
+
+    class _FakeProjectSyncManager:
+        def start_sync(self, **kwargs):
+            captured.update(kwargs)
+            return {"accepted": True, "project_id": kwargs["project_id"], "status": "queued"}
+
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "_project_sync_for_workspace",
+        lambda *_args, **_kwargs: _FakeProjectSyncManager(),
+    )
+
+    response = knowledge_api_client.post(
+        f"/knowledge/project-sync/run?project_id={project_id}",
+        json={"trigger": "manual-test", "force": True, "processing_mode": "fast"},
+    )
+
+    assert response.status_code == 200
+    assert captured["processing_mode"] == "fast"
 
 
 def test_restore_knowledge_backup_offloads_filesystem_copy_to_thread(

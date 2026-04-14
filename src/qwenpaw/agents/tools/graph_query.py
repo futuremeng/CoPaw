@@ -36,6 +36,7 @@ def _resolve_graph_tool_context():
 async def graph_query(
     query_text: str,
     query_mode: str = "template",
+    output_mode: str = "",
     dataset_scope: list[str] | None = None,
     top_k: int = 10,
     timeout_sec: int = 20,
@@ -45,6 +46,7 @@ async def graph_query(
     Args:
         query_text: Text query or cypher query body.
         query_mode: One of "template" or "cypher".
+        output_mode: Optional preferred output mode, one of "fast", "nlp", or "agentic".
         dataset_scope: Optional dataset names/ids for scoping.
         top_k: Maximum number of records to return.
         timeout_sec: Query timeout for backend provider.
@@ -62,6 +64,17 @@ async def graph_query(
                 TextBlock(
                     type="text",
                     text="Error: query_mode must be 'template' or 'cypher'.",
+                )
+            ],
+        )
+
+    preferred_output_mode = (output_mode or "").strip().lower()
+    if preferred_output_mode and preferred_output_mode not in {"fast", "nlp", "agentic"}:
+        return ToolResponse(
+            content=[
+                TextBlock(
+                    type="text",
+                    text="Error: output_mode must be 'fast', 'nlp', or 'agentic'.",
                 )
             ],
         )
@@ -101,6 +114,7 @@ async def graph_query(
             dataset_scope=dataset_scope,
             top_k=max(1, int(top_k)),
             timeout_sec=max(1, min(int(timeout_sec), 120)),
+            preferred_output_mode=preferred_output_mode or None,
         )
         payload = {
             "records": result.records,

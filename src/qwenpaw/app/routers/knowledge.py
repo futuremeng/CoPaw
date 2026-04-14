@@ -957,11 +957,15 @@ async def run_project_sync(
     trigger: str = Body(default="manual"),
     changed_paths: list[str] | None = Body(default=None),
     force: bool = Body(default=False),
+    processing_mode: str = Body(default="agentic"),
 ):
     """Start project-scoped automatic knowledge synchronization."""
     config, knowledge_config, running_config, workspace_dir, _ = await _resolve_knowledge_request_context(request)
     _ensure_knowledge_enabled_flag(knowledge_config.enabled)
-    if not bool(getattr(knowledge_config, "memify_enabled", False)):
+    normalized_mode = (processing_mode or "agentic").strip().lower() or "agentic"
+    if normalized_mode not in {"fast", "nlp", "agentic"}:
+        raise HTTPException(status_code=400, detail="PROCESSING_MODE_INVALID")
+    if normalized_mode in {"nlp", "agentic"} and not bool(getattr(knowledge_config, "memify_enabled", False)):
         raise HTTPException(status_code=400, detail="MEMIFY_DISABLED")
 
     project_id = _resolve_project_id(request)
@@ -994,6 +998,7 @@ async def run_project_sync(
             changed_paths=changed_paths,
             auto_enabled=True,
             force=bool(force),
+            processing_mode=normalized_mode,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

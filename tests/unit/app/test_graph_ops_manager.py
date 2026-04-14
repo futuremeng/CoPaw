@@ -462,7 +462,9 @@ def test_graph_query_respects_preferred_output_mode_for_local_engine(tmp_path):
     assert nlp_result.provenance.get("resolved_output_mode") == "nlp"
     assert nlp_result.provenance.get("layer") == "l1_raw"
     assert fast_result.provenance.get("resolved_output_mode") == "fast"
-    assert fast_result.provenance.get("engine") == "local_lexical"
+    assert fast_result.provenance.get("engine") == "fast_preview"
+    assert fast_result.provenance.get("semantic_profile") == "fast_preview"
+    assert fast_result.records[0].get("predicate") == "preview_match"
 
 
 def test_graphify_query_prefers_enriched_graph_when_enabled(tmp_path):
