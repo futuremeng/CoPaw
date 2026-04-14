@@ -353,6 +353,10 @@ if (-not (Test-Path $RealBin)) {
 Set-Content -Path $wrapperPath -Value $wrapperContent -Encoding UTF8
 Write-Info "Wrapper created at $wrapperPath"
 
+$copawWrapperPath = Join-Path $QwenpawBin "copaw.ps1"
+Set-Content -Path $copawWrapperPath -Value $wrapperContent -Encoding UTF8
+Write-Info "Wrapper created at $copawWrapperPath"
+
 # Also create a .cmd wrapper for use from cmd.exe
 $cmdWrapperPath = Join-Path $QwenpawBin "qwenpaw.cmd"
 $cmdWrapperContent = @"
@@ -371,6 +375,10 @@ if not exist "%REAL_BIN%" (
 
 Set-Content -Path $cmdWrapperPath -Value $cmdWrapperContent -Encoding UTF8
 Write-Info "CMD wrapper created at $cmdWrapperPath"
+
+$copawCmdWrapperPath = Join-Path $QwenpawBin "copaw.cmd"
+Set-Content -Path $copawCmdWrapperPath -Value $cmdWrapperContent -Encoding UTF8
+Write-Info "CMD wrapper created at $copawCmdWrapperPath"
 
 # ──Step 5: Update PATH via User Environment Variable ────────────────────────
 $targetPath = $QwenpawBin

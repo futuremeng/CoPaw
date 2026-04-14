@@ -553,7 +553,6 @@ class ToolGuardMixin:
     ) -> dict | None:
         """Auto-deny a tool call without offering approval."""
         from qwenpaw.security.tool_guard.approval import (
-        from qwenpaw.security.tool_guard.approval import (
             format_findings_summary,
         )
 
@@ -602,7 +601,6 @@ class ToolGuardMixin:
         guard_result,
     ) -> dict | None:
         """Deny the tool call and record a pending approval."""
-        from qwenpaw.security.tool_guard.approval import (
         from qwenpaw.security.tool_guard.approval import (
             format_findings_summary,
         )

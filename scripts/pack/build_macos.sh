@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-click build: console -> conda-pack -> QwenPaw.app. Run from repo root.
+# One-click build: console -> conda-pack -> CoPaw.app. Run from repo root.
 # Requires: conda, node/npm (for console). Optional: icon.icns in assets/.
 
 set -e
@@ -8,7 +8,7 @@ cd "$REPO_ROOT"
 PACK_DIR="$(cd "$(dirname "$0")" && pwd)"
 DIST="${DIST:-dist}"
 ARCHIVE="${DIST}/qwenpaw-env.tar.gz"
-APP_NAME="QwenPaw"
+APP_NAME="CoPaw"
 APP_DIR="${DIST}/${APP_NAME}.app"
 
 # Prefer workspace virtualenv interpreter, then active python, then python3.
@@ -101,7 +101,7 @@ LOG_LEVEL="${QWENPAW_LOG_LEVEL:-info}"
 
 if [ ! -t 2 ]; then
   mkdir -p "$HOME/.qwenpaw"
-  { echo "=== $(date) QwenPaw starting ==="
+  { echo "=== $(date) CoPaw starting ==="
     echo "ENV_DIR=$ENV_DIR"
     echo "Python: $ENV_DIR/bin/python (exists=$([ -x "$ENV_DIR/bin/python" ] && echo yes || echo no))"
     echo "PATH=$PATH"

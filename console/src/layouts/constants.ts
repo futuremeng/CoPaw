@@ -128,9 +128,9 @@ export const compareVersions = (a: string, b: string): number => {
 // ── Update markdown ───────────────────────────────────────────────────────
 // TODO
 export const UPDATE_MD: Record<string, string> = {
-  zh: `### QwenPaw如何更新
+  zh: `### CoPaw如何更新
 
-要更新 QwenPaw 到最新版本，可根据你的安装方式选择对应方法：
+要更新 CoPaw 到最新版本，可根据你的安装方式选择对应方法：
 
 1. 如果你使用的是一键安装脚本，直接重新运行安装命令即可自动升级。
 
@@ -155,7 +155,7 @@ docker pull agentscope/qwenpaw:latest
 docker run -p 127.0.0.1:8088:8088 -v qwenpaw-data:/app/working agentscope/qwenpaw:latest
 \`\`\`
 
-升级后重启服务 qwenpaw app。`,
+升级后重启服务 copaw app。`,
 
   ru: `### Как обновить QwenPaw
 

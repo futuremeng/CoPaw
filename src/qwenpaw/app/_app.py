@@ -494,10 +494,10 @@ def read_root():
         return FileResponse(_CONSOLE_INDEX)
     return {
         "message": (
-            f"{PROJECT_NAME} web console is not available. "
+            "CoPaw web console is not available. "
             "If you installed the project from source code, please run "
             "`npm ci && npm run build` in the `console/` "
-            f"directory, and restart {PROJECT_NAME} to enable the "
+            "directory, and restart CoPaw to enable the "
             "web console."
         ),
     }

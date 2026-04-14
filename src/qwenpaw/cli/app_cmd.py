@@ -51,7 +51,7 @@ from ..utils.logging import setup_logger, SuppressPathAccessLogFilter
     default=None,
     help="[DEPRECATED] Number of worker processes. "
     "This option is deprecated and will be removed in a future version. "
-    "QwenPaw always uses 1 worker.",
+    "CoPaw always uses 1 worker.",
 )
 def app_cmd(
     host: str,
@@ -61,7 +61,7 @@ def app_cmd(
     log_level: str,
     hide_access_paths: tuple[str, ...],
 ) -> None:
-    """Run QwenPaw FastAPI app."""
+    """Run CoPaw FastAPI app."""
     # Handle deprecated --workers parameter
     if workers is not None:
         click.echo(
@@ -70,7 +70,7 @@ def app_cmd(
             err=True,
         )
         click.echo(
-            "   QwenPaw always uses 1 worker for stability. "
+            "   CoPaw always uses 1 worker for stability. "
             "Your specified value will be ignored.",
             err=True,
         )

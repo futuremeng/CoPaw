@@ -7,7 +7,7 @@ const defaultConfig = {
     prefix: "qwenpaw",
     leftHeader: {
       logo: "",
-      title: "Work with QwenPaw",
+      title: "Work with CoPaw",
     },
   },
   sender: {
@@ -19,8 +19,7 @@ const defaultConfig = {
     greeting: "Hello, how can I help you today?",
     description:
       "I am a helpful assistant that can help you with your questions.",
-    avatar:
-      "https://gw.alicdn.com/imgextra/i2/O1CN01xRQe2y1iZA7ZBP06g_!!6000000004426-55-tps-175-235.svg",
+    avatar: "/copaw-icon.svg",
     prompts: [
       {
         value: "Let's start a new journey!",

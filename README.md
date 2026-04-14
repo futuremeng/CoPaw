@@ -1,6 +1,6 @@
 <div align="center">
 
-# QwenPaw
+# CoPaw
 
 [![GitHub Repo](https://img.shields.io/badge/GitHub-Repo-black.svg?logo=github)](https://github.com/agentscope-ai/QwenPaw)
 [![PyPI](https://img.shields.io/pypi/v/qwenpaw?color=3775A9&label=PyPI&logo=pypi)](https://pypi.org/project/qwenpaw/)
@@ -19,7 +19,7 @@
 [[Documentation](https://qwenpaw.agentscope.io/)] [[中文](README_zh.md)] [[日本語](README_ja.md)] [[Русский](README_ru.md)]
 
 <p align="center">
-  <img src="https://gw.alicdn.com/imgextra/i1/O1CN01sens5C1TuwioeGexL_!!6000000002443-55-tps-771-132.svg" alt="QwenPaw Logo" width="120">
+  <img src="console/public/copaw-icon.svg" alt="CoPaw Logo" width="120">
 </p>
 
 <p align="center"><b>Works for you, grows with you.</b></p>
@@ -32,16 +32,16 @@ Your personal AI assistant — easy to install, deploy locally or in the cloud, 
 >
 > **Under your control** — Memory and personalization fully under your control. Deploy locally (data stays on your machine) or in the cloud (your chosen server). No third-party hosting, no data upload.
 >
-> **Skills extension** — Built-in scheduling, PDF/Office processing, news digest, and more; custom skills auto-loaded, no lock-in. Skills determine what QwenPaw can do.
+> **Skills extension** — Built-in scheduling, PDF/Office processing, news digest, and more; custom skills auto-loaded, no lock-in. Skills determine what CoPaw can do.
 >
 > **Multi-agent collaboration** — Create multiple independent agents, each with their own role; enable collaboration skills for inter-agent communication to tackle complex tasks together.
 >
 > **Multi-layer security** — Tool guard, file access control, skill security scanning to ensure safe operation.
 >
-> **Every channel** — DingTalk, Feishu, WeChat, Discord, Telegram, and more. One QwenPaw, connect as needed.
+> **Every channel** — DingTalk, Feishu, WeChat, Discord, Telegram, and more. One CoPaw, connect as needed.
 >
 > <details>
-> <summary><b>What you can do with QwenPaw</b></summary>
+> <summary><b>What you can do with CoPaw</b></summary>
 >
 > <br>
 >
@@ -58,7 +58,7 @@ Your personal AI assistant — easy to install, deploy locally or in the cloud, 
 
 ## News
 
-[2026-04-12] **CoPaw is Officially Rebranding to QwenPaw**: This rebranding marks an important step forward into our next phase of open-source development.
+[2026-04-12] **This fork keeps the CoPaw brand on top of the upstream QwenPaw codebase**: upstream renamed the project to QwenPaw, while this fork keeps CoPaw as the user-facing brand.
 
 The new name better reflects the open ecosystem we are building and the broader direction we are continuing to pursue:
 
@@ -71,7 +71,7 @@ This rebranding does not change our vision and goals in the open-source communit
 - To stay committed to open-source collaboration and move forward together with the community.
 
 Thank you all for your support along the way.
-From today on, QwenPaw will stay and grow with you!
+CoPaw will keep tracking upstream while staying recognizable to existing users.
 
 ---
 
@@ -95,7 +95,7 @@ From today on, QwenPaw will stay and grow with you!
 - [Roadmap](#roadmap)
 - [Install from source](#install-from-source)
 - [Contributing](#contributing)
-- [Why QwenPaw?](#why-qwenpaw)
+- [Why CoPaw?](#why-copaw)
 - [Built by](#built-by)
 - [License](#license)
 
@@ -109,8 +109,8 @@ If you prefer managing Python yourself:
 
 ```bash
 pip install qwenpaw
-qwenpaw init --defaults
-qwenpaw app
+copaw init --defaults
+copaw app
 ```
 
 Then open the Console in your browser at **http://127.0.0.1:8088/** to configure your model. To chat in DingTalk, Feishu, WeChat, etc., see the [Channel setup](https://qwenpaw.agentscope.io/docs/channels) documentation.
@@ -494,10 +494,10 @@ Join [GitHub Discussions](https://github.com/agentscope-ai/QwenPaw/discussions) 
 
 ---
 
-## Why QwenPaw?
+## Why CoPaw?
 
-QwenPaw stands for Qwen Personal Agent Workstation, and also embodies the wisdom of Qwen and the warmth of a Paw.
-We hope it is not a cold tool, but an intelligent and warm "little paw" always ready to help—a most intuitive partner in your digital life.
+CoPaw keeps the familiar companion metaphor from the original fork while continuing to track the upstream QwenPaw codebase.
+We want it to feel less like a cold tool and more like an intelligent, dependable "little paw" that stays close to your actual workflow.
 
 ---
 

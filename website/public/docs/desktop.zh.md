@@ -1,4 +1,4 @@
-# QwenPaw Desktop 桌面应用版使用指南
+# CoPaw Desktop 桌面应用版使用指南
 
 > ⚠️ **Beta 版本说明**
 >
@@ -12,7 +12,7 @@
 
 **下载地址**：[GitHub Releases][releases]
 
-本文档说明如何在 Windows 和 macOS 系统上安装和使用 QwenPaw Desktop 桌面应用。
+本文档说明如何在 Windows 和 macOS 系统上安装和使用 CoPaw Desktop 桌面应用。
 
 [releases]: https://github.com/agentscope-ai/QwenPaw/releases
 
@@ -38,32 +38,32 @@
 ### 安装步骤
 
 1. **下载安装包**
-   从 [Release 页面][releases]下载 `QwenPaw-Setup-<version>.exe` 文件
+   从 [Release 页面][releases]下载 `CoPaw-Setup-<version>.exe` 文件
 
 2. **运行安装程序**
    双击 `.exe` 文件，按照安装向导提示完成安装
-   - 默认安装位置：`C:\Users\<你的用户名>\AppData\Local\QwenPaw`
+   - 默认安装位置：`C:\Users\<你的用户名>\AppData\Local\CoPaw`
    - 安装完成后会在桌面和开始菜单创建快捷方式
 
 ### 启动方式
 
 安装完成后，您会看到**两个启动快捷方式**：
 
-#### **QwenPaw Desktop** (推荐日常使用)
+#### **CoPaw Desktop** (推荐日常使用)
 
 - **特点**: 静默启动，无终端窗口，界面简洁
 - **适用场景**: 正常使用，不需要查看技术日志
-- **启动方式**: 双击桌面或开始菜单的 "QwenPaw Desktop" 图标
+- **启动方式**: 双击桌面或开始菜单的 "CoPaw Desktop" 图标
 - **技术说明**: 使用 VBScript 启动器，后台运行 Python 进程
 
-#### **QwenPaw Desktop (Debug)** (调试模式)
+#### **CoPaw Desktop (Debug)** (调试模式)
 
 - **特点**: 显示终端窗口，实时输出运行日志
 - **适用场景**:
   - 遇到问题需要查看错误信息
   - 开发测试
   - 报告 Bug 时需要提供日志
-- **启动方式**: 双击开始菜单的 "QwenPaw Desktop (Debug)" 图标
+- **启动方式**: 双击开始菜单的 "CoPaw Desktop (Debug)" 图标
 - **日志内容**:
   - 应用启动信息
   - Python 错误堆栈
@@ -79,10 +79,10 @@ A: 这通常是因为系统缺少 **Microsoft WebView2** 运行时（部分 Wind
 安装完成后重启应用即可。
 
 **Q: 应用启动后没有反应？**
-A: 使用 "QwenPaw Desktop (Debug)" 模式启动，查看终端输出的错误信息
+A: 使用 "CoPaw Desktop (Debug)" 模式启动，查看终端输出的错误信息
 
 **Q: 如何卸载？**
-A: 在 Windows 设置 → 应用 → 已安装的应用 → 找到 "QwenPaw Desktop" → 卸载
+A: 在 Windows 设置 → 应用 → 已安装的应用 → 找到 "CoPaw Desktop" → 卸载
 
 **Q: 安装包是否安全？**
 A:
@@ -105,7 +105,7 @@ A:
 ### 安装步骤
 
 1. **下载压缩包**
-   从 [Release 页面][releases]下载 `QwenPaw-<version>-macOS.zip` 文件
+   从 [Release 页面][releases]下载 `CoPaw-<version>-macOS.zip` 文件
 
 2. **解压缩**
    双击 `.zip` 文件自动解压，得到 `QwenPaw.app` 应用

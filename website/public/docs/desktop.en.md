@@ -1,4 +1,4 @@
-# QwenPaw Desktop Application Guide
+# CoPaw Desktop Application Guide
 
 > ⚠️ **Beta Version Notice**
 >
@@ -12,7 +12,7 @@
 
 **Download**: [GitHub Releases][releases]
 
-This guide explains how to install and use the QwenPaw Desktop application on Windows and macOS.
+This guide explains how to install and use the CoPaw Desktop application on Windows and macOS.
 
 [releases]: https://github.com/agentscope-ai/QwenPaw/releases
 
@@ -38,32 +38,32 @@ This guide explains how to install and use the QwenPaw Desktop application on Wi
 ### Installation Steps
 
 1. **Download the installer**
-   Download `QwenPaw-Setup-<version>.exe` from the [Release page][releases]
+   Download `CoPaw-Setup-<version>.exe` from the [Release page][releases]
 
 2. **Run the installer**
    Double-click the `.exe` file and follow the installation wizard
-   - Default installation location: `C:\Users\<your-username>\AppData\Local\QwenPaw`
+   - Default installation location: `C:\Users\<your-username>\AppData\Local\CoPaw`
    - Desktop and Start Menu shortcuts will be created after installation
 
 ### Launch Options
 
 After installation, you'll see **two launch shortcuts**:
 
-#### **QwenPaw Desktop** (Recommended for daily use)
+#### **CoPaw Desktop** (Recommended for daily use)
 
 - **Features**: Silent launch, no terminal window, clean interface
 - **Use Case**: Normal usage when you don't need to view technical logs
-- **How to Launch**: Double-click the "QwenPaw Desktop" icon on desktop or Start Menu
+- **How to Launch**: Double-click the "CoPaw Desktop" icon on desktop or Start Menu
 - **Technical Note**: Uses VBScript launcher, runs Python process in background
 
-#### **QwenPaw Desktop (Debug)** (Debug Mode)
+#### **CoPaw Desktop (Debug)** (Debug Mode)
 
 - **Features**: Shows terminal window with real-time logging
 - **Use Cases**:
   - Need to view error messages when encountering problems
   - Development and testing
   - Need to provide logs when reporting bugs
-- **How to Launch**: Double-click "QwenPaw Desktop (Debug)" icon in Start Menu
+- **How to Launch**: Double-click "CoPaw Desktop (Debug)" icon in Start Menu
 - **Log Contents**:
   - Application startup information
   - Python error stack traces
@@ -79,10 +79,10 @@ Download and install it from the Microsoft website:
 Restart the application after installation.
 
 **Q: Application doesn't respond after launch?**
-A: Use "QwenPaw Desktop (Debug)" mode to view terminal output for error messages
+A: Use "CoPaw Desktop (Debug)" mode to view terminal output for error messages
 
 **Q: How to uninstall?**
-A: Go to Windows Settings → Apps → Installed apps → Find "QwenPaw Desktop" → Uninstall
+A: Go to Windows Settings → Apps → Installed apps → Find "CoPaw Desktop" → Uninstall
 
 **Q: Is the installer safe?**
 A:
@@ -105,7 +105,7 @@ A:
 ### Installation Steps
 
 1. **Download the archive**
-   Download `QwenPaw-<version>-macOS.zip` from the [Release page][releases]
+   Download `CoPaw-<version>-macOS.zip` from the [Release page][releases]
 
 2. **Extract**
    Double-click the `.zip` file to extract and get `QwenPaw.app`

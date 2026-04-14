@@ -485,6 +485,8 @@ echo } >> "%WRAPPER_PS1%"
 echo. >> "%WRAPPER_PS1%"
 echo ^& $RealBin @args >> "%WRAPPER_PS1%"
 echo [qwenpaw] Wrapper created at %WRAPPER_PS1%
+copy /Y "%WRAPPER_PS1%" "%QWENPAW_BIN%\copaw.ps1" >nul
+echo [copaw] Wrapper created at %QWENPAW_BIN%\copaw.ps1
 
 REM CMD wrapper
 set "WRAPPER_CMD=%QWENPAW_BIN%\qwenpaw.cmd"
@@ -500,6 +502,8 @@ echo     exit /b 1 >> "%WRAPPER_CMD%"
 echo ) >> "%WRAPPER_CMD%"
 echo "%%REAL_BIN%%" %%* >> "%WRAPPER_CMD%"
 echo [qwenpaw] CMD wrapper created at %WRAPPER_CMD%
+copy /Y "%WRAPPER_CMD%" "%QWENPAW_BIN%\copaw.cmd" >nul
+echo [copaw] CMD wrapper created at %QWENPAW_BIN%\copaw.cmd
 
 REM ──── Step 5: Update PATH via user environment variable ──────────────────────────────────────────────────
 set "CURRENT_USER_PATH="
@@ -534,7 +538,7 @@ if /i "%path_check%" neq "%path_check:%check_str%=%" (
 
 REM ──── Done ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 echo.
-echo QwenPaw installed successfully!
+echo CoPaw installed successfully!
 echo.
 echo   Install location:  %QWENPAW_HOME%
 echo   Python:            %PY_VERSION%
@@ -547,10 +551,10 @@ if "%CONSOLE_AVAILABLE%"=="1" (
 echo.
 echo To get started, open a new terminal and run:
 echo.
-echo   qwenpaw init       # first-time setup
-echo   qwenpaw app        # start QwenPaw
+echo   copaw init         # first-time setup
+echo   copaw app          # start CoPaw
 echo.
 echo To upgrade later, re-run this installer.
-echo To uninstall, run: qwenpaw uninstall
+echo To uninstall, run: copaw uninstall
 
 exit /b 0

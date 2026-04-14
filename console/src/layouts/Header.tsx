@@ -16,7 +16,6 @@ import {
   isStableVersion,
   compareVersions,
 } from "./constants";
-import { useTheme } from "../contexts/ThemeContext";
 import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -51,7 +50,6 @@ function UpdateCodeBlock({ code }: { code: string }) {
 
 export default function Header() {
   const { t, i18n } = useTranslation();
-  const { isDark } = useTheme();
   const [version, setVersion] = useState<string>("");
   const [latestVersion, setLatestVersion] = useState<string>("");
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
@@ -154,14 +152,11 @@ export default function Header() {
       <AntHeader className={styles.header}>
         <div className={styles.logoWrapper}>
           <img
-            src={
-              isDark
-                ? `https://gw.alicdn.com/imgextra/i4/O1CN01L7e39724RlGeJYJ7l_!!6000000007388-55-tps-771-132.svg`
-                : "https://gw.alicdn.com/imgextra/i1/O1CN01sens5C1TuwioeGexL_!!6000000002443-55-tps-771-132.svg"
-            }
-            alt="QwenPaw"
+            src="/copaw-icon.svg"
+            alt="CoPaw"
             className={styles.logoImg}
           />
+          <span className={styles.brandText}>CoPaw</span>
           <div className={styles.logoDivider} />
           {version && (
             <Badge

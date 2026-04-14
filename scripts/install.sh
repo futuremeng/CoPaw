@@ -274,7 +274,10 @@ exec "$REAL_BIN" "$@"
 WRAPPER
 
 chmod +x "$QWENPAW_BIN/qwenpaw"
+cp "$QWENPAW_BIN/qwenpaw" "$QWENPAW_BIN/copaw"
+chmod +x "$QWENPAW_BIN/copaw"
 info "Wrapper created at $QWENPAW_BIN/qwenpaw"
+info "Wrapper created at $QWENPAW_BIN/copaw"
 
 # ── Step 5: Update PATH in shell profile ─────────────────────────────────────
 PATH_ENTRY="export PATH=\"\$HOME/.qwenpaw/bin:\$PATH\""

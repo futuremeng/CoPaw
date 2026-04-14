@@ -1,6 +1,6 @@
 # CLI
 
-`qwenpaw` 是 QwenPaw 的命令行工具。本页按「上手 → 配置 → 日常管理」的顺序组织——
+`copaw` 是 CoPaw 的命令行工具。本页按「上手 → 配置 → 日常管理」的顺序组织——
 新用户从头读，老用户直接跳到需要的章节。
 
 > 还不清楚「频道」「心跳」「定时任务」是什么？先看 [项目介绍](./intro)。
@@ -9,16 +9,16 @@
 
 ## 快速上手
 
-第一次用 QwenPaw，只需要这两条命令。
+第一次用 CoPaw，只需要这两条命令。
 
-### qwenpaw init
+### copaw init
 
 首次初始化，交互式引导你完成所有配置。
 
 ```bash
-qwenpaw init              # 交互式初始化（推荐新用户）
-qwenpaw init --defaults   # 不交互，用默认值（适合脚本）
-qwenpaw init --force      # 覆盖已有配置文件
+copaw init              # 交互式初始化（推荐新用户）
+copaw init --defaults   # 不交互，用默认值（适合脚本）
+copaw init --force      # 覆盖已有配置文件
 ```
 
 **交互流程（按顺序）：**
@@ -28,14 +28,14 @@ qwenpaw init --force      # 覆盖已有配置文件
 3. **环境变量** —— 可选添加工具所需的键值对。
 4. **HEARTBEAT.md** —— 在默认编辑器中编辑心跳检查清单。
 
-### qwenpaw app
+### copaw app
 
-启动 QwenPaw 服务。频道、定时任务、控制台等所有运行时功能都依赖此服务。
+启动 CoPaw 服务。频道、定时任务、控制台等所有运行时功能都依赖此服务。
 
 ```bash
-qwenpaw app                             # 默认 127.0.0.1:8088
-qwenpaw app --reload                    # 代码改动自动重载（开发用）
-qwenpaw app --log-level debug           # 详细日志
+copaw app                             # 默认 127.0.0.1:8088
+copaw app --reload                    # 代码改动自动重载（开发用）
+copaw app --log-level debug           # 详细日志
 ```
 
 | 选项          | 默认值      | 说明                                                          |
@@ -44,41 +44,41 @@ qwenpaw app --log-level debug           # 详细日志
 | `--port`      | `8088`      | 绑定端口                                                      |
 | `--reload`    | 关闭        | 文件变动时自动重载（仅开发用）                                |
 | `--log-level` | `info`      | `critical` / `error` / `warning` / `info` / `debug` / `trace` |
-| `--workers`   | —           | **[已废弃]** 将被忽略，QwenPaw 始终使用 1 个 worker           |
+| `--workers`   | —           | **[已废弃]** 将被忽略，CoPaw 始终使用 1 个 worker             |
 
-> **说明：** `--workers` 选项因稳定性原因已废弃。QwenPaw 被设计为单 worker 进程运行。多 worker 模式会导致内存状态管理和 WebSocket 连接出现问题。此选项将在未来版本中移除。
+> **说明：** `--workers` 选项因稳定性原因已废弃。CoPaw 被设计为单 worker 进程运行。多 worker 模式会导致内存状态管理和 WebSocket 连接出现问题。此选项将在未来版本中移除。
 
 ### 控制台
 
-`qwenpaw app` 启动后，在浏览器打开 `http://127.0.0.1:8088/` 即可进入 **控制台** ——
+`copaw app` 启动后，在浏览器打开 `http://127.0.0.1:8088/` 即可进入 **控制台** ——
 一个用于对话、频道、定时任务、技能、模型等的 Web 管理界面。详见 [控制台](./console)。
 
-若未构建前端，根路径会返回类似 `{"message": "QwenPaw Web Console is not available."}` 的提示信息（实际文案可能调整），API 仍可正常使用。
+若未构建前端，根路径会返回类似 `{"message": "CoPaw web console is not available."}` 的提示信息（实际文案可能调整），API 仍可正常使用。
 
 **构建方式：** 在项目 `console/` 目录下执行 `npm ci && npm run build`，
 然后将构建产物复制到包目录：
 `mkdir -p src/qwenpaw/console && cp -R console/dist/. src/qwenpaw/console/`。
 Docker 镜像或 pip 安装包已内置控制台，无需单独构建。
 
-### qwenpaw daemon
+### copaw daemon
 
 查看运行状态、版本、最近日志等，无需启动对话。与在对话中发送 `/daemon status` 等效果一致（CLI 无进程时可查看本地信息）。
 
 | 命令                           | 说明                                                                           |
 | ------------------------------ | ------------------------------------------------------------------------------ |
-| `qwenpaw daemon status`        | 状态（配置、工作目录、记忆服务）                                               |
-| `qwenpaw daemon restart`       | 打印说明（在对话中用 /daemon restart 可进程内重载）                            |
-| `qwenpaw daemon reload-config` | 重新读取并校验配置（频道/MCP 变更需在对话中 /daemon restart 或重启进程后生效） |
-| `qwenpaw daemon version`       | 版本与路径                                                                     |
-| `qwenpaw daemon logs [-n N]`   | 最近 N 行日志（默认 100，来自工作目录 `qwenpaw.log`）                          |
+| `copaw daemon status`        | 状态（配置、工作目录、记忆服务）                                               |
+| `copaw daemon restart`       | 打印说明（在对话中用 /daemon restart 可进程内重载）                            |
+| `copaw daemon reload-config` | 重新读取并校验配置（频道/MCP 变更需在对话中 /daemon restart 或重启进程后生效） |
+| `copaw daemon version`       | 版本与路径                                                                     |
+| `copaw daemon logs [-n N]`   | 最近 N 行日志（默认 100，来自工作目录 `qwenpaw.log`）                          |
 
 **多智能体支持：** 所有命令都支持 `--agent-id` 参数（默认为 `default`）。
 
 ```bash
-qwenpaw daemon status                     # 默认智能体状态
-qwenpaw daemon status --agent-id abc123   # 特定智能体状态
-qwenpaw daemon version
-qwenpaw daemon logs -n 50
+copaw daemon status                     # 默认智能体状态
+copaw daemon status --agent-id abc123   # 特定智能体状态
+copaw daemon version
+copaw daemon logs -n 50
 ```
 
 ---
