@@ -18,6 +18,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 from typing import List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -29,6 +30,10 @@ _local_whisper_model = None
 _local_whisper_lock = threading.Lock()
 _opencc_converter = None
 _opencc_converter_lock = threading.Lock()
+_local_whisper_status_cache: dict | None = None
+_local_whisper_status_cache_time = 0.0
+_local_whisper_status_cache_ttl_sec = 30.0
+_local_whisper_status_lock = threading.Lock()
 
 
 def _get_local_whisper_model():
@@ -137,6 +142,17 @@ def check_local_whisper_available() -> dict:
             "whisper_installed": bool,
         }
     """
+    global _local_whisper_status_cache  # noqa: PLW0603
+    global _local_whisper_status_cache_time  # noqa: PLW0603
+
+    now = time.monotonic()
+    with _local_whisper_status_lock:
+        if (
+            _local_whisper_status_cache is not None
+            and (now - _local_whisper_status_cache_time) < _local_whisper_status_cache_ttl_sec
+        ):
+            return dict(_local_whisper_status_cache)
+
     ffmpeg_ok = shutil.which("ffmpeg") is not None
 
     whisper_ok = False
@@ -147,11 +163,17 @@ def check_local_whisper_available() -> dict:
     except ImportError:
         pass
 
-    return {
+    status = {
         "available": ffmpeg_ok and whisper_ok,
         "ffmpeg_installed": ffmpeg_ok,
         "whisper_installed": whisper_ok,
     }
+
+    with _local_whisper_status_lock:
+        _local_whisper_status_cache = status
+        _local_whisper_status_cache_time = now
+
+    return dict(status)
 
 
 def _get_transcription_language_hints() -> dict[str, Optional[str]]:

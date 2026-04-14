@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Agent file management API."""
 
+import asyncio
+
 from fastapi import APIRouter, Body, HTTPException, Request
 from pydantic import BaseModel, Field
 
@@ -456,7 +458,7 @@ async def get_local_whisper_status() -> dict:
         check_local_whisper_available,
     )
 
-    return check_local_whisper_available()
+    return await asyncio.to_thread(check_local_whisper_available)
 
 
 @router.post(
