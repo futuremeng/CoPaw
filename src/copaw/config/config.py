@@ -1035,11 +1035,13 @@ def _default_builtin_tools() -> Dict[str, BuiltinToolConfig]:
             name="skill_market_search",
             enabled=True,
             description="Search enabled skill markets for installable skills",
+            icon="🧩",
         ),
         "skill_market_install": BuiltinToolConfig(
             name="skill_market_install",
             enabled=True,
             description="Install a skill from enabled markets after explicit confirmation",
+            icon="📥",
         ),
     }
 

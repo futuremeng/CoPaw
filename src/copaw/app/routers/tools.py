@@ -19,6 +19,8 @@ from ...config import load_config
 
 router = APIRouter(prefix="/tools", tags=["tools"])
 
+_DEFAULT_TOOL_ICON = "🔧"
+
 
 class ToolInfo(BaseModel):
     """Tool information for API responses."""
@@ -30,7 +32,17 @@ class ToolInfo(BaseModel):
         default=False,
         description="Whether to execute the tool asynchronously in background",
     )
-    icon: str = Field(default="🔧", description="Emoji icon for the tool")
+    icon: str = Field(default=_DEFAULT_TOOL_ICON, description="Emoji icon for the tool")
+
+
+def _build_tool_info(tool_config) -> ToolInfo:
+    return ToolInfo(
+        name=tool_config.name,
+        enabled=tool_config.enabled,
+        description=tool_config.description,
+        async_execution=tool_config.async_execution,
+        icon=tool_config.icon or _DEFAULT_TOOL_ICON,
+    )
 
 
 @router.get("", response_model=List[ToolInfo])
@@ -61,15 +73,7 @@ async def list_tools(
 
     tools_list = []
     for tool_config in builtin_tools.values():
-        tools_list.append(
-            ToolInfo(
-                name=tool_config.name,
-                enabled=tool_config.enabled,
-                description=tool_config.description,
-                async_execution=tool_config.async_execution,
-                icon=tool_config.icon,
-            ),
-        )
+        tools_list.append(_build_tool_info(tool_config))
 
     return tools_list
 
@@ -117,13 +121,7 @@ async def toggle_tool(
     schedule_agent_reload(request, workspace.agent_id)
 
     # Return immediately (optimistic update)
-    return ToolInfo(
-        name=tool_config.name,
-        enabled=tool_config.enabled,
-        description=tool_config.description,
-        async_execution=tool_config.async_execution,
-        icon=tool_config.icon,
-    )
+    return _build_tool_info(tool_config)
 
 
 @router.patch("/{tool_name}/async-execution", response_model=ToolInfo)
@@ -171,10 +169,4 @@ async def update_tool_async_execution(
     schedule_agent_reload(request, workspace.agent_id)
 
     # Return immediately (optimistic update)
-    return ToolInfo(
-        name=tool_config.name,
-        enabled=tool_config.enabled,
-        description=tool_config.description,
-        async_execution=tool_config.async_execution,
-        icon=tool_config.icon,
-    )
+    return _build_tool_info(tool_config)
