@@ -66,6 +66,7 @@ interface SkillDrawerProps {
   open: boolean;
   editingSkill: SkillSpec | null;
   form: FormInstance<SkillDrawerFormValues>;
+  availableTags?: string[];
   onClose: () => void;
   onSubmit: (values: SkillSpec) => void;
   onContentChange?: (content: string) => void;
@@ -75,6 +76,7 @@ export function SkillDrawer({
   open,
   editingSkill,
   form,
+  availableTags = [],
   onClose,
   onSubmit,
   onContentChange,
@@ -345,7 +347,10 @@ export function SkillDrawer({
         >
           <Select
             mode="tags"
-            open={false}
+            options={availableTags.map((tag) => ({
+              label: tag,
+              value: tag,
+            }))}
             placeholder={t("skillPool.tagsPlaceholder")}
             maxCount={MAX_TAGS}
           />

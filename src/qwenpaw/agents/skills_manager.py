@@ -962,6 +962,8 @@ def import_builtin_skills(
             )
             if "config" in existing:
                 entry["config"] = existing.get("config")
+            if "tags" in existing:
+                entry["tags"] = existing.get("tags")
             skills[skill_name] = entry
 
         return {
@@ -1306,6 +1308,8 @@ def update_single_builtin(skill_name: str) -> dict[str, Any]:
         )
         if "config" in existing:
             entry["config"] = existing["config"]
+        if "tags" in existing:
+            entry["tags"] = existing["tags"]
         payload["skills"][skill_name] = entry
         return entry
 
@@ -1390,7 +1394,6 @@ def _import_skill_dir(
     src_dir: Path,
     target_root: Path,
     skill_name: str,
-    overwrite: bool,
 ) -> bool:
     """Import a skill directory to target location.
 
@@ -1398,8 +1401,6 @@ def _import_skill_dir(
         src_dir: Source skill directory
         target_root: Target root directory
         skill_name: Name of the skill
-        overwrite: Whether to overwrite existing skill
-
     Returns:
         bool: True if import succeeded, False otherwise
     """
@@ -1408,7 +1409,7 @@ def _import_skill_dir(
         return False
 
     target_dir = target_root / skill_name
-    if target_dir.exists() and not overwrite:
+    if target_dir.exists():
         return False
     _copy_skill_dir(src_dir, target_dir)
     return True
@@ -1556,7 +1557,6 @@ class SkillService:
         self,
         name: str,
         content: str,
-        overwrite: bool = False,
         references: dict[str, Any] | None = None,
         scripts: dict[str, Any] | None = None,
         extra_files: dict[str, Any] | None = None,
@@ -1568,7 +1568,7 @@ class SkillService:
         skill_root = get_workspace_skills_dir(self.workspace_dir)
         skill_root.mkdir(parents=True, exist_ok=True)
         skill_dir = skill_root / skill_name
-        if skill_dir.exists() and not overwrite:
+        if skill_dir.exists():
             return None
 
         with _staged_skill_dir(skill_name) as staged_dir:
@@ -1625,6 +1625,7 @@ class SkillService:
         content: str,
         target_name: str | None = None,
         config: dict[str, Any] | None = None,
+        overwrite: bool = False,
     ) -> dict[str, Any]:
         """Edit-in-place or rename-save a workspace skill."""
         final_name = _normalize_skill_dir_name(target_name or skill_name)
@@ -1634,86 +1635,16 @@ class SkillService:
             return {"success": False, "reason": "not_found"}
 
         if final_name == skill_name:
-            new_config = (
-                config if config is not None else old_entry.get("config") or {}
+            return self._save_skill_in_place(
+                skill_name=skill_name,
+                content=content,
+                config=config,
+                old_entry=old_entry,
             )
-            skill_root = get_workspace_skills_dir(self.workspace_dir)
-            skill_root.mkdir(parents=True, exist_ok=True)
-            skill_dir = skill_root / skill_name
-
-            old_md = (
-                (skill_dir / "SKILL.md").read_text(
-                    encoding="utf-8",
-                )
-                if (skill_dir / "SKILL.md").exists()
-                else ""
-            )
-            content_changed = content != old_md
-            if not content_changed and new_config == (
-                old_entry.get("config") or {}
-            ):
-                return {
-                    "success": True,
-                    "mode": "noop",
-                    "name": skill_name,
-                }
-
-            if content_changed:
-                with _staged_skill_dir(skill_name) as staged_dir:
-                    if skill_dir.exists():
-                        _copy_skill_dir(skill_dir, staged_dir)
-                    (staged_dir / "SKILL.md").write_text(
-                        content,
-                        encoding="utf-8",
-                    )
-                    _scan_skill_dir_or_raise(staged_dir, skill_name)
-                (skill_dir / "SKILL.md").write_text(
-                    content,
-                    encoding="utf-8",
-                )
-            source = (
-                "customized"
-                if content_changed
-                else old_entry.get("source", "customized")
-            )
-            metadata = _build_skill_metadata(
-                skill_name,
-                skill_dir,
-                source=source,
-                protected=False,
-                compute_signature=False,
-            )
-
-            def _edit(payload: dict[str, Any]) -> None:
-                payload.setdefault("skills", {})
-                entry = payload["skills"].get(skill_name) or {}
-                payload["skills"][skill_name] = {
-                    "enabled": bool(entry.get("enabled", False)),
-                    "channels": entry.get("channels") or ["all"],
-                    "source": metadata["source"],
-                    "config": new_config,
-                    "metadata": metadata,
-                    "requirements": metadata["requirements"],
-                    "updated_at": metadata["updated_at"],
-                }
-
-            _mutate_json(
-                get_workspace_skill_manifest_path(
-                    self.workspace_dir,
-                ),
-                _default_workspace_manifest(),
-                _edit,
-            )
-            return {
-                "success": True,
-                "mode": "edit",
-                "name": skill_name,
-            }
 
         skill_root = get_workspace_skills_dir(self.workspace_dir)
         target_dir = skill_root / final_name
-        old_dir = skill_root / skill_name
-        if target_dir.exists():
+        if target_dir.exists() and not overwrite:
             existing = (
                 {p.name for p in skill_root.iterdir() if p.is_dir()}
                 if skill_root.exists()
@@ -1727,6 +1658,112 @@ class SkillService:
                     existing,
                 ),
             }
+        return self._save_skill_as_rename(
+            skill_name=skill_name,
+            final_name=final_name,
+            content=content,
+            config=config,
+            old_entry=old_entry,
+        )
+
+    def _save_skill_in_place(
+        self,
+        *,
+        skill_name: str,
+        content: str,
+        config: dict[str, Any] | None,
+        old_entry: dict[str, Any],
+    ) -> dict[str, Any]:
+        new_config = (
+            config if config is not None else old_entry.get("config") or {}
+        )
+        skill_root = get_workspace_skills_dir(self.workspace_dir)
+        skill_root.mkdir(parents=True, exist_ok=True)
+        skill_dir = skill_root / skill_name
+
+        old_md = (
+            (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+            if (skill_dir / "SKILL.md").exists()
+            else ""
+        )
+        content_changed = content != old_md
+        if not content_changed and new_config == (
+            old_entry.get("config") or {}
+        ):
+            return {
+                "success": True,
+                "mode": "noop",
+                "name": skill_name,
+            }
+
+        if content_changed:
+            with _staged_skill_dir(skill_name) as staged_dir:
+                if skill_dir.exists():
+                    _copy_skill_dir(skill_dir, staged_dir)
+                (staged_dir / "SKILL.md").write_text(
+                    content,
+                    encoding="utf-8",
+                )
+                _scan_skill_dir_or_raise(staged_dir, skill_name)
+            (skill_dir / "SKILL.md").write_text(
+                content,
+                encoding="utf-8",
+            )
+        source = (
+            "customized"
+            if content_changed
+            else old_entry.get("source", "customized")
+        )
+        metadata = _build_skill_metadata(
+            skill_name,
+            skill_dir,
+            source=source,
+            protected=False,
+            compute_signature=False,
+        )
+
+        def _edit(payload: dict[str, Any]) -> None:
+            payload.setdefault("skills", {})
+            current_entry = (
+                payload["skills"].get(skill_name) or old_entry or {}
+            )
+            next_entry = {
+                "enabled": bool(current_entry.get("enabled", False)),
+                "channels": current_entry.get("channels") or ["all"],
+                "source": metadata["source"],
+                "config": new_config,
+                "metadata": metadata,
+                "requirements": metadata["requirements"],
+                "updated_at": metadata["updated_at"],
+            }
+            existing_tags = current_entry.get("tags")
+            if existing_tags is not None:
+                next_entry["tags"] = existing_tags
+            payload["skills"][skill_name] = next_entry
+
+        _mutate_json(
+            get_workspace_skill_manifest_path(self.workspace_dir),
+            _default_workspace_manifest(),
+            _edit,
+        )
+        return {
+            "success": True,
+            "mode": "edit",
+            "name": skill_name,
+        }
+
+    def _save_skill_as_rename(
+        self,
+        *,
+        skill_name: str,
+        final_name: str,
+        content: str,
+        config: dict[str, Any] | None,
+        old_entry: dict[str, Any],
+    ) -> dict[str, Any]:
+        skill_root = get_workspace_skills_dir(self.workspace_dir)
+        target_dir = skill_root / final_name
+        old_dir = skill_root / skill_name
 
         with _staged_skill_dir(final_name) as staged_dir:
             _copy_skill_dir(old_dir, staged_dir)
@@ -1751,15 +1788,22 @@ class SkillService:
 
         def _rename_entry(payload: dict[str, Any]) -> None:
             payload.setdefault("skills", {})
-            payload["skills"][final_name] = {
-                "enabled": bool(old_entry.get("enabled", False)),
-                "channels": old_channels,
+            current_entry = (
+                payload["skills"].get(skill_name) or old_entry or {}
+            )
+            next_entry = {
+                "enabled": bool(current_entry.get("enabled", False)),
+                "channels": current_entry.get("channels") or old_channels,
                 "source": metadata["source"],
                 "config": old_config,
                 "metadata": metadata,
                 "requirements": metadata["requirements"],
                 "updated_at": metadata["updated_at"],
             }
+            existing_tags = current_entry.get("tags")
+            if existing_tags is not None:
+                next_entry["tags"] = existing_tags
+            payload["skills"][final_name] = next_entry
             payload["skills"].pop(skill_name, None)
 
         _mutate_json(
@@ -1779,7 +1823,6 @@ class SkillService:
     def import_from_zip(
         self,
         data: bytes,
-        overwrite: bool = False,
         enable: bool = False,
         target_name: str | None = None,
         rename_map: dict[str, str] | None = None,
@@ -1826,7 +1869,7 @@ class SkillService:
                     continue
                 seen_names.add(skill_name)
                 exists = (skill_root / skill_name).exists()
-                if exists and not overwrite:
+                if exists:
                     conflicts.append(
                         _build_import_conflict(
                             skill_name,
@@ -1848,7 +1891,6 @@ class SkillService:
                     skill_dir,
                     skill_root,
                     skill_name,
-                    True,
                 ):
                     imported.append(skill_name)
 
@@ -2139,7 +2181,6 @@ class SkillPoolService:
     def import_from_zip(
         self,
         data: bytes,
-        overwrite: bool = False,
         target_name: str | None = None,
         rename_map: dict[str, str] | None = None,
     ) -> dict[str, Any]:
@@ -2196,8 +2237,7 @@ class SkillPoolService:
                 occupied = (
                     existing is not None or (pool_dir / skill_name).exists()
                 )
-                is_builtin_entry = _is_pool_builtin_entry(existing)
-                if occupied and (not overwrite or is_builtin_entry):
+                if occupied:
                     conflicts.append(
                         _build_import_conflict(
                             skill_name,
@@ -2218,7 +2258,6 @@ class SkillPoolService:
                     skill_dir,
                     pool_dir,
                     skill_name,
-                    True,
                 ):
                     imported.append(skill_name)
 
@@ -2295,6 +2334,7 @@ class SkillPoolService:
         skill_name: str,
         *,
         target_name: str | None = None,
+        overwrite: bool = False,
     ) -> dict[str, Any]:
         manifest = read_skill_pool_manifest()
         entry = manifest.get("skills", {}).get(skill_name)
@@ -2313,7 +2353,7 @@ class SkillPoolService:
             }
 
         existing = manifest.get("skills", {}).get(normalized_target)
-        if existing is not None:
+        if existing is not None and not overwrite:
             return {
                 "success": False,
                 "reason": "conflict",
@@ -2336,6 +2376,7 @@ class SkillPoolService:
         content: str,
         target_name: str | None = None,
         config: dict[str, Any] | None = None,
+        overwrite: bool = False,
     ) -> dict[str, Any]:
         _validate_skill_content(content)
         manifest = read_skill_pool_manifest()
@@ -2346,72 +2387,61 @@ class SkillPoolService:
         edit_target = self.get_edit_target_name(
             skill_name,
             target_name=target_name,
+            overwrite=overwrite,
         )
         if not edit_target.get("success"):
             return edit_target
 
         final_name = str(edit_target["name"])
-        is_rename = (
-            str(edit_target["mode"]) == "rename" and final_name != skill_name
+        if str(edit_target["mode"]) == "rename" and final_name != skill_name:
+            return self._save_pool_skill_as_rename(
+                skill_name=skill_name,
+                final_name=final_name,
+                content=content,
+                config=config,
+                entry=entry,
+            )
+        return self._save_pool_skill_in_place(
+            skill_name=skill_name,
+            content=content,
+            config=config,
+            entry=entry,
         )
-        keep_original = _is_pool_builtin_entry(entry) and is_rename
-        skill_dir = get_skill_pool_dir() / final_name
-        old_skill_dir = get_skill_pool_dir() / skill_name
+
+    def _save_pool_skill_in_place(
+        self,
+        *,
+        skill_name: str,
+        content: str,
+        config: dict[str, Any] | None,
+        entry: dict[str, Any],
+    ) -> dict[str, Any]:
+        skill_dir = get_skill_pool_dir() / skill_name
         new_config = (
             config if config is not None else entry.get("config") or {}
         )
-
-        source_dir = old_skill_dir if is_rename else skill_dir
         old_md = (
-            (source_dir / "SKILL.md").read_text(
-                encoding="utf-8",
-            )
-            if (source_dir / "SKILL.md").exists()
+            (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+            if (skill_dir / "SKILL.md").exists()
             else ""
         )
         content_changed = content != old_md
+        if not content_changed and new_config == (entry.get("config") or {}):
+            return {
+                "success": True,
+                "mode": "noop",
+                "name": skill_name,
+            }
 
-        if not is_rename:
-            if _is_pool_builtin_entry(entry) and content_changed:
-                return {
-                    "success": False,
-                    "reason": "conflict",
-                    "mode": "rename",
-                    "suggested_name": suggest_conflict_name(
-                        skill_name,
-                        set(manifest.get("skills", {}).keys()),
-                    ),
-                }
-            if not content_changed and new_config == (
-                entry.get("config") or {}
-            ):
-                return {
-                    "success": True,
-                    "mode": "noop",
-                    "name": skill_name,
-                }
-
-        if is_rename:
-            with _staged_skill_dir(final_name) as staged_dir:
-                if source_dir.exists():
-                    _copy_skill_dir(source_dir, staged_dir)
-                (staged_dir / "SKILL.md").write_text(
-                    content,
-                    encoding="utf-8",
-                )
-                _scan_skill_dir_or_raise(staged_dir, final_name)
-                _copy_skill_dir(staged_dir, skill_dir)
-            if not keep_original and old_skill_dir.exists():
-                shutil.rmtree(old_skill_dir)
-        elif content_changed:
-            with _staged_skill_dir(final_name) as staged_dir:
+        if content_changed:
+            with _staged_skill_dir(skill_name) as staged_dir:
                 if skill_dir.exists():
                     _copy_skill_dir(skill_dir, staged_dir)
                 (staged_dir / "SKILL.md").write_text(
                     content,
                     encoding="utf-8",
                 )
-                _scan_skill_dir_or_raise(staged_dir, final_name)
+                _scan_skill_dir_or_raise(staged_dir, skill_name)
             (skill_dir / "SKILL.md").write_text(
                 content,
                 encoding="utf-8",
@@ -2419,26 +2449,25 @@ class SkillPoolService:
 
         source = (
             "customized"
-            if content_changed or is_rename
+            if content_changed
             else entry.get("source", "customized")
         )
-        next_entry = _build_skill_metadata(
-            final_name,
-            skill_dir,
-            source=source,
-            protected=False,
-            compute_signature=False,
-        )
-        next_entry["config"] = new_config
-        existing_tags = entry.get("tags")
-        if existing_tags is not None:
-            next_entry["tags"] = existing_tags
 
         def _update(payload: dict[str, Any]) -> None:
             payload.setdefault("skills", {})
-            payload["skills"][final_name] = next_entry
-            if is_rename and not keep_original:
-                payload["skills"].pop(skill_name, None)
+            current_entry = payload["skills"].get(skill_name) or entry or {}
+            next_entry = _build_skill_metadata(
+                skill_name,
+                skill_dir,
+                source=source,
+                protected=False,
+                compute_signature=False,
+            )
+            next_entry["config"] = new_config
+            existing_tags = current_entry.get("tags")
+            if existing_tags is not None:
+                next_entry["tags"] = existing_tags
+            payload["skills"][skill_name] = next_entry
 
         _mutate_json(
             get_pool_skill_manifest_path(),
@@ -2447,7 +2476,63 @@ class SkillPoolService:
         )
         return {
             "success": True,
-            "mode": str(edit_target["mode"]),
+            "mode": "edit",
+            "name": skill_name,
+        }
+
+    def _save_pool_skill_as_rename(
+        self,
+        *,
+        skill_name: str,
+        final_name: str,
+        content: str,
+        config: dict[str, Any] | None,
+        entry: dict[str, Any],
+    ) -> dict[str, Any]:
+        skill_dir = get_skill_pool_dir() / final_name
+        old_skill_dir = get_skill_pool_dir() / skill_name
+
+        with _staged_skill_dir(final_name) as staged_dir:
+            if old_skill_dir.exists():
+                _copy_skill_dir(old_skill_dir, staged_dir)
+            (staged_dir / "SKILL.md").write_text(
+                content,
+                encoding="utf-8",
+            )
+            _scan_skill_dir_or_raise(staged_dir, final_name)
+            _copy_skill_dir(staged_dir, skill_dir)
+        if old_skill_dir.exists():
+            shutil.rmtree(old_skill_dir)
+
+        new_config = (
+            config if config is not None else entry.get("config") or {}
+        )
+
+        def _update(payload: dict[str, Any]) -> None:
+            payload.setdefault("skills", {})
+            current_entry = payload["skills"].get(skill_name) or entry or {}
+            next_entry = _build_skill_metadata(
+                final_name,
+                skill_dir,
+                source="customized",
+                protected=False,
+                compute_signature=False,
+            )
+            next_entry["config"] = new_config
+            existing_tags = current_entry.get("tags")
+            if existing_tags is not None:
+                next_entry["tags"] = existing_tags
+            payload["skills"][final_name] = next_entry
+            payload["skills"].pop(skill_name, None)
+
+        _mutate_json(
+            get_pool_skill_manifest_path(),
+            _default_pool_manifest(),
+            _update,
+        )
+        return {
+            "success": True,
+            "mode": "rename",
             "name": final_name,
         }
 
@@ -2456,26 +2541,18 @@ class SkillPoolService:
         workspace_dir: Path,
         skill_name: str,
         *,
-        target_name: str | None = None,
         overwrite: bool = False,
+        preview_only: bool = False,
     ) -> dict[str, Any]:
         source_dir = get_workspace_skills_dir(workspace_dir) / skill_name
         if not source_dir.exists():
             return {"success": False, "reason": "not_found"}
 
-        final_name = _normalize_skill_dir_name(target_name or skill_name)
+        final_name = _normalize_skill_dir_name(skill_name)
         target_dir = get_skill_pool_dir() / final_name
         manifest = read_skill_pool_manifest()
         existing = manifest.get("skills", {}).get(final_name)
         if existing:
-            if _is_pool_builtin_entry(existing):
-                return {
-                    "success": False,
-                    "reason": "conflict",
-                    "suggested_name": suggest_conflict_name(
-                        final_name,
-                    ),
-                }
             if not overwrite:
                 return {
                     "success": False,
@@ -2484,6 +2561,8 @@ class SkillPoolService:
                         final_name,
                     ),
                 }
+        if preview_only:
+            return {"success": True, "name": final_name}
 
         with _staged_skill_dir(final_name) as staged_dir:
             _copy_skill_dir(source_dir, staged_dir)
@@ -2555,6 +2634,8 @@ class SkillPoolService:
                 "workspace_id": ws_id,
                 "workspace_name": ws_name,
                 "skill_name": final_name,
+                "source_version_text": pool_ver,
+                "current_version_text": ws_ver,
             }
         return {
             "success": False,
@@ -2569,7 +2650,6 @@ class SkillPoolService:
         skill_name: str,
         workspace_dir: Path,
         *,
-        target_name: str | None = None,
         overwrite: bool = False,
     ) -> dict[str, Any]:
         manifest = read_skill_pool_manifest()
@@ -2578,7 +2658,7 @@ class SkillPoolService:
             return {"success": False, "reason": "not_found"}
 
         source_dir = get_skill_pool_dir() / skill_name
-        final_name = _normalize_skill_dir_name(target_name or skill_name)
+        final_name = _normalize_skill_dir_name(skill_name)
         target_dir = get_workspace_skills_dir(workspace_dir) / final_name
         workspace_manifest = read_skill_manifest(workspace_dir)
         existing = workspace_manifest.get("skills", {}).get(final_name)
@@ -2642,7 +2722,6 @@ class SkillPoolService:
         skill_name: str,
         workspace_dir: Path,
         *,
-        target_name: str | None = None,
         overwrite: bool = False,
     ) -> dict[str, Any]:
         manifest = read_skill_pool_manifest()
@@ -2650,7 +2729,7 @@ class SkillPoolService:
         if entry is None:
             return {"success": False, "reason": "not_found"}
 
-        final_name = _normalize_skill_dir_name(target_name or skill_name)
+        final_name = _normalize_skill_dir_name(skill_name)
         workspace_manifest = read_skill_manifest(workspace_dir)
         existing = workspace_manifest.get("skills", {}).get(final_name)
         workspace_identity = get_workspace_identity(workspace_dir)

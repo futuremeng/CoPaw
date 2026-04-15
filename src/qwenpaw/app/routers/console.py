@@ -50,7 +50,7 @@ def _extract_session_and_payload(
     run_key must be ChatSpec.id (chat_id) so it matches list_chats/get_chat.
     """
     if isinstance(request_data, AgentRequest):
-        channel_id = request_data.channel or "console"
+        channel_id = getattr(request_data, "channel", None) or "console"
         sender_id = request_data.user_id or "default"
         session_id = request_data.session_id or "default"
         content_parts = (
