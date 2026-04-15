@@ -62,7 +62,7 @@ class MCPClientManager:
                 logger.warning(
                     f"MCP client '{key}' unavailable at startup"
                     f" ({type(e).__name__}: {e})."
-                    " Will be retried automatically.",
+                    " Auto-reconnect is disabled; fix config and reconnect manually.",
                 )
 
     def active_keys(self) -> set:
