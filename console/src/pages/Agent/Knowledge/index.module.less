@@ -1177,6 +1177,200 @@
   color: #595959;
 }
 
+:global(.dark-mode) {
+  .description,
+  .contentEmpty,
+  .searchStatusText,
+  .filterLabel,
+  .infoLabel,
+  .paramLabel,
+  .documentTitle,
+  .searchHitSnippet,
+  .enableBackfillHint,
+  .quantLabel,
+  .quantNote,
+  .quantReason,
+  .unifiedProgressLabel {
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .quantCard,
+  .documentMarkdown,
+  .searchHitCard,
+  .cardContainer,
+  .infoBlock,
+  .dragZone {
+    border-color: rgba(255, 255, 255, 0.1);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.02) 100%);
+  }
+
+  .quantCardPositive {
+    border-color: rgba(95, 191, 159, 0.3);
+    background: linear-gradient(180deg, rgba(35, 93, 41, 0.34) 0%, rgba(27, 72, 32, 0.24) 100%);
+  }
+
+  .quantCardWarning {
+    border-color: rgba(245, 166, 35, 0.3);
+    background: linear-gradient(180deg, rgba(92, 62, 18, 0.36) 0%, rgba(73, 49, 18, 0.26) 100%);
+  }
+
+  .quantCardNeutral {
+    border-color: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .quantValue,
+  .cardTitle,
+  .searchHitPath,
+  .cardHeaderId,
+  .statusRow,
+  .statusSubRow {
+    color: rgba(255, 248, 240, 0.9);
+  }
+
+  .originTag,
+  .typeTag,
+  .indexedTag,
+  .notIndexedTag {
+    border-color: rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 248, 240, 0.82);
+  }
+
+  .cardContainer {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+
+    &:hover {
+      border-color: rgba(255, 255, 255, 0.18);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    &:active {
+      border-color: rgba(255, 255, 255, 0.24);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    &[aria-busy="true"] {
+      border-color: rgba(122, 162, 255, 0.3);
+      background: linear-gradient(180deg, rgba(46, 107, 213, 0.2) 0%, rgba(33, 76, 150, 0.14) 100%);
+    }
+  }
+
+  .cardContainerActive {
+    border-color: rgba(255, 127, 22, 0.38);
+    box-shadow: 0 0 0 1px rgba(255, 127, 22, 0.16);
+  }
+
+  .clickableBlock {
+    &:hover {
+      border-color: rgba(255, 255, 255, 0.2);
+      background-color: rgba(255, 255, 255, 0.06);
+    }
+
+    &:active {
+      border-color: rgba(255, 255, 255, 0.26);
+      background-color: rgba(255, 255, 255, 0.08);
+    }
+
+    &:focus-visible {
+      border-color: rgba(255, 127, 22, 0.44);
+      box-shadow: 0 0 0 2px rgba(255, 127, 22, 0.24);
+    }
+  }
+
+  .cardFooter {
+    border-top-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .actionButton {
+    color: rgba(255, 248, 240, 0.84);
+
+    &:hover {
+      background-color: rgba(255, 255, 255, 0.08);
+    }
+
+    &:active {
+      background-color: rgba(255, 255, 255, 0.12);
+    }
+
+    &:focus-visible {
+      box-shadow: 0 0 0 2px rgba(255, 127, 22, 0.22);
+    }
+  }
+
+  .deleteButton {
+    &:hover {
+      background-color: #ff4d4f;
+      color: #fff;
+      border-color: #ff4d4f;
+    }
+  }
+
+  .remoteError {
+    color: #ffb8b2;
+  }
+
+  .dragZone {
+    &:hover {
+      border-color: rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.05);
+    }
+  }
+
+  .dragZoneActive {
+    border-color: rgba(255, 127, 22, 0.42);
+    background: rgba(255, 127, 22, 0.12);
+  }
+
+  .knowledgePage {
+    :global(.ant-divider),
+    :global(.copaw-divider) {
+      border-color: rgba(255, 255, 255, 0.1);
+    }
+
+    :global(.ant-select-selector),
+    :global(.copaw-select-selector),
+    :global(.ant-input),
+    :global(.copaw-input),
+    :global(.ant-input-affix-wrapper),
+    :global(.copaw-input-affix-wrapper),
+    :global(.ant-input-number),
+    :global(.copaw-input-number) {
+      background: rgba(255, 255, 255, 0.05) !important;
+      border-color: rgba(255, 255, 255, 0.14) !important;
+      color: rgba(255, 248, 240, 0.88) !important;
+    }
+
+    :global(.ant-input::placeholder),
+    :global(.copaw-input::placeholder),
+    :global(.ant-select-selection-placeholder),
+    :global(.copaw-select-selection-placeholder) {
+      color: rgba(255, 255, 255, 0.44) !important;
+    }
+
+    :global(.ant-btn:not(.ant-btn-primary):not(.ant-btn-dangerous)),
+    :global(.copaw-btn:not(.copaw-btn-primary):not(.copaw-btn-dangerous)) {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.14);
+      color: rgba(255, 248, 240, 0.86);
+    }
+
+    :global(.ant-btn:not(.ant-btn-primary):not(.ant-btn-dangerous):hover),
+    :global(.copaw-btn:not(.copaw-btn-primary):not(.copaw-btn-dangerous):hover) {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.24);
+      color: rgba(255, 248, 240, 0.94);
+    }
+
+    :global(.ant-tag),
+    :global(.copaw-tag) {
+      border-color: rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.06);
+      color: rgba(255, 248, 240, 0.84);
+    }
+  }
+}
+
 @media (max-width: 900px) {
   .header {
     flex-wrap: wrap;
