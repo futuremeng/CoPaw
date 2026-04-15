@@ -1,27 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  CheckSquareOutlined,
-  CodeOutlined,
-  CopyOutlined,
-  FileMarkdownOutlined,
-  FileOutlined,
-  ApartmentOutlined,
-  DatabaseOutlined,
-  FolderOpenOutlined,
-  FileSearchOutlined,
-  LeftOutlined,
-  RobotOutlined,
-  RightOutlined,
-  ToolOutlined,
-} from "@ant-design/icons";
-import {
   Alert,
   Badge,
   Button,
   Card,
   Drawer,
   Empty,
-  Menu,
   Modal,
   Popconfirm,
   Select,
@@ -33,8 +17,6 @@ import {
 } from "antd";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import type { MenuProps } from "antd";
-import type { ReactNode } from "react";
 import { agentsApi } from "../../../api/modules/agents";
 import { chatApi } from "../../../api/modules/chat";
 import { knowledgeApi } from "../../../api/modules/knowledge";
@@ -50,6 +32,7 @@ import ProjectKnowledgeSignalsPanel from "./ProjectKnowledgeSignalsPanel";
 import ProjectKnowledgeSourcesPanel from "./ProjectKnowledgeSourcesPanel";
 import ProjectKnowledgeSettingsPanel from "./ProjectKnowledgeSettingsPanel";
 import ProjectOverviewCard from "./ProjectOverviewCard";
+import ProjectStageMenu from "./ProjectStageMenu";
 import ProjectUploadModal from "./ProjectUploadModal";
 import ProjectWorkbenchPanel from "./ProjectWorkbenchPanel";
 import ProjectMetricsPanel from "./ProjectMetricsPanel";
@@ -116,6 +99,7 @@ import type {
   QualityLoopJobStatus,
 } from "../../../api/types";
 import type { ChatSpec } from "../../../api/types/chat";
+import { useTheme } from "../../../contexts/ThemeContext";
 import { useAgentStore } from "../../../stores/agentStore";
 import styles from "./index.module.less";
 
@@ -273,37 +257,6 @@ function formatRuntimeTimestamp(value: string | null | undefined, locale: string
     hour: "2-digit",
     minute: "2-digit",
   }).format(parsed);
-}
-
-function getLeafFilterIcon(filterKey: ProjectFileFilterKey): ReactNode {
-  switch (filterKey) {
-    case "original":
-      return <FolderOpenOutlined />;
-    case "intermediate":
-      return <FileOutlined />;
-    case "artifact":
-      return <CheckSquareOutlined />;
-    case "markdown":
-      return <FileMarkdownOutlined />;
-    case "text":
-      return <FileSearchOutlined />;
-    case "script":
-      return <CodeOutlined />;
-    case "otherType":
-      return <CopyOutlined />;
-    case "agent":
-      return <RobotOutlined />;
-    case "skill":
-      return <ToolOutlined />;
-    case "flow":
-      return <ApartmentOutlined />;
-    case "case":
-      return <CheckSquareOutlined />;
-    case "builtin":
-      return <FileOutlined />;
-    default:
-      return <FileOutlined />;
-  }
 }
 
 function getCurrentAgent(
@@ -521,6 +474,7 @@ function getRealtimeBadgeStatus(status: ProjectRealtimeConnectionStatus) {
 }
 
 export default function ProjectDetailPage() {
+  const { isDark } = useTheme();
   const { t, i18n } = useTranslation();
   const translateWithFallback = useCallback(
     (key: string, fallback: string) => t(key, fallback),
@@ -1134,224 +1088,6 @@ export default function ProjectDetailPage() {
     projectFileSummary?.visible_files,
     visibleProjectSummary.totalFiles,
   ]);
-
-  const stageLeafFilters = useMemo(
-    () => ({
-      source: [
-        { key: "original" as const, label: t("projects.filesOriginal", "Original Files"), count: leafCounts.original },
-        { key: "intermediate" as const, label: t("projects.filesIntermediate", "Intermediate Files"), count: leafCounts.intermediate },
-        { key: "artifact" as const, label: t("projects.filesArtifact", "Artifact Files"), count: leafCounts.artifact },
-      ],
-      knowledge: [
-        { key: "markdown" as const, label: t("projects.quantMarkdownFiles", "Markdown"), count: leafCounts.markdown },
-        { key: "text" as const, label: t("projects.quantTextFiles", "文本文件"), count: leafCounts.text },
-        { key: "script" as const, label: t("projects.quantScriptFiles", "脚本 (.py)"), count: leafCounts.script },
-        { key: "otherType" as const, label: t("projects.quantOtherTypeFiles", "其他类型"), count: leafCounts.otherType },
-      ],
-      output: [
-        { key: "agent" as const, label: t("projects.filesAgent", "智能体"), count: leafCounts.agent },
-        { key: "skill" as const, label: t("projects.filesSkill", "技能"), count: leafCounts.skill },
-        { key: "flow" as const, label: t("projects.filesFlow", "流程"), count: leafCounts.flow },
-        { key: "case" as const, label: t("projects.filesCase", "案例"), count: leafCounts.case },
-      ],
-      builtin: [
-        { key: "builtin" as const, label: t("projects.filesBuiltIn", "Built-in Files"), count: leafCounts.builtin },
-      ],
-    }),
-    [leafCounts, t],
-  );
-
-  const stageMenuItems = useMemo<MenuProps["items"]>(
-    () => [
-      {
-        key: "stage:source",
-        icon: <FileSearchOutlined />,
-        label: (
-          <span className={styles.stageMenuLabel}>
-            <span>{t("projects.stage.source", "Source")}</span>
-            <span
-              className={`${styles.stageMenuCount} ${activeStage === "source" ? styles.stageMenuCountActive : styles.stageMenuCountMuted}`}
-            >
-              {stageCounts.source}
-            </span>
-          </span>
-        ),
-        children: stageLeafFilters.source.map((item) => ({
-          key: item.key,
-          icon: getLeafFilterIcon(item.key),
-          label: (
-            <span className={styles.stageLeafMenuLabel}>
-              <span>{item.label}</span>
-              <span
-                className={`${styles.stageLeafMenuCount} ${selectedMetricFilter === item.key ? styles.stageLeafMenuCountActive : styles.stageLeafMenuCountMuted}`}
-              >
-                {item.count}
-              </span>
-            </span>
-          ),
-        })),
-      },
-      {
-        key: "stage:knowledge",
-        icon: <DatabaseOutlined />,
-        label: (
-          <span className={styles.stageMenuLabel}>
-            <span>{t("projects.stage.fileTypes", "文件类型")}</span>
-            <span
-              className={`${styles.stageMenuCount} ${activeStage === "knowledge" ? styles.stageMenuCountActive : styles.stageMenuCountMuted}`}
-            >
-              {stageCounts.knowledge}
-            </span>
-          </span>
-        ),
-        children: stageLeafFilters.knowledge.map((item) => ({
-          key: item.key,
-          icon: getLeafFilterIcon(item.key),
-          label: (
-            <span className={styles.stageLeafMenuLabel}>
-              <span>{item.label}</span>
-              <span
-                className={`${styles.stageLeafMenuCount} ${selectedMetricFilter === item.key ? styles.stageLeafMenuCountActive : styles.stageLeafMenuCountMuted}`}
-              >
-                {item.count}
-              </span>
-            </span>
-          ),
-        })),
-      },
-      {
-        key: "stage:output",
-        icon: <ApartmentOutlined />,
-        label: (
-          <span className={styles.stageMenuLabel}>
-            <span>{t("projects.stage.projectFiles", "项目文件")}</span>
-            <span
-              className={`${styles.stageMenuCount} ${activeStage === "output" ? styles.stageMenuCountActive : styles.stageMenuCountMuted}`}
-            >
-              {stageCounts.outputRuns || stageCounts.output}
-            </span>
-          </span>
-        ),
-        children: stageLeafFilters.output.map((item) => ({
-          key: item.key,
-          icon: getLeafFilterIcon(item.key),
-          label: (
-            <span className={styles.stageLeafMenuLabel}>
-              <span>{item.label}</span>
-              <span
-                className={`${styles.stageLeafMenuCount} ${selectedMetricFilter === item.key ? styles.stageLeafMenuCountActive : styles.stageLeafMenuCountMuted}`}
-              >
-                {item.count}
-              </span>
-            </span>
-          ),
-        })),
-      },
-      {
-        key: "stage:builtin",
-        icon: <FileOutlined />,
-        label: (
-          <span className={styles.stageMenuLabel}>
-            <span>{t("projects.stage.builtin", "Built-in")}</span>
-            <span
-              className={`${styles.stageMenuCount} ${activeStage === "builtin" ? styles.stageMenuCountActive : styles.stageMenuCountMuted}`}
-            >
-              {stageCounts.builtin}
-            </span>
-          </span>
-        ),
-        children: stageLeafFilters.builtin.map((item) => ({
-          key: item.key,
-          icon: getLeafFilterIcon(item.key),
-          label: (
-            <span className={styles.stageLeafMenuLabel}>
-              <span>{item.label}</span>
-              <span
-                className={`${styles.stageLeafMenuCount} ${selectedMetricFilter === item.key ? styles.stageLeafMenuCountActive : styles.stageLeafMenuCountMuted}`}
-              >
-                {item.count}
-              </span>
-            </span>
-          ),
-        })),
-      },
-    ],
-    [activeStage, selectedMetricFilter, stageCounts.builtin, stageCounts.knowledge, stageCounts.output, stageCounts.outputRuns, stageCounts.source, stageLeafFilters.builtin, stageLeafFilters.knowledge, stageLeafFilters.output, stageLeafFilters.source, t],
-  );
-
-  const renderCollapsedLeafIcon = useCallback((itemKey: ProjectFileFilterKey, itemCount: number) => {
-    const isActive = selectedMetricFilter === itemKey;
-    if (itemCount > 0) {
-      return (
-        <Badge
-          count={itemCount}
-          size="small"
-          overflowCount={99}
-          offset={[4, -1]}
-          className={`${styles.collapsedLeafBadge} ${isActive ? styles.collapsedLeafBadgeActive : styles.collapsedLeafBadgeMuted}`}
-          styles={{
-            indicator: {
-              minWidth: 14,
-              width: "auto",
-              height: 14,
-              lineHeight: "14px",
-              padding: "0 2px",
-              fontSize: 8,
-              fontWeight: 600,
-              color: isActive ? "#ffffff" : "#5f7fc7",
-              background: isActive ? "#2f66e8" : "#eef3ff",
-              border: isActive ? "1px solid #ffffff" : "1px solid #d4def8",
-              boxShadow: isActive ? "0 1px 2px rgba(15, 23, 42, 0.16)" : "none",
-            },
-          }}
-        >
-          <span className={styles.collapsedLeafIconWrap}>{getLeafFilterIcon(itemKey)}</span>
-        </Badge>
-      );
-    }
-    return (
-      <Badge
-        dot
-        offset={[2, -1]}
-        className={`${styles.collapsedLeafBadgeDot} ${isActive ? styles.collapsedLeafBadgeDotActive : styles.collapsedLeafBadgeDotMuted}`}
-      >
-        <span className={styles.collapsedLeafIconWrap}>{getLeafFilterIcon(itemKey)}</span>
-      </Badge>
-    );
-  }, [selectedMetricFilter]);
-
-  const collapsedLeafMenuItems = useMemo<MenuProps["items"]>(
-    () => [
-      ...stageLeafFilters.source.map((item) => ({
-        key: item.key,
-        icon: renderCollapsedLeafIcon(item.key, item.count),
-        label: item.label,
-      })),
-      ...stageLeafFilters.knowledge.map((item) => ({
-        key: item.key,
-        icon: renderCollapsedLeafIcon(item.key, item.count),
-        label: item.label,
-      })),
-      ...stageLeafFilters.output.map((item) => ({
-        key: item.key,
-        icon: renderCollapsedLeafIcon(item.key, item.count),
-        label: item.label,
-      })),
-      ...stageLeafFilters.builtin.map((item) => ({
-        key: item.key,
-        icon: renderCollapsedLeafIcon(item.key, item.count),
-        label: item.label,
-      })),
-    ],
-    [renderCollapsedLeafIcon, stageLeafFilters.builtin, stageLeafFilters.knowledge, stageLeafFilters.output, stageLeafFilters.source],
-  );
-
-  const showExpandedStageMenu = !leftPanelCollapsed && leftPanelExpandedMenuReady;
-
-  const stageMenuOpenKeys = useMemo(
-    () => (showExpandedStageMenu ? ["stage:source", "stage:knowledge", "stage:output", "stage:builtin"] : []),
-    [showExpandedStageMenu],
-  );
 
   const handleSelectStage = useCallback((stage: ProjectStageKey) => {
     setActiveStage(stage);
@@ -3735,46 +3471,20 @@ export default function ProjectDetailPage() {
                   >
                     <div className={styles.splitterPanel}>
                       <div className={`${styles.columnLeft} ${leftPanelCollapsed ? styles.columnLeftCollapsed : ""}`}>
-                        <div className={`${styles.leftStageRail} ${leftPanelCollapsed ? styles.leftStageRailCollapsed : ""}`}>
-                          <Button
-                            size="small"
-                            block
-                            className={styles.leftRailToggle}
-                            icon={leftPanelCollapsed ? <RightOutlined /> : <LeftOutlined />}
-                            onClick={handleToggleLeftPanel}
-                            title={leftPanelCollapsed
-                              ? t("projects.layout.expandLeft", "Expand left panel")
-                              : t("projects.layout.collapseLeft", "Collapse left panel")}
-                          />
-                          <Menu
-                            mode="inline"
-                            className={styles.leftStageMenu}
-                            inlineCollapsed={!showExpandedStageMenu}
-                            items={showExpandedStageMenu ? stageMenuItems : collapsedLeafMenuItems}
-                            selectedKeys={selectedMetricFilter ? [selectedMetricFilter] : []}
-                            openKeys={stageMenuOpenKeys}
-                            onClick={({ key }) => {
-                              const keyValue = String(key);
-                              if (keyValue === "stage:source") {
-                                handleSelectStage("source");
-                                return;
-                              }
-                              if (keyValue === "stage:knowledge") {
-                                handleSelectStage("knowledge");
-                                return;
-                              }
-                              if (keyValue === "stage:output") {
-                                handleSelectStage("output");
-                                return;
-                              }
-                              if (keyValue === "stage:builtin") {
-                                handleSelectStage("builtin");
-                                return;
-                              }
-                              setSelectedMetricFilter(keyValue as ProjectFileFilterKey);
-                            }}
-                          />
-                        </div>
+                        <ProjectStageMenu
+                          isDark={isDark}
+                          leftPanelCollapsed={leftPanelCollapsed}
+                          leftPanelExpandedMenuReady={leftPanelExpandedMenuReady}
+                          activeStage={activeStage}
+                          selectedMetricFilter={selectedMetricFilter}
+                          stageCounts={stageCounts}
+                          leafCounts={leafCounts}
+                          onToggleLeftPanel={handleToggleLeftPanel}
+                          onSelectStage={handleSelectStage}
+                          onSelectMetricFilter={(filter) => {
+                            setSelectedMetricFilter(filter);
+                          }}
+                        />
 
                         <div className={styles.columnStack}>
                           <ProjectOverviewCard
