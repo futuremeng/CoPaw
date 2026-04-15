@@ -760,6 +760,33 @@
 .projectKnowledgeCard {
   flex-shrink: 0;
 
+  :global(.ant-card),
+  :global(.qwenpaw-card),
+  :global(.copaw-card) {
+    border-color: #e6edf9;
+    background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+    box-shadow: 0 4px 14px rgba(31, 42, 68, 0.04);
+  }
+
+  :global(.ant-card-head),
+  :global(.qwenpaw-card-head),
+  :global(.copaw-card-head) {
+    background: transparent;
+    border-bottom-color: #eef2fb;
+  }
+
+  :global(.ant-card-head-title),
+  :global(.qwenpaw-card-head-title),
+  :global(.copaw-card-head-title) {
+    color: #183153;
+  }
+
+  :global(.ant-card-extra),
+  :global(.qwenpaw-card-extra),
+  :global(.copaw-card-extra) {
+    color: #5b6b86;
+  }
+
   :global(.ant-card-body) {
     display: flex;
     flex-direction: column;
@@ -1361,6 +1388,14 @@
   padding: 4px 0;
 }
 
+.projectKnowledgeSelectDropdown {
+  :global(.ant-select-item),
+  :global(.qwenpaw-select-item),
+  :global(.copaw-select-item) {
+    border-radius: 8px;
+  }
+}
+
 .projectKnowledgeResults {
   display: flex;
   flex-direction: column;
@@ -1783,48 +1818,113 @@
 }
 
 .knowledgeDockTabs {
+  --knowledge-dock-tabs-nav-width: 112px;
+  --knowledge-dock-tabs-nav-gap: 4px;
+  --knowledge-dock-tabs-nav-padding-inline-end: 6px;
+  --knowledge-dock-tabs-nav-border: rgba(219, 231, 251, 0.92);
+  --knowledge-dock-tabs-nav-bg: transparent;
+  --knowledge-dock-tabs-tab-fg: rgba(49, 70, 98, 0.78);
+  --knowledge-dock-tabs-tab-hover-fg: #183153;
+  --knowledge-dock-tabs-tab-hover-bg: rgba(115, 156, 255, 0.1);
+  --knowledge-dock-tabs-tab-active-fg: #ff7f16;
+  --knowledge-dock-tabs-tab-active-bg: rgba(255, 127, 22, 0.12);
+  --knowledge-dock-tabs-ink-bar: #ff7f16;
   height: 100%;
   min-height: 0;
 
-  :global(.ant-tabs) {
+  :global(.ant-tabs),
+  :global(.qwenpaw-tabs),
+  :global(.copaw-tabs) {
     height: 100%;
     min-height: 0;
     display: flex;
     overflow: hidden;
+    background: transparent;
   }
 
-  :global(.ant-tabs-nav) {
-    width: 112px;
-    min-width: 112px;
+  :global(.ant-tabs-left > .ant-tabs-nav),
+  :global(.qwenpaw-tabs-left > .qwenpaw-tabs-nav),
+  :global(.copaw-tabs-left > .copaw-tabs-nav),
+  :global(.ant-tabs-nav),
+  :global(.qwenpaw-tabs-nav),
+  :global(.copaw-tabs-nav) {
+    width: var(--knowledge-dock-tabs-nav-width);
+    min-width: var(--knowledge-dock-tabs-nav-width);
     margin: 0;
-    padding: 0 6px 0 0;
+    padding: 0 var(--knowledge-dock-tabs-nav-padding-inline-end) 0 0;
+    background: var(--knowledge-dock-tabs-nav-bg);
   }
 
-  :global(.ant-tabs-nav-list) {
+  :global(.ant-tabs-left > .ant-tabs-nav::before),
+  :global(.qwenpaw-tabs-left > .qwenpaw-tabs-nav::before),
+  :global(.copaw-tabs-left > .copaw-tabs-nav::before),
+  :global(.ant-tabs-nav::before),
+  :global(.qwenpaw-tabs-nav::before),
+  :global(.copaw-tabs-nav::before) {
+    border-color: var(--knowledge-dock-tabs-nav-border) !important;
+  }
+
+  :global(.ant-tabs-nav-list),
+  :global(.qwenpaw-tabs-nav-list),
+  :global(.copaw-tabs-nav-list) {
     width: 100%;
-    gap: 4px;
+    gap: var(--knowledge-dock-tabs-nav-gap);
   }
 
-  :global(.ant-tabs-tab) {
+  :global(.ant-tabs-tab),
+  :global(.qwenpaw-tabs-tab),
+  :global(.copaw-tabs-tab) {
     margin: 0 !important;
     padding: 8px 10px !important;
     border-radius: 8px;
+    color: var(--knowledge-dock-tabs-tab-fg) !important;
+    transition: background-color 0.18s ease, color 0.18s ease;
+
+    &:hover {
+      background: var(--knowledge-dock-tabs-tab-hover-bg) !important;
+      color: var(--knowledge-dock-tabs-tab-hover-fg) !important;
+    }
   }
 
-  :global(.ant-tabs-nav-wrap) {
+  :global(.ant-tabs-tab-btn),
+  :global(.qwenpaw-tabs-tab-btn),
+  :global(.copaw-tabs-tab-btn) {
+    width: 100%;
+    color: inherit !important;
+  }
+
+  :global(.ant-tabs-tab-active),
+  :global(.qwenpaw-tabs-tab-active),
+  :global(.copaw-tabs-tab-active) {
+    background: var(--knowledge-dock-tabs-tab-active-bg) !important;
+    color: var(--knowledge-dock-tabs-tab-active-fg) !important;
+  }
+
+  :global(.ant-tabs-tab-active .ant-tabs-tab-btn),
+  :global(.qwenpaw-tabs-tab-active .qwenpaw-tabs-tab-btn),
+  :global(.copaw-tabs-tab-active .copaw-tabs-tab-btn) {
+    color: var(--knowledge-dock-tabs-tab-active-fg) !important;
+    font-weight: 600;
+  }
+
+  :global(.ant-tabs-nav-wrap),
+  :global(.qwenpaw-tabs-nav-wrap),
+  :global(.copaw-tabs-nav-wrap) {
     width: 100%;
   }
 
-  :global(.ant-tabs-tab-btn) {
-    width: 100%;
-  }
-
-  :global(.ant-tabs-ink-bar) {
+  :global(.ant-tabs-ink-bar),
+  :global(.qwenpaw-tabs-ink-bar),
+  :global(.copaw-tabs-ink-bar) {
     left: auto !important;
     right: 0;
+    background: var(--knowledge-dock-tabs-ink-bar) !important;
+    border-radius: 999px;
   }
 
-  :global(.ant-tabs-content-holder) {
+  :global(.ant-tabs-content-holder),
+  :global(.qwenpaw-tabs-content-holder),
+  :global(.copaw-tabs-content-holder) {
     display: flex;
     flex-direction: column;
     flex: 1;
@@ -1832,17 +1932,11 @@
     min-height: 0;
     height: 100%;
     overflow: hidden;
+    background: transparent;
   }
 
-  :global(.ant-tabs-content) {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    height: 100%;
-    min-height: 0;
-    overflow: hidden;
-  }
-
+  :global(.ant-tabs-content),
+  :global(.qwenpaw-tabs-content),
   :global(.copaw-tabs-content) {
     display: flex;
     flex-direction: column;
@@ -1850,27 +1944,19 @@
     height: 100%;
     min-height: 0;
     overflow: hidden;
+    background: transparent;
   }
 
+  :global(.qwenpaw-tabs-content-left),
   :global(.copaw-tabs-content-left) {
     height: 100%;
     min-height: 0;
   }
 
-  :global(.ant-tabs-content-holder) {
-    min-height: 0;
-    height: 100%;
-  }
-
-  :global(.ant-tabs-tabpane) {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    min-height: 0;
-    overflow: hidden;
-    padding: 0 4px 0 0;
-  }
-
+  :global(.ant-tabs-tabpane),
+  :global(.qwenpaw-tabs-tabpane),
+  :global(.ant-tabs-tabpane-active),
+  :global(.qwenpaw-tabs-tabpane-active),
   :global(.copaw-tabs-tabpane),
   :global(.copaw-tabs-tabpane-active) {
     display: flex;
@@ -3875,6 +3961,103 @@
     }
   }
 
+  .knowledgeDockTabs {
+    --knowledge-dock-tabs-nav-border: rgba(255, 255, 255, 0.08);
+    --knowledge-dock-tabs-nav-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0.02) 100%);
+    --knowledge-dock-tabs-tab-fg: rgba(255, 255, 255, 0.68);
+    --knowledge-dock-tabs-tab-hover-fg: rgba(255, 255, 255, 0.92);
+    --knowledge-dock-tabs-tab-hover-bg: rgba(255, 255, 255, 0.08);
+    --knowledge-dock-tabs-tab-active-fg: #ff7f16;
+    --knowledge-dock-tabs-tab-active-bg: rgba(255, 127, 22, 0.16);
+    --knowledge-dock-tabs-ink-bar: #ff7f16;
+
+    :global(.ant-tabs-left),
+    :global(.qwenpaw-tabs-left),
+    :global(.copaw-tabs-left),
+    :global(.ant-tabs),
+    :global(.qwenpaw-tabs),
+    :global(.copaw-tabs) {
+      background: transparent !important;
+    }
+
+    :global(.ant-tabs-left > .ant-tabs-nav),
+    :global(.qwenpaw-tabs-left > .qwenpaw-tabs-nav),
+    :global(.copaw-tabs-left > .copaw-tabs-nav),
+    :global(.ant-tabs-nav),
+    :global(.qwenpaw-tabs-nav),
+    :global(.copaw-tabs-nav) {
+      background: var(--knowledge-dock-tabs-nav-bg) !important;
+      border-radius: 12px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    }
+
+    :global(.ant-tabs-left > .ant-tabs-nav::before),
+    :global(.qwenpaw-tabs-left > .qwenpaw-tabs-nav::before),
+    :global(.copaw-tabs-left > .copaw-tabs-nav::before),
+    :global(.ant-tabs-nav::before),
+    :global(.qwenpaw-tabs-nav::before),
+    :global(.copaw-tabs-nav::before) {
+      border-color: var(--knowledge-dock-tabs-nav-border) !important;
+    }
+
+    :global(.ant-tabs-tab),
+    :global(.qwenpaw-tabs-tab),
+    :global(.copaw-tabs-tab) {
+      color: var(--knowledge-dock-tabs-tab-fg) !important;
+
+      &:hover {
+        background: var(--knowledge-dock-tabs-tab-hover-bg) !important;
+        color: var(--knowledge-dock-tabs-tab-hover-fg) !important;
+      }
+    }
+
+    :global(.ant-tabs-tab .ant-tabs-tab-btn),
+    :global(.qwenpaw-tabs-tab .qwenpaw-tabs-tab-btn),
+    :global(.copaw-tabs-tab .copaw-tabs-tab-btn) {
+      color: inherit !important;
+    }
+
+    :global(.ant-tabs-tab-active .ant-tabs-tab-btn),
+    :global(.qwenpaw-tabs-tab-active .qwenpaw-tabs-tab-btn),
+    :global(.copaw-tabs-tab-active .copaw-tabs-tab-btn) {
+      color: #ff7f16 !important;
+      font-weight: 600;
+    }
+
+    :global(.ant-tabs-tab-active),
+    :global(.qwenpaw-tabs-tab-active),
+    :global(.copaw-tabs-tab-active) {
+      background: rgba(255, 127, 22, 0.16) !important;
+      color: #ff7f16 !important;
+      box-shadow: inset 0 0 0 1px rgba(255, 127, 22, 0.12);
+    }
+
+    :global(.ant-tabs-content-holder),
+    :global(.qwenpaw-tabs-content-holder),
+    :global(.copaw-tabs-content-holder),
+    :global(.ant-tabs-content),
+    :global(.qwenpaw-tabs-content),
+    :global(.copaw-tabs-content) {
+      background: transparent !important;
+    }
+
+    :global(.ant-tabs-ink-bar),
+    :global(.qwenpaw-tabs-ink-bar),
+    :global(.copaw-tabs-ink-bar) {
+      background: #ff7f16 !important;
+      width: 3px !important;
+      border-radius: 999px;
+      right: 0 !important;
+      left: auto !important;
+    }
+
+    :global(.ant-tabs-nav),
+    :global(.qwenpaw-tabs-nav),
+    :global(.copaw-tabs-nav) {
+      border-radius: 12px;
+    }
+  }
+
   .knowledgeLoopSummary,
   .knowledgeRuntimeTooltipItem {
     border-color: rgba(255, 255, 255, 0.08);
@@ -4134,7 +4317,43 @@
   .projectKnowledgePrimaryPanel,
   .projectKnowledgeSecondaryPanel {
     border-color: rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.03);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0.02) 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  }
+
+  .projectKnowledgeCard {
+    :global(.ant-card),
+    :global(.qwenpaw-card),
+    :global(.copaw-card) {
+      border-color: rgba(255, 255, 255, 0.08);
+      background: linear-gradient(180deg, rgba(34, 34, 34, 0.98) 0%, rgba(24, 24, 24, 0.96) 100%);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    }
+
+    :global(.ant-card-head),
+    :global(.qwenpaw-card-head),
+    :global(.copaw-card-head) {
+      background: transparent;
+      border-bottom-color: rgba(255, 255, 255, 0.08);
+    }
+
+    :global(.ant-card-head-title),
+    :global(.qwenpaw-card-head-title),
+    :global(.copaw-card-head-title) {
+      color: rgba(255, 248, 240, 0.9);
+    }
+
+    :global(.ant-card-extra),
+    :global(.qwenpaw-card-extra),
+    :global(.copaw-card-extra) {
+      color: rgba(255, 255, 255, 0.52);
+    }
+
+    :global(.ant-card-body),
+    :global(.qwenpaw-card-body),
+    :global(.copaw-card-body) {
+      background: transparent;
+    }
   }
 
   .projectKnowledgeEntityDetailCol {
@@ -4145,6 +4364,13 @@
   .projectKnowledgePanelHeader,
   .projectKnowledgeQueryTop {
     border-bottom-color: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .projectKnowledgePanelBody,
+  .projectKnowledgeQueryBottom,
+  .projectKnowledgeSelectableList {
+    background: transparent;
   }
 
   .projectKnowledgeEntityRelationItem,
@@ -4221,6 +4447,240 @@
   .projectKnowledgeTrendDeltaRow {
     :global(.ant-typography) {
       color: rgba(255, 255, 255, 0.62) !important;
+    }
+  }
+
+  .knowledgeDockTabs,
+  .projectKnowledgeWorkbench {
+    :global(.ant-typography),
+    :global(.qwenpaw-typography),
+    :global(.copaw-typography) {
+      color: rgba(255, 248, 240, 0.88);
+    }
+
+    :global(.ant-typography.ant-typography-secondary),
+    :global(.qwenpaw-typography.qwenpaw-typography-secondary),
+    :global(.copaw-typography.copaw-typography-secondary) {
+      color: rgba(255, 255, 255, 0.56) !important;
+    }
+
+    :global(.ant-typography-disabled) {
+      color: rgba(255, 255, 255, 0.32) !important;
+    }
+  }
+
+  .projectKnowledgeEmpty {
+    :global(.ant-empty-description),
+    :global(.qwenpaw-empty-description),
+    :global(.copaw-empty-description) {
+      color: rgba(255, 255, 255, 0.58) !important;
+    }
+
+    :global(.ant-empty-image),
+    :global(.qwenpaw-empty-image),
+    :global(.copaw-empty-image) {
+      opacity: 0.24;
+    }
+  }
+
+  .knowledgeDockTabs,
+  .projectKnowledgeWorkbench {
+    :global(.ant-alert),
+    :global(.qwenpaw-alert),
+    :global(.copaw-alert) {
+      border-color: rgba(255, 255, 255, 0.1);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.025) 100%);
+      box-shadow: none;
+    }
+
+    :global(.ant-alert-info),
+    :global(.qwenpaw-alert-info),
+    :global(.copaw-alert-info) {
+      border-color: rgba(122, 162, 255, 0.24);
+      background: linear-gradient(180deg, rgba(46, 107, 213, 0.2) 0%, rgba(33, 76, 150, 0.14) 100%);
+    }
+
+    :global(.ant-alert-warning),
+    :global(.qwenpaw-alert-warning),
+    :global(.copaw-alert-warning) {
+      border-color: rgba(245, 166, 35, 0.24);
+      background: linear-gradient(180deg, rgba(92, 62, 18, 0.34) 0%, rgba(73, 49, 18, 0.24) 100%);
+    }
+
+    :global(.ant-alert-error),
+    :global(.qwenpaw-alert-error),
+    :global(.copaw-alert-error) {
+      border-color: rgba(255, 123, 114, 0.24);
+      background: linear-gradient(180deg, rgba(101, 43, 39, 0.34) 0%, rgba(78, 34, 31, 0.24) 100%);
+    }
+
+    :global(.ant-alert-success),
+    :global(.qwenpaw-alert-success),
+    :global(.copaw-alert-success) {
+      border-color: rgba(95, 191, 159, 0.24);
+      background: linear-gradient(180deg, rgba(35, 93, 41, 0.32) 0%, rgba(27, 72, 32, 0.22) 100%);
+    }
+
+    :global(.ant-alert-message),
+    :global(.ant-alert-description),
+    :global(.qwenpaw-alert-message),
+    :global(.qwenpaw-alert-description),
+    :global(.copaw-alert-message),
+    :global(.copaw-alert-description) {
+      color: rgba(255, 248, 240, 0.9) !important;
+    }
+
+    :global(.ant-alert .anticon),
+    :global(.qwenpaw-alert .anticon),
+    :global(.copaw-alert .anticon) {
+      color: rgba(255, 214, 176, 0.88) !important;
+    }
+
+    :global(.ant-tag),
+    :global(.qwenpaw-tag),
+    :global(.copaw-tag) {
+      border-color: rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.06);
+      color: rgba(255, 248, 240, 0.86);
+    }
+
+    :global(.ant-tag-blue),
+    :global(.ant-tag-processing) {
+      border-color: rgba(122, 162, 255, 0.28);
+      background: rgba(46, 107, 213, 0.22);
+      color: #c8deff;
+    }
+
+    :global(.ant-tag-orange),
+    :global(.ant-tag-warning) {
+      border-color: rgba(245, 166, 35, 0.28);
+      background: rgba(245, 166, 35, 0.16);
+      color: #ffd2ac;
+    }
+
+    :global(.ant-tag-green),
+    :global(.ant-tag-success) {
+      border-color: rgba(95, 191, 159, 0.28);
+      background: rgba(95, 191, 159, 0.16);
+      color: #cdeecb;
+    }
+
+    :global(.ant-tag-red),
+    :global(.ant-tag-error) {
+      border-color: rgba(255, 123, 114, 0.28);
+      background: rgba(255, 123, 114, 0.14);
+      color: #ffb8b2;
+    }
+
+    :global(.ant-badge-status-text),
+    :global(.qwenpaw-badge-status-text),
+    :global(.copaw-badge-status-text) {
+      color: rgba(255, 248, 240, 0.82) !important;
+    }
+
+    :global(.ant-badge-status-default) {
+      background: rgba(255, 255, 255, 0.36) !important;
+    }
+
+    :global(.ant-badge-status-processing) {
+      background: #7aa2ff !important;
+    }
+
+    :global(.ant-badge-status-success) {
+      background: #5fbf9f !important;
+    }
+
+    :global(.ant-badge-status-warning) {
+      background: #f5a623 !important;
+    }
+
+    :global(.ant-badge-status-error) {
+      background: #ff7b72 !important;
+    }
+  }
+
+  .projectKnowledgeSelectDropdown {
+    background: rgba(28, 28, 28, 0.98);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.34);
+
+    :global(.ant-select-item-option-content),
+    :global(.qwenpaw-select-item-option-content),
+    :global(.copaw-select-item-option-content) {
+      color: rgba(255, 248, 240, 0.86);
+    }
+
+    :global(.ant-select-item),
+    :global(.qwenpaw-select-item),
+    :global(.copaw-select-item) {
+      color: rgba(255, 248, 240, 0.86);
+    }
+
+    :global(.ant-select-item-option-active:not(.ant-select-item-option-disabled)),
+    :global(.qwenpaw-select-item-option-active:not(.qwenpaw-select-item-option-disabled)),
+    :global(.copaw-select-item-option-active:not(.copaw-select-item-option-disabled)) {
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    :global(.ant-select-item-option-selected:not(.ant-select-item-option-disabled)),
+    :global(.qwenpaw-select-item-option-selected:not(.qwenpaw-select-item-option-disabled)),
+    :global(.copaw-select-item-option-selected:not(.copaw-select-item-option-disabled)) {
+      background: rgba(255, 127, 22, 0.18);
+
+      :global(.ant-select-item-option-content),
+      :global(.qwenpaw-select-item-option-content),
+      :global(.copaw-select-item-option-content) {
+        color: #ffe6cf;
+      }
+    }
+
+    :global(.ant-empty-description) {
+      color: rgba(255, 255, 255, 0.52) !important;
+    }
+  }
+
+  .projectKnowledgeTabActions,
+  .projectKnowledgeTrendHeader,
+  .projectKnowledgeInsightActions,
+  .knowledgeLoopSummaryTags,
+  .projectKnowledgeStatusGroup {
+    :global(.ant-btn),
+    :global(.qwenpaw-btn),
+    :global(.copaw-btn) {
+      border-color: rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.05);
+      color: rgba(255, 248, 240, 0.84);
+      box-shadow: none;
+
+      &:hover,
+      &:focus {
+        border-color: rgba(255, 255, 255, 0.22) !important;
+        background: rgba(255, 255, 255, 0.09) !important;
+        color: rgba(255, 248, 240, 0.94) !important;
+      }
+    }
+
+    :global(.ant-btn-primary),
+    :global(.qwenpaw-btn-primary),
+    :global(.copaw-btn-primary) {
+      border-color: rgba(255, 127, 22, 0.34);
+      background: rgba(255, 127, 22, 0.18);
+      color: #ffe6cf;
+
+      &:hover,
+      &:focus {
+        border-color: rgba(255, 127, 22, 0.44) !important;
+        background: rgba(255, 127, 22, 0.26) !important;
+        color: #fff1e4 !important;
+      }
+    }
+
+    :global(.ant-btn-text),
+    :global(.qwenpaw-btn-text),
+    :global(.copaw-btn-text) {
+      background: transparent;
+      border-color: transparent;
     }
   }
 

@@ -126,6 +126,7 @@ export default function ProjectKnowledgeRelationsPanel(
           value={predicateFilter || undefined}
           allowClear
           size="small"
+          popupClassName={styles.projectKnowledgeSelectDropdown}
           placeholder={t("projects.knowledge.relationTypeFilter", "Filter by relation type")}
           options={predicateOptions.map((item) => ({ label: item, value: item }))}
           onChange={(value) => setPredicateFilter(String(value || ""))}

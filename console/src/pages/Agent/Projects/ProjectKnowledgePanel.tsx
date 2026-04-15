@@ -155,6 +155,7 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
         <Select
           size="small"
           value={props.knowledgeState.graphQueryMode}
+          popupClassName={styles.projectKnowledgeSelectDropdown}
           onChange={(value) => props.knowledgeState.setGraphQueryMode(value as "template" | "cypher")}
           options={[
             { label: t("projects.knowledge.queryModeTemplate"), value: "template" },

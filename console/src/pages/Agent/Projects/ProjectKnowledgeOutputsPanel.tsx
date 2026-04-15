@@ -115,6 +115,7 @@ export default function ProjectKnowledgeOutputsPanel(
           <Select
             size="small"
             value={selectedMode}
+            popupClassName={styles.projectKnowledgeSelectDropdown}
             style={{ width: 180 }}
             options={props.knowledgeState.processingModes.map((item) => ({
               label: modeLabel(item.mode, t),
@@ -257,6 +258,7 @@ export default function ProjectKnowledgeOutputsPanel(
           value={predicateFilter || undefined}
           allowClear
           size="small"
+          popupClassName={styles.projectKnowledgeSelectDropdown}
           placeholder={t("projects.knowledge.relationTypeFilter", "Filter by relation type")}
           options={predicateOptions.map((item) => ({ label: item, value: item }))}
           onChange={(value) => setPredicateFilter(String(value || ""))}

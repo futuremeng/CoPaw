@@ -243,3 +243,105 @@
     grid-template-columns: 1fr;
   }
 }
+
+:global(.dark-mode) {
+  .pageHeader {
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .breadcrumbParent {
+    color: rgba(255, 255, 255, 0.48);
+  }
+
+  .breadcrumbSeparator {
+    color: rgba(255, 255, 255, 0.28);
+  }
+
+  .breadcrumbCurrent {
+    color: rgba(255, 248, 240, 0.96);
+  }
+
+  .workspacePath {
+    color: rgba(255, 255, 255, 0.58);
+  }
+
+  .projectCard {
+    background: linear-gradient(180deg, rgba(36, 36, 36, 0.96) 0%, rgba(25, 25, 25, 0.98) 100%);
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.22);
+
+    &:hover {
+      border-color: rgba(255, 127, 22, 0.4);
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+    }
+
+    :global(.ant-card-body) {
+      background: transparent !important;
+    }
+  }
+
+  .projectName {
+    color: rgba(255, 247, 237, 0.94);
+  }
+
+  .projectDescription {
+    color: rgba(255, 255, 255, 0.68);
+  }
+
+  .metaLabel {
+    color: rgba(255, 255, 255, 0.48);
+  }
+
+  .metaValue {
+    color: rgba(255, 255, 255, 0.82);
+  }
+
+  .cloneButton {
+    background-color: rgba(255, 255, 255, 0.06) !important;
+    color: rgba(255, 255, 255, 0.88) !important;
+    border-color: rgba(255, 255, 255, 0.16) !important;
+
+    &:hover,
+    &:focus {
+      background-color: rgba(255, 255, 255, 0.1) !important;
+      color: rgba(255, 255, 255, 0.96) !important;
+      border-color: rgba(255, 255, 255, 0.26) !important;
+    }
+
+    &:active {
+      background-color: rgba(255, 255, 255, 0.14) !important;
+      color: rgba(255, 255, 255, 0.96) !important;
+      border-color: rgba(255, 255, 255, 0.32) !important;
+    }
+  }
+
+  .deleteButton {
+    background-color: rgba(255, 77, 79, 0.12) !important;
+    color: #ff9d95 !important;
+    border-color: rgba(255, 77, 79, 0.24) !important;
+
+    &:hover,
+    &:focus {
+      background-color: #ff4d4f !important;
+      border-color: #ff4d4f !important;
+      color: #ffffff !important;
+    }
+
+    &:disabled {
+      background-color: rgba(255, 255, 255, 0.04) !important;
+      color: rgba(255, 255, 255, 0.3) !important;
+      border-color: rgba(255, 255, 255, 0.08) !important;
+    }
+  }
+
+  .inlineAlert {
+    :global(.ant-alert) {
+      background: rgba(255, 77, 79, 0.12);
+      border-color: rgba(255, 77, 79, 0.22);
+    }
+  }
+
+  :global(.ant-empty-description) {
+    color: rgba(255, 255, 255, 0.58);
+  }
+}

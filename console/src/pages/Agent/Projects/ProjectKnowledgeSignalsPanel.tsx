@@ -306,6 +306,7 @@ export default function ProjectKnowledgeSignalsPanel(
             <Select
               size="small"
               value={knowledgeState.trendRangeDays}
+              popupClassName={styles.projectKnowledgeSelectDropdown}
               options={[
                 { value: 7, label: t("projects.knowledge.trendRange7d") },
                 { value: 30, label: t("projects.knowledge.trendRange30d") },
