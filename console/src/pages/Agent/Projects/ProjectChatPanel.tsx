@@ -1,4 +1,4 @@
-import { memo, useCallback } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Card, Empty, Spin, Typography, message } from "antd";
 import { useTranslation } from "react-i18next";
 import AnywhereChat from "../../../components/AnywhereChat";
@@ -69,6 +69,52 @@ function ProjectChatPanel({
   const { t } = useTranslation();
   const hasUserFiles = projectFileCount > 0;
   const isRunMode = chatMode === "run";
+  const isVsCodeEmbedded = useMemo(() => {
+    if (typeof window === "undefined" || typeof navigator === "undefined") {
+      return false;
+    }
+    const ua = navigator.userAgent.toLowerCase();
+    return ua.includes("vscode") || typeof (window as Window & { acquireVsCodeApi?: unknown }).acquireVsCodeApi === "function";
+  }, []);
+  const activeSessionId = chatMode === "run"
+    ? activeRunChatId
+    : chatMode === "design"
+      ? activeDesignChatId
+      : activeWorkspaceChatId;
+  const [stableSessionId, setStableSessionId] = useState(activeSessionId);
+  const [chatMountReady, setChatMountReady] = useState(!activeSessionId);
+  const [chatRuntimeEnabled, setChatRuntimeEnabled] = useState(!isVsCodeEmbedded);
+  const sessionSwitchDebounceMs = isVsCodeEmbedded ? 320 : 140;
+  const mountDelayMs = isVsCodeEmbedded ? 240 : 80;
+
+  useEffect(() => {
+    if (!isVsCodeEmbedded) {
+      setChatRuntimeEnabled(true);
+    }
+  }, [isVsCodeEmbedded]);
+
+  useEffect(() => {
+    if (!activeSessionId) {
+      setStableSessionId("");
+      setChatMountReady(true);
+      return;
+    }
+
+    setChatMountReady(false);
+    const switchTimer = window.setTimeout(() => {
+      setStableSessionId(activeSessionId);
+    }, sessionSwitchDebounceMs);
+    const mountTimer = window.setTimeout(() => {
+      setChatMountReady(true);
+    }, sessionSwitchDebounceMs + mountDelayMs);
+
+    return () => {
+      window.clearTimeout(switchTimer);
+      window.clearTimeout(mountTimer);
+    };
+  }, [activeSessionId, mountDelayMs, sessionSwitchDebounceMs]);
+
+  const shouldRenderActiveChat = chatRuntimeEnabled && chatMountReady && stableSessionId === activeSessionId;
 
   const handleAutoAttachHandled = useCallback((payload: AutoAttachHandledPayload) => {
     if (!payload.ok) {
@@ -118,38 +164,58 @@ function ProjectChatPanel({
               if (activeRunChatId) {
                 return (
                   <div className={styles.chatPanel}>
-                    <AnywhereChat
-                      sessionId={activeRunChatId}
-                      autoAttachRequest={autoAttachRequest}
-                      onAutoAttachHandled={handleAutoAttachHandled}
-                      onNewChat={onStartRunChat}
-                      onSelectHistoryChat={onSelectRunHistoryChat}
-                      historyMenuActionLabel={t("projects.chat.manualRecover", "手动恢复对话关联")}
-                      onHistoryMenuAction={onOpenManualRecoverDialog}
-                      onAssistantTurnCompleted={onAssistantTurnCompleted}
-                      inputPlaceholder={t(
-                        "projects.chat.placeholder",
-                        "Describe what you want to adjust in this run, and I will help iterate.",
-                      )}
-                      welcomeGreeting={t(
-                        "projects.chat.welcomeGreeting",
-                        "Project run assistant is ready.",
-                      )}
-                      welcomeDescription={t(
-                        "projects.chat.welcomeDescription",
-                        "Discuss artifacts, metrics, and evidence for the selected run without leaving this page.",
-                      )}
-                      welcomePrompts={[
-                        t(
-                          "projects.chat.prompt1",
-                          "Summarize the risks in this run and suggest next actions.",
-                        ),
-                        t(
-                          "projects.chat.prompt2",
-                          "Based on current evidence, propose a retry strategy for failed steps.",
-                        ),
-                      ]}
-                    />
+                    {!chatRuntimeEnabled ? (
+                      <div className={styles.chatEmptyAction}>
+                        <div className={styles.chatEmptyActions}>
+                          <Text type="secondary">
+                            {t(
+                              "projects.chat.previewRuntimeGuard",
+                              "VS Code 内置预览中已暂缓加载实时聊天运行时，以降低页面崩溃概率。",
+                            )}
+                          </Text>
+                          <Button onClick={() => setChatRuntimeEnabled(true)}>
+                            {t("projects.chat.enablePreviewRuntime", "继续在预览中启用聊天")}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : shouldRenderActiveChat ? (
+                      <AnywhereChat
+                        sessionId={stableSessionId}
+                        autoAttachRequest={autoAttachRequest}
+                        onAutoAttachHandled={handleAutoAttachHandled}
+                        onNewChat={onStartRunChat}
+                        onSelectHistoryChat={onSelectRunHistoryChat}
+                        historyMenuActionLabel={t("projects.chat.manualRecover", "手动恢复对话关联")}
+                        onHistoryMenuAction={onOpenManualRecoverDialog}
+                        onAssistantTurnCompleted={onAssistantTurnCompleted}
+                        inputPlaceholder={t(
+                          "projects.chat.placeholder",
+                          "Describe what you want to adjust in this run, and I will help iterate.",
+                        )}
+                        welcomeGreeting={t(
+                          "projects.chat.welcomeGreeting",
+                          "Project run assistant is ready.",
+                        )}
+                        welcomeDescription={t(
+                          "projects.chat.welcomeDescription",
+                          "Discuss artifacts, metrics, and evidence for the selected run without leaving this page.",
+                        )}
+                        welcomePrompts={[
+                          t(
+                            "projects.chat.prompt1",
+                            "Summarize the risks in this run and suggest next actions.",
+                          ),
+                          t(
+                            "projects.chat.prompt2",
+                            "Based on current evidence, propose a retry strategy for failed steps.",
+                          ),
+                        ]}
+                      />
+                    ) : (
+                      <div className={styles.centerState}>
+                        <Spin />
+                      </div>
+                    )}
                   </div>
                 );
               }
@@ -172,38 +238,58 @@ function ProjectChatPanel({
               if (activeDesignChatId) {
                 return (
                   <div className={styles.chatPanel}>
-                    <AnywhereChat
-                      sessionId={activeDesignChatId}
-                      autoAttachRequest={autoAttachRequest}
-                      onAutoAttachHandled={handleAutoAttachHandled}
-                      onNewChat={onStartDesignChat}
-                      onSelectHistoryChat={onSelectDesignHistoryChat}
-                      historyMenuActionLabel={t("projects.chat.manualRecover", "手动恢复对话关联")}
-                      onHistoryMenuAction={onOpenManualRecoverDialog}
-                      onAssistantTurnCompleted={onAssistantTurnCompleted}
-                      inputPlaceholder={t(
-                        "projects.chat.designPlaceholder",
-                        "Describe your target workflow and constraints, and I will draft/refine the project flow.",
-                      )}
-                      welcomeGreeting={t(
-                        "projects.chat.designWelcomeGreeting",
-                        "Project flow design assistant is ready.",
-                      )}
-                      welcomeDescription={t(
-                        "projects.chat.designWelcomeDescription",
-                        "Use this session to build a flow draft from your real project files before launching a run.",
-                      )}
-                      welcomePrompts={[
-                        t(
-                          "projects.chat.designPrompt1",
-                          "Based on the current source files, propose a 4-step flow with clear inputs and outputs.",
-                        ),
-                        t(
-                          "projects.chat.designPrompt2",
-                          "Please optimize the flow for reliability and add retry policy suggestions.",
-                        ),
-                      ]}
-                    />
+                    {!chatRuntimeEnabled ? (
+                      <div className={styles.chatEmptyAction}>
+                        <div className={styles.chatEmptyActions}>
+                          <Text type="secondary">
+                            {t(
+                              "projects.chat.previewRuntimeGuard",
+                              "VS Code 内置预览中已暂缓加载实时聊天运行时，以降低页面崩溃概率。",
+                            )}
+                          </Text>
+                          <Button onClick={() => setChatRuntimeEnabled(true)}>
+                            {t("projects.chat.enablePreviewRuntime", "继续在预览中启用聊天")}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : shouldRenderActiveChat ? (
+                      <AnywhereChat
+                        sessionId={stableSessionId}
+                        autoAttachRequest={autoAttachRequest}
+                        onAutoAttachHandled={handleAutoAttachHandled}
+                        onNewChat={onStartDesignChat}
+                        onSelectHistoryChat={onSelectDesignHistoryChat}
+                        historyMenuActionLabel={t("projects.chat.manualRecover", "手动恢复对话关联")}
+                        onHistoryMenuAction={onOpenManualRecoverDialog}
+                        onAssistantTurnCompleted={onAssistantTurnCompleted}
+                        inputPlaceholder={t(
+                          "projects.chat.designPlaceholder",
+                          "Describe your target workflow and constraints, and I will draft/refine the project flow.",
+                        )}
+                        welcomeGreeting={t(
+                          "projects.chat.designWelcomeGreeting",
+                          "Project flow design assistant is ready.",
+                        )}
+                        welcomeDescription={t(
+                          "projects.chat.designWelcomeDescription",
+                          "Use this session to build a flow draft from your real project files before launching a run.",
+                        )}
+                        welcomePrompts={[
+                          t(
+                            "projects.chat.designPrompt1",
+                            "Based on the current source files, propose a 4-step flow with clear inputs and outputs.",
+                          ),
+                          t(
+                            "projects.chat.designPrompt2",
+                            "Please optimize the flow for reliability and add retry policy suggestions.",
+                          ),
+                        ]}
+                      />
+                    ) : (
+                      <div className={styles.centerState}>
+                        <Spin />
+                      </div>
+                    )}
                   </div>
                 );
               }
@@ -228,51 +314,71 @@ function ProjectChatPanel({
             if (activeWorkspaceChatId) {
               return (
                 <div className={styles.chatPanel}>
-                  <AnywhereChat
-                    sessionId={activeWorkspaceChatId}
-                    autoAttachRequest={autoAttachRequest}
-                    onAutoAttachHandled={handleAutoAttachHandled}
-                    onNewChat={onStartWorkspaceChat}
-                    onSelectHistoryChat={onSelectWorkspaceHistoryChat}
-                    historyMenuActionLabel={t("projects.chat.manualRecover", "手动恢复对话关联")}
-                    onHistoryMenuAction={onOpenManualRecoverDialog}
-                    onAssistantTurnCompleted={onAssistantTurnCompleted}
-                    welcomePromptClickBehavior="append"
-                    inputPlaceholder={t(
-                      "projects.chat.collaborationPlaceholder",
-                      "Describe the project goal, current materials, or the next thing you want to move forward.",
-                    )}
-                    welcomeGreeting={t(
-                      "projects.chat.collaborationWelcomeGreeting",
-                      "Project collaboration assistant is ready.",
-                    )}
-                    welcomeDescription={t(
-                      hasUserFiles
-                        ? "projects.chat.collaborationWelcomeDescription"
-                        : "projects.chat.collaborationWelcomeDescriptionEmptyProject",
-                      hasUserFiles
-                        ? "Use this space to understand the project, organize materials, and plan the next step. In your first reply, confirm workspace root and path mapping (original/* -> data/*) before drafting actions."
-                        : "This is a new project. Start by clarifying goals, scope, and expected outcomes, then confirm workspace root and path mapping before preparing the first batch of materials.",
-                    )}
-                    welcomePromptsWhenEmpty={[
-                      t(
+                  {!chatRuntimeEnabled ? (
+                    <div className={styles.chatEmptyAction}>
+                      <div className={styles.chatEmptyActions}>
+                        <Text type="secondary">
+                          {t(
+                            "projects.chat.previewRuntimeGuard",
+                            "VS Code 内置预览中已暂缓加载实时聊天运行时，以降低页面崩溃概率。",
+                          )}
+                        </Text>
+                        <Button onClick={() => setChatRuntimeEnabled(true)}>
+                          {t("projects.chat.enablePreviewRuntime", "继续在预览中启用聊天")}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : shouldRenderActiveChat ? (
+                    <AnywhereChat
+                      sessionId={stableSessionId}
+                      autoAttachRequest={autoAttachRequest}
+                      onAutoAttachHandled={handleAutoAttachHandled}
+                      onNewChat={onStartWorkspaceChat}
+                      onSelectHistoryChat={onSelectWorkspaceHistoryChat}
+                      historyMenuActionLabel={t("projects.chat.manualRecover", "手动恢复对话关联")}
+                      onHistoryMenuAction={onOpenManualRecoverDialog}
+                      onAssistantTurnCompleted={onAssistantTurnCompleted}
+                      welcomePromptClickBehavior="append"
+                      inputPlaceholder={t(
+                        "projects.chat.collaborationPlaceholder",
+                        "Describe the project goal, current materials, or the next thing you want to move forward.",
+                      )}
+                      welcomeGreeting={t(
+                        "projects.chat.collaborationWelcomeGreeting",
+                        "Project collaboration assistant is ready.",
+                      )}
+                      welcomeDescription={t(
                         hasUserFiles
-                          ? "projects.chat.collaborationPromptEmpty1"
-                          : "projects.chat.collaborationPromptEmptyNewProject1",
+                          ? "projects.chat.collaborationWelcomeDescription"
+                          : "projects.chat.collaborationWelcomeDescriptionEmptyProject",
                         hasUserFiles
-                          ? "First confirm workspace root and map original/* to data/*. Then help me clarify this project's goal, current stage, and expected deliverable."
-                          : "This is a new project. First confirm workspace root and path mapping, then help me define goal, scope, milestones, and acceptance criteria.",
-                      ),
-                      t(
-                        hasUserFiles
-                          ? "projects.chat.collaborationPromptEmpty2"
-                          : "projects.chat.collaborationPromptEmptyNewProject2",
-                        hasUserFiles
-                          ? "I have provided materials. Summarize current state with exact file paths, point out missing information, and avoid guessing non-existent paths."
-                          : "Give me a from-zero-to-one kickoff checklist with the first three actions, and include where each artifact should be stored (skills/scripts/flows/cases).",
-                      ),
-                    ]}
-                  />
+                          ? "Use this space to understand the project, organize materials, and plan the next step. In your first reply, confirm workspace root and path mapping (original/* -> data/*) before drafting actions."
+                          : "This is a new project. Start by clarifying goals, scope, and expected outcomes, then confirm workspace root and path mapping before preparing the first batch of materials.",
+                      )}
+                      welcomePromptsWhenEmpty={[
+                        t(
+                          hasUserFiles
+                            ? "projects.chat.collaborationPromptEmpty1"
+                            : "projects.chat.collaborationPromptEmptyNewProject1",
+                          hasUserFiles
+                            ? "First confirm workspace root and map original/* to data/*. Then help me clarify this project's goal, current stage, and expected deliverable."
+                            : "This is a new project. First confirm workspace root and path mapping, then help me define goal, scope, milestones, and acceptance criteria.",
+                        ),
+                        t(
+                          hasUserFiles
+                            ? "projects.chat.collaborationPromptEmpty2"
+                            : "projects.chat.collaborationPromptEmptyNewProject2",
+                          hasUserFiles
+                            ? "I have provided materials. Summarize current state with exact file paths, point out missing information, and avoid guessing non-existent paths."
+                            : "Give me a from-zero-to-one kickoff checklist with the first three actions, and include where each artifact should be stored (skills/scripts/flows/cases).",
+                        ),
+                      ]}
+                    />
+                  ) : (
+                    <div className={styles.centerState}>
+                      <Spin />
+                    </div>
+                  )}
                 </div>
               );
             }

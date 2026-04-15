@@ -154,31 +154,76 @@
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 6px;
-  border: 1px solid #f0f0f0;
-  border-radius: 12px;
-  background: #fff;
-  height: fit-content;
-  overflow: hidden;
+  gap: 0;
+  padding: 0 12px 12px;
+  border: 1px solid #eae8e7;
+  border-radius: 16px;
+  background: #f9f8f4;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  box-sizing: border-box;
   transition: width 0.2s ease, padding 0.2s ease;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .leftStageRailCollapsed {
   width: 76px;
-  padding: 6px 4px;
+  padding: 0 8px 10px;
 }
 
 .leftRailToggle {
-  width: 100%;
+  width: calc(100% + 24px);
+  margin: 0 -12px 8px;
+  padding: 8px 12px 10px !important;
+  min-height: 40px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex !important;
+  align-items: center;
+  justify-content: flex-start;
+  border: none !important;
+  border-radius: 0 !important;
+  background: #f9f8f4 !important;
+  box-shadow: none !important;
+  color: rgba(26, 23, 22, 0.45) !important;
+  transition: background 0.2s ease, color 0.2s ease;
+
+  &:hover,
+  &:focus {
+    background: rgba(0, 0, 0, 0.06) !important;
+    color: #ff7f16 !important;
+  }
 }
 
 .leftStageMenu {
   width: 100%;
+  flex: 1;
   min-width: 0;
-  overflow: hidden;
+  min-height: 0;
+  overflow-y: auto;
   border-inline-end: none !important;
-  background: transparent;
+  background: #f9f8f4;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  :global(.ant-menu),
+  :global(.copaw-menu) {
+    background: #f9f8f4 !important;
+    border-inline-end: 0 !important;
+  }
 
   :global(.ant-menu-inline-collapsed),
   :global(.copaw-menu-inline-collapsed) {
@@ -189,6 +234,16 @@
   :global(.ant-menu-submenu-title) {
     border-radius: 8px;
     margin: 2px 0;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    line-height: 32px !important;
+    color: rgba(26, 23, 22, 0.25) !important;
+    padding-left: 8px !important;
+
+    &:hover {
+      background: transparent !important;
+      color: rgba(26, 23, 22, 0.25) !important;
+    }
   }
 
   :global(.copaw-menu-submenu-title) {
@@ -199,6 +254,12 @@
   :global(.ant-menu-item) {
     border-radius: 8px;
     margin: 2px 0;
+    color: rgba(26, 23, 22, 0.72) !important;
+
+    &:hover {
+      background: rgba(43, 18, 0, 0.04) !important;
+      color: rgba(26, 23, 22, 0.92) !important;
+    }
   }
 
   :global(.ant-menu-inline .ant-menu-item),
@@ -214,6 +275,12 @@
   :global(.ant-menu-inline .ant-menu-item::after),
   :global(.copaw-menu-inline .copaw-menu-item::after) {
     border-inline-end: none !important;
+  }
+
+  :global(.ant-menu-item-selected),
+  :global(.copaw-menu-item-selected) {
+    background: rgba(43, 18, 0, 0.08) !important;
+    color: inherit !important;
   }
 
   :global(.copaw-menu-item) {
@@ -3355,5 +3422,633 @@
 
   .knowledgeModuleHeaderToggle {
     padding: 0 8px;
+  }
+}
+
+:global(.dark-mode) {
+  .pathParent,
+  .pathParentLink,
+  .description,
+  .descriptionDivider,
+  .realtimeStatusMeta {
+    color: rgba(255, 255, 255, 0.54) !important;
+  }
+
+  .pathParentLink {
+    &:hover,
+    &:focus {
+      color: rgba(255, 255, 255, 0.8) !important;
+    }
+  }
+
+  .pathSeparator {
+    color: rgba(255, 255, 255, 0.28);
+  }
+
+  .pathCurrent {
+    color: rgba(255, 248, 240, 0.96);
+  }
+
+  .leftStageRail {
+    background: #1a1a1a;
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: none;
+  }
+
+  .leftRailToggle {
+    background: #1a1a1a !important;
+    color: rgba(255, 255, 255, 0.45) !important;
+
+    &:hover,
+    &:focus {
+      background: rgba(255, 255, 255, 0.08) !important;
+      color: #ff7f16 !important;
+    }
+  }
+
+  .leftStageMenu {
+    background: #1a1a1a;
+
+    :global(.ant-menu),
+    :global(.copaw-menu) {
+      background: #1a1a1a !important;
+    }
+
+    :global(.ant-menu-submenu-title),
+    :global(.copaw-menu-submenu-title) {
+      color: rgba(255, 255, 255, 0.45) !important;
+
+      &:hover {
+        background: transparent !important;
+        color: rgba(255, 255, 255, 0.45) !important;
+      }
+    }
+
+    :global(.ant-menu-item),
+    :global(.copaw-menu-item) {
+      color: rgba(255, 255, 255, 0.75) !important;
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.1) !important;
+        color: rgba(255, 255, 255, 0.95) !important;
+      }
+    }
+
+    :global(.ant-menu-item-selected),
+    :global(.copaw-menu-item-selected) {
+      background: rgba(255, 127, 22, 0.5) !important;
+      color: #ff7f16 !important;
+    }
+  }
+
+  .stageMenuCountMuted,
+  .stageLeafMenuCountMuted {
+    color: rgba(255, 255, 255, 0.44);
+  }
+
+  .stageMenuCountActive,
+  .stageLeafMenuCountActive {
+    color: #ff7f16;
+  }
+
+  .collapsedLeafBadgeMuted {
+    :global(.ant-badge-count),
+    :global(.copaw-badge-count) {
+      background: rgba(226, 232, 240, 0.14) !important;
+      color: #c7d2fe !important;
+      border-color: rgba(148, 163, 184, 0.28);
+    }
+  }
+
+  .collapsedLeafBadgeDotMuted {
+    :global(.ant-badge-dot),
+    :global(.copaw-badge-dot) {
+      background: rgba(226, 232, 240, 0.46);
+      border-color: rgba(15, 23, 42, 0.8);
+      opacity: 1;
+    }
+  }
+
+  .knowledgeModuleHeader {
+    border-color: rgba(255, 255, 255, 0.1);
+    background:
+      radial-gradient(circle at top left, rgba(255, 127, 22, 0.14), transparent 32%),
+      linear-gradient(180deg, rgba(34, 34, 34, 0.96) 0%, rgba(24, 24, 24, 0.98) 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.05),
+      0 8px 18px rgba(0, 0, 0, 0.18);
+  }
+
+  .knowledgeModuleHeaderTitle {
+    background: rgba(255, 127, 22, 0.12);
+    border-color: rgba(255, 127, 22, 0.22);
+    color: #ffe1c2;
+    box-shadow: none;
+  }
+
+  .knowledgeModuleHeaderSignal {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.025) 100%);
+    box-shadow: none;
+
+    &::before {
+      box-shadow: 0 0 0 3px rgba(122, 162, 255, 0.22);
+    }
+
+    &:nth-child(2)::before {
+      box-shadow: 0 0 0 3px rgba(95, 191, 159, 0.22);
+    }
+
+    &:nth-child(3)::before {
+      box-shadow: 0 0 0 3px rgba(255, 180, 84, 0.22);
+    }
+
+    &:nth-child(4)::before {
+      box-shadow: 0 0 0 3px rgba(255, 123, 114, 0.22);
+    }
+
+    :global(.ant-typography:first-child) {
+      color: rgba(255, 255, 255, 0.46);
+    }
+
+    :global(.ant-typography:last-child) {
+      color: rgba(255, 248, 240, 0.92);
+    }
+  }
+
+  .knowledgeModuleHeaderSignalActive {
+    border-color: rgba(95, 191, 159, 0.34);
+    background: linear-gradient(180deg, rgba(95, 191, 159, 0.16) 0%, rgba(95, 191, 159, 0.1) 100%);
+  }
+
+  .knowledgeModuleHeaderToggle {
+    color: rgba(255, 255, 255, 0.82);
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: none;
+
+    &:hover,
+    &:focus {
+      color: rgba(255, 255, 255, 0.94);
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+  }
+
+  .knowledgeLoopSummary,
+  .knowledgeRuntimeTooltipItem {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: linear-gradient(180deg, rgba(34, 34, 34, 0.98) 0%, rgba(26, 26, 26, 0.96) 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  }
+
+  .knowledgeLoopSummaryWarning {
+    border-color: rgba(245, 166, 35, 0.32);
+    background:
+      linear-gradient(180deg, rgba(61, 42, 21, 0.98) 0%, rgba(48, 35, 21, 0.96) 100%),
+      radial-gradient(circle at top right, rgba(245, 166, 35, 0.12), transparent 42%);
+  }
+
+  .knowledgeLoopSummarySuccess {
+    border-color: rgba(95, 191, 159, 0.28);
+    background:
+      linear-gradient(180deg, rgba(27, 47, 38, 0.98) 0%, rgba(22, 39, 33, 0.96) 100%),
+      radial-gradient(circle at top right, rgba(95, 191, 159, 0.12), transparent 42%);
+  }
+
+  .knowledgeLoopSummaryError {
+    border-color: rgba(255, 123, 114, 0.28);
+    background:
+      linear-gradient(180deg, rgba(60, 30, 31, 0.98) 0%, rgba(47, 24, 25, 0.96) 100%),
+      radial-gradient(circle at top right, rgba(255, 123, 114, 0.12), transparent 42%);
+  }
+
+  .knowledgeRuntimeTooltipStage,
+  .panelExtraText,
+  .overviewDescription,
+  .projectSummaryName,
+  .itemTitle {
+    color: rgba(255, 248, 240, 0.9);
+  }
+
+  .itemMeta,
+  .artifactGroupTitle,
+  .lineageLabel,
+  .overviewSummary,
+  .treeToolbarSticky,
+  .treeFilterChipMuted {
+    color: rgba(255, 255, 255, 0.56);
+  }
+
+  .agentsPage {
+    :global(.ant-empty-description) {
+      color: rgba(255, 255, 255, 0.58);
+    }
+
+    :global(.ant-btn-default) {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.14);
+      color: rgba(255, 255, 255, 0.86);
+    }
+
+    :global(.ant-btn-default:hover),
+    :global(.ant-btn-default:focus) {
+      background: rgba(255, 255, 255, 0.09);
+      border-color: rgba(255, 255, 255, 0.22);
+      color: rgba(255, 255, 255, 0.96);
+    }
+
+    :global(.ant-menu),
+    :global(.copaw-menu) {
+      background: transparent !important;
+      color: rgba(255, 255, 255, 0.72);
+    }
+
+    :global(.ant-menu-item),
+    :global(.ant-menu-submenu-title),
+    :global(.copaw-menu-item),
+    :global(.copaw-menu-submenu-title) {
+      color: rgba(255, 255, 255, 0.72) !important;
+    }
+
+    :global(.ant-menu-item:hover),
+    :global(.ant-menu-submenu-title:hover),
+    :global(.copaw-menu-item:hover),
+    :global(.copaw-menu-submenu-title:hover) {
+      background: rgba(255, 127, 22, 0.08) !important;
+      color: #ffd2ac !important;
+    }
+
+    :global(.ant-menu-item-selected),
+    :global(.copaw-menu-item-selected) {
+      background: rgba(255, 127, 22, 0.14) !important;
+      color: #ffbe82 !important;
+    }
+
+    :global(.ant-tabs-tab) {
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    :global(.ant-tabs-tab:hover) {
+      color: rgba(255, 222, 196, 0.9);
+    }
+
+    :global(.ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn) {
+      color: #ffbe82;
+    }
+
+    :global(.ant-tabs-tab-active) {
+      background: rgba(255, 127, 22, 0.12);
+      border-radius: 8px;
+    }
+
+    :global(.ant-tabs-content-holder),
+    :global(.copaw-tabs-content-holder),
+    :global(.ant-tabs-content),
+    :global(.copaw-tabs-content) {
+      background: transparent;
+    }
+
+    :global(.ant-splitter-bar) {
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    :global(.ant-typography-secondary) {
+      color: rgba(255, 255, 255, 0.56) !important;
+    }
+
+    :global(.ant-popover-inner),
+    :global(.ant-tooltip-inner) {
+      background: #232323;
+      color: rgba(255, 255, 255, 0.88);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    :global(.ant-popover-arrow::before),
+    :global(.ant-tooltip-arrow::before) {
+      background: #232323 !important;
+    }
+
+    :global(.ant-card-extra) {
+      color: rgba(255, 255, 255, 0.58);
+    }
+
+    :global(.ant-select-selector),
+    :global(.ant-segmented),
+    :global(.ant-input-affix-wrapper),
+    :global(.ant-input-number),
+    :global(.ant-upload-drag) {
+      background: rgba(255, 255, 255, 0.05) !important;
+      border-color: rgba(255, 255, 255, 0.12) !important;
+      color: rgba(255, 255, 255, 0.86) !important;
+    }
+
+    :global(.ant-select-selection-item),
+    :global(.ant-select-selection-placeholder),
+    :global(.ant-segmented-item-label) {
+      color: rgba(255, 255, 255, 0.72) !important;
+    }
+
+    :global(.ant-select-arrow),
+    :global(.ant-input-clear-icon),
+    :global(.ant-input-suffix),
+    :global(.anticon-search) {
+      color: rgba(255, 255, 255, 0.52) !important;
+    }
+
+    :global(.ant-input-group-addon),
+    :global(.ant-input-search-button) {
+      background: rgba(255, 127, 22, 0.14) !important;
+      border-color: rgba(255, 127, 22, 0.24) !important;
+      color: #ffd2ac !important;
+    }
+
+    :global(.ant-input-search-button:hover),
+    :global(.ant-input-search-button:focus) {
+      background: rgba(255, 127, 22, 0.2) !important;
+      border-color: rgba(255, 127, 22, 0.32) !important;
+      color: #ffe6cf !important;
+    }
+
+    :global(.ant-segmented-item-selected) {
+      background: rgba(255, 127, 22, 0.14) !important;
+      box-shadow: none !important;
+    }
+
+    :global(.ant-tree) {
+      background: transparent !important;
+      color: rgba(255, 255, 255, 0.78) !important;
+    }
+
+    :global(.ant-tree-switcher),
+    :global(.ant-tree-switcher-icon) {
+      color: rgba(255, 255, 255, 0.42) !important;
+    }
+
+    :global(.ant-tree-node-content-wrapper) {
+      color: rgba(255, 255, 255, 0.76) !important;
+    }
+
+    :global(.ant-tree-node-content-wrapper:hover) {
+      background: rgba(255, 255, 255, 0.06) !important;
+    }
+
+    :global(.ant-tree-node-content-wrapper.ant-tree-node-selected) {
+      background: rgba(255, 127, 22, 0.14) !important;
+      color: #ffe1c2 !important;
+    }
+  }
+
+  .treeToolbarSticky,
+  .artifactToolbar,
+  .artifactDetailCard,
+  .overviewSummary {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.035);
+  }
+
+  .focusBar,
+  .attachFloatingBar {
+    border-color: rgba(255, 127, 22, 0.2);
+    background: rgba(255, 127, 22, 0.1);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+  }
+
+  .attachCountText {
+    color: #ffd2ac;
+  }
+
+  .attachAutoAnalyzeCheck {
+    :global(.ant-checkbox + span) {
+      color: rgba(255, 231, 211, 0.88);
+    }
+  }
+
+  .lineageTerminal {
+    border-color: rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.68);
+  }
+
+  .lineageNode {
+    border-color: rgba(120, 177, 255, 0.36);
+    background: rgba(46, 107, 213, 0.18);
+    color: #c8deff;
+  }
+
+  .lineageArtifact {
+    border-color: rgba(106, 207, 122, 0.3);
+    background: rgba(35, 93, 41, 0.28);
+    color: #cdeecb;
+  }
+
+  .lineageArrow {
+    color: rgba(255, 255, 255, 0.36);
+  }
+
+  .projectKnowledgePrimaryPanel,
+  .projectKnowledgeSecondaryPanel {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .projectKnowledgeEntityDetailCol {
+    border-right-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .projectKnowledgeEntityDetailHeader,
+  .projectKnowledgePanelHeader,
+  .projectKnowledgeQueryTop {
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .projectKnowledgeEntityRelationItem,
+  .projectKnowledgeSelectableItem,
+  .projectKnowledgeDocumentCard,
+  .projectKnowledgeRelationCard,
+  .projectKnowledgeModeCard,
+  .projectKnowledgeOutputCard,
+  .projectKnowledgeModeMetric,
+  .projectKnowledgeHeaderStat,
+  .projectKnowledgeTrendSection,
+  .projectKnowledgeSignalCard,
+  .projectKnowledgeTrendChart,
+  .projectKnowledgeInsightBox,
+  .projectKnowledgeInsightBar,
+  .projectKnowledgeMetricPill,
+  .projectKnowledgeSettingsCard,
+  .artifactEditorRow,
+  .artifactEditorEmpty,
+  .automationTopCard,
+  .progressCoach {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.035);
+  }
+
+  .projectKnowledgeSelectableItem:hover,
+  .projectKnowledgeEntityRelationItem:hover {
+    border-color: rgba(255, 127, 22, 0.28);
+    background: rgba(255, 127, 22, 0.08);
+  }
+
+  .projectKnowledgeSelectableItemActive,
+  .projectKnowledgeModeCardActive,
+  .projectKnowledgeOutputCardActive {
+    border-color: rgba(255, 127, 22, 0.34);
+    background: rgba(255, 127, 22, 0.1);
+    box-shadow: 0 0 0 1px rgba(255, 127, 22, 0.14);
+  }
+
+  .projectKnowledgeEntityRelationLabel,
+  .projectKnowledgeMetaLine,
+  .projectKnowledgeTrendLegend,
+  .artifactSummaryTitle,
+  .artifactEditorEmpty,
+  .treeNodeIconFile {
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .projectKnowledgeEntityRelationTarget,
+  .projectKnowledgeCardTitle,
+  .projectKnowledgeSectionTitle,
+  .projectKnowledgeTrendHeader,
+  .treeNodeText,
+  .compactTreeFolderLabel,
+  .compactTreeLeafLabel {
+    color: rgba(255, 248, 240, 0.88);
+  }
+
+  .projectKnowledgeEntityRelationStrength,
+  .treeNodeTextHighlighted {
+    color: #ffbe82;
+  }
+
+  .projectKnowledgeHeaderStat,
+  .projectKnowledgeSignalCard,
+  .projectKnowledgeMetricPill {
+    box-shadow: none;
+  }
+
+  .projectKnowledgeTrendChart {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.02) 100%);
+  }
+
+  .projectKnowledgeTrendDeltaRow {
+    :global(.ant-typography) {
+      color: rgba(255, 255, 255, 0.62) !important;
+    }
+  }
+
+  .projectKnowledgeControls {
+    :global(.ant-select-selector),
+    :global(.ant-input-affix-wrapper),
+    :global(.ant-input-group-addon),
+    :global(.ant-input-search-button),
+    :global(.ant-input-search > .ant-input-group > .ant-input-group-addon:last-child) {
+      background: rgba(255, 255, 255, 0.05) !important;
+      border-color: rgba(255, 255, 255, 0.12) !important;
+      color: rgba(255, 255, 255, 0.84) !important;
+    }
+
+    :global(.ant-select-selector) {
+      box-shadow: none !important;
+    }
+
+    :global(.ant-input),
+    :global(.ant-input-affix-wrapper .ant-input) {
+      background: transparent !important;
+      color: rgba(255, 255, 255, 0.84) !important;
+    }
+
+    :global(.ant-input::placeholder),
+    :global(.ant-input-affix-wrapper .ant-input::placeholder),
+    :global(.ant-select-selection-placeholder) {
+      color: rgba(255, 255, 255, 0.42) !important;
+    }
+
+    :global(.ant-input-group-addon) {
+      padding: 0 !important;
+    }
+
+    :global(.ant-input-search-button) {
+      background: rgba(255, 127, 22, 0.16) !important;
+      border-color: rgba(255, 127, 22, 0.28) !important;
+      color: #ffd2ac !important;
+    }
+
+    :global(.ant-input-search-button:hover),
+    :global(.ant-input-search-button:focus) {
+      background: rgba(255, 127, 22, 0.22) !important;
+      border-color: rgba(255, 127, 22, 0.36) !important;
+      color: #ffe6cf !important;
+    }
+  }
+
+  .treeFilterChip {
+    border-color: rgba(255, 127, 22, 0.28);
+    background: rgba(255, 127, 22, 0.12);
+    color: #ffd2ac;
+  }
+
+  .treeToolbarSticky {
+    background: rgba(20, 20, 20, 0.92);
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(6px);
+  }
+
+  .overviewCompactTree {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.02);
+
+    :global(.ant-tree-node-content-wrapper:hover) .treeNodeActions {
+      background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(28, 28, 28, 0.96) 18px, rgba(28, 28, 28, 0.96) 100%);
+    }
+
+    :global(.ant-tree-node-content-wrapper.ant-tree-node-selected) .treeNodeActions {
+      background: linear-gradient(90deg, rgba(255, 127, 22, 0), rgba(64, 38, 18, 0.96) 18px, rgba(64, 38, 18, 0.96) 100%);
+    }
+  }
+
+  .treeNodeMetaCount {
+    background: rgba(255, 127, 22, 0.12);
+    color: #ffd2ac;
+  }
+
+  .treeNodeActions {
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(20, 20, 20, 0.96) 18px, rgba(20, 20, 20, 0.96) 100%);
+  }
+
+  .treeNodeIconFolder {
+    color: #ffbe82;
+  }
+
+  .priorityFileIcon {
+    background: rgba(255, 127, 22, 0.12);
+    border-color: rgba(255, 127, 22, 0.3);
+    box-shadow: none;
+  }
+
+  .priorityFileIcon :global(.anticon) {
+    color: #ffd2ac;
+  }
+
+  .attachActionButton {
+    border-color: rgba(255, 127, 22, 0.22);
+    background: rgba(255, 127, 22, 0.1);
+    color: #ffd2ac;
+
+    &:hover,
+    &:focus {
+      border-color: rgba(255, 127, 22, 0.34) !important;
+      color: #ffe6cf !important;
+      background: rgba(255, 127, 22, 0.16) !important;
+    }
+  }
+
+  .previewContent,
+  .stepPreviewCellMeta .previewContent,
+  .stepPreviewCellText .previewContent {
+    background: #171717;
+    color: rgba(255, 255, 255, 0.84);
   }
 }

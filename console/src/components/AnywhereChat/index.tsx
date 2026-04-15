@@ -7,6 +7,7 @@ import {
   type IAgentScopeRuntimeWebUIRef,
 } from "@agentscope-ai/chat";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import * as ReactDOM from "react-dom";
 import { createPortal } from "react-dom";
 import { Button, Empty, Modal, Popover, Spin, Tooltip, message } from "antd";
 import { CopyOutlined, DashboardOutlined, DeleteOutlined, FileMarkdownOutlined } from "@ant-design/icons";
@@ -91,6 +92,45 @@ const RUNTIME_STATUS_RETRY_DELAY_MS = 1500;
 const RUNTIME_STATUS_MAX_RETRIES = 2;
 const AUTO_CONTINUE_MAX_ATTEMPTS = 2;
 const AUTO_CONTINUE_MIN_INCREMENT_CHARS = 32;
+const FLUSH_SYNC_PATCH_FLAG = "__copaw_relaxed_flush_sync_patched__";
+
+function applyRelaxedFlushSyncPatch(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const runtimeWindow = window as Window & {
+    [FLUSH_SYNC_PATCH_FLAG]?: boolean;
+  };
+  if (runtimeWindow[FLUSH_SYNC_PATCH_FLAG]) {
+    return;
+  }
+
+  const reactDomWithFlushSync = ReactDOM as typeof ReactDOM & {
+    flushSync?: (callback: () => void) => void;
+  };
+  if (typeof reactDomWithFlushSync.flushSync !== "function") {
+    return;
+  }
+
+  // @agentscope-ai/chat 当前版本在生命周期内高频调用 flushSync，
+  // 在 VS Code 内置渲染器中容易导致渲染线程异常退出。
+  reactDomWithFlushSync.flushSync = (function relaxedFlushSync<R>(callback: () => R): R {
+    if (typeof queueMicrotask === "function") {
+      queueMicrotask(() => {
+        callback();
+      });
+    } else {
+      window.setTimeout(() => {
+        callback();
+      }, 0);
+    }
+    return undefined as R;
+  }) as typeof reactDomWithFlushSync.flushSync;
+
+  runtimeWindow[FLUSH_SYNC_PATCH_FLAG] = true;
+}
+
+applyRelaxedFlushSyncPatch();
 
 interface AnywhereChatProps {
   sessionId: string;
