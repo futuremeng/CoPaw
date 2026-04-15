@@ -407,6 +407,26 @@ See: https://docs.trychroma.com/docs/overview/troubleshooting#sqlite
             add_thinking_block=cc.compact_with_thinking_block,
         )
 
+    async def dream_memory(self, **kwargs) -> None:
+        """Run one dream-based memory optimization task when supported.
+
+        Falls back to no-op for reme-ai versions that do not expose
+        ``dream_memory`` yet.
+        """
+        self._warn_if_version_mismatch()
+        if self._reme is None:
+            return None
+
+        dream_fn = getattr(self._reme, "dream_memory", None)
+        if dream_fn is None:
+            logger.debug(
+                "ReMe backend has no dream_memory; skipping dream pass",
+            )
+            return None
+
+        await dream_fn(**kwargs)
+        return None
+
     async def memory_search(
         self,
         query: str,
