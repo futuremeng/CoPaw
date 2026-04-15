@@ -347,6 +347,33 @@
     padding-inline-end: 8px !important;
   }
 
+  :global(.qwenpaw-menu.qwenpaw-menu-root.qwenpaw-menu-inline.qwenpaw-menu-dark .qwenpaw-menu-submenu-title) {
+    color: rgba(255, 255, 255, 0.45) !important;
+    background: transparent !important;
+    padding-inline: 8px !important;
+    padding-inline-start: 8px !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    &:hover {
+      color: rgba(255, 255, 255, 0.45) !important;
+      background: transparent !important;
+    }
+  }
+
+  :global(.qwenpaw-menu.qwenpaw-menu-root.qwenpaw-menu-inline.qwenpaw-menu-dark .qwenpaw-menu-submenu-title .qwenpaw-menu-item-icon),
+  :global(.qwenpaw-menu.qwenpaw-menu-root.qwenpaw-menu-inline.qwenpaw-menu-dark .qwenpaw-menu-submenu-title .anticon) {
+    color: rgba(255, 255, 255, 0.62) !important;
+    flex-shrink: 0;
+  }
+
+  :global(.qwenpaw-menu.qwenpaw-menu-root.qwenpaw-menu-inline.qwenpaw-menu-dark .qwenpaw-menu-submenu-title .qwenpaw-menu-submenu-arrow) {
+    display: none !important;
+  }
+
   :global(.qwenpaw-menu-dark .qwenpaw-menu-item),
   :global(.ant-menu-dark .ant-menu-item),
   :global(.copaw-menu-dark .copaw-menu-item) {
@@ -3912,6 +3939,7 @@
     }
 
     :global(.ant-menu),
+    :global(.qwenpaw-menu),
     :global(.copaw-menu) {
       background: transparent !important;
       color: rgba(255, 255, 255, 0.72);
@@ -3919,6 +3947,8 @@
 
     :global(.ant-menu-item),
     :global(.ant-menu-submenu-title),
+    :global(.qwenpaw-menu-item),
+    :global(.qwenpaw-menu-submenu-title),
     :global(.copaw-menu-item),
     :global(.copaw-menu-submenu-title) {
       color: rgba(255, 255, 255, 0.72) !important;
@@ -3926,6 +3956,7 @@
 
     :global(.ant-menu-item:hover),
     :global(.ant-menu-submenu-title:hover),
+    :global(.qwenpaw-menu-item:hover),
     :global(.copaw-menu-item:hover),
     :global(.copaw-menu-submenu-title:hover) {
       background: rgba(255, 127, 22, 0.08) !important;
@@ -3933,6 +3964,7 @@
     }
 
     :global(.ant-menu-item-selected),
+    :global(.qwenpaw-menu-item-selected),
     :global(.copaw-menu-item-selected) {
       background: rgba(255, 127, 22, 0.14) !important;
       color: #ffbe82 !important;
