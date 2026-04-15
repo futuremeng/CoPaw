@@ -4396,6 +4396,49 @@
     background: rgba(255, 255, 255, 0.035);
   }
 
+  .projectKnowledgeLayerSection {
+    border-color: rgba(255, 255, 255, 0.1);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.025) 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  }
+
+  .projectKnowledgeLayerDivider {
+    border-top-color: rgba(255, 255, 255, 0.14) !important;
+  }
+
+  .projectKnowledgeCompatDetails {
+    border-color: rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .projectKnowledgeCompatSummary {
+    color: rgba(255, 255, 255, 0.62);
+
+    &:hover,
+    &:focus {
+      color: rgba(255, 248, 240, 0.9);
+    }
+  }
+
+  .projectKnowledgeLayerHeader,
+  .projectKnowledgeCompatBody,
+  .projectKnowledgeSettingsRowCompact,
+  .projectKnowledgeStatsInline {
+    :global(.ant-typography.ant-typography-secondary),
+    :global(.qwenpaw-typography.qwenpaw-typography-secondary),
+    :global(.copaw-typography.copaw-typography-secondary) {
+      color: rgba(255, 255, 255, 0.66) !important;
+    }
+  }
+
+  .projectKnowledgeMetaRowCompact {
+    :global(.ant-typography),
+    :global(.qwenpaw-typography),
+    :global(.copaw-typography) {
+      color: rgba(255, 255, 255, 0.62) !important;
+    }
+  }
+
   .projectKnowledgeSelectableItem:hover,
   .projectKnowledgeEntityRelationItem:hover {
     border-color: rgba(255, 127, 22, 0.28);
@@ -4530,10 +4573,62 @@
       color: rgba(255, 248, 240, 0.9) !important;
     }
 
+    :global(.ant-alert-message),
+    :global(.qwenpaw-alert-message),
+    :global(.copaw-alert-message) {
+      color: rgba(255, 248, 240, 0.96) !important;
+      font-weight: 600;
+    }
+
+    :global(.ant-alert-description),
+    :global(.qwenpaw-alert-description),
+    :global(.copaw-alert-description) {
+      color: rgba(255, 255, 255, 0.74) !important;
+    }
+
     :global(.ant-alert .anticon),
     :global(.qwenpaw-alert .anticon),
     :global(.copaw-alert .anticon) {
       color: rgba(255, 214, 176, 0.88) !important;
+    }
+
+    :global(.ant-alert-action .ant-btn),
+    :global(.qwenpaw-alert-action .qwenpaw-btn),
+    :global(.copaw-alert-action .copaw-btn) {
+      border-color: rgba(255, 255, 255, 0.18);
+      background: rgba(255, 255, 255, 0.06);
+      color: rgba(255, 248, 240, 0.9);
+      box-shadow: none;
+    }
+
+    :global(.ant-alert-action .ant-btn:hover),
+    :global(.ant-alert-action .ant-btn:focus),
+    :global(.qwenpaw-alert-action .qwenpaw-btn:hover),
+    :global(.qwenpaw-alert-action .qwenpaw-btn:focus),
+    :global(.copaw-alert-action .copaw-btn:hover),
+    :global(.copaw-alert-action .copaw-btn:focus) {
+      border-color: rgba(255, 255, 255, 0.28) !important;
+      background: rgba(255, 255, 255, 0.1) !important;
+      color: rgba(255, 248, 240, 0.96) !important;
+    }
+
+    :global(.ant-alert-action .ant-btn-dangerous),
+    :global(.qwenpaw-alert-action .qwenpaw-btn-dangerous),
+    :global(.copaw-alert-action .copaw-btn-dangerous) {
+      border-color: rgba(255, 123, 114, 0.4);
+      background: rgba(255, 123, 114, 0.16);
+      color: #ffd3cf;
+    }
+
+    :global(.ant-alert-action .ant-btn-dangerous:hover),
+    :global(.ant-alert-action .ant-btn-dangerous:focus),
+    :global(.qwenpaw-alert-action .qwenpaw-btn-dangerous:hover),
+    :global(.qwenpaw-alert-action .qwenpaw-btn-dangerous:focus),
+    :global(.copaw-alert-action .copaw-btn-dangerous:hover),
+    :global(.copaw-alert-action .copaw-btn-dangerous:focus) {
+      border-color: rgba(255, 123, 114, 0.56) !important;
+      background: rgba(255, 123, 114, 0.24) !important;
+      color: #ffe5e1 !important;
     }
 
     :global(.ant-tag),
@@ -4578,8 +4673,14 @@
       color: rgba(255, 248, 240, 0.82) !important;
     }
 
+    :global(.ant-badge-status-dot),
+    :global(.qwenpaw-badge-status-dot),
+    :global(.copaw-badge-status-dot) {
+      box-shadow: 0 0 0 2px rgba(20, 20, 20, 0.5);
+    }
+
     :global(.ant-badge-status-default) {
-      background: rgba(255, 255, 255, 0.36) !important;
+      background: rgba(255, 248, 240, 0.68) !important;
     }
 
     :global(.ant-badge-status-processing) {
@@ -4641,6 +4742,7 @@
   }
 
   .projectKnowledgeTabActions,
+  .projectKnowledgeSettingsActions,
   .projectKnowledgeTrendHeader,
   .projectKnowledgeInsightActions,
   .knowledgeLoopSummaryTags,
@@ -4726,6 +4828,106 @@
       background: rgba(255, 127, 22, 0.22) !important;
       border-color: rgba(255, 127, 22, 0.36) !important;
       color: #ffe6cf !important;
+    }
+  }
+
+  .projectKnowledgeSettingsActions,
+  .projectKnowledgeCompatBody {
+    :global(.ant-switch),
+    :global(.qwenpaw-switch),
+    :global(.copaw-switch) {
+      background: rgba(255, 255, 255, 0.24);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+    }
+
+    :global(.ant-switch:hover:not(.ant-switch-disabled)),
+    :global(.qwenpaw-switch:hover:not(.qwenpaw-switch-disabled)),
+    :global(.copaw-switch:hover:not(.copaw-switch-disabled)) {
+      background: rgba(255, 255, 255, 0.3);
+      border-color: rgba(255, 255, 255, 0.24);
+    }
+
+    :global(.ant-switch-checked),
+    :global(.qwenpaw-switch-checked),
+    :global(.copaw-switch-checked) {
+      background: rgba(255, 127, 22, 0.6) !important;
+      border-color: rgba(255, 127, 22, 0.38);
+    }
+
+    :global(.ant-switch:focus-visible),
+    :global(.qwenpaw-switch:focus-visible),
+    :global(.copaw-switch:focus-visible) {
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(255, 127, 22, 0.24);
+    }
+
+    :global(.ant-switch-disabled),
+    :global(.qwenpaw-switch-disabled),
+    :global(.copaw-switch-disabled) {
+      background: rgba(255, 255, 255, 0.12) !important;
+      border-color: rgba(255, 255, 255, 0.12) !important;
+      opacity: 0.72;
+    }
+
+    :global(.ant-switch .ant-switch-handle::before),
+    :global(.qwenpaw-switch .qwenpaw-switch-handle::before),
+    :global(.copaw-switch .copaw-switch-handle::before) {
+      background: rgba(255, 248, 240, 0.96);
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.32);
+    }
+
+    :global(.ant-checkbox-wrapper),
+    :global(.qwenpaw-checkbox-wrapper),
+    :global(.copaw-checkbox-wrapper) {
+      color: rgba(255, 248, 240, 0.86);
+    }
+
+    :global(.ant-checkbox-inner),
+    :global(.qwenpaw-checkbox-inner),
+    :global(.copaw-checkbox-inner) {
+      border-color: rgba(255, 255, 255, 0.38);
+      background: rgba(255, 255, 255, 0.05);
+      box-shadow: none;
+    }
+
+    :global(.ant-checkbox:hover .ant-checkbox-inner),
+    :global(.qwenpaw-checkbox:hover .qwenpaw-checkbox-inner),
+    :global(.copaw-checkbox:hover .copaw-checkbox-inner) {
+      border-color: rgba(255, 255, 255, 0.52);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    :global(.ant-checkbox-input:focus-visible + .ant-checkbox-inner),
+    :global(.qwenpaw-checkbox-input:focus-visible + .qwenpaw-checkbox-inner),
+    :global(.copaw-checkbox-input:focus-visible + .copaw-checkbox-inner) {
+      border-color: rgba(255, 127, 22, 0.5);
+      box-shadow: 0 0 0 2px rgba(255, 127, 22, 0.24);
+    }
+
+    :global(.ant-checkbox-checked .ant-checkbox-inner),
+    :global(.qwenpaw-checkbox-checked .qwenpaw-checkbox-inner),
+    :global(.copaw-checkbox-checked .copaw-checkbox-inner) {
+      border-color: rgba(255, 127, 22, 0.42);
+      background: rgba(255, 127, 22, 0.38);
+    }
+
+    :global(.ant-checkbox-checked .ant-checkbox-inner::after),
+    :global(.qwenpaw-checkbox-checked .qwenpaw-checkbox-inner::after),
+    :global(.copaw-checkbox-checked .copaw-checkbox-inner::after) {
+      border-color: rgba(255, 248, 240, 0.98);
+    }
+
+    :global(.ant-checkbox-wrapper.ant-checkbox-wrapper-disabled),
+    :global(.qwenpaw-checkbox-wrapper.qwenpaw-checkbox-wrapper-disabled),
+    :global(.copaw-checkbox-wrapper.copaw-checkbox-wrapper-disabled) {
+      color: rgba(255, 255, 255, 0.42);
+    }
+
+    :global(.ant-checkbox-disabled .ant-checkbox-inner),
+    :global(.qwenpaw-checkbox-disabled .qwenpaw-checkbox-inner),
+    :global(.copaw-checkbox-disabled .copaw-checkbox-inner) {
+      border-color: rgba(255, 255, 255, 0.22) !important;
+      background: rgba(255, 255, 255, 0.03) !important;
     }
   }
 
