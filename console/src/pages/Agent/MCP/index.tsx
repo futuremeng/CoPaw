@@ -6,51 +6,8 @@ import { MCPClientCard } from "./components";
 import { useMCP } from "./useMCP";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
+import { parseCreateClientsJson } from "./clientConfig";
 import styles from "./index.module.less";
-
-type MCPTransport = "stdio" | "streamable_http" | "sse";
-
-function normalizeTransport(raw?: unknown): MCPTransport | undefined {
-  if (typeof raw !== "string") return undefined;
-  const value = raw.trim().toLowerCase();
-  switch (value) {
-    case "stdio":
-      return "stdio";
-    case "sse":
-      return "sse";
-    case "streamablehttp":
-    case "streamable_http":
-    case "streamable-http":
-    case "http":
-      return "streamable_http";
-    default:
-      return undefined;
-  }
-}
-
-function normalizeClientData(key: string, rawData: any) {
-  const transport =
-    normalizeTransport(rawData.transport ?? rawData.type) ??
-    (rawData.url || rawData.baseUrl || !rawData.command
-      ? "streamable_http"
-      : "stdio");
-
-  const command =
-    transport === "stdio" ? (rawData.command ?? "").toString() : "";
-
-  return {
-    name: rawData.name || key,
-    description: rawData.description || "",
-    enabled: rawData.enabled ?? rawData.isActive ?? true,
-    transport,
-    url: (rawData.url || rawData.baseUrl || "").toString(),
-    headers: rawData.headers || {},
-    command,
-    args: Array.isArray(rawData.args) ? rawData.args : [],
-    env: rawData.env || {},
-    cwd: (rawData.cwd || "").toString(),
-  };
-}
 
 function MCPPage() {
   const { t } = useTranslation();
@@ -66,6 +23,7 @@ function MCPPage() {
     updateClient,
   } = useMCP();
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
   const probingCount = queuedRefreshKeys.length + refreshingKeys.length;
   const hasEnabledClients = clients.some((client) => client.enabled);
   const [newClientJson, setNewClientJson] = useState(`{
@@ -103,50 +61,9 @@ function MCPPage() {
   };
 
   const handleCreateClient = async () => {
+    setIsCreating(true);
     try {
-      const parsed = JSON.parse(newClientJson);
-
-      // Support two formats:
-      // Format 1: { "mcpServers": { "key": { "command": "...", ... } } }
-      // Format 2: { "key": { "command": "...", ... } }
-      // Format 3: { "key": "...", "name": "...", "command": "...", ... } (direct)
-
-      const clientsToCreate: Array<{ key: string; data: any }> = [];
-
-      if (parsed.mcpServers) {
-        // Format 1: nested mcpServers
-        Object.entries(parsed.mcpServers).forEach(
-          ([key, data]: [string, any]) => {
-            clientsToCreate.push({
-              key,
-              data: normalizeClientData(key, data),
-            });
-          },
-        );
-      } else if (
-        parsed.key &&
-        (parsed.command || parsed.url || parsed.baseUrl)
-      ) {
-        // Format 3: direct format with key field
-        const { key, ...clientData } = parsed;
-        clientsToCreate.push({
-          key,
-          data: normalizeClientData(key, clientData),
-        });
-      } else {
-        // Format 2: direct client objects with keys
-        Object.entries(parsed).forEach(([key, data]: [string, any]) => {
-          if (
-            typeof data === "object" &&
-            (data.command || data.url || data.baseUrl)
-          ) {
-            clientsToCreate.push({
-              key,
-              data: normalizeClientData(key, data),
-            });
-          }
-        });
-      }
+      const clientsToCreate = parseCreateClientsJson(newClientJson);
 
       // Create all clients
       let allSuccess = true;
@@ -170,7 +87,11 @@ function MCPPage() {
 }`);
       }
     } catch (error) {
-      alert("Invalid JSON format");
+      const errorMessage =
+        error instanceof Error ? error.message : "Invalid JSON format";
+      message.error(errorMessage);
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -231,10 +152,16 @@ function MCPPage() {
             <Button
               onClick={() => setCreateModalOpen(false)}
               style={{ marginRight: 8 }}
+              disabled={isCreating}
             >
               {t("common.cancel")}
             </Button>
-            <Button type="primary" onClick={handleCreateClient}>
+            <Button
+              type="primary"
+              onClick={handleCreateClient}
+              loading={isCreating}
+              disabled={isCreating}
+            >
               {t("common.create")}
             </Button>
           </div>

@@ -18,6 +18,7 @@ import {
   ToolOutlined,
 } from "@ant-design/icons";
 import api from "../../../../api";
+import { parseUpdateClientJson } from "../clientConfig";
 import styles from "../index.module.less";
 
 interface MCPClientUpdate {
@@ -61,6 +62,7 @@ export const MCPClientCard = React.memo(function MCPClientCard({
   const [toolsError, setToolsError] = useState<string | null>(null);
   const [editedJson, setEditedJson] = useState("");
   const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Determine if MCP client is remote or local based on command
   const isRemote =
@@ -104,18 +106,20 @@ export const MCPClientCard = React.memo(function MCPClientCard({
   };
 
   const handleSaveJson = async () => {
+    setIsSaving(true);
     try {
-      const parsed = JSON.parse(editedJson);
-      const { key: _key, ...updates } = parsed;
-
-      // Send all updates directly to backend, let backend handle env masking check
+      const updates = parseUpdateClientJson(editedJson, client.key);
       const success = await onUpdate(client.key, updates);
       if (success) {
         setJsonModalOpen(false);
         setIsEditing(false);
       }
-    } catch {
-      alert("Invalid JSON format");
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Invalid JSON format";
+      alert(errorMessage);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -291,7 +295,12 @@ export const MCPClientCard = React.memo(function MCPClientCard({
               {t("common.cancel")}
             </Button>
             {isEditing ? (
-              <Button type="primary" onClick={handleSaveJson}>
+              <Button
+                type="primary"
+                onClick={handleSaveJson}
+                loading={isSaving}
+                disabled={isSaving}
+              >
                 {t("common.save")}
               </Button>
             ) : (

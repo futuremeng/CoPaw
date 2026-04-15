@@ -263,6 +263,7 @@ class MCPClientManager:
         async with self._lock:
             old_client = self._clients.get(key)
             self._clients[key] = new_client
+            self._failed_keys.discard(key)
 
             if old_client is not None:
                 logger.debug(f"Closing old MCP client: {key}")
@@ -283,6 +284,7 @@ class MCPClientManager:
         """
         async with self._lock:
             old_client = self._clients.pop(key, None)
+            self._failed_keys.discard(key)
 
         if old_client is not None:
             logger.debug(f"Removing MCP client: {key}")
@@ -299,6 +301,7 @@ class MCPClientManager:
         async with self._lock:
             clients_snapshot = list(self._clients.items())
             self._clients.clear()
+            self._failed_keys.clear()
 
         logger.debug("Closing all MCP clients")
         for key, client in clients_snapshot:

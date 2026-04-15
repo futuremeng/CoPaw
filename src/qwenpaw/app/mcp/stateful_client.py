@@ -519,7 +519,8 @@ class StdIOStatefulClient(StatefulClientBase):
         Raises:
             RuntimeError: If not connected (unless ignore_errors=True)
         """
-        if not self.is_connected:
+        has_lifecycle_task = self._lifecycle_task is not None
+        if not self.is_connected and not has_lifecycle_task:
             if not ignore_errors:
                 raise RuntimeError(
                     f"MCP client '{self.name}' is not connected. "
@@ -530,9 +531,15 @@ class StdIOStatefulClient(StatefulClientBase):
         try:
             # Signal stop and wait for lifecycle task to finish
             self._stop_event.set()
+            self._reload_event.clear()
+            self._ready_event.clear()
+            self._failed_event.clear()
             if self._lifecycle_task:
                 await self._lifecycle_task
-                self._lifecycle_task = None
+            self._lifecycle_task = None
+            self.session = None
+            self.is_connected = False
+            self._cached_tools = None
         except Exception as e:
             if not ignore_errors:
                 raise
@@ -846,7 +853,8 @@ class HttpStatefulClient(StatefulClientBase):
         Raises:
             RuntimeError: If not connected (unless ignore_errors=True)
         """
-        if not self.is_connected:
+        has_lifecycle_task = self._lifecycle_task is not None
+        if not self.is_connected and not has_lifecycle_task:
             if not ignore_errors:
                 raise RuntimeError(
                     f"MCP client '{self.name}' is not connected. "
@@ -856,9 +864,14 @@ class HttpStatefulClient(StatefulClientBase):
 
         try:
             self._stop_event.set()
+            self._reload_event.clear()
+            self._ready_event.clear()
             if self._lifecycle_task:
                 await self._lifecycle_task
-                self._lifecycle_task = None
+            self._lifecycle_task = None
+            self.session = None
+            self.is_connected = False
+            self._cached_tools = None
         except Exception as e:
             if not ignore_errors:
                 raise
