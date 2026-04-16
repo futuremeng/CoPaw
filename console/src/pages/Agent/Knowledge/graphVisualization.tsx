@@ -103,6 +103,8 @@ interface G6Graph {
   getNeighborNodesData: (id: string) => Array<{ id?: string | number }>;
   zoomBy?: (ratio: number, animation?: unknown, origin?: [number, number]) => void;
   fitView?: (options?: unknown, animation?: unknown) => void;
+  setOptions?: (options: unknown) => void;
+  layout?: () => Promise<void>;
 }
 
 type GraphTopologyData = {
@@ -119,6 +121,7 @@ type GraphInsightCard = {
 };
 
 type GraphColorMode = "type" | "weight";
+type GraphLayoutMode = "force-cluster" | "force-prevent-overlap" | "radial";
 
 const TYPE_COLOR_PALETTE = [
   "#1677ff",
@@ -675,10 +678,69 @@ export function GraphVisualization(props: GraphVisualizationProps) {
   const [pendingTopK, setPendingTopK] = useState<number | null>(
     typeof topK === "number" ? topK : null,
   );
+  const [layoutMode, setLayoutMode] = useState<GraphLayoutMode>("force-cluster");
   const [activeInsightKey, setActiveInsightKey] = useState("");
   const colorModeRef = useRef<GraphColorMode>("type");
   const nodeTypeColorMapRef = useRef<Map<string, string>>(new Map());
   const lastFocusStateKeyRef = useRef("");
+
+  const buildLayoutConfig = useCallback((width: number, height: number) => {
+    const nodeCount = data.nodes.length;
+    const baseIterations = Math.min(240, Math.max(80, Math.round(60 + nodeCount * 1.2)));
+
+    if (layoutMode === "force-prevent-overlap") {
+      return {
+        type: "d3-force",
+        center: { x: width / 2, y: height / 2 },
+        link: {
+          distance: (edge: { source?: { data?: { visualSize?: number } }; target?: { data?: { visualSize?: number } } }) => {
+            const sourceSize = Number(edge?.source?.data?.visualSize || 22);
+            const targetSize = Number(edge?.target?.data?.visualSize || 22);
+            return sourceSize + targetSize + 36;
+          },
+        },
+        collide: {
+          radius: (node: { data?: { visualSize?: number } }) => Number(node?.data?.visualSize || 22) + 16,
+        },
+        manyBody: {
+          strength: (node: { data?: { visualSize?: number } }) => -7.5 * Number(node?.data?.visualSize || 22),
+        },
+        animation: false,
+        iterations: Math.min(320, baseIterations + 80),
+      };
+    }
+
+    if (layoutMode === "radial") {
+      return {
+        type: "radial",
+        center: [width / 2, height / 2],
+        unitRadius: Math.max(26, Math.min(width, height) / Math.max(8, Math.sqrt(nodeCount || 1) * 1.8)),
+        linkDistance: 80,
+        preventOverlap: true,
+        nodeSize: (node: { data?: { visualSize?: number } }) => Number(node?.data?.visualSize || 22) + 6,
+      };
+    }
+
+    return {
+      type: "d3-force",
+      center: { x: width / 2, y: height / 2 },
+      link: {
+        distance: (edge: { source?: { data?: { visualSize?: number } }; target?: { data?: { visualSize?: number } } }) => {
+          const sourceSize = Number(edge?.source?.data?.visualSize || 22);
+          const targetSize = Number(edge?.target?.data?.visualSize || 22);
+          return sourceSize + targetSize + 26;
+        },
+      },
+      collide: {
+        radius: (node: { data?: { visualSize?: number } }) => Number(node?.data?.visualSize || 22) + 8,
+      },
+      manyBody: {
+        strength: (node: { data?: { visualSize?: number } }) => -6 * Number(node?.data?.visualSize || 22),
+      },
+      animation: false,
+      iterations: baseIterations,
+    };
+  }, [data.nodes.length, layoutMode]);
 
   const normalizeTopK = useCallback(
     (value: number) => {
@@ -1172,7 +1234,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     updateHoverStateRef.current = updateHoverState;
   }, [updateHoverState]);
 
-  const handleExport = () => {
+  const handleExport = useCallback(() => {
     const blob = new Blob([JSON.stringify(data, null, 2)], {
       type: "application/json;charset=utf-8",
     });
@@ -1182,7 +1244,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     anchor.download = `knowledge-graph-${Date.now()}.json`;
     anchor.click();
     URL.revokeObjectURL(url);
-  };
+  }, [data]);
 
   const handleOpenSettings = useCallback(() => {
     setAdvancedSettingsOpen(true);
@@ -1201,7 +1263,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     return () => {
       onActionsReady?.(null);
     };
-  }, [handleOpenSettings, handleRefreshGraph, onActionsReady]);
+  }, [handleExport, handleOpenSettings, handleRefreshGraph, onActionsReady]);
 
   const handleZoomIn = useCallback(() => {
     graphRef.current?.zoomBy?.(1.2, { duration: 200 });
@@ -1449,25 +1511,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
           autoFit: "view",
           padding: 24,
           data: g6Data,
-          layout: {
-            type: "d3-force",
-            center: { x: width / 2, y: height / 2 },
-            link: {
-              distance: (edge: { source?: { data?: { visualSize?: number } }; target?: { data?: { visualSize?: number } } }) => {
-                const sourceSize = Number(edge?.source?.data?.visualSize || 22);
-                const targetSize = Number(edge?.target?.data?.visualSize || 22);
-                return sourceSize + targetSize + 26;
-              },
-            },
-            collide: {
-              radius: (node: { data?: { visualSize?: number } }) => Number(node?.data?.visualSize || 22) + 8,
-            },
-            manyBody: {
-              strength: (node: { data?: { visualSize?: number } }) => -6 * Number(node?.data?.visualSize || 22),
-            },
-            animation: false,
-            iterations: Math.min(220, Math.max(80, Math.round(60 + graphData.nodes.length * 1.2))),
-          },
+          layout: buildLayoutConfig(width, height),
           behaviors: [
             "drag-canvas",
             "zoom-canvas",
@@ -1639,6 +1683,8 @@ export function GraphVisualization(props: GraphVisualizationProps) {
         await graphRef.current.render();
       } else {
         graphRef.current.setData(g6Data);
+        graphRef.current.setOptions?.({ layout: buildLayoutConfig(width, height) });
+        await graphRef.current.layout?.();
         await graphRef.current.render();
       }
 
@@ -1671,6 +1717,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
       unmounted = true;
     };
   }, [
+    buildLayoutConfig,
     graphData,
     colorMode,
     nodeTypeColorMap,
@@ -1862,10 +1909,80 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     </div>
   );
 
+  const toolbar = (
+    <Space size={compact ? 4 : 8}>
+      <Tooltip title={t("knowledge.graphQuery.zoomIn")}>
+        <Button size={compact ? "small" : "middle"} icon={<PlusOutlined />} onClick={handleZoomIn}>
+          {compact ? null : t("knowledge.graphQuery.zoomIn")}
+        </Button>
+      </Tooltip>
+      <Tooltip title={t("knowledge.graphQuery.zoomOut")}>
+        <Button size={compact ? "small" : "middle"} icon={<MinusOutlined />} onClick={handleZoomOut}>
+          {compact ? null : t("knowledge.graphQuery.zoomOut")}
+        </Button>
+      </Tooltip>
+      <Tooltip title={t("knowledge.graphQuery.fitView")}>
+        <Button size={compact ? "small" : "middle"} icon={<AimOutlined />} onClick={handleFitView}>
+          {compact ? null : t("knowledge.graphQuery.fitView")}
+        </Button>
+      </Tooltip>
+      {!compact ? topKControl : null}
+      <Popover
+        trigger="hover"
+        placement="bottomRight"
+        overlayClassName={styles.graphStatusPopover}
+        content={statusPopoverContent}
+      >
+        <Button size={compact ? "small" : "middle"}>
+          {t("knowledge.graphQuery.status", "状态")}
+        </Button>
+      </Popover>
+      <Tooltip title={t("knowledge.graphQuery.advancedSettings", "高级设置")}>
+        <Button size={compact ? "small" : "middle"} onClick={handleOpenSettings}>
+          {compact ? t("knowledge.graphQuery.advancedSettingsShort", "设置") : t("knowledge.graphQuery.advancedSettings", "高级设置")}
+        </Button>
+      </Tooltip>
+      <Tooltip title={t("knowledge.graphQuery.refresh", "刷新")}>
+        <Button
+          size={compact ? "small" : "middle"}
+          type={hasPendingGraphSettings ? "primary" : "default"}
+          icon={<ReloadOutlined />}
+          onClick={handleRefreshGraph}
+        >
+          {compact ? null : t("knowledge.graphQuery.refresh", "刷新")}
+        </Button>
+      </Tooltip>
+      <Tooltip title={t("knowledge.graphQuery.export")}>
+        <Button size={compact ? "small" : "middle"} icon={<ExportOutlined />} onClick={handleExport}>
+          {compact ? null : t("knowledge.graphQuery.export")}
+        </Button>
+      </Tooltip>
+      <Select
+        size={compact ? "small" : "middle"}
+        value={layoutMode}
+        style={{ width: compact ? 150 : 180 }}
+        onChange={(value) => setLayoutMode(value as GraphLayoutMode)}
+        options={[
+          { label: t("knowledge.graphQuery.layoutForceCluster", "Force聚类"), value: "force-cluster" },
+          { label: t("knowledge.graphQuery.layoutForcePreventOverlap", "力导向（防重叠）"), value: "force-prevent-overlap" },
+          { label: t("knowledge.graphQuery.layoutRadial", "径向布局"), value: "radial" },
+        ]}
+        aria-label={t("knowledge.graphQuery.layoutMode", "布局模式")}
+      />
+    </Space>
+  );
+
   const graphBody = (
     <>
-      <div className={styles.graphCanvasWrap}>
-        <div ref={containerRef} className={styles.graphCanvas} />
+      <div className={styles.graphCanvasStage}>
+        <div className={styles.graphCanvasWrap}>
+          <div ref={containerRef} className={styles.graphCanvas} />
+        </div>
+        {hideToolbar ? null : (
+          <div className={styles.graphFloatingToolbar}>
+            {toolbar}
+          </div>
+        )}
       </div>
       {focusedNodeId && !hideEntityDetail ? (
         <div className={styles.graphEntityPanel}>
@@ -1930,57 +2047,6 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     </>
   );
 
-  const toolbar = (
-    <Space size={compact ? 4 : 8}>
-      <Tooltip title={t("knowledge.graphQuery.zoomIn")}>
-        <Button size={compact ? "small" : "middle"} icon={<PlusOutlined />} onClick={handleZoomIn}>
-          {compact ? null : t("knowledge.graphQuery.zoomIn")}
-        </Button>
-      </Tooltip>
-      <Tooltip title={t("knowledge.graphQuery.zoomOut")}>
-        <Button size={compact ? "small" : "middle"} icon={<MinusOutlined />} onClick={handleZoomOut}>
-          {compact ? null : t("knowledge.graphQuery.zoomOut")}
-        </Button>
-      </Tooltip>
-      <Tooltip title={t("knowledge.graphQuery.fitView")}>
-        <Button size={compact ? "small" : "middle"} icon={<AimOutlined />} onClick={handleFitView}>
-          {compact ? null : t("knowledge.graphQuery.fitView")}
-        </Button>
-      </Tooltip>
-      {!compact ? topKControl : null}
-      <Popover
-        trigger="hover"
-        placement="bottomRight"
-        overlayClassName={styles.graphStatusPopover}
-        content={statusPopoverContent}
-      >
-        <Button size={compact ? "small" : "middle"}>
-          {t("knowledge.graphQuery.status", "状态")}
-        </Button>
-      </Popover>
-      <Tooltip title={t("knowledge.graphQuery.advancedSettings", "高级设置")}>
-        <Button size={compact ? "small" : "middle"} onClick={handleOpenSettings}>
-          {compact ? t("knowledge.graphQuery.advancedSettingsShort", "设置") : t("knowledge.graphQuery.advancedSettings", "高级设置")}
-        </Button>
-      </Tooltip>
-      <Tooltip title={t("knowledge.graphQuery.refresh", "刷新")}>
-        <Button
-          size={compact ? "small" : "middle"}
-          type={hasPendingGraphSettings ? "primary" : "default"}
-          icon={<ReloadOutlined />}
-          onClick={handleRefreshGraph}
-        >
-          {compact ? null : t("knowledge.graphQuery.refresh", "刷新")}
-        </Button>
-      </Tooltip>
-      <Tooltip title={t("knowledge.graphQuery.export")}>
-        <Button size={compact ? "small" : "middle"} icon={<ExportOutlined />} onClick={handleExport}>
-          {compact ? null : t("knowledge.graphQuery.export")}
-        </Button>
-      </Tooltip>
-    </Space>
-  );
-
   return (
     <>
       {frameless ? (
@@ -1991,7 +2057,6 @@ export function GraphVisualization(props: GraphVisualizationProps) {
         <Card
           className={compact ? styles.graphCardCompact : undefined}
           title={compact ? topKControl : t("knowledge.graphQuery.visualization")}
-          extra={hideToolbar ? undefined : toolbar}
           loading={loading}
         >
           {graphBody}
