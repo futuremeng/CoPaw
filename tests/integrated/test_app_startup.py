@@ -120,6 +120,18 @@ def test_app_startup_and_console() -> None:
                 or "<html" in html_content.lower()
             ), "Console should return valid HTML"
 
+            icon_response = client.get(f"http://{host}:{port}/copaw-icon.svg")
+            assert (
+                icon_response.status_code == 200
+            ), f"Console icon not accessible: {icon_response.status_code}"
+            assert (
+                "image/svg+xml"
+                in icon_response.headers.get("content-type", "").lower()
+            ), "Console icon should return SVG content"
+            assert (
+                "<svg" in icon_response.text.lower()
+            ), "Console icon should return SVG markup"
+
     finally:
         if process.poll() is None:
             process.terminate()

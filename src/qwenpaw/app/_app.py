@@ -553,6 +553,22 @@ if os.path.isdir(_CONSOLE_STATIC_DIR):
 
         raise HTTPException(status_code=404, detail="Not Found")
 
+    def _serve_console_static_file(relative_path: str):
+        normalized_parts = [part for part in Path(relative_path).parts if part not in ("", ".")]
+        if not normalized_parts or any(part == ".." for part in normalized_parts):
+            return None
+
+        candidate = (_console_path / Path(*normalized_parts)).resolve()
+        try:
+            candidate.relative_to(_console_path.resolve())
+        except ValueError:
+            return None
+
+        if candidate.is_file():
+            return FileResponse(candidate)
+
+        return None
+
     _assets_dir = _console_path / "assets"
     if _assets_dir.is_dir():
         app.mount(
@@ -578,4 +594,9 @@ if os.path.isdir(_CONSOLE_STATIC_DIR):
         # Skip API routes (should already be matched due to registration order)
         if full_path.startswith("api/") or full_path == "api":
             raise HTTPException(status_code=404, detail="Not Found")
+
+        static_file_response = _serve_console_static_file(full_path)
+        if static_file_response is not None:
+            return static_file_response
+
         return _serve_console_index()
