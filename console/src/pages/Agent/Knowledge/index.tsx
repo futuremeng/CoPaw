@@ -52,7 +52,7 @@ import { appendUniqueContextLine, buildPathContextLine } from "./pathContext";
 import { buildUnifiedBatchProgress } from "./progress";
 import { buildKnowledgeQuantCardViewModels } from "./quantCards";
 import { buildRemoteRetryNotice, collectRemoteRetrySources } from "./remoteRetry";
-import { recordsToVisualizationData, formatScore } from "./graphQuery";
+import { graphEntityNodeId, recordsToVisualizationData, formatScore } from "./graphQuery";
 import { GraphQueryResults, GraphVisualization } from "./graphVisualization.tsx";
 import styles from "./index.module.less";
 
@@ -70,11 +70,11 @@ const SOURCE_TYPE_OPTIONS: Array<{
 type SourceOriginFilter = "all" | "manual" | "auto";
 
 function safeGraphNodeId(raw: string): string {
-  return raw
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
+  const normalized = String(raw || "").trim();
+  if (!normalized) {
+    return "";
+  }
+  return graphEntityNodeId(normalized);
 }
 
 function extractHopNodeId(rawObject: string): string {

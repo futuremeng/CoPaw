@@ -254,11 +254,12 @@ export default function Header() {
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
-                a({ href, children, ...props }: any) {
+                a({ href, children, className, title }: any) {
                   return (
                     <a
-                      {...props}
                       href={href}
+                      className={className}
+                      title={title}
                       onClick={(e) => {
                         e.preventDefault();
                         if (href) handleNavClick(href);

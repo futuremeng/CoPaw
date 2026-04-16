@@ -131,8 +131,19 @@ function resolveEventElementId(evt: unknown): string | null {
   if (!evt || typeof evt !== "object") {
     return null;
   }
-  const raw = evt as { target?: { id?: string } };
-  return raw.target?.id || null;
+  const raw = evt as { targetType?: string; target?: { id?: string | number } };
+  if (raw.targetType && raw.targetType !== "node") {
+    return null;
+  }
+  const candidate = String(raw.target?.id || "").trim();
+  return candidate || null;
+}
+
+function resolveKnownNodeId(nodeId: string | null | undefined, nodeMap: Map<string, GraphNode>): string | null {
+  if (!nodeId) {
+    return null;
+  }
+  return nodeMap.has(nodeId) ? nodeId : null;
 }
 
 function buildStateMap(
@@ -921,18 +932,19 @@ export function GraphVisualization(props: GraphVisualizationProps) {
 
   useEffect(() => {
     setFocusedNodeId((prev) => {
-      const next = activeNodeId || null;
+      const next = resolveKnownNodeId(activeNodeId || null, nodeMap);
       return prev === next ? prev : next;
     });
-  }, [activeNodeId]);
+  }, [activeNodeId, nodeMap]);
 
   const updateFocusState = useCallback(
     async (nodeId: string | null, shouldFocusElement: boolean) => {
       if (!graphRef.current) {
         return;
       }
+      const resolvedNodeId = resolveKnownNodeId(nodeId, nodeMap);
       const focusKey = [
-        nodeId || "",
+        resolvedNodeId || "",
         pathNodeIds.join(","),
         pathEdgeIds.join(","),
         (activeInsight?.nodeIds || []).join(","),
@@ -947,7 +959,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
       const pathEdgeSet = new Set(pathEdgeIds);
       const insightNodeSet = new Set(activeInsight?.nodeIds || []);
       const insightEdgeSet = new Set(activeInsight?.edgeIds || []);
-      if (!nodeId) {
+      if (!resolvedNodeId) {
         const resetState = buildStateMap(
           graphData,
           null,
@@ -966,13 +978,13 @@ export function GraphVisualization(props: GraphVisualizationProps) {
 
       const neighbors = new Set(
         graphRef.current
-          .getNeighborNodesData(nodeId)
+          .getNeighborNodesData(resolvedNodeId)
           .map((item) => String(item.id || ""))
           .filter(Boolean),
       );
       const stateMap = buildStateMap(
         graphData,
-        nodeId,
+        resolvedNodeId,
         neighbors,
         filteredNodeIds,
         filteredEdgeIds,
@@ -985,10 +997,10 @@ export function GraphVisualization(props: GraphVisualizationProps) {
       lastFocusStateKeyRef.current = focusKey;
 
       if (shouldFocusElement) {
-        await graphRef.current.focusElement(nodeId, { duration: 300 });
+        await graphRef.current.focusElement(resolvedNodeId, { duration: 300 });
       }
     },
-    [activeInsight?.edgeIds, activeInsight?.nodeIds, filteredEdgeIds, filteredNodeIds, graphData, pathEdgeIds, pathNodeIds],
+    [activeInsight?.edgeIds, activeInsight?.nodeIds, filteredEdgeIds, filteredNodeIds, graphData, nodeMap, pathEdgeIds, pathNodeIds],
   );
 
   const updateFocusStateRef = useRef(updateFocusState);
@@ -1001,7 +1013,8 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     if (!graphRef.current) {
       return;
     }
-    if (!nodeId) {
+    const resolvedNodeId = resolveKnownNodeId(nodeId, nodeMap);
+    if (!resolvedNodeId) {
       await updateFocusStateRef.current(focusedNodeIdRef.current, false);
       return;
     }
@@ -1012,13 +1025,13 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     const insightEdgeSet = new Set(activeInsight?.edgeIds || []);
     const neighbors = new Set(
       graphRef.current
-        .getNeighborNodesData(nodeId)
+        .getNeighborNodesData(resolvedNodeId)
         .map((item) => String(item.id || ""))
         .filter(Boolean),
     );
     const stateMap = buildHoverStateMap(
       graphData,
-      nodeId,
+      resolvedNodeId,
       neighbors,
       filteredNodeIds,
       filteredEdgeIds,
@@ -1028,7 +1041,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
       insightEdgeSet,
     );
     await graphRef.current.setElementState(stateMap, false);
-  }, [activeInsight?.edgeIds, activeInsight?.nodeIds, filteredEdgeIds, filteredNodeIds, graphData, pathEdgeIds, pathNodeIds]);
+  }, [activeInsight?.edgeIds, activeInsight?.nodeIds, filteredEdgeIds, filteredNodeIds, graphData, nodeMap, pathEdgeIds, pathNodeIds]);
 
   const updateHoverStateRef = useRef(updateHoverState);
 
@@ -1441,6 +1454,9 @@ export function GraphVisualization(props: GraphVisualizationProps) {
 
         graph.on("node:mouseenter", async (evt: unknown) => {
           const nodeId = resolveEventElementId(evt);
+          if (nodeId && !nodeMapRef.current.has(nodeId)) {
+            return;
+          }
           onNodeHoverRef.current?.(nodeId);
           if (!nodeId || hoveredNodeIdRef.current === nodeId) {
             return;
@@ -1463,7 +1479,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
 
         graph.on("node:click", async (evt: unknown) => {
           const nodeId = resolveEventElementId(evt);
-          if (!nodeId) {
+          if (!nodeId || !nodeMapRef.current.has(nodeId)) {
             return;
           }
           handleAutoFillPathFromClickRef.current(nodeId);

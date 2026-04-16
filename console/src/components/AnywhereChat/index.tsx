@@ -112,22 +112,36 @@ function applyRelaxedFlushSyncPatch(): void {
     return;
   }
 
-  // @agentscope-ai/chat 当前版本在生命周期内高频调用 flushSync，
-  // 在 VS Code 内置渲染器中容易导致渲染线程异常退出。
-  reactDomWithFlushSync.flushSync = (function relaxedFlushSync<R>(callback: () => R): R {
-    if (typeof queueMicrotask === "function") {
-      queueMicrotask(() => {
-        callback();
-      });
-    } else {
-      window.setTimeout(() => {
-        callback();
-      }, 0);
-    }
-    return undefined as R;
-  }) as typeof reactDomWithFlushSync.flushSync;
+  const flushSyncDescriptor = Object.getOwnPropertyDescriptor(
+    reactDomWithFlushSync,
+    "flushSync",
+  );
+  if (flushSyncDescriptor && !flushSyncDescriptor.writable && typeof flushSyncDescriptor.set !== "function") {
+    // Some ESM runtime namespace objects expose flushSync as getter-only.
+    // Attempting to overwrite it throws and breaks route rendering.
+    return;
+  }
 
-  runtimeWindow[FLUSH_SYNC_PATCH_FLAG] = true;
+  try {
+    // @agentscope-ai/chat 当前版本在生命周期内高频调用 flushSync，
+    // 在 VS Code 内置渲染器中容易导致渲染线程异常退出。
+    reactDomWithFlushSync.flushSync = (function relaxedFlushSync<R>(callback: () => R): R {
+      if (typeof queueMicrotask === "function") {
+        queueMicrotask(() => {
+          callback();
+        });
+      } else {
+        window.setTimeout(() => {
+          callback();
+        }, 0);
+      }
+      return undefined as R;
+    }) as typeof reactDomWithFlushSync.flushSync;
+
+    runtimeWindow[FLUSH_SYNC_PATCH_FLAG] = true;
+  } catch (error) {
+    console.warn("skip relaxed flushSync patch", error);
+  }
 }
 
 applyRelaxedFlushSyncPatch();
