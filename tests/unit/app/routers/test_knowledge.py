@@ -453,6 +453,52 @@ def test_graph_query_forwards_output_mode(
     assert response.json()["provenance"]["resolved_output_mode"] == "agentic"
 
 
+def test_graph_query_fast_preview_bypasses_graph_enabled_flag(
+    knowledge_api_client: TestClient,
+    monkeypatch,
+):
+    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload["enabled"] = True
+    config_payload["graph_query_enabled"] = False
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    captured: dict[str, object] = {}
+
+    class _FakeGraphOps:
+        def graph_query(self, **kwargs):
+            captured.update(kwargs)
+            return SimpleNamespace(
+                records=[{"query": kwargs["query_text"]}],
+                summary="fast-preview",
+                provenance={"resolved_output_mode": kwargs.get("preferred_output_mode") or "fast"},
+                warnings=[],
+            )
+
+    monkeypatch.setattr(knowledge_router_module, "_graph_ops_for_workspace", lambda *_args, **_kwargs: _FakeGraphOps())
+
+    response = knowledge_api_client.get("/knowledge/graph-query?q=threaded-graph&output_mode=fast")
+
+    assert response.status_code == 200
+    assert response.json()["summary"] == "fast-preview"
+    assert captured["preferred_output_mode"] == "fast"
+
+
+def test_graph_query_non_fast_still_requires_graph_enabled(
+    knowledge_api_client: TestClient,
+):
+    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload["enabled"] = True
+    config_payload["graph_query_enabled"] = False
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    response = knowledge_api_client.get("/knowledge/graph-query?q=threaded-graph&output_mode=agentic")
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "GRAPH_QUERY_DISABLED"
+
+
 def test_get_memify_job_status_offloads_status_read_to_thread(
     knowledge_api_client: TestClient,
     monkeypatch,

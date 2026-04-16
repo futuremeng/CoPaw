@@ -712,7 +712,10 @@ async def query_knowledge_graph(
     if query_mode not in {"template", "cypher"}:
         raise HTTPException(status_code=400, detail="GRAPH_QUERY_MODE_INVALID")
 
-    if not bool(getattr(knowledge_config, "graph_query_enabled", False)):
+    requested_output_mode = (output_mode or "").strip().lower()
+    fast_preview_only = query_mode == "template" and requested_output_mode == "fast"
+
+    if not fast_preview_only and not bool(getattr(knowledge_config, "graph_query_enabled", False)):
         raise HTTPException(status_code=400, detail="GRAPH_QUERY_DISABLED")
 
     if query_mode == "cypher" and not bool(getattr(knowledge_config, "allow_cypher_query", False)):
@@ -737,7 +740,7 @@ async def query_knowledge_graph(
             include_global=include_global,
             top_k=top_k,
             timeout_sec=timeout_sec,
-            preferred_output_mode=(output_mode or "").strip() or None,
+            preferred_output_mode=requested_output_mode or None,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
