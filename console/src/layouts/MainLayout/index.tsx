@@ -102,10 +102,9 @@ export default function MainLayout() {
             <ChunkErrorBoundary resetKey={currentPath}>
               <Suspense
                 fallback={
-                  <Spin
-                    tip={t("common.loading")}
-                    style={{ display: "block", margin: "20vh auto" }}
-                  />
+                  <Spin tip={t("common.loading")}>
+                    <div style={{ minHeight: "40vh" }} />
+                  </Spin>
                 }
               >
                 <Routes>
