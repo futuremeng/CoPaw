@@ -549,12 +549,6 @@ export function GraphQueryResults(props: GraphQueryResultsProps) {
           </div>
         ) : null}
 
-        <Typography.Text type="secondary">
-          {t("knowledge.graphQuery.resultsSummary", {
-            count: viewModels.recordCount,
-          })}
-          {props.summary ? ` - ${props.summary}` : ""}
-        </Typography.Text>
       </Space>
 
       {viewModels.records.length === 0 ? (
@@ -581,6 +575,9 @@ export function GraphQueryResults(props: GraphQueryResultsProps) {
               pageSize,
               onChange: (_, size) => setPageSize(size),
               showSizeChanger: true,
+              showTotal: (total) => t("knowledge.graphQuery.resultsSummary", {
+                count: total,
+              }),
               pageSizeOptions: ["10", "20", "50", "100"],
             }}
             sticky={props.compact}
