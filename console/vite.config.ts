@@ -42,9 +42,6 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
-    optimizeDeps: {
-      include: ["diff"],
-    },
     build: {
       // Output to QwenPaw's console directory,
       // so we don't need to copy files manually after build.

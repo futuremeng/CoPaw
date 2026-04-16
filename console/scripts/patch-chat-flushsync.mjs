@@ -73,6 +73,23 @@ const patches = [
       },
     ],
   },
+  {
+    relativePath: "node_modules/@agentscope-ai/chat/lib/Markdown/core/components/Link.js",
+    replacements: [
+      {
+        from: 'var _excluded = ["href"];\n',
+        to: 'var _excluded = ["href"], _excluded2 = ["streamStatus", "domNode"], _excluded3 = ["href", "streamStatus", "domNode"];\n',
+      },
+      {
+        from: "export default function Link(props) {\n  if (props['data-footnote-ref'] === '') return /*#__PURE__*/_jsx(Sup, _objectSpread({}, props));\n  if (props.children === '↩' && props['data-footnote-backref'] === '') return null;\n  return /*#__PURE__*/_jsx(\"a\", _objectSpread({}, props));\n}\n",
+        to: "export default function Link(props) {\n  var streamStatus = props.streamStatus,\n    domNode = props.domNode,\n    rest = _objectWithoutProperties(props, _excluded2);\n  if (rest['data-footnote-ref'] === '') return /*#__PURE__*/_jsx(Sup, _objectSpread({}, rest));\n  if (rest.children === '↩' && rest['data-footnote-backref'] === '') return null;\n  return /*#__PURE__*/_jsx(\"a\", _objectSpread({}, rest));\n}\n",
+      },
+      {
+        from: "  var href = props.href,\n    rest = _objectWithoutProperties(props, _excluded);\n",
+        to: "  var href = props.href,\n    streamStatus = props.streamStatus,\n    domNode = props.domNode,\n    rest = _objectWithoutProperties(props, _excluded3);\n",
+      },
+    ],
+  },
 ];
 
 let changedCount = 0;

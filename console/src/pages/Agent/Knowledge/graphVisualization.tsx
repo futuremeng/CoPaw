@@ -146,6 +146,20 @@ function resolveKnownNodeId(nodeId: string | null | undefined, nodeMap: Map<stri
   return nodeMap.has(nodeId) ? nodeId : null;
 }
 
+function filterRenderedElementState(
+  stateMap: Record<string, string[]>,
+  renderedNodeIds: Set<string>,
+  renderedEdgeIds: Set<string>,
+): Record<string, string[]> {
+  const filtered: Record<string, string[]> = {};
+  Object.entries(stateMap).forEach(([id, states]) => {
+    if (renderedNodeIds.has(id) || renderedEdgeIds.has(id)) {
+      filtered[id] = states;
+    }
+  });
+  return filtered;
+}
+
 function buildStateMap(
   data: GraphTopologyData,
   focusedNodeId: string | null,
@@ -622,6 +636,9 @@ export function GraphVisualization(props: GraphVisualizationProps) {
   const onNodeClickRef = useRef(onNodeClick);
   const onNodeHoverRef = useRef(onNodeHover);
   const onActiveNodeChangeRef = useRef(onActiveNodeChange);
+  const renderedNodeIdsRef = useRef<Set<string>>(new Set());
+  const renderedEdgeIdsRef = useRef<Set<string>>(new Set());
+  const renderSequenceRef = useRef(0);
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(
     activeNodeId || null,
   );
@@ -971,7 +988,14 @@ export function GraphVisualization(props: GraphVisualizationProps) {
           insightNodeSet,
           insightEdgeSet,
         );
-        await graphRef.current.setElementState(resetState, false);
+          const renderedResetState = filterRenderedElementState(
+            resetState,
+            renderedNodeIdsRef.current,
+            renderedEdgeIdsRef.current,
+          );
+          if (Object.keys(renderedResetState).length > 0) {
+            await graphRef.current.setElementState(renderedResetState, false);
+          }
         lastFocusStateKeyRef.current = focusKey;
         return;
       }
@@ -993,10 +1017,17 @@ export function GraphVisualization(props: GraphVisualizationProps) {
         insightNodeSet,
         insightEdgeSet,
       );
-      await graphRef.current.setElementState(stateMap, false);
+      const renderedStateMap = filterRenderedElementState(
+        stateMap,
+        renderedNodeIdsRef.current,
+        renderedEdgeIdsRef.current,
+      );
+      if (Object.keys(renderedStateMap).length > 0) {
+        await graphRef.current.setElementState(renderedStateMap, false);
+      }
       lastFocusStateKeyRef.current = focusKey;
 
-      if (shouldFocusElement) {
+      if (shouldFocusElement && renderedNodeIdsRef.current.has(resolvedNodeId)) {
         await graphRef.current.focusElement(resolvedNodeId, { duration: 300 });
       }
     },
@@ -1040,7 +1071,14 @@ export function GraphVisualization(props: GraphVisualizationProps) {
       insightNodeSet,
       insightEdgeSet,
     );
-    await graphRef.current.setElementState(stateMap, false);
+    const renderedStateMap = filterRenderedElementState(
+      stateMap,
+      renderedNodeIdsRef.current,
+      renderedEdgeIdsRef.current,
+    );
+    if (Object.keys(renderedStateMap).length > 0) {
+      await graphRef.current.setElementState(renderedStateMap, false);
+    }
   }, [activeInsight?.edgeIds, activeInsight?.nodeIds, filteredEdgeIds, filteredNodeIds, graphData, nodeMap, pathEdgeIds, pathNodeIds]);
 
   const updateHoverStateRef = useRef(updateHoverState);
@@ -1257,6 +1295,8 @@ export function GraphVisualization(props: GraphVisualizationProps) {
       if (!containerRef.current || !graphData.nodes.length) {
         return;
       }
+      const renderSequence = renderSequenceRef.current + 1;
+      renderSequenceRef.current = renderSequence;
 
       const width = containerRef.current.clientWidth || 800;
       const height = Math.max(320, containerRef.current.clientHeight || 440);
@@ -1497,6 +1537,14 @@ export function GraphVisualization(props: GraphVisualizationProps) {
         graphRef.current.setData(g6Data);
         await graphRef.current.render();
       }
+
+      if (unmounted || renderSequence !== renderSequenceRef.current) {
+        return;
+      }
+
+      renderedNodeIdsRef.current = new Set(g6Data.nodes.map((node) => node.id));
+      renderedEdgeIdsRef.current = new Set(g6Data.edges.map((edge) => edge.id));
+      await updateFocusStateRef.current(focusedNodeIdRef.current, false);
 
       if (!resizeObserverRef.current && containerRef.current) {
         resizeObserverRef.current = new ResizeObserver((entries) => {
