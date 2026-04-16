@@ -100,7 +100,10 @@ def _build_file_tree_signal(
             visible_files += 1
             if agents_router_impl._is_original_project_metric_file(rel):
                 original_files += 1
-            elif not agents_router_impl._is_standard_artifact_metric_file(rel):
+            elif (
+                agents_router_impl._is_intermediate_project_metric_file(rel)
+                or agents_router_impl._is_artifact_project_metric_file(rel)
+            ):
                 derived_files += 1
 
         if extension in agents_router_impl._PROJECT_KNOWLEDGE_EXTENSIONS:
