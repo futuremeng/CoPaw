@@ -122,6 +122,7 @@ export default function MainLayout() {
                   <Route path="/workspace" element={<WorkspacePage />} />
                   <Route path="/projects" element={<ProjectsListPage />} />
                   <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
+                  <Route path="/projects/:projectId/chat/:chatId" element={<ProjectDetailPage />} />
                   <Route path="/pipelines" element={<PipelinesPage />} />
                   <Route path="/agents" element={<AgentsPage />} />
                   <Route path="/models" element={<ModelsPage />} />

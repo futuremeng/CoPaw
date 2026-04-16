@@ -397,6 +397,10 @@ function normalizeProjectPath(path: string): string {
   return path.replace(/\\/g, "/").replace(/^\.\//, "").toLowerCase();
 }
 
+function buildProjectWorkspaceChatPath(projectId: string, chatId: string): string {
+  return `/projects/${encodeURIComponent(projectId)}/chat/${encodeURIComponent(chatId)}`;
+}
+
 function compareProjectTreePreviewPriority(
   left: AgentProjectFileTreeNode,
   right: AgentProjectFileTreeNode,
@@ -482,11 +486,15 @@ export default function ProjectDetailPage() {
   );
   const location = useLocation();
   const navigate = useNavigate();
-  const { projectId } = useParams<{ projectId?: string }>();
+  const { projectId, chatId } = useParams<{ projectId?: string; chatId?: string }>();
   const { selectedAgent, agents, setAgents } = useAgentStore();
   const routeProjectId = useMemo(
     () => (projectId ? decodeURIComponent(projectId) : ""),
     [projectId],
+  );
+  const routeWorkspaceChatId = useMemo(
+    () => (chatId ? decodeURIComponent(chatId) : ""),
+    [chatId],
   );
 
   const [loading, setLoading] = useState(false);
@@ -941,6 +949,25 @@ export default function ProjectDetailPage() {
     }
     return "workspace";
   }, [activeDesignChatId, selectedRunId]);
+
+  useEffect(() => {
+    if (!selectedProject?.id || !activeWorkspaceChatId) {
+      return;
+    }
+    if (projectChatMode !== "workspace") {
+      return;
+    }
+    const expectedPath = buildProjectWorkspaceChatPath(selectedProject.id, activeWorkspaceChatId);
+    if (location.pathname !== expectedPath) {
+      navigate(expectedPath, { replace: true });
+    }
+  }, [
+    activeWorkspaceChatId,
+    location.pathname,
+    navigate,
+    projectChatMode,
+    selectedProject?.id,
+  ]);
 
   const runProgress = useMemo(() => {
     if (!runDetail) {
@@ -2197,6 +2224,7 @@ export default function ProjectDetailPage() {
     handleEnsureWorkspaceChat,
   } = useProjectChatEnsureController({
     selectedProject,
+    routeWorkspaceChatId,
     selectedRunId,
     activeRunChatId,
     workspaceFocusChatId,
@@ -2234,6 +2262,7 @@ export default function ProjectDetailPage() {
   } = usePreferredProjectWorkspaceChat({
     currentAgentId: currentAgent?.id,
     selectedProject,
+    routeWorkspaceChatId,
     workspaceFocusChatId,
     activeWorkspaceChatId,
     activeDesignChatId,
@@ -2245,6 +2274,22 @@ export default function ProjectDetailPage() {
     setDesignFocusChatId,
     setWorkspaceFocusChatId,
   });
+
+  const navigateToWorkspaceChat = useCallback((chatIdValue: string, replace = false) => {
+    if (!selectedProject?.id || !chatIdValue) {
+      return;
+    }
+    const targetPath = buildProjectWorkspaceChatPath(selectedProject.id, chatIdValue);
+    if (location.pathname === targetPath) {
+      return;
+    }
+    navigate(targetPath, { replace });
+  }, [location.pathname, navigate, selectedProject?.id]);
+
+  const selectWorkspaceChatSession = useCallback((chatIdValue: string, replace = false) => {
+    applyWorkspaceChatFocus(chatIdValue);
+    navigateToWorkspaceChat(chatIdValue, replace);
+  }, [applyWorkspaceChatFocus, navigateToWorkspaceChat]);
 
   const selectDesignChatSession = useCallback((chatId: string) => {
     setRunFocusChatId("");
@@ -2258,8 +2303,13 @@ export default function ProjectDetailPage() {
 
   const handleStartWorkspaceChat = useCallback(() => {
     setDesignFocusChatId("");
-    void handleEnsureWorkspaceChat(true);
-  }, [handleEnsureWorkspaceChat]);
+    void (async () => {
+      const createdChatId = await handleEnsureWorkspaceChat(true);
+      if (createdChatId) {
+        navigateToWorkspaceChat(createdChatId);
+      }
+    })();
+  }, [handleEnsureWorkspaceChat, navigateToWorkspaceChat]);
 
   const handleStartDesignChat = useCallback(() => {
     setWorkspaceFocusChatId("");
@@ -2369,7 +2419,7 @@ export default function ProjectDetailPage() {
         },
       });
 
-      applyWorkspaceChatFocus(target.id);
+      selectWorkspaceChatSession(target.id);
       await syncPreferredWorkspaceChatBinding(target.id);
       setManualRecoverOpen(false);
       message.success(
@@ -2384,10 +2434,10 @@ export default function ProjectDetailPage() {
       setManualRecoverLoading(false);
     }
   }, [
-    applyWorkspaceChatFocus,
     manualRecoverCandidates,
     manualRecoverChatId,
     resolvedProjectRequestId,
+    selectWorkspaceChatSession,
     selectedProject,
     syncPreferredWorkspaceChatBinding,
     t,
@@ -3284,7 +3334,7 @@ export default function ProjectDetailPage() {
       onStartWorkspaceChat={handleStartWorkspaceChat}
       onStartDesignChat={handleStartDesignChat}
       onStartRunChat={handleStartRunChat}
-      onSelectWorkspaceHistoryChat={applyWorkspaceChatFocus}
+      onSelectWorkspaceHistoryChat={selectWorkspaceChatSession}
       onSelectDesignHistoryChat={selectDesignChatSession}
       onSelectRunHistoryChat={selectRunChatSession}
       onOpenManualRecoverDialog={handleOpenManualRecoverDialogFromChat}
@@ -3294,7 +3344,6 @@ export default function ProjectDetailPage() {
     activeDesignChatId,
     activeRunChatId,
     activeWorkspaceChatId,
-    applyWorkspaceChatFocus,
     autoAttachRequest,
     chatStarting,
     handleAssistantTurnCompletedFromChat,
@@ -3305,6 +3354,7 @@ export default function ProjectDetailPage() {
     handleStartWorkspaceChat,
     projectChatMode,
     projectFileCount,
+    selectWorkspaceChatSession,
     selectDesignChatSession,
     selectRunChatSession,
     selectedRunId,

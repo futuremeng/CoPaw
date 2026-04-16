@@ -155,12 +155,13 @@ async function pickChatWithHistory(chats: ChatSpec[]): Promise<string> {
 async function resolvePreferredOrLatestWorkspaceChat(params: {
   projectId: string;
   preferredChatId: string;
+  chats?: ChatSpec[];
 }): Promise<{ chatId: string; preferredValid: boolean }> {
   if (!params.projectId) {
     return { chatId: "", preferredValid: false };
   }
 
-  const chats = await chatApi.listChats({ user_id: "default", channel: "console" });
+  const chats = params.chats || await chatApi.listChats({ user_id: "default", channel: "console" });
   const related = chats.filter((chat) => isProjectWorkspaceRelatedChat(chat, params.projectId));
 
   const preferredChatId = params.preferredChatId.trim();
@@ -191,9 +192,29 @@ async function resolvePreferredOrLatestWorkspaceChat(params: {
   return { chatId: resolvedChatId, preferredValid: false };
 }
 
+async function resolveRouteWorkspaceChat(params: {
+  projectId: string;
+  routeChatId: string;
+  chats?: ChatSpec[];
+}): Promise<{ chatId: string; routeValid: boolean }> {
+  const routeChatId = params.routeChatId.trim();
+  if (!params.projectId || !routeChatId) {
+    return { chatId: "", routeValid: false };
+  }
+
+  const chats = params.chats || await chatApi.listChats({ user_id: "default", channel: "console" });
+  const target = chats.find((chat) => chat.id === routeChatId);
+  if (!target || !isProjectWorkspaceRelatedChat(target, params.projectId)) {
+    return { chatId: "", routeValid: false };
+  }
+
+  return { chatId: routeChatId, routeValid: true };
+}
+
 interface UsePreferredProjectWorkspaceChatParams {
   currentAgentId?: string;
   selectedProject?: AgentProjectSummary;
+  routeWorkspaceChatId?: string;
   workspaceFocusChatId: string;
   activeWorkspaceChatId: string;
   activeDesignChatId: string;
@@ -209,6 +230,7 @@ interface UsePreferredProjectWorkspaceChatParams {
 export default function usePreferredProjectWorkspaceChat({
   currentAgentId,
   selectedProject,
+  routeWorkspaceChatId,
   workspaceFocusChatId,
   activeWorkspaceChatId,
   activeDesignChatId,
@@ -320,11 +342,38 @@ export default function usePreferredProjectWorkspaceChat({
 
     let cancelled = false;
     void (async () => {
+      const routeCandidate = (routeWorkspaceChatId || "").trim();
       const preferredCandidate = preferredWorkspaceChatId.trim();
       try {
+        const chats = routeCandidate
+          ? await chatApi.listChats({ user_id: "default", channel: "console" })
+          : undefined;
+
+        if (routeCandidate) {
+          const routeResolved = await resolveRouteWorkspaceChat({
+            projectId: selectedProject.id,
+            routeChatId: routeCandidate,
+            chats,
+          });
+          if (cancelled) {
+            return;
+          }
+          if (routeResolved.routeValid && routeResolved.chatId) {
+            persistedWorkspaceChatIdRef.current = routeResolved.chatId;
+            applyWorkspaceChatFocus(routeResolved.chatId);
+            if (routeResolved.chatId !== preferredCandidate) {
+              void syncPreferredWorkspaceChatBinding(routeResolved.chatId).catch(() => {
+                // Ignore passive binding sync failures.
+              });
+            }
+            return;
+          }
+        }
+
         const resolved = await resolvePreferredOrLatestWorkspaceChat({
           projectId: selectedProject.id,
           preferredChatId: preferredCandidate,
+          chats,
         });
         if (cancelled) {
           return;
@@ -377,6 +426,7 @@ export default function usePreferredProjectWorkspaceChat({
     applyWorkspaceChatFocus,
     createProjectWorkspaceChat,
     preferredWorkspaceChatId,
+    routeWorkspaceChatId,
     selectedProject?.id,
     selectedRunId,
     syncPreferredWorkspaceChatBinding,

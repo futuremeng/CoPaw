@@ -5,6 +5,7 @@ import type { ChatSpec } from "../../../api/types/chat";
 
 interface UseProjectChatEnsureControllerParams {
   selectedProject?: AgentProjectSummary;
+  routeWorkspaceChatId?: string;
   selectedRunId: string;
   activeRunChatId: string;
   workspaceFocusChatId: string;
@@ -99,28 +100,44 @@ function sortChatsForRestore<T extends ChatSpec>(chats: T[]): T[] {
   return [...chats].sort((a, b) => toMillis(b) - toMillis(a));
 }
 
-async function pickChatWithHistory(chats: ChatSpec[]): Promise<string> {
-  for (const chat of chats.slice(0, 20)) {
-    try {
-      const history = await chatApi.getChat(chat.id, { limit: 1 });
-      if ((history.messages || []).length > 0) {
-        return chat.id;
-      }
-    } catch {
-      // Skip invalid/unavailable chats and continue fallback scan.
-    }
-  }
-  return chats[0]?.id || "";
-}
-
 function pickLeafChatCandidates(chats: ChatSpec[]): ChatSpec[] {
   const parentIds = new Set(chats.map((chat) => chat.session_id).filter(Boolean) as string[]);
   const leaves = chats.filter((chat) => !parentIds.has(chat.id));
   return leaves.length > 0 ? leaves : chats;
 }
 
+function pickWorkspaceChatFromCandidates(params: {
+  chats: ChatSpec[];
+  projectId: string;
+  routeWorkspaceChatId?: string;
+  preferredWorkspaceChatId?: string;
+}): string {
+  const directCandidates = [
+    params.routeWorkspaceChatId || "",
+    params.preferredWorkspaceChatId || "",
+  ]
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  for (const candidateId of Array.from(new Set(directCandidates))) {
+    const matched = params.chats.find((chat) => chat.id === candidateId);
+    if (matched && isProjectWorkspaceRelatedChat(matched, params.projectId)) {
+      return matched.id;
+    }
+  }
+
+  const related = collectWorkspaceChatCandidates(params.chats, params.projectId);
+  if (related.length === 0) {
+    return "";
+  }
+  const leafCandidates = pickLeafChatCandidates(related);
+  const sorted = sortChatsForRestore(leafCandidates);
+  return sorted[0]?.id || "";
+}
+
 export default function useProjectChatEnsureController({
   selectedProject,
+  routeWorkspaceChatId,
   selectedRunId,
   activeRunChatId,
   workspaceFocusChatId,
@@ -207,51 +224,16 @@ export default function useProjectChatEnsureController({
           user_id: "default",
           channel: "console",
         });
-        const matched = chats.filter((chat) => {
-          const meta =
-            chat.meta && typeof chat.meta === "object"
-              ? (chat.meta as Record<string, unknown>)
-              : undefined;
-          const metaType = getMetaString(meta, "focus_type");
-          return metaType === "project_workspace" && isProjectWorkspaceRelatedChat(chat, selectedProject.id);
+        const restoredChatId = pickWorkspaceChatFromCandidates({
+          chats,
+          projectId: selectedProject.id,
+          routeWorkspaceChatId,
+          preferredWorkspaceChatId: selectedProject.preferred_workspace_chat_id || "",
         });
-
-        if (matched.length > 0) {
-          const candidates = collectWorkspaceChatCandidates(chats, selectedProject.id);
-          const leafCandidates = pickLeafChatCandidates(candidates.length > 0 ? candidates : matched);
-          const sorted = sortChatsForRestore(leafCandidates);
-          const restoredChatId = await pickChatWithHistory(sorted);
-          if (restoredChatId) {
-            setWorkspaceFocusChatId(restoredChatId);
-            setError("");
-            return restoredChatId;
-          }
-        }
-
-        const sessionPrefix = `project-workspace-${selectedProject.id}-`;
-        const bySession = chats.filter((chat) =>
-          (chat.session_id || "").startsWith(sessionPrefix),
-        );
-        if (bySession.length > 0) {
-          const sorted = sortChatsForRestore(bySession);
-          const restoredChatId = await pickChatWithHistory(sorted);
-          if (restoredChatId) {
-            setWorkspaceFocusChatId(restoredChatId);
-            setError("");
-            return restoredChatId;
-          }
-        }
-
-        const related = collectWorkspaceChatCandidates(chats, selectedProject.id);
-        if (related.length > 0) {
-          const leafCandidates = pickLeafChatCandidates(related);
-          const sorted = sortChatsForRestore(leafCandidates);
-          const restoredChatId = await pickChatWithHistory(sorted);
-          if (restoredChatId) {
-            setWorkspaceFocusChatId(restoredChatId);
-            setError("");
-            return restoredChatId;
-          }
+        if (restoredChatId) {
+          setWorkspaceFocusChatId(restoredChatId);
+          setError("");
+          return restoredChatId;
         }
       }
 
@@ -290,6 +272,7 @@ export default function useProjectChatEnsureController({
       setChatStarting(false);
     }
   }, [
+    routeWorkspaceChatId,
     resolvedProjectRequestId,
     selectedProject,
     setChatStarting,
