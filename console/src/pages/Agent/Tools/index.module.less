@@ -73,7 +73,7 @@
   color: #999;
   background: transparent;
   cursor: pointer;
-  transition: all 0.18s ease;
+  transition: color 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
 
   &:hover {
     color: #666;
@@ -127,7 +127,8 @@
   background: var(--color-bg-base, #ffffff);
   border: 1px solid var(--color-border-secondary, #eae8e7);
   box-sizing: border-box;
-  transition: all 0.2s ease-in-out;
+  transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out,
+    background-color 0.2s ease-in-out;
 
   :global(.qwenpaw-card-body) {
     padding: 0 !important;
@@ -223,7 +224,7 @@
   background: transparent;
   border: 1px solid #d9d9d9;
   cursor: pointer;
-  transition: all 0.18s ease;
+  transition: color 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
 
   &:hover:not(:disabled) {
     color: #333;

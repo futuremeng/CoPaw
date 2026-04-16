@@ -9,7 +9,7 @@
   border-radius: 8px;
   box-sizing: border-box;
   width: 100%;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
   margin-bottom: 12px;
 }
 
@@ -26,7 +26,7 @@
   color: #f07e26;
   cursor: default;
   margin-bottom: 12px;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 
   &:hover {
     background: rgba(43, 18, 0, 0.08);
@@ -89,7 +89,7 @@
       font-size: 13px;
       font-weight: normal;
       border-radius: 8px !important;
-      transition: all 0.2s ease;
+      transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
       padding: 0 !important;
 
       &:hover {
@@ -183,7 +183,9 @@
       padding: 0 !important;
       border-radius: 8px;
       margin: 3px 6px;
-      transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+      transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+        border-color 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+        box-shadow 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 
       &:hover {
         background: rgba(43, 18, 0, 0.06) !important;
@@ -205,7 +207,9 @@
       padding: 0 !important;
       border-radius: 8px;
       margin: 3px 6px;
-      transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+      transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+        border-color 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+        box-shadow 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 
       &:hover {
         background: rgba(43, 18, 0, 0.06) !important;
@@ -254,7 +258,8 @@
   border: 1px solid rgba(240, 126, 38, 0.15);
   border-radius: 8px;
   color: #f07e26;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease,
+    box-shadow 0.2s ease;
 
   .agentOption:hover & {
     background: linear-gradient(135deg, #ffe9d4 0%, #fff0e5 100%);

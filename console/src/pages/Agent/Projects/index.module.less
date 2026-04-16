@@ -631,7 +631,8 @@
   gap: 4px;
   padding: 8px 6px;
   cursor: pointer;
-  transition: all 0.18s ease;
+  transition: border-color 0.18s ease, color 0.18s ease, background-color 0.18s ease,
+    box-shadow 0.18s ease;
 
   &:hover {
     border-color: #91caff;
@@ -677,7 +678,7 @@
   gap: 6px;
   padding: 5px 6px;
   cursor: pointer;
-  transition: all 0.16s ease;
+  transition: border-color 0.16s ease, background-color 0.16s ease, color 0.16s ease;
 
   &:hover {
     border-color: #d6e4ff;
@@ -708,7 +709,7 @@
 }
 
 .treeTransitionShell {
-  transition: opacity 0.2s ease, transform 0.2s ease, max-height 0.2s ease;
+  transition: opacity 0.2s ease, transform 0.2s ease;
   transform-origin: top;
   opacity: 1;
   transform: translateY(0);
@@ -1381,7 +1382,7 @@
 
 .projectKnowledgeEmpty {
   flex: 1;
-  min-height: 0;
+  min-height: 220px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2628,7 +2629,7 @@
   gap: 4px;
   min-height: 124px;
   margin-bottom: 8px;
-  transition: all 0.2s;
+  transition: border-color 0.2s, background-color 0.2s, box-shadow 0.2s;
 
   &:hover {
     border-color: #d9d9d9;
@@ -2844,7 +2845,6 @@
   gap: 10px;
   padding: 12px;
 }
-
 .stepPreviewCell {
   display: flex;
   align-items: stretch;

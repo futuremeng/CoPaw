@@ -154,6 +154,8 @@ export default function Header() {
           <img
             src="/copaw-icon.svg"
             alt="CoPaw"
+            width={24}
+            height={24}
             className={styles.logoImg}
           />
           <span className={styles.brandText}>CoPaw</span>

@@ -567,6 +567,10 @@ export default function ProjectDetailPage() {
   const runRestoreAttemptKeyRef = useRef("");
   const automationDrawerAutoOpenKeyRef = useRef("");
   const layoutPrefsLoadedRef = useRef(false);
+  const workspaceResizeFrameRef = useRef<number | null>(null);
+  const knowledgeDockResizeFrameRef = useRef<number | null>(null);
+  const pendingWorkspaceSizesRef = useRef<number[] | null>(null);
+  const pendingKnowledgeDockSizesRef = useRef<number[] | null>(null);
 
   const currentAgent = useMemo(
     () => getCurrentAgent(agents, selectedAgent),
@@ -1103,7 +1107,7 @@ export default function ProjectDetailPage() {
     }
   }, [leftPanelCollapsed]);
 
-  const handleWorkspaceResize = useCallback((sizes: number[]) => {
+  const flushWorkspaceResize = useCallback((sizes: number[]) => {
     if (sizes.length !== 3) {
       return;
     }
@@ -1113,7 +1117,31 @@ export default function ProjectDetailPage() {
     setChatPaneSize(nextChatSize);
   }, []);
 
-  const handleKnowledgeDockResize = useCallback((sizes: number[]) => {
+  const handleWorkspaceResize = useCallback((sizes: number[]) => {
+    pendingWorkspaceSizesRef.current = sizes;
+    if (workspaceResizeFrameRef.current !== null) {
+      return;
+    }
+    workspaceResizeFrameRef.current = window.requestAnimationFrame(() => {
+      workspaceResizeFrameRef.current = null;
+      const nextSizes = pendingWorkspaceSizesRef.current;
+      pendingWorkspaceSizesRef.current = null;
+      if (nextSizes) {
+        flushWorkspaceResize(nextSizes);
+      }
+    });
+  }, [flushWorkspaceResize]);
+
+  const handleWorkspaceResizeEnd = useCallback((sizes: number[]) => {
+    if (workspaceResizeFrameRef.current !== null) {
+      window.cancelAnimationFrame(workspaceResizeFrameRef.current);
+      workspaceResizeFrameRef.current = null;
+    }
+    pendingWorkspaceSizesRef.current = null;
+    flushWorkspaceResize(sizes);
+  }, [flushWorkspaceResize]);
+
+  const flushKnowledgeDockResize = useCallback((sizes: number[]) => {
     if (sizes.length !== 2) {
       return;
     }
@@ -1121,6 +1149,45 @@ export default function ProjectDetailPage() {
     if (Number.isFinite(nextDockSize) && nextDockSize > 0) {
       setKnowledgeDockSize(nextDockSize);
     }
+  }, []);
+
+  const handleKnowledgeDockResize = useCallback((sizes: number[]) => {
+    pendingKnowledgeDockSizesRef.current = sizes;
+    if (knowledgeDockResizeFrameRef.current !== null) {
+      return;
+    }
+    knowledgeDockResizeFrameRef.current = window.requestAnimationFrame(() => {
+      knowledgeDockResizeFrameRef.current = null;
+      const nextSizes = pendingKnowledgeDockSizesRef.current;
+      pendingKnowledgeDockSizesRef.current = null;
+      if (nextSizes) {
+        flushKnowledgeDockResize(nextSizes);
+      }
+    });
+  }, [flushKnowledgeDockResize]);
+
+  const handleKnowledgeDockResizeEnd = useCallback((sizes: number[]) => {
+    if (knowledgeDockResizeFrameRef.current !== null) {
+      window.cancelAnimationFrame(knowledgeDockResizeFrameRef.current);
+      knowledgeDockResizeFrameRef.current = null;
+    }
+    pendingKnowledgeDockSizesRef.current = null;
+    flushKnowledgeDockResize(sizes);
+  }, [flushKnowledgeDockResize]);
+
+  useEffect(() => {
+    return () => {
+      if (workspaceResizeFrameRef.current !== null) {
+        window.cancelAnimationFrame(workspaceResizeFrameRef.current);
+        workspaceResizeFrameRef.current = null;
+      }
+      if (knowledgeDockResizeFrameRef.current !== null) {
+        window.cancelAnimationFrame(knowledgeDockResizeFrameRef.current);
+        knowledgeDockResizeFrameRef.current = null;
+      }
+      pendingWorkspaceSizesRef.current = null;
+      pendingKnowledgeDockSizesRef.current = null;
+    };
   }, []);
 
   const handleToggleLeftPanel = useCallback(() => {
@@ -3456,13 +3523,13 @@ export default function ProjectDetailPage() {
               layout="vertical"
               className={styles.contentSplitter}
               onResize={handleKnowledgeDockResize}
-              onResizeEnd={handleKnowledgeDockResize}
+              onResizeEnd={handleKnowledgeDockResizeEnd}
             >
               <Splitter.Panel min={420}>
                 <Splitter
                   className={styles.workspaceSplitter}
                   onResize={handleWorkspaceResize}
-                  onResizeEnd={handleWorkspaceResize}
+                  onResizeEnd={handleWorkspaceResizeEnd}
                 >
                   <Splitter.Panel
                     size={leftPaneSize}
