@@ -61,6 +61,7 @@ interface GraphQueryResultsProps {
   activeNodeId?: string | null;
   onRecordClick?: (nodeId: string) => void;
   compact?: boolean;
+  frameless?: boolean;
 }
 
 interface GraphVisualizationProps {
@@ -79,6 +80,13 @@ interface GraphVisualizationProps {
   onTopKCommit?: (value: number) => void;
   compact?: boolean;
   hideEntityDetail?: boolean;
+  frameless?: boolean;
+  hideToolbar?: boolean;
+  onActionsReady?: (actions: {
+    openSettings: () => void;
+    refresh: () => void;
+    exportData: () => void;
+  } | null) => void;
 }
 
 interface G6Graph {
@@ -493,116 +501,128 @@ export function GraphQueryResults(props: GraphQueryResultsProps) {
     },
   ];
 
-  return (
-    <div className={`${styles.graphQueryResults} ${props.compact ? styles.graphQueryResultsCompact : ""}`}>
-      <Card
-        className={props.compact ? styles.graphCardCompact : undefined}
-        title={props.title || t("knowledge.graphQuery.results")}
-        extra={
-          <Space size={props.compact ? 4 : 8}>
-            <Tooltip title={t("knowledge.graphQuery.refresh")}>
-              <Button
-                size={props.compact ? "small" : "middle"}
-                icon={<ReloadOutlined />}
-                loading={props.loading}
-                onClick={props.onRefresh}
-              />
-            </Tooltip>
-          </Space>
-        }
-        loading={props.loading}
-        style={{ marginBottom: props.compact ? 0 : 16 }}
+  const resultsBody = (
+    <>
+      {props.queryHeader}
+      <Space
+        direction="vertical"
+        size={props.compact ? 8 : 12}
+        style={{ width: "100%", marginBottom: props.compact ? 8 : 16 }}
       >
-        {props.queryHeader}
-        <Space
-          direction="vertical"
-          size={props.compact ? 8 : 12}
-          style={{ width: "100%", marginBottom: props.compact ? 8 : 16 }}
-        >
-          <Space wrap size={props.compact ? 6 : 8} className={props.compact ? styles.graphQueryToolbarCompact : undefined}>
-            <Input
-              size={props.compact ? "small" : "middle"}
-              value={filterText}
-              onChange={(event) => setFilterText(event.target.value)}
-              placeholder={t("knowledge.graphQuery.filterPlaceholder")}
-              style={{ width: props.compact ? 220 : 260 }}
-            />
-            <Select
-              size={props.compact ? "small" : "middle"}
-              value={sortBy}
-              onChange={setSortBy}
-              options={[
-                { label: "Score", value: "score" },
-                { label: "Subject", value: "subject" },
-                { label: "Document Title", value: "title" },
-              ]}
-              style={{ width: props.compact ? 130 : 150 }}
-            />
-            <Select
-              size={props.compact ? "small" : "middle"}
-              value={sortOrder}
-              onChange={(value) => setSortOrder(value as "ascend" | "descend")}
-              options={[
-                { label: "Descending", value: "descend" },
-                { label: "Ascending", value: "ascend" },
-              ]}
-              style={{ width: props.compact ? 112 : 120 }}
-            />
-          </Space>
-
-          {props.warnings.length > 0 ? (
-            <div className={styles.graphQueryWarningBox}>
-              <strong>{t("knowledge.graphQuery.warnings")}:</strong>
-              {props.warnings.map((warning) => (
-                <div key={warning}>- {warning}</div>
-              ))}
-            </div>
-          ) : null}
-
-          <Typography.Text type="secondary">
-            {t("knowledge.graphQuery.resultsSummary", {
-              count: viewModels.recordCount,
-            })}
-            {props.summary ? ` - ${props.summary}` : ""}
-          </Typography.Text>
+        <Space wrap size={props.compact ? 6 : 8} className={props.compact ? styles.graphQueryToolbarCompact : undefined}>
+          <Input
+            size={props.compact ? "small" : "middle"}
+            value={filterText}
+            onChange={(event) => setFilterText(event.target.value)}
+            placeholder={t("knowledge.graphQuery.filterPlaceholder")}
+            style={{ width: props.compact ? 220 : 260 }}
+          />
+          <Select
+            size={props.compact ? "small" : "middle"}
+            value={sortBy}
+            onChange={setSortBy}
+            options={[
+              { label: "Score", value: "score" },
+              { label: "Subject", value: "subject" },
+              { label: "Document Title", value: "title" },
+            ]}
+            style={{ width: props.compact ? 130 : 150 }}
+          />
+          <Select
+            size={props.compact ? "small" : "middle"}
+            value={sortOrder}
+            onChange={(value) => setSortOrder(value as "ascend" | "descend")}
+            options={[
+              { label: "Descending", value: "descend" },
+              { label: "Ascending", value: "ascend" },
+            ]}
+            style={{ width: props.compact ? 112 : 120 }}
+          />
         </Space>
 
-        {viewModels.records.length === 0 ? (
-          <Empty description={t("knowledge.graphQuery.noResults")} />
-        ) : (
-          <div className={styles.graphQueryTableWrap}>
-            <Table
-              className={styles.graphQueryTable}
-              columns={columns}
-              dataSource={viewModels.records}
-              rowKey="id"
-              rowClassName={(record) =>
-                props.activeNodeId === subjectToNodeId(record.subject)
-                  ? styles.graphTableRowSelected
-                  : ""
-              }
-              onRow={(record) => ({
-                onClick: () => {
-                  props.onRecordClick?.(subjectToNodeId(record.subject));
-                },
-              })}
-              pagination={{
-                size: "small",
-                pageSize,
-                onChange: (_, size) => setPageSize(size),
-                showSizeChanger: true,
-                pageSizeOptions: ["10", "20", "50", "100"],
-              }}
-              sticky={props.compact}
-              size="small"
-              scroll={{
-                x: 1200,
-                y: props.compact ? "calc(100% - 52px)" : undefined,
-              }}
-            />
+        {props.warnings.length > 0 ? (
+          <div className={styles.graphQueryWarningBox}>
+            <strong>{t("knowledge.graphQuery.warnings")}:</strong>
+            {props.warnings.map((warning) => (
+              <div key={warning}>- {warning}</div>
+            ))}
           </div>
-        )}
-      </Card>
+        ) : null}
+
+        <Typography.Text type="secondary">
+          {t("knowledge.graphQuery.resultsSummary", {
+            count: viewModels.recordCount,
+          })}
+          {props.summary ? ` - ${props.summary}` : ""}
+        </Typography.Text>
+      </Space>
+
+      {viewModels.records.length === 0 ? (
+        <Empty description={t("knowledge.graphQuery.noResults")} />
+      ) : (
+        <div className={styles.graphQueryTableWrap}>
+          <Table
+            className={styles.graphQueryTable}
+            columns={columns}
+            dataSource={viewModels.records}
+            rowKey="id"
+            rowClassName={(record) =>
+              props.activeNodeId === subjectToNodeId(record.subject)
+                ? styles.graphTableRowSelected
+                : ""
+            }
+            onRow={(record) => ({
+              onClick: () => {
+                props.onRecordClick?.(subjectToNodeId(record.subject));
+              },
+            })}
+            pagination={{
+              size: "small",
+              pageSize,
+              onChange: (_, size) => setPageSize(size),
+              showSizeChanger: true,
+              pageSizeOptions: ["10", "20", "50", "100"],
+            }}
+            sticky={props.compact}
+            size="small"
+            scroll={{
+              x: 1200,
+              y: props.compact ? "calc(100% - 52px)" : undefined,
+            }}
+          />
+        </div>
+      )}
+    </>
+  );
+
+  return (
+    <div className={`${styles.graphQueryResults} ${props.compact ? styles.graphQueryResultsCompact : ""} ${props.frameless ? styles.graphQueryResultsFrameless : ""}`.trim()}>
+      {props.frameless ? (
+        <div className={styles.graphQueryResultsBody}>
+          {resultsBody}
+        </div>
+      ) : (
+        <Card
+          className={props.compact ? styles.graphCardCompact : undefined}
+          title={props.title || t("knowledge.graphQuery.results")}
+          extra={
+            <Space size={props.compact ? 4 : 8}>
+              <Tooltip title={t("knowledge.graphQuery.refresh")}>
+                <Button
+                  size={props.compact ? "small" : "middle"}
+                  icon={<ReloadOutlined />}
+                  loading={props.loading}
+                  onClick={props.onRefresh}
+                />
+              </Tooltip>
+            </Space>
+          }
+          loading={props.loading}
+          style={{ marginBottom: props.compact ? 0 : 16 }}
+        >
+          {resultsBody}
+        </Card>
+      )}
     </div>
   );
 }
@@ -625,6 +645,9 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     onTopKCommit,
     compact,
     hideEntityDetail,
+    frameless,
+    hideToolbar,
+    onActionsReady,
   } = props;
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1164,6 +1187,25 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     URL.revokeObjectURL(url);
   };
 
+  const handleOpenSettings = useCallback(() => {
+    setAdvancedSettingsOpen(true);
+  }, []);
+
+  const handleRefreshGraph = useCallback(() => {
+    applyPendingGraphSettings({ refreshQuery: true });
+  }, [applyPendingGraphSettings]);
+
+  useEffect(() => {
+    onActionsReady?.({
+      openSettings: handleOpenSettings,
+      refresh: handleRefreshGraph,
+      exportData: handleExport,
+    });
+    return () => {
+      onActionsReady?.(null);
+    };
+  }, [handleOpenSettings, handleRefreshGraph, onActionsReady]);
+
   const handleZoomIn = useCallback(() => {
     graphRef.current?.zoomBy?.(1.2, { duration: 200 });
   }, []);
@@ -1651,11 +1693,77 @@ export function GraphVisualization(props: GraphVisualizationProps) {
   }, []);
 
   if (!graphData.nodes.length) {
+    if (frameless) {
+      return (
+        <>
+          <div className={styles.graphFramelessRoot}>
+            <Empty description={edgeStrengthThreshold > 0 ? t("knowledge.graphQuery.noVisualizationAfterFilter", "No graph data after threshold filter") : t("knowledge.graphQuery.noVisualization")} />
+          </div>
+          <Modal
+            title={t("knowledge.graphQuery.advancedSettings", "高级设置")}
+            open={advancedSettingsOpen}
+            onCancel={() => {
+              resetPendingGraphSettings();
+              setAdvancedSettingsOpen(false);
+            }}
+            footer={(
+              <Space>
+                <Button
+                  onClick={() => {
+                    resetPendingGraphSettings();
+                  }}
+                >
+                  {t("common.reset", "重置")}
+                </Button>
+                <Button
+                  type="primary"
+                  icon={<ReloadOutlined />}
+                  onClick={() => {
+                    applyPendingGraphSettings({ closeModal: true, refreshQuery: true });
+                  }}
+                >
+                  {t("knowledge.graphQuery.applyAndRefresh", "应用并刷新")}
+                </Button>
+              </Space>
+            )}
+            width={960}
+          >
+            <Space direction="vertical" size={10} style={{ width: "100%" }}>
+              <Space wrap className={styles.graphAdvancedRow}>
+                <Typography.Text type="secondary">{t("knowledge.graphQuery.colorMode", "Color Mode")}</Typography.Text>
+                <Select
+                  size="small"
+                  value={pendingColorMode}
+                  style={{ width: 180 }}
+                  onChange={(value) => setPendingColorMode(value as GraphColorMode)}
+                  options={[
+                    { label: t("knowledge.graphQuery.colorModeType", "Type Coloring"), value: "type" },
+                    { label: t("knowledge.graphQuery.colorModeWeight", "Weight Heatmap"), value: "weight" },
+                  ]}
+                />
+                <Typography.Text type="secondary">{t("knowledge.graphQuery.edgeThreshold", "Edge threshold")}</Typography.Text>
+                <Slider
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={pendingEdgeStrengthThreshold}
+                  onChange={(value) => setPendingEdgeStrengthThreshold(Number(value) || 0)}
+                  style={{ width: 220 }}
+                />
+                <Typography.Text className={styles.graphThresholdValue}>
+                  {Math.round(pendingEdgeStrengthThreshold * 100)}%
+                </Typography.Text>
+              </Space>
+            </Space>
+          </Modal>
+        </>
+      );
+    }
     return (
       <Card
-        title={t("knowledge.graphQuery.visualization")}
+        title={hideToolbar ? undefined : t("knowledge.graphQuery.visualization")}
         loading={loading}
-        className={compact ? styles.graphCardCompact : undefined}
+        className={`${compact ? styles.graphCardCompact : ""} ${frameless ? styles.graphCardFrameless : ""}`.trim()}
       >
         <Empty description={edgeStrengthThreshold > 0 ? t("knowledge.graphQuery.noVisualizationAfterFilter", "No graph data after threshold filter") : t("knowledge.graphQuery.noVisualization")} />
       </Card>
@@ -1757,64 +1865,8 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     </div>
   );
 
-  return (
-    <Card
-      className={compact ? styles.graphCardCompact : undefined}
-      title={compact ? topKControl : t("knowledge.graphQuery.visualization")}
-      extra={
-        <Space size={compact ? 4 : 8}>
-          <Tooltip title={t("knowledge.graphQuery.zoomIn")}>
-            <Button size={compact ? "small" : "middle"} icon={<PlusOutlined />} onClick={handleZoomIn}>
-              {compact ? null : t("knowledge.graphQuery.zoomIn")}
-            </Button>
-          </Tooltip>
-          <Tooltip title={t("knowledge.graphQuery.zoomOut")}>
-            <Button size={compact ? "small" : "middle"} icon={<MinusOutlined />} onClick={handleZoomOut}>
-              {compact ? null : t("knowledge.graphQuery.zoomOut")}
-            </Button>
-          </Tooltip>
-          <Tooltip title={t("knowledge.graphQuery.fitView")}>
-            <Button size={compact ? "small" : "middle"} icon={<AimOutlined />} onClick={handleFitView}>
-              {compact ? null : t("knowledge.graphQuery.fitView")}
-            </Button>
-          </Tooltip>
-          {!compact ? topKControl : null}
-          <Popover
-            trigger="hover"
-            placement="bottomRight"
-            overlayClassName={styles.graphStatusPopover}
-            content={statusPopoverContent}
-          >
-            <Button size={compact ? "small" : "middle"}>
-              {t("knowledge.graphQuery.status", "状态")}
-            </Button>
-          </Popover>
-          <Tooltip title={t("knowledge.graphQuery.advancedSettings", "高级设置")}>
-            <Button size={compact ? "small" : "middle"} onClick={() => setAdvancedSettingsOpen(true)}>
-              {compact ? t("knowledge.graphQuery.advancedSettingsShort", "设置") : t("knowledge.graphQuery.advancedSettings", "高级设置")}
-            </Button>
-          </Tooltip>
-          <Tooltip title={t("knowledge.graphQuery.refresh", "刷新")}> 
-            <Button
-              size={compact ? "small" : "middle"}
-              type={hasPendingGraphSettings ? "primary" : "default"}
-              icon={<ReloadOutlined />}
-              onClick={() => {
-                applyPendingGraphSettings({ refreshQuery: true });
-              }}
-            >
-              {compact ? null : t("knowledge.graphQuery.refresh", "刷新")}
-            </Button>
-          </Tooltip>
-          <Tooltip title={t("knowledge.graphQuery.export")}>
-            <Button size={compact ? "small" : "middle"} icon={<ExportOutlined />} onClick={handleExport}>
-              {compact ? null : t("knowledge.graphQuery.export")}
-            </Button>
-          </Tooltip>
-        </Space>
-      }
-      loading={loading}
-    >
+  const graphBody = (
+    <>
       <div className={styles.graphCanvasWrap}>
         <div ref={containerRef} className={styles.graphCanvas} />
       </div>
@@ -1878,6 +1930,76 @@ export function GraphVisualization(props: GraphVisualizationProps) {
           </div>
         </div>
       ) : null}
+    </>
+  );
+
+  const toolbar = (
+    <Space size={compact ? 4 : 8}>
+      <Tooltip title={t("knowledge.graphQuery.zoomIn")}>
+        <Button size={compact ? "small" : "middle"} icon={<PlusOutlined />} onClick={handleZoomIn}>
+          {compact ? null : t("knowledge.graphQuery.zoomIn")}
+        </Button>
+      </Tooltip>
+      <Tooltip title={t("knowledge.graphQuery.zoomOut")}>
+        <Button size={compact ? "small" : "middle"} icon={<MinusOutlined />} onClick={handleZoomOut}>
+          {compact ? null : t("knowledge.graphQuery.zoomOut")}
+        </Button>
+      </Tooltip>
+      <Tooltip title={t("knowledge.graphQuery.fitView")}>
+        <Button size={compact ? "small" : "middle"} icon={<AimOutlined />} onClick={handleFitView}>
+          {compact ? null : t("knowledge.graphQuery.fitView")}
+        </Button>
+      </Tooltip>
+      {!compact ? topKControl : null}
+      <Popover
+        trigger="hover"
+        placement="bottomRight"
+        overlayClassName={styles.graphStatusPopover}
+        content={statusPopoverContent}
+      >
+        <Button size={compact ? "small" : "middle"}>
+          {t("knowledge.graphQuery.status", "状态")}
+        </Button>
+      </Popover>
+      <Tooltip title={t("knowledge.graphQuery.advancedSettings", "高级设置")}>
+        <Button size={compact ? "small" : "middle"} onClick={handleOpenSettings}>
+          {compact ? t("knowledge.graphQuery.advancedSettingsShort", "设置") : t("knowledge.graphQuery.advancedSettings", "高级设置")}
+        </Button>
+      </Tooltip>
+      <Tooltip title={t("knowledge.graphQuery.refresh", "刷新")}>
+        <Button
+          size={compact ? "small" : "middle"}
+          type={hasPendingGraphSettings ? "primary" : "default"}
+          icon={<ReloadOutlined />}
+          onClick={handleRefreshGraph}
+        >
+          {compact ? null : t("knowledge.graphQuery.refresh", "刷新")}
+        </Button>
+      </Tooltip>
+      <Tooltip title={t("knowledge.graphQuery.export")}>
+        <Button size={compact ? "small" : "middle"} icon={<ExportOutlined />} onClick={handleExport}>
+          {compact ? null : t("knowledge.graphQuery.export")}
+        </Button>
+      </Tooltip>
+    </Space>
+  );
+
+  return (
+    <>
+      {frameless ? (
+        <div className={styles.graphFramelessRoot}>
+          {graphBody}
+        </div>
+      ) : (
+        <Card
+          className={compact ? styles.graphCardCompact : undefined}
+          title={compact ? topKControl : t("knowledge.graphQuery.visualization")}
+          extra={hideToolbar ? undefined : toolbar}
+          loading={loading}
+        >
+          {graphBody}
+        </Card>
+      )}
       <Modal
         title={t("knowledge.graphQuery.advancedSettings", "高级设置")}
         open={advancedSettingsOpen}
@@ -2113,6 +2235,6 @@ export function GraphVisualization(props: GraphVisualizationProps) {
           ) : null}
         </Space>
       </Modal>
-    </Card>
+    </>
   );
 }

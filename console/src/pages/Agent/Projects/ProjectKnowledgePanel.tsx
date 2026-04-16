@@ -1,13 +1,16 @@
 import { Suspense, lazy, memo, useEffect, useMemo, useRef } from "react";
 import {
   Alert,
+  Button,
   Empty,
   Input,
   Select,
+  Space,
   Spin,
   Typography,
   message,
 } from "antd";
+import { ExportOutlined, ReloadOutlined, SettingOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
 import { recordsToVisualizationData } from "../Knowledge/graphQuery";
 import { parseEdgeStrength } from "../Knowledge/graphVisualizationData";
@@ -44,6 +47,11 @@ interface ProjectKnowledgePanelProps {
 function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
   const { t } = useTranslation();
   const handledRequestedQueryRef = useRef("");
+  const graphActionsRef = useRef<{
+    openSettings: () => void;
+    refresh: () => void;
+    exportData: () => void;
+  } | null>(null);
   const {
     graphComponents,
     knowledgeState,
@@ -159,6 +167,36 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
           loading={props.knowledgeState.graphLoading}
           allowClear
         />
+        <Space size={6} className={styles.projectKnowledgeQueryActions}>
+          <Button
+            size="small"
+            icon={<SettingOutlined />}
+            onClick={() => {
+              graphActionsRef.current?.openSettings();
+            }}
+          >
+            {t("knowledge.graphQuery.advancedSettingsShort", "设置")}
+          </Button>
+          <Button
+            size="small"
+            type={props.knowledgeState.graphNeedsRefresh ? "primary" : "default"}
+            icon={<ReloadOutlined />}
+            onClick={() => {
+              graphActionsRef.current?.refresh();
+            }}
+          >
+            {t("projects.knowledge.actionRefreshSignals", "Refresh")}
+          </Button>
+          <Button
+            size="small"
+            icon={<ExportOutlined />}
+            onClick={() => {
+              graphActionsRef.current?.exportData();
+            }}
+          >
+            {t("knowledge.graphQuery.export", "导出")}
+          </Button>
+        </Space>
       </div>
     </div>
   );
@@ -186,6 +224,8 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
               <GraphVisualizationComponent
                 compact
                 hideEntityDetail
+                frameless
+                hideToolbar
                 data={visualizationData}
                 loading={props.knowledgeState.graphLoading}
                 topK={props.knowledgeState.graphQueryTopK}
@@ -221,6 +261,13 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
                   if (runNow) {
                     void props.knowledgeState.runGraphQuery(nextQuery);
                   }
+                }}
+                onActionsReady={(actions) => {
+                  graphActionsRef.current = actions as {
+                    openSettings: () => void;
+                    refresh: () => void;
+                    exportData: () => void;
+                  } | null;
                 }}
               />
             </Suspense>
@@ -303,6 +350,7 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
               <Suspense fallback={<div className={styles.projectKnowledgeEmpty}><Spin size="small" /></div>}>
                 <GraphQueryResultsComponent
                   compact
+                  frameless
                   title={t("projects.knowledge.query", "查询")}
                   queryHeader={queryControls}
                   records={props.knowledgeState.graphResult.records}
