@@ -207,6 +207,8 @@ function buildKnowledgeState(): ProjectKnowledgeState {
     setGraphQueryTopK: vi.fn(),
     graphQueryMode: "template",
     setGraphQueryMode: vi.fn(),
+    graphNeedsRefresh: false,
+    markGraphNeedsRefresh: vi.fn(),
     graphLoading: false,
     graphError: "",
     graphResult: {

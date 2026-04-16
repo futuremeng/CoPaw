@@ -156,6 +156,8 @@ export interface ProjectKnowledgeState {
   setGraphQueryMode: (value: ProjectGraphQueryMode) => void;
   graphQueryTopK: number;
   setGraphQueryTopK: (value: number) => void;
+  graphNeedsRefresh: boolean;
+  markGraphNeedsRefresh: () => void;
   graphLoading: boolean;
   graphError: string;
   graphResult: GraphQueryResponse | null;
@@ -754,6 +756,7 @@ export function useProjectKnowledgeState(
   const [graphQueryText, setGraphQueryText] = useState("");
   const [graphQueryMode, setGraphQueryMode] = useState<ProjectGraphQueryMode>("template");
   const [graphQueryTopK, setGraphQueryTopK] = useState(PROJECT_GRAPH_QUERY_TOP_K);
+  const [graphNeedsRefresh, setGraphNeedsRefresh] = useState(false);
   const [graphLoading, setGraphLoading] = useState(false);
   const [graphError, setGraphError] = useState("");
   const [graphResult, setGraphResult] = useState<GraphQueryResponse | null>(null);
@@ -901,6 +904,10 @@ export function useProjectKnowledgeState(
     return "fast";
   }, [syncState]);
 
+  const markGraphNeedsRefresh = useCallback(() => {
+    setGraphNeedsRefresh(true);
+  }, []);
+
   const runGraphQuery = useCallback(async (
     overrideQuery?: string,
     overrideMode?: ProjectGraphQueryMode,
@@ -935,6 +942,7 @@ export function useProjectKnowledgeState(
       setGraphQueryMode(mode);
       setGraphResult(response);
       setActiveGraphNodeId(null);
+      setGraphNeedsRefresh(false);
     } catch (err) {
       const messageText = err instanceof Error ? err.message : t("projects.knowledge.queryFailed");
       setGraphError(messageText);
@@ -968,6 +976,7 @@ export function useProjectKnowledgeState(
     setGraphError("");
     setGraphResult(null);
     setActiveGraphNodeId(null);
+    setGraphNeedsRefresh(false);
   }, []);
 
   useEffect(() => {
@@ -977,6 +986,7 @@ export function useProjectKnowledgeState(
     setGraphQueryText("");
     setGraphQueryMode("template");
     setGraphQueryTopK(PROJECT_GRAPH_QUERY_TOP_K);
+    setGraphNeedsRefresh(false);
     setGraphLoading(false);
     setGraphError("");
     setGraphResult(null);
@@ -1277,8 +1287,8 @@ export function useProjectKnowledgeState(
       return;
     }
     graphRefreshReasonRef.current = finishToken;
-    void runGraphQuery(graphQueryText);
-  }, [graphQueryText, runGraphQuery, syncState?.last_finished_at]);
+    setGraphNeedsRefresh(true);
+  }, [graphQueryText, syncState?.last_finished_at]);
 
   useEffect(() => {
     setTrendSnapshots(loadTrendSnapshots(params.projectId));
@@ -1860,6 +1870,8 @@ export function useProjectKnowledgeState(
     setGraphQueryMode,
     graphQueryTopK,
     setGraphQueryTopK,
+    graphNeedsRefresh,
+    markGraphNeedsRefresh,
     graphLoading,
     graphError,
     graphResult,
@@ -1900,6 +1912,7 @@ export function useProjectKnowledgeState(
     graphQueryMode,
     graphQueryText,
     graphQueryTopK,
+    graphNeedsRefresh,
     graphResult,
     insightAction,
     insightMessageKey,
@@ -1916,6 +1929,7 @@ export function useProjectKnowledgeState(
     quantMetrics,
     relationKeywordSeed,
     relationRecords,
+    markGraphNeedsRefresh,
     resetGraphQuery,
     runGraphQuery,
     startProcessingMode,

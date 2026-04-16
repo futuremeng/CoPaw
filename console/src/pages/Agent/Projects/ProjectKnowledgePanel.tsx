@@ -44,23 +44,19 @@ interface ProjectKnowledgePanelProps {
 function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
   const { t } = useTranslation();
   const handledRequestedQueryRef = useRef("");
-  const lastAutoMaxTopKRef = useRef<number | null>(null);
   const {
     graphComponents,
     knowledgeState,
     onOpenOutputs,
     onRequestedQueryHandled,
-    projectId,
     requestedQuery,
   } = props;
   const {
     graphQueryMode,
-    graphQueryTopK,
     graphResult,
     quantMetrics,
     runGraphQuery,
     setGraphQueryText,
-    setGraphQueryTopK,
   } = knowledgeState;
 
   const GraphQueryResultsComponent =
@@ -134,21 +130,6 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
     return { nodeId, nodeLabel, outgoing, incoming };
   }, [knowledgeState.activeGraphNodeId, visualizationData]);
 
-  useEffect(() => {
-    lastAutoMaxTopKRef.current = null;
-  }, [projectId]);
-
-  useEffect(() => {
-    const current = graphQueryTopK;
-    const prevAuto = lastAutoMaxTopKRef.current;
-    const shouldAutoFollow = prevAuto === null || current === prevAuto;
-    if (!shouldAutoFollow || current === maxByEntity) {
-      return;
-    }
-    setGraphQueryTopK(maxByEntity);
-    lastAutoMaxTopKRef.current = maxByEntity;
-  }, [graphQueryTopK, maxByEntity, setGraphQueryTopK]);
-
   const queryControls = (
     <div className={styles.projectKnowledgeQueryTop}>
       <div className={styles.projectKnowledgeControls}>
@@ -186,6 +167,14 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
     <div className={`${styles.projectKnowledgeWorkbench} ${styles.projectKnowledgeWorkbenchCompact}`}>
       {props.knowledgeState.graphError ? (
         <Alert type="error" showIcon message={props.knowledgeState.graphError} />
+      ) : null}
+      {props.knowledgeState.graphNeedsRefresh ? (
+        <Alert
+          type="warning"
+          showIcon
+          message={t("projects.knowledge.refreshPending", "参数已变更，等待手动刷新")}
+          description={t("projects.knowledge.refreshPendingHint", "请点击图谱区域右上角 Refresh 以应用最新设置。")}
+        />
       ) : null}
 
       <div className={styles.projectKnowledgeWorkbenchSplit}>

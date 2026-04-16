@@ -46,17 +46,12 @@ export default function ProjectKnowledgeOutputsPanel(
     if (!props.knowledgeState.graphQueryText.trim()) {
       return;
     }
-    void props.knowledgeState.runGraphQuery(
-      props.knowledgeState.graphQueryText,
-      props.knowledgeState.graphQueryMode,
-      props.knowledgeState.graphQueryTopK,
-      selectedMode,
-    );
+    props.knowledgeState.markGraphNeedsRefresh();
   }, [
     props.knowledgeState.graphQueryMode,
     props.knowledgeState.graphQueryText,
     props.knowledgeState.graphQueryTopK,
-    props.knowledgeState.runGraphQuery,
+    props.knowledgeState.markGraphNeedsRefresh,
     selectedMode,
   ]);
 
@@ -77,6 +72,8 @@ export default function ProjectKnowledgeOutputsPanel(
   );
 
   const canShowGraphRecords = selectedMode === "nlp" || selectedMode === "agentic";
+  const modeRefreshPending = canShowGraphRecords
+    && selectedMode !== props.knowledgeState.activeOutputResolution.activeMode;
 
   const filteredRecords = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLowerCase();
@@ -125,6 +122,7 @@ export default function ProjectKnowledgeOutputsPanel(
           />
           <Button
             size="small"
+            type={props.knowledgeState.graphNeedsRefresh || modeRefreshPending ? "primary" : "default"}
             onClick={() => {
               void props.knowledgeState.runGraphQuery(
                 props.knowledgeState.graphQueryText || props.knowledgeState.suggestedQuery,
@@ -139,6 +137,15 @@ export default function ProjectKnowledgeOutputsPanel(
           </Button>
         </div>
       </div>
+
+      {(props.knowledgeState.graphNeedsRefresh || modeRefreshPending) ? (
+        <Alert
+          type="warning"
+          showIcon
+          message={t("projects.knowledge.refreshPending", "参数已变更，等待手动刷新")}
+          description={t("projects.knowledge.refreshPendingHint", "点击右上角 Refresh 以应用最新图谱查询条件。")}
+        />
+      ) : null}
 
       <Alert
         type="info"

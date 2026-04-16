@@ -650,10 +650,81 @@ export function GraphVisualization(props: GraphVisualizationProps) {
   const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState(false);
   const [colorMode, setColorMode] = useState<GraphColorMode>("type");
   const [edgeStrengthThreshold, setEdgeStrengthThreshold] = useState(0);
+  const [pendingColorMode, setPendingColorMode] = useState<GraphColorMode>("type");
+  const [pendingEdgeStrengthThreshold, setPendingEdgeStrengthThreshold] = useState(0);
+  const [pendingTopK, setPendingTopK] = useState<number | null>(
+    typeof topK === "number" ? topK : null,
+  );
   const [activeInsightKey, setActiveInsightKey] = useState("");
   const colorModeRef = useRef<GraphColorMode>("type");
   const nodeTypeColorMapRef = useRef<Map<string, string>>(new Map());
   const lastFocusStateKeyRef = useRef("");
+
+  const normalizeTopK = useCallback(
+    (value: number) => {
+      const minValue = Math.max(20, minTopK ?? 20);
+      const maxValue = Math.max(minValue, maxTopK ?? minValue);
+      const snapped = snapTopKBySegment(Number(value));
+      return Math.max(minValue, Math.min(maxValue, snapped));
+    },
+    [maxTopK, minTopK],
+  );
+
+  const effectivePendingTopK = useMemo(() => {
+    if (typeof topK !== "number") {
+      return null;
+    }
+    const base = typeof pendingTopK === "number" ? pendingTopK : topK;
+    return normalizeTopK(base);
+  }, [normalizeTopK, pendingTopK, topK]);
+
+  const hasPendingGraphSettings = useMemo(() => {
+    const topKDirty = typeof topK === "number"
+      && typeof effectivePendingTopK === "number"
+      && effectivePendingTopK !== topK;
+    return (
+      pendingColorMode !== colorMode
+      || pendingEdgeStrengthThreshold !== edgeStrengthThreshold
+      || topKDirty
+    );
+  }, [colorMode, edgeStrengthThreshold, effectivePendingTopK, pendingColorMode, pendingEdgeStrengthThreshold, topK]);
+
+  const applyPendingGraphSettings = useCallback((options?: { closeModal?: boolean; refreshQuery?: boolean }) => {
+    const closeModal = options?.closeModal ?? false;
+    const refreshQuery = options?.refreshQuery ?? true;
+    setColorMode(pendingColorMode);
+    setEdgeStrengthThreshold(pendingEdgeStrengthThreshold);
+
+    if (typeof topK === "number" && typeof effectivePendingTopK === "number") {
+      onTopKChange?.(effectivePendingTopK);
+      if (refreshQuery) {
+        onTopKCommit?.(effectivePendingTopK);
+      }
+    }
+
+    if (closeModal) {
+      setAdvancedSettingsOpen(false);
+    }
+  }, [effectivePendingTopK, onTopKChange, onTopKCommit, pendingColorMode, pendingEdgeStrengthThreshold, topK]);
+
+  const resetPendingGraphSettings = useCallback(() => {
+    setPendingColorMode(colorMode);
+    setPendingEdgeStrengthThreshold(edgeStrengthThreshold);
+    if (typeof topK === "number") {
+      setPendingTopK(topK);
+    }
+  }, [colorMode, edgeStrengthThreshold, topK]);
+
+  useEffect(() => {
+    if (advancedSettingsOpen) {
+      return;
+    }
+    setPendingColorMode(colorMode);
+    setPendingEdgeStrengthThreshold(edgeStrengthThreshold);
+    if (typeof topK === "number") {
+      setPendingTopK(topK);
+    }
+  }, [advancedSettingsOpen, colorMode, edgeStrengthThreshold, topK]);
 
   const nodeTypeColorMap = useMemo(() => {
     const groups = Array.from(new Set(data.nodes.map((node) => getNodeGroupId(node.id, String(node.type || "")))));
@@ -688,24 +759,18 @@ export function GraphVisualization(props: GraphVisualizationProps) {
         min={Math.max(20, minTopK ?? 20)}
         max={Math.max(Math.max(20, minTopK ?? 20), maxTopK ?? topK)}
         step={1}
-        value={topK}
+        value={effectivePendingTopK ?? topK}
         onChange={(value) => {
-          const next = snapTopKBySegment(Number(value));
+          const next = normalizeTopK(Number(value));
           if (Number.isFinite(next)) {
-            onTopKChange?.(next);
-          }
-        }}
-        onChangeComplete={(value) => {
-          const next = snapTopKBySegment(Number(value));
-          if (Number.isFinite(next)) {
-            onTopKCommit?.(next);
+            setPendingTopK(next);
           }
         }}
         style={{ width: compact ? 120 : 180, margin: 0 }}
         tooltip={{ open: false }}
       />
       <Typography.Text style={{ fontSize: 12, minWidth: 36, textAlign: "right" }}>
-        {topK}
+        {effectivePendingTopK ?? topK}
       </Typography.Text>
     </Space>
   ) : null;
@@ -1729,6 +1794,18 @@ export function GraphVisualization(props: GraphVisualizationProps) {
               {compact ? t("knowledge.graphQuery.advancedSettingsShort", "设置") : t("knowledge.graphQuery.advancedSettings", "高级设置")}
             </Button>
           </Tooltip>
+          <Tooltip title={t("knowledge.graphQuery.refresh", "刷新")}> 
+            <Button
+              size={compact ? "small" : "middle"}
+              type={hasPendingGraphSettings ? "primary" : "default"}
+              icon={<ReloadOutlined />}
+              onClick={() => {
+                applyPendingGraphSettings({ refreshQuery: true });
+              }}
+            >
+              {compact ? null : t("knowledge.graphQuery.refresh", "刷新")}
+            </Button>
+          </Tooltip>
           <Tooltip title={t("knowledge.graphQuery.export")}>
             <Button size={compact ? "small" : "middle"} icon={<ExportOutlined />} onClick={handleExport}>
               {compact ? null : t("knowledge.graphQuery.export")}
@@ -1804,8 +1881,30 @@ export function GraphVisualization(props: GraphVisualizationProps) {
       <Modal
         title={t("knowledge.graphQuery.advancedSettings", "高级设置")}
         open={advancedSettingsOpen}
-        onCancel={() => setAdvancedSettingsOpen(false)}
-        footer={null}
+        onCancel={() => {
+          resetPendingGraphSettings();
+          setAdvancedSettingsOpen(false);
+        }}
+        footer={(
+          <Space>
+            <Button
+              onClick={() => {
+                resetPendingGraphSettings();
+              }}
+            >
+              {t("common.reset", "重置")}
+            </Button>
+            <Button
+              type="primary"
+              icon={<ReloadOutlined />}
+              onClick={() => {
+                applyPendingGraphSettings({ closeModal: true, refreshQuery: true });
+              }}
+            >
+              {t("knowledge.graphQuery.applyAndRefresh", "应用并刷新")}
+            </Button>
+          </Space>
+        )}
         width={960}
       >
         <Space direction="vertical" size={10} style={{ width: "100%" }}>
@@ -1813,9 +1912,9 @@ export function GraphVisualization(props: GraphVisualizationProps) {
             <Typography.Text type="secondary">{t("knowledge.graphQuery.colorMode", "Color Mode")}</Typography.Text>
             <Select
               size="small"
-              value={colorMode}
+              value={pendingColorMode}
               style={{ width: 180 }}
-              onChange={(value) => setColorMode(value as GraphColorMode)}
+              onChange={(value) => setPendingColorMode(value as GraphColorMode)}
               options={[
                 { label: t("knowledge.graphQuery.colorModeType", "Type Coloring"), value: "type" },
                 { label: t("knowledge.graphQuery.colorModeWeight", "Weight Heatmap"), value: "weight" },
@@ -1826,12 +1925,12 @@ export function GraphVisualization(props: GraphVisualizationProps) {
               min={0}
               max={1}
               step={0.05}
-              value={edgeStrengthThreshold}
-              onChange={(value) => setEdgeStrengthThreshold(Number(value) || 0)}
+              value={pendingEdgeStrengthThreshold}
+              onChange={(value) => setPendingEdgeStrengthThreshold(Number(value) || 0)}
               style={{ width: 220 }}
             />
             <Typography.Text className={styles.graphThresholdValue}>
-              {Math.round(edgeStrengthThreshold * 100)}%
+              {Math.round(pendingEdgeStrengthThreshold * 100)}%
             </Typography.Text>
           </Space>
           <Space wrap className={styles.graphFocusBar}>
