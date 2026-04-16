@@ -96,14 +96,7 @@ function sortChatsForRestore<T extends ChatSpec>(chats: T[]): T[] {
     return Number.isFinite(createdTs) ? createdTs : 0;
   };
 
-  return [...chats].sort((a, b) => {
-    const aRunning = a.status === "running";
-    const bRunning = b.status === "running";
-    if (aRunning !== bRunning) {
-      return aRunning ? 1 : -1;
-    }
-    return toMillis(b) - toMillis(a);
-  });
+  return [...chats].sort((a, b) => toMillis(b) - toMillis(a));
 }
 
 async function pickChatWithHistory(chats: ChatSpec[]): Promise<string> {

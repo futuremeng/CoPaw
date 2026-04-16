@@ -1921,8 +1921,8 @@ export default function AnywhereChat({
       getSessionList: async () => {
         if (!sessionId) return [];
         try {
-          const mergedSession = await loadMergedRuntimeSession(sessionId);
-          return mergedSession ? [mergedSession] : [];
+          const current = await sessionApi.getSession(sessionId);
+          return current ? [current] : [];
         } catch {
           return [];
         }
@@ -1930,10 +1930,6 @@ export default function AnywhereChat({
       getSession: async () => {
         if (!sessionId) {
           throw new Error("session id missing");
-        }
-        const mergedSession = await loadMergedRuntimeSession(sessionId);
-        if (mergedSession) {
-          return mergedSession;
         }
         return sessionApi.getSession(sessionId);
       },

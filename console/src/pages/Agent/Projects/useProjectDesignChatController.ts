@@ -57,15 +57,28 @@ function sortChatsForRestore<T extends ChatSpec>(chats: T[]): T[] {
     return Number.isFinite(createdTs) ? createdTs : 0;
   };
 
-  return [...chats].sort((a, b) => {
-    const aRunning = a.status === "running";
-    const bRunning = b.status === "running";
-    if (aRunning !== bRunning) {
-      // Prefer non-running chats to avoid restoring into empty-running sessions.
-      return aRunning ? 1 : -1;
+  return [...chats].sort((a, b) => toMillis(b) - toMillis(a));
+}
+
+function pickLeafChatCandidates(chats: ChatSpec[]): ChatSpec[] {
+  const parentIds = new Set(chats.map((chat) => chat.session_id).filter(Boolean) as string[]);
+  const leaves = chats.filter((chat) => !parentIds.has(chat.id));
+  return leaves.length > 0 ? leaves : chats;
+}
+
+async function pickChatWithHistory(chats: ChatSpec[]): Promise<string> {
+  for (const chat of chats.slice(0, 10)) {
+    try {
+      const history = await chatApi.getChat(chat.id, { limit: 1 });
+      if ((history.messages || []).length > 0) {
+        return chat.id;
+      }
+    } catch {
+      // Ignore unreadable chats and continue scanning recent candidates.
     }
-    return toMillis(b) - toMillis(a);
-  });
+  }
+
+  return chats[0]?.id || "";
 }
 
 function buildProjectFlowBootstrapPrompt(params: {
@@ -151,8 +164,8 @@ export default function useProjectDesignChatController({
         (chat.session_id || "").startsWith(sessionPrefix),
       );
       if (bySession.length > 0) {
-        const sorted = sortChatsForRestore(bySession);
-        return sorted[0]?.id || "";
+        const sorted = sortChatsForRestore(pickLeafChatCandidates(bySession));
+        return pickChatWithHistory(sorted);
       }
     }
 
@@ -160,8 +173,8 @@ export default function useProjectDesignChatController({
       return "";
     }
 
-    const sorted = sortChatsForRestore(matched);
-    return sorted[0]?.id || "";
+    const sorted = sortChatsForRestore(pickLeafChatCandidates(matched));
+    return pickChatWithHistory(sorted);
   }, [currentAgent, selectedProject, selectedTemplateId]);
 
   const handleEnsureDesignChat = useCallback(async (

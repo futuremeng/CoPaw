@@ -37,15 +37,28 @@ function sortChatsForRestore<T extends ChatSpec>(chats: T[]): T[] {
     return Number.isFinite(createdTs) ? createdTs : 0;
   };
 
-  return [...chats].sort((a, b) => {
-    const aRunning = a.status === "running";
-    const bRunning = b.status === "running";
-    if (aRunning !== bRunning) {
-      // Prefer non-running chats to avoid restoring into empty-running sessions.
-      return aRunning ? 1 : -1;
+  return [...chats].sort((a, b) => toMillis(b) - toMillis(a));
+}
+
+function pickLeafChatCandidates(chats: ChatSpec[]): ChatSpec[] {
+  const parentIds = new Set(chats.map((chat) => chat.session_id).filter(Boolean) as string[]);
+  const leaves = chats.filter((chat) => !parentIds.has(chat.id));
+  return leaves.length > 0 ? leaves : chats;
+}
+
+async function pickChatWithHistory(chats: ChatSpec[]): Promise<string> {
+  for (const chat of chats.slice(0, 10)) {
+    try {
+      const history = await chatApi.getChat(chat.id, { limit: 1 });
+      if ((history.messages || []).length > 0) {
+        return chat.id;
+      }
+    } catch {
+      // Ignore unreadable chats and continue scanning recent candidates.
     }
-    return toMillis(b) - toMillis(a);
-  });
+  }
+
+  return chats[0]?.id || "";
 }
 
 export default function useProjectChatFocusEffects({
@@ -81,7 +94,7 @@ export default function useProjectChatFocusEffects({
 
   useEffect(() => {
     const fallbackChatId = runDetailFocusChatId || selectedRunSummaryFocusChatId || "";
-    if (fallbackChatId && fallbackChatId !== runFocusChatId) {
+    if (!runFocusChatId && fallbackChatId && fallbackChatId !== runFocusChatId) {
       setRunFocusChatId(fallbackChatId);
     }
   }, [
@@ -95,7 +108,7 @@ export default function useProjectChatFocusEffects({
     if (!currentAgentId || !selectedProjectId || !selectedRunId) {
       return;
     }
-    if (activeRunChatId || pipelineLoading || chatStarting) {
+    if (pipelineLoading || chatStarting) {
       return;
     }
 
@@ -131,8 +144,8 @@ export default function useProjectChatFocusEffects({
           (chat.session_id || "").startsWith(sessionPrefix),
         );
         if (bySession.length > 0) {
-          const sorted = sortChatsForRestore(bySession);
-          return sorted[0]?.id || "";
+          const sorted = sortChatsForRestore(pickLeafChatCandidates(bySession));
+          return pickChatWithHistory(sorted);
         }
       }
 
@@ -140,8 +153,8 @@ export default function useProjectChatFocusEffects({
         return "";
       }
 
-      const sorted = sortChatsForRestore(matched);
-      return sorted[0]?.id || "";
+      const sorted = sortChatsForRestore(pickLeafChatCandidates(matched));
+      return pickChatWithHistory(sorted);
     };
 
     void resolveLatestRunBoundChatId()
@@ -149,7 +162,18 @@ export default function useProjectChatFocusEffects({
         if (cancelled || !restoredChatId) {
           return;
         }
-        setRunFocusChatId((prev) => (prev || restoredChatId));
+        const fallbackChatId = runDetailFocusChatId || selectedRunSummaryFocusChatId || "";
+        const currentFocusChatId = runFocusChatIdRef.current;
+        if (
+          currentFocusChatId &&
+          currentFocusChatId !== fallbackChatId &&
+          currentFocusChatId !== restoredChatId
+        ) {
+          return;
+        }
+        if (currentFocusChatId !== restoredChatId) {
+          setRunFocusChatId(restoredChatId);
+        }
         setError("");
       })
       .catch(() => {
@@ -165,8 +189,11 @@ export default function useProjectChatFocusEffects({
     currentAgentId,
     pipelineLoading,
     runRestoreAttemptKeyRef,
+    runDetailFocusChatId,
+    runFocusChatIdRef,
     selectedProjectId,
     selectedRunId,
+    selectedRunSummaryFocusChatId,
     setError,
     setRunFocusChatId,
   ]);

@@ -91,6 +91,67 @@ function isProjectWorkspaceRelatedChat(chat: ChatSpec, projectId: string): boole
   return false;
 }
 
+function collectDescendantChats(chats: ChatSpec[], rootIds: string[]): ChatSpec[] {
+  if (rootIds.length === 0) {
+    return [];
+  }
+
+  const childrenByParent = new Map<string, ChatSpec[]>();
+  for (const chat of chats) {
+    if (!chat.session_id) {
+      continue;
+    }
+    const siblings = childrenByParent.get(chat.session_id) || [];
+    siblings.push(chat);
+    childrenByParent.set(chat.session_id, siblings);
+  }
+
+  const relatedIds = new Set(rootIds.filter(Boolean));
+  const queue = [...relatedIds];
+  while (queue.length > 0) {
+    const currentId = queue.shift() as string;
+    const children = childrenByParent.get(currentId) || [];
+    for (const child of children) {
+      if (relatedIds.has(child.id)) {
+        continue;
+      }
+      relatedIds.add(child.id);
+      queue.push(child.id);
+    }
+  }
+
+  return chats.filter((chat) => relatedIds.has(chat.id));
+}
+
+function pickLeafChatCandidates(chats: ChatSpec[]): ChatSpec[] {
+  const parentIds = new Set(chats.map((chat) => chat.session_id).filter(Boolean) as string[]);
+  const leaves = chats.filter((chat) => !parentIds.has(chat.id));
+  return leaves.length > 0 ? leaves : chats;
+}
+
+function sortChatsForRestore<T extends ChatSpec>(chats: T[]): T[] {
+  return [...chats].sort(
+    (a, b) =>
+      toTimestamp(b.updated_at || b.created_at) -
+      toTimestamp(a.updated_at || a.created_at),
+  );
+}
+
+async function pickChatWithHistory(chats: ChatSpec[]): Promise<string> {
+  for (const chat of chats.slice(0, 10)) {
+    try {
+      const history = await chatApi.getChat(chat.id, { limit: 1 });
+      if ((history.messages || []).length > 0) {
+        return chat.id;
+      }
+    } catch {
+      // Ignore unreadable chats and continue scanning recent candidates.
+    }
+  }
+
+  return chats[0]?.id || "";
+}
+
 async function resolvePreferredOrLatestWorkspaceChat(params: {
   projectId: string;
   preferredChatId: string;
@@ -106,7 +167,17 @@ async function resolvePreferredOrLatestWorkspaceChat(params: {
   if (preferredChatId) {
     const preferredChat = chats.find((chat) => chat.id === preferredChatId);
     if (preferredChat && isProjectWorkspaceRelatedChat(preferredChat, params.projectId)) {
-      return { chatId: preferredChatId, preferredValid: true };
+      const descendantPool = collectDescendantChats(chats, [preferredChat.id]);
+      const preferredCandidates = pickLeafChatCandidates(
+        descendantPool.length > 0 ? descendantPool : [preferredChat],
+      );
+      const preferredResolvedChatId = await pickChatWithHistory(
+        sortChatsForRestore(preferredCandidates),
+      );
+      return {
+        chatId: preferredResolvedChatId || preferredChatId,
+        preferredValid: true,
+      };
     }
   }
 
@@ -114,16 +185,10 @@ async function resolvePreferredOrLatestWorkspaceChat(params: {
     return { chatId: "", preferredValid: false };
   }
 
-  related.sort((a, b) => {
-    const aRunning = a.status === "running";
-    const bRunning = b.status === "running";
-    if (aRunning !== bRunning) {
-      return aRunning ? 1 : -1;
-    }
-    return toTimestamp(b.updated_at || b.created_at) - toTimestamp(a.updated_at || a.created_at);
-  });
+  const relatedLeaves = pickLeafChatCandidates(related);
+  const resolvedChatId = await pickChatWithHistory(sortChatsForRestore(relatedLeaves));
 
-  return { chatId: related[0]?.id || "", preferredValid: false };
+  return { chatId: resolvedChatId, preferredValid: false };
 }
 
 interface UsePreferredProjectWorkspaceChatParams {

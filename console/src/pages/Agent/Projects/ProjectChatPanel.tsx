@@ -100,6 +100,12 @@ function ProjectChatPanel({
       return;
     }
 
+    if (!stableSessionId || stableSessionId === activeSessionId) {
+      setStableSessionId(activeSessionId);
+      setChatMountReady(true);
+      return;
+    }
+
     setChatMountReady(false);
     const switchTimer = window.setTimeout(() => {
       setStableSessionId(activeSessionId);
@@ -112,7 +118,7 @@ function ProjectChatPanel({
       window.clearTimeout(switchTimer);
       window.clearTimeout(mountTimer);
     };
-  }, [activeSessionId, mountDelayMs, sessionSwitchDebounceMs]);
+  }, [activeSessionId, mountDelayMs, sessionSwitchDebounceMs, stableSessionId]);
 
   const shouldRenderActiveChat = chatRuntimeEnabled && chatMountReady && stableSessionId === activeSessionId;
 
