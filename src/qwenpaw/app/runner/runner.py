@@ -27,6 +27,10 @@ from .command_dispatch import (
     _is_command,
     run_command_path,
 )
+from .mission_dispatch import (
+    detect_active_mission_phase,
+    maybe_handle_mission_command,
+)
 from .query_error_dump import write_query_error_dump
 from .runtime_status_store import (
     RuntimeStatusWriteContext,
@@ -1139,27 +1143,101 @@ class AgentRunner(Runner):
 
             logger.debug(f"Enabled MCP: {mcp_clients}")
 
+            # Build base request context
+            base_request_context = {
+                "session_id": session_id,
+                "user_id": user_id,
+                "channel": channel,
+                "agent_id": self.agent_id,
+                **(
+                    {
+                        "forced_tool_call_json": json.dumps(
+                            approved_tool_call,
+                            ensure_ascii=False,
+                        ),
+                    }
+                    if approved_tool_call
+                    else {}
+                ),
+            }
+
+            # Merge custom request_context from request
+            # (e.g., _headless_tool_guard)
+            custom_context = getattr(request, "request_context", None)
+            if custom_context and isinstance(custom_context, dict):
+                base_request_context.update(custom_context)
+
+            # Mission Mode: /mission
+            _ws = self.workspace_dir or WORKING_DIR
+            mission_info: dict | None = None
+
+            mission_result = await maybe_handle_mission_command(
+                query=query,
+                msgs=msgs,
+                workspace_dir=_ws,
+                agent_id=self.agent_id,
+                rewrite_fn=self._rewrite_last_message_text,
+                session_id=session_id,
+            )
+            if isinstance(mission_result, Msg):
+                yield mission_result, True
+                return
+            if isinstance(mission_result, dict):
+                mission_info = mission_result
+
+            # Active mission: auto-detect follow-up messages
+            # (e.g., user confirms PRD without typing /mission again)
+            if mission_info is None:
+                mission_info = detect_active_mission_phase(
+                    _ws,
+                    session_id=session_id,
+                )
+
+            # Mission Mode: bypass tool guard
+            # (workers can't respond to /approve)
+            if mission_info is not None:
+                base_request_context["_headless_tool_guard"] = "false"
+                logger.info(
+                    "Mission Mode: bypassing tool guard for session %s",
+                    session_id,
+                )
+                # Inject context reminder for active mission
+                loop_dir = mission_info.get("loop_dir", "")
+                phase = mission_info.get("mission_phase", 1)
+                if phase == 1:
+                    refresher = (
+                        f"[Mission active — dir: `{loop_dir}`]\n"
+                        f"You are in Mission Phase 1 (PRD review). "
+                        f"The user's message follows.\n"
+                        f"If the user is confirming the PRD, update "
+                        f"`{loop_dir}/loop_config.json` setting "
+                        f"`current_phase` to `execution_confirmed`.\n"
+                        f"If the user requests changes, modify "
+                        f"prd.json.\n---\n"
+                    )
+                elif phase == 2:
+                    refresher = (
+                        f"[Mission active — dir: `{loop_dir}`]\n"
+                        f"You are in Mission Phase 2 (execution). "
+                        f"The user's follow-up message follows.\n"
+                        f"Continue the worker → verifier pipeline. "
+                        f"Check prd.json progress and dispatch workers "
+                        f"for remaining stories.\n---\n"
+                    )
+                else:
+                    refresher = f"[Mission active — dir: `{loop_dir}`]\n---\n"
+                original = query or ""
+                self._rewrite_last_message_text(
+                    msgs,
+                    refresher + original,
+                )
+
             agent = CoPawAgent(
                 agent_config=agent_config,
                 env_context=env_context,
                 mcp_clients=mcp_clients,
                 memory_manager=self.memory_manager,
-                request_context={
-                    "session_id": session_id,
-                    "user_id": user_id,
-                    "channel": channel,
-                    "agent_id": self.agent_id,
-                    **(
-                        {
-                            "forced_tool_call_json": json.dumps(
-                                approved_tool_call,
-                                ensure_ascii=False,
-                            ),
-                        }
-                        if approved_tool_call
-                        else {}
-                    ),
-                },
+                request_context=base_request_context,
                 workspace_dir=self.workspace_dir,
                 task_tracker=self._task_tracker,
             )
@@ -1251,14 +1329,15 @@ class AgentRunner(Runner):
 
             # Skill info (/<name> without input) is display-only:
             # persisted in chat history but not in agent memory.
-            skill_response = self._maybe_inject_skill(
-                query,
-                msgs,
-                agent.toolkit.skills,
-            )
-            if skill_response is not None:
-                yield skill_response, True
-                return
+            if mission_info is None:
+                skill_response = self._maybe_inject_skill(
+                    query,
+                    msgs,
+                    agent.toolkit.skills,
+                )
+                if skill_response is not None:
+                    yield skill_response, True
+                    return
 
             try:
                 await self.session.load_session_state(

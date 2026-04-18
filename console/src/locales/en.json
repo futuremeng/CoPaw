@@ -28,7 +28,9 @@
     "help": "Help",
     "close": "Close",
     "actions": "Actions",
-    "total": "Total {{count}}"
+    "total": "Total {{count}}",
+    "clear": "Clear",
+    "paste": "Paste"
   },
   "chunkError": {
     "title": "Failed to load page",
@@ -60,7 +62,32 @@
     "environments": "Environments",
     "security": "Security",
     "tokenUsage": "Token Usage",
-    "voiceTranscription": "Voice Transcription"
+    "voiceTranscription": "Voice Transcription",
+    "debug": "Debug",
+    "plugins": "Plugins"
+  },
+  "debug": {
+    "title": "Debug",
+    "desc": "View the backend daemon log file to help diagnose issues. Logs refresh automatically while this page is open.",
+    "level": {
+      "all": "All"
+    },
+    "backend": {
+      "title": "Backend logs",
+      "autoRefresh": "Auto refresh",
+      "newestFirst": "Newest first",
+      "updatedAt": "Updated at",
+      "path": "Log file",
+      "notFound": "Backend log file was not found yet.",
+      "placeholder": "Backend log output will appear here.",
+      "loadFailed": "Failed to load backend logs",
+      "searchPlaceholder": "Search backend logs..."
+    },
+    "actions": {
+      "refreshBackend": "Refresh backend logs",
+      "refreshSuccess": "Logs refreshed",
+      "copyBackend": "Copy backend logs"
+    }
   },
   "voiceTranscription": {
     "title": "Voice Transcription",
@@ -196,7 +223,9 @@
     "loadConfigFailed": "Failed to load agent config",
     "saveFailed": "Failed to save agent",
     "idRequired": "Please enter agent ID",
-    "idPattern": "ID can only contain lowercase letters, numbers, underscores and hyphens",
+    "idLabel": "Agent ID (optional)",
+    "idHelp": "Leave empty to auto-generate. Only letters, digits, hyphens and underscores allowed.",
+    "idPattern": "ID can only contain letters, numbers, underscores and hyphens",
     "idPlaceholder": "e.g.: my-agent",
     "nameRequired": "Please enter agent name",
     "namePlaceholder": "e.g.: My Agent",
@@ -233,13 +262,21 @@
   "skills": {
     "title": "Skills",
     "description": "Manage agent skills and capabilities.",
-    "importHub": "Import from Skills Hub",
-    "importHubHint": "Import skills via URL",
+    "importHub": "Import Hub",
+    "importHubHint": "Import a skill from a supported online hub URL into the current workspace",
+    "importSkills": "Import Skill",
     "enterSkillUrl": "Enter Skill URL",
-    "supportedSkillUrlSources": "Currently supported skill URL sources:",
+    "orChooseFromSources": "or choose from supported Skill marketplaces",
+    "supportedSkillUrlSources": "Supported Skill Marketplaces:",
     "urlExamples": "URL examples:",
-    "invalidSkillUrlSource": "Skill URL currently needs to start with https://skills.sh/, https://clawhub.ai/, https://skillsmp.com/, https://lobehub.com/, https://market.lobehub.com/, https://github.com/, or https://modelscope.cn/skills/",
+    "urlValid": "Valid URL from {{source}}",
+    "invalidUrl": "Invalid URL",
+    "examplesFrom": "Examples from {{source}}",
+    "clickToFill": "Click to fill in URL",
+    "invalidSkillUrlSource": "Please verify the skill URL is from a supported marketplace",
     "type": "Type",
+    "source": "Source",
+    "path": "Path",
     "skillDescription": "Description",
     "tags": "Tags",
     "builtin": "Built-in",
@@ -382,8 +419,9 @@
     "emptyStateBadge": "New workspaces start empty",
     "emptyStateTitle": "This agent does not have any skills yet",
     "emptyStateText": "This is expected. New workspaces do not come with skills automatically. Download skills from the local pool or create one here to equip this agent.",
-    "emptyStateDownload": "Load from Skill Pool",
+    "emptyStateDownload": "Download from Skill Pool",
     "emptyStateCreate": "Create First Skill",
+    "examples": "Examples",
     "loadFailed": "Failed to load skills",
     "refreshFailed": "Failed to refresh skills",
     "createdSuccessfully": "Created successfully",
@@ -666,6 +704,7 @@
     "broadcastTitle": "Broadcast {{name}}",
     "importBuiltin": "Update Built-in Skills",
     "importBuiltinHint": "Update built-in skills to the latest version",
+    "importBuiltinAlertHint": "{{count}} built-in changes need review",
     "importHubHint": "Import skills via URL",
     "uploadZipHint": "Upload via Zip",
     "importBuiltinSuccess": "Built-ins imported: {{names}}",
@@ -679,6 +718,11 @@
     "importStatusMissing": "Missing in pool",
     "importStatusCurrent": "Already current",
     "importStatusConflict": "Conflict",
+    "builtinNoticeSummary": "{{count}} built-in changes detected",
+    "builtinNoticeLineAdded": "Added: {{names}}",
+    "builtinNoticeLineMissing": "Missing: {{names}}",
+    "builtinNoticeLineUpdated": "Updated: {{names}}",
+    "builtinNoticeLineRemoved": "Removed: {{names}}",
     "zipImport": "ZIP Import",
     "create": "Create",
     "edit": "Edit",
@@ -893,6 +937,9 @@
     "filterToolMessagesTooltip": "Show tool call and output messages to users (turn off to hide)",
     "filterThinking": "Show Thinking",
     "filterThinkingTooltip": "Show model thinking/reasoning content to users (turn off to hide)",
+    "ackMessage": "Acknowledgment Message",
+    "ackMessageTooltip": "Send an instant reply when a message is received, before agent processing begins. Leave empty to disable.",
+    "ackMessagePlaceholder": "⏳ Processing...",
     "notSet": "Not set",
     "clickCardToEdit": "Click card to edit",
     "settings": "Settings",
@@ -1116,6 +1163,9 @@
     "selectModel": "Select a model",
     "llmModelUpdated": "LLM Model updated",
     "failedToSave": "Failed to save",
+    "freeModelWarningTitle": "Free Model Risk Warning",
+    "freeModelWarningMessage": "You are using a free model. It may have stability and privacy leakage risks. See the provider website for details:",
+    "freeModelWarningDontShowAgain": "Do not show this again",
     "saved": "Saved",
     "save": "Save",
     "cancel": "Cancel",
@@ -1156,6 +1206,7 @@
     "manageModelsTitle": "{{provider}} — Model Management",
     "userAdded": "User-added",
     "addModel": "Add Model",
+    "addModels": "Add Models",
     "autoDiscoverModels": "Auto Discover Models",
     "addModelTitle": "Add Model to {{provider}}",
     "modelIdLabel": "Model ID",
@@ -1185,7 +1236,12 @@
     "allModelsCleared": "Cleared {{count}} models",
     "filterModels": "Filter Models",
     "filterByProvider": "Provider:",
+    "searchProviderPlaceholder": "Search provider name",
+    "selectAllProviders": "Select All",
+    "clearProviderSelection": "Deselect All",
+    "noMatchingProviders": "No matching providers",
     "filterByModality": "Input Modality:",
+    "filterFreeOnly": "Free Models Only:",
     "getModels": "Get Models",
     "discovered": "Available Models:",
     "add": "Add",
@@ -1299,6 +1355,7 @@
     "tagMultimodal": "Multimodal",
     "tagVision": "Vision",
     "tagText": "Text",
+    "free": "Free",
     "probeMultimodal": "Test Multimodal",
     "probeImage": "Image",
     "probeVideo": "Video",
@@ -1306,7 +1363,7 @@
     "probeNotSupported": "This model does not support multimodal input",
     "probeFailed": "Probe failed",
     "tagNotProbed": "Not Probed",
-    "modalityVision": "Vision (image)",
+    "modalityVision": "Image",
     "modalityAudio": "Audio",
     "modalityVideo": "Video",
     "modalityFile": "File",
@@ -1314,7 +1371,6 @@
     "perMillionIn": "/1M in",
     "perMillionOut": "/1M out"
   },
-
   "agentConfig": {
     "title": "Configuration",
     "description": "Configure agent runtime parameters",
@@ -1606,6 +1662,9 @@
       },
       "mission": {
         "description": "Launch mission mode — Automatically decompose, implement, and verify complex tasks ⚠️ This mode will bypass tool guardrails"
+      },
+      "skills": {
+        "description": "List chat-available skills and expose explicit skill commands"
       }
     },
     "attachments": {

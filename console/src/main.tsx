@@ -1,4 +1,11 @@
 import { createRoot } from "react-dom/client";
+import App from "./App.tsx";
+import "./i18n";
+import { installHostExternals } from "./plugins/hostExternals";
+
+// Expose host dependencies (React, antd, etc.) on window
+// so that plugin UI modules can use them without bundling their own copies.
+installHostExternals();
 
 if (typeof window !== "undefined") {
   const originalError = console.error;
@@ -19,15 +26,15 @@ if (typeof window !== "undefined") {
     );
   };
 
-  console.error = function (...args: any[]) {
+  console.error = function (...args: unknown[]) {
     const msg = args[0]?.toString() || "";
     if (shouldIgnoreConsoleNoise(msg)) {
       return;
     }
-    originalError.apply(console, args);
+    originalError.apply(console, args as []);
   };
 
-  console.warn = function (...args: any[]) {
+  console.warn = function (...args: unknown[]) {
     const msg = args[0]?.toString() || "";
     if (
       shouldIgnoreConsoleNoise(msg) ||
@@ -35,12 +42,8 @@ if (typeof window !== "undefined") {
     ) {
       return;
     }
-    originalWarn.apply(console, args);
+    originalWarn.apply(console, args as []);
   };
 }
 
-void (async () => {
-  await import("./i18n");
-  const { default: App } = await import("./App.tsx");
-  createRoot(document.getElementById("root")!).render(<App />);
-})();
+createRoot(document.getElementById("root")!).render(<App />);

@@ -24,6 +24,7 @@ from .settings import router as settings_router
 from .knowledge import router as knowledge_router
 from .agents_pipeline import router as agents_pipeline_router
 from .project_realtime import router as project_realtime_router
+from .plugins import router as plugins_router
 
 router = APIRouter()
 
@@ -49,6 +50,7 @@ router.include_router(auth_router)
 router.include_router(files_router)
 router.include_router(settings_router)
 router.include_router(knowledge_router)
+router.include_router(plugins_router)
 
 
 def create_agent_scoped_router() -> APIRouter:

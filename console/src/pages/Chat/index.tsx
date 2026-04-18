@@ -16,6 +16,7 @@ import {
   SparkHistoryLine,
   SparkNewChatFill,
 } from "@agentscope-ai/icons";
+import { usePlugins } from "../../plugins/PluginContext";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import sessionApi from "./sessionApi";
@@ -555,6 +556,9 @@ function useMessageHistoryNavigation(
     [],
   );
 
+  const isSuggestionPopupOpen = (textarea: HTMLTextAreaElement): boolean =>
+    textarea.value.startsWith("/");
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isChatActive()) return;
@@ -576,6 +580,8 @@ function useMessageHistoryNavigation(
       const userMessages = getUserMessagesWithText();
 
       if (e.key === "ArrowUp") {
+        if (isSuggestionPopupOpen(textarea)) return;
+
         const cursorPosition = textarea.selectionStart || 0;
         const textBeforeCursor = textarea.value.substring(0, cursorPosition);
         const lineBreaks = textBeforeCursor.split("\n").length - 1;
@@ -746,6 +752,7 @@ export default function ChatPage() {
   }, [location.pathname]);
   const [showModelPrompt, setShowModelPrompt] = useState(false);
   const { selectedAgent } = useAgentStore();
+  const { toolRenderConfig } = usePlugins();
   const [refreshKey, setRefreshKey] = useState(0);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -2003,6 +2010,16 @@ export default function ChatPage() {
         value: "deny",
         description: t("chat.commands.deny.description"),
       },
+      {
+        command: "/mission",
+        value: "mission",
+        description: t("chat.commands.mission.description"),
+      },
+      {
+        command: "/skills",
+        value: "skills",
+        description: t("chat.commands.skills.description"),
+      },
     ];
 
     const handleBeforeSubmit = async () => {
@@ -2240,6 +2257,8 @@ export default function ChatPage() {
           });
         },
       },
+      customToolRenderConfig:
+        Object.keys(toolRenderConfig).length > 0 ? toolRenderConfig : undefined,
       actions: {
         list: [
           {
@@ -2279,6 +2298,7 @@ export default function ChatPage() {
     handleAutoContinueToggle,
     runningConfigSnapshot,
     savingAutoContinue,
+    toolRenderConfig,
   ]);
 
   return (

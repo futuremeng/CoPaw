@@ -126,7 +126,9 @@ function MCPPage() {
           <p>{t("common.loading")}</p>
         </div>
       ) : clients.length === 0 ? (
-        <Empty description={t("mcp.emptyState")} />
+        <div className={styles.emptyState}>
+          <Empty description={t("mcp.emptyState")} />
+        </div>
       ) : (
         <div className={styles.mcpGrid}>
           {clients.map((client) => (

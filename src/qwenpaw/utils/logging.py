@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 """Logging setup for application logging and optional file output."""
-import io
 import logging
 import logging.handlers
 import os
@@ -8,7 +7,7 @@ import platform
 import sys
 from pathlib import Path
 
-from ..constant import PROJECT_NAME
+from ..constant import PROJECT_NAME, WORKING_DIR
 
 # Rotating file handler limits (idempotent add avoids duplicate handlers)
 _LOG_MAX_BYTES = 5 * 1024 * 1024  # 5 MiB
@@ -25,6 +24,10 @@ _LEVEL_MAP = {
 
 # Top-level name for this package; only loggers under this name are shown.
 LOG_NAMESPACE = PROJECT_NAME.lower()
+
+# Canonical log file name and path — import these instead of reconstructing.
+LOG_FILE_BASENAME = f"{LOG_NAMESPACE}.log"
+LOG_FILE_PATH = WORKING_DIR / LOG_FILE_BASENAME
 
 
 def _enable_windows_ansi() -> None:
@@ -145,12 +148,10 @@ def setup_logger(level: int | str = logging.INFO):
     logger.setLevel(level)
     logger.propagate = False
     if not logger.handlers:
-        utf8_stderr = io.TextIOWrapper(
-            sys.stderr.buffer,
-            encoding="utf-8",
-            errors="replace",
-        )
-        handler = logging.StreamHandler(utf8_stderr)
+        # Use sys.stderr directly. Wrapping sys.stderr.buffer in a
+        # TextIOWrapper takes ownership of the buffer and closes it on GC,
+        # which corrupts sys.stderr for subsequent tests/code.
+        handler = logging.StreamHandler(sys.stderr)
         handler.setFormatter(formatter)
         logger.addHandler(handler)
 

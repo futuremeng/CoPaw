@@ -7,6 +7,7 @@ import Header from "../Header";
 import ConsoleCronBubble from "../../components/ConsoleCronBubble";
 import { ChunkErrorBoundary } from "../../components/ChunkErrorBoundary";
 import { lazyWithRetry } from "../../utils/lazyWithRetry";
+import { usePlugins } from "../../plugins/PluginContext";
 import styles from "../index.module.less";
 
 // Chat is eagerly loaded (default landing page)
@@ -57,6 +58,7 @@ const VoiceTranscriptionPage = lazyWithRetry(
   () => import("../../pages/Settings/VoiceTranscription"),
 );
 const AgentsPage = lazyWithRetry(() => import("../../pages/Settings/Agents"));
+const DebugPage = lazyWithRetry(() => import("../../pages/Debug"));
 
 const { Content } = Layout;
 
@@ -81,15 +83,29 @@ const pathToKey: Record<string, string> = {
   "/security": "security",
   "/token-usage": "token-usage",
   "/voice-transcription": "voice-transcription",
+  "/debug": "debug",
 };
 
 export default function MainLayout() {
   const { t } = useTranslation();
   const location = useLocation();
   const currentPath = location.pathname;
-  const selectedKey =
-    pathToKey[currentPath] ||
-    (currentPath.startsWith("/projects/") ? "projects" : "chat");
+  const { pluginRoutes } = usePlugins();
+
+  // Resolve selected key: check static routes first, then plugin routes
+  let selectedKey = pathToKey[currentPath] || "";
+  if (!selectedKey) {
+    if (currentPath.startsWith("/projects/")) {
+      selectedKey = "projects";
+    } else {
+    const matchedPlugin = pluginRoutes.find(
+      (route) => currentPath === route.path,
+    );
+    selectedKey = matchedPlugin
+      ? matchedPlugin.path.replace(/^\//, "")
+      : "chat";
+    }
+  }
 
   return (
     <Layout className={styles.mainLayout}>
@@ -134,6 +150,16 @@ export default function MainLayout() {
                     path="/voice-transcription"
                     element={<VoiceTranscriptionPage />}
                   />
+                  <Route path="/debug" element={<DebugPage />} />
+
+                  {/* Plugin routes — dynamically injected at runtime */}
+                  {pluginRoutes.map((route) => (
+                    <Route
+                      key={route.path}
+                      path={route.path}
+                      element={<route.component />}
+                    />
+                  ))}
                 </Routes>
               </Suspense>
             </ChunkErrorBoundary>
