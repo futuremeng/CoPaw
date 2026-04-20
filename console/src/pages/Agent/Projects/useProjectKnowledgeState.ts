@@ -6,6 +6,8 @@ import type {
   KnowledgeTaskProgress,
   KnowledgeSourceContent,
   KnowledgeSourceItem,
+  ProjectKnowledgeGlobalMetricsPayload,
+  ProjectKnowledgeModeMetricsPayload,
   ProjectKnowledgeOutputResolutionPayload,
   ProjectKnowledgeModeOutputPayload,
   ProjectKnowledgeProcessingSchedulerPayload,
@@ -500,6 +502,44 @@ function normalizeNullableNumber(value: unknown): number | null {
     : typeof value === "string" && value.trim() && Number.isFinite(Number(value))
       ? Number(value)
       : null;
+}
+
+function getBackendModeMetric(
+  syncState: ProjectKnowledgeSyncState | null,
+  mode: ProjectKnowledgeProcessingMode,
+): ProjectKnowledgeModeMetricsPayload | null {
+  const payload = syncState?.mode_metrics;
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const raw = payload[mode];
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  return raw as ProjectKnowledgeModeMetricsPayload;
+}
+
+function getBackendModeMetricNumber(
+  syncState: ProjectKnowledgeSyncState | null,
+  mode: ProjectKnowledgeProcessingMode,
+  key: keyof ProjectKnowledgeModeMetricsPayload,
+): number {
+  return normalizeNumber(getBackendModeMetric(syncState, mode)?.[key]);
+}
+
+function getBackendModeMetricNullableNumber(
+  syncState: ProjectKnowledgeSyncState | null,
+  mode: ProjectKnowledgeProcessingMode,
+  key: keyof ProjectKnowledgeModeMetricsPayload,
+): number | null {
+  return normalizeNullableNumber(getBackendModeMetric(syncState, mode)?.[key]);
+}
+
+function getBackendGlobalMetricNumber(
+  syncState: ProjectKnowledgeSyncState | null,
+  key: keyof ProjectKnowledgeGlobalMetricsPayload,
+): number {
+  return normalizeNumber(syncState?.global_metrics?.[key]);
 }
 
 function parseBackendProcessingModes(
@@ -1506,8 +1546,44 @@ export function useProjectKnowledgeState(
       : typeof syncState?.progress === "number"
         ? Math.max(0, Math.min(100, Math.round(syncState.progress * 100)))
         : null;
-    const fastAvailable = quantMetrics.documentCount > 0 || quantMetrics.chunkCount > 0;
-    const nlpAvailable = quantMetrics.entityCount > 0 || quantMetrics.relationCount > 0;
+    const fastDocumentCount = Math.max(
+      getBackendModeMetricNumber(syncState, "fast", "document_count"),
+      getBackendGlobalMetricNumber(syncState, "document_count"),
+      quantMetrics.documentCount,
+    );
+    const fastChunkCount = Math.max(
+      getBackendModeMetricNumber(syncState, "fast", "chunk_count"),
+      getBackendGlobalMetricNumber(syncState, "chunk_count"),
+      quantMetrics.chunkCount,
+    );
+    const nlpEntityCount = Math.max(
+      getBackendModeMetricNumber(syncState, "nlp", "entity_count"),
+      getSyncNodeCount(syncState),
+      getSyncEnrichmentMetric(syncState, "node_count"),
+    );
+    const nlpRelationCount = Math.max(
+      getBackendModeMetricNumber(syncState, "nlp", "relation_count"),
+      getSyncRelationCount(syncState),
+      getSyncEnrichmentMetric(syncState, "edge_count"),
+    );
+    const agenticEntityCount = Math.max(
+      getBackendModeMetricNumber(syncState, "agentic", "entity_count"),
+      normalizeNumber(workflowRunMeta.entity_count),
+      normalizeNumber(workflowRunMeta.final_entity_count),
+    );
+    const agenticRelationCount = Math.max(
+      getBackendModeMetricNumber(syncState, "agentic", "relation_count"),
+      normalizeNumber(workflowRunMeta.relation_count),
+      normalizeNumber(workflowRunMeta.final_relation_count),
+    );
+    const agenticQualityScore = getBackendModeMetricNullableNumber(syncState, "agentic", "quality_score")
+      ?? normalizeNullableNumber(
+        workflowRunMeta.quality_score
+        ?? workflowRunMeta.final_quality_score,
+      );
+
+    const fastAvailable = fastDocumentCount > 0 || fastChunkCount > 0;
+    const nlpAvailable = nlpEntityCount > 0 || nlpRelationCount > 0;
     const agenticAvailable = ["succeeded", "completed"].includes(workflowStatus);
     const latestUpdatedAt = String(
       latestQualityLoopJob?.updated_at
@@ -1561,8 +1637,8 @@ export function useProjectKnowledgeState(
         lastUpdatedAt: String(syncState?.last_finished_at || syncState?.updated_at || "").trim(),
         runId: "",
         jobId: String(syncState?.latest_job_id || "").trim(),
-        documentCount: quantMetrics.documentCount,
-        chunkCount: quantMetrics.chunkCount,
+        documentCount: fastDocumentCount,
+        chunkCount: fastChunkCount,
         entityCount: 0,
         relationCount: 0,
         qualityScore: null,
@@ -1583,11 +1659,11 @@ export function useProjectKnowledgeState(
         lastUpdatedAt: latestUpdatedAt,
         runId: "",
         jobId: String(activeKnowledgeTask?.job_id || syncState?.latest_job_id || "").trim(),
-        documentCount: quantMetrics.documentCount,
-        chunkCount: quantMetrics.chunkCount,
-        entityCount: quantMetrics.entityCount,
-        relationCount: quantMetrics.relationCount,
-        qualityScore: quantMetrics.qualityAssessmentScore,
+        documentCount: fastDocumentCount,
+        chunkCount: fastChunkCount,
+        entityCount: nlpEntityCount,
+        relationCount: nlpRelationCount,
+        qualityScore: null,
       },
       {
         mode: "agentic",
@@ -1607,11 +1683,11 @@ export function useProjectKnowledgeState(
         lastUpdatedAt: String(workflowRunMeta.updated_at || latestUpdatedAt || "").trim(),
         runId: workflowRunId,
         jobId: String(syncState?.latest_job_id || "").trim(),
-        documentCount: quantMetrics.documentCount,
-        chunkCount: quantMetrics.chunkCount,
-        entityCount: quantMetrics.entityCount,
-        relationCount: quantMetrics.relationCount,
-        qualityScore: quantMetrics.qualityAssessmentScore,
+        documentCount: fastDocumentCount,
+        chunkCount: fastChunkCount,
+        entityCount: agenticEntityCount,
+        relationCount: agenticRelationCount,
+        qualityScore: agenticQualityScore,
       },
     ];
   }, [
@@ -1622,9 +1698,6 @@ export function useProjectKnowledgeState(
     latestQualityLoopJob?.updated_at,
     quantMetrics.chunkCount,
     quantMetrics.documentCount,
-    quantMetrics.entityCount,
-    quantMetrics.qualityAssessmentScore,
-    quantMetrics.relationCount,
     sourceRegistered,
     syncState,
   ]);

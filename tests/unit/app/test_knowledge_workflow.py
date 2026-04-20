@@ -195,6 +195,11 @@ def test_project_sync_manager_records_workflow_run_metadata(
     assert state["mode_outputs"]["fast"]["source"] == "indexed-preview"
     assert state["mode_outputs"]["nlp"]["source"] == "graph-artifacts"
     assert state["mode_outputs"]["agentic"]["source"] == "workflow-artifacts"
+    assert state["mode_metrics"]["fast"]["document_count"] == 1
+    assert state["mode_metrics"]["nlp"]["entity_count"] == 0
+    assert state["mode_metrics"]["agentic"]["artifact_count"] == 0
+    assert state["global_metrics"]["document_count"] == 1
+    assert state["global_metrics"]["chunk_count"] == 0
 
 
 def test_knowledge_workflow_orchestrator_fast_mode_stops_before_memify(

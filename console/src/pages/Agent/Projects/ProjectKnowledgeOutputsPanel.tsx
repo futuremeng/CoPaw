@@ -232,8 +232,8 @@ export default function ProjectKnowledgeOutputsPanel(
           <Typography.Text strong>{getProjectKnowledgeModeLabel(selectedModeState.mode, t)}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("projects.knowledge.signalDocuments", "Documents")}</Typography.Text>
-          <Typography.Text strong>{selectedModeState.documentCount}</Typography.Text>
+          <Typography.Text type="secondary">{t("projects.knowledge.outputs.artifactCount", "Artifacts")}</Typography.Text>
+          <Typography.Text strong>{artifactCount}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
           <Typography.Text type="secondary">{t("projects.knowledge.entities", "Entities")}</Typography.Text>

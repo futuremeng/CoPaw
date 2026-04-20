@@ -218,6 +218,8 @@ class ProjectKnowledgeSyncManager:
                 "reason": "Scheduler is waiting for the fast preview lane to start.",
             },
             "mode_outputs": {},
+            "mode_metrics": {},
+            "global_metrics": {},
         }
 
     def _relative_workspace_path(self, value: str | Path | None) -> str:
@@ -341,6 +343,85 @@ class ProjectKnowledgeSyncManager:
                 ],
                 "artifacts": agentic_artifacts,
             },
+        }
+
+    @staticmethod
+    def _build_mode_metrics(
+        processing_modes: list[dict[str, Any]],
+        mode_outputs: dict[str, Any],
+    ) -> dict[str, Any]:
+        metrics: dict[str, Any] = {}
+        for item in processing_modes:
+            mode = str(item.get("mode") or "").strip()
+            if not mode:
+                continue
+            output = mode_outputs.get(mode)
+            artifacts = output.get("artifacts") if isinstance(output, dict) else []
+            quality_score = _safe_float(item.get("quality_score"))
+            metrics[mode] = {
+                "mode": mode,
+                "document_count": _safe_int(item.get("document_count")),
+                "chunk_count": _safe_int(item.get("chunk_count")),
+                "entity_count": _safe_int(item.get("entity_count")),
+                "relation_count": _safe_int(item.get("relation_count")),
+                "artifact_count": len(artifacts) if isinstance(artifacts, list) else 0,
+                "quality_score": quality_score,
+            }
+        return metrics
+
+    @staticmethod
+    def _build_global_metrics(
+        state: dict[str, Any],
+        mode_metrics: dict[str, Any],
+    ) -> dict[str, Any]:
+        last_result = state.get("last_result") or {}
+        if not isinstance(last_result, dict):
+            last_result = {}
+        index_result = last_result.get("index") or {}
+        memify_result = last_result.get("memify") or {}
+        if not isinstance(index_result, dict):
+            index_result = {}
+        if not isinstance(memify_result, dict):
+            memify_result = {}
+
+        fast_metrics = mode_metrics.get("fast") if isinstance(mode_metrics.get("fast"), dict) else {}
+        nlp_metrics = mode_metrics.get("nlp") if isinstance(mode_metrics.get("nlp"), dict) else {}
+        agentic_metrics = (
+            mode_metrics.get("agentic")
+            if isinstance(mode_metrics.get("agentic"), dict)
+            else {}
+        )
+
+        document_count = max(
+            _safe_int(index_result.get("document_count")),
+            _safe_int(memify_result.get("document_count")),
+            _safe_int(fast_metrics.get("document_count")),
+        )
+        chunk_count = max(
+            _safe_int(index_result.get("chunk_count")),
+            _safe_int(fast_metrics.get("chunk_count")),
+        )
+        sentence_count = max(
+            _safe_int(index_result.get("sentence_count")),
+            _safe_int(memify_result.get("sentence_count")),
+        )
+        entity_count = max(
+            _safe_int(memify_result.get("node_count")),
+            _safe_int(nlp_metrics.get("entity_count")),
+            _safe_int(agentic_metrics.get("entity_count")),
+        )
+        relation_count = max(
+            _safe_int(memify_result.get("relation_count")),
+            _safe_int(nlp_metrics.get("relation_count")),
+            _safe_int(agentic_metrics.get("relation_count")),
+        )
+
+        return {
+            "document_count": document_count,
+            "chunk_count": chunk_count,
+            "sentence_count": sentence_count,
+            "entity_count": entity_count,
+            "relation_count": relation_count,
         }
 
     def _build_processing_modes(self, state: dict[str, Any]) -> list[dict[str, Any]]:
@@ -705,13 +786,17 @@ class ProjectKnowledgeSyncManager:
         hydrated = dict(state)
         processing_modes = self._build_processing_modes(hydrated)
         output_resolution = self._build_output_resolution(processing_modes)
+        mode_outputs = self._build_mode_outputs(hydrated)
+        mode_metrics = self._build_mode_metrics(processing_modes, mode_outputs)
         hydrated["processing_modes"] = processing_modes
         hydrated["active_output_resolution"] = output_resolution
         hydrated["processing_scheduler"] = self._build_processing_scheduler(
             processing_modes,
             output_resolution,
         )
-        hydrated["mode_outputs"] = self._build_mode_outputs(hydrated)
+        hydrated["mode_outputs"] = mode_outputs
+        hydrated["mode_metrics"] = mode_metrics
+        hydrated["global_metrics"] = self._build_global_metrics(hydrated, mode_metrics)
         return hydrated
 
     def check_needs_reindex(

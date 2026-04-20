@@ -86,6 +86,24 @@ export interface ProjectKnowledgeModeOutputPayload {
   artifacts: ProjectKnowledgeModeArtifactPayload[];
 }
 
+export interface ProjectKnowledgeModeMetricsPayload {
+  mode: ProjectKnowledgeProcessingMode;
+  document_count?: number;
+  chunk_count?: number;
+  entity_count?: number;
+  relation_count?: number;
+  artifact_count?: number;
+  quality_score?: number | null;
+}
+
+export interface ProjectKnowledgeGlobalMetricsPayload {
+  document_count?: number;
+  chunk_count?: number;
+  sentence_count?: number;
+  entity_count?: number;
+  relation_count?: number;
+}
+
 export interface ProjectKnowledgeSyncState {
   project_id: string;
   task_type?: string;
@@ -130,6 +148,8 @@ export interface ProjectKnowledgeSyncState {
   active_output_resolution?: ProjectKnowledgeOutputResolutionPayload;
   processing_scheduler?: ProjectKnowledgeProcessingSchedulerPayload;
   mode_outputs?: Partial<Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeOutputPayload>>;
+  mode_metrics?: Partial<Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeMetricsPayload>>;
+  global_metrics?: ProjectKnowledgeGlobalMetricsPayload;
 }
 
 export interface ProjectKnowledgeSyncRunRequest {
