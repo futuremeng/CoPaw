@@ -33,6 +33,9 @@ except ImportError:  # pragma: no cover - compatibility fallback
     GeminiChatFormatter = None
     GeminiChatModel = None
 
+from .utils.message_request_normalizer import (
+    normalize_messages_for_model_request,
+)
 from .utils.tool_message_utils import _sanitize_tool_messages
 from ..exceptions import ProviderError, ModelFormatterError
 from ..providers import ProviderManager
