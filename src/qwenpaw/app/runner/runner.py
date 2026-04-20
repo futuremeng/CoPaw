@@ -1473,6 +1473,10 @@ class AgentRunner(Runner):
 
             if _is_transient_upstream_error(e):
                 status = _extract_status_code(e)
+                if status is None:
+                    status = _extract_status_code(converted)
+                if status is None:
+                    status = _extract_status_code_from_message(converted)
                 status_text = str(status) if status is not None else "unknown"
                 detail_text = (
                     f"\n(Details:  {debug_dump_path})"
