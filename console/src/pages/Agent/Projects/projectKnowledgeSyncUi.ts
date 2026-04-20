@@ -1,6 +1,54 @@
 import type { ProjectKnowledgeSyncState } from "../../../api/types";
+import type { TFunction } from "i18next";
 
-type Translate = (key: string, options?: Record<string, unknown>) => string;
+export type ProjectKnowledgeProcessingMode = "fast" | "nlp" | "agentic";
+
+type Translate = TFunction;
+
+export function getProjectKnowledgeModeLevel(
+  mode: ProjectKnowledgeProcessingMode,
+): "L1" | "L2" | "L3" {
+  if (mode === "fast") {
+    return "L1";
+  }
+  if (mode === "nlp") {
+    return "L2";
+  }
+  return "L3";
+}
+
+export function getProjectKnowledgeModeLabel(
+  mode: ProjectKnowledgeProcessingMode,
+  t: Translate,
+): string {
+  if (mode === "fast") {
+    return t("projects.knowledge.processing.fast", "极速模式");
+  }
+  if (mode === "nlp") {
+    return t("projects.knowledge.processing.nlp", "NLP 模式");
+  }
+  return t("projects.knowledge.processing.agentic", "多智能体模式");
+}
+
+export function getProjectKnowledgeModeTitle(
+  mode: ProjectKnowledgeProcessingMode,
+  t: Translate,
+): string {
+  return `${getProjectKnowledgeModeLevel(mode)} · ${getProjectKnowledgeModeLabel(mode, t)}`;
+}
+
+export function getProjectKnowledgeModeRouteHint(
+  mode: ProjectKnowledgeProcessingMode,
+  t: Translate,
+): string {
+  if (mode === "fast") {
+    return t("projects.knowledge.processing.fastHint", "极速索引与预览，优先保障可用性。");
+  }
+  if (mode === "nlp") {
+    return t("projects.knowledge.processing.nlpHint", "实体关系抽取与图谱构建，作为中阶结构化产物层。");
+  }
+  return t("projects.knowledge.processing.agenticHint", "多智能体协作与质量环迭代，提供最高质量产物。");
+}
 
 function formatSyncTime(raw: string | null | undefined): string {
   if (!raw) {

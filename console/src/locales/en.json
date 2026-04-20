@@ -2009,7 +2009,35 @@
       "roundLabel": "Round",
       "qualityLoopHypotheses": "Issues",
       "qualityLoopNextPlan": "Next plan",
-      "agentGate": "agent gate: {{status}}"
+      "agentGate": "agent gate: {{status}}",
+      "processingHint": "Three knowledge processing lanes run in parallel, and the consumer side automatically picks the best available layer.",
+      "processing": {
+        "none": "None",
+        "fast": "Fast Mode",
+        "nlp": "NLP Mode",
+        "agentic": "Agentic Mode",
+        "fastHint": "Fast indexing and preview, optimized for immediate availability.",
+        "nlpHint": "Entity/relation extraction and graph construction as the structured middle layer.",
+        "agenticHint": "Multi-agent collaboration with quality-loop iterations for the highest-quality outputs."
+      },
+      "outputsHint": "View knowledge outputs by mode. The system automatically falls back when higher layers are unavailable.",
+      "sourcesRoleHint": "This tab focuses on source inventory and coverage only, without processing or output-layer details.",
+      "processingRoleHint": "This tab focuses on the three processing lanes, scheduler state, and run readiness only.",
+      "outputsRoleHint": "This tab focuses on active consumption layer and artifacts, without duplicating scheduler details.",
+      "sourcesInventoryHint": "Confirm that project sources are complete, indexed, and covering the expected document inventory.",
+      "outputs": {
+        "artifactCount": "Artifacts",
+        "activeLayer": "Active Layer",
+        "fallbackChain": "Fallback Chain",
+        "fallbackReason": "Fallback Reason",
+        "skippedLayers": "Skipped Higher-layer Reasons",
+        "fallbackUnknown": "Unknown state",
+        "fallbackFailed": "Processing failed",
+        "fallbackQueued": "Still queued",
+        "fallbackRunning": "Still running",
+        "fallbackUnavailable": "Outputs are not ready",
+        "fallbackNotSelected": "Not selected as active layer"
+      }
     },
     "stage": {
       "source": "Source",

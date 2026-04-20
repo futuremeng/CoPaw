@@ -1940,7 +1940,35 @@
       "roundLabel": "ラウンド",
       "qualityLoopHypotheses": "課題仮説",
       "qualityLoopNextPlan": "次の計画",
-      "agentGate": "agent gate: {{status}}"
+      "agentGate": "agent gate: {{status}}",
+      "processingHint": "3 つの知識処理レーンが並行で進み、利用側は利用可能な最適レイヤーを自動選択します。",
+      "processing": {
+        "none": "なし",
+        "fast": "高速モード",
+        "nlp": "NLP モード",
+        "agentic": "マルチエージェントモード",
+        "fastHint": "高速インデックスとプレビューで、まず利用可能性を確保します。",
+        "nlpHint": "エンティティ・関係抽出とグラフ構築を担う中間の構造化レイヤーです。",
+        "agenticHint": "マルチエージェント協調と品質ループ反復により、最高品質の出力を提供します。"
+      },
+      "outputsHint": "モード別に知識出力を確認します。上位レイヤーが使えない場合は自動でフォールバックします。",
+      "sourcesRoleHint": "このタブは知識ソース一覧とカバレッジのみを表示し、処理レイヤーや出力レイヤーの詳細は表示しません。",
+      "processingRoleHint": "このタブは 3 つの処理レーン、スケジューラ状態、実行可否のみを表示します。",
+      "outputsRoleHint": "このタブは現在の利用レイヤーと成果物に集中し、スケジューラ詳細は重複表示しません。",
+      "sourcesInventoryHint": "プロジェクトの知識ソースが揃っているか、索引済みか、期待する文書在庫をどこまでカバーしているかを確認します。",
+      "outputs": {
+        "artifactCount": "成果物数",
+        "activeLayer": "現在の適用レイヤー",
+        "fallbackChain": "フォールバックチェーン",
+        "fallbackReason": "フォールバック理由",
+        "skippedLayers": "上位レイヤーをスキップした理由",
+        "fallbackUnknown": "状態不明",
+        "fallbackFailed": "処理失敗",
+        "fallbackQueued": "キュー待機中",
+        "fallbackRunning": "実行中",
+        "fallbackUnavailable": "出力未準備",
+        "fallbackNotSelected": "アクティブレイヤーに未選択"
+      }
     },
     "stage": {
       "source": "ソース",

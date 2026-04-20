@@ -97,7 +97,14 @@ export interface ProjectKnowledgeOutputResolution {
   activeMode: ProjectKnowledgeProcessingMode;
   availableModes: ProjectKnowledgeProcessingMode[];
   fallbackChain: ProjectKnowledgeProcessingMode[];
+  reasonCode?: string;
   reason: string;
+  skippedModes?: Array<{
+    mode: ProjectKnowledgeProcessingMode;
+    status: ProjectKnowledgeModeState["status"];
+    reasonCode: string;
+    reason: string;
+  }>;
 }
 
 export interface ProjectKnowledgeProcessingScheduler {
@@ -549,12 +556,24 @@ function parseBackendOutputResolution(
   const activeMode = processingModes.some((item) => item.mode === payload.active_mode)
     ? payload.active_mode
     : processingModes[0]?.mode || "fast";
+  const skippedModes = Array.isArray(payload.skipped_modes)
+    ? payload.skipped_modes
+      .filter((item) => isProcessingMode(item?.mode))
+      .map((item) => ({
+        mode: item.mode,
+        status: normalizeModeStatus(item.status),
+        reasonCode: String(item.reason_code || "").trim() || "UNKNOWN",
+        reason: String(item.reason || "").trim(),
+      }))
+    : [];
 
   return {
     activeMode,
     availableModes,
     fallbackChain,
+    reasonCode: String(payload.reason_code || "").trim() || "UNKNOWN",
     reason: String(payload.reason || "").trim(),
+    skippedModes,
   };
 }
 
@@ -1626,7 +1645,9 @@ export function useProjectKnowledgeState(
         activeMode: "agentic",
         availableModes,
         fallbackChain,
+        reasonCode: "HIGHEST_LAYER_READY",
         reason: "多智能体产物可用，当前使用最高质量输出。",
+        skippedModes: [],
       };
     }
     if (availableModes.includes("nlp")) {
@@ -1634,14 +1655,38 @@ export function useProjectKnowledgeState(
         activeMode: "nlp",
         availableModes,
         fallbackChain,
+        reasonCode: "FALLBACK_TO_NLP",
         reason: "多智能体产物缺失，已自动降级到 NLP 产物。",
+        skippedModes: [
+          {
+            mode: "agentic",
+            status: processingModes.find((item) => item.mode === "agentic")?.status || "idle",
+            reasonCode: "OUTPUT_NOT_READY",
+            reason: "多智能体产物未就绪。",
+          },
+        ],
       };
     }
     return {
       activeMode: "fast",
       availableModes,
       fallbackChain,
+      reasonCode: "FALLBACK_TO_FAST",
       reason: "高阶产物尚不可用，当前回退到极速预览。",
+      skippedModes: [
+        {
+          mode: "agentic",
+          status: processingModes.find((item) => item.mode === "agentic")?.status || "idle",
+          reasonCode: "OUTPUT_NOT_READY",
+          reason: "多智能体产物未就绪。",
+        },
+        {
+          mode: "nlp",
+          status: processingModes.find((item) => item.mode === "nlp")?.status || "idle",
+          reasonCode: "OUTPUT_NOT_READY",
+          reason: "NLP 产物未就绪。",
+        },
+      ],
     };
   }, [processingModes, syncState]);
 

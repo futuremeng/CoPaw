@@ -186,6 +186,8 @@ def test_project_sync_manager_records_workflow_run_metadata(
     assert state["processing_modes"][2]["available"] is True
     assert state["active_output_resolution"]["active_mode"] == "agentic"
     assert state["active_output_resolution"]["fallback_chain"] == ["agentic", "nlp", "fast"]
+    assert state["active_output_resolution"]["reason_code"] == "HIGHEST_LAYER_READY"
+    assert state["active_output_resolution"]["skipped_modes"] == []
     assert state["processing_scheduler"]["strategy"] == "parallel"
     assert state["processing_scheduler"]["consumption_mode"] == "agentic"
     assert state["processing_scheduler"]["ready_modes"] == ["agentic", "fast"]

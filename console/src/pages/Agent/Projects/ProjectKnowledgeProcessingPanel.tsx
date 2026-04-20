@@ -5,6 +5,11 @@ import type {
   ProjectKnowledgeModeState,
   ProjectKnowledgeState,
 } from "./useProjectKnowledgeState";
+import {
+  getProjectKnowledgeModeLabel,
+  getProjectKnowledgeModeLevel,
+  getProjectKnowledgeModeRouteHint,
+} from "./projectKnowledgeSyncUi";
 
 interface ProjectKnowledgeProcessingPanelProps {
   knowledgeState: ProjectKnowledgeState;
@@ -32,19 +37,6 @@ function launchDisabledReason(
     return t("projects.knowledge.processing.needMemify", "需要先在 Settings 中启用实体抽取");
   }
   return "";
-}
-
-function modeLabel(
-  mode: ProjectKnowledgeModeState["mode"],
-  t: ReturnType<typeof useTranslation>["t"],
-): string {
-  if (mode === "fast") {
-    return t("projects.knowledge.processing.fast", "极速模式");
-  }
-  if (mode === "nlp") {
-    return t("projects.knowledge.processing.nlp", "NLP 模式");
-  }
-  return t("projects.knowledge.processing.agentic", "多智能体模式");
 }
 
 function statusColor(status: ProjectKnowledgeModeState["status"]): string {
@@ -92,7 +84,7 @@ export default function ProjectKnowledgeProcessingPanel(
 
   const modeName = (mode: string | null | undefined): string => {
     if (mode === "fast" || mode === "nlp" || mode === "agentic") {
-      return modeLabel(mode, t);
+      return getProjectKnowledgeModeLabel(mode, t);
     }
     return t("projects.knowledge.processing.none", "暂无");
   };
@@ -106,8 +98,8 @@ export default function ProjectKnowledgeProcessingPanel(
           </Typography.Title>
           <Typography.Text type="secondary">
             {t(
-              "projects.knowledge.processingHint",
-              "三条知识加工轨道并行推进，由 CoPaw 统一调度资源；当前消费端会自动选择最佳可用产物。",
+              "projects.knowledge.processingRoleHint",
+              "这里只展示三层加工路线、调度状态与可运行性，不展示来源清单与最终产物详情。",
             )}
           </Typography.Text>
         </div>
@@ -127,7 +119,7 @@ export default function ProjectKnowledgeProcessingPanel(
         message={t("projects.knowledge.processing.schedulerTitle", "统一调度策略")}
         description={t(
           "projects.knowledge.processing.schedulerDescription",
-          "极速模式优先保障预览，NLP 在中等预算下补齐结构化产物，多智能体模式在空闲资源下持续推进；消费端固定按 多智能体 -> NLP -> 极速 自动降级。",
+          "三层路线并行推进：L1 极速保障可用预览，L2 NLP 提供结构化图谱，L3 多智能体持续做高质量加工；消费端固定按 L3 -> L2 -> L1 自动降级。",
         )}
       />
 
@@ -157,7 +149,7 @@ export default function ProjectKnowledgeProcessingPanel(
         description={scheduler.reason}
       />
 
-      <div className={styles.projectKnowledgeModeGrid}>
+      <div className={styles.projectKnowledgeProcessingStack}>
         {props.knowledgeState.processingModes.map((mode) => (
           (() => {
             const disabledReason = launchDisabledReason(mode, props.knowledgeState, t);
@@ -165,12 +157,13 @@ export default function ProjectKnowledgeProcessingPanel(
             return (
           <div
             key={mode.mode}
-            className={`${styles.projectKnowledgeModeCard} ${activeMode === mode.mode ? styles.projectKnowledgeModeCardActive : ""}`}
+            className={`${styles.projectKnowledgeModeCard} ${styles.projectKnowledgeProcessingLane} ${activeMode === mode.mode ? styles.projectKnowledgeModeCardActive : ""}`}
           >
             <div className={styles.projectKnowledgeModeHeader}>
               <div>
-                <Typography.Text strong>{modeLabel(mode.mode, t)}</Typography.Text>
+                <Typography.Text strong>{getProjectKnowledgeModeLabel(mode.mode, t)}</Typography.Text>
                 <div className={styles.projectKnowledgeModeMeta}>
+                  <Tag>{getProjectKnowledgeModeLevel(mode.mode)}</Tag>
                   <Tag color={statusColor(mode.status)}>{statusLabel(mode.status, t)}</Tag>
                   {activeMode === mode.mode ? (
                     <Tag color="blue">{t("projects.knowledge.outputs.currentSource", "当前消费来源")}</Tag>
@@ -183,6 +176,8 @@ export default function ProjectKnowledgeProcessingPanel(
                   : t("projects.knowledge.processing.unavailable", "未就绪")}
               </Typography.Text>
             </div>
+
+            <Typography.Text type="secondary">{getProjectKnowledgeModeRouteHint(mode.mode, t)}</Typography.Text>
 
             <Typography.Paragraph type="secondary" className={styles.projectKnowledgeModeSummary}>
               {mode.summary}
@@ -226,25 +221,6 @@ export default function ProjectKnowledgeProcessingPanel(
             {disabledReason ? (
               <Typography.Text type="secondary">{disabledReason}</Typography.Text>
             ) : null}
-
-            <div className={styles.projectKnowledgeModeMetrics}>
-              <div className={styles.projectKnowledgeModeMetric}>
-                <Typography.Text type="secondary">{t("projects.knowledge.signalDocuments", "Documents")}</Typography.Text>
-                <Typography.Text strong>{mode.documentCount}</Typography.Text>
-              </div>
-              <div className={styles.projectKnowledgeModeMetric}>
-                <Typography.Text type="secondary">{t("projects.knowledge.signalChunks", "Chunks")}</Typography.Text>
-                <Typography.Text strong>{mode.chunkCount}</Typography.Text>
-              </div>
-              <div className={styles.projectKnowledgeModeMetric}>
-                <Typography.Text type="secondary">{t("projects.knowledge.entities", "Entities")}</Typography.Text>
-                <Typography.Text strong>{mode.entityCount}</Typography.Text>
-              </div>
-              <div className={styles.projectKnowledgeModeMetric}>
-                <Typography.Text type="secondary">{t("projects.knowledge.signalRelations", "Relations")}</Typography.Text>
-                <Typography.Text strong>{mode.relationCount}</Typography.Text>
-              </div>
-            </div>
           </div>
             );
           })()

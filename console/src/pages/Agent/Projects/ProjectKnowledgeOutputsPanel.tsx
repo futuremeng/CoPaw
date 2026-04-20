@@ -4,25 +4,39 @@ import { useTranslation } from "react-i18next";
 import styles from "./index.module.less";
 import type {
   ProjectKnowledgeProcessingMode,
+  ProjectKnowledgeModeState,
   ProjectKnowledgeState,
 } from "./useProjectKnowledgeState";
+import {
+  getProjectKnowledgeModeLabel,
+  getProjectKnowledgeModeTitle,
+} from "./projectKnowledgeSyncUi";
 
 interface ProjectKnowledgeOutputsPanelProps {
   knowledgeState: ProjectKnowledgeState;
   onRunSuggestedQuery?: (query: string) => void;
 }
 
-function modeLabel(
-  mode: ProjectKnowledgeProcessingMode,
+function modeUnavailableReason(
+  mode: ProjectKnowledgeModeState | undefined,
   t: ReturnType<typeof useTranslation>["t"],
 ): string {
-  if (mode === "fast") {
-    return t("projects.knowledge.processing.fast", "极速模式");
+  if (!mode) {
+    return t("projects.knowledge.outputs.fallbackUnknown", "状态未知");
   }
-  if (mode === "nlp") {
-    return t("projects.knowledge.processing.nlp", "NLP 模式");
+  if (mode.status === "failed") {
+    return t("projects.knowledge.outputs.fallbackFailed", "运行失败");
   }
-  return t("projects.knowledge.processing.agentic", "多智能体模式");
+  if (mode.status === "queued") {
+    return t("projects.knowledge.outputs.fallbackQueued", "仍在排队");
+  }
+  if (mode.status === "running") {
+    return t("projects.knowledge.outputs.fallbackRunning", "仍在运行");
+  }
+  if (!mode.available) {
+    return t("projects.knowledge.outputs.fallbackUnavailable", "产物未就绪");
+  }
+  return t("projects.knowledge.outputs.fallbackNotSelected", "未被选为当前消费层");
 }
 
 export default function ProjectKnowledgeOutputsPanel(
@@ -70,10 +84,46 @@ export default function ProjectKnowledgeOutputsPanel(
     () => props.knowledgeState.modeOutputs[selectedMode],
     [props.knowledgeState.modeOutputs, selectedMode],
   );
+  const artifactCount = (selectedModeOutput?.artifacts || []).length;
 
   const canShowGraphRecords = selectedMode === "nlp" || selectedMode === "agentic";
   const modeRefreshPending = canShowGraphRecords
     && selectedMode !== props.knowledgeState.activeOutputResolution.activeMode;
+
+  const fallbackTrail = useMemo(
+    () => props.knowledgeState.activeOutputResolution.fallbackChain
+      .map((mode) => getProjectKnowledgeModeLabel(mode, t))
+      .join(" -> "),
+    [props.knowledgeState.activeOutputResolution.fallbackChain, t],
+  );
+
+  const fallbackSkippedSummary = useMemo(() => {
+    const skippedModes = props.knowledgeState.activeOutputResolution.skippedModes || [];
+    if (skippedModes.length > 0) {
+      return skippedModes
+        .map((item) => `${getProjectKnowledgeModeLabel(item.mode, t)}: ${item.reason || modeUnavailableReason(undefined, t)}`)
+        .join("；");
+    }
+
+    const chain = props.knowledgeState.activeOutputResolution.fallbackChain;
+    const activeIndex = chain.indexOf(props.knowledgeState.activeOutputResolution.activeMode);
+    if (activeIndex <= 0) {
+      return "";
+    }
+    return chain
+      .slice(0, activeIndex)
+      .map((mode) => {
+        const modeState = props.knowledgeState.processingModes.find((item) => item.mode === mode);
+        return `${getProjectKnowledgeModeLabel(mode, t)}: ${modeUnavailableReason(modeState, t)}`;
+      })
+      .join("；");
+  }, [
+    props.knowledgeState.activeOutputResolution.activeMode,
+    props.knowledgeState.activeOutputResolution.fallbackChain,
+    props.knowledgeState.activeOutputResolution.skippedModes,
+    props.knowledgeState.processingModes,
+    t,
+  ]);
 
   const filteredRecords = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLowerCase();
@@ -103,8 +153,8 @@ export default function ProjectKnowledgeOutputsPanel(
           </Typography.Title>
           <Typography.Text type="secondary">
             {t(
-              "projects.knowledge.outputsHint",
-              "按处理模式查看知识产物。当前图谱交互会优先读取最佳可用产物，并在高阶产物缺失时自动降级。",
+              "projects.knowledge.outputsRoleHint",
+              "这里聚焦最终消费层与产物清单，不重复展示加工调度细节。",
             )}
           </Typography.Text>
         </div>
@@ -115,7 +165,7 @@ export default function ProjectKnowledgeOutputsPanel(
             classNames={{ popup: { root: styles.projectKnowledgeSelectDropdown } }}
             style={{ width: 180 }}
             options={props.knowledgeState.processingModes.map((item) => ({
-              label: modeLabel(item.mode, t),
+              label: getProjectKnowledgeModeTitle(item.mode, t),
               value: item.mode,
             }))}
             onChange={(value) => setSelectedMode(value as ProjectKnowledgeProcessingMode)}
@@ -147,51 +197,39 @@ export default function ProjectKnowledgeOutputsPanel(
         />
       ) : null}
 
-      <Alert
-        type="info"
-        showIcon
-        message={t("projects.knowledge.outputs.currentMode", "当前读取策略")}
-        description={`${modeLabel(props.knowledgeState.activeOutputResolution.activeMode, t)} · ${props.knowledgeState.activeOutputResolution.reason}`}
-      />
-
-      <div className={styles.projectKnowledgeOutputsCompareGrid}>
-        {props.knowledgeState.processingModes.map((mode) => (
-          <div
-            key={mode.mode}
-            className={`${styles.projectKnowledgeOutputCard} ${mode.mode === props.knowledgeState.activeOutputResolution.activeMode ? styles.projectKnowledgeOutputCardActive : ""}`}
-          >
-            <div className={styles.projectKnowledgeCardHeader}>
-              <Typography.Text strong>{modeLabel(mode.mode, t)}</Typography.Text>
-              <Tag color={mode.available ? "success" : "default"}>
-                {mode.available ? t("projects.knowledge.processing.available", "可用") : t("projects.knowledge.processing.unavailable", "未就绪")}
-              </Tag>
-            </div>
-            <div className={styles.projectKnowledgeHeaderStats}>
-              <div className={styles.projectKnowledgeHeaderStat}>
-                <Typography.Text type="secondary">{t("projects.knowledge.signalDocuments", "Documents")}</Typography.Text>
-                <Typography.Text strong>{mode.documentCount}</Typography.Text>
-              </div>
-              <div className={styles.projectKnowledgeHeaderStat}>
-                <Typography.Text type="secondary">{t("projects.knowledge.signalChunks", "Chunks")}</Typography.Text>
-                <Typography.Text strong>{mode.chunkCount}</Typography.Text>
-              </div>
-              <div className={styles.projectKnowledgeHeaderStat}>
-                <Typography.Text type="secondary">{t("projects.knowledge.entities", "Entities")}</Typography.Text>
-                <Typography.Text strong>{mode.entityCount}</Typography.Text>
-              </div>
-              <div className={styles.projectKnowledgeHeaderStat}>
-                <Typography.Text type="secondary">{t("projects.knowledge.signalRelations", "Relations")}</Typography.Text>
-                <Typography.Text strong>{mode.relationCount}</Typography.Text>
-              </div>
-            </div>
+      <div className={styles.projectKnowledgeOutputsHero}>
+        <div className={styles.projectKnowledgeOutputsHeroMain}>
+          <Typography.Text type="secondary">{t("projects.knowledge.outputs.currentMode", "当前读取策略")}</Typography.Text>
+          <Typography.Title level={5} className={styles.projectKnowledgeSectionTitle}>
+            {getProjectKnowledgeModeTitle(props.knowledgeState.activeOutputResolution.activeMode, t)}
+          </Typography.Title>
+          <Typography.Text type="secondary">{props.knowledgeState.activeOutputResolution.reason}</Typography.Text>
+        </div>
+        <div className={styles.projectKnowledgeOutputsHeroAside}>
+          <div className={styles.projectKnowledgeHeaderStat}>
+            <Typography.Text type="secondary">{t("projects.knowledge.outputs.fallbackChain", "自动降级链")}</Typography.Text>
+            <Typography.Text strong>{fallbackTrail}</Typography.Text>
           </div>
-        ))}
+          <div className={styles.projectKnowledgeHeaderStat}>
+            <Typography.Text type="secondary">{t("projects.knowledge.outputs.artifactCount", "Artifacts")}</Typography.Text>
+            <Typography.Text strong>{artifactCount}</Typography.Text>
+          </div>
+        </div>
       </div>
+
+      {fallbackSkippedSummary ? (
+        <Alert
+          type="info"
+          showIcon
+          message={t("projects.knowledge.outputs.skippedLayers", "上层未命中原因")}
+          description={fallbackSkippedSummary}
+        />
+      ) : null}
 
       <div className={styles.projectKnowledgeSignalGrid}>
         <div className={styles.projectKnowledgeSignalCard}>
           <Typography.Text type="secondary">{t("projects.knowledge.outputs.selectedMode", "Selected Mode")}</Typography.Text>
-          <Typography.Text strong>{modeLabel(selectedModeState.mode, t)}</Typography.Text>
+          <Typography.Text strong>{getProjectKnowledgeModeLabel(selectedModeState.mode, t)}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
           <Typography.Text type="secondary">{t("projects.knowledge.signalDocuments", "Documents")}</Typography.Text>

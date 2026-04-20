@@ -51,7 +51,14 @@ export interface ProjectKnowledgeOutputResolutionPayload {
   active_mode: ProjectKnowledgeProcessingMode;
   available_modes: ProjectKnowledgeProcessingMode[];
   fallback_chain: ProjectKnowledgeProcessingMode[];
+  reason_code?: string;
   reason: string;
+  skipped_modes?: Array<{
+    mode: ProjectKnowledgeProcessingMode;
+    status?: "idle" | "queued" | "running" | "ready" | "failed";
+    reason_code?: string;
+    reason?: string;
+  }>;
 }
 
 export interface ProjectKnowledgeProcessingSchedulerPayload {

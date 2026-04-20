@@ -1,4 +1,4 @@
-import { Badge, Button, Empty, Spin, Tag, Typography } from "antd";
+import { Badge, Button, Empty, Progress, Spin, Tag, Typography } from "antd";
 import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import styles from "./index.module.less";
@@ -66,6 +66,7 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
   const selectedSemanticLoading = selectedSource
     ? Boolean(knowledgeState.semanticLoadingBySourceId[selectedSource.id])
     : false;
+  const indexedPercent = Math.round(knowledgeState.quantMetrics.indexedRatio * 100);
 
   return (
     <div className={styles.projectKnowledgeWorkbench}>
@@ -75,9 +76,10 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
             {t("projects.knowledgeDock.tabSources", "Sources")}
           </Typography.Title>
           <Typography.Text type="secondary">
-            {knowledgeState.sourceRegistered
-              ? t("projects.knowledge.sourceRegistered")
-              : t("projects.knowledge.sourceNotRegistered")}
+            {t(
+              "projects.knowledge.sourcesRoleHint",
+              "这里只展示知识来源与覆盖情况，不展示加工层与输出层状态。",
+            )}
           </Typography.Text>
         </div>
         <div className={styles.projectKnowledgeTabActions}>
@@ -92,15 +94,47 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
         </div>
       </div>
 
+      <div className={styles.projectKnowledgeSourcesHero}>
+        <div className={styles.projectKnowledgeSourcesHeroMain}>
+          <div className={styles.projectKnowledgeSourcesHeroHeader}>
+            <Typography.Text strong>{t("projects.knowledge.sourceList", "Source List")}</Typography.Text>
+            <Tag color={knowledgeState.sourceRegistered ? "success" : "default"}>
+              {knowledgeState.sourceRegistered
+                ? t("projects.knowledge.sourceRegistered", "项目知识源已注册")
+                : t("projects.knowledge.sourceNotRegistered", "项目知识源未注册")}
+            </Tag>
+          </div>
+          <Typography.Paragraph className={styles.projectKnowledgeModeSummary}>
+            {t(
+              "projects.knowledge.sourcesInventoryHint",
+              "先确认项目知识源是否齐全、是否已索引，以及每个来源当前覆盖到多少文档内容。",
+            )}
+          </Typography.Paragraph>
+          <div className={styles.projectKnowledgeSourcesCoverageRow}>
+            <div className={styles.projectKnowledgeMetaRowCompact}>
+              <Typography.Text type="secondary">{t("projects.knowledge.signalIndexedCoverage", "Indexed Coverage")}</Typography.Text>
+              <Typography.Text strong>{`${indexedPercent}%`}</Typography.Text>
+            </div>
+            <Progress percent={indexedPercent} size="small" showInfo={false} />
+          </div>
+        </div>
+        <div className={styles.projectKnowledgeSourcesHeroStats}>
+          <div className={styles.projectKnowledgeHeaderStat}>
+            <Typography.Text type="secondary">{t("projects.knowledge.totalSources", "Sources")}</Typography.Text>
+            <Typography.Text strong>{knowledgeState.quantMetrics.totalSources}</Typography.Text>
+          </div>
+          <div className={styles.projectKnowledgeHeaderStat}>
+            <Typography.Text type="secondary">{t("projects.knowledge.indexedSources", "Indexed")}</Typography.Text>
+            <Typography.Text strong>{knowledgeState.quantMetrics.indexedSources}</Typography.Text>
+          </div>
+          <div className={styles.projectKnowledgeHeaderStat}>
+            <Typography.Text type="secondary">{t("projects.knowledge.signalDocuments", "Documents")}</Typography.Text>
+            <Typography.Text strong>{knowledgeState.quantMetrics.documentCount}</Typography.Text>
+          </div>
+        </div>
+      </div>
+
       <div className={styles.projectKnowledgeSignalGrid}>
-        <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("projects.knowledge.totalSources", "Sources")}</Typography.Text>
-          <Typography.Text strong>{knowledgeState.quantMetrics.totalSources}</Typography.Text>
-        </div>
-        <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("projects.knowledge.indexedSources", "Indexed")}</Typography.Text>
-          <Typography.Text strong>{knowledgeState.quantMetrics.indexedSources}</Typography.Text>
-        </div>
         <div className={styles.projectKnowledgeSignalCard}>
           <Typography.Text type="secondary">{t("projects.knowledge.signalDocuments")}</Typography.Text>
           <Typography.Text strong>{knowledgeState.quantMetrics.documentCount}</Typography.Text>
@@ -114,16 +148,8 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
           <Typography.Text strong>{knowledgeState.quantMetrics.sentenceCount}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("projects.knowledge.signalEntityMentions", "Entity Mentions")}</Typography.Text>
-          <Typography.Text strong>{knowledgeState.quantMetrics.entityMentionsCount}</Typography.Text>
-        </div>
-        <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("projects.knowledge.signalAvgEntitiesPerSentence", "Entities/Sentence")}</Typography.Text>
-          <Typography.Text strong>{knowledgeState.quantMetrics.avgEntitiesPerSentence.toFixed(2)}</Typography.Text>
-        </div>
-        <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("projects.knowledge.signalEntityCharRatio", "Entity Char Ratio")}</Typography.Text>
-          <Typography.Text strong>{`${Math.round(knowledgeState.quantMetrics.avgEntityCharRatio * 100)}%`}</Typography.Text>
+          <Typography.Text type="secondary">{t("projects.knowledge.signalIndexedCoverage", "Indexed Coverage")}</Typography.Text>
+          <Typography.Text strong>{`${indexedPercent}%`}</Typography.Text>
         </div>
       </div>
 

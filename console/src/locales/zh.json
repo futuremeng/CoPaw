@@ -1959,7 +1959,35 @@
       "roundLabel": "轮次",
       "qualityLoopHypotheses": "问题假设",
       "qualityLoopNextPlan": "下一步计划",
-      "agentGate": "智能体门控：{{status}}"
+      "agentGate": "智能体门控：{{status}}",
+      "processingHint": "三条知识加工轨道并行推进，消费端会按可用性自动选择最优层级。",
+      "processing": {
+        "none": "暂无",
+        "fast": "极速模式",
+        "nlp": "NLP 模式",
+        "agentic": "多智能体模式",
+        "fastHint": "极速索引与预览，优先保障可用性。",
+        "nlpHint": "实体关系抽取与图谱构建，作为中阶结构化产物层。",
+        "agenticHint": "多智能体协作与质量环迭代，提供最高质量产物。"
+      },
+      "outputsHint": "按模式查看知识产物，系统在高阶产物缺失时会自动降级。",
+      "sourcesRoleHint": "这里只展示知识来源与覆盖情况，不展示加工层与输出层状态。",
+      "processingRoleHint": "这里只展示三层加工路线、调度状态与可运行性，不展示来源清单与最终产物详情。",
+      "outputsRoleHint": "这里聚焦最终消费层与产物清单，不重复展示加工调度细节。",
+      "sourcesInventoryHint": "先确认项目知识源是否齐全、是否已索引，以及每个来源当前覆盖到多少文档内容。",
+      "outputs": {
+        "artifactCount": "产物数",
+        "activeLayer": "当前命中层",
+        "fallbackChain": "自动降级链",
+        "fallbackReason": "回退说明",
+        "skippedLayers": "上层未命中原因",
+        "fallbackUnknown": "状态未知",
+        "fallbackFailed": "运行失败",
+        "fallbackQueued": "仍在排队",
+        "fallbackRunning": "仍在运行",
+        "fallbackUnavailable": "产物未就绪",
+        "fallbackNotSelected": "未被选为当前消费层"
+      }
     },
     "stage": {
       "source": "源文件",

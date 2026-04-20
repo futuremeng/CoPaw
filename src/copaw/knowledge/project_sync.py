@@ -202,7 +202,9 @@ class ProjectKnowledgeSyncManager:
                 "active_mode": "fast",
                 "available_modes": [],
                 "fallback_chain": KNOWLEDGE_PROCESSING_FALLBACK_CHAIN[:],
+                "reason_code": "FALLBACK_TO_FAST",
                 "reason": "High-order outputs are not ready yet; using fast preview.",
+                "skipped_modes": [],
             },
             "processing_scheduler": {
                 "strategy": "parallel",
@@ -554,24 +556,84 @@ class ProjectKnowledgeSyncManager:
         return modes
 
     def _build_output_resolution(self, processing_modes: list[dict[str, Any]]) -> dict[str, Any]:
+        status_by_mode = {
+            str(item.get("mode") or "").strip(): str(item.get("status") or "idle").strip()
+            for item in processing_modes
+        }
+        available_by_mode = {
+            str(item.get("mode") or "").strip(): bool(item.get("available"))
+            for item in processing_modes
+        }
+
         available_modes = [
             str(item.get("mode") or "").strip()
             for item in processing_modes
             if bool(item.get("available"))
         ]
+
+        def build_skip_reason(mode: str) -> dict[str, str]:
+            status = status_by_mode.get(mode, "idle")
+            available = available_by_mode.get(mode, False)
+            if status == "failed":
+                return {
+                    "mode": mode,
+                    "status": status,
+                    "reason_code": "MODE_FAILED",
+                    "reason": "Processing failed for this mode.",
+                }
+            if status == "running":
+                return {
+                    "mode": mode,
+                    "status": status,
+                    "reason_code": "MODE_RUNNING",
+                    "reason": "Processing is still running for this mode.",
+                }
+            if status == "queued":
+                return {
+                    "mode": mode,
+                    "status": status,
+                    "reason_code": "MODE_QUEUED",
+                    "reason": "Processing is still queued for this mode.",
+                }
+            if not available:
+                return {
+                    "mode": mode,
+                    "status": status,
+                    "reason_code": "OUTPUT_NOT_READY",
+                    "reason": "Outputs are not ready for this mode.",
+                }
+            return {
+                "mode": mode,
+                "status": status,
+                "reason_code": "MODE_NOT_SELECTED",
+                "reason": "Mode is available but not selected as the active output layer.",
+            }
+
         active_mode = "fast"
+        reason_code = "FALLBACK_TO_FAST"
         reason = "High-order outputs are not ready yet; using fast preview."
         if "agentic" in available_modes:
             active_mode = "agentic"
+            reason_code = "HIGHEST_LAYER_READY"
             reason = "Multi-agent outputs are available and selected as the highest-quality layer."
         elif "nlp" in available_modes:
             active_mode = "nlp"
+            reason_code = "FALLBACK_TO_NLP"
             reason = "Multi-agent outputs are unavailable, automatically downgraded to NLP outputs."
+
+        skipped_modes: list[dict[str, str]] = []
+        for mode in KNOWLEDGE_PROCESSING_FALLBACK_CHAIN:
+            if mode == active_mode:
+                break
+            skipped_modes.append(build_skip_reason(mode))
+
         return {
             "active_mode": active_mode,
             "available_modes": available_modes,
             "fallback_chain": KNOWLEDGE_PROCESSING_FALLBACK_CHAIN[:],
+            "reason_code": reason_code,
             "reason": reason,
+            "skipped_modes": skipped_modes,
         }
 
     def _build_processing_scheduler(
@@ -1256,6 +1318,7 @@ class ProjectKnowledgeSyncManager:
                     source=source,
                     trigger=str(state.get("last_trigger") or "auto"),
                     force=False,
+                    processing_mode=str(state.get("latest_requested_mode") or processing_mode or "agentic"),
                 )
 
             if should_start:
@@ -1264,6 +1327,7 @@ class ProjectKnowledgeSyncManager:
                     config=config,
                     running_config=running_config,
                     source=source,
+                    processing_mode=str(state.get("latest_requested_mode") or processing_mode or "agentic"),
                 )
             return
 
