@@ -1077,139 +1077,135 @@ class BuiltinToolConfig(BaseModel):
     )
 
 
+def _builtin_tool(
+    name: str,
+    description: str,
+    icon: str,
+    *,
+    enabled: bool = True,
+    display_to_user: bool = True,
+    async_execution: bool = False,
+) -> BuiltinToolConfig:
+    return BuiltinToolConfig(
+        name=name,
+        enabled=enabled,
+        description=description,
+        display_to_user=display_to_user,
+        async_execution=async_execution,
+        icon=icon,
+    )
+
+
 def _default_builtin_tools() -> Dict[str, BuiltinToolConfig]:
     """Return a fresh copy of the canonical built-in tool definitions."""
     return {
-        "execute_shell_command": BuiltinToolConfig(
-            name="execute_shell_command",
-            enabled=True,
-            description="Execute shell commands",
-            icon="💻",
+        "execute_shell_command": _builtin_tool(
+            "execute_shell_command",
+            "Execute shell commands",
+            "💻",
         ),
-        "read_file": BuiltinToolConfig(
-            name="read_file",
-            enabled=True,
-            description="Read file contents",
-            icon="📄",
+        "read_file": _builtin_tool(
+            "read_file",
+            "Read file contents",
+            "📄",
         ),
-        "write_file": BuiltinToolConfig(
-            name="write_file",
-            enabled=True,
-            description="Write content to file",
-            icon="✍️",
+        "write_file": _builtin_tool(
+            "write_file",
+            "Write content to file",
+            "✍️",
         ),
-        "edit_file": BuiltinToolConfig(
-            name="edit_file",
-            enabled=True,
-            description="Edit file using find-and-replace",
-            icon="🖊️",
+        "edit_file": _builtin_tool(
+            "edit_file",
+            "Edit file using find-and-replace",
+            "🖊️",
         ),
-        "grep_search": BuiltinToolConfig(
-            name="grep_search",
-            enabled=True,
-            description="Search file contents by pattern",
-            icon="🔍",
+        "grep_search": _builtin_tool(
+            "grep_search",
+            "Search file contents by pattern",
+            "🔍",
         ),
-        "glob_search": BuiltinToolConfig(
-            name="glob_search",
-            enabled=True,
-            description="Find files matching a glob pattern",
-            icon="📁",
+        "glob_search": _builtin_tool(
+            "glob_search",
+            "Find files matching a glob pattern",
+            "📁",
         ),
-        "browser_use": BuiltinToolConfig(
-            name="browser_use",
-            enabled=True,
-            description="Browser automation and web interaction",
-            icon="🌐",
+        "browser_use": _builtin_tool(
+            "browser_use",
+            "Browser automation and web interaction",
+            "🌐",
         ),
-        "desktop_screenshot": BuiltinToolConfig(
-            name="desktop_screenshot",
-            enabled=True,
-            description="Capture desktop screenshots",
-            icon="📸",
+        "desktop_screenshot": _builtin_tool(
+            "desktop_screenshot",
+            "Capture desktop screenshots",
+            "📸",
         ),
-        "view_image": BuiltinToolConfig(
-            name="view_image",
-            enabled=True,
-            description="Load an image into LLM context for visual analysis",
+        "view_image": _builtin_tool(
+            "view_image",
+            "Load an image into LLM context for visual analysis",
+            "🖼️",
             display_to_user=False,
-            icon="🖼️",
         ),
-        "view_video": BuiltinToolConfig(
-            name="view_video",
-            enabled=True,
-            description="Load a video into LLM context for visual analysis",
+        "view_video": _builtin_tool(
+            "view_video",
+            "Load a video into LLM context for visual analysis",
+            "🎥",
             display_to_user=False,
-            icon="🎥",
         ),
-        "send_file_to_user": BuiltinToolConfig(
-            name="send_file_to_user",
-            enabled=True,
-            description="Send files to user",
-            icon="📤",
+        "send_file_to_user": _builtin_tool(
+            "send_file_to_user",
+            "Send files to user",
+            "📤",
         ),
-        "get_current_time": BuiltinToolConfig(
-            name="get_current_time",
-            enabled=True,
-            description="Get current date and time",
-            icon="🕐",
+        "get_current_time": _builtin_tool(
+            "get_current_time",
+            "Get current date and time",
+            "🕐",
         ),
-        "set_user_timezone": BuiltinToolConfig(
-            name="set_user_timezone",
-            enabled=True,
-            description="Set user timezone",
-            icon="🌍",
+        "set_user_timezone": _builtin_tool(
+            "set_user_timezone",
+            "Set user timezone",
+            "🌍",
         ),
-        "get_token_usage": BuiltinToolConfig(
-            name="get_token_usage",
-            enabled=True,
-            description="Get llm token usage",
-            icon="📊",
+        "get_token_usage": _builtin_tool(
+            "get_token_usage",
+            "Get llm token usage",
+            "📊",
         ),
-        "delegate_external_agent": BuiltinToolConfig(
-            name="delegate_external_agent",
+        "delegate_external_agent": _builtin_tool(
+            "delegate_external_agent",
+            "Delegate work to an external ACP agent runner",
+            "📡",
             enabled=False,
-            description="Delegate work to an external ACP agent runner",
-            icon="📡",
         ),
-        "list_agents": BuiltinToolConfig(
-            name="list_agents",
-            enabled=True,
-            description="List configured agents from the local API",
-            icon="🤖",
+        "list_agents": _builtin_tool(
+            "list_agents",
+            "List configured agents from the local API",
+            "🤖",
         ),
-        "chat_with_agent": BuiltinToolConfig(
-            name="chat_with_agent",
-            enabled=True,
-            description=(
-                "Send a message to another configured agent and wait for "
-                "the response"
-            ),
-            icon="💬",
+        "chat_with_agent": _builtin_tool(
+            "chat_with_agent",
+            "Send a message to another configured agent and wait for the response",
+            "💬",
         ),
-        "skill_market_search": BuiltinToolConfig(
-            name="skill_market_search",
-            enabled=True,
-            description="Search enabled skill markets for installable skills",
-            icon="🧩",
+        "skill_market_search": _builtin_tool(
+            "skill_market_search",
+            "Search enabled skill markets for installable skills",
+            "🧩",
         ),
-        "skill_market_install": BuiltinToolConfig(
-            name="skill_market_install",
-            enabled=True,
-            description="Install a skill from enabled markets after explicit confirmation",
-            icon="📥",
+        "skill_market_install": _builtin_tool(
+            "skill_market_install",
+            "Install a skill from enabled markets after explicit confirmation",
+            "📥",
         ),
-        "submit_to_agent": BuiltinToolConfig(
-            name="submit_to_agent",
-            enabled=True,
-            description="Submit a background task to another configured agent",
-            icon="📨",
+        "submit_to_agent": _builtin_tool(
+            "submit_to_agent",
+            "Submit a background task to another configured agent",
+            "📨",
         ),
-        "check_agent_task": BuiltinToolConfig(
-            name="check_agent_task",
-            enabled=True,
-            description="Check the status of a background agent task",
-            icon="⏳",
+        "check_agent_task": _builtin_tool(
+            "check_agent_task",
+            "Check the status of a background agent task",
+            "⏳",
         ),
     }
 
@@ -1827,7 +1823,7 @@ def load_agent_config(agent_id: str) -> AgentProfileConfig:
     except Exception:
         pass
 
-    return AgentProfileConfig(**data)
+    return AgentProfileConfig.model_validate(data)
 
 
 def save_agent_config(
