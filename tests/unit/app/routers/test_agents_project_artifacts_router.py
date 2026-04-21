@@ -1,14 +1,16 @@
 # -*- coding: utf-8 -*-
 
+import json
 from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from copaw.app.project_realtime_events import collect_project_realtime_changes
-from copaw.app.routers import agents as agents_router_module
-from copaw.app.routers.agents import (
+from copaw.config.config import Config
+from qwenpaw.app.project_realtime_events import collect_project_realtime_changes
+from qwenpaw.app.routers import agents as agents_router_module
+from qwenpaw.app.routers.agents import (
     CreateProjectRequest,
     _create_project,
     _build_project_file_summary,
@@ -210,6 +212,92 @@ def test_upload_project_file_triggers_auto_knowledge_sync(
     )
     assert latest_event_id >= 1
     assert "original/brief.txt" in changed_paths
+
+
+def test_upload_project_file_auto_sync_writes_project_chunks(
+    project_artifact_router_client: tuple[TestClient, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+):
+    client, workspace_dir, project_id = project_artifact_router_client
+    config = Config()
+    config.knowledge.enabled = True
+    config.knowledge.memify_enabled = True
+
+    monkeypatch.setattr(agents_router_module, "load_config", lambda: config)
+    monkeypatch.setattr(agents_router_module, "save_config", lambda _config: None)
+    monkeypatch.setattr(agents_router_module, "DEFAULT_PROJECT_SYNC_DEBOUNCE_SECONDS", 0)
+    monkeypatch.setattr(agents_router_module, "DEFAULT_PROJECT_SYNC_COOLDOWN_SECONDS", 0)
+
+    def run_worker_inline(self, **kwargs):
+        self._run_sync_loop(**kwargs)
+
+    monkeypatch.setattr(
+        agents_router_module.ProjectKnowledgeSyncManager,
+        "_start_worker",
+        run_worker_inline,
+    )
+    monkeypatch.setattr(
+        "qwenpaw.app.knowledge_workflow.KnowledgeWorkflowOrchestrator.run",
+        lambda self, **kwargs: {
+            "run_id": "run-project-upload-auto-chunks",
+            "run_status": "succeeded",
+            "template_id": "builtin-knowledge-processing-v1",
+            "processing_mode": kwargs.get("processing_mode") or "agentic",
+            "processing_fingerprint": self.knowledge_manager.compute_processing_fingerprint(
+                kwargs["config"],
+                kwargs.get("running_config"),
+            ),
+            "latest_job_id": "",
+            "index": self.knowledge_manager.index_source(
+                kwargs["source"],
+                kwargs["config"],
+                kwargs.get("running_config"),
+            ),
+            "memify": {},
+            "quality_loop": {},
+            "artifacts": [],
+        },
+    )
+
+    response = client.post(
+        f"/agents/default/projects/{project_id}/files/upload",
+        data={"target_dir": "original"},
+        files={"file": ("brief.txt", b"hello knowledge", "text/plain")},
+    )
+
+    assert response.status_code == 200
+
+    chunk_path = (
+        workspace_dir
+        / "projects"
+        / project_id
+        / ".knowledge"
+        / "chunks"
+        / "original"
+        / "brief.txt.0.txt"
+    )
+    index_path = (
+        workspace_dir
+        / "projects"
+        / project_id
+        / ".knowledge"
+        / "sources"
+        / f"project-{project_id}-workspace"
+        / "index.json"
+    )
+
+    assert chunk_path.exists()
+    assert chunk_path.read_text(encoding="utf-8") == "hello knowledge"
+
+    payload = json.loads(index_path.read_text(encoding="utf-8"))
+    chunk_paths = [item.get("chunk_path") for item in payload.get("chunks") or []]
+    assert "chunks/original/brief.txt.0.txt" in chunk_paths
+    uploaded_chunk = next(
+        item
+        for item in payload.get("chunks") or []
+        if item.get("chunk_path") == "chunks/original/brief.txt.0.txt"
+    )
+    assert "text" not in uploaded_chunk
 
 
 def test_list_project_files_endpoint_offloads_to_thread(

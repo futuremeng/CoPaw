@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 
 import asyncio
+import json
 from pathlib import Path
 
 import pytest
 
-from copaw.app import project_knowledge_watcher as watcher_module
 from copaw.config.config import Config
+from qwenpaw.app import project_knowledge_watcher as watcher_module
 
 
 @pytest.mark.asyncio
@@ -37,7 +38,7 @@ async def test_project_knowledge_watcher_triggers_bootstrap_sync(
         lambda _agent_id: type("AgentCfg", (), {"running": config.agents.running})(),
     )
     monkeypatch.setattr(
-        "copaw.config.utils.save_config",
+        "qwenpaw.config.utils.save_config",
         lambda _config: saved.__setitem__("called", saved["called"] + 1),
     )
 
@@ -69,6 +70,105 @@ async def test_project_knowledge_watcher_triggers_bootstrap_sync(
 
 
 @pytest.mark.asyncio
+async def test_project_knowledge_watcher_bootstrap_writes_project_chunks_automatically(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    project_dir = tmp_path / "projects" / "project-auto-chunks"
+    project_dir.mkdir(parents=True, exist_ok=True)
+    (project_dir / "PROJECT.md").write_text(
+        "---\nid: project-auto-chunks\nname: Project Auto Chunks\nproject_auto_knowledge_sink: true\n---\n",
+        encoding="utf-8",
+    )
+    brief_path = project_dir / "original" / "brief.md"
+    brief_path.parent.mkdir(parents=True, exist_ok=True)
+    brief_path.write_text("第一句。第二句!", encoding="utf-8")
+
+    config = Config()
+    config.knowledge.enabled = True
+    config.knowledge.memify_enabled = True
+
+    monkeypatch.setattr(watcher_module, "load_config", lambda: config)
+    monkeypatch.setattr(
+        watcher_module,
+        "load_agent_config",
+        lambda _agent_id: type("AgentCfg", (), {"running": config.agents.running})(),
+    )
+    monkeypatch.setattr("qwenpaw.config.utils.save_config", lambda _config: None)
+
+    def run_worker_inline(self, **kwargs):
+        self._run_sync_loop(**kwargs)
+
+    monkeypatch.setattr(
+        watcher_module.ProjectKnowledgeSyncManager,
+        "_start_worker",
+        run_worker_inline,
+    )
+    monkeypatch.setattr(
+        "qwenpaw.app.knowledge_workflow.KnowledgeWorkflowOrchestrator.run",
+        lambda self, **kwargs: {
+            "run_id": "run-project-auto-chunks",
+            "run_status": "succeeded",
+            "template_id": "builtin-knowledge-processing-v1",
+            "processing_mode": kwargs.get("processing_mode") or "agentic",
+            "processing_fingerprint": self.knowledge_manager.compute_processing_fingerprint(
+                kwargs["config"],
+                kwargs.get("running_config"),
+            ),
+            "latest_job_id": "",
+            "index": self.knowledge_manager.index_source(
+                kwargs["source"],
+                kwargs["config"],
+                kwargs.get("running_config"),
+            ),
+            "memify": {},
+            "quality_loop": {},
+            "artifacts": [],
+        },
+    )
+
+    watcher = watcher_module.ProjectKnowledgeWatcher(
+        agent_id="default",
+        workspace_dir=tmp_path,
+        poll_interval=0.01,
+    )
+
+    current = watcher._collect_snapshots()
+    await watcher._handle_snapshot_changes(current)
+
+    chunk_path = (
+        tmp_path
+        / "projects"
+        / "project-auto-chunks"
+        / ".knowledge"
+        / "chunks"
+        / "original"
+        / "brief.md.0.txt"
+    )
+    index_path = (
+        tmp_path
+        / "projects"
+        / "project-auto-chunks"
+        / ".knowledge"
+        / "sources"
+        / "project-project-auto-chunks-workspace"
+        / "index.json"
+    )
+
+    assert chunk_path.exists()
+    assert chunk_path.read_text(encoding="utf-8") == "第一句。\n第二句!"
+    payload = json.loads(index_path.read_text(encoding="utf-8"))
+    chunk_paths = [item.get("chunk_path") for item in payload.get("chunks") or []]
+    assert "chunks/original/brief.md.0.txt" in chunk_paths
+    brief_chunk = next(
+        item
+        for item in payload.get("chunks") or []
+        if item.get("chunk_path") == "chunks/original/brief.md.0.txt"
+    )
+    assert "text" not in brief_chunk
+
+
+@pytest.mark.asyncio
 async def test_project_knowledge_watcher_triggers_on_file_change(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -92,7 +192,7 @@ async def test_project_knowledge_watcher_triggers_on_file_change(
         "load_agent_config",
         lambda _agent_id: type("AgentCfg", (), {"running": config.agents.running})(),
     )
-    monkeypatch.setattr("copaw.config.utils.save_config", lambda _config: None)
+    monkeypatch.setattr("qwenpaw.config.utils.save_config", lambda _config: None)
 
     calls: list[dict] = []
 
@@ -230,7 +330,7 @@ async def test_project_knowledge_watcher_triggers_on_processing_config_change(
         "load_agent_config",
         lambda _agent_id: type("AgentCfg", (), {"running": config.agents.running})(),
     )
-    monkeypatch.setattr("copaw.config.utils.save_config", lambda _config: None)
+    monkeypatch.setattr("qwenpaw.config.utils.save_config", lambda _config: None)
 
     calls: list[dict] = []
 
