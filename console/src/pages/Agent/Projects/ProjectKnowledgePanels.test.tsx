@@ -123,10 +123,82 @@ function buildKnowledgeState(): ProjectKnowledgeState {
         qualityScore: 0.86,
       },
     ],
-    activeOutputResolution: {
+    processingCompareModes: [
+      {
+        mode: "nlp",
+        status: "ready",
+        available: true,
+        progress: null,
+        stage: "NLP graph artifacts ready",
+        summary: "中等复杂度知识产物，可作为多智能体结果的回退层。",
+        lastUpdatedAt: "2026-04-11T23:30:00+00:00",
+        runId: "",
+        jobId: "job-nlp",
+        documentCount: 3,
+        chunkCount: 7,
+        entityCount: 2,
+        relationCount: 12,
+        qualityScore: null,
+      },
+      {
+        mode: "agentic",
+        status: "queued",
+        available: false,
+        progress: 45,
+        stage: "Waiting for multi-agent workflow scheduling",
+        summary: "长耗时深加工轨道，产物缺失时将自动降级。",
+        lastUpdatedAt: "2026-04-11T23:30:00+00:00",
+        runId: "run-knowledge-1",
+        jobId: "job-agentic",
+        documentCount: 3,
+        chunkCount: 7,
+        entityCount: 2,
+        relationCount: 12,
+        qualityScore: 0.86,
+      },
+    ],
+    processingCompareDelta: {
+      entityDelta: 0,
+      relationDelta: 0,
+    },
+    outputModes: [
+      {
+        mode: "agentic",
+        status: "queued",
+        available: false,
+        progress: 45,
+        stage: "Waiting for multi-agent workflow scheduling",
+        summary: "长耗时深加工轨道，产物缺失时将自动降级。",
+        lastUpdatedAt: "2026-04-11T23:30:00+00:00",
+        runId: "run-knowledge-1",
+        jobId: "job-agentic",
+        documentCount: 3,
+        chunkCount: 7,
+        entityCount: 2,
+        relationCount: 12,
+        qualityScore: 0.86,
+      },
+      {
+        mode: "nlp",
+        status: "ready",
+        available: true,
+        progress: null,
+        stage: "NLP graph artifacts ready",
+        summary: "中等复杂度知识产物，可作为多智能体结果的回退层。",
+        lastUpdatedAt: "2026-04-11T23:30:00+00:00",
+        runId: "",
+        jobId: "job-nlp",
+        documentCount: 3,
+        chunkCount: 7,
+        entityCount: 2,
+        relationCount: 12,
+        qualityScore: null,
+      },
+    ],
+    outputResolution: {
       activeMode: "nlp",
-      availableModes: ["fast", "nlp"],
-      fallbackChain: ["agentic", "nlp", "fast"],
+      availableModes: ["nlp"],
+      fallbackChain: ["agentic", "nlp"],
       reason: "多智能体产物缺失，已自动降级到 NLP 产物。",
     },
     processingScheduler: {
@@ -341,21 +413,33 @@ describe("project knowledge supporting panels", () => {
   });
 
   it("renders source inventory", () => {
-    render(<ProjectKnowledgeSourcesPanel knowledgeState={buildKnowledgeState()} />);
+    const { container } = render(<ProjectKnowledgeSourcesPanel knowledgeState={buildKnowledgeState()} />);
 
-    expect(screen.getAllByText("Project Source").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("/tmp/workspace").length).toBeGreaterThan(0);
+    const signalLabels = Array.from(
+      container.querySelectorAll("._projectKnowledgeSignalCard_209b2b .ant-typography-secondary"),
+    ).map((element) => element.textContent);
+
+    expect(signalLabels).toEqual([
+      "projects.knowledge.signalDocuments",
+      "projects.knowledge.signalChunks",
+      "Sentences",
+      "Tokens",
+      "Characters",
+    ]);
   });
 
   it("renders processing mode cards", () => {
     render(<ProjectKnowledgeProcessingPanel knowledgeState={buildKnowledgeState()} />);
 
     expect(screen.getByText("Processing")).not.toBeNull();
-    expect(screen.getAllByText("极速模式").length).toBeGreaterThan(0);
+    expect(screen.queryByText("极速模式")).toBeNull();
     expect(screen.getAllByText("NLP 模式").length).toBeGreaterThan(0);
     expect(screen.getAllByText("多智能体模式").length).toBeGreaterThan(0);
-    expect(screen.getByText("当前调度状态")).not.toBeNull();
-    expect(screen.getByText("当前无活跃执行，下一条待推进轨道为 agentic。")).not.toBeNull();
+    expect(screen.getByText("L2 实体数")).not.toBeNull();
+    expect(screen.getByText("L3 关系数")).not.toBeNull();
+    expect(screen.getByText("实体关系抽取")).not.toBeNull();
+    expect(screen.getByText("多智能体增强")).not.toBeNull();
+    expect(screen.getByText("L2 提供实体与关系的结构化基础，L3 在此基础上继续做多智能体增强与质量提升。")).not.toBeNull();
   });
 
   it("renders output records through the new outputs panel", async () => {

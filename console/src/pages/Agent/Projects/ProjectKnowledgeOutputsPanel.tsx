@@ -1,5 +1,5 @@
 import { Alert, Button, Empty, Input, Select, Tag, Typography } from "antd";
-import { useEffect, useMemo, useState } from "react";
+import { startTransition, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import styles from "./index.module.less";
 import type {
@@ -16,6 +16,11 @@ interface ProjectKnowledgeOutputsPanelProps {
   knowledgeState: ProjectKnowledgeState;
   onRunSuggestedQuery?: (query: string) => void;
 }
+
+const INITIAL_VISIBLE_ARTIFACTS = 40;
+const INITIAL_VISIBLE_RELATIONS = 120;
+const LOAD_MORE_ARTIFACTS_STEP = 40;
+const LOAD_MORE_RELATIONS_STEP = 120;
 
 function modeUnavailableReason(
   mode: ProjectKnowledgeModeState | undefined,
@@ -43,15 +48,31 @@ export default function ProjectKnowledgeOutputsPanel(
   props: ProjectKnowledgeOutputsPanelProps,
 ) {
   const { t } = useTranslation();
+  const outputModes = props.knowledgeState.outputModes;
+  const initialSelectedMode = outputModes.find(
+    (item) => item.mode === props.knowledgeState.outputResolution.activeMode,
+  )?.mode || outputModes[0]?.mode || props.knowledgeState.outputResolution.activeMode;
   const [keyword, setKeyword] = useState("");
   const [predicateFilter, setPredicateFilter] = useState("");
+  const [visibleArtifactCount, setVisibleArtifactCount] = useState(INITIAL_VISIBLE_ARTIFACTS);
+  const [visibleRelationCount, setVisibleRelationCount] = useState(INITIAL_VISIBLE_RELATIONS);
   const [selectedMode, setSelectedMode] = useState<ProjectKnowledgeProcessingMode>(
-    props.knowledgeState.activeOutputResolution.activeMode,
+    initialSelectedMode,
   );
+  const deferredKeyword = useDeferredValue(keyword);
+  const deferredPredicateFilter = useDeferredValue(predicateFilter);
 
   useEffect(() => {
-    setSelectedMode(props.knowledgeState.activeOutputResolution.activeMode);
-  }, [props.knowledgeState.activeOutputResolution.activeMode]);
+    setSelectedMode(initialSelectedMode);
+  }, [initialSelectedMode]);
+
+  useEffect(() => {
+    setVisibleArtifactCount(INITIAL_VISIBLE_ARTIFACTS);
+  }, [selectedMode]);
+
+  useEffect(() => {
+    setVisibleRelationCount(INITIAL_VISIBLE_RELATIONS);
+  }, [selectedMode, deferredKeyword, deferredPredicateFilter]);
 
   useEffect(() => {
     if (selectedMode !== "nlp" && selectedMode !== "agentic") {
@@ -75,9 +96,9 @@ export default function ProjectKnowledgeOutputsPanel(
   );
 
   const selectedModeState = useMemo(
-    () => props.knowledgeState.processingModes.find((item) => item.mode === selectedMode)
-      || props.knowledgeState.processingModes[0],
-    [props.knowledgeState.processingModes, selectedMode],
+    () => outputModes.find((item) => item.mode === selectedMode)
+      || outputModes[0],
+    [outputModes, selectedMode],
   );
 
   const selectedModeOutput = useMemo(
@@ -88,25 +109,25 @@ export default function ProjectKnowledgeOutputsPanel(
 
   const canShowGraphRecords = selectedMode === "nlp" || selectedMode === "agentic";
   const modeRefreshPending = canShowGraphRecords
-    && selectedMode !== props.knowledgeState.activeOutputResolution.activeMode;
+    && selectedMode !== props.knowledgeState.outputResolution.activeMode;
 
   const fallbackTrail = useMemo(
-    () => props.knowledgeState.activeOutputResolution.fallbackChain
+    () => props.knowledgeState.outputResolution.fallbackChain
       .map((mode) => getProjectKnowledgeModeLabel(mode, t))
       .join(" -> "),
-    [props.knowledgeState.activeOutputResolution.fallbackChain, t],
+    [props.knowledgeState.outputResolution.fallbackChain, t],
   );
 
   const fallbackSkippedSummary = useMemo(() => {
-    const skippedModes = props.knowledgeState.activeOutputResolution.skippedModes || [];
+    const skippedModes = props.knowledgeState.outputResolution.skippedModes || [];
     if (skippedModes.length > 0) {
       return skippedModes
         .map((item) => `${getProjectKnowledgeModeLabel(item.mode, t)}: ${item.reason || modeUnavailableReason(undefined, t)}`)
         .join("；");
     }
 
-    const chain = props.knowledgeState.activeOutputResolution.fallbackChain;
-    const activeIndex = chain.indexOf(props.knowledgeState.activeOutputResolution.activeMode);
+    const chain = props.knowledgeState.outputResolution.fallbackChain;
+    const activeIndex = chain.indexOf(props.knowledgeState.outputResolution.activeMode);
     if (activeIndex <= 0) {
       return "";
     }
@@ -118,17 +139,17 @@ export default function ProjectKnowledgeOutputsPanel(
       })
       .join("；");
   }, [
-    props.knowledgeState.activeOutputResolution.activeMode,
-    props.knowledgeState.activeOutputResolution.fallbackChain,
-    props.knowledgeState.activeOutputResolution.skippedModes,
+    props.knowledgeState.outputResolution.activeMode,
+    props.knowledgeState.outputResolution.fallbackChain,
+    props.knowledgeState.outputResolution.skippedModes,
     props.knowledgeState.processingModes,
     t,
   ]);
 
   const filteredRecords = useMemo(() => {
-    const normalizedKeyword = keyword.trim().toLowerCase();
+    const normalizedKeyword = deferredKeyword.trim().toLowerCase();
     return props.knowledgeState.relationRecords.filter((item) => {
-      if (predicateFilter && item.predicate !== predicateFilter) {
+      if (deferredPredicateFilter && item.predicate !== deferredPredicateFilter) {
         return false;
       }
       if (!normalizedKeyword) {
@@ -142,7 +163,17 @@ export default function ProjectKnowledgeOutputsPanel(
         item.document_path,
       ].some((part) => part.toLowerCase().includes(normalizedKeyword));
     });
-  }, [keyword, predicateFilter, props.knowledgeState.relationRecords]);
+  }, [deferredKeyword, deferredPredicateFilter, props.knowledgeState.relationRecords]);
+
+  const visibleArtifacts = useMemo(
+    () => (selectedModeOutput?.artifacts || []).slice(0, visibleArtifactCount),
+    [selectedModeOutput?.artifacts, visibleArtifactCount],
+  );
+
+  const visibleRelations = useMemo(
+    () => filteredRecords.slice(0, visibleRelationCount),
+    [filteredRecords, visibleRelationCount],
+  );
 
   return (
     <div className={styles.projectKnowledgeWorkbench}>
@@ -164,7 +195,7 @@ export default function ProjectKnowledgeOutputsPanel(
             value={selectedMode}
             classNames={{ popup: { root: styles.projectKnowledgeSelectDropdown } }}
             style={{ width: 180 }}
-            options={props.knowledgeState.processingModes.map((item) => ({
+            options={outputModes.map((item) => ({
               label: getProjectKnowledgeModeTitle(item.mode, t),
               value: item.mode,
             }))}
@@ -199,11 +230,13 @@ export default function ProjectKnowledgeOutputsPanel(
 
       <div className={styles.projectKnowledgeOutputsHero}>
         <div className={styles.projectKnowledgeOutputsHeroMain}>
-          <Typography.Text type="secondary">{t("projects.knowledge.outputs.currentMode", "当前读取策略")}</Typography.Text>
+          <Typography.Text type="secondary">{t("projects.knowledge.outputs.currentMode", "当前输出层关注")}</Typography.Text>
           <Typography.Title level={5} className={styles.projectKnowledgeSectionTitle}>
-            {getProjectKnowledgeModeTitle(props.knowledgeState.activeOutputResolution.activeMode, t)}
+            {selectedModeState
+              ? getProjectKnowledgeModeTitle(selectedModeState.mode, t)
+              : t("projects.knowledge.processing.none", "暂无")}
           </Typography.Title>
-          <Typography.Text type="secondary">{props.knowledgeState.activeOutputResolution.reason}</Typography.Text>
+          <Typography.Text type="secondary">{props.knowledgeState.outputResolution.reason}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeOutputsHeroAside}>
           <div className={styles.projectKnowledgeHeaderStat}>
@@ -256,7 +289,7 @@ export default function ProjectKnowledgeOutputsPanel(
       />
 
       <div className={styles.projectKnowledgeRelationList}>
-        {(selectedModeOutput?.artifacts || []).map((artifact) => (
+        {visibleArtifacts.map((artifact) => (
           <div key={`${artifact.kind}:${artifact.path}`} className={styles.projectKnowledgeRelationCard}>
             <div className={styles.projectKnowledgeCardHeader}>
               <Typography.Text strong>{artifact.label || artifact.kind}</Typography.Text>
@@ -268,6 +301,22 @@ export default function ProjectKnowledgeOutputsPanel(
           </div>
         ))}
       </div>
+      {artifactCount > visibleArtifacts.length ? (
+        <div className={styles.projectKnowledgeListFooter}>
+          <Typography.Text type="secondary">
+            {t("projects.knowledge.outputs.renderedArtifacts", "Showing {{shown}} / {{total}} artifacts", {
+              shown: visibleArtifacts.length,
+              total: artifactCount,
+            })}
+          </Typography.Text>
+          <Button
+            size="small"
+            onClick={() => setVisibleArtifactCount((prev) => prev + LOAD_MORE_ARTIFACTS_STEP)}
+          >
+            {t("projects.knowledge.outputs.loadMoreArtifacts", "Load more")}
+          </Button>
+        </div>
+      ) : null}
 
       {canShowGraphRecords ? (
         <Alert
@@ -279,23 +328,18 @@ export default function ProjectKnowledgeOutputsPanel(
             "下方关系列表暂时仍复用当前最佳可用图谱查询结果；artifact 视图已经按模式切分。",
           )}
         />
-      ) : (
-        <Alert
-          type="info"
-          showIcon
-          message={t("projects.knowledge.outputs.fastArtifactTitle", "极速模式以预览产物为主")}
-          description={t(
-            "projects.knowledge.outputs.fastArtifactDescription",
-            "极速模式主要提供索引与预览产物，不直接承载完整图谱关系结果。",
-          )}
-        />
-      )}
+      ) : null}
 
       {canShowGraphRecords ? (
       <div className={styles.projectKnowledgeControls}>
         <Input
           value={keyword}
-          onChange={(event) => setKeyword(event.target.value)}
+          onChange={(event) => {
+            const nextValue = event.target.value;
+            startTransition(() => {
+              setKeyword(nextValue);
+            });
+          }}
           placeholder={t("projects.knowledge.relationSearchPlaceholder", "Search entities, relations, or document paths")}
           allowClear
         />
@@ -306,7 +350,11 @@ export default function ProjectKnowledgeOutputsPanel(
           classNames={{ popup: { root: styles.projectKnowledgeSelectDropdown } }}
           placeholder={t("projects.knowledge.relationTypeFilter", "Filter by relation type")}
           options={predicateOptions.map((item) => ({ label: item, value: item }))}
-          onChange={(value) => setPredicateFilter(String(value || ""))}
+          onChange={(value) => {
+            startTransition(() => {
+              setPredicateFilter(String(value || ""));
+            });
+          }}
           style={{ width: 220 }}
         />
       </div>
@@ -315,13 +363,22 @@ export default function ProjectKnowledgeOutputsPanel(
       <div className={styles.projectKnowledgePanelBody}>
         {!canShowGraphRecords ? (
           <div className={styles.projectKnowledgeEmpty}>
-            <Empty description={t("projects.knowledge.outputs.fastOnlyEmpty", "This mode currently exposes artifact previews instead of graph relations.")} />
+            <Empty description={t("projects.knowledge.outputs.highOrderEmpty", "L2/L3 输出尚未就绪，暂时无法展示实体关系结果。")} />
           </div>
         ) : props.knowledgeState.graphLoading && !props.knowledgeState.graphResult ? (
           <div className={styles.projectKnowledgeEmpty}><Empty description={t("common.loading", "Loading")} /></div>
         ) : filteredRecords.length ? (
+          <>
+            <div className={styles.projectKnowledgeListFooter}>
+              <Typography.Text type="secondary">
+                {t("projects.knowledge.outputs.renderedRelations", "Showing {{shown}} / {{total}} relations", {
+                  shown: visibleRelations.length,
+                  total: filteredRecords.length,
+                })}
+              </Typography.Text>
+            </div>
           <div className={styles.projectKnowledgeRelationList}>
-            {filteredRecords.map((record, index) => (
+            {visibleRelations.map((record, index) => (
               <div key={`${record.subject}-${record.predicate}-${record.object}-${index}`} className={styles.projectKnowledgeRelationCard}>
                 <div className={styles.projectKnowledgeRelationMain}>
                   <Typography.Text strong>{record.subject}</Typography.Text>
@@ -335,6 +392,17 @@ export default function ProjectKnowledgeOutputsPanel(
               </div>
             ))}
           </div>
+          {filteredRecords.length > visibleRelations.length ? (
+            <div className={styles.projectKnowledgeListFooter}>
+              <Button
+                size="small"
+                onClick={() => setVisibleRelationCount((prev) => prev + LOAD_MORE_RELATIONS_STEP)}
+              >
+                {t("projects.knowledge.outputs.loadMoreRelations", "Load more")}
+              </Button>
+            </div>
+          ) : null}
+          </>
         ) : (
           <div className={styles.projectKnowledgeEmpty}>
             <Empty description={t("projects.knowledge.emptyResult", "No result")}>

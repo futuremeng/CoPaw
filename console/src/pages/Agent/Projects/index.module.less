@@ -1093,6 +1093,14 @@
   gap: 8px;
 }
 
+.projectKnowledgeListFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .projectKnowledgeDocumentCard,
 .projectKnowledgeRelationCard {
   border: 1px solid #edf2ff;
@@ -1158,6 +1166,42 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.projectKnowledgeProcessingCompareGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+
+  @media (max-width: 1100px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.projectKnowledgeProcessingCompareCard {
+  min-height: 0;
+}
+
+.projectKnowledgeProcessingArtifacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.projectKnowledgeProcessingCardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+}
+
+.projectKnowledgeProcessingCompareNote {
+  border: 1px solid #edf2ff;
+  border-radius: 10px;
+  background: #fafcff;
+  padding: 10px 12px;
 }
 
 .projectKnowledgeProcessingLane {

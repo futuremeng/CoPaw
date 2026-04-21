@@ -27,6 +27,8 @@ export interface ProjectKnowledgeHeaderSignals {
   documentCount: number;
   chunkCount: number;
   sentenceCount: number;
+  charCount?: number;
+  tokenCount?: number;
   sentenceWithEntitiesCount: number;
   entityMentionsCount: number;
   avgEntitiesPerSentence: number;
@@ -59,6 +61,8 @@ export interface ProjectKnowledgeMetrics {
   documentCount: number;
   chunkCount: number;
   sentenceCount: number;
+  charCount?: number;
+  tokenCount?: number;
   sentenceWithEntitiesCount: number;
   entityMentionsCount: number;
   avgEntitiesPerSentence: number;
@@ -121,6 +125,11 @@ export interface ProjectKnowledgeProcessingScheduler {
   reason: string;
 }
 
+export interface ProjectKnowledgeProcessingCompareDelta {
+  entityDelta: number;
+  relationDelta: number;
+}
+
 export interface ProjectKnowledgeModeArtifact {
   kind: string;
   label: string;
@@ -155,7 +164,10 @@ export interface ProjectKnowledgeState {
   latestQualityLoopJob?: QualityLoopJobStatus | null;
   memifyEnabled: boolean;
   processingModes: ProjectKnowledgeModeState[];
-  activeOutputResolution: ProjectKnowledgeOutputResolution;
+  processingCompareModes: ProjectKnowledgeModeState[];
+  processingCompareDelta: ProjectKnowledgeProcessingCompareDelta;
+  outputModes: ProjectKnowledgeModeState[];
+  outputResolution: ProjectKnowledgeOutputResolution;
   processingScheduler: ProjectKnowledgeProcessingScheduler;
   modeOutputs: Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeOutput>;
   quantMetrics: ProjectKnowledgeMetrics;
@@ -227,6 +239,7 @@ const PROJECT_TREND_STORAGE_PREFIX = "copaw.project.knowledge.trend.v1";
 const PROJECT_KNOWLEDGE_UI_PREFS_PREFIX = "copaw.project.knowledge.ui.v1";
 const DAY_MS = 24 * 60 * 60 * 1000;
 const PROJECT_GRAPH_QUERY_TOP_K = 200;
+const HIGH_ORDER_OUTPUT_MODES: ProjectKnowledgeProcessingMode[] = ["agentic", "nlp"];
 
 const ACTIVE_KNOWLEDGE_STATUSES = new Set([
   "pending",
@@ -408,7 +421,7 @@ function getSyncNodeCount(syncState: ProjectKnowledgeSyncState | null): number {
 
 function getSyncIndexCount(
   syncState: ProjectKnowledgeSyncState | null,
-  key: "document_count" | "chunk_count" | "sentence_count",
+  key: "document_count" | "chunk_count" | "sentence_count" | "char_count" | "token_count",
 ): number {
   const indexResult = syncState?.last_result?.index;
   if (!indexResult || typeof indexResult !== "object") {
@@ -582,23 +595,28 @@ function parseBackendOutputResolution(
   syncState: ProjectKnowledgeSyncState | null,
   processingModes: ProjectKnowledgeModeState[],
 ): ProjectKnowledgeOutputResolution | null {
-  const payload = syncState?.active_output_resolution as ProjectKnowledgeOutputResolutionPayload | undefined;
-  if (!payload || !isProcessingMode(payload.active_mode)) {
+  const payload = syncState?.output_resolution as ProjectKnowledgeOutputResolutionPayload | undefined;
+  if (!payload) {
+    return null;
+  }
+
+  const outputModes = processingModes.filter((item) => item.mode === "nlp" || item.mode === "agentic");
+  if (outputModes.length === 0 || (payload.active_mode !== "nlp" && payload.active_mode !== "agentic")) {
     return null;
   }
 
   const availableModes = Array.isArray(payload.available_modes)
-    ? payload.available_modes.filter(isProcessingMode)
+    ? payload.available_modes.filter((mode): mode is ProjectKnowledgeProcessingMode => mode === "nlp" || mode === "agentic")
     : [];
   const fallbackChain: ProjectKnowledgeProcessingMode[] = Array.isArray(payload.fallback_chain)
-    ? payload.fallback_chain.filter(isProcessingMode)
-    : ["agentic", "nlp", "fast"];
-  const activeMode = processingModes.some((item) => item.mode === payload.active_mode)
+    ? payload.fallback_chain.filter((mode): mode is ProjectKnowledgeProcessingMode => mode === "nlp" || mode === "agentic")
+    : HIGH_ORDER_OUTPUT_MODES;
+  const activeMode = outputModes.some((item) => item.mode === payload.active_mode)
     ? payload.active_mode
-    : processingModes[0]?.mode || "fast";
+    : outputModes[0]?.mode || "agentic";
   const skippedModes = Array.isArray(payload.skipped_modes)
     ? payload.skipped_modes
-      .filter((item) => isProcessingMode(item?.mode))
+      .filter((item) => item?.mode === "nlp" || item?.mode === "agentic")
       .map((item) => ({
         mode: item.mode,
         status: normalizeModeStatus(item.status),
@@ -620,9 +638,9 @@ function parseBackendOutputResolution(
 function parseBackendProcessingScheduler(
   syncState: ProjectKnowledgeSyncState | null,
   processingModes: ProjectKnowledgeModeState[],
-  activeOutputResolution: ProjectKnowledgeOutputResolution,
+  outputResolution: ProjectKnowledgeOutputResolution,
 ): ProjectKnowledgeProcessingScheduler | null {
-  const payload = syncState?.processing_scheduler as ProjectKnowledgeProcessingSchedulerPayload | undefined;
+  const payload = syncState?.output_scheduler as ProjectKnowledgeProcessingSchedulerPayload | undefined;
   if (!payload || payload.strategy !== "parallel") {
     return null;
   }
@@ -645,7 +663,7 @@ function parseBackendProcessingScheduler(
   const nextMode = isProcessingMode(payload.next_mode) ? payload.next_mode : null;
   const consumptionMode = processingModes.some((item) => item.mode === payload.consumption_mode)
     ? payload.consumption_mode
-    : activeOutputResolution.activeMode;
+    : outputResolution.activeMode;
 
   return {
     strategy: "parallel",
@@ -662,7 +680,7 @@ function parseBackendProcessingScheduler(
 
 function deriveProcessingScheduler(
   processingModes: ProjectKnowledgeModeState[],
-  activeOutputResolution: ProjectKnowledgeOutputResolution,
+  outputResolution: ProjectKnowledgeOutputResolution,
 ): ProjectKnowledgeProcessingScheduler {
   const modeOrder: ProjectKnowledgeProcessingMode[] = ["agentic", "nlp", "fast"];
   const runningModes = modeOrder.filter(
@@ -682,13 +700,13 @@ function deriveProcessingScheduler(
     return status === "queued" || status === "idle";
   }) || null;
 
-  let reason = `当前按 ${activeOutputResolution.activeMode} 输出消费。`;
+  let reason = `当前按 ${outputResolution.activeMode} 输出消费。`;
   if (runningModes.length > 0) {
-    reason = `当前正在推进 ${runningModes.join(" / ")}，消费侧继续读取 ${activeOutputResolution.activeMode}。`;
+    reason = `当前正在推进 ${runningModes.join(" / ")}，消费侧继续读取 ${outputResolution.activeMode}。`;
   } else if (queuedModes.length > 0) {
     reason = `当前无活跃执行，下一条待推进轨道为 ${queuedModes[0]}。`;
   } else if (readyModes.length > 0) {
-    reason = `当前无待执行轨道，直接消费最佳可用输出 ${activeOutputResolution.activeMode}。`;
+    reason = `当前无待执行轨道，直接消费最佳可用输出 ${outputResolution.activeMode}。`;
   }
 
   return {
@@ -699,7 +717,7 @@ function deriveProcessingScheduler(
     readyModes,
     failedModes,
     nextMode,
-    consumptionMode: activeOutputResolution.activeMode,
+    consumptionMode: outputResolution.activeMode,
     reason,
   };
 }
@@ -783,6 +801,8 @@ function isSameHeaderSignals(
     && left.documentCount === right.documentCount
     && left.chunkCount === right.chunkCount
     && left.sentenceCount === right.sentenceCount
+    && left.charCount === right.charCount
+    && left.tokenCount === right.tokenCount
     && left.sentenceWithEntitiesCount === right.sentenceWithEntitiesCount
     && left.entityMentionsCount === right.entityMentionsCount
     && left.avgEntitiesPerSentence === right.avgEntitiesPerSentence
@@ -956,11 +976,11 @@ export function useProjectKnowledgeState(
   }, [loadSourceSemantic, selectedSourceId]);
 
   const defaultOutputModeForQuery = useMemo<ProjectKnowledgeProcessingMode>(() => {
-    const payload = syncState?.active_output_resolution as ProjectKnowledgeOutputResolutionPayload | undefined;
-    if (payload && isProcessingMode(payload.active_mode)) {
+    const payload = syncState?.output_resolution as ProjectKnowledgeOutputResolutionPayload | undefined;
+    if (payload && (payload.active_mode === "nlp" || payload.active_mode === "agentic")) {
       return payload.active_mode;
     }
-    return "fast";
+    return "agentic";
   }, [syncState]);
 
   const markGraphNeedsRefresh = useCallback(() => {
@@ -1391,9 +1411,19 @@ export function useProjectKnowledgeState(
       (sum, item) => sum + Math.max(0, item.status.sentence_count || 0),
       0,
     );
+    const sourceCharCount = projectSources.reduce(
+      (sum, item) => sum + Math.max(0, item.status.char_count || 0),
+      0,
+    );
+    const sourceTokenCount = projectSources.reduce(
+      (sum, item) => sum + Math.max(0, item.status.token_count || 0),
+      0,
+    );
     const fallbackDocumentCount = getSyncIndexCount(syncState, "document_count");
     const fallbackChunkCount = getSyncIndexCount(syncState, "chunk_count");
     const fallbackSentenceCount = getSyncIndexCount(syncState, "sentence_count");
+    const fallbackCharCount = getSyncIndexCount(syncState, "char_count");
+    const fallbackTokenCount = getSyncIndexCount(syncState, "token_count");
     const effectiveTotalSources = totalSources > 0 ? totalSources : (sourceRegistered ? 1 : 0);
     const effectiveIndexedSources = totalSources > 0
       ? indexedSources
@@ -1404,6 +1434,8 @@ export function useProjectKnowledgeState(
     const documentCount = totalSources > 0 ? sourceDocumentCount : fallbackDocumentCount;
     const chunkCount = totalSources > 0 ? sourceChunkCount : fallbackChunkCount;
     const sentenceCount = totalSources > 0 ? sourceSentenceCount : fallbackSentenceCount;
+    const charCount = totalSources > 0 ? sourceCharCount : fallbackCharCount;
+    const tokenCount = totalSources > 0 ? sourceTokenCount : fallbackTokenCount;
     const sentenceWithEntitiesCount = getSyncMemifyMetric(syncState, "sentence_with_entities_count");
     const entityMentionsCount = getSyncMemifyMetric(syncState, "entity_mentions_count");
     const avgEntitiesPerSentence = getSyncMemifyMetric(syncState, "avg_entities_per_sentence");
@@ -1499,6 +1531,8 @@ export function useProjectKnowledgeState(
       documentCount,
       chunkCount,
       sentenceCount,
+      charCount,
+      tokenCount,
       sentenceWithEntitiesCount,
       entityMentionsCount,
       avgEntitiesPerSentence,
@@ -1702,16 +1736,23 @@ export function useProjectKnowledgeState(
     syncState,
   ]);
 
-  const activeOutputResolution = useMemo<ProjectKnowledgeOutputResolution>(() => {
+  const outputModes = useMemo<ProjectKnowledgeModeState[]>(
+    () => HIGH_ORDER_OUTPUT_MODES
+      .map((mode) => processingModes.find((item) => item.mode === mode) || null)
+      .filter((item): item is ProjectKnowledgeModeState => Boolean(item)),
+    [processingModes],
+  );
+
+  const outputResolution = useMemo<ProjectKnowledgeOutputResolution>(() => {
     const backendResolution = parseBackendOutputResolution(syncState, processingModes);
     if (backendResolution) {
       return backendResolution;
     }
 
-    const availableModes = processingModes
+    const availableModes = outputModes
       .filter((mode) => mode.available)
       .map((mode) => mode.mode);
-    const fallbackChain: ProjectKnowledgeProcessingMode[] = ["agentic", "nlp", "fast"];
+    const fallbackChain: ProjectKnowledgeProcessingMode[] = HIGH_ORDER_OUTPUT_MODES;
 
     if (availableModes.includes("agentic")) {
       return {
@@ -1741,11 +1782,11 @@ export function useProjectKnowledgeState(
       };
     }
     return {
-      activeMode: "fast",
+      activeMode: "agentic",
       availableModes,
       fallbackChain,
-      reasonCode: "FALLBACK_TO_FAST",
-      reason: "高阶产物尚不可用，当前回退到极速预览。",
+      reasonCode: "HIGH_ORDER_PENDING",
+      reason: "高阶输出尚未就绪，当前保持 L2/L3 输出视角并等待深加工产物生成。",
       skippedModes: [
         {
           mode: "agentic",
@@ -1761,19 +1802,36 @@ export function useProjectKnowledgeState(
         },
       ],
     };
-  }, [processingModes, syncState]);
+  }, [outputModes, processingModes, syncState]);
 
   const processingScheduler = useMemo<ProjectKnowledgeProcessingScheduler>(() => {
     const backendScheduler = parseBackendProcessingScheduler(
       syncState,
       processingModes,
-      activeOutputResolution,
+      outputResolution,
     );
     if (backendScheduler) {
       return backendScheduler;
     }
-    return deriveProcessingScheduler(processingModes, activeOutputResolution);
-  }, [activeOutputResolution, processingModes, syncState]);
+    return deriveProcessingScheduler(processingModes, outputResolution);
+  }, [outputResolution, processingModes, syncState]);
+
+  const processingCompareModes = useMemo<ProjectKnowledgeModeState[]>(
+    () => ["nlp", "agentic"]
+      .map((mode) => processingModes.find((item) => item.mode === mode) || null)
+      .filter((item): item is ProjectKnowledgeModeState => Boolean(item)),
+    [processingModes],
+  );
+
+  const processingCompareDelta = useMemo<ProjectKnowledgeProcessingCompareDelta>(() => {
+    const l2Mode = processingCompareModes.find((item) => item.mode === "nlp") || null;
+    const l3Mode = processingCompareModes.find((item) => item.mode === "agentic") || null;
+
+    return {
+      entityDelta: l2Mode && l3Mode ? Math.max(0, l3Mode.entityCount - l2Mode.entityCount) : 0,
+      relationDelta: l2Mode && l3Mode ? Math.max(0, l3Mode.relationCount - l2Mode.relationCount) : 0,
+    };
+  }, [processingCompareModes]);
 
   const modeOutputs = useMemo<Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeOutput>>(() => {
     const backendModeOutputs = parseBackendModeOutputs(syncState);
@@ -1814,6 +1872,8 @@ export function useProjectKnowledgeState(
       documentCount: quantMetrics.documentCount,
       chunkCount: quantMetrics.chunkCount,
       sentenceCount: quantMetrics.sentenceCount,
+      charCount: quantMetrics.charCount,
+      tokenCount: quantMetrics.tokenCount,
       sentenceWithEntitiesCount: quantMetrics.sentenceWithEntitiesCount,
       entityMentionsCount: quantMetrics.entityMentionsCount,
       avgEntitiesPerSentence: quantMetrics.avgEntitiesPerSentence,
@@ -1842,6 +1902,7 @@ export function useProjectKnowledgeState(
     quantMetrics.entityCount,
     quantMetrics.entityCanonicalCoverage,
     quantMetrics.chunkCount,
+    quantMetrics.charCount,
     quantMetrics.sentenceCount,
     quantMetrics.sentenceWithEntitiesCount,
     quantMetrics.entityMentionsCount,
@@ -1849,6 +1910,7 @@ export function useProjectKnowledgeState(
     quantMetrics.avgEntityCharRatio,
     quantMetrics.documentCount,
     quantMetrics.indexedRatio,
+    quantMetrics.tokenCount,
     quantMetrics.lowConfidenceThreshold,
     quantMetrics.lowConfidenceRatio,
     quantMetrics.missingEvidenceThreshold,
@@ -1978,7 +2040,10 @@ export function useProjectKnowledgeState(
     latestQualityLoopJob,
     memifyEnabled,
     processingModes,
-    activeOutputResolution,
+    processingCompareModes,
+    processingCompareDelta,
+    outputModes,
+    outputResolution,
     processingScheduler,
     modeOutputs,
     quantMetrics,
@@ -2023,7 +2088,6 @@ export function useProjectKnowledgeState(
     activeGraphNodeId,
     activeKnowledgeTask,
     activeKnowledgeTasks,
-    activeOutputResolution,
     filteredTrendSnapshots,
     graphError,
     graphLoading,
@@ -2040,6 +2104,10 @@ export function useProjectKnowledgeState(
     loadSourceContent,
     loadSourceSemantic,
     modeOutputs,
+    outputModes,
+    outputResolution,
+    processingCompareDelta,
+    processingCompareModes,
     processingModes,
     processingScheduler,
     projectSourceId,

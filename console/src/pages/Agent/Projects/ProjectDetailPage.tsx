@@ -603,9 +603,9 @@ export default function ProjectDetailPage() {
     eagerSourceLoad:
       knowledgeDockTab === "sources"
       || knowledgeDockTab === "processing"
-      || knowledgeDockTab === "outputs"
-      || knowledgeDockTab === "health",
-    eagerExploreLoad: knowledgeDockTab === "explore" || knowledgeDockTab === "outputs",
+      || knowledgeDockTab === "health"
+      || knowledgeDockTab === "settings",
+    eagerExploreLoad: knowledgeDockTab === "explore",
   });
 
   useEffect(() => {

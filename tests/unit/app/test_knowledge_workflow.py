@@ -184,14 +184,14 @@ def test_project_sync_manager_records_workflow_run_metadata(
     assert state["processing_modes"][0]["available"] is True
     assert state["processing_modes"][1]["available"] is False
     assert state["processing_modes"][2]["available"] is True
-    assert state["active_output_resolution"]["active_mode"] == "agentic"
-    assert state["active_output_resolution"]["fallback_chain"] == ["agentic", "nlp", "fast"]
-    assert state["active_output_resolution"]["reason_code"] == "HIGHEST_LAYER_READY"
-    assert state["active_output_resolution"]["skipped_modes"] == []
-    assert state["processing_scheduler"]["strategy"] == "parallel"
-    assert state["processing_scheduler"]["consumption_mode"] == "agentic"
-    assert state["processing_scheduler"]["ready_modes"] == ["agentic", "fast"]
-    assert state["processing_scheduler"]["next_mode"] == "nlp"
+    assert state["output_resolution"]["active_mode"] == "agentic"
+    assert state["output_resolution"]["fallback_chain"] == ["agentic", "nlp"]
+    assert state["output_resolution"]["reason_code"] == "HIGHEST_LAYER_READY"
+    assert state["output_resolution"]["skipped_modes"] == []
+    assert state["output_scheduler"]["strategy"] == "parallel"
+    assert state["output_scheduler"]["consumption_mode"] == "agentic"
+    assert state["output_scheduler"]["ready_modes"] == ["agentic", "fast"]
+    assert state["output_scheduler"]["next_mode"] == "nlp"
     assert state["mode_outputs"]["fast"]["source"] == "indexed-preview"
     assert state["mode_outputs"]["nlp"]["source"] == "graph-artifacts"
     assert state["mode_outputs"]["agentic"]["source"] == "workflow-artifacts"

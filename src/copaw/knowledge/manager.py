@@ -216,6 +216,8 @@ class KnowledgeManager:
                 "document_count": 0,
                 "chunk_count": 0,
                 "sentence_count": 0,
+                "char_count": 0,
+                "token_count": 0,
                 "needs_reindex": bool(config),
                 "error": None,
             }
@@ -239,6 +241,14 @@ class KnowledgeManager:
                 "sentence_count",
                 self._sum_chunk_sentence_count(chunks),
             ),
+            "char_count": payload.get(
+                "char_count",
+                self._sum_chunk_char_count(chunks),
+            ),
+            "token_count": payload.get(
+                "token_count",
+                self._sum_chunk_token_count(chunks),
+            ),
             "needs_reindex": needs_reindex,
             "error": payload.get("error"),
         }
@@ -259,6 +269,7 @@ class KnowledgeManager:
             self._resolve_chunk_size(config, running_config),
         )
         sentence_count = self._sum_chunk_sentence_count(chunks)
+        document_stats = self._build_document_stats(documents)
         processing_fingerprint = self.compute_processing_fingerprint(config, running_config)
         payload = {
             "source": source.model_dump(mode="json"),
@@ -266,6 +277,8 @@ class KnowledgeManager:
             "document_count": len(documents),
             "chunk_count": len(chunks),
             "sentence_count": sentence_count,
+            "char_count": document_stats["char_count"],
+            "token_count": document_stats["token_count"],
             "processing_fingerprint": processing_fingerprint,
             "error": None,
             "chunks": chunks,
@@ -276,6 +289,8 @@ class KnowledgeManager:
             "document_count": len(documents),
             "chunk_count": len(chunks),
             "sentence_count": sentence_count,
+            "char_count": document_stats["char_count"],
+            "token_count": document_stats["token_count"],
             "indexed_at": payload["indexed_at"],
         }
 
@@ -419,6 +434,14 @@ class KnowledgeManager:
                 "sentence_count",
                 self._sum_chunk_sentence_count(chunks),
             ),
+            "char_count": payload.get(
+                "char_count",
+                self._sum_chunk_char_count(chunks),
+            ),
+            "token_count": payload.get(
+                "token_count",
+                self._sum_chunk_token_count(chunks),
+            ),
             "documents": documents,
         }
 
@@ -509,6 +532,8 @@ class KnowledgeManager:
             "document_count": payload.get("document_count", 0),
             "chunk_count": payload.get("chunk_count", 0),
             "sentence_count": payload.get("sentence_count", 0),
+            "char_count": payload.get("char_count", 0),
+            "token_count": payload.get("token_count", 0),
             "path": str(self._source_dir(source.id)),
         }
 
@@ -2412,7 +2437,7 @@ class KnowledgeManager:
         return self._semantic_title_from_text(text)
 
     @staticmethod
-    def _tokenize_text(text: str) -> list[str]:
+    def _tokenize_text(text: str, *, exclude_stop_words: bool = True) -> list[str]:
         normalized = re.sub(r"\s+", " ", (text or "").strip())
         if not normalized:
             return []
@@ -2450,7 +2475,7 @@ class KnowledgeManager:
                 continue
             if not _SEMANTIC_TOKEN_RE.fullmatch(token):
                 continue
-            if token in _SEMANTIC_STOP_WORDS:
+            if exclude_stop_words and token in _SEMANTIC_STOP_WORDS:
                 continue
             tokens.append(token)
         return tokens
@@ -2509,6 +2534,25 @@ class KnowledgeManager:
                 )
         return chunks
 
+    @classmethod
+    def _build_document_stats(cls, documents: list[dict[str, str]]) -> dict[str, int]:
+        char_count = 0
+        token_count = 0
+        for document in documents:
+            text = str(document.get("text") or "")
+            if not text:
+                continue
+            char_count += cls._count_text_chars(text)
+            token_count += len(cls._tokenize_text(text, exclude_stop_words=False))
+        return {
+            "char_count": char_count,
+            "token_count": token_count,
+        }
+
+    @staticmethod
+    def _count_text_chars(text: str) -> int:
+        return len(re.sub(r"\s+", "", text or ""))
+
     @staticmethod
     def _split_chunk_sentences(text: str) -> list[str]:
         normalized = text.replace("\r\n", "\n").replace("\r", "\n")
@@ -2539,6 +2583,25 @@ class KnowledgeManager:
             except (TypeError, ValueError):
                 count = 0
             total += max(0, count)
+        return total
+
+    @classmethod
+    def _sum_chunk_char_count(cls, chunks: list[dict[str, Any]]) -> int:
+        total = 0
+        for chunk in chunks:
+            total += cls._count_text_chars(str(chunk.get("text") or ""))
+        return total
+
+    @classmethod
+    def _sum_chunk_token_count(cls, chunks: list[dict[str, Any]]) -> int:
+        total = 0
+        for chunk in chunks:
+            total += len(
+                cls._tokenize_text(
+                    str(chunk.get("text") or ""),
+                    exclude_stop_words=False,
+                )
+            )
         return total
 
     @staticmethod

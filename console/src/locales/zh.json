@@ -1905,6 +1905,8 @@
       "signalDocuments": "文档数",
       "signalChunks": "切片数",
       "signalSentences": "句子数",
+      "signalCharacters": "字数",
+      "signalTokens": "词数",
       "signalNeedsReindex": "需重新索引",
       "sourceSubject": "主题",
       "sourceKeywords": "关键词",
@@ -1968,13 +1970,28 @@
         "agentic": "多智能体模式",
         "fastHint": "极速索引与预览，优先保障可用性。",
         "nlpHint": "实体关系抽取与图谱构建，作为中阶结构化产物层。",
-        "agenticHint": "多智能体协作与质量环迭代，提供最高质量产物。"
+        "agenticHint": "多智能体协作与质量环迭代，在实体关系基础上继续做增强。",
+        "l2Entities": "L2 实体数",
+        "l2Relations": "L2 关系数",
+        "l3Entities": "L3 实体数",
+        "l3Relations": "L3 关系数",
+        "compareL2Label": "实体关系抽取",
+        "compareL3Label": "多智能体增强",
+        "qualityScore": "质量分",
+        "processingFocus": "处理焦点",
+        "enhancementDelta": "相对 L2 增量",
+        "artifactSummary": "核心产物",
+        "deltaSummary": "+{{entities}} 实体 / +{{relations}} 关系",
+        "entityGraphArtifact": "实体关系图谱",
+        "qualityPending": "待增强",
+        "structureReady": "结构化基线",
+        "compareNote": "L2 提供实体与关系的结构化基础，L3 在此基础上继续做多智能体增强与质量提升。"
       },
       "outputsHint": "按模式查看知识产物，系统在高阶产物缺失时会自动降级。",
-      "sourcesRoleHint": "这里只展示知识来源与覆盖情况，不展示加工层与输出层状态。",
-      "processingRoleHint": "这里只展示三层加工路线、调度状态与可运行性，不展示来源清单与最终产物详情。",
+      "sourcesRoleHint": "Sources 就是 L1 基础统计层，只展示文档数、切片数、句子数、字数、词数与索引覆盖率。",
+      "processingRoleHint": "这里只展示 L2 与 L3 的处理进度，重点聚焦实体与关系的构建、增强与呈现。",
       "outputsRoleHint": "这里聚焦最终消费层与产物清单，不重复展示加工调度细节。",
-      "sourcesInventoryHint": "先确认项目知识源是否齐全、是否已索引，以及每个来源当前覆盖到多少文档内容。",
+      "sourcesInventoryHint": "先确认项目知识源是否齐全、是否已索引，并核对每个来源的 L1 基础统计是否完整。",
       "outputs": {
         "artifactCount": "产物数",
         "activeLayer": "当前命中层",
@@ -1986,7 +2003,8 @@
         "fallbackQueued": "仍在排队",
         "fallbackRunning": "仍在运行",
         "fallbackUnavailable": "产物未就绪",
-        "fallbackNotSelected": "未被选为当前消费层"
+        "fallbackNotSelected": "未被选为当前消费层",
+        "highOrderEmpty": "L2/L3 输出尚未就绪，暂时无法展示实体关系结果。"
       }
     },
     "stage": {

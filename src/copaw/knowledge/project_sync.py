@@ -21,6 +21,7 @@ DEFAULT_PROJECT_SYNC_COOLDOWN_SECONDS = 10.0
 DEFAULT_PROJECT_SYNC_STALE_AFTER_SECONDS = 120.0
 DEFAULT_PROJECT_SYNC_QUALITY_LOOP_ROUNDS = 3
 KNOWLEDGE_PROCESSING_FALLBACK_CHAIN = ["agentic", "nlp", "fast"]
+KNOWLEDGE_OUTPUT_FALLBACK_CHAIN = ["agentic", "nlp"]
 KNOWLEDGE_PROCESSING_SUPPORTED_MODES = {"fast", "nlp", "agentic"}
 
 
@@ -198,24 +199,24 @@ class ProjectKnowledgeSyncManager:
             "last_result": {},
             "processing_modes": [],
             "processing_mode_overrides": {},
-            "active_output_resolution": {
-                "active_mode": "fast",
+            "output_resolution": {
+                "active_mode": "agentic",
                 "available_modes": [],
-                "fallback_chain": KNOWLEDGE_PROCESSING_FALLBACK_CHAIN[:],
-                "reason_code": "FALLBACK_TO_FAST",
-                "reason": "High-order outputs are not ready yet; using fast preview.",
+                "fallback_chain": KNOWLEDGE_OUTPUT_FALLBACK_CHAIN[:],
+                "reason_code": "HIGH_ORDER_PENDING",
+                "reason": "High-order outputs are not ready yet; keeping the L2/L3 output view warm.",
                 "skipped_modes": [],
             },
-            "processing_scheduler": {
+            "output_scheduler": {
                 "strategy": "parallel",
                 "mode_order": KNOWLEDGE_PROCESSING_FALLBACK_CHAIN[:],
                 "running_modes": [],
                 "queued_modes": [],
                 "ready_modes": [],
                 "failed_modes": [],
-                "next_mode": "fast",
-                "consumption_mode": "fast",
-                "reason": "Scheduler is waiting for the fast preview lane to start.",
+                "next_mode": "agentic",
+                "consumption_mode": "agentic",
+                "reason": "Scheduler is waiting for the high-order output lanes to start.",
             },
             "mode_outputs": {},
             "mode_metrics": {},
@@ -385,12 +386,6 @@ class ProjectKnowledgeSyncManager:
             memify_result = {}
 
         fast_metrics = mode_metrics.get("fast") if isinstance(mode_metrics.get("fast"), dict) else {}
-        nlp_metrics = mode_metrics.get("nlp") if isinstance(mode_metrics.get("nlp"), dict) else {}
-        agentic_metrics = (
-            mode_metrics.get("agentic")
-            if isinstance(mode_metrics.get("agentic"), dict)
-            else {}
-        )
 
         document_count = max(
             _safe_int(index_result.get("document_count")),
@@ -405,23 +400,21 @@ class ProjectKnowledgeSyncManager:
             _safe_int(index_result.get("sentence_count")),
             _safe_int(memify_result.get("sentence_count")),
         )
-        entity_count = max(
-            _safe_int(memify_result.get("node_count")),
-            _safe_int(nlp_metrics.get("entity_count")),
-            _safe_int(agentic_metrics.get("entity_count")),
+        char_count = max(
+            _safe_int(index_result.get("char_count")),
+            _safe_int(fast_metrics.get("char_count")),
         )
-        relation_count = max(
-            _safe_int(memify_result.get("relation_count")),
-            _safe_int(nlp_metrics.get("relation_count")),
-            _safe_int(agentic_metrics.get("relation_count")),
+        token_count = max(
+            _safe_int(index_result.get("token_count")),
+            _safe_int(fast_metrics.get("token_count")),
         )
 
         return {
             "document_count": document_count,
             "chunk_count": chunk_count,
             "sentence_count": sentence_count,
-            "entity_count": entity_count,
-            "relation_count": relation_count,
+            "char_count": char_count,
+            "token_count": token_count,
         }
 
     def _build_processing_modes(self, state: dict[str, Any]) -> list[dict[str, Any]]:
@@ -649,7 +642,7 @@ class ProjectKnowledgeSyncManager:
         available_modes = [
             str(item.get("mode") or "").strip()
             for item in processing_modes
-            if bool(item.get("available"))
+            if bool(item.get("available")) and str(item.get("mode") or "").strip() in KNOWLEDGE_OUTPUT_FALLBACK_CHAIN
         ]
 
         def build_skip_reason(mode: str) -> dict[str, str]:
@@ -690,9 +683,9 @@ class ProjectKnowledgeSyncManager:
                 "reason": "Mode is available but not selected as the active output layer.",
             }
 
-        active_mode = "fast"
-        reason_code = "FALLBACK_TO_FAST"
-        reason = "High-order outputs are not ready yet; using fast preview."
+        active_mode = "agentic"
+        reason_code = "HIGH_ORDER_PENDING"
+        reason = "High-order outputs are not ready yet; keeping the L2/L3 output view warm."
         if "agentic" in available_modes:
             active_mode = "agentic"
             reason_code = "HIGHEST_LAYER_READY"
@@ -703,7 +696,7 @@ class ProjectKnowledgeSyncManager:
             reason = "Multi-agent outputs are unavailable, automatically downgraded to NLP outputs."
 
         skipped_modes: list[dict[str, str]] = []
-        for mode in KNOWLEDGE_PROCESSING_FALLBACK_CHAIN:
+        for mode in KNOWLEDGE_OUTPUT_FALLBACK_CHAIN:
             if mode == active_mode:
                 break
             skipped_modes.append(build_skip_reason(mode))
@@ -711,13 +704,13 @@ class ProjectKnowledgeSyncManager:
         return {
             "active_mode": active_mode,
             "available_modes": available_modes,
-            "fallback_chain": KNOWLEDGE_PROCESSING_FALLBACK_CHAIN[:],
+            "fallback_chain": KNOWLEDGE_OUTPUT_FALLBACK_CHAIN[:],
             "reason_code": reason_code,
             "reason": reason,
             "skipped_modes": skipped_modes,
         }
 
-    def _build_processing_scheduler(
+    def _build_output_scheduler(
         self,
         processing_modes: list[dict[str, Any]],
         output_resolution: dict[str, Any],
@@ -751,7 +744,7 @@ class ProjectKnowledgeSyncManager:
             ),
             "",
         )
-        consumption_mode = str(output_resolution.get("active_mode") or "fast").strip() or "fast"
+        consumption_mode = str(output_resolution.get("active_mode") or "agentic").strip() or "agentic"
 
         if running_modes:
             reason = (
@@ -768,7 +761,7 @@ class ProjectKnowledgeSyncManager:
         elif ready_modes:
             reason = f"Scheduler has no active work and is serving the best available output from {consumption_mode}."
         else:
-            reason = "Scheduler is waiting for the fast preview lane to start."
+            reason = "Scheduler is waiting for the high-order output lanes to start."
 
         return {
             "strategy": "parallel",
@@ -788,12 +781,13 @@ class ProjectKnowledgeSyncManager:
         output_resolution = self._build_output_resolution(processing_modes)
         mode_outputs = self._build_mode_outputs(hydrated)
         mode_metrics = self._build_mode_metrics(processing_modes, mode_outputs)
-        hydrated["processing_modes"] = processing_modes
-        hydrated["active_output_resolution"] = output_resolution
-        hydrated["processing_scheduler"] = self._build_processing_scheduler(
+        output_scheduler = self._build_output_scheduler(
             processing_modes,
             output_resolution,
         )
+        hydrated["processing_modes"] = processing_modes
+        hydrated["output_resolution"] = output_resolution
+        hydrated["output_scheduler"] = output_scheduler
         hydrated["mode_outputs"] = mode_outputs
         hydrated["mode_metrics"] = mode_metrics
         hydrated["global_metrics"] = self._build_global_metrics(hydrated, mode_metrics)

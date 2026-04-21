@@ -406,8 +406,8 @@ def test_processing_mode_overrides_take_precedence_during_active_run(tmp_path: P
     assert modes["nlp"]["status"] == "running"
     assert modes["nlp"]["progress"] == 62
     assert modes["agentic"]["status"] == "queued"
-    assert hydrated["processing_scheduler"]["running_modes"] == ["nlp"]
-    assert hydrated["processing_scheduler"]["queued_modes"] == ["agentic"]
+    assert hydrated["output_scheduler"]["running_modes"] == ["nlp"]
+    assert hydrated["output_scheduler"]["queued_modes"] == ["agentic"]
     assert hydrated["mode_metrics"]["fast"]["document_count"] == 3
     assert hydrated["mode_metrics"]["nlp"]["relation_count"] == 12
     assert hydrated["global_metrics"]["document_count"] == 3

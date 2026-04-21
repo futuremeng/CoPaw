@@ -100,8 +100,8 @@ export interface ProjectKnowledgeGlobalMetricsPayload {
   document_count?: number;
   chunk_count?: number;
   sentence_count?: number;
-  entity_count?: number;
-  relation_count?: number;
+  char_count?: number;
+  token_count?: number;
 }
 
 export interface ProjectKnowledgeSyncState {
@@ -145,8 +145,8 @@ export interface ProjectKnowledgeSyncState {
   latest_source_id: string;
   last_result: Record<string, unknown>;
   processing_modes?: ProjectKnowledgeProcessingModeStatePayload[];
-  active_output_resolution?: ProjectKnowledgeOutputResolutionPayload;
-  processing_scheduler?: ProjectKnowledgeProcessingSchedulerPayload;
+  output_resolution?: ProjectKnowledgeOutputResolutionPayload;
+  output_scheduler?: ProjectKnowledgeProcessingSchedulerPayload;
   mode_outputs?: Partial<Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeOutputPayload>>;
   mode_metrics?: Partial<Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeMetricsPayload>>;
   global_metrics?: ProjectKnowledgeGlobalMetricsPayload;
@@ -188,6 +188,8 @@ export interface KnowledgeSourceStatus {
   document_count: number;
   chunk_count: number;
   sentence_count?: number;
+  char_count?: number;
+  token_count?: number;
   needs_reindex?: boolean;
   error: string | null;
   remote_status?: string;
@@ -214,6 +216,8 @@ export interface KnowledgeIndexResult {
   document_count: number;
   chunk_count: number;
   sentence_count?: number;
+  char_count?: number;
+  token_count?: number;
   indexed_at: string;
 }
 
@@ -293,6 +297,8 @@ export interface KnowledgeSourceContent {
   document_count?: number;
   chunk_count?: number;
   sentence_count?: number;
+  char_count?: number;
+  token_count?: number;
   documents: KnowledgeSourceDocument[];
 }
 
