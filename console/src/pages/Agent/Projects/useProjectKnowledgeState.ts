@@ -6,6 +6,7 @@ import type {
   KnowledgeTaskProgress,
   KnowledgeSourceContent,
   KnowledgeSourceItem,
+  KnowledgeSourceSemanticStatus,
   ProjectKnowledgeGlobalMetricsPayload,
   ProjectKnowledgeModeMetricsPayload,
   ProjectKnowledgeOutputResolutionPayload,
@@ -16,6 +17,7 @@ import type {
   QualityLoopJobStatus,
 } from "../../../api/types";
 import {
+  getProjectKnowledgeSemanticSummary,
   getProjectKnowledgeSyncAlertDescription,
   getProjectKnowledgeSyncAlertType,
 } from "./projectKnowledgeSyncUi";
@@ -217,7 +219,7 @@ export interface ProjectKnowledgeState {
   insightAction: ProjectKnowledgeInsightAction;
   insightMessageKey: string;
   loadProjectSourceStatus: () => Promise<void>;
-  semanticBySourceId: Record<string, { subject?: string; summary?: string; keywords?: string[] }>;
+  semanticBySourceId: Record<string, { subject?: string; summary?: string; keywords?: string[]; semanticStatus?: KnowledgeSourceSemanticStatus }>;
   semanticLoadingBySourceId: Record<string, boolean>;
   loadSourceSemantic: (sourceId: string) => Promise<void>;
 }
@@ -248,6 +250,26 @@ const ACTIVE_KNOWLEDGE_STATUSES = new Set([
   "indexing",
   "graphifying",
 ]);
+
+function mergeSemanticSummaryIntoStage(
+  baseStage: string,
+  semanticSummary?: string,
+  semanticStatus?: string,
+): string {
+  const normalizedStage = String(baseStage || "").trim();
+  const normalizedSummary = String(semanticSummary || "").trim();
+  const normalizedStatus = String(semanticStatus || "").trim().toLowerCase();
+  if (!normalizedSummary || normalizedStatus === "ready") {
+    return normalizedStage;
+  }
+  if (!normalizedStage) {
+    return normalizedSummary;
+  }
+  if (normalizedStage.includes(normalizedSummary)) {
+    return normalizedStage;
+  }
+  return `${normalizedStage} · ${normalizedSummary}`;
+}
 
 function getActiveKnowledgeTasks(tasks: KnowledgeTaskProgress[]): KnowledgeTaskProgress[] {
   const priority = (task: KnowledgeTaskProgress): number => {
@@ -850,7 +872,7 @@ export function useProjectKnowledgeState(
   const [activeKnowledgeTasks, setActiveKnowledgeTasks] = useState<KnowledgeTaskProgress[]>([]);
   const [activeKnowledgeTask, setActiveKnowledgeTask] = useState<KnowledgeTaskProgress | null>(null);
   const [latestQualityLoopJob, setLatestQualityLoopJob] = useState<QualityLoopJobStatus | null>(null);
-  const [semanticBySourceId, setSemanticBySourceId] = useState<Record<string, { subject?: string; summary?: string; keywords?: string[] }>>({});
+  const [semanticBySourceId, setSemanticBySourceId] = useState<Record<string, { subject?: string; summary?: string; keywords?: string[]; semanticStatus?: KnowledgeSourceSemanticStatus }>>({});
   const [semanticLoadingBySourceId, setSemanticLoadingBySourceId] = useState<Record<string, boolean>>({});
   const refreshReasonRef = useRef("");
   const graphRefreshReasonRef = useRef("");
@@ -943,6 +965,7 @@ export function useProjectKnowledgeState(
             subject: match.subject,
             summary: match.summary,
             keywords: match.keywords,
+            semanticStatus: match.semantic_status,
           },
         }));
       }
@@ -1619,6 +1642,8 @@ export function useProjectKnowledgeState(
     const fastAvailable = fastDocumentCount > 0 || fastChunkCount > 0;
     const nlpAvailable = nlpEntityCount > 0 || nlpRelationCount > 0;
     const agenticAvailable = ["succeeded", "completed"].includes(workflowStatus);
+    const semanticSummary = getProjectKnowledgeSemanticSummary(syncState?.semantic_engine, t);
+    const semanticStatus = String(syncState?.semantic_engine?.status || "").trim();
     const latestUpdatedAt = String(
       latestQualityLoopJob?.updated_at
       || syncState?.last_finished_at
@@ -1682,11 +1707,15 @@ export function useProjectKnowledgeState(
         status: nlpStatus,
         available: nlpAvailable,
         progress: nlpStatus === "running" ? syncPercent : null,
-        stage: nlpStatus === "running"
-          ? String(activeKnowledgeTask?.stage_message || activeKnowledgeTask?.current_stage || "Building NLP artifacts")
-          : nlpAvailable
-            ? "NLP graph artifacts ready"
-            : "Waiting for graph extraction",
+        stage: mergeSemanticSummaryIntoStage(
+          nlpStatus === "running"
+            ? String(activeKnowledgeTask?.stage_message || activeKnowledgeTask?.current_stage || "Building NLP artifacts")
+            : nlpAvailable
+              ? "NLP graph artifacts ready"
+              : "Waiting for graph extraction",
+          semanticSummary,
+          semanticStatus,
+        ),
         summary: nlpAvailable
           ? "中等复杂度知识产物，可作为多智能体结果的回退层。"
           : "图谱与结构化产物尚未形成。",
@@ -1734,6 +1763,7 @@ export function useProjectKnowledgeState(
     quantMetrics.documentCount,
     sourceRegistered,
     syncState,
+    t,
   ]);
 
   const outputModes = useMemo<ProjectKnowledgeModeState[]>(

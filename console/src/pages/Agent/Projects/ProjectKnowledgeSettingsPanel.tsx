@@ -17,6 +17,8 @@ import { knowledgeApi } from "../../../api/modules/knowledge";
 import styles from "./index.module.less";
 import { useTranslation } from "react-i18next";
 import {
+  getProjectKnowledgeSemanticDescription,
+  getProjectKnowledgeSemanticReasonLabel,
   getProjectKnowledgeSyncAlertDescription,
   getProjectKnowledgeSyncAlertType,
 } from "./projectKnowledgeSyncUi";
@@ -91,6 +93,7 @@ export default function ProjectKnowledgeSettingsPanel(
     try {
       const response = await api.listKnowledgeSources({
         projectId,
+        includeSemantic: true,
       });
       const matched = response.sources.find((source) => source.id === projectSourceId) || null;
       setProjectSource(matched);
@@ -432,6 +435,17 @@ export default function ProjectKnowledgeSettingsPanel(
     return `${ratio.toFixed(1)}%`;
   }, [memifyStats.sentenceCount, memifyStats.sentenceWithEntitiesCount]);
 
+  const semanticStatus = syncState?.semantic_engine ?? projectSource?.semantic_status;
+  const semanticAlertType = semanticStatus?.status === "error"
+    ? "error"
+    : semanticStatus?.status === "unavailable"
+      ? "warning"
+      : semanticStatus?.status === "idle"
+        ? "info"
+      : "success";
+  const semanticReasonLabel = getProjectKnowledgeSemanticReasonLabel(semanticStatus, t);
+  const semanticDescription = getProjectKnowledgeSemanticDescription(semanticStatus, t);
+
   return (
     <div className={styles.projectKnowledgeWorkbench}>
       <div className={styles.projectKnowledgeTabHeader}>
@@ -577,6 +591,15 @@ export default function ProjectKnowledgeSettingsPanel(
           <Typography.Text type="secondary">
             {t("projects.knowledge.entityStatsHint", "Run a sync once to generate entity and relation stats.")}
           </Typography.Text>
+        ) : null}
+
+        {semanticStatus ? (
+          <Alert
+            type={semanticAlertType}
+            showIcon
+            message={`${t("projects.knowledge.semanticEngineStatus", "Semantic Engine")}: ${semanticReasonLabel}`}
+            description={semanticDescription}
+          />
         ) : null}
       </section>
 

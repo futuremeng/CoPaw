@@ -5,6 +5,7 @@ import ProjectKnowledgeOutputsPanel from "./ProjectKnowledgeOutputsPanel";
 import ProjectKnowledgeProcessingPanel from "./ProjectKnowledgeProcessingPanel";
 import ProjectKnowledgeSignalsPanel from "./ProjectKnowledgeSignalsPanel";
 import ProjectKnowledgeSourcesPanel from "./ProjectKnowledgeSourcesPanel";
+import { buildModeState } from "./projectKnowledgeTestUtils";
 import type { ProjectKnowledgeState } from "./useProjectKnowledgeState";
 
 vi.mock("react-i18next", () => ({
@@ -23,6 +24,41 @@ vi.mock("react-i18next", () => ({
     },
   }),
 }));
+
+function buildSemanticEngineState(overrides: Record<string, unknown> = {}) {
+  return {
+    engine: "hanlp2",
+    status: "unavailable",
+    reason_code: "HANLP2_IMPORT_UNAVAILABLE",
+    reason: "HanLP2 module is not installed or failed to import.",
+    summary: "Semantic engine unavailable: HanLP2 module is not installed.",
+    ...overrides,
+  };
+}
+
+function buildKnowledgeHeaderSignals(knowledgeState: ProjectKnowledgeState) {
+  return {
+    indexedRatio: knowledgeState.quantMetrics.indexedRatio,
+    documentCount: knowledgeState.quantMetrics.documentCount,
+    chunkCount: knowledgeState.quantMetrics.chunkCount,
+    sentenceCount: knowledgeState.quantMetrics.sentenceCount,
+    sentenceWithEntitiesCount: knowledgeState.quantMetrics.sentenceWithEntitiesCount,
+    entityMentionsCount: knowledgeState.quantMetrics.entityMentionsCount,
+    avgEntitiesPerSentence: knowledgeState.quantMetrics.avgEntitiesPerSentence,
+    avgEntityCharRatio: knowledgeState.quantMetrics.avgEntityCharRatio,
+    relationCount: knowledgeState.quantMetrics.relationCount,
+    entityCount: knowledgeState.quantMetrics.entityCount,
+    relationNormalizationCoverage: knowledgeState.quantMetrics.relationNormalizationCoverage,
+    entityCanonicalCoverage: knowledgeState.quantMetrics.entityCanonicalCoverage,
+    lowConfidenceRatio: knowledgeState.quantMetrics.lowConfidenceRatio,
+    missingEvidenceRatio: knowledgeState.quantMetrics.missingEvidenceRatio,
+    relationNormalizationThreshold: knowledgeState.quantMetrics.relationNormalizationThreshold,
+    entityCanonicalThreshold: knowledgeState.quantMetrics.entityCanonicalThreshold,
+    lowConfidenceThreshold: knowledgeState.quantMetrics.lowConfidenceThreshold,
+    missingEvidenceThreshold: knowledgeState.quantMetrics.missingEvidenceThreshold,
+    qualityAssessmentScore: knowledgeState.quantMetrics.qualityAssessmentScore,
+  };
+}
 
 function buildKnowledgeState(): ProjectKnowledgeState {
   return {
@@ -68,45 +104,48 @@ function buildKnowledgeState(): ProjectKnowledgeState {
     },
     sourceContentLoadingById: {},
     loadSourceContent: vi.fn().mockResolvedValue(null),
-    syncState: null,
+    syncState: {
+      project_id: "project-abc",
+      status: "idle",
+      current_stage: "idle",
+      progress: 0,
+      auto_enabled: true,
+      dirty: false,
+      dirty_after_run: false,
+      last_trigger: "",
+      changed_paths: [],
+      pending_changed_paths: [],
+      changed_count: 0,
+      last_error: "",
+      latest_job_id: "",
+      latest_source_id: "project-project-abc-workspace",
+      last_result: {},
+      semantic_engine: buildSemanticEngineState(),
+    },
     activeKnowledgeTasks: [],
     activeKnowledgeTask: null,
     latestQualityLoopJob: null,
     memifyEnabled: true,
     processingModes: [
-      {
-        mode: "fast",
-        status: "ready",
-        available: true,
-        progress: null,
-        stage: "Fast preview ready",
-        summary: "秒级预览，优先保障可用性。",
+      buildModeState({
         lastUpdatedAt: "2026-04-11T23:30:00+00:00",
-        runId: "",
         jobId: "job-fast",
         documentCount: 3,
         chunkCount: 7,
-        entityCount: 0,
-        relationCount: 0,
-        qualityScore: null,
-      },
-      {
+      }),
+      buildModeState({
         mode: "nlp",
-        status: "ready",
-        available: true,
-        progress: null,
         stage: "NLP graph artifacts ready",
         summary: "中等复杂度知识产物，可作为多智能体结果的回退层。",
         lastUpdatedAt: "2026-04-11T23:30:00+00:00",
-        runId: "",
         jobId: "job-nlp",
         documentCount: 3,
         chunkCount: 7,
         entityCount: 2,
         relationCount: 12,
         qualityScore: 0.86,
-      },
-      {
+      }),
+      buildModeState({
         mode: "agentic",
         status: "queued",
         available: false,
@@ -121,26 +160,21 @@ function buildKnowledgeState(): ProjectKnowledgeState {
         entityCount: 2,
         relationCount: 12,
         qualityScore: 0.86,
-      },
+      }),
     ],
     processingCompareModes: [
-      {
+      buildModeState({
         mode: "nlp",
-        status: "ready",
-        available: true,
-        progress: null,
         stage: "NLP graph artifacts ready",
         summary: "中等复杂度知识产物，可作为多智能体结果的回退层。",
         lastUpdatedAt: "2026-04-11T23:30:00+00:00",
-        runId: "",
         jobId: "job-nlp",
         documentCount: 3,
         chunkCount: 7,
         entityCount: 2,
         relationCount: 12,
-        qualityScore: null,
-      },
-      {
+      }),
+      buildModeState({
         mode: "agentic",
         status: "queued",
         available: false,
@@ -155,14 +189,14 @@ function buildKnowledgeState(): ProjectKnowledgeState {
         entityCount: 2,
         relationCount: 12,
         qualityScore: 0.86,
-      },
+      }),
     ],
     processingCompareDelta: {
       entityDelta: 0,
       relationDelta: 0,
     },
     outputModes: [
-      {
+      buildModeState({
         mode: "agentic",
         status: "queued",
         available: false,
@@ -177,23 +211,18 @@ function buildKnowledgeState(): ProjectKnowledgeState {
         entityCount: 2,
         relationCount: 12,
         qualityScore: 0.86,
-      },
-      {
+      }),
+      buildModeState({
         mode: "nlp",
-        status: "ready",
-        available: true,
-        progress: null,
         stage: "NLP graph artifacts ready",
         summary: "中等复杂度知识产物，可作为多智能体结果的回退层。",
         lastUpdatedAt: "2026-04-11T23:30:00+00:00",
-        runId: "",
         jobId: "job-nlp",
         documentCount: 3,
         chunkCount: 7,
         entityCount: 2,
         relationCount: 12,
-        qualityScore: null,
-      },
+      }),
     ],
     outputResolution: {
       activeMode: "nlp",
@@ -362,39 +391,30 @@ function buildKnowledgeState(): ProjectKnowledgeState {
 describe("project knowledge supporting panels", () => {
   it("renders health content outside explore", () => {
     const knowledgeState = buildKnowledgeState();
+    const runtimeTooltipContent = (
+      <div>
+        <span>Runtime</span>
+        <span>Semantic Engine: Module Unavailable. Code: HANLP2_IMPORT_UNAVAILABLE</span>
+        <span>Updated: 2026-04-11 23:30:00</span>
+      </div>
+    );
     const { container } = render(
       <ProjectKnowledgeSignalsPanel
         knowledgeState={knowledgeState}
-        knowledgeHeaderSignals={{
-          indexedRatio: knowledgeState.quantMetrics.indexedRatio,
-          documentCount: knowledgeState.quantMetrics.documentCount,
-          chunkCount: knowledgeState.quantMetrics.chunkCount,
-          sentenceCount: knowledgeState.quantMetrics.sentenceCount,
-          sentenceWithEntitiesCount: knowledgeState.quantMetrics.sentenceWithEntitiesCount,
-          entityMentionsCount: knowledgeState.quantMetrics.entityMentionsCount,
-          avgEntitiesPerSentence: knowledgeState.quantMetrics.avgEntitiesPerSentence,
-          avgEntityCharRatio: knowledgeState.quantMetrics.avgEntityCharRatio,
-          relationCount: knowledgeState.quantMetrics.relationCount,
-          entityCount: knowledgeState.quantMetrics.entityCount,
-          relationNormalizationCoverage: knowledgeState.quantMetrics.relationNormalizationCoverage,
-          entityCanonicalCoverage: knowledgeState.quantMetrics.entityCanonicalCoverage,
-          lowConfidenceRatio: knowledgeState.quantMetrics.lowConfidenceRatio,
-          missingEvidenceRatio: knowledgeState.quantMetrics.missingEvidenceRatio,
-          relationNormalizationThreshold: knowledgeState.quantMetrics.relationNormalizationThreshold,
-          entityCanonicalThreshold: knowledgeState.quantMetrics.entityCanonicalThreshold,
-          lowConfidenceThreshold: knowledgeState.quantMetrics.lowConfidenceThreshold,
-          missingEvidenceThreshold: knowledgeState.quantMetrics.missingEvidenceThreshold,
-          qualityAssessmentScore: knowledgeState.quantMetrics.qualityAssessmentScore,
-        }}
+        knowledgeHeaderSignals={buildKnowledgeHeaderSignals(knowledgeState)}
         runtimeSignalValue="Idle"
-        runtimeSignalTooltipContent={"Runtime"}
-        runtimeSignalTooltipOpen={false}
+        runtimeSignalTooltipContent={runtimeTooltipContent}
+        runtimeSignalTooltipOpen
       />,
     );
 
     expect(screen.getByText("projects.knowledge.signalsTitle")).not.toBeNull();
     expect(screen.getAllByText("projects.knowledge.signalRelations").length).toBeGreaterThan(0);
     expect(screen.getAllByText("实体数").length).toBeGreaterThan(0);
+    expect(screen.getByText("Semantic Engine")).not.toBeNull();
+    expect(screen.getByText("Module Unavailable")).not.toBeNull();
+    expect(screen.getByText(/Semantic Engine: Module Unavailable/)).not.toBeNull();
+    expect(screen.getByText(/HANLP2_IMPORT_UNAVAILABLE/)).not.toBeNull();
 
     const signalLabels = Array.from(
       container.querySelectorAll("._projectKnowledgeSignalCard_209b2b .ant-typography-secondary"),
@@ -423,13 +443,23 @@ describe("project knowledge supporting panels", () => {
       "projects.knowledge.signalDocuments",
       "projects.knowledge.signalChunks",
       "Sentences",
-      "Tokens",
+      "Lightweight Tokens",
       "Characters",
     ]);
   });
 
   it("renders processing mode cards", () => {
-    render(<ProjectKnowledgeProcessingPanel knowledgeState={buildKnowledgeState()} />);
+    const knowledgeState = buildKnowledgeState();
+    knowledgeState.processingCompareModes = knowledgeState.processingCompareModes.map((mode) => (
+      mode.mode === "nlp"
+        ? {
+          ...mode,
+          stage: "Waiting for graph extraction · Semantic engine unavailable: HanLP2 module is not installed.",
+        }
+        : mode
+    ));
+
+    render(<ProjectKnowledgeProcessingPanel knowledgeState={knowledgeState} />);
 
     expect(screen.getByText("Processing")).not.toBeNull();
     expect(screen.queryByText("极速模式")).toBeNull();
@@ -439,6 +469,10 @@ describe("project knowledge supporting panels", () => {
     expect(screen.getByText("L3 关系数")).not.toBeNull();
     expect(screen.getByText("实体关系抽取")).not.toBeNull();
     expect(screen.getByText("多智能体增强")).not.toBeNull();
+    expect(screen.getAllByText(/Semantic engine unavailable: HanLP2 module is not installed\./).length).toBeGreaterThan(0);
+    const runNlpButton = screen.getByRole("button", { name: "运行 NLP 结构化" }) as HTMLButtonElement;
+    expect(runNlpButton.disabled).toBe(true);
+    expect(runNlpButton.parentElement?.getAttribute("title")).toBe("Semantic engine unavailable: HanLP2 module is not installed.");
     expect(screen.getByText("L2 提供实体与关系的结构化基础，L3 在此基础上继续做多智能体增强与质量提升。")).not.toBeNull();
   });
 

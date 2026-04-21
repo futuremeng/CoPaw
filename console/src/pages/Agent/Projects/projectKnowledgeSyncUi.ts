@@ -1,4 +1,7 @@
-import type { ProjectKnowledgeSyncState } from "../../../api/types";
+import type {
+  ProjectKnowledgeSemanticEngineState,
+  ProjectKnowledgeSyncState,
+} from "../../../api/types";
 import type { TFunction } from "i18next";
 
 export type ProjectKnowledgeProcessingMode = "fast" | "nlp" | "agentic";
@@ -89,6 +92,70 @@ export function getProjectKnowledgeSyncStageLabel(
 ): string {
   const stage = String(syncState.current_stage || syncState.status || "idle").trim() || "idle";
   return t(`projects.knowledge.syncStage.${stage}`);
+}
+
+export function getProjectKnowledgeSemanticSummary(
+  semanticEngine: ProjectKnowledgeSemanticEngineState | null | undefined,
+  t: Translate,
+): string {
+  if (!semanticEngine) {
+    return "";
+  }
+  const reasonCode = String(semanticEngine.reason_code || "").trim();
+  const fallback = reasonCode === "SOURCE_NOT_READY"
+    ? "Semantic engine waiting for project source registration."
+    : reasonCode === "HANLP2_IMPORT_UNAVAILABLE"
+      ? "Semantic engine unavailable: HanLP2 module is not installed."
+      : reasonCode === "HANLP2_ENTRYPOINT_MISSING"
+        ? "Semantic engine unavailable: HanLP2 tokenizer entry point is missing."
+        : reasonCode === "HANLP2_TOKENIZE_FAILED"
+          ? "Semantic engine error: HanLP2 tokenization failed."
+          : reasonCode === "SEMANTIC_STATE_INVALID"
+            ? "Semantic engine error: invalid runtime state payload."
+            : reasonCode === "SEMANTIC_STATE_UNKNOWN"
+              ? "Semantic engine status is unknown."
+              : String(semanticEngine.summary || semanticEngine.reason || "").trim();
+  return t(`projects.knowledge.semanticReasonSummary.${reasonCode}`, fallback);
+}
+
+export function getProjectKnowledgeSemanticReasonLabel(
+  semanticEngine: ProjectKnowledgeSemanticEngineState | null | undefined,
+  t: Translate,
+): string {
+  if (!semanticEngine) {
+    return "";
+  }
+  const reasonCode = String(semanticEngine.reason_code || "").trim();
+  const fallback = reasonCode === "HANLP2_IMPORT_UNAVAILABLE"
+    ? "Module Unavailable"
+    : reasonCode === "HANLP2_ENTRYPOINT_MISSING"
+      ? "Tokenizer Entry Missing"
+      : reasonCode === "HANLP2_TOKENIZE_FAILED"
+        ? "Tokenization Failed"
+        : reasonCode === "SOURCE_NOT_READY"
+          ? "Source Not Ready"
+          : reasonCode === "SEMANTIC_STATE_INVALID"
+            ? "Invalid Semantic State"
+            : reasonCode === "SEMANTIC_STATE_UNKNOWN"
+              ? "Unknown Semantic State"
+              : "Ready";
+  return t(`projects.knowledge.semanticReasonCode.${reasonCode}`, fallback);
+}
+
+export function getProjectKnowledgeSemanticDescription(
+  semanticEngine: ProjectKnowledgeSemanticEngineState | null | undefined,
+  t: Translate,
+): string {
+  if (!semanticEngine) {
+    return "";
+  }
+  const reasonCode = String(semanticEngine.reason_code || "").trim();
+  const summary = getProjectKnowledgeSemanticSummary(semanticEngine, t);
+  const fallbackReason = String(semanticEngine.reason || "").trim();
+  const suffix = summary || fallbackReason;
+  return suffix
+    ? `${t("projects.knowledge.semanticEngineCode", "Code")}: ${reasonCode}. ${suffix}`
+    : `${t("projects.knowledge.semanticEngineCode", "Code")}: ${reasonCode}`;
 }
 
 export function getProjectKnowledgeSyncAlertDescription(

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Alert, Button, Select, Space, Tag, Tooltip, Typography } from "antd";
 import { useTranslation } from "react-i18next";
 import styles from "./index.module.less";
+import { getProjectKnowledgeSemanticReasonLabel } from "./projectKnowledgeSyncUi";
 import type {
   ProjectKnowledgeHeaderSignals,
   ProjectKnowledgeState,
@@ -47,6 +48,8 @@ export default function ProjectKnowledgeSignalsPanel(
     onRuntimeSignalTooltipOpenChange,
     latestQualityLoopSummary,
   } = props;
+  const semanticEngine = knowledgeState.syncState?.semantic_engine;
+  const semanticReasonLabel = getProjectKnowledgeSemanticReasonLabel(semanticEngine, t);
 
   return (
     <div className={styles.projectKnowledgeWorkbench}>
@@ -137,6 +140,14 @@ export default function ProjectKnowledgeSignalsPanel(
           <Typography.Text type="secondary">{t("projects.knowledge.signalQualityScore", "Quality Score")}</Typography.Text>
           <Typography.Text strong>{`${Math.round(knowledgeHeaderSignals.qualityAssessmentScore * 100)}`}</Typography.Text>
         </div>
+        {semanticEngine ? (
+          <div className={styles.knowledgeModuleHeaderSignal}>
+            <Typography.Text type="secondary">
+              {t("projects.knowledge.semanticEngineStatus", "Semantic Engine")}
+            </Typography.Text>
+            <Typography.Text strong>{semanticReasonLabel}</Typography.Text>
+          </div>
+        ) : null}
         <div className={styles.knowledgeModuleHeaderSignal}>
           <Typography.Text type="secondary">{t("knowledge.quantRelationNormalizationCoverage")}</Typography.Text>
           <Typography.Text strong>

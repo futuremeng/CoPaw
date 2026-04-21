@@ -1,4 +1,4 @@
-import { Button, Progress, Tag, Typography } from "antd";
+import { Button, Progress, Tag, Tooltip, Typography } from "antd";
 import { useTranslation } from "react-i18next";
 import styles from "./index.module.less";
 import type {
@@ -8,6 +8,7 @@ import type {
 import {
   getProjectKnowledgeModeLabel,
   getProjectKnowledgeModeRouteHint,
+  getProjectKnowledgeSemanticSummary,
 } from "./projectKnowledgeSyncUi";
 
 interface ProjectKnowledgeProcessingPanelProps {
@@ -34,6 +35,15 @@ function launchDisabledReason(
   }
   if (mode.mode !== "fast" && !knowledgeState.memifyEnabled) {
     return t("projects.knowledge.processing.needMemify", "需要先在 Settings 中启用实体抽取");
+  }
+  const semanticEngine = knowledgeState.syncState?.semantic_engine;
+  if (
+    mode.mode === "nlp"
+    && semanticEngine
+    && semanticEngine.status !== "ready"
+    && getProjectKnowledgeSemanticSummary(semanticEngine, t)
+  ) {
+    return getProjectKnowledgeSemanticSummary(semanticEngine, t);
   }
   return "";
 }
@@ -244,15 +254,19 @@ export default function ProjectKnowledgeProcessingPanel(
               ) : null}
 
               <div className={styles.projectKnowledgeProcessingCardFooter}>
-                <Button
-                  size="small"
-                  type="default"
-                  loading={launchMode === mode.mode}
-                  disabled={launchDisabled}
-                  onClick={() => void props.knowledgeState.startProcessingMode(mode.mode)}
-                >
-                  {actionLabel(mode.mode, t)}
-                </Button>
+                <Tooltip title={launchDisabled ? disabledReason : ""}>
+                  <span title={launchDisabled ? disabledReason : undefined}>
+                    <Button
+                      size="small"
+                      type="default"
+                      loading={launchMode === mode.mode}
+                      disabled={launchDisabled}
+                      onClick={() => void props.knowledgeState.startProcessingMode(mode.mode)}
+                    >
+                      {actionLabel(mode.mode, t)}
+                    </Button>
+                  </span>
+                </Tooltip>
                 {disabledReason ? (
                   <Typography.Text type="secondary">{disabledReason}</Typography.Text>
                 ) : null}

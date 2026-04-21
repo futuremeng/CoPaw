@@ -1886,6 +1886,7 @@
       "signalDocuments": "ドキュメント数",
       "signalChunks": "チャンク数",
       "signalSentences": "文数",
+      "signalTokens": "軽量トークン数",
       "signalNeedsReindex": "再索引が必要",
       "sourceSubject": "主題",
       "sourceKeywords": "キーワード",
@@ -1894,6 +1895,26 @@
       "signalQualityScore": "品質スコア",
       "signalRelations": "関係数",
       "entities": "エンティティ数",
+      "semanticEngineStatus": "セマンティックエンジン",
+      "semanticEngineCode": "コード",
+      "semanticReasonCode": {
+        "SOURCE_NOT_READY": "ソース未準備",
+        "SEMANTIC_STATE_INVALID": "セマンティック状態が無効",
+        "SEMANTIC_STATE_UNKNOWN": "セマンティック状態が不明",
+        "HANLP2_READY": "準備完了",
+        "HANLP2_IMPORT_UNAVAILABLE": "モジュール利用不可",
+        "HANLP2_ENTRYPOINT_MISSING": "トークナイザー入口なし",
+        "HANLP2_TOKENIZE_FAILED": "トークン化失敗"
+      },
+      "semanticReasonSummary": {
+        "SOURCE_NOT_READY": "セマンティックエンジンはプロジェクトソース登録待ちです。",
+        "SEMANTIC_STATE_INVALID": "セマンティックエンジンエラー: 実行時状態ペイロードが無効です。",
+        "SEMANTIC_STATE_UNKNOWN": "セマンティックエンジンの状態は不明です。",
+        "HANLP2_READY": "セマンティックエンジンは準備完了です。",
+        "HANLP2_IMPORT_UNAVAILABLE": "セマンティックエンジンは利用できません: HanLP2 モジュールが未インストールです。",
+        "HANLP2_ENTRYPOINT_MISSING": "セマンティックエンジンは利用できません: HanLP2 トークナイザーのエントリポイントがありません。",
+        "HANLP2_TOKENIZE_FAILED": "セマンティックエンジンエラー: HanLP2 のトークン化に失敗しました。"
+      },
       "runtimeStatusIdle": "待機中",
       "runtimeStatusNoDetails": "現在アクティブなナレッジタスクはありません。",
       "runtimeStatusTaskCount": "{{count}} 件が実行中",
@@ -1952,7 +1973,7 @@
         "agenticHint": "マルチエージェント協調と品質ループ反復により、最高品質の出力を提供します。"
       },
       "outputsHint": "モード別に知識出力を確認します。上位レイヤーが使えない場合は自動でフォールバックします。",
-      "sourcesRoleHint": "このタブは知識ソース一覧とカバレッジのみを表示し、処理レイヤーや出力レイヤーの詳細は表示しません。",
+      "sourcesRoleHint": "このタブは L1 の基礎統計レイヤーであり、ドキュメント数・チャンク数・文数・文字数・軽量トークン数・索引カバレッジのみを表示します。",
       "processingRoleHint": "このタブは 3 つの処理レーン、スケジューラ状態、実行可否のみを表示します。",
       "outputsRoleHint": "このタブは現在の利用レイヤーと成果物に集中し、スケジューラ詳細は重複表示しません。",
       "sourcesInventoryHint": "プロジェクトの知識ソースが揃っているか、索引済みか、期待する文書在庫をどこまでカバーしているかを確認します。",

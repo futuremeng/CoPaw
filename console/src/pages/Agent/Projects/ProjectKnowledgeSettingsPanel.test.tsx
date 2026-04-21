@@ -46,6 +46,12 @@ function buildRegisteredSource(projectId: string) {
     recursive: true,
     tags: ["project"],
     summary: "",
+    semantic_status: {
+      engine: "hanlp2",
+      status: "ready",
+      reason_code: "HANLP2_READY",
+      reason: "HanLP2 semantic engine is ready.",
+    },
     status: {
       indexed: true,
       indexed_at: null,
@@ -53,6 +59,43 @@ function buildRegisteredSource(projectId: string) {
       chunk_count: 3,
       error: null,
     },
+  };
+}
+
+function buildSemanticState(
+  overrides: Record<string, unknown> = {},
+) {
+  return {
+    engine: "hanlp2",
+    status: "ready",
+    reason_code: "HANLP2_READY",
+    reason: "HanLP2 semantic engine is ready.",
+    ...overrides,
+  };
+}
+
+function buildSyncState(
+  projectId: string,
+  overrides: Record<string, unknown> = {},
+) {
+  return {
+    project_id: projectId,
+    status: "idle",
+    current_stage: "idle",
+    progress: 0,
+    auto_enabled: true,
+    dirty: false,
+    dirty_after_run: false,
+    last_trigger: "",
+    changed_paths: [],
+    pending_changed_paths: [],
+    changed_count: 0,
+    last_error: "",
+    latest_job_id: "",
+    latest_source_id: `project-${projectId.toLowerCase()}-workspace`,
+    last_result: {},
+    semantic_engine: buildSemanticState(),
+    ...overrides,
   };
 }
 
@@ -64,23 +107,7 @@ describe("ProjectKnowledgeSettingsPanel", () => {
     mockedApi.listKnowledgeSources.mockResolvedValue({
       sources: [buildRegisteredSource(projectId)],
     });
-    mockedApi.getProjectKnowledgeSyncStatus.mockResolvedValue({
-      project_id: projectId,
-      status: "idle",
-      current_stage: "idle",
-      progress: 0,
-      auto_enabled: true,
-      dirty: false,
-      dirty_after_run: false,
-      last_trigger: "",
-      changed_paths: [],
-      pending_changed_paths: [],
-      changed_count: 0,
-      last_error: "",
-      latest_job_id: "",
-      latest_source_id: `project-${projectId.toLowerCase()}-workspace`,
-      last_result: {},
-    });
+    mockedApi.getProjectKnowledgeSyncStatus.mockResolvedValue(buildSyncState(projectId));
     mockedApi.runProjectKnowledgeSync.mockResolvedValue({
       accepted: true,
       reason: "STARTED",
@@ -191,24 +218,23 @@ describe("ProjectKnowledgeSettingsPanel", () => {
   });
 
   it("renders queued sync stage summary", async () => {
-    mockedApi.getProjectKnowledgeSyncStatus.mockResolvedValueOnce({
-      project_id: projectId,
+    mockedApi.getProjectKnowledgeSyncStatus.mockResolvedValueOnce(buildSyncState(projectId, {
       status: "queued",
       current_stage: "cooldown",
+      stage_message: "Waiting for debounce/cooldown window · Semantic engine unavailable: HanLP2 module is not installed.",
       progress: 1,
-      auto_enabled: true,
       dirty: true,
-      dirty_after_run: false,
       last_trigger: "project_watcher_change",
       changed_paths: ["original/a.md"],
-      pending_changed_paths: [],
       changed_count: 1,
       scheduled_for: "2026-04-11T23:31:00+00:00",
-      last_error: "",
-      latest_job_id: "",
-      latest_source_id: `project-${projectId.toLowerCase()}-workspace`,
-      last_result: {},
-    });
+      semantic_engine: buildSemanticState({
+        status: "unavailable",
+        reason_code: "HANLP2_IMPORT_UNAVAILABLE",
+        reason: "HanLP2 module is not installed or failed to import.",
+        summary: "Semantic engine unavailable: HanLP2 module is not installed.",
+      }),
+    }));
 
     render(
       <ProjectKnowledgeSettingsPanel
@@ -224,6 +250,113 @@ describe("ProjectKnowledgeSettingsPanel", () => {
 
     await waitFor(() => {
       expect(document.body.textContent || "").toContain("projects.knowledge.syncStage.cooldown");
+      expect(document.body.textContent || "").toContain("Semantic engine unavailable: HanLP2 module is not installed.");
+    });
+  });
+
+  it("renders semantic engine status in layer 2", async () => {
+    mockedApi.getProjectKnowledgeSyncStatus.mockResolvedValueOnce(buildSyncState(projectId, {
+      semantic_engine: buildSemanticState({
+        status: "unavailable",
+        reason_code: "HANLP2_IMPORT_UNAVAILABLE",
+        reason: "HanLP2 module is not installed or failed to import.",
+      }),
+    }));
+    mockedApi.listKnowledgeSources.mockResolvedValueOnce({
+      sources: [
+        {
+          ...buildRegisteredSource(projectId),
+          semantic_status: buildSemanticState({
+            status: "unavailable",
+            reason_code: "HANLP2_IMPORT_UNAVAILABLE",
+            reason: "HanLP2 module is not installed or failed to import.",
+          }),
+        },
+      ],
+    });
+
+    render(
+      <ProjectKnowledgeSettingsPanel
+        agentId="default"
+        projectId={projectId}
+        projectName="Project ABC"
+        projectWorkspaceDir="/tmp/workspace"
+        projectAutoKnowledgeSink
+        includeGlobal
+        onIncludeGlobalChange={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(document.body.textContent || "").toContain("Module Unavailable");
+      expect(document.body.textContent || "").toContain("HANLP2_IMPORT_UNAVAILABLE");
+      expect(document.body.textContent || "").toContain("Semantic engine unavailable: HanLP2 module is not installed.");
+    });
+  });
+
+  it("renders semantic runtime failure code in layer 2", async () => {
+    mockedApi.getProjectKnowledgeSyncStatus.mockResolvedValueOnce(buildSyncState(projectId, {
+      semantic_engine: buildSemanticState({
+        status: "error",
+        reason_code: "HANLP2_TOKENIZE_FAILED",
+        reason: "HanLP2 semantic tokenization failed via tok: RuntimeError.",
+      }),
+    }));
+    mockedApi.listKnowledgeSources.mockResolvedValueOnce({
+      sources: [
+        {
+          ...buildRegisteredSource(projectId),
+          semantic_status: buildSemanticState({
+            status: "error",
+            reason_code: "HANLP2_TOKENIZE_FAILED",
+            reason: "HanLP2 semantic tokenization failed via tok: RuntimeError.",
+          }),
+        },
+      ],
+    });
+
+    render(
+      <ProjectKnowledgeSettingsPanel
+        agentId="default"
+        projectId={projectId}
+        projectName="Project ABC"
+        projectWorkspaceDir="/tmp/workspace"
+        projectAutoKnowledgeSink
+        includeGlobal
+        onIncludeGlobalChange={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(document.body.textContent || "").toContain("Tokenization Failed");
+      expect(document.body.textContent || "").toContain("HANLP2_TOKENIZE_FAILED");
+    });
+  });
+
+  it("prefers sync state semantic engine over source fallback", async () => {
+    mockedApi.getProjectKnowledgeSyncStatus.mockResolvedValueOnce(buildSyncState(projectId, {
+      semantic_engine: buildSemanticState({
+        status: "idle",
+        reason_code: "SOURCE_NOT_READY",
+        reason: "Project source has not been prepared for semantic extraction yet.",
+      }),
+    }));
+
+    render(
+      <ProjectKnowledgeSettingsPanel
+        agentId="default"
+        projectId={projectId}
+        projectName="Project ABC"
+        projectWorkspaceDir="/tmp/workspace"
+        projectAutoKnowledgeSink
+        includeGlobal
+        onIncludeGlobalChange={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(document.body.textContent || "").toContain("Source Not Ready");
+      expect(document.body.textContent || "").toContain("SOURCE_NOT_READY");
     });
   });
 });

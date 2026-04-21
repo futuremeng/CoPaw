@@ -28,6 +28,23 @@ export interface KnowledgeIndexConfig {
   updated_at?: string | null;
 }
 
+export interface ProjectKnowledgeSemanticEngineState {
+  engine: string;
+  status: "idle" | "ready" | "unavailable" | "error";
+  reason_code:
+    | "SOURCE_NOT_READY"
+    | "SEMANTIC_STATE_INVALID"
+    | "SEMANTIC_STATE_UNKNOWN"
+    | "HANLP2_READY"
+    | "HANLP2_IMPORT_UNAVAILABLE"
+    | "HANLP2_ENTRYPOINT_MISSING"
+    | "HANLP2_TOKENIZE_FAILED"
+    | string;
+  reason: string;
+  summary?: string;
+  updated_at?: string | null;
+}
+
 export type ProjectKnowledgeProcessingMode = "fast" | "nlp" | "agentic";
 
 export interface ProjectKnowledgeProcessingModeStatePayload {
@@ -150,6 +167,7 @@ export interface ProjectKnowledgeSyncState {
   mode_outputs?: Partial<Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeOutputPayload>>;
   mode_metrics?: Partial<Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeMetricsPayload>>;
   global_metrics?: ProjectKnowledgeGlobalMetricsPayload;
+  semantic_engine?: ProjectKnowledgeSemanticEngineState;
 }
 
 export interface ProjectKnowledgeSyncRunRequest {
@@ -200,9 +218,22 @@ export interface KnowledgeSourceStatus {
   remote_updated_at?: string | null;
 }
 
+export interface KnowledgeSourceSemanticStatus {
+  engine: string;
+  status: "ready" | "unavailable" | "error";
+  reason_code:
+    | "HANLP2_READY"
+    | "HANLP2_IMPORT_UNAVAILABLE"
+    | "HANLP2_ENTRYPOINT_MISSING"
+    | "HANLP2_TOKENIZE_FAILED"
+    | string;
+  reason: string;
+}
+
 export interface KnowledgeSourceItem extends KnowledgeSourceSpec {
   subject?: string;
   keywords?: string[];
+  semantic_status?: KnowledgeSourceSemanticStatus;
   status: KnowledgeSourceStatus;
 }
 

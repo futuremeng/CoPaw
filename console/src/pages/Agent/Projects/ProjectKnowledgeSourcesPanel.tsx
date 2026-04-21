@@ -21,7 +21,7 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
           <Typography.Text type="secondary">
             {t(
               "projects.knowledge.sourcesRoleHint",
-              "Sources 就是 L1 基础统计层，这里只保留文档数、切片数、句子数、词数、字数。",
+              "Sources 就是 L1 基础统计层，这里只保留文档数、切片数、句子数、轻量词数、字数。",
             )}
           </Typography.Text>
         </div>
@@ -41,7 +41,7 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
           <Typography.Text strong>{knowledgeState.quantMetrics.sentenceCount}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("projects.knowledge.signalTokens", "Tokens")}</Typography.Text>
+          <Typography.Text type="secondary">{t("projects.knowledge.signalTokens", "Lightweight Tokens")}</Typography.Text>
           <Typography.Text strong>{knowledgeState.quantMetrics.tokenCount || 0}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>

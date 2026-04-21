@@ -31,6 +31,10 @@ import ProjectKnowledgeProcessingPanel from "./ProjectKnowledgeProcessingPanel";
 import ProjectKnowledgeSignalsPanel from "./ProjectKnowledgeSignalsPanel";
 import ProjectKnowledgeSourcesPanel from "./ProjectKnowledgeSourcesPanel";
 import ProjectKnowledgeSettingsPanel from "./ProjectKnowledgeSettingsPanel";
+import {
+  getProjectKnowledgeSemanticDescription,
+  getProjectKnowledgeSemanticReasonLabel,
+} from "./projectKnowledgeSyncUi";
 import ProjectOverviewCard from "./ProjectOverviewCard";
 import ProjectStageMenu from "./ProjectStageMenu";
 import ProjectUploadModal from "./ProjectUploadModal";
@@ -729,6 +733,9 @@ export default function ProjectDetailPage() {
             const projectSyncDetail = task.task_type === "project_sync"
               ? (detail as ProjectKnowledgeSyncState | null)
               : null;
+            const semanticEngine = projectSyncDetail?.semantic_engine;
+            const semanticReasonLabel = getProjectKnowledgeSemanticReasonLabel(semanticEngine, t);
+            const semanticDescription = getProjectKnowledgeSemanticDescription(semanticEngine, t);
             const scoreBefore = typeof qualityLoopDetail?.score_before === "number"
               ? qualityLoopDetail.score_before
               : null;
@@ -791,6 +798,12 @@ export default function ProjectDetailPage() {
                 {warnings.length ? (
                   <Text type="secondary">
                     {t("projects.knowledge.runtimeStatusWarnings", "Warnings")}: {warnings.join("; ")}
+                  </Text>
+                ) : null}
+                {semanticEngine ? (
+                  <Text type="secondary">
+                    {t("projects.knowledge.semanticEngineStatus", "Semantic Engine")}: {semanticReasonLabel}
+                    {semanticDescription ? `. ${semanticDescription}` : ""}
                   </Text>
                 ) : null}
                 {errorText ? (
@@ -3386,7 +3399,6 @@ export default function ProjectDetailPage() {
         children: (
           <ProjectKnowledgeSourcesPanel
             knowledgeState={projectKnowledgeState}
-            onOpenSettings={handleKnowledgeOpenSettings}
           />
         ),
       },
