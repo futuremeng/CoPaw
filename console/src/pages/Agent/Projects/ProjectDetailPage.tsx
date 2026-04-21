@@ -511,6 +511,10 @@ export default function ProjectDetailPage() {
   const [knownProjectFilesByPath, setKnownProjectFilesByPath] =
     useState<Record<string, AgentProjectFileInfo>>({});
   const [selectedFilePath, setSelectedFilePath] = useState("");
+  const [workbenchSyncNotice, setWorkbenchSyncNotice] = useState<{
+    changedPaths: string[];
+    updatedAt: number;
+  } | null>(null);
   const [fileContent, setFileContent] = useState("");
   const [filesLoading, setFilesLoading] = useState(false);
   const [projectTreeLoading, setProjectTreeLoading] = useState(false);
@@ -1856,6 +1860,15 @@ export default function ProjectDetailPage() {
           .filter((item) => item && !isIgnoredProjectFile(item)),
       ),
     );
+    if (
+      changedPaths.length > 0
+      && (!selectedFilePath || !changedPaths.includes(selectedFilePath))
+    ) {
+      setWorkbenchSyncNotice({
+        changedPaths,
+        updatedAt: Date.now(),
+      });
+    }
     const shouldPatchIncrementally = Boolean(
       payload
       && payload.reason !== "resync"
@@ -1895,6 +1908,12 @@ export default function ProjectDetailPage() {
       ),
     );
     if (shouldRefreshSelectedContent) {
+      setWorkbenchSyncNotice((prev) => {
+        if (!prev) {
+          return prev;
+        }
+        return changedPaths.includes(selectedFilePath) ? null : prev;
+      });
       await loadFileContent(currentAgent.id, selectedProject, selectedFilePath);
     }
   }, [applyProjectFilesMetadataPatch, currentAgent, loadFileContent, loadProjectFileSummary, loadProjectFilesMetadata, loadProjectTreeRoot, scheduleProjectFilesRefresh, selectedFilePath, selectedProject]);
@@ -2528,6 +2547,7 @@ export default function ProjectDetailPage() {
     setProjectFileSummary(null);
     setKnownProjectFilesByPath({});
     setSelectedFilePath("");
+    setWorkbenchSyncNotice(null);
     setFileContent("");
     setPipelineTemplates([]);
     setPipelineRuns([]);
@@ -2946,6 +2966,7 @@ export default function ProjectDetailPage() {
   }, [currentAgent, loadAgents, navigate, selectedProject, t]);
 
   const handleSelectArtifactFile = useCallback((path: string) => {
+    setWorkbenchSyncNotice(null);
     setSelectedFilePath(path);
   }, []);
 
@@ -3665,6 +3686,7 @@ export default function ProjectDetailPage() {
                         <div className={styles.rightWorkbenchPrimary}>
                           <ProjectWorkbenchPanel
                             projectLabel={selectedProject?.id || routeProjectId}
+                            syncNotice={workbenchSyncNotice}
                             filesLoading={filesLoading}
                             contentLoading={contentLoading}
                             artifactRecords={artifactRecords}
@@ -3679,6 +3701,9 @@ export default function ProjectDetailPage() {
                             onToggleAutoAnalyze={setAutoAnalyzeOnAttach}
                             onSendSelectedFilesToChat={() => {
                               void handleSendSelectedFilesToChat();
+                            }}
+                            onDismissSyncNotice={() => {
+                              setWorkbenchSyncNotice(null);
                             }}
                             formatBytes={formatBytes}
                           />

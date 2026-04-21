@@ -10,7 +10,11 @@ interface UseProjectUploadControllerParams {
   selectedProject?: AgentProjectSummary;
   resolvedProjectRequestId: string;
   setResolvedProjectRequestId: (value: string) => void;
-  loadProjectFiles: (agentId: string, project: AgentProjectSummary) => Promise<void>;
+  loadProjectFiles: (
+    agentId: string,
+    project: AgentProjectSummary,
+    options?: { preserveSelection?: boolean },
+  ) => Promise<void>;
 }
 
 export default function useProjectUploadController({
@@ -68,7 +72,9 @@ export default function useProjectUploadController({
         }
       }
 
-      await loadProjectFiles(currentAgent.id, selectedProject);
+      await loadProjectFiles(currentAgent.id, selectedProject, {
+        preserveSelection: true,
+      });
       resetUploadState();
       message.success(
         t("projects.upload.success", "Uploaded {{count}} file(s) to project.", {
