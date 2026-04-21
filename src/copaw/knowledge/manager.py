@@ -829,7 +829,12 @@ class KnowledgeManager:
             if target_dir.exists():
                 shutil.rmtree(target_dir, ignore_errors=True)
             try:
-                shutil.copytree(source_path, target_dir, dirs_exist_ok=True)
+                shutil.copytree(
+                    source_path,
+                    target_dir,
+                    dirs_exist_ok=True,
+                    ignore=shutil.ignore_patterns(self.root_dir.name),
+                )
                 for file_path in target_dir.rglob("*"):
                     if file_path.is_file():
                         self._write_media_semantic_if_needed(file_path, media_root)

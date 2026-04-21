@@ -72,6 +72,34 @@ def test_directory_source_skips_hidden_files_and_hidden_directories(tmp_path: Pa
     assert paths[0].endswith("visible.md")
 
 
+def test_directory_source_raw_sync_ignores_internal_knowledge_dir(tmp_path: Path):
+    project_root = tmp_path / "project-raw-sync"
+    project_root.mkdir(parents=True, exist_ok=True)
+    (project_root / "original").mkdir(parents=True, exist_ok=True)
+    (project_root / "original" / "note.md").write_text("hello raw sync", encoding="utf-8")
+
+    config = Config().knowledge
+    source = KnowledgeSourceSpec(
+        id="project-raw-sync-source",
+        name="Project Raw Sync Source",
+        type="directory",
+        location=str(project_root),
+        content="",
+        enabled=True,
+        recursive=True,
+        tags=["project"],
+        summary="",
+    )
+
+    manager = KnowledgeManager(project_root, knowledge_dirname=".knowledge")
+    manager.index_source(source, config)
+
+    raw_dir = manager.get_source_storage_dir(source.id) / "raw" / project_root.name
+
+    assert (raw_dir / "original" / "note.md").exists()
+    assert not (raw_dir / ".knowledge").exists()
+
+
 def test_chunk_documents_split_sentences_and_count(tmp_path: Path):
     config = Config().knowledge
     config.index.chunk_size = 10_000

@@ -169,6 +169,112 @@ async def test_project_knowledge_watcher_bootstrap_writes_project_chunks_automat
 
 
 @pytest.mark.asyncio
+async def test_project_knowledge_watcher_change_updates_project_chunks_automatically(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    project_dir = tmp_path / "projects" / "project-change-chunks"
+    project_dir.mkdir(parents=True, exist_ok=True)
+    (project_dir / "PROJECT.md").write_text(
+        "---\nid: project-change-chunks\nname: Project Change Chunks\nproject_auto_knowledge_sink: true\n---\n",
+        encoding="utf-8",
+    )
+    note_path = project_dir / "original" / "note.md"
+    note_path.parent.mkdir(parents=True, exist_ok=True)
+    note_path.write_text("v1", encoding="utf-8")
+
+    config = Config()
+    config.knowledge.enabled = True
+    config.knowledge.memify_enabled = True
+
+    monkeypatch.setattr(watcher_module, "load_config", lambda: config)
+    monkeypatch.setattr(
+        watcher_module,
+        "load_agent_config",
+        lambda _agent_id: type("AgentCfg", (), {"running": config.agents.running})(),
+    )
+    monkeypatch.setattr("qwenpaw.config.utils.save_config", lambda _config: None)
+    monkeypatch.setattr(watcher_module, "DEFAULT_CHANGE_DEBOUNCE_SECONDS", 0)
+    monkeypatch.setattr(watcher_module, "DEFAULT_SYNC_COOLDOWN_SECONDS", 0)
+
+    def run_worker_inline(self, **kwargs):
+        self._run_sync_loop(**kwargs)
+
+    monkeypatch.setattr(
+        watcher_module.ProjectKnowledgeSyncManager,
+        "_start_worker",
+        run_worker_inline,
+    )
+    monkeypatch.setattr(
+        "qwenpaw.app.knowledge_workflow.KnowledgeWorkflowOrchestrator.run",
+        lambda self, **kwargs: {
+            "run_id": "run-project-change-chunks",
+            "run_status": "succeeded",
+            "template_id": "builtin-knowledge-processing-v1",
+            "processing_mode": kwargs.get("processing_mode") or "agentic",
+            "processing_fingerprint": self.knowledge_manager.compute_processing_fingerprint(
+                kwargs["config"],
+                kwargs.get("running_config"),
+            ),
+            "latest_job_id": "",
+            "index": self.knowledge_manager.index_source(
+                kwargs["source"],
+                kwargs["config"],
+                kwargs.get("running_config"),
+            ),
+            "memify": {},
+            "quality_loop": {},
+            "artifacts": [],
+        },
+    )
+
+    watcher = watcher_module.ProjectKnowledgeWatcher(
+        agent_id="default",
+        workspace_dir=tmp_path,
+        poll_interval=0.01,
+    )
+
+    initial = watcher._collect_snapshots()
+    await watcher._handle_snapshot_changes(initial)
+    watcher._snapshots = initial
+
+    chunk_path = (
+        tmp_path
+        / "projects"
+        / "project-change-chunks"
+        / ".knowledge"
+        / "chunks"
+        / "original"
+        / "note.md.0.txt"
+    )
+    index_path = (
+        tmp_path
+        / "projects"
+        / "project-change-chunks"
+        / ".knowledge"
+        / "sources"
+        / "project-project-change-chunks-workspace"
+        / "index.json"
+    )
+
+    assert chunk_path.exists()
+    assert chunk_path.read_text(encoding="utf-8") == "v1"
+
+    note_path.write_text("v2", encoding="utf-8")
+    current = watcher._collect_snapshots()
+    await watcher._handle_snapshot_changes(current)
+
+    assert chunk_path.read_text(encoding="utf-8") == "v2"
+    payload = json.loads(index_path.read_text(encoding="utf-8"))
+    note_chunk = next(
+        item
+        for item in payload.get("chunks") or []
+        if item.get("chunk_path") == "chunks/original/note.md.0.txt"
+    )
+    assert "text" not in note_chunk
+
+
+@pytest.mark.asyncio
 async def test_project_knowledge_watcher_triggers_on_file_change(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
