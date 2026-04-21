@@ -221,7 +221,86 @@ class ProjectKnowledgeSyncManager:
             "mode_outputs": {},
             "mode_metrics": {},
             "global_metrics": {},
+            "semantic_engine": {
+                "engine": "hanlp2",
+                "status": "idle",
+                "reason_code": "SOURCE_NOT_READY",
+                "reason": "Project source has not been prepared for semantic extraction yet.",
+                "summary": "Semantic engine waiting for project source registration.",
+                "updated_at": None,
+            },
         }
+
+    @staticmethod
+    def _build_semantic_engine_summary(payload: dict[str, Any]) -> str:
+        status = str(payload.get("status") or "").strip().lower()
+        reason_code = str(payload.get("reason_code") or "").strip().upper()
+        if reason_code == "SOURCE_NOT_READY":
+            return "Semantic engine waiting for project source registration."
+        if reason_code == "HANLP2_IMPORT_UNAVAILABLE":
+            return "Semantic engine unavailable: HanLP2 module is not installed."
+        if reason_code == "HANLP2_ENTRYPOINT_MISSING":
+            return "Semantic engine unavailable: HanLP2 tokenizer entry point is missing."
+        if reason_code == "HANLP2_TOKENIZE_FAILED":
+            return "Semantic engine error: HanLP2 tokenization failed."
+        if reason_code == "SEMANTIC_STATE_INVALID":
+            return "Semantic engine error: invalid runtime state payload."
+        if status == "ready":
+            return "Semantic engine ready."
+        if status == "error":
+            return "Semantic engine error."
+        if status == "unavailable":
+            return "Semantic engine unavailable."
+        return "Semantic engine status pending."
+
+    @staticmethod
+    def _merge_stage_message_with_semantic_summary(
+        stage_message: str | None,
+        semantic_summary: str | None,
+    ) -> str:
+        primary = str(stage_message or "").strip()
+        summary = str(semantic_summary or "").strip()
+        if not primary:
+            return summary
+        if not summary:
+            return primary
+        if summary in primary:
+            return primary
+        return f"{primary} · {summary}"
+
+    def _build_semantic_engine_state(self, state: dict[str, Any]) -> dict[str, Any]:
+        updated_at = str(state.get("updated_at") or "").strip() or None
+        latest_source_id = str(state.get("latest_source_id") or "").strip()
+        if not latest_source_id:
+            payload = {
+                "engine": "hanlp2",
+                "status": "idle",
+                "reason_code": "SOURCE_NOT_READY",
+                "reason": "Project source has not been prepared for semantic extraction yet.",
+                "updated_at": updated_at,
+            }
+            payload["summary"] = self._build_semantic_engine_summary(payload)
+            return payload
+        semantic_state = self._knowledge_manager.get_semantic_engine_state()
+        if not isinstance(semantic_state, dict):
+            payload = {
+                "engine": "hanlp2",
+                "status": "error",
+                "reason_code": "SEMANTIC_STATE_INVALID",
+                "reason": "Semantic engine state returned an invalid payload.",
+                "updated_at": updated_at,
+            }
+            payload["summary"] = self._build_semantic_engine_summary(payload)
+            return payload
+        payload = {
+            "engine": str(semantic_state.get("engine") or "hanlp2"),
+            "status": str(semantic_state.get("status") or "idle"),
+            "reason_code": str(semantic_state.get("reason_code") or "SEMANTIC_STATE_UNKNOWN"),
+            "reason": str(semantic_state.get("reason") or "Semantic engine state is unavailable."),
+            "updated_at": updated_at,
+        }
+        payload["summary"] = self._build_semantic_engine_summary(payload)
+        return payload
 
     def _relative_workspace_path(self, value: str | Path | None) -> str:
         text = str(value or "").strip()
@@ -791,6 +870,11 @@ class ProjectKnowledgeSyncManager:
         hydrated["mode_outputs"] = mode_outputs
         hydrated["mode_metrics"] = mode_metrics
         hydrated["global_metrics"] = self._build_global_metrics(hydrated, mode_metrics)
+        hydrated["semantic_engine"] = self._build_semantic_engine_state(hydrated)
+        hydrated["stage_message"] = self._merge_stage_message_with_semantic_summary(
+            str(hydrated.get("stage_message") or "").strip(),
+            str((hydrated.get("semantic_engine") or {}).get("summary") or "").strip(),
+        )
         return hydrated
 
     def check_needs_reindex(
@@ -1192,7 +1276,7 @@ class ProjectKnowledgeSyncManager:
             if changed_paths:
                 state["last_change_at"] = self._now_iso()
             self._save_state(state)
-            return dict(state)
+            return self._hydrate_processing_view(state)
 
     def start_sync(
         self,
@@ -1235,7 +1319,7 @@ class ProjectKnowledgeSyncManager:
                 return {
                     "accepted": False,
                     "reason": "RUN_ALREADY_ACTIVE",
-                    "state": dict(state),
+                    "state": self._hydrate_processing_view(state),
                 }
 
             if not force and changed_paths:
@@ -1270,7 +1354,7 @@ class ProjectKnowledgeSyncManager:
         return {
             "accepted": True,
             "reason": reason,
-            "state": state,
+            "state": self._hydrate_processing_view(state),
         }
 
     def _run_sync_loop(
@@ -1415,4 +1499,4 @@ class ProjectKnowledgeSyncManager:
             state = self._load_state(project_id)
             state.update(self._normalize_sync_patch(patch))
             self._save_state(state)
-            return dict(state)
+            return self._hydrate_processing_view(state)

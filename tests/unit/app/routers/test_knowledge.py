@@ -82,7 +82,8 @@ def test_upsert_source_auto_summary_includes_keywords(
 
     assert response.status_code == 200
     generated = response.json()["summary"]
-    assert "关键词:" in generated
+    assert generated
+    assert "支付系统" in generated
 
 
 def test_upsert_source_subject_prefers_summary_over_content(
@@ -158,6 +159,46 @@ def test_list_sources_returns_structured_summary_keywords(
     assert isinstance(source.get("subject"), str)
     assert isinstance(source.get("summary"), str)
     assert isinstance(source.get("keywords"), list)
+
+
+def test_list_sources_returns_semantic_engine_status(
+    knowledge_api_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        KnowledgeManager,
+        "get_semantic_engine_state",
+        classmethod(
+            lambda cls: {
+                "engine": "hanlp2",
+                "status": "unavailable",
+                "reason_code": "HANLP2_IMPORT_UNAVAILABLE",
+                "reason": "HanLP2 module is not installed or failed to import.",
+            }
+        ),
+    )
+
+    put_response = knowledge_api_client.put(
+        "/knowledge/sources",
+        json={
+            "id": "text-semantic-status",
+            "name": "Manual Name",
+            "type": "text",
+            "content": "支付系统 风控规则 更新。",
+            "enabled": True,
+            "recursive": False,
+            "tags": [],
+            "summary": "",
+        },
+    )
+    assert put_response.status_code == 200
+
+    listing = knowledge_api_client.get("/knowledge/sources?include_semantic=true")
+    assert listing.status_code == 200
+    source = listing.json()["sources"][0]
+    assert source["semantic_status"]["engine"] == "hanlp2"
+    assert source["semantic_status"]["status"] == "unavailable"
+    assert source["semantic_status"]["reason_code"] == "HANLP2_IMPORT_UNAVAILABLE"
 
 
 def test_list_sources_filters_by_project_id(

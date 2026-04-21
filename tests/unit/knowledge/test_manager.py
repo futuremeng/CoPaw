@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 from copaw.config.config import Config, KnowledgeSourceSpec
 from copaw.knowledge.manager import KnowledgeManager
@@ -103,6 +104,128 @@ def test_chunk_documents_split_sentences_and_count(tmp_path: Path):
     assert status.get("sentence_count") == 3
     assert content.get("chunk_count") == 1
     assert content.get("sentence_count") == 3
+
+
+def test_lightweight_token_count_does_not_depend_on_semantic_tokenizer(tmp_path: Path):
+    config = Config().knowledge
+    config.index.chunk_size = 10_000
+    source = KnowledgeSourceSpec(
+        id="lightweight-token-source",
+        name="Lightweight Token Source",
+        type="text",
+        content="第一句。第二句! Third sentence?",
+        enabled=True,
+        recursive=False,
+        tags=[],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    with patch.object(
+        KnowledgeManager,
+        "_tokenize_semantic_text",
+        side_effect=RuntimeError("semantic path should not be used for token_count"),
+    ):
+        result = manager.index_source(source, config)
+
+    assert result.get("token_count") == 4
+
+
+def test_process_knowledge_text_returns_empty_keywords_without_hanlp(tmp_path: Path):
+    manager = KnowledgeManager(tmp_path)
+
+    with patch("copaw.knowledge.manager.hanlp", None):
+        processed = manager._process_knowledge_text("第一句。第二句! Third sentence?", top_n=3)
+
+    assert processed["subject"] == "第一句。第二句"
+    assert processed["summary"] == "第一句。第二句"
+    assert processed["keywords"] == []
+
+
+def test_semantic_tokenizer_uses_hanlp2_tok_and_flattens_nested_tokens(tmp_path: Path):
+    manager = KnowledgeManager(tmp_path)
+
+    class FakeHanLP:
+        @staticmethod
+        def tok(text: str):
+            assert text == "Agent runner 关系抽取"
+            return [["Agent", "runner"], ["关系抽取"]]
+
+    original_cache = KnowledgeManager._hanlp2_tokenizer_cache
+    KnowledgeManager._hanlp2_tokenizer_cache = None
+    try:
+        with patch("copaw.knowledge.manager.hanlp", FakeHanLP()):
+            tokens = manager._tokenize_semantic_text("Agent runner 关系抽取", exclude_stop_words=False)
+    finally:
+        KnowledgeManager._hanlp2_tokenizer_cache = original_cache
+
+    assert tokens == ["agent", "runner", "关系抽取"]
+
+
+def test_semantic_engine_state_reports_unavailable_without_hanlp(tmp_path: Path):
+    manager = KnowledgeManager(tmp_path)
+
+    original_cache = KnowledgeManager._hanlp2_tokenizer_cache
+    original_state = KnowledgeManager._hanlp2_state
+    KnowledgeManager._hanlp2_tokenizer_cache = None
+    KnowledgeManager._hanlp2_state = None
+    try:
+        with patch("copaw.knowledge.manager.hanlp", None):
+            state = manager.get_semantic_engine_state()
+    finally:
+        KnowledgeManager._hanlp2_tokenizer_cache = original_cache
+        KnowledgeManager._hanlp2_state = original_state
+
+    assert state["engine"] == "hanlp2"
+    assert state["status"] == "unavailable"
+    assert state["reason_code"] == "HANLP2_IMPORT_UNAVAILABLE"
+
+
+def test_semantic_engine_state_reports_missing_entrypoint(tmp_path: Path):
+    manager = KnowledgeManager(tmp_path)
+
+    class FakeHanLP:
+        pass
+
+    original_cache = KnowledgeManager._hanlp2_tokenizer_cache
+    original_state = KnowledgeManager._hanlp2_state
+    KnowledgeManager._hanlp2_tokenizer_cache = None
+    KnowledgeManager._hanlp2_state = None
+    try:
+        with patch("copaw.knowledge.manager.hanlp", FakeHanLP()):
+            state = manager.get_semantic_engine_state()
+    finally:
+        KnowledgeManager._hanlp2_tokenizer_cache = original_cache
+        KnowledgeManager._hanlp2_state = original_state
+
+    assert state["status"] == "unavailable"
+    assert state["reason_code"] == "HANLP2_ENTRYPOINT_MISSING"
+
+
+def test_semantic_engine_state_reports_tokenize_runtime_failure(tmp_path: Path):
+    manager = KnowledgeManager(tmp_path)
+
+    class FakeHanLP:
+        @staticmethod
+        def tok(text: str):
+            raise RuntimeError(f"boom: {text}")
+
+    original_cache = KnowledgeManager._hanlp2_tokenizer_cache
+    original_state = KnowledgeManager._hanlp2_state
+    KnowledgeManager._hanlp2_tokenizer_cache = None
+    KnowledgeManager._hanlp2_state = None
+    try:
+        with patch("copaw.knowledge.manager.hanlp", FakeHanLP()):
+            tokens = manager._tokenize_semantic_text("Agent runner 关系抽取")
+            state = manager.get_semantic_engine_state()
+    finally:
+        KnowledgeManager._hanlp2_tokenizer_cache = original_cache
+        KnowledgeManager._hanlp2_state = original_state
+
+    assert tokens == []
+    assert state["status"] == "error"
+    assert state["reason_code"] == "HANLP2_TOKENIZE_FAILED"
+    assert "RuntimeError" in state["reason"]
 
 
 def test_compute_processing_fingerprint_changes_with_chunk_size(tmp_path: Path):

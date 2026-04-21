@@ -66,6 +66,7 @@ def test_project_sync_queues_until_debounce_window(tmp_path: Path, monkeypatch):
     assert result["reason"] == "QUEUED"
     assert state["status"] == "queued"
     assert state["current_stage"] == "debouncing"
+    assert "Semantic engine waiting for project source registration." in state["stage_message"]
     assert "original/a.md" in state["changed_paths"]
     assert state["scheduled_for"]
     assert len(scheduled) == 1
@@ -411,3 +412,77 @@ def test_processing_mode_overrides_take_precedence_during_active_run(tmp_path: P
     assert hydrated["mode_metrics"]["fast"]["document_count"] == 3
     assert hydrated["mode_metrics"]["nlp"]["relation_count"] == 12
     assert hydrated["global_metrics"]["document_count"] == 3
+
+
+def test_project_sync_state_exposes_idle_semantic_engine_before_source_ready(tmp_path: Path):
+    project_id = "project-i"
+    manager = ProjectKnowledgeSyncManager(
+        tmp_path,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+
+    state = manager.get_state(project_id)
+
+    assert state["semantic_engine"]["engine"] == "hanlp2"
+    assert state["semantic_engine"]["status"] == "idle"
+    assert state["semantic_engine"]["reason_code"] == "SOURCE_NOT_READY"
+    assert state["semantic_engine"]["summary"] == "Semantic engine waiting for project source registration."
+
+
+def test_project_sync_state_mirrors_semantic_engine_after_source_selected(tmp_path: Path, monkeypatch):
+    project_id = "project-j"
+    manager = ProjectKnowledgeSyncManager(
+        tmp_path,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+
+    monkeypatch.setattr(
+        manager._knowledge_manager,
+        "get_semantic_engine_state",
+        lambda: {
+            "engine": "hanlp2",
+            "status": "error",
+            "reason_code": "HANLP2_TOKENIZE_FAILED",
+            "reason": "HanLP2 semantic tokenization failed via tok: RuntimeError.",
+        },
+    )
+
+    state = manager.get_state(project_id)
+    state["latest_source_id"] = f"project-{project_id}-workspace"
+    manager._save_state(state)
+
+    hydrated = manager.get_state(project_id)
+
+    assert hydrated["semantic_engine"]["status"] == "error"
+    assert hydrated["semantic_engine"]["reason_code"] == "HANLP2_TOKENIZE_FAILED"
+    assert hydrated["semantic_engine"]["summary"] == "Semantic engine error: HanLP2 tokenization failed."
+
+
+def test_project_sync_stage_message_merges_semantic_summary(tmp_path: Path, monkeypatch):
+    project_id = "project-k"
+    manager = ProjectKnowledgeSyncManager(
+        tmp_path,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+
+    monkeypatch.setattr(
+        manager._knowledge_manager,
+        "get_semantic_engine_state",
+        lambda: {
+            "engine": "hanlp2",
+            "status": "unavailable",
+            "reason_code": "HANLP2_IMPORT_UNAVAILABLE",
+            "reason": "HanLP2 module is not installed or failed to import.",
+        },
+    )
+
+    state = manager.get_state(project_id)
+    state["latest_source_id"] = f"project-{project_id}-workspace"
+    state["stage_message"] = "Project sync pending"
+    manager._save_state(state)
+
+    hydrated = manager.get_state(project_id)
+
+    assert hydrated["stage_message"] == (
+        "Project sync pending · Semantic engine unavailable: HanLP2 module is not installed."
+    )

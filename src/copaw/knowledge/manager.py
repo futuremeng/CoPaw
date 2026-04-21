@@ -19,11 +19,6 @@ from urllib.parse import urlparse, parse_qs
 import httpx
 
 try:
-    import jieba  # type: ignore[import-not-found]
-except Exception:  # pragma: no cover - optional dependency
-    jieba = None
-
-try:
     import hanlp  # type: ignore[import-not-found]
 except Exception:  # pragma: no cover - optional dependency
     hanlp = None
@@ -86,6 +81,7 @@ _TITLE_STOP_WORDS = {
     "知识",
     "数据",
 }
+_LIGHTWEIGHT_TOKEN_RE = re.compile(r"[A-Za-z0-9]+(?:[_-][A-Za-z0-9]+)*|[\u4e00-\u9fff]{2,}")
 _SEMANTIC_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9_-]{2,}|[\u4e00-\u9fff]{2,}")
 _SEMANTIC_STOP_WORDS = {
     *_TITLE_STOP_WORDS,
@@ -146,6 +142,9 @@ def _sanitize_filename(name: str) -> str:
 class KnowledgeManager:
     """Manage knowledge source indexing within the CoPaw working directory."""
 
+    _hanlp2_tokenizer_cache: tuple[int, str, Any] | None = None
+    _hanlp2_state: dict[str, str] | None = None
+
     def __init__(
         self,
         working_dir: str | Path,
@@ -184,6 +183,7 @@ class KnowledgeManager:
                 payload["subject"] = processed.get("subject") or source.name
                 payload["summary"] = processed.get("summary") or source.summary
                 payload["keywords"] = processed.get("keywords") or []
+                payload["semantic_status"] = self.get_semantic_engine_state()
             else:
                 payload["subject"] = source.name
                 payload["summary"] = source.summary
@@ -191,6 +191,41 @@ class KnowledgeManager:
             payload["status"] = self.get_source_status(source.id, source, config)
             results.append(payload)
         return results
+
+    @classmethod
+    def get_semantic_engine_state(cls) -> dict[str, str]:
+        tokenizer = cls._resolve_hanlp2_tokenizer()
+        if tokenizer is None:
+            return cls._hanlp2_state or cls._semantic_engine_state(
+                status="unavailable",
+                reason_code="HANLP2_IMPORT_UNAVAILABLE",
+                reason="HanLP2 semantic engine is unavailable.",
+            )
+        state = cls._hanlp2_state
+        if state is not None and state.get("status") == "error":
+            return state
+        return cls._semantic_engine_state(
+            status="ready",
+            reason_code="HANLP2_READY",
+            reason="HanLP2 semantic engine is ready.",
+        )
+
+    @classmethod
+    def _semantic_engine_state(
+        cls,
+        *,
+        status: str,
+        reason_code: str,
+        reason: str,
+    ) -> dict[str, str]:
+        state = {
+            "engine": "hanlp2",
+            "status": status,
+            "reason_code": reason_code,
+            "reason": reason,
+        }
+        cls._hanlp2_state = state
+        return state
 
     def normalize_source_name(
         self,
@@ -2408,7 +2443,7 @@ class KnowledgeManager:
         token_freq: dict[str, int] = {}
         sentence_tokens: list[list[str]] = []
         for sentence in sentences:
-            tokens = self._tokenize_text(sentence)
+            tokens = self._tokenize_semantic_text(sentence)
             sentence_tokens.append(tokens)
             for token in tokens:
                 token_freq[token] = token_freq.get(token, 0) + 1
@@ -2437,36 +2472,101 @@ class KnowledgeManager:
         return self._semantic_title_from_text(text)
 
     @staticmethod
-    def _tokenize_text(text: str, *, exclude_stop_words: bool = True) -> list[str]:
+    def _tokenize_lightweight_text(text: str, *, exclude_stop_words: bool = False) -> list[str]:
         normalized = re.sub(r"\s+", " ", (text or "").strip())
         if not normalized:
             return []
 
-        raw_tokens: list[str] = []
+        tokens: list[str] = []
+        for raw in _LIGHTWEIGHT_TOKEN_RE.findall(normalized):
+            token = str(raw).strip().lower()
+            if not token:
+                continue
+            if exclude_stop_words and token in _SEMANTIC_STOP_WORDS:
+                continue
+            tokens.append(token)
+        return tokens
 
-        if jieba is not None:
-            try:
-                raw_tokens = [str(tok) for tok in jieba.lcut(normalized)]
-            except Exception:
-                raw_tokens = []
-        elif hanlp is not None:
-            for attr in ("tokenize", "tok"):
-                fn = getattr(hanlp, attr, None)
-                if not callable(fn):
-                    continue
-                try:
-                    result = fn(normalized)
-                    if isinstance(result, list):
-                        raw_tokens = [str(tok) for tok in result]
-                    elif isinstance(result, tuple):
-                        raw_tokens = [str(tok) for tok in result]
-                    if raw_tokens:
-                        break
-                except Exception:
-                    continue
+    @staticmethod
+    def _flatten_hanlp2_tokens(value: Any) -> list[str]:
+        if isinstance(value, str):
+            return [value]
+        if isinstance(value, (list, tuple)):
+            tokens: list[str] = []
+            for item in value:
+                tokens.extend(KnowledgeManager._flatten_hanlp2_tokens(item))
+            return tokens
+        return []
+
+    @classmethod
+    def _resolve_hanlp2_tokenizer(cls) -> tuple[str, Any] | None:
+        if hanlp is None:
+            cls._semantic_engine_state(
+                status="unavailable",
+                reason_code="HANLP2_IMPORT_UNAVAILABLE",
+                reason="HanLP2 module is not installed or failed to import.",
+            )
+            return None
+
+        module_id = id(hanlp)
+        cached = cls._hanlp2_tokenizer_cache
+        if cached is not None and cached[0] == module_id:
+            return (cached[1], cached[2])
+
+        for attr in ("tokenize", "tok"):
+            fn = getattr(hanlp, attr, None)
+            if callable(fn):
+                cls._hanlp2_tokenizer_cache = (module_id, attr, fn)
+                return (attr, fn)
+
+        cls._hanlp2_tokenizer_cache = None
+        cls._semantic_engine_state(
+            status="unavailable",
+            reason_code="HANLP2_ENTRYPOINT_MISSING",
+            reason="HanLP2 tokenizer entry point was not found.",
+        )
+        return None
+
+    @classmethod
+    def _tokenize_semantic_text(cls, text: str, *, exclude_stop_words: bool = True) -> list[str]:
+        normalized = re.sub(r"\s+", " ", (text or "").strip())
+        if not normalized:
+            return []
+
+        tokenizer = cls._resolve_hanlp2_tokenizer()
+        if tokenizer is None:
+            logger.info("HanLP2 is unavailable; semantic tokenization is skipped")
+            return []
+
+        attr, fn = tokenizer
+        try:
+            result = fn(normalized)
+        except Exception as exc:
+            cls._semantic_engine_state(
+                status="error",
+                reason_code="HANLP2_TOKENIZE_FAILED",
+                reason=(
+                    f"HanLP2 semantic tokenization failed via {attr}: "
+                    f"{exc.__class__.__name__}."
+                ),
+            )
+            logger.warning(
+                "HanLP2 semantic tokenization failed via %s",
+                attr,
+                exc_info=True,
+            )
+            return []
+
+        raw_tokens = cls._flatten_hanlp2_tokens(result)
 
         if not raw_tokens:
-            raw_tokens = _SEMANTIC_TOKEN_RE.findall(normalized)
+            cls._semantic_engine_state(
+                status="ready",
+                reason_code="HANLP2_READY",
+                reason="HanLP2 semantic engine is ready.",
+            )
+            logger.info("HanLP2 tokenizer %s returned no semantic tokens", attr)
+            return []
 
         tokens: list[str] = []
         for raw in raw_tokens:
@@ -2478,10 +2578,15 @@ class KnowledgeManager:
             if exclude_stop_words and token in _SEMANTIC_STOP_WORDS:
                 continue
             tokens.append(token)
+        cls._semantic_engine_state(
+            status="ready",
+            reason_code="HANLP2_READY",
+            reason="HanLP2 semantic engine is ready.",
+        )
         return tokens
 
     def _extract_keywords_from_text(self, text: str, top_n: int = 3) -> list[str]:
-        tokens = self._tokenize_text(text)
+        tokens = self._tokenize_semantic_text(text)
         if not tokens or top_n <= 0:
             return []
 
@@ -2543,7 +2648,7 @@ class KnowledgeManager:
             if not text:
                 continue
             char_count += cls._count_text_chars(text)
-            token_count += len(cls._tokenize_text(text, exclude_stop_words=False))
+            token_count += len(cls._tokenize_lightweight_text(text, exclude_stop_words=False))
         return {
             "char_count": char_count,
             "token_count": token_count,
@@ -2597,7 +2702,7 @@ class KnowledgeManager:
         total = 0
         for chunk in chunks:
             total += len(
-                cls._tokenize_text(
+                cls._tokenize_lightweight_text(
                     str(chunk.get("text") or ""),
                     exclude_stop_words=False,
                 )
