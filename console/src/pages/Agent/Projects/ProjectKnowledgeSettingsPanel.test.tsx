@@ -333,6 +333,48 @@ describe("ProjectKnowledgeSettingsPanel", () => {
     });
   });
 
+  it("renders HanLP sidecar setup guidance for sidecar-related semantic status", async () => {
+    mockedApi.getProjectKnowledgeSyncStatus.mockResolvedValueOnce(buildSyncState(projectId, {
+      semantic_engine: buildSemanticState({
+        status: "unavailable",
+        reason_code: "HANLP2_SIDECAR_UNCONFIGURED",
+        reason: "HanLP2 sidecar is not configured.",
+      }),
+    }));
+    mockedApi.listKnowledgeSources.mockResolvedValueOnce({
+      sources: [
+        {
+          ...buildRegisteredSource(projectId),
+          semantic_status: buildSemanticState({
+            status: "unavailable",
+            reason_code: "HANLP2_SIDECAR_UNCONFIGURED",
+            reason: "HanLP2 sidecar is not configured.",
+          }),
+        },
+      ],
+    });
+
+    render(
+      <ProjectKnowledgeSettingsPanel
+        agentId="default"
+        projectId={projectId}
+        projectName="Project ABC"
+        projectWorkspaceDir="/tmp/workspace"
+        projectAutoKnowledgeSink
+        includeGlobal
+        onIncludeGlobalChange={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      const body = document.body.textContent || "";
+      expect(body).toContain("Sidecar Unconfigured");
+      expect(body).toContain("HanLP sidecar setup");
+      expect(body).toContain("COPAW_HANLP_SIDECAR_ENABLED=1");
+      expect(body).toContain("qwenpaw doctor");
+    });
+  });
+
   it("prefers sync state semantic engine over source fallback", async () => {
     mockedApi.getProjectKnowledgeSyncStatus.mockResolvedValueOnce(buildSyncState(projectId, {
       semantic_engine: buildSemanticState({

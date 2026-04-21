@@ -245,6 +245,32 @@ Mode semantics in the current implementation:
 
 Graph query consumers now follow the same mode selection. When the selected mode does not yet have a higher-order artifact, CoPaw falls back automatically instead of blocking the user on long-running processing.
 
+### HanLP L2 sidecar setup
+
+Layer 2 NLP in the current implementation is based on the HanLP 2.x local runtime, but CoPaw's main environment targets Python 3.10-3.13 while the upstream HanLP 2.x local install guide targets Python 3.6-3.9. To avoid mixing incompatible runtimes, run HanLP in a dedicated sidecar Python environment.
+
+Recommended setup:
+
+```bash
+python3.9 -m venv ~/.venvs/copaw-hanlp
+~/.venvs/copaw-hanlp/bin/python -m pip install -U pip
+~/.venvs/copaw-hanlp/bin/python -m pip install hanlp
+
+export COPAW_HANLP_SIDECAR_ENABLED=1
+export COPAW_HANLP_SIDECAR_PYTHON="$HOME/.venvs/copaw-hanlp/bin/python"
+# Optional: reuse an existing offline cache/model directory
+export COPAW_HANLP_HOME="$HOME/.hanlp"
+
+qwenpaw doctor
+```
+
+Notes:
+
+1. The main CoPaw app does not need HanLP installed in its own `.venv`.
+2. The first HanLP load may download models into `HANLP_HOME` or `~/.hanlp`.
+3. For offline or intranet deployment, pre-seed both `~/.hanlp` and `~/.cache/huggingface` into the sidecar environment.
+4. In the Project Knowledge Settings panel, Layer 2 will report whether the sidecar is unconfigured, missing, incompatible, or ready.
+
 ---
 
 ### Option 3: Docker

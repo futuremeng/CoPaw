@@ -237,6 +237,14 @@ class ProjectKnowledgeSyncManager:
         reason_code = str(payload.get("reason_code") or "").strip().upper()
         if reason_code == "SOURCE_NOT_READY":
             return "Semantic engine waiting for project source registration."
+        if reason_code == "HANLP2_SIDECAR_UNCONFIGURED":
+            return "Semantic engine unavailable: HanLP sidecar is not configured."
+        if reason_code == "HANLP2_SIDECAR_PYTHON_MISSING":
+            return "Semantic engine unavailable: HanLP sidecar Python executable was not found."
+        if reason_code == "HANLP2_SIDECAR_PYTHON_INCOMPATIBLE":
+            return "Semantic engine unavailable: HanLP sidecar must use Python 3.6-3.9."
+        if reason_code == "HANLP2_SIDECAR_EXEC_FAILED":
+            return "Semantic engine unavailable: HanLP sidecar health check failed."
         if reason_code == "HANLP2_IMPORT_UNAVAILABLE":
             return "Semantic engine unavailable: HanLP2 module is not installed."
         if reason_code == "HANLP2_ENTRYPOINT_MISSING":

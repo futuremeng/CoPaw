@@ -1428,6 +1428,52 @@ class KnowledgeAutomationConfig(BaseModel):
     url_exclude_patterns: List[str] = Field(default_factory=list)
 
 
+class KnowledgeHanLPSidecarConfig(BaseModel):
+    """HanLP 2.x local sidecar runtime configuration."""
+
+    enabled: bool = Field(default=False)
+    python_executable: str = Field(
+        default="",
+        description="Python 3.6-3.9 executable used to run the HanLP sidecar.",
+    )
+    probe_timeout_sec: float = Field(default=5.0, ge=0.5, le=60.0)
+    tokenize_timeout_sec: float = Field(default=15.0, ge=0.5, le=120.0)
+    hanlp_home: str = Field(
+        default="",
+        description="Optional HANLP_HOME for offline cache/model lookup.",
+    )
+
+    @model_validator(mode="after")
+    def _inject_from_env(self) -> "KnowledgeHanLPSidecarConfig":
+        enabled_raw = os.environ.get("COPAW_HANLP_SIDECAR_ENABLED", "").strip()
+        if enabled_raw:
+            self.enabled = enabled_raw.lower() not in {"0", "false", "no"}
+
+        python_executable = os.environ.get("COPAW_HANLP_SIDECAR_PYTHON", "").strip()
+        if python_executable:
+            self.python_executable = python_executable
+
+        hanlp_home = os.environ.get("COPAW_HANLP_HOME", "").strip()
+        if hanlp_home:
+            self.hanlp_home = hanlp_home
+
+        probe_timeout = os.environ.get("COPAW_HANLP_SIDECAR_PROBE_TIMEOUT_SEC", "").strip()
+        if probe_timeout:
+            try:
+                self.probe_timeout_sec = max(0.5, min(float(probe_timeout), 60.0))
+            except ValueError:
+                pass
+
+        tokenize_timeout = os.environ.get("COPAW_HANLP_SIDECAR_TOKENIZE_TIMEOUT_SEC", "").strip()
+        if tokenize_timeout:
+            try:
+                self.tokenize_timeout_sec = max(0.5, min(float(tokenize_timeout), 120.0))
+            except ValueError:
+                pass
+
+        return self
+
+
 class GraphifyConfig(BaseModel):
     """Graphify knowledge graph engine configuration.
 
@@ -1534,6 +1580,9 @@ class KnowledgeConfig(BaseModel):
     index: KnowledgeIndexConfig = Field(default_factory=KnowledgeIndexConfig)
     automation: KnowledgeAutomationConfig = Field(
         default_factory=KnowledgeAutomationConfig,
+    )
+    hanlp: KnowledgeHanLPSidecarConfig = Field(
+        default_factory=KnowledgeHanLPSidecarConfig,
     )
     graphify: GraphifyConfig = Field(
         default_factory=GraphifyConfig,

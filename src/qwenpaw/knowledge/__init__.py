@@ -6,5 +6,11 @@ upstream-renamed modules import from ``qwenpaw.knowledge``.
 """
 
 from copaw.knowledge import GraphOpsManager, KnowledgeManager, ProjectKnowledgeSyncManager
+from copaw.knowledge.hanlp_runtime import HanLPSidecarRuntime
 
-__all__ = ["KnowledgeManager", "GraphOpsManager", "ProjectKnowledgeSyncManager"]
+__all__ = [
+	"KnowledgeManager",
+	"GraphOpsManager",
+	"ProjectKnowledgeSyncManager",
+	"HanLPSidecarRuntime",
+]

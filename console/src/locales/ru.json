@@ -1917,6 +1917,10 @@
         "SEMANTIC_STATE_INVALID": "Некорректное семантическое состояние",
         "SEMANTIC_STATE_UNKNOWN": "Неизвестное семантическое состояние",
         "HANLP2_READY": "Готов",
+        "HANLP2_SIDECAR_UNCONFIGURED": "Сайдкар не настроен",
+        "HANLP2_SIDECAR_PYTHON_MISSING": "Python сайдкара не найден",
+        "HANLP2_SIDECAR_PYTHON_INCOMPATIBLE": "Python сайдкара несовместим",
+        "HANLP2_SIDECAR_EXEC_FAILED": "Проверка сайдкара не удалась",
         "HANLP2_IMPORT_UNAVAILABLE": "Модуль недоступен",
         "HANLP2_ENTRYPOINT_MISSING": "Нет точки входа токенизатора",
         "HANLP2_TOKENIZE_FAILED": "Сбой токенизации"
@@ -1926,6 +1930,10 @@
         "SEMANTIC_STATE_INVALID": "Ошибка семантического движка: некорректное состояние во время выполнения.",
         "SEMANTIC_STATE_UNKNOWN": "Состояние семантического движка неизвестно.",
         "HANLP2_READY": "Семантический движок готов.",
+        "HANLP2_SIDECAR_UNCONFIGURED": "Семантический движок недоступен: сайдкар HanLP не настроен.",
+        "HANLP2_SIDECAR_PYTHON_MISSING": "Семантический движок недоступен: не найден Python-исполняемый файл сайдкара HanLP.",
+        "HANLP2_SIDECAR_PYTHON_INCOMPATIBLE": "Семантический движок недоступен: сайдкар HanLP должен использовать Python 3.6-3.9.",
+        "HANLP2_SIDECAR_EXEC_FAILED": "Семантический движок недоступен: проверка сайдкара HanLP завершилась с ошибкой.",
         "HANLP2_IMPORT_UNAVAILABLE": "Семантический движок недоступен: модуль HanLP2 не установлен.",
         "HANLP2_ENTRYPOINT_MISSING": "Семантический движок недоступен: отсутствует точка входа токенизатора HanLP2.",
         "HANLP2_TOKENIZE_FAILED": "Ошибка семантического движка: сбой токенизации HanLP2."

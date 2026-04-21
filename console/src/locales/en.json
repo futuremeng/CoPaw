@@ -1971,6 +1971,10 @@
         "SEMANTIC_STATE_INVALID": "Invalid Semantic State",
         "SEMANTIC_STATE_UNKNOWN": "Unknown Semantic State",
         "HANLP2_READY": "Ready",
+        "HANLP2_SIDECAR_UNCONFIGURED": "Sidecar Unconfigured",
+        "HANLP2_SIDECAR_PYTHON_MISSING": "Sidecar Python Missing",
+        "HANLP2_SIDECAR_PYTHON_INCOMPATIBLE": "Sidecar Python Incompatible",
+        "HANLP2_SIDECAR_EXEC_FAILED": "Sidecar Check Failed",
         "HANLP2_IMPORT_UNAVAILABLE": "Module Unavailable",
         "HANLP2_ENTRYPOINT_MISSING": "Tokenizer Entry Missing",
         "HANLP2_TOKENIZE_FAILED": "Tokenization Failed"
@@ -1980,6 +1984,10 @@
         "SEMANTIC_STATE_INVALID": "Semantic engine error: invalid runtime state payload.",
         "SEMANTIC_STATE_UNKNOWN": "Semantic engine status is unknown.",
         "HANLP2_READY": "Semantic engine is ready.",
+        "HANLP2_SIDECAR_UNCONFIGURED": "Semantic engine unavailable: HanLP sidecar is not configured.",
+        "HANLP2_SIDECAR_PYTHON_MISSING": "Semantic engine unavailable: HanLP sidecar Python executable was not found.",
+        "HANLP2_SIDECAR_PYTHON_INCOMPATIBLE": "Semantic engine unavailable: HanLP sidecar must use Python 3.6-3.9.",
+        "HANLP2_SIDECAR_EXEC_FAILED": "Semantic engine unavailable: HanLP sidecar health check failed.",
         "HANLP2_IMPORT_UNAVAILABLE": "Semantic engine unavailable: HanLP2 module is not installed.",
         "HANLP2_ENTRYPOINT_MISSING": "Semantic engine unavailable: HanLP2 tokenizer entry point is missing.",
         "HANLP2_TOKENIZE_FAILED": "Semantic engine error: HanLP2 tokenization failed."

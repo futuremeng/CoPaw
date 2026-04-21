@@ -1902,6 +1902,10 @@
         "SEMANTIC_STATE_INVALID": "セマンティック状態が無効",
         "SEMANTIC_STATE_UNKNOWN": "セマンティック状態が不明",
         "HANLP2_READY": "準備完了",
+        "HANLP2_SIDECAR_UNCONFIGURED": "サイドカー未設定",
+        "HANLP2_SIDECAR_PYTHON_MISSING": "サイドカー Python 不在",
+        "HANLP2_SIDECAR_PYTHON_INCOMPATIBLE": "サイドカー Python 非互換",
+        "HANLP2_SIDECAR_EXEC_FAILED": "サイドカー確認失敗",
         "HANLP2_IMPORT_UNAVAILABLE": "モジュール利用不可",
         "HANLP2_ENTRYPOINT_MISSING": "トークナイザー入口なし",
         "HANLP2_TOKENIZE_FAILED": "トークン化失敗"
@@ -1911,6 +1915,10 @@
         "SEMANTIC_STATE_INVALID": "セマンティックエンジンエラー: 実行時状態ペイロードが無効です。",
         "SEMANTIC_STATE_UNKNOWN": "セマンティックエンジンの状態は不明です。",
         "HANLP2_READY": "セマンティックエンジンは準備完了です。",
+        "HANLP2_SIDECAR_UNCONFIGURED": "セマンティックエンジンは利用できません: HanLP サイドカーが未設定です。",
+        "HANLP2_SIDECAR_PYTHON_MISSING": "セマンティックエンジンは利用できません: HanLP サイドカーの Python 実行ファイルが見つかりません。",
+        "HANLP2_SIDECAR_PYTHON_INCOMPATIBLE": "セマンティックエンジンは利用できません: HanLP サイドカーは Python 3.6-3.9 が必要です。",
+        "HANLP2_SIDECAR_EXEC_FAILED": "セマンティックエンジンは利用できません: HanLP サイドカーのヘルスチェックに失敗しました。",
         "HANLP2_IMPORT_UNAVAILABLE": "セマンティックエンジンは利用できません: HanLP2 モジュールが未インストールです。",
         "HANLP2_ENTRYPOINT_MISSING": "セマンティックエンジンは利用できません: HanLP2 トークナイザーのエントリポイントがありません。",
         "HANLP2_TOKENIZE_FAILED": "セマンティックエンジンエラー: HanLP2 のトークン化に失敗しました。"

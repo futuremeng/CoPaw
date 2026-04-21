@@ -304,7 +304,16 @@ def test_lightweight_token_count_does_not_depend_on_semantic_tokenizer(tmp_path:
 def test_process_knowledge_text_returns_empty_keywords_without_hanlp(tmp_path: Path):
     manager = KnowledgeManager(tmp_path)
 
-    with patch("copaw.knowledge.manager.hanlp", None):
+    with patch.object(
+        manager._semantic_runtime,
+        "tokenize",
+        return_value=([], {
+            "engine": "hanlp2",
+            "status": "unavailable",
+            "reason_code": "HANLP2_SIDECAR_UNCONFIGURED",
+            "reason": "HanLP2 sidecar is not configured.",
+        }),
+    ):
         processed = manager._process_knowledge_text("第一句。第二句! Third sentence?", top_n=3)
 
     assert processed["subject"] == "第一句。第二句"
@@ -315,19 +324,17 @@ def test_process_knowledge_text_returns_empty_keywords_without_hanlp(tmp_path: P
 def test_semantic_tokenizer_uses_hanlp2_tok_and_flattens_nested_tokens(tmp_path: Path):
     manager = KnowledgeManager(tmp_path)
 
-    class FakeHanLP:
-        @staticmethod
-        def tok(text: str):
-            assert text == "Agent runner 关系抽取"
-            return [["Agent", "runner"], ["关系抽取"]]
-
-    original_cache = KnowledgeManager._hanlp2_tokenizer_cache
-    KnowledgeManager._hanlp2_tokenizer_cache = None
-    try:
-        with patch("copaw.knowledge.manager.hanlp", FakeHanLP()):
-            tokens = manager._tokenize_semantic_text("Agent runner 关系抽取", exclude_stop_words=False)
-    finally:
-        KnowledgeManager._hanlp2_tokenizer_cache = original_cache
+    with patch.object(
+        manager._semantic_runtime,
+        "tokenize",
+        return_value=(["Agent", "runner", "关系抽取"], {
+            "engine": "hanlp2",
+            "status": "ready",
+            "reason_code": "HANLP2_READY",
+            "reason": "HanLP2 semantic engine is ready.",
+        }),
+    ):
+        tokens = manager._tokenize_semantic_text("Agent runner 关系抽取", exclude_stop_words=False)
 
     assert tokens == ["agent", "runner", "关系抽取"]
 
@@ -335,38 +342,27 @@ def test_semantic_tokenizer_uses_hanlp2_tok_and_flattens_nested_tokens(tmp_path:
 def test_semantic_engine_state_reports_unavailable_without_hanlp(tmp_path: Path):
     manager = KnowledgeManager(tmp_path)
 
-    original_cache = KnowledgeManager._hanlp2_tokenizer_cache
-    original_state = KnowledgeManager._hanlp2_state
-    KnowledgeManager._hanlp2_tokenizer_cache = None
-    KnowledgeManager._hanlp2_state = None
-    try:
-        with patch("copaw.knowledge.manager.hanlp", None):
-            state = manager.get_semantic_engine_state()
-    finally:
-        KnowledgeManager._hanlp2_tokenizer_cache = original_cache
-        KnowledgeManager._hanlp2_state = original_state
+    state = manager.get_semantic_engine_state()
 
     assert state["engine"] == "hanlp2"
     assert state["status"] == "unavailable"
-    assert state["reason_code"] == "HANLP2_IMPORT_UNAVAILABLE"
+    assert state["reason_code"] == "HANLP2_SIDECAR_UNCONFIGURED"
 
 
 def test_semantic_engine_state_reports_missing_entrypoint(tmp_path: Path):
     manager = KnowledgeManager(tmp_path)
 
-    class FakeHanLP:
-        pass
-
-    original_cache = KnowledgeManager._hanlp2_tokenizer_cache
-    original_state = KnowledgeManager._hanlp2_state
-    KnowledgeManager._hanlp2_tokenizer_cache = None
-    KnowledgeManager._hanlp2_state = None
-    try:
-        with patch("copaw.knowledge.manager.hanlp", FakeHanLP()):
-            state = manager.get_semantic_engine_state()
-    finally:
-        KnowledgeManager._hanlp2_tokenizer_cache = original_cache
-        KnowledgeManager._hanlp2_state = original_state
+    with patch.object(
+        manager._semantic_runtime,
+        "probe",
+        return_value={
+            "engine": "hanlp2",
+            "status": "unavailable",
+            "reason_code": "HANLP2_ENTRYPOINT_MISSING",
+            "reason": "HanLP2 tokenizer entry point was not found.",
+        },
+    ):
+        state = manager.get_semantic_engine_state()
 
     assert state["status"] == "unavailable"
     assert state["reason_code"] == "HANLP2_ENTRYPOINT_MISSING"
@@ -375,22 +371,18 @@ def test_semantic_engine_state_reports_missing_entrypoint(tmp_path: Path):
 def test_semantic_engine_state_reports_tokenize_runtime_failure(tmp_path: Path):
     manager = KnowledgeManager(tmp_path)
 
-    class FakeHanLP:
-        @staticmethod
-        def tok(text: str):
-            raise RuntimeError(f"boom: {text}")
-
-    original_cache = KnowledgeManager._hanlp2_tokenizer_cache
-    original_state = KnowledgeManager._hanlp2_state
-    KnowledgeManager._hanlp2_tokenizer_cache = None
-    KnowledgeManager._hanlp2_state = None
-    try:
-        with patch("copaw.knowledge.manager.hanlp", FakeHanLP()):
-            tokens = manager._tokenize_semantic_text("Agent runner 关系抽取")
-            state = manager.get_semantic_engine_state()
-    finally:
-        KnowledgeManager._hanlp2_tokenizer_cache = original_cache
-        KnowledgeManager._hanlp2_state = original_state
+    with patch.object(
+        manager._semantic_runtime,
+        "tokenize",
+        return_value=([], {
+            "engine": "hanlp2",
+            "status": "error",
+            "reason_code": "HANLP2_TOKENIZE_FAILED",
+            "reason": "HanLP2 semantic tokenization failed via tok: RuntimeError.",
+        }),
+    ):
+        tokens = manager._tokenize_semantic_text("Agent runner 关系抽取")
+        state = manager.get_semantic_engine_state()
 
     assert tokens == []
     assert state["status"] == "error"

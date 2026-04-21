@@ -18,13 +18,9 @@ from urllib.parse import urlparse, parse_qs
 
 import httpx
 
-try:
-    import hanlp  # type: ignore[import-not-found]
-except Exception:  # pragma: no cover - optional dependency
-    hanlp = None
-
 from ..constant import CHATS_FILE
 from ..config.config import KnowledgeConfig, KnowledgeSourceSpec
+from .hanlp_runtime import HanLPSidecarRuntime
 
 _UNSAFE_FILENAME_RE = re.compile(r'[\\/:*?"<>|]')
 _CHAT_URL_RE = re.compile(
@@ -142,9 +138,6 @@ def _sanitize_filename(name: str) -> str:
 class KnowledgeManager:
     """Manage knowledge source indexing within the CoPaw working directory."""
 
-    _hanlp2_tokenizer_cache: tuple[int, str, Any] | None = None
-    _hanlp2_state: dict[str, str] | None = None
-
     def __init__(
         self,
         working_dir: str | Path,
@@ -170,6 +163,8 @@ class KnowledgeManager:
         self.uploads_dir.mkdir(parents=True, exist_ok=True)
         self.remote_blob_dir.mkdir(parents=True, exist_ok=True)
         self.remote_meta_dir.mkdir(parents=True, exist_ok=True)
+        self._semantic_runtime = HanLPSidecarRuntime()
+        self._hanlp2_state: dict[str, str] | None = None
 
     def list_sources(
         self,
@@ -185,7 +180,7 @@ class KnowledgeManager:
                 payload["subject"] = processed.get("subject") or source.name
                 payload["summary"] = processed.get("summary") or source.summary
                 payload["keywords"] = processed.get("keywords") or []
-                payload["semantic_status"] = self.get_semantic_engine_state()
+                payload["semantic_status"] = self.get_semantic_engine_state(config)
             else:
                 payload["subject"] = source.name
                 payload["summary"] = source.summary
@@ -194,27 +189,25 @@ class KnowledgeManager:
             results.append(payload)
         return results
 
-    @classmethod
-    def get_semantic_engine_state(cls) -> dict[str, str]:
-        tokenizer = cls._resolve_hanlp2_tokenizer()
-        if tokenizer is None:
-            return cls._hanlp2_state or cls._semantic_engine_state(
-                status="unavailable",
-                reason_code="HANLP2_IMPORT_UNAVAILABLE",
-                reason="HanLP2 semantic engine is unavailable.",
-            )
-        state = cls._hanlp2_state
+    def get_semantic_engine_state(
+        self,
+        config: KnowledgeConfig | None = None,
+    ) -> dict[str, str]:
+        state = self._hanlp2_state
         if state is not None and state.get("status") == "error":
             return state
-        return cls._semantic_engine_state(
-            status="ready",
-            reason_code="HANLP2_READY",
-            reason="HanLP2 semantic engine is ready.",
+        runtime_state = self._semantic_runtime.probe(config)
+        return self._remember_semantic_engine_state(runtime_state)
+
+    def _remember_semantic_engine_state(self, payload: dict[str, Any]) -> dict[str, str]:
+        return self._semantic_engine_state(
+            status=str(payload.get("status") or "unavailable"),
+            reason_code=str(payload.get("reason_code") or "HANLP2_SIDECAR_EXEC_FAILED"),
+            reason=str(payload.get("reason") or "HanLP2 semantic engine is unavailable."),
         )
 
-    @classmethod
     def _semantic_engine_state(
-        cls,
+        self,
         *,
         status: str,
         reason_code: str,
@@ -226,7 +219,7 @@ class KnowledgeManager:
             "reason_code": reason_code,
             "reason": reason,
         }
-        cls._hanlp2_state = state
+        self._hanlp2_state = state
         return state
 
     def normalize_source_name(
@@ -2470,11 +2463,11 @@ class KnowledgeManager:
     ) -> dict[str, Any]:
         candidates = self._collect_source_processing_candidates(source, config)
         merged = self._normalize_text("\n".join(part for part in candidates if part))
-        processed = self._process_knowledge_text(merged, top_n=top_n)
+        processed = self._process_knowledge_text(merged, top_n=top_n, config=config)
 
         # Keep deterministic priority for subjects: summary > content > index/title.
         for candidate in candidates:
-            subject = self._extract_subject_from_text(candidate)
+            subject = self._extract_subject_from_text(candidate, config=config)
             if subject:
                 processed["subject"] = subject
                 break
@@ -2484,6 +2477,7 @@ class KnowledgeManager:
         self,
         text: str,
         top_n: int = _KEYWORD_DEFAULT_TOP_N,
+        config: KnowledgeConfig | None = None,
     ) -> dict[str, Any]:
         normalized = self._normalize_text(text or "")
         if not normalized:
@@ -2494,9 +2488,9 @@ class KnowledgeManager:
             }
 
         return {
-            "subject": self._extract_subject_from_text(normalized),
-            "summary": self._extract_summary_from_text(normalized),
-            "keywords": self._extract_keywords_from_text(normalized, top_n=top_n),
+            "subject": self._extract_subject_from_text(normalized, config=config),
+            "summary": self._extract_summary_from_text(normalized, config=config),
+            "keywords": self._extract_keywords_from_text(normalized, top_n=top_n, config=config),
         }
 
     def _collect_source_processing_text(
@@ -2618,7 +2612,11 @@ class KnowledgeManager:
             return ""
         return ""
 
-    def _semantic_title_from_text(self, text: str) -> str:
+    def _semantic_title_from_text(
+        self,
+        text: str,
+        config: KnowledgeConfig | None = None,
+    ) -> str:
         normalized = self._normalize_text(text or "")
         if not normalized:
             return ""
@@ -2634,7 +2632,7 @@ class KnowledgeManager:
         token_freq: dict[str, int] = {}
         sentence_tokens: list[list[str]] = []
         for sentence in sentences:
-            tokens = self._tokenize_semantic_text(sentence)
+            tokens = self._tokenize_semantic_text(sentence, config=config)
             sentence_tokens.append(tokens)
             for token in tokens:
                 token_freq[token] = token_freq.get(token, 0) + 1
@@ -2655,12 +2653,20 @@ class KnowledgeManager:
             best_sentence = sentences[0]
         return self._normalize_text(best_sentence)
 
-    def _extract_subject_from_text(self, text: str) -> str:
-        return self._semantic_title_from_text(text)
+    def _extract_subject_from_text(
+        self,
+        text: str,
+        config: KnowledgeConfig | None = None,
+    ) -> str:
+        return self._semantic_title_from_text(text, config=config)
 
-    def _extract_summary_from_text(self, text: str) -> str:
+    def _extract_summary_from_text(
+        self,
+        text: str,
+        config: KnowledgeConfig | None = None,
+    ) -> str:
         # Keep the summary extractor independent for future tuning.
-        return self._semantic_title_from_text(text)
+        return self._semantic_title_from_text(text, config=config)
 
     @staticmethod
     def _tokenize_lightweight_text(text: str, *, exclude_stop_words: bool = False) -> list[str]:
@@ -2678,85 +2684,32 @@ class KnowledgeManager:
             tokens.append(token)
         return tokens
 
-    @staticmethod
-    def _flatten_hanlp2_tokens(value: Any) -> list[str]:
-        if isinstance(value, str):
-            return [value]
-        if isinstance(value, (list, tuple)):
-            tokens: list[str] = []
-            for item in value:
-                tokens.extend(KnowledgeManager._flatten_hanlp2_tokens(item))
-            return tokens
-        return []
-
-    @classmethod
-    def _resolve_hanlp2_tokenizer(cls) -> tuple[str, Any] | None:
-        if hanlp is None:
-            cls._semantic_engine_state(
-                status="unavailable",
-                reason_code="HANLP2_IMPORT_UNAVAILABLE",
-                reason="HanLP2 module is not installed or failed to import.",
-            )
-            return None
-
-        module_id = id(hanlp)
-        cached = cls._hanlp2_tokenizer_cache
-        if cached is not None and cached[0] == module_id:
-            return (cached[1], cached[2])
-
-        for attr in ("tokenize", "tok"):
-            fn = getattr(hanlp, attr, None)
-            if callable(fn):
-                cls._hanlp2_tokenizer_cache = (module_id, attr, fn)
-                return (attr, fn)
-
-        cls._hanlp2_tokenizer_cache = None
-        cls._semantic_engine_state(
-            status="unavailable",
-            reason_code="HANLP2_ENTRYPOINT_MISSING",
-            reason="HanLP2 tokenizer entry point was not found.",
-        )
-        return None
-
-    @classmethod
-    def _tokenize_semantic_text(cls, text: str, *, exclude_stop_words: bool = True) -> list[str]:
+    def _tokenize_semantic_text(
+        self,
+        text: str,
+        *,
+        exclude_stop_words: bool = True,
+        config: KnowledgeConfig | None = None,
+    ) -> list[str]:
         normalized = re.sub(r"\s+", " ", (text or "").strip())
         if not normalized:
             return []
 
-        tokenizer = cls._resolve_hanlp2_tokenizer()
-        if tokenizer is None:
-            logger.info("HanLP2 is unavailable; semantic tokenization is skipped")
-            return []
-
-        attr, fn = tokenizer
-        try:
-            result = fn(normalized)
-        except Exception as exc:
-            cls._semantic_engine_state(
-                status="error",
-                reason_code="HANLP2_TOKENIZE_FAILED",
-                reason=(
-                    f"HanLP2 semantic tokenization failed via {attr}: "
-                    f"{exc.__class__.__name__}."
-                ),
-            )
-            logger.warning(
-                "HanLP2 semantic tokenization failed via %s",
-                attr,
-                exc_info=True,
+        raw_tokens, state = self._semantic_runtime.tokenize(normalized, config)
+        self._remember_semantic_engine_state(state)
+        if state.get("status") != "ready":
+            logger.info(
+                "HanLP2 sidecar is unavailable; semantic tokenization is skipped (%s)",
+                state.get("reason_code"),
             )
             return []
-
-        raw_tokens = cls._flatten_hanlp2_tokens(result)
 
         if not raw_tokens:
-            cls._semantic_engine_state(
+            self._semantic_engine_state(
                 status="ready",
                 reason_code="HANLP2_READY",
                 reason="HanLP2 semantic engine is ready.",
             )
-            logger.info("HanLP2 tokenizer %s returned no semantic tokens", attr)
             return []
 
         tokens: list[str] = []
@@ -2769,15 +2722,20 @@ class KnowledgeManager:
             if exclude_stop_words and token in _SEMANTIC_STOP_WORDS:
                 continue
             tokens.append(token)
-        cls._semantic_engine_state(
+        self._semantic_engine_state(
             status="ready",
             reason_code="HANLP2_READY",
             reason="HanLP2 semantic engine is ready.",
         )
         return tokens
 
-    def _extract_keywords_from_text(self, text: str, top_n: int = 3) -> list[str]:
-        tokens = self._tokenize_semantic_text(text)
+    def _extract_keywords_from_text(
+        self,
+        text: str,
+        top_n: int = 3,
+        config: KnowledgeConfig | None = None,
+    ) -> list[str]:
+        tokens = self._tokenize_semantic_text(text, config=config)
         if not tokens or top_n <= 0:
             return []
 

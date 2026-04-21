@@ -445,6 +445,31 @@ export default function ProjectKnowledgeSettingsPanel(
       : "success";
   const semanticReasonLabel = getProjectKnowledgeSemanticReasonLabel(semanticStatus, t);
   const semanticDescription = getProjectKnowledgeSemanticDescription(semanticStatus, t);
+  const semanticReasonCode = String(semanticStatus?.reason_code || "").trim().toUpperCase();
+  const showSidecarHint = semanticReasonCode.startsWith("HANLP2_SIDECAR_");
+  const semanticSidecarHint = useMemo(() => {
+    if (!showSidecarHint) {
+      return [] as string[];
+    }
+    return [
+      t(
+        "projects.knowledge.semanticSidecarHintEnable",
+        "1. Set COPAW_HANLP_SIDECAR_ENABLED=1 and point COPAW_HANLP_SIDECAR_PYTHON to a dedicated Python 3.9 interpreter.",
+      ),
+      t(
+        "projects.knowledge.semanticSidecarHintInstall",
+        "2. Install HanLP into that sidecar environment with: <sidecar-python> -m pip install hanlp",
+      ),
+      t(
+        "projects.knowledge.semanticSidecarHintOffline",
+        "3. Optional for offline use: set COPAW_HANLP_HOME and preload ~/.hanlp plus ~/.cache/huggingface.",
+      ),
+      t(
+        "projects.knowledge.semanticSidecarHintVerify",
+        "4. Run qwenpaw doctor to verify the HanLP sidecar before rerunning project sync.",
+      ),
+    ];
+  }, [showSidecarHint, t]);
 
   return (
     <div className={styles.projectKnowledgeWorkbench}>
@@ -598,7 +623,25 @@ export default function ProjectKnowledgeSettingsPanel(
             type={semanticAlertType}
             showIcon
             message={`${t("projects.knowledge.semanticEngineStatus", "Semantic Engine")}: ${semanticReasonLabel}`}
-            description={semanticDescription}
+            description={(
+              <div>
+                <div>{semanticDescription}</div>
+                {showSidecarHint ? (
+                  <div style={{ marginTop: 8 }}>
+                    <Typography.Text strong>
+                      {t("projects.knowledge.semanticSidecarHintTitle", "HanLP sidecar setup")}
+                    </Typography.Text>
+                    <div style={{ marginTop: 4 }}>
+                      {semanticSidecarHint.map((line) => (
+                        <div key={line}>
+                          <Typography.Text type="secondary">{line}</Typography.Text>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            )}
           />
         ) : null}
       </section>

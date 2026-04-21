@@ -1922,6 +1922,10 @@
         "SEMANTIC_STATE_INVALID": "语义状态无效",
         "SEMANTIC_STATE_UNKNOWN": "语义状态未知",
         "HANLP2_READY": "已就绪",
+        "HANLP2_SIDECAR_UNCONFIGURED": "侧车未配置",
+        "HANLP2_SIDECAR_PYTHON_MISSING": "侧车 Python 缺失",
+        "HANLP2_SIDECAR_PYTHON_INCOMPATIBLE": "侧车 Python 版本不兼容",
+        "HANLP2_SIDECAR_EXEC_FAILED": "侧车检查失败",
         "HANLP2_IMPORT_UNAVAILABLE": "模块不可用",
         "HANLP2_ENTRYPOINT_MISSING": "缺少分词入口",
         "HANLP2_TOKENIZE_FAILED": "分词执行失败"
@@ -1931,6 +1935,10 @@
         "SEMANTIC_STATE_INVALID": "语义引擎错误：运行态载荷无效。",
         "SEMANTIC_STATE_UNKNOWN": "语义引擎状态未知。",
         "HANLP2_READY": "语义引擎已就绪。",
+        "HANLP2_SIDECAR_UNCONFIGURED": "语义引擎不可用：未配置 HanLP 侧车。",
+        "HANLP2_SIDECAR_PYTHON_MISSING": "语义引擎不可用：找不到 HanLP 侧车 Python 可执行文件。",
+        "HANLP2_SIDECAR_PYTHON_INCOMPATIBLE": "语义引擎不可用：HanLP 侧车必须使用 Python 3.6-3.9。",
+        "HANLP2_SIDECAR_EXEC_FAILED": "语义引擎不可用：HanLP 侧车健康检查失败。",
         "HANLP2_IMPORT_UNAVAILABLE": "语义引擎不可用：未安装 HanLP2 模块。",
         "HANLP2_ENTRYPOINT_MISSING": "语义引擎不可用：缺少 HanLP2 分词入口。",
         "HANLP2_TOKENIZE_FAILED": "语义引擎错误：HanLP2 分词执行失败。"

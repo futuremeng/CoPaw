@@ -138,3 +138,10 @@ echo "Using $("$VENV_DIR/bin/python" -V)"
 echo
 echo "Bootstrap complete."
 echo "Activate with: source .venv/bin/activate"
+echo
+echo "Optional HanLP L2 sidecar setup (recommended on a separate Python 3.9 env):"
+echo "  export COPAW_HANLP_SIDECAR_ENABLED=1"
+echo "  export COPAW_HANLP_SIDECAR_PYTHON=/path/to/python3.9"
+echo "  export COPAW_HANLP_HOME=~/.hanlp   # optional offline/model cache path"
+echo "  \$COPAW_HANLP_SIDECAR_PYTHON -m pip install hanlp"
+echo "  qwenpaw doctor   # verify HanLP sidecar status"

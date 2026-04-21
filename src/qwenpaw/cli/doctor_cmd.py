@@ -19,7 +19,9 @@ from ..__version__ import __version__
 from ..app.auth import has_registered_users, is_auth_enabled
 from ..config import load_config
 from ..config.utils import strict_validate_config_file
+from ..constant import WORKING_DIR
 from ..constant import PROJECT_NAME, WORKING_DIR
+from ..knowledge.hanlp_runtime import HanLPSidecarRuntime
 from ..providers.provider import Provider
 from ..providers.provider_manager import ProviderManager
 from ..utils.console_static import (
@@ -221,6 +223,50 @@ def _check_web_auth(base: str) -> tuple[bool, str]:
         "session. API clients must send Authorization: Bearer <token> "
         "from login.",
     )
+
+
+def _check_hanlp_sidecar(cfg) -> tuple[bool, str, list[str]]:
+    runtime = HanLPSidecarRuntime()
+    state = runtime.probe(cfg.knowledge)
+    status = str(state.get("status") or "unavailable").strip().lower()
+    reason_code = str(state.get("reason_code") or "").strip().upper()
+    reason = str(state.get("reason") or "HanLP sidecar state is unavailable.").strip()
+    notes: list[str] = []
+
+    hanlp_cfg = cfg.knowledge.hanlp
+    if not hanlp_cfg.enabled:
+        notes.append(
+            "Enable HanLP sidecar with COPAW_HANLP_SIDECAR_ENABLED=1 and "
+            "set COPAW_HANLP_SIDECAR_PYTHON to a Python 3.6-3.9 interpreter.",
+        )
+    elif not str(hanlp_cfg.python_executable or "").strip():
+        notes.append(
+            "Set COPAW_HANLP_SIDECAR_PYTHON or knowledge.hanlp.python_executable "
+            "to the dedicated Python 3.6-3.9 sidecar interpreter.",
+        )
+    else:
+        notes.append(
+            f"Configured sidecar Python: {hanlp_cfg.python_executable}",
+        )
+    if str(hanlp_cfg.hanlp_home or "").strip():
+        notes.append(f"HANLP_HOME: {hanlp_cfg.hanlp_home}")
+    else:
+        notes.append(
+            "Optional: set COPAW_HANLP_HOME when using preloaded offline model caches.",
+        )
+
+    if status == "ready":
+        return True, reason, notes
+    if reason_code == "HANLP2_IMPORT_UNAVAILABLE":
+        notes.append(
+            "Install HanLP in the sidecar environment, for example: "
+            "<sidecar-python> -m pip install hanlp",
+        )
+    elif reason_code == "HANLP2_SIDECAR_PYTHON_INCOMPATIBLE":
+        notes.append(
+            "HanLP 2.x local runtime should use Python 3.6-3.9 according to the upstream install guide.",
+        )
+    return False, reason, notes
 
 
 def _classify_console_root_response(resp: httpx.Response) -> tuple[bool, str]:
@@ -495,6 +541,15 @@ def run_doctor_checks(
                 click.style("OK", fg="green")
                 + " — no enabled-channel credential warnings",
             )
+
+        click.echo("\n=== HanLP Sidecar ===")
+        hanlp_ok, hanlp_detail, hanlp_notes = _check_hanlp_sidecar(cfg)
+        if hanlp_ok:
+            click.echo(click.style("OK", fg="green") + f" — {hanlp_detail}")
+        else:
+            click.echo(click.style("Note:", fg="yellow") + f" {hanlp_detail}")
+        for line in hanlp_notes:
+            click.echo(f"  - {line}")
 
         click.echo("\n=== Doctor extensions ===")
         ext_ctx = DoctorRunContext(

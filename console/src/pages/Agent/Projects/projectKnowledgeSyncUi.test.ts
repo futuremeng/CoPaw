@@ -9,6 +9,15 @@ import {
 const t = ((key: string, fallback?: string) => fallback || key) as TFunction;
 
 describe("projectKnowledgeSyncUi semantic helpers", () => {
+  it("maps sidecar unconfigured to localized summary", () => {
+    expect(getProjectKnowledgeSemanticSummary({
+      engine: "hanlp2",
+      status: "unavailable",
+      reason_code: "HANLP2_SIDECAR_UNCONFIGURED",
+      reason: "HanLP2 sidecar is not configured.",
+    }, t)).toBe("Semantic engine unavailable: HanLP sidecar is not configured.");
+  });
+
   it("maps import unavailable to localized summary", () => {
     expect(getProjectKnowledgeSemanticSummary({
       engine: "hanlp2",
@@ -25,6 +34,15 @@ describe("projectKnowledgeSyncUi semantic helpers", () => {
       reason_code: "HANLP2_TOKENIZE_FAILED",
       reason: "HanLP2 semantic tokenization failed via tok: RuntimeError.",
     }, t)).toBe("Tokenization Failed");
+  });
+
+  it("maps sidecar python missing to localized reason label", () => {
+    expect(getProjectKnowledgeSemanticReasonLabel({
+      engine: "hanlp2",
+      status: "unavailable",
+      reason_code: "HANLP2_SIDECAR_PYTHON_MISSING",
+      reason: "HanLP2 sidecar Python executable was not found.",
+    }, t)).toBe("Sidecar Python Missing");
   });
 
   it("builds semantic description from code and localized summary", () => {

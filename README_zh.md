@@ -270,6 +270,38 @@ docker run -p 127.0.0.1:8088:8088 \
 
 ---
 
+## 项目知识处理
+
+项目页内置了项目级知识处理流程，当前包含三条并行处理路径：`fast`、`nlp` 与 `agentic`。系统会优先提供快速预览，再逐步补全 NLP 图谱产物和多智能体深处理结果；消费侧始终自动优先使用最佳可用结果，并在必要时按 `agentic -> nlp -> fast` 回退。
+
+### HanLP L2 侧车安装
+
+当前 Layer 2 NLP 基于 HanLP 2.x 本地版实现，但 CoPaw 主环境面向 Python 3.10-3.13，而 HanLP 2.x 本地版官方安装说明面向 Python 3.6-3.9。为了避免把不兼容运行时混在一起，推荐把 HanLP 放到独立 sidecar Python 环境中运行。
+
+推荐安装方式：
+
+```bash
+python3.9 -m venv ~/.venvs/copaw-hanlp
+~/.venvs/copaw-hanlp/bin/python -m pip install -U pip
+~/.venvs/copaw-hanlp/bin/python -m pip install hanlp
+
+export COPAW_HANLP_SIDECAR_ENABLED=1
+export COPAW_HANLP_SIDECAR_PYTHON="$HOME/.venvs/copaw-hanlp/bin/python"
+# 可选：复用已有离线缓存/模型目录
+export COPAW_HANLP_HOME="$HOME/.hanlp"
+
+qwenpaw doctor
+```
+
+说明：
+
+1. CoPaw 主服务自己的 `.venv` 不需要安装 HanLP。
+2. HanLP 首次加载模型时，可能会下载到 `HANLP_HOME` 或 `~/.hanlp`。
+3. 如果是离线/内网部署，建议同时预置 `~/.hanlp` 与 `~/.cache/huggingface`。
+4. 项目知识设置页的 Layer 2 会直接显示 sidecar 当前是未配置、缺失、版本不兼容，还是已经就绪。
+
+---
+
 ### 方式四：部署到阿里云 ECS
 
 若希望将 QwenPaw 部署在阿里云上，可使用阿里云 ECS 一键部署：打开 [QwenPaw 阿里云 ECS 部署链接](https://computenest.console.aliyun.com/service/instance/create/cn-hangzhou?type=user&ServiceId=service-1ed84201799f40879884) 按页面提示操作即可。详细步骤见 [阿里云开发者社区：QwenPaw 3 分钟部署你的 AI 助理](https://developer.aliyun.com/article/1713682)。
