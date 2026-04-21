@@ -93,17 +93,159 @@ def test_chunk_documents_split_sentences_and_count(tmp_path: Path):
     chunks = payload.get("chunks") or []
     status = manager.get_source_status(source.id)
     content = manager.get_source_documents(source.id)
+    chunk_path = tmp_path / "knowledge" / "chunks" / "sentence-chunk-source.0.txt"
 
     assert len(chunks) == 1
     first_chunk = chunks[0]
     assert first_chunk.get("sentence_count") == 3
-    assert first_chunk.get("text") == "第一句。\n第二句!\nThird sentence?"
+    assert "text" not in first_chunk
+    assert first_chunk.get("chunk_path") == "chunks/sentence-chunk-source.0.txt"
+    assert chunk_path.exists()
+    assert chunk_path.read_text(encoding="utf-8") == "第一句。\n第二句!\nThird sentence?"
     assert result.get("chunk_count") == 1
     assert result.get("sentence_count") == 3
     assert status.get("chunk_count") == 1
     assert status.get("sentence_count") == 3
     assert content.get("chunk_count") == 1
     assert content.get("sentence_count") == 3
+    assert content["documents"][0]["text"] == "第一句。\n第二句!\nThird sentence?"
+
+
+def test_search_reads_chunk_text_from_chunk_file_when_index_has_no_text(tmp_path: Path):
+    config = Config().knowledge
+    config.index.chunk_size = 10_000
+    source = KnowledgeSourceSpec(
+        id="search-chunk-source",
+        name="Search Chunk Source",
+        type="text",
+        content="Alpha beta. Gamma delta.",
+        enabled=True,
+        recursive=False,
+        tags=[],
+        summary="",
+    )
+    config.sources = [source]
+
+    manager = KnowledgeManager(tmp_path)
+    manager.index_source(source, config)
+
+    result = manager.search("gamma", config, limit=5)
+
+    assert len(result["hits"]) == 1
+    assert result["hits"][0]["source_id"] == source.id
+    assert "Gamma delta" in result["hits"][0]["snippet"]
+
+
+def test_process_source_candidates_read_chunk_text_from_chunk_file(tmp_path: Path):
+    config = Config().knowledge
+    config.index.chunk_size = 10_000
+    source = KnowledgeSourceSpec(
+        id="candidate-chunk-source",
+        name="Candidate Chunk Source",
+        type="text",
+        content="第一句。第二句! Third sentence?",
+        enabled=True,
+        recursive=False,
+        tags=[],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    manager.index_source(source, config)
+
+    candidates = manager._collect_source_processing_candidates(source, config)
+
+    assert any("第一句。\n第二句!\nThird sentence?" in item for item in candidates)
+
+
+def test_directory_source_writes_chunks_under_relative_document_path(tmp_path: Path):
+    project_root = tmp_path / "project-rel-chunks"
+    docs_dir = project_root / "docs"
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    (docs_dir / "README.md").write_text("第一句。第二句!", encoding="utf-8")
+
+    config = Config().knowledge
+    config.index.chunk_size = 10_000
+    source = KnowledgeSourceSpec(
+        id="project-rel-source",
+        name="Project Relative Source",
+        type="directory",
+        location=str(project_root),
+        content="",
+        enabled=True,
+        recursive=True,
+        tags=["project"],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    manager.index_source(source, config)
+
+    payload = json.loads(
+        (manager.get_source_storage_dir(source.id) / "index.json").read_text(encoding="utf-8")
+    )
+    chunk = payload["chunks"][0]
+    chunk_path = tmp_path / "knowledge" / chunk["chunk_path"]
+
+    assert chunk["chunk_path"] == "chunks/docs/README.md.0.txt"
+    assert chunk_path.exists()
+    assert chunk_path.read_text(encoding="utf-8") == "第一句。\n第二句!"
+
+
+def test_delete_index_removes_chunk_files(tmp_path: Path):
+    config = Config().knowledge
+    config.index.chunk_size = 10_000
+    source = KnowledgeSourceSpec(
+        id="delete-chunk-source",
+        name="Delete Chunk Source",
+        type="text",
+        content="第一句。第二句!",
+        enabled=True,
+        recursive=False,
+        tags=[],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    manager.index_source(source, config)
+    chunk_path = tmp_path / "knowledge" / "chunks" / "delete-chunk-source.0.txt"
+
+    assert chunk_path.exists()
+
+    manager.delete_index(source.id)
+
+    assert not chunk_path.exists()
+
+
+def test_delete_index_uses_chunk_manifest_when_index_is_missing(tmp_path: Path):
+    config = Config().knowledge
+    config.index.chunk_size = 10_000
+    source = KnowledgeSourceSpec(
+        id="manifest-delete-source",
+        name="Manifest Delete Source",
+        type="text",
+        content="第一句。第二句!",
+        enabled=True,
+        recursive=False,
+        tags=[],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    manager.index_source(source, config)
+
+    source_dir = manager.get_source_storage_dir(source.id)
+    chunk_path = tmp_path / "knowledge" / "chunks" / "manifest-delete-source.0.txt"
+    index_path = source_dir / "index.json"
+
+    assert chunk_path.exists()
+    assert index_path.exists()
+
+    index_path.unlink()
+
+    manager.delete_index(source.id)
+
+    assert not chunk_path.exists()
 
 
 def test_lightweight_token_count_does_not_depend_on_semantic_tokenizer(tmp_path: Path):

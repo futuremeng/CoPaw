@@ -153,6 +153,7 @@ class KnowledgeManager:
     ):
         self.working_dir = Path(working_dir).expanduser().resolve()
         self.root_dir = self.working_dir / knowledge_dirname
+        self.chunks_dir = self.root_dir / "chunks"
         self.sources_dir = self.root_dir / "sources"
         self.catalog_path = self.root_dir / "catalog.json"
         self.uploads_dir = self.root_dir / "uploads"
@@ -164,6 +165,7 @@ class KnowledgeManager:
         legacy_index_dir = self.root_dir / "indexes"
         if legacy_index_dir.exists():
             shutil.rmtree(legacy_index_dir, ignore_errors=True)
+        self.chunks_dir.mkdir(parents=True, exist_ok=True)
         self.sources_dir.mkdir(parents=True, exist_ok=True)
         self.uploads_dir.mkdir(parents=True, exist_ok=True)
         self.remote_blob_dir.mkdir(parents=True, exist_ok=True)
@@ -347,6 +349,10 @@ class KnowledgeManager:
 
     def delete_index(self, source_id: str) -> None:
         """Delete persisted index for a source."""
+        for chunk_path in self._load_source_chunk_manifest(source_id):
+            self._delete_chunk_path(chunk_path)
+        payload = self._load_index_payload_safe(source_id)
+        self._delete_chunks_from_payload(payload)
         source_dir = self._source_dir(source_id)
         if source_dir.exists():
             shutil.rmtree(source_dir, ignore_errors=True)
@@ -362,6 +368,7 @@ class KnowledgeManager:
             shutil.rmtree(self.root_dir, ignore_errors=True)
 
         # Recreate expected directory structure after cleanup.
+        self.chunks_dir.mkdir(parents=True, exist_ok=True)
         self.sources_dir.mkdir(parents=True, exist_ok=True)
         self.uploads_dir.mkdir(parents=True, exist_ok=True)
         self.remote_blob_dir.mkdir(parents=True, exist_ok=True)
@@ -414,7 +421,8 @@ class KnowledgeManager:
             if payload is None:
                 continue
             for chunk in payload.get("chunks", []):
-                score = self._score_chunk(chunk.get("text", ""), terms)
+                chunk_text = self._read_chunk_text(chunk)
+                score = self._score_chunk(chunk_text, terms)
                 if score <= 0:
                     continue
                 hits.append(
@@ -426,7 +434,7 @@ class KnowledgeManager:
                         "document_title": chunk.get("document_title"),
                         "score": score,
                         "snippet": self._build_snippet(
-                            chunk.get("text", ""),
+                            chunk_text,
                             terms,
                         ),
                     },
@@ -451,7 +459,7 @@ class KnowledgeManager:
                     "title": chunk.get("document_title") or doc_path,
                     "text": [],
                 }
-            docs[doc_path]["text"].append(chunk.get("text", ""))
+            docs[doc_path]["text"].append(self._read_chunk_text(chunk))
         documents = [
             {
                 "path": d["path"],
@@ -489,6 +497,158 @@ class KnowledgeManager:
     def _source_content_md_path(self, source_id: str) -> Path:
         return self._source_dir(source_id) / "content.md"
 
+    def _source_chunk_manifest_path(self, source_id: str) -> Path:
+        return self._source_dir(source_id) / "chunk-manifest.json"
+
+    def _load_source_chunk_manifest(self, source_id: str) -> set[str]:
+        path = self._source_chunk_manifest_path(source_id)
+        if not path.exists():
+            return set()
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return set()
+        if not isinstance(payload, dict):
+            return set()
+        chunk_paths = payload.get("chunk_paths")
+        if not isinstance(chunk_paths, list):
+            return set()
+        return {
+            str(item).strip()
+            for item in chunk_paths
+            if isinstance(item, str) and str(item).strip()
+        }
+
+    def _write_source_chunk_manifest(self, source_id: str, chunk_paths: set[str]) -> None:
+        self._source_chunk_manifest_path(source_id).write_text(
+            json.dumps(
+                {
+                    "source_id": source_id,
+                    "chunk_paths": sorted(chunk_paths),
+                    "updated_at": datetime.now(UTC).isoformat(),
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+    def _collect_chunk_paths_from_payload(self, payload: dict[str, Any] | None) -> set[str]:
+        if not isinstance(payload, dict):
+            return set()
+        source = None
+        source_payload = payload.get("source")
+        if isinstance(source_payload, dict):
+            try:
+                source = KnowledgeSourceSpec.model_validate(source_payload)
+            except Exception:
+                source = None
+        results: set[str] = set()
+        for chunk in payload.get("chunks") or []:
+            if not isinstance(chunk, dict):
+                continue
+            chunk_path = str(chunk.get("chunk_path") or "").strip()
+            if not chunk_path and source is not None:
+                chunk_path = self._build_chunk_relative_path(source, chunk).as_posix()
+            if chunk_path:
+                results.add(chunk_path)
+        return results
+
+    def _delete_chunk_path(self, relative_path: str | Path | None) -> None:
+        text = str(relative_path or "").strip()
+        if not text:
+            return
+        target = self.root_dir / text
+        if not target.exists() or not target.is_file():
+            return
+        try:
+            target.unlink()
+        except FileNotFoundError:
+            return
+        current = target.parent
+        while current != self.chunks_dir and current.exists():
+            try:
+                current.rmdir()
+            except OSError:
+                break
+            current = current.parent
+
+    def _delete_chunks_from_payload(self, payload: dict[str, Any] | None) -> None:
+        for chunk_path in self._collect_chunk_paths_from_payload(payload):
+            self._delete_chunk_path(chunk_path)
+
+    def _read_chunk_text(self, chunk: dict[str, Any]) -> str:
+        chunk_text = chunk.get("text")
+        if isinstance(chunk_text, str):
+            return chunk_text
+        chunk_path = str(chunk.get("chunk_path") or "").strip()
+        if not chunk_path:
+            return ""
+        try:
+            return (self.root_dir / chunk_path).read_text(encoding="utf-8")
+        except FileNotFoundError:
+            return ""
+
+    def _normalize_chunk_document_path(
+        self,
+        source: KnowledgeSourceSpec,
+        document_path: str,
+    ) -> Path:
+        raw_document_path = str(document_path or "").strip()
+        normalized_path: str | None = None
+
+        if source.type == "directory" and source.location and raw_document_path:
+            try:
+                root = Path(source.location).expanduser().resolve()
+                resolved = Path(raw_document_path).expanduser().resolve()
+                normalized_path = resolved.relative_to(root).as_posix()
+            except Exception:
+                normalized_path = None
+        elif source.type == "file":
+            candidate = raw_document_path or str(source.location or "")
+            normalized_path = Path(candidate).name
+        elif source.type == "url":
+            candidate = raw_document_path or str(source.location or source.id)
+            parsed = urlparse(candidate)
+            normalized_path = parsed.path.strip("/") or parsed.netloc or self._safe_name(source.id)
+        elif source.type == "chat":
+            candidate = raw_document_path or str(source.location or source.id)
+            normalized_path = Path(candidate).name or self._safe_name(source.id)
+
+        if not normalized_path:
+            candidate = raw_document_path or str(source.location or source.id)
+            normalized_path = Path(candidate).name or self._safe_name(source.id)
+
+        safe_parts = [
+            self._safe_name(part)
+            for part in Path(normalized_path).parts
+            if part not in {"", ".", "..", "/", "\\"}
+        ]
+        if not safe_parts:
+            safe_parts = [self._safe_name(source.id)]
+        return Path(*safe_parts)
+
+    def _build_chunk_relative_path(
+        self,
+        source: KnowledgeSourceSpec,
+        chunk: dict[str, Any],
+    ) -> Path:
+        normalized_doc_path = self._normalize_chunk_document_path(
+            source,
+            str(chunk.get("document_path") or ""),
+        )
+        parent = normalized_doc_path.parent
+        basename = self._safe_name(normalized_doc_path.name or source.id)
+        chunk_id = str(chunk.get("chunk_id") or "")
+        try:
+            chunk_index = int(chunk_id.rsplit("::", 1)[-1])
+        except (TypeError, ValueError):
+            chunk_index = 0
+        target = self.chunks_dir
+        if str(parent) not in {"", "."}:
+            target = target / parent
+        return target.relative_to(self.root_dir) / f"{basename}.{chunk_index}.txt"
+
     def get_source_storage_dir(self, source_id: str) -> Path:
         return self._source_dir(source_id)
 
@@ -522,10 +682,36 @@ class KnowledgeManager:
         payload: dict[str, Any],
         documents: list[dict[str, str]],
     ) -> None:
+        previous_payload = self._load_index_payload_safe(source.id)
+        previous_manifest_paths = self._load_source_chunk_manifest(source.id)
         source_dir = self._source_dir(source.id)
         source_dir.mkdir(parents=True, exist_ok=True)
         (source_dir / "raw").mkdir(parents=True, exist_ok=True)
         (source_dir / "media").mkdir(parents=True, exist_ok=True)
+
+        current_chunk_paths: set[str] = set()
+        for chunk in payload.get("chunks") or []:
+            if not isinstance(chunk, dict):
+                continue
+            chunk_relative_path = self._build_chunk_relative_path(source, chunk)
+            chunk["chunk_path"] = chunk_relative_path.as_posix()
+            chunk_file_path = self.root_dir / chunk_relative_path
+            chunk_file_path.parent.mkdir(parents=True, exist_ok=True)
+            chunk_file_path.write_text(
+                str(chunk.get("text") or ""),
+                encoding="utf-8",
+            )
+            current_chunk_paths.add(chunk["chunk_path"])
+            chunk.pop("text", None)
+
+        stale_chunk_paths = (
+            previous_manifest_paths
+            | self._collect_chunk_paths_from_payload(previous_payload)
+        ) - current_chunk_paths
+        for chunk_path in stale_chunk_paths:
+            self._delete_chunk_path(chunk_path)
+
+        self._write_source_chunk_manifest(source.id, current_chunk_paths)
 
         self._source_index_path(source.id).write_text(
             json.dumps(payload, ensure_ascii=False, indent=2),
@@ -2338,8 +2524,8 @@ class KnowledgeManager:
                 chunk_title = chunk.get("document_title")
                 if isinstance(chunk_title, str) and chunk_title.strip():
                     chunk_titles.append(chunk_title)
-                chunk_text = chunk.get("text")
-                if isinstance(chunk_text, str) and chunk_text.strip():
+                chunk_text = self._read_chunk_text(chunk)
+                if chunk_text.strip():
                     chunk_texts.append(chunk_text)
 
             if chunk_titles:

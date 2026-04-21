@@ -1196,9 +1196,14 @@ def test_project_scoped_index_storage_isolated(
         / "index.json"
     )
     global_index = tmp_path / "knowledge" / "sources" / "proj-source-a" / "index.json"
+    project_chunks_dir = tmp_path / "projects" / "project-a" / ".knowledge" / "chunks"
+    global_chunks_dir = tmp_path / "knowledge" / "chunks"
 
     assert project_index.exists()
     assert not global_index.exists()
+    assert project_chunks_dir.exists()
+    assert any(project_chunks_dir.rglob("*.txt"))
+    assert not global_chunks_dir.exists() or not any(global_chunks_dir.rglob("*.txt"))
 
 
 def test_project_scoped_memify_jobs_are_isolated(
