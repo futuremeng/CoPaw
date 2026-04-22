@@ -4,6 +4,7 @@ import {
   Badge,
   Button,
   Card,
+  Collapse,
   Drawer,
   Empty,
   Modal,
@@ -118,8 +119,8 @@ const WORKBENCH_PANE_MIN_SIZE = 360;
 const CHAT_PANE_DEFAULT_SIZE = 520;
 const CHAT_PANE_MIN_SIZE = 420;
 const KNOWLEDGE_DOCK_DEFAULT_SIZE = 320;
-const KNOWLEDGE_DOCK_COLLAPSED_SIZE = 56;
 const KNOWLEDGE_DOCK_MIN_SIZE = 240;
+const KNOWLEDGE_DOCK_COLLAPSE_KEY = "knowledge";
 const PROJECT_FILES_DEFER_MS = 420;
 const INITIAL_PROJECT_FILES_IDLE_TIMEOUT_MS = 1200;
 const PIPELINE_CONTEXT_DEFER_MS = 260;
@@ -1247,17 +1248,12 @@ export default function ProjectDetailPage() {
     });
   }, []);
 
-  const handleToggleKnowledgeDock = useCallback(() => {
-    setKnowledgeModuleCollapsed((prev) => {
-      const next = !prev;
-      setKnowledgeDockSize((current) => {
-        if (next) {
-          return KNOWLEDGE_DOCK_COLLAPSED_SIZE;
-        }
-        return Math.max(current, KNOWLEDGE_DOCK_DEFAULT_SIZE);
-      });
-      return next;
-    });
+  const handleKnowledgeDockCollapseChange = useCallback((activeKey: string | string[]) => {
+    const nextExpanded = Array.isArray(activeKey)
+      ? activeKey.includes(KNOWLEDGE_DOCK_COLLAPSE_KEY)
+      : activeKey === KNOWLEDGE_DOCK_COLLAPSE_KEY;
+
+    setKnowledgeModuleCollapsed(!nextExpanded);
   }, []);
 
   const projectWorkspaceSummary = useMemo(
@@ -2584,11 +2580,7 @@ export default function ProjectDetailPage() {
       );
       setWorkbenchPaneSize(Math.max(parsed.workbenchPaneSize, WORKBENCH_PANE_MIN_SIZE));
       setChatPaneSize(Math.max(parsed.chatPaneSize, CHAT_PANE_MIN_SIZE));
-      setKnowledgeDockSize(
-        parsed.knowledgeModuleCollapsed
-          ? KNOWLEDGE_DOCK_COLLAPSED_SIZE
-          : Math.max(parsed.knowledgeDockSize, KNOWLEDGE_DOCK_MIN_SIZE),
-      );
+      setKnowledgeDockSize(Math.max(parsed.knowledgeDockSize, KNOWLEDGE_DOCK_MIN_SIZE));
     } catch {
       const parsed = parseProjectLayoutPrefs(null);
       setLeftPanelCollapsed(parsed.leftPanelCollapsed);
@@ -2604,11 +2596,7 @@ export default function ProjectDetailPage() {
       );
       setWorkbenchPaneSize(Math.max(parsed.workbenchPaneSize, WORKBENCH_PANE_MIN_SIZE));
       setChatPaneSize(Math.max(parsed.chatPaneSize, CHAT_PANE_MIN_SIZE));
-      setKnowledgeDockSize(
-        parsed.knowledgeModuleCollapsed
-          ? KNOWLEDGE_DOCK_COLLAPSED_SIZE
-          : Math.max(parsed.knowledgeDockSize, KNOWLEDGE_DOCK_MIN_SIZE),
-      );
+      setKnowledgeDockSize(Math.max(parsed.knowledgeDockSize, KNOWLEDGE_DOCK_MIN_SIZE));
     } finally {
       layoutPrefsLoadedRef.current = true;
     }
@@ -3728,41 +3716,38 @@ export default function ProjectDetailPage() {
 
               <Splitter.Panel
                 size={knowledgeDockSize}
-                min={knowledgeModuleCollapsed ? KNOWLEDGE_DOCK_COLLAPSED_SIZE : KNOWLEDGE_DOCK_MIN_SIZE}
+                min={KNOWLEDGE_DOCK_MIN_SIZE}
                 max="52%"
                 defaultSize={KNOWLEDGE_DOCK_DEFAULT_SIZE}
               >
                 <div className={`${styles.splitterPanel} ${styles.knowledgeDockSplitterPanel}`}>
-                  <div className={`${styles.knowledgeModuleShell} ${knowledgeModuleCollapsed ? styles.knowledgeDockPanelCollapsed : ""}`}>
-                    <div className={styles.knowledgeModuleHeader}>
-                      <div className={styles.knowledgeModuleHeaderMain}>
-                        <Text strong className={styles.knowledgeModuleHeaderTitle}>
-                          {t("projects.knowledgePanelTitle")}
-                        </Text>
-                      </div>
-                      <Button
-                        className={styles.knowledgeModuleHeaderToggle}
-                        size="small"
-                        type="text"
-                        onClick={handleToggleKnowledgeDock}
-                      >
-                        {knowledgeModuleCollapsed
-                          ? t("projects.knowledgeModuleExpand", "Expand knowledge module")
-                          : t("projects.knowledgeModuleCollapse", "Collapse knowledge module")}
-                      </Button>
-                    </div>
-                    {knowledgeModuleCollapsed ? null : (
-                      <div className={styles.knowledgeDockBody}>
-                        <Tabs
-                          className={styles.knowledgeDockTabs}
-                          activeKey={knowledgeDockTab}
-                          tabPosition="left"
-                          destroyOnHidden
-                          onChange={(key) => setKnowledgeDockTab(key as KnowledgeDockTabKey)}
-                          items={knowledgeDockTabItems}
-                        />
-                      </div>
-                    )}
+                  <div className={styles.knowledgeModuleShell}>
+                    <Collapse
+                      destroyOnHidden
+                      className={styles.knowledgeModuleCollapse}
+                      activeKey={knowledgeModuleCollapsed ? [] : [KNOWLEDGE_DOCK_COLLAPSE_KEY]}
+                      onChange={handleKnowledgeDockCollapseChange}
+                      items={[
+                        {
+                          key: KNOWLEDGE_DOCK_COLLAPSE_KEY,
+                          label: (
+                            <span>{t("projects.knowledgePanelTitle")}</span>
+                          ),
+                          children: (
+                            <div className={styles.knowledgeDockBody}>
+                              <Tabs
+                                className={styles.knowledgeDockTabs}
+                                activeKey={knowledgeDockTab}
+                                tabPosition="left"
+                                destroyOnHidden
+                                onChange={(key) => setKnowledgeDockTab(key as KnowledgeDockTabKey)}
+                                items={knowledgeDockTabItems}
+                              />
+                            </div>
+                          ),
+                        },
+                      ]}
+                    />
                   </div>
                 </div>
               </Splitter.Panel>

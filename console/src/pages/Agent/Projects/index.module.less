@@ -1674,51 +1674,37 @@
 .knowledgeModuleShell {
   display: flex;
   flex-direction: column;
-  gap: 8px;
   height: 100%;
   min-height: 0;
-  padding-top: 4px;
   overflow: hidden;
 }
 
-.knowledgeModuleHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  flex-shrink: 0;
-  padding: 10px 12px;
-  border: 1px solid #dbe7fb;
-  border-radius: 12px;
-  background:
-    radial-gradient(circle at top left, rgba(115, 156, 255, 0.14), transparent 34%),
-    linear-gradient(180deg, #fcfdff 0%, #f3f7ff 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.8),
-    0 6px 18px rgba(31, 42, 68, 0.05);
-}
-
-.knowledgeModuleHeaderMain {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.knowledgeModuleCollapse {
   flex: 1;
-}
+  min-height: 0;
 
-.knowledgeModuleHeaderTitle {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  min-height: 30px;
-  padding: 0 10px;
-  border-radius: 999px;
-  background: linear-gradient(180deg, #eef4ff 0%, #e4efff 100%);
-  border: 1px solid #d8e6ff;
-  font-size: 13px;
-  letter-spacing: 0.03em;
-  color: #183153;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  :global(.ant-collapse-item) {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+  }
+
+  :global(.ant-collapse-header) {
+    flex-shrink: 0;
+  }
+
+  :global(.ant-collapse-content) {
+    flex: 1;
+    min-height: 0;
+  }
+
+  :global(.ant-collapse-content-box) {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+  }
 }
 
 .knowledgeModuleHeaderSignals {
@@ -1898,28 +1884,6 @@
   display: flex;
   flex-wrap: wrap;
   gap: 4px 12px;
-}
-
-.knowledgeModuleHeaderToggle {
-  flex-shrink: 0;
-  height: 28px;
-  padding: 0 10px;
-  border-radius: 999px;
-  color: #314662;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(240, 246, 255, 0.9) 100%);
-  border: 1px solid #dce7fb;
-  box-shadow: 0 1px 2px rgba(31, 42, 68, 0.05);
-
-  &:hover,
-  &:focus {
-    color: #162742;
-    background: #ffffff;
-    border-color: #cdddfb;
-  }
-}
-
-.knowledgeDockPanelCollapsed {
-  padding-top: 0;
 }
 
 .knowledgeDockBody {
@@ -3719,15 +3683,6 @@
     overflow: auto;
   }
 
-  .knowledgeModuleHeader {
-    align-items: flex-start;
-  }
-
-  .knowledgeModuleHeaderMain {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
   .knowledgeModuleHeaderSignals {
     width: 100%;
   }
@@ -3773,17 +3728,9 @@
 }
 
 @media (max-width: 768px) {
-  .knowledgeModuleHeader {
-    padding: 8px;
-  }
-
   .knowledgeModuleHeaderSignal {
     min-height: 28px;
     padding: 3px 8px;
-  }
-
-  .knowledgeModuleHeaderToggle {
-    padding: 0 8px;
   }
 }
 
@@ -4008,24 +3955,6 @@
     border-color: rgba(255, 127, 22, 0.52);
     background: rgba(255, 127, 22, 0.2);
   }
-
-  .knowledgeModuleHeader {
-    border-color: rgba(255, 255, 255, 0.1);
-    background:
-      radial-gradient(circle at top left, rgba(255, 127, 22, 0.14), transparent 32%),
-      linear-gradient(180deg, rgba(34, 34, 34, 0.96) 0%, rgba(24, 24, 24, 0.98) 100%);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.05),
-      0 8px 18px rgba(0, 0, 0, 0.18);
-  }
-
-  .knowledgeModuleHeaderTitle {
-    background: rgba(255, 127, 22, 0.12);
-    border-color: rgba(255, 127, 22, 0.22);
-    color: #ffe1c2;
-    box-shadow: none;
-  }
-
   .knowledgeModuleHeaderSignal {
     border-color: rgba(255, 255, 255, 0.08);
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.025) 100%);
@@ -4059,20 +3988,6 @@
   .knowledgeModuleHeaderSignalActive {
     border-color: rgba(95, 191, 159, 0.34);
     background: linear-gradient(180deg, rgba(95, 191, 159, 0.16) 0%, rgba(95, 191, 159, 0.1) 100%);
-  }
-
-  .knowledgeModuleHeaderToggle {
-    color: rgba(255, 255, 255, 0.82);
-    background: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.12);
-    box-shadow: none;
-
-    &:hover,
-    &:focus {
-      color: rgba(255, 255, 255, 0.94);
-      background: rgba(255, 255, 255, 0.08);
-      border-color: rgba(255, 255, 255, 0.18);
-    }
   }
 
   .knowledgeDockTabs {
