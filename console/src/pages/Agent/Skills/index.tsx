@@ -2,12 +2,9 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useProgressiveRender } from "../../../hooks/useProgressiveRender";
 import {
   Button,
-  Checkbox,
   Form,
   Modal,
   Tooltip,
-  Switch,
-  Select,
 } from "@agentscope-ai/design";
 import {
   AppstoreAddOutlined,
@@ -19,9 +16,6 @@ import {
   ReloadOutlined,
   SwapOutlined,
   UploadOutlined,
-  UnorderedListOutlined,
-  AppstoreOutlined,
-  SearchOutlined,
 } from "@ant-design/icons";
 import type {
   MarketError,
@@ -39,6 +33,8 @@ import {
   MarketplaceDrawer,
   PoolTransferModal,
   ImportHubModal,
+  SkillsToolbar,
+  SkillListItem,
 } from "./components";
 import { useTranslation } from "react-i18next";
 import { useAgentStore } from "../../../stores/agentStore";
@@ -69,6 +65,8 @@ type DownloadConflict =
 
 function SkillsPage() {
   const { t } = useTranslation();
+  const { selectedAgent } = useAgentStore();
+  const { message } = useAppMessage();
   const {
     skills,
     loading,

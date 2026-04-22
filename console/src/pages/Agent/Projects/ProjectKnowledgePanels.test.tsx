@@ -6,6 +6,7 @@ import ProjectKnowledgeProcessingPanel from "./ProjectKnowledgeProcessingPanel";
 import ProjectKnowledgeSignalsPanel from "./ProjectKnowledgeSignalsPanel";
 import ProjectKnowledgeSourcesPanel from "./ProjectKnowledgeSourcesPanel";
 import { buildModeState } from "./projectKnowledgeTestUtils";
+import type { ProjectKnowledgeSemanticEngineState } from "../../../api/types/knowledge";
 import type { ProjectKnowledgeState } from "./useProjectKnowledgeState";
 
 vi.mock("react-i18next", () => ({
@@ -25,7 +26,9 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-function buildSemanticEngineState(overrides: Record<string, unknown> = {}) {
+function buildSemanticEngineState(
+  overrides: Partial<ProjectKnowledgeSemanticEngineState> = {},
+): ProjectKnowledgeSemanticEngineState {
   return {
     engine: "hanlp2",
     status: "unavailable",
