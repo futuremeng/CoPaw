@@ -71,13 +71,6 @@ function SkillsPage() {
   const { t } = useTranslation();
   const {
     skills,
-    visibleSkills,
-    hasMore,
-    sentinelRef,
-    poolSkills,
-    allTags,
-    sortedSkills,
-    conflictRenameModal,
     loading,
     uploading,
     importing,

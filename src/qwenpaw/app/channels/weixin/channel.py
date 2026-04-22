@@ -727,7 +727,6 @@ class WeixinChannel(BaseChannel):
                                 from_user_id,
                                 error_msg,
                                 context_token,
-                                client,
                             ),
                             self._loop,
                         )

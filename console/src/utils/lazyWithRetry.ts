@@ -15,9 +15,12 @@ const RETRY_DELAY_MS = 1000;
  *   "../../pages/Settings/Debug"         →  "Settings/Debug/index"
  */
 function pathToModuleKey(importPath: string): string {
+  const hasExplicitExtension = /\.[^.\/]+$/.test(importPath);
   const key = importPath.replace(/^.*\/pages\//, "").replace(/\.[^.]+$/, "");
   // Bare-directory imports are registered as "<Dir>/index" in registerHostModules
-  return key.includes("/") && !/\/index$/.test(key) ? `${key}/index` : key;
+  return !hasExplicitExtension && key.includes("/") && !/\/index$/.test(key)
+    ? `${key}/index`
+    : key;
 }
 
 function retryImport<T extends ComponentType<unknown>>(
@@ -54,6 +57,10 @@ function toGlobKey(path: string): string {
   afterPages = afterPages.replace(/\/index$/, "");
   // Add the ../  prefix to match the glob map
   return `../${afterPages}`;
+}
+
+function pathFromGlobKey(globKey: string): string {
+  return globKey.replace(/^\.\.\/pages\//, "../pages/");
 }
 
 // ---------------------------------------------------------------------------
@@ -111,10 +118,16 @@ export function lazyImportWithRetry(
 ): ReturnType<typeof lazy<ComponentType<unknown>>> {
   // Normalise to the glob-map key (relative to src/utils/).
   // Bare-directory paths like "../../pages/Settings/Debug" are tried with
-  // /index.tsx and /index.ts suffixes automatically.
+  // /index.tsx and /index.ts suffixes automatically. Single-file modules like
+  // "../../pages/Agent/Projects/ProjectDetailPage" are also resolved against
+  // .tsx/.ts page files.
   const base = toGlobKey(path);
   const globKey = PAGE_MODULES[base]
     ? base
+    : PAGE_MODULES[`${base}.tsx`]
+    ? `${base}.tsx`
+    : PAGE_MODULES[`${base}.ts`]
+    ? `${base}.ts`
     : PAGE_MODULES[`${base}/index.tsx`]
     ? `${base}/index.tsx`
     : PAGE_MODULES[`${base}/index.ts`]
@@ -128,7 +141,7 @@ export function lazyImportWithRetry(
         `Available: ${Object.keys(PAGE_MODULES).join(", ")}`,
     );
   }
-  const key = pathToModuleKey(path);
+  const key = pathToModuleKey(pathFromGlobKey(globKey));
   return lazy(() =>
     retryImport(
       () => factory().then((comp) => ({ default: comp })),
