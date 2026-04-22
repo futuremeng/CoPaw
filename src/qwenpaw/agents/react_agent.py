@@ -326,8 +326,6 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
             "check_agent_task": check_agent_task,
         }
 
-        multimodal = get_active_model_supports_multimodal()
-
         # Register only enabled tools
         for tool_name, tool_func in tool_functions.items():
             tool_enabled = enabled_tools.get(tool_name, True)
@@ -369,13 +367,6 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
             # If tool not in config, enable by default (backward compatibility)
             if not tool_enabled:
                 logger.debug("Skipped disabled tool: %s", tool_name)
-                continue
-
-            if tool_name in ("view_image", "view_video") and not multimodal:
-                logger.debug(
-                    "Skipped %s — model does not support multimodal",
-                    tool_name,
-                )
                 continue
 
             # Get async_execution setting (default to False for backward

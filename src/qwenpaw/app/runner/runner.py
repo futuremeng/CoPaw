@@ -9,11 +9,10 @@ import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Coroutine
 
 import frontmatter as fm
 from agentscope.message import Msg, TextBlock
-from agentscope.pipeline import stream_printing_messages
 from agentscope_runtime.engine.runner import Runner
 from agentscope_runtime.engine.schemas.agent_schemas import AgentRequest
 from agentscope_runtime.engine.schemas.exception import (
@@ -82,7 +81,6 @@ _APPROVE_EXACT = frozenset(
         "/daemon approve",
     },
 )
-
 _REFERENCE_SECTION_PATTERN = re.compile(
     r"(^|\n)#{1,6}\s*(references|引文清单)\b",
     re.IGNORECASE,
@@ -709,6 +707,63 @@ def _build_retryable_error_msg(exc: Exception) -> Msg | None:
             ),
         ],
     )
+
+_PRINT_END_SIGNAL = "[END]"
+
+
+async def _cancel_streaming_agent_task(task: asyncio.Task) -> None:
+    if task.done():
+        return
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+    except Exception:
+        logger.debug(
+            "Streaming agent task finished with error during cancellation",
+            exc_info=True,
+        )
+
+
+async def _stream_printing_messages_interruptible(
+    *,
+    agents: list[Any],
+    coroutine_task: Coroutine[Any, Any, Msg],
+) -> AsyncGenerator[tuple[Msg, bool], None]:
+    """Like agentscope.stream_printing_messages, but cancel the agent task
+    promptly when the outer stream is stopped or closed.
+    """
+
+    queue: asyncio.Queue = asyncio.Queue()
+    for agent in agents:
+        agent.set_msg_queue_enabled(True, queue)
+
+    task = asyncio.create_task(coroutine_task)
+    if task.done():
+        await queue.put(_PRINT_END_SIGNAL)
+    else:
+        task.add_done_callback(lambda _: queue.put_nowait(_PRINT_END_SIGNAL))
+
+    try:
+        while True:
+            printing_msg = await queue.get()
+            if (
+                isinstance(printing_msg, str)
+                and printing_msg == _PRINT_END_SIGNAL
+            ):
+                break
+            msg, last, _ = printing_msg
+            yield msg, last
+
+        exception = task.exception()
+        if exception is not None:
+            raise exception from None
+    except asyncio.CancelledError:
+        await _cancel_streaming_agent_task(task)
+        raise
+    finally:
+        await _cancel_streaming_agent_task(task)
 
 
 def _is_approval(text: str) -> bool:
@@ -1357,69 +1412,94 @@ class AgentRunner(Runner):
             # AGENTS.md / SOUL.md / PROFILE.md, not the stale one saved
             # in the session state.
             agent.rebuild_sys_prompt()
-
-            runtime_status_token = set_current_runtime_status_context(
-                RuntimeStatusWriteContext(
-                    session=self.session,
-                    agent_id=self.agent_id,
-                    session_id=session_id,
-                    user_id=user_id,
-                    chat_id=chat.id if chat is not None else "",
+            # --- Execution: Mission Mode (phased) or standard ---
+            if mission_info is not None:
+                from ...agents.mission.mission_runner import (
+                    run_mission_phase1,
+                    run_mission_phase2,
                 )
-            )
 
-            stream_retry_budget = 1
-            while True:
-                try:
-                    citation_records: list[str] = []
-                    citation_seen: set[str] = set()
-                    citation_tool_use_idx: dict[str, int] = {}
-                    async for stream_item in stream_printing_messages(
-                        agents=[agent],
-                        coroutine_task=agent(msgs),
+                phase = mission_info["mission_phase"]
+                loop_dir = Path(mission_info["loop_dir"])
+                max_iters = mission_info.get("max_iterations", 20)
+
+                if phase == 1:
+                    async for msg, last in run_mission_phase1(
+                        agent=agent,
+                        msgs=msgs,
+                        loop_dir=loop_dir,
+                        max_iterations=max_iters,
+                        agent_id=self.agent_id,
                     ):
-                        out_msg, is_last = stream_item[0], stream_item[1]
-                        if isinstance(out_msg, Msg):
-                            _collect_runtime_references(
-                                out_msg,
-                                citation_records,
-                                citation_seen,
-                                citation_tool_use_idx,
-                            )
-                            if is_last:
-                                out_msg = _append_references_footer_if_needed(
+                        yield msg, last
+                else:
+                    async for msg, last in run_mission_phase2(
+                        agent=agent,
+                        msgs=msgs,
+                        loop_dir=loop_dir,
+                        max_iterations=max_iters,
+                        agent_id=self.agent_id,
+                    ):
+                        yield msg, last
+            else:
+                runtime_status_token = set_current_runtime_status_context(
+                    RuntimeStatusWriteContext(
+                        session=self.session,
+                        agent_id=self.agent_id,
+                        session_id=session_id,
+                        user_id=user_id,
+                        chat_id=chat.id if chat is not None else "",
+                    )
+                )
+
+                stream_retry_budget = 1
+                while True:
+                    try:
+                        citation_records: list[str] = []
+                        citation_seen: set[str] = set()
+                        citation_tool_use_idx: dict[str, int] = {}
+                        async for out_msg, is_last in _stream_printing_messages_interruptible(
+                            agents=[agent],
+                            coroutine_task=agent(msgs),
+                        ):
+                            if isinstance(out_msg, Msg):
+                                _collect_runtime_references(
                                     out_msg,
                                     citation_records,
+                                    citation_seen,
+                                    citation_tool_use_idx,
                                 )
-                        yield out_msg, is_last
-                    break
-                except Exception as stream_err:
-                    if (
-                        stream_retry_budget <= 0
-                        or not _is_context_overflow_error(stream_err)
-                    ):
-                        raise
+                                if is_last:
+                                    out_msg = _append_references_footer_if_needed(
+                                        out_msg,
+                                        citation_records,
+                                    )
+                            yield out_msg, is_last
+                        break
+                    except Exception as stream_err:
+                        if (
+                            stream_retry_budget <= 0
+                            or not _is_context_overflow_error(stream_err)
+                        ):
+                            raise
 
-                    compacted = await self._force_context_compaction(agent)
-                    if not compacted:
-                        raise
+                        compacted = await self._force_context_compaction(agent)
+                        if not compacted:
+                            raise
 
-                    stream_retry_budget -= 1
-                    logger.warning(
-                        "Context overflow detected; compacted memory and "
-                        "retrying once. session_id=%s user_id=%s channel=%s",
-                        session_id,
-                        user_id,
-                        channel,
-                    )
+                        stream_retry_budget -= 1
+                        logger.warning(
+                            "Context overflow detected; compacted memory and "
+                            "retrying once. session_id=%s user_id=%s channel=%s",
+                            session_id,
+                            user_id,
+                            channel,
+                        )
 
         except asyncio.CancelledError as exc:
             logger.info(f"query_handler: {session_id} cancelled!")
             if agent is not None:
                 await agent.interrupt()
-            return
-        except AppBaseException:
-            raise
             return
         except AppBaseException:
             raise

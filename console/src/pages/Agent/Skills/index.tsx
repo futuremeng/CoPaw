@@ -38,19 +38,16 @@ import {
   useConflictRenameModal,
   MarketplaceDrawer,
   PoolTransferModal,
-  SkillFilterDropdown,
-  getSkillVisual,
+  ImportHubModal,
 } from "./components";
-import { ImportHubModal } from "./components/ImportHubModal";
-import { isSkillBuiltin } from "@/utils/skill";
-import { useSkills } from "./useSkills";
-import { useSkillFilter } from "./useSkillFilter";
 import { useTranslation } from "react-i18next";
 import { useAgentStore } from "../../../stores/agentStore";
 import { useAppMessage } from "../../../hooks/useAppMessage";
 import api from "../../../api";
 import { invalidateSkillCache } from "../../../api/modules/skill";
 import { parseErrorDetail } from "../../../utils/error";
+import { useSkills } from "./useSkills";
+import { useSkillFilter } from "./useSkillFilter";
 import { PageHeader } from "@/components/PageHeader";
 import styles from "./index.module.less";
 import dayjs from "dayjs";
@@ -72,10 +69,15 @@ type DownloadConflict =
 
 function SkillsPage() {
   const { t } = useTranslation();
-  const { message } = useAppMessage();
-  const { selectedAgent } = useAgentStore();
   const {
     skills,
+    visibleSkills,
+    hasMore,
+    sentinelRef,
+    poolSkills,
+    allTags,
+    sortedSkills,
+    conflictRenameModal,
     loading,
     uploading,
     importing,
@@ -457,7 +459,9 @@ function SkillsPage() {
     shouldStop: () => boolean;
     onProgress?: (skillKey: string | null) => void;
   }) => {
-    const targets = marketplace.filter((item) => item.market_id === params.marketId);
+    const targets = marketplace.filter(
+      (item) => item.market_id === params.marketId,
+    );
 
     if (params.type === "enable") {
       let enabled = 0;
@@ -914,7 +918,6 @@ function SkillsPage() {
       );
     }
   };
-
   return (
     <div className={styles.skillsPage}>
       <PageHeader
@@ -1043,9 +1046,6 @@ function SkillsPage() {
                   <Button type="primary" onClick={toggleBatchMode}>
                     {t("skills.batchOperation")}
                   </Button>
-                  <Button type="primary" onClick={toggleBatchMode}>
-                    {t("skills.batchOperation")}
-                  </Button>
                   <Tooltip title={t("skills.createSkillHint")}>
                     <Button
                       type="primary"
@@ -1073,55 +1073,17 @@ function SkillsPage() {
       />
 
       {!loading && skills.length > 0 && (
-        <div className={styles.toolbar}>
-          <div className={styles.searchContainer}>
-            <Select
-              mode="multiple"
-              className={styles.searchSelect}
-              placeholder={t("skills.searchPlaceholder")}
-              value={searchTags}
-              onChange={setSearchTags}
-              searchValue={searchQuery}
-              onSearch={setSearchQuery}
-              open={filterOpen && allTags.length > 0}
-              onDropdownVisibleChange={setFilterOpen}
-              allowClear
-              maxTagCount="responsive"
-              suffixIcon={<SearchOutlined />}
-              notFoundContent={<></>}
-              dropdownRender={() => (
-                <SkillFilterDropdown
-                  allTags={allTags}
-                  searchTags={searchTags}
-                  setSearchTags={setSearchTags}
-                  styles={styles}
-                />
-              )}
-            />
-          </div>
-          <div className={styles.toolbarRight}>
-            <div className={styles.viewToggle}>
-              <button
-                className={`${styles.viewToggleBtn} ${
-                  viewMode === "list" ? styles.viewToggleBtnActive : ""
-                }`}
-                onClick={() => setViewMode("list")}
-                title={t("skills.listView")}
-              >
-                <UnorderedListOutlined />
-              </button>
-              <button
-                className={`${styles.viewToggleBtn} ${
-                  viewMode === "card" ? styles.viewToggleBtnActive : ""
-                }`}
-                onClick={() => setViewMode("card")}
-                title={t("skills.gridView")}
-              >
-                <AppstoreOutlined />
-              </button>
-            </div>
-          </div>
-        </div>
+        <SkillsToolbar
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchTags={searchTags}
+          onTagsChange={setSearchTags}
+          allTags={allTags}
+          filterOpen={filterOpen}
+          onFilterOpenChange={setFilterOpen}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+        />
       )}
 
       {loading ? (
@@ -1148,6 +1110,13 @@ function SkillsPage() {
             </Button>
           </div>
         </div>
+      ) : sortedSkills.length === 0 ? (
+        <div className={styles.noSearchResults}>
+          <span className={styles.noSearchResultsIcon}>🔍</span>
+          <span className={styles.noSearchResultsText}>
+            {t("skills.noSearchResults")}
+          </span>
+        </div>
       ) : viewMode === "card" ? (
         <div className={styles.skillsGrid}>
           {visibleSkills.map((skill) => (
@@ -1169,92 +1138,21 @@ function SkillsPage() {
         </div>
       ) : (
         <div className={styles.skillsList}>
-          {visibleSkills.map((skill) => {
-            const isBuiltin = isSkillBuiltin(skill.source);
-            const channels = (skill.channels || ["all"])
-              .map((ch) => (ch === "all" ? t("skills.allChannels") : ch))
-              .join(", ");
-            const isSelected = selectedSkills.has(skill.name);
-            return (
-              <div
-                key={skill.name}
-                className={`${styles.skillListItem} ${
-                  isSelected ? styles.selectedListItem : ""
-                }`}
-                onClick={() => {
-                  if (batchModeEnabled) {
-                    toggleSelect(skill.name);
-                  } else {
-                    handleEdit(skill);
-                  }
-                }}
-              >
-                {batchModeEnabled && (
-                  <Checkbox
-                    checked={isSelected}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleSelect(skill.name);
-                    }}
-                  />
-                )}
-                <div className={styles.listItemLeft}>
-                  <span className={styles.fileIcon}>
-                    {getSkillVisual(skill.name, skill.emoji)}
-                  </span>
-                  <div className={styles.listItemInfo}>
-                    <div className={styles.listItemHeader}>
-                      <span className={styles.skillTitle}>{skill.name}</span>
-                      <span className={styles.typeBadge}>
-                        {isBuiltin ? t("skills.builtin") : t("skills.custom")}
-                      </span>
-                      <span className={styles.channelBadge}>{channels}</span>
-                      {skill.last_updated && (
-                        <span className={styles.listItemTime}>
-                          {t("skills.lastUpdated")}{" "}
-                          {dayjs(skill.last_updated).fromNow()}
-                        </span>
-                      )}
-                    </div>
-                    <p className={styles.listItemDesc}>
-                      {skill.description || "-"}
-                    </p>
-                    {!!skill.tags?.length && (
-                      <div className={styles.listItemTags}>
-                        {skill.tags.map((tag) => (
-                          <span key={tag} className={styles.tagChip}>
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className={styles.listItemRight}>
-                  <span onClick={(e) => e.stopPropagation()}>
-                    <Switch
-                      checked={skill.enabled}
-                      disabled={batchModeEnabled}
-                      onChange={async () => {
-                        await toggleEnabled(skill);
-                        await refreshSkills();
-                      }}
-                    />
-                  </span>
-                  <Button
-                    danger
-                    disabled={batchModeEnabled}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(skill);
-                    }}
-                  >
-                    {t("common.delete")}
-                  </Button>
-                </div>
-              </div>
-            );
-          })}
+          {visibleSkills.map((skill) => (
+            <SkillListItem
+              key={skill.name}
+              skill={skill}
+              batchModeEnabled={batchModeEnabled}
+              isSelected={selectedSkills.has(skill.name)}
+              onSelect={() => toggleSelect(skill.name)}
+              onClick={() => handleEdit(skill)}
+              onToggleEnabled={async () => {
+                await toggleEnabled(skill);
+                await refreshSkills();
+              }}
+              onDelete={() => handleDelete(skill)}
+            />
+          ))}
           {hasMore && <div ref={sentinelRef} style={{ height: 1 }} />}
         </div>
       )}

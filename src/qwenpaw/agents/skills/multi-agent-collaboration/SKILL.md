@@ -2,12 +2,12 @@
 name: multi-agent-collaboration
 description: Use this skill when another agent's expertise/context is needed, or when the user explicitly asks to involve another agent. First list agents, then use qwenpaw agents chat for two-way communication with replies. | 当需要其他 agent 的专长/上下文，或用户明确要求调用其他 agent 时使用；先查 agent，再用 qwenpaw agents chat 双向通信（有回复）
 metadata:
-  builtin_skill_version: "1.3"
+  builtin_skill_version: "1.4"
   qwenpaw:
     emoji: "🤝"
 ---
 
-# Multi-Agent Collaboration（多智能体协作）
+# 多智能体协作
 
 ## 什么时候用
 

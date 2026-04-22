@@ -17,6 +17,9 @@ export { ImportHubModal } from "./ImportHubModal";
 export { PoolTransferModal } from "./PoolTransferModal";
 export { MarketplaceDrawer } from "./MarketplaceDrawer";
 export { SkillFilterDropdown, TAG_PREFIX } from "./SkillFilterDropdown";
+export { HeaderActions } from "./HeaderActions";
+export { SkillsToolbar } from "./SkillsToolbar";
+export { SkillListItem } from "./SkillListItem";
 export {
   SUPPORTED_SKILL_URL_PREFIXES,
   isSupportedSkillUrl,
