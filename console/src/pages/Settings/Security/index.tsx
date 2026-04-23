@@ -92,12 +92,14 @@ function SecurityPage() {
       setSaving(true);
       const values = await form.validateFields();
       const guardedTools: string[] = values.guarded_tools ?? [];
+      const saveBody = buildSaveBody();
       const body = {
         enabled: values.enabled,
         guarded_tools: guardedTools.length > 0 ? guardedTools : null,
         denied_tools: values.denied_tools ?? [],
         custom_rules: customRules,
-        disabled_rules: Array.from(buildSaveBody().disabled_rules),
+        disabled_rules: Array.from(saveBody.disabled_rules),
+        shell_evasion_checks: saveBody.shell_evasion_checks,
       };
       await api.updateToolGuard(body);
       setEnabled(body.enabled);

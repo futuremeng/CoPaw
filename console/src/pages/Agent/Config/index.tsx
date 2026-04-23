@@ -5,11 +5,9 @@ import {
   ReactAgentCard,
   LlmRetryCard,
   LlmRateLimiterCard,
-  ContextCompactCard,
-  ToolResultCompactCard,
-  MemorySummaryCard,
-  EmbeddingConfigCard,
   KnowledgeMaintenanceCard,
+  LightContextCard,
+  ReMeLightMemoryCard,
 } from "./components";
 import { PageHeader } from "@/components/PageHeader";
 import styles from "./index.module.less";
@@ -78,13 +76,9 @@ function AgentConfigPage() {
 
             <KnowledgeMaintenanceCard />
 
-            <ContextCompactCard maxInputLength={maxInputLength} />
+            <LightContextCard maxInputLength={maxInputLength} />
 
-            <ToolResultCompactCard />
-
-            <MemorySummaryCard />
-
-            <EmbeddingConfigCard />
+            <ReMeLightMemoryCard />
           </Form>
         </div>
       </div>

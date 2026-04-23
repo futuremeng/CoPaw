@@ -1,3 +1,5 @@
+import type { ModelSlotConfig } from "./provider";
+
 // Multi-agent management types
 export interface ProjectArtifactItem {
   id: string;
@@ -439,6 +441,7 @@ export interface AgentSummary {
   description: string;
   workspace_dir: string;
   enabled: boolean;
+  active_model?: ModelSlotConfig | null;
   is_builtin: boolean;
   builtin_kind: string;
   builtin_label: string;
@@ -469,6 +472,7 @@ export interface AgentProfileConfig {
   mcp?: unknown;
   heartbeat?: unknown;
   running?: unknown;
+  active_model?: ModelSlotConfig | null;
   llm_routing?: unknown;
   system_prompt_files?: string[];
   tools?: unknown;
@@ -482,6 +486,7 @@ export interface CreateAgentRequest {
   workspace_dir?: string;
   language?: string;
   skill_names?: string[];
+  active_model?: ModelSlotConfig | null;
 }
 
 export interface AgentProfileRef {
