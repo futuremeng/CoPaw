@@ -7,6 +7,7 @@ import time
 
 import click
 
+from ..runtime_mode import ensure_runtime_flavor
 from ..utils.stdio import ensure_standard_streams
 
 # On Windows, force UTF-8 for stdout/stderr so cron and other commands
@@ -161,6 +162,8 @@ class LazyGroup(click.Group):
 @click.pass_context
 def cli(ctx: click.Context, host: str | None, port: int | None) -> None:
     """CoPaw CLI."""
+    runtime_flavor = ensure_runtime_flavor(program_name=ctx.info_name)
+
     # default from last run if not provided
     last = read_last_api()
     if host is None or port is None:
@@ -175,3 +178,4 @@ def cli(ctx: click.Context, host: str | None, port: int | None) -> None:
     ctx.ensure_object(dict)
     ctx.obj["host"] = host
     ctx.obj["port"] = port
+    ctx.obj["runtime_flavor"] = runtime_flavor

@@ -28,6 +28,7 @@ from ..constant import (
     WORKING_DIR,
     PROJECT_NAME,
 )
+from ..runtime_mode import get_runtime_flavor, is_enhanced_runtime
 from ..__version__ import __version__
 from ..utils.logging import (
     setup_logger,
@@ -53,6 +54,7 @@ from .channels.registry import register_custom_channel_routes
 
 # Apply log level on load so reload child process gets same level as CLI.
 logger = setup_logger(os.environ.get(LOG_LEVEL_ENV, "info"))
+RUNTIME_FLAVOR = get_runtime_flavor()
 
 # Ensure static assets are served with browser-compatible MIME types across
 # platforms (notably Windows may miss .js/.mjs mappings).
@@ -513,6 +515,13 @@ app = FastAPI(
     docs_url="/docs" if DOCS_ENABLED else None,
     redoc_url="/redoc" if DOCS_ENABLED else None,
     openapi_url="/openapi.json" if DOCS_ENABLED else None,
+)
+app.state.runtime_flavor = RUNTIME_FLAVOR
+app.state.runtime_overlay_enabled = is_enhanced_runtime(RUNTIME_FLAVOR)
+logger.info(
+    "Application runtime flavor: %s (overlay_enabled=%s)",
+    app.state.runtime_flavor,
+    app.state.runtime_overlay_enabled,
 )
 
 # Add agent context middleware for agent-scoped routes

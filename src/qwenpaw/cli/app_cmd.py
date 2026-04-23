@@ -10,6 +10,7 @@ import uvicorn
 
 from ..constant import LOG_LEVEL_ENV
 from ..config.utils import write_last_api
+from ..runtime_mode import get_runtime_app_import_path
 from ..utils.logging import setup_logger, SuppressPathAccessLogFilter
 
 
@@ -126,7 +127,8 @@ def app_cmd(
             },
         )
 
+    app_import_path = get_runtime_app_import_path()
     uvicorn.run(
-        "qwenpaw.app._app:app",
+        app_import_path,
         **run_kwargs,
     )
