@@ -123,6 +123,7 @@ class WeixinChannel(BaseChannel):
         self._client: Optional[ILinkClient] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._poll_loop: Optional[asyncio.AbstractEventLoop] = None
+        self._poll_task: Optional[asyncio.Task[Any]] = None
         self._poll_thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
 
@@ -431,8 +432,12 @@ class WeixinChannel(BaseChannel):
             poll_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(poll_loop)
         self._poll_loop = poll_loop
+        self._poll_task = poll_loop.create_task(self._poll_loop_async())
         try:
-            poll_loop.run_until_complete(self._poll_loop_async())
+            poll_loop.run_until_complete(self._poll_task)
+        except asyncio.CancelledError:
+            if not self._stop_event.is_set():
+                logger.exception("weixin: poll thread cancelled unexpectedly")
         except Exception:
             logger.exception("weixin: poll thread failed")
         finally:
@@ -448,6 +453,7 @@ class WeixinChannel(BaseChannel):
                 poll_loop.close()
             except Exception:
                 pass
+            self._poll_task = None
             self._poll_loop = None
 
     async def _poll_loop_async(self) -> None:
@@ -1482,9 +1488,9 @@ class WeixinChannel(BaseChannel):
         if not self.enabled:
             return
         self._stop_event.set()
-        if self._poll_loop is not None:
+        if self._poll_loop is not None and self._poll_task is not None:
             try:
-                self._poll_loop.call_soon_threadsafe(self._poll_loop.stop)
+                self._poll_loop.call_soon_threadsafe(self._poll_task.cancel)
             except Exception:
                 pass
         if self._poll_thread:

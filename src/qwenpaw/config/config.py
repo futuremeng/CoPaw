@@ -356,6 +356,25 @@ class VoiceChannelConfig(BaseChannelConfig):
     welcome_greeting: str = "Hi! This is QwenPaw. How can I help you?"
 
 
+class SIPChannelConfig(BaseChannelConfig):
+    """SIP voice channel configuration."""
+
+    sip_mode: Literal["dev", "livekit"] = "dev"
+    sip_server: str = ""
+    sip_username: str = ""
+    sip_password: str = ""
+    sip_host: str = "0.0.0.0"
+    sip_port: int = 5060
+    rtp_port_low: int = 10000
+    rtp_port_high: int = 20000
+    livekit_url: str = ""
+    livekit_api_key: str = ""
+    livekit_api_secret: str = ""
+    livekit_sip_trunk_id: str = ""
+    livekit_room_name: str = "sip-inbound"
+    livekit_output_sample_rate: int = 24000
+
+
 class XiaoYiConfig(BaseChannelConfig):
     """XiaoYi channel: Huawei A2A protocol via WebSocket."""
 
@@ -398,6 +417,7 @@ class ChannelConfig(BaseModel):
     console: ConsoleConfig = ConsoleConfig()
     matrix: MatrixConfig = MatrixConfig()
     voice: VoiceChannelConfig = VoiceChannelConfig()
+    sip: SIPChannelConfig = SIPChannelConfig()
     wecom: WecomConfig = WecomConfig()
     xiaoyi: XiaoYiConfig = XiaoYiConfig()
     weixin: WeixinConfig = WeixinConfig()
@@ -955,6 +975,10 @@ class AgentProfileConfig(BaseModel):
         default=None,
         description="Tools configuration for this agent",
     )
+    plan: Optional["PlanConfig"] = Field(
+        default=None,
+        description="Plan mode configuration for this agent",
+    )
     security: Optional["SecurityConfig"] = Field(
         default=None,
         description="Security configuration for this agent",
@@ -1339,6 +1363,16 @@ def build_qa_agent_tools_config() -> ToolsConfig:
     return ToolsConfig(builtin_tools=builtin_tools)
 
 
+def build_local_agent_tools_config() -> ToolsConfig:
+    """Tools preset for builtin local agents.
+
+    Local agents keep the standard built-in tool set so they behave like a
+    normal workspace agent, with model selection handled elsewhere.
+    """
+
+    return ToolsConfig()
+
+
 def build_understand_builtin_tools_config() -> ToolsConfig:
     """Tools preset for builtin understand-analysis agents.
 
@@ -1391,6 +1425,12 @@ class ToolGuardConfig(BaseModel):
     denied_tools: List[str] = Field(default_factory=list)
     custom_rules: List[ToolGuardRuleConfig] = Field(default_factory=list)
     disabled_rules: List[str] = Field(default_factory=list)
+
+
+class PlanConfig(BaseModel):
+    """Per-agent plan mode configuration."""
+
+    enabled: bool = Field(default=False)
 
 
 class SkillScannerWhitelistEntry(BaseModel):
@@ -1865,6 +1905,7 @@ ChannelConfigUnion = Union[
     ConsoleConfig,
     MatrixConfig,
     VoiceChannelConfig,
+    SIPChannelConfig,
     WecomConfig,
     XiaoYiConfig,
     WeixinConfig,

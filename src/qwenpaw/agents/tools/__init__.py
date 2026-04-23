@@ -36,6 +36,7 @@ from .agent_management import (
     check_agent_task,
 )
 from .delegate_external_agent import delegate_external_agent
+from .memory_search import create_memory_search_tool
 
 __all__ = [
     "execute_python_code",
@@ -64,6 +65,7 @@ __all__ = [
     "skill_market_search",
     "skill_market_install",
     "delegate_external_agent",
+    "create_memory_search_tool",
     "list_agents",
     "chat_with_agent",
     "submit_to_agent",

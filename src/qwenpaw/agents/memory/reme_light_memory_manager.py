@@ -17,7 +17,12 @@ from agentscope.tool import Toolkit, ToolResponse
 
 from copaw.agents.memory.base_memory_manager import BaseMemoryManager
 from copaw.agents.model_factory import create_model_and_formatter
-from copaw.agents.tools import read_file, write_file, edit_file
+from copaw.agents.tools import (
+    create_memory_search_tool,
+    edit_file,
+    read_file,
+    write_file,
+)
 from copaw.agents.utils import get_copaw_token_counter
 from copaw.config import load_config
 from copaw.config.config import load_agent_config
@@ -26,6 +31,7 @@ from copaw.config.context import (
     set_current_recent_max_bytes,
 )
 from copaw.constant import EnvVarLoader
+from .prompts import MEMORY_GUIDANCE_EN, MEMORY_GUIDANCE_ZH
 
 if TYPE_CHECKING:
     from reme.memory.file_based.reme_in_memory_memory import ReMeInMemoryMemory
@@ -260,6 +266,19 @@ See: https://docs.trychroma.com/docs/overview/troubleshooting#sqlite
             return None
         await self._reme.start()
         return None
+
+    def get_memory_prompt(self, language: str = "zh") -> str:
+        """Return the localized memory guidance block for system prompts."""
+        agent_config = load_agent_config(self.agent_id)
+        if not agent_config.running.memory_summary.memory_prompt_enabled:
+            return ""
+        if language == "zh":
+            return MEMORY_GUIDANCE_ZH
+        return MEMORY_GUIDANCE_EN
+
+    def list_memory_tools(self) -> list:
+        """Return memory tools exposed to the agent toolkit."""
+        return [create_memory_search_tool(self)]
 
     async def close(self) -> bool:
         """Close ReMeLight and perform cleanup."""

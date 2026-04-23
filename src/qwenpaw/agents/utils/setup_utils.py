@@ -20,6 +20,44 @@ def normalize_agent_language(language: str) -> str:
     return "en"
 
 
+def copy_workspace_md_files(
+    language: str,
+    workspace_dir: Path | str,
+    *,
+    md_template_id: str | None = None,
+    only_if_missing: bool = True,
+) -> list[str]:
+    """Copy the appropriate workspace markdown templates for an agent.
+
+    ``md_template_id`` selects builtin template-specific persona files when
+    available. Otherwise the generic language pack is copied.
+    """
+
+    normalized_language = normalize_agent_language(language)
+    workspace_path = Path(workspace_dir).expanduser()
+
+    if md_template_id == "qa":
+        return copy_builtin_qa_md_files(
+            normalized_language,
+            workspace_path,
+            only_if_missing=only_if_missing,
+        )
+
+    if md_template_id:
+        return copy_builtin_agent_md_files(
+            md_template_id,
+            normalized_language,
+            workspace_path,
+            only_if_missing=only_if_missing,
+        )
+
+    return copy_md_files(
+        normalized_language,
+        skip_existing=only_if_missing,
+        workspace_dir=workspace_path,
+    )
+
+
 def copy_md_files(
     language: str,
     skip_existing: bool = False,

@@ -6,10 +6,13 @@ AgentScope's hook interface (any Callable).
 
 Available Hooks:
     - BootstrapHook: First-time setup guidance
+    - MemoryCompactionHook: Legacy context compaction compatibility hook
 """
 
 from .bootstrap import BootstrapHook
+from .memory_compaction import MemoryCompactionHook
 
 __all__ = [
     "BootstrapHook",
+    "MemoryCompactionHook",
 ]
