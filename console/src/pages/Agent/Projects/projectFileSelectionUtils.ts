@@ -1,10 +1,20 @@
+const PREVIEWABLE_HIDDEN_DIRECTORIES = new Set([
+  ".agent",
+  ".memories",
+  ".skills",
+]);
+
 export function isPreviewablePath(path: string): boolean {
   if (!path) {
     return false;
   }
   const segments = path.replace(/\\/g, "/").split("/").filter(Boolean);
   for (let index = 0; index < segments.length - 1; index += 1) {
-    if ((segments[index] || "").startsWith(".")) {
+    const segment = segments[index] || "";
+    if (
+      segment.startsWith(".")
+      && !PREVIEWABLE_HIDDEN_DIRECTORIES.has(segment)
+    ) {
       return false;
     }
   }

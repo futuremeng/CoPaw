@@ -45,6 +45,12 @@ export default function ProjectArtifactsPanel({
     || projectFiles.find((item) => item.path === selectedFilePath);
   const hasPreviewTarget = Boolean(selectedFilePath);
   const shouldBlockOnFilesLoading = filesLoading && !hasPreviewTarget;
+  const isEmptyFilePreview = Boolean(
+    selectedFilePath
+    && !contentLoading
+    && fileContent === ""
+    && selectedFileInfo?.size === 0,
+  );
 
   return (
     <div className={`${styles.previewBody} ${styles.previewBodyArtifacts}`}>
@@ -97,7 +103,14 @@ export default function ProjectArtifactsPanel({
                     </div>
                   ) : null}
                 </div>
-                <pre className={styles.previewContent}>{fileContent}</pre>
+                {isEmptyFilePreview ? (
+                  <Empty
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    description={t("projects.emptyFile", "This file is empty")}
+                  />
+                ) : (
+                  <pre className={styles.previewContent}>{fileContent}</pre>
+                )}
               </>
             ) : (
               <Empty
