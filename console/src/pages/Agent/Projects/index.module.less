@@ -1681,27 +1681,51 @@
 
 .knowledgeModuleCollapse {
   flex: 1;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
 
-  :global(.ant-collapse-item) {
+  :global(.ant-collapse),
+  :global(.qwenpaw-collapse),
+  :global(.copaw-collapse) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  :global(.ant-collapse-item),
+  :global(.qwenpaw-collapse-item),
+  :global(.copaw-collapse-item) {
     display: flex;
     flex-direction: column;
+    flex: 1;
     height: 100%;
     min-height: 0;
   }
 
-  :global(.ant-collapse-header) {
+  :global(.ant-collapse-header),
+  :global(.qwenpaw-collapse-header),
+  :global(.copaw-collapse-header) {
     flex-shrink: 0;
   }
 
-  :global(.ant-collapse-content) {
+  :global(.ant-collapse-content),
+  :global(.qwenpaw-collapse-content),
+  :global(.copaw-collapse-content) {
+    display: flex;
+    flex-direction: column;
     flex: 1;
+    height: 100%;
     min-height: 0;
   }
 
-  :global(.ant-collapse-content-box) {
+  :global(.ant-collapse-content-box),
+  :global(.qwenpaw-collapse-content-box),
+  :global(.copaw-collapse-content-box) {
     display: flex;
     flex-direction: column;
+    flex: 1;
     height: 100%;
     min-height: 0;
   }
