@@ -1,31 +1,7 @@
 import { isBuiltInProjectFile } from "./builtInFiles";
 
-const PREVIEWABLE_HIDDEN_DIRECTORIES = new Set([
-  ".agent",
-  ".memories",
-  ".skills",
-  ".scripts",
-  ".flows",
-  ".cases",
-  ".pipelines",
-  ".data",
-]);
-
 export function isPreviewablePath(path: string): boolean {
-  if (!path) {
-    return false;
-  }
-  const segments = path.replace(/\\/g, "/").split("/").filter(Boolean);
-  for (let index = 0; index < segments.length - 1; index += 1) {
-    const segment = segments[index] || "";
-    if (
-      segment.startsWith(".")
-      && !PREVIEWABLE_HIDDEN_DIRECTORIES.has(segment)
-    ) {
-      return false;
-    }
-  }
-  return true;
+  return Boolean(path);
 }
 
 export function isIgnoredProjectFile(path: string): boolean {

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { isPreviewablePath } from "./projectFileSelectionUtils";
 
 describe("project file selection utils", () => {
-  it("allows project-managed hidden directories to be previewed", () => {
+  it("allows managed hidden directories to be previewed", () => {
     expect(isPreviewablePath(".memories/baseline.md")).toBe(true);
     expect(isPreviewablePath(".agent/AGENTS.md")).toBe(true);
     expect(isPreviewablePath(".skills/demo/SKILL.md")).toBe(true);
@@ -10,9 +10,9 @@ describe("project file selection utils", () => {
     expect(isPreviewablePath(".pipelines/templates/template.json")).toBe(true);
   });
 
-  it("continues to block arbitrary hidden paths", () => {
+  it("allows arbitrary hidden paths under the project workspace", () => {
     expect(isPreviewablePath(".env")).toBe(true);
-    expect(isPreviewablePath(".cursor/rules.md")).toBe(false);
-    expect(isPreviewablePath("docs/.drafts/notes.md")).toBe(false);
+    expect(isPreviewablePath(".cursor/rules.md")).toBe(true);
+    expect(isPreviewablePath("docs/.drafts/notes.md")).toBe(true);
   });
 });

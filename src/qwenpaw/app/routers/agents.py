@@ -2221,11 +2221,7 @@ def _is_visible_project_tree_path(rel_path: str) -> bool:
     parts = Path(rel_path).parts
     if any(part in _PROJECT_TREE_IGNORED_NAMES for part in parts):
         return False
-    return not _has_hidden_directory_segment(
-        rel_path,
-        assume_last_segment_is_dir=rel_path.endswith("/"),
-        allow_managed_hidden_dirs=True,
-    )
+    return True
 
 
 def _count_visible_project_tree_children(target_dir: Path) -> int:
