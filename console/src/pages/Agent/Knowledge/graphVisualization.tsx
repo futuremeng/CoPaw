@@ -1671,7 +1671,9 @@ export function GraphVisualization(props: GraphVisualizationProps) {
               lineWidth: 0.8 + strength * 2,
               endArrow: true,
               labelText: displayEdgeLabel,
-              labelBackground: !isDark,
+              labelPlacement: "center" as const,
+              labelOffsetY: -14,
+              labelBackground: false,
               labelFontSize: 10,
               labelFill: graphTheme.edgeLabelFill,
             };
