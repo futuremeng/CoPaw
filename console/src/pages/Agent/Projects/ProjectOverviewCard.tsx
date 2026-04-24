@@ -11,9 +11,11 @@ import {
   FolderOpenOutlined,
   MinusOutlined,
   PlusOutlined,
+  ReloadOutlined,
+  SearchOutlined,
 } from "@ant-design/icons";
-import { Button, Card, Empty, Segmented, Spin, Tree, Typography } from "antd";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Button, Card, Empty, Input, Segmented, Spin, Tree, Typography } from "antd";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type {
@@ -47,6 +49,8 @@ interface ProjectOverviewCardProps {
   onMetricFilterChange: (next: ProjectFileFilterKey | "") => void;
   treeDisplayMode: TreeDisplayMode;
   onTreeDisplayModeChange: (next: TreeDisplayMode) => void;
+  onRefreshProjectFiles?: () => Promise<void> | void;
+  projectFilesRefreshing?: boolean;
   treeOnly?: boolean;
   selectedProject?: AgentProjectSummary;
   projectFileCount: number;
@@ -132,15 +136,15 @@ function isAgentProjectFile(path: string): boolean {
   return normalizeProjectPath(path).startsWith(".agent/");
 }
 
-function isSkillProjectFile(path: string): boolean {
+function isSkillProjectFile(_path: string): boolean {
   return false;
 }
 
-function isFlowProjectFile(path: string): boolean {
+function isFlowProjectFile(_path: string): boolean {
   return false;
 }
 
-function isCaseProjectFile(path: string): boolean {
+function isCaseProjectFile(_path: string): boolean {
   return false;
 }
 
@@ -157,6 +161,16 @@ function isStandardTreeRootDir(dir: string): boolean {
     ".cases",
     "metadata",
   ].includes(dir);
+}
+
+function matchesProjectPathQuery(path: string, normalizedQuery: string): boolean {
+  if (!normalizedQuery) {
+    return true;
+  }
+
+  const normalizedPath = normalizeProjectPath(path);
+  const fileName = normalizedPath.split("/").pop() || "";
+  return normalizedPath.includes(normalizedQuery) || fileName.includes(normalizedQuery);
 }
 
 function getFileNodeIcon(fileName: string, isDirectory: boolean): ReactNode {
@@ -470,6 +484,8 @@ export default function ProjectOverviewCard({
   onMetricFilterChange,
   treeDisplayMode,
   onTreeDisplayModeChange,
+  onRefreshProjectFiles,
+  projectFilesRefreshing = false,
   treeOnly = false,
   selectedProject,
   projectFileCount: _projectFileCount,
@@ -494,10 +510,13 @@ export default function ProjectOverviewCard({
   const { t } = useTranslation();
   const [workspaceSummaryExpanded, setWorkspaceSummaryExpanded] = useState(false);
   const [treeTransitioning, setTreeTransitioning] = useState(false);
+  const [treeFilterQuery, setTreeFilterQuery] = useState("");
   const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
   const [lazyTreeItems, setLazyTreeItems] = useState<LazyTreeItem[]>([]);
   const treeExpandedInitializedRef = useRef(false);
   const updatedDateParts = formatUpdatedDateParts(selectedProject?.updated_time);
+  const deferredTreeFilterQuery = useDeferredValue(treeFilterQuery);
+  const normalizedTreeFilterQuery = normalizeProjectPath(deferredTreeFilterQuery.trim());
 
   const builtInFiles = useMemo(
     () => projectFiles.filter((item) => isBuiltInProjectFile(item.path)),
@@ -559,14 +578,22 @@ export default function ProjectOverviewCard({
         return true;
     }
   });
-  const filteredFilePaths = filteredFiles.map((item) => item.path);
+  const keywordFilteredFiles = useMemo(
+    () => filteredFiles.filter((item) => matchesProjectPathQuery(item.path, normalizedTreeFilterQuery)),
+    [filteredFiles, normalizedTreeFilterQuery],
+  );
+  const filteredFilePaths = keywordFilteredFiles.map((item) => item.path);
   const highlightedFilePaths = useMemo(
     () => (selectedMetricFilter ? filteredFilePaths : []),
     [filteredFilePaths, selectedMetricFilter],
   );
-  const treeFiles = treeDisplayMode === "highlight"
+  const treeBaseFiles = treeDisplayMode === "highlight"
     ? (selectedMetricFilter === "builtin" ? projectFiles : stageScopedFiles)
-    : filteredFiles;
+    : keywordFilteredFiles;
+  const treeFiles = useMemo(
+    () => treeBaseFiles.filter((item) => matchesProjectPathQuery(item.path, normalizedTreeFilterQuery)),
+    [normalizedTreeFilterQuery, treeBaseFiles],
+  );
   const treeFilePaths = treeFiles.map((item) => item.path);
   const highlightedFileSet = useMemo(
     () => new Set(treeDisplayMode === "highlight" ? highlightedFilePaths : []),
@@ -603,13 +630,19 @@ export default function ProjectOverviewCard({
     attachTitle,
     detachTitle,
   );
-  const hasActiveFilter = Boolean(selectedMetricFilter);
+  const hasActiveFilter = Boolean(selectedMetricFilter || normalizedTreeFilterQuery);
+  const emptyTreeDescription = normalizedTreeFilterQuery
+    ? t("projects.noMatchedFiles", "No files match the current keyword")
+    : hasActiveFilter
+      ? t("projects.noFilteredFiles", "No related files under the current filter")
+      : t("projects.noFiles", "No files in this project");
   const knowledgeFilterActive = Boolean(
     selectedMetricFilter && isProjectKnowledgeFilterKey(selectedMetricFilter),
   );
   const useLazyTreeMode = Boolean(
     treeOnly
     && treeDisplayMode === "filter"
+    && !normalizedTreeFilterQuery
     && (!selectedMetricFilter
       || ["original", "intermediate", "artifact", "agent", "skill", "flow", "case", "builtin"].includes(selectedMetricFilter)),
   );
@@ -620,6 +653,10 @@ export default function ProjectOverviewCard({
     }
     setLazyTreeItems(toLazyTreeItems(projectTreeNodes || []));
   }, [projectTreeNodes, treeOnly]);
+
+  useEffect(() => {
+    setTreeFilterQuery("");
+  }, [selectedProject?.id]);
 
   const visibleLazyTreeItems = useMemo(() => {
     if (!useLazyTreeMode) {
@@ -677,7 +714,7 @@ export default function ProjectOverviewCard({
   useEffect(() => {
     treeExpandedInitializedRef.current = false;
     setExpandedKeys([]);
-  }, [selectedProject?.id, useLazyTreeMode]);
+  }, [normalizedTreeFilterQuery, selectedProject?.id, useLazyTreeMode]);
 
   useEffect(() => {
     if (treeExpandedInitializedRef.current) {
@@ -768,15 +805,6 @@ export default function ProjectOverviewCard({
   }));
 
   if (treeOnly) {
-    const stageTitle =
-      activeStage === "knowledge"
-        ? t("projects.stage.fileTypes", "文件类型")
-        : activeStage === "output"
-          ? t("projects.stage.projectFiles", "项目文件")
-          : activeStage === "builtin"
-            ? t("projects.stage.builtin", "Built-in")
-            : t("projects.stage.source", "Source");
-
     return (
       <Card
         style={{
@@ -786,7 +814,7 @@ export default function ProjectOverviewCard({
           minHeight: 0,
           overflow: "hidden",
         }}
-        title={<span className={styles.sectionTitle}>{t("projects.workspaceSummaryFiles", "Workspace Files")}</span>}
+        title={<span className={styles.sectionTitle}>{t("projects.projectSpaceFiles", "Project Space Files")}</span>}
         styles={{
           body: {
             padding: 12,
@@ -797,7 +825,20 @@ export default function ProjectOverviewCard({
             overflow: "hidden",
           },
         }}
-        extra={<Text type="secondary" className={styles.panelExtraText}>{stageTitle}</Text>}
+        extra={(
+          <Button
+            size="small"
+            type="link"
+            icon={<ReloadOutlined spin={projectFilesRefreshing} />}
+            className={styles.panelExtraAction}
+            onClick={() => {
+              void onRefreshProjectFiles?.();
+            }}
+            disabled={!onRefreshProjectFiles || projectFilesRefreshing}
+          >
+            {t("projects.refreshFiles", "Refresh")}
+          </Button>
+        )}
       >
         <div className={`${styles.scrollContainer} ${styles.treeOnlyScrollContainer}`}>
           <div className={styles.treeUploadRow}>
@@ -806,7 +847,19 @@ export default function ProjectOverviewCard({
             </Button>
           </div>
           <div className={`${styles.overviewTreeToolbar} ${styles.treeToolbarSticky}`}>
-            <div className={styles.treeToolbarLeft} />
+            <div className={styles.treeToolbarLeft}>
+              <Input
+                size="small"
+                allowClear
+                value={treeFilterQuery}
+                onChange={(event) => {
+                  setTreeFilterQuery(event.target.value);
+                }}
+                className={styles.treeFilterInput}
+                prefix={<SearchOutlined />}
+                placeholder={t("projects.treeFilterPlaceholder", "Filter files")}
+              />
+            </div>
             <div className={styles.treeToolbarRight}>
               <Segmented
                 size="small"
@@ -830,11 +883,7 @@ export default function ProjectOverviewCard({
             ) : (useLazyTreeMode ? lazyTreeData : treeData).length === 0 ? (
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={
-                  hasActiveFilter
-                    ? t("projects.noFilteredFiles", "No related files under the current filter")
-                    : t("projects.noFiles", "No files in this project")
-                }
+                description={emptyTreeDescription}
               />
             ) : (
               <Tree
@@ -1047,11 +1096,7 @@ export default function ProjectOverviewCard({
             {treeData.length === 0 ? (
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={
-                  hasActiveFilter
-                    ? t("projects.noFilteredFiles", "No related files under the current filter")
-                    : t("projects.noFiles", "No files in this project")
-                }
+                description={emptyTreeDescription}
               />
             ) : (
               <Tree

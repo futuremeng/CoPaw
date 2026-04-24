@@ -1393,6 +1393,20 @@ export default function ProjectDetailPage() {
     }
   }, [loadProjectTreeDirectory, selectedFilePath]);
 
+  const handleRefreshProjectFiles = useCallback(async () => {
+    if (!currentAgent || !selectedProject) {
+      return;
+    }
+
+    const agentId = currentAgent.id;
+    const project = selectedProject;
+    await Promise.allSettled([
+      loadProjectFiles(agentId, project, { preserveSelection: true }),
+      loadProjectTreeRoot(agentId, project),
+      loadProjectFileSummary(agentId, project),
+    ]);
+  }, [currentAgent, loadProjectFileSummary, loadProjectFiles, loadProjectTreeRoot, selectedProject]);
+
   const {
     uploadModalOpen,
     setUploadModalOpen,
@@ -3429,6 +3443,8 @@ export default function ProjectDetailPage() {
                             onMetricFilterChange={setSelectedMetricFilter}
                             treeDisplayMode={treeDisplayMode}
                             onTreeDisplayModeChange={setTreeDisplayMode}
+                            onRefreshProjectFiles={handleRefreshProjectFiles}
+                            projectFilesRefreshing={filesLoading || projectTreeLoading}
                             treeOnly
                             onUploadFiles={openProjectUploadModal}
                             onLoadProjectTreeChildren={(path) => {

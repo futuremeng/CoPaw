@@ -60,6 +60,7 @@ function buildProjectSummary(): AgentProjectSummary {
 function renderCard(
   projectFiles: AgentProjectFileInfo[],
   options?: {
+    treeOnly?: boolean;
     activeStage?: ProjectStageKey;
     initialFilter?: "" | "original" | "intermediate" | "artifact" | "agent" | "skill" | "flow" | "case" | "builtin" | "markdown" | "text" | "script" | "otherType";
     initialTreeDisplayMode?: "filter" | "highlight";
@@ -83,6 +84,7 @@ function renderCard(
         onMetricFilterChange={setSelectedMetricFilter}
         treeDisplayMode={treeDisplayMode}
         onTreeDisplayModeChange={setTreeDisplayMode}
+        treeOnly={options?.treeOnly ?? false}
         selectedProject={buildProjectSummary()}
         projectFileCount={projectFiles.length}
         pipelineTemplateCount={0}
@@ -157,6 +159,37 @@ describe("ProjectOverviewCard interactions", () => {
 
     expect(screen.getByText("No related files under the current filter")).toBeDefined();
     expect(screen.getByRole("button", { name: /脚本/i }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("filters tree-only files by keyword and shows keyword empty state", async () => {
+    const user = userEvent.setup();
+    renderCard(
+      [
+        {
+          filename: "README.md",
+          path: "data/README.md",
+          size: 10,
+          modified_time: "2026-04-09T00:00:00Z",
+        },
+        {
+          filename: "guide.md",
+          path: "original/guide.md",
+          size: 10,
+          modified_time: "2026-04-09T00:00:00Z",
+        },
+      ],
+      { treeOnly: true },
+    );
+
+    await user.type(screen.getByPlaceholderText("Filter files"), "missing-keyword");
+
+    expect(screen.getByText("No files match the current keyword")).toBeDefined();
+
+    await user.clear(screen.getByPlaceholderText("Filter files"));
+    await user.type(screen.getByPlaceholderText("Filter files"), "readme");
+
+    expect(screen.getByText("README.md")).toBeDefined();
+    expect(screen.queryByText("guide.md")).toBeNull();
   });
 
   it("shows only built-in files when builtin stage/filter is active", () => {

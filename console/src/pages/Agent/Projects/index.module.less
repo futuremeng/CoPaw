@@ -2201,8 +2201,14 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-width: 0;
+}
+
+.treeFilterInput {
+  flex: 1 1 180px;
+  min-width: 0;
+  max-width: 260px;
 }
 
 .treeFilterChip {
@@ -2263,6 +2269,14 @@
     font-size: 12px;
     padding: 0 8px;
     line-height: 24px;
+  }
+}
+
+.panelExtraAction {
+  padding-inline: 0 !important;
+
+  :global(.anticon) {
+    font-size: 12px;
   }
 }
 
