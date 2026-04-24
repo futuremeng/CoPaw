@@ -70,6 +70,55 @@ async def test_project_knowledge_watcher_triggers_bootstrap_sync(
 
 
 @pytest.mark.asyncio
+async def test_project_knowledge_watcher_skips_idle_projects_before_first_file_activity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    project_dir = tmp_path / "projects" / "project-idle"
+    project_dir.mkdir(parents=True, exist_ok=True)
+    (project_dir / "PROJECT.md").write_text(
+        "---\n"
+        "id: project-idle\n"
+        "name: Project Idle\n"
+        "project_auto_knowledge_sink: true\n"
+        "file_monitoring_state: idle\n"
+        "---\n",
+        encoding="utf-8",
+    )
+    (project_dir / "original" / "brief.md").parent.mkdir(parents=True, exist_ok=True)
+    (project_dir / "original" / "brief.md").write_text("hello", encoding="utf-8")
+
+    config = Config()
+    config.knowledge.enabled = True
+    config.knowledge.memify_enabled = True
+
+    calls: list[dict] = []
+
+    monkeypatch.setattr(watcher_module, "load_config", lambda: config)
+    monkeypatch.setattr(
+        watcher_module,
+        "load_agent_config",
+        lambda _agent_id: type("AgentCfg", (), {"running": config.agents.running})(),
+    )
+    monkeypatch.setattr("qwenpaw.config.utils.save_config", lambda _config: None)
+    monkeypatch.setattr(
+        watcher_module.ProjectKnowledgeSyncManager,
+        "start_sync",
+        lambda self, **kwargs: calls.append(kwargs),
+    )
+
+    watcher = watcher_module.ProjectKnowledgeWatcher(
+        agent_id="default",
+        workspace_dir=tmp_path,
+        poll_interval=0.01,
+    )
+    current = watcher._collect_snapshots()
+    await watcher._handle_snapshot_changes(current)
+
+    assert calls == []
+
+
+@pytest.mark.asyncio
 async def test_project_knowledge_watcher_bootstrap_writes_project_chunks_automatically(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

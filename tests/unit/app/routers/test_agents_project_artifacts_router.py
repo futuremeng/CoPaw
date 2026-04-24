@@ -214,6 +214,55 @@ def test_upload_project_file_triggers_auto_knowledge_sync(
     assert "original/brief.txt" in changed_paths
 
 
+def test_upload_project_file_activates_idle_monitoring_and_sync(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    manager = _FakeManager(str(tmp_path))
+    monkeypatch.setattr(
+        agents_router_module,
+        "_get_multi_agent_manager",
+        lambda _request: manager,
+    )
+
+    app = FastAPI()
+    app.include_router(agents_router_module.router)
+    client = TestClient(app)
+
+    project = _create_project(
+        tmp_path,
+        CreateProjectRequest(
+            name="Idle Upload Activation",
+            description="First upload should activate monitoring",
+        ),
+    )
+
+    before = _load_project_summary(tmp_path / "projects" / project.id)
+    assert before is not None
+    assert before.file_monitoring_state == "idle"
+
+    calls: list[tuple[str, list[str] | None, str]] = []
+    monkeypatch.setattr(
+        agents_router_module,
+        "_maybe_start_project_auto_knowledge_sync",
+        lambda workspace, target_project_id, changed_paths, *, trigger: calls.append(
+            (target_project_id, changed_paths, trigger)
+        ),
+    )
+
+    response = client.post(
+        f"/agents/default/projects/{project.id}/files/upload",
+        data={"target_dir": "original"},
+        files={"file": ("brief.txt", b"hello activation", "text/plain")},
+    )
+
+    assert response.status_code == 200
+    after = _load_project_summary(tmp_path / "projects" / project.id)
+    assert after is not None
+    assert after.file_monitoring_state == "active"
+    assert calls == [(project.id, ["original/brief.txt"], "project_upload")]
+
+
 def test_upload_project_file_auto_sync_writes_project_chunks(
     project_artifact_router_client: tuple[TestClient, Path, str],
     monkeypatch: pytest.MonkeyPatch,
@@ -591,9 +640,9 @@ def test_create_project_uses_builtin_template_fallbacks(
     )
     assert latest_event_id >= 1
     assert ".agent/PROJECT.md" in changed_paths
-    assert ".agent/AGENTS.md" in changed_paths
-    assert ".agent/PLAN.md" in changed_paths
-    assert "data/README.md" in changed_paths
+    assert ".agent/AGENTS.md" not in changed_paths
+    assert ".agent/PLAN.md" not in changed_paths
+    assert "data/README.md" not in changed_paths
 
 
 def test_create_project_defaults_auto_knowledge_sink_enabled(tmp_path: Path):
@@ -608,6 +657,7 @@ def test_create_project_defaults_auto_knowledge_sink_enabled(tmp_path: Path):
     summary = _load_project_summary(tmp_path / "projects" / project.id)
     assert summary is not None
     assert summary.project_auto_knowledge_sink is True
+    assert summary.file_monitoring_state == "idle"
 
 
 def test_clone_project_records_realtime_event(

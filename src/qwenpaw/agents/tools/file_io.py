@@ -18,6 +18,9 @@ from ...config.context import (
     get_current_recent_max_bytes,
     get_current_focus_dir,
 )
+from ...app.project_monitoring_state import (
+    activate_project_file_monitoring_for_path,
+)
 from ...app.project_realtime_events import record_project_realtime_paths
 from ...constant import WORKING_DIR, TRUNCATION_NOTICE_MARKER
 
@@ -94,6 +97,7 @@ def _get_encoding_for_file(file_path: str) -> str:
 
 def _record_project_realtime_write(file_path: str) -> None:
     try:
+        activate_project_file_monitoring_for_path(file_path)
         record_project_realtime_paths(
             get_current_workspace_dir(),
             [file_path],

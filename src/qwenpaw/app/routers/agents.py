@@ -69,6 +69,14 @@ from ...knowledge.project_sync import (
     DEFAULT_PROJECT_SYNC_DEBOUNCE_SECONDS,
     ensure_project_source_registered,
 )
+from ..project_monitoring_state import (
+    PROJECT_FILE_MONITORING_ACTIVE,
+    PROJECT_FILE_MONITORING_IDLE,
+    normalize_project_file_monitoring_state,
+    read_project_metadata_with_body,
+    update_project_file_monitoring_state,
+    write_project_metadata,
+)
 from ..project_realtime_events import record_project_realtime_paths
 
 logger = logging.getLogger(__name__)
@@ -178,6 +186,7 @@ class ProjectSummary(BaseModel):
         default_factory=lambda: ProjectArtifactProfile(),
     )
     project_auto_knowledge_sink: bool = True
+    file_monitoring_state: str = PROJECT_FILE_MONITORING_ACTIVE
     preferred_workspace_chat_id: str = ""
     updated_time: str
 
@@ -1086,17 +1095,9 @@ def _default_project_metadata_file(project_dir: Path) -> Path:
 
 
 def _load_project_summary(project_dir: Path) -> ProjectSummary | None:
-    metadata_file = next(_iter_project_metadata_files(project_dir), None)
+    metadata_file, metadata, body = read_project_metadata_with_body(project_dir)
     if metadata_file is None:
         return None
-
-    parsed = _parse_markdown_frontmatter(metadata_file)
-    metadata: dict[str, Any] = {}
-    body = ""
-    if parsed is not None:
-        metadata, body = parsed
-    else:
-        body = metadata_file.read_text(encoding="utf-8", errors="ignore")
 
     data_subdir = _safe_project_data_subdir(
         str(metadata.get("data_dir") or metadata.get("dataDir") or "data"),
@@ -1120,6 +1121,9 @@ def _load_project_summary(project_dir: Path) -> ProjectSummary | None:
     project_auto_knowledge_sink = _normalize_project_auto_knowledge_sink(
         metadata.get("project_auto_knowledge_sink"),
     )
+    file_monitoring_state = normalize_project_file_monitoring_state(
+        metadata.get("file_monitoring_state"),
+    )
     preferred_workspace_chat_id = str(
         metadata.get("preferred_workspace_chat_id")
         or metadata.get("preferred_workspace_chat")
@@ -1139,6 +1143,7 @@ def _load_project_summary(project_dir: Path) -> ProjectSummary | None:
         artifact_distill_mode=artifact_distill_mode,
         artifact_profile=artifact_profile,
         project_auto_knowledge_sink=project_auto_knowledge_sink,
+        file_monitoring_state=file_monitoring_state,
         preferred_workspace_chat_id=preferred_workspace_chat_id,
         updated_time=updated_time,
     )
@@ -1320,9 +1325,11 @@ def _resolve_project_dir(workspace_dir: Path, project_id: str) -> Path:
 def _read_project_frontmatter_with_body(
     metadata_file: Path,
 ) -> tuple[dict[str, Any], str]:
-    parsed = _parse_markdown_frontmatter(metadata_file)
-    if parsed is not None:
-        metadata, body = parsed
+    project_dir = metadata_file.parent
+    if project_dir.name == ".agent":
+        project_dir = project_dir.parent
+    resolved_file, metadata, body = read_project_metadata_with_body(project_dir)
+    if resolved_file is not None:
         return metadata, body
     if metadata_file.exists():
         return {}, metadata_file.read_text(encoding="utf-8", errors="ignore")
@@ -1424,7 +1431,7 @@ def _update_project_workspace_chat_binding(
     metadata["preferred_workspace_chat_id"] = (
         preferred_workspace_chat_id.strip()
     )
-    _write_project_frontmatter(metadata_file, metadata, body)
+    write_project_metadata(metadata_file, metadata, body)
 
     updated = _load_project_summary(project_dir)
     if updated is None:
@@ -1451,7 +1458,7 @@ def _update_project_auto_knowledge_sink(
     metadata_file = Path(summary.metadata_file)
     metadata, body = _read_project_frontmatter_with_body(metadata_file)
     metadata["project_auto_knowledge_sink"] = bool(project_auto_knowledge_sink)
-    _write_project_frontmatter(metadata_file, metadata, body)
+    write_project_metadata(metadata_file, metadata, body)
 
     updated = _load_project_summary(project_dir)
     if updated is None:
@@ -1475,7 +1482,11 @@ def _maybe_start_project_auto_knowledge_sync(
 
     project_dir = _resolve_project_dir(workspace_dir, project_id)
     summary = _load_project_summary(project_dir)
-    if summary is None or not summary.project_auto_knowledge_sink:
+    if (
+        summary is None
+        or not summary.project_auto_knowledge_sink
+        or summary.file_monitoring_state != PROJECT_FILE_MONITORING_ACTIVE
+    ):
         return None
 
     config = load_config()
@@ -2025,17 +2036,7 @@ def _write_project_frontmatter(
     metadata: dict[str, Any],
     body: str,
 ) -> None:
-    import yaml
-
-    serialized = yaml.safe_dump(
-        metadata,
-        allow_unicode=True,
-        sort_keys=False,
-    ).strip()
-    text = f"---\n{serialized}\n---\n\n{(body or '').strip()}\n"
-    metadata_file.parent.mkdir(parents=True, exist_ok=True)
-    metadata_file.write_text(text, encoding="utf-8")
-    record_project_realtime_paths(None, [metadata_file])
+    write_project_metadata(metadata_file, metadata, body)
 
 
 def _clone_project(
@@ -2144,6 +2145,7 @@ def _create_project(
             body.artifact_distill_mode,
         ),
         "project_auto_knowledge_sink": bool(body.project_auto_knowledge_sink),
+        "file_monitoring_state": PROJECT_FILE_MONITORING_IDLE,
         "artifact_profile": normalized_profile.model_dump(
             mode="json",
             exclude_none=True,
@@ -2152,10 +2154,6 @@ def _create_project(
     body_text = (body.description or "").strip() or f"# {project_name}"
     _write_project_frontmatter(metadata_file, metadata, body_text)
     _scaffold_project_governance_files(project_dir, data_subdir)
-    record_project_realtime_paths(
-        None,
-        [path for path in project_dir.rglob("*") if path.is_file()],
-    )
 
     summary = _load_project_summary(project_dir)
     if summary is None:
@@ -4777,6 +4775,10 @@ async def upload_agent_project_file(
             Path(workspace.workspace_dir), projectId
         )
         uploaded = _upload_project_file(project_dir, file, target_dir)
+        update_project_file_monitoring_state(
+            project_dir,
+            PROJECT_FILE_MONITORING_ACTIVE,
+        )
         record_project_realtime_paths(
             workspace.workspace_dir,
             [project_dir / uploaded.path],

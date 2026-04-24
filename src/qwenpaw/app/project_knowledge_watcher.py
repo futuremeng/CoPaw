@@ -16,6 +16,10 @@ from ..knowledge.project_sync import (
     DEFAULT_PROJECT_SYNC_DEBOUNCE_SECONDS,
     ensure_project_source_registered,
 )
+from .project_monitoring_state import (
+    PROJECT_FILE_MONITORING_ACTIVE,
+    normalize_project_file_monitoring_state,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -218,6 +222,13 @@ class ProjectKnowledgeWatcher:
         for project_id, snapshot in current.items():
             if not snapshot.get("auto_enabled"):
                 continue
+            if (
+                normalize_project_file_monitoring_state(
+                    snapshot.get("file_monitoring_state"),
+                )
+                != PROJECT_FILE_MONITORING_ACTIVE
+            ):
+                continue
             previous = self._snapshots.get(project_id)
             changed_paths = self._diff_paths(previous, snapshot)
             should_bootstrap = previous is None
@@ -324,6 +335,9 @@ class ProjectKnowledgeWatcher:
             "project_dir": str(project_dir),
             "metadata_file": str(metadata_file),
             "auto_enabled": auto_enabled,
+            "file_monitoring_state": normalize_project_file_monitoring_state(
+                meta.get("file_monitoring_state"),
+            ),
             "fingerprint": fingerprint,
             "files": file_map,
         }
