@@ -155,7 +155,6 @@ function isIntermediatePath(path: string): boolean {
   const normalized = normalizePath(path);
   return (
     normalized.startsWith("intermediate/")
-    || normalized.startsWith("data/")
     || normalized.startsWith("metadata/")
     || normalized.startsWith("cross-book/")
     || normalized.startsWith("term-candidates/")

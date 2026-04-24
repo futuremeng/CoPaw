@@ -1,7 +1,14 @@
+import { isBuiltInProjectFile } from "./builtInFiles";
+
 const PREVIEWABLE_HIDDEN_DIRECTORIES = new Set([
   ".agent",
   ".memories",
   ".skills",
+  ".scripts",
+  ".flows",
+  ".cases",
+  ".pipelines",
+  ".data",
 ]);
 
 export function isPreviewablePath(path: string): boolean {
@@ -41,7 +48,13 @@ function isTextSourcePath(path: string): boolean {
 }
 
 export function selectSeedSourceFiles(paths: string[]): string[] {
-  const unique = Array.from(new Set(paths.map((item) => item.trim()).filter(Boolean)));
+  const unique = Array.from(
+    new Set(
+      paths
+        .map((item) => item.trim())
+        .filter((item) => item && !isBuiltInProjectFile(item)),
+    ),
+  );
   const textFiles = unique.filter((item) => isTextSourcePath(item));
   const fallback = textFiles.length > 0 ? textFiles : unique;
   const prioritized = [...fallback].sort((a, b) => {

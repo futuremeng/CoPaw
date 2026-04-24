@@ -104,7 +104,7 @@ def test_project_realtime_ws_emits_pipeline_updates(tmp_path: Path):
                 tmp_path
                 / "projects"
                 / project_id
-                / "pipelines"
+                / ".pipelines"
                 / "runs"
                 / "run-1"
                 / "run_manifest.json"
@@ -119,7 +119,7 @@ def test_project_realtime_ws_emits_pipeline_updates(tmp_path: Path):
             assert second["type"] == "snapshot"
             assert second["event_id"] == 2
             assert second["reason"] == "change"
-            assert "pipelines/runs/run-1/run_manifest.json" in second["changed_paths"]
+            assert ".pipelines/runs/run-1/run_manifest.json" in second["changed_paths"]
             assert second["snapshot"]["pipeline"]["fingerprint"] != first_fingerprint
             assert second["snapshot"]["pipeline"]["run_count"] == 1
 

@@ -20,9 +20,10 @@ from ..project_realtime_events import record_project_realtime_paths
 
 logger = logging.getLogger(__name__)
 
-_PROJECT_PIPELINES_DIRNAME = "pipelines"
+_PROJECT_PIPELINES_DIRNAME = ".pipelines"
 _PROJECT_PIPELINE_TEMPLATES_DIRNAME = "templates"
 _PROJECT_PIPELINE_RUNS_DIRNAME = "runs"
+_PROJECT_DATA_DIRNAME = ".data"
 _AGENT_PIPELINES_DIRNAME = "pipelines"
 _AGENT_PIPELINE_TEMPLATES_DIRNAME = "templates"
 _AGENT_PIPELINE_PLATFORM_DIRNAME = "platform-templates"
@@ -2153,7 +2154,7 @@ def _sample_project_artifacts(project_dir: Path, limit: int = 20) -> list[str]:
         rel = path.resolve().relative_to(project_root).as_posix()
         if rel.startswith(".git/") or "/.git/" in rel:
             continue
-        if rel.startswith("pipelines/"):
+        if rel.startswith(f"{_PROJECT_PIPELINES_DIRNAME}/"):
             continue
         artifacts.append(rel)
         if len(artifacts) >= limit:
@@ -2162,7 +2163,7 @@ def _sample_project_artifacts(project_dir: Path, limit: int = 20) -> list[str]:
 
 
 def _list_project_data_files(project_dir: Path) -> list[str]:
-    data_dir = project_dir / "data"
+    data_dir = project_dir / _PROJECT_DATA_DIRNAME
     project_root = project_dir.resolve()
     if not data_dir.exists() or not data_dir.is_dir():
         return []
@@ -2187,12 +2188,15 @@ def _match_project_artifacts(paths: list[str], *patterns: str) -> list[str]:
 
 
 def _compute_step_outputs(step_id: str, data_files: list[str]) -> tuple[list[str], dict[str, Any]]:
-    markdown_inputs = _match_project_artifacts(data_files, "data/*.md")
+    markdown_inputs = _match_project_artifacts(
+        data_files,
+        f"{_PROJECT_DATA_DIRNAME}/*.md",
+    )
     workbench_dirs = sorted(
         {
             path.rsplit("/", 1)[0]
             for path in data_files
-            if path.startswith("data/term-workbench-") and "/" in path
+            if path.startswith(f"{_PROJECT_DATA_DIRNAME}/term-workbench-") and "/" in path
         },
     )
 
@@ -2212,11 +2216,11 @@ def _compute_step_outputs(step_id: str, data_files: list[str]) -> tuple[list[str
     if step_id == "extract":
         outputs = _match_project_artifacts(
             data_files,
-            "data/term-workbench-*/manifest.json",
-            "data/term-workbench-*/terms.normalized.json",
-            "data/term-workbench-*/terms.reviewed.json",
-            "data/term-workbench-*/terms.baseline*.json",
-            "data/term-workbench-*/code-map*.json",
+            f"{_PROJECT_DATA_DIRNAME}/term-workbench-*/manifest.json",
+            f"{_PROJECT_DATA_DIRNAME}/term-workbench-*/terms.normalized.json",
+            f"{_PROJECT_DATA_DIRNAME}/term-workbench-*/terms.reviewed.json",
+            f"{_PROJECT_DATA_DIRNAME}/term-workbench-*/terms.baseline*.json",
+            f"{_PROJECT_DATA_DIRNAME}/term-workbench-*/code-map*.json",
         )
         return outputs, {
             "workbench_count": len(workbench_dirs),
@@ -2226,10 +2230,10 @@ def _compute_step_outputs(step_id: str, data_files: list[str]) -> tuple[list[str
     if step_id == "align":
         outputs = _match_project_artifacts(
             data_files,
-            "data/contrast-*.json",
-            "data/contrast-*.md",
-            "data/concept-trees/*/concept-alignment*.json",
-            "data/concept-trees/*/concept-alignment*.md",
+            f"{_PROJECT_DATA_DIRNAME}/contrast-*.json",
+            f"{_PROJECT_DATA_DIRNAME}/contrast-*.md",
+            f"{_PROJECT_DATA_DIRNAME}/concept-trees/*/concept-alignment*.json",
+            f"{_PROJECT_DATA_DIRNAME}/concept-trees/*/concept-alignment*.md",
         )
         return outputs, {
             "alignment_outputs": len(outputs),
@@ -2238,9 +2242,9 @@ def _compute_step_outputs(step_id: str, data_files: list[str]) -> tuple[list[str
     if step_id == "build_concept_tree":
         outputs = _match_project_artifacts(
             data_files,
-            "data/concept-trees/*/concept-tree*.json",
-            "data/concept-trees/*/concept-tree*.md",
-            "data/concept-trees/*/concept-tree.index.*",
+            f"{_PROJECT_DATA_DIRNAME}/concept-trees/*/concept-tree*.json",
+            f"{_PROJECT_DATA_DIRNAME}/concept-trees/*/concept-tree*.md",
+            f"{_PROJECT_DATA_DIRNAME}/concept-trees/*/concept-tree.index.*",
         )
         return outputs, {
             "concept_tree_outputs": len(outputs),
@@ -2249,9 +2253,9 @@ def _compute_step_outputs(step_id: str, data_files: list[str]) -> tuple[list[str
     if step_id == "build_relation_matrix":
         outputs = _match_project_artifacts(
             data_files,
-            "data/book-relation-matrix*.json",
-            "data/book-relation-matrix*.md",
-            "data/concept-trees/*/concept-alignment.incremental-matrix.*",
+            f"{_PROJECT_DATA_DIRNAME}/book-relation-matrix*.json",
+            f"{_PROJECT_DATA_DIRNAME}/book-relation-matrix*.md",
+            f"{_PROJECT_DATA_DIRNAME}/concept-trees/*/concept-alignment.incremental-matrix.*",
         )
         return outputs, {
             "relation_outputs": len(outputs),
@@ -2260,9 +2264,9 @@ def _compute_step_outputs(step_id: str, data_files: list[str]) -> tuple[list[str
     if step_id == "review_pack":
         outputs = _match_project_artifacts(
             data_files,
-            "data/review.dashboard*.json",
-            "data/review.ui-payload*.json",
-            "data/term-eval-detailed-report*.md",
+            f"{_PROJECT_DATA_DIRNAME}/review.dashboard*.json",
+            f"{_PROJECT_DATA_DIRNAME}/review.ui-payload*.json",
+            f"{_PROJECT_DATA_DIRNAME}/term-eval-detailed-report*.md",
         )
         return outputs, {
             "review_outputs": len(outputs),
@@ -2271,11 +2275,11 @@ def _compute_step_outputs(step_id: str, data_files: list[str]) -> tuple[list[str
     if step_id == "report":
         outputs = _match_project_artifacts(
             data_files,
-            "data/*summary-report.md",
-            "data/repo-archive.manifest.json",
-            "data/concept-trees/*.zip",
-            "data/concept-trees/*/*.zip",
-            "data/concept-trees/*/*.sha256",
+            f"{_PROJECT_DATA_DIRNAME}/*summary-report.md",
+            f"{_PROJECT_DATA_DIRNAME}/repo-archive.manifest.json",
+            f"{_PROJECT_DATA_DIRNAME}/concept-trees/*.zip",
+            f"{_PROJECT_DATA_DIRNAME}/concept-trees/*/*.zip",
+            f"{_PROJECT_DATA_DIRNAME}/concept-trees/*/*.sha256",
         )
         return outputs, {
             "report_outputs": len(outputs),
@@ -2316,15 +2320,27 @@ def _enrich_run_with_guidance(
     ]
 
     artifacts = run.artifacts or []
-    has_term_workbench = _has_artifact_match(artifacts, "data/term-workbench-*/terms.reviewed.json")
-    has_alignment = _has_artifact_match(artifacts, "data/contrast-*.json") and _has_artifact_match(
+    has_term_workbench = _has_artifact_match(
         artifacts,
-        "data/concept-trees/*/concept-alignment*.json",
+        f"{_PROJECT_DATA_DIRNAME}/term-workbench-*/terms.reviewed.json",
     )
-    has_relation_matrix = _has_artifact_match(artifacts, "data/book-relation-matrix*.json")
-    has_review_pack = _has_artifact_match(artifacts, "data/review.dashboard*.json") and _has_artifact_match(
+    has_alignment = _has_artifact_match(
         artifacts,
-        "data/review.ui-payload*.json",
+        f"{_PROJECT_DATA_DIRNAME}/contrast-*.json",
+    ) and _has_artifact_match(
+        artifacts,
+        f"{_PROJECT_DATA_DIRNAME}/concept-trees/*/concept-alignment*.json",
+    )
+    has_relation_matrix = _has_artifact_match(
+        artifacts,
+        f"{_PROJECT_DATA_DIRNAME}/book-relation-matrix*.json",
+    )
+    has_review_pack = _has_artifact_match(
+        artifacts,
+        f"{_PROJECT_DATA_DIRNAME}/review.dashboard*.json",
+    ) and _has_artifact_match(
+        artifacts,
+        f"{_PROJECT_DATA_DIRNAME}/review.ui-payload*.json",
     )
 
     checks = [

@@ -92,14 +92,14 @@ _DEFAULT_PROJECT_TEMPLATES = {
     "Store one project per subdirectory, for example:\n\n"
     "- project-abcde123/\n"
     "  - .agent/PROJECT.md\n"
-    "  - data/\n\n"
+    "  - .data/\n\n"
     "The project metadata should be declared in .agent/PROJECT.md frontmatter:\n\n"
     "---\n"
     "id: project-abcde123\n"
     "name: Example project\n"
     "description: Short summary\n"
     "status: active\n"
-    "data_dir: data\n"
+    "data_dir: .data\n"
     "tags: [demo, draft]\n"
     "artifact_profile:\n"
     "    skills: []\n"
@@ -114,28 +114,28 @@ _DEFAULT_PROJECT_TEMPLATES = {
     "- Resolve files by relative path from project root.\n"
     "- If a requested path starts with original/, retry {{DATA_DIR}}/ once.\n"
     "- Prefer exact file reads over broad scans.\n"
-    "- Artifact mapping: scripts/*.py => script, pipelines/templates/*.json => flow, {{DATA_DIR}}/* and pipelines/runs/* => case.\n"
-    "- Put detailed behavior and distillation rules in skills/project-artifact-governor/SKILL.md.\n",
-    "project/data/README.md": "# {{DATA_DIR}} directory\n\n"
+    "- Artifact mapping: .scripts/*.py => builtin, .pipelines/templates/*.json => builtin, {{DATA_DIR}}/* and .pipelines/runs/* => builtin.\n"
+    "- Put detailed behavior and distillation rules in .skills/project-artifact-governor/SKILL.md.\n",
+    "project/.data/README.md": "# {{DATA_DIR}} directory\n\n"
     "Purpose: case artifacts and evidence outputs.\n\n"
     "## Mapping to artifact kind\n"
     "- Most files here are case artifacts.\n\n"
     "## Notes\n"
     "- Historical user references may use original/.\n"
     "- In this project, use {{DATA_DIR}}/ as canonical location.\n",
-    "project/scripts/README.md": "# scripts directory\n\n"
-    "Purpose: executable scripts for project workflows.\n\n"
+    "project/.scripts/README.md": "# .scripts directory\n\n"
+    "Purpose: builtin executable scripts for project workflows.\n\n"
     "## Mapping to artifact kind\n"
-    "- scripts/*.py are script artifacts.\n",
-    "project/pipelines/templates/README.md": "# pipelines/templates directory\n\n"
+    "- .scripts/*.py are builtin project files.\n",
+    "project/.pipelines/templates/README.md": "# .pipelines/templates directory\n\n"
     "Purpose: reusable flow templates.\n\n"
     "## Mapping to artifact kind\n"
-    "- pipelines/templates/*.json are flow artifacts.\n",
-    "project/pipelines/runs/README.md": "# pipelines/runs directory\n\n"
+    "- .pipelines/templates/*.json are builtin project files.\n",
+    "project/.pipelines/runs/README.md": "# .pipelines/runs directory\n\n"
     "Purpose: run instances, manifests, and evidence.\n\n"
     "## Mapping to artifact kind\n"
-    "- Run outputs are primarily case evidence.\n",
-    "project/skills/project-artifact-governor/SKILL.md": "---\n"
+    "- Run outputs are stored as builtin project files.\n",
+    "project/.skills/project-artifact-governor/SKILL.md": "---\n"
     "name: project-artifact-governor\n"
     "description: Enforce project path resolution and four-artifact governance for this project workspace.\n"
     "---\n\n"
@@ -147,9 +147,9 @@ _DEFAULT_PROJECT_TEMPLATES = {
     "4. Classify outputs by directory + intent.\n"
     "5. Generate concise structured result.\n\n"
     "## Classification Rules\n"
-    "- scripts/*.py => script\n"
-    "- pipelines/templates/*.json => flow\n"
-    "- {{DATA_DIR}}/* or pipelines/runs/* outputs => case\n"
+    "- .scripts/*.py => builtin\n"
+    "- .pipelines/templates/*.json => builtin\n"
+    "- {{DATA_DIR}}/* or .pipelines/runs/* outputs => builtin\n"
     "- reusable method/checklist distilled from repeated evidence => skill\n",
 }
 
@@ -355,7 +355,7 @@ class CreateProjectRequest(BaseModel):
     name: str
     description: str = ""
     status: str = "active"
-    data_dir: str = "data"
+    data_dir: str = ".data"
     tags: list[str] = Field(default_factory=list)
     artifact_distill_mode: str = "file_scan"
     project_auto_knowledge_sink: bool = True
@@ -534,10 +534,20 @@ _PROJECT_METADATA_RELATIVE_PATHS = (
     "project.md",
 )
 _PROJECT_ARTIFACT_DIR_BY_KIND = {
-    "skill": "skills",
-    "script": "scripts",
-    "flow": "flows",
-    "case": "cases",
+    "skill": ".skills",
+    "script": ".scripts",
+    "flow": ".flows",
+    "case": ".cases",
+}
+_PROJECT_MANAGED_VISIBLE_HIDDEN_DIRS = {
+    ".agent",
+    ".memories",
+    ".skills",
+    ".scripts",
+    ".flows",
+    ".cases",
+    ".pipelines",
+    ".data",
 }
 _PROJECT_TREE_IGNORED_NAMES = {
     ".git",
@@ -799,12 +809,12 @@ def _format_iso_time(ts: float) -> str:
 
 
 def _safe_project_data_subdir(raw_value: str) -> str:
-    candidate = (raw_value or "").strip() or "original"
+    candidate = (raw_value or "").strip() or ".data"
     path = Path(candidate)
     if path.is_absolute() or ".." in path.parts:
-        return "original"
+        return ".data"
     normalized = path.as_posix().strip("/")
-    return normalized or "original"
+    return normalized or ".data"
 
 
 def _parse_project_tags(raw_tags: Any) -> list[str]:
@@ -1067,6 +1077,7 @@ def _has_hidden_directory_segment(
     rel_path: str,
     *,
     assume_last_segment_is_dir: bool = False,
+    allow_managed_hidden_dirs: bool = False,
 ) -> bool:
     normalized = str(rel_path or "").replace("\\", "/").strip("/")
     if not normalized:
@@ -1077,6 +1088,8 @@ def _has_hidden_directory_segment(
     last_index = len(segments) - 1
     for index, segment in enumerate(segments):
         if not segment.startswith("."):
+            continue
+        if allow_managed_hidden_dirs and segment in _PROJECT_MANAGED_VISIBLE_HIDDEN_DIRS:
             continue
         if index < last_index or assume_last_segment_is_dir:
             return True
@@ -1100,7 +1113,7 @@ def _load_project_summary(project_dir: Path) -> ProjectSummary | None:
         return None
 
     data_subdir = _safe_project_data_subdir(
-        str(metadata.get("data_dir") or metadata.get("dataDir") or "data"),
+        str(metadata.get("data_dir") or metadata.get("dataDir") or ".data"),
     )
     project_id = (
         str(metadata.get("id") or project_dir.name).strip() or project_dir.name
@@ -1249,42 +1262,42 @@ def _scaffold_project_governance_files(
     if not data_readme.exists():
         data_readme.write_text(
             _load_project_template_text(
-                "project/data/README.md",
+                "project/.data/README.md",
                 {"DATA_DIR": data_subdir},
             ),
             encoding="utf-8",
         )
 
-    scripts_readme = project_dir / "scripts" / "README.md"
+    scripts_readme = project_dir / ".scripts" / "README.md"
     scripts_readme.parent.mkdir(parents=True, exist_ok=True)
     if not scripts_readme.exists():
         scripts_readme.write_text(
-            _load_project_template_text("project/scripts/README.md"),
+            _load_project_template_text("project/.scripts/README.md"),
             encoding="utf-8",
         )
 
-    templates_readme = project_dir / "pipelines" / "templates" / "README.md"
+    templates_readme = project_dir / ".pipelines" / "templates" / "README.md"
     if not templates_readme.exists():
         templates_readme.write_text(
             _load_project_template_text(
-                "project/pipelines/templates/README.md",
+                "project/.pipelines/templates/README.md",
             ),
             encoding="utf-8",
         )
 
-    runs_readme = project_dir / "pipelines" / "runs" / "README.md"
+    runs_readme = project_dir / ".pipelines" / "runs" / "README.md"
     runs_readme.parent.mkdir(parents=True, exist_ok=True)
     if not runs_readme.exists():
         runs_readme.write_text(
             _load_project_template_text(
-                "project/pipelines/runs/README.md",
+                "project/.pipelines/runs/README.md",
             ),
             encoding="utf-8",
         )
 
     skill_md = (
         project_dir
-        / "skills"
+        / ".skills"
         / "project-artifact-governor"
         / "SKILL.md"
     )
@@ -1292,7 +1305,7 @@ def _scaffold_project_governance_files(
     if not skill_md.exists():
         skill_md.write_text(
             _load_project_template_text(
-                "project/skills/project-artifact-governor/SKILL.md",
+                "project/.skills/project-artifact-governor/SKILL.md",
                 {"DATA_DIR": data_subdir},
             ),
             encoding="utf-8",
@@ -1561,7 +1574,7 @@ def _extract_project_conversation_skill_candidates(
     limit: int = 50,
     run_id: str | None = None,
 ) -> list[dict[str, str]]:
-    runs_dir = project_dir / "pipelines" / "runs"
+    runs_dir = project_dir / ".pipelines" / "runs"
     if not runs_dir.exists() or not runs_dir.is_dir():
         return []
 
@@ -1688,7 +1701,7 @@ def _auto_distill_project_skills_to_draft(
             existing_ids.add(artifact_id)
             drafted_ids.append(artifact_id)
     else:
-        skills_dir = project_dir / "skills"
+        skills_dir = project_dir / ".skills"
         if not skills_dir.exists() or not skills_dir.is_dir():
             return DistillProjectSkillsDraftResponse(
                 drafted_count=0,
@@ -1927,7 +1940,7 @@ def _promote_project_skill_to_agent(
         try:
             source_file.relative_to(project_dir.resolve())
         except ValueError:
-            source_file = project_dir / "skills" / f"{skill_item.id}.md"
+            source_file = project_dir / ".skills" / f"{skill_item.id}.md"
         if source_file.exists() and source_file.is_file():
             source_body = source_file.read_text(
                 encoding="utf-8",
@@ -2124,7 +2137,7 @@ def _create_project(
 
     data_subdir = _safe_project_data_subdir(body.data_dir)
     (project_dir / data_subdir).mkdir(parents=True, exist_ok=True)
-    (project_dir / "pipelines" / "templates").mkdir(
+    (project_dir / ".pipelines" / "templates").mkdir(
         parents=True, exist_ok=True
     )
     _ensure_project_artifact_layout(project_dir)
@@ -2209,6 +2222,7 @@ def _is_visible_project_tree_path(rel_path: str) -> bool:
     return not _has_hidden_directory_segment(
         rel_path,
         assume_last_segment_is_dir=rel_path.endswith("/"),
+        allow_managed_hidden_dirs=True,
     )
 
 
@@ -2456,30 +2470,30 @@ def _build_project_file_summary(project_dir: Path) -> ProjectFileSummary:
             elif _is_artifact_project_metric_file(rel_path):
                 artifact_files += 1
 
-        if _is_agent_project_metric_file(rel_path):
-            agent_files += 1
-        elif _is_skill_project_metric_file(rel_path):
-            skill_files += 1
-        elif _is_flow_project_metric_file(rel_path):
-            flow_files += 1
-        elif _is_case_project_metric_file(rel_path):
-            case_files += 1
+        if not is_builtin:
+            if _is_agent_project_metric_file(rel_path):
+                agent_files += 1
+            elif _is_skill_project_metric_file(rel_path):
+                skill_files += 1
+            elif _is_flow_project_metric_file(rel_path):
+                flow_files += 1
+            elif _is_case_project_metric_file(rel_path):
+                case_files += 1
 
-        if extension in _PROJECT_KNOWLEDGE_EXTENSIONS:
-            if not is_builtin:
+            if extension in _PROJECT_KNOWLEDGE_EXTENSIONS:
                 knowledge_candidate_files += 1
-        if is_markdown:
-            markdown_files += 1
-        if is_text_file:
-            text_files += 1
-        if is_script_file:
-            script_files += 1
-        if not is_markdown and not is_text_file and not is_script_file:
-            other_type_files += 1
-        if is_text_like:
-            text_like_files += 1
-        if _is_recent_project_metric_file(stat.st_mtime):
-            recently_updated_files += 1
+            if is_markdown:
+                markdown_files += 1
+            if is_text_file:
+                text_files += 1
+            if is_script_file:
+                script_files += 1
+            if not is_markdown and not is_text_file and not is_script_file:
+                other_type_files += 1
+            if is_text_like:
+                text_like_files += 1
+            if _is_recent_project_metric_file(stat.st_mtime):
+                recently_updated_files += 1
 
     derived_files = intermediate_files + artifact_files
 

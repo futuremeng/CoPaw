@@ -94,7 +94,7 @@ def build_knowledge_workflow_template() -> PipelineTemplateInfo:
 
 def ensure_knowledge_workflow_template(project_dir: Path) -> PipelineTemplateInfo:
     template = build_knowledge_workflow_template()
-    pipelines_dir = project_dir / "pipelines" / "templates"
+    pipelines_dir = project_dir / ".pipelines" / "templates"
     pipelines_dir.mkdir(parents=True, exist_ok=True)
     template_path = pipelines_dir / f"{template.id}.json"
     if not template_path.exists():

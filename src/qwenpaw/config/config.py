@@ -585,6 +585,83 @@ class ToolResultCompactConfig(BaseModel):
     )
 
 
+class _LegacyLightContextCompactConfig:
+    """Compatibility view for legacy light-context compaction access."""
+
+    def __init__(self, source: ContextCompactConfig):
+        self._source = source
+
+    @property
+    def enabled(self) -> bool:
+        return self._source.context_compact_enabled
+
+    @property
+    def compact_threshold_ratio(self) -> float:
+        return self._source.memory_compact_ratio
+
+    @property
+    def reserve_threshold_ratio(self) -> float:
+        return self._source.memory_reserve_ratio
+
+    @property
+    def token_count_estimate_divisor(self) -> float:
+        return self._source.token_count_estimate_divisor
+
+
+class _LegacyToolResultPruningConfig:
+    """Compatibility view for legacy light-context tool-result pruning."""
+
+    def __init__(self, source: ToolResultCompactConfig):
+        self._source = source
+
+    @property
+    def enabled(self) -> bool:
+        return self._source.enabled
+
+    @property
+    def pruning_recent_n(self) -> int:
+        return self._source.recent_n
+
+    @property
+    def pruning_old_msg_max_bytes(self) -> int:
+        return self._source.old_max_bytes
+
+    @property
+    def pruning_recent_msg_max_bytes(self) -> int:
+        return self._source.recent_max_bytes
+
+    @property
+    def offload_retention_days(self) -> int:
+        return self._source.retention_days
+
+    @property
+    def tool_results_cache(self) -> str:
+        return "tool-results"
+
+
+class _LegacyLightContextConfig:
+    """Compatibility adapter for callers still expecting light_context_config."""
+
+    def __init__(self, running: "AgentsRunningConfig"):
+        self._running = running
+
+    @property
+    def context_compact_config(self) -> _LegacyLightContextCompactConfig:
+        return _LegacyLightContextCompactConfig(self._running.context_compact)
+
+    @property
+    def tool_result_pruning_config(self) -> _LegacyToolResultPruningConfig:
+        return _LegacyToolResultPruningConfig(self._running.tool_result_compact)
+
+    @property
+    def token_count_estimate_divisor(self) -> float:
+        return self.context_compact_config.token_count_estimate_divisor
+
+    @property
+    def dialog_path(self) -> str:
+        return "dialogs"
+
+
 class MemorySummaryConfig(BaseModel):
     """Memory summarization and search configuration."""
 
@@ -841,6 +918,11 @@ class AgentsRunningConfig(BaseModel):
         return int(
             self.max_input_length * self.context_compact.memory_compact_ratio,
         )
+
+    @property
+    def light_context_config(self) -> _LegacyLightContextConfig:
+        """Backward-compatible view for legacy light-context callers."""
+        return _LegacyLightContextConfig(self)
 
 
 class AgentsLLMRoutingConfig(BaseModel):

@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from fastapi import HTTPException
 
-from copaw.app.routers.agents import (
+from qwenpaw.app.routers.agents import (
     _auto_distill_project_skills_to_draft,
     _confirm_project_skill_stable,
     ProjectArtifactItem,
@@ -24,9 +24,9 @@ def _build_workspace_with_project(
 ) -> tuple[str, Path]:
     project_id = "project-demo"
     project_dir = workspace_dir / "projects" / project_id
-    source_rel_path = f"skills/{artifact_id}.md"
+    source_rel_path = f".skills/{artifact_id}.md"
 
-    (project_dir / "skills").mkdir(parents=True, exist_ok=True)
+    (project_dir / ".skills").mkdir(parents=True, exist_ok=True)
     (project_dir / source_rel_path).write_text(
         "# Distilled notes\n\nUse this skill carefully.\n",
         encoding="utf-8",
@@ -37,7 +37,7 @@ def _build_workspace_with_project(
         "name": "Demo Project",
         "description": "For artifact promotion tests",
         "status": "active",
-        "data_dir": "data",
+        "data_dir": ".data",
         "artifact_profile": {
             "skills": [
                 {
@@ -70,12 +70,12 @@ def _build_workspace_with_project(
 def _build_workspace_with_empty_artifacts(workspace_dir: Path) -> tuple[str, Path]:
     project_id = "project-demo"
     project_dir = workspace_dir / "projects" / project_id
-    (project_dir / "skills").mkdir(parents=True, exist_ok=True)
-    (project_dir / "skills" / "quick_start.md").write_text(
+    (project_dir / ".skills").mkdir(parents=True, exist_ok=True)
+    (project_dir / ".skills" / "quick_start.md").write_text(
         "# Quick Start\n\nCollect requirements and constraints first.\n",
         encoding="utf-8",
     )
-    (project_dir / "skills" / "legacy_tooling.md").write_text(
+    (project_dir / ".skills" / "legacy_tooling.md").write_text(
         "# Legacy Tooling\n\nWrap old scripts with guard rails.\n",
         encoding="utf-8",
     )
@@ -85,7 +85,7 @@ def _build_workspace_with_empty_artifacts(workspace_dir: Path) -> tuple[str, Pat
         "name": "Demo Project",
         "description": "For auto draft tests",
         "status": "active",
-        "data_dir": "data",
+        "data_dir": ".data",
         "artifact_profile": {
             "skills": [],
             "scripts": [],

@@ -293,3 +293,40 @@ def test_agent_running_config_rejects_backoff_cap_below_base():
             llm_backoff_base=2.0,
             llm_backoff_cap=1.0,
         )
+
+
+def test_agent_running_config_exposes_legacy_light_context_compat_view():
+    """Legacy light-context callers should still resolve against flattened config."""
+    running = AgentsRunningConfig()
+
+    legacy = running.light_context_config
+
+    assert legacy.token_count_estimate_divisor == (
+        running.context_compact.token_count_estimate_divisor
+    )
+    assert legacy.dialog_path == "dialogs"
+    assert legacy.context_compact_config.enabled is (
+        running.context_compact.context_compact_enabled
+    )
+    assert legacy.context_compact_config.compact_threshold_ratio == (
+        running.context_compact.memory_compact_ratio
+    )
+    assert legacy.context_compact_config.reserve_threshold_ratio == (
+        running.context_compact.memory_reserve_ratio
+    )
+    assert legacy.tool_result_pruning_config.enabled is (
+        running.tool_result_compact.enabled
+    )
+    assert legacy.tool_result_pruning_config.pruning_recent_n == (
+        running.tool_result_compact.recent_n
+    )
+    assert legacy.tool_result_pruning_config.pruning_old_msg_max_bytes == (
+        running.tool_result_compact.old_max_bytes
+    )
+    assert legacy.tool_result_pruning_config.pruning_recent_msg_max_bytes == (
+        running.tool_result_compact.recent_max_bytes
+    )
+    assert legacy.tool_result_pruning_config.offload_retention_days == (
+        running.tool_result_compact.retention_days
+    )
+    assert legacy.tool_result_pruning_config.tool_results_cache == "tool-results"

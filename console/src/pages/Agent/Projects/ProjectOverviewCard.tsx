@@ -117,7 +117,6 @@ function isIntermediateFile(path: string): boolean {
   const normalized = normalizeProjectPath(path);
   return (
     isPathInStandardDir(path, "intermediate")
-    || normalized.startsWith("data/")
     || normalized.startsWith("metadata/")
     || normalized.startsWith("cross-book/")
     || normalized.startsWith("term-candidates/")
@@ -134,21 +133,30 @@ function isAgentProjectFile(path: string): boolean {
 }
 
 function isSkillProjectFile(path: string): boolean {
-  return normalizeProjectPath(path).startsWith(".skills/");
+  return false;
 }
 
 function isFlowProjectFile(path: string): boolean {
-  const segments = normalizeProjectPath(path).split("/").filter(Boolean);
-  return segments.length >= 4 && segments[0] === "pipelines" && segments[2] === "pipeline";
+  return false;
 }
 
 function isCaseProjectFile(path: string): boolean {
-  const segments = normalizeProjectPath(path).split("/").filter(Boolean);
-  return segments.length >= 4 && segments[0] === "pipelines" && segments[2] === "runs";
+  return false;
 }
 
 function isStandardTreeRootDir(dir: string): boolean {
-  return ["original", "intermediate", "output", "pipelines", "data", "metadata"].includes(dir);
+  return [
+    "original",
+    "intermediate",
+    "output",
+    ".pipelines",
+    ".data",
+    ".skills",
+    ".scripts",
+    ".flows",
+    ".cases",
+    "metadata",
+  ].includes(dir);
 }
 
 function getFileNodeIcon(fileName: string, isDirectory: boolean): ReactNode {

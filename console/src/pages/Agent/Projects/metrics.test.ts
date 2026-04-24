@@ -38,19 +38,19 @@ describe("project metrics", () => {
       },
       {
         filename: "skill.md",
-        path: "skills/skill.md",
+        path: ".skills/skill.md",
         size: 2048,
         modified_time: "2026-04-04T12:00:00Z",
       },
       {
         filename: "flow.json",
-        path: "flows/flow.json",
+        path: ".flows/flow.json",
         size: 4096,
         modified_time: "2026-04-09T11:00:00Z",
       },
       {
         filename: "diagram.png",
-        path: "data/diagram.png",
+        path: "intermediate/diagram.png",
         size: 8192,
         modified_time: "2026-04-09T10:00:00Z",
       },
@@ -84,13 +84,13 @@ describe("project metrics", () => {
       },
       {
         filename: "outline.txt",
-        path: "data/outline.txt",
+        path: "intermediate/outline.txt",
         size: 512,
         modified_time: "2026-04-08T11:00:00Z",
       },
       {
         filename: "draft.py",
-        path: "scripts/draft.py",
+        path: ".scripts/draft.py",
         size: 256,
         modified_time: "2026-04-07T11:00:00Z",
       },
@@ -117,7 +117,7 @@ describe("project metrics", () => {
     const metrics = computeProjectKnowledgeMetrics([
       {
         filename: "image.png",
-        path: "data/image.png",
+        path: "intermediate/image.png",
         size: 1024,
         modified_time: "2026-03-01T00:00:00Z",
       },
@@ -141,7 +141,7 @@ describe("project metrics", () => {
     expect(isMarkdownPath("original/readme.txt")).toBe(false);
     expect(isTextPath("original/doc.txt")).toBe(true);
     expect(isTextPath("assets/photo.webp")).toBe(false);
-    expect(isScriptPath("scripts/run.py")).toBe(true);
+    expect(isScriptPath(".scripts/run.py")).toBe(true);
     expect(isOtherTypePath("assets/photo.webp")).toBe(true);
     expect(isRecentlyUpdatedFile("2026-04-08T00:00:00Z", Date.parse("2026-04-09T00:00:00Z"))).toBe(true);
     expect(isRecentlyUpdatedFile("2026-03-20T00:00:00Z", Date.parse("2026-04-09T00:00:00Z"))).toBe(false);
@@ -154,7 +154,7 @@ describe("project metrics", () => {
       modified_time: "2026-04-08T00:00:00Z",
     })).toBe(true);
     expect(matchesProjectKnowledgeFilter("script", {
-      path: "scripts/run.py",
+      path: ".scripts/run.py",
       modified_time: "2026-04-08T00:00:00Z",
     })).toBe(true);
     expect(matchesProjectKnowledgeFilter("otherType", {

@@ -93,9 +93,9 @@ def test_persist_project_pipeline_run_records_manifest_changes(tmp_path: Path):
     )
 
     assert latest_event_id == 1
-    assert "pipelines/runs/run-1/run_manifest.json" in changed_paths
-    assert "pipelines/runs/run-1/steps/step-1/artifact_manifest.json" in changed_paths
-    assert "pipelines/runs/run-1/steps/step-1/metric_pack.json" in changed_paths
+    assert ".pipelines/runs/run-1/run_manifest.json" in changed_paths
+    assert ".pipelines/runs/run-1/steps/step-1/artifact_manifest.json" in changed_paths
+    assert ".pipelines/runs/run-1/steps/step-1/metric_pack.json" in changed_paths
 
 
 def test_import_platform_template_to_project_records_template_change(tmp_path: Path):
@@ -130,4 +130,4 @@ def test_import_platform_template_to_project_records_template_change(tmp_path: P
 
     assert imported.id == "instance-a"
     assert latest_event_id == 1
-    assert "pipelines/templates/instance-a.json" in changed_paths
+    assert ".pipelines/templates/instance-a.json" in changed_paths

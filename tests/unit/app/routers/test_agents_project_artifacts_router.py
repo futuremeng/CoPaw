@@ -35,7 +35,7 @@ class _FakeManager:
 def _seed_project(workspace_dir: Path) -> str:
     project_id = "project-demo"
     project_dir = workspace_dir / "projects" / project_id
-    skills_dir = project_dir / "skills"
+    skills_dir = project_dir / ".skills"
     skills_dir.mkdir(parents=True, exist_ok=True)
 
     (skills_dir / "quick_start.md").write_text(
@@ -52,7 +52,7 @@ def _seed_project(workspace_dir: Path) -> str:
         "name": "Demo Project",
         "description": "For router artifact tests",
         "status": "active",
-        "data_dir": "data",
+        "data_dir": ".data",
         "artifact_profile": {
             "skills": [],
             "scripts": [],
@@ -422,7 +422,7 @@ def test_list_project_file_tree_endpoint_offloads_to_thread(
 
     response = client.get(
         f"/agents/default/projects/{project_id}/file-tree",
-        params={"dir_path": "skills"},
+        params={"dir_path": ".skills"},
     )
 
     assert response.status_code == 200
@@ -436,12 +436,12 @@ def test_project_file_summary_endpoint_returns_aggregated_counts(
     client, workspace_dir, project_id = project_artifact_router_client
     project_dir = workspace_dir / "projects" / project_id
     (project_dir / "original").mkdir(parents=True, exist_ok=True)
-    (project_dir / "data").mkdir(parents=True, exist_ok=True)
-    (project_dir / "scripts").mkdir(parents=True, exist_ok=True)
+    (project_dir / ".data").mkdir(parents=True, exist_ok=True)
+    (project_dir / ".scripts").mkdir(parents=True, exist_ok=True)
     (project_dir / ".cache").mkdir(parents=True, exist_ok=True)
     (project_dir / "original" / "brief.md").write_text("brief", encoding="utf-8")
-    (project_dir / "data" / "notes.txt").write_text("notes", encoding="utf-8")
-    (project_dir / "scripts" / "run.py").write_text("print('ok')", encoding="utf-8")
+    (project_dir / ".data" / "notes.txt").write_text("notes", encoding="utf-8")
+    (project_dir / ".scripts" / "run.py").write_text("print('ok')", encoding="utf-8")
     (project_dir / ".cache" / "session.log").write_text("noop", encoding="utf-8")
     (project_dir / ".gitkeep").write_text("", encoding="utf-8")
     (project_dir / "AGENTS.md").write_text("# agent", encoding="utf-8")
@@ -451,13 +451,13 @@ def test_project_file_summary_endpoint_returns_aggregated_counts(
     assert response.status_code == 200
     payload = response.json()
     assert payload["builtin_files"] >= 1
-    assert payload["visible_files"] >= 6
+    assert payload["visible_files"] >= 3
     assert payload["original_files"] == 1
-    assert payload["derived_files"] >= 1
-    assert payload["knowledge_candidate_files"] >= 5
-    assert payload["markdown_files"] >= 4
-    assert payload["text_like_files"] >= 6
-    assert payload["recently_updated_files"] == payload["total_files"]
+    assert payload["derived_files"] == 0
+    assert payload["knowledge_candidate_files"] >= 3
+    assert payload["markdown_files"] >= 2
+    assert payload["text_like_files"] >= 3
+    assert payload["recently_updated_files"] == payload["visible_files"]
 
     summary = _build_project_file_summary(project_dir)
     assert payload == summary.model_dump()
@@ -490,17 +490,17 @@ def test_project_file_metadata_endpoint_returns_existing_files_only(
     client, workspace_dir, project_id = project_artifact_router_client
     project_dir = workspace_dir / "projects" / project_id
     (project_dir / "original").mkdir(parents=True, exist_ok=True)
-    (project_dir / "data").mkdir(parents=True, exist_ok=True)
+    (project_dir / ".data").mkdir(parents=True, exist_ok=True)
     (project_dir / "original" / "brief.md").write_text("brief", encoding="utf-8")
-    (project_dir / "data" / "notes.txt").write_text("notes", encoding="utf-8")
+    (project_dir / ".data" / "notes.txt").write_text("notes", encoding="utf-8")
 
     response = client.post(
         f"/agents/default/projects/{project_id}/files/metadata",
         json={
             "paths": [
                 "original/brief.md",
-                "data/notes.txt",
-                "data/missing.txt",
+                ".data/notes.txt",
+                ".data/missing.txt",
                 "original/brief.md",
             ]
         },
@@ -510,7 +510,7 @@ def test_project_file_metadata_endpoint_returns_existing_files_only(
     payload = response.json()
     assert [item["path"] for item in payload] == [
         "original/brief.md",
-        "data/notes.txt",
+        ".data/notes.txt",
     ]
 
 
@@ -623,12 +623,12 @@ def test_create_project_uses_builtin_template_fallbacks(
     assert (project_dir / ".agent" / "AGENTS.md").exists()
     assert (project_dir / ".agent" / "PLAN.md").exists()
     assert (project_dir / ".agent" / "PROJECT.md").exists()
-    assert (project_dir / "data" / "README.md").exists()
-    assert (project_dir / "pipelines" / "templates" / "README.md").exists()
-    assert (project_dir / "pipelines" / "runs" / "README.md").exists()
+    assert (project_dir / ".data" / "README.md").exists()
+    assert (project_dir / ".pipelines" / "templates" / "README.md").exists()
+    assert (project_dir / ".pipelines" / "runs" / "README.md").exists()
     assert (
         project_dir
-        / "skills"
+        / ".skills"
         / "project-artifact-governor"
         / "SKILL.md"
     ).exists()
@@ -683,8 +683,8 @@ def test_clone_project_records_realtime_event(
 
     assert latest_event_id >= 1
     assert "PROJECT.md" in changed_paths
-    assert "skills/quick_start.md" in changed_paths
-    assert (cloned_project_dir / "skills" / "quick_start.md").exists()
+    assert ".skills/quick_start.md" in changed_paths
+    assert (cloned_project_dir / ".skills" / "quick_start.md").exists()
 
 
 def test_distill_draft_uses_conversation_evidence_mode(
@@ -696,7 +696,7 @@ def test_distill_draft_uses_conversation_evidence_mode(
         workspace_dir
         / "projects"
         / project_id
-        / "pipelines"
+        / ".pipelines"
         / "runs"
         / "run-demo-1"
     )
@@ -744,7 +744,7 @@ def test_distill_draft_can_target_specific_run_id(
     client, workspace_dir, project_id = project_artifact_router_client
 
     run_a_dir = (
-        workspace_dir / "projects" / project_id / "pipelines" / "runs" / "run-a"
+        workspace_dir / "projects" / project_id / ".pipelines" / "runs" / "run-a"
     )
     run_a_dir.mkdir(parents=True, exist_ok=True)
     (run_a_dir / "run_manifest.json").write_text(
@@ -758,7 +758,7 @@ def test_distill_draft_can_target_specific_run_id(
     )
 
     run_b_dir = (
-        workspace_dir / "projects" / project_id / "pipelines" / "runs" / "run-b"
+        workspace_dir / "projects" / project_id / ".pipelines" / "runs" / "run-b"
     )
     run_b_dir.mkdir(parents=True, exist_ok=True)
     (run_b_dir / "run_manifest.json").write_text(

@@ -6,6 +6,8 @@ describe("project file selection utils", () => {
     expect(isPreviewablePath(".memories/baseline.md")).toBe(true);
     expect(isPreviewablePath(".agent/AGENTS.md")).toBe(true);
     expect(isPreviewablePath(".skills/demo/SKILL.md")).toBe(true);
+    expect(isPreviewablePath(".data/source.txt")).toBe(true);
+    expect(isPreviewablePath(".pipelines/templates/template.json")).toBe(true);
   });
 
   it("continues to block arbitrary hidden paths", () => {
