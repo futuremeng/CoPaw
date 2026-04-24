@@ -2,11 +2,11 @@
 
 from pathlib import Path
 
-from copaw.app.project_realtime_events import (
+from qwenpaw.app.project_realtime_events import (
     collect_project_realtime_changes,
     record_project_realtime_paths,
 )
-from copaw.app.routers.agents_pipeline_core import (
+from qwenpaw.app.routers.agents_pipeline_core import (
     PipelineRunDetail,
     PipelineRunStep,
     PlatformFlowTemplateInfo,
@@ -53,6 +53,9 @@ def test_record_project_realtime_paths_ignores_non_project_files(tmp_path: Path)
 def test_persist_project_pipeline_run_records_manifest_changes(tmp_path: Path):
     project_dir = tmp_path / "projects" / "project-a"
     project_dir.mkdir(parents=True, exist_ok=True)
+    source_output = project_dir / ".data" / "final-report.json"
+    source_output.parent.mkdir(parents=True, exist_ok=True)
+    source_output.write_text('{"ok": true}', encoding="utf-8")
     template = PipelineTemplateInfo(
         id="pipeline-a",
         name="Pipeline A",
@@ -82,6 +85,7 @@ def test_persist_project_pipeline_run_records_manifest_changes(tmp_path: Path):
                 ended_at="2026-01-01T00:00:01Z",
             )
         ],
+        artifacts=[".data/final-report.json"],
     )
 
     _persist_project_pipeline_run(project_dir, run, template)
@@ -96,6 +100,7 @@ def test_persist_project_pipeline_run_records_manifest_changes(tmp_path: Path):
     assert ".pipelines/runs/run-1/run_manifest.json" in changed_paths
     assert ".pipelines/runs/run-1/steps/step-1/artifact_manifest.json" in changed_paths
     assert ".pipelines/runs/run-1/steps/step-1/metric_pack.json" in changed_paths
+    assert ".pipelines/runs/run-1/steps/step-1/outputs/data/final-report.json" in changed_paths
 
 
 def test_import_platform_template_to_project_records_template_change(tmp_path: Path):

@@ -7,6 +7,10 @@ import type {
 } from "../../../api/types/agents";
 import styles from "./index.module.less";
 
+function getArtifactDisplayPath(artifact: ProjectPipelineArtifactRecord | undefined, fallbackPath: string): string {
+  return artifact?.published_path || fallbackPath;
+}
+
 interface ProjectArtifactsPanelProps {
   filesLoading: boolean;
   contentLoading: boolean;
@@ -43,6 +47,10 @@ export default function ProjectArtifactsPanel({
   const { t } = useTranslation();
   const selectedFileInfo = knownProjectFilesByPath[selectedFilePath]
     || projectFiles.find((item) => item.path === selectedFilePath);
+  const selectedDisplayPath = getArtifactDisplayPath(selectedArtifactRecord, selectedFilePath);
+  const selectedSnapshotPath = selectedArtifactRecord?.published_path
+    ? selectedFilePath
+    : "";
   const hasPreviewTarget = Boolean(selectedFilePath);
   const shouldBlockOnFilesLoading = filesLoading && !hasPreviewTarget;
   const isEmptyFilePreview = Boolean(
@@ -89,7 +97,12 @@ export default function ProjectArtifactsPanel({
                       </Tag>
                     ) : null}
                   </div>
-                  <div className={styles.itemMeta}>{selectedFilePath}</div>
+                  <div className={styles.itemMeta}>{selectedDisplayPath}</div>
+                  {selectedSnapshotPath ? (
+                    <div className={styles.itemMeta}>
+                      {t("projects.artifacts.snapshotPath", "Run snapshot")}: {selectedSnapshotPath}
+                    </div>
+                  ) : null}
                   {selectedFileInfo ? (
                     <div className={styles.itemMeta}>
                       {formatBytes(selectedFileInfo.size)} · {selectedFileInfo.modified_time}

@@ -14,6 +14,14 @@ import styles from "./index.module.less";
 
 const { Text } = Typography;
 
+function getArtifactPreviewLabel(params: {
+  path?: string | null;
+  publishedPath?: string | null;
+  name?: string | null;
+}): string {
+  return String(params.publishedPath || params.path || params.name || "").trim();
+}
+
 interface RunProgressSummary {
   total: number;
   completed: number;
@@ -635,7 +643,11 @@ export default function ProjectAutomationPanel({
       if (!(artifact.consumer_step_ids || []).includes(params.stepId)) {
         continue;
       }
-      const label = (artifact.path || artifact.name || "").trim();
+      const label = getArtifactPreviewLabel({
+        path: artifact.path,
+        publishedPath: artifact.published_path,
+        name: artifact.name,
+      });
       if (!label) {
         continue;
       }
@@ -660,7 +672,11 @@ export default function ProjectAutomationPanel({
       if ((artifact.producer_step_id || "") !== params.stepId) {
         continue;
       }
-      const label = (artifact.path || artifact.name || "").trim();
+      const label = getArtifactPreviewLabel({
+        path: artifact.path,
+        publishedPath: artifact.published_path,
+        name: artifact.name,
+      });
       if (!label) {
         continue;
       }

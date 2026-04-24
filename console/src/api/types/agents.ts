@@ -300,6 +300,8 @@ export interface ProjectPipelineCollaborationEvent {
 export interface ProjectPipelineArtifactRecord {
   artifact_id: string;
   path: string;
+  logical_key?: string;
+  published_path?: string | null;
   name: string;
   kind: string;
   format: string;

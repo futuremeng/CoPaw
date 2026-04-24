@@ -25,6 +25,16 @@ interface ProjectMetricsPanelProps {
   onSelectArtifactPath?: (path: string) => void;
 }
 
+function resolveArtifactCompareKey(item: ProjectPipelineRunDetail["artifact_records"][number]): string {
+  return item.published_path || item.logical_key || item.path;
+}
+
+type ArtifactCompareEntry = {
+  compareKey: string;
+  currentPath: string;
+  baselinePath: string;
+};
+
 function toTimestamp(raw?: string | null): number {
   if (!raw) {
     return 0;
@@ -141,30 +151,47 @@ export default function ProjectMetricsPanel({
   }, [compareRunDetail?.steps]);
 
   const artifactCompareSummary = useMemo(() => {
-    const currentPaths = new Set((runDetail?.artifact_records || []).map((item) => item.path));
-    const baselinePaths = new Set((compareRunDetail?.artifact_records || []).map((item) => item.path));
+    const currentByKey = new Map<string, string>();
+    for (const item of runDetail?.artifact_records || []) {
+      const compareKey = resolveArtifactCompareKey(item);
+      if (!currentByKey.has(compareKey)) {
+        currentByKey.set(compareKey, item.path);
+      }
+    }
 
-    const shared: string[] = [];
-    const currentOnly: string[] = [];
-    const baselineOnly: string[] = [];
+    const baselineByKey = new Map<string, string>();
+    for (const item of compareRunDetail?.artifact_records || []) {
+      const compareKey = resolveArtifactCompareKey(item);
+      if (!baselineByKey.has(compareKey)) {
+        baselineByKey.set(compareKey, item.path);
+      }
+    }
 
-    for (const path of currentPaths) {
-      if (baselinePaths.has(path)) {
-        shared.push(path);
+    const shared: ArtifactCompareEntry[] = [];
+    const currentOnly: ArtifactCompareEntry[] = [];
+    const baselineOnly: ArtifactCompareEntry[] = [];
+
+    for (const [compareKey, currentPath] of currentByKey) {
+      const baselinePath = baselineByKey.get(compareKey) || "";
+      if (baselinePath) {
+        shared.push({ compareKey, currentPath, baselinePath });
       } else {
-        currentOnly.push(path);
+        currentOnly.push({ compareKey, currentPath, baselinePath: "" });
       }
     }
 
-    for (const path of baselinePaths) {
-      if (!currentPaths.has(path)) {
-        baselineOnly.push(path);
+    for (const [compareKey, baselinePath] of baselineByKey) {
+      if (!currentByKey.has(compareKey)) {
+        baselineOnly.push({ compareKey, currentPath: "", baselinePath });
       }
     }
 
-    shared.sort();
-    currentOnly.sort();
-    baselineOnly.sort();
+    const compareEntries = (left: ArtifactCompareEntry, right: ArtifactCompareEntry) =>
+      left.compareKey.localeCompare(right.compareKey);
+
+    shared.sort(compareEntries);
+    currentOnly.sort(compareEntries);
+    baselineOnly.sort(compareEntries);
 
     return {
       shared,
@@ -174,25 +201,34 @@ export default function ProjectMetricsPanel({
   }, [compareRunDetail?.artifact_records, runDetail?.artifact_records]);
 
   const renderPathLinks = useCallback(
-    (paths: string[]) => {
-      if (paths.length === 0) {
+    (entries: ArtifactCompareEntry[], mode: "current" | "baseline" | "shared") => {
+      if (entries.length === 0) {
         return null;
       }
       return (
         <div style={{ marginTop: 4, display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
-          {paths.slice(0, 6).map((path) => (
+          {entries.slice(0, 6).map((entry) => {
+            const targetPath = mode === "baseline"
+              ? entry.baselinePath
+              : entry.currentPath || entry.baselinePath;
+            const label = mode === "shared"
+              ? `${entry.compareKey} -> ${entry.currentPath || entry.baselinePath}`
+              : entry.compareKey;
+
+            return (
             <Button
-              key={path}
+              key={`${mode}:${entry.compareKey}`}
               type="link"
               size="small"
               style={{ paddingInline: 0, height: "auto" }}
-              onClick={() => onSelectArtifactPath?.(path)}
+              onClick={() => onSelectArtifactPath?.(targetPath)}
             >
-              {path}
+              {label}
             </Button>
-          ))}
-          {paths.length > 6 ? (
-            <span className={styles.itemMeta}>+{paths.length - 6}</span>
+            );
+          })}
+          {entries.length > 6 ? (
+            <span className={styles.itemMeta}>+{entries.length - 6}</span>
           ) : null}
         </div>
       );
@@ -260,19 +296,19 @@ export default function ProjectMetricsPanel({
                     {artifactCompareSummary.currentOnly.length > 0 ? (
                       <div className={styles.itemMeta}>
                         {t("projects.pipeline.compareArtifactsCurrentOnlyPreview", "Current only")}:
-                        {renderPathLinks(artifactCompareSummary.currentOnly)}
+                        {renderPathLinks(artifactCompareSummary.currentOnly, "current")}
                       </div>
                     ) : null}
                     {artifactCompareSummary.shared.length > 0 ? (
                       <div className={styles.itemMeta}>
                         {t("projects.pipeline.compareArtifactsSharedPreview", "Shared paths")}:
-                        {renderPathLinks(artifactCompareSummary.shared)}
+                        {renderPathLinks(artifactCompareSummary.shared, "shared")}
                       </div>
                     ) : null}
                     {artifactCompareSummary.baselineOnly.length > 0 ? (
                       <div className={styles.itemMeta}>
                         {t("projects.pipeline.compareArtifactsBaselineOnlyPreview", "Baseline only")}:
-                        {renderPathLinks(artifactCompareSummary.baselineOnly)}
+                        {renderPathLinks(artifactCompareSummary.baselineOnly, "baseline")}
                       </div>
                     ) : null}
                   </div>

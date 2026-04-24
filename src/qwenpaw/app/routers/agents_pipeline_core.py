@@ -7,6 +7,7 @@ import json
 import logging
 import re
 import hashlib
+import shutil
 from datetime import datetime, timezone
 from fnmatch import fnmatch
 from pathlib import Path
@@ -116,6 +117,8 @@ class PipelineArtifactRecord(BaseModel):
 
     artifact_id: str
     path: str
+    logical_key: str = ""
+    published_path: str | None = None
     name: str
     kind: str
     format: str = "bin"
@@ -2063,6 +2066,40 @@ def _run_dir_paths(runs_dir: Path, run_id: str) -> tuple[Path, Path, Path]:
     return run_dir, manifest_path, steps_dir
 
 
+def _build_run_output_snapshot_relpath(step_id: str, published_path: str) -> str:
+    step_storage = _step_storage_name(step_id)
+    normalized = Path(published_path).as_posix().strip().lstrip("/")
+    normalized = normalized.lstrip(".")
+    normalized = normalized.lstrip("/") or Path(published_path).name or "artifact"
+    return f"steps/{step_storage}/outputs/{normalized}"
+
+
+def _snapshot_run_output(
+    project_dir: Path,
+    run_dir: Path,
+    step_id: str,
+    published_path: str,
+) -> tuple[str, Path] | None:
+    if not _is_safe_relative_path(published_path):
+        return None
+
+    project_root = project_dir.resolve()
+    source_file = (project_dir / published_path).resolve()
+    if not source_file.exists() or not source_file.is_file():
+        return None
+    if not str(source_file).startswith(str(project_root)):
+        return None
+
+    output_rel = _build_run_output_snapshot_relpath(step_id, published_path)
+    destination = (run_dir / output_rel).resolve()
+    if not str(destination).startswith(str(run_dir.resolve())):
+        return None
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source_file, destination)
+    return output_rel, destination
+
+
 def _infer_output_format(path: str) -> str:
     suffix = Path(path).suffix.lower()
     if suffix == ".json":
@@ -2079,18 +2116,39 @@ def _infer_output_format(path: str) -> str:
 
 
 def _write_step_manifests(
+    project_dir: Path,
     run_dir: Path,
     run_id: str,
     step: PipelineRunStep,
     generated_at: str,
     output_paths: list[str],
-) -> tuple[str, str]:
+) -> tuple[str, str, list[Path]]:
     step_storage = _step_storage_name(step.id)
     step_dir = run_dir / "steps" / step_storage
     step_dir.mkdir(parents=True, exist_ok=True)
 
     artifact_manifest_rel = f"steps/{step_storage}/artifact_manifest.json"
     metric_pack_rel = f"steps/{step_storage}/metric_pack.json"
+
+    changed_paths: list[Path] = []
+    manifest_outputs: list[dict[str, Any]] = []
+    for path in output_paths:
+        snapshot = _snapshot_run_output(project_dir, run_dir, step.id, path)
+        if snapshot is None:
+            continue
+        output_rel, destination = snapshot
+        changed_paths.append(destination)
+        output_format = _infer_output_format(path)
+        manifest_outputs.append(
+            {
+                "path": output_rel,
+                "published_path": path,
+                "logical_key": path,
+                "role": "preview",
+                "format": output_format,
+                "human_readable": output_format != "bin",
+            }
+        )
 
     artifact_manifest = {
         "artifact_id": f"{run_id}-{step.id}",
@@ -2099,15 +2157,7 @@ def _write_step_manifests(
         "generated_at": generated_at,
         "producer": step.kind,
         "inputs": [],
-        "outputs": [
-            {
-                "path": path,
-                "role": "preview",
-                "format": _infer_output_format(path),
-                "human_readable": _infer_output_format(path) != "bin",
-            }
-            for path in output_paths
-        ],
+        "outputs": manifest_outputs,
         "evidence": [
             {
                 "kind": "rule-hit",
@@ -2142,7 +2192,7 @@ def _write_step_manifests(
         encoding="utf-8",
     )
 
-    return artifact_manifest_rel, metric_pack_rel
+    return artifact_manifest_rel, metric_pack_rel, changed_paths
 
 
 def _sample_project_artifacts(project_dir: Path, limit: int = 20) -> list[str]:
@@ -2687,7 +2737,8 @@ def _persist_project_pipeline_run(project_dir: Path, run: PipelineRunDetail, tem
     shared_artifacts = run.artifacts[:8]
     for idx, step in enumerate(run.steps):
         output_paths = shared_artifacts if idx == len(run.steps) - 1 else []
-        artifact_manifest_rel, metric_pack_rel = _write_step_manifests(
+        artifact_manifest_rel, metric_pack_rel, snapshot_paths = _write_step_manifests(
+            project_dir,
             run_dir,
             run.id,
             step,
@@ -2698,6 +2749,7 @@ def _persist_project_pipeline_run(project_dir: Path, run: PipelineRunDetail, tem
             [
                 run_dir / artifact_manifest_rel,
                 run_dir / metric_pack_rel,
+                *snapshot_paths,
             ]
         )
 
@@ -2791,11 +2843,15 @@ def _build_pipeline_artifact_records(
             output_path = str(output.get("path") or "").strip()
             if not output_path:
                 continue
+            published_path = str(output.get("published_path") or "").strip() or None
+            logical_key = str(output.get("logical_key") or "").strip() or published_path or output_path
             produced_paths.add(output_path)
             records.append(
                 PipelineArtifactRecord(
-                    artifact_id=f"{run_id}:{step_id}:{output_path}",
+                    artifact_id=f"{run_id}:{step_id}:{logical_key}",
                     path=output_path,
+                    logical_key=logical_key,
+                    published_path=published_path,
                     name=Path(output_path).name,
                     kind="final" if step_id == terminal_step_id else "intermediate",
                     format=str(output.get("format") or _infer_output_format(output_path)),
@@ -2818,6 +2874,8 @@ def _build_pipeline_artifact_records(
             PipelineArtifactRecord(
                 artifact_id=f"source:{source_path}",
                 path=source_path,
+                logical_key=source_path,
+                published_path=None,
                 name=Path(source_path).name,
                 kind="source",
                 format=_infer_output_format(source_path),
