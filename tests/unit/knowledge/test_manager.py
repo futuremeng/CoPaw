@@ -269,6 +269,130 @@ def test_directory_source_reindex_retains_old_snapshots_and_chunks(tmp_path: Pat
     assert all((tmp_path / "knowledge" / path).exists() for path in chunk_paths)
 
 
+def test_index_source_writes_ner_files_when_semantic_ready(tmp_path: Path):
+    config = Config().knowledge
+    config.index.chunk_size = 10_000
+    source = KnowledgeSourceSpec(
+        id="ner-ready-source",
+        name="NER Ready Source",
+        type="text",
+        content="AgentRunner uses ToolDispatcher.",
+        enabled=True,
+        recursive=False,
+        tags=[],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    ready_state = {
+        "engine": "hanlp2",
+        "status": "ready",
+        "reason_code": "HANLP2_READY",
+        "reason": "HanLP2 semantic engine is ready.",
+    }
+    with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
+        manager._semantic_runtime,
+        "tokenize",
+        return_value=(
+            ["AgentRunner", "ToolDispatcher"],
+            ready_state,
+        ),
+    ):
+        manager.index_source(source, config)
+
+    payload = json.loads(
+        (manager.get_source_storage_dir(source.id) / "index.json").read_text(encoding="utf-8")
+    )
+    chunk = payload["chunks"][0]
+    ner_path = tmp_path / "knowledge" / chunk["ner_path"]
+
+    assert chunk["ner_status"] == "ready"
+    assert chunk["ner_entity_count"] == 2
+    assert chunk["version_id"]
+    assert ner_path.exists()
+    ner_text = ner_path.read_text(encoding="utf-8")
+    assert "<entity type=\"semantic_token\">agentrunner</entity>" in ner_text
+    assert "<entity type=\"semantic_token\">tooldispatcher</entity>" in ner_text
+
+
+def test_index_source_skips_ner_files_when_semantic_unavailable(tmp_path: Path):
+    config = Config().knowledge
+    config.index.chunk_size = 10_000
+    source = KnowledgeSourceSpec(
+        id="ner-unavailable-source",
+        name="NER Unavailable Source",
+        type="text",
+        content="AgentRunner uses ToolDispatcher.",
+        enabled=True,
+        recursive=False,
+        tags=[],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    unavailable_state = {
+        "engine": "hanlp2",
+        "status": "unavailable",
+        "reason_code": "HANLP2_SIDECAR_UNCONFIGURED",
+        "reason": "HanLP2 sidecar is not configured.",
+    }
+    with patch.object(manager._semantic_runtime, "probe", return_value=unavailable_state):
+        result = manager.index_source(source, config)
+
+    payload = json.loads(
+        (manager.get_source_storage_dir(source.id) / "index.json").read_text(encoding="utf-8")
+    )
+    chunk = payload["chunks"][0]
+
+    assert result["chunk_count"] == 1
+    assert chunk["ner_status"] == "unavailable"
+    assert chunk["ner_entity_count"] == 0
+    assert "ner_path" not in chunk
+    assert list((tmp_path / "knowledge" / "ner").rglob("*.ner.txt")) == []
+
+
+def test_delete_index_removes_ner_files(tmp_path: Path):
+    config = Config().knowledge
+    config.index.chunk_size = 10_000
+    source = KnowledgeSourceSpec(
+        id="delete-ner-source",
+        name="Delete NER Source",
+        type="text",
+        content="AgentRunner uses ToolDispatcher.",
+        enabled=True,
+        recursive=False,
+        tags=[],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    ready_state = {
+        "engine": "hanlp2",
+        "status": "ready",
+        "reason_code": "HANLP2_READY",
+        "reason": "HanLP2 semantic engine is ready.",
+    }
+    with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
+        manager._semantic_runtime,
+        "tokenize",
+        return_value=(
+            ["AgentRunner", "ToolDispatcher"],
+            ready_state,
+        ),
+    ):
+        manager.index_source(source, config)
+
+    payload = json.loads(
+        (manager.get_source_storage_dir(source.id) / "index.json").read_text(encoding="utf-8")
+    )
+    ner_path = tmp_path / "knowledge" / payload["chunks"][0]["ner_path"]
+    assert ner_path.exists()
+
+    manager.delete_index(source.id)
+
+    assert not ner_path.exists()
+
+
 def test_delete_index_removes_chunk_files(tmp_path: Path):
     config = Config().knowledge
     config.index.chunk_size = 10_000

@@ -33,6 +33,9 @@ function launchDisabledReason(
   if (mode.status === "queued") {
     return t("projects.knowledge.processing.modeQueued", "当前模式已在队列中");
   }
+  if (mode.status === "blocked") {
+    return mode.summary || mode.stage || t("projects.knowledge.processing.modeBlocked", "当前模式被前置条件阻塞");
+  }
   if (mode.mode !== "fast" && !knowledgeState.memifyEnabled) {
     return t("projects.knowledge.processing.needMemify", "需要先在 Settings 中启用实体抽取");
   }
@@ -58,6 +61,9 @@ function statusColor(status: ProjectKnowledgeModeState["status"]): string {
   if (status === "queued") {
     return "gold";
   }
+  if (status === "blocked") {
+    return "orange";
+  }
   if (status === "failed") {
     return "error";
   }
@@ -76,6 +82,9 @@ function statusLabel(
   }
   if (status === "queued") {
     return t("projects.knowledge.processing.statusQueued", "排队中");
+  }
+  if (status === "blocked") {
+    return t("projects.knowledge.processing.statusBlocked", "阻塞中");
   }
   if (status === "failed") {
     return t("projects.knowledge.processing.statusFailed", "失败");
@@ -190,7 +199,7 @@ export default function ProjectKnowledgeProcessingPanel(
               <Typography.Text type="secondary">{getProjectKnowledgeModeRouteHint(mode.mode, t)}</Typography.Text>
 
               {progress !== null ? (
-                <Progress percent={progress} size="small" status={mode.status === "failed" ? "exception" : mode.status === "ready" ? "success" : "active"} />
+                <Progress percent={progress} size="small" status={mode.status === "failed" || mode.status === "blocked" ? "exception" : mode.status === "ready" ? "success" : "active"} />
               ) : null}
 
               <div className={styles.projectKnowledgeModeDetails}>

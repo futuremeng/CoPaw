@@ -161,6 +161,16 @@ def test_project_sync_manager_records_workflow_run_metadata(
             "quality_loop": {"accepted": False, "reason": "QUALITY_TARGET_MET"},
         },
     )
+    monkeypatch.setattr(
+        manager._knowledge_manager,
+        "get_semantic_engine_state",
+        lambda: {
+            "engine": "hanlp2",
+            "status": "ready",
+            "reason_code": "HANLP2_READY",
+            "reason": "HanLP2 semantic engine is ready.",
+        },
+    )
 
     response = manager.start_sync(
         project_id=project_id,

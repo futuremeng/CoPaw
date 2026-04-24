@@ -486,3 +486,44 @@ def test_project_sync_stage_message_merges_semantic_summary(tmp_path: Path, monk
     assert hydrated["stage_message"] == (
         "Project sync pending · Semantic engine unavailable: HanLP2 module is not installed."
     )
+
+
+def test_project_sync_processing_modes_block_when_semantic_engine_unavailable(tmp_path: Path, monkeypatch):
+    project_id = "project-l"
+    manager = ProjectKnowledgeSyncManager(
+        tmp_path,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+
+    monkeypatch.setattr(
+        manager._knowledge_manager,
+        "get_semantic_engine_state",
+        lambda: {
+            "engine": "hanlp2",
+            "status": "unavailable",
+            "reason_code": "HANLP2_SIDECAR_UNCONFIGURED",
+            "reason": "HanLP2 sidecar is not configured.",
+        },
+    )
+
+    state = manager.get_state(project_id)
+    state["latest_source_id"] = f"project-{project_id}-workspace"
+    state["last_result"] = {
+        "index": {"document_count": 1, "chunk_count": 4},
+        "memify": {"node_count": 12, "relation_count": 18},
+        "workflow_run": {"status": "succeeded", "mode": "agentic", "run_id": "run-blocked"},
+    }
+    manager._save_state(state)
+
+    hydrated = manager.get_state(project_id)
+    modes = {item["mode"]: item for item in hydrated["processing_modes"]}
+
+    assert modes["fast"]["status"] == "ready"
+    assert modes["nlp"]["status"] == "blocked"
+    assert modes["nlp"]["available"] is False
+    assert "HanLP sidecar is not configured" in modes["nlp"]["summary"]
+    assert modes["agentic"]["status"] == "blocked"
+    assert modes["agentic"]["available"] is False
+    assert hydrated["output_resolution"]["available_modes"] == []
+    assert hydrated["output_resolution"]["reason_code"] == "SEMANTIC_ENGINE_UNAVAILABLE"
+    assert hydrated["output_scheduler"]["ready_modes"] == ["fast"]

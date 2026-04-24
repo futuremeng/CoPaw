@@ -86,7 +86,7 @@ export type ProjectKnowledgeProcessingMode = "fast" | "nlp" | "agentic";
 
 export interface ProjectKnowledgeModeState {
   mode: ProjectKnowledgeProcessingMode;
-  status: "idle" | "queued" | "running" | "ready" | "failed";
+  status: "idle" | "queued" | "running" | "ready" | "failed" | "blocked";
   available: boolean;
   progress: number | null;
   stage: string;
@@ -518,6 +518,7 @@ function normalizeModeStatus(
     || value === "running"
     || value === "ready"
     || value === "failed"
+    || value === "blocked"
     || value === "idle"
     ? value
     : "idle";

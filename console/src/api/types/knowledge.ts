@@ -49,7 +49,7 @@ export type ProjectKnowledgeProcessingMode = "fast" | "nlp" | "agentic";
 
 export interface ProjectKnowledgeProcessingModeStatePayload {
   mode: ProjectKnowledgeProcessingMode;
-  status: "idle" | "queued" | "running" | "ready" | "failed";
+  status: "idle" | "queued" | "running" | "ready" | "failed" | "blocked";
   available: boolean;
   progress?: number | null;
   stage: string;
@@ -72,7 +72,7 @@ export interface ProjectKnowledgeOutputResolutionPayload {
   reason: string;
   skipped_modes?: Array<{
     mode: ProjectKnowledgeProcessingMode;
-    status?: "idle" | "queued" | "running" | "ready" | "failed";
+    status?: "idle" | "queued" | "running" | "ready" | "failed" | "blocked";
     reason_code?: string;
     reason?: string;
   }>;

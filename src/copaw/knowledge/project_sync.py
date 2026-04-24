@@ -23,6 +23,7 @@ DEFAULT_PROJECT_SYNC_QUALITY_LOOP_ROUNDS = 3
 KNOWLEDGE_PROCESSING_FALLBACK_CHAIN = ["agentic", "nlp", "fast"]
 KNOWLEDGE_OUTPUT_FALLBACK_CHAIN = ["agentic", "nlp"]
 KNOWLEDGE_PROCESSING_SUPPORTED_MODES = {"fast", "nlp", "agentic"}
+KNOWLEDGE_PROCESSING_MODE_STATUSES = {"idle", "queued", "running", "ready", "failed", "blocked"}
 
 
 def build_project_source_id(project_id: str) -> str:
@@ -562,16 +563,28 @@ class ProjectKnowledgeSyncManager:
             or quality_loop_result.get("quality_score")
         )
 
+        semantic_state = state.get("semantic_engine")
+        if not isinstance(semantic_state, dict):
+            semantic_state = self._build_semantic_engine_state(state)
+        semantic_status = str(semantic_state.get("status") or "idle").strip().lower()
+        semantic_ready = semantic_status == "ready"
+        semantic_summary = str(
+            semantic_state.get("summary")
+            or semantic_state.get("reason")
+            or "Semantic engine unavailable."
+        ).strip()
+
         fast_available = document_count > 0 or chunk_count > 0
-        nlp_available = entity_count > 0 or relation_count > 0
-        agentic_available = workflow_status in {"succeeded", "completed"} and workflow_mode in {"", "agentic"}
+        nlp_available = semantic_ready and (entity_count > 0 or relation_count > 0)
+        agentic_available = semantic_ready and workflow_status in {"succeeded", "completed"} and workflow_mode in {"", "agentic"}
 
         fast_running = sync_status in {"pending", "indexing"} or sync_stage in {"pending", "indexing"}
-        nlp_running = sync_status == "graphifying" or sync_stage == "graphifying" or sync_stage.startswith("graphify")
+        nlp_running = semantic_ready and (sync_status == "graphifying" or sync_stage == "graphifying" or sync_stage.startswith("graphify"))
         agentic_running = workflow_status in {"running", "pending"} or (
-            sync_status in {"pending", "indexing", "graphifying"} and bool(workflow_run_id)
+            semantic_ready and sync_status in {"pending", "indexing", "graphifying"} and bool(workflow_run_id)
         )
-        agentic_queued = workflow_status == "queued"
+        agentic_queued = semantic_ready and workflow_status == "queued"
+        semantic_blocked = fast_available and not semantic_ready
 
         fast_status = (
             "failed"
@@ -589,6 +602,8 @@ class ProjectKnowledgeSyncManager:
             if sync_status == "failed" and not nlp_available
             else "running"
             if nlp_running
+            else "blocked"
+            if semantic_blocked
             else "ready"
             if nlp_available
             else "queued"
@@ -598,6 +613,8 @@ class ProjectKnowledgeSyncManager:
         agentic_status = (
             "failed"
             if workflow_status in {"failed", "blocked", "cancelled"} or (sync_status == "failed" and not agentic_available)
+            else "blocked"
+            if semantic_blocked
             else "queued"
             if agentic_queued
             else "running"
@@ -644,11 +661,16 @@ class ProjectKnowledgeSyncManager:
                 "stage": (
                     str(state.get("stage_message") or state.get("current_stage") or "Building NLP artifacts")
                     if nlp_status == "running"
+                    else semantic_summary
+                    if nlp_status == "blocked"
                     else "NLP graph artifacts ready"
                     if nlp_available
                     else "Waiting for graph extraction"
                 ),
                 "summary": (
+                    semantic_summary
+                    if nlp_status == "blocked"
+                    else
                     "Structured graph artifacts are available as the fallback layer."
                     if nlp_available
                     else "Structured graph artifacts are not ready yet."
@@ -670,6 +692,8 @@ class ProjectKnowledgeSyncManager:
                 "stage": (
                     str(state.get("stage_message") or state.get("current_stage") or "Running multi-agent workflow")
                     if agentic_status == "running"
+                    else semantic_summary
+                    if agentic_status == "blocked"
                     else "Multi-agent outputs ready"
                     if agentic_available
                     else "Workflow run exists but outputs are incomplete"
@@ -677,6 +701,9 @@ class ProjectKnowledgeSyncManager:
                     else "Waiting for multi-agent workflow scheduling"
                 ),
                 "summary": (
+                    semantic_summary
+                    if agentic_status == "blocked"
+                    else
                     "Multi-agent knowledge outputs are ready and preferred for consumption."
                     if agentic_available
                     else "High-quality long-running processing continues in the background."
@@ -699,7 +726,7 @@ class ProjectKnowledgeSyncManager:
                 override = overrides.get(mode_key)
                 if not isinstance(override, dict):
                     continue
-                if override.get("status") in {"idle", "queued", "running", "ready", "failed"}:
+                if override.get("status") in KNOWLEDGE_PROCESSING_MODE_STATUSES:
                     item["status"] = override.get("status")
                 if "available" in override:
                     item["available"] = bool(override.get("available"))
@@ -735,6 +762,13 @@ class ProjectKnowledgeSyncManager:
         def build_skip_reason(mode: str) -> dict[str, str]:
             status = status_by_mode.get(mode, "idle")
             available = available_by_mode.get(mode, False)
+            if status == "blocked":
+                return {
+                    "mode": mode,
+                    "status": status,
+                    "reason_code": "MODE_BLOCKED",
+                    "reason": "Processing is blocked by an unmet prerequisite.",
+                }
             if status == "failed":
                 return {
                     "mode": mode,
@@ -773,7 +807,10 @@ class ProjectKnowledgeSyncManager:
         active_mode = "agentic"
         reason_code = "HIGH_ORDER_PENDING"
         reason = "High-order outputs are not ready yet; keeping the L2/L3 output view warm."
-        if "agentic" in available_modes:
+        if status_by_mode.get("nlp") == "blocked" and status_by_mode.get("agentic") == "blocked":
+            reason_code = "SEMANTIC_ENGINE_UNAVAILABLE"
+            reason = "Semantic engine is unavailable, so structured L2/L3 outputs are blocked."
+        elif "agentic" in available_modes:
             active_mode = "agentic"
             reason_code = "HIGHEST_LAYER_READY"
             reason = "Multi-agent outputs are available and selected as the highest-quality layer."
@@ -864,6 +901,7 @@ class ProjectKnowledgeSyncManager:
 
     def _hydrate_processing_view(self, state: dict[str, Any]) -> dict[str, Any]:
         hydrated = dict(state)
+        hydrated["semantic_engine"] = self._build_semantic_engine_state(hydrated)
         processing_modes = self._build_processing_modes(hydrated)
         output_resolution = self._build_output_resolution(processing_modes)
         mode_outputs = self._build_mode_outputs(hydrated)
@@ -878,7 +916,6 @@ class ProjectKnowledgeSyncManager:
         hydrated["mode_outputs"] = mode_outputs
         hydrated["mode_metrics"] = mode_metrics
         hydrated["global_metrics"] = self._build_global_metrics(hydrated, mode_metrics)
-        hydrated["semantic_engine"] = self._build_semantic_engine_state(hydrated)
         hydrated["stage_message"] = self._merge_stage_message_with_semantic_summary(
             str(hydrated.get("stage_message") or "").strip(),
             str((hydrated.get("semantic_engine") or {}).get("summary") or "").strip(),

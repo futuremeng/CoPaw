@@ -343,6 +343,336 @@ def test_local_memify_builds_queryable_graph(tmp_path):
     assert len(result.records) >= 1
 
 
+def test_local_memify_emits_path_time_and_version_relations_from_chunk_ner(tmp_path):
+    knowledge_config = Config().knowledge
+    knowledge_config.enabled = True
+    knowledge_config.engine = "local_lexical"
+
+    project_root = tmp_path / "project-graph-ner"
+    docs_dir = project_root / "docs"
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    (docs_dir / "note.md").write_text("AgentRunner uses ToolDispatcher.", encoding="utf-8")
+
+    source = KnowledgeSourceSpec(
+        id="local-graph-ner-source",
+        name="Local Graph NER Source",
+        type="directory",
+        location=str(project_root),
+        content="",
+        enabled=True,
+        recursive=True,
+        tags=["graph", "ner"],
+        summary="",
+    )
+    knowledge_config.sources.append(source)
+
+    manager = KnowledgeManager(tmp_path)
+    ready_state = {
+        "engine": "hanlp2",
+        "status": "ready",
+        "reason_code": "HANLP2_READY",
+        "reason": "HanLP2 semantic engine is ready.",
+    }
+    with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
+        manager._semantic_runtime,
+        "tokenize",
+        return_value=(
+            ["AgentRunner", "ToolDispatcher"],
+            ready_state,
+        ),
+    ):
+        manager.index_source(
+            source,
+            knowledge_config,
+            SimpleNamespace(knowledge_chunk_size=knowledge_config.index.chunk_size),
+        )
+
+    graph_ops = GraphOpsManager(tmp_path)
+    memify_result = graph_ops.execute_memify_once(
+        config=knowledge_config,
+        pipeline_type="project-auto",
+        dataset_scope=[source.id],
+        dry_run=False,
+    )
+
+    assert memify_result["status"] == "succeeded"
+
+    result = graph_ops.graph_query(
+        config=knowledge_config,
+        query_mode="template",
+        query_text="note",
+        dataset_scope=[source.id],
+        project_scope=None,
+        include_global=True,
+        top_k=20,
+        timeout_sec=30,
+    )
+
+    predicates = {record.get("predicate") for record in result.records}
+    assert "has_path" in predicates
+    assert "has_file_name" in predicates
+    assert "has_snapshot_at" in predicates
+    assert "has_version" in predicates
+    assert any(record.get("snapshot_at") for record in result.records)
+    assert any(record.get("version_id") for record in result.records)
+
+
+def test_local_graph_query_supports_path_time_filter_sort_and_aggregate(tmp_path):
+    knowledge_config = Config().knowledge
+    knowledge_config.enabled = True
+    knowledge_config.engine = "local_lexical"
+
+    project_root = tmp_path / "project-query-controls"
+    docs_dir = project_root / "docs"
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    note_path = docs_dir / "note.md"
+    note_path.write_text("AgentRunner uses ToolDispatcher.", encoding="utf-8")
+
+    source = KnowledgeSourceSpec(
+        id="local-query-controls-source",
+        name="Local Query Controls Source",
+        type="directory",
+        location=str(project_root),
+        content="",
+        enabled=True,
+        recursive=True,
+        tags=["graph", "ner", "query-controls"],
+        summary="",
+    )
+    knowledge_config.sources.append(source)
+
+    manager = KnowledgeManager(tmp_path)
+    ready_state = {
+        "engine": "hanlp2",
+        "status": "ready",
+        "reason_code": "HANLP2_READY",
+        "reason": "HanLP2 semantic engine is ready.",
+    }
+    with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
+        manager._semantic_runtime,
+        "tokenize",
+        return_value=(
+            ["AgentRunner", "ToolDispatcher", "KnowledgeGraph"],
+            ready_state,
+        ),
+    ):
+        manager.index_source(
+            source,
+            knowledge_config,
+            SimpleNamespace(knowledge_chunk_size=knowledge_config.index.chunk_size),
+        )
+        time.sleep(0.02)
+        note_path.write_text("AgentRunner uses ToolDispatcher and KnowledgeGraph.", encoding="utf-8")
+        manager.index_source(
+            source,
+            knowledge_config,
+            SimpleNamespace(knowledge_chunk_size=knowledge_config.index.chunk_size),
+        )
+
+    graph_ops = GraphOpsManager(tmp_path)
+    memify_result = graph_ops.execute_memify_once(
+        config=knowledge_config,
+        pipeline_type="project-auto",
+        dataset_scope=[source.id],
+        dry_run=False,
+    )
+
+    assert memify_result["status"] == "succeeded"
+
+    all_versions = graph_ops.graph_query(
+        config=knowledge_config,
+        query_mode="template",
+        query_text="note path:docs/note.md sort:time_desc",
+        dataset_scope=[source.id],
+        project_scope=None,
+        include_global=True,
+        top_k=20,
+        timeout_sec=30,
+    )
+
+    assert len(all_versions.records) >= 2
+    assert all(str(record.get("document_path") or "").endswith("docs/note.md") for record in all_versions.records)
+    assert all_versions.records[0]["snapshot_at"] >= all_versions.records[-1]["snapshot_at"]
+
+    latest_snapshot_at = all_versions.records[0]["snapshot_at"]
+    latest_version_id = all_versions.records[0]["version_id"]
+    latest_only = graph_ops.graph_query(
+        config=knowledge_config,
+        query_mode="template",
+        query_text=f"note path:docs/note.md at:{latest_snapshot_at} version:{latest_version_id}",
+        dataset_scope=[source.id],
+        project_scope=None,
+        include_global=True,
+        top_k=20,
+        timeout_sec=30,
+    )
+
+    assert latest_only.records
+    assert all(record.get("snapshot_at") == latest_snapshot_at for record in latest_only.records)
+    assert all(record.get("version_id") == latest_version_id for record in latest_only.records)
+
+    aggregated = graph_ops.graph_query(
+        config=knowledge_config,
+        query_mode="template",
+        query_text="note path:docs/note.md group:path sort:time_desc",
+        dataset_scope=[source.id],
+        project_scope=None,
+        include_global=True,
+        top_k=20,
+        timeout_sec=30,
+    )
+
+    assert len(aggregated.records) == 1
+    assert aggregated.records[0].get("aggregate_group") == "path"
+    assert str(aggregated.records[0].get("aggregate_key") or "").endswith("docs/note.md")
+    assert int(aggregated.records[0].get("aggregate_count") or 0) >= 2
+
+
+def test_local_graph_query_filters_latest_version_and_sorts_by_time(tmp_path):
+    knowledge_config = Config().knowledge
+    knowledge_config.enabled = True
+    knowledge_config.engine = "local_lexical"
+
+    project_root = tmp_path / "project-graph-filter"
+    docs_dir = project_root / "docs"
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    note_path = docs_dir / "note.md"
+    note_path.write_text("AgentRunner uses ToolDispatcher and FileSearch.", encoding="utf-8")
+
+    source = KnowledgeSourceSpec(
+        id="local-graph-filter-source",
+        name="Local Graph Filter Source",
+        type="directory",
+        location=str(project_root),
+        content="",
+        enabled=True,
+        recursive=True,
+        tags=["graph", "filter"],
+        summary="",
+    )
+    knowledge_config.sources.append(source)
+
+    manager = KnowledgeManager(tmp_path)
+    ready_state = {
+        "engine": "hanlp2",
+        "status": "ready",
+        "reason_code": "HANLP2_READY",
+        "reason": "HanLP2 semantic engine is ready.",
+    }
+    with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
+        manager._semantic_runtime,
+        "tokenize",
+        return_value=(
+            ["AgentRunner", "ToolDispatcher", "FileSearch"],
+            ready_state,
+        ),
+    ):
+        manager.index_source(
+            source,
+            knowledge_config,
+            SimpleNamespace(knowledge_chunk_size=knowledge_config.index.chunk_size),
+        )
+        time.sleep(0.01)
+        note_path.write_text("AgentRunner uses ToolDispatcher and KnowledgeGraph.", encoding="utf-8")
+        manager.index_source(
+            source,
+            knowledge_config,
+            SimpleNamespace(knowledge_chunk_size=knowledge_config.index.chunk_size),
+        )
+
+    graph_ops = GraphOpsManager(tmp_path)
+    graph_ops.execute_memify_once(
+        config=knowledge_config,
+        pipeline_type="project-auto",
+        dataset_scope=[source.id],
+        dry_run=False,
+    )
+
+    sorted_result = graph_ops.graph_query(
+        config=knowledge_config,
+        query_mode="template",
+        query_text="AgentRunner path:docs/note.md sort:time_desc",
+        dataset_scope=[source.id],
+        project_scope=None,
+        include_global=True,
+        top_k=20,
+        timeout_sec=30,
+    )
+    timestamps = [record.get("snapshot_at") for record in sorted_result.records]
+
+    assert len(sorted_result.records) >= 2
+    assert all(record.get("document_path") == "docs/note.md" for record in sorted_result.records)
+    assert timestamps == sorted(timestamps, reverse=True)
+
+    latest_result = graph_ops.graph_query(
+        config=knowledge_config,
+        query_mode="template",
+        query_text="AgentRunner path:docs/note.md latest:true sort:time_desc",
+        dataset_scope=[source.id],
+        project_scope=None,
+        include_global=True,
+        top_k=20,
+        timeout_sec=30,
+    )
+    latest_versions = {record.get("version_id") for record in latest_result.records}
+
+    assert len(latest_result.records) >= 1
+    assert len(latest_versions) == 1
+
+
+def test_local_graph_query_aggregates_by_path(tmp_path):
+    knowledge_config = Config().knowledge
+    knowledge_config.enabled = True
+    knowledge_config.engine = "local_lexical"
+
+    manager = KnowledgeManager(tmp_path)
+    source = KnowledgeSourceSpec(
+        id="local-graph-group-source",
+        name="Local Graph Group Source",
+        type="text",
+        location="",
+        content=(
+            "AgentRunner uses ToolDispatcher. "
+            "ToolDispatcher calls FileSearch. "
+            "FileSearch indexes KnowledgeGraph."
+        ),
+        enabled=True,
+        recursive=False,
+        tags=["graph", "group"],
+        summary="",
+    )
+    knowledge_config.sources.append(source)
+    manager.index_source(
+        source,
+        knowledge_config,
+        SimpleNamespace(knowledge_chunk_size=knowledge_config.index.chunk_size),
+    )
+
+    graph_ops = GraphOpsManager(tmp_path)
+    graph_ops.execute_memify_once(
+        config=knowledge_config,
+        pipeline_type="project-auto",
+        dataset_scope=[source.id],
+        dry_run=False,
+    )
+
+    result = graph_ops.graph_query(
+        config=knowledge_config,
+        query_mode="template",
+        query_text="ToolDispatcher group:path",
+        dataset_scope=[source.id],
+        project_scope=None,
+        include_global=True,
+        top_k=20,
+        timeout_sec=30,
+    )
+
+    assert len(result.records) == 1
+    assert result.records[0].get("predicate") == "aggregate_by_path"
+    assert result.records[0].get("aggregate_mode") == "path"
+    assert int(result.records[0].get("aggregate_count") or 0) >= 2
+
+
 def test_local_memify_runs_enrichment_pipeline_and_query_prefers_l2(tmp_path):
     knowledge_config = Config().knowledge
     knowledge_config.enabled = True

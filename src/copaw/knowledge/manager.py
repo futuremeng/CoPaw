@@ -11,7 +11,7 @@ import re
 import shutil
 from collections import Counter
 from datetime import UTC, datetime, timedelta
-from html import unescape
+from html import escape, unescape
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse, parse_qs
@@ -156,6 +156,7 @@ class KnowledgeManager:
         self.root_dir = self.working_dir / knowledge_dirname
         self.raw_dir = self.root_dir / "raw"
         self.chunks_dir = self.root_dir / "chunks"
+        self.ner_dir = self.root_dir / "ner"
         self.sources_dir = self.root_dir / "sources"
         self.catalog_path = self.root_dir / "catalog.json"
         self.uploads_dir = self.root_dir / "uploads"
@@ -169,6 +170,7 @@ class KnowledgeManager:
             shutil.rmtree(legacy_index_dir, ignore_errors=True)
         self.raw_dir.mkdir(parents=True, exist_ok=True)
         self.chunks_dir.mkdir(parents=True, exist_ok=True)
+        self.ner_dir.mkdir(parents=True, exist_ok=True)
         self.sources_dir.mkdir(parents=True, exist_ok=True)
         self.uploads_dir.mkdir(parents=True, exist_ok=True)
         self.remote_blob_dir.mkdir(parents=True, exist_ok=True)
@@ -330,7 +332,7 @@ class KnowledgeManager:
             "error": None,
             "chunks": chunks,
         }
-        self._write_source_storage(source, payload, live_documents)
+        self._write_source_storage(source, payload, live_documents, config=config)
         return {
             "source_id": source.id,
             "document_count": len(live_documents),
@@ -362,8 +364,11 @@ class KnowledgeManager:
         """Delete persisted index for a source."""
         for chunk_path in self._load_source_chunk_manifest(source_id):
             self._delete_chunk_path(chunk_path)
+        for ner_path in self._load_source_ner_manifest(source_id):
+            self._delete_ner_path(ner_path)
         payload = self._load_index_payload_safe(source_id)
         self._delete_chunks_from_payload(payload)
+        self._delete_ner_from_payload(payload)
         raw_dir = self._source_raw_dir(source_id)
         if raw_dir.exists():
             shutil.rmtree(raw_dir, ignore_errors=True)
@@ -384,6 +389,7 @@ class KnowledgeManager:
         # Recreate expected directory structure after cleanup.
         self.raw_dir.mkdir(parents=True, exist_ok=True)
         self.chunks_dir.mkdir(parents=True, exist_ok=True)
+        self.ner_dir.mkdir(parents=True, exist_ok=True)
         self.sources_dir.mkdir(parents=True, exist_ok=True)
         self.uploads_dir.mkdir(parents=True, exist_ok=True)
         self.remote_blob_dir.mkdir(parents=True, exist_ok=True)
@@ -516,6 +522,9 @@ class KnowledgeManager:
     def _source_chunk_manifest_path(self, source_id: str) -> Path:
         return self._source_dir(source_id) / "chunk-manifest.json"
 
+    def _source_ner_manifest_path(self, source_id: str) -> Path:
+        return self._source_dir(source_id) / "ner-manifest.json"
+
     def _source_snapshot_manifest_path(self, source_id: str) -> Path:
         return self._source_dir(source_id) / "snapshot-manifest.json"
 
@@ -547,6 +556,39 @@ class KnowledgeManager:
                 {
                     "source_id": source_id,
                     "chunk_paths": sorted(chunk_paths),
+                    "updated_at": datetime.now(UTC).isoformat(),
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+    def _load_source_ner_manifest(self, source_id: str) -> set[str]:
+        path = self._source_ner_manifest_path(source_id)
+        if not path.exists():
+            return set()
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return set()
+        if not isinstance(payload, dict):
+            return set()
+        ner_paths = payload.get("ner_paths")
+        if not isinstance(ner_paths, list):
+            return set()
+        return {
+            str(item).strip()
+            for item in ner_paths
+            if isinstance(item, str) and str(item).strip()
+        }
+
+    def _write_source_ner_manifest(self, source_id: str, ner_paths: set[str]) -> None:
+        self._source_ner_manifest_path(source_id).write_text(
+            json.dumps(
+                {
+                    "source_id": source_id,
+                    "ner_paths": sorted(ner_paths),
                     "updated_at": datetime.now(UTC).isoformat(),
                 },
                 ensure_ascii=False,
@@ -631,6 +673,18 @@ class KnowledgeManager:
                 results.add(chunk_path)
         return results
 
+    def _collect_ner_paths_from_payload(self, payload: dict[str, Any] | None) -> set[str]:
+        if not isinstance(payload, dict):
+            return set()
+        results: set[str] = set()
+        for chunk in payload.get("chunks") or []:
+            if not isinstance(chunk, dict):
+                continue
+            ner_path = str(chunk.get("ner_path") or "").strip()
+            if ner_path:
+                results.add(ner_path)
+        return results
+
     def _delete_chunk_path(self, relative_path: str | Path | None) -> None:
         text = str(relative_path or "").strip()
         if not text:
@@ -650,9 +704,32 @@ class KnowledgeManager:
                 break
             current = current.parent
 
+    def _delete_ner_path(self, relative_path: str | Path | None) -> None:
+        text = str(relative_path or "").strip()
+        if not text:
+            return
+        target = self.root_dir / text
+        if not target.exists() or not target.is_file():
+            return
+        try:
+            target.unlink()
+        except FileNotFoundError:
+            return
+        current = target.parent
+        while current != self.ner_dir and current.exists():
+            try:
+                current.rmdir()
+            except OSError:
+                break
+            current = current.parent
+
     def _delete_chunks_from_payload(self, payload: dict[str, Any] | None) -> None:
         for chunk_path in self._collect_chunk_paths_from_payload(payload):
             self._delete_chunk_path(chunk_path)
+
+    def _delete_ner_from_payload(self, payload: dict[str, Any] | None) -> None:
+        for ner_path in self._collect_ner_paths_from_payload(payload):
+            self._delete_ner_path(ner_path)
 
     def _read_chunk_text(self, chunk: dict[str, Any]) -> str:
         chunk_text = chunk.get("text")
@@ -663,6 +740,18 @@ class KnowledgeManager:
             return ""
         try:
             return (self.root_dir / chunk_path).read_text(encoding="utf-8")
+        except FileNotFoundError:
+            return ""
+
+    def _read_ner_text(self, chunk: dict[str, Any]) -> str:
+        ner_text = chunk.get("ner_text")
+        if isinstance(ner_text, str):
+            return ner_text
+        ner_path = str(chunk.get("ner_path") or "").strip()
+        if not ner_path:
+            return ""
+        try:
+            return (self.root_dir / ner_path).read_text(encoding="utf-8")
         except FileNotFoundError:
             return ""
 
@@ -740,8 +829,168 @@ class KnowledgeManager:
             target = target / parent
         return target.relative_to(self.root_dir) / f"{basename}.{chunk_index}.txt"
 
+    def _build_ner_relative_path(self, chunk_relative_path: str) -> Path:
+        chunk_path = Path(str(chunk_relative_path or "").strip())
+        if not chunk_path.parts:
+            return self.ner_dir.relative_to(self.root_dir) / "knowledge.ner.txt"
+        relative_parts = chunk_path.parts[1:] if chunk_path.parts[0] == self.chunks_dir.name else chunk_path.parts
+        basename = chunk_path.name
+        if basename.endswith(".txt"):
+            basename = f"{basename[:-4]}.ner.txt"
+        else:
+            basename = f"{basename}.ner.txt"
+        target = self.ner_dir.joinpath(*relative_parts[:-1], basename)
+        return target.relative_to(self.root_dir)
+
+    def _chunk_file_key(self, chunk: dict[str, Any]) -> str:
+        return str(chunk.get("document_path") or chunk.get("document_title") or "knowledge").strip()
+
+    def _chunk_version_id(self, chunk: dict[str, Any]) -> str:
+        snapshot_ref = str(
+            chunk.get("snapshot_relative_path")
+            or chunk.get("snapshot_path")
+            or ""
+        ).strip()
+        matched = re.search(r"snapshot_([0-9A-Za-z]+)", snapshot_ref)
+        if matched:
+            return matched.group(1)
+        raw = "|".join(
+            [
+                self._chunk_file_key(chunk),
+                str(chunk.get("snapshot_at") or "").strip(),
+                str(chunk.get("chunk_id") or "").strip(),
+            ]
+        )
+        return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
+
+    def _collect_chunk_ner_entities(
+        self,
+        text: str,
+        *,
+        config: KnowledgeConfig,
+    ) -> list[str]:
+        tokens = self._tokenize_semantic_text(text, config=config)
+        seen: set[str] = set()
+        entities: list[str] = []
+        for token in tokens:
+            normalized = str(token or "").strip()
+            if len(normalized) < 2 or normalized in seen:
+                continue
+            seen.add(normalized)
+            entities.append(normalized)
+        return entities
+
+    def _render_chunk_ner_text(
+        self,
+        chunk: dict[str, Any],
+        *,
+        text: str,
+        entities: list[str],
+    ) -> str:
+        attributes = [
+            f'document_path="{escape(str(chunk.get("document_path") or ""))}"',
+            f'version_id="{escape(self._chunk_version_id(chunk))}"',
+        ]
+        snapshot_at = str(chunk.get("snapshot_at") or "").strip()
+        if snapshot_at:
+            attributes.append(f'snapshot_at="{escape(snapshot_at)}"')
+        lines = [f"<chunk {' '.join(attributes)}>", "  <text>"]
+        source_lines = str(text or "").splitlines() or [str(text or "")]
+        for line in source_lines:
+            lines.append(f"    {escape(line)}")
+        lines.extend(["  </text>", "  <entities>"])
+        for entity in entities:
+            lines.append(f"    <entity type=\"semantic_token\">{escape(entity)}</entity>")
+        lines.extend(["  </entities>", "</chunk>"])
+        return "\n".join(lines)
+
+    def _write_chunk_ner_artifacts(
+        self,
+        source: KnowledgeSourceSpec,
+        payload: dict[str, Any],
+        *,
+        config: KnowledgeConfig | None,
+    ) -> set[str]:
+        previous_manifest_paths = self._load_source_ner_manifest(source.id)
+        previous_payload = self._load_index_payload_safe(source.id)
+        current_ner_paths: set[str] = set()
+        semantic_state = self.get_semantic_engine_state(config) if config is not None else self._semantic_engine_state(
+            status="unavailable",
+            reason_code="HANLP2_SIDECAR_UNCONFIGURED",
+            reason="HanLP2 sidecar is not configured.",
+        )
+        ready = semantic_state.get("status") == "ready"
+
+        for chunk in payload.get("chunks") or []:
+            if not isinstance(chunk, dict):
+                continue
+            chunk["file_key"] = self._chunk_file_key(chunk)
+            chunk["version_id"] = self._chunk_version_id(chunk)
+            chunk["ner_status"] = "unavailable"
+            chunk["ner_entity_count"] = 0
+            chunk.pop("ner_path", None)
+            if not ready:
+                continue
+            chunk_text = self._read_chunk_text(chunk)
+            entities = self._collect_chunk_ner_entities(chunk_text, config=config) if config is not None else []
+            chunk["ner_status"] = "ready"
+            chunk["ner_entity_count"] = len(entities)
+            ner_relative_path = self._build_ner_relative_path(str(chunk.get("chunk_path") or ""))
+            ner_file_path = self.root_dir / ner_relative_path
+            ner_file_path.parent.mkdir(parents=True, exist_ok=True)
+            ner_file_path.write_text(
+                self._render_chunk_ner_text(chunk, text=chunk_text, entities=entities),
+                encoding="utf-8",
+            )
+            chunk["ner_path"] = ner_relative_path.as_posix()
+            current_ner_paths.add(chunk["ner_path"])
+
+        stale_ner_paths = (
+            previous_manifest_paths
+            | self._collect_ner_paths_from_payload(previous_payload)
+        ) - current_ner_paths
+        for ner_path in stale_ner_paths:
+            self._delete_ner_path(ner_path)
+        self._write_source_ner_manifest(source.id, current_ner_paths)
+        return current_ner_paths
+
     def get_source_storage_dir(self, source_id: str) -> Path:
         return self._source_dir(source_id)
+
+    def get_source_chunk_documents(self, source_id: str) -> dict[str, Any]:
+        payload = self._load_index_payload(source_id)
+        if payload is None:
+            return {"indexed": False, "documents": []}
+        documents: list[dict[str, Any]] = []
+        for chunk in payload.get("chunks") or []:
+            if not isinstance(chunk, dict):
+                continue
+            documents.append(
+                {
+                    "path": str(chunk.get("document_path") or source_id),
+                    "title": str(chunk.get("document_title") or chunk.get("document_path") or source_id),
+                    "text": self._read_chunk_text(chunk),
+                    "chunk_id": str(chunk.get("chunk_id") or ""),
+                    "chunk_path": str(chunk.get("chunk_path") or ""),
+                    "snapshot_path": str(chunk.get("snapshot_path") or ""),
+                    "snapshot_relative_path": str(chunk.get("snapshot_relative_path") or ""),
+                    "snapshot_at": str(chunk.get("snapshot_at") or ""),
+                    "file_key": str(chunk.get("file_key") or self._chunk_file_key(chunk)),
+                    "version_id": str(chunk.get("version_id") or self._chunk_version_id(chunk)),
+                    "ner_path": str(chunk.get("ner_path") or ""),
+                    "ner_status": str(chunk.get("ner_status") or "unavailable"),
+                    "ner_entity_count": int(chunk.get("ner_entity_count") or 0),
+                    "ner_text": self._read_ner_text(chunk),
+                }
+            )
+        return {
+            "indexed": True,
+            "indexed_at": payload.get("indexed_at"),
+            "document_count": payload.get("document_count", len(documents)),
+            "snapshot_count": payload.get("snapshot_count", len(documents)),
+            "chunk_count": payload.get("chunk_count", len(documents)),
+            "documents": documents,
+        }
 
     def list_sources_from_storage(self) -> list[KnowledgeSourceSpec]:
         """Rebuild source specs from persisted v2 storage layout."""
@@ -772,6 +1021,8 @@ class KnowledgeManager:
         source: KnowledgeSourceSpec,
         payload: dict[str, Any],
         documents: list[dict[str, str]],
+        *,
+        config: KnowledgeConfig | None = None,
     ) -> None:
         previous_payload = self._load_index_payload_safe(source.id)
         previous_manifest_paths = self._load_source_chunk_manifest(source.id)
@@ -803,6 +1054,7 @@ class KnowledgeManager:
             self._delete_chunk_path(chunk_path)
 
         self._write_source_chunk_manifest(source.id, current_chunk_paths)
+        self._write_chunk_ner_artifacts(source, payload, config=config)
 
         self._source_index_path(source.id).write_text(
             json.dumps(payload, ensure_ascii=False, indent=2),
