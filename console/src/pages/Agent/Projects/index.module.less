@@ -1706,9 +1706,14 @@
   :global(.copaw-collapse-item) {
     display: flex;
     flex-direction: column;
+    min-height: 0;
+  }
+
+  :global(.ant-collapse-item-active),
+  :global(.qwenpaw-collapse-item-active),
+  :global(.copaw-collapse-item-active) {
     flex: 1;
     height: 100%;
-    min-height: 0;
   }
 
   :global(.ant-collapse-header),
@@ -1722,9 +1727,14 @@
   :global(.copaw-collapse-content) {
     display: flex;
     flex-direction: column;
+    min-height: 0;
+  }
+
+  :global(.ant-collapse-content-active),
+  :global(.qwenpaw-collapse-content-active),
+  :global(.copaw-collapse-content-active) {
     flex: 1;
     height: 100%;
-    min-height: 0;
   }
 
   :global(.ant-collapse-content-box),
@@ -1733,7 +1743,6 @@
     display: flex;
     flex-direction: column;
     flex: 1;
-    height: 100%;
     min-height: 0;
   }
 }

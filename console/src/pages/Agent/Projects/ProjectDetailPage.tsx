@@ -116,6 +116,7 @@ const CHAT_PANE_DEFAULT_SIZE = 520;
 const CHAT_PANE_MIN_SIZE = 420;
 const KNOWLEDGE_DOCK_DEFAULT_SIZE = 320;
 const KNOWLEDGE_DOCK_MIN_SIZE = 240;
+const KNOWLEDGE_DOCK_COLLAPSED_SIZE = 52;
 const KNOWLEDGE_DOCK_COLLAPSE_KEY = "knowledge";
 const PROJECT_FILES_DEFER_MS = 420;
 const INITIAL_PROJECT_FILES_IDLE_TIMEOUT_MS = 1200;
@@ -3523,8 +3524,8 @@ export default function ProjectDetailPage() {
               </Splitter.Panel>
 
               <Splitter.Panel
-                size={knowledgeDockSize}
-                min={KNOWLEDGE_DOCK_MIN_SIZE}
+                size={knowledgeModuleCollapsed ? KNOWLEDGE_DOCK_COLLAPSED_SIZE : knowledgeDockSize}
+                min={knowledgeModuleCollapsed ? KNOWLEDGE_DOCK_COLLAPSED_SIZE : KNOWLEDGE_DOCK_MIN_SIZE}
                 max="52%"
                 defaultSize={KNOWLEDGE_DOCK_DEFAULT_SIZE}
               >
