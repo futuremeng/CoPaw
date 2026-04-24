@@ -112,6 +112,7 @@ _DEFAULT_PROJECT_TEMPLATES = {
     "Use this file only for the highest-signal project rules.\n\n"
     "- Workspace root is this project directory.\n"
     "- Resolve files by relative path from project root.\n"
+    "- Save new user-facing files in the project root by default; use subdirectories only when explicitly required.\n"
     "- If a requested path starts with original/, retry {{DATA_DIR}}/ once.\n"
     "- Prefer exact file reads over broad scans.\n"
     "- Artifact mapping: .scripts/*.py => builtin, .pipelines/templates/*.json => builtin, {{DATA_DIR}}/* and .pipelines/runs/* => builtin.\n"
@@ -143,9 +144,10 @@ _DEFAULT_PROJECT_TEMPLATES = {
     "## Procedure\n"
     "1. Confirm workspace root.\n"
     "2. Resolve each file via absolute path first.\n"
-    "3. If path uses original/, remap to {{DATA_DIR}}/ and retry once.\n"
-    "4. Classify outputs by directory + intent.\n"
-    "5. Generate concise structured result.\n\n"
+    "3. Save new user-facing files in the project root unless the user explicitly requests a subdirectory.\n"
+    "4. If path uses original/, remap to {{DATA_DIR}}/ and retry once.\n"
+    "5. Classify outputs by directory + intent.\n"
+    "6. Generate concise structured result.\n\n"
     "## Classification Rules\n"
     "- .scripts/*.py => builtin\n"
     "- .pipelines/templates/*.json => builtin\n"
@@ -2637,12 +2639,17 @@ def _upload_project_file(
             status_code=400, detail="Uploaded file must have a filename"
         )
 
-    safe_dir = _safe_project_data_subdir(target_dir or "original")
+    safe_dir = (target_dir or "").strip().strip("/")
+    if safe_dir:
+        path = Path(safe_dir)
+        if path.is_absolute() or ".." in path.parts:
+            raise HTTPException(status_code=400, detail="Invalid target directory")
+        safe_dir = path.as_posix().strip("/")
     raw_name = Path(upload.filename).name.strip()
     if not raw_name:
         raise HTTPException(status_code=400, detail="Invalid filename")
 
-    destination_dir = (project_dir / safe_dir).resolve()
+    destination_dir = (project_dir / safe_dir).resolve() if safe_dir else project_dir.resolve()
     project_root = project_dir.resolve()
     if not str(destination_dir).startswith(str(project_root)):
         raise HTTPException(status_code=400, detail="Invalid target directory")
@@ -4767,14 +4774,14 @@ async def read_agent_project_file(
     "/{agentId}/projects/{projectId}/files/upload",
     response_model=ProjectFileInfo,
     summary="Upload project file",
-    description="Upload a file into project original directory or a safe subdirectory",
+    description="Upload a file into the project root or a safe subdirectory",
 )
 async def upload_agent_project_file(
     request: Request,
     agentId: str = PathParam(...),
     projectId: str = PathParam(...),
     file: UploadFile = File(...),
-    target_dir: str = Form("original"),
+    target_dir: str = Form(""),
 ) -> ProjectFileInfo:
     """Upload a file into project workspace."""
     manager = _get_multi_agent_manager(request)

@@ -2155,7 +2155,8 @@
       "button": "ファイルをアップロード",
       "batchButton": "現在の実行バッチをアップロード",
       "batchHint": "現在のバッチディレクトリ: original/batches/{{runId}}（現在の run に紐づく）",
-      "defaultHint": "実行が未選択のため、既定バッチディレクトリ: original/batches/manual",
+      "defaultHint": "実行が未選択の場合、ファイルは既定でプロジェクトルートにアップロードされます",
+      "targetDir": "保存先ディレクトリ（既定: プロジェクトルート）",
       "batchBehaviorHint": "バッチファイルをアップロードしない場合、既定ではプロジェクト内の全ての原本ファイルを処理します。"
     },
     "automation": {
@@ -2406,11 +2407,11 @@
       "removeAttachment": "チャット添付から削除",
       "collaborationPlaceholder": "プロジェクトの目標、現在の資料、または次に進めたいことを入力してください。",
       "collaborationWelcomeGreeting": "プロジェクト協作アシスタントの準備ができました。",
-      "collaborationWelcomeDescription": "まずプロジェクトの目標・現在の段階・期待する成果を簡潔に共有してください。資料がある場合は先にアップロードまたは貼り付けると、不足している背景情報を補完できます。",
-      "collaborationWelcomeDescriptionEmptyProject": "これは新規プロジェクトです。まず目標・範囲・期待成果を明確にし、最初の資料を準備しましょう。",
-      "collaborationPromptEmpty1": "このプロジェクトの目標、現在の段階、期待する成果を整理してください。",
+      "collaborationWelcomeDescription": "まずプロジェクトの目標・現在の段階・期待する成果を簡潔に共有してください。資料がある場合は先にアップロードまたは貼り付けてください。新しいファイルは、明示的に子ディレクトリが必要な場合を除き、既定でプロジェクトルートに保存します。",
+      "collaborationWelcomeDescriptionEmptyProject": "これは新規プロジェクトです。まず目標・範囲・期待成果を明確にし、新しいファイルの既定保存先をプロジェクトルートにしたうえで最初の資料を準備しましょう。",
+      "collaborationPromptEmpty1": "まず workspace root を確認し、新しいファイルの既定保存先をプロジェクトルートにしてください。そのうえで、このプロジェクトの目標、現在の段階、期待する成果を整理してください。",
       "collaborationPromptEmpty2": "資料は用意しました。現状を要約し、不足情報を指摘してください。",
-      "collaborationPromptEmptyNewProject1": "これは新規プロジェクトです。目標、範囲、マイルストーン、受け入れ基準を定義してください。",
+      "collaborationPromptEmptyNewProject1": "これは新規プロジェクトです。まず workspace root を確認し、新しいファイルは既定でプロジェクトルートに保存する前提で、目標、範囲、マイルストーン、受け入れ基準を定義してください。",
       "collaborationPromptEmptyNewProject2": "0 から 1 までの立ち上げチェックリストをください。今日すぐ始められる最初の 3 ステップを含めてください。",
       "collaborationPrompt1": "現在のファイルをもとに、このプロジェクトの現状を要約し、不足している情報を指摘してください。",
       "collaborationPrompt2": "固定されたフローを前提にせず、このプロジェクトを前進させるための次の3つの行動を提案してください。"

@@ -2353,7 +2353,8 @@
       "button": "Upload Files",
       "batchButton": "Upload current run batch",
       "batchHint": "Current batch directory: original/batches/{{runId}} (scoped to current run)",
-      "defaultHint": "No run selected. Default batch directory: original/batches/manual",
+      "defaultHint": "No run selected. Files upload to the project root by default",
+      "targetDir": "Target directory (default: project root)",
       "batchBehaviorHint": "If no batch files are uploaded, the run will process all original files in the project by default."
     },
     "automation": {
@@ -2579,11 +2580,11 @@
       "removeAttachment": "Remove from chat attachments",
       "collaborationPlaceholder": "Describe the project goal, current materials, or the next thing you want to move forward.",
       "collaborationWelcomeGreeting": "Project collaboration assistant is ready.",
-      "collaborationWelcomeDescription": "Briefly describe the project goal, current stage, and expected deliverable. If materials are available, upload or paste them first so the missing context can be completed.",
-      "collaborationWelcomeDescriptionEmptyProject": "This is a new project. Start by clarifying goals, scope, and expected outcomes, then prepare the first batch of materials.",
-      "collaborationPromptEmpty1": "Help me clarify this project's goal, current stage, and expected deliverable.",
+      "collaborationWelcomeDescription": "Briefly describe the project goal, current stage, and expected deliverable. If materials are available, upload or paste them first. New files should default to the project root unless a subdirectory is explicitly needed.",
+      "collaborationWelcomeDescriptionEmptyProject": "This is a new project. Start by clarifying goals, scope, and expected outcomes, then default new files to the project root before preparing the first batch of materials.",
+      "collaborationPromptEmpty1": "First confirm the workspace root and default new files to the project root. Then help me clarify this project's goal, current stage, and expected deliverable.",
       "collaborationPromptEmpty2": "I have provided materials. Summarize the current state and point out missing information.",
-      "collaborationPromptEmptyNewProject1": "This is a new project. Help me define the goal, scope, milestones, and acceptance criteria.",
+      "collaborationPromptEmptyNewProject1": "This is a new project. First confirm the workspace root and that new files should default to the project root, then help me define the goal, scope, milestones, and acceptance criteria.",
       "collaborationPromptEmptyNewProject2": "Give me a from-zero-to-one kickoff checklist with the first three actions I can start today.",
       "collaborationPrompt1": "Summarize the current project based on the available files and highlight missing inputs.",
       "collaborationPrompt2": "Suggest the next three actions to move this project forward without assuming a fixed flow yet."

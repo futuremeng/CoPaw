@@ -630,10 +630,9 @@ export default function ProjectOverviewCard({
     attachTitle,
     detachTitle,
   );
-  const hasActiveFilter = Boolean(selectedMetricFilter || normalizedTreeFilterQuery);
   const emptyTreeDescription = normalizedTreeFilterQuery
     ? t("projects.noMatchedFiles", "No files match the current keyword")
-    : hasActiveFilter
+    : Boolean(selectedMetricFilter || normalizedTreeFilterQuery)
       ? t("projects.noFilteredFiles", "No related files under the current filter")
       : t("projects.noFiles", "No files in this project");
   const knowledgeFilterActive = Boolean(

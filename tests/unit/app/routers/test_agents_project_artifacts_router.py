@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import io
 import json
 from pathlib import Path
 
@@ -15,6 +16,7 @@ from qwenpaw.app.routers.agents import (
     _create_project,
     _build_project_file_summary,
     _load_project_summary,
+    _upload_project_file,
     _write_project_frontmatter,
 )
 
@@ -212,6 +214,22 @@ def test_upload_project_file_triggers_auto_knowledge_sync(
     )
     assert latest_event_id >= 1
     assert "original/brief.txt" in changed_paths
+
+
+def test_upload_project_file_defaults_to_project_root(tmp_path: Path):
+    from starlette.datastructures import UploadFile
+
+    project_dir = tmp_path / "projects" / "project-demo"
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    uploaded = _upload_project_file(
+        project_dir,
+        UploadFile(filename="brief.txt", file=io.BytesIO(b"hello root")),
+        "",
+    )
+
+    assert uploaded.path == "brief.txt"
+    assert (project_dir / "brief.txt").read_text(encoding="utf-8") == "hello root"
 
 
 def test_upload_project_file_activates_idle_monitoring_and_sync(

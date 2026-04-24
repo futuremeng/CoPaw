@@ -44,8 +44,8 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-function TestHarness({ loadProjectFiles }: {
-  loadProjectFiles: ReturnType<typeof vi.fn>;
+function TestHarness({ onUploadCompleted }: {
+  onUploadCompleted: ReturnType<typeof vi.fn>;
 }) {
   const controller = useProjectUploadController({
     currentAgent: {
@@ -80,7 +80,7 @@ function TestHarness({ loadProjectFiles }: {
     },
     resolvedProjectRequestId: "proj-1",
     setResolvedProjectRequestId: vi.fn(),
-    loadProjectFiles,
+    onUploadCompleted,
   });
 
   return (
@@ -113,21 +113,26 @@ describe("useProjectUploadController", () => {
     mockedAgentsApi.uploadProjectFile.mockResolvedValue(undefined);
   });
 
-  it("preserves the current workbench selection after uploads refresh the file list", async () => {
+  it("refreshes the project workbench after uploads complete", async () => {
     const user = userEvent.setup();
-    const loadProjectFiles = vi.fn().mockResolvedValue(undefined);
+    const onUploadCompleted = vi.fn().mockResolvedValue(undefined);
 
-    render(<TestHarness loadProjectFiles={loadProjectFiles} />);
+    render(<TestHarness onUploadCompleted={onUploadCompleted} />);
 
     await user.click(screen.getByRole("button", { name: "prepare" }));
     await user.click(screen.getByRole("button", { name: "upload" }));
 
     await waitFor(() => {
       expect(agentsApi.uploadProjectFile).toHaveBeenCalledTimes(1);
-      expect(loadProjectFiles).toHaveBeenCalledWith(
+      expect(agentsApi.uploadProjectFile).toHaveBeenCalledWith(
+        "agent-1",
+        "proj-1",
+        expect.any(File),
+        "",
+      );
+      expect(onUploadCompleted).toHaveBeenCalledWith(
         "agent-1",
         expect.objectContaining({ id: "proj-1" }),
-        { preserveSelection: true },
       );
     });
   });

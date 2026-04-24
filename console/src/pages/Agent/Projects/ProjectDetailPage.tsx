@@ -456,6 +456,10 @@ function getRealtimeBadgeStatus(status: ProjectRealtimeConnectionStatus) {
   return "processing" as const;
 }
 
+function shouldShowRealtimeStatus(status: ProjectRealtimeConnectionStatus): boolean {
+  return status === "reconnecting" || status === "degraded";
+}
+
 export default function ProjectDetailPage() {
   const { t, i18n } = useTranslation();
   const translateWithFallback = useCallback(
@@ -1422,7 +1426,7 @@ export default function ProjectDetailPage() {
     selectedProject,
     resolvedProjectRequestId,
     setResolvedProjectRequestId,
-    loadProjectFiles,
+    onUploadCompleted: handleRefreshProjectFiles,
   });
 
   const uploadModalHint = useMemo(() => {
@@ -1434,7 +1438,7 @@ export default function ProjectDetailPage() {
 
   const openProjectUploadModal = useCallback(() => {
     setPendingUploads([]);
-    setUploadTargetDir("original");
+    setUploadTargetDir("");
     setUploadModalOpen(true);
   }, [setPendingUploads, setUploadTargetDir, setUploadModalOpen]);
 
@@ -2374,6 +2378,8 @@ export default function ProjectDetailPage() {
     }
     return t("projects.realtime.connecting", "Realtime connecting");
   }, [realtimeConnectionState.status, t]);
+
+  const showRealtimeStatus = shouldShowRealtimeStatus(realtimeConnectionState.status);
 
   useEffect(() => {
     if (!currentAgent) {
@@ -3332,19 +3338,21 @@ export default function ProjectDetailPage() {
               currentAgent?.workspace_dir ||
               t("projects.noAgent")}
           </Text>
-          <div className={styles.realtimeStatusRow}>
-            <Badge
-              status={getRealtimeBadgeStatus(realtimeConnectionState.status)}
-              text={realtimeConnectionText}
-            />
-            {realtimeConnectionState.reconnectAttempt > 0 ? (
-              <Text type="secondary" className={styles.realtimeStatusMeta}>
-                {t("projects.realtime.retryingAttempt", "Attempt {{count}}", {
-                  count: realtimeConnectionState.reconnectAttempt,
-                })}
-              </Text>
-            ) : null}
-          </div>
+          {showRealtimeStatus ? (
+            <div className={styles.realtimeStatusRow}>
+              <Badge
+                status={getRealtimeBadgeStatus(realtimeConnectionState.status)}
+                text={realtimeConnectionText}
+              />
+              {realtimeConnectionState.reconnectAttempt > 0 ? (
+                <Text type="secondary" className={styles.realtimeStatusMeta}>
+                  {t("projects.realtime.retryingAttempt", "Attempt {{count}}", {
+                    count: realtimeConnectionState.reconnectAttempt,
+                  })}
+                </Text>
+              ) : null}
+            </div>
+          ) : null}
         </div>
         <div className={styles.headerActions}>
           {selectedProject ? (

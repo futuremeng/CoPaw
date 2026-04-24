@@ -358,8 +358,8 @@ function ProjectChatPanel({
                           ? "projects.chat.collaborationWelcomeDescription"
                           : "projects.chat.collaborationWelcomeDescriptionEmptyProject",
                         hasUserFiles
-                          ? "Use this space to understand the project, organize materials, and plan the next step. In your first reply, confirm workspace root and path mapping (original/* -> data/*) before drafting actions."
-                          : "This is a new project. Start by clarifying goals, scope, and expected outcomes, then confirm workspace root and path mapping before preparing the first batch of materials.",
+                          ? "Use this space to understand the project, organize materials, and plan the next step. In your first reply, confirm workspace root and default new files to the project root unless a subdirectory is explicitly needed."
+                          : "This is a new project. Start by clarifying goals, scope, and expected outcomes, then confirm workspace root and default new files to the project root before preparing the first batch of materials.",
                       )}
                       welcomePromptsWhenEmpty={[
                         t(
@@ -367,8 +367,8 @@ function ProjectChatPanel({
                             ? "projects.chat.collaborationPromptEmpty1"
                             : "projects.chat.collaborationPromptEmptyNewProject1",
                           hasUserFiles
-                            ? "First confirm workspace root and map original/* to data/*. Then help me clarify this project's goal, current stage, and expected deliverable."
-                            : "This is a new project. First confirm workspace root and path mapping, then help me define goal, scope, milestones, and acceptance criteria.",
+                            ? "First confirm workspace root and default new files to the project root. Then help me clarify this project's goal, current stage, and expected deliverable."
+                            : "This is a new project. First confirm workspace root and that new files should default to the project root, then help me define goal, scope, milestones, and acceptance criteria.",
                         ),
                         t(
                           hasUserFiles

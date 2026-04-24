@@ -10,10 +10,9 @@ interface UseProjectUploadControllerParams {
   selectedProject?: AgentProjectSummary;
   resolvedProjectRequestId: string;
   setResolvedProjectRequestId: (value: string) => void;
-  loadProjectFiles: (
+  onUploadCompleted: (
     agentId: string,
     project: AgentProjectSummary,
-    options?: { preserveSelection?: boolean },
   ) => Promise<void>;
 }
 
@@ -22,18 +21,18 @@ export default function useProjectUploadController({
   selectedProject,
   resolvedProjectRequestId,
   setResolvedProjectRequestId,
-  loadProjectFiles,
+  onUploadCompleted,
 }: UseProjectUploadControllerParams) {
   const { t } = useTranslation();
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [pendingUploads, setPendingUploads] = useState<File[]>([]);
-  const [uploadTargetDir, setUploadTargetDir] = useState("original");
+  const [uploadTargetDir, setUploadTargetDir] = useState("");
 
   const resetUploadState = useCallback(() => {
     setUploadModalOpen(false);
     setPendingUploads([]);
-    setUploadTargetDir("original");
+    setUploadTargetDir("");
   }, []);
 
   const handleUploadFiles = useCallback(async () => {
@@ -57,7 +56,7 @@ export default function useProjectUploadController({
               currentAgent.id,
               projectRequestId,
               file,
-              uploadTargetDir || "original",
+              uploadTargetDir,
             );
             setResolvedProjectRequestId(projectRequestId);
             uploaded = true;
@@ -72,9 +71,7 @@ export default function useProjectUploadController({
         }
       }
 
-      await loadProjectFiles(currentAgent.id, selectedProject, {
-        preserveSelection: true,
-      });
+      await onUploadCompleted(currentAgent.id, selectedProject);
       resetUploadState();
       message.success(
         t("projects.upload.success", "Uploaded {{count}} file(s) to project.", {
@@ -89,7 +86,7 @@ export default function useProjectUploadController({
     }
   }, [
     currentAgent,
-    loadProjectFiles,
+    onUploadCompleted,
     pendingUploads,
     resolvedProjectRequestId,
     resetUploadState,
