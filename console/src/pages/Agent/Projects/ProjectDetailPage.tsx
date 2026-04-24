@@ -123,7 +123,6 @@ const KNOWLEDGE_DOCK_MIN_SIZE = 240;
 const KNOWLEDGE_DOCK_COLLAPSE_KEY = "knowledge";
 const PROJECT_FILES_DEFER_MS = 420;
 const INITIAL_PROJECT_FILES_IDLE_TIMEOUT_MS = 1200;
-const PIPELINE_CONTEXT_DEFER_MS = 260;
 const ASSISTANT_TURN_REALTIME_FALLBACK_MS = 900;
 const PROJECT_TREE_PREFETCH_DIR_LIMIT = 3;
 const PROJECT_TREE_PREVIEW_DIR_PRIORITY = [
@@ -583,6 +582,7 @@ export default function ProjectDetailPage() {
   const realtimeConnectionStatusRef = useRef<ProjectRealtimeConnectionStatus>("idle");
   const runRestoreAttemptKeyRef = useRef("");
   const automationDrawerAutoOpenKeyRef = useRef("");
+  const pipelineManualActivationRef = useRef(false);
   const layoutPrefsLoadedRef = useRef(false);
   const workspaceResizeFrameRef = useRef<number | null>(null);
   const knowledgeDockResizeFrameRef = useRef<number | null>(null);
@@ -1139,6 +1139,7 @@ export default function ProjectDetailPage() {
   ]);
 
   const handleSelectStage = useCallback((stage: ProjectStageKey) => {
+    pipelineManualActivationRef.current = stage === "output";
     setActiveStage(stage);
     const stageFilters = STAGE_FILTERS[stage];
     setSelectedMetricFilter((prev) => {
@@ -2558,6 +2559,7 @@ export default function ProjectDetailPage() {
     setSelectedAttachPaths([]);
     setSendingSelectedFiles(false);
     runRestoreAttemptKeyRef.current = "";
+    pipelineManualActivationRef.current = false;
     resetPreferredWorkspaceChatBinding();
   }, [resetPreferredWorkspaceChatBinding, resetUploadState, routeProjectId]);
 
@@ -2689,7 +2691,6 @@ export default function ProjectDetailPage() {
 
     let cancelled = false;
     let fileTimer: number | null = null;
-    let pipelineTimer: number | null = null;
     const idleCallback = (window as Window & {
       requestIdleCallback?: (
         callback: () => void,
@@ -2701,7 +2702,6 @@ export default function ProjectDetailPage() {
       cancelIdleCallback?: (handle: number) => void;
     }).cancelIdleCallback;
     let fileIdleHandle: number | null = null;
-    let idleHandle: number | null = null;
 
     const loadDeferredProjectFiles = () => {
       if (cancelled) {
@@ -2712,28 +2712,14 @@ export default function ProjectDetailPage() {
       });
     };
 
-    const loadDeferredPipelineContext = () => {
-      if (cancelled) {
-        return;
-      }
-      void loadPipelineContext(currentAgent.id, selectedProject);
-    };
-
     if (typeof idleCallback === "function") {
       fileIdleHandle = idleCallback(loadDeferredProjectFiles, {
         timeout: INITIAL_PROJECT_FILES_IDLE_TIMEOUT_MS,
-      });
-      idleHandle = idleCallback(loadDeferredPipelineContext, {
-        timeout: PIPELINE_CONTEXT_DEFER_MS,
       });
     } else {
       fileTimer = window.setTimeout(
         loadDeferredProjectFiles,
         INITIAL_PROJECT_FILES_IDLE_TIMEOUT_MS,
-      );
-      pipelineTimer = window.setTimeout(
-        loadDeferredPipelineContext,
-        PIPELINE_CONTEXT_DEFER_MS,
       );
     }
 
@@ -2754,17 +2740,11 @@ export default function ProjectDetailPage() {
       if (fileTimer !== null) {
         window.clearTimeout(fileTimer);
       }
-      if (pipelineTimer !== null) {
-        window.clearTimeout(pipelineTimer);
-      }
       if (fileIdleHandle !== null && typeof cancelIdleCallback === "function") {
         cancelIdleCallback(fileIdleHandle);
       }
-      if (idleHandle !== null && typeof cancelIdleCallback === "function") {
-        cancelIdleCallback(idleHandle);
-      }
     };
-  }, [currentAgent, selectedProject, loadProjectTreeRoot, loadPipelineContext, scheduleProjectFilesRefresh]);
+  }, [currentAgent, selectedProject, loadProjectTreeRoot, scheduleProjectFilesRefresh]);
 
   useEffect(() => {
     if (!currentAgent || !selectedProject || projectFileSummary) {
@@ -2803,7 +2783,9 @@ export default function ProjectDetailPage() {
     if (pipelineLoading || pipelineTemplates.length > 0 || pipelineRuns.length > 0) {
       return;
     }
-    if (activeStage !== "output" && !automationDrawerOpen) {
+    const allowManualStageLoad =
+      pipelineManualActivationRef.current && activeStage === "output";
+    if (!automationDrawerOpen && !allowManualStageLoad) {
       return;
     }
     void loadPipelineContext(currentAgent.id, selectedProject);
