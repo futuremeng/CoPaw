@@ -46,6 +46,7 @@ import {
   parseEdgeStrength,
   summarizeGraphEntities,
 } from "./graphVisualizationData";
+import { useTheme } from "../../../contexts/ThemeContext";
 import styles from "./index.module.less";
 
 interface GraphQueryResultsProps {
@@ -123,6 +124,54 @@ type GraphInsightCard = {
 type GraphColorMode = "type" | "weight";
 type GraphLayoutMode = "force-cluster" | "force-prevent-overlap" | "radial";
 
+type GraphThemeTokens = {
+  nodeLabelFill: string;
+  nodeFilteredStroke: string;
+  nodeActiveStroke: string;
+  nodePathStroke: string;
+  nodePathFill: string;
+  nodeInsightStroke: string;
+  nodeInsightFill: string;
+  nodeHoverStroke: string;
+  edgeLabelFill: string;
+  edgeFilteredStroke: string;
+  edgeActiveStroke: string;
+  edgePathStroke: string;
+  edgeInsightStroke: string;
+};
+
+const LIGHT_GRAPH_THEME: GraphThemeTokens = {
+  nodeLabelFill: "#262626",
+  nodeFilteredStroke: "#1677ff",
+  nodeActiveStroke: "#0958d9",
+  nodePathStroke: "#389e0d",
+  nodePathFill: "#f6ffed",
+  nodeInsightStroke: "#531dab",
+  nodeInsightFill: "#f9f0ff",
+  nodeHoverStroke: "#fa8c16",
+  edgeLabelFill: "#8c8c8c",
+  edgeFilteredStroke: "#1677ff",
+  edgeActiveStroke: "#1677ff",
+  edgePathStroke: "#52c41a",
+  edgeInsightStroke: "#722ed1",
+};
+
+const DARK_GRAPH_THEME: GraphThemeTokens = {
+  nodeLabelFill: "rgba(255, 248, 240, 0.58)",
+  nodeFilteredStroke: "#7cb8ff",
+  nodeActiveStroke: "#91caff",
+  nodePathStroke: "#73d13d",
+  nodePathFill: "rgba(82, 196, 26, 0.14)",
+  nodeInsightStroke: "#b37feb",
+  nodeInsightFill: "rgba(114, 46, 209, 0.16)",
+  nodeHoverStroke: "#ff9c3d",
+  edgeLabelFill: "rgba(255, 255, 255, 0.38)",
+  edgeFilteredStroke: "#7cb8ff",
+  edgeActiveStroke: "#91caff",
+  edgePathStroke: "#95de64",
+  edgeInsightStroke: "#b37feb",
+};
+
 const TYPE_COLOR_PALETTE = [
   "#1677ff",
   "#13c2c2",
@@ -132,6 +181,17 @@ const TYPE_COLOR_PALETTE = [
   "#722ed1",
   "#fa541c",
   "#2f54eb",
+];
+
+const DARK_TYPE_COLOR_PALETTE = [
+  "#6ea8ff",
+  "#5bc7c4",
+  "#7bcf7b",
+  "#e0b45c",
+  "#d98fbc",
+  "#a78bfa",
+  "#f0996b",
+  "#7f9cff",
 ];
 
 function subjectToNodeId(subject: string): string {
@@ -302,12 +362,25 @@ function getNodeGroupId(nodeId: string, nodeType: string): string {
   return "other";
 }
 
-function colorByIndex(index: number): string {
-  return TYPE_COLOR_PALETTE[index % TYPE_COLOR_PALETTE.length];
+function colorByIndex(index: number, isDark = false): string {
+  const palette = isDark ? DARK_TYPE_COLOR_PALETTE : TYPE_COLOR_PALETTE;
+  return palette[index % palette.length];
 }
 
-function buildWeightColor(weight: number): string {
+function buildWeightColor(weight: number, isDark = false): string {
   const w = Math.max(0, Math.min(1, weight));
+  if (isDark) {
+    if (w < 0.25) {
+      return "#71839b";
+    }
+    if (w < 0.5) {
+      return "#6ea8d7";
+    }
+    if (w < 0.75) {
+      return "#73c08a";
+    }
+    return "#9dd67a";
+  }
   if (w < 0.25) {
     return "#d9d9d9";
   }
@@ -320,8 +393,20 @@ function buildWeightColor(weight: number): string {
   return "#0958d9";
 }
 
-function buildEdgeColor(weight: number): string {
+function buildEdgeColor(weight: number, isDark = false): string {
   const w = Math.max(0, Math.min(1, weight));
+  if (isDark) {
+    if (w < 0.25) {
+      return "rgba(148, 163, 184, 0.34)";
+    }
+    if (w < 0.5) {
+      return "rgba(104, 168, 215, 0.42)";
+    }
+    if (w < 0.75) {
+      return "rgba(115, 192, 138, 0.52)";
+    }
+    return "rgba(157, 214, 122, 0.66)";
+  }
   if (w < 0.25) {
     return "#d9d9d9";
   }
@@ -629,6 +714,7 @@ export function GraphQueryResults(props: GraphQueryResultsProps) {
 
 export function GraphVisualization(props: GraphVisualizationProps) {
   const { t } = useTranslation();
+  const { isDark } = useTheme();
   const {
     data,
     loading,
@@ -683,6 +769,11 @@ export function GraphVisualization(props: GraphVisualizationProps) {
   const colorModeRef = useRef<GraphColorMode>("type");
   const nodeTypeColorMapRef = useRef<Map<string, string>>(new Map());
   const lastFocusStateKeyRef = useRef("");
+
+  const graphTheme = useMemo(
+    () => (isDark ? DARK_GRAPH_THEME : LIGHT_GRAPH_THEME),
+    [isDark],
+  );
 
   const buildLayoutConfig = useCallback((width: number, height: number) => {
     const nodeCount = data.nodes.length;
@@ -812,10 +903,10 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     const groups = Array.from(new Set(data.nodes.map((node) => getNodeGroupId(node.id, String(node.type || "")))));
     const map = new Map<string, string>();
     groups.forEach((group, index) => {
-      map.set(group, colorByIndex(index));
+      map.set(group, colorByIndex(index, isDark));
     });
     return map;
-  }, [data.nodes]);
+  }, [data.nodes, isDark]);
 
   const graphData = useMemo(
     () => buildGraphDisplayData(data, 0),
@@ -1503,6 +1594,119 @@ export function GraphVisualization(props: GraphVisualizationProps) {
         return;
       }
 
+      const graphElementOptions = {
+        node: {
+          type: "circle",
+          style: (datum: {
+            data?: { label?: string; score?: number; visualSize?: number; type?: string; isIsolated?: boolean };
+          }) => {
+            const score = Number(datum?.data?.score || 0);
+            const group = getNodeGroupId("", String(datum?.data?.type || ""));
+            const isIsolated = Boolean(datum?.data?.isIsolated);
+            const currentColorMode = colorModeRef.current;
+            const baseFill =
+              currentColorMode === "type"
+                ? nodeTypeColorMapRef.current.get(group) || "#1677ff"
+                : buildWeightColor(score, isDark);
+            const size = Number(datum?.data?.visualSize || nodeVisualSizeFromScore(score));
+            const rawLabel = String(datum?.data?.label || "");
+            const showLabel = true;
+            const displayLabel = showLabel ? shortenLabel(rawLabel, 24) : "";
+            return {
+              size,
+              lineWidth: isDark ? 0.58 : 1,
+              fill: `${baseFill}${isIsolated ? (isDark ? "08" : "14") : isDark ? "10" : "22"}`,
+              stroke: isDark ? `${baseFill}66` : baseFill,
+              labelText: displayLabel || undefined,
+              labelPlacement: "center" as const,
+              labelFontSize: isDark ? 9 : 11,
+              labelFill: graphTheme.nodeLabelFill,
+              opacity: isIsolated ? 0.55 : 1,
+              lineDash: isIsolated ? [4, 3] : undefined,
+              cursor: "pointer" as const,
+            };
+          },
+          state: {
+            inactive: {
+              opacity: 0.6,
+            },
+            filtered: {
+              lineWidth: 2,
+              stroke: graphTheme.nodeFilteredStroke,
+            },
+            dim: {
+              opacity: isDark ? 0.12 : 0.18,
+            },
+            active: {
+              lineWidth: 2,
+              stroke: graphTheme.nodeActiveStroke,
+              opacity: 1,
+            },
+            path: {
+              lineWidth: 3,
+              stroke: graphTheme.nodePathStroke,
+              fill: graphTheme.nodePathFill,
+              opacity: 1,
+            },
+            insight: {
+              lineWidth: 3,
+              stroke: graphTheme.nodeInsightStroke,
+              fill: graphTheme.nodeInsightFill,
+              opacity: 1,
+            },
+            hover: {
+              lineWidth: 3,
+              stroke: graphTheme.nodeHoverStroke,
+            },
+          },
+        },
+        edge: {
+          type: "line",
+          style: (datum: { data?: { label?: string; strength?: number } }) => {
+            const strength = Number(datum?.data?.strength || 0.5);
+            const rawEdgeLabel = String(datum?.data?.label || "");
+            const displayEdgeLabel = shortenLabel(rawEdgeLabel, 18);
+            return {
+              stroke: buildEdgeColor(strength, isDark),
+              lineWidth: 0.8 + strength * 2,
+              endArrow: true,
+              labelText: displayEdgeLabel,
+              labelBackground: !isDark,
+              labelFontSize: 10,
+              labelFill: graphTheme.edgeLabelFill,
+            };
+          },
+          state: {
+            inactive: {
+              opacity: isDark ? 0.22 : 0.32,
+            },
+            filtered: {
+              stroke: graphTheme.edgeFilteredStroke,
+              lineWidth: 1.6,
+              opacity: 0.95,
+            },
+            dim: {
+              opacity: isDark ? 0.08 : 0.12,
+            },
+            active: {
+              stroke: graphTheme.edgeActiveStroke,
+              opacity: 1,
+              lineWidth: 1.4,
+            },
+            path: {
+              stroke: graphTheme.edgePathStroke,
+              opacity: 1,
+              lineWidth: 2,
+            },
+            insight: {
+              stroke: graphTheme.edgeInsightStroke,
+              opacity: 1,
+              lineWidth: 2.2,
+            },
+          },
+        },
+      };
+
       if (!graphRef.current) {
         const graph = new module.Graph({
           container: containerRef.current,
@@ -1529,115 +1733,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
             },
           ],
           animation: false,
-          node: {
-            type: "circle",
-            style: (datum: {
-              data?: { label?: string; score?: number; visualSize?: number; type?: string; isIsolated?: boolean };
-            }) => {
-              const score = Number(datum?.data?.score || 0);
-              const group = getNodeGroupId("", String(datum?.data?.type || ""));
-              const isIsolated = Boolean(datum?.data?.isIsolated);
-              const currentColorMode = colorModeRef.current;
-              const baseFill =
-                currentColorMode === "type"
-                  ? nodeTypeColorMapRef.current.get(group) || "#1677ff"
-                  : buildWeightColor(score);
-              const size = Number(datum?.data?.visualSize || nodeVisualSizeFromScore(score));
-              const rawLabel = String(datum?.data?.label || "");
-              const displayLabel = shortenLabel(rawLabel, 24);
-              return {
-                size,
-                lineWidth: 1,
-                fill: `${baseFill}${isIsolated ? "14" : "22"}`,
-                stroke: baseFill,
-                labelText: displayLabel,
-                labelPlacement: "bottom",
-                labelFontSize: 11,
-                opacity: isIsolated ? 0.55 : 1,
-                lineDash: isIsolated ? [4, 3] : undefined,
-                cursor: "pointer",
-              };
-            },
-            state: {
-              inactive: {
-                opacity: 0.6,
-              },
-              filtered: {
-                lineWidth: 2,
-                stroke: "#1677ff",
-                opacity: 1,
-              },
-              dim: {
-                opacity: 0.18,
-              },
-              active: {
-                lineWidth: 2,
-                stroke: "#0958d9",
-                opacity: 1,
-              },
-              path: {
-                lineWidth: 3,
-                stroke: "#389e0d",
-                fill: "#f6ffed",
-                opacity: 1,
-              },
-              insight: {
-                lineWidth: 3,
-                stroke: "#531dab",
-                fill: "#f9f0ff",
-                opacity: 1,
-              },
-              hover: {
-                lineWidth: 3,
-                stroke: "#fa8c16",
-              },
-            },
-          },
-          edge: {
-            type: "line",
-            style: (datum: { data?: { label?: string; strength?: number } }) => {
-              const strength = Number(datum?.data?.strength || 0.5);
-              const rawEdgeLabel = String(datum?.data?.label || "");
-              const displayEdgeLabel = shortenLabel(rawEdgeLabel, 18);
-              return {
-              stroke: buildEdgeColor(strength),
-              lineWidth: 0.8 + strength * 2,
-              endArrow: true,
-              labelText: displayEdgeLabel,
-              labelBackground: true,
-              labelFontSize: 10,
-              labelFill: "#8c8c8c",
-            };
-            },
-            state: {
-              inactive: {
-                opacity: 0.32,
-              },
-              filtered: {
-                stroke: "#1677ff",
-                lineWidth: 1.6,
-                opacity: 0.95,
-              },
-              dim: {
-                opacity: 0.12,
-              },
-              active: {
-                stroke: "#1677ff",
-                opacity: 1,
-                lineWidth: 1.4,
-              },
-              path: {
-                stroke: "#52c41a",
-                opacity: 1,
-                lineWidth: 2,
-              },
-              insight: {
-                stroke: "#722ed1",
-                opacity: 1,
-                lineWidth: 2.2,
-              },
-            },
-          },
+          ...graphElementOptions,
         }) as unknown as G6Graph;
 
         graph.on("node:mouseenter", async (evt: unknown) => {
@@ -1683,7 +1779,10 @@ export function GraphVisualization(props: GraphVisualizationProps) {
         await graphRef.current.render();
       } else {
         graphRef.current.setData(g6Data);
-        graphRef.current.setOptions?.({ layout: buildLayoutConfig(width, height) });
+        graphRef.current.setOptions?.({
+          layout: buildLayoutConfig(width, height),
+          ...graphElementOptions,
+        });
         await graphRef.current.layout?.();
         await graphRef.current.render();
       }
@@ -1720,6 +1819,8 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     buildLayoutConfig,
     graphData,
     colorMode,
+    graphTheme,
+    isDark,
     nodeTypeColorMap,
   ]);
 
@@ -1911,6 +2012,13 @@ export function GraphVisualization(props: GraphVisualizationProps) {
 
   const toolbar = (
     <Space size={compact ? 4 : 8}>
+      {focusedNodeLabel ? (
+        <Tooltip title={focusedNodeLabel}>
+          <Typography.Text className={styles.graphSelectedNodeName} ellipsis>
+            {focusedNodeLabel}
+          </Typography.Text>
+        </Tooltip>
+      ) : null}
       <Tooltip title={t("knowledge.graphQuery.zoomIn")}>
         <Button size={compact ? "small" : "middle"} icon={<PlusOutlined />} onClick={handleZoomIn}>
           {compact ? null : t("knowledge.graphQuery.zoomIn")}
