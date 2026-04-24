@@ -1,4 +1,4 @@
-import { Button, Card, Tag, Typography } from "antd";
+import { Button, Card, Typography } from "antd";
 import { useTranslation } from "react-i18next";
 import type {
   AgentProjectFileInfo,
@@ -14,16 +14,6 @@ function getArtifactDisplayPath(
   fallbackPath: string,
 ): string {
   return artifact?.published_path || fallbackPath;
-}
-
-function getArtifactKindColor(kind: ProjectPipelineArtifactRecord["kind"]): string {
-  if (kind === "source") {
-    return "default";
-  }
-  if (kind === "final") {
-    return "success";
-  }
-  return "processing";
 }
 
 interface ProjectWorkbenchPanelProps {
@@ -74,39 +64,19 @@ export default function ProjectWorkbenchPanel({
   const selectedDisplayPath = selectedFilePath
     ? getArtifactDisplayPath(selectedArtifactRecord, selectedFilePath)
     : "";
-  const selectedSnapshotPath = selectedArtifactRecord?.published_path
-    ? selectedFilePath
-    : "";
-  const selectedArtifactTitle = selectedArtifactRecord?.name || selectedFilePath.split("/").pop() || "";
   const workbenchTitle = selectedFilePath
     ? (
       <div className={styles.workbenchHeaderTitleWrap}>
-        <div className={styles.itemTitleRow}>
-          <div className={styles.itemTitle}>{selectedArtifactTitle}</div>
-          {selectedArtifactRecord ? (
-            <Tag color={getArtifactKindColor(selectedArtifactRecord.kind)}>
-              {selectedArtifactRecord.kind}
-            </Tag>
-          ) : null}
-        </div>
-        <div className={styles.workbenchHeaderMetaList}>
-          <div className={styles.itemMeta}>{selectedDisplayPath}</div>
-          {selectedSnapshotPath ? (
-            <div className={styles.itemMeta}>
-              {t("projects.artifacts.snapshotPath", "Run snapshot")}: {selectedSnapshotPath}
-            </div>
-          ) : null}
+        <div className={styles.workbenchHeaderTopRow}>
+          <div className={styles.workbenchHeaderTitleMain}>
+            {selectedDisplayPath}
+          </div>
           {selectedFileInfo ? (
-            <div className={styles.itemMeta}>
-              {formatBytes(selectedFileInfo.size)} · {selectedFileInfo.modified_time}
-            </div>
-          ) : null}
-          {selectedArtifactRecord?.producer_step_name ? (
-            <div className={styles.itemMeta}>
-              {t("projects.artifacts.producedBy", "Produced by: {{step}}", {
-                step: selectedArtifactRecord.producer_step_name,
-              })}
-            </div>
+            <span className={styles.workbenchHeaderSummary}>
+              <span>{formatBytes(selectedFileInfo.size)}</span>
+              <span className={styles.workbenchHeaderMetaDot} />
+              <span>{selectedFileInfo.modified_time}</span>
+            </span>
           ) : null}
         </div>
       </div>
