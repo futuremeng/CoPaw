@@ -1,5 +1,5 @@
 import { SendOutlined } from "@ant-design/icons";
-import { Button, Checkbox, Empty, Spin, Tag } from "antd";
+import { Button, Checkbox, Empty, Spin } from "antd";
 import { useTranslation } from "react-i18next";
 import type {
   AgentProjectFileInfo,
@@ -7,15 +7,10 @@ import type {
 } from "../../../api/types/agents";
 import styles from "./index.module.less";
 
-function getArtifactDisplayPath(artifact: ProjectPipelineArtifactRecord | undefined, fallbackPath: string): string {
-  return artifact?.published_path || fallbackPath;
-}
-
 interface ProjectArtifactsPanelProps {
   filesLoading: boolean;
   contentLoading: boolean;
   artifactRecords: ProjectPipelineArtifactRecord[];
-  selectedArtifactRecord: ProjectPipelineArtifactRecord | undefined;
   selectedFilePath: string;
   knownProjectFilesByPath: Record<string, AgentProjectFileInfo>;
   projectFiles: AgentProjectFileInfo[];
@@ -25,14 +20,12 @@ interface ProjectArtifactsPanelProps {
   sendingSelectedFiles: boolean;
   onToggleAutoAnalyze: (value: boolean) => void;
   onSendSelectedFilesToChat: () => void;
-  formatBytes: (size: number) => string;
 }
 
 export default function ProjectArtifactsPanel({
   filesLoading,
   contentLoading,
   artifactRecords,
-  selectedArtifactRecord,
   selectedFilePath,
   knownProjectFilesByPath,
   projectFiles,
@@ -42,15 +35,10 @@ export default function ProjectArtifactsPanel({
   sendingSelectedFiles,
   onToggleAutoAnalyze,
   onSendSelectedFilesToChat,
-  formatBytes,
 }: ProjectArtifactsPanelProps) {
   const { t } = useTranslation();
   const selectedFileInfo = knownProjectFilesByPath[selectedFilePath]
     || projectFiles.find((item) => item.path === selectedFilePath);
-  const selectedDisplayPath = getArtifactDisplayPath(selectedArtifactRecord, selectedFilePath);
-  const selectedSnapshotPath = selectedArtifactRecord?.published_path
-    ? selectedFilePath
-    : "";
   const hasPreviewTarget = Boolean(selectedFilePath);
   const shouldBlockOnFilesLoading = filesLoading && !hasPreviewTarget;
   const isEmptyFilePreview = Boolean(
@@ -80,42 +68,6 @@ export default function ProjectArtifactsPanel({
               </div>
             ) : selectedFilePath ? (
               <>
-                <div className={styles.artifactDetailCard}>
-                  <div className={styles.itemTitleRow}>
-                    <div className={styles.itemTitle}>{selectedArtifactRecord?.name || selectedFilePath.split("/").pop()}</div>
-                    {selectedArtifactRecord ? (
-                      <Tag
-                        color={
-                          selectedArtifactRecord.kind === "source"
-                            ? "default"
-                            : selectedArtifactRecord.kind === "final"
-                              ? "success"
-                              : "processing"
-                        }
-                      >
-                        {selectedArtifactRecord.kind}
-                      </Tag>
-                    ) : null}
-                  </div>
-                  <div className={styles.itemMeta}>{selectedDisplayPath}</div>
-                  {selectedSnapshotPath ? (
-                    <div className={styles.itemMeta}>
-                      {t("projects.artifacts.snapshotPath", "Run snapshot")}: {selectedSnapshotPath}
-                    </div>
-                  ) : null}
-                  {selectedFileInfo ? (
-                    <div className={styles.itemMeta}>
-                      {formatBytes(selectedFileInfo.size)} · {selectedFileInfo.modified_time}
-                    </div>
-                  ) : null}
-                  {selectedArtifactRecord?.producer_step_name ? (
-                    <div className={styles.itemMeta}>
-                      {t("projects.artifacts.producedBy", "Produced by: {{step}}", {
-                        step: selectedArtifactRecord.producer_step_name,
-                      })}
-                    </div>
-                  ) : null}
-                </div>
                 {isEmptyFilePreview ? (
                   <Empty
                     image={Empty.PRESENTED_IMAGE_SIMPLE}

@@ -34,7 +34,6 @@ describe("ProjectWorkbenchPanel", () => {
 
     render(
       <ProjectWorkbenchPanel
-        projectLabel="proj-1"
         syncNotice={{
           changedPaths: ["original/new-file.md", "artifact/report.md"],
           updatedAt: Date.now(),
@@ -44,7 +43,14 @@ describe("ProjectWorkbenchPanel", () => {
         artifactRecords={[]}
         selectedArtifactRecord={undefined}
         selectedFilePath="original/existing.md"
-        knownProjectFilesByPath={{}}
+        knownProjectFilesByPath={{
+          "original/existing.md": {
+            filename: "existing.md",
+            path: "original/existing.md",
+            size: 1,
+            modified_time: "2026-04-24 16:00:00",
+          },
+        }}
         projectFiles={[]}
         fileContent="content"
         selectedAttachPaths={[]}
@@ -58,6 +64,7 @@ describe("ProjectWorkbenchPanel", () => {
     );
 
     expect(screen.getByText("Background sync updated project files.")).toBeTruthy();
+    expect(screen.getByText("existing.md")).toBeTruthy();
     expect(
       screen.getByText("2 files changed in the background. Workbench stays on your current selection."),
     ).toBeTruthy();

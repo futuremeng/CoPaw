@@ -1,4 +1,4 @@
-import { Button, Card, Typography } from "antd";
+import { Button, Card, Tag, Typography } from "antd";
 import { useTranslation } from "react-i18next";
 import type {
   AgentProjectFileInfo,
@@ -9,8 +9,24 @@ import styles from "./index.module.less";
 
 const { Text } = Typography;
 
+function getArtifactDisplayPath(
+  artifact: ProjectPipelineArtifactRecord | undefined,
+  fallbackPath: string,
+): string {
+  return artifact?.published_path || fallbackPath;
+}
+
+function getArtifactKindColor(kind: ProjectPipelineArtifactRecord["kind"]): string {
+  if (kind === "source") {
+    return "default";
+  }
+  if (kind === "final") {
+    return "success";
+  }
+  return "processing";
+}
+
 interface ProjectWorkbenchPanelProps {
-  projectLabel: string;
   syncNotice: {
     changedPaths: string[];
     updatedAt: number;
@@ -33,7 +49,6 @@ interface ProjectWorkbenchPanelProps {
 }
 
 export default function ProjectWorkbenchPanel({
-  projectLabel,
   syncNotice,
   filesLoading,
   contentLoading,
@@ -54,6 +69,49 @@ export default function ProjectWorkbenchPanel({
   const { t } = useTranslation();
   const primaryChangedPath = syncNotice?.changedPaths[0] || "";
   const changedCount = syncNotice?.changedPaths.length || 0;
+  const selectedFileInfo = knownProjectFilesByPath[selectedFilePath]
+    || projectFiles.find((item) => item.path === selectedFilePath);
+  const selectedDisplayPath = selectedFilePath
+    ? getArtifactDisplayPath(selectedArtifactRecord, selectedFilePath)
+    : "";
+  const selectedSnapshotPath = selectedArtifactRecord?.published_path
+    ? selectedFilePath
+    : "";
+  const selectedArtifactTitle = selectedArtifactRecord?.name || selectedFilePath.split("/").pop() || "";
+  const workbenchTitle = selectedFilePath
+    ? (
+      <div className={styles.workbenchHeaderTitleWrap}>
+        <div className={styles.itemTitleRow}>
+          <div className={styles.itemTitle}>{selectedArtifactTitle}</div>
+          {selectedArtifactRecord ? (
+            <Tag color={getArtifactKindColor(selectedArtifactRecord.kind)}>
+              {selectedArtifactRecord.kind}
+            </Tag>
+          ) : null}
+        </div>
+        <div className={styles.workbenchHeaderMetaList}>
+          <div className={styles.itemMeta}>{selectedDisplayPath}</div>
+          {selectedSnapshotPath ? (
+            <div className={styles.itemMeta}>
+              {t("projects.artifacts.snapshotPath", "Run snapshot")}: {selectedSnapshotPath}
+            </div>
+          ) : null}
+          {selectedFileInfo ? (
+            <div className={styles.itemMeta}>
+              {formatBytes(selectedFileInfo.size)} · {selectedFileInfo.modified_time}
+            </div>
+          ) : null}
+          {selectedArtifactRecord?.producer_step_name ? (
+            <div className={styles.itemMeta}>
+              {t("projects.artifacts.producedBy", "Produced by: {{step}}", {
+                step: selectedArtifactRecord.producer_step_name,
+              })}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    )
+    : <span className={styles.sectionTitle}>{t("projects.selectFile", "Select a file to preview")}</span>;
 
   return (
     <Card
@@ -64,7 +122,7 @@ export default function ProjectWorkbenchPanel({
         minHeight: 0,
         overflow: "hidden",
       }}
-      title={<span className={styles.sectionTitle}>{t("projects.preview", "Workbench")}</span>}
+      title={workbenchTitle}
       styles={{
         body: {
           padding: 0,
@@ -74,11 +132,6 @@ export default function ProjectWorkbenchPanel({
           overflow: "hidden",
         },
       }}
-      extra={
-        <Text type="secondary" className={styles.panelExtraText}>
-          {projectLabel}
-        </Text>
-      }
     >
       {syncNotice ? (
         <div style={{ padding: "12px 12px 0" }}>
@@ -125,7 +178,6 @@ export default function ProjectWorkbenchPanel({
         filesLoading={filesLoading}
         contentLoading={contentLoading}
         artifactRecords={artifactRecords}
-        selectedArtifactRecord={selectedArtifactRecord}
         selectedFilePath={selectedFilePath}
         knownProjectFilesByPath={knownProjectFilesByPath}
         projectFiles={projectFiles}
@@ -135,7 +187,6 @@ export default function ProjectWorkbenchPanel({
         sendingSelectedFiles={sendingSelectedFiles}
         onToggleAutoAnalyze={onToggleAutoAnalyze}
         onSendSelectedFilesToChat={onSendSelectedFilesToChat}
-        formatBytes={formatBytes}
       />
     </Card>
   );

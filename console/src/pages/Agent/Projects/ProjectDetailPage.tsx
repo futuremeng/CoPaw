@@ -3482,7 +3482,6 @@ export default function ProjectDetailPage() {
                       <div className={styles.columnRight}>
                         <div className={styles.rightWorkbenchPrimary}>
                           <ProjectWorkbenchPanel
-                            projectLabel={selectedProject?.id || routeProjectId}
                             syncNotice={workbenchSyncNotice}
                             filesLoading={filesLoading}
                             contentLoading={contentLoading}
