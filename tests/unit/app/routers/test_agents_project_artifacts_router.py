@@ -2,6 +2,7 @@
 
 import io
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -334,15 +335,6 @@ def test_upload_project_file_auto_sync_writes_project_chunks(
 
     assert response.status_code == 200
 
-    chunk_path = (
-        workspace_dir
-        / "projects"
-        / project_id
-        / ".knowledge"
-        / "chunks"
-        / "original"
-        / "brief.txt.0.txt"
-    )
     index_path = (
         workspace_dir
         / "projects"
@@ -353,16 +345,24 @@ def test_upload_project_file_auto_sync_writes_project_chunks(
         / "index.json"
     )
 
-    assert chunk_path.exists()
-    assert chunk_path.read_text(encoding="utf-8") == "hello knowledge"
-
     payload = json.loads(index_path.read_text(encoding="utf-8"))
     chunk_paths = [item.get("chunk_path") for item in payload.get("chunks") or []]
-    assert "chunks/original/brief.txt.0.txt" in chunk_paths
+    uploaded_chunk_path = next(
+        path
+        for path in chunk_paths
+        if isinstance(path, str)
+        and re.fullmatch(
+            r"chunks/original/brief\.snapshot_[0-9]{8}T[0-9]{6}[0-9]{6}Z\.txt\.0\.txt",
+            path,
+        )
+    )
+    chunk_path = workspace_dir / "projects" / project_id / ".knowledge" / uploaded_chunk_path
+    assert chunk_path.exists()
+    assert chunk_path.read_text(encoding="utf-8") == "hello knowledge"
     uploaded_chunk = next(
         item
         for item in payload.get("chunks") or []
-        if item.get("chunk_path") == "chunks/original/brief.txt.0.txt"
+        if item.get("chunk_path") == uploaded_chunk_path
     )
     assert "text" not in uploaded_chunk
 
@@ -728,7 +728,6 @@ def test_distill_draft_uses_conversation_evidence_mode(
         "}\n",
         encoding="utf-8",
     )
-
     updated = client.put(
         f"/agents/default/projects/{project_id}/artifact-distill-mode",
         json={"artifact_distill_mode": "conversation_evidence"},

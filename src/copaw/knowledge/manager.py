@@ -114,6 +114,14 @@ _TEXTUAL_CONTENT_TYPE_MARKERS = (
     "application/x-javascript",
     "application/ld+json",
 )
+_TEXT_FILE_ENCODINGS = (
+    "utf-8",
+    "utf-8-sig",
+    "utf-16",
+    "utf-16-le",
+    "utf-16-be",
+    "gb18030",
+)
 _INTERNAL_EXCLUDED_DIRS = {
     ".knowledge",
     ".git",
@@ -146,6 +154,7 @@ class KnowledgeManager:
     ):
         self.working_dir = Path(working_dir).expanduser().resolve()
         self.root_dir = self.working_dir / knowledge_dirname
+        self.raw_dir = self.root_dir / "raw"
         self.chunks_dir = self.root_dir / "chunks"
         self.sources_dir = self.root_dir / "sources"
         self.catalog_path = self.root_dir / "catalog.json"
@@ -158,6 +167,7 @@ class KnowledgeManager:
         legacy_index_dir = self.root_dir / "indexes"
         if legacy_index_dir.exists():
             shutil.rmtree(legacy_index_dir, ignore_errors=True)
+        self.raw_dir.mkdir(parents=True, exist_ok=True)
         self.chunks_dir.mkdir(parents=True, exist_ok=True)
         self.sources_dir.mkdir(parents=True, exist_ok=True)
         self.uploads_dir.mkdir(parents=True, exist_ok=True)
@@ -293,7 +303,13 @@ class KnowledgeManager:
         running_config: Any | None = None,
     ) -> dict[str, Any]:
         """Index a single source into chunked JSON files."""
-        documents = self._load_documents(source, config)
+        indexed_at = datetime.now(UTC).isoformat()
+        live_documents = self._load_documents(source, config)
+        documents = self._prepare_documents_for_indexing(
+            source,
+            live_documents,
+            indexed_at=indexed_at,
+        )
         chunks = self._chunk_documents(
             documents,
             self._resolve_chunk_size(config, running_config),
@@ -303,8 +319,9 @@ class KnowledgeManager:
         processing_fingerprint = self.compute_processing_fingerprint(config, running_config)
         payload = {
             "source": source.model_dump(mode="json"),
-            "indexed_at": datetime.now(UTC).isoformat(),
-            "document_count": len(documents),
+            "indexed_at": indexed_at,
+            "document_count": len(live_documents),
+            "snapshot_count": len(documents),
             "chunk_count": len(chunks),
             "sentence_count": sentence_count,
             "char_count": document_stats["char_count"],
@@ -313,10 +330,11 @@ class KnowledgeManager:
             "error": None,
             "chunks": chunks,
         }
-        self._write_source_storage(source, payload, documents)
+        self._write_source_storage(source, payload, live_documents)
         return {
             "source_id": source.id,
-            "document_count": len(documents),
+            "document_count": len(live_documents),
+            "snapshot_count": len(documents),
             "chunk_count": len(chunks),
             "sentence_count": sentence_count,
             "char_count": document_stats["char_count"],
@@ -346,6 +364,9 @@ class KnowledgeManager:
             self._delete_chunk_path(chunk_path)
         payload = self._load_index_payload_safe(source_id)
         self._delete_chunks_from_payload(payload)
+        raw_dir = self._source_raw_dir(source_id)
+        if raw_dir.exists():
+            shutil.rmtree(raw_dir, ignore_errors=True)
         source_dir = self._source_dir(source_id)
         if source_dir.exists():
             shutil.rmtree(source_dir, ignore_errors=True)
@@ -361,6 +382,7 @@ class KnowledgeManager:
             shutil.rmtree(self.root_dir, ignore_errors=True)
 
         # Recreate expected directory structure after cleanup.
+        self.raw_dir.mkdir(parents=True, exist_ok=True)
         self.chunks_dir.mkdir(parents=True, exist_ok=True)
         self.sources_dir.mkdir(parents=True, exist_ok=True)
         self.uploads_dir.mkdir(parents=True, exist_ok=True)
@@ -465,6 +487,7 @@ class KnowledgeManager:
             "indexed": True,
             "indexed_at": payload.get("indexed_at"),
             "document_count": payload.get("document_count", len(documents)),
+            "snapshot_count": payload.get("snapshot_count", len(documents)),
             "chunk_count": payload.get("chunk_count", len(chunks)),
             "sentence_count": payload.get(
                 "sentence_count",
@@ -493,6 +516,12 @@ class KnowledgeManager:
     def _source_chunk_manifest_path(self, source_id: str) -> Path:
         return self._source_dir(source_id) / "chunk-manifest.json"
 
+    def _source_snapshot_manifest_path(self, source_id: str) -> Path:
+        return self._source_dir(source_id) / "snapshot-manifest.json"
+
+    def _source_raw_dir(self, source_id: str) -> Path:
+        return self.raw_dir / self._safe_name(source_id)
+
     def _load_source_chunk_manifest(self, source_id: str) -> set[str]:
         path = self._source_chunk_manifest_path(source_id)
         if not path.exists():
@@ -519,6 +548,61 @@ class KnowledgeManager:
                     "source_id": source_id,
                     "chunk_paths": sorted(chunk_paths),
                     "updated_at": datetime.now(UTC).isoformat(),
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+    def _load_source_snapshot_manifest(self, source_id: str) -> list[dict[str, str]]:
+        path = self._source_snapshot_manifest_path(source_id)
+        if not path.exists():
+            return []
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return []
+        if not isinstance(payload, dict):
+            return []
+        snapshots = payload.get("snapshots")
+        if not isinstance(snapshots, list):
+            return []
+        results: list[dict[str, str]] = []
+        for item in snapshots:
+            if not isinstance(item, dict):
+                continue
+            snapshot_path = str(item.get("snapshot_path") or "").strip()
+            document_path = str(item.get("document_path") or "").strip()
+            if not snapshot_path or not document_path:
+                continue
+            results.append(
+                {
+                    "document_path": document_path,
+                    "relative_path": str(item.get("relative_path") or "").strip(),
+                    "title": str(item.get("title") or Path(document_path).name or document_path),
+                    "snapshot_path": snapshot_path,
+                    "snapshot_relative_path": str(item.get("snapshot_relative_path") or "").strip(),
+                    "snapshot_at": str(item.get("snapshot_at") or "").strip(),
+                }
+            )
+        results.sort(
+            key=lambda item: (
+                item.get("document_path") or "",
+                item.get("snapshot_at") or "",
+                item.get("snapshot_path") or "",
+            )
+        )
+        return results
+
+    def _write_source_snapshot_manifest(self, source_id: str, snapshots: list[dict[str, str]]) -> None:
+        manifest_path = self._source_snapshot_manifest_path(source_id)
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "source_id": source_id,
+                    "snapshots": snapshots,
                 },
                 ensure_ascii=False,
                 indent=2,
@@ -621,15 +705,29 @@ class KnowledgeManager:
             safe_parts = [self._safe_name(source.id)]
         return Path(*safe_parts)
 
+    def _normalize_snapshot_chunk_path(self, snapshot_relative_path: str) -> Path:
+        safe_parts = [
+            self._safe_name(part)
+            for part in Path(snapshot_relative_path).parts
+            if part not in {"", ".", "..", "/", "\\"}
+        ]
+        if not safe_parts:
+            safe_parts = ["knowledge"]
+        return Path(*safe_parts)
+
     def _build_chunk_relative_path(
         self,
         source: KnowledgeSourceSpec,
         chunk: dict[str, Any],
     ) -> Path:
-        normalized_doc_path = self._normalize_chunk_document_path(
-            source,
-            str(chunk.get("document_path") or ""),
-        )
+        snapshot_relative_path = str(chunk.get("snapshot_relative_path") or "").strip()
+        if snapshot_relative_path:
+            normalized_doc_path = self._normalize_snapshot_chunk_path(snapshot_relative_path)
+        else:
+            normalized_doc_path = self._normalize_chunk_document_path(
+                source,
+                str(chunk.get("document_path") or ""),
+            )
         parent = normalized_doc_path.parent
         basename = self._safe_name(normalized_doc_path.name or source.id)
         chunk_id = str(chunk.get("chunk_id") or "")
@@ -714,7 +812,6 @@ class KnowledgeManager:
             self._build_source_markdown(source, documents),
             encoding="utf-8",
         )
-        self._sync_raw_source_assets(source)
         self._update_catalog_entry(source, payload)
 
     def _update_catalog_entry(
@@ -795,44 +892,134 @@ class KnowledgeManager:
             )
         return "\n".join(lines)
 
-    def _sync_raw_source_assets(self, source: KnowledgeSourceSpec) -> None:
-        raw_root = self._source_dir(source.id) / "raw"
-        media_root = self._source_dir(source.id) / "media"
+    def _snapshot_timestamp_token(self, timestamp: str) -> str:
+        raw = str(timestamp or "").strip()
+        if not raw:
+            return datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+        try:
+            normalized = raw.replace("Z", "+00:00")
+            dt = datetime.fromisoformat(normalized)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=UTC)
+            return dt.astimezone(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+        except ValueError:
+            return re.sub(r"[^0-9A-Za-z]+", "", raw) or datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
 
+    def _snapshot_filename(self, filename: str, indexed_at: str) -> str:
+        path = Path(filename or "knowledge")
+        token = self._snapshot_timestamp_token(indexed_at)
+        suffix = path.suffix
+        stem = path.stem or path.name or "knowledge"
+        return f"{stem}.snapshot_{token}{suffix}"
+
+    def _build_snapshot_relative_path(
+        self,
+        source: KnowledgeSourceSpec,
+        document: dict[str, Any],
+        *,
+        indexed_at: str,
+    ) -> Path:
+        relative_path = str(document.get("relative_path") or "").strip()
+        if source.type == "directory" and relative_path:
+            parent = Path(relative_path).parent
+            filename = Path(relative_path).name
+            target = parent if str(parent) not in {"", "."} else Path()
+            return target / self._snapshot_filename(filename, indexed_at)
+
+        source_path = str(document.get("source_path") or document.get("path") or source.location or source.id)
+        filename = Path(source_path).name or self._safe_name(source.id)
+        return Path(self._snapshot_filename(filename, indexed_at))
+
+    def _persist_source_snapshots(
+        self,
+        source: KnowledgeSourceSpec,
+        documents: list[dict[str, Any]],
+        *,
+        indexed_at: str,
+    ) -> list[dict[str, str]]:
         if source.type not in {"file", "directory"}:
-            return
-        if not source.location:
-            return
+            return []
 
-        source_path = Path(source.location).expanduser()
-        if not source_path.exists():
-            return
+        raw_root = self._source_raw_dir(source.id)
+        raw_root.mkdir(parents=True, exist_ok=True)
+        existing = self._load_source_snapshot_manifest(source.id)
+        seen = {
+            (item.get("document_path") or "", item.get("snapshot_path") or "")
+            for item in existing
+        }
+        manifest = list(existing)
+        results: list[dict[str, str]] = []
 
-        if source.type == "file" and source_path.is_file():
-            target_file = raw_root / source_path.name
-            try:
-                shutil.copy2(source_path, target_file)
-                self._write_media_semantic_if_needed(target_file, media_root)
-            except Exception:
-                logger.warning("Failed to sync raw file for source %s", source.id)
-            return
+        for document in documents:
+            source_path_raw = str(document.get("source_path") or document.get("path") or "").strip()
+            if not source_path_raw:
+                continue
+            source_path = Path(source_path_raw).expanduser().resolve()
+            if not source_path.exists() or not source_path.is_file():
+                continue
+            snapshot_relative = self._build_snapshot_relative_path(
+                source,
+                document,
+                indexed_at=indexed_at,
+            )
+            target_path = raw_root / snapshot_relative
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_path, target_path)
+            snapshot_entry = {
+                "document_path": str(document.get("path") or source_path.as_posix()),
+                "relative_path": str(document.get("relative_path") or "").strip(),
+                "title": str(document.get("title") or source_path.name),
+                "snapshot_path": target_path.as_posix(),
+                "snapshot_relative_path": snapshot_relative.as_posix(),
+                "snapshot_at": indexed_at,
+            }
+            key = (snapshot_entry["document_path"], snapshot_entry["snapshot_path"])
+            if key not in seen:
+                manifest.append(snapshot_entry)
+                seen.add(key)
+            results.append(snapshot_entry)
 
-        if source.type == "directory" and source_path.is_dir():
-            target_dir = raw_root / source_path.name
-            if target_dir.exists():
-                shutil.rmtree(target_dir, ignore_errors=True)
-            try:
-                shutil.copytree(
-                    source_path,
-                    target_dir,
-                    dirs_exist_ok=True,
-                    ignore=shutil.ignore_patterns(self.root_dir.name),
-                )
-                for file_path in target_dir.rglob("*"):
-                    if file_path.is_file():
-                        self._write_media_semantic_if_needed(file_path, media_root)
-            except Exception:
-                logger.warning("Failed to sync raw directory for source %s", source.id)
+        if manifest:
+            self._write_source_snapshot_manifest(source.id, manifest)
+        return manifest
+
+    def _load_snapshot_documents(
+        self,
+        source: KnowledgeSourceSpec,
+    ) -> list[dict[str, Any]]:
+        documents: list[dict[str, Any]] = []
+        for snapshot in self._load_source_snapshot_manifest(source.id):
+            snapshot_path_raw = str(snapshot.get("snapshot_path") or "").strip()
+            if not snapshot_path_raw:
+                continue
+            snapshot_path = Path(snapshot_path_raw)
+            text = self._read_local_text(snapshot_path)
+            if not text:
+                continue
+            documents.append(
+                {
+                    "path": str(snapshot.get("document_path") or source.id),
+                    "title": str(snapshot.get("title") or Path(snapshot_path_raw).name),
+                    "text": text,
+                    "snapshot_path": snapshot_path_raw,
+                    "snapshot_relative_path": str(snapshot.get("snapshot_relative_path") or "").strip(),
+                    "snapshot_at": str(snapshot.get("snapshot_at") or "").strip(),
+                }
+            )
+        return documents
+
+    def _prepare_documents_for_indexing(
+        self,
+        source: KnowledgeSourceSpec,
+        documents: list[dict[str, Any]],
+        *,
+        indexed_at: str,
+    ) -> list[dict[str, Any]]:
+        if source.type not in {"file", "directory"}:
+            return documents
+        self._persist_source_snapshots(source, documents, indexed_at=indexed_at)
+        snapshot_documents = self._load_snapshot_documents(source)
+        return snapshot_documents or documents
 
     def _write_media_semantic_if_needed(self, file_path: Path, media_root: Path) -> None:
         suffix = file_path.suffix.lower()
@@ -914,7 +1101,7 @@ class KnowledgeManager:
         directory: Path,
         source: KnowledgeSourceSpec,
         config: KnowledgeConfig,
-    ) -> list[dict[str, str]]:
+    ) -> list[dict[str, Any]]:
         root = directory.expanduser().resolve()
         if not root.exists() or not root.is_dir():
             raise FileNotFoundError(f"Knowledge directory not found: {root}")
@@ -928,15 +1115,19 @@ class KnowledgeManager:
             if not self._is_allowed_path(relative, config):
                 continue
             try:
-                documents.append(self._read_file_document(path, config))
+                document = self._read_file_document(path, config)
+                document["relative_path"] = relative
+                document["source_path"] = str(path.resolve())
+                documents.append(document)
             except ValueError as exc:
-                if "exceeds max size" not in str(exc):
+                if "exceeds max size" not in str(exc) and "not decodable as text" not in str(exc):
                     raise
-                logger.warning(
-                    "Skip oversized knowledge file: %s (max=%s bytes)",
-                    path,
-                    config.index.max_file_size,
-                )
+                if "exceeds max size" in str(exc):
+                    logger.warning(
+                        "Skip oversized knowledge file: %s (max=%s bytes)",
+                        path,
+                        config.index.max_file_size,
+                    )
         return documents
 
     def save_uploaded_file(self, source_id: str, filename: str, data: bytes) -> Path:
@@ -1499,19 +1690,34 @@ class KnowledgeManager:
         self,
         path: Path,
         config: KnowledgeConfig,
-    ) -> dict[str, str]:
+    ) -> dict[str, Any]:
         file_path = path.expanduser().resolve()
         if not file_path.exists() or not file_path.is_file():
             raise FileNotFoundError(f"Knowledge file not found: {file_path}")
         if file_path.stat().st_size > config.index.max_file_size:
             raise ValueError(f"Knowledge file exceeds max size: {file_path}")
+        text = self._read_text_file_content(file_path)
+        if text is None:
+            raise ValueError(f"Knowledge file is not decodable as text: {file_path}")
         return {
             "path": str(file_path),
+            "source_path": str(file_path),
             "title": file_path.name,
-            "text": self._normalize_text(
-                file_path.read_text(encoding="utf-8", errors="ignore"),
-            ),
+            "text": text,
         }
+
+    def _read_text_file_content(self, path: Path) -> str | None:
+        try:
+            raw = path.read_bytes()
+        except Exception:
+            return None
+        for encoding in _TEXT_FILE_ENCODINGS:
+            try:
+                decoded = raw.decode(encoding)
+                return self._normalize_text(decoded)
+            except UnicodeDecodeError:
+                continue
+        return None
 
     @staticmethod
     def _read_url_document(url: str) -> dict[str, str]:
@@ -2549,8 +2755,8 @@ class KnowledgeManager:
             resolved = path.expanduser().resolve()
             if not resolved.exists() or not resolved.is_file():
                 return ""
-            raw = resolved.read_text(encoding="utf-8", errors="ignore")
-            return self._normalize_text(raw)
+            text = self._read_text_file_content(resolved)
+            return text or ""
         except Exception:
             return ""
 
@@ -2763,7 +2969,7 @@ class KnowledgeManager:
 
     @staticmethod
     def _chunk_documents(
-        documents: list[dict[str, str]],
+        documents: list[dict[str, Any]],
         chunk_size: int,
     ) -> list[dict[str, Any]]:
         chunks: list[dict[str, Any]] = []
@@ -2771,6 +2977,7 @@ class KnowledgeManager:
             text = document["text"]
             if not text:
                 continue
+            chunk_subject = str(document.get("snapshot_path") or document["path"])
             for index, start in enumerate(range(0, len(text), chunk_size)):
                 chunk_text = text[start : start + chunk_size]
                 if not chunk_text.strip():
@@ -2779,9 +2986,12 @@ class KnowledgeManager:
                 normalized_chunk_text = "\n".join(sentences) if sentences else chunk_text.strip()
                 chunks.append(
                     {
-                        "chunk_id": f"{document['path']}::{index}",
+                        "chunk_id": f"{chunk_subject}::{index}",
                         "document_path": document["path"],
                         "document_title": document["title"],
+                        "snapshot_path": document.get("snapshot_path"),
+                        "snapshot_relative_path": document.get("snapshot_relative_path"),
+                        "snapshot_at": document.get("snapshot_at"),
                         "text": normalized_chunk_text,
                         "sentence_count": len(sentences),
                     },

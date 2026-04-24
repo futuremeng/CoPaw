@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import json
+import re
 from pathlib import Path
 from unittest.mock import patch
 
@@ -94,10 +95,12 @@ def test_directory_source_raw_sync_ignores_internal_knowledge_dir(tmp_path: Path
     manager = KnowledgeManager(project_root, knowledge_dirname=".knowledge")
     manager.index_source(source, config)
 
-    raw_dir = manager.get_source_storage_dir(source.id) / "raw" / project_root.name
+    raw_dir = manager.raw_dir / source.id / "original"
+    snapshots = list(raw_dir.glob("note.snapshot_*.md"))
 
-    assert (raw_dir / "original" / "note.md").exists()
-    assert not (raw_dir / ".knowledge").exists()
+    assert len(snapshots) == 1
+    assert snapshots[0].read_text(encoding="utf-8") == "hello raw sync"
+    assert not any(path.name == ".knowledge" for path in manager.raw_dir.rglob("*"))
 
 
 def test_chunk_documents_split_sentences_and_count(tmp_path: Path):
@@ -215,9 +218,55 @@ def test_directory_source_writes_chunks_under_relative_document_path(tmp_path: P
     chunk = payload["chunks"][0]
     chunk_path = tmp_path / "knowledge" / chunk["chunk_path"]
 
-    assert chunk["chunk_path"] == "chunks/docs/README.md.0.txt"
+    assert re.fullmatch(
+        r"chunks/docs/README\.snapshot_[0-9]{8}T[0-9]{6}[0-9]{6}Z\.md\.0\.txt",
+        chunk["chunk_path"],
+    )
     assert chunk_path.exists()
     assert chunk_path.read_text(encoding="utf-8") == "第一句。\n第二句!"
+
+
+def test_directory_source_reindex_retains_old_snapshots_and_chunks(tmp_path: Path):
+    project_root = tmp_path / "project-retain"
+    docs_dir = project_root / "docs"
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    source_file = docs_dir / "README.md"
+    source_file.write_text("alpha version", encoding="utf-8")
+
+    config = Config().knowledge
+    config.index.chunk_size = 10_000
+    source = KnowledgeSourceSpec(
+        id="project-retain-source",
+        name="Project Retain Source",
+        type="directory",
+        location=str(project_root),
+        content="",
+        enabled=True,
+        recursive=True,
+        tags=["project"],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    manager.index_source(source, config)
+
+    source_file.write_text("beta version", encoding="utf-8")
+    manager.index_source(source, config)
+
+    raw_snapshots = sorted((manager.raw_dir / source.id / "docs").glob("README.snapshot_*.md"))
+    payload = json.loads(
+        (manager.get_source_storage_dir(source.id) / "index.json").read_text(encoding="utf-8")
+    )
+    chunk_paths = sorted(chunk["chunk_path"] for chunk in payload["chunks"])
+
+    assert len(raw_snapshots) == 2
+    assert raw_snapshots[0].read_text(encoding="utf-8") == "alpha version"
+    assert raw_snapshots[1].read_text(encoding="utf-8") == "beta version"
+    assert payload["document_count"] == 1
+    assert payload["snapshot_count"] == 2
+    assert len(chunk_paths) == 2
+    assert all(path.startswith("chunks/docs/README.snapshot_") for path in chunk_paths)
+    assert all((tmp_path / "knowledge" / path).exists() for path in chunk_paths)
 
 
 def test_delete_index_removes_chunk_files(tmp_path: Path):
