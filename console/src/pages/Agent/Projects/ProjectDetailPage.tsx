@@ -37,7 +37,6 @@ import {
   getProjectKnowledgeSemanticReasonLabel,
 } from "./projectKnowledgeSyncUi";
 import ProjectOverviewCard from "./ProjectOverviewCard";
-import ProjectStageMenu from "./ProjectStageMenu";
 import ProjectUploadModal from "./ProjectUploadModal";
 import ProjectWorkbenchPanel from "./ProjectWorkbenchPanel";
 import ProjectMetricsPanel from "./ProjectMetricsPanel";
@@ -104,15 +103,12 @@ import type {
   QualityLoopJobStatus,
 } from "../../../api/types";
 import type { ChatSpec } from "../../../api/types/chat";
-import { useTheme } from "../../../contexts/ThemeContext";
 import { useAgentStore } from "../../../stores/agentStore";
 import styles from "./index.module.less";
 
 const { Text } = Typography;
 
-const LEFT_STAGE_RAIL_TRANSITION_MS = 220;
 const LEFT_PANE_EXPANDED_SIZE = 440;
-const LEFT_PANE_COLLAPSED_SIZE = 360;
 const LEFT_PANE_MIN_SIZE = 320;
 const WORKBENCH_PANE_DEFAULT_SIZE = 620;
 const WORKBENCH_PANE_MIN_SIZE = 360;
@@ -163,13 +159,6 @@ const STAGE_FILTERS: Record<ProjectStageKey, ProjectFileFilterKey[]> = {
   knowledge: ["markdown", "text", "script", "otherType"],
   output: ["agent", "skill", "flow", "case"],
   builtin: ["builtin"],
-};
-
-const DEFAULT_STAGE_FILTER: Record<ProjectStageKey, ProjectFileFilterKey> = {
-  source: "original",
-  knowledge: "markdown",
-  output: "agent",
-  builtin: "builtin",
 };
 
 function resolveStageFromFilter(filter: ProjectFileFilterKey | ""): ProjectStageKey {
@@ -442,20 +431,6 @@ function getProjectPipelineRunIdFromPath(path: string): string {
   return segments[2] || "";
 }
 
-function getProjectTreeRootDirectoryFileCount(
-  nodes: AgentProjectFileTreeNode[],
-  dirName: string,
-): number | null {
-  const normalizedDirName = normalizeProjectPath(dirName);
-  const matched = nodes.find(
-    (item) => item.is_directory && normalizeProjectPath(item.path) === normalizedDirName,
-  );
-  if (!matched) {
-    return null;
-  }
-  return matched.descendant_file_count;
-}
-
 function isSucceededStatus(status: string): boolean {
   return status === "succeeded" || status === "completed";
 }
@@ -482,7 +457,6 @@ function getRealtimeBadgeStatus(status: ProjectRealtimeConnectionStatus) {
 }
 
 export default function ProjectDetailPage() {
-  const { isDark } = useTheme();
   const { t, i18n } = useTranslation();
   const translateWithFallback = useCallback(
     (key: string, fallback: string) => t(key, fallback),
@@ -552,8 +526,6 @@ export default function ProjectDetailPage() {
   const [selectedAttachPaths, setSelectedAttachPaths] = useState<string[]>([]);
   const [sendingSelectedFiles, setSendingSelectedFiles] = useState(false);
   const [autoAnalyzeOnAttach, setAutoAnalyzeOnAttach] = useState(true);
-  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(true);
-  const [leftPanelExpandedMenuReady, setLeftPanelExpandedMenuReady] = useState(false);
   const [activeStage, setActiveStage] = useState<ProjectStageKey>("source");
   const [knowledgeModuleCollapsed, setKnowledgeModuleCollapsed] = useState(false);
   const [knowledgeDockTab, setKnowledgeDockTab] = useState<KnowledgeDockTabKey>("explore");
@@ -1026,11 +998,6 @@ export default function ProjectDetailPage() {
     [effectiveProjectFiles, projectFileSummary?.visible_files],
   );
 
-  const builtInProjectFiles = useMemo(
-    () => effectiveProjectFiles.filter((item) => isBuiltInProjectFile(item.path)),
-    [effectiveProjectFiles],
-  );
-
   const visibleProjectFiles = useMemo(
     () => effectiveProjectFiles.filter((item) => !isBuiltInProjectFile(item.path)),
     [effectiveProjectFiles],
@@ -1040,118 +1007,6 @@ export default function ProjectDetailPage() {
     () => computeProjectFileInventorySummary(visibleProjectFiles),
     [visibleProjectFiles],
   );
-
-  const knowledgeMetrics = visibleProjectSummary.knowledgeMetrics;
-
-  const projectTreeRootDirCounts = useMemo(
-    () => ({
-      original: getProjectTreeRootDirectoryFileCount(projectTreeNodes, "original"),
-      intermediate: getProjectTreeRootDirectoryFileCount(projectTreeNodes, "intermediate"),
-      output: getProjectTreeRootDirectoryFileCount(projectTreeNodes, "output"),
-    }),
-    [projectTreeNodes],
-  );
-
-  const leafCounts = useMemo(() => {
-    return {
-      original:
-        projectFileSummary?.original_files
-        ?? projectTreeRootDirCounts.original
-        ?? visibleProjectSummary.originalFiles,
-      intermediate:
-        projectFileSummary?.intermediate_files
-        ?? projectTreeRootDirCounts.intermediate
-        ?? visibleProjectSummary.intermediateFiles,
-      artifact:
-        projectFileSummary?.artifact_files
-        ?? projectTreeRootDirCounts.output
-        ?? visibleProjectSummary.artifactFiles,
-      markdown: projectFileSummary?.markdown_files ?? knowledgeMetrics.markdownFiles,
-      text: projectFileSummary?.text_files ?? knowledgeMetrics.textFiles,
-      script: projectFileSummary?.script_files ?? knowledgeMetrics.scriptFiles,
-      otherType: projectFileSummary?.other_type_files ?? knowledgeMetrics.otherTypeFiles,
-      agent:
-        projectFileSummary?.agent_files
-        ?? effectiveProjectFiles.filter((item) => item.path.replace(/\\/g, "/").startsWith(".agent/")).length,
-      skill:
-        projectFileSummary?.skill_files
-        ?? effectiveProjectFiles.filter((item) => item.path.replace(/\\/g, "/").startsWith(".skills/")).length,
-      flow:
-        projectFileSummary?.flow_files
-        ?? effectiveProjectFiles.filter((item) => {
-          const parts = item.path.replace(/\\/g, "/").split("/").filter(Boolean);
-          return parts.length >= 4 && parts[0] === "pipelines" && parts[2] === "pipeline";
-        }).length,
-      case:
-        projectFileSummary?.case_files
-        ?? effectiveProjectFiles.filter((item) => {
-          const parts = item.path.replace(/\\/g, "/").split("/").filter(Boolean);
-          return parts.length >= 4 && parts[0] === "pipelines" && parts[2] === "runs";
-        }).length,
-      builtin: projectFileSummary?.builtin_files ?? builtInProjectFiles.length,
-    };
-  }, [
-    effectiveProjectFiles,
-    builtInProjectFiles.length,
-    knowledgeMetrics,
-    projectFileSummary?.agent_files,
-    projectFileSummary?.artifact_files,
-    projectFileSummary?.builtin_files,
-    projectFileSummary?.case_files,
-    projectFileSummary?.flow_files,
-    projectFileSummary?.intermediate_files,
-    projectFileSummary?.markdown_files,
-    projectFileSummary?.other_type_files,
-    projectFileSummary?.original_files,
-    projectFileSummary?.script_files,
-    projectFileSummary?.skill_files,
-    projectFileSummary?.text_files,
-    projectTreeRootDirCounts.intermediate,
-    projectTreeRootDirCounts.original,
-    projectTreeRootDirCounts.output,
-    visibleProjectSummary.artifactFiles,
-    visibleProjectSummary.intermediateFiles,
-    visibleProjectSummary.originalFiles,
-  ]);
-
-  const stageCounts = useMemo(() => {
-    return {
-      source: projectFileSummary?.visible_files ?? visibleProjectSummary.totalFiles,
-      knowledge: leafCounts.markdown + leafCounts.text + leafCounts.script + leafCounts.otherType,
-      output: leafCounts.agent + leafCounts.skill + leafCounts.flow + leafCounts.case,
-      outputRuns: pipelineRuns.length,
-      builtin: projectFileSummary?.builtin_files ?? builtInProjectFiles.length,
-    };
-  }, [
-    builtInProjectFiles.length,
-    leafCounts.agent,
-    leafCounts.case,
-    leafCounts.flow,
-    leafCounts.markdown,
-    leafCounts.otherType,
-    leafCounts.script,
-    leafCounts.skill,
-    leafCounts.text,
-    pipelineRuns.length,
-    projectFileSummary?.builtin_files,
-    projectFileSummary?.visible_files,
-    visibleProjectSummary.totalFiles,
-  ]);
-
-  const handleSelectStage = useCallback((stage: ProjectStageKey) => {
-    pipelineManualActivationRef.current = stage === "output";
-    setActiveStage(stage);
-    const stageFilters = STAGE_FILTERS[stage];
-    setSelectedMetricFilter((prev) => {
-      if (prev && stageFilters.includes(prev)) {
-        return prev;
-      }
-      return DEFAULT_STAGE_FILTER[stage];
-    });
-    if (leftPanelCollapsed) {
-      setLeftPanelCollapsed(false);
-    }
-  }, [leftPanelCollapsed]);
 
   const flushWorkspaceResize = useCallback((sizes: number[]) => {
     if (sizes.length !== 3) {
@@ -1234,19 +1089,6 @@ export default function ProjectDetailPage() {
       pendingWorkspaceSizesRef.current = null;
       pendingKnowledgeDockSizesRef.current = null;
     };
-  }, []);
-
-  const handleToggleLeftPanel = useCallback(() => {
-    setLeftPanelCollapsed((prev) => {
-      const next = !prev;
-      setLeftPaneSize((current) => {
-        if (next) {
-          return Math.min(current, LEFT_PANE_COLLAPSED_SIZE);
-        }
-        return Math.max(current, LEFT_PANE_EXPANDED_SIZE);
-      });
-      return next;
-    });
   }, []);
 
   const handleKnowledgeDockCollapseChange = useCallback((activeKey: string | string[]) => {
@@ -2569,33 +2411,23 @@ export default function ProjectDetailPage() {
     try {
       const raw = window.localStorage.getItem(storageKey);
       const parsed = parseProjectLayoutPrefs(raw);
-      setLeftPanelCollapsed(parsed.leftPanelCollapsed);
       setActiveStage(parsed.activeStage);
       setKnowledgeModuleCollapsed(parsed.knowledgeModuleCollapsed);
       setKnowledgeDockTab(parsed.knowledgeDockTab);
       setSelectedMetricFilter(parsed.selectedMetricFilter);
       setTreeDisplayMode(parsed.treeDisplayMode);
-      setLeftPaneSize(
-        parsed.leftPanelCollapsed
-          ? Math.min(parsed.leftPaneSize, LEFT_PANE_COLLAPSED_SIZE)
-          : Math.max(parsed.leftPaneSize, LEFT_PANE_MIN_SIZE),
-      );
+      setLeftPaneSize(Math.max(parsed.leftPaneSize, LEFT_PANE_MIN_SIZE));
       setWorkbenchPaneSize(Math.max(parsed.workbenchPaneSize, WORKBENCH_PANE_MIN_SIZE));
       setChatPaneSize(Math.max(parsed.chatPaneSize, CHAT_PANE_MIN_SIZE));
       setKnowledgeDockSize(Math.max(parsed.knowledgeDockSize, KNOWLEDGE_DOCK_MIN_SIZE));
     } catch {
       const parsed = parseProjectLayoutPrefs(null);
-      setLeftPanelCollapsed(parsed.leftPanelCollapsed);
       setActiveStage(parsed.activeStage);
       setKnowledgeModuleCollapsed(parsed.knowledgeModuleCollapsed);
       setKnowledgeDockTab(parsed.knowledgeDockTab);
       setSelectedMetricFilter(parsed.selectedMetricFilter);
       setTreeDisplayMode(parsed.treeDisplayMode);
-      setLeftPaneSize(
-        parsed.leftPanelCollapsed
-          ? Math.min(parsed.leftPaneSize, LEFT_PANE_COLLAPSED_SIZE)
-          : Math.max(parsed.leftPaneSize, LEFT_PANE_MIN_SIZE),
-      );
+      setLeftPaneSize(Math.max(parsed.leftPaneSize, LEFT_PANE_MIN_SIZE));
       setWorkbenchPaneSize(Math.max(parsed.workbenchPaneSize, WORKBENCH_PANE_MIN_SIZE));
       setChatPaneSize(Math.max(parsed.chatPaneSize, CHAT_PANE_MIN_SIZE));
       setKnowledgeDockSize(Math.max(parsed.knowledgeDockSize, KNOWLEDGE_DOCK_MIN_SIZE));
@@ -2615,25 +2447,12 @@ export default function ProjectDetailPage() {
   }, [activeStage, selectedMetricFilter]);
 
   useEffect(() => {
-    if (leftPanelCollapsed) {
-      setLeftPanelExpandedMenuReady(false);
-      return;
-    }
-    const timer = window.setTimeout(() => {
-      setLeftPanelExpandedMenuReady(true);
-    }, LEFT_STAGE_RAIL_TRANSITION_MS);
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [leftPanelCollapsed]);
-
-  useEffect(() => {
     if (!layoutPrefsLoadedRef.current) {
       return;
     }
     const storageKey = buildProjectLayoutStorageKey(routeProjectId);
     const payload: ProjectDetailLayoutPrefs = {
-      leftPanelCollapsed,
+      leftPanelCollapsed: false,
       activeStage,
       knowledgeModuleCollapsed,
       knowledgeDockTab,
@@ -2656,7 +2475,6 @@ export default function ProjectDetailPage() {
     knowledgeModuleCollapsed,
     knowledgeDockSize,
     leftPaneSize,
-    leftPanelCollapsed,
     routeProjectId,
     selectedMetricFilter,
     treeDisplayMode,
@@ -3590,22 +3408,7 @@ export default function ProjectDetailPage() {
                     defaultSize={LEFT_PANE_EXPANDED_SIZE}
                   >
                     <div className={styles.splitterPanel}>
-                      <div className={`${styles.columnLeft} ${leftPanelCollapsed ? styles.columnLeftCollapsed : ""}`}>
-                        <ProjectStageMenu
-                          isDark={isDark}
-                          leftPanelCollapsed={leftPanelCollapsed}
-                          leftPanelExpandedMenuReady={leftPanelExpandedMenuReady}
-                          activeStage={activeStage}
-                          selectedMetricFilter={selectedMetricFilter}
-                          stageCounts={stageCounts}
-                          leafCounts={leafCounts}
-                          onToggleLeftPanel={handleToggleLeftPanel}
-                          onSelectStage={handleSelectStage}
-                          onSelectMetricFilter={(filter) => {
-                            setSelectedMetricFilter(filter);
-                          }}
-                        />
-
+                        <div className={styles.columnLeft}>
                         <div className={styles.columnStack}>
                           <ProjectOverviewCard
                             selectedProject={selectedProject}
