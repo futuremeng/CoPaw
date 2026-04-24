@@ -171,7 +171,7 @@ export default function ProjectsListPage() {
         name: values.name.trim(),
         description: values.description?.trim() || "",
         status: "active",
-        data_dir: "data",
+        data_dir: ".data",
         tags,
       });
       message.success(
