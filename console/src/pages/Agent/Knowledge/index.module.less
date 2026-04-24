@@ -470,6 +470,14 @@
   backdrop-filter: blur(4px);
 }
 
+.graphFloatingToolbarDropdown {
+  :global(.ant-select-dropdown),
+  :global(.qwenpaw-select-dropdown),
+  :global(.copaw-select-dropdown) {
+    border-radius: 10px;
+  }
+}
+
 .graphCanvas {
   width: 100%;
   height: 100%;
@@ -705,6 +713,100 @@
 :global(.dark-mode) {
   .graphTableRowSelected :global(td) {
     background: rgba(64, 169, 255, 0.2) !important;
+  }
+
+  .graphFloatingToolbar {
+    border-color: rgba(255, 255, 255, 0.14);
+    background: rgba(22, 22, 22, 0.82);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+    color: rgba(255, 248, 240, 0.88);
+
+    :global(.ant-space-item),
+    :global(.qwenpaw-space-item),
+    :global(.copaw-space-item),
+    :global(.ant-space-item span),
+    :global(.qwenpaw-space-item span),
+    :global(.copaw-space-item span) {
+      color: rgba(255, 248, 240, 0.88) !important;
+    }
+
+    :global(.ant-btn:not(.ant-btn-primary):not(.ant-btn-dangerous)),
+    :global(.qwenpaw-btn:not(.qwenpaw-btn-primary):not(.qwenpaw-btn-dangerous)),
+    :global(.copaw-btn:not(.copaw-btn-primary):not(.copaw-btn-dangerous)) {
+      background: rgba(255, 255, 255, 0.05) !important;
+      border-color: rgba(255, 255, 255, 0.14) !important;
+      color: rgba(255, 248, 240, 0.86) !important;
+    }
+
+    :global(.ant-btn:not(.ant-btn-primary):not(.ant-btn-dangerous):hover),
+    :global(.qwenpaw-btn:not(.qwenpaw-btn-primary):not(.qwenpaw-btn-dangerous):hover),
+    :global(.copaw-btn:not(.copaw-btn-primary):not(.copaw-btn-dangerous):hover) {
+      background: rgba(255, 255, 255, 0.1) !important;
+      border-color: rgba(255, 255, 255, 0.24) !important;
+      color: rgba(255, 248, 240, 0.94) !important;
+    }
+
+    :global(.ant-btn .anticon),
+    :global(.qwenpaw-btn .anticon),
+    :global(.copaw-btn .anticon),
+    :global(.ant-btn svg),
+    :global(.qwenpaw-btn svg),
+    :global(.copaw-btn svg) {
+      color: inherit !important;
+    }
+
+    :global(.ant-select-selector),
+    :global(.qwenpaw-select-selector),
+    :global(.copaw-select-selector) {
+      background: rgba(255, 255, 255, 0.05) !important;
+      border-color: rgba(255, 255, 255, 0.14) !important;
+      color: rgba(255, 248, 240, 0.88) !important;
+    }
+
+    :global(.ant-select-selection-item),
+    :global(.qwenpaw-select-selection-item),
+    :global(.copaw-select-selection-item),
+    :global(.ant-select-selection-placeholder),
+    :global(.qwenpaw-select-selection-placeholder),
+    :global(.copaw-select-selection-placeholder) {
+      color: rgba(255, 248, 240, 0.78) !important;
+    }
+
+    :global(.ant-select-arrow),
+    :global(.qwenpaw-select-arrow),
+    :global(.copaw-select-arrow) {
+      color: rgba(255, 255, 255, 0.48) !important;
+    }
+  }
+
+  .graphFloatingToolbarDropdown {
+    :global(.ant-select-dropdown),
+    :global(.qwenpaw-select-dropdown),
+    :global(.copaw-select-dropdown) {
+      background: rgba(22, 22, 22, 0.96) !important;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 14px 32px rgba(0, 0, 0, 0.34);
+    }
+
+    :global(.ant-select-item),
+    :global(.qwenpaw-select-item),
+    :global(.copaw-select-item) {
+      color: rgba(255, 248, 240, 0.84) !important;
+    }
+
+    :global(.ant-select-item-option-active:not(.ant-select-item-option-disabled)),
+    :global(.qwenpaw-select-item-option-active:not(.qwenpaw-select-item-option-disabled)),
+    :global(.copaw-select-item-option-active:not(.copaw-select-item-option-disabled)) {
+      background: rgba(255, 255, 255, 0.08) !important;
+    }
+
+    :global(.ant-select-item-option-selected:not(.ant-select-item-option-disabled)),
+    :global(.qwenpaw-select-item-option-selected:not(.qwenpaw-select-item-option-disabled)),
+    :global(.copaw-select-item-option-selected:not(.copaw-select-item-option-disabled)) {
+      background: rgba(255, 127, 22, 0.18) !important;
+      color: rgba(255, 248, 240, 0.96) !important;
+      font-weight: 500;
+    }
   }
 
   .graphCanvasWrap {

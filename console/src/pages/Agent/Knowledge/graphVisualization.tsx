@@ -1960,6 +1960,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
       <Select
         size={compact ? "small" : "middle"}
         value={layoutMode}
+        classNames={{ popup: { root: styles.graphFloatingToolbarDropdown } }}
         style={{ width: compact ? 150 : 180 }}
         onChange={(value) => setLayoutMode(value as GraphLayoutMode)}
         options={[
