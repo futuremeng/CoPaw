@@ -50,6 +50,7 @@ interface ProjectOverviewCardProps {
   treeDisplayMode: TreeDisplayMode;
   onTreeDisplayModeChange: (next: TreeDisplayMode) => void;
   onRefreshProjectFiles?: () => Promise<void> | void;
+  onRefreshProjectTreeDirectory?: (path: string) => Promise<AgentProjectFileTreeNode[]>;
   projectFilesRefreshing?: boolean;
   treeOnly?: boolean;
   selectedProject?: AgentProjectSummary;
@@ -355,10 +356,16 @@ function updateLazyTreeChildren(
   targetPath: string,
   children: LazyTreeItem[],
 ): LazyTreeItem[] {
+  const descendantFileCount = children.reduce((total, child) => (
+    child.is_directory ? total + child.descendant_file_count : total + 1
+  ), 0);
+
   return items.map((item) => {
     if (item.path === targetPath) {
       return {
         ...item,
+        child_count: children.length,
+        descendant_file_count: descendantFileCount,
         loaded: true,
         children,
       };
@@ -399,11 +406,15 @@ function buildLazyTreeNodes(
   onAttachArtifactToChat: (path: string) => void,
   attachTitle: string,
   detachTitle: string,
+  onRefreshTreeDirectory: ((path: string) => void) | undefined,
+  refreshingDirectorySet: Set<string>,
+  refreshTitle: string,
 ): TreeNode[] {
   return items.map((item) => {
     const isPriority = !item.is_directory && priorityFileSet.has(item.path);
     const isAttached = !item.is_directory && selectedAttachSet.has(item.path);
     const isHighlighted = !item.is_directory && highlightedFileSet.has(item.path);
+    const isRefreshingDirectory = item.is_directory && refreshingDirectorySet.has(item.path);
     const directoryCountLabel = item.is_directory && item.descendant_file_count > 0
       ? String(item.descendant_file_count)
       : "";
@@ -416,6 +427,9 @@ function buildLazyTreeNodes(
           onAttachArtifactToChat,
           attachTitle,
           detachTitle,
+          onRefreshTreeDirectory,
+          refreshingDirectorySet,
+          refreshTitle,
         )
       : undefined;
 
@@ -440,7 +454,23 @@ function buildLazyTreeNodes(
               <span className={styles.treeNodeMetaCount}>{directoryCountLabel}</span>
             ) : null}
           </span>
-          {!item.is_directory ? (
+          {item.is_directory ? (
+            <span className={styles.treeNodeActions}>
+              <Button
+                size="small"
+                type="text"
+                icon={<ReloadOutlined spin={isRefreshingDirectory} />}
+                className={styles.attachActionButton}
+                title={refreshTitle}
+                aria-label={refreshTitle}
+                disabled={!onRefreshTreeDirectory || isRefreshingDirectory}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onRefreshTreeDirectory?.(item.path);
+                }}
+              />
+            </span>
+          ) : (
             <span className={styles.treeNodeActions}>
               <Button
                 size="small"
@@ -455,7 +485,7 @@ function buildLazyTreeNodes(
                 }}
               />
             </span>
-          ) : null}
+          )}
         </span>
       ),
       isLeaf: !item.is_directory,
@@ -485,6 +515,7 @@ export default function ProjectOverviewCard({
   treeDisplayMode,
   onTreeDisplayModeChange,
   onRefreshProjectFiles,
+  onRefreshProjectTreeDirectory,
   projectFilesRefreshing = false,
   treeOnly = false,
   selectedProject,
@@ -513,6 +544,7 @@ export default function ProjectOverviewCard({
   const [treeFilterQuery, setTreeFilterQuery] = useState("");
   const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
   const [lazyTreeItems, setLazyTreeItems] = useState<LazyTreeItem[]>([]);
+  const [refreshingDirectoryPaths, setRefreshingDirectoryPaths] = useState<string[]>([]);
   const treeExpandedInitializedRef = useRef(false);
   const updatedDateParts = formatUpdatedDateParts(selectedProject?.updated_time);
   const deferredTreeFilterQuery = useDeferredValue(treeFilterQuery);
@@ -532,8 +564,13 @@ export default function ProjectOverviewCard({
       : nonBuiltInFiles;
   const attachTitle = t("projects.chat.addAttachment", "Add to chat attachments");
   const detachTitle = t("projects.chat.removeAttachment", "Remove from chat attachments");
+  const refreshTitle = t("projects.refreshFiles", "Refresh");
   const priorityFileSet = useMemo(() => new Set(priorityFilePaths), [priorityFilePaths]);
   const selectedAttachSet = useMemo(() => new Set(selectedAttachPaths), [selectedAttachPaths]);
+  const refreshingDirectorySet = useMemo(
+    () => new Set(refreshingDirectoryPaths),
+    [refreshingDirectoryPaths],
+  );
   const treeRootDirCounts = useMemo(
     () => ({
       original: getProjectTreeRootDirectoryFileCount(projectTreeNodes, "original"),
@@ -651,11 +688,29 @@ export default function ProjectOverviewCard({
       return;
     }
     setLazyTreeItems(toLazyTreeItems(projectTreeNodes || []));
+    setRefreshingDirectoryPaths([]);
   }, [projectTreeNodes, treeOnly]);
 
   useEffect(() => {
     setTreeFilterQuery("");
   }, [selectedProject?.id]);
+
+  const handleRefreshTreeDirectory = async (path: string) => {
+    if (!onRefreshProjectTreeDirectory) {
+      return;
+    }
+
+    setRefreshingDirectoryPaths((prev) => (
+      prev.includes(path) ? prev : [...prev, path]
+    ));
+
+    try {
+      const children = await onRefreshProjectTreeDirectory(path);
+      setLazyTreeItems((prev) => updateLazyTreeChildren(prev, path, toLazyTreeItems(children)));
+    } finally {
+      setRefreshingDirectoryPaths((prev) => prev.filter((item) => item !== path));
+    }
+  };
 
   const visibleLazyTreeItems = useMemo(() => {
     if (!useLazyTreeMode) {
@@ -698,14 +753,21 @@ export default function ProjectOverviewCard({
       onAttachArtifactToChat,
       attachTitle,
       detachTitle,
+      useLazyTreeMode ? handleRefreshTreeDirectory : undefined,
+      refreshingDirectorySet,
+      refreshTitle,
     ),
     [
       attachTitle,
       detachTitle,
       highlightedFileSet,
+      handleRefreshTreeDirectory,
       onAttachArtifactToChat,
+      refreshTitle,
+      refreshingDirectorySet,
       priorityFileSet,
       selectedAttachSet,
+      useLazyTreeMode,
       visibleLazyTreeItems,
     ],
   );

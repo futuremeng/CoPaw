@@ -3453,6 +3453,12 @@ export default function ProjectDetailPage() {
                             treeDisplayMode={treeDisplayMode}
                             onTreeDisplayModeChange={setTreeDisplayMode}
                             onRefreshProjectFiles={handleRefreshProjectFiles}
+                            onRefreshProjectTreeDirectory={(path) => {
+                              if (!currentAgent || !selectedProject) {
+                                return Promise.resolve([]);
+                              }
+                              return loadProjectTreeDirectory(currentAgent.id, selectedProject, path);
+                            }}
                             projectFilesRefreshing={filesLoading || projectTreeLoading}
                             treeOnly
                             onUploadFiles={openProjectUploadModal}
