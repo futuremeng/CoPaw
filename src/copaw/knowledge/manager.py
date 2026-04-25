@@ -1164,6 +1164,25 @@ class KnowledgeManager:
         stem = path.stem or path.name or "knowledge"
         return f"{stem}.snapshot_{token}{suffix}"
 
+    def _project_snapshot_relative_path(
+        self,
+        source: KnowledgeSourceSpec,
+        relative_path: str,
+    ) -> Path:
+        normalized = Path(str(relative_path or "").strip())
+        if source.type != "directory" or len(normalized.parts) < 2:
+            return normalized
+
+        project_id = str(getattr(source, "project_id", "") or "").strip()
+        if not project_id:
+            return normalized
+
+        first_part = str(normalized.parts[0] or "").strip()
+        location_name = Path(str(source.location or "").strip()).name
+        if first_part in {project_id, location_name}:
+            return Path(*normalized.parts[1:])
+        return normalized
+
     def _build_snapshot_relative_path(
         self,
         source: KnowledgeSourceSpec,
@@ -1173,8 +1192,12 @@ class KnowledgeManager:
     ) -> Path:
         relative_path = str(document.get("relative_path") or "").strip()
         if source.type == "directory" and relative_path:
-            parent = Path(relative_path).parent
-            filename = Path(relative_path).name
+            normalized_relative = self._project_snapshot_relative_path(
+                source,
+                relative_path,
+            )
+            parent = normalized_relative.parent
+            filename = normalized_relative.name
             target = parent if str(parent) not in {"", "."} else Path()
             return target / self._snapshot_filename(filename, indexed_at)
 

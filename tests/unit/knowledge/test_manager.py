@@ -103,6 +103,56 @@ def test_directory_source_raw_sync_ignores_internal_knowledge_dir(tmp_path: Path
     assert not any(path.name == ".knowledge" for path in manager.raw_dir.rglob("*"))
 
 
+def test_project_directory_raw_snapshots_strip_redundant_project_prefix(tmp_path: Path):
+    project_root = tmp_path / "project-SYbxke"
+    project_root.mkdir(parents=True, exist_ok=True)
+    (project_root / "original").mkdir(parents=True, exist_ok=True)
+    source_file = project_root / "original" / "note.md"
+    source_file.write_text("hello project raw sync", encoding="utf-8")
+
+    config = Config().knowledge
+    config.index.chunk_size = 10_000
+    source = KnowledgeSourceSpec(
+        id="project-sybxke-workspace",
+        name="Project Workspace: project-SYbxke",
+        type="directory",
+        location=str(project_root),
+        content="",
+        enabled=True,
+        recursive=True,
+        project_id="project-SYbxke",
+        tags=["project"],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    indexed_at = "2026-04-25T03:11:34.447491+00:00"
+    live_documents = [
+        {
+            "path": str(source_file),
+            "title": source_file.name,
+            "text": "hello project raw sync",
+            "relative_path": "project-SYbxke/original/note.md",
+            "source_path": str(source_file),
+        }
+    ]
+
+    documents = manager._prepare_documents_for_indexing(
+        source,
+        live_documents,
+        indexed_at=indexed_at,
+    )
+    snapshot_relative = documents[0]["snapshot_relative_path"]
+
+    assert snapshot_relative.startswith("original/note.snapshot_")
+    assert "project-SYbxke/original" not in snapshot_relative
+
+    chunks = manager._chunk_documents(documents, config.index.chunk_size)
+    chunk_relative = manager._build_chunk_relative_path(source, chunks[0]).as_posix()
+
+    assert chunk_relative.startswith("chunks/original/note.snapshot_")
+
+
 def test_chunk_documents_split_sentences_and_count(tmp_path: Path):
     config = Config().knowledge
     config.index.chunk_size = 10_000
