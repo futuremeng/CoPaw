@@ -77,6 +77,15 @@ function buildKnowledgeState(projectId: string): ProjectKnowledgeState {
       entityDelta: 0,
       relationDelta: 0,
     },
+    processingFreshness: {
+      stale: false,
+      staleModes: [],
+      staleSources: [],
+      channelStatus: {
+        "project-sync": "open",
+        tasks: "open",
+      },
+    },
     outputModes: [
       buildModeState({
         mode: "agentic",

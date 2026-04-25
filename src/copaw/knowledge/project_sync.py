@@ -563,6 +563,43 @@ class ProjectKnowledgeSyncManager:
             or quality_loop_result.get("quality_score")
         )
 
+        agentic_snapshot: dict[str, Any] = {}
+        rounds = quality_loop_result.get("rounds")
+        if isinstance(rounds, list) and rounds:
+            latest_round = rounds[-1]
+            if isinstance(latest_round, dict):
+                after_snapshot = latest_round.get("after")
+                if isinstance(after_snapshot, dict):
+                    agentic_snapshot = after_snapshot
+        if not agentic_snapshot:
+            snapshot = quality_loop_result.get("snapshot")
+            if isinstance(snapshot, dict):
+                agentic_snapshot = snapshot
+
+        agentic_entity_count = max(
+            _safe_int(workflow_run.get("final_entity_count")),
+            _safe_int(workflow_run.get("entity_count")),
+            _safe_int(workflow_run.get("node_count")),
+            _safe_int(agentic_snapshot.get("entity_count")),
+            _safe_int(agentic_snapshot.get("node_count")),
+        )
+        agentic_relation_count = max(
+            _safe_int(workflow_run.get("final_relation_count")),
+            _safe_int(workflow_run.get("relation_count")),
+            _safe_int(workflow_run.get("edge_count")),
+            _safe_int(agentic_snapshot.get("relation_count")),
+            _safe_int(agentic_snapshot.get("edge_count")),
+        )
+        agentic_quality_score = _safe_float(
+            workflow_run.get("final_quality_score")
+            or workflow_run.get("quality_score")
+            or agentic_snapshot.get("quality_score")
+            or quality_loop_result.get("score_after")
+            or quality_loop_result.get("score_before")
+            or quality_loop_result.get("quality_score_after")
+            or quality_loop_result.get("quality_score")
+        )
+
         semantic_state = state.get("semantic_engine")
         if not isinstance(semantic_state, dict):
             semantic_state = self._build_semantic_engine_state(state)
@@ -713,9 +750,9 @@ class ProjectKnowledgeSyncManager:
                 "job_id": str(state.get("latest_job_id") or "").strip(),
                 "document_count": document_count,
                 "chunk_count": chunk_count,
-                "entity_count": entity_count,
-                "relation_count": relation_count,
-                "quality_score": quality_score,
+                "entity_count": agentic_entity_count,
+                "relation_count": agentic_relation_count,
+                "quality_score": agentic_quality_score,
             },
         ]
 

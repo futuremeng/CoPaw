@@ -527,3 +527,91 @@ def test_project_sync_processing_modes_block_when_semantic_engine_unavailable(tm
     assert hydrated["output_resolution"]["available_modes"] == []
     assert hydrated["output_resolution"]["reason_code"] == "SEMANTIC_ENGINE_UNAVAILABLE"
     assert hydrated["output_scheduler"]["ready_modes"] == ["fast"]
+
+
+def test_project_sync_agentic_mode_does_not_reuse_memify_counts_while_pending(tmp_path: Path, monkeypatch):
+    project_id = "project-agentic-pending"
+    manager = ProjectKnowledgeSyncManager(
+        tmp_path,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+
+    monkeypatch.setattr(
+        manager._knowledge_manager,
+        "get_semantic_engine_state",
+        lambda: {
+            "engine": "hanlp2",
+            "status": "ready",
+            "reason_code": "HANLP2_READY",
+            "reason": "HanLP2 semantic engine is ready.",
+        },
+    )
+
+    state = manager.get_state(project_id)
+    state["latest_source_id"] = f"project-{project_id}-workspace"
+    state["last_result"] = {
+        "index": {"document_count": 2, "chunk_count": 6},
+        "memify": {"node_count": 12, "relation_count": 18},
+        "workflow_run": {"status": "pending", "mode": "agentic", "run_id": "run-pending"},
+    }
+    manager._save_state(state)
+
+    hydrated = manager.get_state(project_id)
+    modes = {item["mode"]: item for item in hydrated["processing_modes"]}
+
+    assert modes["nlp"]["entity_count"] == 12
+    assert modes["nlp"]["relation_count"] == 18
+    assert modes["agentic"]["status"] == "running"
+    assert modes["agentic"]["entity_count"] == 0
+    assert modes["agentic"]["relation_count"] == 0
+    assert modes["agentic"]["quality_score"] is None
+
+
+def test_project_sync_agentic_mode_prefers_quality_snapshot_metrics(tmp_path: Path, monkeypatch):
+    project_id = "project-agentic-final"
+    manager = ProjectKnowledgeSyncManager(
+        tmp_path,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+
+    monkeypatch.setattr(
+        manager._knowledge_manager,
+        "get_semantic_engine_state",
+        lambda: {
+            "engine": "hanlp2",
+            "status": "ready",
+            "reason_code": "HANLP2_READY",
+            "reason": "HanLP2 semantic engine is ready.",
+        },
+    )
+
+    state = manager.get_state(project_id)
+    state["latest_source_id"] = f"project-{project_id}-workspace"
+    state["last_result"] = {
+        "index": {"document_count": 2, "chunk_count": 6},
+        "memify": {"node_count": 5, "relation_count": 12},
+        "quality_loop": {
+            "score_after": 0.91,
+            "rounds": [
+                {
+                    "after": {
+                        "entity_count": 14,
+                        "relation_count": 22,
+                        "quality_score": 0.91,
+                    }
+                }
+            ],
+        },
+        "workflow_run": {"status": "succeeded", "mode": "agentic", "run_id": "run-final"},
+    }
+    manager._save_state(state)
+
+    hydrated = manager.get_state(project_id)
+    modes = {item["mode"]: item for item in hydrated["processing_modes"]}
+
+    assert modes["nlp"]["entity_count"] == 5
+    assert modes["nlp"]["relation_count"] == 12
+    assert modes["agentic"]["status"] == "ready"
+    assert modes["agentic"]["entity_count"] == 14
+    assert modes["agentic"]["relation_count"] == 22
+    assert modes["agentic"]["quality_score"] == 0.91

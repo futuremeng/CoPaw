@@ -198,6 +198,15 @@ function buildKnowledgeState(): ProjectKnowledgeState {
       entityDelta: 0,
       relationDelta: 0,
     },
+    processingFreshness: {
+      stale: false,
+      staleModes: [],
+      staleSources: [],
+      channelStatus: {
+        "project-sync": "open",
+        tasks: "open",
+      },
+    },
     outputModes: [
       buildModeState({
         mode: "agentic",
@@ -477,6 +486,59 @@ describe("project knowledge supporting panels", () => {
     expect(runNlpButton.disabled).toBe(true);
     expect(runNlpButton.parentElement?.getAttribute("title")).toBe("Semantic engine unavailable: HanLP2 module is not installed.");
     expect(screen.getByText("L2 提供实体与关系的结构化基础，L3 在此基础上继续做多智能体增强与质量提升。")).not.toBeNull();
+  });
+
+  it("marks stale queued processing snapshots", () => {
+    const knowledgeState = buildKnowledgeState();
+    knowledgeState.processingFreshness = {
+      stale: true,
+      staleModes: ["agentic"],
+      staleSources: ["tasks"],
+      channelStatus: {
+        "project-sync": "open",
+        tasks: "reconnecting",
+      },
+    };
+
+    render(<ProjectKnowledgeProcessingPanel knowledgeState={knowledgeState} />);
+
+    expect(screen.getByText("状态可能已过期")).not.toBeNull();
+    expect(screen.getByText("快照过期")).not.toBeNull();
+    expect(screen.getByText("tasks 通道重连中，等待新的运行快照，当前展示可能落后于实际执行状态。")).not.toBeNull();
+  });
+
+  it("shows a lightweight l1 indexing hint in the processing header", () => {
+    const knowledgeState = buildKnowledgeState();
+    knowledgeState.quantMetrics = {
+      ...knowledgeState.quantMetrics,
+      totalSources: 3,
+      indexedSources: 1,
+    };
+
+    render(<ProjectKnowledgeProcessingPanel knowledgeState={knowledgeState} />);
+
+    expect(screen.getByText("L1 基础索引进度 1/3，详细状态请看 Sources / Signals。")).not.toBeNull();
+  });
+
+  it("shows pending labels when agentic outputs are not independently available", () => {
+    const knowledgeState = buildKnowledgeState();
+    knowledgeState.processingCompareModes = knowledgeState.processingCompareModes.map((mode) => (
+      mode.mode === "agentic"
+        ? {
+          ...mode,
+          available: false,
+          status: "queued",
+          entityCount: 0,
+          relationCount: 0,
+          qualityScore: null,
+        }
+        : mode
+    ));
+
+    render(<ProjectKnowledgeProcessingPanel knowledgeState={knowledgeState} />);
+
+    expect(screen.getAllByText("未产出").length).toBeGreaterThan(1);
+    expect(screen.getByText("等待形成独立增强结果")).not.toBeNull();
   });
 
   it("renders output records through the new outputs panel", async () => {

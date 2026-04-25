@@ -2,6 +2,7 @@ import { Button, Progress, Tag, Tooltip, Typography } from "antd";
 import { useTranslation } from "react-i18next";
 import styles from "./index.module.less";
 import type {
+  ProjectKnowledgeProcessingFreshness,
   ProjectKnowledgeModeState,
   ProjectKnowledgeState,
 } from "./useProjectKnowledgeState";
@@ -14,6 +15,24 @@ import {
 interface ProjectKnowledgeProcessingPanelProps {
   knowledgeState: ProjectKnowledgeState;
   onOpenSettings?: () => void;
+}
+
+function modeHasIndependentOutputs(mode: ProjectKnowledgeModeState | null): boolean {
+  if (!mode) {
+    return false;
+  }
+  return mode.available || mode.entityCount > 0 || mode.relationCount > 0 || mode.qualityScore != null;
+}
+
+function formatModeCountValue(
+  mode: ProjectKnowledgeModeState | null,
+  value: number,
+  t: ReturnType<typeof useTranslation>["t"],
+): string | number {
+  if (mode?.mode === "agentic" && !modeHasIndependentOutputs(mode)) {
+    return t("projects.knowledge.processing.outputPending", "未产出");
+  }
+  return value;
 }
 
 function launchDisabledReason(
@@ -102,17 +121,112 @@ function actionLabel(
   return t("projects.knowledge.processing.runAgentic", "运行多智能体");
 }
 
+function describeL1Hint(
+  knowledgeState: ProjectKnowledgeState,
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
+  if (!knowledgeState.sourceRegistered) {
+    return t(
+      "projects.knowledge.processing.l1HintNeedSource",
+      "L1 基础索引尚未注册，请先在 Settings 注册项目知识源。",
+    );
+  }
+
+  const indexedSources = Math.max(0, knowledgeState.quantMetrics.indexedSources || 0);
+  const totalSources = Math.max(0, knowledgeState.quantMetrics.totalSources || 0);
+  if (totalSources > 0 && indexedSources < totalSources) {
+    return `${t(
+      "projects.knowledge.processing.l1HintProgressPrefix",
+      "L1 基础索引进度",
+    )} ${indexedSources}/${totalSources}，${t(
+      "projects.knowledge.processing.l1HintProgressSuffix",
+      "详细状态请看 Sources / Signals。",
+    )}`;
+  }
+
+  return t(
+    "projects.knowledge.processing.l1HintReady",
+    "L1 基础索引状态请看 Sources / Signals；Processing 这里聚焦 L2 / L3 深加工。",
+  );
+}
+
+function describeStaleSources(
+  freshness: ProjectKnowledgeProcessingFreshness,
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
+  if (freshness.staleSources.length === 0) {
+    return t(
+      "projects.knowledge.processing.staleHint",
+      "最近 15 秒未收到新的运行快照，当前处理状态可能已过期。",
+    );
+  }
+
+  const sourceLabels = freshness.staleSources.map((source) => (
+    source === "project-sync"
+      ? t("projects.knowledge.processing.channelProjectSync", "project-sync 通道")
+      : t("projects.knowledge.processing.channelTasks", "tasks 通道")
+  ));
+  const sourceSummary = sourceLabels.length > 1
+    ? sourceLabels.join(" / ")
+    : sourceLabels[0];
+  const primaryStatus = freshness.channelStatus[freshness.staleSources[0]];
+  const statusLabel = primaryStatus === "connecting"
+    ? t("projects.knowledge.processing.channelConnecting", "连接中")
+    : t("projects.knowledge.processing.channelReconnecting", "重连中");
+
+  return `${sourceSummary}${statusLabel}，${t(
+    "projects.knowledge.processing.staleHintSuffix",
+    "最近 15 秒未收到新的运行快照，当前处理状态可能已过期。",
+  )}`;
+}
+
+function describeInlineStaleHint(
+  freshness: ProjectKnowledgeProcessingFreshness,
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
+  if (freshness.staleSources.length === 0) {
+    return t(
+      "projects.knowledge.processing.staleInlineHint",
+      "等待新的运行快照，当前展示可能落后于实际执行状态。",
+    );
+  }
+
+  const sourceLabels = freshness.staleSources.map((source) => (
+    source === "project-sync"
+      ? t("projects.knowledge.processing.channelProjectSync", "project-sync 通道")
+      : t("projects.knowledge.processing.channelTasks", "tasks 通道")
+  ));
+  const sourceSummary = sourceLabels.length > 1
+    ? sourceLabels.join(" / ")
+    : sourceLabels[0];
+  const primaryStatus = freshness.channelStatus[freshness.staleSources[0]];
+  const statusLabel = primaryStatus === "connecting"
+    ? t("projects.knowledge.processing.channelConnecting", "连接中")
+    : t("projects.knowledge.processing.channelReconnecting", "重连中");
+
+  return `${sourceSummary}${statusLabel}，${t(
+    "projects.knowledge.processing.staleInlineHintSuffix",
+    "等待新的运行快照，当前展示可能落后于实际执行状态。",
+  )}`;
+}
+
 export default function ProjectKnowledgeProcessingPanel(
   props: ProjectKnowledgeProcessingPanelProps,
 ) {
   const { t } = useTranslation();
   const launchMode = props.knowledgeState.processingLaunchMode;
   const visibleModes = props.knowledgeState.processingCompareModes;
+  const staleModes = new Set(props.knowledgeState.processingFreshness.staleModes);
+  const hasStaleProcessing = props.knowledgeState.processingFreshness.stale;
   const l2Mode = visibleModes.find((mode) => mode.mode === "nlp") || null;
   const l3Mode = visibleModes.find((mode) => mode.mode === "agentic") || null;
   const l2Output = l2Mode ? props.knowledgeState.modeOutputs[l2Mode.mode] : null;
   const l3Output = l3Mode ? props.knowledgeState.modeOutputs[l3Mode.mode] : null;
+  const l3HasIndependentOutputs = modeHasIndependentOutputs(l3Mode);
   const { entityDelta, relationDelta } = props.knowledgeState.processingCompareDelta;
+  const staleTooltip = describeStaleSources(props.knowledgeState.processingFreshness, t);
+  const staleInlineHint = describeInlineStaleHint(props.knowledgeState.processingFreshness, t);
+  const l1Hint = describeL1Hint(props.knowledgeState, t);
 
   return (
     <div className={styles.projectKnowledgeWorkbench}>
@@ -121,12 +235,22 @@ export default function ProjectKnowledgeProcessingPanel(
           <Typography.Title level={5} className={styles.projectKnowledgeSectionTitle}>
             {t("projects.knowledgeDock.tabProcessing", "Processing")}
           </Typography.Title>
-          <Typography.Text type="secondary">
-            {t(
-              "projects.knowledge.processingRoleHint",
-              "这里只展示 L2 与 L3 的处理进度，重点聚焦实体与关系的构建、增强与呈现。",
-            )}
-          </Typography.Text>
+          <div className={styles.projectKnowledgeModeMeta}>
+            <Typography.Text type="secondary">
+              {t(
+                "projects.knowledge.processingRoleHint",
+                "这里只展示 L2 与 L3 的处理进度，重点聚焦实体与关系的构建、增强与呈现。",
+              )}
+            </Typography.Text>
+            <Typography.Text type="secondary">{l1Hint}</Typography.Text>
+            {hasStaleProcessing ? (
+              <Tooltip title={staleTooltip}>
+                <Tag color="orange">
+                  {t("projects.knowledge.processing.staleTag", "状态可能已过期")}
+                </Tag>
+              </Tooltip>
+            ) : null}
+          </div>
         </div>
         <div className={styles.projectKnowledgeTabActions}>
           <Button size="small" onClick={() => void props.knowledgeState.loadProjectSourceStatus()}>
@@ -149,11 +273,11 @@ export default function ProjectKnowledgeProcessingPanel(
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
           <Typography.Text type="secondary">{t("projects.knowledge.processing.l3Entities", "L3 实体数")}</Typography.Text>
-          <Typography.Text strong>{l3Mode?.entityCount || 0}</Typography.Text>
+          <Typography.Text strong>{formatModeCountValue(l3Mode, l3Mode?.entityCount || 0, t)}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
           <Typography.Text type="secondary">{t("projects.knowledge.processing.l3Relations", "L3 关系数")}</Typography.Text>
-          <Typography.Text strong>{l3Mode?.relationCount || 0}</Typography.Text>
+          <Typography.Text strong>{formatModeCountValue(l3Mode, l3Mode?.relationCount || 0, t)}</Typography.Text>
         </div>
       </div>
 
@@ -161,6 +285,7 @@ export default function ProjectKnowledgeProcessingPanel(
         {visibleModes.map((mode) => {
           const disabledReason = launchDisabledReason(mode, props.knowledgeState, t);
           const launchDisabled = Boolean(disabledReason) && launchMode !== mode.mode;
+          const staleStatus = staleModes.has(mode.mode);
           const progress = typeof mode.progress === "number"
             ? mode.progress
             : mode.status === "ready"
@@ -187,6 +312,18 @@ export default function ProjectKnowledgeProcessingPanel(
                   <div className={styles.projectKnowledgeModeMeta}>
                     <Tag color={statusColor(mode.status)}>{statusLabel(mode.status, t)}</Tag>
                     <Tag>{isL3 ? "L3" : "L2"}</Tag>
+                    {staleStatus ? (
+                      <Tooltip
+                        title={t(
+                          "projects.knowledge.processing.staleModeHint",
+                          "该模式的运行状态尚未收到最新快照，建议手动刷新或等待连接恢复。",
+                        )}
+                      >
+                        <Tag color="orange">
+                          {t("projects.knowledge.processing.staleShort", "快照过期")}
+                        </Tag>
+                      </Tooltip>
+                    ) : null}
                   </div>
                 </div>
                 <Typography.Text type="secondary">
@@ -209,6 +346,11 @@ export default function ProjectKnowledgeProcessingPanel(
                     {t("projects.knowledge.runtimeStatusUpdatedAt", "Updated")}: {mode.lastUpdatedAt}
                   </Typography.Text>
                 ) : null}
+                {staleStatus ? (
+                  <Typography.Text type="secondary">
+                    {staleInlineHint}
+                  </Typography.Text>
+                ) : null}
                 {isL3 && mode.runId ? (
                   <Typography.Text type="secondary">Run: {mode.runId}</Typography.Text>
                 ) : null}
@@ -217,11 +359,11 @@ export default function ProjectKnowledgeProcessingPanel(
               <div className={styles.projectKnowledgeModeMetrics}>
                 <div className={styles.projectKnowledgeModeMetric}>
                   <Typography.Text type="secondary">{t("projects.knowledge.entities", "实体数")}</Typography.Text>
-                  <Typography.Text strong>{mode.entityCount}</Typography.Text>
+                  <Typography.Text strong>{formatModeCountValue(mode, mode.entityCount, t)}</Typography.Text>
                 </div>
                 <div className={styles.projectKnowledgeModeMetric}>
                   <Typography.Text type="secondary">{t("projects.knowledge.signalRelations", "关系数")}</Typography.Text>
-                  <Typography.Text strong>{mode.relationCount}</Typography.Text>
+                  <Typography.Text strong>{formatModeCountValue(mode, mode.relationCount, t)}</Typography.Text>
                 </div>
                 <div className={styles.projectKnowledgeModeMetric}>
                   <Typography.Text type="secondary">
@@ -239,10 +381,12 @@ export default function ProjectKnowledgeProcessingPanel(
                   </Typography.Text>
                   <Typography.Text strong>
                     {isL3
-                      ? t("projects.knowledge.processing.deltaSummary", "+{{entities}} 实体 / +{{relations}} 关系", {
-                        entities: entityDelta,
-                        relations: relationDelta,
-                      })
+                      ? l3HasIndependentOutputs
+                        ? t("projects.knowledge.processing.deltaSummary", "+{{entities}} 实体 / +{{relations}} 关系", {
+                          entities: entityDelta,
+                          relations: relationDelta,
+                        })
+                        : t("projects.knowledge.processing.outputPendingLong", "等待形成独立增强结果")
                       : output?.artifacts?.[0]?.label || t("projects.knowledge.processing.entityGraphArtifact", "实体关系图谱")}
                   </Typography.Text>
                 </div>

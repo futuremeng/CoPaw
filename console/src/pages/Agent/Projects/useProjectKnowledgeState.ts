@@ -83,6 +83,8 @@ export interface ProjectKnowledgeMetrics {
 }
 
 export type ProjectKnowledgeProcessingMode = "fast" | "nlp" | "agentic";
+export type ProjectKnowledgeRealtimeChannel = "project-sync" | "tasks";
+export type ProjectKnowledgeRealtimeChannelStatus = "idle" | "connecting" | "open" | "reconnecting";
 
 export interface ProjectKnowledgeModeState {
   mode: ProjectKnowledgeProcessingMode;
@@ -132,6 +134,13 @@ export interface ProjectKnowledgeProcessingCompareDelta {
   relationDelta: number;
 }
 
+export interface ProjectKnowledgeProcessingFreshness {
+  stale: boolean;
+  staleModes: ProjectKnowledgeProcessingMode[];
+  staleSources: ProjectKnowledgeRealtimeChannel[];
+  channelStatus: Record<ProjectKnowledgeRealtimeChannel, ProjectKnowledgeRealtimeChannelStatus>;
+}
+
 export interface ProjectKnowledgeModeArtifact {
   kind: string;
   label: string;
@@ -168,6 +177,7 @@ export interface ProjectKnowledgeState {
   processingModes: ProjectKnowledgeModeState[];
   processingCompareModes: ProjectKnowledgeModeState[];
   processingCompareDelta: ProjectKnowledgeProcessingCompareDelta;
+  processingFreshness: ProjectKnowledgeProcessingFreshness;
   outputModes: ProjectKnowledgeModeState[];
   outputResolution: ProjectKnowledgeOutputResolution;
   processingScheduler: ProjectKnowledgeProcessingScheduler;
@@ -242,6 +252,7 @@ const PROJECT_KNOWLEDGE_UI_PREFS_PREFIX = "copaw.project.knowledge.ui.v1";
 const DAY_MS = 24 * 60 * 60 * 1000;
 const PROJECT_GRAPH_QUERY_TOP_K = 200;
 const HIGH_ORDER_OUTPUT_MODES: ProjectKnowledgeProcessingMode[] = ["agentic", "nlp"];
+const PROCESSING_STALE_AFTER_MS = 15_000;
 
 const ACTIVE_KNOWLEDGE_STATUSES = new Set([
   "pending",
@@ -271,22 +282,26 @@ function mergeSemanticSummaryIntoStage(
   return `${normalizedStage} · ${normalizedSummary}`;
 }
 
-function getActiveKnowledgeTasks(tasks: KnowledgeTaskProgress[]): KnowledgeTaskProgress[] {
+function activeKnowledgeTaskPriority(task: KnowledgeTaskProgress): number {
+  const type = String(task.task_type || "").trim().toLowerCase();
+  if (type === "quality_loop") {
+    return 0;
+  }
+  if (type === "memify") {
+    return 1;
+  }
+  if (type === "project_sync") {
+    return 2;
+  }
+  if (type === "history_backfill") {
+    return 3;
+  }
+  return 9;
+}
+
+export function getActiveKnowledgeTasks(tasks: KnowledgeTaskProgress[]): KnowledgeTaskProgress[] {
   const priority = (task: KnowledgeTaskProgress): number => {
-    const type = String(task.task_type || "");
-    if (type === "project_sync") {
-      return 0;
-    }
-    if (type === "memify") {
-      return 1;
-    }
-    if (type === "history_backfill") {
-      return 2;
-    }
-    if (type === "quality_loop") {
-      return 3;
-    }
-    return 9;
+    return activeKnowledgeTaskPriority(task);
   };
 
   return tasks
@@ -300,9 +315,25 @@ function getActiveKnowledgeTasks(tasks: KnowledgeTaskProgress[]): KnowledgeTaskP
     });
 }
 
-function pickActiveKnowledgeTask(tasks: KnowledgeTaskProgress[]): KnowledgeTaskProgress | null {
+export function pickActiveKnowledgeTask(tasks: KnowledgeTaskProgress[]): KnowledgeTaskProgress | null {
   const active = getActiveKnowledgeTasks(tasks);
   return active[0] || null;
+}
+
+function parseTimestampMs(value: string): number | null {
+  const parsed = Date.parse(String(value || "").trim());
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function isModeStatusStale(mode: ProjectKnowledgeModeState): boolean {
+  if (mode.status !== "running" && mode.status !== "queued") {
+    return false;
+  }
+  const updatedMs = parseTimestampMs(mode.lastUpdatedAt);
+  if (updatedMs === null) {
+    return false;
+  }
+  return Date.now() - updatedMs >= PROCESSING_STALE_AFTER_MS;
 }
 
 function uiPrefsStorageKey(projectId: string): string {
@@ -873,6 +904,10 @@ export function useProjectKnowledgeState(
   const [activeKnowledgeTasks, setActiveKnowledgeTasks] = useState<KnowledgeTaskProgress[]>([]);
   const [activeKnowledgeTask, setActiveKnowledgeTask] = useState<KnowledgeTaskProgress | null>(null);
   const [latestQualityLoopJob, setLatestQualityLoopJob] = useState<QualityLoopJobStatus | null>(null);
+  const [projectSyncChannelStatus, setProjectSyncChannelStatus] =
+    useState<ProjectKnowledgeRealtimeChannelStatus>("idle");
+  const [tasksChannelStatus, setTasksChannelStatus] =
+    useState<ProjectKnowledgeRealtimeChannelStatus>("idle");
   const [semanticBySourceId, setSemanticBySourceId] = useState<Record<string, { subject?: string; summary?: string; keywords?: string[]; semanticStatus?: KnowledgeSourceSemanticStatus }>>({});
   const [semanticLoadingBySourceId, setSemanticLoadingBySourceId] = useState<Record<string, boolean>>({});
   const refreshReasonRef = useRef("");
@@ -1099,6 +1134,8 @@ export function useProjectKnowledgeState(
     setActiveKnowledgeTasks([]);
     setActiveKnowledgeTask(null);
     setLatestQualityLoopJob(null);
+    setProjectSyncChannelStatus("idle");
+    setTasksChannelStatus("idle");
     setSemanticBySourceId({});
     setSemanticLoadingBySourceId({});
     defaultExploreTokenRef.current = "";
@@ -1205,6 +1242,7 @@ export function useProjectKnowledgeState(
 
   useEffect(() => {
     if (!params.projectId || typeof WebSocket === "undefined") {
+      setProjectSyncChannelStatus("idle");
       return;
     }
     let disposed = false;
@@ -1215,6 +1253,7 @@ export function useProjectKnowledgeState(
       if (disposed) {
         return;
       }
+      setProjectSyncChannelStatus((prev) => (prev === "idle" ? "connecting" : "reconnecting"));
       try {
         const baseUrl = getApiUrl("/knowledge/project-sync/ws");
         const wsUrl = new URL(baseUrl, window.location.origin);
@@ -1228,6 +1267,12 @@ export function useProjectKnowledgeState(
 
         const ws = new WebSocket(wsUrl.toString());
         activeSocket = ws;
+        ws.onopen = () => {
+          if (disposed) {
+            return;
+          }
+          setProjectSyncChannelStatus("open");
+        };
         ws.onmessage = (event) => {
           if (disposed) {
             return;
@@ -1247,12 +1292,14 @@ export function useProjectKnowledgeState(
           if (disposed) {
             return;
           }
+          setProjectSyncChannelStatus("reconnecting");
           reconnectTimer = window.setTimeout(() => {
             connect();
           }, 1500);
         };
       } catch {
         // ignore websocket construction failure in unsupported env
+        setProjectSyncChannelStatus("reconnecting");
       }
     };
 
@@ -1260,6 +1307,7 @@ export function useProjectKnowledgeState(
 
     return () => {
       disposed = true;
+      setProjectSyncChannelStatus("idle");
       if (reconnectTimer) {
         window.clearTimeout(reconnectTimer);
       }
@@ -1277,6 +1325,7 @@ export function useProjectKnowledgeState(
 
   useEffect(() => {
     if (!params.projectId || typeof WebSocket === "undefined") {
+      setTasksChannelStatus("idle");
       return;
     }
     let disposed = false;
@@ -1287,6 +1336,7 @@ export function useProjectKnowledgeState(
       if (disposed) {
         return;
       }
+      setTasksChannelStatus((prev) => (prev === "idle" ? "connecting" : "reconnecting"));
       try {
         const baseUrl = getApiUrl("/knowledge/tasks/ws");
         const wsUrl = new URL(baseUrl, window.location.origin);
@@ -1300,6 +1350,12 @@ export function useProjectKnowledgeState(
 
         const ws = new WebSocket(wsUrl.toString());
         activeSocket = ws;
+        ws.onopen = () => {
+          if (disposed) {
+            return;
+          }
+          setTasksChannelStatus("open");
+        };
         ws.onmessage = (event) => {
           if (disposed) {
             return;
@@ -1321,12 +1377,14 @@ export function useProjectKnowledgeState(
           if (disposed) {
             return;
           }
+          setTasksChannelStatus("reconnecting");
           reconnectTimer = window.setTimeout(() => {
             connect();
           }, 1500);
         };
       } catch {
         // ignore websocket construction failure in unsupported env
+        setTasksChannelStatus("reconnecting");
       }
     };
 
@@ -1334,6 +1392,7 @@ export function useProjectKnowledgeState(
 
     return () => {
       disposed = true;
+      setTasksChannelStatus("idle");
       if (reconnectTimer) {
         window.clearTimeout(reconnectTimer);
       }
@@ -1864,6 +1923,32 @@ export function useProjectKnowledgeState(
     };
   }, [processingCompareModes]);
 
+  const processingFreshness = useMemo<ProjectKnowledgeProcessingFreshness>(() => {
+    const staleModeStates = processingCompareModes.filter((mode) => isModeStatusStale(mode));
+    const staleModes = staleModeStates.map((mode) => mode.mode);
+    const staleSources: ProjectKnowledgeRealtimeChannel[] = [];
+    const hasQueuedOrRunningModes = staleModeStates.some(
+      (mode) => mode.status === "running" || mode.status === "queued",
+    );
+
+    if (staleModes.length > 0 && projectSyncChannelStatus !== "open") {
+      staleSources.push("project-sync");
+    }
+    if (hasQueuedOrRunningModes && tasksChannelStatus !== "open") {
+      staleSources.push("tasks");
+    }
+
+    return {
+      stale: staleModes.length > 0,
+      staleModes,
+      staleSources,
+      channelStatus: {
+        "project-sync": projectSyncChannelStatus,
+        tasks: tasksChannelStatus,
+      },
+    };
+  }, [processingCompareModes, projectSyncChannelStatus, tasksChannelStatus]);
+
   const modeOutputs = useMemo<Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeOutput>>(() => {
     const backendModeOutputs = parseBackendModeOutputs(syncState);
     if (backendModeOutputs) {
@@ -2073,6 +2158,7 @@ export function useProjectKnowledgeState(
     processingModes,
     processingCompareModes,
     processingCompareDelta,
+    processingFreshness,
     outputModes,
     outputResolution,
     processingScheduler,
@@ -2139,6 +2225,7 @@ export function useProjectKnowledgeState(
     outputResolution,
     processingCompareDelta,
     processingCompareModes,
+    processingFreshness,
     processingModes,
     processingScheduler,
     projectSourceId,
