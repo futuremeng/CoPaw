@@ -278,6 +278,12 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
       label: t("nav.voiceTranscription"),
     },
     {
+      key: "nlp",
+      icon: <SparkScanLine size={18} />,
+      path: "/nlp",
+      label: t("nav.nlp"),
+    },
+    {
       key: "debug",
       icon: <SparkDebugLine size={18} />,
       path: "/debug",
@@ -430,6 +436,11 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
           key: "voice-transcription",
           label: collapsed ? null : t("nav.voiceTranscription"),
           icon: <SparkMicLine size={16} />,
+        },
+        {
+          key: "nlp",
+          label: collapsed ? null : t("nav.nlp"),
+          icon: <SparkScanLine size={16} />,
         },
         {
           key: "debug",

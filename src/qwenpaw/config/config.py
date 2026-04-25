@@ -1647,6 +1647,10 @@ class KnowledgeHanLPSidecarConfig(BaseModel):
         default="",
         description="Python 3.6-3.9 executable used to run the HanLP sidecar.",
     )
+    model_id: str = Field(
+        default="FINE_ELECTRA_SMALL_ZH",
+        description="Default HanLP tokenizer model to load and validate.",
+    )
     probe_timeout_sec: float = Field(default=5.0, ge=0.5, le=60.0)
     tokenize_timeout_sec: float = Field(default=15.0, ge=0.5, le=120.0)
     hanlp_home: str = Field(
@@ -1663,6 +1667,10 @@ class KnowledgeHanLPSidecarConfig(BaseModel):
         python_executable = os.environ.get("COPAW_HANLP_SIDECAR_PYTHON", "").strip()
         if python_executable:
             self.python_executable = python_executable
+
+        model_id = os.environ.get("COPAW_HANLP_MODEL_ID", "").strip()
+        if model_id:
+            self.model_id = model_id
 
         hanlp_home = os.environ.get("COPAW_HANLP_HOME", "").strip()
         if hanlp_home:

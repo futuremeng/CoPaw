@@ -54,6 +54,46 @@ def locate_tokenizer(module):
     return "", None
 
 
+def validate_model(module, model_id, text="HanLP 模型校验"):
+    raw_model_id, model, resolved_name = load_model(module, model_id)
+    if model is None:
+        return raw_model_id, None, resolved_name, [], ""
+    try:
+        tokens = flatten(model(text))
+    except Exception as exc:
+        return raw_model_id, None, resolved_name, [], exc.__class__.__name__
+    return raw_model_id, model, resolved_name, tokens, ""
+
+
+def resolve_model_id(module, model_id):
+    raw = str(model_id or "").strip()
+    if not raw:
+        return "", None, ""
+    pretrained = getattr(module, "pretrained", None)
+    tok = getattr(pretrained, "tok", None)
+    if tok is not None and hasattr(tok, raw):
+        return raw, getattr(tok, raw), raw
+    return raw, raw, raw
+
+
+def load_model(module, model_id):
+    resolved_name, resolved_value, raw = resolve_model_id(module, model_id)
+    if not resolved_value:
+        return raw, None, ""
+    loader = getattr(module, "load", None)
+    if not callable(loader):
+        return raw, None, resolved_name
+    return raw, loader(resolved_value), resolved_name
+
+
+def has_model_loader(module, model_id):
+    resolved_name, resolved_value, raw_model_id = resolve_model_id(module, model_id)
+    loader = getattr(module, "load", None)
+    if not resolved_value or not callable(loader):
+        return raw_model_id, False, resolved_name
+    return raw_model_id, True, resolved_name
+
+
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else "probe"
     payload = load_payload()
@@ -88,19 +128,28 @@ def main():
         })
         return
 
+    configured_model_id = str(payload.get("model_id") or "").strip()
+
     attr, fn = locate_tokenizer(hanlp)
-    if fn is None:
-        emit({
-            "engine": "hanlp2",
-            "status": "unavailable",
-            "reason_code": "HANLP2_ENTRYPOINT_MISSING",
-            "reason": "HanLP2 tokenizer entry point was not found.",
-            "python_version": version_text(),
-            "tokens": [],
-        })
-        return
 
     if mode == "probe":
+        if fn is None:
+            raw_model_id, has_loader, resolved_name = has_model_loader(
+                hanlp,
+                configured_model_id,
+            )
+            if not has_loader:
+                emit({
+                    "engine": "hanlp2",
+                    "status": "unavailable",
+                    "reason_code": "HANLP2_ENTRYPOINT_MISSING",
+                    "reason": "HanLP2 tokenizer entry point was not found.",
+                    "python_version": version_text(),
+                    "model_id": raw_model_id,
+                    "resolved_model": resolved_name,
+                    "tokens": [],
+                })
+                return
         emit({
             "engine": "hanlp2",
             "status": "ready",
@@ -108,13 +157,59 @@ def main():
             "reason": "HanLP2 semantic engine is ready.",
             "python_version": version_text(),
             "tokenizer_attr": attr,
+            "model_id": raw_model_id if fn is None else configured_model_id,
+            "resolved_model": resolved_name if fn is None else "",
             "tokens": [],
+        })
+        return
+
+    if mode in {"model_status", "ensure_model"}:
+        raw_model_id, model, resolved_name, tokens, error_name = validate_model(
+            hanlp,
+            configured_model_id,
+        )
+        if model is None:
+            reason = "HanLP2 model loader is unavailable or model_id is empty."
+            if error_name:
+                reason = f"HanLP2 model load failed: {error_name}."
+            emit({
+                "engine": "hanlp2",
+                "status": "unavailable",
+                "reason_code": "HANLP2_MODEL_LOAD_FAILED",
+                "reason": reason,
+                "python_version": version_text(),
+                "model_id": raw_model_id,
+                "resolved_model": resolved_name,
+                "tokens": [],
+            })
+            return
+        emit({
+            "engine": "hanlp2",
+            "status": "ready",
+            "reason_code": "HANLP2_MODEL_READY",
+            "reason": "HanLP2 tokenizer model is ready.",
+            "python_version": version_text(),
+            "model_id": raw_model_id,
+            "resolved_model": resolved_name,
+            "tokenizer_attr": attr,
+            "tokens": tokens,
         })
         return
 
     text = str(payload.get("text") or "")
     try:
-        result = fn(text)
+        if configured_model_id:
+            _, model, _ = load_model(hanlp, configured_model_id)
+            if model is not None:
+                result = model(text)
+            elif fn is not None:
+                result = fn(text)
+            else:
+                raise RuntimeError("HanLP2 tokenizer entry point was not found.")
+        else:
+            if fn is None:
+                raise RuntimeError("HanLP2 tokenizer entry point was not found.")
+            result = fn(text)
     except Exception as exc:
         emit({
             "engine": "hanlp2",
@@ -164,6 +259,7 @@ class HanLPSidecarRuntime:
         return {
             "enabled": bool(getattr(hanlp_cfg, "enabled", False)),
             "python_executable": str(getattr(hanlp_cfg, "python_executable", "") or "").strip(),
+            "model_id": str(getattr(hanlp_cfg, "model_id", "") or "").strip(),
             "probe_timeout_sec": float(getattr(hanlp_cfg, "probe_timeout_sec", 5.0) or 5.0),
             "tokenize_timeout_sec": float(getattr(hanlp_cfg, "tokenize_timeout_sec", 15.0) or 15.0),
             "hanlp_home": str(getattr(hanlp_cfg, "hanlp_home", "") or "").strip(),
@@ -174,6 +270,7 @@ class HanLPSidecarRuntime:
             {
                 "enabled": payload["enabled"],
                 "python_executable": payload["python_executable"],
+                "model_id": payload["model_id"],
                 "hanlp_home": payload["hanlp_home"],
             },
             sort_keys=True,
@@ -283,6 +380,64 @@ class HanLPSidecarRuntime:
         )
         self._probe_cache_state = state
         return dict(state)
+
+    def model_status(self, config: KnowledgeConfig | None) -> dict[str, str]:
+        payload = self._config_payload(config)
+        probe_state = self.probe(config)
+        if probe_state.get("status") != "ready":
+            return dict(probe_state)
+
+        executable = self._ensure_sidecar(payload)
+        if executable is None:
+            return dict(
+                self._probe_cache_state
+                or self._state(
+                    status="unavailable",
+                    reason_code="HANLP2_SIDECAR_UNCONFIGURED",
+                    reason="HanLP2 sidecar is not configured.",
+                ),
+            )
+
+        result = self._run_bridge(
+            executable,
+            mode="model_status",
+            payload=payload,
+            timeout=payload["tokenize_timeout_sec"],
+        )
+        return self._state(
+            status=str(result.get("status") or "unavailable"),
+            reason_code=str(result.get("reason_code") or "HANLP2_MODEL_LOAD_FAILED"),
+            reason=str(result.get("reason") or "HanLP2 model probe failed."),
+        )
+
+    def ensure_model(self, config: KnowledgeConfig | None) -> dict[str, str]:
+        payload = self._config_payload(config)
+        probe_state = self.probe(config)
+        if probe_state.get("status") != "ready":
+            return dict(probe_state)
+
+        executable = self._ensure_sidecar(payload)
+        if executable is None:
+            return dict(
+                self._probe_cache_state
+                or self._state(
+                    status="unavailable",
+                    reason_code="HANLP2_SIDECAR_UNCONFIGURED",
+                    reason="HanLP2 sidecar is not configured.",
+                ),
+            )
+
+        result = self._run_bridge(
+            executable,
+            mode="ensure_model",
+            payload=payload,
+            timeout=payload["tokenize_timeout_sec"],
+        )
+        return self._state(
+            status=str(result.get("status") or "unavailable"),
+            reason_code=str(result.get("reason_code") or "HANLP2_MODEL_LOAD_FAILED"),
+            reason=str(result.get("reason") or "HanLP2 model verification failed."),
+        )
 
     def tokenize(
         self,

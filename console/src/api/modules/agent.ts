@@ -110,4 +110,73 @@ export const agentApi = {
     }>("/agent/local-whisper-install", {
       method: "POST",
     }),
+
+  getHanlpStatus: () =>
+    request<{
+      sidecar: {
+        status: string;
+        reason_code: string;
+        reason: string;
+        enabled: boolean;
+        python_executable: string;
+        managed: boolean;
+        uv_available: boolean;
+        uv_executable: string;
+        hanlp_home: string;
+      };
+      model: {
+        status: string;
+        reason_code: string;
+        reason: string;
+        model_id: string;
+      };
+    }>("/agent/hanlp-status"),
+
+  installHanlp: () =>
+    request<{
+      success: boolean;
+      already_available: boolean;
+      status_before: {
+        sidecar: { status: string };
+        model: { status: string };
+      };
+      status_after: {
+        sidecar: { status: string };
+        model: { status: string };
+      };
+      operations: {
+        name: string;
+        attempted: boolean;
+        installer: string | null;
+        command: string;
+        ok: boolean;
+        output: string;
+        returncode: number | null;
+      }[];
+      manual_steps: string[];
+    }>("/agent/hanlp-install", {
+      method: "POST",
+    }),
+
+  downloadHanlpModel: () =>
+    request<{
+      success: boolean;
+      status_before: {
+        sidecar: { status: string };
+        model: { status: string };
+      };
+      status_after: {
+        sidecar: { status: string };
+        model: { status: string };
+      };
+      model_result: {
+        status: string;
+        reason_code: string;
+        reason: string;
+        model_id: string;
+      };
+      manual_steps: string[];
+    }>("/agent/hanlp-download-model", {
+      method: "POST",
+    }),
 };

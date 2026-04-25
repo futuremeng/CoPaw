@@ -40,6 +40,7 @@ export const KEY_TO_PATH: Record<string, string> = {
   "token-usage": "/token-usage",
   "agent-stats": "/agent-stats",
   "voice-transcription": "/voice-transcription",
+  nlp: "/nlp",
   debug: "/debug",
   backups: "/backups",
 };
@@ -65,6 +66,7 @@ export const KEY_TO_LABEL: Record<string, string> = {
   security: "nav.security",
   "token-usage": "nav.tokenUsage",
   agents: "nav.agents",
+  nlp: "nav.nlp",
   debug: "nav.debug",
   backups: "nav.backups",
 };

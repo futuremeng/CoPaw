@@ -10,6 +10,7 @@ import {
   Typography,
   message,
 } from "antd";
+import { useNavigate } from "react-router-dom";
 import api, { getApiToken, getApiUrl } from "../../../api";
 import type { KnowledgeSourceItem, ProjectKnowledgeSyncState } from "../../../api/types";
 import { agentsApi } from "../../../api/modules/agents";
@@ -38,6 +39,7 @@ export default function ProjectKnowledgeSettingsPanel(
   props: ProjectKnowledgeSettingsPanelProps,
 ) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const {
     agentId,
     projectId,
@@ -638,6 +640,13 @@ export default function ProjectKnowledgeSettingsPanel(
                         </div>
                       ))}
                     </div>
+                    <Button
+                      type="link"
+                      style={{ paddingInline: 0, marginTop: 8 }}
+                      onClick={() => navigate("/nlp")}
+                    >
+                      {t("projects.knowledge.openNlpSettings", "Open NLP settings")}
+                    </Button>
                   </div>
                 ) : null}
               </div>

@@ -35,6 +35,7 @@ const AgentStatsPage = lazyImportWithRetry("../../pages/Settings/AgentStats");
 const VoiceTranscriptionPage = lazyImportWithRetry(
   "../../pages/Settings/VoiceTranscription",
 );
+const NlpPage = lazyImportWithRetry("../../pages/Settings/Nlp");
 const AgentsPage = lazyImportWithRetry("../../pages/Settings/Agents");
 const KnowledgePage = lazyImportWithRetry("../../pages/Agent/Knowledge");
 const ProjectsListPage = lazyImportWithRetry(
@@ -72,6 +73,7 @@ const pathToKey: Record<string, string> = {
   "/token-usage": "token-usage",
   "/agent-stats": "agent-stats",
   "/voice-transcription": "voice-transcription",
+  "/nlp": "nlp",
   "/debug": "debug",
   "/backups": "backups",
 };
@@ -143,6 +145,7 @@ export default function MainLayout() {
                     path="/voice-transcription"
                     element={<VoiceTranscriptionPage />}
                   />
+                  <Route path="/nlp" element={<NlpPage />} />
                   <Route path="/debug" element={<DebugPage />} />
                   <Route path="/backups" element={<BackupsPage />} />
 

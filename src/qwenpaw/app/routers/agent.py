@@ -484,6 +484,57 @@ async def post_local_whisper_install() -> dict:
 
 
 @router.get(
+    "/hanlp-status",
+    summary="Check HanLP sidecar availability",
+    description=(
+        "Check whether the managed HanLP sidecar is ready and whether the "
+        "default tokenizer model has been verified."
+    ),
+)
+async def get_hanlp_status() -> dict:
+    """Check HanLP sidecar and model readiness."""
+    from ...agents.utils.hanlp_sidecar import get_hanlp_sidecar_status
+
+    return await asyncio.to_thread(get_hanlp_sidecar_status)
+
+
+@router.post(
+    "/hanlp-install",
+    summary="Install HanLP sidecar",
+    description=(
+        "Create a managed HanLP sidecar environment with uv and install the "
+        "HanLP package into it."
+    ),
+)
+async def post_hanlp_install() -> dict:
+    """Install the managed HanLP sidecar environment."""
+    from ...agents.utils.hanlp_sidecar import auto_install_hanlp_sidecar
+
+    try:
+        return await asyncio.to_thread(auto_install_hanlp_sidecar)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post(
+    "/hanlp-download-model",
+    summary="Download and verify HanLP model",
+    description=(
+        "Download the configured HanLP tokenizer model inside the managed "
+        "sidecar and verify it can be loaded."
+    ),
+)
+async def post_hanlp_download_model() -> dict:
+    """Download and verify the configured HanLP tokenizer model."""
+    from ...agents.utils.hanlp_sidecar import ensure_hanlp_model
+
+    try:
+        return await asyncio.to_thread(ensure_hanlp_model)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.get(
     "/transcription-providers",
     summary="List transcription providers",
     description=(
