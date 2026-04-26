@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import fnmatch
+import filecmp
 import hashlib
 import json
 import logging
@@ -366,6 +367,8 @@ class KnowledgeManager:
             self._delete_chunk_path(chunk_path)
         for ner_path in self._load_source_ner_manifest(source_id):
             self._delete_ner_path(ner_path)
+        for snapshot in self._load_source_snapshot_manifest(source_id):
+            self._delete_snapshot_file(snapshot.get("snapshot_path"))
         payload = self._load_index_payload_safe(source_id)
         self._delete_chunks_from_payload(payload)
         self._delete_ner_from_payload(payload)
@@ -528,8 +531,40 @@ class KnowledgeManager:
     def _source_snapshot_manifest_path(self, source_id: str) -> Path:
         return self._source_dir(source_id) / "snapshot-manifest.json"
 
-    def _source_raw_dir(self, source_id: str) -> Path:
+    def _source_uses_root_raw_dir(self, source: KnowledgeSourceSpec | None) -> bool:
+        if source is None:
+            return False
+        return source.type == "directory" and bool(str(source.project_id or "").strip())
+
+    def _source_raw_dir(
+        self,
+        source_id: str,
+        source: KnowledgeSourceSpec | None = None,
+    ) -> Path:
+        if self._source_uses_root_raw_dir(source):
+            return self.raw_dir
         return self.raw_dir / self._safe_name(source_id)
+
+    def _delete_snapshot_file(self, snapshot_path: str | Path | None) -> None:
+        text = str(snapshot_path or "").strip()
+        if not text:
+            return
+        target = Path(text)
+        if not target.is_absolute():
+            target = self.root_dir / text
+        if not target.exists() or not target.is_file():
+            return
+        try:
+            target.unlink()
+        except FileNotFoundError:
+            return
+        current = target.parent
+        while current != self.raw_dir and current.exists():
+            try:
+                current.rmdir()
+            except OSError:
+                break
+            current = current.parent
 
     def _load_source_chunk_manifest(self, source_id: str) -> set[str]:
         path = self._source_chunk_manifest_path(source_id)
@@ -1205,6 +1240,60 @@ class KnowledgeManager:
         filename = Path(source_path).name or self._safe_name(source.id)
         return Path(self._snapshot_filename(filename, indexed_at))
 
+    def _latest_snapshot_by_document(
+        self,
+        snapshots: list[dict[str, str]],
+    ) -> dict[str, dict[str, str]]:
+        latest: dict[str, dict[str, str]] = {}
+        for item in snapshots:
+            document_path = str(item.get("document_path") or "").strip()
+            if not document_path:
+                continue
+            latest[document_path] = item
+        return latest
+
+    def _snapshot_matches_source(
+        self,
+        source_path: Path,
+        snapshot_entry: dict[str, str] | None,
+    ) -> bool:
+        if not snapshot_entry:
+            return False
+        snapshot_path_raw = str(snapshot_entry.get("snapshot_path") or "").strip()
+        if not snapshot_path_raw:
+            return False
+        snapshot_path = Path(snapshot_path_raw)
+        if not snapshot_path.exists() or not snapshot_path.is_file():
+            return False
+        try:
+            return filecmp.cmp(source_path, snapshot_path, shallow=False)
+        except OSError:
+            return False
+
+    def _ensure_snapshot_entry_under_raw_root(
+        self,
+        raw_root: Path,
+        snapshot_entry: dict[str, str],
+    ) -> dict[str, str]:
+        snapshot_relative = str(snapshot_entry.get("snapshot_relative_path") or "").strip()
+        if not snapshot_relative:
+            return snapshot_entry
+
+        target_path = raw_root / snapshot_relative
+        current_path_raw = str(snapshot_entry.get("snapshot_path") or "").strip()
+        current_path = Path(current_path_raw) if current_path_raw else None
+        if current_path == target_path:
+            return snapshot_entry
+
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        if current_path is not None and current_path.exists() and current_path.is_file():
+            if target_path != current_path:
+                shutil.copy2(current_path, target_path)
+                self._delete_snapshot_file(current_path)
+        updated = dict(snapshot_entry)
+        updated["snapshot_path"] = target_path.as_posix()
+        return updated
+
     def _persist_source_snapshots(
         self,
         source: KnowledgeSourceSpec,
@@ -1215,9 +1304,10 @@ class KnowledgeManager:
         if source.type not in {"file", "directory"}:
             return []
 
-        raw_root = self._source_raw_dir(source.id)
+        raw_root = self._source_raw_dir(source.id, source)
         raw_root.mkdir(parents=True, exist_ok=True)
         existing = self._load_source_snapshot_manifest(source.id)
+        latest_by_document = self._latest_snapshot_by_document(existing)
         seen = {
             (item.get("document_path") or "", item.get("snapshot_path") or "")
             for item in existing
@@ -1232,6 +1322,21 @@ class KnowledgeManager:
             source_path = Path(source_path_raw).expanduser().resolve()
             if not source_path.exists() or not source_path.is_file():
                 continue
+            document_path = str(document.get("path") or source_path.as_posix())
+            latest_snapshot = latest_by_document.get(document_path)
+            if self._snapshot_matches_source(source_path, latest_snapshot):
+                reused_entry = dict(latest_snapshot)
+                if self._source_uses_root_raw_dir(source):
+                    reused_entry = self._ensure_snapshot_entry_under_raw_root(raw_root, reused_entry)
+                    if reused_entry != latest_snapshot:
+                        manifest = [reused_entry if item is latest_snapshot else item for item in manifest]
+                        latest_by_document[document_path] = reused_entry
+                        seen = {
+                            (item.get("document_path") or "", item.get("snapshot_path") or "")
+                            for item in manifest
+                        }
+                results.append(reused_entry)
+                continue
             snapshot_relative = self._build_snapshot_relative_path(
                 source,
                 document,
@@ -1241,7 +1346,7 @@ class KnowledgeManager:
             target_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source_path, target_path)
             snapshot_entry = {
-                "document_path": str(document.get("path") or source_path.as_posix()),
+                "document_path": document_path,
                 "relative_path": str(document.get("relative_path") or "").strip(),
                 "title": str(document.get("title") or source_path.name),
                 "snapshot_path": target_path.as_posix(),
@@ -1252,6 +1357,7 @@ class KnowledgeManager:
             if key not in seen:
                 manifest.append(snapshot_entry)
                 seen.add(key)
+            latest_by_document[document_path] = snapshot_entry
             results.append(snapshot_entry)
 
         if manifest:

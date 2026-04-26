@@ -83,6 +83,7 @@ class CommandHandler(ConversationCommandHandlerMixin):
         memory: "AgentContext",
         memory_manager: "BaseMemoryManager | None" = None,
         context_manager: "BaseContextManager | None" = None,
+        enable_memory_manager: bool | None = None,
     ):
         """Initialize command handler.
 
@@ -91,10 +92,15 @@ class CommandHandler(ConversationCommandHandlerMixin):
             memory: Agent's context instance (AgentContext)
             memory_manager: Optional memory manager instance
             context_manager: Optional context manager instance
+            enable_memory_manager: Backward-compatible flag to disable
+                memory-manager-backed commands even when a manager instance
+                is passed by older call sites
         """
         self.agent_name = agent_name
         self.memory: "AgentContext" = memory
-        self.memory_manager: "BaseMemoryManager" = memory_manager
+        if enable_memory_manager is False:
+            memory_manager = None
+        self.memory_manager: "BaseMemoryManager | None" = memory_manager
         self.context_manager: "BaseContextManager" = context_manager
 
     def _get_agent_config(self):

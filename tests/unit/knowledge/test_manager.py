@@ -153,6 +153,71 @@ def test_project_directory_raw_snapshots_strip_redundant_project_prefix(tmp_path
     assert chunk_relative.startswith("chunks/original/note.snapshot_")
 
 
+def test_project_directory_raw_snapshots_write_to_top_level_raw_dir(tmp_path: Path):
+    project_root = tmp_path / "project-gfc3xo"
+    project_root.mkdir(parents=True, exist_ok=True)
+    (project_root / "aacid__duxiu_files").mkdir(parents=True, exist_ok=True)
+    source_file = project_root / "aacid__duxiu_files" / "260317_002144.md"
+    source_file.write_text("only uploaded once", encoding="utf-8")
+
+    config = Config().knowledge
+    source = KnowledgeSourceSpec(
+        id="project-project-gfc3xo-workspace",
+        name="Project Workspace: project-gfc3xo",
+        type="directory",
+        location=str(project_root),
+        content="",
+        enabled=True,
+        recursive=True,
+        project_id="project-gfc3xo",
+        tags=["project"],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    manager.index_source(source, config)
+
+    snapshots = list((manager.raw_dir / "aacid__duxiu_files").glob("260317_002144.snapshot_*.md"))
+
+    assert len(snapshots) == 1
+    assert not (manager.raw_dir / source.id).exists()
+
+
+def test_project_directory_unchanged_file_reuses_existing_snapshot(tmp_path: Path):
+    project_root = tmp_path / "project-gfc3xo"
+    project_root.mkdir(parents=True, exist_ok=True)
+    (project_root / "aacid__duxiu_files").mkdir(parents=True, exist_ok=True)
+    source_file = project_root / "aacid__duxiu_files" / "260317_002144.md"
+    source_file.write_text("only uploaded once", encoding="utf-8")
+
+    config = Config().knowledge
+    source = KnowledgeSourceSpec(
+        id="project-project-gfc3xo-workspace",
+        name="Project Workspace: project-gfc3xo",
+        type="directory",
+        location=str(project_root),
+        content="",
+        enabled=True,
+        recursive=True,
+        project_id="project-gfc3xo",
+        tags=["project"],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    first = manager.index_source(source, config)
+    second = manager.index_source(source, config)
+    manifest = json.loads(
+        (manager.get_source_storage_dir(source.id) / "snapshot-manifest.json").read_text(encoding="utf-8")
+    )
+    snapshots = list((manager.raw_dir / "aacid__duxiu_files").glob("260317_002144.snapshot_*.md"))
+
+    assert first["snapshot_count"] == 1
+    assert second["snapshot_count"] == 1
+    assert len(manifest["snapshots"]) == 1
+    assert len(snapshots) == 1
+
+
 def test_chunk_documents_split_sentences_and_count(tmp_path: Path):
     config = Config().knowledge
     config.index.chunk_size = 10_000
