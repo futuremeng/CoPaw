@@ -10,6 +10,17 @@ function parsePaneSize(value: unknown, fallback: number): number {
     : fallback;
 }
 
+function parseStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 export interface ProjectDetailLayoutPrefs {
   leftPanelCollapsed: boolean;
   activeStage: ProjectStageKey;
@@ -17,6 +28,8 @@ export interface ProjectDetailLayoutPrefs {
   knowledgeDockTab: KnowledgeDockTabKey;
   selectedMetricFilter: ProjectFileFilterKey | "";
   treeDisplayMode: TreeDisplayMode;
+  treeExpandedKeys: string[];
+  selectedTreeFilePath: string;
   leftPaneSize: number;
   workbenchPaneSize: number;
   chatPaneSize: number;
@@ -51,6 +64,8 @@ export function defaultProjectLayoutPrefs(): ProjectDetailLayoutPrefs {
     knowledgeDockTab: "explore",
     selectedMetricFilter: "",
     treeDisplayMode: "filter",
+    treeExpandedKeys: [],
+    selectedTreeFilePath: "",
     leftPaneSize: 440,
     workbenchPaneSize: 620,
     chatPaneSize: 520,
@@ -87,6 +102,11 @@ export function parseProjectLayoutPrefs(raw: string | null): ProjectDetailLayout
       selectedMetricFilter:
         parsed.selectedMetricFilter ?? fallback.selectedMetricFilter,
       treeDisplayMode: parseTreeMode(parsed.treeDisplayMode, fallback.treeDisplayMode),
+      treeExpandedKeys: parseStringArray(parsed.treeExpandedKeys),
+      selectedTreeFilePath:
+        typeof parsed.selectedTreeFilePath === "string"
+          ? parsed.selectedTreeFilePath.trim()
+          : fallback.selectedTreeFilePath,
       leftPaneSize: parsePaneSize(parsed.leftPaneSize, fallback.leftPaneSize),
       workbenchPaneSize: parsePaneSize(
         parsed.workbenchPaneSize,

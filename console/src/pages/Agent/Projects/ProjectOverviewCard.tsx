@@ -15,7 +15,7 @@ import {
   SearchOutlined,
 } from "@ant-design/icons";
 import { Button, Card, Empty, Input, Segmented, Spin, Tree, Typography } from "antd";
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type {
@@ -37,7 +37,7 @@ import {
   type FileMetricFilterKey,
   type ProjectFileFilterKey,
 } from "./filtering";
-import type { ProjectStageKey } from "./projectLayoutPrefs";
+import type { ProjectStageKey, TreeDisplayMode } from "./projectLayoutPrefs";
 import { isBuiltInProjectFile } from "./builtInFiles";
 import styles from "./index.module.less";
 
@@ -65,8 +65,10 @@ interface ProjectOverviewCardProps {
   projectTreeLoading?: boolean;
   priorityFilePaths: string[];
   selectedFilePath: string;
+  expandedKeys?: string[];
   selectedAttachPaths: string[];
   onUploadFiles: () => void;
+  onExpandedKeysChange?: (keys: string[]) => void;
   onSelectFileFromTree: (path: string) => void;
   onAttachArtifactToChat: (path: string) => void;
   onLoadProjectTreeChildren?: (path: string) => Promise<AgentProjectFileTreeNode[]>;
@@ -79,11 +81,32 @@ interface TreeNode {
   isLeaf?: boolean;
 }
 
-type TreeDisplayMode = "filter" | "highlight";
-
 interface LazyTreeItem extends AgentProjectFileTreeNode {
   loaded: boolean;
   children?: LazyTreeItem[];
+}
+
+function normalizeTreeKeys(keys: string[]): string[] {
+  const next: string[] = [];
+  const seen = new Set<string>();
+  for (const key of keys) {
+    const normalized = String(key || "").trim();
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    next.push(normalized);
+  }
+  return next;
+}
+
+function compareTreePathDepth(left: string, right: string): number {
+  const leftDepth = left.split("/").filter(Boolean).length;
+  const rightDepth = right.split("/").filter(Boolean).length;
+  if (leftDepth !== rightDepth) {
+    return leftDepth - rightDepth;
+  }
+  return left.localeCompare(right);
 }
 
 function formatUpdatedDateParts(updatedTime?: string): { day: string; month: string } {
@@ -351,6 +374,41 @@ function toLazyTreeItems(nodes: AgentProjectFileTreeNode[]): LazyTreeItem[] {
   }));
 }
 
+function mergeLazyTreeRootItems(
+  current: LazyTreeItem[],
+  nextNodes: AgentProjectFileTreeNode[],
+): LazyTreeItem[] {
+  const currentByPath = new Map(current.map((item) => [item.path, item]));
+
+  return nextNodes.map((node) => {
+    const previous = currentByPath.get(node.path);
+    if (!node.is_directory) {
+      return {
+        ...node,
+        loaded: true,
+        children: undefined,
+      };
+    }
+
+    if (!previous || !previous.is_directory) {
+      return {
+        ...node,
+        loaded: node.child_count <= 0,
+        children: undefined,
+      };
+    }
+
+    const hasChildren = Boolean(previous.children && previous.children.length > 0);
+    const shouldKeepChildren = previous.loaded && hasChildren && node.child_count > 0;
+
+    return {
+      ...node,
+      loaded: node.child_count <= 0 ? true : previous.loaded,
+      children: shouldKeepChildren ? previous.children : undefined,
+    };
+  });
+}
+
 function updateLazyTreeChildren(
   items: LazyTreeItem[],
   targetPath: string,
@@ -530,8 +588,10 @@ export default function ProjectOverviewCard({
   projectTreeLoading = false,
   priorityFilePaths,
   selectedFilePath,
+  expandedKeys: controlledExpandedKeys,
   selectedAttachPaths,
   onUploadFiles,
+  onExpandedKeysChange,
   onSelectFileFromTree,
   onAttachArtifactToChat,
   onLoadProjectTreeChildren,
@@ -542,13 +602,19 @@ export default function ProjectOverviewCard({
   const [workspaceSummaryExpanded, setWorkspaceSummaryExpanded] = useState(false);
   const [treeTransitioning, setTreeTransitioning] = useState(false);
   const [treeFilterQuery, setTreeFilterQuery] = useState("");
-  const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
+  const [internalExpandedKeys, setInternalExpandedKeys] = useState<string[]>([]);
   const [lazyTreeItems, setLazyTreeItems] = useState<LazyTreeItem[]>([]);
   const [refreshingDirectoryPaths, setRefreshingDirectoryPaths] = useState<string[]>([]);
   const treeExpandedInitializedRef = useRef(false);
+  const lazyTreeItemsRef = useRef<LazyTreeItem[]>([]);
+  const loadingTreeDirectoryPathsRef = useRef<Set<string>>(new Set());
   const updatedDateParts = formatUpdatedDateParts(selectedProject?.updated_time);
   const deferredTreeFilterQuery = useDeferredValue(treeFilterQuery);
   const normalizedTreeFilterQuery = normalizeProjectPath(deferredTreeFilterQuery.trim());
+  const expandedKeys = useMemo(
+    () => normalizeTreeKeys(controlledExpandedKeys ?? internalExpandedKeys),
+    [controlledExpandedKeys, internalExpandedKeys],
+  );
 
   const builtInFiles = useMemo(
     () => projectFiles.filter((item) => isBuiltInProjectFile(item.path)),
@@ -683,17 +749,60 @@ export default function ProjectOverviewCard({
       || ["original", "intermediate", "artifact", "agent", "skill", "flow", "case", "builtin"].includes(selectedMetricFilter)),
   );
 
+  const updateExpandedKeys = useCallback((nextKeys: string[]) => {
+    const normalizedKeys = normalizeTreeKeys(nextKeys);
+    if (onExpandedKeysChange) {
+      onExpandedKeysChange(normalizedKeys);
+      return;
+    }
+    setInternalExpandedKeys(normalizedKeys);
+  }, [onExpandedKeysChange]);
+
+  useEffect(() => {
+    lazyTreeItemsRef.current = lazyTreeItems;
+  }, [lazyTreeItems]);
+
   useEffect(() => {
     if (!treeOnly) {
       return;
     }
-    setLazyTreeItems(toLazyTreeItems(projectTreeNodes || []));
+    setLazyTreeItems((prev) => mergeLazyTreeRootItems(prev, projectTreeNodes || []));
     setRefreshingDirectoryPaths([]);
   }, [projectTreeNodes, treeOnly]);
 
   useEffect(() => {
     setTreeFilterQuery("");
   }, [selectedProject?.id]);
+
+  const loadTreeDirectory = useCallback(async (path: string, options?: { force?: boolean }) => {
+    if (!useLazyTreeMode || !onLoadProjectTreeChildren) {
+      return;
+    }
+
+    const normalizedPath = String(path || "").trim();
+    if (!normalizedPath) {
+      return;
+    }
+
+    const currentNode = findLazyTreeItem(lazyTreeItemsRef.current, normalizedPath);
+    if (!currentNode || !currentNode.is_directory) {
+      return;
+    }
+    if (!options?.force && currentNode.loaded) {
+      return;
+    }
+    if (loadingTreeDirectoryPathsRef.current.has(normalizedPath)) {
+      return;
+    }
+
+    loadingTreeDirectoryPathsRef.current.add(normalizedPath);
+    try {
+      const children = await onLoadProjectTreeChildren(normalizedPath);
+      setLazyTreeItems((prev) => updateLazyTreeChildren(prev, normalizedPath, toLazyTreeItems(children)));
+    } finally {
+      loadingTreeDirectoryPathsRef.current.delete(normalizedPath);
+    }
+  }, [onLoadProjectTreeChildren, useLazyTreeMode]);
 
   const handleRefreshTreeDirectory = async (path: string) => {
     if (!onRefreshProjectTreeDirectory) {
@@ -711,6 +820,20 @@ export default function ProjectOverviewCard({
       setRefreshingDirectoryPaths((prev) => prev.filter((item) => item !== path));
     }
   };
+
+  useEffect(() => {
+    if (!useLazyTreeMode || !onLoadProjectTreeChildren || expandedKeys.length === 0) {
+      return;
+    }
+
+    const nextPaths = [...expandedKeys].sort(compareTreePathDepth);
+    for (const path of nextPaths) {
+      const currentNode = findLazyTreeItem(lazyTreeItems, path);
+      if (currentNode && currentNode.is_directory && !currentNode.loaded) {
+        void loadTreeDirectory(path);
+      }
+    }
+  }, [expandedKeys, lazyTreeItems, loadTreeDirectory, onLoadProjectTreeChildren, useLazyTreeMode]);
 
   const visibleLazyTreeItems = useMemo(() => {
     if (!useLazyTreeMode) {
@@ -774,28 +897,31 @@ export default function ProjectOverviewCard({
 
   useEffect(() => {
     treeExpandedInitializedRef.current = false;
-    setExpandedKeys([]);
-  }, [normalizedTreeFilterQuery, selectedProject?.id, useLazyTreeMode]);
+  }, [selectedProject?.id, useLazyTreeMode]);
 
   useEffect(() => {
-    if (treeExpandedInitializedRef.current) {
-      return;
-    }
     const nextTreeData = useLazyTreeMode ? lazyTreeData : treeData;
     if (nextTreeData.length === 0) {
       return;
     }
+    if (expandedKeys.length > 0) {
+      treeExpandedInitializedRef.current = true;
+      return;
+    }
+    if (treeExpandedInitializedRef.current) {
+      return;
+    }
     if (useLazyTreeMode) {
-      setExpandedKeys(
+      updateExpandedKeys(
         nextTreeData.length === 1 && !nextTreeData[0].isLeaf
           ? [String(nextTreeData[0].key)]
           : [],
       );
     } else {
-      setExpandedKeys(collectDirectoryKeys(nextTreeData));
+      updateExpandedKeys(collectDirectoryKeys(nextTreeData));
     }
     treeExpandedInitializedRef.current = true;
-  }, [lazyTreeData, treeData, useLazyTreeMode]);
+  }, [expandedKeys.length, lazyTreeData, treeData, updateExpandedKeys, useLazyTreeMode]);
 
   useEffect(() => {
     if (treeDisplayMode !== "filter") {
@@ -952,16 +1078,27 @@ export default function ProjectOverviewCard({
                 selectedKeys={selectedFilePath ? [selectedFilePath] : []}
                 treeData={useLazyTreeMode ? lazyTreeData : treeData}
                 expandedKeys={expandedKeys}
-                onExpand={(keys) => setExpandedKeys(keys as string[])}
+                onExpand={(keys) => {
+                  const nextKeys = normalizeTreeKeys((keys as string[]).map((key) => String(key)));
+                  const previousKeySet = new Set(expandedKeys);
+                  updateExpandedKeys(nextKeys);
+                  if (!useLazyTreeMode) {
+                    return;
+                  }
+                  for (const key of nextKeys) {
+                    if (!previousKeySet.has(key)) {
+                      void loadTreeDirectory(key);
+                    }
+                  }
+                }}
                 loadData={useLazyTreeMode && onLoadProjectTreeChildren
                   ? async (treeNode) => {
                     const key = String(treeNode.key || "");
-                    const currentNode = findLazyTreeItem(lazyTreeItems, key);
+                    const currentNode = findLazyTreeItem(lazyTreeItemsRef.current, key);
                     if (!currentNode || !currentNode.is_directory || currentNode.loaded) {
                       return;
                     }
-                    const children = await onLoadProjectTreeChildren(key);
-                    setLazyTreeItems((prev) => updateLazyTreeChildren(prev, key, toLazyTreeItems(children)));
+                    await loadTreeDirectory(key);
                   }
                   : undefined}
                 onSelect={(keys) => {
@@ -1165,7 +1302,7 @@ export default function ProjectOverviewCard({
                 selectedKeys={selectedFilePath && treeFilePaths.includes(selectedFilePath) ? [selectedFilePath] : []}
                 treeData={treeData}
                 expandedKeys={expandedKeys}
-                onExpand={(keys) => setExpandedKeys(keys as string[])}
+                onExpand={(keys) => updateExpandedKeys((keys as string[]).map((key) => String(key)))}
                 onSelect={(keys) => {
                   const key = String(keys[0] || "");
                   if (key) {

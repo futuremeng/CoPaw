@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -6,6 +6,7 @@ import type {
   AgentProjectFileInfo,
   AgentProjectFileSummary,
   AgentProjectSummary,
+  AgentProjectFileTreeNode,
 } from "../../../api/types/agents";
 import ProjectOverviewCard from "./ProjectOverviewCard";
 import type { ProjectStageKey } from "./projectLayoutPrefs";
@@ -65,11 +66,16 @@ function renderCard(
     initialFilter?: "" | "original" | "intermediate" | "artifact" | "agent" | "skill" | "flow" | "case" | "builtin" | "markdown" | "text" | "script" | "otherType";
     initialTreeDisplayMode?: "filter" | "highlight";
     projectFileSummary?: AgentProjectFileSummary | null;
+    selectedFilePath?: string;
+    expandedKeys?: string[];
+    projectTreeNodes?: AgentProjectFileTreeNode[];
+    onLoadProjectTreeChildren?: (path: string) => Promise<AgentProjectFileTreeNode[]>;
   },
 ) {
   const onUploadFiles = vi.fn();
   const onSelectFileFromTree = vi.fn();
   const onAttachArtifactToChat = vi.fn();
+  const onExpandedKeysChange = vi.fn();
 
   function TestHarness() {
     const [selectedMetricFilter, setSelectedMetricFilter] = useState<
@@ -92,12 +98,16 @@ function renderCard(
         projectWorkspaceSummary="snapshot"
         projectFiles={projectFiles}
         projectFileSummary={options?.projectFileSummary ?? null}
+        projectTreeNodes={options?.projectTreeNodes ?? []}
         priorityFilePaths={[]}
-        selectedFilePath=""
+        selectedFilePath={options?.selectedFilePath ?? ""}
+        expandedKeys={options?.expandedKeys}
         selectedAttachPaths={[]}
         onUploadFiles={onUploadFiles}
         onSelectFileFromTree={onSelectFileFromTree}
         onAttachArtifactToChat={onAttachArtifactToChat}
+        onExpandedKeysChange={options?.expandedKeys ? onExpandedKeysChange : undefined}
+        onLoadProjectTreeChildren={options?.onLoadProjectTreeChildren}
       />
     );
   }
@@ -290,5 +300,129 @@ describe("ProjectOverviewCard interactions", () => {
     expect(screen.getByRole("button", { name: /Intermediate Files/i }).textContent).toContain("2");
     expect(screen.getByRole("button", { name: /Markdown/i }).textContent).toContain("6");
     expect(screen.getByRole("button", { name: /文本文件/i }).textContent).toContain("4");
+  });
+
+  it("loads expanded lazy directories automatically in tree-only mode", async () => {
+    const onLoadProjectTreeChildren = vi.fn(async () => [
+      {
+        filename: "guide.md",
+        path: "original/guide.md",
+        size: 10,
+        modified_time: "2026-04-09T00:00:00Z",
+        is_directory: false,
+        child_count: 0,
+        descendant_file_count: 0,
+      },
+    ]);
+
+    renderCard([], {
+      treeOnly: true,
+      expandedKeys: ["original"],
+      projectTreeNodes: [
+        {
+          filename: "original",
+          path: "original",
+          size: 0,
+          modified_time: "2026-04-09T00:00:00Z",
+          is_directory: true,
+          child_count: 1,
+          descendant_file_count: 1,
+        },
+      ],
+      onLoadProjectTreeChildren,
+    });
+
+    await waitFor(() => {
+      expect(onLoadProjectTreeChildren).toHaveBeenCalledWith("original");
+    });
+
+    expect(await screen.findByText("guide.md")).toBeDefined();
+  });
+
+  it("keeps loaded lazy children when root tree nodes refresh", async () => {
+    const onLoadProjectTreeChildren = vi.fn(async () => [
+      {
+        filename: "guide.md",
+        path: "original/guide.md",
+        size: 10,
+        modified_time: "2026-04-09T00:00:00Z",
+        is_directory: false,
+        child_count: 0,
+        descendant_file_count: 0,
+      },
+    ]);
+
+    function RefreshHarness() {
+      const [projectTreeNodes, setProjectTreeNodes] = useState<AgentProjectFileTreeNode[]>([
+        {
+          filename: "original",
+          path: "original",
+          size: 0,
+          modified_time: "2026-04-09T00:00:00Z",
+          is_directory: true,
+          child_count: 1,
+          descendant_file_count: 1,
+        },
+      ]);
+
+      return (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              setProjectTreeNodes([
+                {
+                  filename: "original",
+                  path: "original",
+                  size: 0,
+                  modified_time: "2026-04-09T00:01:00Z",
+                  is_directory: true,
+                  child_count: 1,
+                  descendant_file_count: 1,
+                },
+              ]);
+            }}
+          >
+            refresh root
+          </button>
+          <ProjectOverviewCard
+            activeStage="source"
+            selectedMetricFilter=""
+            onMetricFilterChange={vi.fn()}
+            treeDisplayMode="filter"
+            onTreeDisplayModeChange={vi.fn()}
+            treeOnly
+            selectedProject={buildProjectSummary()}
+            projectFileCount={0}
+            pipelineTemplateCount={0}
+            pipelineRunCount={0}
+            projectWorkspaceSummary="snapshot"
+            projectFiles={[]}
+            projectFileSummary={null}
+            projectTreeNodes={projectTreeNodes}
+            priorityFilePaths={[]}
+            selectedFilePath=""
+            expandedKeys={["original"]}
+            selectedAttachPaths={[]}
+            onUploadFiles={vi.fn()}
+            onExpandedKeysChange={vi.fn()}
+            onSelectFileFromTree={vi.fn()}
+            onAttachArtifactToChat={vi.fn()}
+            onLoadProjectTreeChildren={onLoadProjectTreeChildren}
+          />
+        </>
+      );
+    }
+
+    const user = userEvent.setup();
+    render(<RefreshHarness />);
+
+    expect(await screen.findByText("guide.md")).toBeDefined();
+    expect(onLoadProjectTreeChildren).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole("button", { name: "refresh root" }));
+
+    expect(await screen.findByText("guide.md")).toBeDefined();
+    expect(onLoadProjectTreeChildren).toHaveBeenCalledTimes(1);
   });
 });

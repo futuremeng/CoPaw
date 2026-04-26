@@ -31,6 +31,8 @@ describe("project layout prefs", () => {
       knowledgeModuleCollapsed: true,
       selectedMetricFilter: "knowledgeCandidates",
       treeDisplayMode: "highlight",
+      treeExpandedKeys: ["original", "original/docs"],
+      selectedTreeFilePath: "original/docs/guide.md",
     };
 
     expect(parseProjectLayoutPrefs(JSON.stringify(payload))).toEqual({
@@ -52,5 +54,19 @@ describe("project layout prefs", () => {
     expect(parsed.knowledgeModuleCollapsed).toBe(false);
     expect(parsed.selectedMetricFilter).toBe("");
     expect(parsed.treeDisplayMode).toBe("filter");
+    expect(parsed.treeExpandedKeys).toEqual([]);
+    expect(parsed.selectedTreeFilePath).toBe("");
+  });
+
+  it("drops invalid tree persistence payload while keeping valid string entries", () => {
+    const parsed = parseProjectLayoutPrefs(
+      JSON.stringify({
+        treeExpandedKeys: ["original", 123, "", "original/docs"],
+        selectedTreeFilePath: 99,
+      }),
+    );
+
+    expect(parsed.treeExpandedKeys).toEqual(["original", "original/docs"]);
+    expect(parsed.selectedTreeFilePath).toBe("");
   });
 });

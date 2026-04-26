@@ -413,6 +413,50 @@ function compareProjectTreePreviewPriority(
   return left.path.localeCompare(right.path);
 }
 
+function normalizeProjectTreeKey(path: string): string {
+  return String(path || "")
+    .replace(/\\/g, "/")
+    .replace(/^\.\//, "")
+    .replace(/^\/+|\/+$/g, "")
+    .trim();
+}
+
+function normalizeProjectTreeKeys(paths: string[]): string[] {
+  const next: string[] = [];
+  const seen = new Set<string>();
+  for (const path of paths) {
+    const normalized = normalizeProjectTreeKey(path);
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    next.push(normalized);
+  }
+  return next;
+}
+
+function buildProjectAncestorDirectoryPaths(path: string): string[] {
+  const normalizedPath = normalizeProjectTreeKey(path);
+  if (!normalizedPath) {
+    return [];
+  }
+
+  const segments = normalizedPath.split("/").filter(Boolean);
+  if (segments.length <= 1) {
+    return [];
+  }
+
+  return segments.slice(0, -1).map((_, index) => segments.slice(0, index + 1).join("/"));
+}
+
+function mergeExpandedProjectTreeKeys(current: string[], extra: string[]): string[] {
+  const next = normalizeProjectTreeKeys([...current, ...extra]);
+  if (next.length === current.length && next.every((item, index) => item === current[index])) {
+    return current;
+  }
+  return next;
+}
+
 function isProjectPipelineTemplatePath(path: string): boolean {
   const normalized = normalizeProjectPath(path);
   return normalized.startsWith("pipelines/templates/");
@@ -490,6 +534,7 @@ export default function ProjectDetailPage() {
   const [knownProjectFilesByPath, setKnownProjectFilesByPath] =
     useState<Record<string, AgentProjectFileInfo>>({});
   const [selectedFilePath, setSelectedFilePath] = useState("");
+  const [treeExpandedKeys, setTreeExpandedKeys] = useState<string[]>([]);
   const [workbenchSyncNotice, setWorkbenchSyncNotice] = useState<{
     changedPaths: string[];
     updatedAt: number;
@@ -2389,6 +2434,17 @@ export default function ProjectDetailPage() {
   }, [currentAgent, loadAgents]);
 
   useEffect(() => {
+    if (!selectedFilePath) {
+      return;
+    }
+    const ancestorKeys = buildProjectAncestorDirectoryPaths(selectedFilePath);
+    if (ancestorKeys.length === 0) {
+      return;
+    }
+    setTreeExpandedKeys((prev) => mergeExpandedProjectTreeKeys(prev, ancestorKeys));
+  }, [selectedFilePath]);
+
+  useEffect(() => {
     if (projectFilesRefreshTimerRef.current !== null) {
       window.clearTimeout(projectFilesRefreshTimerRef.current);
       projectFilesRefreshTimerRef.current = null;
@@ -2407,6 +2463,7 @@ export default function ProjectDetailPage() {
     setProjectFileSummary(null);
     setKnownProjectFilesByPath({});
     setSelectedFilePath("");
+    setTreeExpandedKeys([]);
     setWorkbenchSyncNotice(null);
     setFileContent("");
     setPipelineTemplates([]);
@@ -2432,11 +2489,19 @@ export default function ProjectDetailPage() {
     try {
       const raw = window.localStorage.getItem(storageKey);
       const parsed = parseProjectLayoutPrefs(raw);
+      const restoredSelectedTreeFilePath = normalizeProjectTreeKey(parsed.selectedTreeFilePath);
       setActiveStage(parsed.activeStage);
       setKnowledgeModuleCollapsed(parsed.knowledgeModuleCollapsed);
       setKnowledgeDockTab(parsed.knowledgeDockTab);
       setSelectedMetricFilter(parsed.selectedMetricFilter);
       setTreeDisplayMode(parsed.treeDisplayMode);
+      setTreeExpandedKeys(
+        mergeExpandedProjectTreeKeys(
+          normalizeProjectTreeKeys(parsed.treeExpandedKeys),
+          buildProjectAncestorDirectoryPaths(restoredSelectedTreeFilePath),
+        ),
+      );
+      setSelectedFilePath(restoredSelectedTreeFilePath);
       setLeftPaneSize(Math.max(parsed.leftPaneSize, LEFT_PANE_MIN_SIZE));
       setWorkbenchPaneSize(Math.max(parsed.workbenchPaneSize, WORKBENCH_PANE_MIN_SIZE));
       setChatPaneSize(Math.max(parsed.chatPaneSize, CHAT_PANE_MIN_SIZE));
@@ -2448,6 +2513,8 @@ export default function ProjectDetailPage() {
       setKnowledgeDockTab(parsed.knowledgeDockTab);
       setSelectedMetricFilter(parsed.selectedMetricFilter);
       setTreeDisplayMode(parsed.treeDisplayMode);
+      setTreeExpandedKeys(parsed.treeExpandedKeys);
+      setSelectedFilePath(parsed.selectedTreeFilePath);
       setLeftPaneSize(Math.max(parsed.leftPaneSize, LEFT_PANE_MIN_SIZE));
       setWorkbenchPaneSize(Math.max(parsed.workbenchPaneSize, WORKBENCH_PANE_MIN_SIZE));
       setChatPaneSize(Math.max(parsed.chatPaneSize, CHAT_PANE_MIN_SIZE));
@@ -2479,6 +2546,8 @@ export default function ProjectDetailPage() {
       knowledgeDockTab,
       selectedMetricFilter,
       treeDisplayMode,
+      treeExpandedKeys,
+      selectedTreeFilePath: selectedFilePath,
       leftPaneSize,
       workbenchPaneSize,
       chatPaneSize,
@@ -2498,7 +2567,9 @@ export default function ProjectDetailPage() {
     leftPaneSize,
     routeProjectId,
     selectedMetricFilter,
+    selectedFilePath,
     treeDisplayMode,
+    treeExpandedKeys,
     workbenchPaneSize,
   ]);
 
@@ -3446,12 +3517,14 @@ export default function ProjectDetailPage() {
                             projectTreeLoading={projectTreeLoading}
                             priorityFilePaths={priorityFilePaths}
                             selectedFilePath={selectedFilePath}
+                            expandedKeys={treeExpandedKeys}
                             selectedAttachPaths={selectedAttachPaths}
                             activeStage={activeStage}
                             selectedMetricFilter={selectedMetricFilter}
                             onMetricFilterChange={setSelectedMetricFilter}
                             treeDisplayMode={treeDisplayMode}
                             onTreeDisplayModeChange={setTreeDisplayMode}
+                            onExpandedKeysChange={setTreeExpandedKeys}
                             onRefreshProjectFiles={handleRefreshProjectFiles}
                             onRefreshProjectTreeDirectory={(path) => {
                               if (!currentAgent || !selectedProject) {
