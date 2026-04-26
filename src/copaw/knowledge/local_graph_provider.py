@@ -36,6 +36,7 @@ _MARKDOWN_HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+.*$", re.MULTILINE)
 _TABLE_SEPARATOR_RE = re.compile(r"^\s*\|?(?:\s*:?-{2,}:?\s*\|)+\s*$", re.MULTILINE)
 _KEY_VALUE_PREFIX_RE = re.compile(r"^\s*(?:[-*]\s*)?[A-Za-z_][A-Za-z0-9_ -]{1,40}:\s*", re.MULTILINE)
 _CAMEL_CASE_RE = re.compile(r"^[A-Z][A-Za-z0-9]+(?:[A-Z][A-Za-z0-9]+)+$")
+_PREDICATE_TRIM_RE = re.compile(r"^[\s\.,;:!\?，。；：！？、\-]+|[\s\.,;:!\?，。；：！？、\-]+$")
 _ENTITY_STOP_WORDS = {
     "the",
     "and",
@@ -313,6 +314,42 @@ def _prepare_entity_text(document: dict[str, Any]) -> str:
     return cleaned.strip()
 
 
+def _load_syntax_payload(document: dict[str, Any]) -> dict[str, Any] | None:
+    raw = str(document.get("syntax_structured_text") or "").strip()
+    if not raw:
+        return None
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _collect_syntax_sentences(document: dict[str, Any]) -> list[dict[str, Any]]:
+    payload = _load_syntax_payload(document)
+    if not isinstance(payload, dict):
+        return []
+    sentences = payload.get("sentences")
+    if not isinstance(sentences, list):
+        return []
+    return [item for item in sentences if isinstance(item, dict)]
+
+
+def _collect_syntax_entity_counter(document: dict[str, Any]) -> Counter[str]:
+    counter: Counter[str] = Counter()
+    for sentence in _collect_syntax_sentences(document):
+        for entity in sentence.get("entities") or []:
+            if not isinstance(entity, dict):
+                continue
+            normalized = _normalize_entity(str(entity.get("normalized") or entity.get("surface") or ""))
+            if len(normalized) < 2 or _looks_like_noise_entity(normalized):
+                continue
+            if normalized.isdigit():
+                continue
+            counter[normalized] += 1
+    return counter
+
+
 def _extract_heading_text(document: dict[str, Any]) -> str:
     text = str(document.get("ner_text") or document.get("text") or "")
     text = _FRONTMATTER_RE.sub("", text, count=1)
@@ -345,6 +382,41 @@ def _split_sentences(text: str) -> list[str]:
 
 
 def _collect_sentence_entity_stats(document: dict[str, Any]) -> list[dict[str, Any]]:
+    syntax_sentences = _collect_syntax_sentences(document)
+    if syntax_sentences:
+        sentence_stats: list[dict[str, Any]] = []
+        syntax_entity_total = 0
+        for sentence in syntax_sentences:
+            sentence_text = str(sentence.get("sentence_text") or "")
+            entities = [item for item in (sentence.get("entities") or []) if isinstance(item, dict)]
+            entity_count_total = len(entities)
+            syntax_entity_total += entity_count_total
+            unique_entities = {
+                _normalize_entity(str(item.get("normalized") or item.get("surface") or ""))
+                for item in entities
+                if _normalize_entity(str(item.get("normalized") or item.get("surface") or ""))
+            }
+            entity_char_count = sum(len(str(item.get("surface") or "")) for item in entities)
+            sentence_char_count = int(len(re.sub(r"\s+", "", sentence_text)))
+            entity_char_ratio = (
+                float(entity_char_count / sentence_char_count)
+                if sentence_char_count > 0
+                else 0.0
+            )
+            sentence_stats.append(
+                {
+                    "sentence_index": int(sentence.get("sentence_index") or len(sentence_stats) + 1),
+                    "sentence": sentence_text,
+                    "entity_count_total": entity_count_total,
+                    "entity_count_unique": int(len(unique_entities)),
+                    "entity_char_count": entity_char_count,
+                    "sentence_char_count": sentence_char_count,
+                    "entity_char_ratio": entity_char_ratio,
+                }
+            )
+        if syntax_entity_total > 0:
+            return sentence_stats
+
     prepared_text = _prepare_entity_text(document)
     sentence_stats: list[dict[str, Any]] = []
     for sentence_index, sentence in enumerate(_split_sentences(prepared_text), start=1):
@@ -407,6 +479,10 @@ def _is_high_signal_entity(raw_token: str) -> bool:
 
 
 def _collect_ranked_entities(document: dict[str, Any]) -> list[tuple[str, int]]:
+    syntax_counter = _collect_syntax_entity_counter(document)
+    if syntax_counter:
+        return syntax_counter.most_common()
+
     title_text = str(document.get("title") or "").strip()
     heading_text = _extract_heading_text(document)
     body_text = _prepare_entity_text(document)
@@ -438,6 +514,112 @@ def _collect_ranked_entities(document: dict[str, Any]) -> list[tuple[str, int]]:
 
     # Return all ranked entities without limit (let all valid candidates through)
     return ranked.most_common()
+
+
+def _collect_syntax_sentence_entity_groups(document: dict[str, Any]) -> list[list[str]]:
+    groups: list[list[str]] = []
+    for sentence in _collect_syntax_sentences(document):
+        labels: list[str] = []
+        seen: set[str] = set()
+        for entity in sentence.get("entities") or []:
+            if not isinstance(entity, dict):
+                continue
+            normalized = _normalize_entity(str(entity.get("normalized") or entity.get("surface") or ""))
+            if len(normalized) < 2 or _looks_like_noise_entity(normalized):
+                continue
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            labels.append(normalized)
+        if labels:
+            groups.append(labels)
+    return groups
+
+
+def _normalize_predicate(text: str) -> str:
+    normalized = _PREDICATE_TRIM_RE.sub("", str(text or "").strip())
+    normalized = re.sub(r"\s+", " ", normalized)
+    if re.fullmatch(r"[A-Za-z0-9_. -]+", normalized):
+        normalized = normalized.lower().strip()
+    return normalized
+
+
+def _looks_like_noise_predicate(text: str) -> bool:
+    normalized = _normalize_predicate(text)
+    if len(normalized) < 1:
+        return True
+    if re.fullmatch(r"[\W_]+", normalized):
+        return True
+    if normalized in {"和", "与", "及", "以及", "and", "or", "to", "with", "by", "of"}:
+        return True
+    if len(normalized) > 32:
+        return True
+    return False
+
+
+def _collect_relation_candidates(document: dict[str, Any]) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+    for sentence in _collect_syntax_sentences(document):
+        sentence_text = str(sentence.get("sentence_text") or "")
+        sentence_start = int(sentence.get("start") or 0)
+        entities = [item for item in (sentence.get("entities") or []) if isinstance(item, dict)]
+        filtered_entities: list[dict[str, Any]] = []
+        for entity in sorted(entities, key=lambda item: (int(item.get("start") or 0), int(item.get("end") or 0))):
+            normalized = _normalize_entity(str(entity.get("normalized") or entity.get("surface") or ""))
+            if len(normalized) < 2 or _looks_like_noise_entity(normalized):
+                continue
+            if normalized.isdigit():
+                continue
+            filtered_entities.append({**entity, "_normalized": normalized})
+
+        if not filtered_entities:
+            regex_entities: list[dict[str, Any]] = []
+            for match in _ENTITY_RE.finditer(sentence_text):
+                surface = match.group(0)
+                normalized = _normalize_entity(surface)
+                if len(normalized) < 2 or _looks_like_noise_entity(normalized):
+                    continue
+                if normalized.isdigit():
+                    continue
+                regex_entities.append(
+                    {
+                        "surface": surface,
+                        "start": sentence_start + match.start(),
+                        "end": sentence_start + match.end(),
+                        "_normalized": normalized,
+                    }
+                )
+            if len(regex_entities) >= 2:
+                filtered_entities = [regex_entities[0], regex_entities[-1]]
+
+        for left, right in zip(filtered_entities, filtered_entities[1:]):
+            subject = str(left.get("_normalized") or "")
+            object_ = str(right.get("_normalized") or "")
+            if not subject or not object_ or subject == object_:
+                continue
+            left_end = int(left.get("end") or 0)
+            right_start = int(right.get("start") or 0)
+            predicate_text = sentence_text[max(left_end - sentence_start, 0):max(right_start - sentence_start, 0)]
+            predicate = _normalize_predicate(predicate_text)
+            if _looks_like_noise_predicate(predicate):
+                continue
+            candidates.append(
+                {
+                    "subject": subject,
+                    "predicate": predicate,
+                    "object": object_,
+                    "subject_id": _safe_node_id("ent", subject),
+                    "object_id": _safe_node_id("ent", object_),
+                    "sentence_index": int(sentence.get("sentence_index") or 0),
+                    "sentence": sentence_text,
+                    "confidence": "syntax_span",
+                    "parse_mode": str(sentence.get("parse_mode") or "tokenized_only"),
+                    "subject_surface": str(left.get("surface") or subject),
+                    "object_surface": str(right.get("surface") or object_),
+                    "predicate_text": predicate_text,
+                }
+            )
+    return candidates
 
 
 def _load_dataset_documents(
@@ -480,6 +662,10 @@ def _load_dataset_documents(
                     "ner_status": str(document.get("ner_status") or "unavailable"),
                     "ner_entity_count": int(document.get("ner_entity_count") or 0),
                     "ner_text": str(document.get("ner_text") or ""),
+                    "syntax_path": str(document.get("syntax_path") or ""),
+                    "syntax_structured_path": str(document.get("syntax_structured_path") or ""),
+                    "syntax_status": str(document.get("syntax_status") or "unavailable"),
+                    "syntax_structured_text": str(document.get("syntax_structured_text") or ""),
                 }
             )
     return documents
@@ -495,6 +681,7 @@ def build_local_graph_payload(
     edges: dict[tuple[str, str, str], dict[str, Any]] = {}
     entity_sources: defaultdict[str, set[str]] = defaultdict(set)
     sentence_entity_stats: list[dict[str, Any]] = []
+    relation_candidates: list[dict[str, Any]] = []
     sentence_count_total = 0
     sentence_with_entities_count = 0
     entity_mentions_count = 0
@@ -601,6 +788,23 @@ def build_local_graph_payload(
             nodes[doc_id]["sentence_count"] = sentence_count
             nodes[doc_id]["entity_mentions_count"] = mentions_for_document
 
+        document_relation_candidates = _collect_relation_candidates(document)
+        for candidate in document_relation_candidates:
+            relation_candidates.append(
+                {
+                    "source_id": document["source_id"],
+                    "project_id": document["project_id"],
+                    "document_path": doc_path,
+                    "document_title": document["title"],
+                    "chunk_path": document.get("chunk_path") or "",
+                    "snapshot_path": document.get("snapshot_path") or "",
+                    "snapshot_at": snapshot_at,
+                    "version_id": version_id,
+                    "file_key": document.get("file_key") or doc_path,
+                    **candidate,
+                }
+            )
+
         entity_pairs = _collect_ranked_entities(document)
         entity_labels = [label for label, _ in entity_pairs[:16]]
         for label, weight in entity_pairs:
@@ -645,31 +849,34 @@ def build_local_graph_payload(
             )
             edge["weight"] += weight
 
-        for left, right in combinations(sorted(set(entity_labels)), 2):
-            left_id = _safe_node_id("ent", left)
-            right_id = _safe_node_id("ent", right)
-            source_id = document["source_id"]
-            ordered = tuple(sorted((left_id, right_id)))
-            edge_key = (ordered[0], ordered[1], "co_occurs_with")
-            edge = edges.setdefault(
-                edge_key,
-                {
-                    "source": ordered[0],
-                    "target": ordered[1],
-                    "relation": "co_occurs_with",
-                    "confidence": "derived",
-                    "weight": 0,
-                    "source_id": source_id,
-                    "document_path": doc_path,
-                    "document_title": document["title"],
-                    "chunk_path": document.get("chunk_path") or "",
-                    "snapshot_path": document.get("snapshot_path") or "",
-                    "snapshot_at": snapshot_at,
-                    "version_id": version_id,
-                    "file_key": document.get("file_key") or doc_path,
-                },
-            )
-            edge["weight"] += 1
+        syntax_entity_groups = _collect_syntax_sentence_entity_groups(document)
+        co_occurrence_groups = syntax_entity_groups or [sorted(set(entity_labels))]
+        for group in co_occurrence_groups:
+            for left, right in combinations(sorted(set(group)), 2):
+                left_id = _safe_node_id("ent", left)
+                right_id = _safe_node_id("ent", right)
+                source_id = document["source_id"]
+                ordered = tuple(sorted((left_id, right_id)))
+                edge_key = (ordered[0], ordered[1], "co_occurs_with")
+                edge = edges.setdefault(
+                    edge_key,
+                    {
+                        "source": ordered[0],
+                        "target": ordered[1],
+                        "relation": "co_occurs_with",
+                        "confidence": "derived",
+                        "weight": 0,
+                        "source_id": source_id,
+                        "document_path": doc_path,
+                        "document_title": document["title"],
+                        "chunk_path": document.get("chunk_path") or "",
+                        "snapshot_path": document.get("snapshot_path") or "",
+                        "snapshot_at": snapshot_at,
+                        "version_id": version_id,
+                        "file_key": document.get("file_key") or doc_path,
+                    },
+                )
+                edge["weight"] += 1
 
     for node_id, source_ids in entity_sources.items():
         if node_id in nodes and source_ids:
@@ -705,10 +912,12 @@ def build_local_graph_payload(
         "nodes": list(nodes.values()),
         "links": list(edges.values()),
         "sentence_entity_stats": sentence_entity_stats,
+        "relation_candidates": relation_candidates,
         "stats": {
             "document_count": len(documents),
             "node_count": len(nodes),
             "relation_count": len(edges),
+            "relation_candidate_count": len(relation_candidates),
             "sentence_count": sentence_count_total,
             "sentence_with_entities_count": sentence_with_entities_count,
             "entity_mentions_count": entity_mentions_count,
@@ -744,6 +953,7 @@ def persist_local_graph(
         "document_count": int(stats.get("document_count") or 0),
         "node_count": int(stats.get("node_count") or 0),
         "relation_count": int(stats.get("relation_count") or 0),
+        "relation_candidate_count": int(stats.get("relation_candidate_count") or 0),
         "sentence_count": int(stats.get("sentence_count") or 0),
         "sentence_with_entities_count": int(stats.get("sentence_with_entities_count") or 0),
         "entity_mentions_count": int(stats.get("entity_mentions_count") or 0),

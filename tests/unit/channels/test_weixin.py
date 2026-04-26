@@ -27,6 +27,7 @@ Run:
 from __future__ import annotations
 
 import asyncio
+import httpx
 import json
 import threading
 from pathlib import Path
@@ -1594,6 +1595,42 @@ class TestWeixinEdgeCases:
             await weixin_channel._poll_loop_async()
         except Exception:
             pytest.fail("_poll_loop_async should handle exceptions gracefully")
+
+    async def test_poll_loop_read_timeout_does_not_log_error_or_sleep(
+        self,
+        weixin_channel,
+        mock_ilink_client,
+    ):
+        """Transport read timeout should be treated as a normal poll retry."""
+
+        async def _raise_timeout_then_stop(*_args, **_kwargs):
+            weixin_channel._stop_event.set()
+            raise httpx.ReadTimeout("timed out")
+
+        mock_ilink_client.start = AsyncMock()
+        mock_ilink_client.stop = AsyncMock()
+        mock_ilink_client.getupdates = AsyncMock(
+            side_effect=_raise_timeout_then_stop,
+        )
+
+        with patch(
+            "qwenpaw.app.channels.weixin.channel.ILinkClient",
+            return_value=mock_ilink_client,
+        ), patch(
+            "qwenpaw.app.channels.weixin.channel.logger.debug",
+        ) as mock_debug, patch(
+            "qwenpaw.app.channels.weixin.channel.logger.exception",
+        ) as mock_exception, patch(
+            "qwenpaw.app.channels.weixin.channel.asyncio.sleep",
+            new_callable=AsyncMock,
+        ) as mock_sleep:
+            await weixin_channel._poll_loop_async()
+
+        mock_exception.assert_not_called()
+        mock_sleep.assert_not_awaited()
+        mock_debug.assert_any_call(
+            "weixin getupdates transport read timeout, continue polling",
+        )
 
     def test_build_agent_request_with_varied_content(self, weixin_channel):
         """Should handle different content types in build_agent_request."""

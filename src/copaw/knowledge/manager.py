@@ -138,6 +138,9 @@ _INTERNAL_EXCLUDED_FILENAMES = {
 
 logger = logging.getLogger(__name__)
 _AUTO_COLLECT_URL_MIN_CONTENT_CHARS = 1000
+_NER_SENTENCE_DELIMITERS = {"。", "！", "？", "!", "?", ";", "；", ".", "\n"}
+_NER_FORMAT_VERSION = "1.1"
+_SYNTAX_FORMAT_VERSION = "0.1"
 
 
 def _sanitize_filename(name: str) -> str:
@@ -158,6 +161,7 @@ class KnowledgeManager:
         self.raw_dir = self.root_dir / "raw"
         self.chunks_dir = self.root_dir / "chunks"
         self.ner_dir = self.root_dir / "ner"
+        self.syntax_dir = self.root_dir / "syntax"
         self.sources_dir = self.root_dir / "sources"
         self.catalog_path = self.root_dir / "catalog.json"
         self.uploads_dir = self.root_dir / "uploads"
@@ -172,6 +176,7 @@ class KnowledgeManager:
         self.raw_dir.mkdir(parents=True, exist_ok=True)
         self.chunks_dir.mkdir(parents=True, exist_ok=True)
         self.ner_dir.mkdir(parents=True, exist_ok=True)
+        self.syntax_dir.mkdir(parents=True, exist_ok=True)
         self.sources_dir.mkdir(parents=True, exist_ok=True)
         self.uploads_dir.mkdir(parents=True, exist_ok=True)
         self.remote_blob_dir.mkdir(parents=True, exist_ok=True)
@@ -367,11 +372,14 @@ class KnowledgeManager:
             self._delete_chunk_path(chunk_path)
         for ner_path in self._load_source_ner_manifest(source_id):
             self._delete_ner_path(ner_path)
+        for syntax_path in self._load_source_syntax_manifest(source_id):
+            self._delete_syntax_path(syntax_path)
         for snapshot in self._load_source_snapshot_manifest(source_id):
             self._delete_snapshot_file(snapshot.get("snapshot_path"))
         payload = self._load_index_payload_safe(source_id)
         self._delete_chunks_from_payload(payload)
         self._delete_ner_from_payload(payload)
+        self._delete_syntax_from_payload(payload)
         raw_dir = self._source_raw_dir(source_id)
         if raw_dir.exists():
             shutil.rmtree(raw_dir, ignore_errors=True)
@@ -393,6 +401,7 @@ class KnowledgeManager:
         self.raw_dir.mkdir(parents=True, exist_ok=True)
         self.chunks_dir.mkdir(parents=True, exist_ok=True)
         self.ner_dir.mkdir(parents=True, exist_ok=True)
+        self.syntax_dir.mkdir(parents=True, exist_ok=True)
         self.sources_dir.mkdir(parents=True, exist_ok=True)
         self.uploads_dir.mkdir(parents=True, exist_ok=True)
         self.remote_blob_dir.mkdir(parents=True, exist_ok=True)
@@ -528,6 +537,9 @@ class KnowledgeManager:
     def _source_ner_manifest_path(self, source_id: str) -> Path:
         return self._source_dir(source_id) / "ner-manifest.json"
 
+    def _source_syntax_manifest_path(self, source_id: str) -> Path:
+        return self._source_dir(source_id) / "syntax-manifest.json"
+
     def _source_snapshot_manifest_path(self, source_id: str) -> Path:
         return self._source_dir(source_id) / "snapshot-manifest.json"
 
@@ -618,12 +630,45 @@ class KnowledgeManager:
             if isinstance(item, str) and str(item).strip()
         }
 
+    def _load_source_syntax_manifest(self, source_id: str) -> set[str]:
+        path = self._source_syntax_manifest_path(source_id)
+        if not path.exists():
+            return set()
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return set()
+        if not isinstance(payload, dict):
+            return set()
+        syntax_paths = payload.get("syntax_paths")
+        if not isinstance(syntax_paths, list):
+            return set()
+        return {
+            str(item).strip()
+            for item in syntax_paths
+            if isinstance(item, str) and str(item).strip()
+        }
+
     def _write_source_ner_manifest(self, source_id: str, ner_paths: set[str]) -> None:
         self._source_ner_manifest_path(source_id).write_text(
             json.dumps(
                 {
                     "source_id": source_id,
                     "ner_paths": sorted(ner_paths),
+                    "updated_at": datetime.now(UTC).isoformat(),
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+    def _write_source_syntax_manifest(self, source_id: str, syntax_paths: set[str]) -> None:
+        self._source_syntax_manifest_path(source_id).write_text(
+            json.dumps(
+                {
+                    "source_id": source_id,
+                    "syntax_paths": sorted(syntax_paths),
                     "updated_at": datetime.now(UTC).isoformat(),
                 },
                 ensure_ascii=False,
@@ -715,9 +760,23 @@ class KnowledgeManager:
         for chunk in payload.get("chunks") or []:
             if not isinstance(chunk, dict):
                 continue
-            ner_path = str(chunk.get("ner_path") or "").strip()
-            if ner_path:
-                results.add(ner_path)
+            for key in ("ner_path", "ner_structured_path", "ner_annotated_path"):
+                ner_path = str(chunk.get(key) or "").strip()
+                if ner_path:
+                    results.add(ner_path)
+        return results
+
+    def _collect_syntax_paths_from_payload(self, payload: dict[str, Any] | None) -> set[str]:
+        if not isinstance(payload, dict):
+            return set()
+        results: set[str] = set()
+        for chunk in payload.get("chunks") or []:
+            if not isinstance(chunk, dict):
+                continue
+            for key in ("syntax_path", "syntax_structured_path", "syntax_annotated_path"):
+                syntax_path = str(chunk.get(key) or "").strip()
+                if syntax_path:
+                    results.add(syntax_path)
         return results
 
     def _delete_chunk_path(self, relative_path: str | Path | None) -> None:
@@ -758,6 +817,25 @@ class KnowledgeManager:
                 break
             current = current.parent
 
+    def _delete_syntax_path(self, relative_path: str | Path | None) -> None:
+        text = str(relative_path or "").strip()
+        if not text:
+            return
+        target = self.root_dir / text
+        if not target.exists() or not target.is_file():
+            return
+        try:
+            target.unlink()
+        except FileNotFoundError:
+            return
+        current = target.parent
+        while current != self.syntax_dir and current.exists():
+            try:
+                current.rmdir()
+            except OSError:
+                break
+            current = current.parent
+
     def _delete_chunks_from_payload(self, payload: dict[str, Any] | None) -> None:
         for chunk_path in self._collect_chunk_paths_from_payload(payload):
             self._delete_chunk_path(chunk_path)
@@ -765,6 +843,10 @@ class KnowledgeManager:
     def _delete_ner_from_payload(self, payload: dict[str, Any] | None) -> None:
         for ner_path in self._collect_ner_paths_from_payload(payload):
             self._delete_ner_path(ner_path)
+
+    def _delete_syntax_from_payload(self, payload: dict[str, Any] | None) -> None:
+        for syntax_path in self._collect_syntax_paths_from_payload(payload):
+            self._delete_syntax_path(syntax_path)
 
     def _read_chunk_text(self, chunk: dict[str, Any]) -> str:
         chunk_text = chunk.get("text")
@@ -787,6 +869,15 @@ class KnowledgeManager:
             return ""
         try:
             return (self.root_dir / ner_path).read_text(encoding="utf-8")
+        except FileNotFoundError:
+            return ""
+
+    def _read_artifact_text(self, chunk: dict[str, Any], path_key: str) -> str:
+        path_text = str(chunk.get(path_key) or "").strip()
+        if not path_text:
+            return ""
+        try:
+            return (self.root_dir / path_text).read_text(encoding="utf-8")
         except FileNotFoundError:
             return ""
 
@@ -877,6 +968,39 @@ class KnowledgeManager:
         target = self.ner_dir.joinpath(*relative_parts[:-1], basename)
         return target.relative_to(self.root_dir)
 
+    def _build_ner_structured_relative_path(self, chunk_relative_path: str) -> Path:
+        ner_path = self._build_ner_relative_path(chunk_relative_path)
+        base = ner_path.name[:-4] if ner_path.name.endswith(".txt") else ner_path.name
+        return ner_path.with_name(f"{base}.json")
+
+    def _build_ner_annotated_relative_path(self, chunk_relative_path: str) -> Path:
+        ner_path = self._build_ner_relative_path(chunk_relative_path)
+        base = ner_path.name[:-4] if ner_path.name.endswith(".txt") else ner_path.name
+        return ner_path.with_name(f"{base}.annotated.md")
+
+    def _build_syntax_relative_path(self, chunk_relative_path: str) -> Path:
+        chunk_path = Path(str(chunk_relative_path or "").strip())
+        if not chunk_path.parts:
+            return self.syntax_dir.relative_to(self.root_dir) / "knowledge.syntax.txt"
+        relative_parts = chunk_path.parts[1:] if chunk_path.parts[0] == self.chunks_dir.name else chunk_path.parts
+        basename = chunk_path.name
+        if basename.endswith(".txt"):
+            basename = f"{basename[:-4]}.syntax.txt"
+        else:
+            basename = f"{basename}.syntax.txt"
+        target = self.syntax_dir.joinpath(*relative_parts[:-1], basename)
+        return target.relative_to(self.root_dir)
+
+    def _build_syntax_structured_relative_path(self, chunk_relative_path: str) -> Path:
+        syntax_path = self._build_syntax_relative_path(chunk_relative_path)
+        base = syntax_path.name[:-4] if syntax_path.name.endswith(".txt") else syntax_path.name
+        return syntax_path.with_name(f"{base}.json")
+
+    def _build_syntax_annotated_relative_path(self, chunk_relative_path: str) -> Path:
+        syntax_path = self._build_syntax_relative_path(chunk_relative_path)
+        base = syntax_path.name[:-4] if syntax_path.name.endswith(".txt") else syntax_path.name
+        return syntax_path.with_name(f"{base}.annotated.md")
+
     def _chunk_file_key(self, chunk: dict[str, Any]) -> str:
         return str(chunk.get("document_path") or chunk.get("document_title") or "knowledge").strip()
 
@@ -914,6 +1038,432 @@ class KnowledgeManager:
             seen.add(normalized)
             entities.append(normalized)
         return entities
+
+    def _build_chunk_ner_mentions(
+        self,
+        text: str,
+        entities: list[str],
+    ) -> list[dict[str, Any]]:
+        source_text = str(text or "")
+        if not source_text or not entities:
+            return []
+
+        occupied: set[int] = set()
+        mentions: list[dict[str, Any]] = []
+        ranked_entities = sorted(
+            {str(item or "").strip().lower() for item in entities if str(item or "").strip()},
+            key=lambda item: (-len(item), item),
+        )
+
+        for normalized in ranked_entities:
+            flags = re.IGNORECASE if re.fullmatch(r"[A-Za-z0-9_-]+", normalized) else 0
+            for match in re.finditer(re.escape(normalized), source_text, flags):
+                start, end = match.span()
+                if start == end:
+                    continue
+                if any(index in occupied for index in range(start, end)):
+                    continue
+                occupied.update(range(start, end))
+                sentence_index = 1 + sum(
+                    1 for char in source_text[:start] if char in _NER_SENTENCE_DELIMITERS
+                )
+                mentions.append(
+                    {
+                        "surface": source_text[start:end],
+                        "normalized": normalized,
+                        "label": "semantic_token",
+                        "start": start,
+                        "end": end,
+                        "confidence": 1.0,
+                        "sentence_index": sentence_index,
+                    }
+                )
+
+        mentions.sort(key=lambda item: (int(item["start"]), int(item["end"])))
+        for index, mention in enumerate(mentions, start=1):
+            mention["entity_id"] = f"e{index}"
+        return mentions
+
+    def _render_chunk_ner_structured_payload(
+        self,
+        chunk: dict[str, Any],
+        *,
+        text: str,
+        entities: list[str],
+        mentions: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        catalog = [
+            {
+                "normalized": entity,
+                "label": "semantic_token",
+                "mention_count": sum(
+                    1 for mention in mentions if mention.get("normalized") == entity
+                ),
+            }
+            for entity in entities
+        ]
+        return {
+            "artifact": "ner_structured",
+            "format_version": _NER_FORMAT_VERSION,
+            "document_path": str(chunk.get("document_path") or ""),
+            "document_title": str(chunk.get("document_title") or ""),
+            "chunk_id": str(chunk.get("chunk_id") or ""),
+            "chunk_path": str(chunk.get("chunk_path") or ""),
+            "version_id": self._chunk_version_id(chunk),
+            "snapshot_at": str(chunk.get("snapshot_at") or ""),
+            "source_text": str(text or ""),
+            "text_length": len(str(text or "")),
+            "entity_catalog": catalog,
+            "entity_mentions": mentions,
+        }
+
+    def _render_chunk_ner_annotated_text(
+        self,
+        text: str,
+        mentions: list[dict[str, Any]],
+    ) -> str:
+        if not mentions:
+            return str(text or "")
+
+        parts: list[str] = []
+        cursor = 0
+        for mention in mentions:
+            start = int(mention.get("start") or 0)
+            end = int(mention.get("end") or 0)
+            if start < cursor or end <= start:
+                continue
+            parts.append(text[cursor:start])
+            surface = str(mention.get("surface") or text[start:end])
+            parts.append(
+                "[["
+                f"{surface}|label={mention.get('label') or 'semantic_token'}"
+                f"|id={mention.get('entity_id') or ''}"
+                f"|norm={mention.get('normalized') or ''}"
+                f"|score={float(mention.get('confidence') or 0.0):.2f}"
+                "]]"
+            )
+            cursor = end
+        parts.append(text[cursor:])
+        return "".join(parts)
+
+    def _render_chunk_ner_annotated_markdown(
+        self,
+        chunk: dict[str, Any],
+        *,
+        text: str,
+        mentions: list[dict[str, Any]],
+        structured_relative_path: Path,
+    ) -> str:
+        annotated_text = self._render_chunk_ner_annotated_text(text, mentions)
+        lines = [
+            "---",
+            "artifact: ner_annotated",
+            f"format_version: {_NER_FORMAT_VERSION}",
+            f"document_path: {json.dumps(str(chunk.get('document_path') or ''), ensure_ascii=False)}",
+            f"chunk_id: {json.dumps(str(chunk.get('chunk_id') or ''), ensure_ascii=False)}",
+            f"version_id: {json.dumps(self._chunk_version_id(chunk), ensure_ascii=False)}",
+            f"snapshot_at: {json.dumps(str(chunk.get('snapshot_at') or ''), ensure_ascii=False)}",
+            f"entity_count: {len(mentions)}",
+            f"structured_ref: {json.dumps(structured_relative_path.as_posix(), ensure_ascii=False)}",
+            "---",
+            "",
+            "# NER Annotated",
+            "",
+            annotated_text,
+            "",
+            "## Entity Index",
+            "",
+            "| id | surface | label | start | end | sentence | normalized | confidence |",
+            "| --- | --- | --- | ---: | ---: | ---: | --- | ---: |",
+        ]
+        for mention in mentions:
+            surface = str(mention.get("surface") or "").replace("|", "\\|")
+            normalized = str(mention.get("normalized") or "").replace("|", "\\|")
+            lines.append(
+                "| "
+                f"{mention.get('entity_id') or ''} | {surface} | {mention.get('label') or 'semantic_token'} | "
+                f"{mention.get('start') or 0} | {mention.get('end') or 0} | {mention.get('sentence_index') or 0} | "
+                f"{normalized} | {float(mention.get('confidence') or 0.0):.2f} |"
+            )
+        return "\n".join(lines)
+
+    def _split_chunk_sentence_spans(self, text: str) -> list[dict[str, Any]]:
+        normalized = str(text or "")
+        if not normalized:
+            return []
+        sentences: list[dict[str, Any]] = []
+        start = 0
+        for index, char in enumerate(normalized):
+            if char not in _NER_SENTENCE_DELIMITERS:
+                continue
+            end = index + 1
+            sentence_text = normalized[start:end]
+            if sentence_text.strip():
+                sentences.append({"text": sentence_text, "start": start, "end": end})
+            start = end
+        if start < len(normalized):
+            sentence_text = normalized[start:]
+            if sentence_text.strip():
+                sentences.append({"text": sentence_text, "start": start, "end": len(normalized)})
+        return sentences
+
+    def _load_chunk_ner_mentions(self, chunk: dict[str, Any]) -> list[dict[str, Any]]:
+        raw = self._read_artifact_text(chunk, "ner_structured_path")
+        if not raw.strip():
+            return []
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            return []
+        mentions = payload.get("entity_mentions")
+        if not isinstance(mentions, list):
+            return []
+        return [item for item in mentions if isinstance(item, dict)]
+
+    def _build_chunk_syntax_sentences(
+        self,
+        text: str,
+        mentions: list[dict[str, Any]],
+    ) -> tuple[list[dict[str, Any]], int]:
+        sentences = self._split_chunk_sentence_spans(text)
+        syntax_sentences: list[dict[str, Any]] = []
+        total_tokens = 0
+        for sentence_index, sentence in enumerate(sentences, start=1):
+            sentence_text = str(sentence.get("text") or "")
+            sentence_start = int(sentence.get("start") or 0)
+            sentence_end = int(sentence.get("end") or sentence_start)
+            tokens: list[dict[str, Any]] = []
+            for token_index, match in enumerate(_LIGHTWEIGHT_TOKEN_RE.finditer(sentence_text), start=1):
+                token_start = sentence_start + match.start()
+                token_end = sentence_start + match.end()
+                tokens.append(
+                    {
+                        "token_index": token_index,
+                        "text": match.group(0),
+                        "start": token_start,
+                        "end": token_end,
+                    }
+                )
+            total_tokens += len(tokens)
+
+            sentence_entities: list[dict[str, Any]] = []
+            for mention in mentions:
+                mention_start = int(mention.get("start") or 0)
+                mention_end = int(mention.get("end") or 0)
+                if mention_start < sentence_start or mention_end > sentence_end:
+                    continue
+                overlapping_tokens = [
+                    token for token in tokens
+                    if int(token.get("start") or 0) < mention_end
+                    and int(token.get("end") or 0) > mention_start
+                ]
+                sentence_entities.append(
+                    {
+                        "entity_id": str(mention.get("entity_id") or ""),
+                        "surface": str(mention.get("surface") or ""),
+                        "label": str(mention.get("label") or "semantic_token"),
+                        "normalized": str(mention.get("normalized") or ""),
+                        "start": mention_start,
+                        "end": mention_end,
+                        "token_start": int(overlapping_tokens[0].get("token_index") or 0) if overlapping_tokens else 0,
+                        "token_end": int(overlapping_tokens[-1].get("token_index") or 0) if overlapping_tokens else 0,
+                    }
+                )
+
+            syntax_sentences.append(
+                {
+                    "sentence_index": sentence_index,
+                    "sentence_text": sentence_text,
+                    "start": sentence_start,
+                    "end": sentence_end,
+                    "tokens": tokens,
+                    "dependencies": [],
+                    "entities": sentence_entities,
+                    "parse_mode": "tokenized_only",
+                    "parse_confidence": 0.0,
+                }
+            )
+        return syntax_sentences, total_tokens
+
+    def _render_chunk_syntax_structured_payload(
+        self,
+        chunk: dict[str, Any],
+        *,
+        text: str,
+        mentions: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        sentences, token_count = self._build_chunk_syntax_sentences(text, mentions)
+        return {
+            "artifact": "syntax_structured",
+            "format_version": _SYNTAX_FORMAT_VERSION,
+            "parse_mode": "tokenized_only",
+            "document_path": str(chunk.get("document_path") or ""),
+            "document_title": str(chunk.get("document_title") or ""),
+            "chunk_id": str(chunk.get("chunk_id") or ""),
+            "chunk_path": str(chunk.get("chunk_path") or ""),
+            "version_id": self._chunk_version_id(chunk),
+            "snapshot_at": str(chunk.get("snapshot_at") or ""),
+            "source_text": str(text or ""),
+            "sentence_count": len(sentences),
+            "token_count": token_count,
+            "entity_alignment_source": str(chunk.get("ner_structured_path") or ""),
+            "sentences": sentences,
+        }
+
+    def _render_chunk_syntax_text(
+        self,
+        chunk: dict[str, Any],
+        structured_payload: dict[str, Any],
+    ) -> str:
+        lines = [
+            f"document_path={chunk.get('document_path') or ''}",
+            f"chunk_id={chunk.get('chunk_id') or ''}",
+            f"version_id={self._chunk_version_id(chunk)}",
+            f"parse_mode={structured_payload.get('parse_mode') or 'tokenized_only'}",
+            f"sentence_count={structured_payload.get('sentence_count') or 0}",
+            f"token_count={structured_payload.get('token_count') or 0}",
+            f"entity_alignment_source={chunk.get('ner_structured_path') or ''}",
+        ]
+        for sentence in structured_payload.get("sentences") or []:
+            if not isinstance(sentence, dict):
+                continue
+            lines.append("")
+            lines.append(f"[Sentence {sentence.get('sentence_index') or 0}] {sentence.get('sentence_text') or ''}")
+            token_labels = [
+                f"{token.get('token_index') or 0}:{token.get('text') or ''}"
+                for token in (sentence.get("tokens") or [])
+                if isinstance(token, dict)
+            ]
+            entity_labels = [
+                f"{entity.get('entity_id') or ''}:{entity.get('surface') or ''}@{entity.get('token_start') or 0}-{entity.get('token_end') or 0}"
+                for entity in (sentence.get("entities") or [])
+                if isinstance(entity, dict)
+            ]
+            lines.append(f"tokens={' | '.join(token_labels)}")
+            lines.append(f"entities={' | '.join(entity_labels)}")
+        return "\n".join(lines)
+
+    def _render_chunk_syntax_annotated_markdown(
+        self,
+        chunk: dict[str, Any],
+        structured_payload: dict[str, Any],
+    ) -> str:
+        lines = [
+            "---",
+            "artifact: syntax_annotated",
+            f"format_version: {_SYNTAX_FORMAT_VERSION}",
+            f"document_path: {json.dumps(str(chunk.get('document_path') or ''), ensure_ascii=False)}",
+            f"chunk_id: {json.dumps(str(chunk.get('chunk_id') or ''), ensure_ascii=False)}",
+            f"version_id: {json.dumps(self._chunk_version_id(chunk), ensure_ascii=False)}",
+            f"snapshot_at: {json.dumps(str(chunk.get('snapshot_at') or ''), ensure_ascii=False)}",
+            f"sentence_count: {int(structured_payload.get('sentence_count') or 0)}",
+            f"token_count: {int(structured_payload.get('token_count') or 0)}",
+            f"structured_ref: {json.dumps(str(chunk.get('syntax_structured_path') or ''), ensure_ascii=False)}",
+            f"ner_structured_ref: {json.dumps(str(chunk.get('ner_structured_path') or ''), ensure_ascii=False)}",
+            "---",
+            "",
+            "# Syntax Annotated",
+            "",
+        ]
+        for sentence in structured_payload.get("sentences") or []:
+            if not isinstance(sentence, dict):
+                continue
+            lines.extend(
+                [
+                    f"## Sentence {sentence.get('sentence_index') or 0}",
+                    "",
+                    str(sentence.get("sentence_text") or ""),
+                    "",
+                    "| token_index | text | start | end |",
+                    "| ---: | --- | ---: | ---: |",
+                ]
+            )
+            for token in sentence.get("tokens") or []:
+                if not isinstance(token, dict):
+                    continue
+                token_text = str(token.get("text") or "").replace("|", "\\|")
+                lines.append(
+                    f"| {token.get('token_index') or 0} | {token_text} | {token.get('start') or 0} | {token.get('end') or 0} |"
+                )
+            lines.extend(["", "### Entity Alignment", "", "| id | surface | label | token_start | token_end |", "| --- | --- | --- | ---: | ---: |"])
+            for entity in sentence.get("entities") or []:
+                if not isinstance(entity, dict):
+                    continue
+                surface = str(entity.get("surface") or "").replace("|", "\\|")
+                lines.append(
+                    f"| {entity.get('entity_id') or ''} | {surface} | {entity.get('label') or 'semantic_token'} | {entity.get('token_start') or 0} | {entity.get('token_end') or 0} |"
+                )
+            lines.append("")
+        return "\n".join(lines)
+
+    def _write_chunk_syntax_artifacts(
+        self,
+        source: KnowledgeSourceSpec,
+        payload: dict[str, Any],
+    ) -> set[str]:
+        previous_manifest_paths = self._load_source_syntax_manifest(source.id)
+        previous_payload = self._load_index_payload_safe(source.id)
+        current_syntax_paths: set[str] = set()
+
+        for chunk in payload.get("chunks") or []:
+            if not isinstance(chunk, dict):
+                continue
+            chunk["syntax_status"] = "ready"
+            chunk["syntax_format_version"] = _SYNTAX_FORMAT_VERSION
+            chunk.pop("syntax_path", None)
+            chunk.pop("syntax_structured_path", None)
+            chunk.pop("syntax_annotated_path", None)
+            chunk_text = self._read_chunk_text(chunk)
+            mentions = self._load_chunk_ner_mentions(chunk)
+            structured_payload = self._render_chunk_syntax_structured_payload(
+                chunk,
+                text=chunk_text,
+                mentions=mentions,
+            )
+            chunk["syntax_sentence_count"] = int(structured_payload.get("sentence_count") or 0)
+            chunk["syntax_token_count"] = int(structured_payload.get("token_count") or 0)
+            chunk["syntax_relation_count"] = 0
+
+            syntax_relative_path = self._build_syntax_relative_path(str(chunk.get("chunk_path") or ""))
+            syntax_structured_relative_path = self._build_syntax_structured_relative_path(
+                str(chunk.get("chunk_path") or "")
+            )
+            syntax_annotated_relative_path = self._build_syntax_annotated_relative_path(
+                str(chunk.get("chunk_path") or "")
+            )
+            chunk["syntax_path"] = syntax_relative_path.as_posix()
+            chunk["syntax_structured_path"] = syntax_structured_relative_path.as_posix()
+            chunk["syntax_annotated_path"] = syntax_annotated_relative_path.as_posix()
+
+            syntax_file_path = self.root_dir / syntax_relative_path
+            syntax_structured_file_path = self.root_dir / syntax_structured_relative_path
+            syntax_annotated_file_path = self.root_dir / syntax_annotated_relative_path
+            syntax_file_path.parent.mkdir(parents=True, exist_ok=True)
+            syntax_file_path.write_text(
+                self._render_chunk_syntax_text(chunk, structured_payload),
+                encoding="utf-8",
+            )
+            syntax_structured_file_path.parent.mkdir(parents=True, exist_ok=True)
+            syntax_structured_file_path.write_text(
+                json.dumps(structured_payload, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            syntax_annotated_file_path.parent.mkdir(parents=True, exist_ok=True)
+            syntax_annotated_file_path.write_text(
+                self._render_chunk_syntax_annotated_markdown(chunk, structured_payload),
+                encoding="utf-8",
+            )
+            current_syntax_paths.add(chunk["syntax_path"])
+            current_syntax_paths.add(chunk["syntax_structured_path"])
+            current_syntax_paths.add(chunk["syntax_annotated_path"])
+
+        stale_syntax_paths = (
+            previous_manifest_paths | self._collect_syntax_paths_from_payload(previous_payload)
+        ) - current_syntax_paths
+        for syntax_path in stale_syntax_paths:
+            self._delete_syntax_path(syntax_path)
+        self._write_source_syntax_manifest(source.id, current_syntax_paths)
+        return current_syntax_paths
 
     def _render_chunk_ner_text(
         self,
@@ -963,22 +1513,63 @@ class KnowledgeManager:
             chunk["version_id"] = self._chunk_version_id(chunk)
             chunk["ner_status"] = "unavailable"
             chunk["ner_entity_count"] = 0
+            chunk["ner_format_version"] = _NER_FORMAT_VERSION
             chunk.pop("ner_path", None)
+            chunk.pop("ner_structured_path", None)
+            chunk.pop("ner_annotated_path", None)
             if not ready:
                 continue
             chunk_text = self._read_chunk_text(chunk)
             entities = self._collect_chunk_ner_entities(chunk_text, config=config) if config is not None else []
+            mentions = self._build_chunk_ner_mentions(chunk_text, entities)
             chunk["ner_status"] = "ready"
             chunk["ner_entity_count"] = len(entities)
             ner_relative_path = self._build_ner_relative_path(str(chunk.get("chunk_path") or ""))
+            ner_structured_relative_path = self._build_ner_structured_relative_path(
+                str(chunk.get("chunk_path") or "")
+            )
+            ner_annotated_relative_path = self._build_ner_annotated_relative_path(
+                str(chunk.get("chunk_path") or "")
+            )
             ner_file_path = self.root_dir / ner_relative_path
+            ner_structured_file_path = self.root_dir / ner_structured_relative_path
+            ner_annotated_file_path = self.root_dir / ner_annotated_relative_path
             ner_file_path.parent.mkdir(parents=True, exist_ok=True)
             ner_file_path.write_text(
                 self._render_chunk_ner_text(chunk, text=chunk_text, entities=entities),
                 encoding="utf-8",
             )
+            ner_structured_file_path.parent.mkdir(parents=True, exist_ok=True)
+            ner_structured_file_path.write_text(
+                json.dumps(
+                    self._render_chunk_ner_structured_payload(
+                        chunk,
+                        text=chunk_text,
+                        entities=entities,
+                        mentions=mentions,
+                    ),
+                    ensure_ascii=False,
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            ner_annotated_file_path.parent.mkdir(parents=True, exist_ok=True)
+            ner_annotated_file_path.write_text(
+                self._render_chunk_ner_annotated_markdown(
+                    chunk,
+                    text=chunk_text,
+                    mentions=mentions,
+                    structured_relative_path=ner_structured_relative_path,
+                ),
+                encoding="utf-8",
+            )
             chunk["ner_path"] = ner_relative_path.as_posix()
+            chunk["ner_structured_path"] = ner_structured_relative_path.as_posix()
+            chunk["ner_annotated_path"] = ner_annotated_relative_path.as_posix()
             current_ner_paths.add(chunk["ner_path"])
+            current_ner_paths.add(chunk["ner_structured_path"])
+            current_ner_paths.add(chunk["ner_annotated_path"])
 
         stale_ner_paths = (
             previous_manifest_paths
@@ -1013,9 +1604,25 @@ class KnowledgeManager:
                     "file_key": str(chunk.get("file_key") or self._chunk_file_key(chunk)),
                     "version_id": str(chunk.get("version_id") or self._chunk_version_id(chunk)),
                     "ner_path": str(chunk.get("ner_path") or ""),
+                    "ner_structured_path": str(chunk.get("ner_structured_path") or ""),
+                    "ner_annotated_path": str(chunk.get("ner_annotated_path") or ""),
                     "ner_status": str(chunk.get("ner_status") or "unavailable"),
                     "ner_entity_count": int(chunk.get("ner_entity_count") or 0),
+                    "ner_format_version": str(chunk.get("ner_format_version") or ""),
                     "ner_text": self._read_ner_text(chunk),
+                    "ner_structured_text": self._read_artifact_text(chunk, "ner_structured_path"),
+                    "ner_annotated_text": self._read_artifact_text(chunk, "ner_annotated_path"),
+                    "syntax_path": str(chunk.get("syntax_path") or ""),
+                    "syntax_structured_path": str(chunk.get("syntax_structured_path") or ""),
+                    "syntax_annotated_path": str(chunk.get("syntax_annotated_path") or ""),
+                    "syntax_status": str(chunk.get("syntax_status") or "unavailable"),
+                    "syntax_sentence_count": int(chunk.get("syntax_sentence_count") or 0),
+                    "syntax_token_count": int(chunk.get("syntax_token_count") or 0),
+                    "syntax_relation_count": int(chunk.get("syntax_relation_count") or 0),
+                    "syntax_format_version": str(chunk.get("syntax_format_version") or ""),
+                    "syntax_text": self._read_artifact_text(chunk, "syntax_path"),
+                    "syntax_structured_text": self._read_artifact_text(chunk, "syntax_structured_path"),
+                    "syntax_annotated_text": self._read_artifact_text(chunk, "syntax_annotated_path"),
                 }
             )
         return {
@@ -1090,6 +1697,7 @@ class KnowledgeManager:
 
         self._write_source_chunk_manifest(source.id, current_chunk_paths)
         self._write_chunk_ner_artifacts(source, payload, config=config)
+        self._write_chunk_syntax_artifacts(source, payload)
 
         self._source_index_path(source.id).write_text(
             json.dumps(payload, ensure_ascii=False, indent=2),

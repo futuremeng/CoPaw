@@ -347,3 +347,48 @@ def test_local_graph_emits_sentence_entity_stats(tmp_path: Path):
     assert all("entity_count_total" in item for item in sentence_stats)
     assert all("entity_char_ratio" in item for item in sentence_stats)
     assert all(0 <= float(item.get("entity_char_ratio") or 0) <= 1 for item in sentence_stats)
+
+
+def test_local_graph_emits_relation_candidates_from_syntax(tmp_path: Path):
+    project_root = tmp_path / "project"
+    project_root.mkdir(parents=True, exist_ok=True)
+    (project_root / "relations.md").write_text(
+        "ToolDispatcher 调用 FileSearch。\n"
+        "FileSearch 处理 KnowledgeGraph。\n",
+        encoding="utf-8",
+    )
+
+    config = Config().knowledge
+    source = KnowledgeSourceSpec(
+        id="project-demo-workspace",
+        name="Project Demo",
+        type="directory",
+        location=str(project_root),
+        content="",
+        enabled=True,
+        recursive=True,
+        tags=["project"],
+        summary="",
+    )
+    config.sources.append(source)
+
+    manager = KnowledgeManager(tmp_path)
+    manager.index_source(source, config)
+    graph_path = tmp_path / "knowledge" / "graphify-out" / "graph.json"
+    result = persist_local_graph(manager, config, [source.id], graph_path)
+    payload = json.loads(graph_path.read_text(encoding="utf-8"))
+    relation_candidates = payload.get("relation_candidates") or []
+
+    assert result["relation_candidate_count"] >= 2
+    assert any(
+        item.get("subject") == "tooldispatcher"
+        and item.get("predicate") == "调用"
+        and item.get("object") == "filesearch"
+        for item in relation_candidates
+    )
+    assert any(
+        item.get("subject") == "filesearch"
+        and item.get("predicate") == "处理"
+        and item.get("object") == "knowledgegraph"
+        for item in relation_candidates
+    )

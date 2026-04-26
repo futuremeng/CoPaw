@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import base64 as _b64
+import httpx
 
 from agentscope_runtime.engine.schemas.agent_schemas import (
     AgentRequest,
@@ -493,6 +494,10 @@ class WeixinChannel(BaseChannel):
                             await asyncio.sleep(3)
                 except asyncio.CancelledError:
                     break
+                except httpx.ReadTimeout:
+                    logger.debug(
+                        "weixin getupdates transport read timeout, continue polling",
+                    )
                 except Exception:
                     logger.exception("weixin poll error, retry in 5s")
                     if not self._stop_event.is_set():

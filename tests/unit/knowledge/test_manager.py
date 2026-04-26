@@ -420,14 +420,47 @@ def test_index_source_writes_ner_files_when_semantic_ready(tmp_path: Path):
     )
     chunk = payload["chunks"][0]
     ner_path = tmp_path / "knowledge" / chunk["ner_path"]
+    ner_structured_path = tmp_path / "knowledge" / chunk["ner_structured_path"]
+    ner_annotated_path = tmp_path / "knowledge" / chunk["ner_annotated_path"]
+    syntax_path = tmp_path / "knowledge" / chunk["syntax_path"]
+    syntax_structured_path = tmp_path / "knowledge" / chunk["syntax_structured_path"]
+    syntax_annotated_path = tmp_path / "knowledge" / chunk["syntax_annotated_path"]
 
     assert chunk["ner_status"] == "ready"
     assert chunk["ner_entity_count"] == 2
     assert chunk["version_id"]
+    assert chunk["ner_format_version"] == "1.1"
+    assert chunk["syntax_status"] == "ready"
+    assert chunk["syntax_format_version"] == "0.1"
+    assert chunk["syntax_sentence_count"] == 1
+    assert chunk["syntax_token_count"] == 3
     assert ner_path.exists()
+    assert ner_structured_path.exists()
+    assert ner_annotated_path.exists()
+    assert syntax_path.exists()
+    assert syntax_structured_path.exists()
+    assert syntax_annotated_path.exists()
     ner_text = ner_path.read_text(encoding="utf-8")
     assert "<entity type=\"semantic_token\">agentrunner</entity>" in ner_text
     assert "<entity type=\"semantic_token\">tooldispatcher</entity>" in ner_text
+    ner_structured = json.loads(ner_structured_path.read_text(encoding="utf-8"))
+    assert ner_structured["artifact"] == "ner_structured"
+    assert ner_structured["entity_catalog"][0]["label"] == "semantic_token"
+    assert {item["normalized"] for item in ner_structured["entity_mentions"]} == {
+        "agentrunner",
+        "tooldispatcher",
+    }
+    ner_annotated = ner_annotated_path.read_text(encoding="utf-8")
+    assert "[[AgentRunner|label=semantic_token|id=e1|norm=agentrunner|score=1.00]]" in ner_annotated
+    assert "[[ToolDispatcher|label=semantic_token|id=e2|norm=tooldispatcher|score=1.00]]" in ner_annotated
+    syntax_structured = json.loads(syntax_structured_path.read_text(encoding="utf-8"))
+    assert syntax_structured["artifact"] == "syntax_structured"
+    assert syntax_structured["parse_mode"] == "tokenized_only"
+    assert syntax_structured["sentence_count"] == 1
+    assert syntax_structured["sentences"][0]["entities"][0]["entity_id"] == "e1"
+    syntax_annotated = syntax_annotated_path.read_text(encoding="utf-8")
+    assert "# Syntax Annotated" in syntax_annotated
+    assert "## Sentence 1" in syntax_annotated
 
 
 def test_index_source_skips_ner_files_when_semantic_unavailable(tmp_path: Path):
@@ -462,8 +495,18 @@ def test_index_source_skips_ner_files_when_semantic_unavailable(tmp_path: Path):
     assert result["chunk_count"] == 1
     assert chunk["ner_status"] == "unavailable"
     assert chunk["ner_entity_count"] == 0
+    assert chunk["ner_format_version"] == "1.1"
+    assert chunk["syntax_status"] == "ready"
+    assert chunk["syntax_format_version"] == "0.1"
+    assert chunk["syntax_sentence_count"] == 1
+    assert chunk["syntax_token_count"] == 3
     assert "ner_path" not in chunk
+    assert "ner_structured_path" not in chunk
+    assert "ner_annotated_path" not in chunk
     assert list((tmp_path / "knowledge" / "ner").rglob("*.ner.txt")) == []
+    assert (tmp_path / "knowledge" / chunk["syntax_path"]).exists()
+    assert (tmp_path / "knowledge" / chunk["syntax_structured_path"]).exists()
+    assert (tmp_path / "knowledge" / chunk["syntax_annotated_path"]).exists()
 
 
 def test_delete_index_removes_ner_files(tmp_path: Path):
@@ -501,11 +544,67 @@ def test_delete_index_removes_ner_files(tmp_path: Path):
         (manager.get_source_storage_dir(source.id) / "index.json").read_text(encoding="utf-8")
     )
     ner_path = tmp_path / "knowledge" / payload["chunks"][0]["ner_path"]
+    ner_structured_path = tmp_path / "knowledge" / payload["chunks"][0]["ner_structured_path"]
+    ner_annotated_path = tmp_path / "knowledge" / payload["chunks"][0]["ner_annotated_path"]
+    syntax_path = tmp_path / "knowledge" / payload["chunks"][0]["syntax_path"]
+    syntax_structured_path = tmp_path / "knowledge" / payload["chunks"][0]["syntax_structured_path"]
+    syntax_annotated_path = tmp_path / "knowledge" / payload["chunks"][0]["syntax_annotated_path"]
     assert ner_path.exists()
+    assert ner_structured_path.exists()
+    assert ner_annotated_path.exists()
+    assert syntax_path.exists()
+    assert syntax_structured_path.exists()
+    assert syntax_annotated_path.exists()
 
     manager.delete_index(source.id)
 
     assert not ner_path.exists()
+    assert not ner_structured_path.exists()
+    assert not ner_annotated_path.exists()
+    assert not syntax_path.exists()
+    assert not syntax_structured_path.exists()
+    assert not syntax_annotated_path.exists()
+
+
+def test_get_source_chunk_documents_exposes_syntax_artifacts(tmp_path: Path):
+    config = Config().knowledge
+    config.index.chunk_size = 10_000
+    source = KnowledgeSourceSpec(
+        id="syntax-doc-source",
+        name="Syntax Doc Source",
+        type="text",
+        content="AgentRunner uses ToolDispatcher.",
+        enabled=True,
+        recursive=False,
+        tags=[],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    ready_state = {
+        "engine": "hanlp2",
+        "status": "ready",
+        "reason_code": "HANLP2_READY",
+        "reason": "HanLP2 semantic engine is ready.",
+    }
+    with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
+        manager._semantic_runtime,
+        "tokenize",
+        return_value=(
+            ["AgentRunner", "ToolDispatcher"],
+            ready_state,
+        ),
+    ):
+        manager.index_source(source, config)
+
+    documents = manager.get_source_chunk_documents(source.id)["documents"]
+    assert len(documents) == 1
+    chunk = documents[0]
+    assert chunk["syntax_status"] == "ready"
+    assert chunk["syntax_structured_path"].endswith(".syntax.json")
+    assert chunk["syntax_annotated_path"].endswith(".syntax.annotated.md")
+    assert '"artifact": "syntax_structured"' in chunk["syntax_structured_text"]
+    assert "# Syntax Annotated" in chunk["syntax_annotated_text"]
 
 
 def test_delete_index_removes_chunk_files(tmp_path: Path):
