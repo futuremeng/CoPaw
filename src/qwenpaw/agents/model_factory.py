@@ -14,7 +14,7 @@ import base64
 import logging
 import os
 from typing import List, Sequence, Tuple, Type, Any, Union, Optional, cast
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 from agentscope.formatter import FormatterBase, OpenAIChatFormatter
 from agentscope.model import ChatModelBase, OpenAIChatModel
@@ -50,12 +50,13 @@ from ..token_usage import TokenRecordingModelWrapper
 def _file_url_to_path(url: str) -> str:
     """
     Strip file:// to path. On Windows file:///C:/path -> C:/path not /C:/path.
+    Percent-decodes the path so non-ASCII filenames resolve correctly.
     """
     s = url.removeprefix("file://")
     # Windows: file:///C:/path yields "/C:/path"; remove leading slash.
     if len(s) >= 3 and s.startswith("/") and s[1].isalpha() and s[2] == ":":
         s = s[1:]
-    return s
+    return unquote(s)
 
 
 logger = logging.getLogger(__name__)
@@ -222,7 +223,7 @@ def _format_openai_video_block(video_block: dict) -> dict:
         media_type = source["media_type"]
         url = f"data:{media_type};base64,{source['data']}"
     elif source["type"] == "url":
-        raw_url = source["url"].removeprefix("file://")
+        raw_url = _file_url_to_path(source["url"])
         if os.path.exists(raw_url) and os.path.isfile(raw_url):
             ext = os.path.splitext(raw_url)[1].lower()
             media_type = _SUPPORTED_VIDEO_EXTENSIONS.get(ext)
@@ -284,15 +285,81 @@ def _replace_video_placeholders(
         fmt_msg["content"] = new_content
 
 
-def _format_anthropic_output_items(output: list) -> list:
+def _media_source_key(block: dict) -> str | None:
+    """Extract a normalised path/URL from a media block for deduplication.
+
+    Returns ``None`` for base64 sources (nothing to compare) or if no
+    usable source URL is present.
+    """
+    source = block.get("source", {})
+    if source.get("type") == "base64":
+        return None
+    url = source.get("url", "")
+    if not url:
+        return None
+    raw = _file_url_to_path(url)
+    if os.path.isabs(raw):
+        return os.path.normpath(raw)
+    return url
+
+
+def _format_anthropic_output_items(
+    output: list,
+    seen_media: set[str] | None = None,
+) -> list:
     """Format a list of tool_result output blocks for Anthropic API,
-    converting image and video blocks as needed."""
-    return [
-        _format_anthropic_media_block(item)
-        if item.get("type") in ("image", "video")
-        else item
-        for item in output
-    ]
+    converting image, video, and file blocks as needed.
+
+    When *seen_media* is provided, media blocks whose source has already
+    been encoded in a preceding top-level block are replaced with a
+    lightweight text placeholder to avoid duplicating large base64 data.
+    """
+    result: list[dict] = []
+    for item in output:
+        item_type = item.get("type")
+
+        if item_type == "file":
+            # Anthropic tool_result content only supports 'text' and 'image';
+            # convert file blocks to a readable text placeholder so the
+            # conversation history stays intact without triggering a 400 error.
+            source = item.get("source", {})
+            file_url = source.get("url", "")
+            filename = (
+                item.get("filename")
+                or file_url.rsplit("/", 1)[-1]
+                or "unknown"
+            )
+            readable_path = file_url.removeprefix("file://")
+            result.append(
+                {
+                    "type": "text",
+                    "text": f"File '{filename}' is available at:"
+                    f" {readable_path}",
+                },
+            )
+            continue
+
+        if item_type not in ("image", "video"):
+            result.append(item)
+            continue
+
+        key = _media_source_key(item)
+        if key and seen_media is not None and key in seen_media:
+            result.append(
+                {
+                    "type": "text",
+                    "text": (
+                        f"[{item['type'].title()} omitted — same "
+                        f"{item['type']} already visible above]"
+                    ),
+                },
+            )
+        else:
+            result.append(_format_anthropic_media_block(item))
+            if key and seen_media is not None:
+                seen_media.add(key)
+
+    return result
 
 
 # TODO: remove after agentscope anthropic formatter updated
@@ -304,8 +371,14 @@ def _format_anthropic_messages(  # pylint: disable=too-many-branches
     This replaces the default ``AnthropicChatFormatter._format`` so that
     ``_format_anthropic_media_block`` is applied to both top-level media
     blocks and media blocks nested inside ``tool_result`` outputs.
+
+    A ``seen_media`` set tracks image/video source paths already encoded
+    in top-level blocks. When the same media appears inside a
+    ``tool_result`` output, it is replaced with a lightweight text
+    placeholder to avoid duplicating large base64 payloads.
     """
     messages: list[dict] = []
+    seen_media: set[str] = set()
     for index, msg in enumerate(msgs):
         content_blocks: list[dict] = []
 
@@ -315,6 +388,9 @@ def _format_anthropic_messages(  # pylint: disable=too-many-branches
                 content_blocks.append({**block})
 
             elif typ in ("image", "video"):
+                key = _media_source_key(block)
+                if key:
+                    seen_media.add(key)
                 content_blocks.append(
                     _format_anthropic_media_block(block),
                 )
@@ -333,10 +409,13 @@ def _format_anthropic_messages(  # pylint: disable=too-many-branches
                 output = block.get("output")
                 if output is None:
                     content_value: list = [
-                        {"type": "text", "text": None},
+                        {"type": "text", "text": ""},
                     ]
                 elif isinstance(output, list):
-                    content_value = _format_anthropic_output_items(output)
+                    content_value = _format_anthropic_output_items(
+                        output,
+                        seen_media,
+                    )
                 else:
                     content_value = [
                         {"type": "text", "text": str(output)},
@@ -361,7 +440,7 @@ def _format_anthropic_messages(  # pylint: disable=too-many-branches
 
         msg_anthropic: dict = {
             "role": role,
-            "content": content_blocks or None,
+            "content": content_blocks or "",
         }
 
         if msg_anthropic["content"] or msg_anthropic.get(

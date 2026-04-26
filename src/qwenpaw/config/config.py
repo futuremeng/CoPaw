@@ -223,6 +223,7 @@ class DingTalkConfig(BaseChannelConfig):
     client_id: str = ""
     client_secret: str = ""
     message_type: str = "markdown"
+    cron_message_type: str = "markdown"
     card_template_id: str = ""
     card_template_key: str = "content"
     robot_code: str = ""
@@ -1414,12 +1415,22 @@ class ToolsConfig(BaseModel):
 
     @model_validator(mode="after")
     def _merge_default_tools(self):
-        """Ensure new code-defined tools are present in saved configs."""
-        for name, tc in _default_builtin_tools().items():
+        """Ensure new code-defined tools are present in saved configs.
+
+        Also normalises legacy entries whose ``icon`` is ``None`` so that
+        downstream serialisation (e.g. ``ToolInfo``) never receives a null
+        icon value.
+        """
+        defaults = _default_builtin_tools()
+        for name, tc in defaults.items():
             if name not in self.builtin_tools:
                 self.builtin_tools[name] = tc
             elif self.builtin_tools[name].icon is None:
                 self.builtin_tools[name].icon = tc.icon
+        # Normalise legacy/stale entries not in the current defaults
+        for name, tc in self.builtin_tools.items():
+            if name not in defaults and tc.icon is None:
+                tc.icon = ""
         return self
 
 
@@ -1495,6 +1506,19 @@ class ToolGuardRuleConfig(BaseModel):
     remediation: str = ""
 
 
+def _default_shell_evasion_checks() -> Dict[str, bool]:
+    """Return default shell-evasion checks (all disabled at startup)."""
+    return {
+        "command_substitution": False,
+        "obfuscated_flags": False,
+        "backslash_escaped_whitespace": False,
+        "backslash_escaped_operators": False,
+        "newlines": False,
+        "comment_quote_desync": False,
+        "quoted_newline": False,
+    }
+
+
 class ToolGuardConfig(BaseModel):
     """Tool guard settings under ``security.tool_guard``.
 
@@ -1507,6 +1531,9 @@ class ToolGuardConfig(BaseModel):
     denied_tools: List[str] = Field(default_factory=list)
     custom_rules: List[ToolGuardRuleConfig] = Field(default_factory=list)
     disabled_rules: List[str] = Field(default_factory=list)
+    shell_evasion_checks: Dict[str, bool] = Field(
+        default_factory=_default_shell_evasion_checks,
+    )
 
 
 class PlanConfig(BaseModel):

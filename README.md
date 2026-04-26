@@ -42,6 +42,8 @@ Your personal AI assistant — easy to install, deploy locally or in the cloud, 
 >
 > **Every channel** — DingTalk, Feishu, WeChat, Discord, Telegram, and more. One CoPaw, connect as needed.
 >
+> **Memory-evolving & proactive** — Agent learns from interactions, reflects on experience, and proactively serves you. Gets smarter the more you use it.
+>
 > <details>
 > <summary><b>What you can do with CoPaw</b></summary>
 >
@@ -60,11 +62,19 @@ Your personal AI assistant — easy to install, deploy locally or in the cloud, 
 
 ## News
 
-[2026-04-17] Upstream released **v1.1.2**. See the full [v1.1.2 Release Notes](https://qwenpaw.agentscope.io/release-notes).
+- [2026-04-24] We've released **v1.1.4**! See the full [v1.1.4 Release Notes](https://qwenpaw.agentscope.io/release-notes).
 
-- **[v1.1.2] Added**: Mission Mode (`/mission`) for autonomous, multi-phase task execution; ACP protocol for external agent delegation; `qwenpaw doctor` diagnostic command; `qwenpaw agents create` CLI agent creation; scheduled memory consolidation (Dream); new Debug page.
-- **[v1.1.2] Changed**: Agent communication tools split into synchronous/asynchronous modes; provider list sorted by availability.
-- **[v1.1.2] New Contributors**: @FrankJingHao, @ployts, @cqhtyi, @leesf, @flystar32.
+  - **[v1.1.4] Added**: Memory & context architecture refactor; plan mode; configurable shell evasion checks; auth-bypass host whitelist; SIP voice channel; session right-click menu; browser launch parameters and shell command timeout; Built-in DeepSeek V4 models.
+  - **[v1.1.4] Changed**: Tool Guard approval system; Docker build improvements; dynamic plugin registration.
+  - **[v1.1.4] New Contributors**: @shadowabi, @shaohuaxi, @vincentyzhj, @hlgone, @twz915, @Nioolek.
+
+- [2026-04-22] We've released **v1.1.3**! See the full [v1.1.3 Release Notes](https://qwenpaw.agentscope.io/release-notes).
+
+- [2026-04-17] Upstream released **v1.1.2**. See the full [v1.1.2 Release Notes](https://qwenpaw.agentscope.io/release-notes).
+
+  - **[v1.1.2] Added**: Mission Mode (`/mission`) for autonomous, multi-phase task execution; ACP protocol for external agent delegation; `qwenpaw doctor` diagnostic command; `qwenpaw agents create` CLI agent creation; scheduled memory consolidation (Dream); new Debug page.
+  - **[v1.1.2] Changed**: Agent communication tools split into synchronous/asynchronous modes; provider list sorted by availability.
+  - **[v1.1.2] New Contributors**: @FrankJingHao, @ployts, @cqhtyi, @leesf, @flystar32.
 
 [2026-04-14] Upstream released v1.1.1. See the full [v1.1.1 Release Notes](https://qwenpaw.agentscope.io/release-notes).
 
@@ -444,6 +454,7 @@ Example source for the `editor-skills` repository:
 | [Skills](https://qwenpaw.agentscope.io/docs/skills)                      | Extend and customize capabilities               |
 | [MCP](https://qwenpaw.agentscope.io/docs/mcp)                            | Manage MCP clients                               |
 | [Memory](https://qwenpaw.agentscope.io/docs/memory)                     | Long-term memory                     |
+| [Memory-Evolving & Proactive](https://qwenpaw.agentscope.io/docs/memory-evolving-and-proactive) | Agent memory evolution and proactive interaction |
 | [Context](https://qwenpaw.agentscope.io/docs/context)                   | Context management mechanism                     |
 | [Magic commands](https://qwenpaw.agentscope.io/docs/commands)           | Control conversation state without waiting for the AI |
 | [Heartbeat](https://qwenpaw.agentscope.io/docs/heartbeat)                | Scheduled check-in and digest                    |
