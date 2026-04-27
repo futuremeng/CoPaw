@@ -493,8 +493,8 @@ describe("project knowledge supporting panels", () => {
     expect(screen.getByText("多智能体增强")).not.toBeNull();
     expect(screen.getAllByText(/Semantic engine unavailable: HanLP2 module is not installed\./).length).toBeGreaterThan(0);
     const runNlpButton = screen.getByRole("button", { name: "运行 NLP 结构化" }) as HTMLButtonElement;
-    expect(runNlpButton.disabled).toBe(true);
-    expect(runNlpButton.parentElement?.getAttribute("title")).toBe("Semantic engine unavailable: HanLP2 module is not installed.");
+    expect(runNlpButton.disabled).toBe(false);
+    expect(runNlpButton.parentElement?.getAttribute("title")).toBeNull();
     expect(screen.getByText("L2 提供实体与关系的结构化基础，L3 在此基础上继续做多智能体增强与质量提升。")).not.toBeNull();
   });
 

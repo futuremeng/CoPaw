@@ -62,6 +62,7 @@ function launchDisabledReason(
   const semanticEngine = knowledgeState.syncState?.semantic_engine;
   if (
     mode.mode === "nlp"
+    && !mode.available
     && semanticEngine
     && semanticEngine.status !== "ready"
     && getProjectKnowledgeSemanticSummary(semanticEngine, t)
@@ -223,7 +224,7 @@ function describeCorBenefit(
     return "";
   }
   const readyChunks = Math.max(0, Number(mode.corReadyChunkCount || 0));
-  if (readyChunks <= 0) {
+  if (readyChunks <= 0 && (!mode.available || mode.status === "running" || mode.status === "queued" || mode.status === "blocked")) {
     return t("projects.knowledge.processing.corBenefitPending", "收益评估生成中");
   }
   const replacementCount = Math.max(0, Number(mode.corReplacementCount || 0));

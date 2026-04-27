@@ -686,8 +686,9 @@ class ProjectKnowledgeSyncManager:
         ).strip()
 
         fast_available = document_count > 0 or chunk_count > 0
-        nlp_available = semantic_ready and (entity_count > 0 or relation_count > 0)
-        agentic_available = semantic_ready and workflow_status in {"succeeded", "completed"} and workflow_mode in {"", "agentic"}
+        # Existing structured outputs should stay consumable even if sidecar is temporarily unavailable.
+        nlp_available = entity_count > 0 or relation_count > 0
+        agentic_available = workflow_status in {"succeeded", "completed"} and workflow_mode in {"", "agentic"}
 
         fast_running = sync_status in {"pending", "indexing"} or sync_stage in {"pending", "indexing"}
         nlp_running = semantic_ready and (sync_status == "graphifying" or sync_stage == "graphifying" or sync_stage.startswith("graphify"))
@@ -695,7 +696,7 @@ class ProjectKnowledgeSyncManager:
             semantic_ready and sync_status in {"pending", "indexing", "graphifying"} and bool(workflow_run_id)
         )
         agentic_queued = semantic_ready and workflow_status == "queued"
-        semantic_blocked = fast_available and not semantic_ready
+        semantic_blocked = fast_available and not semantic_ready and not nlp_available
 
         fast_status = (
             "failed"
@@ -713,10 +714,10 @@ class ProjectKnowledgeSyncManager:
             if sync_status == "failed" and not nlp_available
             else "running"
             if nlp_running
-            else "blocked"
-            if semantic_blocked
             else "ready"
             if nlp_available
+            else "blocked"
+            if semantic_blocked
             else "queued"
             if fast_available
             else "idle"
@@ -724,14 +725,14 @@ class ProjectKnowledgeSyncManager:
         agentic_status = (
             "failed"
             if workflow_status in {"failed", "blocked", "cancelled"} or (sync_status == "failed" and not agentic_available)
+            else "ready"
+            if agentic_available
             else "blocked"
-            if semantic_blocked
+            if semantic_blocked and not agentic_available
             else "queued"
             if agentic_queued
             else "running"
             if agentic_running
-            else "ready"
-            if agentic_available
             else "queued"
             if nlp_available or bool(workflow_run_id)
             else "idle"
