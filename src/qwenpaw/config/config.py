@@ -1684,6 +1684,10 @@ class KnowledgeHanLPSidecarConfig(BaseModel):
         default="",
         description="Optional HANLP_HOME for offline cache/model lookup.",
     )
+    task_matrix: KnowledgeHanLPTaskMatrixConfig = Field(
+        default_factory=lambda: KnowledgeHanLPTaskMatrixConfig(),
+        description="HanLP task matrix for L2 annotation and evaluation.",
+    )
 
     @model_validator(mode="after")
     def _inject_from_env(self) -> "KnowledgeHanLPSidecarConfig":
@@ -1717,6 +1721,69 @@ class KnowledgeHanLPSidecarConfig(BaseModel):
             except ValueError:
                 pass
 
+        return self
+
+
+class KnowledgeHanLPTaskConfig(BaseModel):
+    """One HanLP task entry in the L2 evaluation matrix."""
+
+    enabled: bool = Field(default=True)
+    task_name: str = Field(
+        default="",
+        description="HanLP task identifier such as ner/msra, dep, sdp, or con.",
+    )
+    model_id: str = Field(
+        default="",
+        description="Optional model identifier used when the task needs a dedicated local model.",
+    )
+    timeout_sec: float = Field(default=30.0, ge=0.5, le=180.0)
+    artifact_key: str = Field(
+        default="",
+        description="Stable artifact key used for output naming and downstream routing.",
+    )
+    eval_role: Literal["primary", "compare", "auxiliary"] = Field(default="compare")
+
+
+def _default_hanlp_tasks() -> Dict[str, KnowledgeHanLPTaskConfig]:
+    return {
+        "ner_msra": KnowledgeHanLPTaskConfig(
+            enabled=True,
+            task_name="ner/msra",
+            artifact_key="ner_msra",
+            eval_role="primary",
+        ),
+        "dep": KnowledgeHanLPTaskConfig(
+            enabled=True,
+            task_name="dep",
+            artifact_key="dep",
+            eval_role="primary",
+        ),
+        "sdp": KnowledgeHanLPTaskConfig(
+            enabled=True,
+            task_name="sdp",
+            artifact_key="sdp",
+            eval_role="primary",
+        ),
+        "con": KnowledgeHanLPTaskConfig(
+            enabled=True,
+            task_name="con",
+            artifact_key="con",
+            eval_role="auxiliary",
+        ),
+    }
+
+
+class KnowledgeHanLPTaskMatrixConfig(BaseModel):
+    """HanLP task matrix used by the L2 annotation baseline."""
+
+    tasks: Dict[str, KnowledgeHanLPTaskConfig] = Field(default_factory=_default_hanlp_tasks)
+
+    @model_validator(mode="after")
+    def _ensure_default_tasks(self) -> "KnowledgeHanLPTaskMatrixConfig":
+        defaults = _default_hanlp_tasks()
+        for key, task in defaults.items():
+            if key not in self.tasks:
+                self.tasks[key] = task
         return self
 
 

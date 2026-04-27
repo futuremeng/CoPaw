@@ -431,7 +431,7 @@ def test_index_source_writes_ner_files_when_semantic_ready(tmp_path: Path):
     assert chunk["version_id"]
     assert chunk["ner_format_version"] == "1.1"
     assert chunk["syntax_status"] == "ready"
-    assert chunk["syntax_format_version"] == "0.1"
+    assert chunk["syntax_format_version"] == "0.2"
     assert chunk["syntax_sentence_count"] == 1
     assert chunk["syntax_token_count"] == 3
     assert ner_path.exists()
@@ -497,7 +497,7 @@ def test_index_source_skips_ner_files_when_semantic_unavailable(tmp_path: Path):
     assert chunk["ner_entity_count"] == 0
     assert chunk["ner_format_version"] == "1.1"
     assert chunk["syntax_status"] == "ready"
-    assert chunk["syntax_format_version"] == "0.1"
+    assert chunk["syntax_format_version"] == "0.2"
     assert chunk["syntax_sentence_count"] == 1
     assert chunk["syntax_token_count"] == 3
     assert "ner_path" not in chunk
@@ -507,6 +507,151 @@ def test_index_source_skips_ner_files_when_semantic_unavailable(tmp_path: Path):
     assert (tmp_path / "knowledge" / chunk["syntax_path"]).exists()
     assert (tmp_path / "knowledge" / chunk["syntax_structured_path"]).exists()
     assert (tmp_path / "knowledge" / chunk["syntax_annotated_path"]).exists()
+
+
+def test_index_source_prefers_hanlp_ner_task_mentions_when_available(tmp_path: Path):
+    config = Config().knowledge
+    config.index.chunk_size = 10_000
+    config.hanlp.enabled = True
+    source = KnowledgeSourceSpec(
+        id="ner-task-source",
+        name="NER Task Source",
+        type="text",
+        content="微软在北京发布模型。",
+        enabled=True,
+        recursive=False,
+        tags=[],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    ready_state = {
+        "engine": "hanlp2",
+        "status": "ready",
+        "reason_code": "HANLP2_TASK_READY",
+        "reason": "HanLP task is ready.",
+    }
+    with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
+        manager._semantic_runtime,
+        "run_task",
+        return_value=(
+            [
+                {"text": "微软", "label": "ORG", "span": [0, 2]},
+                {"text": "北京", "label": "GPE", "span": [3, 5]},
+            ],
+            ready_state,
+        ),
+    ), patch.object(
+        manager._semantic_runtime,
+        "tokenize",
+        side_effect=AssertionError("tokenize should not be used when HanLP NER task succeeds"),
+    ):
+        manager.index_source(source, config)
+
+    payload = json.loads(
+        (manager.get_source_storage_dir(source.id) / "index.json").read_text(encoding="utf-8")
+    )
+    chunk = payload["chunks"][0]
+    ner_path = tmp_path / "knowledge" / chunk["ner_path"]
+    ner_structured_path = tmp_path / "knowledge" / chunk["ner_structured_path"]
+    ner_annotated_path = tmp_path / "knowledge" / chunk["ner_annotated_path"]
+    syntax_structured_path = tmp_path / "knowledge" / chunk["syntax_structured_path"]
+
+    assert chunk["ner_status"] == "ready"
+    assert chunk["ner_entity_count"] == 2
+    ner_text = ner_path.read_text(encoding="utf-8")
+    assert '<entity type="ORG">微软</entity>' in ner_text
+    assert '<entity type="GPE">北京</entity>' in ner_text
+    ner_structured = json.loads(ner_structured_path.read_text(encoding="utf-8"))
+    assert {(item["normalized"], item["label"]) for item in ner_structured["entity_catalog"]} == {
+        ("微软", "ORG"),
+        ("北京", "GPE"),
+    }
+    ner_annotated = ner_annotated_path.read_text(encoding="utf-8")
+    assert "[[微软|label=ORG|id=e1|norm=微软|score=1.00]]" in ner_annotated
+    assert "[[北京|label=GPE|id=e2|norm=北京|score=1.00]]" in ner_annotated
+    syntax_structured = json.loads(syntax_structured_path.read_text(encoding="utf-8"))
+    assert syntax_structured["sentences"][0]["entities"][0]["label"] == "ORG"
+    assert syntax_structured["sentences"][0]["entities"][1]["label"] == "GPE"
+
+
+def test_index_source_populates_hanlp_syntax_tasks_when_available(tmp_path: Path):
+    config = Config().knowledge
+    config.index.chunk_size = 10_000
+    config.hanlp.enabled = True
+    source = KnowledgeSourceSpec(
+        id="syntax-task-source",
+        name="Syntax Task Source",
+        type="text",
+        content="微软在北京发布模型。",
+        enabled=True,
+        recursive=False,
+        tags=[],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    ready_state = {
+        "engine": "hanlp2",
+        "status": "ready",
+        "reason_code": "HANLP2_TASK_READY",
+        "reason": "HanLP task is ready.",
+    }
+
+    def fake_run_task(task_key: str, text: str, current_config):
+        if task_key == "ner_msra":
+            return [
+                {"text": "微软", "label": "ORG", "span": [0, 2]},
+                {"text": "北京", "label": "GPE", "span": [3, 5]},
+            ], ready_state
+        if task_key == "dep":
+            return {
+                "tokens": ["微软", "北京", "发布模型"],
+                "head": [2, 3, 0],
+                "deprel": ["nsubj", "obl", "root"],
+            }, ready_state
+        if task_key == "sdp":
+            return [
+                {"dependent_index": 1, "head_index": 3, "relation": "Agt", "dependent": "微软"},
+                {"dependent_index": 2, "head_index": 3, "relation": "Loc", "dependent": "北京"},
+            ], ready_state
+        if task_key == "con":
+            return {"tree": "(S (NP 微软) (PP 在 (NP 北京)) (VP 发布模型))"}, ready_state
+        raise AssertionError(f"unexpected task key: {task_key}")
+
+    with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
+        manager._semantic_runtime,
+        "run_task",
+        side_effect=fake_run_task,
+    ), patch.object(
+        manager._semantic_runtime,
+        "tokenize",
+        side_effect=AssertionError("tokenize should not be used when HanLP NER task succeeds"),
+    ):
+        manager.index_source(source, config)
+
+    payload = json.loads(
+        (manager.get_source_storage_dir(source.id) / "index.json").read_text(encoding="utf-8")
+    )
+    chunk = payload["chunks"][0]
+    syntax_structured_path = tmp_path / "knowledge" / chunk["syntax_structured_path"]
+    syntax_annotated_path = tmp_path / "knowledge" / chunk["syntax_annotated_path"]
+
+    assert chunk["syntax_status"] == "ready"
+    assert chunk["syntax_format_version"] == "0.2"
+    assert chunk["syntax_relation_count"] == 5
+    syntax_structured = json.loads(syntax_structured_path.read_text(encoding="utf-8"))
+    assert syntax_structured["parse_mode"] == "hanlp_task_matrix"
+    assert syntax_structured["task_keys"] == ["con", "dep", "sdp"]
+    assert syntax_structured["relation_count"] == 5
+    sentence = syntax_structured["sentences"][0]
+    assert [task["task_key"] for task in sentence["syntax_tasks"]] == ["dep", "sdp", "con"]
+    assert sentence["dependencies"][0]["task_key"] == "dep"
+    assert sentence["dependencies"][3]["task_key"] == "sdp"
+    assert sentence["constituency"]["tree"] == "(S (NP 微软) (PP 在 (NP 北京)) (VP 发布模型))"
+    syntax_annotated = syntax_annotated_path.read_text(encoding="utf-8")
+    assert "### Dependencies" in syntax_annotated
+    assert "### Constituency" in syntax_annotated
 
 
 def test_delete_index_removes_ner_files(tmp_path: Path):

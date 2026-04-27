@@ -140,7 +140,7 @@ logger = logging.getLogger(__name__)
 _AUTO_COLLECT_URL_MIN_CONTENT_CHARS = 1000
 _NER_SENTENCE_DELIMITERS = {"。", "！", "？", "!", "?", ";", "；", ".", "\n"}
 _NER_FORMAT_VERSION = "1.1"
-_SYNTAX_FORMAT_VERSION = "0.1"
+_SYNTAX_FORMAT_VERSION = "0.2"
 
 
 def _sanitize_filename(name: str) -> str:
@@ -1039,6 +1039,116 @@ class KnowledgeManager:
             entities.append(normalized)
         return entities
 
+    @staticmethod
+    def _sentence_index_for_offset(text: str, start: int) -> int:
+        return 1 + sum(1 for char in str(text or "")[:max(0, start)] if char in _NER_SENTENCE_DELIMITERS)
+
+    def _normalize_hanlp_ner_mentions(
+        self,
+        text: str,
+        raw_result: Any,
+    ) -> list[dict[str, Any]]:
+        source_text = str(text or "")
+        if not source_text or not isinstance(raw_result, list):
+            return []
+
+        mentions: list[dict[str, Any]] = []
+        search_cursor = 0
+        for item in raw_result:
+            surface = ""
+            label = "entity"
+            start = -1
+            end = -1
+            confidence = 1.0
+
+            if isinstance(item, dict):
+                surface = str(item.get("text") or item.get("surface") or item.get("word") or "").strip()
+                label = str(item.get("label") or item.get("type") or item.get("tag") or "entity").strip() or "entity"
+                span = item.get("span")
+                if isinstance(span, (list, tuple)) and len(span) >= 2:
+                    start = int(span[0] or 0)
+                    end = int(span[1] or 0)
+                else:
+                    start = int(item.get("start") or -1)
+                    end = int(item.get("end") or -1)
+                confidence = float(item.get("confidence") or item.get("score") or 1.0)
+            elif isinstance(item, (list, tuple)):
+                if len(item) >= 2:
+                    surface = str(item[0] or "").strip()
+                    label = str(item[1] or "entity").strip() or "entity"
+                if len(item) >= 4:
+                    start = int(item[2] or -1)
+                    end = int(item[3] or -1)
+            else:
+                continue
+
+            if not surface:
+                continue
+            if start < 0 or end <= start:
+                found = source_text.find(surface, search_cursor)
+                if found < 0:
+                    found = source_text.find(surface)
+                if found < 0:
+                    continue
+                start = found
+                end = found + len(surface)
+                search_cursor = end
+            else:
+                search_cursor = max(search_cursor, end)
+
+            mentions.append(
+                {
+                    "surface": source_text[start:end],
+                    "normalized": surface.lower(),
+                    "label": label,
+                    "start": start,
+                    "end": end,
+                    "confidence": confidence,
+                    "sentence_index": self._sentence_index_for_offset(source_text, start),
+                }
+            )
+
+        mentions.sort(key=lambda item: (int(item["start"]), int(item["end"])))
+        for index, mention in enumerate(mentions, start=1):
+            mention["entity_id"] = f"e{index}"
+        return mentions
+
+    def _collect_chunk_ner_mentions_with_fallback(
+        self,
+        text: str,
+        *,
+        config: KnowledgeConfig,
+    ) -> list[dict[str, Any]]:
+        raw_result, state = self._semantic_runtime.run_task("ner_msra", text, config)
+        self._remember_semantic_engine_state(state)
+        if state.get("status") == "ready":
+            mentions = self._normalize_hanlp_ner_mentions(text, raw_result)
+            if mentions:
+                return mentions
+
+        entities = self._collect_chunk_ner_entities(text, config=config)
+        return self._build_chunk_ner_mentions(text, entities)
+
+    @staticmethod
+    def _build_chunk_ner_catalog(mentions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        grouped: dict[tuple[str, str], dict[str, Any]] = {}
+        for mention in mentions:
+            normalized = str(mention.get("normalized") or "").strip()
+            label = str(mention.get("label") or "entity").strip() or "entity"
+            if not normalized:
+                continue
+            key = (normalized, label)
+            entry = grouped.setdefault(
+                key,
+                {
+                    "normalized": normalized,
+                    "label": label,
+                    "mention_count": 0,
+                },
+            )
+            entry["mention_count"] += 1
+        return sorted(grouped.values(), key=lambda item: (str(item["label"]), str(item["normalized"])))
+
     def _build_chunk_ner_mentions(
         self,
         text: str,
@@ -1089,19 +1199,9 @@ class KnowledgeManager:
         chunk: dict[str, Any],
         *,
         text: str,
-        entities: list[str],
+        catalog: list[dict[str, Any]],
         mentions: list[dict[str, Any]],
     ) -> dict[str, Any]:
-        catalog = [
-            {
-                "normalized": entity,
-                "label": "semantic_token",
-                "mention_count": sum(
-                    1 for mention in mentions if mention.get("normalized") == entity
-                ),
-            }
-            for entity in entities
-        ]
         return {
             "artifact": "ner_structured",
             "format_version": _NER_FORMAT_VERSION,
@@ -1224,6 +1324,8 @@ class KnowledgeManager:
         self,
         text: str,
         mentions: list[dict[str, Any]],
+        *,
+        config: KnowledgeConfig | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
         sentences = self._split_chunk_sentence_spans(text)
         syntax_sentences: list[dict[str, Any]] = []
@@ -1270,6 +1372,20 @@ class KnowledgeManager:
                     }
                 )
 
+            syntax_tasks: list[dict[str, Any]] = []
+            dependencies: list[dict[str, Any]] = []
+            constituency: dict[str, Any] | None = None
+            if config is not None and sentence_text.strip():
+                syntax_tasks, dependencies, constituency = self._collect_sentence_syntax_tasks(
+                    sentence_text,
+                    sentence_start=sentence_start,
+                    tokens=tokens,
+                    config=config,
+                )
+
+            parse_mode = "hanlp_task_matrix" if syntax_tasks else "tokenized_only"
+            parse_confidence = 1.0 if syntax_tasks else 0.0
+
             syntax_sentences.append(
                 {
                     "sentence_index": sentence_index,
@@ -1277,13 +1393,171 @@ class KnowledgeManager:
                     "start": sentence_start,
                     "end": sentence_end,
                     "tokens": tokens,
-                    "dependencies": [],
+                    "dependencies": dependencies,
                     "entities": sentence_entities,
-                    "parse_mode": "tokenized_only",
-                    "parse_confidence": 0.0,
+                    "parse_mode": parse_mode,
+                    "parse_confidence": parse_confidence,
+                    "syntax_tasks": syntax_tasks,
+                    "constituency": constituency,
                 }
             )
         return syntax_sentences, total_tokens
+
+    def _collect_sentence_syntax_tasks(
+        self,
+        sentence_text: str,
+        *,
+        sentence_start: int,
+        tokens: list[dict[str, Any]],
+        config: KnowledgeConfig,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any] | None]:
+        task_specs = getattr(getattr(config.hanlp, "task_matrix", None), "tasks", {}) or {}
+        task_order = ("dep", "sdp", "con")
+        syntax_tasks: list[dict[str, Any]] = []
+        dependencies: list[dict[str, Any]] = []
+        constituency: dict[str, Any] | None = None
+
+        for task_key in task_order:
+            task_cfg = task_specs.get(task_key)
+            if task_cfg is not None and not bool(getattr(task_cfg, "enabled", True)):
+                continue
+            raw_result, state = self._semantic_runtime.run_task(task_key, sentence_text, config)
+            self._remember_semantic_engine_state(state)
+            if state.get("status") != "ready":
+                continue
+            task_name = str(getattr(task_cfg, "task_name", task_key) or task_key)
+            task_entry = {
+                "task_key": task_key,
+                "task_name": task_name,
+                "result": raw_result,
+            }
+            syntax_tasks.append(task_entry)
+            if task_key in {"dep", "sdp"}:
+                dependencies.extend(
+                    self._normalize_hanlp_dependencies(
+                        task_key,
+                        raw_result,
+                        sentence_start=sentence_start,
+                        tokens=tokens,
+                    )
+                )
+            elif task_key == "con":
+                constituency = self._normalize_hanlp_constituency(task_key, raw_result)
+
+        return syntax_tasks, dependencies, constituency
+
+    @staticmethod
+    def _token_text_at(tokens: list[dict[str, Any]], token_index: int) -> str:
+        if 1 <= token_index <= len(tokens):
+            token = tokens[token_index - 1]
+            if isinstance(token, dict):
+                return str(token.get("text") or "")
+        return ""
+
+    def _normalize_hanlp_dependencies(
+        self,
+        task_key: str,
+        raw_result: Any,
+        *,
+        sentence_start: int,
+        tokens: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+
+        if isinstance(raw_result, dict):
+            heads = raw_result.get("head") or raw_result.get("heads") or raw_result.get("arcs")
+            relations = raw_result.get("deprel") or raw_result.get("relations") or raw_result.get("labels")
+            words = raw_result.get("tokens") or raw_result.get("tok") or []
+            if isinstance(heads, list) and isinstance(relations, list):
+                for dependent_index, relation in enumerate(relations, start=1):
+                    head_index = int(heads[dependent_index - 1] or 0)
+                    dependent = self._token_text_at(tokens, dependent_index)
+                    if not dependent and isinstance(words, list) and dependent_index - 1 < len(words):
+                        dependent = str(words[dependent_index - 1] or "")
+                    rows.append(
+                        self._build_dependency_row(
+                            task_key,
+                            dependent_index=dependent_index,
+                            head_index=head_index,
+                            relation=str(relation or "").strip(),
+                            dependent=dependent,
+                            sentence_start=sentence_start,
+                            tokens=tokens,
+                        )
+                    )
+                return [row for row in rows if row]
+
+        if isinstance(raw_result, list):
+            for fallback_index, item in enumerate(raw_result, start=1):
+                if isinstance(item, dict):
+                    dependent_index = int(item.get("dependent_index") or item.get("id") or fallback_index)
+                    head_index = int(item.get("head_index") or item.get("head") or 0)
+                    relation = str(item.get("relation") or item.get("label") or item.get("deprel") or "").strip()
+                    dependent = str(item.get("dependent") or item.get("form") or item.get("text") or self._token_text_at(tokens, dependent_index))
+                elif isinstance(item, (list, tuple)) and len(item) >= 3:
+                    if isinstance(item[0], int):
+                        dependent_index = int(item[0] or fallback_index)
+                        head_index = int(item[1] or 0)
+                        relation = str(item[2] or "").strip()
+                        dependent = self._token_text_at(tokens, dependent_index)
+                    else:
+                        dependent_index = fallback_index
+                        dependent = str(item[0] or "")
+                        head_index = int(item[1] or 0)
+                        relation = str(item[2] or "").strip()
+                else:
+                    continue
+                rows.append(
+                    self._build_dependency_row(
+                        task_key,
+                        dependent_index=dependent_index,
+                        head_index=head_index,
+                        relation=relation,
+                        dependent=dependent,
+                        sentence_start=sentence_start,
+                        tokens=tokens,
+                    )
+                )
+        return [row for row in rows if row]
+
+    def _build_dependency_row(
+        self,
+        task_key: str,
+        *,
+        dependent_index: int,
+        head_index: int,
+        relation: str,
+        dependent: str,
+        sentence_start: int,
+        tokens: list[dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        if dependent_index <= 0:
+            return None
+        token = tokens[dependent_index - 1] if 1 <= dependent_index <= len(tokens) else {}
+        start = int(token.get("start") or sentence_start)
+        end = int(token.get("end") or start)
+        return {
+            "task_key": task_key,
+            "dependent_index": dependent_index,
+            "head_index": head_index,
+            "relation": relation,
+            "dependent": dependent,
+            "head": self._token_text_at(tokens, head_index) if head_index > 0 else "ROOT",
+            "start": start,
+            "end": end,
+        }
+
+    @staticmethod
+    def _normalize_hanlp_constituency(task_key: str, raw_result: Any) -> dict[str, Any] | None:
+        if raw_result is None:
+            return None
+        tree = raw_result
+        if isinstance(raw_result, dict):
+            tree = raw_result.get("tree") or raw_result.get("con") or raw_result
+        return {
+            "task_key": task_key,
+            "tree": tree,
+        }
 
     def _render_chunk_syntax_structured_payload(
         self,
@@ -1291,12 +1565,28 @@ class KnowledgeManager:
         *,
         text: str,
         mentions: list[dict[str, Any]],
+        config: KnowledgeConfig | None = None,
     ) -> dict[str, Any]:
-        sentences, token_count = self._build_chunk_syntax_sentences(text, mentions)
+        sentences, token_count = self._build_chunk_syntax_sentences(text, mentions, config=config)
+        task_keys = sorted(
+            {
+                str(task.get("task_key") or "")
+                for sentence in sentences
+                if isinstance(sentence, dict)
+                for task in (sentence.get("syntax_tasks") or [])
+                if isinstance(task, dict) and str(task.get("task_key") or "")
+            }
+        )
+        relation_count = sum(
+            len([item for item in (sentence.get("dependencies") or []) if isinstance(item, dict)])
+            for sentence in sentences
+            if isinstance(sentence, dict)
+        )
+        parse_mode = "hanlp_task_matrix" if task_keys else "tokenized_only"
         return {
             "artifact": "syntax_structured",
             "format_version": _SYNTAX_FORMAT_VERSION,
-            "parse_mode": "tokenized_only",
+            "parse_mode": parse_mode,
             "document_path": str(chunk.get("document_path") or ""),
             "document_title": str(chunk.get("document_title") or ""),
             "chunk_id": str(chunk.get("chunk_id") or ""),
@@ -1306,6 +1596,8 @@ class KnowledgeManager:
             "source_text": str(text or ""),
             "sentence_count": len(sentences),
             "token_count": token_count,
+            "relation_count": relation_count,
+            "task_keys": task_keys,
             "entity_alignment_source": str(chunk.get("ner_structured_path") or ""),
             "sentences": sentences,
         }
@@ -1322,6 +1614,8 @@ class KnowledgeManager:
             f"parse_mode={structured_payload.get('parse_mode') or 'tokenized_only'}",
             f"sentence_count={structured_payload.get('sentence_count') or 0}",
             f"token_count={structured_payload.get('token_count') or 0}",
+            f"relation_count={structured_payload.get('relation_count') or 0}",
+            f"task_keys={'|'.join(structured_payload.get('task_keys') or [])}",
             f"entity_alignment_source={chunk.get('ner_structured_path') or ''}",
         ]
         for sentence in structured_payload.get("sentences") or []:
@@ -1341,6 +1635,13 @@ class KnowledgeManager:
             ]
             lines.append(f"tokens={' | '.join(token_labels)}")
             lines.append(f"entities={' | '.join(entity_labels)}")
+            dependency_labels = [
+                f"{dep.get('task_key') or ''}:{dep.get('dependent_index') or 0}->{dep.get('head_index') or 0}:{dep.get('relation') or ''}"
+                for dep in (sentence.get("dependencies") or [])
+                if isinstance(dep, dict)
+            ]
+            if dependency_labels:
+                lines.append(f"dependencies={' | '.join(dependency_labels)}")
         return "\n".join(lines)
 
     def _render_chunk_syntax_annotated_markdown(
@@ -1358,6 +1659,7 @@ class KnowledgeManager:
             f"snapshot_at: {json.dumps(str(chunk.get('snapshot_at') or ''), ensure_ascii=False)}",
             f"sentence_count: {int(structured_payload.get('sentence_count') or 0)}",
             f"token_count: {int(structured_payload.get('token_count') or 0)}",
+            f"relation_count: {int(structured_payload.get('relation_count') or 0)}",
             f"structured_ref: {json.dumps(str(chunk.get('syntax_structured_path') or ''), ensure_ascii=False)}",
             f"ner_structured_ref: {json.dumps(str(chunk.get('ner_structured_path') or ''), ensure_ascii=False)}",
             "---",
@@ -1393,6 +1695,32 @@ class KnowledgeManager:
                 lines.append(
                     f"| {entity.get('entity_id') or ''} | {surface} | {entity.get('label') or 'semantic_token'} | {entity.get('token_start') or 0} | {entity.get('token_end') or 0} |"
                 )
+            dependencies = [item for item in (sentence.get("dependencies") or []) if isinstance(item, dict)]
+            if dependencies:
+                lines.extend([
+                    "",
+                    "### Dependencies",
+                    "",
+                    "| task | dependent | head | relation |",
+                    "| --- | --- | --- | --- |",
+                ])
+                for dep in dependencies:
+                    dependent = str(dep.get("dependent") or "").replace("|", "\\|")
+                    head = str(dep.get("head") or "").replace("|", "\\|")
+                    relation = str(dep.get("relation") or "").replace("|", "\\|")
+                    lines.append(
+                        f"| {dep.get('task_key') or ''} | {dependent} | {head} | {relation} |"
+                    )
+            constituency = sentence.get("constituency")
+            if isinstance(constituency, dict) and constituency.get("tree") is not None:
+                lines.extend([
+                    "",
+                    "### Constituency",
+                    "",
+                    "```text",
+                    str(constituency.get("tree") or ""),
+                    "```",
+                ])
             lines.append("")
         return "\n".join(lines)
 
@@ -1400,6 +1728,8 @@ class KnowledgeManager:
         self,
         source: KnowledgeSourceSpec,
         payload: dict[str, Any],
+        *,
+        config: KnowledgeConfig | None = None,
     ) -> set[str]:
         previous_manifest_paths = self._load_source_syntax_manifest(source.id)
         previous_payload = self._load_index_payload_safe(source.id)
@@ -1419,10 +1749,11 @@ class KnowledgeManager:
                 chunk,
                 text=chunk_text,
                 mentions=mentions,
+                config=config,
             )
             chunk["syntax_sentence_count"] = int(structured_payload.get("sentence_count") or 0)
             chunk["syntax_token_count"] = int(structured_payload.get("token_count") or 0)
-            chunk["syntax_relation_count"] = 0
+            chunk["syntax_relation_count"] = int(structured_payload.get("relation_count") or 0)
 
             syntax_relative_path = self._build_syntax_relative_path(str(chunk.get("chunk_path") or ""))
             syntax_structured_relative_path = self._build_syntax_structured_relative_path(
@@ -1470,7 +1801,7 @@ class KnowledgeManager:
         chunk: dict[str, Any],
         *,
         text: str,
-        entities: list[str],
+        catalog: list[dict[str, Any]],
     ) -> str:
         attributes = [
             f'document_path="{escape(str(chunk.get("document_path") or ""))}"',
@@ -1484,8 +1815,12 @@ class KnowledgeManager:
         for line in source_lines:
             lines.append(f"    {escape(line)}")
         lines.extend(["  </text>", "  <entities>"])
-        for entity in entities:
-            lines.append(f"    <entity type=\"semantic_token\">{escape(entity)}</entity>")
+        for entity in catalog:
+            if not isinstance(entity, dict):
+                continue
+            entity_label = escape(str(entity.get("label") or "entity"))
+            entity_text = escape(str(entity.get("normalized") or ""))
+            lines.append(f"    <entity type=\"{entity_label}\">{entity_text}</entity>")
         lines.extend(["  </entities>", "</chunk>"])
         return "\n".join(lines)
 
@@ -1520,10 +1855,10 @@ class KnowledgeManager:
             if not ready:
                 continue
             chunk_text = self._read_chunk_text(chunk)
-            entities = self._collect_chunk_ner_entities(chunk_text, config=config) if config is not None else []
-            mentions = self._build_chunk_ner_mentions(chunk_text, entities)
+            mentions = self._collect_chunk_ner_mentions_with_fallback(chunk_text, config=config) if config is not None else []
+            catalog = self._build_chunk_ner_catalog(mentions)
             chunk["ner_status"] = "ready"
-            chunk["ner_entity_count"] = len(entities)
+            chunk["ner_entity_count"] = len(catalog)
             ner_relative_path = self._build_ner_relative_path(str(chunk.get("chunk_path") or ""))
             ner_structured_relative_path = self._build_ner_structured_relative_path(
                 str(chunk.get("chunk_path") or "")
@@ -1536,7 +1871,7 @@ class KnowledgeManager:
             ner_annotated_file_path = self.root_dir / ner_annotated_relative_path
             ner_file_path.parent.mkdir(parents=True, exist_ok=True)
             ner_file_path.write_text(
-                self._render_chunk_ner_text(chunk, text=chunk_text, entities=entities),
+                self._render_chunk_ner_text(chunk, text=chunk_text, catalog=catalog),
                 encoding="utf-8",
             )
             ner_structured_file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1545,7 +1880,7 @@ class KnowledgeManager:
                     self._render_chunk_ner_structured_payload(
                         chunk,
                         text=chunk_text,
-                        entities=entities,
+                        catalog=catalog,
                         mentions=mentions,
                     ),
                     ensure_ascii=False,
@@ -1697,7 +2032,7 @@ class KnowledgeManager:
 
         self._write_source_chunk_manifest(source.id, current_chunk_paths)
         self._write_chunk_ner_artifacts(source, payload, config=config)
-        self._write_chunk_syntax_artifacts(source, payload)
+        self._write_chunk_syntax_artifacts(source, payload, config=config)
 
         self._source_index_path(source.id).write_text(
             json.dumps(payload, ensure_ascii=False, indent=2),

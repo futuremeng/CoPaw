@@ -244,3 +244,150 @@ def test_ensure_model_returns_unavailable_when_sidecar_reports_model_failure() -
 
     assert state["status"] == "unavailable"
     assert state["reason_code"] == "HANLP2_MODEL_LOAD_FAILED"
+
+
+def test_default_task_matrix_contains_l2_baseline_tasks() -> None:
+    config = Config().knowledge
+
+    tasks = config.hanlp.task_matrix.tasks
+
+    assert set(tasks) >= {"ner_msra", "dep", "sdp", "con"}
+    assert tasks["ner_msra"].task_name == "ner/msra"
+    assert tasks["ner_msra"].eval_role == "primary"
+    assert tasks["con"].eval_role == "auxiliary"
+
+
+def test_task_status_returns_ready_when_sidecar_reports_task_ready() -> None:
+    runtime = HanLPSidecarRuntime()
+    config = Config().knowledge
+    config.hanlp.enabled = True
+    config.hanlp.python_executable = "/bin/python3"
+
+    def fake_run(*args, **kwargs):
+        mode = args[0][-1]
+        if mode == "probe":
+            return subprocess.CompletedProcess(
+                args=args[0],
+                returncode=0,
+                stdout=json.dumps({
+                    "engine": "hanlp2",
+                    "status": "ready",
+                    "reason_code": "HANLP2_READY",
+                    "reason": "HanLP2 semantic engine is ready.",
+                }),
+                stderr="",
+            )
+        return subprocess.CompletedProcess(
+            args=args[0],
+            returncode=0,
+            stdout=json.dumps({
+                "engine": "hanlp2",
+                "status": "ready",
+                "reason_code": "HANLP2_TASK_READY",
+                "reason": "HanLP task is ready.",
+            }),
+            stderr="",
+        )
+
+    with patch("pathlib.Path.exists", return_value=True), patch(
+        "subprocess.run",
+        side_effect=fake_run,
+    ):
+        state = runtime.task_status("ner_msra", config)
+
+    assert state["status"] == "ready"
+    assert state["reason_code"] == "HANLP2_TASK_READY"
+
+
+def test_run_task_returns_structured_result_from_sidecar() -> None:
+    runtime = HanLPSidecarRuntime()
+    config = Config().knowledge
+    config.hanlp.enabled = True
+    config.hanlp.python_executable = "/bin/python3"
+
+    def fake_run(*args, **kwargs):
+        mode = args[0][-1]
+        if mode == "probe":
+            return subprocess.CompletedProcess(
+                args=args[0],
+                returncode=0,
+                stdout=json.dumps({
+                    "engine": "hanlp2",
+                    "status": "ready",
+                    "reason_code": "HANLP2_READY",
+                    "reason": "HanLP2 semantic engine is ready.",
+                }),
+                stderr="",
+            )
+        return subprocess.CompletedProcess(
+            args=args[0],
+            returncode=0,
+            stdout=json.dumps({
+                "engine": "hanlp2",
+                "status": "ready",
+                "reason_code": "HANLP2_TASK_READY",
+                "reason": "HanLP task is ready.",
+                "task_result": [{"span": [0, 5], "label": "组织名"}],
+            }),
+            stderr="",
+        )
+
+    with patch("pathlib.Path.exists", return_value=True), patch(
+        "subprocess.run",
+        side_effect=fake_run,
+    ):
+        result, state = runtime.run_task("ner_msra", "微软发布新模型", config)
+
+    assert state["status"] == "ready"
+    assert result == [{"span": [0, 5], "label": "组织名"}]
+
+
+def test_bridge_run_task_uses_parse_entrypoint_for_configured_task(tmp_path: Path) -> None:
+    hanlp_pkg = tmp_path / "hanlp"
+    hanlp_pkg.mkdir()
+    (hanlp_pkg / "__init__.py").write_text(
+        """
+def parse(text, tasks=None):
+    return {"ner/msra": [{"text": text, "label": "ORG"}]}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    bridge_code = hanlp_runtime_module._BRIDGE_CODE.replace(
+        "return (3, 6) <= current <= (3, 9)",
+        "return True",
+    )
+    payload = {
+        "task_key": "ner_msra",
+        "task_matrix": {
+            "tasks": {
+                "ner_msra": {
+                    "enabled": True,
+                    "task_name": "ner/msra",
+                    "artifact_key": "ner_msra",
+                    "eval_role": "primary",
+                    "timeout_sec": 30,
+                },
+            },
+        },
+        "text": "微软发布新模型",
+    }
+    env = {
+        **os.environ,
+        "PYTHONPATH": str(tmp_path),
+    }
+
+    completed = subprocess.run(
+        [sys.executable, "-c", bridge_code, "run_task"],
+        input=json.dumps(payload, ensure_ascii=False),
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+
+    assert completed.returncode == 0
+    parsed = json.loads(completed.stdout)
+    assert parsed["status"] == "ready"
+    assert parsed["reason_code"] == "HANLP2_TASK_READY"
+    assert parsed["task_result"] == [{"text": "微软发布新模型", "label": "ORG"}]

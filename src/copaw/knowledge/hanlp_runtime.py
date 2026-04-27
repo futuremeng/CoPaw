@@ -30,6 +30,10 @@ def flatten(value):
     return []
 
 
+def normalize_task_key(task_name):
+    return str(task_name or "").strip().replace("/", "_").replace("-", "_")
+
+
 def version_text():
     return f"{sys.version_info.major}.{sys.version_info.minor}"
 
@@ -46,12 +50,53 @@ def load_payload():
     return json.loads(raw)
 
 
+def load_task_specs(payload):
+    raw_matrix = payload.get("task_matrix") or {}
+    if not isinstance(raw_matrix, dict):
+        return {}
+    raw_tasks = raw_matrix.get("tasks") or {}
+    if not isinstance(raw_tasks, dict):
+        return {}
+    specs = {}
+    for task_key, raw_spec in raw_tasks.items():
+        if not isinstance(raw_spec, dict):
+            continue
+        specs[str(task_key)] = {
+            "enabled": bool(raw_spec.get("enabled", True)),
+            "task_name": str(raw_spec.get("task_name") or "").strip(),
+            "model_id": str(raw_spec.get("model_id") or "").strip(),
+            "artifact_key": str(raw_spec.get("artifact_key") or task_key).strip(),
+            "eval_role": str(raw_spec.get("eval_role") or "compare").strip(),
+            "timeout_sec": float(raw_spec.get("timeout_sec") or payload.get("tokenize_timeout_sec") or 30.0),
+        }
+    return specs
+
+
+def lookup_task_spec(payload, task_key):
+    task_specs = load_task_specs(payload)
+    spec = task_specs.get(str(task_key or "").strip())
+    if spec:
+        return spec
+    normalized = normalize_task_key(task_key)
+    for item in task_specs.values():
+        if normalize_task_key(item.get("task_name")) == normalized:
+            return item
+    return None
+
+
 def locate_tokenizer(module):
     for attr in ("tokenize", "tok"):
         fn = getattr(module, attr, None)
         if callable(fn):
             return attr, fn
     return "", None
+
+
+def locate_parser(module):
+    parser = getattr(module, "parse", None)
+    if callable(parser):
+        return parser
+    return None
 
 
 def validate_model(module, model_id, text="HanLP 模型校验"):
@@ -63,6 +108,44 @@ def validate_model(module, model_id, text="HanLP 模型校验"):
     except Exception as exc:
         return raw_model_id, None, resolved_name, [], exc.__class__.__name__
     return raw_model_id, model, resolved_name, tokens, ""
+
+
+def extract_task_result(document, task_name):
+    if document is None:
+        return None
+    candidates = [str(task_name or "").strip()]
+    if "/" in candidates[0]:
+        candidates.append(candidates[0].split("/", 1)[1])
+    candidates.append(normalize_task_key(task_name))
+    if isinstance(document, dict):
+        for key in candidates:
+            if key in document:
+                return document[key]
+        return None
+    for key in candidates:
+        try:
+            return document[key]
+        except Exception:
+            continue
+    return None
+
+
+def run_parse_task(module, text, task_name):
+    parser = locate_parser(module)
+    if parser is None:
+        raise RuntimeError("HanLP parse entry point was not found.")
+    try:
+        return parser(text, tasks=[task_name])
+    except TypeError:
+        return parser(text, tasks=task_name)
+
+
+def validate_task(module, task_name, text="HanLP 任务校验"):
+    try:
+        document = run_parse_task(module, text, task_name)
+    except Exception as exc:
+        return None, exc.__class__.__name__
+    return extract_task_result(document, task_name), ""
 
 
 def resolve_model_id(module, model_id):
@@ -129,6 +212,8 @@ def main():
         return
 
     configured_model_id = str(payload.get("model_id") or "").strip()
+    requested_task_key = str(payload.get("task_key") or "").strip()
+    requested_task_spec = lookup_task_spec(payload, requested_task_key)
 
     attr, fn = locate_tokenizer(hanlp)
 
@@ -196,6 +281,85 @@ def main():
         })
         return
 
+    if mode == "task_status":
+        if not requested_task_spec or not requested_task_spec.get("task_name"):
+            emit({
+                "engine": "hanlp2",
+                "status": "unavailable",
+                "reason_code": "HANLP2_TASK_NOT_CONFIGURED",
+                "reason": "Requested HanLP task is not configured.",
+                "python_version": version_text(),
+                "task_key": requested_task_key,
+                "task_name": "",
+            })
+            return
+        task_name = str(requested_task_spec.get("task_name") or "")
+        task_result, error_name = validate_task(hanlp, task_name)
+        if error_name:
+            emit({
+                "engine": "hanlp2",
+                "status": "unavailable",
+                "reason_code": "HANLP2_TASK_LOAD_FAILED",
+                "reason": f"HanLP task validation failed: {error_name}.",
+                "python_version": version_text(),
+                "task_key": requested_task_key,
+                "task_name": task_name,
+            })
+            return
+        emit({
+            "engine": "hanlp2",
+            "status": "ready",
+            "reason_code": "HANLP2_TASK_READY",
+            "reason": "HanLP task is ready.",
+            "python_version": version_text(),
+            "task_key": requested_task_key,
+            "task_name": task_name,
+            "result_kind": type(task_result).__name__,
+        })
+        return
+
+    if mode == "run_task":
+        if not requested_task_spec or not requested_task_spec.get("task_name"):
+            emit({
+                "engine": "hanlp2",
+                "status": "unavailable",
+                "reason_code": "HANLP2_TASK_NOT_CONFIGURED",
+                "reason": "Requested HanLP task is not configured.",
+                "python_version": version_text(),
+                "task_key": requested_task_key,
+                "task_name": "",
+                "task_result": None,
+            })
+            return
+        task_name = str(requested_task_spec.get("task_name") or "")
+        text = str(payload.get("text") or "")
+        try:
+            document = run_parse_task(hanlp, text, task_name)
+            task_result = extract_task_result(document, task_name)
+        except Exception as exc:
+            emit({
+                "engine": "hanlp2",
+                "status": "error",
+                "reason_code": "HANLP2_TASK_RUN_FAILED",
+                "reason": f"HanLP task execution failed: {exc.__class__.__name__}.",
+                "python_version": version_text(),
+                "task_key": requested_task_key,
+                "task_name": task_name,
+                "task_result": None,
+            })
+            return
+        emit({
+            "engine": "hanlp2",
+            "status": "ready",
+            "reason_code": "HANLP2_TASK_READY",
+            "reason": "HanLP task is ready.",
+            "python_version": version_text(),
+            "task_key": requested_task_key,
+            "task_name": task_name,
+            "task_result": task_result,
+        })
+        return
+
     text = str(payload.get("text") or "")
     try:
         if configured_model_id:
@@ -256,6 +420,19 @@ class HanLPSidecarRuntime:
     @staticmethod
     def _config_payload(config: KnowledgeConfig | None) -> dict[str, Any]:
         hanlp_cfg = getattr(config, "hanlp", None)
+        task_matrix = getattr(hanlp_cfg, "task_matrix", None)
+        raw_tasks = getattr(task_matrix, "tasks", {}) if task_matrix is not None else {}
+        serialized_tasks: dict[str, dict[str, Any]] = {}
+        if isinstance(raw_tasks, dict):
+            for task_key, task_cfg in raw_tasks.items():
+                serialized_tasks[str(task_key)] = {
+                    "enabled": bool(getattr(task_cfg, "enabled", True)),
+                    "task_name": str(getattr(task_cfg, "task_name", "") or "").strip(),
+                    "model_id": str(getattr(task_cfg, "model_id", "") or "").strip(),
+                    "timeout_sec": float(getattr(task_cfg, "timeout_sec", 30.0) or 30.0),
+                    "artifact_key": str(getattr(task_cfg, "artifact_key", task_key) or task_key).strip(),
+                    "eval_role": str(getattr(task_cfg, "eval_role", "compare") or "compare").strip(),
+                }
         return {
             "enabled": bool(getattr(hanlp_cfg, "enabled", False)),
             "python_executable": str(getattr(hanlp_cfg, "python_executable", "") or "").strip(),
@@ -263,6 +440,9 @@ class HanLPSidecarRuntime:
             "probe_timeout_sec": float(getattr(hanlp_cfg, "probe_timeout_sec", 5.0) or 5.0),
             "tokenize_timeout_sec": float(getattr(hanlp_cfg, "tokenize_timeout_sec", 15.0) or 15.0),
             "hanlp_home": str(getattr(hanlp_cfg, "hanlp_home", "") or "").strip(),
+            "task_matrix": {
+                "tasks": serialized_tasks,
+            },
         }
 
     def _cache_key(self, payload: dict[str, Any]) -> str:
@@ -272,6 +452,7 @@ class HanLPSidecarRuntime:
                 "python_executable": payload["python_executable"],
                 "model_id": payload["model_id"],
                 "hanlp_home": payload["hanlp_home"],
+                "task_matrix": payload.get("task_matrix") or {},
             },
             sort_keys=True,
             ensure_ascii=True,
@@ -479,3 +660,78 @@ class HanLPSidecarRuntime:
         if state.get("status") == "ready":
             self._probe_cache_state = dict(state)
         return tokens, state
+
+    def task_status(
+        self,
+        task_key: str,
+        config: KnowledgeConfig | None,
+    ) -> dict[str, str]:
+        payload = self._config_payload(config)
+        probe_state = self.probe(config)
+        if probe_state.get("status") != "ready":
+            return dict(probe_state)
+
+        executable = self._ensure_sidecar(payload)
+        if executable is None:
+            return dict(
+                self._probe_cache_state
+                or self._state(
+                    status="unavailable",
+                    reason_code="HANLP2_SIDECAR_UNCONFIGURED",
+                    reason="HanLP2 sidecar is not configured.",
+                ),
+            )
+
+        result = self._run_bridge(
+            executable,
+            mode="task_status",
+            payload={
+                **payload,
+                "task_key": task_key,
+            },
+            timeout=payload["tokenize_timeout_sec"],
+        )
+        return self._state(
+            status=str(result.get("status") or "unavailable"),
+            reason_code=str(result.get("reason_code") or "HANLP2_TASK_LOAD_FAILED"),
+            reason=str(result.get("reason") or "HanLP task probe failed."),
+        )
+
+    def run_task(
+        self,
+        task_key: str,
+        text: str,
+        config: KnowledgeConfig | None,
+    ) -> tuple[Any, dict[str, str]]:
+        payload = self._config_payload(config)
+        probe_state = self.probe(config)
+        if probe_state.get("status") != "ready":
+            return None, probe_state
+
+        executable = self._ensure_sidecar(payload)
+        if executable is None:
+            state = self._probe_cache_state or self._state(
+                status="unavailable",
+                reason_code="HANLP2_SIDECAR_UNCONFIGURED",
+                reason="HanLP2 sidecar is not configured.",
+            )
+            return None, dict(state)
+
+        result = self._run_bridge(
+            executable,
+            mode="run_task",
+            payload={
+                **payload,
+                "task_key": task_key,
+                "text": text,
+            },
+            timeout=payload["tokenize_timeout_sec"],
+        )
+        state = self._state(
+            status=str(result.get("status") or "unavailable"),
+            reason_code=str(result.get("reason_code") or "HANLP2_TASK_RUN_FAILED"),
+            reason=str(result.get("reason") or "HanLP task execution failed."),
+        )
+        if state.get("status") == "ready":
+            self._probe_cache_state = dict(state)
+        return result.get("task_result"), state
