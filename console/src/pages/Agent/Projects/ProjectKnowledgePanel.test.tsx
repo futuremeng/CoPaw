@@ -10,6 +10,8 @@ import {
 import { buildModeState } from "./projectKnowledgeTestUtils";
 import type { ProjectKnowledgeState } from "./useProjectKnowledgeState";
 
+const mockRecordsToVisualizationData = vi.fn(() => ({ nodes: [], edges: [] }));
+
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (
@@ -25,7 +27,16 @@ vi.mock("react-i18next", () => ({
 }));
 
 vi.mock("../Knowledge/graphQuery", () => ({
-  recordsToVisualizationData: () => ({ nodes: [], edges: [] }),
+  limitGraphVisualizationRecords: (records: unknown[], topK?: number) => {
+    if (!Array.isArray(records)) {
+      return [];
+    }
+    if (!Number.isFinite(topK)) {
+      return records;
+    }
+    return records.slice(0, Math.max(1, Math.floor(Number(topK))));
+  },
+  recordsToVisualizationData: (...args: unknown[]) => mockRecordsToVisualizationData(...args),
 }));
 
 function buildKnowledgeState(projectId: string): ProjectKnowledgeState {
@@ -328,6 +339,61 @@ describe("ProjectKnowledgePanel interactions", () => {
     expect(knowledgeState.graphRelationTypeFilters).toEqual([]);
     expect(knowledgeState.setGraphEntityTypeFilters).not.toHaveBeenCalled();
     expect(knowledgeState.setGraphRelationTypeFilters).not.toHaveBeenCalled();
+  });
+
+  it("limits visualization records by graph topK while keeping query results intact", () => {
+    const knowledgeState = buildKnowledgeState(projectId);
+    knowledgeState.graphQueryTopK = 2;
+    knowledgeState.graphResult = {
+      records: [
+        {
+          subject: "Alpha",
+          predicate: "mentions",
+          object: "Beta",
+          score: 0.9,
+          source_id: "source-1",
+          source_type: "directory",
+          document_path: "docs/a.md",
+          document_title: "Doc A",
+        },
+        {
+          subject: "Gamma",
+          predicate: "mentions",
+          object: "Delta",
+          score: 0.8,
+          source_id: "source-1",
+          source_type: "directory",
+          document_path: "docs/a.md",
+          document_title: "Doc A",
+        },
+        {
+          subject: "Epsilon",
+          predicate: "mentions",
+          object: "Zeta",
+          score: 0.7,
+          source_id: "source-1",
+          source_type: "directory",
+          document_path: "docs/a.md",
+          document_title: "Doc A",
+        },
+      ],
+      summary: "3 records",
+      warnings: [],
+      provenance: {},
+    };
+
+    render(
+      <ProjectKnowledgePanel
+        projectId={projectId}
+        projectName="Project ABC"
+        knowledgeState={knowledgeState}
+        graphComponents={testGraphComponents}
+      />,
+    );
+
+    expect(mockRecordsToVisualizationData).toHaveBeenCalled();
+    expect(mockRecordsToVisualizationData.mock.calls.at(-1)?.[0]).toHaveLength(2);
+    expect(knowledgeState.graphResult.records).toHaveLength(3);
   });
 
   it("keeps signals and health actions out of explore", () => {

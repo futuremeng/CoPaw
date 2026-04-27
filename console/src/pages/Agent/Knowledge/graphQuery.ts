@@ -51,6 +51,26 @@ export function filterGraphQuerySourceRecords(
   ));
 }
 
+export function limitGraphVisualizationRecords(
+  records: GraphQueryRecord[],
+  topK?: number,
+): GraphQueryRecord[] {
+  if (!Array.isArray(records) || records.length <= 0) {
+    return [];
+  }
+
+  if (!Number.isFinite(topK)) {
+    return records;
+  }
+
+  const safeTopK = Math.max(1, Math.floor(Number(topK)));
+  if (records.length <= safeTopK) {
+    return records;
+  }
+
+  return records.slice(0, safeTopK);
+}
+
 /**
  * View model for displaying a graph query record as a table row.
  */

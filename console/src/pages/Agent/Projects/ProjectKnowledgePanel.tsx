@@ -9,7 +9,10 @@ import {
   message,
 } from "antd";
 import { useTranslation } from "react-i18next";
-import { recordsToVisualizationData } from "../Knowledge/graphQuery";
+import {
+  limitGraphVisualizationRecords,
+  recordsToVisualizationData,
+} from "../Knowledge/graphQuery";
 import { parseEdgeStrength } from "../Knowledge/graphVisualizationData";
 import {
   appendUniqueContextLine,
@@ -92,12 +95,16 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
     if (!graphResult) {
       return null;
     }
-    return recordsToVisualizationData(
+    const visualizationRecords = limitGraphVisualizationRecords(
       graphResult.records,
+      knowledgeState.graphQueryTopK,
+    );
+    return recordsToVisualizationData(
+      visualizationRecords,
       graphResult.summary,
       graphResult.provenance,
     );
-  }, [graphResult]);
+  }, [graphResult, knowledgeState.graphQueryTopK]);
 
   const maxByEntity = useMemo(
     () => Math.max(20, quantMetrics.entityCount || 200),

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { GraphQueryRecord } from "../../../api/types";
-import { recordsToVisualizationData } from "./graphQuery";
+import {
+  limitGraphVisualizationRecords,
+  recordsToVisualizationData,
+} from "./graphQuery";
 
 function buildRecord(partial: Partial<GraphQueryRecord>): GraphQueryRecord {
   return {
@@ -17,6 +20,20 @@ function buildRecord(partial: Partial<GraphQueryRecord>): GraphQueryRecord {
 }
 
 describe("recordsToVisualizationData", () => {
+  it("limits graph visualization source records by topK before rendering", () => {
+    const records = [
+      buildRecord({ subject: "Alpha" }),
+      buildRecord({ subject: "Beta" }),
+      buildRecord({ subject: "Gamma" }),
+    ];
+
+    expect(limitGraphVisualizationRecords(records, 2).map((item) => item.subject)).toEqual([
+      "Alpha",
+      "Beta",
+    ]);
+    expect(limitGraphVisualizationRecords(records, Number.NaN)).toHaveLength(3);
+  });
+
   it("falls back to plain-text object targets and merges shared entities", () => {
     const data = recordsToVisualizationData(
       [
