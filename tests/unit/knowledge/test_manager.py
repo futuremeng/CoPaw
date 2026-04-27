@@ -599,6 +599,11 @@ def test_index_source_populates_hanlp_syntax_tasks_when_available(tmp_path: Path
     }
 
     def fake_run_task(task_key: str, text: str, current_config):
+        if task_key == "cor":
+            return {
+                "tokens": ["微软", "在", "北京", "发布", "模型", "。"],
+                "clusters": [],
+            }, ready_state
         if task_key == "ner_msra":
             return [
                 {"text": "微软", "label": "ORG", "span": [0, 2]},
@@ -654,6 +659,98 @@ def test_index_source_populates_hanlp_syntax_tasks_when_available(tmp_path: Path
     assert "### Constituency" in syntax_annotated
 
 
+def test_index_source_runs_cor_before_ner_and_syntax_uses_resolved_text(tmp_path: Path):
+    config = Config().knowledge
+    config.index.chunk_size = 10_000
+    config.hanlp.enabled = True
+    source = KnowledgeSourceSpec(
+        id="cor-ner-syntax-source",
+        name="COR NER Syntax Source",
+        type="text",
+        content="我姐送我她的猫。我很喜欢它。",
+        enabled=True,
+        recursive=False,
+        tags=[],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    ready_state = {
+        "engine": "hanlp2",
+        "status": "ready",
+        "reason_code": "HANLP2_TASK_READY",
+        "reason": "HanLP task is ready.",
+    }
+    call_trace: list[tuple[str, str]] = []
+
+    def fake_run_task(task_key: str, text: str, current_config):
+        call_trace.append((task_key, text))
+        if task_key == "cor":
+            return {
+                "tokens": ["我", "姐", "送", "我", "她", "的", "猫", "。", "我", "很", "喜欢", "它", "。"],
+                "clusters": [
+                    [["我姐", 0, 2], ["她", 4, 5]],
+                    [["她的猫", 4, 7], ["它", 11, 12]],
+                ],
+            }, ready_state
+        if task_key == "ner_msra":
+            return [
+                {"text": "我姐", "label": "PER", "span": [0, 2]},
+                {"text": "她的猫", "label": "PET", "span": [11, 14]},
+            ], ready_state
+        if task_key in {"dep", "sdp"}:
+            return [], ready_state
+        if task_key == "con":
+            return {"tree": "(S (NP 我姐) (VP 喜欢 (NP 她的猫)))"}, ready_state
+        raise AssertionError(f"unexpected task key: {task_key}")
+
+    with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
+        manager._semantic_runtime,
+        "run_task",
+        side_effect=fake_run_task,
+    ), patch.object(
+        manager._semantic_runtime,
+        "tokenize",
+        side_effect=AssertionError("tokenize should not be used when HanLP task chain is available"),
+    ):
+        manager.index_source(source, config)
+
+    payload = json.loads(
+        (manager.get_source_storage_dir(source.id) / "index.json").read_text(encoding="utf-8")
+    )
+    chunk = payload["chunks"][0]
+    cor_structured_path = tmp_path / "knowledge" / chunk["cor_structured_path"]
+    ner_structured_path = tmp_path / "knowledge" / chunk["ner_structured_path"]
+    syntax_structured_path = tmp_path / "knowledge" / chunk["syntax_structured_path"]
+
+    assert chunk["cor_status"] == "ready"
+    assert chunk["cor_cluster_count"] == 2
+    cor_structured = json.loads(cor_structured_path.read_text(encoding="utf-8"))
+    assert cor_structured["source_text"].replace("\n", "") == "我姐送我她的猫。我很喜欢它。"
+    assert cor_structured["resolved_text"].replace("\n", "") == "我姐送我我姐的猫。我很喜欢她的猫。"
+    assert cor_structured["replacement_count"] == 2
+
+    ner_structured = json.loads(ner_structured_path.read_text(encoding="utf-8"))
+    assert ner_structured["source_text"] == cor_structured["source_text"]
+    assert ner_structured["input_text"] == cor_structured["resolved_text"]
+    assert ner_structured["cor_structured_path"] == chunk["cor_structured_path"]
+    assert ner_structured["cor_resolution_mode"] == "hanlp_cor"
+
+    syntax_structured = json.loads(syntax_structured_path.read_text(encoding="utf-8"))
+    assert syntax_structured["source_text"] == cor_structured["source_text"]
+    assert syntax_structured["input_text"] == cor_structured["resolved_text"]
+    assert syntax_structured["cor_structured_path"] == chunk["cor_structured_path"]
+    assert syntax_structured["cor_resolution_mode"] == "hanlp_cor"
+
+    task_order = [item[0] for item in call_trace]
+    assert task_order[0] == "cor"
+    assert "ner_msra" in task_order
+    assert "dep" in task_order
+    assert "sdp" in task_order
+    assert "con" in task_order
+    assert task_order.index("cor") < task_order.index("ner_msra")
+
+
 def test_delete_index_removes_ner_files(tmp_path: Path):
     config = Config().knowledge
     config.index.chunk_size = 10_000
@@ -688,12 +785,18 @@ def test_delete_index_removes_ner_files(tmp_path: Path):
     payload = json.loads(
         (manager.get_source_storage_dir(source.id) / "index.json").read_text(encoding="utf-8")
     )
+    cor_path = tmp_path / "knowledge" / payload["chunks"][0]["cor_path"]
+    cor_structured_path = tmp_path / "knowledge" / payload["chunks"][0]["cor_structured_path"]
+    cor_annotated_path = tmp_path / "knowledge" / payload["chunks"][0]["cor_annotated_path"]
     ner_path = tmp_path / "knowledge" / payload["chunks"][0]["ner_path"]
     ner_structured_path = tmp_path / "knowledge" / payload["chunks"][0]["ner_structured_path"]
     ner_annotated_path = tmp_path / "knowledge" / payload["chunks"][0]["ner_annotated_path"]
     syntax_path = tmp_path / "knowledge" / payload["chunks"][0]["syntax_path"]
     syntax_structured_path = tmp_path / "knowledge" / payload["chunks"][0]["syntax_structured_path"]
     syntax_annotated_path = tmp_path / "knowledge" / payload["chunks"][0]["syntax_annotated_path"]
+    assert cor_path.exists()
+    assert cor_structured_path.exists()
+    assert cor_annotated_path.exists()
     assert ner_path.exists()
     assert ner_structured_path.exists()
     assert ner_annotated_path.exists()
@@ -703,6 +806,9 @@ def test_delete_index_removes_ner_files(tmp_path: Path):
 
     manager.delete_index(source.id)
 
+    assert not cor_path.exists()
+    assert not cor_structured_path.exists()
+    assert not cor_annotated_path.exists()
     assert not ner_path.exists()
     assert not ner_structured_path.exists()
     assert not ner_annotated_path.exists()

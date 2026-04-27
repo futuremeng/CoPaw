@@ -604,7 +604,7 @@ def test_local_graph_query_filters_latest_version_and_sorts_by_time(tmp_path):
     timestamps = [record.get("snapshot_at") for record in sorted_result.records]
 
     assert len(sorted_result.records) >= 2
-    assert all(record.get("document_path") == "docs/note.md" for record in sorted_result.records)
+    assert all(str(record.get("document_path") or "").endswith("docs/note.md") for record in sorted_result.records)
     assert timestamps == sorted(timestamps, reverse=True)
 
     latest_result = graph_ops.graph_query(

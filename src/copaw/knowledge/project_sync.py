@@ -500,6 +500,7 @@ class ProjectKnowledgeSyncManager:
     def _build_mode_metrics(
         processing_modes: list[dict[str, Any]],
         mode_outputs: dict[str, Any],
+        index_result: dict[str, Any],
     ) -> dict[str, Any]:
         metrics: dict[str, Any] = {}
         for item in processing_modes:
@@ -518,6 +519,17 @@ class ProjectKnowledgeSyncManager:
                 "artifact_count": len(artifacts) if isinstance(artifacts, list) else 0,
                 "quality_score": quality_score,
             }
+            if mode == "nlp":
+                metrics[mode].update(
+                    {
+                        "cor_ready_chunk_count": _safe_int(index_result.get("cor_ready_chunk_count")),
+                        "cor_cluster_count": _safe_int(index_result.get("cor_cluster_count")),
+                        "cor_replacement_count": _safe_int(index_result.get("cor_replacement_count")),
+                        "cor_effective_chunk_count": _safe_int(index_result.get("cor_effective_chunk_count")),
+                        "cor_ready_chunk_ratio": _safe_float(index_result.get("cor_ready_chunk_ratio")),
+                        "cor_effective_chunk_ratio": _safe_float(index_result.get("cor_effective_chunk_ratio")),
+                    }
+                )
         return metrics
 
     @staticmethod
@@ -1001,10 +1013,14 @@ class ProjectKnowledgeSyncManager:
     def _hydrate_processing_view(self, state: dict[str, Any]) -> dict[str, Any]:
         hydrated = dict(state)
         hydrated["semantic_engine"] = self._build_semantic_engine_state(hydrated)
+        last_result = hydrated.get("last_result") or {}
+        index_result = last_result.get("index") if isinstance(last_result, dict) else {}
+        if not isinstance(index_result, dict):
+            index_result = {}
         processing_modes = self._build_processing_modes(hydrated)
         output_resolution = self._build_output_resolution(processing_modes)
         mode_outputs = self._build_mode_outputs(hydrated)
-        mode_metrics = self._build_mode_metrics(processing_modes, mode_outputs)
+        mode_metrics = self._build_mode_metrics(processing_modes, mode_outputs, index_result)
         output_scheduler = self._build_output_scheduler(
             processing_modes,
             output_resolution,

@@ -34,6 +34,16 @@ def normalize_task_key(task_name):
     return str(task_name or "").strip().replace("/", "_").replace("-", "_")
 
 
+def is_coref_task_name(task_name):
+    normalized = normalize_task_key(task_name)
+    return normalized in {
+        "cor",
+        "coref",
+        "coreference",
+        "coreference_resolution",
+    }
+
+
 def version_text():
     return f"{sys.version_info.major}.{sys.version_info.minor}"
 
@@ -99,6 +109,14 @@ def locate_parser(module):
     return None
 
 
+def locate_coref_resolver(module):
+    for attr in ("coreference_resolution", "coref", "cor"):
+        fn = getattr(module, attr, None)
+        if callable(fn):
+            return fn
+    return None
+
+
 def validate_model(module, model_id, text="HanLP 模型校验"):
     raw_model_id, model, resolved_name = load_model(module, model_id)
     if model is None:
@@ -140,12 +158,24 @@ def run_parse_task(module, text, task_name):
         return parser(text, tasks=task_name)
 
 
+def run_task_entrypoint(module, text, task_name):
+    if is_coref_task_name(task_name):
+        resolver = locate_coref_resolver(module)
+        if resolver is None:
+            raise RuntimeError("HanLP coreference_resolution entry point was not found.")
+        return resolver(text)
+    return run_parse_task(module, text, task_name)
+
+
 def validate_task(module, task_name, text="HanLP 任务校验"):
     try:
-        document = run_parse_task(module, text, task_name)
+        document = run_task_entrypoint(module, text, task_name)
     except Exception as exc:
         return None, exc.__class__.__name__
-    return extract_task_result(document, task_name), ""
+    task_result = extract_task_result(document, task_name)
+    if task_result is None and is_coref_task_name(task_name):
+        task_result = document
+    return task_result, ""
 
 
 def resolve_model_id(module, model_id):
@@ -334,8 +364,10 @@ def main():
         task_name = str(requested_task_spec.get("task_name") or "")
         text = str(payload.get("text") or "")
         try:
-            document = run_parse_task(hanlp, text, task_name)
+            document = run_task_entrypoint(hanlp, text, task_name)
             task_result = extract_task_result(document, task_name)
+            if task_result is None and is_coref_task_name(task_name):
+                task_result = document
         except Exception as exc:
             emit({
                 "engine": "hanlp2",

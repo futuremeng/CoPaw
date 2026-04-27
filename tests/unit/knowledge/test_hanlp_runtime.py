@@ -251,7 +251,8 @@ def test_default_task_matrix_contains_l2_baseline_tasks() -> None:
 
     tasks = config.hanlp.task_matrix.tasks
 
-    assert set(tasks) >= {"ner_msra", "dep", "sdp", "con"}
+    assert set(tasks) >= {"cor", "ner_msra", "dep", "sdp", "con"}
+    assert tasks["cor"].task_name == "coreference_resolution"
     assert tasks["ner_msra"].task_name == "ner/msra"
     assert tasks["ner_msra"].eval_role == "primary"
     assert tasks["con"].eval_role == "auxiliary"
@@ -391,3 +392,64 @@ def parse(text, tasks=None):
     assert parsed["status"] == "ready"
     assert parsed["reason_code"] == "HANLP2_TASK_READY"
     assert parsed["task_result"] == [{"text": "微软发布新模型", "label": "ORG"}]
+
+
+def test_bridge_run_task_uses_coreference_entrypoint_for_cor_task(tmp_path: Path) -> None:
+    hanlp_pkg = tmp_path / "hanlp"
+    hanlp_pkg.mkdir()
+    (hanlp_pkg / "__init__.py").write_text(
+        """
+def parse(text, tasks=None):
+    raise RuntimeError("parse should not be used for cor")
+
+
+def coreference_resolution(text):
+    return {
+        "tokens": ["我", "姐", "喜欢", "它"],
+        "clusters": [
+            [["我姐", 0, 2], ["她", 2, 3]],
+            [["她的猫", 2, 4], ["它", 3, 4]],
+        ],
+    }
+""".strip(),
+        encoding="utf-8",
+    )
+
+    bridge_code = hanlp_runtime_module._BRIDGE_CODE.replace(
+        "return (3, 6) <= current <= (3, 9)",
+        "return True",
+    )
+    payload = {
+        "task_key": "cor",
+        "task_matrix": {
+            "tasks": {
+                "cor": {
+                    "enabled": True,
+                    "task_name": "coreference_resolution",
+                    "artifact_key": "cor",
+                    "eval_role": "primary",
+                    "timeout_sec": 30,
+                },
+            },
+        },
+        "text": "我姐喜欢它",
+    }
+    env = {
+        **os.environ,
+        "PYTHONPATH": str(tmp_path),
+    }
+
+    completed = subprocess.run(
+        [sys.executable, "-c", bridge_code, "run_task"],
+        input=json.dumps(payload, ensure_ascii=False),
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+
+    assert completed.returncode == 0
+    parsed = json.loads(completed.stdout)
+    assert parsed["status"] == "ready"
+    assert parsed["reason_code"] == "HANLP2_TASK_READY"
+    assert parsed["task_result"]["tokens"] == ["我", "姐", "喜欢", "它"]

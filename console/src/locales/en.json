@@ -2312,7 +2312,10 @@
         "agentic": "Agentic Mode",
         "fastHint": "Fast indexing and preview, optimized for immediate availability.",
         "nlpHint": "Entity/relation extraction and graph construction as the structured middle layer.",
-        "agenticHint": "Multi-agent collaboration with quality-loop iterations for the highest-quality outputs."
+        "agenticHint": "Multi-agent collaboration with quality-loop iterations for the highest-quality outputs.",
+        "corBenefit": "COR Gain",
+        "corBenefitPending": "Gain estimation in progress",
+        "corBenefitSummary": "+{{replacements}} replacements / coverage {{coverage}} / hit {{hitRatio}}"
       },
       "outputsHint": "View knowledge outputs by mode. The system automatically falls back when higher layers are unavailable.",
       "sourcesRoleHint": "This tab is the L1 stats layer and shows only document count, chunk count, sentence count, character count, lightweight token count, and index coverage.",

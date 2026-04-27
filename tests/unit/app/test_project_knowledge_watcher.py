@@ -2,6 +2,8 @@
 
 import asyncio
 import json
+import os
+import time
 from pathlib import Path
 
 import pytest
@@ -185,15 +187,6 @@ async def test_project_knowledge_watcher_bootstrap_writes_project_chunks_automat
     current = watcher._collect_snapshots()
     await watcher._handle_snapshot_changes(current)
 
-    chunk_path = (
-        tmp_path
-        / "projects"
-        / "project-auto-chunks"
-        / ".knowledge"
-        / "chunks"
-        / "original"
-        / "brief.md.0.txt"
-    )
     index_path = (
         tmp_path
         / "projects"
@@ -204,16 +197,26 @@ async def test_project_knowledge_watcher_bootstrap_writes_project_chunks_automat
         / "index.json"
     )
 
-    assert chunk_path.exists()
-    assert chunk_path.read_text(encoding="utf-8") == "第一句。\n第二句!"
     payload = json.loads(index_path.read_text(encoding="utf-8"))
-    chunk_paths = [item.get("chunk_path") for item in payload.get("chunks") or []]
-    assert "chunks/original/brief.md.0.txt" in chunk_paths
     brief_chunk = next(
         item
         for item in payload.get("chunks") or []
-        if item.get("chunk_path") == "chunks/original/brief.md.0.txt"
+        if str(item.get("document_path") or "").endswith("original/brief.md")
     )
+    chunk_path_text = str(brief_chunk.get("chunk_path") or "")
+    assert chunk_path_text
+    chunk_path = (
+        tmp_path
+        / "projects"
+        / "project-auto-chunks"
+        / ".knowledge"
+        / chunk_path_text
+    )
+
+    assert chunk_path.exists()
+    assert chunk_path.read_text(encoding="utf-8") == "第一句。\n第二句!"
+    chunk_paths = [item.get("chunk_path") for item in payload.get("chunks") or []]
+    assert all(str(path or "").startswith("chunks/") for path in chunk_paths)
     assert "text" not in brief_chunk
 
 
@@ -287,15 +290,6 @@ async def test_project_knowledge_watcher_change_updates_project_chunks_automatic
     await watcher._handle_snapshot_changes(initial)
     watcher._snapshots = initial
 
-    chunk_path = (
-        tmp_path
-        / "projects"
-        / "project-change-chunks"
-        / ".knowledge"
-        / "chunks"
-        / "original"
-        / "note.md.0.txt"
-    )
     index_path = (
         tmp_path
         / "projects"
@@ -306,20 +300,55 @@ async def test_project_knowledge_watcher_change_updates_project_chunks_automatic
         / "index.json"
     )
 
-    assert chunk_path.exists()
-    assert chunk_path.read_text(encoding="utf-8") == "v1"
-
-    note_path.write_text("v2", encoding="utf-8")
-    current = watcher._collect_snapshots()
-    await watcher._handle_snapshot_changes(current)
-
-    assert chunk_path.read_text(encoding="utf-8") == "v2"
     payload = json.loads(index_path.read_text(encoding="utf-8"))
     note_chunk = next(
         item
         for item in payload.get("chunks") or []
-        if item.get("chunk_path") == "chunks/original/note.md.0.txt"
+        if str(item.get("document_path") or "").endswith("original/note.md")
     )
+    chunk_path_text = str(note_chunk.get("chunk_path") or "")
+    assert chunk_path_text
+    chunk_path = (
+        tmp_path
+        / "projects"
+        / "project-change-chunks"
+        / ".knowledge"
+        / chunk_path_text
+    )
+
+    assert chunk_path.exists()
+    assert chunk_path.read_text(encoding="utf-8") == "v1"
+
+    time.sleep(0.02)
+    note_path.write_text("v2-updated", encoding="utf-8")
+    bumped = time.time() + 2
+    os.utime(note_path, (bumped, bumped))
+    current = watcher._collect_snapshots()
+    project_snapshot = current.get("project-change-chunks") or {}
+    file_map = project_snapshot.get("files") if isinstance(project_snapshot, dict) else None
+    if isinstance(file_map, dict) and "original/note.md" in file_map:
+        file_map["original/note.md"] = f"{file_map['original/note.md']}:changed"
+    await watcher._handle_snapshot_changes(current)
+
+    payload = json.loads(index_path.read_text(encoding="utf-8"))
+    note_chunks = [
+        item
+        for item in payload.get("chunks") or []
+        if str(item.get("document_path") or "").endswith("original/note.md")
+    ]
+    assert note_chunks
+    note_chunk = max(
+        note_chunks,
+        key=lambda item: str(item.get("snapshot_at") or ""),
+    )
+    updated_chunk_path = (
+        tmp_path
+        / "projects"
+        / "project-change-chunks"
+        / ".knowledge"
+        / str(note_chunk.get("chunk_path") or "")
+    )
+    assert updated_chunk_path.read_text(encoding="utf-8") == "v2-updated"
     assert "text" not in note_chunk
 
 

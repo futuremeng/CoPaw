@@ -211,6 +211,42 @@ function describeInlineStaleHint(
   )}`;
 }
 
+function formatPercent(value: number): string {
+  return `${Math.max(0, Math.min(100, Math.round(value * 100)))}%`;
+}
+
+function describeCorBenefit(
+  mode: ProjectKnowledgeModeState,
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
+  if (mode.mode !== "nlp") {
+    return "";
+  }
+  const readyChunks = Math.max(0, Number(mode.corReadyChunkCount || 0));
+  if (readyChunks <= 0) {
+    return t("projects.knowledge.processing.corBenefitPending", "收益评估生成中");
+  }
+  const replacementCount = Math.max(0, Number(mode.corReplacementCount || 0));
+  const totalChunks = Math.max(0, Number(mode.chunkCount || 0));
+  const effectiveChunks = Math.max(0, Number(mode.corEffectiveChunkCount || 0));
+  const coverage = totalChunks > 0
+    ? readyChunks / totalChunks
+    : Number(mode.corReadyChunkRatio || 0);
+  const hitRatio = readyChunks > 0
+    ? effectiveChunks / readyChunks
+    : Number(mode.corEffectiveChunkRatio || 0);
+
+  return t(
+    "projects.knowledge.processing.corBenefitSummary",
+    "+{{replacements}} 次替换 / 覆盖 {{coverage}} / 命中 {{hitRatio}}",
+    {
+      replacements: replacementCount,
+      coverage: formatPercent(coverage),
+      hitRatio: formatPercent(hitRatio),
+    },
+  );
+}
+
 export default function ProjectKnowledgeProcessingPanel(
   props: ProjectKnowledgeProcessingPanelProps,
 ) {
@@ -297,6 +333,7 @@ export default function ProjectKnowledgeProcessingPanel(
           const isL3 = mode.mode === "agentic";
           const output = props.knowledgeState.modeOutputs[mode.mode];
           const prioritizedArtifacts = prioritizeProjectKnowledgeArtifacts(output?.artifacts || []);
+          const corBenefitSummary = describeCorBenefit(mode, t);
           const highlightValue = isL3
             ? mode.qualityScore != null
               ? `${Math.round(mode.qualityScore * 100)}%`
@@ -379,7 +416,9 @@ export default function ProjectKnowledgeProcessingPanel(
                   <Typography.Text type="secondary">
                     {isL3
                       ? t("projects.knowledge.processing.enhancementDelta", "相对 L2 增量")
-                      : t("projects.knowledge.processing.artifactSummary", "核心产物")}
+                      : mode.mode === "nlp"
+                        ? t("projects.knowledge.processing.corBenefit", "COR 收益")
+                        : t("projects.knowledge.processing.artifactSummary", "核心产物")}
                   </Typography.Text>
                   <Typography.Text strong>
                     {isL3
@@ -389,7 +428,9 @@ export default function ProjectKnowledgeProcessingPanel(
                           relations: relationDelta,
                         })
                         : t("projects.knowledge.processing.outputPendingLong", "等待形成独立增强结果")
-                      : prioritizedArtifacts[0]?.label || t("projects.knowledge.processing.entityGraphArtifact", "实体关系图谱")}
+                      : mode.mode === "nlp"
+                        ? corBenefitSummary
+                        : prioritizedArtifacts[0]?.label || t("projects.knowledge.processing.entityGraphArtifact", "实体关系图谱")}
                   </Typography.Text>
                 </div>
               </div>

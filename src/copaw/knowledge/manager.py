@@ -139,6 +139,7 @@ _INTERNAL_EXCLUDED_FILENAMES = {
 logger = logging.getLogger(__name__)
 _AUTO_COLLECT_URL_MIN_CONTENT_CHARS = 1000
 _NER_SENTENCE_DELIMITERS = {"。", "！", "？", "!", "?", ";", "；", ".", "\n"}
+_COR_FORMAT_VERSION = "0.1"
 _NER_FORMAT_VERSION = "1.1"
 _SYNTAX_FORMAT_VERSION = "0.2"
 
@@ -160,6 +161,7 @@ class KnowledgeManager:
         self.root_dir = self.working_dir / knowledge_dirname
         self.raw_dir = self.root_dir / "raw"
         self.chunks_dir = self.root_dir / "chunks"
+        self.cor_dir = self.root_dir / "cor"
         self.ner_dir = self.root_dir / "ner"
         self.syntax_dir = self.root_dir / "syntax"
         self.sources_dir = self.root_dir / "sources"
@@ -175,6 +177,7 @@ class KnowledgeManager:
             shutil.rmtree(legacy_index_dir, ignore_errors=True)
         self.raw_dir.mkdir(parents=True, exist_ok=True)
         self.chunks_dir.mkdir(parents=True, exist_ok=True)
+        self.cor_dir.mkdir(parents=True, exist_ok=True)
         self.ner_dir.mkdir(parents=True, exist_ok=True)
         self.syntax_dir.mkdir(parents=True, exist_ok=True)
         self.sources_dir.mkdir(parents=True, exist_ok=True)
@@ -339,6 +342,41 @@ class KnowledgeManager:
             "chunks": chunks,
         }
         self._write_source_storage(source, payload, live_documents, config=config)
+        cor_ready_chunk_count = 0
+        cor_cluster_count = 0
+        cor_replacement_count = 0
+        cor_effective_chunk_count = 0
+        for chunk in payload.get("chunks") or []:
+            if not isinstance(chunk, dict):
+                continue
+            if str(chunk.get("cor_status") or "").strip() != "ready":
+                continue
+            cor_ready_chunk_count += 1
+            chunk_cluster_count = int(chunk.get("cor_cluster_count") or 0)
+            chunk_replacement_count = int(chunk.get("cor_replacement_count") or 0)
+            cor_cluster_count += max(0, chunk_cluster_count)
+            cor_replacement_count += max(0, chunk_replacement_count)
+            if chunk_replacement_count > 0:
+                cor_effective_chunk_count += 1
+
+        payload["cor_ready_chunk_count"] = cor_ready_chunk_count
+        payload["cor_cluster_count"] = cor_cluster_count
+        payload["cor_replacement_count"] = cor_replacement_count
+        payload["cor_effective_chunk_count"] = cor_effective_chunk_count
+        payload["cor_ready_chunk_ratio"] = (
+            float(cor_ready_chunk_count / len(chunks)) if len(chunks) > 0 else 0.0
+        )
+        payload["cor_effective_chunk_ratio"] = (
+            float(cor_effective_chunk_count / cor_ready_chunk_count)
+            if cor_ready_chunk_count > 0
+            else 0.0
+        )
+
+        self._source_index_path(source.id).write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
         return {
             "source_id": source.id,
             "document_count": len(live_documents),
@@ -348,6 +386,12 @@ class KnowledgeManager:
             "char_count": document_stats["char_count"],
             "token_count": document_stats["token_count"],
             "indexed_at": payload["indexed_at"],
+            "cor_ready_chunk_count": cor_ready_chunk_count,
+            "cor_cluster_count": cor_cluster_count,
+            "cor_replacement_count": cor_replacement_count,
+            "cor_effective_chunk_count": cor_effective_chunk_count,
+            "cor_ready_chunk_ratio": payload["cor_ready_chunk_ratio"],
+            "cor_effective_chunk_ratio": payload["cor_effective_chunk_ratio"],
         }
 
     def index_all(
@@ -370,6 +414,8 @@ class KnowledgeManager:
         """Delete persisted index for a source."""
         for chunk_path in self._load_source_chunk_manifest(source_id):
             self._delete_chunk_path(chunk_path)
+        for cor_path in self._load_source_cor_manifest(source_id):
+            self._delete_cor_path(cor_path)
         for ner_path in self._load_source_ner_manifest(source_id):
             self._delete_ner_path(ner_path)
         for syntax_path in self._load_source_syntax_manifest(source_id):
@@ -378,6 +424,7 @@ class KnowledgeManager:
             self._delete_snapshot_file(snapshot.get("snapshot_path"))
         payload = self._load_index_payload_safe(source_id)
         self._delete_chunks_from_payload(payload)
+        self._delete_cor_from_payload(payload)
         self._delete_ner_from_payload(payload)
         self._delete_syntax_from_payload(payload)
         raw_dir = self._source_raw_dir(source_id)
@@ -400,6 +447,7 @@ class KnowledgeManager:
         # Recreate expected directory structure after cleanup.
         self.raw_dir.mkdir(parents=True, exist_ok=True)
         self.chunks_dir.mkdir(parents=True, exist_ok=True)
+        self.cor_dir.mkdir(parents=True, exist_ok=True)
         self.ner_dir.mkdir(parents=True, exist_ok=True)
         self.syntax_dir.mkdir(parents=True, exist_ok=True)
         self.sources_dir.mkdir(parents=True, exist_ok=True)
@@ -534,6 +582,9 @@ class KnowledgeManager:
     def _source_chunk_manifest_path(self, source_id: str) -> Path:
         return self._source_dir(source_id) / "chunk-manifest.json"
 
+    def _source_cor_manifest_path(self, source_id: str) -> Path:
+        return self._source_dir(source_id) / "cor-manifest.json"
+
     def _source_ner_manifest_path(self, source_id: str) -> Path:
         return self._source_dir(source_id) / "ner-manifest.json"
 
@@ -630,6 +681,25 @@ class KnowledgeManager:
             if isinstance(item, str) and str(item).strip()
         }
 
+    def _load_source_cor_manifest(self, source_id: str) -> set[str]:
+        path = self._source_cor_manifest_path(source_id)
+        if not path.exists():
+            return set()
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return set()
+        if not isinstance(payload, dict):
+            return set()
+        cor_paths = payload.get("cor_paths")
+        if not isinstance(cor_paths, list):
+            return set()
+        return {
+            str(item).strip()
+            for item in cor_paths
+            if isinstance(item, str) and str(item).strip()
+        }
+
     def _load_source_syntax_manifest(self, source_id: str) -> set[str]:
         path = self._source_syntax_manifest_path(source_id)
         if not path.exists():
@@ -655,6 +725,20 @@ class KnowledgeManager:
                 {
                     "source_id": source_id,
                     "ner_paths": sorted(ner_paths),
+                    "updated_at": datetime.now(UTC).isoformat(),
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+    def _write_source_cor_manifest(self, source_id: str, cor_paths: set[str]) -> None:
+        self._source_cor_manifest_path(source_id).write_text(
+            json.dumps(
+                {
+                    "source_id": source_id,
+                    "cor_paths": sorted(cor_paths),
                     "updated_at": datetime.now(UTC).isoformat(),
                 },
                 ensure_ascii=False,
@@ -766,6 +850,19 @@ class KnowledgeManager:
                     results.add(ner_path)
         return results
 
+    def _collect_cor_paths_from_payload(self, payload: dict[str, Any] | None) -> set[str]:
+        if not isinstance(payload, dict):
+            return set()
+        results: set[str] = set()
+        for chunk in payload.get("chunks") or []:
+            if not isinstance(chunk, dict):
+                continue
+            for key in ("cor_path", "cor_structured_path", "cor_annotated_path"):
+                cor_path = str(chunk.get(key) or "").strip()
+                if cor_path:
+                    results.add(cor_path)
+        return results
+
     def _collect_syntax_paths_from_payload(self, payload: dict[str, Any] | None) -> set[str]:
         if not isinstance(payload, dict):
             return set()
@@ -817,6 +914,25 @@ class KnowledgeManager:
                 break
             current = current.parent
 
+    def _delete_cor_path(self, relative_path: str | Path | None) -> None:
+        text = str(relative_path or "").strip()
+        if not text:
+            return
+        target = self.root_dir / text
+        if not target.exists() or not target.is_file():
+            return
+        try:
+            target.unlink()
+        except FileNotFoundError:
+            return
+        current = target.parent
+        while current != self.cor_dir and current.exists():
+            try:
+                current.rmdir()
+            except OSError:
+                break
+            current = current.parent
+
     def _delete_syntax_path(self, relative_path: str | Path | None) -> None:
         text = str(relative_path or "").strip()
         if not text:
@@ -843,6 +959,10 @@ class KnowledgeManager:
     def _delete_ner_from_payload(self, payload: dict[str, Any] | None) -> None:
         for ner_path in self._collect_ner_paths_from_payload(payload):
             self._delete_ner_path(ner_path)
+
+    def _delete_cor_from_payload(self, payload: dict[str, Any] | None) -> None:
+        for cor_path in self._collect_cor_paths_from_payload(payload):
+            self._delete_cor_path(cor_path)
 
     def _delete_syntax_from_payload(self, payload: dict[str, Any] | None) -> None:
         for syntax_path in self._collect_syntax_paths_from_payload(payload):
@@ -955,6 +1075,29 @@ class KnowledgeManager:
             target = target / parent
         return target.relative_to(self.root_dir) / f"{basename}.{chunk_index}.txt"
 
+    def _build_cor_relative_path(self, chunk_relative_path: str) -> Path:
+        chunk_path = Path(str(chunk_relative_path or "").strip())
+        if not chunk_path.parts:
+            return self.cor_dir.relative_to(self.root_dir) / "knowledge.cor.txt"
+        relative_parts = chunk_path.parts[1:] if chunk_path.parts[0] == self.chunks_dir.name else chunk_path.parts
+        basename = chunk_path.name
+        if basename.endswith(".txt"):
+            basename = f"{basename[:-4]}.cor.txt"
+        else:
+            basename = f"{basename}.cor.txt"
+        target = self.cor_dir.joinpath(*relative_parts[:-1], basename)
+        return target.relative_to(self.root_dir)
+
+    def _build_cor_structured_relative_path(self, chunk_relative_path: str) -> Path:
+        cor_path = self._build_cor_relative_path(chunk_relative_path)
+        base = cor_path.name[:-4] if cor_path.name.endswith(".txt") else cor_path.name
+        return cor_path.with_name(f"{base}.json")
+
+    def _build_cor_annotated_relative_path(self, chunk_relative_path: str) -> Path:
+        cor_path = self._build_cor_relative_path(chunk_relative_path)
+        base = cor_path.name[:-4] if cor_path.name.endswith(".txt") else cor_path.name
+        return cor_path.with_name(f"{base}.annotated.md")
+
     def _build_ner_relative_path(self, chunk_relative_path: str) -> Path:
         chunk_path = Path(str(chunk_relative_path or "").strip())
         if not chunk_path.parts:
@@ -1021,6 +1164,278 @@ class KnowledgeManager:
             ]
         )
         return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
+
+    @staticmethod
+    def _token_offsets_from_text(text: str, tokens: list[str]) -> list[tuple[int, int]]:
+        source_text = str(text or "")
+        offsets: list[tuple[int, int]] = []
+        cursor = 0
+        for token in tokens:
+            token_text = str(token or "")
+            if not token_text:
+                offsets.append((cursor, cursor))
+                continue
+            start = source_text.find(token_text, cursor)
+            if start < 0:
+                start = source_text.find(token_text)
+            if start < 0:
+                start = cursor
+            end = max(start, 0) + len(token_text)
+            offsets.append((max(start, 0), end))
+            cursor = max(cursor, end)
+        return offsets
+
+    def _normalize_hanlp_coref_payload(
+        self,
+        raw_result: Any,
+    ) -> tuple[list[str], list[dict[str, Any]]]:
+        tokens: list[str] = []
+        raw_clusters: Any = []
+        if isinstance(raw_result, dict):
+            raw_tokens = raw_result.get("tokens")
+            if isinstance(raw_tokens, list):
+                tokens = [str(item or "") for item in raw_tokens]
+            raw_clusters = raw_result.get("clusters") or []
+        elif isinstance(raw_result, list):
+            raw_clusters = raw_result
+
+        clusters: list[dict[str, Any]] = []
+        if not isinstance(raw_clusters, list):
+            return tokens, clusters
+
+        for cluster_index, raw_cluster in enumerate(raw_clusters, start=1):
+            if not isinstance(raw_cluster, list):
+                continue
+            mentions: list[dict[str, Any]] = []
+            for mention_index, raw_mention in enumerate(raw_cluster, start=1):
+                if not isinstance(raw_mention, (list, tuple)) or len(raw_mention) < 3:
+                    continue
+                surface = str(raw_mention[0] or "").strip()
+                try:
+                    token_start = int(raw_mention[1] or 0)
+                    token_end = int(raw_mention[2] or 0)
+                except (TypeError, ValueError):
+                    continue
+                if not surface or token_start < 0 or token_end <= token_start:
+                    continue
+                mentions.append(
+                    {
+                        "mention_id": f"c{cluster_index}_m{mention_index}",
+                        "surface": surface,
+                        "token_start": token_start,
+                        "token_end": token_end,
+                    }
+                )
+            if not mentions:
+                continue
+            mentions.sort(key=lambda item: (int(item["token_start"]), int(item["token_end"])))
+            canonical = max(
+                mentions,
+                key=lambda item: (
+                    len(str(item.get("surface") or "")),
+                    -int(item.get("token_start") or 0),
+                ),
+            )
+            clusters.append(
+                {
+                    "cluster_id": f"c{cluster_index}",
+                    "canonical_mention": canonical,
+                    "mentions": mentions,
+                }
+            )
+        return tokens, clusters
+
+    def _resolve_text_from_coref(
+        self,
+        text: str,
+        tokens: list[str],
+        clusters: list[dict[str, Any]],
+    ) -> tuple[str, list[str], list[dict[str, Any]]]:
+        source_text = str(text or "")
+        if not source_text or not tokens or not clusters:
+            return source_text, list(tokens), []
+
+        offsets = self._token_offsets_from_text(source_text, tokens)
+        replacements: list[dict[str, Any]] = []
+        for cluster in clusters:
+            canonical = cluster.get("canonical_mention") if isinstance(cluster, dict) else None
+            if not isinstance(canonical, dict):
+                continue
+            canonical_surface = str(canonical.get("surface") or "").strip()
+            canonical_id = str(canonical.get("mention_id") or "")
+            if not canonical_surface:
+                continue
+            for mention in cluster.get("mentions") or []:
+                if not isinstance(mention, dict):
+                    continue
+                if str(mention.get("mention_id") or "") == canonical_id:
+                    continue
+                token_start = int(mention.get("token_start") or 0)
+                token_end = int(mention.get("token_end") or 0)
+                if token_start < 0 or token_end <= token_start or token_end > len(offsets):
+                    continue
+                char_start = int(offsets[token_start][0])
+                char_end = int(offsets[token_end - 1][1])
+                if char_end <= char_start:
+                    continue
+                replacements.append(
+                    {
+                        "cluster_id": str(cluster.get("cluster_id") or ""),
+                        "mention_id": str(mention.get("mention_id") or ""),
+                        "canonical_mention_id": canonical_id,
+                        "token_start": token_start,
+                        "token_end": token_end,
+                        "start": char_start,
+                        "end": char_end,
+                        "source_surface": source_text[char_start:char_end],
+                        "replacement_surface": canonical_surface,
+                    }
+                )
+
+        if not replacements:
+            return source_text, list(tokens), []
+
+        replacements.sort(key=lambda item: (int(item["start"]), int(item["end"])))
+        filtered: list[dict[str, Any]] = []
+        last_end = -1
+        for item in replacements:
+            start = int(item["start"])
+            end = int(item["end"])
+            if start < last_end:
+                continue
+            filtered.append(item)
+            last_end = end
+
+        resolved_text = source_text
+        for item in reversed(filtered):
+            start = int(item["start"])
+            end = int(item["end"])
+            resolved_text = (
+                resolved_text[:start]
+                + str(item.get("replacement_surface") or "")
+                + resolved_text[end:]
+            )
+        resolved_tokens = [match.group(0) for match in _LIGHTWEIGHT_TOKEN_RE.finditer(resolved_text)]
+        return resolved_text, resolved_tokens, filtered
+
+    def _render_chunk_cor_structured_payload(
+        self,
+        chunk: dict[str, Any],
+        *,
+        text: str,
+        raw_result: Any,
+    ) -> dict[str, Any]:
+        tokens, clusters = self._normalize_hanlp_coref_payload(raw_result)
+        resolved_text, resolved_tokens, replacements = self._resolve_text_from_coref(text, tokens, clusters)
+        resolution_mode = "hanlp_cor" if replacements else "identity_fallback"
+        return {
+            "artifact": "cor_structured",
+            "format_version": _COR_FORMAT_VERSION,
+            "document_path": str(chunk.get("document_path") or ""),
+            "document_title": str(chunk.get("document_title") or ""),
+            "chunk_id": str(chunk.get("chunk_id") or ""),
+            "chunk_path": str(chunk.get("chunk_path") or ""),
+            "version_id": self._chunk_version_id(chunk),
+            "snapshot_at": str(chunk.get("snapshot_at") or ""),
+            "source_text": str(text or ""),
+            "resolved_text": resolved_text,
+            "tokens": tokens,
+            "resolved_tokens": resolved_tokens,
+            "clusters": clusters,
+            "replacements": replacements,
+            "cluster_count": len(clusters),
+            "replacement_count": len(replacements),
+            "resolution_mode": resolution_mode,
+        }
+
+    def _render_chunk_cor_text(
+        self,
+        chunk: dict[str, Any],
+        structured_payload: dict[str, Any],
+    ) -> str:
+        lines = [
+            f"document_path={chunk.get('document_path') or ''}",
+            f"chunk_id={chunk.get('chunk_id') or ''}",
+            f"version_id={self._chunk_version_id(chunk)}",
+            f"resolution_mode={structured_payload.get('resolution_mode') or 'identity_fallback'}",
+            f"cluster_count={int(structured_payload.get('cluster_count') or 0)}",
+            f"replacement_count={int(structured_payload.get('replacement_count') or 0)}",
+            "",
+            "[Original Text]",
+            str(structured_payload.get("source_text") or ""),
+            "",
+            "[Resolved Text]",
+            str(structured_payload.get("resolved_text") or ""),
+        ]
+        return "\n".join(lines)
+
+    def _render_chunk_cor_annotated_markdown(
+        self,
+        chunk: dict[str, Any],
+        structured_payload: dict[str, Any],
+    ) -> str:
+        lines = [
+            "---",
+            "artifact: cor_annotated",
+            f"format_version: {_COR_FORMAT_VERSION}",
+            f"document_path: {json.dumps(str(chunk.get('document_path') or ''), ensure_ascii=False)}",
+            f"chunk_id: {json.dumps(str(chunk.get('chunk_id') or ''), ensure_ascii=False)}",
+            f"version_id: {json.dumps(self._chunk_version_id(chunk), ensure_ascii=False)}",
+            f"snapshot_at: {json.dumps(str(chunk.get('snapshot_at') or ''), ensure_ascii=False)}",
+            f"cluster_count: {int(structured_payload.get('cluster_count') or 0)}",
+            f"replacement_count: {int(structured_payload.get('replacement_count') or 0)}",
+            f"structured_ref: {json.dumps(str(chunk.get('cor_structured_path') or ''), ensure_ascii=False)}",
+            "---",
+            "",
+            "# Coreference Annotated",
+            "",
+            "## Original Text",
+            "",
+            str(structured_payload.get("source_text") or ""),
+            "",
+            "## Resolved Text",
+            "",
+            str(structured_payload.get("resolved_text") or ""),
+            "",
+            "## Replacement Index",
+            "",
+            "| cluster | mention | canonical | source | replacement | start | end |",
+            "| --- | --- | --- | --- | --- | ---: | ---: |",
+        ]
+        for item in structured_payload.get("replacements") or []:
+            if not isinstance(item, dict):
+                continue
+            source_surface = str(item.get("source_surface") or "").replace("|", "\\|")
+            replacement_surface = str(item.get("replacement_surface") or "").replace("|", "\\|")
+            lines.append(
+                "| "
+                f"{item.get('cluster_id') or ''} | {item.get('mention_id') or ''} | {item.get('canonical_mention_id') or ''} | "
+                f"{source_surface} | {replacement_surface} | {item.get('start') or 0} | {item.get('end') or 0} |"
+            )
+        return "\n".join(lines)
+
+    def _load_chunk_cor_structured(self, chunk: dict[str, Any]) -> dict[str, Any] | None:
+        raw = self._read_artifact_text(chunk, "cor_structured_path")
+        if not raw.strip():
+            return None
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+        return payload if isinstance(payload, dict) else None
+
+    def _resolve_chunk_text_via_cor(self, chunk: dict[str, Any]) -> tuple[str, str, str, str]:
+        original_text = self._read_chunk_text(chunk)
+        cor_payload = self._load_chunk_cor_structured(chunk)
+        if not cor_payload:
+            return original_text, "", "identity_fallback", original_text
+        resolved_text = str(cor_payload.get("resolved_text") or "")
+        if not resolved_text:
+            resolved_text = original_text
+        cor_path = str(chunk.get("cor_structured_path") or "")
+        resolution_mode = str(cor_payload.get("resolution_mode") or "identity_fallback")
+        source_text = str(cor_payload.get("source_text") or original_text)
+        return resolved_text, cor_path, resolution_mode, source_text
 
     def _collect_chunk_ner_entities(
         self,
@@ -1198,7 +1613,10 @@ class KnowledgeManager:
         self,
         chunk: dict[str, Any],
         *,
-        text: str,
+        source_text: str,
+        input_text: str,
+        cor_structured_path: str,
+        cor_resolution_mode: str,
         catalog: list[dict[str, Any]],
         mentions: list[dict[str, Any]],
     ) -> dict[str, Any]:
@@ -1211,8 +1629,11 @@ class KnowledgeManager:
             "chunk_path": str(chunk.get("chunk_path") or ""),
             "version_id": self._chunk_version_id(chunk),
             "snapshot_at": str(chunk.get("snapshot_at") or ""),
-            "source_text": str(text or ""),
-            "text_length": len(str(text or "")),
+            "source_text": str(source_text or ""),
+            "input_text": str(input_text or ""),
+            "text_length": len(str(input_text or "")),
+            "cor_structured_path": cor_structured_path,
+            "cor_resolution_mode": cor_resolution_mode,
             "entity_catalog": catalog,
             "entity_mentions": mentions,
         }
@@ -1563,11 +1984,14 @@ class KnowledgeManager:
         self,
         chunk: dict[str, Any],
         *,
-        text: str,
+        source_text: str,
+        input_text: str,
+        cor_structured_path: str,
+        cor_resolution_mode: str,
         mentions: list[dict[str, Any]],
         config: KnowledgeConfig | None = None,
     ) -> dict[str, Any]:
-        sentences, token_count = self._build_chunk_syntax_sentences(text, mentions, config=config)
+        sentences, token_count = self._build_chunk_syntax_sentences(input_text, mentions, config=config)
         task_keys = sorted(
             {
                 str(task.get("task_key") or "")
@@ -1593,7 +2017,10 @@ class KnowledgeManager:
             "chunk_path": str(chunk.get("chunk_path") or ""),
             "version_id": self._chunk_version_id(chunk),
             "snapshot_at": str(chunk.get("snapshot_at") or ""),
-            "source_text": str(text or ""),
+            "source_text": str(source_text or ""),
+            "input_text": str(input_text or ""),
+            "cor_structured_path": cor_structured_path,
+            "cor_resolution_mode": cor_resolution_mode,
             "sentence_count": len(sentences),
             "token_count": token_count,
             "relation_count": relation_count,
@@ -1617,6 +2044,8 @@ class KnowledgeManager:
             f"relation_count={structured_payload.get('relation_count') or 0}",
             f"task_keys={'|'.join(structured_payload.get('task_keys') or [])}",
             f"entity_alignment_source={chunk.get('ner_structured_path') or ''}",
+            f"cor_alignment_source={structured_payload.get('cor_structured_path') or ''}",
+            f"cor_resolution_mode={structured_payload.get('cor_resolution_mode') or 'identity_fallback'}",
         ]
         for sentence in structured_payload.get("sentences") or []:
             if not isinstance(sentence, dict):
@@ -1662,6 +2091,8 @@ class KnowledgeManager:
             f"relation_count: {int(structured_payload.get('relation_count') or 0)}",
             f"structured_ref: {json.dumps(str(chunk.get('syntax_structured_path') or ''), ensure_ascii=False)}",
             f"ner_structured_ref: {json.dumps(str(chunk.get('ner_structured_path') or ''), ensure_ascii=False)}",
+            f"cor_structured_ref: {json.dumps(str(structured_payload.get('cor_structured_path') or ''), ensure_ascii=False)}",
+            f"cor_resolution_mode: {json.dumps(str(structured_payload.get('cor_resolution_mode') or 'identity_fallback'), ensure_ascii=False)}",
             "---",
             "",
             "# Syntax Annotated",
@@ -1743,11 +2174,14 @@ class KnowledgeManager:
             chunk.pop("syntax_path", None)
             chunk.pop("syntax_structured_path", None)
             chunk.pop("syntax_annotated_path", None)
-            chunk_text = self._read_chunk_text(chunk)
+            resolved_text, cor_structured_path, cor_resolution_mode, source_text = self._resolve_chunk_text_via_cor(chunk)
             mentions = self._load_chunk_ner_mentions(chunk)
             structured_payload = self._render_chunk_syntax_structured_payload(
                 chunk,
-                text=chunk_text,
+                source_text=source_text,
+                input_text=resolved_text,
+                cor_structured_path=cor_structured_path,
+                cor_resolution_mode=cor_resolution_mode,
                 mentions=mentions,
                 config=config,
             )
@@ -1795,6 +2229,96 @@ class KnowledgeManager:
             self._delete_syntax_path(syntax_path)
         self._write_source_syntax_manifest(source.id, current_syntax_paths)
         return current_syntax_paths
+
+    def _write_chunk_cor_artifacts(
+        self,
+        source: KnowledgeSourceSpec,
+        payload: dict[str, Any],
+        *,
+        config: KnowledgeConfig | None,
+    ) -> set[str]:
+        previous_manifest_paths = self._load_source_cor_manifest(source.id)
+        previous_payload = self._load_index_payload_safe(source.id)
+        current_cor_paths: set[str] = set()
+        semantic_state = self.get_semantic_engine_state(config) if config is not None else self._semantic_engine_state(
+            status="unavailable",
+            reason_code="HANLP2_SIDECAR_UNCONFIGURED",
+            reason="HanLP2 sidecar is not configured.",
+        )
+        ready = semantic_state.get("status") == "ready"
+
+        for chunk in payload.get("chunks") or []:
+            if not isinstance(chunk, dict):
+                continue
+            chunk["cor_status"] = "unavailable"
+            chunk["cor_format_version"] = _COR_FORMAT_VERSION
+            chunk["cor_cluster_count"] = 0
+            chunk["cor_replacement_count"] = 0
+            chunk["cor_resolution_mode"] = "identity_fallback"
+            chunk.pop("cor_path", None)
+            chunk.pop("cor_structured_path", None)
+            chunk.pop("cor_annotated_path", None)
+
+            chunk_text = self._read_chunk_text(chunk)
+            raw_result: Any = {}
+            if ready and config is not None:
+                raw_result, state = self._semantic_runtime.run_task("cor", chunk_text, config)
+                self._remember_semantic_engine_state(state)
+                if state.get("status") == "ready":
+                    chunk["cor_status"] = "ready"
+                else:
+                    raw_result = {}
+
+            cor_relative_path = self._build_cor_relative_path(str(chunk.get("chunk_path") or ""))
+            cor_structured_relative_path = self._build_cor_structured_relative_path(
+                str(chunk.get("chunk_path") or "")
+            )
+            cor_annotated_relative_path = self._build_cor_annotated_relative_path(
+                str(chunk.get("chunk_path") or "")
+            )
+            chunk["cor_path"] = cor_relative_path.as_posix()
+            chunk["cor_structured_path"] = cor_structured_relative_path.as_posix()
+            chunk["cor_annotated_path"] = cor_annotated_relative_path.as_posix()
+
+            structured_payload = self._render_chunk_cor_structured_payload(
+                chunk,
+                text=chunk_text,
+                raw_result=raw_result,
+            )
+            chunk["cor_cluster_count"] = int(structured_payload.get("cluster_count") or 0)
+            chunk["cor_replacement_count"] = int(structured_payload.get("replacement_count") or 0)
+            chunk["cor_resolution_mode"] = str(structured_payload.get("resolution_mode") or "identity_fallback")
+
+            cor_file_path = self.root_dir / cor_relative_path
+            cor_structured_file_path = self.root_dir / cor_structured_relative_path
+            cor_annotated_file_path = self.root_dir / cor_annotated_relative_path
+            cor_file_path.parent.mkdir(parents=True, exist_ok=True)
+            cor_file_path.write_text(
+                self._render_chunk_cor_text(chunk, structured_payload),
+                encoding="utf-8",
+            )
+            cor_structured_file_path.parent.mkdir(parents=True, exist_ok=True)
+            cor_structured_file_path.write_text(
+                json.dumps(structured_payload, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            cor_annotated_file_path.parent.mkdir(parents=True, exist_ok=True)
+            cor_annotated_file_path.write_text(
+                self._render_chunk_cor_annotated_markdown(chunk, structured_payload),
+                encoding="utf-8",
+            )
+
+            current_cor_paths.add(chunk["cor_path"])
+            current_cor_paths.add(chunk["cor_structured_path"])
+            current_cor_paths.add(chunk["cor_annotated_path"])
+
+        stale_cor_paths = (
+            previous_manifest_paths | self._collect_cor_paths_from_payload(previous_payload)
+        ) - current_cor_paths
+        for cor_path in stale_cor_paths:
+            self._delete_cor_path(cor_path)
+        self._write_source_cor_manifest(source.id, current_cor_paths)
+        return current_cor_paths
 
     def _render_chunk_ner_text(
         self,
@@ -1854,8 +2378,8 @@ class KnowledgeManager:
             chunk.pop("ner_annotated_path", None)
             if not ready:
                 continue
-            chunk_text = self._read_chunk_text(chunk)
-            mentions = self._collect_chunk_ner_mentions_with_fallback(chunk_text, config=config) if config is not None else []
+            resolved_text, cor_structured_path, cor_resolution_mode, source_text = self._resolve_chunk_text_via_cor(chunk)
+            mentions = self._collect_chunk_ner_mentions_with_fallback(resolved_text, config=config) if config is not None else []
             catalog = self._build_chunk_ner_catalog(mentions)
             chunk["ner_status"] = "ready"
             chunk["ner_entity_count"] = len(catalog)
@@ -1871,7 +2395,7 @@ class KnowledgeManager:
             ner_annotated_file_path = self.root_dir / ner_annotated_relative_path
             ner_file_path.parent.mkdir(parents=True, exist_ok=True)
             ner_file_path.write_text(
-                self._render_chunk_ner_text(chunk, text=chunk_text, catalog=catalog),
+                self._render_chunk_ner_text(chunk, text=resolved_text, catalog=catalog),
                 encoding="utf-8",
             )
             ner_structured_file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1879,7 +2403,10 @@ class KnowledgeManager:
                 json.dumps(
                     self._render_chunk_ner_structured_payload(
                         chunk,
-                        text=chunk_text,
+                        source_text=source_text,
+                        input_text=resolved_text,
+                        cor_structured_path=cor_structured_path,
+                        cor_resolution_mode=cor_resolution_mode,
                         catalog=catalog,
                         mentions=mentions,
                     ),
@@ -1893,7 +2420,7 @@ class KnowledgeManager:
             ner_annotated_file_path.write_text(
                 self._render_chunk_ner_annotated_markdown(
                     chunk,
-                    text=chunk_text,
+                    text=resolved_text,
                     mentions=mentions,
                     structured_relative_path=ner_structured_relative_path,
                 ),
@@ -1938,6 +2465,17 @@ class KnowledgeManager:
                     "snapshot_at": str(chunk.get("snapshot_at") or ""),
                     "file_key": str(chunk.get("file_key") or self._chunk_file_key(chunk)),
                     "version_id": str(chunk.get("version_id") or self._chunk_version_id(chunk)),
+                    "cor_path": str(chunk.get("cor_path") or ""),
+                    "cor_structured_path": str(chunk.get("cor_structured_path") or ""),
+                    "cor_annotated_path": str(chunk.get("cor_annotated_path") or ""),
+                    "cor_status": str(chunk.get("cor_status") or "unavailable"),
+                    "cor_cluster_count": int(chunk.get("cor_cluster_count") or 0),
+                    "cor_replacement_count": int(chunk.get("cor_replacement_count") or 0),
+                    "cor_format_version": str(chunk.get("cor_format_version") or ""),
+                    "cor_resolution_mode": str(chunk.get("cor_resolution_mode") or "identity_fallback"),
+                    "cor_text": self._read_artifact_text(chunk, "cor_path"),
+                    "cor_structured_text": self._read_artifact_text(chunk, "cor_structured_path"),
+                    "cor_annotated_text": self._read_artifact_text(chunk, "cor_annotated_path"),
                     "ner_path": str(chunk.get("ner_path") or ""),
                     "ner_structured_path": str(chunk.get("ner_structured_path") or ""),
                     "ner_annotated_path": str(chunk.get("ner_annotated_path") or ""),
@@ -2031,6 +2569,7 @@ class KnowledgeManager:
             self._delete_chunk_path(chunk_path)
 
         self._write_source_chunk_manifest(source.id, current_chunk_paths)
+        self._write_chunk_cor_artifacts(source, payload, config=config)
         self._write_chunk_ner_artifacts(source, payload, config=config)
         self._write_chunk_syntax_artifacts(source, payload, config=config)
 

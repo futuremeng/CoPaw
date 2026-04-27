@@ -106,6 +106,12 @@ export interface ProjectKnowledgeModeState {
   entityCount: number;
   relationCount: number;
   qualityScore: number | null;
+  corReadyChunkCount?: number;
+  corClusterCount?: number;
+  corReplacementCount?: number;
+  corEffectiveChunkCount?: number;
+  corReadyChunkRatio?: number;
+  corEffectiveChunkRatio?: number;
 }
 
 export interface ProjectKnowledgeOutputResolution {
@@ -495,6 +501,18 @@ function getSyncIndexCount(
   return Number.isFinite(Number(rawValue)) ? Number(rawValue) : Number(rawValue || 0);
 }
 
+function getSyncIndexMetric(
+  syncState: ProjectKnowledgeSyncState | null,
+  key: string,
+): number {
+  const indexResult = syncState?.last_result?.index;
+  if (!indexResult || typeof indexResult !== "object") {
+    return 0;
+  }
+  const rawValue = (indexResult as Record<string, unknown>)[key];
+  return Number.isFinite(Number(rawValue)) ? Number(rawValue) : Number(rawValue || 0);
+}
+
 function getSyncEnrichmentMetric(
   syncState: ProjectKnowledgeSyncState | null,
   key: string,
@@ -634,6 +652,7 @@ function parseBackendProcessingModes(
       if (!isProcessingMode(modePayload.mode)) {
         return null;
       }
+      const modeMetric = getBackendModeMetric(syncState, modePayload.mode);
       return {
         mode: modePayload.mode,
         status: normalizeModeStatus(modePayload.status),
@@ -649,6 +668,12 @@ function parseBackendProcessingModes(
         entityCount: normalizeNumber(modePayload.entity_count),
         relationCount: normalizeNumber(modePayload.relation_count),
         qualityScore: normalizeNullableNumber(modePayload.quality_score),
+        corReadyChunkCount: normalizeNumber(modeMetric?.cor_ready_chunk_count),
+        corClusterCount: normalizeNumber(modeMetric?.cor_cluster_count),
+        corReplacementCount: normalizeNumber(modeMetric?.cor_replacement_count),
+        corEffectiveChunkCount: normalizeNumber(modeMetric?.cor_effective_chunk_count),
+        corReadyChunkRatio: normalizeNullableNumber(modeMetric?.cor_ready_chunk_ratio),
+        corEffectiveChunkRatio: normalizeNullableNumber(modeMetric?.cor_effective_chunk_ratio),
       } satisfies ProjectKnowledgeModeState;
     })
     .filter((item): item is ProjectKnowledgeModeState => Boolean(item));
@@ -1792,6 +1817,26 @@ export function useProjectKnowledgeState(
       getSyncRelationCount(syncState),
       getSyncEnrichmentMetric(syncState, "edge_count"),
     );
+    const nlpCorReadyChunkCount = Math.max(
+      getBackendModeMetricNumber(syncState, "nlp", "cor_ready_chunk_count"),
+      getSyncIndexMetric(syncState, "cor_ready_chunk_count"),
+    );
+    const nlpCorClusterCount = Math.max(
+      getBackendModeMetricNumber(syncState, "nlp", "cor_cluster_count"),
+      getSyncIndexMetric(syncState, "cor_cluster_count"),
+    );
+    const nlpCorReplacementCount = Math.max(
+      getBackendModeMetricNumber(syncState, "nlp", "cor_replacement_count"),
+      getSyncIndexMetric(syncState, "cor_replacement_count"),
+    );
+    const nlpCorEffectiveChunkCount = Math.max(
+      getBackendModeMetricNumber(syncState, "nlp", "cor_effective_chunk_count"),
+      getSyncIndexMetric(syncState, "cor_effective_chunk_count"),
+    );
+    const nlpCorReadyChunkRatio = getBackendModeMetricNullableNumber(syncState, "nlp", "cor_ready_chunk_ratio")
+      ?? normalizeNullableNumber(getSyncIndexMetric(syncState, "cor_ready_chunk_ratio"));
+    const nlpCorEffectiveChunkRatio = getBackendModeMetricNullableNumber(syncState, "nlp", "cor_effective_chunk_ratio")
+      ?? normalizeNullableNumber(getSyncIndexMetric(syncState, "cor_effective_chunk_ratio"));
     const agenticEntityCount = Math.max(
       getBackendModeMetricNumber(syncState, "agentic", "entity_count"),
       normalizeNumber(workflowRunMeta.entity_count),
@@ -1896,6 +1941,12 @@ export function useProjectKnowledgeState(
         entityCount: nlpEntityCount,
         relationCount: nlpRelationCount,
         qualityScore: null,
+        corReadyChunkCount: nlpCorReadyChunkCount,
+        corClusterCount: nlpCorClusterCount,
+        corReplacementCount: nlpCorReplacementCount,
+        corEffectiveChunkCount: nlpCorEffectiveChunkCount,
+        corReadyChunkRatio: nlpCorReadyChunkRatio,
+        corEffectiveChunkRatio: nlpCorEffectiveChunkRatio,
       },
       {
         mode: "agentic",

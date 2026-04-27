@@ -111,6 +111,12 @@ export interface ProjectKnowledgeModeMetricsPayload {
   relation_count?: number;
   artifact_count?: number;
   quality_score?: number | null;
+  cor_ready_chunk_count?: number;
+  cor_cluster_count?: number;
+  cor_replacement_count?: number;
+  cor_effective_chunk_count?: number;
+  cor_ready_chunk_ratio?: number;
+  cor_effective_chunk_ratio?: number;
 }
 
 export interface ProjectKnowledgeGlobalMetricsPayload {

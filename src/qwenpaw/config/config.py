@@ -1746,6 +1746,12 @@ class KnowledgeHanLPTaskConfig(BaseModel):
 
 def _default_hanlp_tasks() -> Dict[str, KnowledgeHanLPTaskConfig]:
     return {
+        "cor": KnowledgeHanLPTaskConfig(
+            enabled=True,
+            task_name="coreference_resolution",
+            artifact_key="cor",
+            eval_role="primary",
+        ),
         "ner_msra": KnowledgeHanLPTaskConfig(
             enabled=True,
             task_name="ner/msra",
