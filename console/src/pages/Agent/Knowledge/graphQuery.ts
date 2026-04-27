@@ -5,6 +5,52 @@ import type {
   GraphVisualizationData,
 } from "../../../api/types";
 
+export function filterGraphQuerySourceRecords(
+  records: GraphQueryRecord[],
+  filterText: string,
+  options?: {
+    relationTypes?: string[];
+    entityTypes?: string[];
+  },
+): GraphQueryRecord[] {
+  const query = String(filterText || "").trim().toLowerCase();
+  const relationTypes = new Set(
+    (options?.relationTypes || [])
+      .map((item) => String(item || "").trim())
+      .filter(Boolean),
+  );
+  const entityTypes = new Set(
+    (options?.entityTypes || [])
+      .map((item) => String(item || "").trim())
+      .filter(Boolean),
+  );
+
+  return records.filter((record) => (
+    (relationTypes.size <= 0 || relationTypes.has(String(record.predicate || "").trim()))
+    && (
+      entityTypes.size <= 0
+      || entityTypes.has(String(record.subject_type || "").trim())
+      || entityTypes.has(String(record.object_type || "").trim())
+    )
+    && (
+      !query
+      || [
+        record.subject,
+        record.subject_type,
+        record.predicate,
+        record.object,
+        record.object_type,
+        record.document_title,
+        record.document_path,
+        record.source_id,
+        record.source_type,
+      ]
+        .map((part) => String(part || "").toLowerCase())
+        .some((part) => part.includes(query))
+    )
+  ));
+}
+
 /**
  * View model for displaying a graph query record as a table row.
  */
@@ -279,7 +325,7 @@ export function recordsToVisualizationData(
         id: subjectId,
         label: subjectLabel,
         title: record.document_title,
-        type: record.source_type || "entity",
+        type: record.subject_type || record.source_type || "entity",
         score: Number.isFinite(record.score) ? record.score : 0,
         source_id: record.source_id,
         document_path: record.document_path,
@@ -310,7 +356,7 @@ export function recordsToVisualizationData(
           id: targetId,
           label: targetLabel,
           title: record.document_title,
-          type: record.source_type || "entity",
+          type: record.object_type || record.source_type || "entity",
           score: Math.max(
             0.05,
             (Number.isFinite(record.score) ? record.score : 0) * 0.85,

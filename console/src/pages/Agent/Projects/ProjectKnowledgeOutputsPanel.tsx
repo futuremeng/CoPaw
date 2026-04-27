@@ -1,6 +1,8 @@
 import { Alert, Button, Empty, Input, Select, Tag, Typography } from "antd";
 import { startTransition, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { isPreviewablePath } from "./projectFileSelectionUtils";
+import { formatGraphRelationTypeLabel } from "./projectKnowledgeFilterLabels";
 import styles from "./index.module.less";
 import type {
   ProjectKnowledgeProcessingMode,
@@ -10,11 +12,13 @@ import type {
 import {
   getProjectKnowledgeModeLabel,
   getProjectKnowledgeModeTitle,
+  prioritizeProjectKnowledgeArtifacts,
 } from "./projectKnowledgeSyncUi";
 
 interface ProjectKnowledgeOutputsPanelProps {
   knowledgeState: ProjectKnowledgeState;
   onRunSuggestedQuery?: (query: string) => void;
+  onSelectArtifactPath?: (path: string) => void;
 }
 
 const INITIAL_VISIBLE_ARTIFACTS = 40;
@@ -42,6 +46,13 @@ function modeUnavailableReason(
     return t("projects.knowledge.outputs.fallbackUnavailable", "产物未就绪");
   }
   return t("projects.knowledge.outputs.fallbackNotSelected", "未被选为当前消费层");
+}
+
+function isPreviewableKnowledgeArtifactPath(kind: string, path: string): boolean {
+  if (!path) {
+    return false;
+  }
+  return isPreviewablePath(path);
 }
 
 export default function ProjectKnowledgeOutputsPanel(
@@ -105,7 +116,11 @@ export default function ProjectKnowledgeOutputsPanel(
     () => props.knowledgeState.modeOutputs[selectedMode],
     [props.knowledgeState.modeOutputs, selectedMode],
   );
-  const artifactCount = (selectedModeOutput?.artifacts || []).length;
+  const sortedArtifacts = useMemo(
+    () => prioritizeProjectKnowledgeArtifacts(selectedModeOutput?.artifacts || []),
+    [selectedModeOutput?.artifacts],
+  );
+  const artifactCount = sortedArtifacts.length;
 
   const canShowGraphRecords = selectedMode === "nlp" || selectedMode === "agentic";
   const modeRefreshPending = canShowGraphRecords
@@ -166,9 +181,38 @@ export default function ProjectKnowledgeOutputsPanel(
   }, [deferredKeyword, deferredPredicateFilter, props.knowledgeState.relationRecords]);
 
   const visibleArtifacts = useMemo(
-    () => (selectedModeOutput?.artifacts || []).slice(0, visibleArtifactCount),
-    [selectedModeOutput?.artifacts, visibleArtifactCount],
+    () => sortedArtifacts.slice(0, visibleArtifactCount),
+    [sortedArtifacts, visibleArtifactCount],
   );
+  const documentGraphSummary = useMemo(() => {
+    if (selectedMode !== "nlp") {
+      return null;
+    }
+    const manifestArtifact = sortedArtifacts.find((artifact) => artifact.kind === "document_graph_manifest");
+    const directoryArtifact = sortedArtifacts.find((artifact) => artifact.kind === "document_graph_dir");
+    if (!manifestArtifact && !directoryArtifact) {
+      return null;
+    }
+
+    const payloadSummary = (selectedModeOutput?.summaryLines || []).find((line) => line.startsWith("Document graphify payloads:")) || "";
+    const details = [
+      payloadSummary,
+      manifestArtifact?.path
+        ? manifestArtifact.path
+        : "",
+      directoryArtifact?.path
+        ? directoryArtifact.path
+        : "",
+    ].filter(Boolean);
+
+    return {
+      title: t("projects.knowledge.outputs.documentGraphReady", "文档级 graphify 中间层已生成"),
+      payloadSummary,
+      manifestPath: manifestArtifact?.path || "",
+      directoryPath: directoryArtifact?.path || "",
+      details,
+    };
+  }, [props, selectedMode, selectedModeOutput?.summaryLines, sortedArtifacts, t]);
 
   const visibleRelations = useMemo(
     () => filteredRecords.slice(0, visibleRelationCount),
@@ -206,7 +250,7 @@ export default function ProjectKnowledgeOutputsPanel(
             type={props.knowledgeState.graphNeedsRefresh || modeRefreshPending ? "primary" : "default"}
             onClick={() => {
               void props.knowledgeState.runGraphQuery(
-                props.knowledgeState.graphQueryText || props.knowledgeState.suggestedQuery,
+                props.knowledgeState.graphQueryText,
                 props.knowledgeState.graphQueryMode,
                 props.knowledgeState.graphQueryTopK,
                 selectedMode,
@@ -288,6 +332,88 @@ export default function ProjectKnowledgeOutputsPanel(
         ].filter(Boolean).join(" · ")}
       />
 
+      {documentGraphSummary ? (
+        <div className={styles.artifactSummaryBlock}>
+          <div className={styles.artifactSummaryGroups}>
+            <div className={styles.artifactSummaryGroup}>
+              <div className={styles.artifactSummaryTitle}>
+                {documentGraphSummary.title}
+              </div>
+              <Typography.Text>
+                {documentGraphSummary.payloadSummary || t("projects.knowledge.outputs.documentGraphPayloadFallback", "Document graphify payloads are ready.")}
+              </Typography.Text>
+            </div>
+            {documentGraphSummary.manifestPath ? (
+              <div className={styles.artifactSummaryGroup}>
+                <div className={styles.artifactSummaryTitle}>
+                  {t("projects.knowledge.outputs.documentGraphManifestLabel", "Manifest")}
+                </div>
+                {props.onSelectArtifactPath ? (
+                  <Button
+                    type="link"
+                    size="small"
+                    style={{ paddingInline: 0, height: "auto", justifyContent: "flex-start" }}
+                    onClick={() => props.onSelectArtifactPath?.(documentGraphSummary.manifestPath)}
+                  >
+                    {documentGraphSummary.manifestPath}
+                  </Button>
+                ) : (
+                  <Typography.Text>{documentGraphSummary.manifestPath}</Typography.Text>
+                )}
+              </div>
+            ) : null}
+            {documentGraphSummary.directoryPath ? (
+              <div className={styles.artifactSummaryGroup}>
+                <div className={styles.artifactSummaryTitle}>
+                  {t("projects.knowledge.outputs.documentGraphDirectoryLabel", "Payload Directory")}
+                </div>
+                {props.onSelectArtifactPath ? (
+                  <Button
+                    type="link"
+                    size="small"
+                    style={{ paddingInline: 0, height: "auto", justifyContent: "flex-start" }}
+                    onClick={() => props.onSelectArtifactPath?.(documentGraphSummary.directoryPath)}
+                  >
+                    {documentGraphSummary.directoryPath}
+                  </Button>
+                ) : (
+                  <Typography.Text>{documentGraphSummary.directoryPath}</Typography.Text>
+                )}
+              </div>
+            ) : null}
+            {(documentGraphSummary.manifestPath || documentGraphSummary.directoryPath) && props.onSelectArtifactPath ? (
+              <div className={styles.artifactSummaryGroup}>
+                <div className={styles.artifactSummaryTitle}>
+                  {t("projects.knowledge.outputs.documentGraphActions", "Actions")}
+                </div>
+                <div>
+                  {documentGraphSummary.manifestPath ? (
+                    <Button
+                      type="link"
+                      size="small"
+                      style={{ paddingInline: 0, height: "auto" }}
+                      onClick={() => props.onSelectArtifactPath?.(documentGraphSummary.manifestPath)}
+                    >
+                      {t("projects.knowledge.outputs.previewManifest", "Preview manifest")}
+                    </Button>
+                  ) : null}
+                  {documentGraphSummary.directoryPath ? (
+                    <Button
+                      type="link"
+                      size="small"
+                      style={{ paddingInline: 0, height: "auto", marginLeft: 12 }}
+                      onClick={() => props.onSelectArtifactPath?.(documentGraphSummary.directoryPath)}
+                    >
+                      {t("projects.knowledge.outputs.openPayloadDirectory", "Open payload directory")}
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
       <div className={styles.projectKnowledgeRelationList}>
         {visibleArtifacts.map((artifact) => (
           <div key={`${artifact.kind}:${artifact.path}`} className={styles.projectKnowledgeRelationCard}>
@@ -296,7 +422,18 @@ export default function ProjectKnowledgeOutputsPanel(
               <Tag>{artifact.kind}</Tag>
             </div>
             <div className={styles.projectKnowledgeMetaLine}>
-              <span>{artifact.path}</span>
+                {isPreviewableKnowledgeArtifactPath(artifact.kind, artifact.path) && props.onSelectArtifactPath ? (
+                  <Button
+                    type="link"
+                    size="small"
+                    style={{ paddingInline: 0, height: "auto" }}
+                    onClick={() => props.onSelectArtifactPath?.(artifact.path)}
+                  >
+                    {artifact.path}
+                  </Button>
+                ) : (
+                  <span>{artifact.path}</span>
+                )}
             </div>
           </div>
         ))}
@@ -348,8 +485,11 @@ export default function ProjectKnowledgeOutputsPanel(
           allowClear
           size="small"
           classNames={{ popup: { root: styles.projectKnowledgeSelectDropdown } }}
-          placeholder={t("projects.knowledge.relationTypeFilter", "Filter by relation type")}
-          options={predicateOptions.map((item) => ({ label: item, value: item }))}
+          placeholder={t("projects.knowledge.relationTypeFilter", "Relation type filter (shows all by default)")}
+          options={predicateOptions.map((item) => ({
+            label: formatGraphRelationTypeLabel(item, (key, defaultValue) => t(key, defaultValue)),
+            value: item,
+          }))}
           onChange={(value) => {
             startTransition(() => {
               setPredicateFilter(String(value || ""));

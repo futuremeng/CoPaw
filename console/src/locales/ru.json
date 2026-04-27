@@ -1973,6 +1973,8 @@
       "openKnowledge": "Открыть на странице знаний",
       "query": "Запрос",
       "queryPlaceholder": "Введите вопрос или ключевое слово, например: архитектурное решение",
+      "entityTypeFilter": "Фильтр по типу сущности (по умолчанию показывает всё)",
+      "relationTypeFilter": "Фильтр по типу связи (по умолчанию показывает всё)",
       "includeGlobal": "Включать глобальные знания",
       "reset": "Сброс",
       "emptyQuery": "Сначала введите запрос.",
@@ -1989,6 +1991,17 @@
       "queryMode": "Режим запроса",
       "queryModeTemplate": "Шаблон",
       "queryModeCypherMvp": "Cypher (MVP)",
+      "graphEntityType": {
+        "document": "Документ",
+        "entity": "Сущность",
+        "path": "Путь",
+        "version": "Версия",
+        "snapshot": "Снимок"
+      },
+      "graphRelationType": {
+        "mentions": "Упоминание",
+        "co_occurs_with": "Совстречаемость"
+      },
       "sinkJob": "Задача погружения",
       "autoSinkAgentMissing": "Нет активного агента",
       "autoSinkEnabled": "Автоматическое погружение знаний включено",

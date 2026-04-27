@@ -65,6 +65,8 @@ import {
 } from "./projectChatPrompts";
 import {
   isIgnoredProjectFile,
+  pickPreviewablePathFromTreeNodes,
+  resolveArtifactSelectionPath,
   isPreviewablePath,
   selectSeedSourceFiles,
 } from "./projectFileSelectionUtils";
@@ -2845,10 +2847,33 @@ export default function ProjectDetailPage() {
     }
   }, [currentAgent, loadAgents, navigate, selectedProject, t]);
 
-  const handleSelectArtifactFile = useCallback((path: string) => {
+  const handleSelectArtifactFile = useCallback(async (path: string) => {
     setWorkbenchSyncNotice(null);
+    if (!path) {
+      return;
+    }
+
+    if (currentAgent && selectedProject) {
+      try {
+        const children = await loadProjectTreeDirectory(currentAgent.id, selectedProject, path);
+        const selection = resolveArtifactSelectionPath(path, children);
+        if (selection.expandedDirectoryPath) {
+          setTreeExpandedKeys((prev) => mergeExpandedProjectTreeKeys(prev, [selection.expandedDirectoryPath]));
+        }
+        if (selection.selectedPath) {
+          setSelectedFilePath(selection.selectedPath);
+          return;
+        }
+        if (children.length >= 0) {
+          return;
+        }
+      } catch {
+        // The path is likely a file rather than a directory.
+      }
+    }
+
     setSelectedFilePath(path);
-  }, []);
+  }, [currentAgent, loadProjectTreeDirectory, selectedProject]);
 
   const handleAttachArtifactToChat = useCallback((path: string) => {
     setSelectedAttachPaths((prev) =>
@@ -3320,6 +3345,7 @@ export default function ProjectDetailPage() {
           <ProjectKnowledgeOutputsPanel
             knowledgeState={projectKnowledgeState}
             onRunSuggestedQuery={handleKnowledgeRunSuggestedQuery}
+            onSelectArtifactPath={handleSelectArtifactFile}
           />
         ),
       },

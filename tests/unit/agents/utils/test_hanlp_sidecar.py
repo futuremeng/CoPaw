@@ -15,13 +15,117 @@ class _StatusSequence:
 
 
 def _make_config():
+    task_matrix = SimpleNamespace(
+        tasks={
+            "ner_msra": SimpleNamespace(
+                enabled=True,
+                task_name="ner/msra",
+                artifact_key="ner_msra",
+                eval_role="primary",
+                model_id="",
+            ),
+            "dep": SimpleNamespace(
+                enabled=True,
+                task_name="dep",
+                artifact_key="dep",
+                eval_role="primary",
+                model_id="",
+            ),
+        }
+    )
     hanlp = SimpleNamespace(
         enabled=False,
         python_executable="",
         hanlp_home="",
         model_id="FINE_ELECTRA_SMALL_ZH",
+        task_matrix=task_matrix,
     )
     return SimpleNamespace(knowledge=SimpleNamespace(hanlp=hanlp))
+
+
+def test_build_status_includes_task_matrix_states(monkeypatch):
+    config = _make_config()
+
+    class _Runtime:
+        def probe(self, _knowledge):
+            return {
+                "status": "ready",
+                "reason_code": "HANLP2_READY",
+                "reason": "HanLP2 semantic engine is ready.",
+            }
+
+        def model_status(self, _knowledge):
+            return {
+                "status": "ready",
+                "reason_code": "HANLP2_MODEL_READY",
+                "reason": "HanLP2 tokenizer model is ready.",
+            }
+
+        def task_status(self, task_key, _knowledge):
+            return {
+                "status": "ready" if task_key == "ner_msra" else "unavailable",
+                "reason_code": "HANLP2_TASK_READY" if task_key == "ner_msra" else "HANLP2_TASK_LOAD_FAILED",
+                "reason": "ok" if task_key == "ner_msra" else "failed",
+            }
+
+    monkeypatch.setattr(hanlp_sidecar_module, "_runtime", lambda: _Runtime())
+    monkeypatch.setattr(hanlp_sidecar_module, "_find_uv_executable", lambda: "/tmp/uv")
+    monkeypatch.setattr(hanlp_sidecar_module, "_managed_venv", lambda: Path("/tmp/hanlp_sidecar/venv"))
+
+    status = hanlp_sidecar_module._build_status(config)
+
+    assert status["model"]["status"] == "ready"
+    assert status["tasks"]["ner_msra"]["status"] == "ready"
+    assert status["tasks"]["ner_msra"]["task_name"] == "ner/msra"
+    assert status["tasks"]["dep"]["status"] == "unavailable"
+
+
+def test_ensure_hanlp_model_aggregates_task_results(monkeypatch):
+    config = _make_config()
+
+    class _Runtime:
+        def ensure_model(self, _knowledge):
+            return {
+                "status": "ready",
+                "reason_code": "HANLP2_MODEL_READY",
+                "reason": "HanLP2 tokenizer model is ready.",
+            }
+
+        def task_status(self, task_key, _knowledge):
+            return {
+                "status": "ready" if task_key == "ner_msra" else "unavailable",
+                "reason_code": "HANLP2_TASK_READY" if task_key == "ner_msra" else "HANLP2_TASK_LOAD_FAILED",
+                "reason": "ok" if task_key == "ner_msra" else "failed",
+            }
+
+    monkeypatch.setattr(hanlp_sidecar_module, "load_config", lambda: config)
+    monkeypatch.setattr(hanlp_sidecar_module, "_runtime", lambda: _Runtime())
+    monkeypatch.setattr(
+        hanlp_sidecar_module,
+        "_build_status",
+        lambda _config: {"sidecar": {"status": "ready"}, "model": {"status": "ready"}, "tasks": {}},
+    )
+    monkeypatch.setattr(
+        hanlp_sidecar_module,
+        "get_hanlp_sidecar_status",
+        lambda force_refresh=False: {
+            "sidecar": {"status": "ready"},
+            "model": {"status": "ready"},
+            "tasks": {
+                "ner_msra": {"status": "ready"},
+                "dep": {"status": "unavailable"},
+            },
+        },
+    )
+
+    result = hanlp_sidecar_module.ensure_hanlp_model()
+
+    assert result["success"] is False
+    assert result["task_results"]["ner_msra"]["status"] == "ready"
+    assert result["task_results"]["dep"]["status"] == "unavailable"
+    assert result["manual_steps"] == [
+        "Verify the configured HanLP task matrix models are available in HANLP_HOME, then retry task verification.",
+    ]
 
 
 def test_ensure_uv_available_bootstraps_with_pip(monkeypatch):

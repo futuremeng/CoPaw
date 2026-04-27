@@ -67,6 +67,14 @@ def test_get_hanlp_status_offloads_to_thread(monkeypatch):
                 "reason": "HanLP2 tokenizer model is ready.",
                 "model_id": "FINE_ELECTRA_SMALL_ZH",
             },
+            "tasks": {
+                "ner_msra": {
+                    "status": "ready",
+                    "reason_code": "HANLP2_TASK_READY",
+                    "reason": "HanLP task is ready.",
+                    "task_name": "ner/msra",
+                }
+            },
         },
     )
 
@@ -96,8 +104,8 @@ def test_post_hanlp_install_offloads_to_thread(monkeypatch):
         lambda: {
             "success": True,
             "already_available": False,
-            "status_before": {"sidecar": {"status": "unavailable"}, "model": {"status": "unavailable"}},
-            "status_after": {"sidecar": {"status": "ready"}, "model": {"status": "unavailable"}},
+            "status_before": {"sidecar": {"status": "unavailable"}, "model": {"status": "unavailable"}, "tasks": {}},
+            "status_after": {"sidecar": {"status": "ready"}, "model": {"status": "unavailable"}, "tasks": {}},
             "operations": [],
             "manual_steps": [],
         },
@@ -128,13 +136,21 @@ def test_post_hanlp_download_model_offloads_to_thread(monkeypatch):
         "qwenpaw.agents.utils.hanlp_sidecar.ensure_hanlp_model",
         lambda: {
             "success": True,
-            "status_before": {"sidecar": {"status": "ready"}, "model": {"status": "unavailable"}},
-            "status_after": {"sidecar": {"status": "ready"}, "model": {"status": "ready"}},
+            "status_before": {"sidecar": {"status": "ready"}, "model": {"status": "unavailable"}, "tasks": {}},
+            "status_after": {"sidecar": {"status": "ready"}, "model": {"status": "ready"}, "tasks": {"ner_msra": {"status": "ready"}}},
             "model_result": {
                 "status": "ready",
                 "reason_code": "HANLP2_MODEL_READY",
                 "reason": "HanLP2 tokenizer model is ready.",
                 "model_id": "FINE_ELECTRA_SMALL_ZH",
+            },
+            "task_results": {
+                "ner_msra": {
+                    "status": "ready",
+                    "reason_code": "HANLP2_TASK_READY",
+                    "reason": "HanLP task is ready.",
+                    "task_name": "ner/msra",
+                }
             },
             "manual_steps": [],
         },

@@ -79,6 +79,7 @@ _ENTITY_STOP_WORDS = {
 _QUERY_DIRECTIVE_RE = re.compile(r'(?P<key>path|file|version|before|after|since|until|sort|group|latest):(?P<value>"[^"]+"|\S+)', re.IGNORECASE)
 _QUERY_GROUP_MODES = {"path", "file", "version", "time", "snapshot"}
 _QUERY_SORT_MODES = {"score_desc", "score_asc", "time_desc", "time_asc", "path_asc", "path_desc"}
+_ALL_GRAPH_QUERY_TOKENS = {"*", "__all__", "all"}
 
 
 def _safe_node_id(prefix: str, value: str) -> str:
@@ -167,6 +168,11 @@ def _parse_query_directives(query_text: str) -> tuple[str, dict[str, Any]]:
     residual = _QUERY_DIRECTIVE_RE.sub(_replace, str(query_text or ""))
     residual = re.sub(r"\s+", " ", residual).strip()
     return residual, directives
+
+
+def _is_all_graph_query(query_text: str) -> bool:
+    normalized = str(query_text or "").strip().lower()
+    return normalized in _ALL_GRAPH_QUERY_TOKENS
 
 
 def _record_matches_directives(record: dict[str, Any], directives: dict[str, Any]) -> bool:
@@ -671,106 +677,82 @@ def _load_dataset_documents(
     return documents
 
 
-def build_local_graph_payload(
-    manager: KnowledgeManager,
-    config: KnowledgeConfig,
-    dataset_scope: list[str] | None,
-) -> dict[str, Any]:
-    documents = _load_dataset_documents(manager, config, dataset_scope)
+def _document_group_key(document: dict[str, Any]) -> str:
+    return str(document.get("path") or document.get("file_key") or document.get("title") or "").strip()
+
+
+def _graphify_document_filename(document_path: str) -> str:
+    normalized = re.sub(r"[^a-z0-9]+", "-", str(document_path or "").strip().lower()).strip("-")
+    if not normalized:
+        normalized = "document"
+    normalized = normalized[:48].strip("-") or "document"
+    digest = hashlib.sha1(str(document_path or normalized).encode("utf-8")).hexdigest()[:12]
+    return f"{normalized}-{digest}.graphify.json"
+
+
+def _sorted_unique_nonempty(values: list[str]) -> list[str]:
+    return sorted({str(value).strip() for value in values if str(value).strip()})
+
+
+def _merge_node_fields(existing: dict[str, Any], incoming: dict[str, Any]) -> None:
+    for key in ("chunk_paths", "snapshot_paths", "version_history"):
+        if key in incoming:
+            merged = _sorted_unique_nonempty(list(existing.get(key) or []) + list(incoming.get(key) or []))
+            if merged:
+                existing[key] = merged
+    for key in ("source_id", "source_file", "source_location", "file_type", "node_type", "project_id", "file_key", "ner_path"):
+        if not existing.get(key) and incoming.get(key):
+            existing[key] = incoming.get(key)
+    if not existing.get("label") and incoming.get("label"):
+        existing["label"] = incoming.get("label")
+
+
+def _merge_edge_fields(existing: dict[str, Any], incoming: dict[str, Any]) -> None:
+    existing["weight"] = float(existing.get("weight") or 0) + float(incoming.get("weight") or 0)
+    for key in ("chunk_paths", "snapshot_paths", "version_history"):
+        if key in incoming:
+            merged = _sorted_unique_nonempty(list(existing.get(key) or []) + list(incoming.get(key) or []))
+            if merged:
+                existing[key] = merged
+    for key in ("document_path", "document_title", "chunk_path", "snapshot_path", "snapshot_at", "version_id", "file_key", "source_id"):
+        if not existing.get(key) and incoming.get(key):
+            existing[key] = incoming.get(key)
+
+
+def _build_document_graphify_payload(document_path: str, documents: list[dict[str, Any]]) -> dict[str, Any]:
+    primary = documents[0] if documents else {}
+    title = str(primary.get("title") or document_path)
+    doc_id = _safe_node_id("doc", document_path)
     nodes: dict[str, dict[str, Any]] = {}
     edges: dict[tuple[str, str, str], dict[str, Any]] = {}
     entity_sources: defaultdict[str, set[str]] = defaultdict(set)
     sentence_entity_stats: list[dict[str, Any]] = []
     relation_candidates: list[dict[str, Any]] = []
+    entity_weights: Counter[str] = Counter()
+    co_occurrence_weights: Counter[tuple[str, str]] = Counter()
     sentence_count_total = 0
     sentence_with_entities_count = 0
     entity_mentions_count = 0
     entity_char_ratio_sum = 0.0
-
-    # 调试统计变量
-    total_entity_pairs_processed = 0
+    chunk_paths: list[str] = []
+    snapshot_paths: list[str] = []
+    snapshot_ats: list[str] = []
+    version_ids: list[str] = []
 
     for document in documents:
-        doc_path = document["path"] or document["title"]
-        version_id = str(document.get("version_id") or "").strip()
-        doc_identity = "::".join(filter(None, [doc_path, version_id, str(document.get("chunk_id") or "")])) or doc_path
-        doc_id = _safe_node_id("doc", doc_identity)
-        nodes.setdefault(
-            doc_id,
-            {
-                "id": doc_id,
-                "label": document["title"],
-                "source_id": document["source_id"],
-                "source_file": doc_path,
-                "source_location": doc_path,
-                "file_type": document["source_type"],
-                "node_type": "document",
-                "project_id": document["project_id"],
-                "chunk_path": document.get("chunk_path") or "",
-                "snapshot_path": document.get("snapshot_path") or "",
-                "snapshot_at": document.get("snapshot_at") or "",
-                "version_id": version_id,
-                "file_key": document.get("file_key") or doc_path,
-                "ner_path": document.get("ner_path") or "",
-            },
-        )
-
-        metadata_relations = [
-            ("has_path", doc_path, "path"),
-            ("has_file_name", Path(doc_path).name or doc_path, "file_name"),
-        ]
+        chunk_path = str(document.get("chunk_path") or "")
+        snapshot_path = str(document.get("snapshot_path") or "")
         snapshot_at = str(document.get("snapshot_at") or "").strip()
-        if snapshot_at:
-            metadata_relations.append(("has_snapshot_at", snapshot_at, "snapshot_at"))
-        if version_id:
-            metadata_relations.append(("has_version", version_id, "version"))
-
-        for relation_name, value_label, node_type in metadata_relations:
-            meta_node_id = _safe_node_id(node_type, value_label)
-            nodes.setdefault(
-                meta_node_id,
-                {
-                    "id": meta_node_id,
-                    "label": value_label,
-                    "source_id": document["source_id"],
-                    "source_file": doc_path,
-                    "source_location": doc_path,
-                    "file_type": node_type,
-                    "node_type": node_type,
-                    "project_id": document["project_id"],
-                    "snapshot_path": document.get("snapshot_path") or "",
-                    "snapshot_at": snapshot_at,
-                    "version_id": version_id,
-                    "file_key": document.get("file_key") or doc_path,
-                },
-            )
-            edge_key = (doc_id, meta_node_id, relation_name)
-            edges.setdefault(
-                edge_key,
-                {
-                    "source": doc_id,
-                    "target": meta_node_id,
-                    "relation": relation_name,
-                    "confidence": "derived",
-                    "weight": 1,
-                    "source_id": document["source_id"],
-                    "document_path": doc_path,
-                    "document_title": document["title"],
-                    "chunk_path": document.get("chunk_path") or "",
-                    "snapshot_path": document.get("snapshot_path") or "",
-                    "snapshot_at": snapshot_at,
-                    "version_id": version_id,
-                    "file_key": document.get("file_key") or doc_path,
-                },
-            )
+        version_id = str(document.get("version_id") or "").strip()
+        chunk_paths.append(chunk_path)
+        snapshot_paths.append(snapshot_path)
+        snapshot_ats.append(snapshot_at)
+        version_ids.append(version_id)
 
         sentence_stats = _collect_sentence_entity_stats(document)
-        sentence_count = len(sentence_stats)
-        sentence_count_total += sentence_count
-        mentions_for_document = 0
+        sentence_count_total += len(sentence_stats)
         for stat in sentence_stats:
             entity_count_total = int(stat.get("entity_count_total") or 0)
-            mentions_for_document += entity_count_total
             entity_mentions_count += entity_count_total
             if entity_count_total > 0:
                 sentence_with_entities_count += 1
@@ -779,14 +761,15 @@ def build_local_graph_payload(
                 {
                     "source_id": document["source_id"],
                     "project_id": document["project_id"],
-                    "document_path": doc_path,
-                    "document_title": document["title"],
+                    "document_path": document_path,
+                    "document_title": title,
+                    "chunk_path": chunk_path,
+                    "snapshot_path": snapshot_path,
+                    "snapshot_at": snapshot_at,
+                    "version_id": version_id,
                     **stat,
                 }
             )
-        if doc_id in nodes:
-            nodes[doc_id]["sentence_count"] = sentence_count
-            nodes[doc_id]["entity_mentions_count"] = mentions_for_document
 
         document_relation_candidates = _collect_relation_candidates(document)
         for candidate in document_relation_candidates:
@@ -794,13 +777,13 @@ def build_local_graph_payload(
                 {
                     "source_id": document["source_id"],
                     "project_id": document["project_id"],
-                    "document_path": doc_path,
-                    "document_title": document["title"],
-                    "chunk_path": document.get("chunk_path") or "",
-                    "snapshot_path": document.get("snapshot_path") or "",
+                    "document_path": document_path,
+                    "document_title": title,
+                    "chunk_path": chunk_path,
+                    "snapshot_path": snapshot_path,
                     "snapshot_at": snapshot_at,
                     "version_id": version_id,
-                    "file_key": document.get("file_key") or doc_path,
+                    "file_key": document.get("file_key") or document_path,
                     **candidate,
                 }
             )
@@ -808,81 +791,266 @@ def build_local_graph_payload(
         entity_pairs = _collect_ranked_entities(document)
         entity_labels = [label for label, _ in entity_pairs[:16]]
         for label, weight in entity_pairs:
+            entity_weights[label] += weight
             entity_id = _safe_node_id("ent", label)
-            nodes.setdefault(
-                entity_id,
-                {
-                    "id": entity_id,
-                    "label": label,
-                    "source_id": document["source_id"],
-                    "source_file": doc_path,
-                    "source_location": doc_path,
-                    "file_type": "entity",
-                    "node_type": "entity",
-                    "project_id": document["project_id"],
-                    "chunk_path": document.get("chunk_path") or "",
-                    "snapshot_path": document.get("snapshot_path") or "",
-                    "snapshot_at": snapshot_at,
-                    "version_id": version_id,
-                    "file_key": document.get("file_key") or doc_path,
-                },
-            )
             entity_sources[entity_id].add(document["source_id"])
-            edge_key = (doc_id, entity_id, "mentions")
-            edge = edges.setdefault(
-                edge_key,
-                {
-                    "source": doc_id,
-                    "target": entity_id,
-                    "relation": "mentions",
-                    "confidence": str(weight),
-                    "weight": 0,
-                    "source_id": document["source_id"],
-                    "document_path": doc_path,
-                    "document_title": document["title"],
-                    "chunk_path": document.get("chunk_path") or "",
-                    "snapshot_path": document.get("snapshot_path") or "",
-                    "snapshot_at": snapshot_at,
-                    "version_id": version_id,
-                    "file_key": document.get("file_key") or doc_path,
-                },
-            )
-            edge["weight"] += weight
 
         syntax_entity_groups = _collect_syntax_sentence_entity_groups(document)
         co_occurrence_groups = syntax_entity_groups or [sorted(set(entity_labels))]
         for group in co_occurrence_groups:
             for left, right in combinations(sorted(set(group)), 2):
-                left_id = _safe_node_id("ent", left)
-                right_id = _safe_node_id("ent", right)
-                source_id = document["source_id"]
-                ordered = tuple(sorted((left_id, right_id)))
-                edge_key = (ordered[0], ordered[1], "co_occurs_with")
-                edge = edges.setdefault(
-                    edge_key,
-                    {
-                        "source": ordered[0],
-                        "target": ordered[1],
-                        "relation": "co_occurs_with",
-                        "confidence": "derived",
-                        "weight": 0,
-                        "source_id": source_id,
-                        "document_path": doc_path,
-                        "document_title": document["title"],
-                        "chunk_path": document.get("chunk_path") or "",
-                        "snapshot_path": document.get("snapshot_path") or "",
-                        "snapshot_at": snapshot_at,
-                        "version_id": version_id,
-                        "file_key": document.get("file_key") or doc_path,
-                    },
-                )
-                edge["weight"] += 1
+                ordered = tuple(sorted((left, right)))
+                co_occurrence_weights[ordered] += 1
+
+    chunk_paths = _sorted_unique_nonempty(chunk_paths)
+    snapshot_paths = _sorted_unique_nonempty(snapshot_paths)
+    snapshot_ats = _sorted_unique_nonempty(snapshot_ats)
+    version_ids = _sorted_unique_nonempty(version_ids)
+    representative_chunk_path = chunk_paths[0] if chunk_paths else ""
+    representative_snapshot_path = snapshot_paths[0] if snapshot_paths else ""
+    representative_snapshot_at = snapshot_ats[-1] if snapshot_ats else ""
+    representative_version_id = version_ids[-1] if version_ids else ""
+
+    nodes[doc_id] = {
+        "id": doc_id,
+        "label": title,
+        "source_id": str(primary.get("source_id") or ""),
+        "source_file": document_path,
+        "source_location": document_path,
+        "file_type": str(primary.get("source_type") or "document"),
+        "node_type": "document",
+        "project_id": str(primary.get("project_id") or ""),
+        "chunk_path": representative_chunk_path,
+        "chunk_paths": chunk_paths,
+        "snapshot_path": representative_snapshot_path,
+        "snapshot_paths": snapshot_paths,
+        "snapshot_at": representative_snapshot_at,
+        "version_id": representative_version_id,
+        "version_history": version_ids,
+        "file_key": str(primary.get("file_key") or document_path),
+        "ner_path": str(primary.get("ner_path") or ""),
+        "sentence_count": sentence_count_total,
+        "entity_mentions_count": entity_mentions_count,
+        "chunk_count": len(chunk_paths),
+    }
+
+    metadata_relations = [
+        ("has_path", document_path, "path"),
+        ("has_file_name", Path(document_path).name or document_path, "file_name"),
+    ]
+    for snapshot_at in snapshot_ats:
+        metadata_relations.append(("has_snapshot_at", snapshot_at, "snapshot_at"))
+    for version_id in version_ids:
+        metadata_relations.append(("has_version", version_id, "version"))
+
+    for relation_name, value_label, node_type in metadata_relations:
+        meta_node_id = _safe_node_id(node_type, value_label)
+        nodes.setdefault(
+            meta_node_id,
+            {
+                "id": meta_node_id,
+                "label": value_label,
+                "source_id": str(primary.get("source_id") or ""),
+                "source_file": document_path,
+                "source_location": document_path,
+                "file_type": node_type,
+                "node_type": node_type,
+                "project_id": str(primary.get("project_id") or ""),
+                "snapshot_path": representative_snapshot_path,
+                "snapshot_paths": snapshot_paths,
+                "snapshot_at": representative_snapshot_at,
+                "version_id": representative_version_id,
+                "version_history": version_ids,
+                "file_key": str(primary.get("file_key") or document_path),
+            },
+        )
+        edges[(doc_id, meta_node_id, relation_name)] = {
+            "source": doc_id,
+            "target": meta_node_id,
+            "relation": relation_name,
+            "confidence": "derived",
+            "weight": 1,
+            "source_id": str(primary.get("source_id") or ""),
+            "document_path": document_path,
+            "document_title": title,
+            "chunk_path": representative_chunk_path,
+            "chunk_paths": chunk_paths,
+            "snapshot_path": representative_snapshot_path,
+            "snapshot_paths": snapshot_paths,
+            "snapshot_at": representative_snapshot_at,
+            "version_id": representative_version_id,
+            "version_history": version_ids,
+            "file_key": str(primary.get("file_key") or document_path),
+        }
+
+    for label, weight in entity_weights.items():
+        entity_id = _safe_node_id("ent", label)
+        nodes.setdefault(
+            entity_id,
+            {
+                "id": entity_id,
+                "label": label,
+                "source_id": sorted(entity_sources.get(entity_id) or [str(primary.get("source_id") or "")])[0],
+                "source_file": document_path,
+                "source_location": document_path,
+                "file_type": "entity",
+                "node_type": "entity",
+                "project_id": str(primary.get("project_id") or ""),
+                "chunk_path": representative_chunk_path,
+                "chunk_paths": chunk_paths,
+                "snapshot_path": representative_snapshot_path,
+                "snapshot_paths": snapshot_paths,
+                "snapshot_at": representative_snapshot_at,
+                "version_id": representative_version_id,
+                "version_history": version_ids,
+                "file_key": str(primary.get("file_key") or document_path),
+            },
+        )
+        edges[(doc_id, entity_id, "mentions")] = {
+            "source": doc_id,
+            "target": entity_id,
+            "relation": "mentions",
+            "confidence": str(weight),
+            "weight": weight,
+            "source_id": str(primary.get("source_id") or ""),
+            "document_path": document_path,
+            "document_title": title,
+            "chunk_path": representative_chunk_path,
+            "chunk_paths": chunk_paths,
+            "snapshot_path": representative_snapshot_path,
+            "snapshot_paths": snapshot_paths,
+            "snapshot_at": representative_snapshot_at,
+            "version_id": representative_version_id,
+            "version_history": version_ids,
+            "file_key": str(primary.get("file_key") or document_path),
+        }
+
+    for (left, right), weight in co_occurrence_weights.items():
+        left_id = _safe_node_id("ent", left)
+        right_id = _safe_node_id("ent", right)
+        ordered = tuple(sorted((left_id, right_id)))
+        edges[(ordered[0], ordered[1], "co_occurs_with")] = {
+            "source": ordered[0],
+            "target": ordered[1],
+            "relation": "co_occurs_with",
+            "confidence": "derived",
+            "weight": weight,
+            "source_id": str(primary.get("source_id") or ""),
+            "document_path": document_path,
+            "document_title": title,
+            "chunk_path": representative_chunk_path,
+            "chunk_paths": chunk_paths,
+            "snapshot_path": representative_snapshot_path,
+            "snapshot_paths": snapshot_paths,
+            "snapshot_at": representative_snapshot_at,
+            "version_id": representative_version_id,
+            "version_history": version_ids,
+            "file_key": str(primary.get("file_key") or document_path),
+        }
 
     for node_id, source_ids in entity_sources.items():
         if node_id in nodes and source_ids:
             nodes[node_id]["source_id"] = sorted(source_ids)[0]
 
-    # 调试统计输出
+    return {
+        "artifact": "document_graphify",
+        "document_path": document_path,
+        "document_title": title,
+        "file_key": str(primary.get("file_key") or document_path),
+        "source_id": str(primary.get("source_id") or ""),
+        "source_name": str(primary.get("source_name") or ""),
+        "source_type": str(primary.get("source_type") or ""),
+        "project_id": str(primary.get("project_id") or ""),
+        "chunk_paths": chunk_paths,
+        "snapshot_paths": snapshot_paths,
+        "snapshot_ats": snapshot_ats,
+        "version_ids": version_ids,
+        "nodes": list(nodes.values()),
+        "links": list(edges.values()),
+        "sentence_entity_stats": sentence_entity_stats,
+        "relation_candidates": relation_candidates,
+        "stats": {
+            "document_count": 1,
+            "chunk_count": len(chunk_paths),
+            "node_count": len(nodes),
+            "relation_count": len(edges),
+            "relation_candidate_count": len(relation_candidates),
+            "sentence_count": sentence_count_total,
+            "sentence_with_entities_count": sentence_with_entities_count,
+            "entity_mentions_count": entity_mentions_count,
+            "avg_entities_per_sentence": (
+                float(entity_mentions_count / sentence_count_total)
+                if sentence_count_total > 0
+                else 0.0
+            ),
+            "avg_entity_char_ratio": (
+                float(entity_char_ratio_sum / sentence_count_total)
+                if sentence_count_total > 0
+                else 0.0
+            ),
+            "entity_char_ratio_sum": entity_char_ratio_sum,
+        },
+    }
+
+
+def _build_document_graphify_payloads(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: defaultdict[str, list[dict[str, Any]]] = defaultdict(list)
+    for document in documents:
+        grouped[_document_group_key(document)].append(document)
+    return [
+        _build_document_graphify_payload(document_path, grouped_documents)
+        for document_path, grouped_documents in sorted(grouped.items(), key=lambda item: item[0])
+        if document_path
+    ]
+
+
+def _build_project_graph_payload_from_documents(document_payloads: list[dict[str, Any]]) -> dict[str, Any]:
+    nodes: dict[str, dict[str, Any]] = {}
+    edges: dict[tuple[str, str, str], dict[str, Any]] = {}
+    sentence_entity_stats: list[dict[str, Any]] = []
+    relation_candidates: list[dict[str, Any]] = []
+    sentence_count_total = 0
+    sentence_with_entities_count = 0
+    entity_mentions_count = 0
+    entity_char_ratio_sum = 0.0
+
+    for payload in document_payloads:
+        for node in payload.get("nodes") or []:
+            if not isinstance(node, dict) or not node.get("id"):
+                continue
+            node_id = str(node.get("id"))
+            existing = nodes.get(node_id)
+            if existing is None:
+                nodes[node_id] = dict(node)
+            else:
+                _merge_node_fields(existing, node)
+
+        for edge in payload.get("links") or []:
+            if not isinstance(edge, dict):
+                continue
+            edge_key = (
+                str(edge.get("source") or ""),
+                str(edge.get("target") or ""),
+                str(edge.get("relation") or ""),
+            )
+            existing = edges.get(edge_key)
+            if existing is None:
+                edges[edge_key] = dict(edge)
+            else:
+                _merge_edge_fields(existing, edge)
+
+        sentence_entity_stats.extend(
+            item for item in (payload.get("sentence_entity_stats") or []) if isinstance(item, dict)
+        )
+        relation_candidates.extend(
+            item for item in (payload.get("relation_candidates") or []) if isinstance(item, dict)
+        )
+        stats = payload.get("stats") or {}
+        sentence_count_total += int(stats.get("sentence_count") or 0)
+        sentence_with_entities_count += int(stats.get("sentence_with_entities_count") or 0)
+        entity_mentions_count += int(stats.get("entity_mentions_count") or 0)
+        entity_char_ratio_sum += float(stats.get("entity_char_ratio_sum") or 0.0)
+
     total_entities = len([n for n in nodes.values() if n.get("node_type") == "entity"])
     total_relations = len(edges)
     entity_coverage_ratio = (
@@ -897,7 +1065,7 @@ def build_local_graph_payload(
     )
     logger.info(
         f"Entity extraction stats: "
-        f"documents={len(documents)}, "
+        f"documents={len(document_payloads)}, "
         f"sentences={sentence_count_total}, "
         f"entities={total_entities}, "
         f"coverage_ratio={entity_coverage_ratio:.2f}%, "
@@ -914,7 +1082,7 @@ def build_local_graph_payload(
         "sentence_entity_stats": sentence_entity_stats,
         "relation_candidates": relation_candidates,
         "stats": {
-            "document_count": len(documents),
+            "document_count": len(document_payloads),
             "node_count": len(nodes),
             "relation_count": len(edges),
             "relation_candidate_count": len(relation_candidates),
@@ -935,13 +1103,57 @@ def build_local_graph_payload(
     }
 
 
+def build_local_graph_payload(
+    manager: KnowledgeManager,
+    config: KnowledgeConfig,
+    dataset_scope: list[str] | None,
+) -> dict[str, Any]:
+    documents = _load_dataset_documents(manager, config, dataset_scope)
+    document_payloads = _build_document_graphify_payloads(documents)
+    return _build_project_graph_payload_from_documents(document_payloads)
+
+
 def persist_local_graph(
     manager: KnowledgeManager,
     config: KnowledgeConfig,
     dataset_scope: list[str] | None,
     graph_path: Path,
 ) -> dict[str, Any]:
-    payload = build_local_graph_payload(manager, config, dataset_scope)
+    documents = _load_dataset_documents(manager, config, dataset_scope)
+    document_payloads = _build_document_graphify_payloads(documents)
+    graphify_dir = graph_path.parent.parent / "graphify"
+    graphify_dir.mkdir(parents=True, exist_ok=True)
+    manifest_documents: list[dict[str, Any]] = []
+    for payload in document_payloads:
+        document_path = str(payload.get("document_path") or "")
+        payload_name = _graphify_document_filename(document_path)
+        payload_path = graphify_dir / payload_name
+        payload_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        manifest_documents.append(
+            {
+                "document_path": document_path,
+                "document_title": str(payload.get("document_title") or ""),
+                "payload_path": str(payload_path),
+                "payload_relative_path": str(payload_path.relative_to(graph_path.parent.parent)),
+                "chunk_count": int((payload.get("stats") or {}).get("chunk_count") or 0),
+                "version_ids": list(payload.get("version_ids") or []),
+            }
+        )
+    manifest_path = graphify_dir / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "artifact": "graphify_manifest",
+                "document_count": len(document_payloads),
+                "documents": manifest_documents,
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    payload = _build_project_graph_payload_from_documents(document_payloads)
     graph_path.parent.mkdir(parents=True, exist_ok=True)
     graph_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     stats = payload.get("stats") or {}
@@ -950,6 +1162,9 @@ def persist_local_graph(
         "error": None,
         "warnings": [] if stats.get("relation_count", 0) > 0 else ["LOCAL_GRAPH_EMPTY"],
         "graph_path": str(graph_path),
+        "document_graph_dir": str(graphify_dir),
+        "document_graph_manifest_path": str(manifest_path),
+        "document_graph_count": len(document_payloads),
         "document_count": int(stats.get("document_count") or 0),
         "node_count": int(stats.get("node_count") or 0),
         "relation_count": int(stats.get("relation_count") or 0),
@@ -977,8 +1192,9 @@ def query_local_graph(
     }
     links = [item for item in (payload.get("links") or []) if isinstance(item, dict)]
     effective_query_text, directives = _parse_query_directives(query_text)
+    all_query = _is_all_graph_query(effective_query_text)
     terms = [token.lower() for token in _ENTITY_RE.findall(effective_query_text or "") if len(token) > 1]
-    if not terms and not any(
+    if not all_query and not terms and not any(
         [
             directives.get("path"),
             directives.get("file"),
@@ -1009,12 +1225,14 @@ def query_local_graph(
             ]
         ).lower()
         score = sum(1 for term in terms if term in haystack)
-        if terms and score <= 0:
+        if not all_query and terms and score <= 0:
             continue
         record = {
             "subject": str(source.get("label") or edge.get("source") or "unknown"),
+            "subject_type": str(source.get("node_type") or source.get("type") or source.get("file_type") or "entity"),
             "predicate": str(edge.get("relation") or "related_to"),
             "object": str(target.get("label") or edge.get("target") or "unknown"),
+            "object_type": str(target.get("node_type") or target.get("type") or target.get("file_type") or "entity"),
             "score": float(score + float(edge.get("weight") or 0) * 0.1),
             "source_id": str(edge.get("source_id") or source.get("source_id") or ""),
             "source_type": str(source.get("file_type") or "graph"),

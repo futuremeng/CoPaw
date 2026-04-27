@@ -1963,6 +1963,8 @@
       "openKnowledge": "ナレッジページで開く",
       "query": "検索",
       "queryPlaceholder": "質問またはキーワードを入力（例: アーキテクチャ判断）",
+      "entityTypeFilter": "エンティティ種別で絞り込み（既定では全件表示）",
+      "relationTypeFilter": "関係種別で絞り込み（既定では全件表示）",
       "includeGlobal": "グローバルナレッジを含める",
       "reset": "リセット",
       "emptyQuery": "先に検索内容を入力してください。",
@@ -1979,6 +1981,17 @@
       "queryMode": "検索モード",
       "queryModeTemplate": "テンプレート",
       "queryModeCypherMvp": "Cypher（MVP）",
+      "graphEntityType": {
+        "document": "ドキュメント",
+        "entity": "エンティティ",
+        "path": "パス",
+        "version": "バージョン",
+        "snapshot": "スナップショット"
+      },
+      "graphRelationType": {
+        "mentions": "言及",
+        "co_occurs_with": "共起"
+      },
       "sinkJob": "取り込みジョブ",
       "autoSinkAgentMissing": "有効なエージェントがありません",
       "autoSinkEnabled": "自動ナレッジ取り込みを有効化しました",

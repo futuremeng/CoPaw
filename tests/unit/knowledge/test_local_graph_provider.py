@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from copaw.config.config import Config, KnowledgeSourceSpec
-from copaw.knowledge.local_graph_provider import persist_local_graph
+from copaw.knowledge.local_graph_provider import persist_local_graph, query_local_graph
 from copaw.knowledge.manager import KnowledgeManager
 
 
@@ -392,3 +392,94 @@ def test_local_graph_emits_relation_candidates_from_syntax(tmp_path: Path):
         and item.get("object") == "knowledgegraph"
         for item in relation_candidates
     )
+
+
+def test_local_graph_emits_document_level_graphify_before_project_graph(tmp_path: Path):
+    project_root = tmp_path / "project"
+    project_root.mkdir(parents=True, exist_ok=True)
+    (project_root / "chapter.md").write_text(
+        "ToolDispatcher 调用 FileSearch。\n"
+        "FileSearch 处理 KnowledgeGraph。\n"
+        "ToolDispatcher 继续协调 FileSearch 与 KnowledgeGraph。\n",
+        encoding="utf-8",
+    )
+
+    config = Config().knowledge
+    config.index.chunk_size = 16
+    config.index.chunk_overlap = 0
+    source = KnowledgeSourceSpec(
+        id="project-demo-workspace",
+        name="Project Demo",
+        type="directory",
+        location=str(project_root),
+        content="",
+        enabled=True,
+        recursive=True,
+        tags=["project"],
+        summary="",
+    )
+    config.sources.append(source)
+
+    manager = KnowledgeManager(tmp_path)
+    manager.index_source(source, config)
+    graph_path = tmp_path / "knowledge" / "graphify-out" / "graph.json"
+    result = persist_local_graph(manager, config, [source.id], graph_path)
+
+    manifest_path = tmp_path / "knowledge" / "graphify" / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert result["document_graph_count"] == 1
+    assert result["document_count"] == 1
+    assert manifest["document_count"] == 1
+    assert len(manifest["documents"]) == 1
+
+    document_payload_path = tmp_path / "knowledge" / manifest["documents"][0]["payload_relative_path"]
+    document_payload = json.loads(document_payload_path.read_text(encoding="utf-8"))
+
+    assert document_payload["artifact"] == "document_graphify"
+    assert document_payload["document_path"].endswith("chapter.md")
+    assert document_payload["stats"]["chunk_count"] > 1
+    assert len(document_payload["chunk_paths"]) > 1
+    assert document_payload["relation_candidates"]
+
+    project_payload = json.loads(graph_path.read_text(encoding="utf-8"))
+    document_nodes = [
+        node for node in (project_payload.get("nodes") or [])
+        if isinstance(node, dict) and node.get("node_type") == "document"
+    ]
+    assert len(document_nodes) == 1
+
+
+def test_local_graph_all_records_query_returns_full_relation_set(tmp_path: Path):
+    project_root = tmp_path / "project"
+    project_root.mkdir(parents=True, exist_ok=True)
+    (project_root / "chapter.md").write_text(
+        "ToolDispatcher 调用 FileSearch。\n"
+        "FileSearch 处理 KnowledgeGraph。\n"
+        "ToolDispatcher 继续协调 FileSearch 与 KnowledgeGraph。\n",
+        encoding="utf-8",
+    )
+
+    config = Config().knowledge
+    source = KnowledgeSourceSpec(
+        id="project-demo-workspace",
+        name="Project Demo",
+        type="directory",
+        location=str(project_root),
+        content="",
+        enabled=True,
+        recursive=True,
+        tags=["project"],
+        summary="",
+    )
+    config.sources.append(source)
+
+    manager = KnowledgeManager(tmp_path)
+    manager.index_source(source, config)
+    graph_path = tmp_path / "knowledge" / "graphify-out" / "graph.json"
+    result = persist_local_graph(manager, config, [source.id], graph_path)
+
+    records = query_local_graph(graph_path, "*", 1000)
+
+    assert result["relation_count"] > 0
+    assert len(records) == result["relation_count"]
+    assert any(record.get("predicate") == "co_occurs_with" for record in records)

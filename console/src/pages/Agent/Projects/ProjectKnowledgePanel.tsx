@@ -15,6 +15,10 @@ import {
   appendUniqueContextLine,
   buildPathContextLine,
 } from "../Knowledge/pathContext";
+import {
+  formatGraphEntityTypeLabel,
+  formatGraphRelationTypeLabel,
+} from "./projectKnowledgeFilterLabels";
 import styles from "./index.module.less";
 import type { ProjectKnowledgeState } from "./useProjectKnowledgeState";
 
@@ -153,11 +157,41 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
           ]}
           style={{ width: 160 }}
         />
+        <Select
+          mode="multiple"
+          size="small"
+          value={props.knowledgeState.graphEntityTypeFilters}
+          classNames={{ popup: { root: styles.projectKnowledgeSelectDropdown } }}
+          onChange={(value) => props.knowledgeState.setGraphEntityTypeFilters((value as string[]).map(String))}
+          options={props.knowledgeState.graphEntityTypeOptions.map((item) => ({
+            label: formatGraphEntityTypeLabel(item, (key, defaultValue) => t(key, defaultValue)),
+            value: item,
+          }))}
+          placeholder={t("projects.knowledge.entityTypeFilter", "Entity type filter (shows all by default)")}
+          allowClear
+          maxTagCount="responsive"
+          style={{ minWidth: 180 }}
+        />
+        <Select
+          mode="multiple"
+          size="small"
+          value={props.knowledgeState.graphRelationTypeFilters}
+          classNames={{ popup: { root: styles.projectKnowledgeSelectDropdown } }}
+          onChange={(value) => props.knowledgeState.setGraphRelationTypeFilters((value as string[]).map(String))}
+          options={props.knowledgeState.graphRelationTypeOptions.map((item) => ({
+            label: formatGraphRelationTypeLabel(item, (key, defaultValue) => t(key, defaultValue)),
+            value: item,
+          }))}
+          placeholder={t("projects.knowledge.relationTypeFilter", "Relation type filter (shows all by default)")}
+          allowClear
+          maxTagCount="responsive"
+          style={{ minWidth: 220 }}
+        />
         <Input.Search
           value={props.knowledgeState.graphQueryText}
           onChange={(event) => props.knowledgeState.setGraphQueryText(event.target.value)}
           onSearch={(value) => {
-            if (!value.trim()) {
+            if (!value.trim() && props.knowledgeState.graphQueryMode === "cypher") {
               message.warning(t("projects.knowledge.emptyQuery"));
               return;
             }
@@ -200,9 +234,10 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
                 onTopKCommit={(value) => {
                   const next = Math.max(20, Math.min(maxByEntity, Math.round(value)));
                   props.knowledgeState.setGraphQueryTopK(next);
-                  if (props.knowledgeState.graphQueryText.trim()) {
-                    void props.knowledgeState.runGraphQuery(undefined, undefined, next);
+                  if (props.knowledgeState.graphQueryMode === "cypher" && !props.knowledgeState.graphQueryText.trim()) {
+                    return;
                   }
+                  void props.knowledgeState.runGraphQuery(undefined, undefined, next);
                 }}
                 activeNodeId={props.knowledgeState.activeGraphNodeId}
                 onActiveNodeChange={props.knowledgeState.setActiveGraphNodeId}

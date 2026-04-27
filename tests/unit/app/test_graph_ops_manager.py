@@ -327,6 +327,9 @@ def test_local_memify_builds_queryable_graph(tmp_path):
     assert memify_result["status"] == "succeeded"
     assert memify_result["engine"] == "local_graph"
     assert memify_result["relation_count"] > 0
+    assert memify_result["document_graph_count"] == 1
+    assert Path(memify_result["document_graph_manifest_path"]).exists()
+    assert Path(memify_result["document_graph_dir"]).is_dir()
 
     result = graph_ops.graph_query(
         config=knowledge_config,

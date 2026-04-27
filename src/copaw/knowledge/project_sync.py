@@ -325,6 +325,47 @@ class ProjectKnowledgeSyncManager:
         except Exception:
             return resolved.as_posix()
 
+    def _resolve_document_graph_artifacts(
+        self,
+        memify_result: dict[str, Any],
+    ) -> tuple[str, str, int]:
+        manifest_path = str(memify_result.get("document_graph_manifest_path") or "").strip()
+        document_graph_dir = str(memify_result.get("document_graph_dir") or "").strip()
+        document_graph_count = _safe_int(memify_result.get("document_graph_count"))
+
+        graph_path_text = str(memify_result.get("graph_path") or "").strip()
+        graph_path = Path(graph_path_text) if graph_path_text else self._graph_ops.local_graph_path
+        graphify_dir = graph_path.parent.parent / "graphify"
+        inferred_manifest_path = graphify_dir / "manifest.json"
+
+        if not document_graph_dir and graphify_dir.exists():
+            document_graph_dir = str(graphify_dir)
+        if not manifest_path and inferred_manifest_path.exists():
+            manifest_path = str(inferred_manifest_path)
+
+        if document_graph_count > 0:
+            return manifest_path, document_graph_dir, document_graph_count
+
+        manifest_candidate = Path(manifest_path) if manifest_path else inferred_manifest_path
+        if not manifest_candidate.exists():
+            return manifest_path, document_graph_dir, document_graph_count
+
+        try:
+            manifest_payload = json.loads(manifest_candidate.read_text(encoding="utf-8"))
+        except Exception:
+            return manifest_path, document_graph_dir, document_graph_count
+
+        if not isinstance(manifest_payload, dict):
+            return manifest_path, document_graph_dir, document_graph_count
+
+        derived_count = max(
+            _safe_int(manifest_payload.get("document_count")),
+            len(manifest_payload.get("documents") or [])
+            if isinstance(manifest_payload.get("documents"), list)
+            else 0,
+        )
+        return manifest_path, document_graph_dir, derived_count
+
     def _build_mode_outputs(self, state: dict[str, Any]) -> dict[str, Any]:
         last_result = state.get("last_result") or {}
         if not isinstance(last_result, dict):
@@ -341,6 +382,11 @@ class ProjectKnowledgeSyncManager:
             quality_loop_result = {}
         if not isinstance(workflow_run, dict):
             workflow_run = {}
+        (
+            document_graph_manifest_path,
+            document_graph_dir_path,
+            document_graph_count,
+        ) = self._resolve_document_graph_artifacts(memify_result)
         workflow_mode = str(
             workflow_run.get("mode") or state.get("latest_requested_mode") or ""
         ).strip().lower()
@@ -369,6 +415,11 @@ class ProjectKnowledgeSyncManager:
 
         nlp_artifacts: list[dict[str, str]] = []
         for kind, label, raw_path in [
+            (
+                "document_graph_manifest",
+                "Document graphify manifest",
+                document_graph_manifest_path,
+            ),
             ("graph", "Raw knowledge graph", memify_result.get("graph_path") or self._graph_ops.local_graph_path),
             ("enriched_graph", "Enriched knowledge graph", memify_result.get("enriched_graph_path") or self._graph_ops.enriched_graph_path),
             (
@@ -388,6 +439,16 @@ class ProjectKnowledgeSyncManager:
                         "path": rel_path,
                     }
                 )
+
+        document_graph_dir = self._relative_workspace_path(document_graph_dir_path)
+        if document_graph_dir:
+            nlp_artifacts.append(
+                {
+                    "kind": "document_graph_dir",
+                    "label": "Document graphify payloads",
+                    "path": document_graph_dir,
+                }
+            )
 
         agentic_artifacts: list[dict[str, str]] = []
         workflow_artifacts = workflow_run.get("artifacts")
@@ -417,6 +478,7 @@ class ProjectKnowledgeSyncManager:
                 "mode": "nlp",
                 "source": "graph-artifacts",
                 "summary_lines": [
+                    f"Document graphify payloads: {document_graph_count}",
                     f"Entities: {_safe_int(memify_result.get('node_count'))}",
                     f"Relations: {_safe_int(memify_result.get('relation_count'))}",
                 ],

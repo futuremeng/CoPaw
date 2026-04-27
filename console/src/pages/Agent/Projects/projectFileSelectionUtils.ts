@@ -1,7 +1,48 @@
 import { isBuiltInProjectFile } from "./builtInFiles";
+import type { AgentProjectFileTreeNode } from "../../../api/types/agents";
 
 export function isPreviewablePath(path: string): boolean {
   return Boolean(path);
+}
+
+export function pickPreviewablePathFromTreeNodes(
+  nodes: AgentProjectFileTreeNode[],
+): string {
+  return nodes.find((item) => !item.is_directory && isPreviewablePath(item.path))?.path || "";
+}
+
+export function resolveArtifactSelectionPath(
+  path: string,
+  nodes?: AgentProjectFileTreeNode[] | null,
+): {
+  selectedPath: string;
+  expandedDirectoryPath: string | null;
+} {
+  if (!path) {
+    return {
+      selectedPath: "",
+      expandedDirectoryPath: null,
+    };
+  }
+
+  if (Array.isArray(nodes)) {
+    const previewableChildPath = pickPreviewablePathFromTreeNodes(nodes);
+    if (previewableChildPath) {
+      return {
+        selectedPath: previewableChildPath,
+        expandedDirectoryPath: path,
+      };
+    }
+    return {
+      selectedPath: "",
+      expandedDirectoryPath: path,
+    };
+  }
+
+  return {
+    selectedPath: path,
+    expandedDirectoryPath: null,
+  };
 }
 
 export function isIgnoredProjectFile(path: string): boolean {

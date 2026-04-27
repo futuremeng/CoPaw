@@ -1,6 +1,7 @@
 import { Alert, Button, Empty, Input, Select, Typography } from "antd";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { formatGraphRelationTypeLabel } from "./projectKnowledgeFilterLabels";
 import styles from "./index.module.less";
 import type { ProjectKnowledgeState } from "./useProjectKnowledgeState";
 
@@ -73,7 +74,7 @@ export default function ProjectKnowledgeRelationsPanel(
             size="small"
             onClick={() => {
               void props.knowledgeState.runGraphQuery(
-                props.knowledgeState.graphQueryText || props.knowledgeState.suggestedQuery,
+                props.knowledgeState.graphQueryText,
               );
             }}
             loading={props.knowledgeState.graphLoading}
@@ -127,8 +128,11 @@ export default function ProjectKnowledgeRelationsPanel(
           allowClear
           size="small"
           classNames={{ popup: { root: styles.projectKnowledgeSelectDropdown } }}
-          placeholder={t("projects.knowledge.relationTypeFilter", "Filter by relation type")}
-          options={predicateOptions.map((item) => ({ label: item, value: item }))}
+          placeholder={t("projects.knowledge.relationTypeFilter", "Relation type filter (shows all by default)")}
+          options={predicateOptions.map((item) => ({
+            label: formatGraphRelationTypeLabel(item, (key, defaultValue) => t(key, defaultValue)),
+            value: item,
+          }))}
           onChange={(value) => setPredicateFilter(String(value || ""))}
           style={{ width: 220 }}
         />

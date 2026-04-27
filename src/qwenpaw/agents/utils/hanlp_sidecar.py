@@ -301,6 +301,47 @@ def _runtime() -> HanLPSidecarRuntime:
     return HanLPSidecarRuntime()
 
 
+def _task_specs(config) -> dict[str, object]:
+    task_matrix = getattr(getattr(config.knowledge, "hanlp", None), "task_matrix", None)
+    tasks = getattr(task_matrix, "tasks", None)
+    if not isinstance(tasks, dict):
+        return {}
+    return {str(task_key): task_cfg for task_key, task_cfg in tasks.items() if str(task_key).strip()}
+
+
+def _build_task_status(runtime: HanLPSidecarRuntime, config) -> dict[str, dict]:
+    task_states: dict[str, dict] = {}
+    for task_key, task_cfg in _task_specs(config).items():
+        enabled = bool(getattr(task_cfg, "enabled", True))
+        task_name = str(getattr(task_cfg, "task_name", task_key) or task_key).strip()
+        task_entry = {
+            "enabled": enabled,
+            "task_name": task_name,
+            "artifact_key": str(getattr(task_cfg, "artifact_key", task_key) or task_key).strip(),
+            "eval_role": str(getattr(task_cfg, "eval_role", "compare") or "compare").strip(),
+            "model_id": str(getattr(task_cfg, "model_id", "") or "").strip(),
+        }
+        if not enabled:
+            task_entry.update(
+                {
+                    "status": "disabled",
+                    "reason_code": "HANLP2_TASK_DISABLED",
+                    "reason": "HanLP task is disabled in the task matrix.",
+                }
+            )
+        else:
+            state = runtime.task_status(task_key, config.knowledge)
+            task_entry.update(
+                {
+                    "status": state.get("status") or "unavailable",
+                    "reason_code": state.get("reason_code") or "HANLP2_TASK_LOAD_FAILED",
+                    "reason": state.get("reason") or "HanLP task is unavailable.",
+                }
+            )
+        task_states[task_key] = task_entry
+    return task_states
+
+
 def _invalidate_cache() -> None:
     global _STATUS_CACHE  # noqa: PLW0603
     global _STATUS_CACHE_TIME  # noqa: PLW0603
@@ -313,6 +354,7 @@ def _build_status(config) -> dict:
     runtime = _runtime()
     probe_state = runtime.probe(config.knowledge)
     model_state = runtime.model_status(config.knowledge)
+    task_states = _build_task_status(runtime, config)
     python_executable = str(config.knowledge.hanlp.python_executable or "").strip()
     managed_python = str(_managed_python_path(_managed_venv()))
     uv_executable = _find_uv_executable()
@@ -334,6 +376,7 @@ def _build_status(config) -> dict:
             "reason": model_state.get("reason") or "HanLP2 tokenizer model is unavailable.",
             "model_id": str(config.knowledge.hanlp.model_id or "").strip(),
         },
+        "tasks": task_states,
     }
 
 
@@ -459,6 +502,32 @@ def ensure_hanlp_model() -> dict:
     status_before = _build_status(config)
     runtime = _runtime()
     model_state = runtime.ensure_model(config.knowledge)
+    task_results: dict[str, dict] = {}
+    all_enabled_tasks_ready = True
+    for task_key, task_cfg in _task_specs(config).items():
+        if not bool(getattr(task_cfg, "enabled", True)):
+            task_results[task_key] = {
+                "status": "disabled",
+                "reason_code": "HANLP2_TASK_DISABLED",
+                "reason": "HanLP task is disabled in the task matrix.",
+                "task_name": str(getattr(task_cfg, "task_name", task_key) or task_key).strip(),
+                "artifact_key": str(getattr(task_cfg, "artifact_key", task_key) or task_key).strip(),
+                "eval_role": str(getattr(task_cfg, "eval_role", "compare") or "compare").strip(),
+                "model_id": str(getattr(task_cfg, "model_id", "") or "").strip(),
+            }
+            continue
+        task_state = runtime.task_status(task_key, config.knowledge)
+        task_ready = task_state.get("status") == "ready"
+        all_enabled_tasks_ready = all_enabled_tasks_ready and task_ready
+        task_results[task_key] = {
+            "status": task_state.get("status") or "unavailable",
+            "reason_code": task_state.get("reason_code") or "HANLP2_TASK_LOAD_FAILED",
+            "reason": task_state.get("reason") or "HanLP task is unavailable.",
+            "task_name": str(getattr(task_cfg, "task_name", task_key) or task_key).strip(),
+            "artifact_key": str(getattr(task_cfg, "artifact_key", task_key) or task_key).strip(),
+            "eval_role": str(getattr(task_cfg, "eval_role", "compare") or "compare").strip(),
+            "model_id": str(getattr(task_cfg, "model_id", "") or "").strip(),
+        }
     _invalidate_cache()
     status_after = get_hanlp_sidecar_status(force_refresh=True)
     manual_steps: list[str] = []
@@ -466,8 +535,12 @@ def ensure_hanlp_model() -> dict:
         manual_steps.append(
             "Verify network access or pre-populate HANLP_HOME, then retry model download.",
         )
+    if not all_enabled_tasks_ready:
+        manual_steps.append(
+            "Verify the configured HanLP task matrix models are available in HANLP_HOME, then retry task verification.",
+        )
     return {
-        "success": model_state.get("status") == "ready",
+        "success": model_state.get("status") == "ready" and all_enabled_tasks_ready,
         "status_before": status_before,
         "status_after": status_after,
         "model_result": {
@@ -476,5 +549,6 @@ def ensure_hanlp_model() -> dict:
             "reason": model_state.get("reason") or "HanLP2 tokenizer model is unavailable.",
             "model_id": str(config.knowledge.hanlp.model_id or "").strip(),
         },
+        "task_results": task_results,
         "manual_steps": manual_steps,
     }

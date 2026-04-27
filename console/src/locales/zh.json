@@ -2006,6 +2006,8 @@
       "openKnowledge": "前往知识页查看",
       "query": "查询",
       "queryPlaceholder": "请输入问题或关键词，例如：架构决策",
+      "entityTypeFilter": "实体类型筛选（默认不过滤）",
+      "relationTypeFilter": "关系类型筛选（默认不过滤）",
       "includeGlobal": "包含全局知识",
       "reset": "重置",
       "emptyQuery": "请先输入查询内容。",
@@ -2022,6 +2024,17 @@
       "queryMode": "查询模式",
       "queryModeTemplate": "模板",
       "queryModeCypherMvp": "Cypher（MVP）",
+      "graphEntityType": {
+        "document": "文档",
+        "entity": "实体",
+        "path": "路径",
+        "version": "版本",
+        "snapshot": "快照"
+      },
+      "graphRelationType": {
+        "mentions": "提及",
+        "co_occurs_with": "共现"
+      },
       "sinkJob": "沉淀任务",
       "autoSinkAgentMissing": "当前没有可用智能体",
       "autoSinkEnabled": "已开启自动知识沉淀",

@@ -328,8 +328,10 @@ function buildKnowledgeState(): ProjectKnowledgeState {
       records: [
         {
           subject: "Agent",
+          subject_type: "entity",
           predicate: "uses",
           object: "Workflow",
+          object_type: "entity",
           score: 0.9,
           source_id: "project-project-abc-workspace",
           source_type: "directory",
@@ -341,11 +343,19 @@ function buildKnowledgeState(): ProjectKnowledgeState {
       provenance: {},
       warnings: [],
     },
+    graphRelationTypeFilters: [],
+    setGraphRelationTypeFilters: vi.fn(),
+    graphEntityTypeFilters: [],
+    setGraphEntityTypeFilters: vi.fn(),
+    graphRelationTypeOptions: ["uses"],
+    graphEntityTypeOptions: ["entity"],
     relationRecords: [
       {
         subject: "Agent",
+        subject_type: "entity",
         predicate: "uses",
         object: "Workflow",
+        object_type: "entity",
         score: 0.9,
         source_id: "project-project-abc-workspace",
         source_type: "directory",
@@ -541,21 +551,91 @@ describe("project knowledge supporting panels", () => {
     expect(screen.getByText("等待形成独立增强结果")).not.toBeNull();
   });
 
+  it("keeps the raw graph as the primary L2 artifact when document graphify artifacts exist", () => {
+    const knowledgeState = buildKnowledgeState();
+    knowledgeState.modeOutputs.nlp.artifacts = [
+      {
+        kind: "document_graph_manifest",
+        label: "Document graphify manifest",
+        path: "projects/project-abc/.knowledge/graphify/manifest.json",
+      },
+      {
+        kind: "document_graph_dir",
+        label: "Document graphify payloads",
+        path: "projects/project-abc/.knowledge/graphify",
+      },
+      {
+        kind: "graph",
+        label: "Raw knowledge graph",
+        path: "projects/project-abc/.knowledge/graphify-out/graph.json",
+      },
+    ];
+
+    render(<ProjectKnowledgeProcessingPanel knowledgeState={knowledgeState} />);
+
+    expect(screen.getAllByText("Raw knowledge graph").length).toBeGreaterThan(0);
+    expect(screen.getByText("Document graphify manifest")).not.toBeNull();
+  });
+
   it("renders output records through the new outputs panel", async () => {
     const user = userEvent.setup();
     const onRunSuggestedQuery = vi.fn();
+    const onSelectArtifactPath = vi.fn();
+    const knowledgeState = buildKnowledgeState();
+    knowledgeState.modeOutputs.nlp.summaryLines = [
+      "Document graphify payloads: 2",
+      "Entities: 2",
+      "Relations: 12",
+    ];
+    knowledgeState.modeOutputs.nlp.artifacts = [
+      {
+        kind: "document_graph_manifest",
+        label: "Document graphify manifest",
+        path: "projects/project-abc/.knowledge/graphify/manifest.json",
+      },
+      {
+        kind: "document_graph_dir",
+        label: "Document graphify payloads",
+        path: "projects/project-abc/.knowledge/graphify",
+      },
+      {
+        kind: "graph",
+        label: "Raw knowledge graph",
+        path: "projects/project-abc/.knowledge/graphify-out/graph.json",
+      },
+    ];
 
     render(
       <ProjectKnowledgeOutputsPanel
-        knowledgeState={buildKnowledgeState()}
+        knowledgeState={knowledgeState}
         onRunSuggestedQuery={onRunSuggestedQuery}
+        onSelectArtifactPath={onSelectArtifactPath}
       />,
     );
 
     expect(screen.getByText("Raw knowledge graph")).not.toBeNull();
-    expect(screen.getByText("projects/project-abc/.knowledge/graphify-out/graph.json")).not.toBeNull();
+    expect(screen.getByText("Document graphify manifest")).not.toBeNull();
+    expect(screen.getByText("文档级 graphify 中间层已生成")).not.toBeNull();
+    expect(screen.getAllByText(/Document graphify payloads: 2/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Manifest")).not.toBeNull();
+    expect(screen.getByText("Payload Directory")).not.toBeNull();
+    expect(screen.getByText("Actions")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Preview manifest" })).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Open payload directory" })).not.toBeNull();
+    expect(screen.getAllByRole("button", { name: "projects/project-abc/.knowledge/graphify/manifest.json" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: "projects/project-abc/.knowledge/graphify" }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "projects/project-abc/.knowledge/graphify-out/graph.json" })).not.toBeNull();
     expect(screen.getByText("Agent")).not.toBeNull();
     expect(screen.getByText("Workflow")).not.toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Preview manifest" }));
+    expect(onSelectArtifactPath).toHaveBeenCalledWith("projects/project-abc/.knowledge/graphify/manifest.json");
+
+    await user.click(screen.getByRole("button", { name: "Open payload directory" }));
+    expect(onSelectArtifactPath).toHaveBeenCalledWith("projects/project-abc/.knowledge/graphify");
+
+    await user.click(screen.getByRole("button", { name: "projects/project-abc/.knowledge/graphify-out/graph.json" }));
+    expect(onSelectArtifactPath).toHaveBeenCalledWith("projects/project-abc/.knowledge/graphify-out/graph.json");
 
     await user.type(
       screen.getByPlaceholderText("Search entities, relations, or document paths"),

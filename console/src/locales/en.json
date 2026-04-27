@@ -2161,6 +2161,8 @@
       "openKnowledge": "Open in Knowledge",
       "query": "Query",
       "queryPlaceholder": "Enter a question or keyword, for example: architecture decision",
+      "entityTypeFilter": "Entity type filter (shows all by default)",
+      "relationTypeFilter": "Relation type filter (shows all by default)",
       "includeGlobal": "Include global knowledge",
       "reset": "Reset",
       "emptyQuery": "Please enter a query first.",
@@ -2177,6 +2179,17 @@
       "queryMode": "Query mode",
       "queryModeTemplate": "Template",
       "queryModeCypherMvp": "Cypher (MVP)",
+      "graphEntityType": {
+        "document": "Document",
+        "entity": "Entity",
+        "path": "Path",
+        "version": "Version",
+        "snapshot": "Snapshot"
+      },
+      "graphRelationType": {
+        "mentions": "Mentions",
+        "co_occurs_with": "Co-occurs with"
+      },
       "sinkJob": "Sink job",
       "autoSinkAgentMissing": "No active agent",
       "autoSinkEnabled": "Auto knowledge sink enabled",

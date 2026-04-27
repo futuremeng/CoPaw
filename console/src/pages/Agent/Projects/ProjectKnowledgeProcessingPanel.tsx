@@ -10,6 +10,7 @@ import {
   getProjectKnowledgeModeLabel,
   getProjectKnowledgeModeRouteHint,
   getProjectKnowledgeSemanticSummary,
+  prioritizeProjectKnowledgeArtifacts,
 } from "./projectKnowledgeSyncUi";
 
 interface ProjectKnowledgeProcessingPanelProps {
@@ -295,6 +296,7 @@ export default function ProjectKnowledgeProcessingPanel(
                 : null;
           const isL3 = mode.mode === "agentic";
           const output = props.knowledgeState.modeOutputs[mode.mode];
+          const prioritizedArtifacts = prioritizeProjectKnowledgeArtifacts(output?.artifacts || []);
           const highlightValue = isL3
             ? mode.qualityScore != null
               ? `${Math.round(mode.qualityScore * 100)}%`
@@ -387,7 +389,7 @@ export default function ProjectKnowledgeProcessingPanel(
                           relations: relationDelta,
                         })
                         : t("projects.knowledge.processing.outputPendingLong", "等待形成独立增强结果")
-                      : output?.artifacts?.[0]?.label || t("projects.knowledge.processing.entityGraphArtifact", "实体关系图谱")}
+                      : prioritizedArtifacts[0]?.label || t("projects.knowledge.processing.entityGraphArtifact", "实体关系图谱")}
                   </Typography.Text>
                 </div>
               </div>
@@ -396,9 +398,9 @@ export default function ProjectKnowledgeProcessingPanel(
                 {mode.summary}
               </Typography.Paragraph>
 
-              {output?.artifacts?.length ? (
+              {prioritizedArtifacts.length ? (
                 <div className={styles.projectKnowledgeProcessingArtifacts}>
-                  {output.artifacts.slice(0, 2).map((artifact) => (
+                  {prioritizedArtifacts.slice(0, 2).map((artifact) => (
                     <Tag key={`${mode.mode}-${artifact.path}`} bordered={false}>
                       {artifact.label}
                     </Tag>

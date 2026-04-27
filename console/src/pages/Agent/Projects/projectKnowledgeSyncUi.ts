@@ -6,7 +6,68 @@ import type { TFunction } from "i18next";
 
 export type ProjectKnowledgeProcessingMode = "fast" | "nlp" | "agentic";
 
+export interface ProjectKnowledgeArtifactLike {
+  kind?: string | null;
+  label?: string | null;
+  path?: string | null;
+}
+
 type Translate = TFunction;
+
+function getProjectKnowledgeArtifactPriority(artifact: ProjectKnowledgeArtifactLike): number {
+  const kind = String(artifact.kind || "").trim();
+  const path = String(artifact.path || "").trim().toLowerCase();
+
+  if (kind === "graph") {
+    return 0;
+  }
+  if (kind === "enriched_graph") {
+    return 1;
+  }
+  if (kind === "workflow_artifact" && path.endsWith("graph.enriched.json")) {
+    return 2;
+  }
+  if (kind === "quality_report" || path.includes("quality-report")) {
+    return 3;
+  }
+  if (kind === "document_graph_manifest") {
+    return 4;
+  }
+  if (kind === "document_graph_dir") {
+    return 5;
+  }
+  if (kind === "workflow_artifact") {
+    return 6;
+  }
+  if (kind === "preview") {
+    return 7;
+  }
+  if (kind === "index") {
+    return 8;
+  }
+  return 99;
+}
+
+export function prioritizeProjectKnowledgeArtifacts<T extends ProjectKnowledgeArtifactLike>(
+  artifacts: T[] | null | undefined,
+): T[] {
+  if (!Array.isArray(artifacts) || artifacts.length <= 1) {
+    return Array.isArray(artifacts) ? [...artifacts] : [];
+  }
+
+  return artifacts
+    .map((artifact, index) => ({ artifact, index }))
+    .sort((left, right) => {
+      const priorityDelta =
+        getProjectKnowledgeArtifactPriority(left.artifact)
+        - getProjectKnowledgeArtifactPriority(right.artifact);
+      if (priorityDelta !== 0) {
+        return priorityDelta;
+      }
+      return left.index - right.index;
+    })
+    .map(({ artifact }) => artifact);
+}
 
 export function getProjectKnowledgeModeLevel(
   mode: ProjectKnowledgeProcessingMode,

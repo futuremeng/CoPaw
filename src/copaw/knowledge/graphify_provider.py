@@ -34,6 +34,9 @@ import httpx
 from ..config.config import GraphifyConfig
 
 
+_ALL_GRAPH_QUERY_TOKENS = {"*", "__all__", "all"}
+
+
 # ---------------------------------------------------------------------------
 # Custom exception types
 # ---------------------------------------------------------------------------
@@ -179,8 +182,10 @@ def _subgraph_to_records(
         records.append(
             {
                 "subject": label,
+                "subject_type": str(d.get("node_type") or d.get("type") or d.get("file_type") or "entity"),
                 "predicate": "graph_node",
                 "object": snippet,
+                "object_type": "entity",
                 "score": float(G.degree(nid)),
                 "source_id": source_file,
                 "source_type": d.get("file_type") or "graph",
@@ -588,6 +593,14 @@ def graphify_query(
         )
 
     G = _load_graph_json(config.graph_path)
+
+    if str(query_text or "").strip().lower() in _ALL_GRAPH_QUERY_TOKENS:
+        return _subgraph_to_records(
+            G,
+            set(G.nodes),
+            list(G.edges),
+            top_k=max(1, int(top_k)),
+        )
 
     terms = [t.lower() for t in query_text.split() if len(t) > 2]
     if not terms:

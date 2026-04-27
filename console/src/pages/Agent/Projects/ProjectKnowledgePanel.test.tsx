@@ -3,6 +3,10 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import ProjectKnowledgePanel from "./ProjectKnowledgePanel";
+import {
+  formatGraphEntityTypeLabel,
+  formatGraphRelationTypeLabel,
+} from "./projectKnowledgeFilterLabels";
 import { buildModeState } from "./projectKnowledgeTestUtils";
 import type { ProjectKnowledgeState } from "./useProjectKnowledgeState";
 
@@ -173,6 +177,12 @@ function buildKnowledgeState(projectId: string): ProjectKnowledgeState {
     graphLoading: false,
     graphError: "",
     graphResult: null,
+    graphRelationTypeFilters: [],
+    setGraphRelationTypeFilters: vi.fn(),
+    graphEntityTypeFilters: [],
+    setGraphEntityTypeFilters: vi.fn(),
+    graphRelationTypeOptions: [],
+    graphEntityTypeOptions: [],
     relationRecords: [],
     relationKeywordSeed: "",
     setRelationKeywordSeed: vi.fn(),
@@ -250,6 +260,15 @@ const testGraphComponents = {
 describe("ProjectKnowledgePanel interactions", () => {
   const projectId = "project-abc";
 
+  it("formats graph filter labels into readable text", () => {
+    const t = (_key: string, fallback: string) => fallback;
+
+    expect(formatGraphEntityTypeLabel("entity", t)).toBe("Entity");
+    expect(formatGraphEntityTypeLabel("document", t)).toBe("Document");
+    expect(formatGraphRelationTypeLabel("co_occurs_with", t)).toBe("Co-occurs with");
+    expect(formatGraphRelationTypeLabel("custom_relation_name", t)).toBe("Custom Relation Name");
+  });
+
   it("dispatches query mode changes to shared knowledge state", async () => {
     const user = userEvent.setup();
     const knowledgeState = buildKnowledgeState(projectId);
@@ -287,6 +306,28 @@ describe("ProjectKnowledgePanel interactions", () => {
         "MATCH (node)-[:RELATES_TO]->(tool) RETURN node LIMIT 5",
       );
     });
+  });
+
+  it("keeps entity and relation type filters opt-in by default", () => {
+    const knowledgeState = buildKnowledgeState(projectId);
+    knowledgeState.graphEntityTypeOptions = ["entity", "document", "path"];
+    knowledgeState.graphRelationTypeOptions = ["mentions", "located_in", "path_contains"];
+
+    render(
+      <ProjectKnowledgePanel
+        projectId={projectId}
+        projectName="Project ABC"
+        knowledgeState={knowledgeState}
+        graphComponents={testGraphComponents}
+      />,
+    );
+
+    expect(screen.getByText("Entity type filter (shows all by default)")).not.toBeNull();
+    expect(screen.getByText("Relation type filter (shows all by default)")).not.toBeNull();
+    expect(knowledgeState.graphEntityTypeFilters).toEqual([]);
+    expect(knowledgeState.graphRelationTypeFilters).toEqual([]);
+    expect(knowledgeState.setGraphEntityTypeFilters).not.toHaveBeenCalled();
+    expect(knowledgeState.setGraphRelationTypeFilters).not.toHaveBeenCalled();
   });
 
   it("keeps signals and health actions out of explore", () => {

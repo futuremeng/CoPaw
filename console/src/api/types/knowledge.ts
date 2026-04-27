@@ -346,8 +346,10 @@ export interface KnowledgeClearResponse {
  */
 export interface GraphQueryRecord {
   subject: string;
+  subject_type?: string;
   predicate: string;
   object: string;
+  object_type?: string;
   score: number;
   source_id: string;
   source_type: string;

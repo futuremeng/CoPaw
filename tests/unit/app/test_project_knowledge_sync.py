@@ -414,6 +414,105 @@ def test_processing_mode_overrides_take_precedence_during_active_run(tmp_path: P
     assert hydrated["global_metrics"]["document_count"] == 3
 
 
+def test_project_sync_state_exposes_document_graphify_artifacts(tmp_path: Path):
+    project_id = "project-h2"
+    manager = ProjectKnowledgeSyncManager(
+        tmp_path,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+
+    graphify_dir = tmp_path / "projects" / project_id / ".knowledge" / "graphify"
+    graphify_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = graphify_dir / "manifest.json"
+    manifest_path.write_text("{}", encoding="utf-8")
+
+    graph_path = tmp_path / "projects" / project_id / ".knowledge" / "graphify-out" / "graph.json"
+    graph_path.parent.mkdir(parents=True, exist_ok=True)
+    graph_path.write_text("{}", encoding="utf-8")
+
+    state = manager.get_state(project_id)
+    state.update(
+        {
+            "last_result": {
+                "index": {"document_count": 2, "chunk_count": 5},
+                "memify": {
+                    "document_count": 2,
+                    "node_count": 7,
+                    "relation_count": 11,
+                    "graph_path": str(graph_path),
+                    "document_graph_dir": str(graphify_dir),
+                    "document_graph_manifest_path": str(manifest_path),
+                    "document_graph_count": 2,
+                },
+            },
+        }
+    )
+    manager._save_state(state)
+
+    hydrated = manager.get_state(project_id)
+    nlp_output = hydrated["mode_outputs"]["nlp"]
+    artifact_kinds = [item["kind"] for item in nlp_output["artifacts"]]
+
+    assert "document_graph_manifest" in artifact_kinds
+    assert "document_graph_dir" in artifact_kinds
+    assert "Document graphify payloads: 2" in nlp_output["summary_lines"]
+
+
+def test_project_sync_state_recovers_document_graphify_artifacts_from_graph_path(tmp_path: Path):
+    project_id = "project-h3"
+    manager = ProjectKnowledgeSyncManager(
+        tmp_path,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+
+    graphify_dir = tmp_path / "projects" / project_id / ".knowledge" / "graphify"
+    graphify_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = graphify_dir / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "artifact": "graphify_manifest",
+                "document_count": 1,
+                "documents": [
+                    {
+                        "document_path": str(tmp_path / "projects" / project_id / "chapter.md"),
+                        "payload_relative_path": "graphify/chapter.graphify.json",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    graph_path = tmp_path / "projects" / project_id / ".knowledge" / "graphify-out" / "graph.json"
+    graph_path.parent.mkdir(parents=True, exist_ok=True)
+    graph_path.write_text("{}", encoding="utf-8")
+
+    state = manager.get_state(project_id)
+    state.update(
+        {
+            "last_result": {
+                "index": {"document_count": 1, "chunk_count": 5},
+                "memify": {
+                    "document_count": 1,
+                    "node_count": 7,
+                    "relation_count": 11,
+                    "graph_path": str(graph_path),
+                },
+            },
+        }
+    )
+    manager._save_state(state)
+
+    hydrated = manager.get_state(project_id)
+    nlp_output = hydrated["mode_outputs"]["nlp"]
+    artifact_kinds = [item["kind"] for item in nlp_output["artifacts"]]
+
+    assert "document_graph_manifest" in artifact_kinds
+    assert "document_graph_dir" in artifact_kinds
+    assert "Document graphify payloads: 1" in nlp_output["summary_lines"]
+
+
 def test_project_sync_state_exposes_idle_semantic_engine_before_source_ready(tmp_path: Path):
     project_id = "project-i"
     manager = ProjectKnowledgeSyncManager(

@@ -1624,6 +1624,9 @@ Agent gate review is mandatory before automatic continuation.
             response.update(
                 {
                     "graph_path": str(self.local_graph_path),
+                    "document_graph_dir": str(memify_result.get("document_graph_dir") or ""),
+                    "document_graph_manifest_path": str(memify_result.get("document_graph_manifest_path") or ""),
+                    "document_graph_count": int(memify_result.get("document_graph_count") or 0),
                     "relation_count": int(memify_result.get("relation_count") or 0),
                     "node_count": int(memify_result.get("node_count") or 0),
                     "document_count": int(memify_result.get("document_count") or 0),
