@@ -346,9 +346,17 @@ class KnowledgeManager:
         cor_cluster_count = 0
         cor_replacement_count = 0
         cor_effective_chunk_count = 0
+        cor_reason_counts: dict[str, int] = {}
+        cor_reason_messages: dict[str, str] = {}
         for chunk in payload.get("chunks") or []:
             if not isinstance(chunk, dict):
                 continue
+            reason_code = str(chunk.get("cor_reason_code") or "").strip()
+            reason = str(chunk.get("cor_reason") or "").strip()
+            if reason_code:
+                cor_reason_counts[reason_code] = cor_reason_counts.get(reason_code, 0) + 1
+                if reason and reason_code not in cor_reason_messages:
+                    cor_reason_messages[reason_code] = reason
             if str(chunk.get("cor_status") or "").strip() != "ready":
                 continue
             cor_ready_chunk_count += 1
@@ -359,10 +367,21 @@ class KnowledgeManager:
             if chunk_replacement_count > 0:
                 cor_effective_chunk_count += 1
 
+        dominant_cor_reason_code = ""
+        dominant_cor_reason = ""
+        if cor_reason_counts:
+            dominant_cor_reason_code = max(
+                cor_reason_counts.items(),
+                key=lambda item: (item[1], item[0]),
+            )[0]
+            dominant_cor_reason = cor_reason_messages.get(dominant_cor_reason_code, "")
+
         payload["cor_ready_chunk_count"] = cor_ready_chunk_count
         payload["cor_cluster_count"] = cor_cluster_count
         payload["cor_replacement_count"] = cor_replacement_count
         payload["cor_effective_chunk_count"] = cor_effective_chunk_count
+        payload["cor_reason_code"] = dominant_cor_reason_code
+        payload["cor_reason"] = dominant_cor_reason
         payload["cor_ready_chunk_ratio"] = (
             float(cor_ready_chunk_count / len(chunks)) if len(chunks) > 0 else 0.0
         )
@@ -390,6 +409,8 @@ class KnowledgeManager:
             "cor_cluster_count": cor_cluster_count,
             "cor_replacement_count": cor_replacement_count,
             "cor_effective_chunk_count": cor_effective_chunk_count,
+            "cor_reason_code": dominant_cor_reason_code,
+            "cor_reason": dominant_cor_reason,
             "cor_ready_chunk_ratio": payload["cor_ready_chunk_ratio"],
             "cor_effective_chunk_ratio": payload["cor_effective_chunk_ratio"],
         }
@@ -2255,6 +2276,8 @@ class KnowledgeManager:
             chunk["cor_cluster_count"] = 0
             chunk["cor_replacement_count"] = 0
             chunk["cor_resolution_mode"] = "identity_fallback"
+            chunk["cor_reason_code"] = str(semantic_state.get("reason_code") or "HANLP2_SIDECAR_UNCONFIGURED")
+            chunk["cor_reason"] = str(semantic_state.get("reason") or "HanLP2 sidecar is not configured.")
             chunk.pop("cor_path", None)
             chunk.pop("cor_structured_path", None)
             chunk.pop("cor_annotated_path", None)
@@ -2266,7 +2289,11 @@ class KnowledgeManager:
                 self._remember_semantic_engine_state(state)
                 if state.get("status") == "ready":
                     chunk["cor_status"] = "ready"
+                    chunk["cor_reason_code"] = "HANLP2_TASK_READY"
+                    chunk["cor_reason"] = "HanLP2 coreference task is ready."
                 else:
+                    chunk["cor_reason_code"] = str(state.get("reason_code") or "HANLP2_SIDECAR_EXEC_FAILED")
+                    chunk["cor_reason"] = str(state.get("reason") or "HanLP2 coreference task failed.")
                     raw_result = {}
 
             cor_relative_path = self._build_cor_relative_path(str(chunk.get("chunk_path") or ""))
@@ -2469,6 +2496,8 @@ class KnowledgeManager:
                     "cor_structured_path": str(chunk.get("cor_structured_path") or ""),
                     "cor_annotated_path": str(chunk.get("cor_annotated_path") or ""),
                     "cor_status": str(chunk.get("cor_status") or "unavailable"),
+                    "cor_reason_code": str(chunk.get("cor_reason_code") or ""),
+                    "cor_reason": str(chunk.get("cor_reason") or ""),
                     "cor_cluster_count": int(chunk.get("cor_cluster_count") or 0),
                     "cor_replacement_count": int(chunk.get("cor_replacement_count") or 0),
                     "cor_format_version": str(chunk.get("cor_format_version") or ""),

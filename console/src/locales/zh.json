@@ -2172,6 +2172,7 @@
         "corBenefit": "COR 收益",
         "corBenefitPending": "收益评估生成中",
         "corBenefitSummary": "+{{replacements}} 次替换 / 覆盖 {{coverage}} / 命中 {{hitRatio}}",
+        "corBenefitUnavailable": "COR 不可用：{{reason}}",
         "deltaSummary": "+{{entities}} 实体 / +{{relations}} 关系",
         "entityGraphArtifact": "实体关系图谱",
         "qualityPending": "待增强",

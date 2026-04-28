@@ -277,7 +277,13 @@ class ProjectKnowledgeSyncManager:
             return primary
         return f"{primary} · {summary}"
 
-    def _build_semantic_engine_state(self, state: dict[str, Any]) -> dict[str, Any]:
+    def _build_semantic_engine_state(
+        self,
+        state: dict[str, Any],
+        *,
+        config: KnowledgeConfig | None = None,
+        use_persisted: bool = True,
+    ) -> dict[str, Any]:
         updated_at = str(state.get("updated_at") or "").strip() or None
         latest_source_id = str(state.get("latest_source_id") or "").strip()
         if not latest_source_id:
@@ -290,7 +296,20 @@ class ProjectKnowledgeSyncManager:
             }
             payload["summary"] = self._build_semantic_engine_summary(payload)
             return payload
-        semantic_state = self._knowledge_manager.get_semantic_engine_state()
+
+        persisted = state.get("semantic_engine")
+        if use_persisted and isinstance(persisted, dict) and persisted:
+            payload = {
+                "engine": str(persisted.get("engine") or "hanlp2"),
+                "status": str(persisted.get("status") or "idle"),
+                "reason_code": str(persisted.get("reason_code") or "SEMANTIC_STATE_UNKNOWN"),
+                "reason": str(persisted.get("reason") or "Semantic engine state is unavailable."),
+                "updated_at": str(persisted.get("updated_at") or updated_at or "").strip() or None,
+            }
+            payload["summary"] = self._build_semantic_engine_summary(payload)
+            return payload
+
+        semantic_state = self._knowledge_manager.get_semantic_engine_state(config)
         if not isinstance(semantic_state, dict):
             payload = {
                 "engine": "hanlp2",
@@ -528,6 +547,8 @@ class ProjectKnowledgeSyncManager:
                         "cor_effective_chunk_count": _safe_int(index_result.get("cor_effective_chunk_count")),
                         "cor_ready_chunk_ratio": _safe_float(index_result.get("cor_ready_chunk_ratio")),
                         "cor_effective_chunk_ratio": _safe_float(index_result.get("cor_effective_chunk_ratio")),
+                        "cor_reason_code": str(index_result.get("cor_reason_code") or "").strip(),
+                        "cor_reason": str(index_result.get("cor_reason") or "").strip(),
                     }
                 )
         return metrics
@@ -1545,6 +1566,11 @@ class ProjectKnowledgeSyncManager:
                         "eta_seconds": 5,
                         "last_started_at": self._now_iso(),
                         "last_error": "",
+                        "semantic_engine": self._build_semantic_engine_state(
+                            self._load_state(project_id),
+                            config=config,
+                            use_persisted=False,
+                        ),
                     }),
                 )
 
@@ -1586,6 +1612,11 @@ class ProjectKnowledgeSyncManager:
                         "latest_workflow_run_id": str(workflow_result.get("run_id") or "").strip(),
                         "latest_requested_mode": normalized_mode,
                         "processing_mode_overrides": {},
+                        "semantic_engine": self._build_semantic_engine_state(
+                            self._load_state(project_id),
+                            config=config,
+                            use_persisted=False,
+                        ),
                         "last_result": {
                             "index": workflow_result.get("index") or {},
                             "memify": workflow_result.get("memify") or {},

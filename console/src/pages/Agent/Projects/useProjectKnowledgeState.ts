@@ -112,6 +112,8 @@ export interface ProjectKnowledgeModeState {
   corEffectiveChunkCount?: number;
   corReadyChunkRatio?: number;
   corEffectiveChunkRatio?: number;
+  corReasonCode?: string;
+  corReason?: string;
 }
 
 export interface ProjectKnowledgeOutputResolution {
@@ -672,8 +674,10 @@ function parseBackendProcessingModes(
         corClusterCount: normalizeNumber(modeMetric?.cor_cluster_count),
         corReplacementCount: normalizeNumber(modeMetric?.cor_replacement_count),
         corEffectiveChunkCount: normalizeNumber(modeMetric?.cor_effective_chunk_count),
-        corReadyChunkRatio: normalizeNullableNumber(modeMetric?.cor_ready_chunk_ratio),
-        corEffectiveChunkRatio: normalizeNullableNumber(modeMetric?.cor_effective_chunk_ratio),
+        corReadyChunkRatio: normalizeNullableNumber(modeMetric?.cor_ready_chunk_ratio) ?? undefined,
+        corEffectiveChunkRatio: normalizeNullableNumber(modeMetric?.cor_effective_chunk_ratio) ?? undefined,
+        corReasonCode: String(modeMetric?.cor_reason_code || "").trim(),
+        corReason: String(modeMetric?.cor_reason || "").trim(),
       } satisfies ProjectKnowledgeModeState;
     })
     .filter((item): item is ProjectKnowledgeModeState => Boolean(item));

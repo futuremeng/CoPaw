@@ -224,6 +224,20 @@ function describeCorBenefit(
     return "";
   }
   const readyChunks = Math.max(0, Number(mode.corReadyChunkCount || 0));
+  const corReasonCode = String(mode.corReasonCode || "").trim();
+  const corReason = String(mode.corReason || "").trim();
+  const corUnavailable = readyChunks <= 0
+    && corReasonCode.length > 0
+    && corReasonCode !== "HANLP2_TASK_READY"
+    && mode.status !== "running"
+    && mode.status !== "queued";
+  if (corUnavailable) {
+    return t(
+      "projects.knowledge.processing.corBenefitUnavailable",
+      "COR 不可用：{{reason}}",
+      { reason: corReason || corReasonCode },
+    );
+  }
   if (readyChunks <= 0 && (!mode.available || mode.status === "running" || mode.status === "queued" || mode.status === "blocked")) {
     return t("projects.knowledge.processing.corBenefitPending", "收益评估生成中");
   }

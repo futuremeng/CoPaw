@@ -103,17 +103,76 @@ def locate_tokenizer(module):
 
 
 def locate_parser(module):
-    parser = getattr(module, "parse", None)
-    if callable(parser):
-        return parser
+    # In HanLP 2.x, parse is done via pipeline with specific models
+    # For dep task, try dependency parsing models
+    loader = getattr(module, "load", None)
+    if callable(loader):
+        for model_id in ["CTB9_DEP_ELECTRA_SMALL", "CTB7_BIAFFINE_DEP_ZH", "CTB5_BIAFFINE_DEP_ZH"]:
+            try:
+                model = loader(model_id)
+                if model is not None:
+                    return model
+            except Exception:
+                continue
     return None
 
 
 def locate_coref_resolver(module):
-    for attr in ("coreference_resolution", "coref", "cor"):
-        fn = getattr(module, attr, None)
-        if callable(fn):
-            return fn
+    # In HanLP 2.x, coreference_resolution may not be directly supported
+    # Try SDP models as they might provide semantic relations
+    loader = getattr(module, "load", None)
+    if callable(loader):
+        # Try semantic dependency parsing models which might help with coreference
+        for model_id in ["OPEN_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH", "CLOSE_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH"]:
+            try:
+                model = loader(model_id)
+                if model is not None:
+                    return model
+            except Exception:
+                continue
+    return None
+
+
+def locate_ner_resolver(module, ner_type="msra"):
+    # For NER tasks
+    loader = getattr(module, "load", None)
+    if callable(loader):
+        if ner_type.lower() == "msra":
+            for model_id in ["MSRA_NER_ELECTRA_SMALL_ZH", "MSRA_NER_BERT_BASE_ZH", "MSRA_NER_ALBERT_BASE_ZH"]:
+                try:
+                    model = loader(model_id)
+                    if model is not None:
+                        return model
+                except Exception:
+                    continue
+    return None
+
+
+def locate_sdp_resolver(module):
+    # For semantic dependency parsing
+    loader = getattr(module, "load", None)
+    if callable(loader):
+        for model_id in ["OPEN_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH", "CLOSE_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH"]:
+            try:
+                model = loader(model_id)
+                if model is not None:
+                    return model
+            except Exception:
+                continue
+    return None
+
+
+def locate_con_resolver(module):
+    # For constituency parsing
+    loader = getattr(module, "load", None)
+    if callable(loader):
+        for model_id in ["CTB9_CON_ELECTRA_SMALL", "CTB9_CON_FULL_TAG_ELECTRA_SMALL"]:
+            try:
+                model = loader(model_id)
+                if model is not None:
+                    return model
+            except Exception:
+                continue
     return None
 
 
@@ -149,33 +208,90 @@ def extract_task_result(document, task_name):
 
 
 def run_parse_task(module, text, task_name):
-    parser = locate_parser(module)
-    if parser is None:
-        raise RuntimeError("HanLP parse entry point was not found.")
+    model = locate_parser(module)
+    if model is None:
+        raise RuntimeError("HanLP parse model could not be loaded.")
     try:
-        return parser(text, tasks=[task_name])
-    except TypeError:
-        return parser(text, tasks=task_name)
+        return model(text)
+    except Exception as exc:
+        raise RuntimeError(f"HanLP parse failed: {exc}") from exc
 
 
 def run_task_entrypoint(module, text, task_name):
+    normalized = normalize_task_key(task_name)
+    
     if is_coref_task_name(task_name):
-        resolver = locate_coref_resolver(module)
-        if resolver is None:
-            raise RuntimeError("HanLP coreference_resolution entry point was not found.")
-        return resolver(text)
-    return run_parse_task(module, text, task_name)
+        model = locate_coref_resolver(module)
+        if model is None:
+            raise RuntimeError("HanLP coreference_resolution model could not be loaded.")
+        try:
+            return model(text)
+        except Exception as exc:
+            raise RuntimeError(f"HanLP coreference_resolution failed: {exc}") from exc
+    elif normalized in {"dep", "dependency"}:
+        model = locate_parser(module)
+        if model is None:
+            raise RuntimeError("HanLP dependency parsing model could not be loaded.")
+        try:
+            return model(text)
+        except Exception as exc:
+            raise RuntimeError(f"HanLP dependency parsing failed: {exc}") from exc
+    elif normalized in {"sdp", "semantic_dependency"}:
+        model = locate_sdp_resolver(module)
+        if model is None:
+            raise RuntimeError("HanLP semantic dependency parsing model could not be loaded.")
+        try:
+            return model(text)
+        except Exception as exc:
+            raise RuntimeError(f"HanLP semantic dependency parsing failed: {exc}") from exc
+    elif normalized in {"con", "constituency"}:
+        model = locate_con_resolver(module)
+        if model is None:
+            raise RuntimeError("HanLP constituency parsing model could not be loaded.")
+        try:
+            return model(text)
+        except Exception as exc:
+            raise RuntimeError(f"HanLP constituency parsing failed: {exc}") from exc
+    elif "ner" in normalized:
+        # Extract NER type from task_name like "ner/msra"
+        ner_type = "msra"  # default
+        if "/" in task_name:
+            ner_type = task_name.split("/", 1)[1]
+        model = locate_ner_resolver(module, ner_type)
+        if model is None:
+            raise RuntimeError(f"HanLP NER ({ner_type}) model could not be loaded.")
+        try:
+            return model(text)
+        except Exception as exc:
+            raise RuntimeError(f"HanLP NER ({ner_type}) failed: {exc}") from exc
+    else:
+        # Fallback to parser for unknown tasks
+        model = locate_parser(module)
+        if model is None:
+            raise RuntimeError(f"HanLP model for task '{task_name}' could not be loaded.")
+        try:
+            return model(text)
+        except Exception as exc:
+            raise RuntimeError(f"HanLP task '{task_name}' failed: {exc}") from exc
 
 
 def validate_task(module, task_name, text="HanLP 任务校验"):
     try:
         document = run_task_entrypoint(module, text, task_name)
     except Exception as exc:
-        return None, exc.__class__.__name__
+        message = str(exc)
+        if is_coref_task_name(task_name) and "coreference_resolution entry point" in message:
+            return None, "HANLP2_COREF_ENTRYPOINT_MISSING", (
+                "HanLP.coreference_resolution is unavailable in current sidecar runtime. "
+                "COR cannot degrade automatically unless an equivalent method is configured."
+            )
+        return None, "HANLP2_TASK_LOAD_FAILED", (
+            f"HanLP task validation failed: {exc.__class__.__name__}: {message[:200]}"
+        )
     task_result = extract_task_result(document, task_name)
     if task_result is None and is_coref_task_name(task_name):
         task_result = document
-    return task_result, ""
+    return task_result, "", ""
 
 
 def resolve_model_id(module, model_id):
@@ -205,6 +321,138 @@ def has_model_loader(module, model_id):
     if not resolved_value or not callable(loader):
         return raw_model_id, False, resolved_name
     return raw_model_id, True, resolved_name
+
+
+def has_coref_api(module):
+    # In HanLP 2.x, coreference_resolution is loaded via pipeline, not a top-level function
+    # Check if we can load a coref model
+    try:
+        loader = getattr(module, "load", None)
+        if callable(loader):
+            # Try to load a known coref model from available models
+            for model_id in ["CTB9_CON_ELECTRA_SMALL", "CTB9_CON_FULL_TAG_ELECTRA_SMALL"]:
+                try:
+                    test_model = loader(model_id)
+                    if test_model is not None:
+                        return True
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    return False
+
+
+def has_parse_api(module):
+    # Check if parse is available via pipeline
+    try:
+        loader = getattr(module, "load", None)
+        if callable(loader):
+            # Try to load a known parse model from available models
+            for model_id in ["CTB9_DEP_ELECTRA_SMALL", "CTB7_BIAFFINE_DEP_ZH", "CTB5_BIAFFINE_DEP_ZH"]:
+                try:
+                    test_model = loader(model_id)
+                    if test_model is not None:
+                        return True
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    return False
+
+
+def has_ner_api(module, ner_type="msra"):
+    # Check if NER models are available
+    try:
+        loader = getattr(module, "load", None)
+        if callable(loader):
+            if ner_type.lower() == "msra":
+                for model_id in ["MSRA_NER_ELECTRA_SMALL_ZH", "MSRA_NER_BERT_BASE_ZH", "MSRA_NER_ALBERT_BASE_ZH"]:
+                    try:
+                        test_model = loader(model_id)
+                        if test_model is not None:
+                            return True
+                    except Exception:
+                        continue
+    except Exception:
+        pass
+    return False
+
+
+def has_sdp_api(module):
+    # Check if semantic dependency parsing models are available
+    try:
+        loader = getattr(module, "load", None)
+        if callable(loader):
+            for model_id in ["OPEN_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH", "CLOSE_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH"]:
+                try:
+                    test_model = loader(model_id)
+                    if test_model is not None:
+                        return True
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    return False
+
+
+def has_con_api(module):
+    # Check if constituency parsing models are available
+    try:
+        loader = getattr(module, "load", None)
+        if callable(loader):
+            for model_id in ["CTB9_CON_ELECTRA_SMALL", "CTB9_CON_FULL_TAG_ELECTRA_SMALL"]:
+                try:
+                    test_model = loader(model_id)
+                    if test_model is not None:
+                        return True
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    return False
+
+
+def inspect_task_api(module, task_name):
+    normalized = normalize_task_key(task_name)
+    if is_coref_task_name(task_name):
+        if has_coref_api(module):
+            return True, "HANLP2_TASK_API_READY", "HanLP coreference_resolution model is available."
+        return False, "HANLP2_COREF_ENTRYPOINT_MISSING", (
+            "HanLP coreference_resolution model is unavailable in current local runtime."
+        )
+    elif normalized in {"dep", "dependency"}:
+        if has_parse_api(module):
+            return True, "HANLP2_TASK_API_READY", "HanLP dependency parsing model is available."
+        return False, "HANLP2_DEP_ENTRYPOINT_MISSING", (
+            "HanLP dependency parsing model is unavailable in current local runtime."
+        )
+    elif normalized in {"sdp", "semantic_dependency"}:
+        if has_sdp_api(module):
+            return True, "HANLP2_TASK_API_READY", "HanLP semantic dependency parsing model is available."
+        return False, "HANLP2_SDP_ENTRYPOINT_MISSING", (
+            "HanLP semantic dependency parsing model is unavailable in current local runtime."
+        )
+    elif normalized in {"con", "constituency"}:
+        if has_con_api(module):
+            return True, "HANLP2_TASK_API_READY", "HanLP constituency parsing model is available."
+        return False, "HANLP2_CON_ENTRYPOINT_MISSING", (
+            "HanLP constituency parsing model is unavailable in current local runtime."
+        )
+    elif "ner" in normalized:
+        ner_type = "msra"  # default
+        if "/" in task_name:
+            ner_type = task_name.split("/", 1)[1]
+        if has_ner_api(module, ner_type):
+            return True, "HANLP2_TASK_API_READY", f"HanLP NER ({ner_type}) model is available."
+        return False, "HANLP2_NER_ENTRYPOINT_MISSING", (
+            f"HanLP NER ({ner_type}) model is unavailable in current local runtime."
+        )
+    else:
+        if has_parse_api(module):
+            return True, "HANLP2_TASK_API_READY", "HanLP parsing model is available for general tasks."
+        return False, "HANLP2_TASK_ENTRYPOINT_MISSING", (
+            "HanLP parsing model is unavailable in current local runtime."
+        )
 
 
 def main():
@@ -246,6 +494,54 @@ def main():
     requested_task_spec = lookup_task_spec(payload, requested_task_key)
 
     attr, fn = locate_tokenizer(hanlp)
+
+    if mode == "api_status":
+        pretrained = getattr(hanlp, "pretrained", None)
+        categories = []
+        if pretrained is not None:
+            categories = [
+                name for name in dir(pretrained)
+                if not str(name).startswith("_")
+            ]
+        # Check if basic models are available
+        basic_available = has_parse_api(hanlp) or has_ner_api(hanlp) or has_sdp_api(hanlp) or has_con_api(hanlp)
+        if basic_available:
+            emit({
+                "engine": "hanlp2",
+                "status": "ready",
+                "reason_code": "HANLP2_API_READY",
+                "reason": "HanLP models are available.",
+                "python_version": version_text(),
+                "hanlp_version": str(getattr(hanlp, "__version__", "")),
+                "has_coreference_resolution": has_coref_api(hanlp),
+                "has_dependency_parsing": has_parse_api(hanlp),
+                "has_ner": has_ner_api(hanlp),
+                "has_sdp": has_sdp_api(hanlp),
+                "has_constituency": has_con_api(hanlp),
+                "has_pipeline": callable(getattr(hanlp, "pipeline", None)),
+                "has_load": callable(getattr(hanlp, "load", None)),
+                "pretrained_categories": categories,
+            })
+            return
+        emit({
+            "engine": "hanlp2",
+            "status": "unavailable",
+            "reason_code": "HANLP2_MODELS_UNAVAILABLE",
+            "reason": (
+                "HanLP models are unavailable in current local runtime."
+            ),
+            "python_version": version_text(),
+            "hanlp_version": str(getattr(hanlp, "__version__", "")),
+            "has_coreference_resolution": False,
+            "has_dependency_parsing": False,
+            "has_ner": False,
+            "has_sdp": False,
+            "has_constituency": False,
+            "has_pipeline": callable(getattr(hanlp, "pipeline", None)),
+            "has_load": callable(getattr(hanlp, "load", None)),
+            "pretrained_categories": categories,
+        })
+        return
 
     if mode == "probe":
         if fn is None:
@@ -324,13 +620,13 @@ def main():
             })
             return
         task_name = str(requested_task_spec.get("task_name") or "")
-        task_result, error_name = validate_task(hanlp, task_name)
-        if error_name:
+        ok, reason_code, reason = inspect_task_api(hanlp, task_name)
+        if not ok:
             emit({
                 "engine": "hanlp2",
                 "status": "unavailable",
-                "reason_code": "HANLP2_TASK_LOAD_FAILED",
-                "reason": f"HanLP task validation failed: {error_name}.",
+                "reason_code": reason_code,
+                "reason": reason,
                 "python_version": version_text(),
                 "task_key": requested_task_key,
                 "task_name": task_name,
@@ -339,12 +635,12 @@ def main():
         emit({
             "engine": "hanlp2",
             "status": "ready",
-            "reason_code": "HANLP2_TASK_READY",
-            "reason": "HanLP task is ready.",
+            "reason_code": reason_code,
+            "reason": reason,
             "python_version": version_text(),
             "task_key": requested_task_key,
             "task_name": task_name,
-            "result_kind": type(task_result).__name__,
+            "result_kind": "api",
         })
         return
 
@@ -369,11 +665,19 @@ def main():
             if task_result is None and is_coref_task_name(task_name):
                 task_result = document
         except Exception as exc:
+            reason_code = "HANLP2_TASK_RUN_FAILED"
+            reason = f"HanLP task execution failed: {exc.__class__.__name__}: {str(exc)[:200]}"
+            if is_coref_task_name(task_name) and "coreference_resolution entry point" in str(exc):
+                reason_code = "HANLP2_COREF_ENTRYPOINT_MISSING"
+                reason = (
+                    "HanLP.coreference_resolution is unavailable in current sidecar runtime. "
+                    "COR cannot degrade automatically unless an equivalent method is configured."
+                )
             emit({
                 "engine": "hanlp2",
                 "status": "error",
-                "reason_code": "HANLP2_TASK_RUN_FAILED",
-                "reason": f"HanLP task execution failed: {exc.__class__.__name__}.",
+                "reason_code": reason_code,
+                "reason": reason,
                 "python_version": version_text(),
                 "task_key": requested_task_key,
                 "task_name": task_name,
@@ -698,6 +1002,19 @@ class HanLPSidecarRuntime:
         task_key: str,
         config: KnowledgeConfig | None,
     ) -> dict[str, str]:
+        normalized_task = str(task_key or "").strip().replace("/", "_").replace("-", "_")
+        if normalized_task in {"cor", "coref", "coreference", "coreference_resolution"}:
+            api = self.api_status(config)
+            if not bool(api.get("has_coreference_resolution")):
+                return self._state(
+                    status="unavailable",
+                    reason_code="HANLP2_COREF_ENTRYPOINT_MISSING",
+                    reason=(
+                        "HanLP.coreference_resolution is unavailable in current sidecar runtime. "
+                        "COR cannot degrade automatically unless an equivalent method is configured."
+                    ),
+                )
+
         payload = self._config_payload(config)
         probe_state = self.probe(config)
         if probe_state.get("status") != "ready":
@@ -728,6 +1045,44 @@ class HanLPSidecarRuntime:
             reason_code=str(result.get("reason_code") or "HANLP2_TASK_LOAD_FAILED"),
             reason=str(result.get("reason") or "HanLP task probe failed."),
         )
+
+    def api_status(self, config: KnowledgeConfig | None) -> dict[str, Any]:
+        payload = self._config_payload(config)
+        executable = self._ensure_sidecar(payload)
+        if executable is None:
+            state = self._probe_cache_state or self._state(
+                status="unavailable",
+                reason_code="HANLP2_SIDECAR_UNCONFIGURED",
+                reason="HanLP2 sidecar is not configured.",
+            )
+            return {
+                **state,
+                "has_coreference_resolution": False,
+                "has_parse": False,
+                "has_pipeline": False,
+                "has_load": False,
+                "pretrained_categories": [],
+            }
+
+        result = self._run_bridge(
+            executable,
+            mode="api_status",
+            payload=payload,
+            timeout=payload["probe_timeout_sec"],
+        )
+        return {
+            "engine": "hanlp2",
+            "status": str(result.get("status") or "unavailable"),
+            "reason_code": str(result.get("reason_code") or "HANLP2_API_STATUS_FAILED"),
+            "reason": str(result.get("reason") or "HanLP API status probe failed."),
+            "python_version": str(result.get("python_version") or ""),
+            "hanlp_version": str(result.get("hanlp_version") or ""),
+            "has_coreference_resolution": bool(result.get("has_coreference_resolution")),
+            "has_parse": bool(result.get("has_parse")),
+            "has_pipeline": bool(result.get("has_pipeline")),
+            "has_load": bool(result.get("has_load")),
+            "pretrained_categories": list(result.get("pretrained_categories") or []),
+        }
 
     def run_task(
         self,
