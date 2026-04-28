@@ -127,6 +127,26 @@ export interface ProjectKnowledgeModeMetricsPayload {
   syntax_relation_count?: number;
 }
 
+export interface ProjectKnowledgeL2ProgressPayload {
+  total_chunks?: number;
+  cor_done_chunks?: number;
+  ner_done_chunks?: number;
+  syntax_done_chunks?: number;
+}
+
+export interface ProjectKnowledgeL2MetricsPayload {
+  cor_ready_chunk_count?: number;
+  cor_cluster_count?: number;
+  cor_replacement_count?: number;
+  cor_effective_chunk_count?: number;
+  ner_ready_chunk_count?: number;
+  ner_entity_count?: number;
+  syntax_ready_chunk_count?: number;
+  syntax_sentence_count?: number;
+  syntax_token_count?: number;
+  syntax_relation_count?: number;
+}
+
 export interface ProjectKnowledgeGlobalMetricsPayload {
   document_count?: number;
   chunk_count?: number;
@@ -185,6 +205,8 @@ export interface ProjectKnowledgeSyncState {
   mode_outputs?: Partial<Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeOutputPayload>>;
   mode_metrics?: Partial<Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeMetricsPayload>>;
   global_metrics?: ProjectKnowledgeGlobalMetricsPayload;
+  l2_progress?: ProjectKnowledgeL2ProgressPayload;
+  l2_metrics?: ProjectKnowledgeL2MetricsPayload;
   semantic_engine?: ProjectKnowledgeSemanticEngineState;
 }
 

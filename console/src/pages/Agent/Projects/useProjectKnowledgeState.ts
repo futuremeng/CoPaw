@@ -127,6 +127,10 @@ export interface ProjectKnowledgeModeState {
   syntaxSentenceCount?: number;
   syntaxTokenCount?: number;
   syntaxRelationCount?: number;
+  l2TotalChunks?: number;
+  corDoneChunks?: number;
+  nerDoneChunks?: number;
+  syntaxDoneChunks?: number;
 }
 
 export interface ProjectKnowledgeOutputResolution {
@@ -759,13 +763,16 @@ function parseBackendProcessingModes(
   }
 
   const parsed = payload
-    .map((item) => {
+    .map((item): ProjectKnowledgeModeState | null => {
       const modePayload = item as ProjectKnowledgeProcessingModeStatePayload;
       if (!isProcessingMode(modePayload.mode)) {
         return null;
       }
       const modeMetric = getBackendModeMetric(syncState, modePayload.mode);
-      return {
+      const l2Progress = syncState?.l2_progress;
+      const l2Metrics = syncState?.l2_metrics;
+      const isNlpMode = modePayload.mode === "nlp";
+      const next: ProjectKnowledgeModeState = {
         mode: modePayload.mode,
         status: normalizeModeStatus(modePayload.status),
         available: Boolean(modePayload.available),
@@ -780,23 +787,78 @@ function parseBackendProcessingModes(
         entityCount: normalizeNumber(modePayload.entity_count),
         relationCount: normalizeNumber(modePayload.relation_count),
         qualityScore: normalizeNullableNumber(modePayload.quality_score),
-        corReadyChunkCount: normalizeNumber(modeMetric?.cor_ready_chunk_count),
-        corClusterCount: normalizeNumber(modeMetric?.cor_cluster_count),
-        corReplacementCount: normalizeNumber(modeMetric?.cor_replacement_count),
-        corEffectiveChunkCount: normalizeNumber(modeMetric?.cor_effective_chunk_count),
+        corReadyChunkCount: isNlpMode
+          ? Math.max(
+            normalizeNumber(modeMetric?.cor_ready_chunk_count),
+            normalizeNumber(l2Metrics?.cor_ready_chunk_count),
+          )
+          : normalizeNumber(modeMetric?.cor_ready_chunk_count),
+        corClusterCount: isNlpMode
+          ? Math.max(
+            normalizeNumber(modeMetric?.cor_cluster_count),
+            normalizeNumber(l2Metrics?.cor_cluster_count),
+          )
+          : normalizeNumber(modeMetric?.cor_cluster_count),
+        corReplacementCount: isNlpMode
+          ? Math.max(
+            normalizeNumber(modeMetric?.cor_replacement_count),
+            normalizeNumber(l2Metrics?.cor_replacement_count),
+          )
+          : normalizeNumber(modeMetric?.cor_replacement_count),
+        corEffectiveChunkCount: isNlpMode
+          ? Math.max(
+            normalizeNumber(modeMetric?.cor_effective_chunk_count),
+            normalizeNumber(l2Metrics?.cor_effective_chunk_count),
+          )
+          : normalizeNumber(modeMetric?.cor_effective_chunk_count),
         corReadyChunkRatio: normalizeNullableNumber(modeMetric?.cor_ready_chunk_ratio) ?? undefined,
         corEffectiveChunkRatio: normalizeNullableNumber(modeMetric?.cor_effective_chunk_ratio) ?? undefined,
         corReasonCode: String(modeMetric?.cor_reason_code || "").trim(),
         corReason: String(modeMetric?.cor_reason || "").trim(),
-        nerReadyChunkCount: normalizeNumber(modeMetric?.ner_ready_chunk_count),
-        nerEntityCount: normalizeNumber(modeMetric?.ner_entity_count),
-        syntaxReadyChunkCount: normalizeNumber(modeMetric?.syntax_ready_chunk_count),
-        syntaxSentenceCount: normalizeNumber(modeMetric?.syntax_sentence_count),
-        syntaxTokenCount: normalizeNumber(modeMetric?.syntax_token_count),
-        syntaxRelationCount: normalizeNumber(modeMetric?.syntax_relation_count),
-      } satisfies ProjectKnowledgeModeState;
+        nerReadyChunkCount: isNlpMode
+          ? Math.max(
+            normalizeNumber(modeMetric?.ner_ready_chunk_count),
+            normalizeNumber(l2Metrics?.ner_ready_chunk_count),
+          )
+          : normalizeNumber(modeMetric?.ner_ready_chunk_count),
+        nerEntityCount: isNlpMode
+          ? Math.max(
+            normalizeNumber(modeMetric?.ner_entity_count),
+            normalizeNumber(l2Metrics?.ner_entity_count),
+          )
+          : normalizeNumber(modeMetric?.ner_entity_count),
+        syntaxReadyChunkCount: isNlpMode
+          ? Math.max(
+            normalizeNumber(modeMetric?.syntax_ready_chunk_count),
+            normalizeNumber(l2Metrics?.syntax_ready_chunk_count),
+          )
+          : normalizeNumber(modeMetric?.syntax_ready_chunk_count),
+        syntaxSentenceCount: isNlpMode
+          ? Math.max(
+            normalizeNumber(modeMetric?.syntax_sentence_count),
+            normalizeNumber(l2Metrics?.syntax_sentence_count),
+          )
+          : normalizeNumber(modeMetric?.syntax_sentence_count),
+        syntaxTokenCount: isNlpMode
+          ? Math.max(
+            normalizeNumber(modeMetric?.syntax_token_count),
+            normalizeNumber(l2Metrics?.syntax_token_count),
+          )
+          : normalizeNumber(modeMetric?.syntax_token_count),
+        syntaxRelationCount: isNlpMode
+          ? Math.max(
+            normalizeNumber(modeMetric?.syntax_relation_count),
+            normalizeNumber(l2Metrics?.syntax_relation_count),
+          )
+          : normalizeNumber(modeMetric?.syntax_relation_count),
+        l2TotalChunks: isNlpMode ? normalizeNumber(l2Progress?.total_chunks) : undefined,
+        corDoneChunks: isNlpMode ? normalizeNumber(l2Progress?.cor_done_chunks) : undefined,
+        nerDoneChunks: isNlpMode ? normalizeNumber(l2Progress?.ner_done_chunks) : undefined,
+        syntaxDoneChunks: isNlpMode ? normalizeNumber(l2Progress?.syntax_done_chunks) : undefined,
+      };
+      return next;
     })
-    .filter((item): item is ProjectKnowledgeModeState => Boolean(item));
+    .filter((item): item is ProjectKnowledgeModeState => item !== null);
 
   return parsed.length > 0 ? parsed : null;
 }
@@ -1931,44 +1993,58 @@ export function useProjectKnowledgeState(
     );
     const nlpCorReadyChunkCount = Math.max(
       getBackendModeMetricNumber(syncState, "nlp", "cor_ready_chunk_count"),
+      normalizeNumber(syncState?.l2_metrics?.cor_ready_chunk_count),
       getSyncIndexMetric(syncState, "cor_ready_chunk_count"),
     );
     const nlpCorClusterCount = Math.max(
       getBackendModeMetricNumber(syncState, "nlp", "cor_cluster_count"),
+      normalizeNumber(syncState?.l2_metrics?.cor_cluster_count),
       getSyncIndexMetric(syncState, "cor_cluster_count"),
     );
     const nlpCorReplacementCount = Math.max(
       getBackendModeMetricNumber(syncState, "nlp", "cor_replacement_count"),
+      normalizeNumber(syncState?.l2_metrics?.cor_replacement_count),
       getSyncIndexMetric(syncState, "cor_replacement_count"),
     );
     const nlpCorEffectiveChunkCount = Math.max(
       getBackendModeMetricNumber(syncState, "nlp", "cor_effective_chunk_count"),
+      normalizeNumber(syncState?.l2_metrics?.cor_effective_chunk_count),
       getSyncIndexMetric(syncState, "cor_effective_chunk_count"),
     );
     const nlpNerReadyChunkCount = Math.max(
       getBackendModeMetricNumber(syncState, "nlp", "ner_ready_chunk_count"),
+      normalizeNumber(syncState?.l2_metrics?.ner_ready_chunk_count),
       0,
     );
     const nlpNerEntityCount = Math.max(
       getBackendModeMetricNumber(syncState, "nlp", "ner_entity_count"),
+      normalizeNumber(syncState?.l2_metrics?.ner_entity_count),
       0,
     );
     const nlpSyntaxReadyChunkCount = Math.max(
       getBackendModeMetricNumber(syncState, "nlp", "syntax_ready_chunk_count"),
+      normalizeNumber(syncState?.l2_metrics?.syntax_ready_chunk_count),
       0,
     );
     const nlpSyntaxSentenceCount = Math.max(
       getBackendModeMetricNumber(syncState, "nlp", "syntax_sentence_count"),
+      normalizeNumber(syncState?.l2_metrics?.syntax_sentence_count),
       0,
     );
     const nlpSyntaxTokenCount = Math.max(
       getBackendModeMetricNumber(syncState, "nlp", "syntax_token_count"),
+      normalizeNumber(syncState?.l2_metrics?.syntax_token_count),
       0,
     );
     const nlpSyntaxRelationCount = Math.max(
       getBackendModeMetricNumber(syncState, "nlp", "syntax_relation_count"),
+      normalizeNumber(syncState?.l2_metrics?.syntax_relation_count),
       0,
     );
+    const l2TotalChunks = normalizeNumber(syncState?.l2_progress?.total_chunks);
+    const l2CorDoneChunks = normalizeNumber(syncState?.l2_progress?.cor_done_chunks);
+    const l2NerDoneChunks = normalizeNumber(syncState?.l2_progress?.ner_done_chunks);
+    const l2SyntaxDoneChunks = normalizeNumber(syncState?.l2_progress?.syntax_done_chunks);
     const nlpCorReadyChunkRatio = getBackendModeMetricNullableNumber(syncState, "nlp", "cor_ready_chunk_ratio")
       ?? normalizeNullableNumber(getSyncIndexMetric(syncState, "cor_ready_chunk_ratio"));
     const nlpCorEffectiveChunkRatio = getBackendModeMetricNullableNumber(syncState, "nlp", "cor_effective_chunk_ratio")
@@ -2081,14 +2157,18 @@ export function useProjectKnowledgeState(
         corClusterCount: nlpCorClusterCount,
         corReplacementCount: nlpCorReplacementCount,
         corEffectiveChunkCount: nlpCorEffectiveChunkCount,
-        corReadyChunkRatio: nlpCorReadyChunkRatio,
-        corEffectiveChunkRatio: nlpCorEffectiveChunkRatio,
+        corReadyChunkRatio: nlpCorReadyChunkRatio ?? undefined,
+        corEffectiveChunkRatio: nlpCorEffectiveChunkRatio ?? undefined,
         nerReadyChunkCount: nlpNerReadyChunkCount,
         nerEntityCount: nlpNerEntityCount,
         syntaxReadyChunkCount: nlpSyntaxReadyChunkCount,
         syntaxSentenceCount: nlpSyntaxSentenceCount,
         syntaxTokenCount: nlpSyntaxTokenCount,
         syntaxRelationCount: nlpSyntaxRelationCount,
+        l2TotalChunks,
+        corDoneChunks: l2CorDoneChunks,
+        nerDoneChunks: l2NerDoneChunks,
+        syntaxDoneChunks: l2SyntaxDoneChunks,
       },
       {
         mode: "agentic",

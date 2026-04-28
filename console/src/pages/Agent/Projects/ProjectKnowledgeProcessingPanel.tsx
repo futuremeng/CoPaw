@@ -274,11 +274,25 @@ function buildNlpStageStats(
     return [];
   }
 
+  const totalChunks = Math.max(
+    0,
+    Number(mode.l2TotalChunks || mode.chunkCount || 0),
+  );
+  const stageDoneLabel = t("projects.knowledge.processing.stageDoneChunks", "已处理块数");
+  const formatDone = (done: number): string | number => (
+    totalChunks > 0 ? `${Math.max(0, done)}/${totalChunks}` : Math.max(0, done)
+  );
+
   return [
     {
       key: "cor",
       title: t("projects.knowledge.processing.corStage", "COR"),
       metrics: [
+        {
+          key: "doneChunks",
+          label: stageDoneLabel,
+          value: formatDone(Number(mode.corDoneChunks || mode.corReadyChunkCount || 0)),
+        },
         {
           key: "readyChunks",
           label: t("projects.knowledge.processing.readyChunks", "就绪块数"),
@@ -301,6 +315,11 @@ function buildNlpStageStats(
       title: t("projects.knowledge.processing.nerStage", "NER"),
       metrics: [
         {
+          key: "doneChunks",
+          label: stageDoneLabel,
+          value: formatDone(Number(mode.nerDoneChunks || mode.nerReadyChunkCount || 0)),
+        },
+        {
           key: "readyChunks",
           label: t("projects.knowledge.processing.readyChunks", "就绪块数"),
           value: mode.nerReadyChunkCount || 0,
@@ -316,6 +335,11 @@ function buildNlpStageStats(
       key: "syntax",
       title: t("projects.knowledge.processing.syntaxStage", "Syntax"),
       metrics: [
+        {
+          key: "doneChunks",
+          label: stageDoneLabel,
+          value: formatDone(Number(mode.syntaxDoneChunks || mode.syntaxReadyChunkCount || 0)),
+        },
         {
           key: "readyChunks",
           label: t("projects.knowledge.processing.readyChunks", "就绪块数"),
