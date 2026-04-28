@@ -414,6 +414,8 @@ class KnowledgeWorkflowOrchestrator:
                 percent = int(float(raw_progress or 70))
             except (TypeError, ValueError):
                 percent = 70
+            l2_progress = payload.get("l2_progress") if isinstance(payload.get("l2_progress"), dict) else {}
+            l2_metrics = payload.get("l2_metrics") if isinstance(payload.get("l2_metrics"), dict) else {}
             status_callback(
                 {
                     "status": "graphifying",
@@ -423,6 +425,8 @@ class KnowledgeWorkflowOrchestrator:
                     "current": 2,
                     "total": 4,
                     "eta_seconds": payload.get("eta_seconds") if isinstance(payload.get("eta_seconds"), (int, float)) else None,
+                    "l2_progress": l2_progress,
+                    "l2_metrics": l2_metrics,
                     **_lane_overrides(
                         fast={
                             "status": "ready",
@@ -804,7 +808,12 @@ class KnowledgeWorkflowOrchestrator:
         running_config: Any | None,
         index_path: Path,
     ) -> dict[str, Any]:
-        index_result = self.knowledge_manager.index_source(source, config, running_config)
+        index_result = self.knowledge_manager.index_source(
+            source,
+            config,
+            running_config,
+            include_semantic_artifacts=False,
+        )
         evidence = []
         artifacts = []
         if index_path.exists():
@@ -831,6 +840,19 @@ class KnowledgeWorkflowOrchestrator:
         progress_callback: Callable[[dict[str, Any]], None] | None,
         quality_report_path: Path,
     ) -> dict[str, Any]:
+        self.knowledge_manager.materialize_semantic_artifacts_for_source(
+            source,
+            config=config,
+            progress_callback=progress_callback,
+        )
+        if progress_callback is not None:
+            progress_callback(
+                {
+                    "stage_message": "Building domain graph artifacts",
+                    "progress": 72,
+                }
+            )
+
         memify_result = self.graph_ops.execute_memify_once(
             config=config,
             pipeline_type="knowledge-processing-workflow",

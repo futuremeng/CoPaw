@@ -174,6 +174,7 @@ class ProjectKnowledgeWatcher:
 
     async def start(self) -> None:
         self._snapshots = await self._collect_snapshots_async()
+        await self._resume_project_syncs(self._snapshots)
         self._task = asyncio.create_task(
             self._poll_loop(),
             name=f"project_knowledge_watcher_{self._agent_id}",
@@ -183,6 +184,52 @@ class ProjectKnowledgeWatcher:
             self._agent_id,
             self._poll_interval,
         )
+
+    async def _resume_project_syncs(
+        self,
+        current: dict[str, dict[str, Any]],
+    ) -> None:
+        global_config, knowledge_config, running_config = await self._load_runtime_context()
+        if not knowledge_config.enabled or not bool(getattr(knowledge_config, "memify_enabled", False)):
+            return
+
+        persist_needed = False
+        for project_id, snapshot in current.items():
+            if not snapshot.get("auto_enabled"):
+                continue
+            if (
+                normalize_project_file_monitoring_state(
+                    snapshot.get("file_monitoring_state"),
+                )
+                != PROJECT_FILE_MONITORING_ACTIVE
+            ):
+                continue
+            manager = self._get_project_sync_manager(project_id)
+            source, source_changed = ensure_project_source_registered(
+                global_config.knowledge,
+                project_id=project_id,
+                project_name=str(snapshot.get("project_name") or project_id),
+                project_workspace_dir=str(snapshot.get("project_dir") or ""),
+                persist=lambda: None,
+            )
+            persist_needed = persist_needed or source_changed
+            result = manager.resume_sync_if_needed(
+                project_id=project_id,
+                config=knowledge_config,
+                running_config=running_config,
+                source=source,
+            )
+            if result.get("accepted"):
+                logger.info(
+                    "ProjectKnowledgeWatcher resumed sync for %s (%s)",
+                    project_id,
+                    str(result.get("reason") or "resumed"),
+                )
+
+        if persist_needed:
+            from ..config.utils import save_config
+
+            save_config(global_config)
 
     async def stop(self) -> None:
         if self._task is not None:

@@ -943,7 +943,7 @@ async def start_memify_job(
 @router.get("/project-sync/status")
 async def get_project_sync_status(request: Request):
     """Get project-scoped automatic knowledge synchronization status."""
-    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    config, knowledge_config, running_config, workspace_dir, _ = await _resolve_knowledge_request_context(request)
     project_id = _resolve_project_id(request)
     if not project_id:
         raise HTTPException(status_code=400, detail="PROJECT_ID_REQUIRED")
@@ -951,6 +951,22 @@ async def get_project_sync_status(request: Request):
         workspace_dir,
         project_id=project_id,
     )
+    project_workspace_dir = (Path(workspace_dir) / "projects" / project_id).resolve()
+    if knowledge_config.enabled and bool(getattr(knowledge_config, "memify_enabled", False)):
+        source, _ = ensure_project_source_registered(
+            config.knowledge,
+            project_id=project_id,
+            project_name=project_id,
+            project_workspace_dir=str(project_workspace_dir),
+            persist=lambda: save_config(config),
+        )
+        await asyncio.to_thread(
+            manager.resume_sync_if_needed,
+            project_id=project_id,
+            config=knowledge_config,
+            running_config=running_config,
+            source=source,
+        )
     return await asyncio.to_thread(manager.get_state, project_id)
 
 

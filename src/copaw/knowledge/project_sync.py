@@ -110,6 +110,7 @@ class ProjectKnowledgeSyncManager:
     _timers_guard = threading.Lock()
     _timers: dict[str, threading.Timer] = {}
     _active_statuses = {"pending", "indexing", "graphifying", "running"}
+    _resumable_statuses = {"queued", "pending", "indexing", "graphifying", "running"}
 
     def __init__(
         self,
@@ -559,6 +560,92 @@ class ProjectKnowledgeSyncManager:
                 )
         return metrics
 
+    def _resolve_index_result(self, state: dict[str, Any]) -> dict[str, Any]:
+        """Resolve the best-available index result for UI hydration.
+
+        Prefer current run `last_result.index`; if missing, fall back to persisted
+        source index payload so NLP stage metrics stay visible while fast indexing
+        is running in parallel.
+        """
+        last_result = state.get("last_result") or {}
+        index_result = last_result.get("index") if isinstance(last_result, dict) else {}
+        if not isinstance(index_result, dict):
+            index_result = {}
+
+        source_id = str(state.get("latest_source_id") or "").strip()
+        fallback_payload: dict[str, Any] = {}
+        if source_id:
+            try:
+                payload = self._knowledge_manager._load_index_payload_safe(source_id)
+            except Exception:
+                payload = None
+            fallback_payload = payload if isinstance(payload, dict) else {}
+
+        if not index_result:
+            return fallback_payload
+
+        # Merge stage metrics from persisted index payload if the current run
+        # snapshot is missing (or still zeroed during indexing).
+        merged = dict(index_result)
+        nlp_metric_keys = (
+            "cor_ready_chunk_count",
+            "cor_cluster_count",
+            "cor_replacement_count",
+            "cor_effective_chunk_count",
+            "ner_ready_chunk_count",
+            "ner_entity_count",
+            "syntax_ready_chunk_count",
+            "syntax_sentence_count",
+            "syntax_token_count",
+            "syntax_relation_count",
+        )
+        for key in nlp_metric_keys:
+            current_value = _safe_int(merged.get(key))
+            fallback_value = _safe_int(fallback_payload.get(key))
+            if fallback_value > current_value:
+                merged[key] = fallback_value
+
+        if not str(merged.get("cor_reason_code") or "").strip() and str(
+            fallback_payload.get("cor_reason_code") or ""
+        ).strip():
+            merged["cor_reason_code"] = str(fallback_payload.get("cor_reason_code") or "").strip()
+        if not str(merged.get("cor_reason") or "").strip() and str(
+            fallback_payload.get("cor_reason") or ""
+        ).strip():
+            merged["cor_reason"] = str(fallback_payload.get("cor_reason") or "").strip()
+
+        if _safe_float(merged.get("cor_ready_chunk_ratio")) is None and _safe_float(
+            fallback_payload.get("cor_ready_chunk_ratio")
+        ) is not None:
+            merged["cor_ready_chunk_ratio"] = _safe_float(fallback_payload.get("cor_ready_chunk_ratio"))
+        if _safe_float(merged.get("cor_effective_chunk_ratio")) is None and _safe_float(
+            fallback_payload.get("cor_effective_chunk_ratio")
+        ) is not None:
+            merged["cor_effective_chunk_ratio"] = _safe_float(
+                fallback_payload.get("cor_effective_chunk_ratio")
+            )
+
+        live_l2_metrics = state.get("l2_metrics")
+        if isinstance(live_l2_metrics, dict):
+            for key in (
+                "cor_ready_chunk_count",
+                "cor_cluster_count",
+                "cor_replacement_count",
+                "cor_effective_chunk_count",
+                "ner_ready_chunk_count",
+                "ner_entity_count",
+                "syntax_ready_chunk_count",
+                "syntax_sentence_count",
+                "syntax_token_count",
+                "syntax_relation_count",
+            ):
+                live_value = _safe_int(live_l2_metrics.get(key))
+                current_value = _safe_int(merged.get(key))
+                if live_value > current_value:
+                    merged[key] = live_value
+
+        return merged
+
     def _build_global_metrics(
         self,
         state: dict[str, Any],
@@ -653,12 +740,10 @@ class ProjectKnowledgeSyncManager:
         last_result = state.get("last_result") or {}
         if not isinstance(last_result, dict):
             last_result = {}
-        index_result = last_result.get("index") or {}
+        index_result = self._resolve_index_result(state)
         memify_result = last_result.get("memify") or {}
         quality_loop_result = last_result.get("quality_loop") or {}
         workflow_run = last_result.get("workflow_run") or {}
-        if not isinstance(index_result, dict):
-            index_result = {}
         if not isinstance(memify_result, dict):
             memify_result = {}
         if not isinstance(quality_loop_result, dict):
@@ -756,8 +841,20 @@ class ProjectKnowledgeSyncManager:
         ).strip()
 
         fast_available = document_count > 0 or chunk_count > 0
+        nlp_stage_ready = any(
+            _safe_int(index_result.get(metric_key)) > 0
+            for metric_key in (
+                "cor_ready_chunk_count",
+                "ner_ready_chunk_count",
+                "syntax_ready_chunk_count",
+                "ner_entity_count",
+                "syntax_sentence_count",
+                "syntax_token_count",
+                "syntax_relation_count",
+            )
+        )
         # Existing structured outputs should stay consumable even if sidecar is temporarily unavailable.
-        nlp_available = entity_count > 0 or relation_count > 0
+        nlp_available = entity_count > 0 or relation_count > 0 or nlp_stage_ready
         agentic_available = workflow_status in {"succeeded", "completed"} and workflow_mode in {"", "agentic"}
 
         fast_running = sync_status in {"pending", "indexing"} or sync_stage in {"pending", "indexing"}
@@ -1084,10 +1181,7 @@ class ProjectKnowledgeSyncManager:
     def _hydrate_processing_view(self, state: dict[str, Any]) -> dict[str, Any]:
         hydrated = dict(state)
         hydrated["semantic_engine"] = self._build_semantic_engine_state(hydrated)
-        last_result = hydrated.get("last_result") or {}
-        index_result = last_result.get("index") if isinstance(last_result, dict) else {}
-        if not isinstance(index_result, dict):
-            index_result = {}
+        index_result = self._resolve_index_result(hydrated)
         processing_modes = self._build_processing_modes(hydrated)
         output_resolution = self._build_output_resolution(processing_modes)
         mode_outputs = self._build_mode_outputs(hydrated)
@@ -1588,6 +1682,100 @@ class ProjectKnowledgeSyncManager:
             "state": self._hydrate_processing_view(state),
         }
 
+    def resume_sync_if_needed(
+        self,
+        *,
+        project_id: str,
+        config: KnowledgeConfig,
+        running_config: Any | None,
+        source: KnowledgeSourceSpec,
+    ) -> dict[str, Any]:
+        should_start = False
+        normalized_mode = "agentic"
+        with self._lock:
+            state = self._load_state(project_id)
+            status = str(state.get("status") or "").strip().lower()
+            has_resumable_work = (
+                status in self._resumable_statuses
+                or bool(state.get("dirty"))
+                or bool(state.get("dirty_after_run"))
+            )
+            if not has_resumable_work:
+                return {
+                    "accepted": False,
+                    "reason": "NO_RESUMABLE_SYNC",
+                    "state": self._hydrate_processing_view(state),
+                }
+
+            normalized_mode = str(state.get("latest_requested_mode") or "agentic").strip().lower() or "agentic"
+            if normalized_mode not in KNOWLEDGE_PROCESSING_SUPPORTED_MODES:
+                normalized_mode = "agentic"
+
+            scheduled_for = self._parse_iso(state.get("scheduled_for"))
+            if status == "queued" and scheduled_for is not None and scheduled_for > datetime.now(UTC):
+                self._schedule_dispatch(
+                    scheduled_for,
+                    project_id=project_id,
+                    config=config,
+                    running_config=running_config,
+                    source=source,
+                    processing_mode=normalized_mode,
+                )
+                self._save_state(state)
+                return {
+                    "accepted": True,
+                    "reason": "RESCHEDULED",
+                    "state": self._hydrate_processing_view(state),
+                }
+
+            if state.get("dirty_after_run"):
+                state["dirty"] = True
+                state["changed_paths"] = self._merge_paths(
+                    state.get("changed_paths"),
+                    state.get("pending_changed_paths"),
+                )
+                state["pending_changed_paths"] = []
+                state["dirty_after_run"] = False
+
+            previous_stage = str(state.get("stage") or state.get("current_stage") or "pending").strip().lower()
+            state["auto_enabled"] = True
+            state["latest_source_id"] = source.id
+            state["latest_requested_mode"] = normalized_mode
+            state["last_trigger"] = "resume"
+            state["last_error"] = ""
+            state["scheduled_for"] = None
+            state["queued_at"] = None
+            state.update(
+                self._normalize_sync_patch(
+                    {
+                        "status": "pending",
+                        "stage": "pending",
+                        "stage_message": f"Resuming knowledge workflow from {previous_stage or 'pending'}",
+                        "progress": max(1, _safe_int(state.get("progress") or 0)),
+                        "current": _safe_int(state.get("current") or 0),
+                        "total": max(_safe_int(state.get("total") or 0), 4),
+                        "eta_seconds": state.get("eta_seconds"),
+                        "last_started_at": self._now_iso(),
+                    }
+                )
+            )
+            self._save_state(state)
+            should_start = True
+
+        if should_start:
+            self._start_worker(
+                project_id=project_id,
+                config=config,
+                running_config=running_config,
+                source=source,
+                processing_mode=normalized_mode,
+            )
+        return {
+            "accepted": True,
+            "reason": "RESUMED",
+            "state": self.get_state(project_id),
+        }
+
     def _run_sync_loop(
         self,
         *,
@@ -1661,6 +1849,8 @@ class ProjectKnowledgeSyncManager:
                         "latest_workflow_run_id": str(workflow_result.get("run_id") or "").strip(),
                         "latest_requested_mode": normalized_mode,
                         "processing_mode_overrides": {},
+                        "l2_progress": {},
+                        "l2_metrics": {},
                         "semantic_engine": self._build_semantic_engine_state(
                             self._load_state(project_id),
                             config=config,
@@ -1698,6 +1888,8 @@ class ProjectKnowledgeSyncManager:
                         "last_finished_at": self._now_iso(),
                         "last_error": str(exc),
                         "processing_mode_overrides": {},
+                        "l2_progress": {},
+                        "l2_metrics": {},
                     }),
                 )
 
