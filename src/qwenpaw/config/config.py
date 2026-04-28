@@ -1680,9 +1680,9 @@ class KnowledgeAutomationConfig(BaseModel):
 class KnowledgeNLPConfig(BaseModel):
     """Generic NLP runtime configuration."""
 
-    provider: Literal["rex_uninlu", "placeholder"] = Field(
-        default="rex_uninlu",
-        description="Configured NLP provider. RexUniNLU is planned as default.",
+    provider: Literal["hanlp", "rex_uninlu", "placeholder"] = Field(
+        default="hanlp",
+        description="Configured NLP provider. HanLP is active during transition to RexUniNLU.",
     )
 
     enabled: bool = Field(default=False)
@@ -1708,7 +1708,7 @@ class KnowledgeNLPConfig(BaseModel):
     @model_validator(mode="after")
     def _inject_from_env(self) -> "KnowledgeNLPConfig":
         provider = os.environ.get("COPAW_NLP_PROVIDER", "").strip().lower()
-        if provider in {"rex_uninlu", "placeholder"}:
+        if provider in {"hanlp", "rex_uninlu", "placeholder"}:
             self.provider = provider
 
         enabled_raw = (

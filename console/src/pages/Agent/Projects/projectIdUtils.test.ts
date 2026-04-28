@@ -21,9 +21,10 @@ describe("projectId utils", () => {
       description: "",
       status: "active",
       workspace_dir: "",
+      data_dir: "",
       metadata_file: "projects/project-abc/.agent/PROJECT.md",
       tags: [],
-      artifact_distill_mode: "inherit",
+      artifact_distill_mode: "file_scan",
       artifact_profile: {
         skills: [],
         scripts: [],
@@ -31,7 +32,6 @@ describe("projectId utils", () => {
         cases: [],
       },
       project_auto_knowledge_sink: false,
-      file_monitoring_state: "active",
       preferred_workspace_chat_id: "",
       updated_time: "",
     })).toEqual(["project-abc"]);

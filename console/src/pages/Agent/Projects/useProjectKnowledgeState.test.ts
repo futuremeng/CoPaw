@@ -57,9 +57,14 @@ function buildSource(
 ): KnowledgeSourceItem {
   return {
     id: "source-1",
+    name: "Source 1",
     type: "directory",
-    path: "/tmp/source-1",
+    location: "/tmp/source-1",
+    content: "",
     enabled: true,
+    recursive: true,
+    tags: [],
+    summary: "",
     status: {
       indexed: false,
       indexed_at: null,
@@ -71,7 +76,7 @@ function buildSource(
       error: null,
       ...status,
     },
-  } as KnowledgeSourceItem;
+  };
 }
 
 function buildSyncState(

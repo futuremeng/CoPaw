@@ -10,7 +10,7 @@ import {
 import { buildModeState } from "./projectKnowledgeTestUtils";
 import type { ProjectKnowledgeState } from "./useProjectKnowledgeState";
 
-const mockRecordsToVisualizationData = vi.fn(() => ({ nodes: [], edges: [] }));
+const mockRecordsToVisualizationData = vi.fn((_: unknown, __?: unknown) => ({ nodes: [], edges: [] }));
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -36,7 +36,9 @@ vi.mock("../Knowledge/graphQuery", () => ({
     }
     return records.slice(0, Math.max(1, Math.floor(Number(topK))));
   },
-  recordsToVisualizationData: (...args: unknown[]) => mockRecordsToVisualizationData(...args),
+  recordsToVisualizationData: (records: unknown[], options?: unknown) => (
+    mockRecordsToVisualizationData(records, options)
+  ),
 }));
 
 function buildKnowledgeState(projectId: string): ProjectKnowledgeState {
@@ -392,7 +394,9 @@ describe("ProjectKnowledgePanel interactions", () => {
     );
 
     expect(mockRecordsToVisualizationData).toHaveBeenCalled();
-    expect(mockRecordsToVisualizationData.mock.calls.at(-1)?.[0]).toHaveLength(2);
+    const calls = mockRecordsToVisualizationData.mock.calls as unknown[][];
+    const lastCall = calls[calls.length - 1];
+    expect(lastCall?.[0]).toHaveLength(2);
     expect(knowledgeState.graphResult.records).toHaveLength(3);
   });
 

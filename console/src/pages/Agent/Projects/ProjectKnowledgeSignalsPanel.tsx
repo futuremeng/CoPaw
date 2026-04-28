@@ -35,7 +35,7 @@ interface ProjectKnowledgeSignalsPanelProps {
   onRunSuggestedQuery?: (query: string) => void;
 }
 
-function formatMetricsSourceLabel(source: string, t: (key: string, defaultValue?: string) => string): string {
+function formatMetricsSourceLabel(source: string, t: ReturnType<typeof useTranslation>["t"]): string {
   const normalized = String(source || "").trim();
   if (!normalized) {
     return t("projects.knowledge.metricsSourceUnknown", "unknown");

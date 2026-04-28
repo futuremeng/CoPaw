@@ -12,6 +12,8 @@ function NlpPage() {
     installing,
     downloadingModel,
     status,
+    provider,
+    hanlpProviderActive,
     lastManualSteps,
     lastOperations,
     sidecarReady,
@@ -46,6 +48,26 @@ function NlpPage() {
         message={t("nlpConfig.infoTitle")}
         description={t("nlpConfig.infoDescription")}
       />
+
+      <Alert
+        type={hanlpProviderActive ? "success" : "warning"}
+        showIcon
+        message={`Provider: ${provider || "hanlp"}`}
+        description={
+          hanlpProviderActive
+            ? "HanLP provider is active."
+            : "Current provider is not HanLP; HanLP install/model actions are disabled."
+        }
+      />
+
+      {status?.sidecar.reason_code === "HANLP2_FULL_INSTALL_REQUIRED" ? (
+        <Alert
+          type="warning"
+          showIcon
+          message="HanLP full package is required"
+          description="Install with pip install 'hanlp[full]' in a dedicated Python environment, then refresh status."
+        />
+      ) : null}
 
       <div className={styles.content}>
         <Card className={styles.card}>
@@ -159,14 +181,14 @@ function NlpPage() {
           type="primary"
           onClick={handleInstall}
           loading={installing}
-          disabled={downloadingModel || sidecarReady}
+          disabled={downloadingModel || sidecarReady || !hanlpProviderActive}
         >
           {sidecarReady ? t("nlpConfig.sidecarReady") : t("nlpConfig.installButton")}
         </Button>
         <Button
           onClick={handleDownloadModel}
           loading={downloadingModel}
-          disabled={installing || !sidecarReady || modelReady}
+          disabled={installing || !sidecarReady || modelReady || !hanlpProviderActive}
         >
           {modelReady ? t("nlpConfig.modelReady") : t("nlpConfig.downloadButton")}
         </Button>

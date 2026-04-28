@@ -258,13 +258,13 @@ def _install_hanlp_package(
         install_attempts.append(
             (
                 "uv",
-                [uv_executable, "pip", "install", "--python", str(python_path), "hanlp"],
+                [uv_executable, "pip", "install", "--python", str(python_path), "hanlp[full]"],
             ),
         )
     install_attempts.append(
         (
             "pip",
-            [str(python_path), "-m", "pip", "install", "hanlp"],
+            [str(python_path), "-m", "pip", "install", "hanlp[full]"],
         ),
     )
 
@@ -302,7 +302,7 @@ def _runtime() -> HanLPSidecarRuntime:
 
 
 def _task_specs(config) -> dict[str, object]:
-    task_matrix = getattr(getattr(config.knowledge, "hanlp", None), "task_matrix", None)
+    task_matrix = getattr(getattr(config.knowledge, "nlp", None), "task_matrix", None)
     tasks = getattr(task_matrix, "tasks", None)
     if not isinstance(tasks, dict):
         return {}
@@ -355,7 +355,7 @@ def _build_status(config) -> dict:
     probe_state = runtime.probe(config.knowledge)
     model_state = runtime.model_status(config.knowledge)
     task_states = _build_task_status(runtime, config)
-    python_executable = str(config.knowledge.hanlp.python_executable or "").strip()
+    python_executable = str(config.knowledge.nlp.python_executable or "").strip()
     managed_python = str(_managed_python_path(_managed_venv()))
     uv_executable = _find_uv_executable()
     return {
@@ -363,18 +363,19 @@ def _build_status(config) -> dict:
             "status": probe_state.get("status") or "unavailable",
             "reason_code": probe_state.get("reason_code") or "HANLP2_SIDECAR_UNCONFIGURED",
             "reason": probe_state.get("reason") or "HanLP2 sidecar is not configured.",
-            "enabled": bool(config.knowledge.hanlp.enabled),
+            "enabled": bool(config.knowledge.nlp.enabled),
+            "provider": str(config.knowledge.nlp.provider or "hanlp").strip(),
             "python_executable": python_executable,
             "managed": python_executable == managed_python,
             "uv_available": bool(uv_executable),
             "uv_executable": uv_executable,
-            "hanlp_home": str(config.knowledge.hanlp.hanlp_home or "").strip(),
+            "model_home": str(config.knowledge.nlp.model_home or "").strip(),
         },
         "model": {
             "status": model_state.get("status") or "unavailable",
             "reason_code": model_state.get("reason_code") or "HANLP2_MODEL_LOAD_FAILED",
             "reason": model_state.get("reason") or "HanLP2 tokenizer model is unavailable.",
-            "model_id": str(config.knowledge.hanlp.model_id or "").strip(),
+            "model_id": str(config.knowledge.nlp.model_id or "").strip(),
         },
         "tasks": task_states,
     }
@@ -403,9 +404,10 @@ def get_hanlp_sidecar_status(*, force_refresh: bool = False) -> dict:
 
 
 def _persist_managed_sidecar_config(config, python_executable: Path, hanlp_home: Path) -> None:
-    config.knowledge.hanlp.enabled = True
-    config.knowledge.hanlp.python_executable = str(python_executable)
-    config.knowledge.hanlp.hanlp_home = str(hanlp_home)
+    config.knowledge.nlp.provider = "hanlp"
+    config.knowledge.nlp.enabled = True
+    config.knowledge.nlp.python_executable = str(python_executable)
+    config.knowledge.nlp.model_home = str(hanlp_home)
     save_config(config)
 
 
@@ -471,7 +473,7 @@ def auto_install_hanlp_sidecar() -> dict:
         operations=operations,
     ):
         manual_steps.append(
-            "HanLP package installation failed in the managed sidecar environment.",
+            "HanLP full package installation failed in the managed sidecar environment.",
         )
         return _failure_result(
             config=config,
@@ -485,7 +487,7 @@ def auto_install_hanlp_sidecar() -> dict:
     status_after = get_hanlp_sidecar_status(force_refresh=True)
     if status_after["sidecar"]["status"] != "ready":
         manual_steps.append(
-            "HanLP was installed, but the sidecar probe still failed. Review the operation log and verify the managed Python can import hanlp.",
+            "HanLP was installed, but the sidecar probe still failed. Review the operation log and verify the managed Python can import hanlp and torch.",
         )
     return {
         "success": status_after["sidecar"]["status"] == "ready",
@@ -547,7 +549,7 @@ def ensure_hanlp_model() -> dict:
             "status": model_state.get("status") or "unavailable",
             "reason_code": model_state.get("reason_code") or "HANLP2_MODEL_LOAD_FAILED",
             "reason": model_state.get("reason") or "HanLP2 tokenizer model is unavailable.",
-            "model_id": str(config.knowledge.hanlp.model_id or "").strip(),
+            "model_id": str(config.knowledge.nlp.model_id or "").strip(),
         },
         "task_results": task_results,
         "manual_steps": manual_steps,

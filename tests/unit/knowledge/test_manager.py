@@ -646,7 +646,7 @@ def test_index_source_populates_hanlp_syntax_tasks_when_available(tmp_path: Path
     assert chunk["syntax_format_version"] == "0.2"
     assert chunk["syntax_relation_count"] == 5
     syntax_structured = json.loads(syntax_structured_path.read_text(encoding="utf-8"))
-    assert syntax_structured["parse_mode"] == "hanlp_task_matrix"
+    assert syntax_structured["parse_mode"] == "nlp_task_matrix"
     assert syntax_structured["task_keys"] == ["con", "dep", "sdp"]
     assert syntax_structured["relation_count"] == 5
     sentence = syntax_structured["sentences"][0]
@@ -659,7 +659,7 @@ def test_index_source_populates_hanlp_syntax_tasks_when_available(tmp_path: Path
     assert "### Constituency" in syntax_annotated
 
 
-def test_index_source_runs_cor_before_ner_and_syntax_uses_resolved_text(tmp_path: Path):
+def test_index_source_runs_cor_after_ner_and_syntax_uses_original_text(tmp_path: Path):
     config = Config().knowledge
     config.index.chunk_size = 10_000
     config.hanlp.enabled = True
@@ -732,23 +732,23 @@ def test_index_source_runs_cor_before_ner_and_syntax_uses_resolved_text(tmp_path
 
     ner_structured = json.loads(ner_structured_path.read_text(encoding="utf-8"))
     assert ner_structured["source_text"] == cor_structured["source_text"]
-    assert ner_structured["input_text"] == cor_structured["resolved_text"]
-    assert ner_structured["cor_structured_path"] == chunk["cor_structured_path"]
-    assert ner_structured["cor_resolution_mode"] == "hanlp_cor"
+    assert ner_structured["input_text"] == cor_structured["source_text"]
+    assert ner_structured["cor_structured_path"] == ""
+    assert ner_structured["cor_resolution_mode"] == "identity_fallback"
 
     syntax_structured = json.loads(syntax_structured_path.read_text(encoding="utf-8"))
     assert syntax_structured["source_text"] == cor_structured["source_text"]
-    assert syntax_structured["input_text"] == cor_structured["resolved_text"]
-    assert syntax_structured["cor_structured_path"] == chunk["cor_structured_path"]
-    assert syntax_structured["cor_resolution_mode"] == "hanlp_cor"
+    assert syntax_structured["input_text"] == cor_structured["source_text"]
+    assert syntax_structured["cor_structured_path"] == ""
+    assert syntax_structured["cor_resolution_mode"] == "identity_fallback"
 
     task_order = [item[0] for item in call_trace]
-    assert task_order[0] == "cor"
+    assert task_order[0] == "ner_msra"
     assert "ner_msra" in task_order
     assert "dep" in task_order
     assert "sdp" in task_order
     assert "con" in task_order
-    assert task_order.index("cor") < task_order.index("ner_msra")
+    assert task_order.index("cor") > task_order.index("ner_msra")
 
 
 def test_delete_index_removes_ner_files(tmp_path: Path):
@@ -982,7 +982,7 @@ def test_semantic_engine_state_reports_unavailable_without_hanlp(tmp_path: Path)
 
     state = manager.get_semantic_engine_state()
 
-    assert state["engine"] == "hanlp2"
+    assert state["engine"] == "nlp"
     assert state["status"] == "unavailable"
     assert state["reason_code"] == "HANLP2_SIDECAR_UNCONFIGURED"
 

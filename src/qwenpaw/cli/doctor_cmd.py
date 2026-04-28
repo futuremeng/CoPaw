@@ -241,15 +241,19 @@ def _check_hanlp_sidecar(cfg) -> tuple[bool, str, list[str]]:
         )
     elif not str(hanlp_cfg.python_executable or "").strip():
         notes.append(
-            "Set COPAW_HANLP_SIDECAR_PYTHON or knowledge.hanlp.python_executable "
+            "Set COPAW_HANLP_SIDECAR_PYTHON or knowledge.nlp.python_executable "
             "to the dedicated Python 3.6-3.9 sidecar interpreter.",
         )
     else:
         notes.append(
             f"Configured sidecar Python: {hanlp_cfg.python_executable}",
         )
-    if str(hanlp_cfg.hanlp_home or "").strip():
-        notes.append(f"HANLP_HOME: {hanlp_cfg.hanlp_home}")
+    model_home = (
+        str(getattr(hanlp_cfg, "model_home", "") or "").strip()
+        or str(getattr(hanlp_cfg, "hanlp_home", "") or "").strip()
+    )
+    if model_home:
+        notes.append(f"HANLP_HOME: {model_home}")
     else:
         notes.append(
             "Optional: set COPAW_HANLP_HOME when using preloaded offline model caches.",
@@ -260,7 +264,11 @@ def _check_hanlp_sidecar(cfg) -> tuple[bool, str, list[str]]:
     if reason_code == "HANLP2_IMPORT_UNAVAILABLE":
         notes.append(
             "Install HanLP in the sidecar environment, for example: "
-            "<sidecar-python> -m pip install hanlp",
+            "<sidecar-python> -m pip install 'hanlp[full]'",
+        )
+    elif reason_code == "HANLP2_FULL_INSTALL_REQUIRED":
+        notes.append(
+            "Install full dependencies in sidecar: <sidecar-python> -m pip install 'hanlp[full]'.",
         )
     elif reason_code == "HANLP2_SIDECAR_PYTHON_INCOMPATIBLE":
         notes.append(

@@ -14,6 +14,7 @@ from ...config import (
 )
 from ...config.config import load_agent_config, save_agent_config
 from ...knowledge.module_skills import sync_knowledge_module_skills
+from ...knowledge.hanlp_runtime import NLPRuntime
 from ...agents.memory.agent_md_manager import AgentMdManager
 from ...agents.utils import (
     copy_builtin_agent_md_files,
@@ -492,17 +493,28 @@ async def post_local_whisper_install() -> dict:
     ),
 )
 async def get_nlp_status() -> dict:
-    """Return generic NLP placeholder status."""
+    """Return provider-aware NLP runtime status."""
     config = load_config()
     nlp_cfg = config.knowledge.nlp
+    provider = str(getattr(nlp_cfg, "provider", "hanlp") or "hanlp").strip().lower()
+    if provider == "hanlp":
+        from ...agents.utils.hanlp_sidecar import get_hanlp_sidecar_status
+
+        payload = await asyncio.to_thread(get_hanlp_sidecar_status)
+        payload["provider"] = "hanlp"
+        payload["api"] = NLPRuntime().api_status(config.knowledge)
+        return payload
+
+    runtime = NLPRuntime()
+    sidecar_state = runtime.probe(config.knowledge)
+    model_state = runtime.model_status(config.knowledge)
+    api_payload = runtime.api_status(config.knowledge)
     return {
-        "provider": str(getattr(nlp_cfg, "provider", "rex_uninlu") or "rex_uninlu"),
+        "provider": provider,
         "sidecar": {
-            "status": "unavailable",
-            "reason_code": "NLP_ENGINE_PLACEHOLDER_ACTIVE",
-            "reason": (
-                "HanLP has been removed. RexUniNLU integration is not enabled yet."
-            ),
+            "status": str(sidecar_state.get("status") or "unavailable"),
+            "reason_code": str(sidecar_state.get("reason_code") or "NLP_ENGINE_UNAVAILABLE"),
+            "reason": str(sidecar_state.get("reason") or "NLP runtime is unavailable."),
             "enabled": bool(getattr(nlp_cfg, "enabled", False)),
             "python_executable": str(getattr(nlp_cfg, "python_executable", "") or ""),
             "managed": False,
@@ -511,11 +523,12 @@ async def get_nlp_status() -> dict:
             "model_home": str(getattr(nlp_cfg, "model_home", "") or ""),
         },
         "model": {
-            "status": "unavailable",
-            "reason_code": "NLP_ENGINE_MODEL_NOT_IMPLEMENTED",
-            "reason": "Model checks are unavailable in placeholder NLP runtime.",
+            "status": str(model_state.get("status") or "unavailable"),
+            "reason_code": str(model_state.get("reason_code") or "NLP_ENGINE_UNAVAILABLE"),
+            "reason": str(model_state.get("reason") or "NLP model is unavailable."),
             "model_id": str(getattr(nlp_cfg, "model_id", "") or ""),
         },
+        "api": api_payload,
     }
 
 
@@ -547,20 +560,13 @@ async def get_hanlp_status() -> dict:
     ),
 )
 async def post_hanlp_install() -> dict:
-    """Compatibility no-op for removed HanLP installer."""
-    status = await get_nlp_status()
-    return {
-        "success": False,
-        "already_available": False,
-        "status_before": status,
-        "status_after": status,
-        "operations": [],
-        "manual_steps": [
-            "HanLP installer has been removed.",
-            "Use knowledge.nlp provider configuration and wait for RexUniNLU integration.",
-        ],
-        "deprecated": True,
-    }
+    """Install HanLP sidecar runtime and full package dependencies."""
+    from ...agents.utils.hanlp_sidecar import auto_install_hanlp_sidecar
+
+    try:
+        return await asyncio.to_thread(auto_install_hanlp_sidecar)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.post(
@@ -572,24 +578,13 @@ async def post_hanlp_install() -> dict:
     ),
 )
 async def post_hanlp_download_model() -> dict:
-    """Compatibility no-op for removed HanLP model downloader."""
-    status = await get_nlp_status()
-    return {
-        "success": False,
-        "status_before": status,
-        "status_after": status,
-        "model_result": {
-            "status": "unavailable",
-            "reason_code": "NLP_ENGINE_MODEL_NOT_IMPLEMENTED",
-            "reason": "Model download/verify is not available before RexUniNLU integration.",
-            "model_id": status.get("model", {}).get("model_id", ""),
-        },
-        "manual_steps": [
-            "HanLP model operations have been removed.",
-            "Use knowledge.nlp and follow RexUniNLU onboarding in next phase.",
-        ],
-        "deprecated": True,
-    }
+    """Download and verify HanLP task models."""
+    from ...agents.utils.hanlp_sidecar import ensure_hanlp_model
+
+    try:
+        return await asyncio.to_thread(ensure_hanlp_model)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.get(

@@ -545,14 +545,6 @@ class KnowledgeManager:
                 }
             )
 
-        self._write_chunk_cor_artifacts(
-            source,
-            payload,
-            config=config,
-            progress_callback=_emit_l2,
-            progress_start=45,
-            progress_end=54,
-        )
         self._write_chunk_ner_artifacts(
             source,
             payload,
@@ -569,11 +561,19 @@ class KnowledgeManager:
             progress_start=64,
             progress_end=70,
         )
+        self._write_chunk_cor_artifacts(
+            source,
+            payload,
+            config=config,
+            progress_callback=_emit_l2,
+            progress_start=45,
+            progress_end=54,
+        )
 
         self._apply_semantic_stage_metrics(payload)
         _emit_l2(
             {
-                "stage": "syntax",
+                "stage": "cor",
                 "done_chunks": total_chunks,
                 "metrics": {
                     "cor_ready_chunk_count": _safe_count_int(payload.get("cor_ready_chunk_count") or 0),
@@ -2599,7 +2599,10 @@ class KnowledgeManager:
                 chunk.pop("syntax_path", None)
                 chunk.pop("syntax_structured_path", None)
                 chunk.pop("syntax_annotated_path", None)
-                resolved_text, cor_structured_path, cor_resolution_mode, source_text = self._resolve_chunk_text_via_cor(chunk)
+                source_text = self._read_chunk_text(chunk)
+                resolved_text = source_text
+                cor_structured_path = ""
+                cor_resolution_mode = "identity_fallback"
                 mentions = self._load_chunk_ner_mentions(chunk)
                 structured_payload = self._render_chunk_syntax_structured_payload(
                     chunk,
@@ -2985,7 +2988,10 @@ class KnowledgeManager:
                         }
                     )
                 continue
-            resolved_text, cor_structured_path, cor_resolution_mode, source_text = self._resolve_chunk_text_via_cor(chunk)
+            source_text = self._read_chunk_text(chunk)
+            resolved_text = source_text
+            cor_structured_path = ""
+            cor_resolution_mode = "identity_fallback"
             mentions = self._collect_chunk_ner_mentions_with_fallback(resolved_text, config=config) if config is not None else []
             catalog = self._build_chunk_ner_catalog(mentions)
             chunk["ner_status"] = "ready"
@@ -3207,9 +3213,9 @@ class KnowledgeManager:
 
         self._write_source_chunk_manifest(source.id, current_chunk_paths)
         if include_semantic_artifacts:
-            self._write_chunk_cor_artifacts(source, payload, config=config)
             self._write_chunk_ner_artifacts(source, payload, config=config)
             self._write_chunk_syntax_artifacts(source, payload, config=config)
+            self._write_chunk_cor_artifacts(source, payload, config=config)
         else:
             for chunk in payload.get("chunks") or []:
                 if not isinstance(chunk, dict):

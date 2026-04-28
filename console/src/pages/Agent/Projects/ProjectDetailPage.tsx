@@ -65,7 +65,6 @@ import {
 } from "./projectChatPrompts";
 import {
   isIgnoredProjectFile,
-  pickPreviewablePathFromTreeNodes,
   resolveArtifactSelectionPath,
   isPreviewablePath,
   selectSeedSourceFiles,
@@ -2871,8 +2870,9 @@ export default function ProjectDetailPage() {
           treeProbePath,
         );
         const selection = resolveArtifactSelectionPath(treeProbePath, children);
-        if (selection.expandedDirectoryPath) {
-          setTreeExpandedKeys((prev) => mergeExpandedProjectTreeKeys(prev, [selection.expandedDirectoryPath]));
+        const expandedDirectoryPath = selection.expandedDirectoryPath;
+        if (typeof expandedDirectoryPath === "string" && expandedDirectoryPath.length > 0) {
+          setTreeExpandedKeys((prev) => mergeExpandedProjectTreeKeys(prev, [expandedDirectoryPath]));
         }
         if (parentDirPath) {
           setSelectedFilePath(normalizedPath);

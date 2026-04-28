@@ -48,7 +48,7 @@ function modeUnavailableReason(
   return t("projects.knowledge.outputs.fallbackNotSelected", "未被选为当前消费层");
 }
 
-function isPreviewableKnowledgeArtifactPath(kind: string, path: string): boolean {
+function isPreviewableKnowledgeArtifactPath(path: string): boolean {
   if (!path) {
     return false;
   }
@@ -422,7 +422,7 @@ export default function ProjectKnowledgeOutputsPanel(
               <Tag>{artifact.kind}</Tag>
             </div>
             <div className={styles.projectKnowledgeMetaLine}>
-                {isPreviewableKnowledgeArtifactPath(artifact.kind, artifact.path) && props.onSelectArtifactPath ? (
+                {isPreviewableKnowledgeArtifactPath(artifact.path) && props.onSelectArtifactPath ? (
                   <Button
                     type="link"
                     size="small"

@@ -23,6 +23,18 @@ export interface NlpStatus {
     reason: string;
     model_id: string;
   };
+  api?: Record<string, unknown>;
+  tasks?: Record<string, {
+    enabled?: boolean;
+    status?: string;
+    reason_code?: string;
+    reason?: string;
+  }>;
+  deprecated?: boolean;
+  migration?: {
+    message?: string;
+    target_endpoint?: string;
+  };
 }
 
 export interface HanlpOperation {
@@ -115,12 +127,16 @@ export function useNlp() {
 
   const sidecarReady = status?.sidecar.status === "ready";
   const modelReady = status?.model.status === "ready";
+  const provider = String(status?.provider || "hanlp").toLowerCase();
+  const hanlpProviderActive = provider === "hanlp";
 
   return {
     loading,
     installing,
     downloadingModel,
     status,
+    provider,
+    hanlpProviderActive,
     lastManualSteps,
     lastOperations,
     sidecarReady,
