@@ -259,18 +259,29 @@ class KnowledgeManager:
         running_config: Any | None = None,
     ) -> dict[str, Any]:
         """Return persisted index metadata for a source."""
+        source_stats = self._load_source_stats(source_id)
         source_index_path = self._source_index_path(source_id)
         if not source_index_path.exists():
+            manifest_stats = self._derive_source_status_from_manifests(source_id)
+            raw_document_count = int(source_stats.get("raw_document_count", 0) or 0)
+            fallback_document_count = max(
+                raw_document_count,
+                int(manifest_stats.get("document_count", 0) or 0),
+            )
             status = {
-                "indexed": False,
-                "indexed_at": None,
-                "document_count": 0,
-                "chunk_count": 0,
-                "sentence_count": 0,
-                "char_count": 0,
-                "token_count": 0,
-                "needs_reindex": bool(config),
+                "indexed": bool(manifest_stats.get("indexed", False)),
+                "indexed_at": source_stats.get("indexed_at"),
+                "document_count": fallback_document_count,
+                "chunk_count": int(manifest_stats.get("chunk_count", 0) or 0),
+                "sentence_count": int(manifest_stats.get("sentence_count", 0) or 0),
+                "char_count": int(manifest_stats.get("char_count", 0) or 0),
+                "token_count": int(manifest_stats.get("token_count", 0) or 0),
+                "needs_reindex": bool(source_stats.get("needs_reindex", bool(config))),
                 "error": None,
+                "raw_document_count": raw_document_count,
+                "raw_total_bytes": int(source_stats.get("raw_total_bytes", 0) or 0),
+                "raw_last_ingested_at": source_stats.get("raw_last_ingested_at"),
+                "stats_updated_at": source_stats.get("stats_updated_at"),
             }
             if source is not None:
                 status.update(self._remote_source_status(source))
@@ -283,11 +294,13 @@ class KnowledgeManager:
             current_fingerprint = self.compute_processing_fingerprint(config, running_config)
             stored_fingerprint = str(payload.get("processing_fingerprint") or "")
             needs_reindex = current_fingerprint != stored_fingerprint
+        stats_needs_reindex = bool(source_stats.get("needs_reindex", False))
+        raw_document_count = int(source_stats.get("raw_document_count", 0) or 0)
         status = {
             "indexed": True,
-            "indexed_at": payload.get("indexed_at"),
-            "document_count": payload.get("document_count", 0),
-            "chunk_count": payload.get("chunk_count", 0),
+            "indexed_at": payload.get("indexed_at") or source_stats.get("indexed_at"),
+            "document_count": int(payload.get("document_count", raw_document_count) or 0),
+            "chunk_count": int(payload.get("chunk_count", len(chunks)) or 0),
             "sentence_count": payload.get(
                 "sentence_count",
                 self._sum_chunk_sentence_count(chunks),
@@ -300,12 +313,64 @@ class KnowledgeManager:
                 "token_count",
                 self._sum_chunk_token_count(chunks),
             ),
-            "needs_reindex": needs_reindex,
+            "needs_reindex": bool(needs_reindex or stats_needs_reindex),
             "error": payload.get("error"),
+            "raw_document_count": raw_document_count,
+            "raw_total_bytes": int(source_stats.get("raw_total_bytes", 0) or 0),
+            "raw_last_ingested_at": source_stats.get("raw_last_ingested_at"),
+            "stats_updated_at": source_stats.get("stats_updated_at"),
         }
         if source is not None:
             status.update(self._remote_source_status(source))
         return status
+
+    def _derive_source_status_from_manifests(self, source_id: str) -> dict[str, int | bool]:
+        chunk_paths = self._load_source_chunk_manifest(source_id)
+        snapshots = self._load_source_snapshot_manifest(source_id)
+
+        unique_documents = {
+            str(item.get("document_path") or "").strip()
+            for item in snapshots
+            if str(item.get("document_path") or "").strip()
+        }
+
+        sentence_count = 0
+        char_count = 0
+        token_count = 0
+        for chunk_path in chunk_paths:
+            text = self._read_chunk_text_from_path(chunk_path)
+            if not text:
+                continue
+            sentence_count += len(self._split_chunk_sentences(text))
+            char_count += self._count_text_chars(text)
+            token_count += len(
+                self._tokenize_lightweight_text(
+                    text,
+                    exclude_stop_words=False,
+                )
+            )
+
+        document_count = len(unique_documents)
+        if document_count <= 0 and len(chunk_paths) > 0:
+            document_count = 1
+
+        return {
+            "indexed": len(chunk_paths) > 0,
+            "document_count": document_count,
+            "chunk_count": len(chunk_paths),
+            "sentence_count": sentence_count,
+            "char_count": char_count,
+            "token_count": token_count,
+        }
+
+    def _read_chunk_text_from_path(self, chunk_path: str) -> str:
+        normalized = str(chunk_path or "").strip()
+        if not normalized:
+            return ""
+        try:
+            return (self.root_dir / normalized).read_text(encoding="utf-8")
+        except Exception:
+            return ""
 
     def index_source(
         self,
@@ -395,6 +460,7 @@ class KnowledgeManager:
             json.dumps(payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+        self._update_source_stats_after_index(source.id, payload)
 
         return {
             "source_id": source.id,
@@ -599,6 +665,69 @@ class KnowledgeManager:
 
     def _source_content_md_path(self, source_id: str) -> Path:
         return self._source_dir(source_id) / "content.md"
+
+    def _source_stats_path(self, source_id: str) -> Path:
+        return self._source_dir(source_id) / "stats.json"
+
+    def _load_source_stats(self, source_id: str) -> dict[str, Any]:
+        path = self._source_stats_path(source_id)
+        if not path.exists():
+            return {}
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+        return payload if isinstance(payload, dict) else {}
+
+    def _write_source_stats(self, source_id: str, payload: dict[str, Any]) -> None:
+        path = self._source_stats_path(source_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+    def _update_source_stats_after_upload(
+        self,
+        source_id: str,
+        *,
+        raw_document_count: int,
+        raw_total_bytes: int,
+    ) -> None:
+        current = self._load_source_stats(source_id)
+        now = datetime.now(UTC).isoformat()
+        updated = {
+            **current,
+            "source_id": source_id,
+            "raw_document_count": max(0, int(raw_document_count or 0)),
+            "raw_total_bytes": max(0, int(raw_total_bytes or 0)),
+            "raw_last_ingested_at": now,
+            "needs_reindex": True,
+            "stats_updated_at": now,
+        }
+        self._write_source_stats(source_id, updated)
+
+    def _update_source_stats_after_index(
+        self,
+        source_id: str,
+        payload: dict[str, Any],
+    ) -> None:
+        current = self._load_source_stats(source_id)
+        now = datetime.now(UTC).isoformat()
+        updated = {
+            **current,
+            "source_id": source_id,
+            "indexed": True,
+            "indexed_at": payload.get("indexed_at"),
+            "document_count": int(payload.get("document_count", 0) or 0),
+            "chunk_count": int(payload.get("chunk_count", 0) or 0),
+            "sentence_count": int(payload.get("sentence_count", 0) or 0),
+            "char_count": int(payload.get("char_count", 0) or 0),
+            "token_count": int(payload.get("token_count", 0) or 0),
+            "needs_reindex": False,
+            "stats_updated_at": now,
+        }
+        self._write_source_stats(source_id, updated)
 
     def _source_chunk_manifest_path(self, source_id: str) -> Path:
         return self._source_dir(source_id) / "chunk-manifest.json"
@@ -3032,6 +3161,11 @@ class KnowledgeManager:
         target_dir.mkdir(parents=True, exist_ok=True)
         target_path = target_dir / safe_name
         target_path.write_bytes(data)
+        self._update_source_stats_after_upload(
+            source_id,
+            raw_document_count=1,
+            raw_total_bytes=len(data),
+        )
         return target_path
 
     def save_uploaded_directory(
@@ -3046,6 +3180,9 @@ class KnowledgeManager:
             shutil.rmtree(target_dir, ignore_errors=True)
         target_dir.mkdir(parents=True, exist_ok=True)
 
+        saved_count = 0
+        total_bytes = 0
+
         for relative_path, data in files:
             normalized = Path(relative_path)
             safe_parts = [self._safe_name(part) for part in normalized.parts if part not in {"", "."}]
@@ -3054,6 +3191,13 @@ class KnowledgeManager:
             file_path = target_dir.joinpath(*safe_parts)
             file_path.parent.mkdir(parents=True, exist_ok=True)
             file_path.write_bytes(data)
+            saved_count += 1
+            total_bytes += len(data)
+        self._update_source_stats_after_upload(
+            source_id,
+            raw_document_count=saved_count,
+            raw_total_bytes=total_bytes,
+        )
         return target_dir
 
     def _read_chat_documents(self) -> list[dict[str, str]]:

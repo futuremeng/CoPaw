@@ -127,6 +127,10 @@ export interface ProjectKnowledgeGlobalMetricsPayload {
   sentence_count?: number;
   char_count?: number;
   token_count?: number;
+  metrics_source?: string;
+  metrics_updated_at?: string | null;
+  source_id?: string | null;
+  source_stats_updated_at?: string | null;
 }
 
 export interface ProjectKnowledgeSyncState {

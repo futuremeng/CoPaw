@@ -714,3 +714,51 @@ def test_project_sync_agentic_mode_prefers_quality_snapshot_metrics(tmp_path: Pa
     assert modes["agentic"]["entity_count"] == 14
     assert modes["agentic"]["relation_count"] == 22
     assert modes["agentic"]["quality_score"] == 0.91
+
+
+def test_project_sync_global_metrics_merge_live_source_status(tmp_path: Path, monkeypatch):
+    project_id = "project-global-metrics"
+    manager = ProjectKnowledgeSyncManager(
+        tmp_path,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+
+    state = manager.get_state(project_id)
+    state["latest_source_id"] = f"project-{project_id}-workspace"
+    state["last_result"] = {
+        "index": {
+            "document_count": 1,
+            "chunk_count": 2,
+            "sentence_count": 3,
+            "char_count": 10,
+            "token_count": 5,
+        },
+        "memify": {},
+    }
+
+    monkeypatch.setattr(
+        manager._knowledge_manager,
+        "get_source_status",
+        lambda source_id: {
+            "document_count": 4,
+            "raw_document_count": 4,
+            "chunk_count": 9,
+            "sentence_count": 14,
+            "char_count": 120,
+            "token_count": 66,
+            "stats_updated_at": "2026-04-28T10:00:00+00:00",
+        },
+    )
+
+    hydrated = manager._hydrate_processing_view(state)
+    global_metrics = hydrated["global_metrics"]
+
+    assert global_metrics["document_count"] == 4
+    assert global_metrics["chunk_count"] == 9
+    assert global_metrics["sentence_count"] == 14
+    assert global_metrics["char_count"] == 120
+    assert global_metrics["token_count"] == 66
+    assert global_metrics["metrics_source"] == "project_sync_merged"
+    assert global_metrics["source_id"] == f"project-{project_id}-workspace"
+    assert global_metrics["source_stats_updated_at"] == "2026-04-28T10:00:00+00:00"
+    assert global_metrics["metrics_updated_at"]

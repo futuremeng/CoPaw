@@ -1111,3 +1111,104 @@ def test_directory_source_skips_oversized_file(tmp_path: Path):
     assert result["document_count"] == 1
     assert len(content["documents"]) == 1
     assert content["documents"][0]["path"].endswith("small.md")
+
+
+def test_save_uploaded_file_updates_raw_stats_and_status(tmp_path: Path):
+    manager = KnowledgeManager(tmp_path)
+
+    saved = manager.save_uploaded_file(
+        source_id="upload-file-source",
+        filename="note.md",
+        data=b"hello world",
+    )
+
+    stats_path = manager.get_source_storage_dir("upload-file-source") / "stats.json"
+    status = manager.get_source_status("upload-file-source")
+
+    assert saved.exists()
+    assert stats_path.exists()
+    assert status["indexed"] is False
+    assert status["document_count"] == 1
+    assert status["raw_document_count"] == 1
+    assert status["raw_total_bytes"] == 11
+    assert status["needs_reindex"] is True
+    assert status["raw_last_ingested_at"]
+    assert status["stats_updated_at"]
+
+
+def test_save_uploaded_directory_updates_raw_stats_and_status(tmp_path: Path):
+    manager = KnowledgeManager(tmp_path)
+
+    saved = manager.save_uploaded_directory(
+        source_id="upload-dir-source",
+        files=[
+            ("docs/a.md", b"abc"),
+            ("docs/b.md", b"12345"),
+            ("", b"ignored"),
+        ],
+    )
+
+    status = manager.get_source_status("upload-dir-source")
+
+    assert saved.exists()
+    assert status["indexed"] is False
+    assert status["document_count"] == 2
+    assert status["raw_document_count"] == 2
+    assert status["raw_total_bytes"] == 8
+    assert status["needs_reindex"] is True
+
+
+def test_get_source_status_uses_chunk_list_length_when_chunk_count_missing(tmp_path: Path):
+    config = Config().knowledge
+    source = KnowledgeSourceSpec(
+        id="missing-chunk-count-source",
+        name="Missing Chunk Count Source",
+        type="text",
+        content="第一句。第二句!",
+        enabled=True,
+        recursive=False,
+        tags=[],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    manager.index_source(source, config)
+
+    index_path = manager.get_source_storage_dir(source.id) / "index.json"
+    payload = json.loads(index_path.read_text(encoding="utf-8"))
+    payload.pop("chunk_count", None)
+    index_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    status = manager.get_source_status(source.id, source, config)
+
+    assert status["chunk_count"] == len(payload["chunks"])
+
+
+def test_get_source_status_uses_manifest_metrics_when_index_payload_missing(tmp_path: Path):
+    config = Config().knowledge
+    source = KnowledgeSourceSpec(
+        id="missing-index-source",
+        name="Missing Index Source",
+        type="text",
+        content="第一句。第二句!",
+        enabled=True,
+        recursive=False,
+        tags=[],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    result = manager.index_source(source, config)
+
+    index_path = manager.get_source_storage_dir(source.id) / "index.json"
+    assert index_path.exists()
+    index_path.unlink()
+
+    status = manager.get_source_status(source.id, source, config)
+
+    assert status["indexed"] is True
+    assert status["document_count"] == result["document_count"]
+    assert status["chunk_count"] == result["chunk_count"]
+    assert status["sentence_count"] >= result["sentence_count"]
+    assert status["char_count"] > 0
+    assert status["token_count"] > 0

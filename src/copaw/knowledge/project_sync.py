@@ -553,8 +553,8 @@ class ProjectKnowledgeSyncManager:
                 )
         return metrics
 
-    @staticmethod
     def _build_global_metrics(
+        self,
         state: dict[str, Any],
         mode_metrics: dict[str, Any],
     ) -> dict[str, Any]:
@@ -568,28 +568,65 @@ class ProjectKnowledgeSyncManager:
         if not isinstance(memify_result, dict):
             memify_result = {}
 
+        source_status: dict[str, Any] = {}
+        latest_source_id = str(state.get("latest_source_id") or "").strip()
+        if latest_source_id:
+            try:
+                source_status = self._knowledge_manager.get_source_status(latest_source_id)
+            except Exception:
+                source_status = {}
+
+        source_stats_updated_at = str(
+            source_status.get("stats_updated_at")
+            or source_status.get("indexed_at")
+            or source_status.get("raw_last_ingested_at")
+            or "",
+        ).strip()
+
+        metrics_updated_at = ""
+        candidate_timestamps = [
+            state.get("updated_at"),
+            state.get("last_finished_at"),
+            index_result.get("indexed_at"),
+            source_stats_updated_at,
+        ]
+        latest_dt = None
+        for candidate in candidate_timestamps:
+            parsed = self._parse_iso(candidate)
+            if parsed is None:
+                continue
+            if latest_dt is None or parsed > latest_dt:
+                latest_dt = parsed
+        if latest_dt is not None:
+            metrics_updated_at = latest_dt.isoformat()
+
         fast_metrics = mode_metrics.get("fast") if isinstance(mode_metrics.get("fast"), dict) else {}
 
         document_count = max(
             _safe_int(index_result.get("document_count")),
             _safe_int(memify_result.get("document_count")),
             _safe_int(fast_metrics.get("document_count")),
+            _safe_int(source_status.get("document_count") or source_status.get("raw_document_count")),
         )
         chunk_count = max(
             _safe_int(index_result.get("chunk_count")),
             _safe_int(fast_metrics.get("chunk_count")),
+            _safe_int(source_status.get("chunk_count")),
         )
         sentence_count = max(
             _safe_int(index_result.get("sentence_count")),
             _safe_int(memify_result.get("sentence_count")),
+            _safe_int(source_status.get("sentence_count")),
         )
         char_count = max(
             _safe_int(index_result.get("char_count")),
             _safe_int(fast_metrics.get("char_count")),
+            _safe_int(source_status.get("char_count")),
         )
         token_count = max(
             _safe_int(index_result.get("token_count")),
             _safe_int(fast_metrics.get("token_count")),
+            _safe_int(source_status.get("token_count")),
         )
 
         return {
@@ -598,6 +635,10 @@ class ProjectKnowledgeSyncManager:
             "sentence_count": sentence_count,
             "char_count": char_count,
             "token_count": token_count,
+            "metrics_source": "project_sync_merged",
+            "metrics_updated_at": metrics_updated_at or None,
+            "source_id": latest_source_id or None,
+            "source_stats_updated_at": source_stats_updated_at or None,
         }
 
     def _build_processing_modes(self, state: dict[str, Any]) -> list[dict[str, Any]]:

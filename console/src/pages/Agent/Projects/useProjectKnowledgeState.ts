@@ -87,6 +87,13 @@ export interface ProjectKnowledgeMetrics {
   qualityAssessmentScore: number;
 }
 
+export interface ProjectKnowledgeMetricsMeta {
+  source: string;
+  updatedAt: string;
+  sourceId: string;
+  sourceStatsUpdatedAt: string;
+}
+
 export type ProjectKnowledgeProcessingMode = "fast" | "nlp" | "agentic";
 export type ProjectKnowledgeRealtimeChannel = "project-sync" | "tasks";
 export type ProjectKnowledgeRealtimeChannelStatus = "idle" | "connecting" | "open" | "reconnecting";
@@ -196,6 +203,7 @@ export interface ProjectKnowledgeState {
   processingScheduler: ProjectKnowledgeProcessingScheduler;
   modeOutputs: Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeOutput>;
   quantMetrics: ProjectKnowledgeMetrics;
+  quantMetricsMeta?: ProjectKnowledgeMetricsMeta | null;
   graphQueryText: string;
   setGraphQueryText: (value: string) => void;
   graphQueryMode: ProjectGraphQueryMode;
@@ -638,6 +646,102 @@ function getBackendGlobalMetricNumber(
   key: keyof ProjectKnowledgeGlobalMetricsPayload,
 ): number {
   return normalizeNumber(syncState?.global_metrics?.[key]);
+}
+
+type ProjectKnowledgeCountMetricKey =
+  | "document_count"
+  | "chunk_count"
+  | "sentence_count"
+  | "char_count"
+  | "token_count";
+
+interface ProjectKnowledgeSourceQuantBaseMetrics {
+  totalSources: number;
+  indexedSources: number;
+  indexedRatio: number;
+  documentCount: number;
+  chunkCount: number;
+  sentenceCount: number;
+  charCount: number;
+  tokenCount: number;
+}
+
+function hasBackendGlobalCountMetric(
+  syncState: ProjectKnowledgeSyncState | null,
+  key: ProjectKnowledgeCountMetricKey,
+): boolean {
+  const payload = syncState?.global_metrics;
+  if (!payload || typeof payload !== "object") {
+    return false;
+  }
+  return normalizeNullableNumber(payload[key]) !== null;
+}
+
+function sumSourceMetric(
+  projectSources: KnowledgeSourceItem[],
+  key: ProjectKnowledgeCountMetricKey,
+): number {
+  return projectSources.reduce(
+    (sum, item) => sum + Math.max(0, normalizeNumber(item.status?.[key])),
+    0,
+  );
+}
+
+function resolveCountMetric(
+  syncState: ProjectKnowledgeSyncState | null,
+  sourceTotal: number,
+  key: ProjectKnowledgeCountMetricKey,
+): number {
+  if (hasBackendGlobalCountMetric(syncState, key)) {
+    return getBackendGlobalMetricNumber(syncState, key);
+  }
+  return Math.max(sourceTotal, getSyncIndexCount(syncState, key));
+}
+
+export function deriveSourceQuantBaseMetrics(
+  projectSources: KnowledgeSourceItem[],
+  sourceRegistered: boolean,
+  syncState: ProjectKnowledgeSyncState | null,
+): ProjectKnowledgeSourceQuantBaseMetrics {
+  const totalSources = projectSources.length;
+  const indexedSources = projectSources.filter((item) => item.status.indexed).length;
+
+  const sourceDocumentCount = sumSourceMetric(projectSources, "document_count");
+  const sourceChunkCount = sumSourceMetric(projectSources, "chunk_count");
+  const sourceSentenceCount = sumSourceMetric(projectSources, "sentence_count");
+  const sourceCharCount = sumSourceMetric(projectSources, "char_count");
+  const sourceTokenCount = sumSourceMetric(projectSources, "token_count");
+
+  const documentCount = resolveCountMetric(syncState, sourceDocumentCount, "document_count");
+  const chunkCount = resolveCountMetric(syncState, sourceChunkCount, "chunk_count");
+  const sentenceCount = resolveCountMetric(syncState, sourceSentenceCount, "sentence_count");
+  const charCount = resolveCountMetric(syncState, sourceCharCount, "char_count");
+  const tokenCount = resolveCountMetric(syncState, sourceTokenCount, "token_count");
+
+  const hasIndexedSignal = documentCount > 0
+    || chunkCount > 0
+    || getSyncIndexCount(syncState, "document_count") > 0
+    || getSyncIndexCount(syncState, "chunk_count") > 0;
+  const effectiveTotalSources = totalSources > 0
+    ? totalSources
+    : (sourceRegistered || hasIndexedSignal ? 1 : 0);
+  const effectiveIndexedSources = totalSources > 0
+    ? Math.max(indexedSources, hasIndexedSignal ? 1 : 0)
+    : (hasIndexedSignal ? 1 : 0);
+  const indexedRatio = effectiveTotalSources > 0
+    ? effectiveIndexedSources / effectiveTotalSources
+    : 0;
+
+  return {
+    totalSources: effectiveTotalSources,
+    indexedSources: effectiveIndexedSources,
+    indexedRatio,
+    documentCount,
+    chunkCount,
+    sentenceCount,
+    charCount,
+    tokenCount,
+  };
 }
 
 function parseBackendProcessingModes(
@@ -1618,45 +1722,17 @@ export function useProjectKnowledgeState(
     const latestRoundAfter = latestRound && typeof latestRound.after === "object"
       ? latestRound.after as Record<string, unknown>
       : null;
-    const totalSources = projectSources.length;
-    const indexedSources = projectSources.filter((item) => item.status.indexed).length;
-    const sourceDocumentCount = projectSources.reduce(
-      (sum, item) => sum + Math.max(0, item.status.document_count || 0),
-      0,
-    );
-    const sourceChunkCount = projectSources.reduce(
-      (sum, item) => sum + Math.max(0, item.status.chunk_count || 0),
-      0,
-    );
-    const sourceSentenceCount = projectSources.reduce(
-      (sum, item) => sum + Math.max(0, item.status.sentence_count || 0),
-      0,
-    );
-    const sourceCharCount = projectSources.reduce(
-      (sum, item) => sum + Math.max(0, item.status.char_count || 0),
-      0,
-    );
-    const sourceTokenCount = projectSources.reduce(
-      (sum, item) => sum + Math.max(0, item.status.token_count || 0),
-      0,
-    );
-    const fallbackDocumentCount = getSyncIndexCount(syncState, "document_count");
-    const fallbackChunkCount = getSyncIndexCount(syncState, "chunk_count");
-    const fallbackSentenceCount = getSyncIndexCount(syncState, "sentence_count");
-    const fallbackCharCount = getSyncIndexCount(syncState, "char_count");
-    const fallbackTokenCount = getSyncIndexCount(syncState, "token_count");
-    const effectiveTotalSources = totalSources > 0 ? totalSources : (sourceRegistered ? 1 : 0);
-    const effectiveIndexedSources = totalSources > 0
-      ? indexedSources
-      : (fallbackDocumentCount > 0 || fallbackChunkCount > 0 ? 1 : 0);
-    const indexedRatio = effectiveTotalSources > 0
-      ? effectiveIndexedSources / effectiveTotalSources
-      : 0;
-    const documentCount = totalSources > 0 ? sourceDocumentCount : fallbackDocumentCount;
-    const chunkCount = totalSources > 0 ? sourceChunkCount : fallbackChunkCount;
-    const sentenceCount = totalSources > 0 ? sourceSentenceCount : fallbackSentenceCount;
-    const charCount = totalSources > 0 ? sourceCharCount : fallbackCharCount;
-    const tokenCount = totalSources > 0 ? sourceTokenCount : fallbackTokenCount;
+    const sourceBaseMetrics = deriveSourceQuantBaseMetrics(projectSources, sourceRegistered, syncState);
+    const {
+      totalSources,
+      indexedSources,
+      indexedRatio,
+      documentCount,
+      chunkCount,
+      sentenceCount,
+      charCount,
+      tokenCount,
+    } = sourceBaseMetrics;
     const sentenceWithEntitiesCount = getSyncMemifyMetric(syncState, "sentence_with_entities_count");
     const entityMentionsCount = getSyncMemifyMetric(syncState, "entity_mentions_count");
     const avgEntitiesPerSentence = getSyncMemifyMetric(syncState, "avg_entities_per_sentence");
@@ -1746,8 +1822,8 @@ export function useProjectKnowledgeState(
       / normalizedQualityScores.length;
 
     return {
-      totalSources: effectiveTotalSources,
-      indexedSources: effectiveIndexedSources,
+      totalSources,
+      indexedSources,
       indexedRatio,
       documentCount,
       chunkCount,
@@ -1778,6 +1854,26 @@ export function useProjectKnowledgeState(
     sourceRegistered,
     syncState,
   ]);
+
+  const quantMetricsMeta = useMemo<ProjectKnowledgeMetricsMeta | null>(() => {
+    const payload = syncState?.global_metrics;
+    if (!payload || typeof payload !== "object") {
+      return null;
+    }
+    const source = String(payload.metrics_source || "").trim();
+    const updatedAt = String(payload.metrics_updated_at || "").trim();
+    const sourceId = String(payload.source_id || "").trim();
+    const sourceStatsUpdatedAt = String(payload.source_stats_updated_at || "").trim();
+    if (!source && !updatedAt && !sourceId && !sourceStatsUpdatedAt) {
+      return null;
+    }
+    return {
+      source,
+      updatedAt,
+      sourceId,
+      sourceStatsUpdatedAt,
+    };
+  }, [syncState?.global_metrics]);
 
   const syncAlertType = useMemo(
     () => getProjectKnowledgeSyncAlertType(syncState),
@@ -2347,6 +2443,7 @@ export function useProjectKnowledgeState(
     processingScheduler,
     modeOutputs,
     quantMetrics,
+    quantMetricsMeta,
     graphQueryText,
     setGraphQueryText,
     graphQueryMode,
@@ -2424,6 +2521,7 @@ export function useProjectKnowledgeState(
     projectSourceId,
     projectSources,
     quantMetrics,
+    quantMetricsMeta,
     relationKeywordSeed,
     relationRecords,
     markGraphNeedsRefresh,

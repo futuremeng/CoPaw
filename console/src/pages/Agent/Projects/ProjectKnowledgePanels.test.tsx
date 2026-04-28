@@ -314,6 +314,12 @@ function buildKnowledgeState(): ProjectKnowledgeState {
       missingEvidenceThreshold: 0.22,
       qualityAssessmentScore: 0.86,
     },
+    quantMetricsMeta: {
+      source: "project_sync_merged",
+      updatedAt: "2026-04-28T10:00:00+00:00",
+      sourceId: "project-project-abc-workspace",
+      sourceStatsUpdatedAt: "2026-04-28T09:59:00+00:00",
+    },
     graphQueryText: "Summarize key entities",
     setGraphQueryText: vi.fn(),
     graphQueryTopK: 200,
@@ -431,6 +437,8 @@ describe("project knowledge supporting panels", () => {
     );
 
     expect(screen.getByText("projects.knowledge.signalsTitle")).not.toBeNull();
+    expect(screen.getByText(/Metrics Source/)).not.toBeNull();
+    expect(screen.getByText(/Backend merged sync metrics/)).not.toBeNull();
     expect(screen.getAllByText("projects.knowledge.signalRelations").length).toBeGreaterThan(0);
     expect(screen.getAllByText("实体数").length).toBeGreaterThan(0);
     expect(screen.getByText("Semantic Engine")).not.toBeNull();

@@ -35,6 +35,35 @@ interface ProjectKnowledgeSignalsPanelProps {
   onRunSuggestedQuery?: (query: string) => void;
 }
 
+function formatMetricsSourceLabel(source: string, t: (key: string, defaultValue?: string) => string): string {
+  const normalized = String(source || "").trim();
+  if (!normalized) {
+    return t("projects.knowledge.metricsSourceUnknown", "unknown");
+  }
+  if (normalized === "project_sync_merged") {
+    return t("projects.knowledge.metricsSourceProjectSyncMerged", "Backend merged sync metrics");
+  }
+  if (normalized === "source_status") {
+    return t("projects.knowledge.metricsSourceSourceStatus", "Source status metrics");
+  }
+  if (normalized === "index_result") {
+    return t("projects.knowledge.metricsSourceIndexResult", "Index result metrics");
+  }
+  return normalized;
+}
+
+function formatLocalDateTime(value: string): string {
+  const normalized = String(value || "").trim();
+  if (!normalized) {
+    return "";
+  }
+  const timestamp = Date.parse(normalized);
+  if (!Number.isFinite(timestamp)) {
+    return normalized;
+  }
+  return new Date(timestamp).toLocaleString();
+}
+
 export default function ProjectKnowledgeSignalsPanel(
   props: ProjectKnowledgeSignalsPanelProps,
 ) {
@@ -50,6 +79,8 @@ export default function ProjectKnowledgeSignalsPanel(
   } = props;
   const semanticEngine = knowledgeState.syncState?.semantic_engine;
   const semanticReasonLabel = getProjectKnowledgeSemanticReasonLabel(semanticEngine, t);
+  const metricsSourceLabel = formatMetricsSourceLabel(knowledgeState.quantMetricsMeta?.source || "", t);
+  const metricsUpdatedAtLabel = formatLocalDateTime(knowledgeState.quantMetricsMeta?.updatedAt || "");
 
   return (
     <div className={styles.projectKnowledgeWorkbench}>
@@ -61,6 +92,14 @@ export default function ProjectKnowledgeSignalsPanel(
           <Typography.Text type="secondary">
             {t(knowledgeState.insightMessageKey)}
           </Typography.Text>
+          {knowledgeState.quantMetricsMeta ? (
+            <Typography.Text type="secondary">
+              {t("projects.knowledge.metricsSourceLabel", "Metrics Source")}: {metricsSourceLabel}
+              {metricsUpdatedAtLabel
+                ? ` · ${t("projects.knowledge.metricsUpdatedAt", "Updated")}: ${metricsUpdatedAtLabel}`
+                : ""}
+            </Typography.Text>
+          ) : null}
         </div>
         <div className={styles.projectKnowledgeTabActions}>
           {knowledgeState.insightAction === "settings" ? (
@@ -91,7 +130,7 @@ export default function ProjectKnowledgeSignalsPanel(
           onOpenChange={(open) => {
             onRuntimeSignalTooltipOpenChange?.(open);
           }}
-          overlayClassName={styles.knowledgeRuntimeTooltipOverlay}
+          classNames={{ root: styles.knowledgeRuntimeTooltipOverlay }}
         >
           <div
             className={`${styles.knowledgeModuleHeaderSignal} ${knowledgeState.activeKnowledgeTask ? styles.knowledgeModuleHeaderSignalActive : ""}`}
