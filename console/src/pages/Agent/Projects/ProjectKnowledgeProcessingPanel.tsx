@@ -281,7 +281,7 @@ export default function ProjectKnowledgeProcessingPanel(
   const l1Hint = describeL1Hint(props.knowledgeState, t);
 
   return (
-    <div className={styles.projectKnowledgeWorkbench}>
+    <div className={`${styles.projectKnowledgeWorkbench} ${styles.projectKnowledgeProcessingWorkbench}`}>
       <div className={styles.projectKnowledgeTabHeader}>
         <div>
           <Typography.Title level={5} className={styles.projectKnowledgeSectionTitle}>
@@ -333,170 +333,172 @@ export default function ProjectKnowledgeProcessingPanel(
         </div>
       </div>
 
-      <div className={styles.projectKnowledgeProcessingCompareGrid}>
-        {visibleModes.map((mode) => {
-          const disabledReason = launchDisabledReason(mode, props.knowledgeState, t);
-          const launchDisabled = Boolean(disabledReason) && launchMode !== mode.mode;
-          const staleStatus = staleModes.has(mode.mode);
-          const progress = typeof mode.progress === "number"
-            ? mode.progress
-            : mode.status === "ready"
-              ? 100
-              : mode.status === "queued"
-                ? 0
-                : null;
-          const isL3 = mode.mode === "agentic";
-          const output = props.knowledgeState.modeOutputs[mode.mode];
-          const prioritizedArtifacts = prioritizeProjectKnowledgeArtifacts(output?.artifacts || []);
-          const corBenefitSummary = describeCorBenefit(mode, t);
-          const highlightValue = isL3
-            ? mode.qualityScore != null
-              ? `${Math.round(mode.qualityScore * 100)}%`
-              : t("projects.knowledge.processing.qualityPending", "待增强")
-            : t("projects.knowledge.processing.structureReady", "结构化基线");
+      <div className={styles.projectKnowledgeProcessingScrollBody}>
+        <div className={styles.projectKnowledgeProcessingCompareGrid}>
+          {visibleModes.map((mode) => {
+            const disabledReason = launchDisabledReason(mode, props.knowledgeState, t);
+            const launchDisabled = Boolean(disabledReason) && launchMode !== mode.mode;
+            const staleStatus = staleModes.has(mode.mode);
+            const progress = typeof mode.progress === "number"
+              ? mode.progress
+              : mode.status === "ready"
+                ? 100
+                : mode.status === "queued"
+                  ? 0
+                  : null;
+            const isL3 = mode.mode === "agentic";
+            const output = props.knowledgeState.modeOutputs[mode.mode];
+            const prioritizedArtifacts = prioritizeProjectKnowledgeArtifacts(output?.artifacts || []);
+            const corBenefitSummary = describeCorBenefit(mode, t);
+            const highlightValue = isL3
+              ? mode.qualityScore != null
+                ? `${Math.round(mode.qualityScore * 100)}%`
+                : t("projects.knowledge.processing.qualityPending", "待增强")
+              : t("projects.knowledge.processing.structureReady", "结构化基线");
 
-          return (
-            <div
-              key={mode.mode}
-              className={`${styles.projectKnowledgeModeCard} ${styles.projectKnowledgeProcessingCompareCard}`}
-            >
-              <div className={styles.projectKnowledgeModeHeader}>
-                <div>
-                  <Typography.Text strong>{getProjectKnowledgeModeLabel(mode.mode, t)}</Typography.Text>
-                  <div className={styles.projectKnowledgeModeMeta}>
-                    <Tag color={statusColor(mode.status)}>{statusLabel(mode.status, t)}</Tag>
-                    <Tag>{isL3 ? "L3" : "L2"}</Tag>
-                    {staleStatus ? (
-                      <Tooltip
-                        title={t(
-                          "projects.knowledge.processing.staleModeHint",
-                          "该模式的运行状态尚未收到最新快照，建议手动刷新或等待连接恢复。",
-                        )}
-                      >
-                        <Tag color="orange">
-                          {t("projects.knowledge.processing.staleShort", "快照过期")}
-                        </Tag>
-                      </Tooltip>
-                    ) : null}
+            return (
+              <div
+                key={mode.mode}
+                className={`${styles.projectKnowledgeModeCard} ${styles.projectKnowledgeProcessingCompareCard}`}
+              >
+                <div className={styles.projectKnowledgeModeHeader}>
+                  <div>
+                    <Typography.Text strong>{getProjectKnowledgeModeLabel(mode.mode, t)}</Typography.Text>
+                    <div className={styles.projectKnowledgeModeMeta}>
+                      <Tag color={statusColor(mode.status)}>{statusLabel(mode.status, t)}</Tag>
+                      <Tag>{isL3 ? "L3" : "L2"}</Tag>
+                      {staleStatus ? (
+                        <Tooltip
+                          title={t(
+                            "projects.knowledge.processing.staleModeHint",
+                            "该模式的运行状态尚未收到最新快照，建议手动刷新或等待连接恢复。",
+                          )}
+                        >
+                          <Tag color="orange">
+                            {t("projects.knowledge.processing.staleShort", "快照过期")}
+                          </Tag>
+                        </Tooltip>
+                      ) : null}
+                    </div>
+                  </div>
+                  <Typography.Text type="secondary">
+                    {isL3
+                      ? t("projects.knowledge.processing.compareL3Label", "多智能体增强")
+                      : t("projects.knowledge.processing.compareL2Label", "实体关系抽取")}
+                  </Typography.Text>
+                </div>
+
+                <Typography.Text type="secondary">{getProjectKnowledgeModeRouteHint(mode.mode, t)}</Typography.Text>
+
+                {progress !== null ? (
+                  <Progress percent={progress} size="small" status={mode.status === "failed" || mode.status === "blocked" ? "exception" : mode.status === "ready" ? "success" : "active"} />
+                ) : null}
+
+                <div className={styles.projectKnowledgeModeDetails}>
+                  <Typography.Text>{mode.stage}</Typography.Text>
+                  {mode.lastUpdatedAt ? (
+                    <Typography.Text type="secondary">
+                      {t("projects.knowledge.runtimeStatusUpdatedAt", "Updated")}: {mode.lastUpdatedAt}
+                    </Typography.Text>
+                  ) : null}
+                  {staleStatus ? (
+                    <Typography.Text type="secondary">
+                      {staleInlineHint}
+                    </Typography.Text>
+                  ) : null}
+                  {isL3 && mode.runId ? (
+                    <Typography.Text type="secondary">Run: {mode.runId}</Typography.Text>
+                  ) : null}
+                </div>
+
+                <div className={styles.projectKnowledgeModeMetrics}>
+                  <div className={styles.projectKnowledgeModeMetric}>
+                    <Typography.Text type="secondary">{t("projects.knowledge.entities", "实体数")}</Typography.Text>
+                    <Typography.Text strong>{formatModeCountValue(mode, mode.entityCount, t)}</Typography.Text>
+                  </div>
+                  <div className={styles.projectKnowledgeModeMetric}>
+                    <Typography.Text type="secondary">{t("projects.knowledge.signalRelations", "关系数")}</Typography.Text>
+                    <Typography.Text strong>{formatModeCountValue(mode, mode.relationCount, t)}</Typography.Text>
+                  </div>
+                  <div className={styles.projectKnowledgeModeMetric}>
+                    <Typography.Text type="secondary">
+                      {isL3
+                        ? t("projects.knowledge.processing.qualityScore", "质量分")
+                        : t("projects.knowledge.processing.processingFocus", "处理焦点")}
+                    </Typography.Text>
+                    <Typography.Text strong>{highlightValue}</Typography.Text>
+                  </div>
+                  <div className={styles.projectKnowledgeModeMetric}>
+                    <Typography.Text type="secondary">
+                      {isL3
+                        ? t("projects.knowledge.processing.enhancementDelta", "相对 L2 增量")
+                        : mode.mode === "nlp"
+                          ? t("projects.knowledge.processing.corBenefit", "COR 收益")
+                          : t("projects.knowledge.processing.artifactSummary", "核心产物")}
+                    </Typography.Text>
+                    <Typography.Text strong>
+                      {isL3
+                        ? l3HasIndependentOutputs
+                          ? t("projects.knowledge.processing.deltaSummary", "+{{entities}} 实体 / +{{relations}} 关系", {
+                            entities: entityDelta,
+                            relations: relationDelta,
+                          })
+                          : t("projects.knowledge.processing.outputPendingLong", "等待形成独立增强结果")
+                        : mode.mode === "nlp"
+                          ? corBenefitSummary
+                          : prioritizedArtifacts[0]?.label || t("projects.knowledge.processing.entityGraphArtifact", "实体关系图谱")}
+                    </Typography.Text>
                   </div>
                 </div>
-                <Typography.Text type="secondary">
-                  {isL3
-                    ? t("projects.knowledge.processing.compareL3Label", "多智能体增强")
-                    : t("projects.knowledge.processing.compareL2Label", "实体关系抽取")}
-                </Typography.Text>
-              </div>
 
-              <Typography.Text type="secondary">{getProjectKnowledgeModeRouteHint(mode.mode, t)}</Typography.Text>
+                <Typography.Paragraph type="secondary" className={styles.projectKnowledgeModeSummary}>
+                  {mode.summary}
+                </Typography.Paragraph>
 
-              {progress !== null ? (
-                <Progress percent={progress} size="small" status={mode.status === "failed" || mode.status === "blocked" ? "exception" : mode.status === "ready" ? "success" : "active"} />
-              ) : null}
-
-              <div className={styles.projectKnowledgeModeDetails}>
-                <Typography.Text>{mode.stage}</Typography.Text>
-                {mode.lastUpdatedAt ? (
-                  <Typography.Text type="secondary">
-                    {t("projects.knowledge.runtimeStatusUpdatedAt", "Updated")}: {mode.lastUpdatedAt}
-                  </Typography.Text>
+                {prioritizedArtifacts.length ? (
+                  <div className={styles.projectKnowledgeProcessingArtifacts}>
+                    {prioritizedArtifacts.slice(0, 2).map((artifact) => (
+                      <Tag key={`${mode.mode}-${artifact.path}`} bordered={false}>
+                        {artifact.label}
+                      </Tag>
+                    ))}
+                  </div>
                 ) : null}
-                {staleStatus ? (
-                  <Typography.Text type="secondary">
-                    {staleInlineHint}
-                  </Typography.Text>
-                ) : null}
-                {isL3 && mode.runId ? (
-                  <Typography.Text type="secondary">Run: {mode.runId}</Typography.Text>
-                ) : null}
-              </div>
 
-              <div className={styles.projectKnowledgeModeMetrics}>
-                <div className={styles.projectKnowledgeModeMetric}>
-                  <Typography.Text type="secondary">{t("projects.knowledge.entities", "实体数")}</Typography.Text>
-                  <Typography.Text strong>{formatModeCountValue(mode, mode.entityCount, t)}</Typography.Text>
-                </div>
-                <div className={styles.projectKnowledgeModeMetric}>
-                  <Typography.Text type="secondary">{t("projects.knowledge.signalRelations", "关系数")}</Typography.Text>
-                  <Typography.Text strong>{formatModeCountValue(mode, mode.relationCount, t)}</Typography.Text>
-                </div>
-                <div className={styles.projectKnowledgeModeMetric}>
-                  <Typography.Text type="secondary">
-                    {isL3
-                      ? t("projects.knowledge.processing.qualityScore", "质量分")
-                      : t("projects.knowledge.processing.processingFocus", "处理焦点")}
-                  </Typography.Text>
-                  <Typography.Text strong>{highlightValue}</Typography.Text>
-                </div>
-                <div className={styles.projectKnowledgeModeMetric}>
-                  <Typography.Text type="secondary">
-                    {isL3
-                      ? t("projects.knowledge.processing.enhancementDelta", "相对 L2 增量")
-                      : mode.mode === "nlp"
-                        ? t("projects.knowledge.processing.corBenefit", "COR 收益")
-                        : t("projects.knowledge.processing.artifactSummary", "核心产物")}
-                  </Typography.Text>
-                  <Typography.Text strong>
-                    {isL3
-                      ? l3HasIndependentOutputs
-                        ? t("projects.knowledge.processing.deltaSummary", "+{{entities}} 实体 / +{{relations}} 关系", {
-                          entities: entityDelta,
-                          relations: relationDelta,
-                        })
-                        : t("projects.knowledge.processing.outputPendingLong", "等待形成独立增强结果")
-                      : mode.mode === "nlp"
-                        ? corBenefitSummary
-                        : prioritizedArtifacts[0]?.label || t("projects.knowledge.processing.entityGraphArtifact", "实体关系图谱")}
-                  </Typography.Text>
+                <div className={styles.projectKnowledgeProcessingCardFooter}>
+                  <Tooltip title={launchDisabled ? disabledReason : ""}>
+                    <span title={launchDisabled ? disabledReason : undefined}>
+                      <Button
+                        size="small"
+                        type="default"
+                        loading={launchMode === mode.mode}
+                        disabled={launchDisabled}
+                        onClick={() => void props.knowledgeState.startProcessingMode(mode.mode)}
+                      >
+                        {actionLabel(mode.mode, t)}
+                      </Button>
+                    </span>
+                  </Tooltip>
+                  {disabledReason ? (
+                    <Typography.Text type="secondary">{disabledReason}</Typography.Text>
+                  ) : null}
                 </div>
               </div>
-
-              <Typography.Paragraph type="secondary" className={styles.projectKnowledgeModeSummary}>
-                {mode.summary}
-              </Typography.Paragraph>
-
-              {prioritizedArtifacts.length ? (
-                <div className={styles.projectKnowledgeProcessingArtifacts}>
-                  {prioritizedArtifacts.slice(0, 2).map((artifact) => (
-                    <Tag key={`${mode.mode}-${artifact.path}`} bordered={false}>
-                      {artifact.label}
-                    </Tag>
-                  ))}
-                </div>
-              ) : null}
-
-              <div className={styles.projectKnowledgeProcessingCardFooter}>
-                <Tooltip title={launchDisabled ? disabledReason : ""}>
-                  <span title={launchDisabled ? disabledReason : undefined}>
-                    <Button
-                      size="small"
-                      type="default"
-                      loading={launchMode === mode.mode}
-                      disabled={launchDisabled}
-                      onClick={() => void props.knowledgeState.startProcessingMode(mode.mode)}
-                    >
-                      {actionLabel(mode.mode, t)}
-                    </Button>
-                  </span>
-                </Tooltip>
-                {disabledReason ? (
-                  <Typography.Text type="secondary">{disabledReason}</Typography.Text>
-                ) : null}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {(l2Output || l3Output) ? (
-        <div className={styles.projectKnowledgeProcessingCompareNote}>
-          <Typography.Text type="secondary">
-            {t(
-              "projects.knowledge.processing.compareNote",
-              "L2 提供实体与关系的结构化基础，L3 在此基础上继续做多智能体增强与质量提升。",
-            )}
-          </Typography.Text>
+            );
+          })}
         </div>
-      ) : null}
+
+        {(l2Output || l3Output) ? (
+          <div className={styles.projectKnowledgeProcessingCompareNote}>
+            <Typography.Text type="secondary">
+              {t(
+                "projects.knowledge.processing.compareNote",
+                "L2 提供实体与关系的结构化基础，L3 在此基础上继续做多智能体增强与质量提升。",
+              )}
+            </Typography.Text>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
