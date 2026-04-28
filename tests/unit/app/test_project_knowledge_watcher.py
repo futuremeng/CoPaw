@@ -121,6 +121,51 @@ async def test_project_knowledge_watcher_skips_idle_projects_before_first_file_a
 
 
 @pytest.mark.asyncio
+async def test_project_knowledge_watcher_resume_syncs_on_startup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    project_dir = tmp_path / "projects" / "project-resume"
+    project_dir.mkdir(parents=True, exist_ok=True)
+    (project_dir / "PROJECT.md").write_text(
+        "---\nid: project-resume\nname: Project Resume\nproject_auto_knowledge_sink: true\n---\n",
+        encoding="utf-8",
+    )
+    (project_dir / "original" / "note.md").parent.mkdir(parents=True, exist_ok=True)
+    (project_dir / "original" / "note.md").write_text("hello", encoding="utf-8")
+
+    config = Config()
+    config.knowledge.enabled = True
+    config.knowledge.memify_enabled = True
+
+    resumed: list[dict] = []
+
+    monkeypatch.setattr(watcher_module, "load_config", lambda: config)
+    monkeypatch.setattr(
+        watcher_module,
+        "load_agent_config",
+        lambda _agent_id: type("AgentCfg", (), {"running": config.agents.running})(),
+    )
+    monkeypatch.setattr("qwenpaw.config.utils.save_config", lambda _config: None)
+    monkeypatch.setattr(
+        watcher_module.ProjectKnowledgeSyncManager,
+        "resume_sync_if_needed",
+        lambda self, **kwargs: resumed.append(kwargs) or {"accepted": True, "reason": "RESUMED"},
+    )
+
+    watcher = watcher_module.ProjectKnowledgeWatcher(
+        agent_id="default",
+        workspace_dir=tmp_path,
+        poll_interval=0.01,
+    )
+
+    await watcher._resume_project_syncs(watcher._collect_snapshots())
+
+    assert len(resumed) == 1
+    assert resumed[0]["project_id"] == "project-resume"
+
+
+@pytest.mark.asyncio
 async def test_project_knowledge_watcher_bootstrap_writes_project_chunks_automatically(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

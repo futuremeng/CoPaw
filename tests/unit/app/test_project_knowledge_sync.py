@@ -244,6 +244,60 @@ def test_project_sync_recovers_stale_active_state_and_restarts(tmp_path: Path, m
     assert started
 
 
+def test_project_sync_resume_if_needed_restarts_resumable_state(tmp_path: Path, monkeypatch):
+    project_id = "project-resume"
+    project_dir = tmp_path / "projects" / project_id
+    project_dir.mkdir(parents=True, exist_ok=True)
+    manager = ProjectKnowledgeSyncManager(
+        tmp_path,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+    config = Config().knowledge
+    source = _build_source(project_id, project_dir)
+
+    state = manager.get_state(project_id)
+    state.update(
+        {
+            "status": "graphifying",
+            "stage": "graphifying",
+            "current_stage": "graphifying",
+            "progress": 62,
+            "current": 2,
+            "total": 4,
+            "last_error": "",
+            "latest_requested_mode": "nlp",
+            "dirty_after_run": True,
+            "pending_changed_paths": ["original/a.md"],
+        }
+    )
+    manager._save_state(state)
+
+    resumed_manager = ProjectKnowledgeSyncManager(
+        tmp_path,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+
+    started: list[dict] = []
+    monkeypatch.setattr(resumed_manager, "_start_worker", lambda **kwargs: started.append(kwargs))
+
+    result = resumed_manager.resume_sync_if_needed(
+        project_id=project_id,
+        config=config,
+        running_config=None,
+        source=source,
+    )
+
+    current = resumed_manager.get_state(project_id)
+    assert result["accepted"] is True
+    assert result["reason"] == "RESUMED"
+    assert current["status"] == "pending"
+    assert current["last_trigger"] == "resume"
+    assert current["dirty_after_run"] is False
+    assert "original/a.md" in current["changed_paths"]
+    assert started
+    assert started[0]["processing_mode"] == "nlp"
+
+
 def test_project_sync_auto_triggers_quality_loop_after_memify_success(tmp_path: Path, monkeypatch):
     project_id = "project-e"
     project_dir = tmp_path / "projects" / project_id

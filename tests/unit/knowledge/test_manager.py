@@ -1212,3 +1212,79 @@ def test_get_source_status_uses_manifest_metrics_when_index_payload_missing(tmp_
     assert status["sentence_count"] >= result["sentence_count"]
     assert status["char_count"] > 0
     assert status["token_count"] > 0
+
+
+def test_semantic_stage_writers_skip_ready_chunks_on_resume(tmp_path: Path, monkeypatch):
+    config = Config().knowledge
+    source = KnowledgeSourceSpec(
+        id="resume-stage-source",
+        name="Resume Stage Source",
+        type="text",
+        content="第一句。第二句。",
+        enabled=True,
+        recursive=False,
+        tags=[],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    payload = {
+        "source": source.model_dump(mode="json"),
+        "chunks": [
+            {
+                "chunk_id": "chunk-1",
+                "chunk_path": "chunks/resume/chunk-1.txt",
+                "cor_status": "ready",
+                "cor_path": "cor/resume/chunk-1.cor.xml",
+                "cor_structured_path": "cor/resume/chunk-1.cor.json",
+                "cor_annotated_path": "cor/resume/chunk-1.cor.md",
+                "cor_cluster_count": 1,
+                "cor_replacement_count": 1,
+                "ner_status": "ready",
+                "ner_path": "ner/resume/chunk-1.ner.xml",
+                "ner_structured_path": "ner/resume/chunk-1.ner.json",
+                "ner_annotated_path": "ner/resume/chunk-1.ner.md",
+                "ner_entity_count": 2,
+                "syntax_status": "ready",
+                "syntax_path": "syntax/resume/chunk-1.syntax.xml",
+                "syntax_structured_path": "syntax/resume/chunk-1.syntax.json",
+                "syntax_annotated_path": "syntax/resume/chunk-1.syntax.md",
+                "syntax_sentence_count": 1,
+                "syntax_token_count": 4,
+                "syntax_relation_count": 2,
+            }
+        ],
+    }
+
+    for relative_path in (
+        "chunks/resume/chunk-1.txt",
+        "cor/resume/chunk-1.cor.xml",
+        "cor/resume/chunk-1.cor.json",
+        "cor/resume/chunk-1.cor.md",
+        "ner/resume/chunk-1.ner.xml",
+        "ner/resume/chunk-1.ner.json",
+        "ner/resume/chunk-1.ner.md",
+        "syntax/resume/chunk-1.syntax.xml",
+        "syntax/resume/chunk-1.syntax.json",
+        "syntax/resume/chunk-1.syntax.md",
+    ):
+        artifact_path = manager.root_dir / relative_path
+        artifact_path.parent.mkdir(parents=True, exist_ok=True)
+        artifact_path.write_text("ok", encoding="utf-8")
+
+    manager._write_source_index_payload(source.id, payload)
+    monkeypatch.setattr(manager, "get_semantic_engine_state", lambda *_args, **_kwargs: {"status": "ready"})
+    monkeypatch.setattr(
+        manager._semantic_runtime,
+        "run_task",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("run_task should not be called")),
+    )
+
+    manager._write_chunk_cor_artifacts(source, payload, config=config)
+    manager._write_chunk_ner_artifacts(source, payload, config=config)
+    manager._write_chunk_syntax_artifacts(source, payload, config=config)
+
+    chunk = payload["chunks"][0]
+    assert chunk["cor_status"] == "ready"
+    assert chunk["ner_status"] == "ready"
+    assert chunk["syntax_status"] == "ready"
