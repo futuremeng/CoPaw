@@ -2123,7 +2123,17 @@
         "corBenefit": "COR 効果",
         "corBenefitPending": "効果評価を算出中",
         "corBenefitSummary": "+{{replacements}} 回の置換 / カバー率 {{coverage}} / ヒット率 {{hitRatio}}",
-        "corBenefitUnavailable": "COR は利用不可: {{reason}}"
+        "corBenefitUnavailable": "COR は利用不可: {{reason}}",
+        "corStage": "COR",
+        "corClusters": "クラスタ数",
+        "corReplacements": "置換数",
+        "nerStage": "NER",
+        "nerEntities": "抽出エンティティ数",
+        "syntaxStage": "Syntax",
+        "syntaxSentences": "文数",
+        "syntaxTokens": "トークン数",
+        "syntaxRelations": "構文関係数",
+        "readyChunks": "準備済みチャンク"
       },
       "outputsHint": "モード別に知識出力を確認します。上位レイヤーが使えない場合は自動でフォールバックします。",
       "sourcesRoleHint": "このタブは L1 の基礎統計レイヤーであり、ドキュメント数・チャンク数・文数・文字数・軽量トークン数・索引カバレッジのみを表示します。",

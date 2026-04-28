@@ -303,15 +303,18 @@ class KnowledgeManager:
             "chunk_count": int(payload.get("chunk_count", len(chunks)) or 0),
             "sentence_count": payload.get(
                 "sentence_count",
-                self._sum_chunk_sentence_count(chunks),
+                int(source_stats.get("sentence_count", 0) or 0)
+                or self._sum_chunk_sentence_count(chunks),
             ),
             "char_count": payload.get(
                 "char_count",
-                self._sum_chunk_char_count(chunks),
+                int(source_stats.get("char_count", 0) or 0)
+                or self._sum_chunk_char_count(chunks),
             ),
             "token_count": payload.get(
                 "token_count",
-                self._sum_chunk_token_count(chunks),
+                int(source_stats.get("token_count", 0) or 0)
+                or self._sum_chunk_token_count(chunks),
             ),
             "needs_reindex": bool(needs_reindex or stats_needs_reindex),
             "error": payload.get("error"),
@@ -411,11 +414,28 @@ class KnowledgeManager:
         cor_cluster_count = 0
         cor_replacement_count = 0
         cor_effective_chunk_count = 0
+        ner_ready_chunk_count = 0
+        ner_entity_count = 0
+        syntax_ready_chunk_count = 0
+        syntax_sentence_count = 0
+        syntax_token_count = 0
+        syntax_relation_count = 0
         cor_reason_counts: dict[str, int] = {}
         cor_reason_messages: dict[str, str] = {}
         for chunk in payload.get("chunks") or []:
             if not isinstance(chunk, dict):
                 continue
+
+            if str(chunk.get("ner_status") or "").strip() == "ready":
+                ner_ready_chunk_count += 1
+            ner_entity_count += max(0, int(chunk.get("ner_entity_count") or 0))
+
+            if str(chunk.get("syntax_status") or "").strip() == "ready":
+                syntax_ready_chunk_count += 1
+            syntax_sentence_count += max(0, int(chunk.get("syntax_sentence_count") or 0))
+            syntax_token_count += max(0, int(chunk.get("syntax_token_count") or 0))
+            syntax_relation_count += max(0, int(chunk.get("syntax_relation_count") or 0))
+
             reason_code = str(chunk.get("cor_reason_code") or "").strip()
             reason = str(chunk.get("cor_reason") or "").strip()
             if reason_code:
@@ -455,6 +475,12 @@ class KnowledgeManager:
             if cor_ready_chunk_count > 0
             else 0.0
         )
+        payload["ner_ready_chunk_count"] = ner_ready_chunk_count
+        payload["ner_entity_count"] = ner_entity_count
+        payload["syntax_ready_chunk_count"] = syntax_ready_chunk_count
+        payload["syntax_sentence_count"] = syntax_sentence_count
+        payload["syntax_token_count"] = syntax_token_count
+        payload["syntax_relation_count"] = syntax_relation_count
 
         self._source_index_path(source.id).write_text(
             json.dumps(payload, ensure_ascii=False, indent=2),
@@ -479,6 +505,12 @@ class KnowledgeManager:
             "cor_reason": dominant_cor_reason,
             "cor_ready_chunk_ratio": payload["cor_ready_chunk_ratio"],
             "cor_effective_chunk_ratio": payload["cor_effective_chunk_ratio"],
+            "ner_ready_chunk_count": ner_ready_chunk_count,
+            "ner_entity_count": ner_entity_count,
+            "syntax_ready_chunk_count": syntax_ready_chunk_count,
+            "syntax_sentence_count": syntax_sentence_count,
+            "syntax_token_count": syntax_token_count,
+            "syntax_relation_count": syntax_relation_count,
         }
 
     def index_all(

@@ -1201,6 +1201,34 @@
   gap: 6px;
 }
 
+.projectKnowledgeProcessingStageGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.projectKnowledgeProcessingStageCard {
+  border: 1px solid #edf2ff;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.82);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.projectKnowledgeProcessingStageMetrics {
+  display: grid;
+  gap: 6px;
+}
+
+.projectKnowledgeProcessingStageMetric {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .projectKnowledgeProcessingCardFooter {
   display: flex;
   align-items: center;
@@ -4540,6 +4568,7 @@
   .projectKnowledgeModeCard,
   .projectKnowledgeOutputCard,
   .projectKnowledgeModeMetric,
+  .projectKnowledgeProcessingStageCard,
   .projectKnowledgeHeaderStat,
   .projectKnowledgeTrendSection,
   .projectKnowledgeSignalCard,

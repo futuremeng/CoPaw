@@ -2133,7 +2133,17 @@
         "corBenefit": "Польза COR",
         "corBenefitPending": "Оценка пользы формируется",
         "corBenefitSummary": "+{{replacements}} замен / покрытие {{coverage}} / попадание {{hitRatio}}",
-        "corBenefitUnavailable": "COR недоступен: {{reason}}"
+        "corBenefitUnavailable": "COR недоступен: {{reason}}",
+        "corStage": "COR",
+        "corClusters": "Кластеры",
+        "corReplacements": "Замены",
+        "nerStage": "NER",
+        "nerEntities": "Распознанные сущности",
+        "syntaxStage": "Syntax",
+        "syntaxSentences": "Предложения",
+        "syntaxTokens": "Токены",
+        "syntaxRelations": "Синтаксические связи",
+        "readyChunks": "Готовые чанки"
       },
       "outputsHint": "Просматривайте знания по режимам. При недоступности верхних слоёв система автоматически откатывается.",
       "sourcesRoleHint": "Эта вкладка является слоем базовой статистики L1 и показывает только число документов, чанков, предложений, символов, лёгких токенов и покрытие индекса.",

@@ -119,6 +119,12 @@ export interface ProjectKnowledgeModeMetricsPayload {
   cor_effective_chunk_ratio?: number;
   cor_reason_code?: string;
   cor_reason?: string;
+  ner_ready_chunk_count?: number;
+  ner_entity_count?: number;
+  syntax_ready_chunk_count?: number;
+  syntax_sentence_count?: number;
+  syntax_token_count?: number;
+  syntax_relation_count?: number;
 }
 
 export interface ProjectKnowledgeGlobalMetricsPayload {

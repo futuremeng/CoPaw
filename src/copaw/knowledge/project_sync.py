@@ -549,6 +549,12 @@ class ProjectKnowledgeSyncManager:
                         "cor_effective_chunk_ratio": _safe_float(index_result.get("cor_effective_chunk_ratio")),
                         "cor_reason_code": str(index_result.get("cor_reason_code") or "").strip(),
                         "cor_reason": str(index_result.get("cor_reason") or "").strip(),
+                        "ner_ready_chunk_count": _safe_int(index_result.get("ner_ready_chunk_count")),
+                        "ner_entity_count": _safe_int(index_result.get("ner_entity_count")),
+                        "syntax_ready_chunk_count": _safe_int(index_result.get("syntax_ready_chunk_count")),
+                        "syntax_sentence_count": _safe_int(index_result.get("syntax_sentence_count")),
+                        "syntax_token_count": _safe_int(index_result.get("syntax_token_count")),
+                        "syntax_relation_count": _safe_int(index_result.get("syntax_relation_count")),
                     }
                 )
         return metrics
@@ -557,6 +563,7 @@ class ProjectKnowledgeSyncManager:
         self,
         state: dict[str, Any],
         mode_metrics: dict[str, Any],
+        source_status: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         last_result = state.get("last_result") or {}
         if not isinstance(last_result, dict):
@@ -568,9 +575,10 @@ class ProjectKnowledgeSyncManager:
         if not isinstance(memify_result, dict):
             memify_result = {}
 
-        source_status: dict[str, Any] = {}
         latest_source_id = str(state.get("latest_source_id") or "").strip()
-        if latest_source_id:
+        if not isinstance(source_status, dict):
+            source_status = {}
+        if latest_source_id and not source_status:
             try:
                 source_status = self._knowledge_manager.get_source_status(latest_source_id)
             except Exception:

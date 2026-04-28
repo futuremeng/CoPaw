@@ -732,6 +732,12 @@ def test_project_sync_global_metrics_merge_live_source_status(tmp_path: Path, mo
             "sentence_count": 3,
             "char_count": 10,
             "token_count": 5,
+            "ner_ready_chunk_count": 2,
+            "ner_entity_count": 8,
+            "syntax_ready_chunk_count": 3,
+            "syntax_sentence_count": 6,
+            "syntax_token_count": 23,
+            "syntax_relation_count": 3,
         },
         "memify": {},
     }
@@ -752,6 +758,7 @@ def test_project_sync_global_metrics_merge_live_source_status(tmp_path: Path, mo
 
     hydrated = manager._hydrate_processing_view(state)
     global_metrics = hydrated["global_metrics"]
+    nlp_metrics = hydrated["mode_metrics"]["nlp"]
 
     assert global_metrics["document_count"] == 4
     assert global_metrics["chunk_count"] == 9
@@ -762,3 +769,9 @@ def test_project_sync_global_metrics_merge_live_source_status(tmp_path: Path, mo
     assert global_metrics["source_id"] == f"project-{project_id}-workspace"
     assert global_metrics["source_stats_updated_at"] == "2026-04-28T10:00:00+00:00"
     assert global_metrics["metrics_updated_at"]
+    assert nlp_metrics["ner_ready_chunk_count"] == 2
+    assert nlp_metrics["ner_entity_count"] == 8
+    assert nlp_metrics["syntax_ready_chunk_count"] == 3
+    assert nlp_metrics["syntax_sentence_count"] == 6
+    assert nlp_metrics["syntax_token_count"] == 23
+    assert nlp_metrics["syntax_relation_count"] == 3

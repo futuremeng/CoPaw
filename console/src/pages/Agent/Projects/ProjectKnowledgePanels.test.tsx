@@ -146,6 +146,15 @@ function buildKnowledgeState(): ProjectKnowledgeState {
         chunkCount: 7,
         entityCount: 2,
         relationCount: 12,
+        corReadyChunkCount: 5,
+        corClusterCount: 7,
+        corReplacementCount: 4,
+        nerReadyChunkCount: 4,
+        nerEntityCount: 9,
+        syntaxReadyChunkCount: 6,
+        syntaxSentenceCount: 11,
+        syntaxTokenCount: 42,
+        syntaxRelationCount: 13,
         qualityScore: 0.86,
       }),
       buildModeState({
@@ -176,6 +185,15 @@ function buildKnowledgeState(): ProjectKnowledgeState {
         chunkCount: 7,
         entityCount: 2,
         relationCount: 12,
+        corReadyChunkCount: 5,
+        corClusterCount: 7,
+        corReplacementCount: 4,
+        nerReadyChunkCount: 4,
+        nerEntityCount: 9,
+        syntaxReadyChunkCount: 6,
+        syntaxSentenceCount: 11,
+        syntaxTokenCount: 42,
+        syntaxRelationCount: 13,
       }),
       buildModeState({
         mode: "agentic",
@@ -500,6 +518,15 @@ describe("project knowledge supporting panels", () => {
     expect(screen.getByText("实体关系抽取")).not.toBeNull();
     expect(screen.getByText("多智能体增强")).not.toBeNull();
     expect(screen.getAllByText(/Semantic engine unavailable: HanLP2 module is not installed\./).length).toBeGreaterThan(0);
+    expect(screen.getByText("COR")).not.toBeNull();
+    expect(screen.getByText("NER")).not.toBeNull();
+    expect(screen.getByText("Syntax")).not.toBeNull();
+    expect(screen.getAllByText("就绪块数").length).toBeGreaterThan(0);
+    expect(screen.getByText("聚类数")).not.toBeNull();
+    expect(screen.getByText("识别实体数")).not.toBeNull();
+    expect(screen.getByText("Token 数")).not.toBeNull();
+    expect(screen.getByText("句法关系数")).not.toBeNull();
+    expect(screen.getByText("42")).not.toBeNull();
     const runNlpButton = screen.getByRole("button", { name: "运行 NLP 结构化" }) as HTMLButtonElement;
     expect(runNlpButton.disabled).toBe(false);
     expect(runNlpButton.parentElement?.getAttribute("title")).toBeNull();

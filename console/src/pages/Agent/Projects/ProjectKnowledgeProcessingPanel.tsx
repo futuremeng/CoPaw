@@ -262,6 +262,85 @@ function describeCorBenefit(
   );
 }
 
+function buildNlpStageStats(
+  mode: ProjectKnowledgeModeState,
+  t: ReturnType<typeof useTranslation>["t"],
+): Array<{
+  key: string;
+  title: string;
+  metrics: Array<{ key: string; label: string; value: string | number }>;
+}> {
+  if (mode.mode !== "nlp") {
+    return [];
+  }
+
+  return [
+    {
+      key: "cor",
+      title: t("projects.knowledge.processing.corStage", "COR"),
+      metrics: [
+        {
+          key: "readyChunks",
+          label: t("projects.knowledge.processing.readyChunks", "就绪块数"),
+          value: mode.corReadyChunkCount || 0,
+        },
+        {
+          key: "clusters",
+          label: t("projects.knowledge.processing.corClusters", "聚类数"),
+          value: mode.corClusterCount || 0,
+        },
+        {
+          key: "replacements",
+          label: t("projects.knowledge.processing.corReplacements", "替换数"),
+          value: mode.corReplacementCount || 0,
+        },
+      ],
+    },
+    {
+      key: "ner",
+      title: t("projects.knowledge.processing.nerStage", "NER"),
+      metrics: [
+        {
+          key: "readyChunks",
+          label: t("projects.knowledge.processing.readyChunks", "就绪块数"),
+          value: mode.nerReadyChunkCount || 0,
+        },
+        {
+          key: "entities",
+          label: t("projects.knowledge.processing.nerEntities", "识别实体数"),
+          value: mode.nerEntityCount || 0,
+        },
+      ],
+    },
+    {
+      key: "syntax",
+      title: t("projects.knowledge.processing.syntaxStage", "Syntax"),
+      metrics: [
+        {
+          key: "readyChunks",
+          label: t("projects.knowledge.processing.readyChunks", "就绪块数"),
+          value: mode.syntaxReadyChunkCount || 0,
+        },
+        {
+          key: "sentences",
+          label: t("projects.knowledge.processing.syntaxSentences", "句子数"),
+          value: mode.syntaxSentenceCount || 0,
+        },
+        {
+          key: "tokens",
+          label: t("projects.knowledge.processing.syntaxTokens", "Token 数"),
+          value: mode.syntaxTokenCount || 0,
+        },
+        {
+          key: "relations",
+          label: t("projects.knowledge.processing.syntaxRelations", "句法关系数"),
+          value: mode.syntaxRelationCount || 0,
+        },
+      ],
+    },
+  ];
+}
+
 export default function ProjectKnowledgeProcessingPanel(
   props: ProjectKnowledgeProcessingPanelProps,
 ) {
@@ -350,6 +429,7 @@ export default function ProjectKnowledgeProcessingPanel(
             const output = props.knowledgeState.modeOutputs[mode.mode];
             const prioritizedArtifacts = prioritizeProjectKnowledgeArtifacts(output?.artifacts || []);
             const corBenefitSummary = describeCorBenefit(mode, t);
+            const nlpStageStats = buildNlpStageStats(mode, t);
             const highlightValue = isL3
               ? mode.qualityScore != null
                 ? `${Math.round(mode.qualityScore * 100)}%`
@@ -454,6 +534,24 @@ export default function ProjectKnowledgeProcessingPanel(
                 <Typography.Paragraph type="secondary" className={styles.projectKnowledgeModeSummary}>
                   {mode.summary}
                 </Typography.Paragraph>
+
+                {nlpStageStats.length ? (
+                  <div className={styles.projectKnowledgeProcessingStageGrid}>
+                    {nlpStageStats.map((section) => (
+                      <div key={section.key} className={styles.projectKnowledgeProcessingStageCard}>
+                        <Typography.Text strong>{section.title}</Typography.Text>
+                        <div className={styles.projectKnowledgeProcessingStageMetrics}>
+                          {section.metrics.map((metric) => (
+                            <div key={`${section.key}-${metric.key}`} className={styles.projectKnowledgeProcessingStageMetric}>
+                              <Typography.Text type="secondary">{metric.label}</Typography.Text>
+                              <Typography.Text strong>{metric.value}</Typography.Text>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
 
                 {prioritizedArtifacts.length ? (
                   <div className={styles.projectKnowledgeProcessingArtifacts}>

@@ -2326,7 +2326,17 @@
         "corBenefit": "COR Gain",
         "corBenefitPending": "Gain estimation in progress",
         "corBenefitSummary": "+{{replacements}} replacements / coverage {{coverage}} / hit {{hitRatio}}",
-        "corBenefitUnavailable": "COR unavailable: {{reason}}"
+        "corBenefitUnavailable": "COR unavailable: {{reason}}",
+        "corStage": "COR",
+        "corClusters": "Clusters",
+        "corReplacements": "Replacements",
+        "nerStage": "NER",
+        "nerEntities": "Recognized Entities",
+        "syntaxStage": "Syntax",
+        "syntaxSentences": "Sentences",
+        "syntaxTokens": "Tokens",
+        "syntaxRelations": "Syntax Relations",
+        "readyChunks": "Ready Chunks"
       },
       "outputsHint": "View knowledge outputs by mode. The system automatically falls back when higher layers are unavailable.",
       "sourcesRoleHint": "This tab is the L1 stats layer and shows only document count, chunk count, sentence count, character count, lightweight token count, and index coverage.",
