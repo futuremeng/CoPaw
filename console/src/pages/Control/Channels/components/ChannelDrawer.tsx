@@ -1105,6 +1105,62 @@ export function ChannelDrawer({
             <Form.Item name="media_dir" label={t("channels.weixinMediaDir")}>
               <Input placeholder={defaultMediaDir} />
             </Form.Item>
+            <Form.Item
+              name="message_merge_enabled"
+              label={t("channels.weixinMessageMerge")}
+              valuePropName="checked"
+              tooltip={t("channels.weixinMessageMergeTooltip")}
+            >
+              <Switch />
+            </Form.Item>
+            <Form.Item
+              noStyle
+              shouldUpdate={(prev, cur) =>
+                prev.message_merge_enabled !== cur.message_merge_enabled
+              }
+            >
+              {({ getFieldValue }) =>
+                getFieldValue("message_merge_enabled") ? (
+                  <Form.Item
+                    name="message_merge_delay_ms"
+                    label={t("channels.weixinMessageMergeDelayMs")}
+                    tooltip={t("channels.weixinMessageMergeDelayMsTooltip")}
+                    initialValue={0}
+                    rules={[
+                      {
+                        validator: (_: unknown, value: unknown) => {
+                          if (
+                            value === null ||
+                            value === undefined ||
+                            value === ""
+                          ) {
+                            return Promise.resolve();
+                          }
+                          const num = Number(value);
+                          if (!Number.isInteger(num) || num < 0) {
+                            return Promise.reject(
+                              new Error(
+                                t(
+                                  "channels.weixinMessageMergeDelayMsValidation",
+                                ),
+                              ),
+                            );
+                          }
+                          return Promise.resolve();
+                        },
+                      },
+                    ]}
+                  >
+                    <InputNumber
+                      min={0}
+                      step={100}
+                      style={{ width: "100%" }}
+                      placeholder="0"
+                    />
+                  </Form.Item>
+                ) : null
+              }
+            </Form.Item>
           </>
         );
 

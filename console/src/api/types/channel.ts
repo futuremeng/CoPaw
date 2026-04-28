@@ -138,6 +138,15 @@ export interface XiaoYiConfig extends BaseChannelConfig {
   task_timeout_ms?: number;
 }
 
+export interface WeixinConfig extends BaseChannelConfig {
+  bot_token: string;
+  bot_token_file: string;
+  base_url: string;
+  media_dir?: string;
+  message_merge_enabled?: boolean;
+  message_merge_delay_ms?: number;
+}
+
 export interface OneBotConfig extends BaseChannelConfig {
   ws_host: string;
   ws_port: number;
@@ -160,6 +169,7 @@ export interface ChannelConfig {
   voice: VoiceChannelConfig;
   sip: SIPChannelConfig;
   xiaoyi: XiaoYiConfig;
+  weixin: WeixinConfig;
   onebot: OneBotConfig;
 }
 
@@ -175,6 +185,7 @@ export type SingleChannelConfig =
   | MatrixConfig
   | MattermostConfig
   | WecomConfig
+  | WeixinConfig
   | VoiceChannelConfig
   | SIPChannelConfig
   | XiaoYiConfig

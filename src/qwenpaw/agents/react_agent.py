@@ -72,6 +72,7 @@ from ..constant import (
     WORKING_DIR,
 )
 from ..agents.memory import BaseMemoryManager
+from ..providers.model_capability_cache import get_capability_cache
 
 if TYPE_CHECKING:
     from ..config.config import AgentProfileConfig
@@ -844,6 +845,205 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
 
     _MEDIA_BLOCK_TYPES = {"image", "audio", "video"}
 
+    # ------------------------------------------------------------------
+    # Plan gate: block non-create_plan tools when /plan gate is active
+    # ------------------------------------------------------------------
+
+    _PLAN_TOOLS_WITH_JSON_ARGS = frozenset(
+        {
+            "create_plan",
+            "revise_current_plan",
+        },
+    )
+    _PLAN_JSON_KEYS = ("subtask", "subtasks")
+
+    @staticmethod
+    def _fix_stringified_json_args(tool_call) -> None:
+        """Parse JSON-string arguments that models sometimes produce for
+        nested objects (e.g. ``subtask``).  Modifies *tool_call* in place."""
+        import json as _json
+
+        inp = tool_call.get("input")
+        if not isinstance(inp, dict):
+            return
+        for key in CoPawAgent._PLAN_JSON_KEYS:
+            val = inp.get(key)
+            if isinstance(val, str):
+                try:
+                    inp[key] = _json.loads(val)
+                except (ValueError, TypeError):
+                    pass
+            elif isinstance(val, list):
+                for i, item in enumerate(val):
+                    if isinstance(item, str):
+                        try:
+                            val[i] = _json.loads(item)
+                        except (ValueError, TypeError):
+                            pass
+
+    async def _acting(self, tool_call) -> dict | None:
+        """Check plan tool gate before delegating to ToolGuardMixin."""
+        from ..plan.hints import check_plan_tool_gate
+
+        tool_name = str(tool_call.get("name", ""))
+
+        if tool_name in self._PLAN_TOOLS_WITH_JSON_ARGS:
+            self._fix_stringified_json_args(tool_call)
+
+        nb = getattr(self, "plan_notebook", None)
+        if nb is not None:
+            err = check_plan_tool_gate(nb, tool_name)
+            if err:
+                from agentscope.message import ToolResultBlock
+
+                tool_res_msg = Msg(
+                    "system",
+                    [
+                        ToolResultBlock(
+                            type="tool_result",
+                            id=tool_call["id"],
+                            name=tool_name,
+                            output=[{"type": "text", "text": err}],
+                        ),
+                    ],
+                    "system",
+                )
+                await self.print(tool_res_msg, True)
+                await self.memory.add(tool_res_msg)
+                return None
+
+        result = await super()._acting(tool_call)
+
+        if nb is not None and tool_name == "revise_current_plan":
+            nb._plan_just_mutated = True  # pylint: disable=protected-access
+
+        return result
+
+    _AUTO_CONTINUE_MAX_EXTRA = 2
+    _AUTO_CONTINUE_TAIL_CHARS = 600
+
+    _AUTO_CONTINUE_HINT_EN = (
+        "<system-hint>"
+        "Your previous assistant turn had text only (no tool calls). "
+        "Use the trailing excerpt in <previous-assistant-tail> (if present) "
+        "plus the conversation to decide in this **reasoning** step: if the "
+        "user's task still needs tools, emit tool_use now; if it is fully "
+        "done, reply with a short text only (no tools). "
+        "Do not stop with plans or code fences alone when tools are still "
+        "needed."
+        "</system-hint>"
+    )
+    _AUTO_CONTINUE_HINT_ZH = (
+        "<system-hint>"
+        "上轮助手仅文字、未调工具。请结合上下文与 <previous-assistant-tail> "
+        "（若有）在本轮推理中判断：仍需执行则立刻 tool；已完结则简短收尾。"
+        "需要操作时勿只输出计划或代码块。"
+        "</system-hint>"
+    )
+
+    def _auto_continue_system_hint(self) -> str:
+        """Pick hint by agent language (zh vs others)."""
+        raw_lang = getattr(self._agent_config, "language", None)
+        lang = (raw_lang or "").strip().lower()
+        if lang == "zh":
+            return self._AUTO_CONTINUE_HINT_ZH
+        return self._AUTO_CONTINUE_HINT_EN
+
+    @staticmethod
+    def _auto_continue_tail_context(msg: Msg, max_chars: int) -> str:
+        """Assistant text suffix for hint (fixed cut, not sentence NLP)."""
+        raw = msg.get_text_content() if msg is not None else ""
+        text = (raw or "").strip()
+        if not text:
+            return ""
+        if len(text) <= max_chars:
+            return text
+        return text[-max_chars:].lstrip()
+
+    async def _auto_continue_if_text_only(
+        self,
+        msg: Msg,
+        tool_choice: Literal["auto", "none", "required"] | None,
+    ) -> Msg:
+        """Nudge the model when it returns text-only mid-task.
+
+        Injects a language-matched hint (with a trailing excerpt of the
+        assistant text for self-review) and runs up to
+        ``_AUTO_CONTINUE_MAX_EXTRA`` extra ``_reasoning`` passes until a
+        tool_use appears or the cap is
+        hit.  Uses the original ``tool_choice`` unchanged (no switching).
+        If an extra pass still returns text-only, keep the prior response to
+        avoid repeated duplicated answers.
+        """
+        from ..plan.hints import should_skip_auto_continue
+
+        nb = getattr(self, "plan_notebook", None)
+        if should_skip_auto_continue(nb):
+            return msg
+
+        running = self._agent_config.running
+        if not running.auto_continue_on_text_only:
+            return msg
+        if msg is None or msg.has_content_blocks("tool_use"):
+            return msg
+
+        extra = 0
+        while extra < self._AUTO_CONTINUE_MAX_EXTRA:
+            if msg.has_content_blocks("tool_use"):
+                break
+            extra += 1
+            tail = self._auto_continue_tail_context(
+                msg,
+                self._AUTO_CONTINUE_TAIL_CHARS,
+            )
+            hint_body = self._auto_continue_system_hint()
+            if tail:
+                hint_body += (
+                    "\n\n<previous-assistant-tail>\n"
+                    f"{tail}\n"
+                    "</previous-assistant-tail>"
+                )
+            logger.info(
+                "Auto-continue: text-only (%d/%d); hint + _reasoning "
+                "tool_choice=%r",
+                extra,
+                self._AUTO_CONTINUE_MAX_EXTRA,
+                tool_choice,
+            )
+            hint_msg = Msg("user", hint_body, "user")
+            await self.memory.add(hint_msg, marks=_MemoryMark.HINT)
+            try:
+                next_msg = await super()._reasoning(tool_choice=tool_choice)
+            except Exception:
+                logger.warning(
+                    "Auto-continue extra _reasoning failed; "
+                    "keeping prior response",
+                    exc_info=True,
+                )
+                break
+            if next_msg.has_content_blocks("tool_use"):
+                msg = next_msg
+                continue
+            logger.info(
+                "Auto-continue extra _reasoning still text-only; "
+                "keeping prior response",
+            )
+            break
+
+        return msg
+
+    def _get_model_key(self) -> str | None:
+        """Return the capability-cache key for the active model."""
+        model = getattr(self, "model", None)
+        return getattr(model, "model_key", None)
+
+    def _model_rejects_media(self) -> bool:
+        """Check the capability cache for a learned ``rejects_media`` flag."""
+        key = self._get_model_key()
+        if key is None:
+            return False
+        return get_capability_cache().get(key, "rejects_media", False)
+
     def _proactive_strip_media_blocks(self) -> int:
         """Proactively strip media blocks from memory before model call.
 
@@ -852,6 +1052,18 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
         """
         return self._strip_media_blocks_from_memory()
 
+    def _uses_request_time_media_normalization(self) -> bool:
+        """Return True when request-time normalization can handle media."""
+        return getattr(self, "formatter", None) is not None
+
+    def _set_formatter_media_strip(self, enabled: bool) -> None:
+        """Toggle request-time media stripping on the active formatter."""
+        formatter = getattr(self, "formatter", None)
+        if formatter is None:
+            return
+        setattr(formatter, "_qwenpaw_force_strip_media", enabled)
+
+    # pylint: disable=too-many-branches
     async def _reasoning(
         self,
         tool_choice: Literal["auto", "none", "required"] | None = None,
@@ -859,9 +1071,11 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
         """Override reasoning with proactive media filtering.
 
         1. Proactive layer: if the model does not support
-           multimodal, strip media blocks *before* calling.
+           multimodal **or** the capability cache records a previous
+           ``rejects_media`` finding, strip media blocks *before* calling.
         2. Passive layer: if the model call still fails with a
-           bad-request / media error, strip remaining blocks and retry.
+           bad-request / media error, strip remaining blocks and retry,
+           then record the finding in the capability cache.
         3. If the model IS marked as multimodal but still errors on
            media, log a warning about possibly inaccurate capability flag.
 
@@ -869,28 +1083,64 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
         interception active.
         """
         # --- Proactive filtering layer ---
-        if not get_active_model_supports_multimodal():
-            n = self._proactive_strip_media_blocks()
-            if n > 0:
-                logger.warning(
-                    "Proactively stripped %d media block(s) - "
-                    "model does not support multimodal.",
-                    n,
+        should_strip = (
+            not get_active_model_supports_multimodal()
+            or self._model_rejects_media()
+        )
+        if should_strip:
+            if self._uses_request_time_media_normalization():
+                self._set_formatter_media_strip(True)
+                logger.debug(
+                    "Formatter will strip media from copied messages "
+                    "before reasoning.",
                 )
+            else:
+                n = self._proactive_strip_media_blocks()
+                if n > 0:
+                    logger.warning(
+                        "Proactively stripped %d media block(s) - "
+                        "model does not support multimodal.",
+                        n,
+                    )
 
         # --- Passive fallback layer (existing logic) ---
         try:
-            return await super()._reasoning(tool_choice=tool_choice)
+            msg = await super()._reasoning(tool_choice=tool_choice)
         except Exception as e:
             if not self._is_bad_request_or_media_error(e):
                 raise
+
+            model_key = self._get_model_key()
+
+            if self._uses_request_time_media_normalization():
+                if get_active_model_supports_multimodal():
+                    logger.warning(
+                        "Model marked multimodal but "
+                        "rejected media. "
+                        "Capability flag may be wrong.",
+                    )
+                self._set_formatter_media_strip(True)
+                try:
+                    logger.warning(
+                        "_reasoning failed (%s). "
+                        "Retrying with request-time media stripping.",
+                        e,
+                    )
+                    msg = await super()._reasoning(tool_choice=tool_choice)
+                    if model_key:
+                        get_capability_cache().learn(
+                            model_key,
+                            "rejects_media",
+                            True,
+                        )
+                    return msg
+                finally:
+                    self._set_formatter_media_strip(False)
 
             n_stripped = self._strip_media_blocks_from_memory()
             if n_stripped == 0:
                 raise
 
-            # If the model is marked as multimodal but still
-            # errored, the capability flag may be wrong.
             if get_active_model_supports_multimodal():
                 logger.warning(
                     "Model marked multimodal but "
@@ -904,16 +1154,29 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
                 e,
                 n_stripped,
             )
-            return await super()._reasoning(tool_choice=tool_choice)
+            msg = await super()._reasoning(tool_choice=tool_choice)
+            if model_key:
+                get_capability_cache().learn(
+                    model_key,
+                    "rejects_media",
+                    True,
+                )
+        finally:
+            if should_strip and self._uses_request_time_media_normalization():
+                self._set_formatter_media_strip(False)
+
+        return await self._auto_continue_if_text_only(msg, tool_choice)
 
     async def _summarizing(self) -> Msg:
         """Override summarizing with proactive media filtering,
         passive fallback, and tool_use block filtering.
 
-        1. Proactive layer: if the model does not support multimodal,
+        1. Proactive layer: if the model does not support multimodal
+           **or** the capability cache records ``rejects_media``,
            strip media blocks *before* calling the model.
         2. Passive layer: if the model call still fails with a
-           bad-request / media error, strip remaining blocks and retry.
+           bad-request / media error, strip remaining blocks and retry,
+           then record the finding in the capability cache.
         3. If the model IS marked as multimodal but still errors on
            media, log a warning about possibly inaccurate capability flag.
 
@@ -922,14 +1185,25 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
         ``print`` can strip tool_use blocks from streaming chunks.
         """
         # --- Proactive filtering layer ---
-        if not get_active_model_supports_multimodal():
-            n = self._proactive_strip_media_blocks()
-            if n > 0:
-                logger.warning(
-                    "Proactively stripped %d media block(s) - "
-                    "model does not support multimodal.",
-                    n,
+        should_strip = (
+            not get_active_model_supports_multimodal()
+            or self._model_rejects_media()
+        )
+        if should_strip:
+            if self._uses_request_time_media_normalization():
+                self._set_formatter_media_strip(True)
+                logger.debug(
+                    "Formatter will strip media from copied messages "
+                    "before summarizing.",
                 )
+            else:
+                n = self._proactive_strip_media_blocks()
+                if n > 0:
+                    logger.warning(
+                        "Proactively stripped %d media block(s) - "
+                        "model does not support multimodal.",
+                        n,
+                    )
 
         # --- Passive fallback layer ---
         self._in_summarizing = True
@@ -940,26 +1214,55 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
                 if not self._is_bad_request_or_media_error(e):
                     raise
 
-                n_stripped = self._strip_media_blocks_from_memory()
-                if n_stripped == 0:
-                    raise
+                model_key = self._get_model_key()
 
-                if get_active_model_supports_multimodal():
-                    logger.warning(
-                        "Model marked multimodal but "
-                        "rejected media. "
-                        "Capability flag may be wrong.",
-                    )
+                if self._uses_request_time_media_normalization():
+                    if get_active_model_supports_multimodal():
+                        logger.warning(
+                            "Model marked multimodal but "
+                            "rejected media. "
+                            "Capability flag may be wrong.",
+                        )
+                    self._set_formatter_media_strip(True)
+                    try:
+                        logger.warning(
+                            "_summarizing failed (%s). "
+                            "Retrying with request-time media stripping.",
+                            e,
+                        )
+                        msg = await super()._summarizing()
+                        if model_key:
+                            get_capability_cache().learn(
+                                model_key,
+                                "rejects_media",
+                                True,
+                            )
+                            return self._strip_tool_use_from_msg(msg)
+                    finally:
+                        self._set_formatter_media_strip(False)
+                else:
+                    n_stripped = self._strip_media_blocks_from_memory()
+                    if n_stripped == 0:
+                        raise
 
-                logger.warning(
-                    "_summarizing failed (%s). "
-                    "Stripped %d media block(s) from memory, retrying.",
-                    e,
-                    n_stripped,
-                )
-                msg = await super()._summarizing()
+                    if get_active_model_supports_multimodal():
+                        logger.warning(
+                            "Model marked multimodal but "
+                            "rejected media. "
+                            "Capability flag may be wrong.",
+                        )
+
+                    msg = await super()._summarizing()
+                    if model_key:
+                        get_capability_cache().learn(
+                            model_key,
+                            "rejects_media",
+                            True,
+                        )
         finally:
             self._in_summarizing = False
+            if should_strip and self._uses_request_time_media_normalization():
+                self._set_formatter_media_strip(False)
 
         return self._strip_tool_use_from_msg(msg)
 

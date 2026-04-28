@@ -389,17 +389,28 @@ class XiaoYiConfig(BaseChannelConfig):
 class WeixinConfig(BaseChannelConfig):
     """WeChat (iLink Bot) personal account channel config.
 
-    bot_token:      Bearer token obtained after QR code login.
-    bot_token_file: Path to persist/load the bot_token
-                    (default ~/.qwenpaw/weixin_bot_token).
-    base_url:       iLink API base URL (leave empty to use default).
-    media_dir:      Local directory for downloaded media files.
+    bot_token:              Bearer token obtained after QR code login.
+    bot_token_file:         Path to persist/load the bot_token
+                            (default ~/.qwenpaw/weixin_bot_token).
+    base_url:               iLink API base URL (leave empty to use default).
+    media_dir:              Local directory for downloaded media files.
+    message_merge_enabled:  When True, merge multiple outgoing text messages
+                            within a single request to reduce message count
+                            (mitigates the 10-message context_token limit).
+    message_merge_delay_ms: Controls merge behaviour when merging is enabled.
+                            0  → merge ALL text messages and send once at the
+                                 end of the request (maximum savings).
+                            >0 → buffer messages for this many milliseconds;
+                                 if no new message arrives within the window
+                                 the buffer is flushed (adjacent-merge mode).
     """
 
     bot_token: str = ""
     bot_token_file: str = ""
     base_url: str = ""
     media_dir: Optional[str] = None
+    message_merge_enabled: bool = False
+    message_merge_delay_ms: Optional[int] = 0
 
 
 class ChannelConfig(BaseModel):
@@ -2105,8 +2116,66 @@ ChannelConfigUnion = Union[
 # Agent configuration utility functions
 
 
+def build_fallback_agent_profile_config(
+    agent_id: str,
+    config: "Config",
+) -> AgentProfileConfig:
+    """Build the same profile as when ``agent.json``
+    is missing (no disk read/write).
+
+    Used by :func:`load_agent_config` and ``qwenpaw doctor fix``
+    so defaults stay in sync.
+    """
+    if agent_id not in config.agents.profiles:
+        raise ValueError(f"Agent '{agent_id}' not found in config")
+
+
+    agent_ref = config.agents.profiles[agent_id]
+    workspace_dir = Path(agent_ref.workspace_dir).expanduser()
+    return AgentProfileConfig(
+        id=agent_id,
+        name=agent_id.title(),
+        description=f"{agent_id} agent",
+        workspace_dir=str(workspace_dir),
+        channels=(
+            config.channels
+            if hasattr(config, "channels") and config.channels
+            else None
+        ),
+        mcp=config.mcp if hasattr(config, "mcp") and config.mcp else None,
+        tools=(
+            config.tools if hasattr(config, "tools") and config.tools else None
+        ),
+        security=(
+            config.security
+            if hasattr(config, "security") and config.security
+            else None
+        ),
+        running=(
+            config.agents.running
+            if hasattr(config.agents, "running") and config.agents.running
+            else AgentsRunningConfig()
+        ),
+        llm_routing=(
+            config.agents.llm_routing
+            if hasattr(config.agents, "llm_routing")
+            and config.agents.llm_routing
+            else AgentsLLMRoutingConfig()
+        ),
+        system_prompt_files=(
+            config.agents.system_prompt_files
+            if hasattr(config.agents, "system_prompt_files")
+            and config.agents.system_prompt_files
+            else ["AGENTS.md", "SOUL.md", "PROFILE.md"]
+        ),
+        acp=(config.acp if hasattr(config, "acp") and config.acp else None),
+    )
+
 def load_agent_config(agent_id: str) -> AgentProfileConfig:
-    """Load agent's complete configuration from workspace/agent.json.
+    """Load agent's complete configuration from workspace/agent.json with
+    mtime-based caching.
+
+    Uses file modification time to avoid unnecessary disk reads.
 
     Args:
         agent_id: Agent ID to load
@@ -2117,7 +2186,11 @@ def load_agent_config(agent_id: str) -> AgentProfileConfig:
     Raises:
         ValueError: If agent ID not found in root config
     """
-    from .utils import load_config
+    from .utils import (
+        load_config,
+        _agent_config_cache,
+        _agent_config_lock,
+    )
 
     config = load_config()
 
@@ -2132,74 +2205,53 @@ def load_agent_config(agent_id: str) -> AgentProfileConfig:
     agent_config_path = workspace_dir / "agent.json"
 
     if not agent_config_path.exists():
-        # Fallback: Try to use root config fields for backward compatibility
-        # This allows downgrade scenarios where agent.json doesn't exist yet
-        fallback_config = AgentProfileConfig(
-            id=agent_id,
-            name=agent_id.title(),
-            description=f"{agent_id} agent",
-            workspace_dir=str(workspace_dir),
-            # Inherit from root config if available (for backward compat)
-            channels=(
-                config.channels
-                if hasattr(config, "channels") and config.channels
-                else None
-            ),
-            mcp=config.mcp if hasattr(config, "mcp") and config.mcp else None,
-            tools=(
-                config.tools
-                if hasattr(config, "tools") and config.tools
-                else None
-            ),
-            security=(
-                config.security
-                if hasattr(config, "security") and config.security
-                else None
-            ),
-            # Use agent-specific configs with proper defaults
-            running=(
-                config.agents.running
-                if hasattr(config.agents, "running") and config.agents.running
-                else AgentsRunningConfig()
-            ),
-            llm_routing=(
-                config.agents.llm_routing
-                if hasattr(config.agents, "llm_routing")
-                and config.agents.llm_routing
-                else AgentsLLMRoutingConfig()
-            ),
-            system_prompt_files=(
-                config.agents.system_prompt_files
-                if hasattr(config.agents, "system_prompt_files")
-                and config.agents.system_prompt_files
-                else ["AGENTS.md", "SOUL.md", "PROFILE.md"]
-            ),
-        )
+        fallback_config = build_fallback_agent_profile_config(agent_id, config)
         # Save for future use
         save_agent_config(agent_id, fallback_config)
         return fallback_config
 
-    with open(agent_config_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    # Normalize legacy ~/.copaw-bound paths to current WORKING_DIR.
-    # This keeps QWENPAW_WORKING_DIR effective even if existing agent.json
-    # contains older hard-coded paths like "~/.copaw/media".
+    # Check mtime to see if we can use cached config
     try:
-        from .utils import _normalize_working_dir_bound_paths
+        current_mtime = agent_config_path.stat().st_mtime
+    except OSError:
+        fallback_config = build_fallback_agent_profile_config(agent_id, config)
+        save_agent_config(agent_id, fallback_config)
+        return fallback_config
 
-        data = _normalize_working_dir_bound_paths(data)
-    except Exception:
-        pass
+    with _agent_config_lock:
+        # Return cached config if mtime hasn't changed
+        if agent_id in _agent_config_cache:
+            cached_config, cached_mtime = _agent_config_cache[agent_id]
+            if cached_mtime == current_mtime:
+                return cached_config
 
-    return AgentProfileConfig.model_validate(data)
+        # Need to reload config from disk
+        with open(agent_config_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        # Normalize legacy ~/.copaw-bound paths to current WORKING_DIR.
+        # This keeps QWENPAW_WORKING_DIR effective even if existing agent.json
+        # contains older hard-coded paths like "~/.copaw/media".
+        try:
+            from .utils import _normalize_working_dir_bound_paths
+
+            data = _normalize_working_dir_bound_paths(data)
+        except Exception:
+            pass
+
+        agent_config = AgentProfileConfig(**data)
+
+        # Cache the config with its mtime
+        _agent_config_cache[agent_id] = (agent_config, current_mtime)
+
+        return agent_config
 
 
 def save_agent_config(
     agent_id: str,
     agent_config: AgentProfileConfig,
 ) -> None:
-    """Save agent configuration to workspace/agent.json.
+    """Save agent configuration to workspace/agent.json and invalidate cache.
 
     Args:
         agent_id: Agent ID
@@ -2208,7 +2260,11 @@ def save_agent_config(
     Raises:
         ValueError: If agent ID not found in root config
     """
-    from .utils import load_config
+    from .utils import (
+        load_config,
+        _agent_config_cache,
+        _agent_config_lock,
+    )
 
     config = load_config()
 
@@ -2231,6 +2287,11 @@ def save_agent_config(
             ensure_ascii=False,
             indent=2,
         )
+
+    # Invalidate cache after saving
+    with _agent_config_lock:
+        if agent_id in _agent_config_cache:
+            del _agent_config_cache[agent_id]
 
 
 def migrate_legacy_config_to_multi_agent() -> bool:
