@@ -6,7 +6,17 @@ export function projectDirNameFromMetadata(metadataFile: string): string {
     return "";
   }
   const segments = normalized.split("/").filter(Boolean);
-  return segments.length >= 2 ? segments[segments.length - 2] : "";
+  if (segments.length < 2) {
+    return "";
+  }
+
+  const metadataParentDir = segments[segments.length - 2];
+  if (metadataParentDir.toLowerCase() !== ".agent") {
+    return metadataParentDir;
+  }
+
+  // Metadata commonly lives at <projectId>/.agent/PROJECT.md.
+  return segments.length >= 3 ? segments[segments.length - 3] : "";
 }
 
 export function buildProjectIdCandidates(project?: AgentProjectSummary): string[] {

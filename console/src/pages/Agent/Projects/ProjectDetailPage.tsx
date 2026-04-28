@@ -2849,16 +2849,34 @@ export default function ProjectDetailPage() {
 
   const handleSelectArtifactFile = useCallback(async (path: string) => {
     setWorkbenchSyncNotice(null);
-    if (!path) {
+    const normalizedPath = String(path || "").trim().replace(/\\/g, "/");
+    if (!normalizedPath) {
       return;
     }
 
+    const parentDirPath = (() => {
+      const lastSlashIndex = normalizedPath.lastIndexOf("/");
+      if (lastSlashIndex <= 0) {
+        return "";
+      }
+      return normalizedPath.slice(0, lastSlashIndex);
+    })();
+
     if (currentAgent && selectedProject) {
+      const treeProbePath = parentDirPath || normalizedPath;
       try {
-        const children = await loadProjectTreeDirectory(currentAgent.id, selectedProject, path);
-        const selection = resolveArtifactSelectionPath(path, children);
+        const children = await loadProjectTreeDirectory(
+          currentAgent.id,
+          selectedProject,
+          treeProbePath,
+        );
+        const selection = resolveArtifactSelectionPath(treeProbePath, children);
         if (selection.expandedDirectoryPath) {
           setTreeExpandedKeys((prev) => mergeExpandedProjectTreeKeys(prev, [selection.expandedDirectoryPath]));
+        }
+        if (parentDirPath) {
+          setSelectedFilePath(normalizedPath);
+          return;
         }
         if (selection.selectedPath) {
           setSelectedFilePath(selection.selectedPath);
@@ -2872,7 +2890,7 @@ export default function ProjectDetailPage() {
       }
     }
 
-    setSelectedFilePath(path);
+    setSelectedFilePath(normalizedPath);
   }, [currentAgent, loadProjectTreeDirectory, selectedProject]);
 
   const handleAttachArtifactToChat = useCallback((path: string) => {
