@@ -3,7 +3,8 @@ import { useTranslation } from "react-i18next";
 import api from "../../../api";
 import { useAppMessage } from "../../../hooks/useAppMessage";
 
-export interface HanlpStatus {
+export interface NlpStatus {
+  provider?: string;
   sidecar: {
     status: string;
     reason_code: string;
@@ -13,7 +14,8 @@ export interface HanlpStatus {
     managed: boolean;
     uv_available: boolean;
     uv_executable: string;
-    hanlp_home: string;
+    model_home?: string;
+    hanlp_home?: string;
   };
   model: {
     status: string;
@@ -40,14 +42,14 @@ export function useNlp() {
   const [loading, setLoading] = useState(true);
   const [installing, setInstalling] = useState(false);
   const [downloadingModel, setDownloadingModel] = useState(false);
-  const [status, setStatus] = useState<HanlpStatus | null>(null);
+  const [status, setStatus] = useState<NlpStatus | null>(null);
   const [lastManualSteps, setLastManualSteps] = useState<string[]>([]);
   const [lastOperations, setLastOperations] = useState<HanlpOperation[]>([]);
 
   const fetchStatus = async () => {
     setLoading(true);
     try {
-      const res = await api.getHanlpStatus();
+      const res = await api.getNlpStatus();
       setStatus(res);
     } catch (error) {
       console.error("Failed to load NLP settings:", error);

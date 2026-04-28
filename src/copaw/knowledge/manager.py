@@ -21,7 +21,7 @@ import httpx
 
 from ..constant import CHATS_FILE
 from ..config.config import KnowledgeConfig, KnowledgeSourceSpec
-from .hanlp_runtime import HanLPSidecarRuntime
+from .hanlp_runtime import NLPRuntime
 
 _UNSAFE_FILENAME_RE = re.compile(r'[\\/:*?"<>|]')
 _CHAT_URL_RE = re.compile(
@@ -207,8 +207,8 @@ class KnowledgeManager:
         self.uploads_dir.mkdir(parents=True, exist_ok=True)
         self.remote_blob_dir.mkdir(parents=True, exist_ok=True)
         self.remote_meta_dir.mkdir(parents=True, exist_ok=True)
-        self._semantic_runtime = HanLPSidecarRuntime()
-        self._hanlp2_state: dict[str, str] | None = None
+        self._semantic_runtime = NLPRuntime()
+        self._nlp_state: dict[str, str] | None = None
 
     def list_sources(
         self,
@@ -237,7 +237,7 @@ class KnowledgeManager:
         self,
         config: KnowledgeConfig | None = None,
     ) -> dict[str, str]:
-        state = self._hanlp2_state
+        state = self._nlp_state
         if state is not None and state.get("status") == "error":
             return state
         runtime_state = self._semantic_runtime.probe(config)
@@ -246,8 +246,8 @@ class KnowledgeManager:
     def _remember_semantic_engine_state(self, payload: dict[str, Any]) -> dict[str, str]:
         return self._semantic_engine_state(
             status=str(payload.get("status") or "unavailable"),
-            reason_code=str(payload.get("reason_code") or "HANLP2_SIDECAR_EXEC_FAILED"),
-            reason=str(payload.get("reason") or "HanLP2 semantic engine is unavailable."),
+            reason_code=str(payload.get("reason_code") or "NLP_ENGINE_UNAVAILABLE"),
+            reason=str(payload.get("reason") or "NLP semantic engine is unavailable."),
         )
 
     def _semantic_engine_state(
@@ -258,12 +258,12 @@ class KnowledgeManager:
         reason: str,
     ) -> dict[str, str]:
         state = {
-            "engine": "hanlp2",
+            "engine": "nlp",
             "status": status,
             "reason_code": reason_code,
             "reason": reason,
         }
-        self._hanlp2_state = state
+        self._nlp_state = state
         return state
 
     def normalize_source_name(
@@ -2198,7 +2198,7 @@ class KnowledgeManager:
                     config=config,
                 )
 
-            parse_mode = "hanlp_task_matrix" if syntax_tasks else "tokenized_only"
+            parse_mode = "nlp_task_matrix" if syntax_tasks else "tokenized_only"
             parse_confidence = 1.0 if syntax_tasks else 0.0
 
             syntax_sentences.append(
@@ -2226,7 +2226,7 @@ class KnowledgeManager:
         tokens: list[dict[str, Any]],
         config: KnowledgeConfig,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any] | None]:
-        task_specs = getattr(getattr(config.hanlp, "task_matrix", None), "tasks", {}) or {}
+        task_specs = getattr(getattr(config.nlp, "task_matrix", None), "tasks", {}) or {}
         task_order = ("dep", "sdp", "con")
         syntax_tasks: list[dict[str, Any]] = []
         dependencies: list[dict[str, Any]] = []
@@ -2289,17 +2289,17 @@ class KnowledgeManager:
                     dependent = self._token_text_at(tokens, dependent_index)
                     if not dependent and isinstance(words, list) and dependent_index - 1 < len(words):
                         dependent = str(words[dependent_index - 1] or "")
-                    rows.append(
-                        self._build_dependency_row(
-                            task_key,
-                            dependent_index=dependent_index,
-                            head_index=head_index,
-                            relation=str(relation or "").strip(),
-                            dependent=dependent,
-                            sentence_start=sentence_start,
-                            tokens=tokens,
-                        )
+                    row = self._build_dependency_row(
+                        task_key,
+                        dependent_index=dependent_index,
+                        head_index=head_index,
+                        relation=str(relation or "").strip(),
+                        dependent=dependent,
+                        sentence_start=sentence_start,
+                        tokens=tokens,
                     )
+                    if row is not None:
+                        rows.append(row)
                 return [row for row in rows if row]
 
         if isinstance(raw_result, list):
@@ -2322,17 +2322,17 @@ class KnowledgeManager:
                         relation = str(item[2] or "").strip()
                 else:
                     continue
-                rows.append(
-                    self._build_dependency_row(
-                        task_key,
-                        dependent_index=dependent_index,
-                        head_index=head_index,
-                        relation=relation,
-                        dependent=dependent,
-                        sentence_start=sentence_start,
-                        tokens=tokens,
-                    )
+                row = self._build_dependency_row(
+                    task_key,
+                    dependent_index=dependent_index,
+                    head_index=head_index,
+                    relation=relation,
+                    dependent=dependent,
+                    sentence_start=sentence_start,
+                    tokens=tokens,
                 )
+                if row is not None:
+                    rows.append(row)
         return [row for row in rows if row]
 
     def _build_dependency_row(
@@ -2400,7 +2400,7 @@ class KnowledgeManager:
             for sentence in sentences
             if isinstance(sentence, dict)
         )
-        parse_mode = "hanlp_task_matrix" if task_keys else "tokenized_only"
+        parse_mode = "nlp_task_matrix" if task_keys else "tokenized_only"
         return {
             "artifact": "syntax_structured",
             "format_version": _SYNTAX_FORMAT_VERSION,
@@ -2704,8 +2704,8 @@ class KnowledgeManager:
         current_cor_paths: set[str] = set()
         semantic_state = self.get_semantic_engine_state(config) if config is not None else self._semantic_engine_state(
             status="unavailable",
-            reason_code="HANLP2_SIDECAR_UNCONFIGURED",
-            reason="HanLP2 sidecar is not configured.",
+            reason_code="NLP_ENGINE_UNAVAILABLE",
+            reason="NLP semantic engine is not configured.",
         )
         ready = semantic_state.get("status") == "ready"
 
@@ -2765,8 +2765,8 @@ class KnowledgeManager:
             chunk["cor_cluster_count"] = 0
             chunk["cor_replacement_count"] = 0
             chunk["cor_resolution_mode"] = "identity_fallback"
-            chunk["cor_reason_code"] = str(semantic_state.get("reason_code") or "HANLP2_SIDECAR_UNCONFIGURED")
-            chunk["cor_reason"] = str(semantic_state.get("reason") or "HanLP2 sidecar is not configured.")
+            chunk["cor_reason_code"] = str(semantic_state.get("reason_code") or "NLP_ENGINE_UNAVAILABLE")
+            chunk["cor_reason"] = str(semantic_state.get("reason") or "NLP semantic engine is not configured.")
             chunk.pop("cor_path", None)
             chunk.pop("cor_structured_path", None)
             chunk.pop("cor_annotated_path", None)
@@ -2778,11 +2778,11 @@ class KnowledgeManager:
                 self._remember_semantic_engine_state(state)
                 if state.get("status") == "ready":
                     chunk["cor_status"] = "ready"
-                    chunk["cor_reason_code"] = "HANLP2_TASK_READY"
-                    chunk["cor_reason"] = "HanLP2 coreference task is ready."
+                    chunk["cor_reason_code"] = "NLP_ENGINE_TASK_READY"
+                    chunk["cor_reason"] = "NLP coreference task is ready."
                 else:
-                    chunk["cor_reason_code"] = str(state.get("reason_code") or "HANLP2_SIDECAR_EXEC_FAILED")
-                    chunk["cor_reason"] = str(state.get("reason") or "HanLP2 coreference task failed.")
+                    chunk["cor_reason_code"] = str(state.get("reason_code") or "NLP_ENGINE_TASK_FAILED")
+                    chunk["cor_reason"] = str(state.get("reason") or "NLP coreference task failed.")
                     raw_result = {}
 
             cor_relative_path = self._build_cor_relative_path(str(chunk.get("chunk_path") or ""))
@@ -2917,8 +2917,8 @@ class KnowledgeManager:
         current_ner_paths: set[str] = set()
         semantic_state = self.get_semantic_engine_state(config) if config is not None else self._semantic_engine_state(
             status="unavailable",
-            reason_code="HANLP2_SIDECAR_UNCONFIGURED",
-            reason="HanLP2 sidecar is not configured.",
+            reason_code="NLP_ENGINE_UNAVAILABLE",
+            reason="NLP semantic engine is not configured.",
         )
         ready = semantic_state.get("status") == "ready"
 
@@ -5472,7 +5472,7 @@ class KnowledgeManager:
         self._remember_semantic_engine_state(state)
         if state.get("status") != "ready":
             logger.info(
-                "HanLP2 sidecar is unavailable; semantic tokenization is skipped (%s)",
+                "NLP semantic engine is unavailable; semantic tokenization is skipped (%s)",
                 state.get("reason_code"),
             )
             return []
@@ -5480,8 +5480,8 @@ class KnowledgeManager:
         if not raw_tokens:
             self._semantic_engine_state(
                 status="ready",
-                reason_code="HANLP2_READY",
-                reason="HanLP2 semantic engine is ready.",
+                reason_code="NLP_ENGINE_READY",
+                reason="NLP semantic engine is ready.",
             )
             return []
 
@@ -5497,8 +5497,8 @@ class KnowledgeManager:
             tokens.append(token)
         self._semantic_engine_state(
             status="ready",
-            reason_code="HANLP2_READY",
-            reason="HanLP2 semantic engine is ready.",
+            reason_code="NLP_ENGINE_READY",
+            reason="NLP semantic engine is ready.",
         )
         return tokens
 

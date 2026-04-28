@@ -1677,55 +1677,82 @@ class KnowledgeAutomationConfig(BaseModel):
     url_exclude_patterns: List[str] = Field(default_factory=list)
 
 
-class KnowledgeHanLPSidecarConfig(BaseModel):
-    """HanLP 2.x local sidecar runtime configuration."""
+class KnowledgeNLPConfig(BaseModel):
+    """Generic NLP runtime configuration."""
+
+    provider: Literal["rex_uninlu", "placeholder"] = Field(
+        default="rex_uninlu",
+        description="Configured NLP provider. RexUniNLU is planned as default.",
+    )
 
     enabled: bool = Field(default=False)
     python_executable: str = Field(
         default="",
-        description="Python 3.6-3.9 executable used to run the HanLP sidecar.",
+        description="Optional Python executable used by external NLP runtime.",
     )
     model_id: str = Field(
-        default="FINE_ELECTRA_SMALL_ZH",
-        description="Default HanLP tokenizer model to load and validate.",
+        default="iic/nlp_deberta_rex-uninlu_chinese-base",
+        description="Default model id for NLP provider runtime.",
     )
     probe_timeout_sec: float = Field(default=5.0, ge=0.5, le=60.0)
     tokenize_timeout_sec: float = Field(default=15.0, ge=0.5, le=120.0)
-    hanlp_home: str = Field(
+    model_home: str = Field(
         default="",
-        description="Optional HANLP_HOME for offline cache/model lookup.",
+        description="Optional local cache/model home for NLP runtime.",
     )
     task_matrix: KnowledgeHanLPTaskMatrixConfig = Field(
         default_factory=lambda: KnowledgeHanLPTaskMatrixConfig(),
-        description="HanLP task matrix for L2 annotation and evaluation.",
+        description="NLP task matrix for L2 annotation and evaluation.",
     )
 
     @model_validator(mode="after")
-    def _inject_from_env(self) -> "KnowledgeHanLPSidecarConfig":
-        enabled_raw = os.environ.get("COPAW_HANLP_SIDECAR_ENABLED", "").strip()
+    def _inject_from_env(self) -> "KnowledgeNLPConfig":
+        provider = os.environ.get("COPAW_NLP_PROVIDER", "").strip().lower()
+        if provider in {"rex_uninlu", "placeholder"}:
+            self.provider = provider
+
+        enabled_raw = (
+            os.environ.get("COPAW_NLP_ENABLED", "").strip()
+            or os.environ.get("COPAW_HANLP_SIDECAR_ENABLED", "").strip()
+        )
         if enabled_raw:
             self.enabled = enabled_raw.lower() not in {"0", "false", "no"}
 
-        python_executable = os.environ.get("COPAW_HANLP_SIDECAR_PYTHON", "").strip()
+        python_executable = (
+            os.environ.get("COPAW_NLP_PYTHON_EXECUTABLE", "").strip()
+            or os.environ.get("COPAW_HANLP_SIDECAR_PYTHON", "").strip()
+        )
         if python_executable:
             self.python_executable = python_executable
 
-        model_id = os.environ.get("COPAW_HANLP_MODEL_ID", "").strip()
+        model_id = (
+            os.environ.get("COPAW_NLP_MODEL_ID", "").strip()
+            or os.environ.get("COPAW_HANLP_MODEL_ID", "").strip()
+        )
         if model_id:
             self.model_id = model_id
 
-        hanlp_home = os.environ.get("COPAW_HANLP_HOME", "").strip()
-        if hanlp_home:
-            self.hanlp_home = hanlp_home
+        model_home = (
+            os.environ.get("COPAW_NLP_MODEL_HOME", "").strip()
+            or os.environ.get("COPAW_HANLP_HOME", "").strip()
+        )
+        if model_home:
+            self.model_home = model_home
 
-        probe_timeout = os.environ.get("COPAW_HANLP_SIDECAR_PROBE_TIMEOUT_SEC", "").strip()
+        probe_timeout = (
+            os.environ.get("COPAW_NLP_PROBE_TIMEOUT_SEC", "").strip()
+            or os.environ.get("COPAW_HANLP_SIDECAR_PROBE_TIMEOUT_SEC", "").strip()
+        )
         if probe_timeout:
             try:
                 self.probe_timeout_sec = max(0.5, min(float(probe_timeout), 60.0))
             except ValueError:
                 pass
 
-        tokenize_timeout = os.environ.get("COPAW_HANLP_SIDECAR_TOKENIZE_TIMEOUT_SEC", "").strip()
+        tokenize_timeout = (
+            os.environ.get("COPAW_NLP_TOKENIZE_TIMEOUT_SEC", "").strip()
+            or os.environ.get("COPAW_HANLP_SIDECAR_TOKENIZE_TIMEOUT_SEC", "").strip()
+        )
         if tokenize_timeout:
             try:
                 self.tokenize_timeout_sec = max(0.5, min(float(tokenize_timeout), 120.0))
@@ -1733,6 +1760,10 @@ class KnowledgeHanLPSidecarConfig(BaseModel):
                 pass
 
         return self
+
+
+class KnowledgeHanLPSidecarConfig(KnowledgeNLPConfig):
+    """Deprecated compatibility alias for legacy hanlp config path."""
 
 
 class KnowledgeHanLPTaskConfig(BaseModel):
@@ -1911,8 +1942,8 @@ class KnowledgeConfig(BaseModel):
     automation: KnowledgeAutomationConfig = Field(
         default_factory=KnowledgeAutomationConfig,
     )
-    hanlp: KnowledgeHanLPSidecarConfig = Field(
-        default_factory=KnowledgeHanLPSidecarConfig,
+    nlp: KnowledgeNLPConfig = Field(
+        default_factory=KnowledgeNLPConfig,
     )
     graphify: GraphifyConfig = Field(
         default_factory=GraphifyConfig,
@@ -1926,6 +1957,24 @@ class KnowledgeConfig(BaseModel):
     enrichment_pipeline_id: str = Field(
         default="system-knowledge-enrichment-v1",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_legacy_hanlp_field(cls, values):
+        if not isinstance(values, dict):
+            return values
+        if "nlp" not in values and "hanlp" in values:
+            values["nlp"] = values.get("hanlp")
+        return values
+
+    @property
+    def hanlp(self) -> KnowledgeNLPConfig:
+        """Deprecated compatibility alias for legacy code paths."""
+        return self.nlp
+
+    @hanlp.setter
+    def hanlp(self, value: KnowledgeNLPConfig) -> None:
+        self.nlp = value
 
 
 class SkillMarketSpec(BaseModel):

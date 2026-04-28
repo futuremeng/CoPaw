@@ -111,6 +111,33 @@ export const agentApi = {
       method: "POST",
     }),
 
+  getNlpStatus: () =>
+    request<{
+      provider: string;
+      sidecar: {
+        status: string;
+        reason_code: string;
+        reason: string;
+        enabled: boolean;
+        python_executable: string;
+        managed: boolean;
+        uv_available: boolean;
+        uv_executable: string;
+        model_home: string;
+      };
+      model: {
+        status: string;
+        reason_code: string;
+        reason: string;
+        model_id: string;
+      };
+      deprecated?: boolean;
+      migration?: {
+        message?: string;
+        target_endpoint?: string;
+      };
+    }>("/agent/nlp-status"),
+
   getHanlpStatus: () =>
     request<{
       sidecar: {
@@ -122,13 +149,19 @@ export const agentApi = {
         managed: boolean;
         uv_available: boolean;
         uv_executable: string;
-        hanlp_home: string;
+        model_home?: string;
+        hanlp_home?: string;
       };
       model: {
         status: string;
         reason_code: string;
         reason: string;
         model_id: string;
+      };
+      deprecated?: boolean;
+      migration?: {
+        message?: string;
+        target_endpoint?: string;
       };
     }>("/agent/hanlp-status"),
 

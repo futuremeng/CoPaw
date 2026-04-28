@@ -69,7 +69,7 @@ function NlpPage() {
               {t("nlpConfig.pythonPath")} {status?.sidecar.python_executable || t("nlpConfig.notConfigured")}
             </Typography.Text>
             <Typography.Text>
-              {t("nlpConfig.hanlpHome")} {status?.sidecar.hanlp_home || t("nlpConfig.notConfigured")}
+              {t("nlpConfig.hanlpHome")} {(status?.sidecar.model_home || status?.sidecar.hanlp_home) || t("nlpConfig.notConfigured")}
             </Typography.Text>
             <Typography.Text>
               {t("nlpConfig.installStrategy", {
