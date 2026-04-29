@@ -521,6 +521,20 @@ function buildSparklinePath(values: number[], width: number, height: number): st
 }
 
 function getSyncRelationCount(syncState: ProjectKnowledgeSyncState | null): number {
+  const l2Metrics = syncState?.l2_metrics;
+  if (l2Metrics && typeof l2Metrics === "object") {
+    const l2RelationCount = (l2Metrics as { syntax_relation_count?: unknown }).syntax_relation_count;
+    if (Number.isFinite(Number(l2RelationCount))) {
+      return Number(l2RelationCount);
+    }
+  }
+  const indexResult = syncState?.last_result?.index;
+  if (indexResult && typeof indexResult === "object") {
+    const syntaxRelationCount = (indexResult as { syntax_relation_count?: unknown }).syntax_relation_count;
+    if (Number.isFinite(Number(syntaxRelationCount))) {
+      return Number(syntaxRelationCount);
+    }
+  }
   const memify = syncState?.last_result?.memify;
   if (!memify || typeof memify !== "object") {
     return 0;
@@ -530,6 +544,20 @@ function getSyncRelationCount(syncState: ProjectKnowledgeSyncState | null): numb
 }
 
 function getSyncNodeCount(syncState: ProjectKnowledgeSyncState | null): number {
+  const l2Metrics = syncState?.l2_metrics;
+  if (l2Metrics && typeof l2Metrics === "object") {
+    const l2EntityCount = (l2Metrics as { ner_entity_count?: unknown }).ner_entity_count;
+    if (Number.isFinite(Number(l2EntityCount))) {
+      return Number(l2EntityCount);
+    }
+  }
+  const indexResult = syncState?.last_result?.index;
+  if (indexResult && typeof indexResult === "object") {
+    const nerEntityCount = (indexResult as { ner_entity_count?: unknown }).ner_entity_count;
+    if (Number.isFinite(Number(nerEntityCount))) {
+      return Number(nerEntityCount);
+    }
+  }
   const memify = syncState?.last_result?.memify;
   if (!memify || typeof memify !== "object") {
     return 0;
@@ -1857,18 +1885,9 @@ export function useProjectKnowledgeState(
     const entityMentionsCount = getSyncMemifyMetric(syncState, "entity_mentions_count");
     const avgEntitiesPerSentence = getSyncMemifyMetric(syncState, "avg_entities_per_sentence");
     const avgEntityCharRatio = getSyncMemifyMetric(syncState, "avg_entity_char_ratio");
-    const relationCount = Math.max(
-      graphBaseResult?.records?.length || 0,
-      getSyncRelationCount(syncState),
-      toFiniteNumber(latestRoundAfter?.relation_count, 0),
-    );
-    const graphEntityCount = new Set(
-      (graphBaseResult?.records || []).flatMap((record) => [record.subject, record.object])
-        .map((item) => String(item || "").trim())
-        .filter(Boolean),
-    ).size;
-    const entityCount = Math.max(graphEntityCount, getSyncNodeCount(syncState));
-    const effectiveEntityCount = Math.max(entityCount, toFiniteNumber(latestRoundAfter?.entity_count, 0));
+    const relationCount = getSyncRelationCount(syncState);
+    const entityCount = getSyncNodeCount(syncState);
+    const effectiveEntityCount = entityCount;
     const activeEnrichmentMetrics = (activeKnowledgeTask?.enrichment_metrics || {}) as Record<string, unknown>;
 
     const edgeCount = Math.max(
@@ -2030,12 +2049,10 @@ export function useProjectKnowledgeState(
     const nlpEntityCount = Math.max(
       getBackendModeMetricNumber(syncState, "nlp", "entity_count"),
       getSyncNodeCount(syncState),
-      getSyncEnrichmentMetric(syncState, "node_count"),
     );
     const nlpRelationCount = Math.max(
       getBackendModeMetricNumber(syncState, "nlp", "relation_count"),
       getSyncRelationCount(syncState),
-      getSyncEnrichmentMetric(syncState, "edge_count"),
     );
     const nlpCorReadyChunkCount = Math.max(
       getBackendModeMetricNumber(syncState, "nlp", "cor_ready_chunk_count"),
@@ -2095,25 +2112,13 @@ export function useProjectKnowledgeState(
       ?? normalizeNullableNumber(getSyncIndexMetric(syncState, "cor_ready_chunk_ratio"));
     const nlpCorEffectiveChunkRatio = getBackendModeMetricNullableNumber(syncState, "nlp", "cor_effective_chunk_ratio")
       ?? normalizeNullableNumber(getSyncIndexMetric(syncState, "cor_effective_chunk_ratio"));
-    const agenticEntityCount = Math.max(
-      getBackendModeMetricNumber(syncState, "agentic", "entity_count"),
-      normalizeNumber(workflowRunMeta.entity_count),
-      normalizeNumber(workflowRunMeta.final_entity_count),
-    );
-    const agenticRelationCount = Math.max(
-      getBackendModeMetricNumber(syncState, "agentic", "relation_count"),
-      normalizeNumber(workflowRunMeta.relation_count),
-      normalizeNumber(workflowRunMeta.final_relation_count),
-    );
-    const agenticQualityScore = getBackendModeMetricNullableNumber(syncState, "agentic", "quality_score")
-      ?? normalizeNullableNumber(
-        workflowRunMeta.quality_score
-        ?? workflowRunMeta.final_quality_score,
-      );
+    const agenticEntityCount = 0;
+    const agenticRelationCount = 0;
+    const agenticQualityScore = null;
 
     const fastAvailable = fastDocumentCount > 0 || fastChunkCount > 0;
     const nlpAvailable = nlpEntityCount > 0 || nlpRelationCount > 0;
-    const agenticAvailable = ["succeeded", "completed"].includes(workflowStatus);
+    const agenticAvailable = false;
     const semanticSummary = getProjectKnowledgeSemanticSummary(syncState?.semantic_engine, t);
     const semanticStatus = String(syncState?.semantic_engine?.status || "").trim();
     const latestUpdatedAt = String(

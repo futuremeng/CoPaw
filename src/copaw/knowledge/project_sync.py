@@ -482,6 +482,9 @@ class ProjectKnowledgeSyncManager:
             "mode_outputs": {},
             "mode_metrics": {},
             "global_metrics": {},
+            "l1_metrics": {},
+            "l2_metrics": {},
+            "l3_metrics": {},
             "semantic_engine": {
                 "engine": "hanlp2",
                 "status": "idle",
@@ -666,6 +669,9 @@ class ProjectKnowledgeSyncManager:
             document_graph_dir_path,
             document_graph_count,
         ) = self._resolve_document_graph_artifacts(memify_result)
+        l2_entity_count = _safe_int(index_result.get("ner_entity_count"))
+        l2_relation_count = _safe_int(index_result.get("syntax_relation_count"))
+
         workflow_mode = str(
             workflow_run.get("mode") or state.get("latest_requested_mode") or ""
         ).strip().lower()
@@ -758,8 +764,8 @@ class ProjectKnowledgeSyncManager:
                 "source": "graph-artifacts",
                 "summary_lines": [
                     f"Document graphify payloads: {document_graph_count}",
-                    f"Entities: {_safe_int(memify_result.get('node_count'))}",
-                    f"Relations: {_safe_int(memify_result.get('relation_count'))}",
+                    f"Entities (NER): {l2_entity_count}",
+                    f"Relations (Syntax): {l2_relation_count}",
                 ],
                 "artifacts": nlp_artifacts,
             },
@@ -799,6 +805,8 @@ class ProjectKnowledgeSyncManager:
                 "quality_score": quality_score,
             }
             if mode == "nlp":
+                metrics[mode]["entity_count"] = _safe_int(index_result.get("ner_entity_count"))
+                metrics[mode]["relation_count"] = _safe_int(index_result.get("syntax_relation_count"))
                 metrics[mode].update(
                     {
                         "cor_ready_chunk_count": _safe_int(index_result.get("cor_ready_chunk_count")),
@@ -817,7 +825,87 @@ class ProjectKnowledgeSyncManager:
                         "syntax_relation_count": _safe_int(index_result.get("syntax_relation_count")),
                     }
                 )
+            if mode == "agentic":
+                metrics[mode]["entity_count"] = 0
+                metrics[mode]["relation_count"] = 0
+                metrics[mode]["quality_score"] = None
         return metrics
+
+    def _build_l1_metrics(
+        self,
+        state: dict[str, Any],
+        source_status: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        if not isinstance(source_status, dict):
+            source_status = {}
+        latest_source_id = str(state.get("latest_source_id") or "").strip()
+        metrics_updated_at = str(
+            source_status.get("stats_updated_at")
+            or source_status.get("indexed_at")
+            or source_status.get("raw_last_ingested_at")
+            or state.get("updated_at")
+            or ""
+        ).strip()
+        raw_document_count = _safe_int(source_status.get("raw_document_count"))
+        indexed_document_count = _safe_int(source_status.get("document_count"))
+        return {
+            "source_id": latest_source_id or None,
+            "metrics_source": "project_sync_l1_raw",
+            "metrics_updated_at": metrics_updated_at or None,
+            "raw_document_count": raw_document_count,
+            "indexed_document_count": indexed_document_count,
+            "chunk_count": _safe_int(source_status.get("chunk_count")),
+            "sentence_count": _safe_int(source_status.get("sentence_count")),
+            "char_count": _safe_int(source_status.get("char_count")),
+            "token_count": _safe_int(source_status.get("token_count")),
+            "raw_total_bytes": _safe_int(source_status.get("raw_total_bytes")),
+            "raw_last_ingested_at": str(source_status.get("raw_last_ingested_at") or "").strip() or None,
+            "source_stats_updated_at": str(source_status.get("stats_updated_at") or "").strip() or None,
+        }
+
+    def _build_l2_metrics(
+        self,
+        state: dict[str, Any],
+        index_result: dict[str, Any],
+    ) -> dict[str, Any]:
+        live_l2 = state.get("l2_metrics") if isinstance(state.get("l2_metrics"), dict) else {}
+        l2_progress = state.get("l2_progress") if isinstance(state.get("l2_progress"), dict) else {}
+        total_chunks = max(
+            _safe_int(l2_progress.get("total_chunks")),
+            _safe_int(index_result.get("chunk_count")),
+        )
+        return {
+            "metrics_source": "project_sync_l2_nlp",
+            "metrics_updated_at": str(state.get("updated_at") or state.get("last_finished_at") or "").strip() or None,
+            "total_chunks": total_chunks,
+            "cor_done_chunks": max(_safe_int(l2_progress.get("cor_done_chunks")), _safe_int(index_result.get("cor_ready_chunk_count"))),
+            "ner_done_chunks": max(_safe_int(l2_progress.get("ner_done_chunks")), _safe_int(index_result.get("ner_ready_chunk_count"))),
+            "syntax_done_chunks": max(_safe_int(l2_progress.get("syntax_done_chunks")), _safe_int(index_result.get("syntax_ready_chunk_count"))),
+            "cor_ready_chunk_count": max(_safe_int(live_l2.get("cor_ready_chunk_count")), _safe_int(index_result.get("cor_ready_chunk_count"))),
+            "cor_cluster_count": max(_safe_int(live_l2.get("cor_cluster_count")), _safe_int(index_result.get("cor_cluster_count"))),
+            "cor_replacement_count": max(_safe_int(live_l2.get("cor_replacement_count")), _safe_int(index_result.get("cor_replacement_count"))),
+            "cor_effective_chunk_count": max(_safe_int(live_l2.get("cor_effective_chunk_count")), _safe_int(index_result.get("cor_effective_chunk_count"))),
+            "ner_ready_chunk_count": max(_safe_int(live_l2.get("ner_ready_chunk_count")), _safe_int(index_result.get("ner_ready_chunk_count"))),
+            "ner_entity_count": max(_safe_int(live_l2.get("ner_entity_count")), _safe_int(index_result.get("ner_entity_count"))),
+            "syntax_ready_chunk_count": max(_safe_int(live_l2.get("syntax_ready_chunk_count")), _safe_int(index_result.get("syntax_ready_chunk_count"))),
+            "syntax_sentence_count": max(_safe_int(live_l2.get("syntax_sentence_count")), _safe_int(index_result.get("syntax_sentence_count"))),
+            "syntax_token_count": max(_safe_int(live_l2.get("syntax_token_count")), _safe_int(index_result.get("syntax_token_count"))),
+            "syntax_relation_count": max(_safe_int(live_l2.get("syntax_relation_count")), _safe_int(index_result.get("syntax_relation_count"))),
+            "entity_count": max(_safe_int(live_l2.get("ner_entity_count")), _safe_int(index_result.get("ner_entity_count"))),
+            "relation_count": max(_safe_int(live_l2.get("syntax_relation_count")), _safe_int(index_result.get("syntax_relation_count"))),
+        }
+
+    def _build_l3_metrics(self, state: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "metrics_source": "project_sync_l3_placeholder",
+            "metrics_updated_at": str(state.get("updated_at") or state.get("last_finished_at") or "").strip() or None,
+            "status": "empty",
+            "reason_code": "L3_NOT_READY",
+            "reason": "L3 agentic metrics are intentionally empty until independent outputs are ready.",
+            "entity_count": 0,
+            "relation_count": 0,
+            "quality_score": None,
+        }
 
     def _resolve_index_result(self, state: dict[str, Any]) -> dict[str, Any]:
         """Resolve the best-available index result for UI hydration.
@@ -957,34 +1045,13 @@ class ProjectKnowledgeSyncManager:
         if latest_dt is not None:
             metrics_updated_at = latest_dt.isoformat()
 
-        fast_metrics = mode_metrics.get("fast") if isinstance(mode_metrics.get("fast"), dict) else {}
+        l1_metrics = self._build_l1_metrics(state, source_status)
 
-        document_count = max(
-            _safe_int(index_result.get("document_count")),
-            _safe_int(memify_result.get("document_count")),
-            _safe_int(fast_metrics.get("document_count")),
-            _safe_int(source_status.get("document_count") or source_status.get("raw_document_count")),
-        )
-        chunk_count = max(
-            _safe_int(index_result.get("chunk_count")),
-            _safe_int(fast_metrics.get("chunk_count")),
-            _safe_int(source_status.get("chunk_count")),
-        )
-        sentence_count = max(
-            _safe_int(index_result.get("sentence_count")),
-            _safe_int(memify_result.get("sentence_count")),
-            _safe_int(source_status.get("sentence_count")),
-        )
-        char_count = max(
-            _safe_int(index_result.get("char_count")),
-            _safe_int(fast_metrics.get("char_count")),
-            _safe_int(source_status.get("char_count")),
-        )
-        token_count = max(
-            _safe_int(index_result.get("token_count")),
-            _safe_int(fast_metrics.get("token_count")),
-            _safe_int(source_status.get("token_count")),
-        )
+        document_count = _safe_int(l1_metrics.get("raw_document_count"))
+        chunk_count = _safe_int(l1_metrics.get("chunk_count"))
+        sentence_count = _safe_int(l1_metrics.get("sentence_count"))
+        char_count = _safe_int(l1_metrics.get("char_count"))
+        token_count = _safe_int(l1_metrics.get("token_count"))
 
         return {
             "document_count": document_count,
@@ -992,7 +1059,7 @@ class ProjectKnowledgeSyncManager:
             "sentence_count": sentence_count,
             "char_count": char_count,
             "token_count": token_count,
-            "metrics_source": "project_sync_merged",
+            "metrics_source": "project_sync_l1_raw",
             "metrics_updated_at": metrics_updated_at or None,
             "source_id": latest_source_id or None,
             "source_stats_updated_at": source_stats_updated_at or None,
@@ -1028,18 +1095,8 @@ class ProjectKnowledgeSyncManager:
             _safe_int(memify_result.get("document_count")),
         )
         chunk_count = _safe_int(index_result.get("chunk_count"))
-        entity_count = max(
-            _safe_int(memify_result.get("node_count")),
-            _safe_int((memify_result.get("enrichment_metrics") or {}).get("node_count"))
-            if isinstance(memify_result.get("enrichment_metrics"), dict)
-            else 0,
-        )
-        relation_count = max(
-            _safe_int(memify_result.get("relation_count")),
-            _safe_int((memify_result.get("enrichment_metrics") or {}).get("edge_count"))
-            if isinstance(memify_result.get("enrichment_metrics"), dict)
-            else 0,
-        )
+        entity_count = _safe_int(index_result.get("ner_entity_count"))
+        relation_count = _safe_int(index_result.get("syntax_relation_count"))
         workflow_status = str(workflow_run.get("status") or "").strip().lower()
         workflow_mode = str(
             workflow_run.get("mode") or state.get("latest_requested_mode") or ""
@@ -1067,29 +1124,9 @@ class ProjectKnowledgeSyncManager:
             if isinstance(snapshot, dict):
                 agentic_snapshot = snapshot
 
-        agentic_entity_count = max(
-            _safe_int(workflow_run.get("final_entity_count")),
-            _safe_int(workflow_run.get("entity_count")),
-            _safe_int(workflow_run.get("node_count")),
-            _safe_int(agentic_snapshot.get("entity_count")),
-            _safe_int(agentic_snapshot.get("node_count")),
-        )
-        agentic_relation_count = max(
-            _safe_int(workflow_run.get("final_relation_count")),
-            _safe_int(workflow_run.get("relation_count")),
-            _safe_int(workflow_run.get("edge_count")),
-            _safe_int(agentic_snapshot.get("relation_count")),
-            _safe_int(agentic_snapshot.get("edge_count")),
-        )
-        agentic_quality_score = _safe_float(
-            workflow_run.get("final_quality_score")
-            or workflow_run.get("quality_score")
-            or agentic_snapshot.get("quality_score")
-            or quality_loop_result.get("score_after")
-            or quality_loop_result.get("score_before")
-            or quality_loop_result.get("quality_score_after")
-            or quality_loop_result.get("quality_score")
-        )
+        agentic_entity_count = 0
+        agentic_relation_count = 0
+        agentic_quality_score = None
 
         semantic_state = state.get("semantic_engine")
         if not isinstance(semantic_state, dict):
@@ -1130,7 +1167,7 @@ class ProjectKnowledgeSyncManager:
         )
         required_stage_ready = ner_stage_ready and syntax_stage_ready
         nlp_available = required_stage_ready
-        agentic_available = workflow_status in {"succeeded", "completed"} and workflow_mode in {"", "agentic"}
+        agentic_available = False
 
         fast_running = sync_status in {"pending", "indexing"} or sync_stage in {"pending", "indexing"}
         nlp_running = semantic_ready and (sync_status == "graphifying" or sync_stage == "graphifying" or sync_stage.startswith("graphify"))
@@ -1457,10 +1494,23 @@ class ProjectKnowledgeSyncManager:
         hydrated = dict(state)
         hydrated["semantic_engine"] = self._build_semantic_engine_state(hydrated)
         index_result = self._resolve_index_result(hydrated)
+        latest_source_id = str(hydrated.get("latest_source_id") or "").strip()
+        source_status: dict[str, Any] = {}
+        if latest_source_id:
+            try:
+                source_status = self._knowledge_manager.get_source_status(
+                    latest_source_id,
+                    lightweight=True,
+                )
+            except Exception:
+                source_status = {}
         processing_modes = self._build_processing_modes(hydrated)
         output_resolution = self._build_output_resolution(processing_modes)
         mode_outputs = self._build_mode_outputs(hydrated)
         mode_metrics = self._build_mode_metrics(processing_modes, mode_outputs, index_result)
+        l1_metrics = self._build_l1_metrics(hydrated, source_status)
+        l2_metrics = self._build_l2_metrics(hydrated, index_result)
+        l3_metrics = self._build_l3_metrics(hydrated)
         output_scheduler = self._build_output_scheduler(
             processing_modes,
             output_resolution,
@@ -1470,7 +1520,10 @@ class ProjectKnowledgeSyncManager:
         hydrated["output_scheduler"] = output_scheduler
         hydrated["mode_outputs"] = mode_outputs
         hydrated["mode_metrics"] = mode_metrics
-        hydrated["global_metrics"] = self._build_global_metrics(hydrated, mode_metrics)
+        hydrated["l1_metrics"] = l1_metrics
+        hydrated["l2_metrics"] = l2_metrics
+        hydrated["l3_metrics"] = l3_metrics
+        hydrated["global_metrics"] = self._build_global_metrics(hydrated, mode_metrics, source_status)
         hydrated["stage_message"] = self._merge_stage_message_with_semantic_summary(
             str(hydrated.get("stage_message") or "").strip(),
             str((hydrated.get("semantic_engine") or {}).get("summary") or "").strip(),
@@ -2127,8 +2180,24 @@ class ProjectKnowledgeSyncManager:
                         "latest_workflow_run_id": str(workflow_result.get("run_id") or "").strip(),
                         "latest_requested_mode": normalized_mode,
                         "processing_mode_overrides": {},
-                        "l2_progress": {},
-                        "l2_metrics": {},
+                        "l2_progress": {
+                            "total_chunks": _safe_int((workflow_result.get("index") or {}).get("chunk_count")),
+                            "cor_done_chunks": _safe_int((workflow_result.get("index") or {}).get("cor_ready_chunk_count")),
+                            "ner_done_chunks": _safe_int((workflow_result.get("index") or {}).get("ner_ready_chunk_count")),
+                            "syntax_done_chunks": _safe_int((workflow_result.get("index") or {}).get("syntax_ready_chunk_count")),
+                        },
+                        "l2_metrics": {
+                            "cor_ready_chunk_count": _safe_int((workflow_result.get("index") or {}).get("cor_ready_chunk_count")),
+                            "cor_cluster_count": _safe_int((workflow_result.get("index") or {}).get("cor_cluster_count")),
+                            "cor_replacement_count": _safe_int((workflow_result.get("index") or {}).get("cor_replacement_count")),
+                            "cor_effective_chunk_count": _safe_int((workflow_result.get("index") or {}).get("cor_effective_chunk_count")),
+                            "ner_ready_chunk_count": _safe_int((workflow_result.get("index") or {}).get("ner_ready_chunk_count")),
+                            "ner_entity_count": _safe_int((workflow_result.get("index") or {}).get("ner_entity_count")),
+                            "syntax_ready_chunk_count": _safe_int((workflow_result.get("index") or {}).get("syntax_ready_chunk_count")),
+                            "syntax_sentence_count": _safe_int((workflow_result.get("index") or {}).get("syntax_sentence_count")),
+                            "syntax_token_count": _safe_int((workflow_result.get("index") or {}).get("syntax_token_count")),
+                            "syntax_relation_count": _safe_int((workflow_result.get("index") or {}).get("syntax_relation_count")),
+                        },
                         "semantic_engine": self._build_semantic_engine_state(
                             self._load_state(project_id),
                             config=config,

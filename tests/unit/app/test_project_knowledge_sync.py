@@ -703,7 +703,12 @@ def test_project_sync_agentic_mode_does_not_reuse_memify_counts_while_pending(tm
     state = manager.get_state(project_id)
     state["latest_source_id"] = f"project-{project_id}-workspace"
     state["last_result"] = {
-        "index": {"document_count": 2, "chunk_count": 6},
+        "index": {
+            "document_count": 2,
+            "chunk_count": 6,
+            "ner_entity_count": 7,
+            "syntax_relation_count": 9,
+        },
         "memify": {"node_count": 12, "relation_count": 18},
         "workflow_run": {"status": "pending", "mode": "agentic", "run_id": "run-pending"},
     }
@@ -712,9 +717,10 @@ def test_project_sync_agentic_mode_does_not_reuse_memify_counts_while_pending(tm
     hydrated = manager.get_state(project_id)
     modes = {item["mode"]: item for item in hydrated["processing_modes"]}
 
-    assert modes["nlp"]["entity_count"] == 12
-    assert modes["nlp"]["relation_count"] == 18
+    assert modes["nlp"]["entity_count"] == 7
+    assert modes["nlp"]["relation_count"] == 9
     assert modes["agentic"]["status"] == "running"
+    assert modes["agentic"]["available"] is False
     assert modes["agentic"]["entity_count"] == 0
     assert modes["agentic"]["relation_count"] == 0
     assert modes["agentic"]["quality_score"] is None
@@ -741,7 +747,12 @@ def test_project_sync_agentic_mode_prefers_quality_snapshot_metrics(tmp_path: Pa
     state = manager.get_state(project_id)
     state["latest_source_id"] = f"project-{project_id}-workspace"
     state["last_result"] = {
-        "index": {"document_count": 2, "chunk_count": 6},
+        "index": {
+            "document_count": 2,
+            "chunk_count": 6,
+            "ner_entity_count": 6,
+            "syntax_relation_count": 11,
+        },
         "memify": {"node_count": 5, "relation_count": 12},
         "quality_loop": {
             "score_after": 0.91,
@@ -762,12 +773,13 @@ def test_project_sync_agentic_mode_prefers_quality_snapshot_metrics(tmp_path: Pa
     hydrated = manager.get_state(project_id)
     modes = {item["mode"]: item for item in hydrated["processing_modes"]}
 
-    assert modes["nlp"]["entity_count"] == 5
-    assert modes["nlp"]["relation_count"] == 12
+    assert modes["nlp"]["entity_count"] == 6
+    assert modes["nlp"]["relation_count"] == 11
     assert modes["agentic"]["status"] == "ready"
-    assert modes["agentic"]["entity_count"] == 14
-    assert modes["agentic"]["relation_count"] == 22
-    assert modes["agentic"]["quality_score"] == 0.91
+    assert modes["agentic"]["available"] is False
+    assert modes["agentic"]["entity_count"] == 0
+    assert modes["agentic"]["relation_count"] == 0
+    assert modes["agentic"]["quality_score"] is None
 
 
 def test_project_sync_global_metrics_merge_live_source_status(tmp_path: Path, monkeypatch):
@@ -799,7 +811,7 @@ def test_project_sync_global_metrics_merge_live_source_status(tmp_path: Path, mo
     monkeypatch.setattr(
         manager._knowledge_manager,
         "get_source_status",
-        lambda source_id: {
+        lambda source_id, lightweight=True: {
             "document_count": 4,
             "raw_document_count": 4,
             "chunk_count": 9,
@@ -819,7 +831,7 @@ def test_project_sync_global_metrics_merge_live_source_status(tmp_path: Path, mo
     assert global_metrics["sentence_count"] == 14
     assert global_metrics["char_count"] == 120
     assert global_metrics["token_count"] == 66
-    assert global_metrics["metrics_source"] == "project_sync_merged"
+    assert global_metrics["metrics_source"] == "project_sync_l1_raw"
     assert global_metrics["source_id"] == f"project-{project_id}-workspace"
     assert global_metrics["source_stats_updated_at"] == "2026-04-28T10:00:00+00:00"
     assert global_metrics["metrics_updated_at"]
