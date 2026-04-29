@@ -2376,7 +2376,15 @@
         "syntaxSentences": "Sentences",
         "syntaxTokens": "Tokens",
         "syntaxRelations": "Syntax Relations",
-        "readyChunks": "Ready Chunks"
+        "readyChunks": "Ready Chunks",
+        "nlpFlowTitle": "NLP Three-Stage Flow",
+        "nlpFlowHint": "NER and Syntax are required for availability; COR is displayed as an optional third-stage enhancement.",
+        "requiredStageLabel": "Required Stage",
+        "optionalStageLabel": "Optional Stage",
+        "stageReady": "Ready",
+        "stageRunning": "Running",
+        "stagePending": "Pending",
+        "stageUnavailable": "Unavailable"
       },
       "outputsHint": "View knowledge outputs by mode. The system automatically falls back when higher layers are unavailable.",
       "sourcesRoleHint": "This tab is the L1 stats layer and shows only document count, chunk count, sentence count, character count, lightweight token count, and index coverage.",

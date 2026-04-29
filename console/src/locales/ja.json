@@ -2173,7 +2173,15 @@
         "syntaxSentences": "文数",
         "syntaxTokens": "トークン数",
         "syntaxRelations": "構文関係数",
-        "readyChunks": "準備済みチャンク"
+        "readyChunks": "準備済みチャンク",
+        "nlpFlowTitle": "NLP 3 段階フロー",
+        "nlpFlowHint": "NER と Syntax が揃えば利用可能です。COR は第3段階の任意強化として表示されます。",
+        "requiredStageLabel": "必須段階",
+        "optionalStageLabel": "予備段階",
+        "stageReady": "準備完了",
+        "stageRunning": "実行中",
+        "stagePending": "待機中",
+        "stageUnavailable": "利用不可"
       },
       "outputsHint": "モード別に知識出力を確認します。上位レイヤーが使えない場合は自動でフォールバックします。",
       "sourcesRoleHint": "このタブは L1 の基礎統計レイヤーであり、ドキュメント数・チャンク数・文数・文字数・軽量トークン数・索引カバレッジのみを表示します。",

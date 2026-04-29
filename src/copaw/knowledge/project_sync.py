@@ -846,20 +846,33 @@ class ProjectKnowledgeSyncManager:
         ).strip()
 
         fast_available = document_count > 0 or chunk_count > 0
-        nlp_stage_ready = any(
+        ner_stage_ready = any(
             _safe_int(index_result.get(metric_key)) > 0
             for metric_key in (
-                "cor_ready_chunk_count",
                 "ner_ready_chunk_count",
-                "syntax_ready_chunk_count",
                 "ner_entity_count",
+            )
+        )
+        syntax_stage_ready = any(
+            _safe_int(index_result.get(metric_key)) > 0
+            for metric_key in (
+                "syntax_ready_chunk_count",
                 "syntax_sentence_count",
                 "syntax_token_count",
                 "syntax_relation_count",
             )
         )
-        # Existing structured outputs should stay consumable even if sidecar is temporarily unavailable.
-        nlp_available = entity_count > 0 or relation_count > 0 or nlp_stage_ready
+        cor_stage_ready = any(
+            _safe_int(index_result.get(metric_key)) > 0
+            for metric_key in (
+                "cor_ready_chunk_count",
+                "cor_cluster_count",
+                "cor_replacement_count",
+                "cor_effective_chunk_count",
+            )
+        )
+        required_stage_ready = ner_stage_ready and syntax_stage_ready
+        nlp_available = required_stage_ready
         agentic_available = workflow_status in {"succeeded", "completed"} and workflow_mode in {"", "agentic"}
 
         fast_running = sync_status in {"pending", "indexing"} or sync_stage in {"pending", "indexing"}
@@ -947,7 +960,7 @@ class ProjectKnowledgeSyncManager:
                     if nlp_status == "running"
                     else semantic_summary
                     if nlp_status == "blocked"
-                    else "NLP graph artifacts ready"
+                    else "NLP required stages ready (NER + Syntax); COR remains optional"
                     if nlp_available
                     else "Waiting for graph extraction"
                 ),
@@ -955,7 +968,7 @@ class ProjectKnowledgeSyncManager:
                     semantic_summary
                     if nlp_status == "blocked"
                     else
-                    "Structured graph artifacts are available as the fallback layer."
+                    "Structured graph artifacts are available. Required stages (NER + Syntax) are complete; COR is a best-effort optional stage."
                     if nlp_available
                     else "Structured graph artifacts are not ready yet."
                 ),

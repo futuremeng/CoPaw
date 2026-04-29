@@ -268,6 +268,9 @@ function buildNlpStageStats(
 ): Array<{
   key: string;
   title: string;
+  optional?: boolean;
+  status: "ready" | "running" | "pending" | "unavailable";
+  subtitle: string;
   metrics: Array<{ key: string; label: string; value: string | number }>;
 }> {
   if (mode.mode !== "nlp") {
@@ -282,47 +285,56 @@ function buildNlpStageStats(
   const formatDone = (done: number): string | number => (
     totalChunks > 0 ? `${Math.max(0, done)}/${totalChunks}` : Math.max(0, done)
   );
+  const resolveStageStatus = (
+    readyCount: number,
+    doneCount: number,
+    optional = false,
+  ): "ready" | "running" | "pending" | "unavailable" => {
+    if (readyCount > 0) {
+      if (mode.status === "running" && totalChunks > 0 && doneCount < totalChunks) {
+        return "running";
+      }
+      return "ready";
+    }
+    if (optional) {
+      const reasonCode = String(mode.corReasonCode || "").trim();
+      const corUnavailable = reasonCode.length > 0
+        && reasonCode !== "HANLP2_TASK_READY"
+        && reasonCode !== "HANLP2_COREF_HEURISTIC_READY"
+        && mode.status !== "running"
+        && mode.status !== "queued";
+      if (corUnavailable) {
+        return "unavailable";
+      }
+    }
+    if (mode.status === "running") {
+      return "running";
+    }
+    return "pending";
+  };
+  const corDone = Number(mode.corDoneChunks || mode.corReadyChunkCount || 0);
+  const nerDone = Number(mode.nerDoneChunks || mode.nerReadyChunkCount || 0);
+  const syntaxDone = Number(mode.syntaxDoneChunks || mode.syntaxReadyChunkCount || 0);
+  const corReady = Number(mode.corReadyChunkCount || 0);
+  const nerReady = Number(mode.nerReadyChunkCount || 0);
+  const syntaxReady = Number(mode.syntaxReadyChunkCount || 0);
 
   return [
     {
-      key: "cor",
-      title: t("projects.knowledge.processing.corStage", "COR"),
-      metrics: [
-        {
-          key: "doneChunks",
-          label: stageDoneLabel,
-          value: formatDone(Number(mode.corDoneChunks || mode.corReadyChunkCount || 0)),
-        },
-        {
-          key: "readyChunks",
-          label: t("projects.knowledge.processing.readyChunks", "就绪块数"),
-          value: mode.corReadyChunkCount || 0,
-        },
-        {
-          key: "clusters",
-          label: t("projects.knowledge.processing.corClusters", "聚类数"),
-          value: mode.corClusterCount || 0,
-        },
-        {
-          key: "replacements",
-          label: t("projects.knowledge.processing.corReplacements", "替换数"),
-          value: mode.corReplacementCount || 0,
-        },
-      ],
-    },
-    {
       key: "ner",
       title: t("projects.knowledge.processing.nerStage", "NER"),
+      status: resolveStageStatus(nerReady, nerDone),
+      subtitle: t("projects.knowledge.processing.requiredStageLabel", "必需阶段"),
       metrics: [
         {
           key: "doneChunks",
           label: stageDoneLabel,
-          value: formatDone(Number(mode.nerDoneChunks || mode.nerReadyChunkCount || 0)),
+          value: formatDone(nerDone),
         },
         {
           key: "readyChunks",
           label: t("projects.knowledge.processing.readyChunks", "就绪块数"),
-          value: mode.nerReadyChunkCount || 0,
+          value: nerReady,
         },
         {
           key: "entities",
@@ -334,16 +346,18 @@ function buildNlpStageStats(
     {
       key: "syntax",
       title: t("projects.knowledge.processing.syntaxStage", "Syntax"),
+      status: resolveStageStatus(syntaxReady, syntaxDone),
+      subtitle: t("projects.knowledge.processing.requiredStageLabel", "必需阶段"),
       metrics: [
         {
           key: "doneChunks",
           label: stageDoneLabel,
-          value: formatDone(Number(mode.syntaxDoneChunks || mode.syntaxReadyChunkCount || 0)),
+          value: formatDone(syntaxDone),
         },
         {
           key: "readyChunks",
           label: t("projects.knowledge.processing.readyChunks", "就绪块数"),
-          value: mode.syntaxReadyChunkCount || 0,
+          value: syntaxReady,
         },
         {
           key: "sentences",
@@ -362,7 +376,67 @@ function buildNlpStageStats(
         },
       ],
     },
+    {
+      key: "cor",
+      title: t("projects.knowledge.processing.corStage", "COR"),
+      optional: true,
+      status: resolveStageStatus(corReady, corDone, true),
+      subtitle: t("projects.knowledge.processing.optionalStageLabel", "备用阶段"),
+      metrics: [
+        {
+          key: "doneChunks",
+          label: stageDoneLabel,
+          value: formatDone(corDone),
+        },
+        {
+          key: "readyChunks",
+          label: t("projects.knowledge.processing.readyChunks", "就绪块数"),
+          value: corReady,
+        },
+        {
+          key: "clusters",
+          label: t("projects.knowledge.processing.corClusters", "聚类数"),
+          value: mode.corClusterCount || 0,
+        },
+        {
+          key: "replacements",
+          label: t("projects.knowledge.processing.corReplacements", "替换数"),
+          value: mode.corReplacementCount || 0,
+        },
+      ],
+    },
   ];
+}
+
+function nlpStageTagColor(
+  status: "ready" | "running" | "pending" | "unavailable",
+): string {
+  if (status === "ready") {
+    return "success";
+  }
+  if (status === "running") {
+    return "processing";
+  }
+  if (status === "unavailable") {
+    return "default";
+  }
+  return "gold";
+}
+
+function nlpStageStatusLabel(
+  status: "ready" | "running" | "pending" | "unavailable",
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
+  if (status === "ready") {
+    return t("projects.knowledge.processing.stageReady", "已就绪");
+  }
+  if (status === "running") {
+    return t("projects.knowledge.processing.stageRunning", "运行中");
+  }
+  if (status === "unavailable") {
+    return t("projects.knowledge.processing.stageUnavailable", "不可用");
+  }
+  return t("projects.knowledge.processing.stagePending", "待执行");
 }
 
 export default function ProjectKnowledgeProcessingPanel(
@@ -560,20 +634,43 @@ export default function ProjectKnowledgeProcessingPanel(
                 </Typography.Paragraph>
 
                 {nlpStageStats.length ? (
-                  <div className={styles.projectKnowledgeProcessingStageGrid}>
-                    {nlpStageStats.map((section) => (
-                      <div key={section.key} className={styles.projectKnowledgeProcessingStageCard}>
-                        <Typography.Text strong>{section.title}</Typography.Text>
-                        <div className={styles.projectKnowledgeProcessingStageMetrics}>
-                          {section.metrics.map((metric) => (
-                            <div key={`${section.key}-${metric.key}`} className={styles.projectKnowledgeProcessingStageMetric}>
-                              <Typography.Text type="secondary">{metric.label}</Typography.Text>
-                              <Typography.Text strong>{metric.value}</Typography.Text>
+                  <div className={styles.projectKnowledgeNlpFlow}>
+                    <div className={styles.projectKnowledgeNlpFlowHeader}>
+                      <Typography.Text strong>
+                        {t("projects.knowledge.processing.nlpFlowTitle", "NLP 三阶段流程")}
+                      </Typography.Text>
+                      <Typography.Text type="secondary">
+                        {t("projects.knowledge.processing.nlpFlowHint", "NER 与 Syntax 达标即可产出，COR 作为第三阶段备用增强。")}
+                      </Typography.Text>
+                    </div>
+                    <div className={styles.projectKnowledgeNlpFlowTrack}>
+                      {nlpStageStats.map((section) => (
+                        <div
+                          key={section.key}
+                          className={`${styles.projectKnowledgeProcessingStageCard} ${styles.projectKnowledgeNlpFlowStage} ${section.optional ? styles.projectKnowledgeNlpFlowStageOptional : ""}`}
+                        >
+                          <div className={styles.projectKnowledgeNlpFlowStageHeader}>
+                            <div>
+                              <Typography.Text strong>{section.title}</Typography.Text>
+                              <div className={styles.projectKnowledgeModeMeta}>
+                                <Tag color={nlpStageTagColor(section.status)}>
+                                  {nlpStageStatusLabel(section.status, t)}
+                                </Tag>
+                                <Tag bordered={false}>{section.subtitle}</Tag>
+                              </div>
                             </div>
-                          ))}
+                          </div>
+                          <div className={styles.projectKnowledgeProcessingStageMetrics}>
+                            {section.metrics.map((metric) => (
+                              <div key={`${section.key}-${metric.key}`} className={styles.projectKnowledgeProcessingStageMetric}>
+                                <Typography.Text type="secondary">{metric.label}</Typography.Text>
+                                <Typography.Text strong>{metric.value}</Typography.Text>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 ) : null}
 

@@ -829,3 +829,144 @@ def test_project_sync_global_metrics_merge_live_source_status(tmp_path: Path, mo
     assert nlp_metrics["syntax_sentence_count"] == 6
     assert nlp_metrics["syntax_token_count"] == 23
     assert nlp_metrics["syntax_relation_count"] == 3
+
+
+def test_project_sync_nlp_ready_when_required_stages_complete_even_if_cor_unavailable(
+    tmp_path: Path,
+    monkeypatch,
+):
+    project_id = "project-nlp-required-ready"
+    manager = ProjectKnowledgeSyncManager(
+        tmp_path,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+
+    monkeypatch.setattr(
+        manager._knowledge_manager,
+        "get_semantic_engine_state",
+        lambda: {
+            "engine": "hanlp2",
+            "status": "ready",
+            "reason_code": "HANLP2_READY",
+            "reason": "HanLP2 semantic engine is ready.",
+        },
+    )
+
+    state = manager.get_state(project_id)
+    state["latest_source_id"] = f"project-{project_id}-workspace"
+    state["last_result"] = {
+        "index": {
+            "document_count": 1,
+            "chunk_count": 4,
+            "ner_ready_chunk_count": 3,
+            "ner_entity_count": 12,
+            "syntax_ready_chunk_count": 3,
+            "syntax_sentence_count": 20,
+            "syntax_token_count": 88,
+            "syntax_relation_count": 42,
+            "cor_ready_chunk_count": 0,
+            "cor_reason_code": "HANLP2_COREF_NOT_OPEN_SOURCE",
+            "cor_reason": "HanLP coreference_resolution is not open-source and is disabled in CoPaw runtime.",
+        },
+        "memify": {"node_count": 12, "relation_count": 20},
+    }
+    manager._save_state(state)
+
+    hydrated = manager.get_state(project_id)
+    modes = {item["mode"]: item for item in hydrated["processing_modes"]}
+
+    assert modes["nlp"]["available"] is True
+    assert modes["nlp"]["status"] == "ready"
+    assert "COR remains optional" in modes["nlp"]["stage"]
+    assert hydrated["output_resolution"]["active_mode"] == "nlp"
+    assert hydrated["output_resolution"]["reason_code"] == "FALLBACK_TO_NLP"
+
+
+def test_project_sync_nlp_not_available_when_required_syntax_stage_missing(
+    tmp_path: Path,
+    monkeypatch,
+):
+    project_id = "project-nlp-syntax-missing"
+    manager = ProjectKnowledgeSyncManager(
+        tmp_path,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+
+    monkeypatch.setattr(
+        manager._knowledge_manager,
+        "get_semantic_engine_state",
+        lambda: {
+            "engine": "hanlp2",
+            "status": "ready",
+            "reason_code": "HANLP2_READY",
+            "reason": "HanLP2 semantic engine is ready.",
+        },
+    )
+
+    state = manager.get_state(project_id)
+    state["latest_source_id"] = f"project-{project_id}-workspace"
+    state["last_result"] = {
+        "index": {
+            "document_count": 1,
+            "chunk_count": 4,
+            "ner_ready_chunk_count": 3,
+            "ner_entity_count": 9,
+            "cor_ready_chunk_count": 2,
+            "cor_cluster_count": 2,
+            "cor_replacement_count": 4,
+        },
+        "memify": {"node_count": 9, "relation_count": 16},
+    }
+    manager._save_state(state)
+
+    hydrated = manager.get_state(project_id)
+    modes = {item["mode"]: item for item in hydrated["processing_modes"]}
+
+    assert modes["nlp"]["available"] is False
+    assert modes["nlp"]["status"] == "queued"
+    assert hydrated["output_resolution"]["available_modes"] == []
+    assert hydrated["output_resolution"]["reason_code"] == "HIGH_ORDER_PENDING"
+
+
+def test_project_sync_nlp_not_unblocked_by_cor_stage_only(
+    tmp_path: Path,
+    monkeypatch,
+):
+    project_id = "project-nlp-cor-only"
+    manager = ProjectKnowledgeSyncManager(
+        tmp_path,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+
+    monkeypatch.setattr(
+        manager._knowledge_manager,
+        "get_semantic_engine_state",
+        lambda: {
+            "engine": "hanlp2",
+            "status": "ready",
+            "reason_code": "HANLP2_READY",
+            "reason": "HanLP2 semantic engine is ready.",
+        },
+    )
+
+    state = manager.get_state(project_id)
+    state["latest_source_id"] = f"project-{project_id}-workspace"
+    state["last_result"] = {
+        "index": {
+            "document_count": 1,
+            "chunk_count": 4,
+            "cor_ready_chunk_count": 3,
+            "cor_cluster_count": 2,
+            "cor_replacement_count": 5,
+            "cor_effective_chunk_count": 2,
+        },
+        "memify": {"node_count": 7, "relation_count": 11},
+    }
+    manager._save_state(state)
+
+    hydrated = manager.get_state(project_id)
+    modes = {item["mode"]: item for item in hydrated["processing_modes"]}
+
+    assert modes["nlp"]["available"] is False
+    assert modes["nlp"]["status"] == "queued"
+    assert hydrated["output_resolution"]["available_modes"] == []

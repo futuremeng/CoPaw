@@ -1207,6 +1207,69 @@
   gap: 8px;
 }
 
+.projectKnowledgeNlpFlow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.projectKnowledgeNlpFlowHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.projectKnowledgeNlpFlowTrack {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+
+  @media (max-width: 1260px) {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
+
+.projectKnowledgeNlpFlowStage {
+  position: relative;
+}
+
+.projectKnowledgeNlpFlowStage::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: -12px;
+  width: 8px;
+  height: 2px;
+  background: #c9d6ee;
+
+  @media (max-width: 1260px) {
+    top: auto;
+    right: auto;
+    left: 50%;
+    bottom: -8px;
+    width: 2px;
+    height: 8px;
+    transform: translateX(-50%);
+  }
+}
+
+.projectKnowledgeNlpFlowStage:last-child::after {
+  display: none;
+}
+
+.projectKnowledgeNlpFlowStageOptional {
+  opacity: 0.78;
+  border-style: dashed;
+}
+
+.projectKnowledgeNlpFlowStageHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .projectKnowledgeProcessingStageCard {
   border: 1px solid #edf2ff;
   border-radius: 8px;
@@ -4575,6 +4638,7 @@
   .projectKnowledgeTrendChart,
   .projectKnowledgeInsightBox,
   .projectKnowledgeInsightBar,
+  .projectKnowledgeProcessingCompareNote,
   .projectKnowledgeMetricPill,
   .projectKnowledgeSettingsCard,
   .artifactEditorRow,
@@ -4583,6 +4647,14 @@
   .progressCoach {
     border-color: rgba(255, 255, 255, 0.08);
     background: rgba(255, 255, 255, 0.035);
+  }
+
+  .projectKnowledgeProcessingCompareNote {
+    :global(.ant-typography.ant-typography-secondary),
+    :global(.qwenpaw-typography.qwenpaw-typography-secondary),
+    :global(.copaw-typography.copaw-typography-secondary) {
+      color: rgba(255, 255, 255, 0.72) !important;
+    }
   }
 
   .projectKnowledgeLayerSection {
