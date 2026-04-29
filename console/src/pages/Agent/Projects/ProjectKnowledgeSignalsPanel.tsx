@@ -78,6 +78,13 @@ export default function ProjectKnowledgeSignalsPanel(
     latestQualityLoopSummary,
   } = props;
   const semanticEngine = knowledgeState.syncState?.semantic_engine;
+  const syncOperationId = String(knowledgeState.syncState?.operation_id || "").trim();
+  const syncIdempotencyKey = String(knowledgeState.syncState?.idempotency_key || "").trim();
+  const syncLastAction = String(knowledgeState.syncState?.last_action || "").trim();
+  const syncDeduplicated = knowledgeState.syncState?.deduplicated === true;
+  const syncOperationUpdatedAt = formatLocalDateTime(
+    String(knowledgeState.syncState?.operation_updated_at || "").trim(),
+  );
   const semanticReasonLabel = getProjectKnowledgeSemanticReasonLabel(semanticEngine, t);
   const metricsSourceLabel = formatMetricsSourceLabel(knowledgeState.quantMetricsMeta?.source || "", t);
   const metricsUpdatedAtLabel = formatLocalDateTime(knowledgeState.quantMetricsMeta?.updatedAt || "");
@@ -185,6 +192,30 @@ export default function ProjectKnowledgeSignalsPanel(
               {t("projects.knowledge.semanticEngineStatus", "Semantic Engine")}
             </Typography.Text>
             <Typography.Text strong>{semanticReasonLabel}</Typography.Text>
+          </div>
+        ) : null}
+        {syncOperationId || syncIdempotencyKey ? (
+          <div className={styles.knowledgeModuleHeaderSignal}>
+            <Typography.Text type="secondary">
+              {t("projects.knowledge.syncTrace", "Sync Trace")}
+            </Typography.Text>
+            <Typography.Text strong>
+              {syncOperationId || "-"}
+            </Typography.Text>
+            <Typography.Text type="secondary">
+              {t("projects.knowledge.syncIdempotencyShort", "Key")}: {syncIdempotencyKey || "-"}
+            </Typography.Text>
+            <Typography.Text type="secondary">
+              {t("projects.knowledge.syncDeduplicated", "Deduplicated")}: {syncDeduplicated ? t("common.yes", "Yes") : t("common.no", "No")}
+              {syncLastAction
+                ? ` · ${t("projects.knowledge.syncLastAction", "Action")}: ${syncLastAction}`
+                : ""}
+            </Typography.Text>
+            {syncOperationUpdatedAt ? (
+              <Typography.Text type="secondary">
+                {t("projects.knowledge.syncOperationUpdatedAt", "Updated")}: {syncOperationUpdatedAt}
+              </Typography.Text>
+            ) : null}
           </div>
         ) : null}
         <div className={styles.knowledgeModuleHeaderSignal}>

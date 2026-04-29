@@ -382,6 +382,42 @@ export default function ProjectKnowledgeSettingsPanel(
     return getProjectKnowledgeSyncAlertDescription(syncState, t);
   }, [syncState, t]);
 
+  const syncOperationSummary = useMemo(() => {
+    if (!syncState) {
+      return null;
+    }
+    const operationId = String(syncState.operation_id || "").trim();
+    const idempotencyKey = String(syncState.idempotency_key || "").trim();
+    if (!operationId && !idempotencyKey) {
+      return null;
+    }
+    const deduplicated = syncState.deduplicated === true;
+    const action = String(syncState.last_action || "").trim();
+    const updatedAtRaw = String(syncState.operation_updated_at || "").trim();
+    let updatedAt = "";
+    if (updatedAtRaw) {
+      const parsed = new Date(updatedAtRaw);
+      if (Number.isNaN(parsed.getTime())) {
+        updatedAt = updatedAtRaw;
+      } else {
+        const y = parsed.getFullYear();
+        const m = String(parsed.getMonth() + 1).padStart(2, "0");
+        const d = String(parsed.getDate()).padStart(2, "0");
+        const hh = String(parsed.getHours()).padStart(2, "0");
+        const mm = String(parsed.getMinutes()).padStart(2, "0");
+        const ss = String(parsed.getSeconds()).padStart(2, "0");
+        updatedAt = `${y}-${m}-${d} ${hh}:${mm}:${ss}`;
+      }
+    }
+    return {
+      operationId,
+      idempotencyKey,
+      deduplicated,
+      action,
+      updatedAt,
+    };
+  }, [syncState]);
+
   const memifyStats = useMemo(() => {
     const empty = {
       nodeCount: 0,
@@ -700,6 +736,46 @@ export default function ProjectKnowledgeSettingsPanel(
           message={t("projects.knowledge.sinkJob", "Knowledge Sync")}
           description={syncAlertDescription}
         />
+      ) : null}
+
+      {syncOperationSummary ? (
+        <div className={styles.projectKnowledgeMetaRowCompact}>
+          <Typography.Text type="secondary">
+            {t("projects.knowledge.syncOperationId", "Operation")}: {" "}
+            {syncOperationSummary.operationId
+              ? (
+                <Typography.Text
+                  copyable={{ text: syncOperationSummary.operationId }}
+                >
+                  {syncOperationSummary.operationId}
+                </Typography.Text>
+              )
+              : "-"}
+          </Typography.Text>
+          <Typography.Text type="secondary">
+            {t("projects.knowledge.syncIdempotencyKey", "Idempotency")}: {" "}
+            {syncOperationSummary.idempotencyKey
+              ? (
+                <Typography.Text
+                  copyable={{ text: syncOperationSummary.idempotencyKey }}
+                >
+                  {syncOperationSummary.idempotencyKey}
+                </Typography.Text>
+              )
+              : "-"}
+          </Typography.Text>
+          <Typography.Text type="secondary">
+            {t("projects.knowledge.syncDeduplicated", "Deduplicated")}: {syncOperationSummary.deduplicated ? t("common.yes", "Yes") : t("common.no", "No")}
+            {syncOperationSummary.action
+              ? ` · ${t("projects.knowledge.syncLastAction", "Action")}: ${syncOperationSummary.action}`
+              : ""}
+          </Typography.Text>
+          {syncOperationSummary.updatedAt ? (
+            <Typography.Text type="secondary">
+              {t("projects.knowledge.syncOperationUpdatedAt", "Updated")}: {syncOperationSummary.updatedAt}
+            </Typography.Text>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );

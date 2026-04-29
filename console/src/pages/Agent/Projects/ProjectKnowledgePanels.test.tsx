@@ -437,6 +437,14 @@ function buildKnowledgeState(): ProjectKnowledgeState {
 describe("project knowledge supporting panels", () => {
   it("renders health content outside explore", () => {
     const knowledgeState = buildKnowledgeState();
+    knowledgeState.syncState = {
+      ...knowledgeState.syncState,
+      operation_id: "ps-test-123",
+      idempotency_key: "manual-op-key-1",
+      deduplicated: true,
+      last_action: "start_sync",
+      operation_updated_at: "2026-04-11T23:30:00+00:00",
+    };
     const runtimeTooltipContent = (
       <div>
         <span>Runtime</span>
@@ -463,6 +471,12 @@ describe("project knowledge supporting panels", () => {
     expect(screen.getByText("Module Unavailable")).not.toBeNull();
     expect(screen.getByText(/Semantic Engine: Module Unavailable/)).not.toBeNull();
     expect(screen.getByText(/HANLP2_IMPORT_UNAVAILABLE/)).not.toBeNull();
+    expect(screen.getByText("Sync Trace")).not.toBeNull();
+    expect(screen.getByText("ps-test-123")).not.toBeNull();
+    expect(screen.getByText(/Key: manual-op-key-1/)).not.toBeNull();
+    expect(screen.getByText(/Deduplicated: Yes/)).not.toBeNull();
+    expect(screen.getByText(/Action: start_sync/)).not.toBeNull();
+    expect((document.body.textContent || "").match(/Sync Trace[\s\S]*Updated\s*:/)).not.toBeNull();
 
     const signalLabels = Array.from(
       container.querySelectorAll("._projectKnowledgeSignalCard_209b2b .ant-typography-secondary"),

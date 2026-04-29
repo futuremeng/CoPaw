@@ -35,6 +35,10 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
+vi.mock("react-router-dom", () => ({
+  useNavigate: () => vi.fn(),
+}));
+
 function buildRegisteredSource(projectId: string) {
   return {
     id: `project-${projectId.toLowerCase()}-workspace`,
@@ -399,6 +403,37 @@ describe("ProjectKnowledgeSettingsPanel", () => {
     await waitFor(() => {
       expect(document.body.textContent || "").toContain("Source Not Ready");
       expect(document.body.textContent || "").toContain("SOURCE_NOT_READY");
+    });
+  });
+
+  it("renders project sync operation tracing metadata", async () => {
+    mockedApi.getProjectKnowledgeSyncStatus.mockResolvedValueOnce(buildSyncState(projectId, {
+      operation_id: "ps-abc1234",
+      idempotency_key: "manual-op-key-1",
+      deduplicated: true,
+      last_action: "start_sync",
+      operation_updated_at: "2026-04-11T23:30:00+00:00",
+    }));
+
+    render(
+      <ProjectKnowledgeSettingsPanel
+        agentId="default"
+        projectId={projectId}
+        projectName="Project ABC"
+        projectWorkspaceDir="/tmp/workspace"
+        projectAutoKnowledgeSink
+        includeGlobal
+        onIncludeGlobalChange={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      const body = document.body.textContent || "";
+      expect(body).toMatch(/Operation:\s*ps-abc1234/);
+      expect(body).toMatch(/Idempotency:\s*manual-op-key-1/);
+      expect(body).toMatch(/Deduplicated:\s*Yes/);
+      expect(body).toMatch(/Action:\s*start_sync/);
+      expect(body).toMatch(/Updated:\s*/);
     });
   });
 });
