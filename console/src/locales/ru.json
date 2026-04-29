@@ -2263,6 +2263,7 @@
     "workspaceSummaryFiles": "Файлы рабочего пространства",
     "projectSpaceFiles": "Файлы пространства проекта",
     "refreshFiles": "Обновить",
+    "latestUpdatedFile": "Последнее обновление",
     "treeFilterPlaceholder": "Фильтровать файлы",
     "noMatchedFiles": "Нет файлов, соответствующих текущему ключевому слову",
     "detailTitle": "Рабочее пространство проекта",

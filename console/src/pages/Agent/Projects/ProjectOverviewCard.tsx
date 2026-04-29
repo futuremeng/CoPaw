@@ -14,7 +14,7 @@ import {
   ReloadOutlined,
   SearchOutlined,
 } from "@ant-design/icons";
-import { Button, Card, Empty, Input, Segmented, Spin, Tree, Typography } from "antd";
+import { Button, Card, Empty, Input, Segmented, Spin, Tooltip, Tree, Typography } from "antd";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
@@ -50,6 +50,8 @@ interface ProjectOverviewCardProps {
   treeDisplayMode: TreeDisplayMode;
   onTreeDisplayModeChange: (next: TreeDisplayMode) => void;
   onRefreshProjectFiles?: () => Promise<void> | void;
+  latestUpdatedFilePath?: string;
+  onSelectLatestUpdatedFile?: (path: string) => void;
   onRefreshProjectTreeDirectory?: (path: string) => Promise<AgentProjectFileTreeNode[]>;
   projectFilesRefreshing?: boolean;
   treeOnly?: boolean;
@@ -573,6 +575,8 @@ export default function ProjectOverviewCard({
   treeDisplayMode,
   onTreeDisplayModeChange,
   onRefreshProjectFiles,
+  latestUpdatedFilePath,
+  onSelectLatestUpdatedFile,
   onRefreshProjectTreeDirectory,
   projectFilesRefreshing = false,
   treeOnly = false,
@@ -1013,18 +1017,40 @@ export default function ProjectOverviewCard({
           },
         }}
         extra={(
-          <Button
-            size="small"
-            type="link"
-            icon={<ReloadOutlined spin={projectFilesRefreshing} />}
-            className={styles.panelExtraAction}
-            onClick={() => {
-              void onRefreshProjectFiles?.();
-            }}
-            disabled={!onRefreshProjectFiles || projectFilesRefreshing}
-          >
-            {t("projects.refreshFiles", "Refresh")}
-          </Button>
+          <div className={styles.panelExtraActions}>
+            <div className={styles.latestUpdatedFileWrap}>
+              <Tooltip title={latestUpdatedFilePath || "--"}>
+                <span>
+                  <Button
+                    size="small"
+                    type="link"
+                    className={`${styles.panelExtraAction} ${styles.latestUpdatedFileButton}`}
+                    onClick={() => {
+                      if (!latestUpdatedFilePath) {
+                        return;
+                      }
+                      onSelectLatestUpdatedFile?.(latestUpdatedFilePath);
+                    }}
+                    disabled={!latestUpdatedFilePath}
+                  >
+                    {t("projects.latestUpdatedFile", "Recent Update")}
+                  </Button>
+                </span>
+              </Tooltip>
+            </div>
+            <Button
+              size="small"
+              type="link"
+              icon={<ReloadOutlined spin={projectFilesRefreshing} />}
+              className={styles.panelExtraAction}
+              onClick={() => {
+                void onRefreshProjectFiles?.();
+              }}
+              disabled={!onRefreshProjectFiles || projectFilesRefreshing}
+            >
+              {t("projects.refreshFiles", "Refresh")}
+            </Button>
+          </div>
         )}
       >
         <div className={`${styles.scrollContainer} ${styles.treeOnlyScrollContainer}`}>

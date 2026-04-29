@@ -2318,6 +2318,7 @@
     "workspaceSummaryFiles": "工作空间文件",
     "projectSpaceFiles": "项目空间文件",
     "refreshFiles": "刷新",
+    "latestUpdatedFile": "最近更新",
     "treeFilterPlaceholder": "过滤文件",
     "noMatchedFiles": "当前关键词下没有匹配文件",
     "detailTitle": "工作区  /  项目  /  项目空间",

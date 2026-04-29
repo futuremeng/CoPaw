@@ -2456,6 +2456,7 @@
     "workspaceSummaryFiles": "Workspace Files",
     "projectSpaceFiles": "Project Space Files",
     "refreshFiles": "Refresh",
+    "latestUpdatedFile": "Recent Update",
     "treeFilterPlaceholder": "Filter files",
     "noMatchedFiles": "No files match the current keyword",
     "detailTitle": "Project Workspace",

@@ -123,6 +123,7 @@ const PROJECT_FILES_DEFER_MS = 420;
 const INITIAL_PROJECT_FILES_IDLE_TIMEOUT_MS = 1200;
 const ASSISTANT_TURN_REALTIME_FALLBACK_MS = 900;
 const PROJECT_TREE_PREFETCH_DIR_LIMIT = 3;
+const PROJECT_TREE_LATEST_SCAN_LIMIT = 4000;
 const PROJECT_TREE_PREVIEW_DIR_PRIORITY = [
   "original",
   "intermediate",
@@ -489,6 +490,25 @@ function toTimestamp(raw?: string | null): number {
   return Number.isFinite(ts) ? ts : 0;
 }
 
+function pickMostRecentlyModifiedPath(files: AgentProjectFileInfo[]): string {
+  if (files.length === 0) {
+    return "";
+  }
+  return files.reduce((latest, file) => (
+    toTimestamp(file.modified_time) >= toTimestamp(latest.modified_time) ? file : latest
+  )).path;
+}
+
+function pickLatestChangedPath(
+  files: AgentProjectFileInfo[],
+  previousMtimeByPath: Record<string, string>,
+): string {
+  const changedFiles = files.filter(
+    (file) => previousMtimeByPath[file.path] !== file.modified_time,
+  );
+  return pickMostRecentlyModifiedPath(changedFiles);
+}
+
 function getRealtimeBadgeStatus(status: ProjectRealtimeConnectionStatus) {
   if (status === "connected") {
     return "success" as const;
@@ -536,6 +556,7 @@ export default function ProjectDetailPage() {
     useState<Record<string, AgentProjectFileInfo>>({});
   const [selectedFilePath, setSelectedFilePath] = useState("");
   const [treeExpandedKeys, setTreeExpandedKeys] = useState<string[]>([]);
+  const [latestUpdatedFilePath, setLatestUpdatedFilePath] = useState("");
   const [workbenchSyncNotice, setWorkbenchSyncNotice] = useState<{
     changedPaths: string[];
     updatedAt: number;
@@ -602,6 +623,7 @@ export default function ProjectDetailPage() {
   const assistantTurnPipelineSyncTimerRef = useRef<number | null>(null);
   const lastFileTreeInvalidationAtRef = useRef(0);
   const lastPipelineInvalidationAtRef = useRef(0);
+  const fileMtimeByPathRef = useRef<Record<string, string>>({});
   const realtimeConnectionStatusRef = useRef<ProjectRealtimeConnectionStatus>("idle");
   const runRestoreAttemptKeyRef = useRef("");
   const automationDrawerAutoOpenKeyRef = useRef("");
@@ -1238,8 +1260,18 @@ export default function ProjectDetailPage() {
           const filteredFiles = files.filter(
             (item) => !isIgnoredProjectFile(item.path),
           );
+          const latestChangedPath = pickLatestChangedPath(
+            filteredFiles,
+            fileMtimeByPathRef.current,
+          );
+          const latestPathFallback = pickMostRecentlyModifiedPath(filteredFiles);
           setProjectFiles(filteredFiles);
           setKnownProjectFilesByPath(buildProjectFilesByPath(filteredFiles));
+          if (latestChangedPath) {
+            setLatestUpdatedFilePath(latestChangedPath);
+          } else if (!latestUpdatedFilePath && latestPathFallback) {
+            setLatestUpdatedFilePath(latestPathFallback);
+          }
           setResolvedProjectRequestId(projectRequestId);
           const preservedFile = previousSelection
             ? filteredFiles.find((item) => item.path === previousSelection)
@@ -1270,7 +1302,7 @@ export default function ProjectDetailPage() {
     } finally {
       setFilesLoading(false);
     }
-  }, [selectedFilePath, t]);
+  }, [latestUpdatedFilePath, selectedFilePath, t]);
 
   const loadProjectTreeDirectory = useCallback(async (
     agentId: string,
@@ -1300,6 +1332,57 @@ export default function ProjectDetailPage() {
 
     throw new Error("project_file_tree_not_found");
   }, [resolvedProjectRequestId]);
+
+  const resolveLatestUpdatedPathFromTree = useCallback(async (
+    agentId: string,
+    project: AgentProjectSummary,
+  ): Promise<string> => {
+    const queue: string[] = [""];
+    const visited = new Set<string>();
+    let scanned = 0;
+    let latestPath = "";
+    let latestTs = 0;
+
+    while (queue.length > 0 && scanned < PROJECT_TREE_LATEST_SCAN_LIMIT) {
+      const dirPath = queue.shift() || "";
+      const normalizedDir = normalizeProjectTreeKey(dirPath);
+      if (visited.has(normalizedDir)) {
+        continue;
+      }
+      visited.add(normalizedDir);
+
+      let nodes: AgentProjectFileTreeNode[] = [];
+      try {
+        nodes = await loadProjectTreeDirectory(agentId, project, normalizedDir);
+      } catch {
+        continue;
+      }
+
+      for (const node of nodes) {
+        if (isIgnoredProjectFile(node.path)) {
+          continue;
+        }
+        if (node.is_directory) {
+          const normalizedChildDir = normalizeProjectTreeKey(node.path);
+          if (!visited.has(normalizedChildDir)) {
+            queue.push(node.path);
+          }
+          continue;
+        }
+        scanned += 1;
+        const ts = toTimestamp(node.modified_time);
+        if (!latestPath || ts >= latestTs) {
+          latestPath = node.path;
+          latestTs = ts;
+        }
+        if (scanned >= PROJECT_TREE_LATEST_SCAN_LIMIT) {
+          break;
+        }
+      }
+    }
+
+    return latestPath;
+  }, [loadProjectTreeDirectory]);
 
   const loadProjectFileSummary = useCallback(async (
     agentId: string,
@@ -1456,7 +1539,21 @@ export default function ProjectDetailPage() {
       loadProjectTreeRoot(agentId, project),
       loadProjectFileSummary(agentId, project),
     ]);
-  }, [currentAgent, loadProjectFileSummary, loadProjectFiles, loadProjectTreeRoot, selectedProject]);
+    if (!latestUpdatedFilePath) {
+      const latestPathFromTree = await resolveLatestUpdatedPathFromTree(agentId, project);
+      if (latestPathFromTree) {
+        setLatestUpdatedFilePath(latestPathFromTree);
+      }
+    }
+  }, [
+    currentAgent,
+    latestUpdatedFilePath,
+    loadProjectFileSummary,
+    loadProjectFiles,
+    loadProjectTreeRoot,
+    resolveLatestUpdatedPathFromTree,
+    selectedProject,
+  ]);
 
   const {
     uploadModalOpen,
@@ -1773,6 +1870,9 @@ export default function ProjectDetailPage() {
         updatedAt: Date.now(),
       });
     }
+    if (changedPaths.length > 0) {
+      setLatestUpdatedFilePath(changedPaths[changedPaths.length - 1]);
+    }
     const shouldPatchIncrementally = Boolean(
       payload
       && payload.reason !== "resync"
@@ -1786,6 +1886,10 @@ export default function ProjectDetailPage() {
         loadProjectFilesMetadata(currentAgent.id, selectedProject, changedPaths)
           .then((files) => {
             applyProjectFilesMetadataPatch(changedPaths, files);
+            const latestPathFromMetadata = pickMostRecentlyModifiedPath(files);
+            if (latestPathFromMetadata) {
+              setLatestUpdatedFilePath(latestPathFromMetadata);
+            }
             patchedIncrementally = true;
           })
           .catch((err) => {
@@ -1800,6 +1904,15 @@ export default function ProjectDetailPage() {
       scheduleProjectFilesRefresh(currentAgent.id, selectedProject, {
         preserveSelection: true,
       });
+    }
+    if (changedPaths.length === 0) {
+      const latestPathFromTree = await resolveLatestUpdatedPathFromTree(
+        currentAgent.id,
+        selectedProject,
+      );
+      if (latestPathFromTree) {
+        setLatestUpdatedFilePath(latestPathFromTree);
+      }
     }
     const shouldRefreshSelectedContent = Boolean(
       selectedFilePath
@@ -1820,7 +1933,18 @@ export default function ProjectDetailPage() {
       });
       await loadFileContent(currentAgent.id, selectedProject, selectedFilePath);
     }
-  }, [applyProjectFilesMetadataPatch, currentAgent, loadFileContent, loadProjectFileSummary, loadProjectFilesMetadata, loadProjectTreeRoot, scheduleProjectFilesRefresh, selectedFilePath, selectedProject]);
+  }, [
+    applyProjectFilesMetadataPatch,
+    currentAgent,
+    loadFileContent,
+    loadProjectFileSummary,
+    loadProjectFilesMetadata,
+    loadProjectTreeRoot,
+    resolveLatestUpdatedPathFromTree,
+    scheduleProjectFilesRefresh,
+    selectedFilePath,
+    selectedProject,
+  ]);
 
   const handleRealtimePipelineInvalidated = useCallback(async (_payload?: {
     changedPaths: string[];
@@ -2426,6 +2550,12 @@ export default function ProjectDetailPage() {
     return t("projects.realtime.connecting", "Realtime connecting");
   }, [realtimeConnectionState.status, t]);
 
+  useEffect(() => {
+    fileMtimeByPathRef.current = Object.fromEntries(
+      projectFiles.map((file) => [file.path, file.modified_time]),
+    );
+  }, [projectFiles]);
+
   const showRealtimeStatus = shouldShowRealtimeStatus(realtimeConnectionState.status);
 
   useEffect(() => {
@@ -2446,6 +2576,26 @@ export default function ProjectDetailPage() {
   }, [selectedFilePath]);
 
   useEffect(() => {
+    if (!currentAgent || !selectedProject || latestUpdatedFilePath) {
+      return;
+    }
+    let cancelled = false;
+    void resolveLatestUpdatedPathFromTree(currentAgent.id, selectedProject)
+      .then((path) => {
+        if (cancelled || !path) {
+          return;
+        }
+        setLatestUpdatedFilePath(path);
+      })
+      .catch(() => {
+        // best-effort fallback only
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentAgent, latestUpdatedFilePath, resolveLatestUpdatedPathFromTree, selectedProject]);
+
+  useEffect(() => {
     if (projectFilesRefreshTimerRef.current !== null) {
       window.clearTimeout(projectFilesRefreshTimerRef.current);
       projectFilesRefreshTimerRef.current = null;
@@ -2460,11 +2610,13 @@ export default function ProjectDetailPage() {
     }
     setResolvedProjectRequestId("");
     setProjectFiles([]);
+    fileMtimeByPathRef.current = {};
     setProjectTreeNodes([]);
     setProjectFileSummary(null);
     setKnownProjectFilesByPath({});
     setSelectedFilePath("");
     setTreeExpandedKeys([]);
+    setLatestUpdatedFilePath("");
     setWorkbenchSyncNotice(null);
     setFileContent("");
     setPipelineTemplates([]);
@@ -3410,6 +3562,7 @@ export default function ProjectDetailPage() {
     handleKnowledgeRunSuggestedQuery,
     handleProjectAutoKnowledgeSinkChange,
     handleRuntimeSignalTooltipOpenChange,
+    handleSelectArtifactFile,
     knowledgeHeaderSignals,
     pendingKnowledgeQuery,
     projectKnowledgeIncludeGlobal,
@@ -3570,6 +3723,7 @@ export default function ProjectDetailPage() {
                             onTreeDisplayModeChange={setTreeDisplayMode}
                             onExpandedKeysChange={setTreeExpandedKeys}
                             onRefreshProjectFiles={handleRefreshProjectFiles}
+                            latestUpdatedFilePath={latestUpdatedFilePath}
                             onRefreshProjectTreeDirectory={(path) => {
                               if (!currentAgent || !selectedProject) {
                                 return Promise.resolve([]);
@@ -3586,6 +3740,9 @@ export default function ProjectDetailPage() {
                               return loadProjectTreeDirectory(currentAgent.id, selectedProject, path);
                             }}
                             onSelectFileFromTree={(path) => {
+                              void handleSelectArtifactFile(path);
+                            }}
+                            onSelectLatestUpdatedFile={(path) => {
                               void handleSelectArtifactFile(path);
                             }}
                             onAttachArtifactToChat={(path) => {

@@ -2253,6 +2253,7 @@
     "workspaceSummaryFiles": "ワークスペースファイル",
     "projectSpaceFiles": "プロジェクトスペースファイル",
     "refreshFiles": "更新",
+    "latestUpdatedFile": "最新更新",
     "treeFilterPlaceholder": "ファイルを絞り込む",
     "noMatchedFiles": "現在のキーワードに一致するファイルはありません",
     "detailTitle": "プロジェクトワークスペース",
