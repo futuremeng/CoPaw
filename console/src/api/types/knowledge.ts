@@ -199,6 +199,11 @@ export interface ProjectKnowledgeSyncState {
   latest_workflow_run_id?: string;
   latest_source_id: string;
   last_result: Record<string, unknown>;
+  operation_id?: string;
+  idempotency_key?: string;
+  deduplicated?: boolean;
+  last_action?: string;
+  operation_updated_at?: string;
   processing_modes?: ProjectKnowledgeProcessingModeStatePayload[];
   output_resolution?: ProjectKnowledgeOutputResolutionPayload;
   output_scheduler?: ProjectKnowledgeProcessingSchedulerPayload;
@@ -216,11 +221,15 @@ export interface ProjectKnowledgeSyncRunRequest {
   changedPaths?: string[];
   force?: boolean;
   processingMode?: ProjectKnowledgeProcessingMode;
+  idempotencyKey?: string;
 }
 
 export interface ProjectKnowledgeSyncRunResponse {
   accepted: boolean;
   reason: string;
+  operation_id?: string;
+  idempotency_key?: string;
+  deduplicated?: boolean;
   state: ProjectKnowledgeSyncState;
 }
 

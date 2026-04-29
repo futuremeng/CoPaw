@@ -11,6 +11,7 @@ import tempfile
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import Lock
 from typing import Optional
 from types import SimpleNamespace
 
@@ -21,11 +22,59 @@ from ...config import load_config, save_config
 from ...config.config import KnowledgeConfig, KnowledgeSourceSpec, load_agent_config, save_agent_config
 from ...constant import WORKING_DIR
 from ...knowledge import GraphOpsManager, KnowledgeManager, ProjectKnowledgeSyncManager
-from ...knowledge.project_sync import ensure_project_source_registered
+from ...knowledge.project_sync import ProjectSyncCommand, ProjectSyncCoordinator, ensure_project_source_registered
 from ...knowledge.module_skills import sync_knowledge_module_skills
 from ..agent_context import get_agent_for_request
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
+
+_PROJECT_SYNC_RUNTIME_LOCK = Lock()
+_PROJECT_SYNC_RUNTIME_META: dict[str, dict[str, object]] = {}
+
+
+def _project_sync_runtime_key(workspace_dir: str | Path, project_id: str) -> str:
+    return f"{Path(workspace_dir).resolve().as_posix()}::{project_id}"
+
+
+def _record_project_sync_runtime_event(
+    *,
+    workspace_dir: str | Path,
+    project_id: str,
+    operation_id: str,
+    idempotency_key: str,
+    deduplicated: bool,
+    action: str,
+) -> None:
+    key = _project_sync_runtime_key(workspace_dir, project_id)
+    payload = {
+        "operation_id": operation_id,
+        "idempotency_key": idempotency_key,
+        "deduplicated": bool(deduplicated),
+        "last_action": action,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    with _PROJECT_SYNC_RUNTIME_LOCK:
+        _PROJECT_SYNC_RUNTIME_META[key] = payload
+
+
+def _project_sync_state_with_runtime_meta(
+    *,
+    workspace_dir: str | Path,
+    project_id: str,
+    state: dict[str, object],
+) -> dict[str, object]:
+    key = _project_sync_runtime_key(workspace_dir, project_id)
+    with _PROJECT_SYNC_RUNTIME_LOCK:
+        runtime_meta = dict(_PROJECT_SYNC_RUNTIME_META.get(key) or {})
+    if not runtime_meta:
+        return state
+    merged = dict(state)
+    merged.setdefault("operation_id", runtime_meta.get("operation_id"))
+    merged.setdefault("idempotency_key", runtime_meta.get("idempotency_key"))
+    merged.setdefault("deduplicated", runtime_meta.get("deduplicated"))
+    merged.setdefault("last_action", runtime_meta.get("last_action"))
+    merged.setdefault("operation_updated_at", runtime_meta.get("updated_at"))
+    return merged
 
 
 def _task_sort_key(payload: dict[str, object]) -> tuple[int, str]:
@@ -86,10 +135,15 @@ def _collect_knowledge_tasks_snapshot(
         )
 
     if project_id:
-        project_sync = _project_sync_for_workspace(
+        project_sync_raw = _project_sync_for_workspace(
             workspace_dir,
             project_id=project_id,
         ).get_state(project_id)
+        project_sync = _project_sync_state_with_runtime_meta(
+            workspace_dir=workspace_dir,
+            project_id=project_id,
+            state=dict(project_sync_raw),
+        )
         if str(project_sync.get("status") or "") in {
             "queued",
             "pending",
@@ -270,6 +324,26 @@ def _project_sync_for_workspace(
     return ProjectKnowledgeSyncManager(
         workspace_dir,
         knowledge_dirname=_knowledge_dirname_for_project(project_id),
+    )
+
+
+def _project_sync_coordinator_for_workspace(
+    workspace_dir: Path | str,
+    *,
+    project_id: str | None = None,
+) -> ProjectSyncCoordinator:
+    normalized_project_id = _normalize_project_id(project_id)
+
+    def _factory(_requested_project_id: str) -> ProjectKnowledgeSyncManager:
+        resolved_project_id = _normalize_project_id(_requested_project_id) or normalized_project_id
+        return _project_sync_for_workspace(
+            workspace_dir,
+            project_id=resolved_project_id,
+        )
+
+    return ProjectSyncCoordinator(
+        workspace_dir,
+        manager_factory=_factory,
     )
 
 
@@ -951,6 +1025,10 @@ async def get_project_sync_status(request: Request):
         workspace_dir,
         project_id=project_id,
     )
+    coordinator = _project_sync_coordinator_for_workspace(
+        workspace_dir,
+        project_id=project_id,
+    )
     project_workspace_dir = (Path(workspace_dir) / "projects" / project_id).resolve()
     if knowledge_config.enabled and bool(getattr(knowledge_config, "memify_enabled", False)):
         source, _ = ensure_project_source_registered(
@@ -960,14 +1038,30 @@ async def get_project_sync_status(request: Request):
             project_workspace_dir=str(project_workspace_dir),
             persist=lambda: save_config(config),
         )
-        await asyncio.to_thread(
-            manager.resume_sync_if_needed,
-            project_id=project_id,
-            config=knowledge_config,
-            running_config=running_config,
-            source=source,
+        event = await asyncio.to_thread(
+            coordinator.dispatch,
+            ProjectSyncCommand.resume(
+                project_id=project_id,
+                config=knowledge_config,
+                running_config=running_config,
+                source=source,
+                idempotency_key=f"route-status-resume:{project_id}",
+            ),
         )
-    return await asyncio.to_thread(manager.get_state, project_id)
+        _record_project_sync_runtime_event(
+            workspace_dir=workspace_dir,
+            project_id=project_id,
+            operation_id=event.operation_id,
+            idempotency_key=event.idempotency_key,
+            deduplicated=event.deduplicated,
+            action=event.action,
+        )
+    state = await asyncio.to_thread(manager.get_state, project_id)
+    return _project_sync_state_with_runtime_meta(
+        workspace_dir=workspace_dir,
+        project_id=project_id,
+        state=dict(state),
+    )
 
 
 @router.post("/project-sync/run")
@@ -977,6 +1071,7 @@ async def run_project_sync(
     changed_paths: list[str] | None = Body(default=None),
     force: bool = Body(default=False),
     processing_mode: str = Body(default="agentic"),
+    idempotency_key: str = Body(default=""),
 ):
     """Start project-scoped automatic knowledge synchronization."""
     config, knowledge_config, running_config, workspace_dir, _ = await _resolve_knowledge_request_context(request)
@@ -1002,23 +1097,35 @@ async def run_project_sync(
         project_workspace_dir=str(project_workspace_dir),
         persist=lambda: save_config(config),
     )
-    manager = _project_sync_for_workspace(
+    coordinator = _project_sync_coordinator_for_workspace(
         workspace_dir,
         project_id=project_id,
     )
     try:
-        return await asyncio.to_thread(
-            manager.start_sync,
-            project_id=project_id,
-            config=knowledge_config,
-            running_config=running_config,
-            source=source,
-            trigger=(trigger or "manual").strip() or "manual",
-            changed_paths=changed_paths,
-            auto_enabled=True,
-            force=bool(force),
-            processing_mode=normalized_mode,
+        event = await asyncio.to_thread(
+            coordinator.dispatch,
+            ProjectSyncCommand.start(
+                project_id=project_id,
+                config=knowledge_config,
+                running_config=running_config,
+                source=source,
+                trigger=(trigger or "manual").strip() or "manual",
+                changed_paths=changed_paths,
+                auto_enabled=True,
+                force=bool(force),
+                processing_mode=normalized_mode,
+                idempotency_key=(idempotency_key or "").strip() or None,
+            ),
         )
+        _record_project_sync_runtime_event(
+            workspace_dir=workspace_dir,
+            project_id=project_id,
+            operation_id=event.operation_id,
+            idempotency_key=event.idempotency_key,
+            deduplicated=event.deduplicated,
+            action=event.action,
+        )
+        return event.payload
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
@@ -1097,7 +1204,12 @@ async def stream_project_sync(websocket: WebSocket):
     last_fingerprint: str | None = None
     try:
         while True:
-            snapshot = await asyncio.to_thread(manager.get_state, project_id)
+            snapshot_raw = await asyncio.to_thread(manager.get_state, project_id)
+            snapshot = _project_sync_state_with_runtime_meta(
+                workspace_dir=workspace_dir,
+                project_id=project_id,
+                state=dict(snapshot_raw),
+            )
             fingerprint = json.dumps(
                 snapshot,
                 ensure_ascii=False,

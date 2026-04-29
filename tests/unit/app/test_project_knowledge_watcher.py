@@ -32,6 +32,7 @@ async def test_project_knowledge_watcher_triggers_bootstrap_sync(
 
     saved = {"called": 0}
     calls: list[dict] = []
+    info_logs: list[tuple[str, tuple]] = []
 
     monkeypatch.setattr(watcher_module, "load_config", lambda: config)
     monkeypatch.setattr(
@@ -53,6 +54,11 @@ async def test_project_knowledge_watcher_triggers_bootstrap_sync(
         "start_sync",
         fake_start_sync,
     )
+    monkeypatch.setattr(
+        watcher_module.logger,
+        "info",
+        lambda message, *args: info_logs.append((message, args)),
+    )
 
     watcher = watcher_module.ProjectKnowledgeWatcher(
         agent_id="default",
@@ -69,6 +75,10 @@ async def test_project_knowledge_watcher_triggers_bootstrap_sync(
     assert calls[0]["debounce_seconds"] == watcher_module.DEFAULT_CHANGE_DEBOUNCE_SECONDS
     assert calls[0]["cooldown_seconds"] == watcher_module.DEFAULT_SYNC_COOLDOWN_SECONDS
     assert saved["called"] == 1
+    assert info_logs
+    assert info_logs[0][0].startswith("ProjectKnowledgeWatcher triggered sync")
+    assert str(info_logs[0][1][3]).startswith("ps-")
+    assert info_logs[0][1][4] == "watcher-start:project-a:project_watcher_bootstrap"
 
 
 @pytest.mark.asyncio

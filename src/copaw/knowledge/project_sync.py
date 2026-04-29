@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
@@ -10,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 
 UTC = timezone.utc
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 from ..config.config import KnowledgeConfig, KnowledgeSourceSpec
 from .graph_ops import GraphOpsManager
@@ -26,6 +27,262 @@ KNOWLEDGE_PROCESSING_FALLBACK_CHAIN = ["agentic", "nlp", "fast"]
 KNOWLEDGE_OUTPUT_FALLBACK_CHAIN = ["agentic", "nlp"]
 KNOWLEDGE_PROCESSING_SUPPORTED_MODES = {"fast", "nlp", "agentic"}
 KNOWLEDGE_PROCESSING_MODE_STATUSES = {"idle", "queued", "running", "ready", "failed", "blocked"}
+
+
+class ProjectSyncCommand:
+    """Typed command envelope for project-scoped sync orchestration."""
+
+    def __init__(
+        self,
+        *,
+        action: Literal["start_sync", "resume_sync", "check_reindex"],
+        project_id: str,
+        config: KnowledgeConfig,
+        running_config: Any = None,
+        source: KnowledgeSourceSpec | None = None,
+        trigger: str = "",
+        changed_paths: list[str] | None = None,
+        auto_enabled: bool = True,
+        force: bool = False,
+        debounce_seconds: float | None = None,
+        cooldown_seconds: float | None = None,
+        processing_mode: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> None:
+        self.action = action
+        self.project_id = project_id
+        self.config = config
+        self.running_config = running_config
+        self.source = source
+        self.trigger = trigger
+        self.changed_paths = list(changed_paths or [])
+        self.auto_enabled = auto_enabled
+        self.force = force
+        self.debounce_seconds = debounce_seconds
+        self.cooldown_seconds = cooldown_seconds
+        self.processing_mode = (processing_mode or "").strip() or None
+        self.idempotency_key = self._normalize_idempotency_key(idempotency_key)
+        self.operation_id = self._build_operation_id()
+
+    def _normalize_idempotency_key(self, raw: str | None) -> str:
+        text = str(raw or "").strip()
+        if text:
+            return text
+        payload = {
+            "action": self.action,
+            "project_id": self.project_id,
+            "trigger": self.trigger,
+            "changed_paths": sorted(self.changed_paths),
+            "force": bool(self.force),
+            "processing_mode": self.processing_mode or "",
+            "source_id": str(getattr(self.source, "id", "") or ""),
+        }
+        encoded = json.dumps(payload, ensure_ascii=True, sort_keys=True).encode("utf-8")
+        return hashlib.sha1(encoded).hexdigest()
+
+    def _build_operation_id(self) -> str:
+        seed = f"{self.action}:{self.project_id}:{self.idempotency_key}".encode("utf-8")
+        return f"ps-{hashlib.sha1(seed).hexdigest()[:16]}"
+
+    @classmethod
+    def start(
+        cls,
+        *,
+        project_id: str,
+        config: KnowledgeConfig,
+        running_config: Any,
+        source: KnowledgeSourceSpec,
+        trigger: str,
+        changed_paths: list[str] | None,
+        auto_enabled: bool,
+        force: bool,
+        debounce_seconds: float | None = None,
+        cooldown_seconds: float | None = None,
+        processing_mode: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> "ProjectSyncCommand":
+        return cls(
+            action="start_sync",
+            project_id=project_id,
+            config=config,
+            running_config=running_config,
+            source=source,
+            trigger=trigger,
+            changed_paths=changed_paths,
+            auto_enabled=auto_enabled,
+            force=force,
+            debounce_seconds=debounce_seconds,
+            cooldown_seconds=cooldown_seconds,
+            processing_mode=processing_mode,
+            idempotency_key=idempotency_key,
+        )
+
+    @classmethod
+    def resume(
+        cls,
+        *,
+        project_id: str,
+        config: KnowledgeConfig,
+        running_config: Any,
+        source: KnowledgeSourceSpec,
+        idempotency_key: str | None = None,
+    ) -> "ProjectSyncCommand":
+        return cls(
+            action="resume_sync",
+            project_id=project_id,
+            config=config,
+            running_config=running_config,
+            source=source,
+            idempotency_key=idempotency_key,
+        )
+
+    @classmethod
+    def check_reindex(
+        cls,
+        *,
+        project_id: str,
+        config: KnowledgeConfig,
+        running_config: Any,
+        idempotency_key: str | None = None,
+    ) -> "ProjectSyncCommand":
+        return cls(
+            action="check_reindex",
+            project_id=project_id,
+            config=config,
+            running_config=running_config,
+            idempotency_key=idempotency_key,
+        )
+
+
+class ProjectSyncEvent:
+    """Execution event returned by the coordinator dispatch boundary."""
+
+    def __init__(
+        self,
+        *,
+        action: str,
+        project_id: str,
+        payload: Any,
+        accepted: bool,
+        reason: str,
+        operation_id: str,
+        idempotency_key: str,
+        deduplicated: bool = False,
+    ) -> None:
+        self.action = action
+        self.project_id = project_id
+        self.payload = payload
+        self.accepted = accepted
+        self.reason = reason
+        self.operation_id = operation_id
+        self.idempotency_key = idempotency_key
+        self.deduplicated = deduplicated
+
+
+class ProjectSyncCoordinator:
+    """Phase-1 orchestration shell delegating to existing sync manager behavior."""
+
+    def __init__(
+        self,
+        working_dir: Path | str,
+        *,
+        manager_factory: Callable[[str], "ProjectKnowledgeSyncManager"] | None = None,
+    ) -> None:
+        self.working_dir = Path(working_dir)
+        self._manager_factory = manager_factory
+        self._sync_managers: dict[str, ProjectKnowledgeSyncManager] = {}
+
+    def _build_manager(self, project_id: str) -> "ProjectKnowledgeSyncManager":
+        if self._manager_factory is not None:
+            return self._manager_factory(project_id)
+        return ProjectKnowledgeSyncManager(
+            self.working_dir,
+            knowledge_dirname=f"projects/{project_id}/.knowledge",
+        )
+
+    def _manager(self, project_id: str) -> "ProjectKnowledgeSyncManager":
+        manager = self._sync_managers.get(project_id)
+        if manager is not None:
+            return manager
+        manager = self._build_manager(project_id)
+        self._sync_managers[project_id] = manager
+        return manager
+
+    def dispatch(self, command: ProjectSyncCommand) -> ProjectSyncEvent:
+        manager = self._manager(command.project_id)
+        if command.action == "check_reindex":
+            payload = manager.check_needs_reindex(
+                project_id=command.project_id,
+                config=command.config,
+                running_config=command.running_config,
+            )
+            return ProjectSyncEvent(
+                action=command.action,
+                project_id=command.project_id,
+                payload=payload,
+                accepted=bool(payload),
+                reason="REINDEX_REQUIRED" if bool(payload) else "NOOP",
+                operation_id=command.operation_id,
+                idempotency_key=command.idempotency_key,
+                deduplicated=not bool(payload),
+            )
+
+        if command.action == "resume_sync":
+            if command.source is None:
+                raise ValueError("ProjectSyncCommand.resume_sync requires source")
+            payload = manager.resume_sync_if_needed(
+                project_id=command.project_id,
+                config=command.config,
+                running_config=command.running_config,
+                source=command.source,
+            )
+            payload = dict(payload or {})
+            payload.setdefault("operation_id", command.operation_id)
+            payload.setdefault("idempotency_key", command.idempotency_key)
+            payload.setdefault("deduplicated", not bool(payload.get("accepted")))
+            return ProjectSyncEvent(
+                action=command.action,
+                project_id=command.project_id,
+                payload=payload,
+                accepted=bool((payload or {}).get("accepted")),
+                reason=str((payload or {}).get("reason") or ""),
+                operation_id=command.operation_id,
+                idempotency_key=command.idempotency_key,
+                deduplicated=bool(payload.get("deduplicated")),
+            )
+
+        if command.action == "start_sync":
+            if command.source is None:
+                raise ValueError("ProjectSyncCommand.start_sync requires source")
+            payload = manager.start_sync(
+                project_id=command.project_id,
+                config=command.config,
+                running_config=command.running_config,
+                source=command.source,
+                trigger=command.trigger,
+                changed_paths=command.changed_paths,
+                auto_enabled=command.auto_enabled,
+                force=command.force,
+                debounce_seconds=command.debounce_seconds,
+                cooldown_seconds=command.cooldown_seconds,
+                processing_mode=command.processing_mode,
+            )
+            payload = dict(payload or {})
+            payload.setdefault("operation_id", command.operation_id)
+            payload.setdefault("idempotency_key", command.idempotency_key)
+            payload.setdefault("deduplicated", False)
+            return ProjectSyncEvent(
+                action=command.action,
+                project_id=command.project_id,
+                payload=payload,
+                accepted=bool((payload or {}).get("accepted")),
+                reason=str((payload or {}).get("reason") or ""),
+                operation_id=command.operation_id,
+                idempotency_key=command.idempotency_key,
+                deduplicated=bool(payload.get("deduplicated")),
+            )
+
+        raise ValueError(f"Unsupported project sync command: {command.action}")
 
 
 def build_project_source_id(project_id: str) -> str:

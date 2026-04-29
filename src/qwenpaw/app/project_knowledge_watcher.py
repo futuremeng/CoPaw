@@ -14,6 +14,8 @@ from ..knowledge import ProjectKnowledgeSyncManager
 from ..knowledge.project_sync import (
     DEFAULT_PROJECT_SYNC_COOLDOWN_SECONDS,
     DEFAULT_PROJECT_SYNC_DEBOUNCE_SECONDS,
+    ProjectSyncCommand,
+    ProjectSyncCoordinator,
     ensure_project_source_registered,
 )
 from .project_monitoring_state import (
@@ -112,13 +114,22 @@ class ProjectKnowledgeWatcher:
         self._poll_interval = poll_interval
         self._task: asyncio.Task | None = None
         self._snapshots: dict[str, dict[str, Any]] = {}
-        self._sync_managers: dict[str, ProjectKnowledgeSyncManager] = {}
+        self._sync_coordinator = ProjectSyncCoordinator(
+            self._workspace_dir,
+            manager_factory=self._build_project_sync_manager,
+        )
         self._runtime_context_cache: dict[str, Any] = {
             "global_mtime_ns": None,
             "agent_mtime_ns": None,
             "global_config": None,
             "running_config": None,
         }
+
+    def _build_project_sync_manager(self, project_id: str) -> ProjectKnowledgeSyncManager:
+        return ProjectKnowledgeSyncManager(
+            self._workspace_dir,
+            knowledge_dirname=f"projects/{project_id}/.knowledge",
+        )
 
     @staticmethod
     def _safe_mtime_ns(path: Path) -> int | None:
@@ -158,17 +169,6 @@ class ProjectKnowledgeWatcher:
         }
         return global_config, global_config.knowledge, running_config
 
-    def _get_project_sync_manager(self, project_id: str) -> ProjectKnowledgeSyncManager:
-        manager = self._sync_managers.get(project_id)
-        if manager is not None:
-            return manager
-        manager = ProjectKnowledgeSyncManager(
-            self._workspace_dir,
-            knowledge_dirname=f"projects/{project_id}/.knowledge",
-        )
-        self._sync_managers[project_id] = manager
-        return manager
-
     async def _collect_snapshots_async(self) -> dict[str, dict[str, Any]]:
         return await asyncio.to_thread(self._collect_snapshots)
 
@@ -204,7 +204,6 @@ class ProjectKnowledgeWatcher:
                 != PROJECT_FILE_MONITORING_ACTIVE
             ):
                 continue
-            manager = self._get_project_sync_manager(project_id)
             source, source_changed = ensure_project_source_registered(
                 global_config.knowledge,
                 project_id=project_id,
@@ -213,17 +212,23 @@ class ProjectKnowledgeWatcher:
                 persist=lambda: None,
             )
             persist_needed = persist_needed or source_changed
-            result = manager.resume_sync_if_needed(
-                project_id=project_id,
-                config=knowledge_config,
-                running_config=running_config,
-                source=source,
+            event = self._sync_coordinator.dispatch(
+                ProjectSyncCommand.resume(
+                    project_id=project_id,
+                    config=knowledge_config,
+                    running_config=running_config,
+                    source=source,
+                    idempotency_key=f"watcher-resume:{project_id}",
+                )
             )
-            if result.get("accepted"):
+            if event.accepted:
                 logger.info(
-                    "ProjectKnowledgeWatcher resumed sync for %s (%s)",
+                    "ProjectKnowledgeWatcher resumed sync for %s (%s, op=%s, key=%s, dedup=%s)",
                     project_id,
-                    str(result.get("reason") or "resumed"),
+                    str(event.reason or "resumed"),
+                    event.operation_id,
+                    event.idempotency_key,
+                    event.deduplicated,
                 )
 
         if persist_needed:
@@ -279,14 +284,17 @@ class ProjectKnowledgeWatcher:
             previous = self._snapshots.get(project_id)
             changed_paths = self._diff_paths(previous, snapshot)
             should_bootstrap = previous is None
-            manager = self._get_project_sync_manager(project_id)
             should_config_reindex = False
             if not should_bootstrap and not changed_paths:
-                should_config_reindex = manager.check_needs_reindex(
-                    project_id=project_id,
-                    config=knowledge_config,
-                    running_config=running_config,
+                reindex_event = self._sync_coordinator.dispatch(
+                    ProjectSyncCommand.check_reindex(
+                        project_id=project_id,
+                        config=knowledge_config,
+                        running_config=running_config,
+                        idempotency_key=f"watcher-check-reindex:{project_id}",
+                    )
                 )
+                should_config_reindex = bool(reindex_event.payload)
                 if not should_config_reindex:
                     continue
 
@@ -303,24 +311,30 @@ class ProjectKnowledgeWatcher:
                 if should_bootstrap
                 else ("project_watcher_config_change" if should_config_reindex else "project_watcher_change")
             )
-            result = manager.start_sync(
-                project_id=project_id,
-                config=knowledge_config,
-                running_config=running_config,
-                source=source,
-                trigger=trigger,
-                changed_paths=changed_paths,
-                auto_enabled=True,
-                force=should_bootstrap,
-                debounce_seconds=DEFAULT_CHANGE_DEBOUNCE_SECONDS,
-                cooldown_seconds=DEFAULT_SYNC_COOLDOWN_SECONDS,
+            event = self._sync_coordinator.dispatch(
+                ProjectSyncCommand.start(
+                    project_id=project_id,
+                    config=knowledge_config,
+                    running_config=running_config,
+                    source=source,
+                    trigger=trigger,
+                    changed_paths=changed_paths,
+                    auto_enabled=True,
+                    force=should_bootstrap,
+                    debounce_seconds=DEFAULT_CHANGE_DEBOUNCE_SECONDS,
+                    cooldown_seconds=DEFAULT_SYNC_COOLDOWN_SECONDS,
+                    idempotency_key=f"watcher-start:{project_id}:{trigger}",
+                )
             )
-            if result.get("accepted"):
+            if event.accepted:
                 logger.info(
-                    "ProjectKnowledgeWatcher triggered sync for %s (%s, %s paths)",
+                    "ProjectKnowledgeWatcher triggered sync for %s (%s, %s paths, op=%s, key=%s, dedup=%s)",
                     project_id,
                     "bootstrap" if should_bootstrap else ("config-change" if should_config_reindex else "change"),
                     len(changed_paths),
+                    event.operation_id,
+                    event.idempotency_key,
+                    event.deduplicated,
                 )
 
         if persist_needed:

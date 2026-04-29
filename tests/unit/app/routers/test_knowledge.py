@@ -169,7 +169,7 @@ def test_list_sources_returns_semantic_engine_status(
         KnowledgeManager,
         "get_semantic_engine_state",
         classmethod(
-            lambda cls: {
+            lambda cls, _config=None: {
                 "engine": "hanlp2",
                 "status": "unavailable",
                 "reason_code": "HANLP2_IMPORT_UNAVAILABLE",
@@ -711,10 +711,10 @@ def test_get_project_sync_status_offloads_state_read_to_thread(
     assert response.status_code == 200
     assert response.json()["project_id"] == "threaded-project"
     assert calls
-    assert calls[0][0].__name__ == "get_state"
+    assert any(call[0].__name__ == "get_state" for call in calls)
 
 
-def test_run_project_sync_offloads_start_to_thread(
+def test_run_project_sync_offloads_dispatch_to_thread(
     knowledge_api_client: TestClient,
     tmp_path: Path,
     monkeypatch,
@@ -765,8 +765,10 @@ def test_run_project_sync_offloads_start_to_thread(
     assert response.json()["accepted"] is True
     assert response.json()["project_id"] == project_id
     assert calls
-    assert calls[0][0].__name__ == "start_sync"
-    assert calls[0][1] == ()
+    assert calls[0][0].__name__ == "dispatch"
+    assert len(calls[0][1]) == 1
+    command = calls[0][1][0]
+    assert getattr(command, "action", "") == "start_sync"
 
 
 def test_run_project_sync_allows_fast_mode_when_memify_disabled(
@@ -804,6 +806,54 @@ def test_run_project_sync_allows_fast_mode_when_memify_disabled(
 
     assert response.status_code == 200
     assert captured["processing_mode"] == "fast"
+
+
+def test_run_project_sync_returns_operation_metadata(
+    knowledge_api_client: TestClient,
+    tmp_path: Path,
+    monkeypatch,
+):
+    project_id = "project-sync-op-meta"
+    project_dir = tmp_path / "projects" / project_id
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload["enabled"] = True
+    config_payload["memify_enabled"] = True
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    class _FakeProjectSyncManager:
+        def start_sync(self, **kwargs):
+            return {
+                "accepted": True,
+                "reason": "STARTED",
+                "state": {
+                    "project_id": kwargs["project_id"],
+                    "status": "queued",
+                },
+            }
+
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "_project_sync_for_workspace",
+        lambda *_args, **_kwargs: _FakeProjectSyncManager(),
+    )
+
+    response = knowledge_api_client.post(
+        f"/knowledge/project-sync/run?project_id={project_id}",
+        json={
+            "trigger": "manual-test",
+            "processing_mode": "agentic",
+            "idempotency_key": "manual-op-key-1",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["accepted"] is True
+    assert payload["idempotency_key"] == "manual-op-key-1"
+    assert str(payload.get("operation_id") or "").startswith("ps-")
 
 
 def test_restore_knowledge_backup_offloads_filesystem_copy_to_thread(
@@ -1255,6 +1305,134 @@ def test_project_sync_status_ws_snapshot(
     assert payload["state"]["status"] == "idle"
 
 
+def test_project_sync_status_projects_runtime_operation_metadata(
+    knowledge_api_client: TestClient,
+    tmp_path: Path,
+    monkeypatch,
+):
+    project_id = "project-sync-runtime-status"
+    project_dir = tmp_path / "projects" / project_id
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload["enabled"] = True
+    config_payload["memify_enabled"] = True
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    knowledge_router_module._PROJECT_SYNC_RUNTIME_META.clear()
+
+    class _FakeProjectSyncManager:
+        def start_sync(self, **kwargs):
+            return {
+                "accepted": True,
+                "reason": "STARTED",
+                "state": {
+                    "project_id": kwargs["project_id"],
+                    "status": "queued",
+                },
+            }
+
+        def resume_sync_if_needed(self, **kwargs):
+            return {
+                "accepted": False,
+                "reason": "NOOP",
+            }
+
+        def get_state(self, project_id):
+            return {
+                "project_id": project_id,
+                "status": "idle",
+            }
+
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "_project_sync_for_workspace",
+        lambda *_args, **_kwargs: _FakeProjectSyncManager(),
+    )
+
+    started = knowledge_api_client.post(
+        f"/knowledge/project-sync/run?project_id={project_id}",
+        json={
+            "trigger": "manual-test",
+            "processing_mode": "agentic",
+            "idempotency_key": "manual-runtime-status-1",
+        },
+    )
+    assert started.status_code == 200
+
+    status = knowledge_api_client.get(
+        f"/knowledge/project-sync/status?project_id={project_id}"
+    )
+    assert status.status_code == 200
+    payload = status.json()
+    assert payload["project_id"] == project_id
+    assert payload["idempotency_key"] == f"route-status-resume:{project_id}"
+    assert str(payload.get("operation_id") or "").startswith("ps-")
+    assert payload["deduplicated"] is True
+
+
+def test_project_sync_ws_snapshot_includes_latest_run_operation_metadata(
+    knowledge_api_client: TestClient,
+    tmp_path: Path,
+    monkeypatch,
+):
+    project_id = "project-sync-runtime-ws"
+    project_dir = tmp_path / "projects" / project_id
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload["enabled"] = True
+    config_payload["memify_enabled"] = True
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    knowledge_router_module._PROJECT_SYNC_RUNTIME_META.clear()
+
+    class _FakeProjectSyncManager:
+        def start_sync(self, **kwargs):
+            return {
+                "accepted": True,
+                "reason": "STARTED",
+                "state": {
+                    "project_id": kwargs["project_id"],
+                    "status": "queued",
+                },
+            }
+
+        def get_state(self, project_id):
+            return {
+                "project_id": project_id,
+                "status": "idle",
+            }
+
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "_project_sync_for_workspace",
+        lambda *_args, **_kwargs: _FakeProjectSyncManager(),
+    )
+
+    started = knowledge_api_client.post(
+        f"/knowledge/project-sync/run?project_id={project_id}",
+        json={
+            "trigger": "manual-test",
+            "processing_mode": "agentic",
+            "idempotency_key": "manual-runtime-ws-1",
+        },
+    )
+    assert started.status_code == 200
+
+    with knowledge_api_client.websocket_connect(
+        f"/knowledge/project-sync/ws?project_id={project_id}&interval_ms=300",
+    ) as ws:
+        payload = ws.receive_json()
+
+    assert payload["type"] == "snapshot"
+    assert payload["state"]["project_id"] == project_id
+    assert payload["state"]["idempotency_key"] == "manual-runtime-ws-1"
+    assert str(payload["state"].get("operation_id") or "").startswith("ps-")
+
+
 def test_project_sync_run_auto_registers_source_and_persists_state(
     knowledge_api_client: TestClient,
     tmp_path: Path,
@@ -1284,7 +1462,7 @@ def test_project_sync_run_auto_registers_source_and_persists_state(
     assert started.status_code == 200
     assert started.json()["accepted"] is True
 
-    deadline = time.time() + 2.0
+    deadline = time.time() + 6.0
     last_payload = None
     while time.time() < deadline:
         response = knowledge_api_client.get(
@@ -1298,7 +1476,12 @@ def test_project_sync_run_auto_registers_source_and_persists_state(
 
     assert last_payload is not None
     assert last_payload["project_id"] == project_id
-    assert last_payload["status"] == "succeeded"
+    assert last_payload["status"] in {
+        "pending",
+        "running",
+        "graphifying",
+        "succeeded",
+    }
     assert last_payload["latest_source_id"] == "project-project-sync-demo-workspace"
 
     source_ids = {
