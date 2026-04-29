@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useCallback } from "react";
 import { Input } from "antd";
 import { IconButton } from "@agentscope-ai/design";
 import {
@@ -9,15 +9,12 @@ import {
 } from "@agentscope-ai/icons";
 import { useTranslation } from "react-i18next";
 import { ChannelIcon } from "../../../Control/Channels/components";
-import {
-  ContextMenu,
-  useContextMenu,
-  type ContextMenuItem,
-} from "../../../../components/ContextMenu";
 import type { ChatStatus } from "../../../../api/types/chat";
 import styles from "./index.module.less";
 
 interface ChatSessionItemProps {
+  /** Unique session id — used to call back parent handlers without inline closures */
+  sessionId: string;
   /** Session display name */
   name: string;
   /** Pre-formatted creation time string */
@@ -36,26 +33,27 @@ interface ChatSessionItemProps {
   editValue?: string;
   /** Whether the chat is pinned */
   pinned?: boolean;
-  /** Click callback */
-  onClick?: () => void;
-  /** Edit button callback */
-  onEdit?: () => void;
-  /** Delete button callback */
-  onDelete?: () => void;
-  /** Pin button callback */
-  onPin?: () => void;
+  /** Click callback — receives sessionId */
+  onClick?: (sessionId: string) => void;
+  /** Edit button callback — receives (sessionId, currentName) */
+  onEdit?: (sessionId: string, currentName: string) => void;
+  /** Delete button callback — receives sessionId */
+  onDelete?: (sessionId: string) => void;
+  /** Pin button callback — receives sessionId */
+  onPin?: (sessionId: string) => void;
   /** Edit input value change callback */
   onEditChange?: (value: string) => void;
   /** Confirm edit callback (Enter key or blur) */
   onEditSubmit?: () => void;
   /** Cancel edit callback */
   onEditCancel?: () => void;
+  /** Context menu callback — parent manages a shared ContextMenu */
+  onContextMenu?: (sessionId: string, event: React.MouseEvent) => void;
   className?: string;
 }
 
 const ChatSessionItem: React.FC<ChatSessionItemProps> = (props) => {
   const { t } = useTranslation();
-  const contextMenu = useContextMenu();
 
   const inProgress =
     props.generating === true || props.chatStatus === "running";
@@ -63,34 +61,39 @@ const ChatSessionItem: React.FC<ChatSessionItemProps> = (props) => {
     ? t("chat.statusInProgress")
     : t("chat.statusIdle");
 
-  const contextMenuItems: ContextMenuItem[] = useMemo(
-    () => [
-      {
-        key: "open",
-        label: t("chat.contextMenu.open", "Open"),
-        onClick: props.onClick,
-      },
-      {
-        key: "rename",
-        label: t("chat.contextMenu.rename", "Rename"),
-        onClick: props.onEdit,
-      },
-      {
-        key: "pin",
-        label: props.pinned
-          ? t("chat.contextMenu.unpin", "Unpin")
-          : t("chat.contextMenu.pin", "Pin"),
-        onClick: props.onPin,
-      },
-      { key: "divider-1", label: "", divider: true },
-      {
-        key: "delete",
-        label: t("chat.contextMenu.delete", "Delete"),
-        danger: true,
-        onClick: props.onDelete,
-      },
-    ],
-    [t, props.onClick, props.onEdit, props.onPin, props.onDelete, props.pinned],
+  const handleClick = useCallback(() => {
+    props.onClick?.(props.sessionId);
+  }, [props.onClick, props.sessionId]);
+
+  const handleEdit = useCallback(
+    (event: React.MouseEvent) => {
+      event.stopPropagation();
+      props.onEdit?.(props.sessionId, props.name);
+    },
+    [props.onEdit, props.sessionId, props.name],
+  );
+
+  const handleDelete = useCallback(
+    (event: React.MouseEvent) => {
+      event.stopPropagation();
+      props.onDelete?.(props.sessionId);
+    },
+    [props.onDelete, props.sessionId],
+  );
+
+  const handlePin = useCallback(
+    (event: React.MouseEvent) => {
+      event.stopPropagation();
+      props.onPin?.(props.sessionId);
+    },
+    [props.onPin, props.sessionId],
+  );
+
+  const handleContextMenu = useCallback(
+    (event: React.MouseEvent) => {
+      props.onContextMenu?.(props.sessionId, event);
+    },
+    [props.onContextMenu, props.sessionId],
   );
 
   const className = [
@@ -106,8 +109,8 @@ const ChatSessionItem: React.FC<ChatSessionItemProps> = (props) => {
   return (
     <div
       className={className}
-      onClick={props.editing ? undefined : props.onClick}
-      onContextMenu={props.editing ? undefined : contextMenu.show}
+      onClick={props.editing ? undefined : handleClick}
+      onContextMenu={props.editing ? undefined : handleContextMenu}
     >
       {/* Timeline indicator placeholder */}
       <div className={styles.iconPlaceholder} />
@@ -166,10 +169,7 @@ const ChatSessionItem: React.FC<ChatSessionItemProps> = (props) => {
           className={styles.pinButton}
           data-pinned={props.pinned}
           icon={props.pinned ? <SparkMarkFill /> : <SparkMarkLine />}
-          onClick={(e) => {
-            e.stopPropagation();
-            props.onPin?.();
-          }}
+          onClick={handlePin}
         />
       )}
       {/* Action buttons - edit and delete, only visible on hover */}
@@ -179,31 +179,18 @@ const ChatSessionItem: React.FC<ChatSessionItemProps> = (props) => {
             bordered={false}
             size="small"
             icon={<SparkEditLine />}
-            onClick={(e) => {
-              e.stopPropagation();
-              props.onEdit?.();
-            }}
+            onClick={handleEdit}
           />
           <IconButton
             bordered={false}
             size="small"
             icon={<SparkDeleteLine />}
-            onClick={(e) => {
-              e.stopPropagation();
-              props.onDelete?.();
-            }}
+            onClick={handleDelete}
           />
         </div>
       )}
-      <ContextMenu
-        visible={contextMenu.visible}
-        x={contextMenu.x}
-        y={contextMenu.y}
-        items={contextMenuItems}
-        onClose={contextMenu.hide}
-      />
     </div>
   );
 };
 
-export default ChatSessionItem;
+export default React.memo(ChatSessionItem);

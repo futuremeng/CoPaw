@@ -1714,6 +1714,8 @@
       "placeholder": "搜索消息...",
       "noResults": "未找到结果",
       "resultsCount": "找到 {{count}} 个结果",
+      "searching": "正在搜索 {{progress}}...",
+      "loading": "加载中...",
       "userMessage": "用户",
       "assistantMessage": "助手",
       "titleMatch": "标题"

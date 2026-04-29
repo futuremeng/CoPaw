@@ -74,4 +74,5 @@ export interface AgentsRunningConfig {
   memory_summary: MemorySummaryConfig;
   embedding_config: EmbeddingConfig;
   memory_manager_backend: "remelight" | string;
+  approval_level?: string;
 }

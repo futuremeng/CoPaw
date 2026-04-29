@@ -1666,6 +1666,8 @@
       "placeholder": "メッセージを検索...",
       "noResults": "結果が見つかりません",
       "resultsCount": "{{count}} 件の結果が見つかりました",
+      "searching": "検索中 {{progress}}...",
+      "loading": "読み込み中...",
       "userMessage": "ユーザー",
       "assistantMessage": "アシスタント",
       "titleMatch": "タイトル"

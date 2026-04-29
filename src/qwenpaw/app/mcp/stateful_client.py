@@ -247,6 +247,7 @@ class StdIOStatefulClient(StatefulClientBase):
             "ignore",
             "replace",
         ] = "strict",
+        **kwargs,
     ) -> None:
         """Initialize the StdIO MCP client.
 
@@ -297,6 +298,8 @@ class StdIOStatefulClient(StatefulClientBase):
 
         # Tool cache
         self._cached_tools = None
+
+        self.timeout = kwargs.get("timeout")
 
     async def _run_lifecycle(self) -> None:
         """Run MCP client lifecycle in a dedicated task.

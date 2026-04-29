@@ -1676,6 +1676,8 @@
       "placeholder": "Поиск сообщений...",
       "noResults": "Результаты не найдены",
       "resultsCount": "Найдено {{count}} результат(ов)",
+      "searching": "Поиск {{progress}}...",
+      "loading": "Загрузка...",
       "userMessage": "Пользователь",
       "assistantMessage": "Ассистент",
       "titleMatch": "Название"

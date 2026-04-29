@@ -917,6 +917,14 @@ class AgentsRunningConfig(BaseModel):
         ),
     )
 
+    approval_level: Optional[str] = Field(
+        default=None,
+        description=(
+            "Tool execution security level (proxied from agent profile): "
+            "STRICT, SMART, AUTO, or OFF."
+        ),
+    )
+
     @property
     def memory_compact_reserve(self) -> int:
         """Memory compact reserve size (tokens)."""
