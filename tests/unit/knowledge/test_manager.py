@@ -685,14 +685,6 @@ def test_index_source_runs_cor_after_ner_and_syntax_uses_original_text(tmp_path:
 
     def fake_run_task(task_key: str, text: str, current_config):
         call_trace.append((task_key, text))
-        if task_key == "cor":
-            return {
-                "tokens": ["我", "姐", "送", "我", "她", "的", "猫", "。", "我", "很", "喜欢", "它", "。"],
-                "clusters": [
-                    [["我姐", 0, 2], ["她", 4, 5]],
-                    [["她的猫", 4, 7], ["它", 11, 12]],
-                ],
-            }, ready_state
         if task_key == "ner_msra":
             return [
                 {"text": "我姐", "label": "PER", "span": [0, 2]},
@@ -723,12 +715,13 @@ def test_index_source_runs_cor_after_ner_and_syntax_uses_original_text(tmp_path:
     ner_structured_path = tmp_path / "knowledge" / chunk["ner_structured_path"]
     syntax_structured_path = tmp_path / "knowledge" / chunk["syntax_structured_path"]
 
-    assert chunk["cor_status"] == "ready"
-    assert chunk["cor_cluster_count"] == 2
+    assert chunk["cor_status"] == "unavailable"
+    assert chunk["cor_reason_code"] == "HANLP2_COREF_NOT_OPEN_SOURCE"
+    assert chunk["cor_cluster_count"] == 0
     cor_structured = json.loads(cor_structured_path.read_text(encoding="utf-8"))
     assert cor_structured["source_text"].replace("\n", "") == "我姐送我她的猫。我很喜欢它。"
-    assert cor_structured["resolved_text"].replace("\n", "") == "我姐送我我姐的猫。我很喜欢她的猫。"
-    assert cor_structured["replacement_count"] == 2
+    assert cor_structured["resolved_text"].replace("\n", "") == "我姐送我她的猫。我很喜欢它。"
+    assert cor_structured["replacement_count"] == 0
 
     ner_structured = json.loads(ner_structured_path.read_text(encoding="utf-8"))
     assert ner_structured["source_text"] == cor_structured["source_text"]
@@ -748,7 +741,7 @@ def test_index_source_runs_cor_after_ner_and_syntax_uses_original_text(tmp_path:
     assert "dep" in task_order
     assert "sdp" in task_order
     assert "con" in task_order
-    assert task_order.index("cor") > task_order.index("ner_msra")
+    assert "cor" not in task_order
 
 
 def test_delete_index_removes_ner_files(tmp_path: Path):

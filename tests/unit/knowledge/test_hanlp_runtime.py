@@ -394,26 +394,10 @@ def parse(text, tasks=None):
     assert parsed["task_result"] == [{"text": "微软发布新模型", "label": "ORG"}]
 
 
-def test_bridge_run_task_uses_coreference_entrypoint_for_cor_task(tmp_path: Path) -> None:
+def test_bridge_run_task_returns_unavailable_for_cor_task(tmp_path: Path) -> None:
     hanlp_pkg = tmp_path / "hanlp"
     hanlp_pkg.mkdir()
-    (hanlp_pkg / "__init__.py").write_text(
-        """
-def parse(text, tasks=None):
-    raise RuntimeError("parse should not be used for cor")
-
-
-def coreference_resolution(text):
-    return {
-        "tokens": ["我", "姐", "喜欢", "它"],
-        "clusters": [
-            [["我姐", 0, 2], ["她", 2, 3]],
-            [["她的猫", 2, 4], ["它", 3, 4]],
-        ],
-    }
-""".strip(),
-        encoding="utf-8",
-    )
+    (hanlp_pkg / "__init__.py").write_text("__version__='2.x'", encoding="utf-8")
 
     bridge_code = hanlp_runtime_module._BRIDGE_CODE.replace(
         "return (3, 6) <= current <= (3, 9)",
@@ -450,6 +434,66 @@ def coreference_resolution(text):
 
     assert completed.returncode == 0
     parsed = json.loads(completed.stdout)
+    assert parsed["status"] == "error"
+    assert parsed["reason_code"] == "HANLP2_COREF_NOT_OPEN_SOURCE"
+    assert parsed["task_result"] is None
+
+
+def test_bridge_run_task_falls_back_to_parse_when_ner_model_fails(tmp_path: Path) -> None:
+    hanlp_pkg = tmp_path / "hanlp"
+    hanlp_pkg.mkdir()
+    (hanlp_pkg / "__init__.py").write_text(
+        """
+class _BrokenModel:
+    def __call__(self, text):
+        raise IndexError("too many indices for tensor of dimension 2")
+
+
+def load(model_id):
+    return _BrokenModel()
+
+
+def parse(text, tasks=None):
+    return {"ner/msra": [{"text": "微软", "label": "ORG"}]}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    bridge_code = hanlp_runtime_module._BRIDGE_CODE.replace(
+        "return (3, 6) <= current <= (3, 9)",
+        "return True",
+    )
+    payload = {
+        "task_key": "ner_msra",
+        "task_matrix": {
+            "tasks": {
+                "ner_msra": {
+                    "enabled": True,
+                    "task_name": "ner/msra",
+                    "artifact_key": "ner_msra",
+                    "eval_role": "primary",
+                    "timeout_sec": 30,
+                },
+            },
+        },
+        "text": "微软发布新模型",
+    }
+    env = {
+        **os.environ,
+        "PYTHONPATH": str(tmp_path),
+    }
+
+    completed = subprocess.run(
+        [sys.executable, "-c", bridge_code, "run_task"],
+        input=json.dumps(payload, ensure_ascii=False),
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+
+    assert completed.returncode == 0
+    parsed = json.loads(completed.stdout)
     assert parsed["status"] == "ready"
     assert parsed["reason_code"] == "HANLP2_TASK_READY"
-    assert parsed["task_result"]["tokens"] == ["我", "姐", "喜欢", "它"]
+    assert parsed["task_result"] == [{"text": "微软", "label": "ORG"}]

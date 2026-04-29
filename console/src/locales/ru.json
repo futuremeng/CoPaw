@@ -1907,6 +1907,11 @@
     "title": "NLP",
     "infoTitle": "Семантический движок HanLP",
     "infoDescription": "Управляйте выделенным HanLP sidecar для семантической обработки знаний проекта. Сначала установите sidecar, затем скачайте и проверьте модель токенизации по умолчанию.",
+    "providerMessage": "Провайдер: {{provider}}",
+    "providerActive": "Провайдер HanLP активен.",
+    "providerInactive": "Текущий провайдер не HanLP; действия установки/модели HanLP отключены.",
+    "fullInstallTitle": "Требуется полный пакет HanLP",
+    "fullInstallDescription": "Установите pip install 'hanlp[full]' в отдельной Python-среде, затем обновите статус.",
     "loadFailed": "Не удалось загрузить настройки NLP",
     "installSuccess": "HanLP sidecar установлен",
     "installPartial": "Настройка HanLP sidecar завершена, но остались ручные шаги",
@@ -1915,7 +1920,7 @@
     "downloadPartial": "Шаг с моделью HanLP завершён, но остались ручные шаги",
     "downloadFailed": "Не удалось скачать модель HanLP",
     "sidecarTitle": "HanLP Sidecar",
-    "sidecarDescription": "Управляемая среда Python 3.9, выделенная для семантической обработки HanLP.",
+    "sidecarDescription": "Управляемая среда Python (предпочтительно 3.10), выделенная для семантической обработки HanLP.",
     "sidecarStatus": "Статус sidecar",
     "pythonPath": "Python:",
     "hanlpHome": "HANLP_HOME:",
@@ -1927,6 +1932,39 @@
     "modelDescription": "Китайская модель токенизации по умолчанию, которая включает семантическую обработку.",
     "modelStatus": "Статус модели",
     "modelId": "Модель:",
+    "methodsTitle": "Поддерживаемые методы",
+    "methodsDescription": "Доступность ниже отражает текущее состояние рантайма из /agent/nlp-status.",
+    "taskKey": "Ключ задачи:",
+    "methods": {
+      "defaultUnavailableReason": "Метод недоступен в текущем рантайме.",
+      "tokenize": {
+        "name": "tokenize",
+        "description": "Базовая точка токенизации для семантической предобработки.",
+        "readyReason": "Модель токенизации готова.",
+        "unavailableReason": "Для tokenize требуется готовность sidecar и модели."
+      },
+      "nerMsra": {
+        "name": "ner/msra",
+        "description": "Задача распознавания именованных сущностей по схеме MSRA."
+      },
+      "dep": {
+        "name": "dep",
+        "description": "Задача синтаксического зависимого разбора."
+      },
+      "sdp": {
+        "name": "sdp",
+        "description": "Задача семантического зависимого разбора."
+      },
+      "con": {
+        "name": "con",
+        "description": "Задача конституентного (фразового) разбора."
+      },
+      "cor": {
+        "name": "coreference_resolution (cor)",
+        "description": "Задача кореференции, заданная в матрице задач.",
+        "unavailableReason": "HanLP coreference_resolution не является open-source и отключён в рантайме CoPaw."
+      }
+    },
     "notConfigured": "Не настроено",
     "manualStepsTitle": "Ручные действия",
     "operationsTitle": "Последние операции",

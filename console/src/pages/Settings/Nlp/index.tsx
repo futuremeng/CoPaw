@@ -5,6 +5,25 @@ import { PageHeader } from "@/components/PageHeader";
 import { useNlp } from "./useNlp";
 import styles from "./index.module.less";
 
+type MethodStatus = {
+  status: string;
+  reasonCode: string;
+  reason: string;
+};
+
+function resolveTagColor(status: string): "success" | "warning" | "error" | "default" {
+  if (status === "ready") {
+    return "success";
+  }
+  if (status === "error") {
+    return "error";
+  }
+  if (status === "disabled") {
+    return "default";
+  }
+  return "warning";
+}
+
 function NlpPage() {
   const { t } = useTranslation();
   const {
@@ -22,6 +41,76 @@ function NlpPage() {
     handleInstall,
     handleDownloadModel,
   } = useNlp();
+
+  const taskStates = status?.tasks ?? {};
+
+  const methods: Array<{ key: string; taskKey?: string; status: MethodStatus }> = [
+    {
+      key: "tokenize",
+      status: sidecarReady
+        ? modelReady
+          ? {
+              status: "ready",
+              reasonCode: "HANLP2_MODEL_READY",
+              reason: t("nlpConfig.methods.tokenize.readyReason"),
+            }
+          : {
+              status: "unavailable",
+              reasonCode: status?.model.reason_code || "HANLP2_MODEL_LOAD_FAILED",
+              reason: status?.model.reason || t("nlpConfig.methods.tokenize.unavailableReason"),
+            }
+        : {
+            status: "unavailable",
+            reasonCode: status?.sidecar.reason_code || "HANLP2_SIDECAR_UNCONFIGURED",
+            reason: status?.sidecar.reason || t("nlpConfig.methods.tokenize.unavailableReason"),
+          },
+    },
+    {
+      key: "nerMsra",
+      taskKey: "ner_msra",
+      status: {
+        status: taskStates.ner_msra?.status || "unavailable",
+        reasonCode: taskStates.ner_msra?.reason_code || "HANLP2_TASK_NOT_CONFIGURED",
+        reason: taskStates.ner_msra?.reason || t("nlpConfig.methods.defaultUnavailableReason"),
+      },
+    },
+    {
+      key: "dep",
+      taskKey: "dep",
+      status: {
+        status: taskStates.dep?.status || "unavailable",
+        reasonCode: taskStates.dep?.reason_code || "HANLP2_TASK_NOT_CONFIGURED",
+        reason: taskStates.dep?.reason || t("nlpConfig.methods.defaultUnavailableReason"),
+      },
+    },
+    {
+      key: "sdp",
+      taskKey: "sdp",
+      status: {
+        status: taskStates.sdp?.status || "unavailable",
+        reasonCode: taskStates.sdp?.reason_code || "HANLP2_TASK_NOT_CONFIGURED",
+        reason: taskStates.sdp?.reason || t("nlpConfig.methods.defaultUnavailableReason"),
+      },
+    },
+    {
+      key: "con",
+      taskKey: "con",
+      status: {
+        status: taskStates.con?.status || "unavailable",
+        reasonCode: taskStates.con?.reason_code || "HANLP2_TASK_NOT_CONFIGURED",
+        reason: taskStates.con?.reason || t("nlpConfig.methods.defaultUnavailableReason"),
+      },
+    },
+    {
+      key: "cor",
+      taskKey: "cor",
+      status: {
+        status: taskStates.cor?.status || "unavailable",
+        reasonCode: taskStates.cor?.reason_code || "HANLP2_COREF_NOT_OPEN_SOURCE",
+        reason: taskStates.cor?.reason || t("nlpConfig.methods.cor.unavailableReason"),
+      },
+    },
+  ];
 
   if (loading) {
     return (
@@ -52,11 +141,11 @@ function NlpPage() {
       <Alert
         type={hanlpProviderActive ? "success" : "warning"}
         showIcon
-        message={`Provider: ${provider || "hanlp"}`}
+        message={t("nlpConfig.providerMessage", { provider: provider || "hanlp" })}
         description={
           hanlpProviderActive
-            ? "HanLP provider is active."
-            : "Current provider is not HanLP; HanLP install/model actions are disabled."
+            ? t("nlpConfig.providerActive")
+            : t("nlpConfig.providerInactive")
         }
       />
 
@@ -64,8 +153,8 @@ function NlpPage() {
         <Alert
           type="warning"
           showIcon
-          message="HanLP full package is required"
-          description="Install with pip install 'hanlp[full]' in a dedicated Python environment, then refresh status."
+          message={t("nlpConfig.fullInstallTitle")}
+          description={t("nlpConfig.fullInstallDescription")}
         />
       ) : null}
 
@@ -126,6 +215,37 @@ function NlpPage() {
             <Typography.Text>
               {t("nlpConfig.modelId")} {status?.model.model_id || t("nlpConfig.notConfigured")}
             </Typography.Text>
+          </Space>
+        </Card>
+
+        <Card className={styles.card}>
+          <Typography.Title level={5} className={styles.cardTitle}>
+            {t("nlpConfig.methodsTitle")}
+          </Typography.Title>
+          <Typography.Paragraph type="secondary" className={styles.cardDescription}>
+            {t("nlpConfig.methodsDescription")}
+          </Typography.Paragraph>
+          <Space direction="vertical" size={12} style={{ width: "100%" }}>
+            {methods.map((method) => (
+              <div key={method.key} className={styles.operationBlock}>
+                <div className={styles.statusRow}>
+                  <Typography.Text strong>{t(`nlpConfig.methods.${method.key}.name`)}</Typography.Text>
+                  <Tag color={resolveTagColor(method.status.status)}>
+                    {method.status.reasonCode || method.status.status}
+                  </Tag>
+                </div>
+                <Typography.Paragraph className={styles.operationOutput}>
+                  {t(`nlpConfig.methods.${method.key}.description`)}
+                </Typography.Paragraph>
+                <Typography.Text type="secondary">{method.status.reason}</Typography.Text>
+                {method.taskKey ? (
+                  <Typography.Text type="secondary">
+                    {` `}
+                    {t("nlpConfig.taskKey")} {method.taskKey}
+                  </Typography.Text>
+                ) : null}
+              </div>
+            ))}
           </Space>
         </Card>
 

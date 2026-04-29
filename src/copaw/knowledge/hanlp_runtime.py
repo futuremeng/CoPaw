@@ -16,7 +16,11 @@ import sys
 
 
 def emit(payload):
-    sys.stdout.write(json.dumps(payload, ensure_ascii=False))
+    try:
+        sys.stdout.write(json.dumps(payload, ensure_ascii=False))
+    except BrokenPipeError:
+        # Parent process may close the pipe on timeout/cancel; avoid masking root error.
+        pass
 
 
 def flatten(value):
@@ -50,7 +54,7 @@ def version_text():
 
 def version_in_range():
     current = (sys.version_info.major, sys.version_info.minor)
-    return (3, 6) <= current <= (3, 9)
+    return (3, 6) <= current <= (3, 10)
 
 
 def load_payload():
@@ -118,28 +122,8 @@ def locate_parser(module):
 
 
 def locate_coref_resolver(module):
-    # Coreference resolution must use dedicated COR model.
-    loader = getattr(module, "load", None)
-    if callable(loader):
-        pretrained = getattr(module, "pretrained", None)
-        cor = getattr(pretrained, "cor", None) if pretrained is not None else None
-        candidates = []
-        if cor is not None and hasattr(cor, "COREF_ZH_GAP"):
-            candidates.append(getattr(cor, "COREF_ZH_GAP"))
-        candidates.append("COREF_ZH_GAP")
-        for model_id in candidates:
-            if not model_id:
-                continue
-            try:
-                model = loader(model_id)
-                if model is not None:
-                    return model
-            except Exception:
-                continue
-    for attr in ("coreference_resolution", "coref", "coreference"):
-        fn = getattr(module, attr, None)
-        if callable(fn):
-            return fn
+    # HanLP coreference is intentionally disabled in CoPaw because this
+    # capability is not available as an open-source runtime path.
     return None
 
 
@@ -232,13 +216,7 @@ def run_task_entrypoint(module, text, task_name):
     parse_fn = getattr(module, "parse", None)
     
     if is_coref_task_name(task_name):
-        model = locate_coref_resolver(module)
-        if model is None:
-            raise RuntimeError("HanLP coreference_resolution model could not be loaded.")
-        try:
-            return model(text)
-        except Exception as exc:
-            raise RuntimeError(f"HanLP coreference_resolution failed: {exc}") from exc
+        raise RuntimeError("HanLP coreference_resolution is not open-source in this runtime.")
     elif normalized in {"dep", "dependency"}:
         model = locate_parser(module)
         if model is None and callable(parse_fn):
@@ -294,6 +272,13 @@ def run_task_entrypoint(module, text, task_name):
         try:
             return model(text)
         except Exception as exc:
+            if callable(parse_fn):
+                try:
+                    return parse_fn(text, tasks=task_name)
+                except TypeError:
+                    return parse_fn(text)
+                except Exception:
+                    pass
             raise RuntimeError(f"HanLP NER ({ner_type}) failed: {exc}") from exc
     else:
         # Fallback to parser for unknown tasks
@@ -311,10 +296,9 @@ def validate_task(module, task_name, text="HanLP 任务校验"):
         document = run_task_entrypoint(module, text, task_name)
     except Exception as exc:
         message = str(exc)
-        if is_coref_task_name(task_name) and "coreference_resolution entry point" in message:
-            return None, "HANLP2_COREF_ENTRYPOINT_MISSING", (
-                "HanLP.coreference_resolution is unavailable in current sidecar runtime. "
-                "COR cannot degrade automatically unless an equivalent method is configured."
+        if is_coref_task_name(task_name):
+            return None, "HANLP2_COREF_NOT_OPEN_SOURCE", (
+                "HanLP coreference_resolution is not open-source and is disabled in CoPaw runtime."
             )
         return None, "HANLP2_TASK_LOAD_FAILED", (
             f"HanLP task validation failed: {exc.__class__.__name__}: {message[:200]}"
@@ -355,21 +339,7 @@ def has_model_loader(module, model_id):
 
 
 def has_coref_api(module):
-    # In HanLP 2.x, coreference_resolution is loaded via pipeline, not a top-level function
-    # Check if we can load a coref model
-    try:
-        loader = getattr(module, "load", None)
-        if callable(loader):
-            # Try to load a known coref model from available models
-            for model_id in ["CTB9_CON_ELECTRA_SMALL", "CTB9_CON_FULL_TAG_ELECTRA_SMALL"]:
-                try:
-                    test_model = loader(model_id)
-                    if test_model is not None:
-                        return True
-                except Exception:
-                    continue
-    except Exception:
-        pass
+    # CoPaw does not expose HanLP coreference at runtime.
     return False
 
 
@@ -452,10 +422,8 @@ def has_con_api(module):
 def inspect_task_api(module, task_name):
     normalized = normalize_task_key(task_name)
     if is_coref_task_name(task_name):
-        if has_coref_api(module):
-            return True, "HANLP2_TASK_API_READY", "HanLP coreference_resolution model is available."
-        return False, "HANLP2_COREF_ENTRYPOINT_MISSING", (
-            "HanLP coreference_resolution model is unavailable in current local runtime."
+        return False, "HANLP2_COREF_NOT_OPEN_SOURCE", (
+            "HanLP coreference_resolution is not open-source and is disabled in CoPaw runtime."
         )
     elif normalized in {"dep", "dependency"}:
         if has_parse_api(module):
@@ -504,7 +472,7 @@ def main():
             "engine": "hanlp2",
             "status": "unavailable",
             "reason_code": "HANLP2_SIDECAR_PYTHON_INCOMPATIBLE",
-            "reason": f"HanLP2 sidecar requires Python 3.6-3.9, got {version_text()}.",
+            "reason": f"HanLP2 sidecar requires Python 3.6-3.10, got {version_text()}.",
             "python_version": version_text(),
             "tokens": [],
         })
@@ -723,11 +691,10 @@ def main():
         except Exception as exc:
             reason_code = "HANLP2_TASK_RUN_FAILED"
             reason = f"HanLP task execution failed: {exc.__class__.__name__}: {str(exc)[:200]}"
-            if is_coref_task_name(task_name) and "coreference_resolution entry point" in str(exc):
-                reason_code = "HANLP2_COREF_ENTRYPOINT_MISSING"
+            if is_coref_task_name(task_name):
+                reason_code = "HANLP2_COREF_NOT_OPEN_SOURCE"
                 reason = (
-                    "HanLP.coreference_resolution is unavailable in current sidecar runtime. "
-                    "COR cannot degrade automatically unless an equivalent method is configured."
+                    "HanLP coreference_resolution is not open-source and is disabled in CoPaw runtime."
                 )
             emit({
                 "engine": "hanlp2",
@@ -1063,16 +1030,11 @@ class HanLPSidecarRuntime:
     ) -> dict[str, str]:
         normalized_task = str(task_key or "").strip().replace("/", "_").replace("-", "_")
         if normalized_task in {"cor", "coref", "coreference", "coreference_resolution"}:
-            api = self.api_status(config)
-            if not bool(api.get("has_coreference_resolution")):
-                return self._state(
-                    status="unavailable",
-                    reason_code="HANLP2_COREF_ENTRYPOINT_MISSING",
-                    reason=(
-                        "HanLP.coreference_resolution is unavailable in current sidecar runtime. "
-                        "COR cannot degrade automatically unless an equivalent method is configured."
-                    ),
-                )
+            return self._state(
+                status="unavailable",
+                reason_code="HANLP2_COREF_NOT_OPEN_SOURCE",
+                reason="HanLP coreference_resolution is not open-source and is disabled in CoPaw runtime.",
+            )
 
         payload = self._config_payload(config)
         probe_state = self.probe(config)
@@ -1149,6 +1111,14 @@ class HanLPSidecarRuntime:
         text: str,
         config: KnowledgeConfig | None,
     ) -> tuple[Any, dict[str, str]]:
+        normalized_task = str(task_key or "").strip().replace("/", "_").replace("-", "_")
+        if normalized_task in {"cor", "coref", "coreference", "coreference_resolution"}:
+            return None, self._state(
+                status="unavailable",
+                reason_code="HANLP2_COREF_NOT_OPEN_SOURCE",
+                reason="HanLP coreference_resolution is not open-source and is disabled in CoPaw runtime.",
+            )
+
         payload = self._config_payload(config)
         probe_state = self.probe(config)
         if probe_state.get("status") != "ready":

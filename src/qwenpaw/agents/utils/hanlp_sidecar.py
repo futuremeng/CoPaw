@@ -19,7 +19,7 @@ _STATUS_CACHE: dict | None = None
 _STATUS_CACHE_TIME = 0.0
 _STATUS_CACHE_TTL_SEC = 10.0
 _STATUS_CACHE_LOCK = threading.Lock()
-_SUPPORTED_HANLP_PYTHON_VERSIONS = ("3.9", "3.8", "3.7", "3.6")
+_SUPPORTED_HANLP_PYTHON_VERSIONS = ("3.10", "3.9", "3.8", "3.7", "3.6")
 
 
 def _managed_root() -> Path:
@@ -113,7 +113,21 @@ def _python_version_supported(python_executable: str) -> bool:
     version = _parse_python_version(result["output"])
     if version is None:
         return False
-    return (3, 6) <= version <= (3, 9)
+    return (3, 6) <= version <= (3, 10)
+
+
+def _python_version(python_executable: str) -> tuple[int, int] | None:
+    result = _run_command(
+        [python_executable, "-c", "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')"],
+    )
+    if not result["ok"]:
+        return None
+    return _parse_python_version(result["output"])
+
+
+def _is_python_310(python_executable: str) -> bool:
+    version = _python_version(python_executable)
+    return version == (3, 10)
 
 
 def _python_candidate_executables() -> list[str]:
@@ -252,6 +266,7 @@ def _install_hanlp_package(
     uv_executable: str,
     python_path: Path,
     operations: list[dict],
+    preserve_qwenpaw_runtime: bool = False,
 ) -> bool:
     install_attempts: list[tuple[str | None, list[str]]] = []
     if uv_executable:
@@ -276,6 +291,36 @@ def _install_hanlp_package(
             command=command,
         )
         if operation["ok"]:
+            if preserve_qwenpaw_runtime:
+                repair_operation = _record_operation(
+                    operations,
+                    name="repair-qwenpaw-runtime",
+                    installer="uv" if uv_executable else "pip",
+                    command=(
+                        [
+                            uv_executable,
+                            "pip",
+                            "install",
+                            "--python",
+                            str(python_path),
+                            "--no-deps",
+                            "typing-extensions>=4.15.0",
+                            "protobuf>=6.33.6",
+                        ]
+                        if uv_executable
+                        else [
+                            str(python_path),
+                            "-m",
+                            "pip",
+                            "install",
+                            "--no-deps",
+                            "typing-extensions>=4.15.0",
+                            "protobuf>=6.33.6",
+                        ]
+                    ),
+                )
+                if not repair_operation["ok"]:
+                    return False
             return True
     return False
 
@@ -403,11 +448,17 @@ def get_hanlp_sidecar_status(*, force_refresh: bool = False) -> dict:
     return dict(status)
 
 
-def _persist_managed_sidecar_config(config, python_executable: Path, hanlp_home: Path) -> None:
+def _persist_hanlp_runtime_config(
+    config,
+    *,
+    python_executable: Path,
+    model_home: Path | None = None,
+) -> None:
     config.knowledge.nlp.provider = "hanlp"
     config.knowledge.nlp.enabled = True
     config.knowledge.nlp.python_executable = str(python_executable)
-    config.knowledge.nlp.model_home = str(hanlp_home)
+    if model_home is not None:
+        config.knowledge.nlp.model_home = str(model_home)
     save_config(config)
 
 
@@ -427,6 +478,51 @@ def auto_install_hanlp_sidecar() -> dict:
             "manual_steps": manual_steps,
         }
 
+    # Strategy:
+    # 1) If main runtime is Python 3.10, install hanlp[full] directly in main env.
+    # 2) Otherwise, provision sidecar as fallback isolation path.
+    main_python = Path(sys.executable).expanduser().resolve()
+    if _is_python_310(str(main_python)):
+        uv_executable = _ensure_uv_available(operations)
+        if not _install_hanlp_package(
+            uv_executable=uv_executable,
+            python_path=main_python,
+            operations=operations,
+            preserve_qwenpaw_runtime=True,
+        ):
+            manual_steps.append(
+                "Main Python is 3.10, but hanlp[full] installation failed in the current environment.",
+            )
+            manual_steps.append(
+                "Retry with: python -m pip install 'hanlp[full]' and verify network access.",
+            )
+            return _failure_result(
+                config=config,
+                status_before=status_before,
+                operations=operations,
+                manual_steps=manual_steps,
+            )
+
+        _persist_hanlp_runtime_config(
+            config,
+            python_executable=main_python,
+            model_home=Path(str(config.knowledge.nlp.model_home or "").strip()) if str(config.knowledge.nlp.model_home or "").strip() else None,
+        )
+        _invalidate_cache()
+        status_after = get_hanlp_sidecar_status(force_refresh=True)
+        if status_after["sidecar"]["status"] != "ready":
+            manual_steps.append(
+                "HanLP was installed in main Python 3.10, but runtime probe still failed. Verify import hanlp/torch in current environment.",
+            )
+        return {
+            "success": status_after["sidecar"]["status"] == "ready",
+            "already_available": False,
+            "status_before": status_before,
+            "status_after": status_after,
+            "operations": operations,
+            "manual_steps": manual_steps,
+        }
+
     root = _managed_root()
     root.mkdir(parents=True, exist_ok=True)
     home = _managed_home()
@@ -438,10 +534,10 @@ def auto_install_hanlp_sidecar() -> dict:
     fallback_python = _find_supported_python_executable()
     if not uv_executable and not fallback_python:
         manual_steps.append(
-            "Automatic HanLP bootstrap could not find or install uv, and no compatible Python 3.6-3.9 interpreter was found.",
+            "Automatic HanLP bootstrap could not find or install uv, and no compatible Python 3.6-3.10 interpreter was found.",
         )
         manual_steps.append(
-            "Install uv or provide a Python 3.9 executable, then retry HanLP sidecar setup.",
+            "Install uv or provide a Python 3.10 executable, then retry HanLP sidecar setup.",
         )
         return _failure_result(
             config=config,
@@ -458,7 +554,7 @@ def auto_install_hanlp_sidecar() -> dict:
     )
     if not created_by or not python_path.is_file():
         manual_steps.append(
-            "HanLP sidecar environment creation failed. Ensure network access is available for uv, or install Python 3.9 locally and retry.",
+            "HanLP sidecar environment creation failed. Ensure network access is available for uv, or install Python 3.10 locally and retry.",
         )
         return _failure_result(
             config=config,
@@ -482,7 +578,7 @@ def auto_install_hanlp_sidecar() -> dict:
             manual_steps=manual_steps,
         )
 
-    _persist_managed_sidecar_config(config, python_path, home)
+    _persist_hanlp_runtime_config(config, python_executable=python_path, model_home=home)
     _invalidate_cache()
     status_after = get_hanlp_sidecar_status(force_refresh=True)
     if status_after["sidecar"]["status"] != "ready":

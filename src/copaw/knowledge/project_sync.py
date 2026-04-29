@@ -6,7 +6,9 @@ import json
 import logging
 import re
 import threading
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+UTC = timezone.utc
 from pathlib import Path
 from typing import Any, Callable
 
@@ -244,7 +246,7 @@ class ProjectKnowledgeSyncManager:
         if reason_code == "HANLP2_SIDECAR_PYTHON_MISSING":
             return "Semantic engine unavailable: HanLP sidecar Python executable was not found."
         if reason_code == "HANLP2_SIDECAR_PYTHON_INCOMPATIBLE":
-            return "Semantic engine unavailable: HanLP sidecar must use Python 3.6-3.9."
+            return "Semantic engine unavailable: HanLP sidecar must use Python 3.6-3.10."
         if reason_code == "HANLP2_SIDECAR_EXEC_FAILED":
             return "Semantic engine unavailable: HanLP sidecar health check failed."
         if reason_code == "HANLP2_IMPORT_UNAVAILABLE":
@@ -667,7 +669,10 @@ class ProjectKnowledgeSyncManager:
             source_status = {}
         if latest_source_id and not source_status:
             try:
-                source_status = self._knowledge_manager.get_source_status(latest_source_id)
+                source_status = self._knowledge_manager.get_source_status(
+                    latest_source_id,
+                    lightweight=True,
+                )
             except Exception:
                 source_status = {}
 
@@ -1210,7 +1215,7 @@ class ProjectKnowledgeSyncManager:
         running_config: Any | None = None,
     ) -> bool:
         with self._lock:
-            state = self._load_state(project_id)
+            state = self._load_state(project_id, hydrate=False)
             current_fingerprint = self._knowledge_manager.compute_processing_fingerprint(
                 config,
                 running_config,
@@ -1237,15 +1242,18 @@ class ProjectKnowledgeSyncManager:
                 break
         return merged
 
-    def _load_state(self, project_id: str) -> dict[str, Any]:
+    def _load_state(self, project_id: str, *, hydrate: bool = True) -> dict[str, Any]:
         if not self.state_path.exists():
-            return self._hydrate_processing_view(self._default_state(project_id))
+            state = self._default_state(project_id)
+            return self._hydrate_processing_view(state) if hydrate else state
         try:
             payload = json.loads(self.state_path.read_text(encoding="utf-8"))
         except Exception:
-            return self._hydrate_processing_view(self._default_state(project_id))
+            state = self._default_state(project_id)
+            return self._hydrate_processing_view(state) if hydrate else state
         if not isinstance(payload, dict):
-            return self._hydrate_processing_view(self._default_state(project_id))
+            state = self._default_state(project_id)
+            return self._hydrate_processing_view(state) if hydrate else state
         state = self._default_state(project_id)
         state.update(payload)
         state["project_id"] = project_id
@@ -1261,7 +1269,7 @@ class ProjectKnowledgeSyncManager:
             state.get("cooldown_seconds"),
         )
         state["changed_count"] = len(state["changed_paths"])
-        return self._hydrate_processing_view(state)
+        return self._hydrate_processing_view(state) if hydrate else state
 
     def _save_state(self, state: dict[str, Any]) -> None:
         self.knowledge_root.mkdir(parents=True, exist_ok=True)

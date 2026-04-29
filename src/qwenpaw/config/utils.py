@@ -9,7 +9,7 @@ import shutil
 import socket
 import subprocess
 import sys
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Tuple
 import threading
@@ -40,6 +40,8 @@ from .config import (
 )
 
 logger = logging.getLogger(__name__)
+
+UTC = timezone.utc
 
 # Config cache with mtime tracking for reducing disk IO
 _config_cache: Optional[Config] = None

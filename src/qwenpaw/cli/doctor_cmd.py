@@ -235,14 +235,20 @@ def _check_hanlp_sidecar(cfg) -> tuple[bool, str, list[str]]:
 
     hanlp_cfg = cfg.knowledge.hanlp
     if not hanlp_cfg.enabled:
-        notes.append(
-            "Enable HanLP sidecar with COPAW_HANLP_SIDECAR_ENABLED=1 and "
-            "set COPAW_HANLP_SIDECAR_PYTHON to a Python 3.6-3.9 interpreter.",
-        )
+        if sys.version_info[:2] == (3, 10):
+            notes.append(
+                "Main runtime is Python 3.10. Install directly with: "
+                "python -m pip install 'hanlp[full]', then set knowledge.nlp.enabled=true.",
+            )
+        else:
+            notes.append(
+                "Enable HanLP sidecar with COPAW_HANLP_SIDECAR_ENABLED=1 and "
+                "set COPAW_HANLP_SIDECAR_PYTHON to a Python 3.6-3.10 interpreter.",
+            )
     elif not str(hanlp_cfg.python_executable or "").strip():
         notes.append(
             "Set COPAW_HANLP_SIDECAR_PYTHON or knowledge.nlp.python_executable "
-            "to the dedicated Python 3.6-3.9 sidecar interpreter.",
+            "to the dedicated Python 3.6-3.10 sidecar interpreter.",
         )
     else:
         notes.append(
@@ -272,7 +278,7 @@ def _check_hanlp_sidecar(cfg) -> tuple[bool, str, list[str]]:
         )
     elif reason_code == "HANLP2_SIDECAR_PYTHON_INCOMPATIBLE":
         notes.append(
-            "HanLP 2.x local runtime should use Python 3.6-3.9 according to the upstream install guide.",
+            "HanLP 2.x local runtime should use Python 3.6-3.10 according to the upstream install guide.",
         )
     return False, reason, notes
 

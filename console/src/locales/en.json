@@ -169,6 +169,11 @@
     "title": "NLP",
     "infoTitle": "HanLP semantic engine",
     "infoDescription": "Manage the dedicated HanLP sidecar used by project knowledge semantic processing. Install the sidecar first, then download and verify the default tokenizer model.",
+    "providerMessage": "Provider: {{provider}}",
+    "providerActive": "HanLP provider is active.",
+    "providerInactive": "Current provider is not HanLP; HanLP install/model actions are disabled.",
+    "fullInstallTitle": "HanLP full package is required",
+    "fullInstallDescription": "Install with pip install 'hanlp[full]' in a dedicated Python environment, then refresh status.",
     "loadFailed": "Failed to load NLP settings",
     "installSuccess": "HanLP sidecar installed",
     "installPartial": "HanLP sidecar setup finished with manual follow-up steps",
@@ -177,7 +182,7 @@
     "downloadPartial": "HanLP model step finished with manual follow-up steps",
     "downloadFailed": "Failed to download HanLP model",
     "sidecarTitle": "HanLP Sidecar",
-    "sidecarDescription": "A managed Python 3.9 environment dedicated to HanLP semantic processing.",
+    "sidecarDescription": "A managed Python (3.10 preferred) environment dedicated to HanLP semantic processing.",
     "sidecarStatus": "Sidecar status",
     "pythonPath": "Python:",
     "hanlpHome": "HANLP_HOME:",
@@ -189,6 +194,39 @@
     "modelDescription": "The default Chinese tokenizer model used to unlock semantic processing.",
     "modelStatus": "Model status",
     "modelId": "Model:",
+    "methodsTitle": "Supported Methods",
+    "methodsDescription": "Availability below reflects the current runtime status at /agent/nlp-status.",
+    "taskKey": "Task key:",
+    "methods": {
+      "defaultUnavailableReason": "Method is unavailable in current runtime.",
+      "tokenize": {
+        "name": "tokenize",
+        "description": "Base tokenizer entry used by semantic preprocessing.",
+        "readyReason": "Tokenizer model is ready.",
+        "unavailableReason": "Tokenizer requires sidecar and model readiness."
+      },
+      "nerMsra": {
+        "name": "ner/msra",
+        "description": "Named entity recognition task for MSRA labels."
+      },
+      "dep": {
+        "name": "dep",
+        "description": "Dependency parsing task."
+      },
+      "sdp": {
+        "name": "sdp",
+        "description": "Semantic dependency parsing task."
+      },
+      "con": {
+        "name": "con",
+        "description": "Constituency parsing task."
+      },
+      "cor": {
+        "name": "coreference_resolution (cor)",
+        "description": "Coreference task configured in task matrix.",
+        "unavailableReason": "HanLP coreference_resolution is not open-source and is disabled in CoPaw runtime."
+      }
+    },
     "notConfigured": "Not configured",
     "manualStepsTitle": "Manual follow-up",
     "operationsTitle": "Recent operations",

@@ -11,7 +11,9 @@ import logging
 import re
 import shutil
 from collections import Counter
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+UTC = timezone.utc
 from html import escape, unescape
 from pathlib import Path
 from typing import Any, Callable
@@ -280,12 +282,25 @@ class KnowledgeManager:
         source: KnowledgeSourceSpec | None = None,
         config: KnowledgeConfig | None = None,
         running_config: Any | None = None,
+        *,
+        lightweight: bool = False,
     ) -> dict[str, Any]:
         """Return persisted index metadata for a source."""
         source_stats = self._load_source_stats(source_id)
         source_index_path = self._source_index_path(source_id)
         if not source_index_path.exists():
-            manifest_stats = self._derive_source_status_from_manifests(source_id)
+            manifest_stats = (
+                {
+                    "indexed": False,
+                    "document_count": 0,
+                    "chunk_count": 0,
+                    "sentence_count": 0,
+                    "char_count": 0,
+                    "token_count": 0,
+                }
+                if lightweight
+                else self._derive_source_status_from_manifests(source_id)
+            )
             raw_document_count = int(source_stats.get("raw_document_count", 0) or 0)
             fallback_document_count = max(
                 raw_document_count,
@@ -319,26 +334,21 @@ class KnowledgeManager:
             needs_reindex = current_fingerprint != stored_fingerprint
         stats_needs_reindex = bool(source_stats.get("needs_reindex", False))
         raw_document_count = int(source_stats.get("raw_document_count", 0) or 0)
+        sentence_count = int(source_stats.get("sentence_count", 0) or 0)
+        char_count = int(source_stats.get("char_count", 0) or 0)
+        token_count = int(source_stats.get("token_count", 0) or 0)
+        if not lightweight:
+            sentence_count = payload.get("sentence_count", sentence_count or self._sum_chunk_sentence_count(chunks))
+            char_count = payload.get("char_count", char_count or self._sum_chunk_char_count(chunks))
+            token_count = payload.get("token_count", token_count or self._sum_chunk_token_count(chunks))
         status = {
             "indexed": True,
             "indexed_at": payload.get("indexed_at") or source_stats.get("indexed_at"),
             "document_count": int(payload.get("document_count", raw_document_count) or 0),
             "chunk_count": int(payload.get("chunk_count", len(chunks)) or 0),
-            "sentence_count": payload.get(
-                "sentence_count",
-                int(source_stats.get("sentence_count", 0) or 0)
-                or self._sum_chunk_sentence_count(chunks),
-            ),
-            "char_count": payload.get(
-                "char_count",
-                int(source_stats.get("char_count", 0) or 0)
-                or self._sum_chunk_char_count(chunks),
-            ),
-            "token_count": payload.get(
-                "token_count",
-                int(source_stats.get("token_count", 0) or 0)
-                or self._sum_chunk_token_count(chunks),
-            ),
+            "sentence_count": sentence_count,
+            "char_count": char_count,
+            "token_count": token_count,
             "needs_reindex": bool(needs_reindex or stats_needs_reindex),
             "error": payload.get("error"),
             "raw_document_count": raw_document_count,
@@ -2777,16 +2787,11 @@ class KnowledgeManager:
             chunk_text = self._read_chunk_text(chunk)
             raw_result: Any = {}
             if ready and config is not None:
-                raw_result, state = self._semantic_runtime.run_task("cor", chunk_text, config)
-                self._remember_semantic_engine_state(state)
-                if state.get("status") == "ready":
-                    chunk["cor_status"] = "ready"
-                    chunk["cor_reason_code"] = "NLP_ENGINE_TASK_READY"
-                    chunk["cor_reason"] = "NLP coreference task is ready."
-                else:
-                    chunk["cor_reason_code"] = str(state.get("reason_code") or "NLP_ENGINE_TASK_FAILED")
-                    chunk["cor_reason"] = str(state.get("reason") or "NLP coreference task failed.")
-                    raw_result = {}
+                # HanLP coreference is intentionally disabled in CoPaw runtime.
+                chunk["cor_reason_code"] = "HANLP2_COREF_NOT_OPEN_SOURCE"
+                chunk["cor_reason"] = (
+                    "HanLP coreference_resolution is not open-source and is disabled in CoPaw runtime."
+                )
 
             cor_relative_path = self._build_cor_relative_path(str(chunk.get("chunk_path") or ""))
             cor_structured_relative_path = self._build_cor_structured_relative_path(

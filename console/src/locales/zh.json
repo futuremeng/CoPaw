@@ -1945,6 +1945,11 @@
     "title": "NLP",
     "infoTitle": "HanLP 语义引擎",
     "infoDescription": "管理项目知识语义处理使用的 HanLP 专用 sidecar。先安装 sidecar，再下载并验证默认分词模型。",
+    "providerMessage": "提供方：{{provider}}",
+    "providerActive": "当前正在使用 HanLP 提供方。",
+    "providerInactive": "当前提供方不是 HanLP；HanLP 安装/模型操作已禁用。",
+    "fullInstallTitle": "需要安装 HanLP 完整依赖",
+    "fullInstallDescription": "请在独立 Python 环境执行 pip install 'hanlp[full]'，然后刷新状态。",
     "loadFailed": "加载 NLP 设置失败",
     "installSuccess": "HanLP sidecar 安装完成",
     "installPartial": "HanLP sidecar 安装完成，但仍有手动后续步骤",
@@ -1953,7 +1958,7 @@
     "downloadPartial": "HanLP 模型步骤已完成，但仍有手动后续步骤",
     "downloadFailed": "下载 HanLP 模型失败",
     "sidecarTitle": "HanLP Sidecar",
-    "sidecarDescription": "一个专用于 HanLP 语义处理的受管 Python 3.9 环境。",
+    "sidecarDescription": "一个专用于 HanLP 语义处理的受管 Python 环境（推荐 3.10）。",
     "sidecarStatus": "Sidecar 状态",
     "pythonPath": "Python：",
     "hanlpHome": "HANLP_HOME：",
@@ -1965,6 +1970,39 @@
     "modelDescription": "用于启用语义处理的默认中文分词模型。",
     "modelStatus": "模型状态",
     "modelId": "模型：",
+    "methodsTitle": "支持的方法",
+    "methodsDescription": "以下可用性来自当前 /agent/nlp-status 运行态信息。",
+    "taskKey": "任务键：",
+    "methods": {
+      "defaultUnavailableReason": "当前运行时不可用。",
+      "tokenize": {
+        "name": "tokenize",
+        "description": "语义预处理使用的基础分词入口。",
+        "readyReason": "分词模型已就绪。",
+        "unavailableReason": "分词依赖 sidecar 与模型就绪。"
+      },
+      "nerMsra": {
+        "name": "ner/msra",
+        "description": "MSRA 标签体系的命名实体识别任务。"
+      },
+      "dep": {
+        "name": "dep",
+        "description": "依存句法分析任务。"
+      },
+      "sdp": {
+        "name": "sdp",
+        "description": "语义依存分析任务。"
+      },
+      "con": {
+        "name": "con",
+        "description": "成分句法分析任务。"
+      },
+      "cor": {
+        "name": "coreference_resolution (cor)",
+        "description": "任务矩阵中配置的指代消解任务。",
+        "unavailableReason": "HanLP coreference_resolution 尚未开源，已在 CoPaw 运行时禁用。"
+      }
+    },
     "notConfigured": "未配置",
     "manualStepsTitle": "手动后续步骤",
     "operationsTitle": "最近一次操作",

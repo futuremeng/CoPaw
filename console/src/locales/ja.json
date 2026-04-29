@@ -1897,6 +1897,11 @@
     "title": "NLP",
     "infoTitle": "HanLP セマンティックエンジン",
     "infoDescription": "プロジェクト知識のセマンティック処理で使う専用 HanLP sidecar を管理します。まず sidecar をインストールし、その後デフォルトのトークナイザモデルをダウンロードして検証します。",
+    "providerMessage": "プロバイダ: {{provider}}",
+    "providerActive": "HanLP プロバイダが有効です。",
+    "providerInactive": "現在のプロバイダは HanLP ではないため、HanLP のインストール/モデル操作は無効です。",
+    "fullInstallTitle": "HanLP full パッケージが必要です",
+    "fullInstallDescription": "専用の Python 環境で pip install 'hanlp[full]' を実行してから、状態を再読み込みしてください。",
     "loadFailed": "NLP 設定の読み込みに失敗しました",
     "installSuccess": "HanLP sidecar をインストールしました",
     "installPartial": "HanLP sidecar のセットアップは完了しましたが、追加の手動手順があります",
@@ -1905,7 +1910,7 @@
     "downloadPartial": "HanLP モデル処理は完了しましたが、追加の手動手順があります",
     "downloadFailed": "HanLP モデルのダウンロードに失敗しました",
     "sidecarTitle": "HanLP Sidecar",
-    "sidecarDescription": "HanLP セマンティック処理専用の管理された Python 3.9 環境です。",
+    "sidecarDescription": "HanLP セマンティック処理専用の管理された Python 環境（3.10 推奨）です。",
     "sidecarStatus": "Sidecar 状態",
     "pythonPath": "Python:",
     "hanlpHome": "HANLP_HOME:",
@@ -1917,6 +1922,39 @@
     "modelDescription": "セマンティック処理を有効にするためのデフォルト中国語トークナイザモデルです。",
     "modelStatus": "モデル状態",
     "modelId": "モデル:",
+    "methodsTitle": "対応メソッド",
+    "methodsDescription": "以下の可用性は現在の /agent/nlp-status 実行状態を反映しています。",
+    "taskKey": "タスクキー:",
+    "methods": {
+      "defaultUnavailableReason": "現在のランタイムでは利用できません。",
+      "tokenize": {
+        "name": "tokenize",
+        "description": "セマンティック前処理で使う基本トークナイズ入口です。",
+        "readyReason": "トークナイザモデルは準備完了です。",
+        "unavailableReason": "tokenize は sidecar とモデルの準備完了が必要です。"
+      },
+      "nerMsra": {
+        "name": "ner/msra",
+        "description": "MSRA ラベル向けの固有表現抽出タスクです。"
+      },
+      "dep": {
+        "name": "dep",
+        "description": "係り受け解析タスクです。"
+      },
+      "sdp": {
+        "name": "sdp",
+        "description": "意味依存解析タスクです。"
+      },
+      "con": {
+        "name": "con",
+        "description": "構文木（句構造）解析タスクです。"
+      },
+      "cor": {
+        "name": "coreference_resolution (cor)",
+        "description": "タスクマトリクスに設定された共参照解析タスクです。",
+        "unavailableReason": "HanLP coreference_resolution は未オープンソースのため、CoPaw ランタイムでは無効化されています。"
+      }
+    },
     "notConfigured": "未設定",
     "manualStepsTitle": "手動フォローアップ",
     "operationsTitle": "直近の操作",

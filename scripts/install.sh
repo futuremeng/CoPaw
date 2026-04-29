@@ -27,7 +27,7 @@ die()   { error "$@"; exit 1; }
 QWENPAW_HOME="${QWENPAW_HOME:-$HOME/.qwenpaw}"
 QWENPAW_VENV="$QWENPAW_HOME/venv"
 QWENPAW_BIN="$QWENPAW_HOME/bin"
-PYTHON_VERSION="3.12"
+PYTHON_VERSION="3.10"
 QWENPAW_REPO="https://github.com/agentscope-ai/QwenPaw.git"
 
 # New: Intelligent selection of PyPI source (automatically using Alibaba Cloud mirror for domestic users, and official source for overseas users)
