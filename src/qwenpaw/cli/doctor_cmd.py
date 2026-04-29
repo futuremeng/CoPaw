@@ -467,6 +467,8 @@ def run_doctor_checks(
             "`qwenpaw doctor fix --dry-run --help` and `--only`.",
         )
 
+    cfg = load_config() if config_ok else None
+
     raw_cfg = load_raw_config_dict()
     if raw_cfg is not None:
         unknown = scan_unknown_config_keys(raw_cfg)
@@ -486,8 +488,7 @@ def run_doctor_checks(
                 "yet).",
             )
 
-    if config_ok:
-        cfg = load_config()
+    if cfg is not None:
         legacy = legacy_single_agent_workspace_note(cfg)
         if legacy:
             click.echo("\n=== Multi-agent / workspace ===")
@@ -858,7 +859,7 @@ def run_doctor_checks(
     for line in llm_notes:
         click.echo(click.style("Note:", fg="yellow") + f" {line}")
 
-    if config_ok:
+    if cfg is not None:
         click.echo("\n=== Models (per agent) ===")
         aok, lines, extra_notes = asyncio.run(
             check_enabled_agents_model_connections(
@@ -892,7 +893,7 @@ def run_doctor_checks(
         for ln in extra_notes:
             click.echo(click.style("Note:", fg="yellow") + f" {ln}")
 
-    if config_ok:
+    if cfg is not None:
         mismatch = api_target_mismatch_note(cfg, base)
         if mismatch:
             click.echo("\n=== API target ===")

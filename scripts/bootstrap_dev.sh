@@ -22,17 +22,23 @@ PYTHON_VERSION_FILE="$ROOT_DIR/.python-version"
 EXTRAS="dev"
 RECREATE=0
 PYTHON_VERSION="3.10"
+BOOTSTRAP_MAIN=1
+BOOTSTRAP_SIDECAR=1
+SIDECAR_PYTHON_VERSION="${COPAW_HANLP_SIDECAR_PYTHON_VERSION:-3.10}"
 
 usage() {
     cat <<'EOF'
 Bootstrap CoPaw development environment in the current repository.
 
 Usage:
-  bash scripts/bootstrap_dev.sh [--extras dev] [--recreate]
+    bash scripts/bootstrap_dev.sh [--extras dev] [--recreate] [--with-sidecar|--sidecar-only|--main-only]
 
 Options:
   --extras <LIST>   Editable install extras, comma-separated. Default: dev
   --recreate        Remove any existing .venv and rebuild it from scratch
+    --with-sidecar    Bootstrap and verify HanLP sidecar in addition to main env (default behavior)
+    --sidecar-only    Bootstrap and verify sidecar only (skip main env)
+    --main-only       Bootstrap and verify main env only
   -h, --help        Show this help message
 EOF
 }
@@ -45,6 +51,20 @@ while [[ $# -gt 0 ]]; do
             ;;
         --recreate)
             RECREATE=1
+            shift
+            ;;
+        --with-sidecar)
+            BOOTSTRAP_SIDECAR=1
+            shift
+            ;;
+        --sidecar-only)
+            BOOTSTRAP_MAIN=0
+            BOOTSTRAP_SIDECAR=1
+            shift
+            ;;
+        --main-only)
+            BOOTSTRAP_MAIN=1
+            BOOTSTRAP_SIDECAR=0
             shift
             ;;
         -h|--help)
@@ -106,80 +126,157 @@ venv_python_version() {
     "$VENV_DIR/bin/python" -c 'import sys; print(f"{sys.version_info[0]}.{sys.version_info[1]}")'
 }
 
-repair_qwenpaw_runtime_after_hanlp() {
-    local venv_python="$VENV_DIR/bin/python"
+resolve_sidecar_python() {
+    if [[ -n "${COPAW_NLP_PYTHON_EXECUTABLE:-}" ]]; then
+        printf '%s\n' "$COPAW_NLP_PYTHON_EXECUTABLE"
+        return
+    fi
+    if [[ -n "${COPAW_HANLP_SIDECAR_PYTHON:-}" ]]; then
+        printf '%s\n' "$COPAW_HANLP_SIDECAR_PYTHON"
+        return
+    fi
+    printf '%s\n' "$ROOT_DIR/.venv-hanlp/bin/python"
+}
 
-    info "Restoring QwenPaw runtime compatibility after HanLP install..."
+is_truthy() {
+    local value="${1:-}"
+    value="$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')"
+    [[ "$value" == "1" || "$value" == "true" || "$value" == "yes" || "$value" == "on" ]]
+}
+
+ensure_runtime_compatibility() {
+    local venv_python="$1"
+    local runtime_label="$2"
+
+    if "$venv_python" - <<'PY' > /dev/null 2>&1
+from typing_extensions import Sentinel
+from google.protobuf import runtime_version  # noqa: F401
+print(Sentinel.__name__)
+PY
+    then
+        info "$runtime_label compatibility already satisfied."
+        return
+    fi
+
+    info "Repairing $runtime_label compatibility..."
     uv pip install --python "$venv_python" --no-deps \
         "typing-extensions>=4.15.0" \
         "protobuf>=6.33.6" \
         --index-url "$PYPI_MIRROR"
     "$venv_python" - <<'PY'
 from typing_extensions import Sentinel
-import hanlp  # noqa: F401
-import pydantic  # noqa: F401
 from google.protobuf import runtime_version  # noqa: F401
 print(Sentinel.__name__)
 PY
 }
 
-install_hanlp_runtime() {
-    local venv_python="$VENV_DIR/bin/python"
-    local python_mm
+bootstrap_main_env() {
+    local extras_suffix=""
 
-    python_mm="$(venv_python_version)"
-    if [[ "$python_mm" == "3.10" ]]; then
-        info "Installing HanLP full runtime into development environment..."
-        uv pip install --python "$venv_python" "hanlp[full]" --index-url "$PYPI_MIRROR"
-        repair_qwenpaw_runtime_after_hanlp
-        if [[ -n "${COPAW_HANLP_HOME:-}" ]]; then
-            mkdir -p "$COPAW_HANLP_HOME"
-            info "Using HanLP cache directory: $COPAW_HANLP_HOME"
-        fi
-        return
+    if [[ $RECREATE -eq 1 && -d "$VENV_DIR" ]]; then
+        rm -rf "$VENV_DIR"
     fi
 
-    warn "Skipping direct HanLP install because .venv is Python $python_mm, not 3.10."
-    warn "Use a Python 3.10 dev environment for direct install, or configure a HanLP sidecar instead."
+    if [[ -d "$VENV_DIR" ]]; then
+        info "Existing development environment found, upgrading..."
+    else
+        info "Creating development environment (Python $PYTHON_VERSION)..."
+    fi
+
+    uv venv "$VENV_DIR" --python "$PYTHON_VERSION" --quiet --clear
+
+    if [[ ! -x "$VENV_DIR/bin/python" ]]; then
+        die "Failed to create development virtual environment"
+    fi
+
+    if [[ -n "$EXTRAS" ]]; then
+        extras_suffix="[$EXTRAS]"
+    fi
+
+    info "Using $("$VENV_DIR/bin/python" --version 2>&1)"
+    info "Installing editable package with extras: ${EXTRAS:-none}"
+    uv pip install --python "$VENV_DIR/bin/python" -e "$ROOT_DIR$extras_suffix" --index-url "$PYPI_MIRROR"
+    ensure_runtime_compatibility "$VENV_DIR/bin/python" "Main runtime"
 }
 
-if [[ $RECREATE -eq 1 && -d "$VENV_DIR" ]]; then
-    rm -rf "$VENV_DIR"
-fi
+verify_hanlp_sidecar() {
+    local sidecar_python="$1"
+    "$sidecar_python" - <<'PY'
+import hanlp  # noqa: F401
+print("hanlp sidecar ready")
+PY
+}
+
+bootstrap_hanlp_sidecar() {
+    local sidecar_python
+    local sidecar_dir
+    local sidecar_mm
+
+    sidecar_python="$(resolve_sidecar_python)"
+
+    if [[ "$sidecar_python" == */bin/python ]]; then
+        sidecar_dir="${sidecar_python%/bin/python}"
+        if [[ -z "$sidecar_dir" ]]; then
+            die "Unable to derive sidecar directory from interpreter path: $sidecar_python"
+        fi
+    else
+        die "Sidecar python path must point to a venv interpreter ending with /bin/python: $sidecar_python"
+    fi
+
+    if [[ $RECREATE -eq 1 && -d "$sidecar_dir" ]]; then
+        rm -rf "$sidecar_dir"
+    fi
+
+    if [[ ! -x "$sidecar_python" ]]; then
+        info "Creating HanLP sidecar environment at $sidecar_dir (Python $SIDECAR_PYTHON_VERSION)..."
+        uv venv "$sidecar_dir" --python "$SIDECAR_PYTHON_VERSION" --quiet --clear
+    else
+        info "Using existing HanLP sidecar interpreter: $sidecar_python"
+    fi
+
+    sidecar_mm="$("$sidecar_python" -c 'import sys; print(f"{sys.version_info[0]}.{sys.version_info[1]}")')"
+    if [[ "$sidecar_mm" != "3.10" ]]; then
+        warn "HanLP sidecar is running Python $sidecar_mm (3.10 recommended)."
+    fi
+
+    info "Installing HanLP full runtime into sidecar..."
+    uv pip install --python "$sidecar_python" "hanlp[full]" --index-url "$PYPI_MIRROR"
+    verify_hanlp_sidecar "$sidecar_python"
+    ensure_runtime_compatibility "$sidecar_python" "Sidecar runtime"
+
+    if [[ -n "${COPAW_HANLP_HOME:-}" ]]; then
+        mkdir -p "$COPAW_HANLP_HOME"
+        info "Using HanLP cache directory: $COPAW_HANLP_HOME"
+    fi
+
+    info "HanLP sidecar ready: $sidecar_python"
+    info "Export for runtime: COPAW_HANLP_SIDECAR_ENABLED=1"
+    info "Export for runtime: COPAW_HANLP_SIDECAR_PYTHON=$sidecar_python"
+}
 
 ensure_uv
 
-if [[ -d "$VENV_DIR" ]]; then
-    info "Existing development environment found, upgrading..."
-else
-    info "Creating development environment (Python $PYTHON_VERSION)..."
+if [[ $BOOTSTRAP_MAIN -eq 1 ]]; then
+    bootstrap_main_env
 fi
 
-uv venv "$VENV_DIR" --python "$PYTHON_VERSION" --quiet --clear
-
-if [[ ! -x "$VENV_DIR/bin/python" ]]; then
-    die "Failed to create development virtual environment"
+if [[ $BOOTSTRAP_SIDECAR -eq 1 ]]; then
+    bootstrap_hanlp_sidecar
 fi
-
-EXTRAS_SUFFIX=""
-if [[ -n "$EXTRAS" ]]; then
-    EXTRAS_SUFFIX="[$EXTRAS]"
-fi
-
-info "Using $("$VENV_DIR/bin/python" --version 2>&1)"
-info "Installing editable package with extras: ${EXTRAS:-none}"
-uv pip install --python "$VENV_DIR/bin/python" -e "$ROOT_DIR$EXTRAS_SUFFIX" --index-url "$PYPI_MIRROR"
-install_hanlp_runtime
 
 echo
 printf "${GREEN}${BOLD}Bootstrap complete.${RESET}\n"
-echo "Activate with: source .venv/bin/activate"
-echo
-echo "HanLP status:"
-if [[ "$(venv_python_version)" == "3.10" ]]; then
-    echo "  - hanlp[full] has been installed into this .venv."
-else
-    echo "  - Direct install was skipped because this .venv is not Python 3.10."
+if [[ $BOOTSTRAP_MAIN -eq 1 ]]; then
+    echo "Main env activate with: source .venv/bin/activate"
 fi
-echo "  - Sidecar remains optional for strict dependency isolation."
+echo
+echo "Bootstrap summary:"
+if [[ $BOOTSTRAP_MAIN -eq 1 ]]; then
+    echo "  - Main runtime initialized and compatibility-verified."
+fi
+if [[ $BOOTSTRAP_SIDECAR -eq 1 ]]; then
+    echo "  - HanLP sidecar initialized and verified."
+else
+    echo "  - HanLP sidecar not initialized in this run (use --with-sidecar or --sidecar-only)."
+fi
 echo "  - Optional cache path: export COPAW_HANLP_HOME=~/.hanlp"
