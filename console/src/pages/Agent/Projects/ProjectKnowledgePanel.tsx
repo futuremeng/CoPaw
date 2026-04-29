@@ -1,10 +1,11 @@
-import { Suspense, lazy, memo, useEffect, useMemo, useRef } from "react";
+import { Suspense, lazy, memo, useCallback, useEffect, useMemo, useRef } from "react";
 import {
   Alert,
   Empty,
   Input,
   Select,
   Spin,
+  Tag,
   Typography,
   message,
 } from "antd";
@@ -111,6 +112,118 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
     [quantMetrics.entityCount],
   );
 
+  const sourceOptions = useMemo(() => (
+    knowledgeState.projectSources.map((source) => ({
+      value: source.id,
+      label: String(source.name || source.id || "").trim() || source.id,
+    }))
+  ), [knowledgeState.projectSources]);
+
+  const effectiveSourceId = String(
+    knowledgeState.selectedSourceId || sourceOptions[0]?.value || "",
+  ).trim();
+
+  const selectedSource = useMemo(() => (
+    knowledgeState.projectSources.find((source) => source.id === effectiveSourceId)
+    || null
+  ), [effectiveSourceId, knowledgeState.projectSources]);
+
+  const isSyncRunning = useMemo(() => {
+    const status = String(knowledgeState.syncState?.status || "").trim().toLowerCase();
+    return status === "pending" || status === "running" || status === "indexing" || status === "graphifying";
+  }, [knowledgeState.syncState?.status]);
+
+  const l1Status = useMemo(() => {
+    if (!selectedSource) {
+      return "missing";
+    }
+    if (selectedSource.status?.indexed) {
+      return "ready";
+    }
+    if (isSyncRunning) {
+      return "running";
+    }
+    return "idle";
+  }, [isSyncRunning, selectedSource]);
+
+  const l2Mode = useMemo(() => (
+    knowledgeState.processingCompareModes.find((mode) => mode.mode === "nlp")
+    || knowledgeState.processingModes.find((mode) => mode.mode === "nlp")
+    || null
+  ), [knowledgeState.processingCompareModes, knowledgeState.processingModes]);
+
+  const l3Mode = useMemo(() => (
+    knowledgeState.processingCompareModes.find((mode) => mode.mode === "agentic")
+    || knowledgeState.processingModes.find((mode) => mode.mode === "agentic")
+    || null
+  ), [knowledgeState.processingCompareModes, knowledgeState.processingModes]);
+
+  const formatLayerStatus = useCallback((status: string) => {
+    if (status === "ready") {
+      return {
+        text: t("projects.knowledge.processing.statusReady", "Ready"),
+        color: "success",
+      } as const;
+    }
+    if (status === "running") {
+      return {
+        text: t("projects.knowledge.processing.statusRunning", "Running"),
+        color: "processing",
+      } as const;
+    }
+    if (status === "queued") {
+      return {
+        text: t("projects.knowledge.processing.statusQueued", "Queued"),
+        color: "gold",
+      } as const;
+    }
+    if (status === "blocked") {
+      return {
+        text: t("projects.knowledge.processing.statusBlocked", "Blocked"),
+        color: "orange",
+      } as const;
+    }
+    if (status === "failed") {
+      return {
+        text: t("projects.knowledge.processing.statusFailed", "Failed"),
+        color: "error",
+      } as const;
+    }
+    if (status === "missing") {
+      return {
+        text: t("projects.knowledge.processing.statusMissing", "Missing"),
+        color: "default",
+      } as const;
+    }
+    return {
+      text: t("projects.knowledge.processing.statusIdle", "Idle"),
+      color: "default",
+    } as const;
+  }, [t]);
+
+  const layerStatusItems = useMemo(() => {
+    const l1 = formatLayerStatus(l1Status);
+    const l2 = formatLayerStatus(String(l2Mode?.status || "idle").trim().toLowerCase());
+    const l3 = formatLayerStatus(String(l3Mode?.status || "idle").trim().toLowerCase());
+    return [
+      {
+        key: "l1",
+        label: t("projects.knowledge.layerL1", "L1"),
+        ...l1,
+      },
+      {
+        key: "l2",
+        label: t("projects.knowledge.layerL2", "L2"),
+        ...l2,
+      },
+      {
+        key: "l3",
+        label: t("projects.knowledge.layerL3", "L3"),
+        ...l3,
+      },
+    ];
+  }, [formatLayerStatus, l1Status, l2Mode?.status, l3Mode?.status, t]);
+
   const activeEntityDetail = useMemo(() => {
     const nodeId = knowledgeState.activeGraphNodeId;
     if (!nodeId || !visualizationData) {
@@ -143,6 +256,37 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
 
   const queryControls = (
     <div className={styles.projectKnowledgeQueryTop}>
+      <div className={styles.projectKnowledgeExploreSourcePanel}>
+        <div className={styles.projectKnowledgeSourceRow}>
+          <Typography.Text type="secondary">
+            {t("projects.knowledge.dataSource", "Data Source")}
+          </Typography.Text>
+          <Select
+            size="small"
+            value={effectiveSourceId || undefined}
+            classNames={{ popup: { root: styles.projectKnowledgeSelectDropdown } }}
+            options={sourceOptions}
+            placeholder={t("projects.knowledge.dataSourceSelect", "Select source")}
+            onChange={(value) => {
+              const next = String(value || "").trim();
+              knowledgeState.setSelectedSourceId(next);
+              if (next) {
+                void knowledgeState.loadSourceSemantic(next);
+                void knowledgeState.loadSourceContent(next);
+              }
+            }}
+            style={{ minWidth: 220 }}
+          />
+        </div>
+        <div className={styles.projectKnowledgeLayerStatusRow}>
+          {layerStatusItems.map((item) => (
+            <div key={item.key} className={styles.projectKnowledgeLayerStatusItem}>
+              <Typography.Text type="secondary">{item.label}</Typography.Text>
+              <Tag color={item.color}>{item.text}</Tag>
+            </div>
+          ))}
+        </div>
+      </div>
       {props.knowledgeState.graphNeedsRefresh ? (
         <Alert
           className={styles.projectKnowledgeQueryNotice}

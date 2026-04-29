@@ -362,6 +362,35 @@ function parseTimestampMs(value: string): number | null {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
+export function filterGraphQueryRecordsBySourceId(
+  records: GraphQueryRecord[],
+  sourceId?: string,
+): GraphQueryRecord[] {
+  const target = String(sourceId || "").trim();
+  if (!target) {
+    return records;
+  }
+  return (records || []).filter((record) => String(record.source_id || "").trim() === target);
+}
+
+export function applySourceFilterToGraphQueryResponse(
+  response: GraphQueryResponse,
+  sourceId?: string,
+): GraphQueryResponse {
+  const filtered = filterGraphQueryRecordsBySourceId(response.records || [], sourceId);
+  return {
+    ...response,
+    records: filtered,
+    summary: `Filtered ${filtered.length} of ${(response.records || []).length} graph records by source.`,
+    provenance: {
+      ...(response.provenance || {}),
+      source_filter_id: String(sourceId || "").trim(),
+      source_filter_mode: String(sourceId || "").trim() ? "selected_source" : "all_sources",
+      source_filter_baseline_record_count: (response.records || []).length,
+    },
+  };
+}
+
 function isModeStatusStale(mode: ProjectKnowledgeModeState): boolean {
   if (mode.status !== "running" && mode.status !== "queued") {
     return false;
@@ -1276,9 +1305,11 @@ export function useProjectKnowledgeState(
     filterText: string,
     relationTypeFilters: string[],
     entityTypeFilters: string[],
+    sourceId: string,
   ): GraphQueryResponse => {
     const normalizedFilter = String(filterText || "").trim();
-    const filteredRecords = filterGraphQuerySourceRecords(baseResult.records || [], normalizedFilter, {
+    const sourceScopedRecords = filterGraphQueryRecordsBySourceId(baseResult.records || [], sourceId);
+    const filteredRecords = filterGraphQuerySourceRecords(sourceScopedRecords, normalizedFilter, {
       relationTypes: relationTypeFilters,
       entityTypes: entityTypeFilters,
     });
@@ -1286,14 +1317,15 @@ export function useProjectKnowledgeState(
       ...baseResult,
       records: filteredRecords,
       summary: normalizedFilter
-        ? `Filtered ${filteredRecords.length} of ${(baseResult.records || []).length} graph records.`
-        : `Loaded ${(baseResult.records || []).length} graph records for local explore.`,
+        ? `Filtered ${filteredRecords.length} of ${sourceScopedRecords.length} graph records.`
+        : `Loaded ${sourceScopedRecords.length} graph records for local explore.`,
       provenance: {
         ...baseResult.provenance,
-        baseline_record_count: (baseResult.records || []).length,
+        baseline_record_count: sourceScopedRecords.length,
         filter_text: normalizedFilter,
         relation_type_filters: relationTypeFilters,
         entity_type_filters: entityTypeFilters,
+        source_filter_id: sourceId,
         filter_mode: "local",
       },
     };
@@ -1334,6 +1366,7 @@ export function useProjectKnowledgeState(
             Number(overrideTopK ?? graphQueryTopK) || PROJECT_GRAPH_QUERY_TOP_K,
           ),
           outputMode,
+          datasetScope: selectedSourceId ? [selectedSourceId] : undefined,
           timeoutSec: 20,
           projectScope: [params.projectId],
           includeGlobal: params.includeGlobal,
@@ -1344,6 +1377,7 @@ export function useProjectKnowledgeState(
           query,
           graphRelationTypeFilters,
           graphEntityTypeFilters,
+          selectedSourceId,
         );
         setGraphQueryText(rawQuery);
         setGraphQueryMode(mode);
@@ -1358,15 +1392,20 @@ export function useProjectKnowledgeState(
             Number(overrideTopK ?? graphQueryTopK) || PROJECT_GRAPH_QUERY_TOP_K,
           ),
           outputMode,
+          datasetScope: selectedSourceId ? [selectedSourceId] : undefined,
           timeoutSec: 20,
           projectScope: [params.projectId],
           includeGlobal: params.includeGlobal,
           projectId: params.projectId,
         });
+        const sourceFilteredResponse = applySourceFilterToGraphQueryResponse(
+          response,
+          selectedSourceId,
+        );
         setGraphQueryText(query);
         setGraphQueryMode(mode);
         setGraphBaseResult(response);
-        setGraphResult(response);
+        setGraphResult(sourceFilteredResponse);
       }
       setActiveGraphNodeId(null);
       setGraphNeedsRefresh(false);
@@ -1376,27 +1415,34 @@ export function useProjectKnowledgeState(
     } finally {
       setGraphLoading(false);
     }
-  }, [allGraphQueryTopK, buildLocalFilteredGraphResult, defaultOutputModeForQuery, graphEntityTypeFilters, graphQueryMode, graphQueryText, graphQueryTopK, graphRelationTypeFilters, params.includeGlobal, params.projectId, t]);
+  }, [allGraphQueryTopK, buildLocalFilteredGraphResult, defaultOutputModeForQuery, graphEntityTypeFilters, graphQueryMode, graphQueryText, graphQueryTopK, graphRelationTypeFilters, params.includeGlobal, params.projectId, selectedSourceId, t]);
 
   useEffect(() => {
-    if (!graphBaseResult || graphQueryMode !== "template") {
+    if (!graphBaseResult) {
       return;
     }
-    setGraphResult(
-      buildLocalFilteredGraphResult(
-        graphBaseResult,
-        graphQueryText,
-        graphRelationTypeFilters,
-        graphEntityTypeFilters,
-      ),
-    );
+    if (graphQueryMode === "template") {
+      setGraphResult(
+        buildLocalFilteredGraphResult(
+          graphBaseResult,
+          graphQueryText,
+          graphRelationTypeFilters,
+          graphEntityTypeFilters,
+          selectedSourceId,
+        ),
+      );
+      return;
+    }
+    setGraphResult(applySourceFilterToGraphQueryResponse(graphBaseResult, selectedSourceId));
   }, [
+    applySourceFilterToGraphQueryResponse,
     buildLocalFilteredGraphResult,
     graphBaseResult,
     graphEntityTypeFilters,
     graphQueryMode,
     graphQueryText,
     graphRelationTypeFilters,
+    selectedSourceId,
   ]);
 
   const startProcessingMode = useCallback(async (

@@ -8,6 +8,7 @@ import {
   formatGraphRelationTypeLabel,
 } from "./projectKnowledgeFilterLabels";
 import { buildModeState } from "./projectKnowledgeTestUtils";
+import type { KnowledgeSourceItem } from "../../../api/types";
 import type { ProjectKnowledgeState } from "./useProjectKnowledgeState";
 
 const mockRecordsToVisualizationData = vi.fn((_: unknown, __?: unknown) => ({ nodes: [], edges: [] }));
@@ -272,6 +273,72 @@ const testGraphComponents = {
 
 describe("ProjectKnowledgePanel interactions", () => {
   const projectId = "project-abc";
+
+  it("supports source switching and shows L1/L2/L3 statuses in Explore", async () => {
+    const user = userEvent.setup();
+    const knowledgeState = buildKnowledgeState(projectId);
+    const sourceA: KnowledgeSourceItem = {
+      id: "project-project-abc-workspace",
+      name: "Workspace Source",
+      type: "directory",
+      location: "/tmp/workspace-a",
+      content: "",
+      enabled: true,
+      recursive: true,
+      tags: ["project"],
+      summary: "",
+      project_id: projectId,
+      status: {
+        indexed: true,
+        indexed_at: "2026-04-29T08:00:00+00:00",
+        document_count: 10,
+        chunk_count: 40,
+      },
+    };
+    const sourceB: KnowledgeSourceItem = {
+      id: "project-project-abc-docs",
+      name: "Docs Source",
+      type: "directory",
+      location: "/tmp/workspace-b",
+      content: "",
+      enabled: true,
+      recursive: true,
+      tags: ["project"],
+      summary: "",
+      project_id: projectId,
+      status: {
+        indexed: false,
+        indexed_at: "",
+        document_count: 0,
+        chunk_count: 0,
+      },
+    };
+    knowledgeState.projectSources = [sourceA, sourceB];
+    knowledgeState.selectedSourceId = sourceA.id;
+    knowledgeState.processingCompareModes = [
+      buildModeState({ mode: "nlp", status: "running" }),
+      buildModeState({ mode: "agentic", status: "ready" }),
+    ];
+
+    render(
+      <ProjectKnowledgePanel
+        projectId={projectId}
+        projectName="Project ABC"
+        knowledgeState={knowledgeState}
+        graphComponents={testGraphComponents}
+      />,
+    );
+
+    expect(screen.getByText("Data Source")).not.toBeNull();
+    expect(screen.getByText("L1")).not.toBeNull();
+    expect(screen.getByText("L2")).not.toBeNull();
+    expect(screen.getByText("L3")).not.toBeNull();
+
+    await user.click(screen.getByText("Workspace Source"));
+    await user.click(await screen.findByText("Docs Source"));
+
+    expect(knowledgeState.setSelectedSourceId).toHaveBeenCalledWith("project-project-abc-docs");
+  });
 
   it("formats graph filter labels into readable text", () => {
     const t = (_key: string, fallback: string) => fallback;

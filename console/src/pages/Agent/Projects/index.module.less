@@ -1478,6 +1478,28 @@
   border-bottom: 1px solid #eef2fb;
 }
 
+.projectKnowledgeExploreSourcePanel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #e9eef9;
+  border-radius: 10px;
+  background: #fafcff;
+}
+
+.projectKnowledgeLayerStatusRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.projectKnowledgeLayerStatusItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .projectKnowledgeQueryNotice {
   margin-bottom: 0;
 }
@@ -4697,6 +4719,28 @@
     border-color: rgba(255, 255, 255, 0.1);
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.025) 100%);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  }
+
+  .projectKnowledgeExploreSourcePanel {
+    border-color: rgba(255, 255, 255, 0.12);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.02) 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  }
+
+  .projectKnowledgeLayerStatusItem {
+    :global(.ant-typography.ant-typography-secondary),
+    :global(.qwenpaw-typography.qwenpaw-typography-secondary),
+    :global(.copaw-typography.copaw-typography-secondary) {
+      color: rgba(255, 255, 255, 0.68) !important;
+    }
+
+    :global(.ant-tag),
+    :global(.qwenpaw-tag),
+    :global(.copaw-tag) {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: rgba(255, 255, 255, 0.16);
+      color: rgba(255, 248, 240, 0.88);
+    }
   }
 
   .projectKnowledgeLayerDivider {

@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { KnowledgeTaskProgress } from "../../../api/types";
 import type { KnowledgeSourceItem, ProjectKnowledgeSyncState } from "../../../api/types";
 import {
+  applySourceFilterToGraphQueryResponse,
   deriveSourceQuantBaseMetrics,
+  filterGraphQueryRecordsBySourceId,
   getActiveKnowledgeTasks,
   pickActiveKnowledgeTask,
 } from "./useProjectKnowledgeState";
@@ -157,5 +159,67 @@ describe("deriveSourceQuantBaseMetrics", () => {
     expect(metrics.documentCount).toBe(5);
     expect(metrics.chunkCount).toBe(9);
     expect(metrics.sentenceCount).toBe(12);
+  });
+});
+
+describe("graph source filtering helpers", () => {
+  it("filters graph records by selected source id", () => {
+    const records = [
+      {
+        source_id: "source-a",
+        source_type: "directory",
+        subject: "A",
+        subject_type: "entity",
+        predicate: "related_to",
+        object: "B",
+        object_type: "entity",
+        document_path: "a.md",
+        document_title: "a.md",
+        score: 0.9,
+      },
+      {
+        source_id: "source-b",
+        source_type: "directory",
+        subject: "C",
+        subject_type: "entity",
+        predicate: "related_to",
+        object: "D",
+        object_type: "entity",
+        document_path: "b.md",
+        document_title: "b.md",
+        score: 0.8,
+      },
+    ];
+
+    const filtered = filterGraphQueryRecordsBySourceId(records, "source-b");
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0].source_id).toBe("source-b");
+  });
+
+  it("adds source filter provenance when applying response filter", () => {
+    const response = {
+      records: [
+        {
+          source_id: "source-a",
+          source_type: "directory",
+          subject: "A",
+          subject_type: "entity",
+          predicate: "related_to",
+          object: "B",
+          object_type: "entity",
+          document_path: "a.md",
+          document_title: "a.md",
+          score: 0.9,
+        },
+      ],
+      summary: "ok",
+      warnings: [],
+      provenance: {},
+    };
+
+    const filtered = applySourceFilterToGraphQueryResponse(response, "source-a");
+    expect(filtered.records).toHaveLength(1);
+    expect(filtered.provenance.source_filter_mode).toBe("selected_source");
+    expect(filtered.provenance.source_filter_id).toBe("source-a");
   });
 });
