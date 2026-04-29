@@ -60,6 +60,34 @@ def _collect_changed_paths(
     return changed[:limit]
 
 
+def _collect_all_changed_paths(
+    previous_entries: dict[str, str] | None,
+    current_entries: dict[str, str],
+) -> list[str]:
+    if previous_entries is None:
+        return []
+
+    return [
+        path
+        for path in sorted(set(previous_entries) | set(current_entries))
+        if previous_entries.get(path) != current_entries.get(path)
+    ]
+
+
+def _build_changed_dirs(changed_paths: list[str]) -> list[str]:
+    next_dirs: set[str] = set()
+    for raw_path in changed_paths:
+        normalized = str(raw_path or "").strip().replace("\\", "/").strip("/")
+        if not normalized:
+            continue
+        parts = [part for part in normalized.split("/") if part]
+        if len(parts) <= 1:
+            continue
+        for index in range(1, len(parts)):
+            next_dirs.add("/".join(parts[:index]))
+    return sorted(next_dirs)
+
+
 def _build_file_tree_signal(
     project_dir: Path,
 ) -> tuple[dict[str, Any], dict[str, str]]:
@@ -139,7 +167,7 @@ def _build_file_tree_signal(
 def _build_pipeline_signal(
     project_dir: Path,
 ) -> tuple[dict[str, Any], dict[str, str]]:
-    runs_dir = project_dir / "pipelines" / "runs"
+    runs_dir = project_dir / ".pipelines" / "runs"
     entries: dict[str, str] = {}
     run_count = 0
     latest_mtime_ns = 0
@@ -264,27 +292,38 @@ async def stream_project_realtime(
             if previous_state is None:
                 should_emit_snapshot = True
                 reason = "initial_sync"
+                changed_dirs = []
+                changed_paths_truncated = False
+                changed_count = 0
             else:
                 fingerprint_changed = current_fingerprint != previous_state["fingerprint"]
                 explicit_event_changed = explicit_event_id > last_explicit_event_id
                 should_emit_snapshot = fingerprint_changed or explicit_event_changed
                 if should_emit_snapshot:
-                    file_tree_changed = []
-                    pipeline_changed = []
+                    file_tree_changed: list[str] = []
+                    pipeline_changed: list[str] = []
                     if fingerprint_changed:
-                        file_tree_changed = _collect_changed_paths(
+                        file_tree_changed = _collect_all_changed_paths(
                             previous_state.get("file_tree_entries"),
                             current_state["file_tree_entries"],
                         )
-                        pipeline_changed = _collect_changed_paths(
+                        pipeline_changed = _collect_all_changed_paths(
                             previous_state.get("pipeline_entries"),
                             current_state["pipeline_entries"],
                         )
                     if explicit_event_changed and not fingerprint_changed:
                         reason = "explicit_event"
-                    changed_paths = sorted(
+                    all_changed_paths = sorted(
                         set(file_tree_changed + pipeline_changed + explicit_changed_paths)
-                    )[:_MAX_CHANGED_PATHS]
+                    )
+                    changed_paths = all_changed_paths[:_MAX_CHANGED_PATHS]
+                    changed_dirs = _build_changed_dirs(all_changed_paths)
+                    changed_paths_truncated = len(all_changed_paths) > _MAX_CHANGED_PATHS
+                    changed_count = len(all_changed_paths)
+                else:
+                    changed_dirs = []
+                    changed_paths_truncated = False
+                    changed_count = 0
 
             if should_emit_snapshot:
                 event_id += 1
@@ -295,7 +334,9 @@ async def stream_project_realtime(
                         "project_id": projectId,
                         "reason": reason,
                         "changed_paths": changed_paths,
-                        "changed_count": len(changed_paths),
+                        "changed_dirs": changed_dirs,
+                        "changed_paths_truncated": changed_paths_truncated,
+                        "changed_count": changed_count,
                         "snapshot": current_state["snapshot"],
                     }
                 )

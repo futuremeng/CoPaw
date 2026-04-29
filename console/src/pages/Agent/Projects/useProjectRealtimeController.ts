@@ -24,6 +24,8 @@ interface ProjectRealtimeEnvelope {
   detail?: string;
   reason?: string;
   changed_paths?: string[];
+  changed_dirs?: string[];
+  changed_paths_truncated?: boolean;
   changed_count?: number;
   generated_at?: string;
   snapshot?: ProjectRealtimeSnapshot;
@@ -31,6 +33,8 @@ interface ProjectRealtimeEnvelope {
 
 interface ProjectRealtimeInvalidationPayload {
   changedPaths: string[];
+  changedDirs: string[];
+  changedPathsTruncated: boolean;
   reason: string;
   fileSummary?: AgentProjectFileSummary;
 }
@@ -191,6 +195,8 @@ export default function useProjectRealtimeController({
             }
 
             const changedPaths = payload.changed_paths || [];
+            const changedDirs = payload.changed_dirs || [];
+            const changedPathsTruncated = Boolean(payload.changed_paths_truncated);
             const reason = payload.reason || "change";
             const nextFileFingerprint = payload.snapshot.file_tree.fingerprint || "";
             const nextPipelineFingerprint = payload.snapshot.pipeline.fingerprint || "";
@@ -208,22 +214,40 @@ export default function useProjectRealtimeController({
               if (shouldResync) {
                 void fileCallbackRef.current?.({
                   changedPaths,
+                  changedDirs,
+                  changedPathsTruncated,
                   reason: "resync",
                   fileSummary,
                 });
-                void pipelineCallbackRef.current?.({ changedPaths, reason: "resync" });
+                void pipelineCallbackRef.current?.({
+                  changedPaths,
+                  changedDirs,
+                  changedPathsTruncated,
+                  reason: "resync",
+                });
               }
               return;
             }
 
             if (nextFileFingerprint && nextFileFingerprint !== fileFingerprintRef.current) {
               fileFingerprintRef.current = nextFileFingerprint;
-              void fileCallbackRef.current?.({ changedPaths, reason, fileSummary });
+              void fileCallbackRef.current?.({
+                changedPaths,
+                changedDirs,
+                changedPathsTruncated,
+                reason,
+                fileSummary,
+              });
             }
 
             if (nextPipelineFingerprint && nextPipelineFingerprint !== pipelineFingerprintRef.current) {
               pipelineFingerprintRef.current = nextPipelineFingerprint;
-              void pipelineCallbackRef.current?.({ changedPaths, reason });
+              void pipelineCallbackRef.current?.({
+                changedPaths,
+                changedDirs,
+                changedPathsTruncated,
+                reason,
+              });
             }
             reconnectAttemptRef.current = 0;
             setConnectionState({ status: "connected", reconnectAttempt: 0 });

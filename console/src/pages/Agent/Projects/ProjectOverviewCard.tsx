@@ -42,6 +42,7 @@ import { isBuiltInProjectFile } from "./builtInFiles";
 import styles from "./index.module.less";
 
 const { Text } = Typography;
+const LAZY_TREE_AUTO_LOAD_BATCH_SIZE = 3;
 
 interface ProjectOverviewCardProps {
   activeStage: ProjectStageKey;
@@ -68,9 +69,11 @@ interface ProjectOverviewCardProps {
   priorityFilePaths: string[];
   selectedFilePath: string;
   expandedKeys?: string[];
+  staleDirectoryPaths?: string[];
   selectedAttachPaths: string[];
   onUploadFiles: () => void;
   onExpandedKeysChange?: (keys: string[]) => void;
+  onConsumeStaleDirectoryPaths?: (paths: string[]) => void;
   onSelectFileFromTree: (path: string) => void;
   onAttachArtifactToChat: (path: string) => void;
   onLoadProjectTreeChildren?: (path: string) => Promise<AgentProjectFileTreeNode[]>;
@@ -593,9 +596,11 @@ export default function ProjectOverviewCard({
   priorityFilePaths,
   selectedFilePath,
   expandedKeys: controlledExpandedKeys,
+  staleDirectoryPaths = [],
   selectedAttachPaths,
   onUploadFiles,
   onExpandedKeysChange,
+  onConsumeStaleDirectoryPaths,
   onSelectFileFromTree,
   onAttachArtifactToChat,
   onLoadProjectTreeChildren,
@@ -637,6 +642,10 @@ export default function ProjectOverviewCard({
   const refreshTitle = t("projects.refreshFiles", "Refresh");
   const priorityFileSet = useMemo(() => new Set(priorityFilePaths), [priorityFilePaths]);
   const selectedAttachSet = useMemo(() => new Set(selectedAttachPaths), [selectedAttachPaths]);
+  const staleDirectorySet = useMemo(
+    () => new Set(normalizeTreeKeys(staleDirectoryPaths)),
+    [staleDirectoryPaths],
+  );
   const refreshingDirectorySet = useMemo(
     () => new Set(refreshingDirectoryPaths),
     [refreshingDirectoryPaths],
@@ -780,29 +789,30 @@ export default function ProjectOverviewCard({
 
   const loadTreeDirectory = useCallback(async (path: string, options?: { force?: boolean }) => {
     if (!useLazyTreeMode || !onLoadProjectTreeChildren) {
-      return;
+      return false;
     }
 
     const normalizedPath = String(path || "").trim();
     if (!normalizedPath) {
-      return;
+      return false;
     }
 
     const currentNode = findLazyTreeItem(lazyTreeItemsRef.current, normalizedPath);
     if (!currentNode || !currentNode.is_directory) {
-      return;
+      return false;
     }
     if (!options?.force && currentNode.loaded) {
-      return;
+      return false;
     }
     if (loadingTreeDirectoryPathsRef.current.has(normalizedPath)) {
-      return;
+      return false;
     }
 
     loadingTreeDirectoryPathsRef.current.add(normalizedPath);
     try {
       const children = await onLoadProjectTreeChildren(normalizedPath);
       setLazyTreeItems((prev) => updateLazyTreeChildren(prev, normalizedPath, toLazyTreeItems(children)));
+      return true;
     } finally {
       loadingTreeDirectoryPathsRef.current.delete(normalizedPath);
     }
@@ -820,6 +830,7 @@ export default function ProjectOverviewCard({
     try {
       const children = await onRefreshProjectTreeDirectory(path);
       setLazyTreeItems((prev) => updateLazyTreeChildren(prev, path, toLazyTreeItems(children)));
+      onConsumeStaleDirectoryPaths?.([path]);
     } finally {
       setRefreshingDirectoryPaths((prev) => prev.filter((item) => item !== path));
     }
@@ -831,13 +842,46 @@ export default function ProjectOverviewCard({
     }
 
     const nextPaths = [...expandedKeys].sort(compareTreePathDepth);
+    let remainingBudget = LAZY_TREE_AUTO_LOAD_BATCH_SIZE;
     for (const path of nextPaths) {
+      if (remainingBudget <= 0) {
+        break;
+      }
       const currentNode = findLazyTreeItem(lazyTreeItems, path);
       if (currentNode && currentNode.is_directory && !currentNode.loaded) {
+        remainingBudget -= 1;
         void loadTreeDirectory(path);
       }
     }
   }, [expandedKeys, lazyTreeItems, loadTreeDirectory, onLoadProjectTreeChildren, useLazyTreeMode]);
+
+  useEffect(() => {
+    if (!useLazyTreeMode || staleDirectorySet.size === 0 || expandedKeys.length === 0) {
+      return;
+    }
+
+    const nextPaths = expandedKeys
+      .filter((path) => staleDirectorySet.has(path))
+      .sort(compareTreePathDepth)
+      .slice(0, LAZY_TREE_AUTO_LOAD_BATCH_SIZE);
+
+    if (nextPaths.length === 0) {
+      return;
+    }
+
+    void (async () => {
+      const consumedPaths: string[] = [];
+      for (const path of nextPaths) {
+        const loaded = await loadTreeDirectory(path, { force: true });
+        if (loaded) {
+          consumedPaths.push(path);
+        }
+      }
+      if (consumedPaths.length > 0) {
+        onConsumeStaleDirectoryPaths?.(consumedPaths);
+      }
+    })();
+  }, [expandedKeys, loadTreeDirectory, onConsumeStaleDirectoryPaths, staleDirectorySet, useLazyTreeMode]);
 
   const visibleLazyTreeItems = useMemo(() => {
     if (!useLazyTreeMode) {
@@ -1113,7 +1157,13 @@ export default function ProjectOverviewCard({
                   }
                   for (const key of nextKeys) {
                     if (!previousKeySet.has(key)) {
-                      void loadTreeDirectory(key);
+                      const shouldForceRefresh = staleDirectorySet.has(key);
+                      void loadTreeDirectory(key, shouldForceRefresh ? { force: true } : undefined)
+                        .then((loaded) => {
+                          if (loaded && shouldForceRefresh) {
+                            onConsumeStaleDirectoryPaths?.([key]);
+                          }
+                        });
                     }
                   }
                 }}
@@ -1121,10 +1171,17 @@ export default function ProjectOverviewCard({
                   ? async (treeNode) => {
                     const key = String(treeNode.key || "");
                     const currentNode = findLazyTreeItem(lazyTreeItemsRef.current, key);
-                    if (!currentNode || !currentNode.is_directory || currentNode.loaded) {
+                    const shouldForceRefresh = staleDirectorySet.has(key);
+                    if (!currentNode || !currentNode.is_directory || (currentNode.loaded && !shouldForceRefresh)) {
                       return;
                     }
-                    await loadTreeDirectory(key);
+                    const loaded = await loadTreeDirectory(
+                      key,
+                      shouldForceRefresh ? { force: true } : undefined,
+                    );
+                    if (loaded && shouldForceRefresh) {
+                      onConsumeStaleDirectoryPaths?.([key]);
+                    }
                   }
                   : undefined}
                 onSelect={(keys) => {

@@ -74,6 +74,11 @@ import {
   matchesRouteProject,
 } from "./projectIdUtils";
 import {
+  createProjectTreeRefreshSchedulerState,
+  resetProjectTreeRefreshSchedulerState,
+  scheduleProjectTreeRefresh,
+} from "./projectTreeRefreshScheduler";
+import {
   buildProjectLayoutStorageKey,
   type KnowledgeDockTabKey,
   parseProjectLayoutPrefs,
@@ -122,8 +127,11 @@ const KNOWLEDGE_DOCK_COLLAPSE_KEY = "knowledge";
 const PROJECT_FILES_DEFER_MS = 420;
 const INITIAL_PROJECT_FILES_IDLE_TIMEOUT_MS = 1200;
 const ASSISTANT_TURN_REALTIME_FALLBACK_MS = 900;
+const PROJECT_TREE_RESYNC_COALESCE_MS = 180;
 const PROJECT_TREE_PREFETCH_DIR_LIMIT = 3;
 const PROJECT_TREE_LATEST_SCAN_LIMIT = 4000;
+const PROJECT_TREE_AUTO_RESTORE_SHALLOW_DEPTH = 2;
+const PROJECT_TREE_AUTO_RESTORE_MAX_DEEP_KEYS = 12;
 const PROJECT_TREE_PREVIEW_DIR_PRIORITY = [
   "original",
   "intermediate",
@@ -437,6 +445,10 @@ function normalizeProjectTreeKeys(paths: string[]): string[] {
   return next;
 }
 
+function getProjectTreeDepth(path: string): number {
+  return normalizeProjectTreeKey(path).split("/").filter(Boolean).length;
+}
+
 function buildProjectAncestorDirectoryPaths(path: string): string[] {
   const normalizedPath = normalizeProjectTreeKey(path);
   if (!normalizedPath) {
@@ -451,12 +463,83 @@ function buildProjectAncestorDirectoryPaths(path: string): string[] {
   return segments.slice(0, -1).map((_, index) => segments.slice(0, index + 1).join("/"));
 }
 
+function buildChangedProjectTreeDirectoryPaths(paths: string[]): string[] {
+  const next: string[] = [];
+  for (const path of paths) {
+    const normalizedPath = normalizeProjectTreeKey(path);
+    if (!normalizedPath) {
+      continue;
+    }
+    const ancestors = buildProjectAncestorDirectoryPaths(normalizedPath);
+    if (ancestors.length > 0) {
+      next.push(...ancestors);
+      continue;
+    }
+    const lastSlashIndex = normalizedPath.lastIndexOf("/");
+    if (lastSlashIndex > 0) {
+      next.push(normalizedPath.slice(0, lastSlashIndex));
+    }
+  }
+  return normalizeProjectTreeKeys(next);
+}
+
+function shouldRefreshProjectTreeRootForChanges(paths: string[]): boolean {
+  return paths.some((path) => getProjectTreeDepth(path) <= 1);
+}
+
+function isProjectPathUnderDirectories(path: string, directories: string[]): boolean {
+  const normalizedPath = normalizeProjectTreeKey(path);
+  if (!normalizedPath) {
+    return false;
+  }
+
+  return directories.some((directory) => {
+    const normalizedDirectory = normalizeProjectTreeKey(directory);
+    return Boolean(
+      normalizedDirectory
+      && (normalizedPath === normalizedDirectory || normalizedPath.startsWith(`${normalizedDirectory}/`)),
+    );
+  });
+}
+
 function mergeExpandedProjectTreeKeys(current: string[], extra: string[]): string[] {
   const next = normalizeProjectTreeKeys([...current, ...extra]);
   if (next.length === current.length && next.every((item, index) => item === current[index])) {
     return current;
   }
   return next;
+}
+
+function budgetRestoredProjectTreeKeys(paths: string[], selectedFilePath: string): string[] {
+  const normalizedKeys = normalizeProjectTreeKeys(paths);
+  if (normalizedKeys.length === 0) {
+    return normalizedKeys;
+  }
+
+  const selectedAncestors = buildProjectAncestorDirectoryPaths(selectedFilePath);
+  const selectedAncestorSet = new Set(selectedAncestors);
+  const shallowKeys = normalizedKeys.filter(
+    (path) => getProjectTreeDepth(path) <= PROJECT_TREE_AUTO_RESTORE_SHALLOW_DEPTH,
+  );
+  const deepKeys = normalizedKeys
+    .filter((path) => getProjectTreeDepth(path) > PROJECT_TREE_AUTO_RESTORE_SHALLOW_DEPTH)
+    .sort((left, right) => {
+      const leftSelected = selectedAncestorSet.has(left) ? 0 : 1;
+      const rightSelected = selectedAncestorSet.has(right) ? 0 : 1;
+      if (leftSelected !== rightSelected) {
+        return leftSelected - rightSelected;
+      }
+
+      const depthDelta = getProjectTreeDepth(left) - getProjectTreeDepth(right);
+      if (depthDelta !== 0) {
+        return depthDelta;
+      }
+
+      return left.localeCompare(right);
+    })
+    .slice(0, PROJECT_TREE_AUTO_RESTORE_MAX_DEEP_KEYS);
+
+  return mergeExpandedProjectTreeKeys(shallowKeys, [...selectedAncestors, ...deepKeys]);
 }
 
 function isProjectPipelineTemplatePath(path: string): boolean {
@@ -556,6 +639,7 @@ export default function ProjectDetailPage() {
     useState<Record<string, AgentProjectFileInfo>>({});
   const [selectedFilePath, setSelectedFilePath] = useState("");
   const [treeExpandedKeys, setTreeExpandedKeys] = useState<string[]>([]);
+  const [staleProjectTreeDirectoryPaths, setStaleProjectTreeDirectoryPaths] = useState<string[]>([]);
   const [latestUpdatedFilePath, setLatestUpdatedFilePath] = useState("");
   const [workbenchSyncNotice, setWorkbenchSyncNotice] = useState<{
     changedPaths: string[];
@@ -619,6 +703,7 @@ export default function ProjectDetailPage() {
   const workspaceFocusChatIdRef = useRef("");
   const designFocusChatIdRef = useRef("");
   const projectFilesRefreshTimerRef = useRef<number | null>(null);
+  const projectTreeRootRefreshSchedulerRef = useRef(createProjectTreeRefreshSchedulerState());
   const assistantTurnFileSyncTimerRef = useRef<number | null>(null);
   const assistantTurnPipelineSyncTimerRef = useRef<number | null>(null);
   const lastFileTreeInvalidationAtRef = useRef(0);
@@ -1527,6 +1612,24 @@ export default function ProjectDetailPage() {
     }
   }, [loadProjectTreeDirectory, selectedFilePath]);
 
+  const scheduleProjectTreeRootRefresh = useCallback((
+    agentId: string,
+    project: AgentProjectSummary,
+    options?: { clearStale?: boolean; delay?: number },
+  ) => {
+    return scheduleProjectTreeRefresh({
+      state: projectTreeRootRefreshSchedulerRef.current,
+      delay: options?.delay ?? PROJECT_TREE_RESYNC_COALESCE_MS,
+      scheduleTimer: (callback, delay) => window.setTimeout(callback, delay),
+      clearTimer: (timerId) => window.clearTimeout(timerId),
+      runRefresh: () => loadProjectTreeRoot(agentId, project),
+      clearStale: options?.clearStale,
+      onClearStale: () => {
+        setStaleProjectTreeDirectoryPaths([]);
+      },
+    });
+  }, [loadProjectTreeRoot]);
+
   const handleRefreshProjectFiles = useCallback(async () => {
     if (!currentAgent || !selectedProject) {
       return;
@@ -1839,6 +1942,8 @@ export default function ProjectDetailPage() {
 
   const handleRealtimeFileTreeInvalidated = useCallback(async (payload?: {
     changedPaths: string[];
+    changedDirs: string[];
+    changedPathsTruncated: boolean;
     reason: string;
     fileSummary?: AgentProjectFileSummary;
   }) => {
@@ -1878,26 +1983,40 @@ export default function ProjectDetailPage() {
       && payload.reason !== "resync"
       && changedPaths.length > 0,
     );
+    const changedDirectoryPaths = normalizeProjectTreeKeys(
+      payload?.changedDirs?.length
+        ? payload.changedDirs
+        : buildChangedProjectTreeDirectoryPaths(changedPaths),
+    );
     let patchedIncrementally = false;
 
     if (shouldPatchIncrementally) {
-      await Promise.all([
-        loadProjectTreeRoot(currentAgent.id, selectedProject),
-        loadProjectFilesMetadata(currentAgent.id, selectedProject, changedPaths)
-          .then((files) => {
-            applyProjectFilesMetadataPatch(changedPaths, files);
-            const latestPathFromMetadata = pickMostRecentlyModifiedPath(files);
-            if (latestPathFromMetadata) {
-              setLatestUpdatedFilePath(latestPathFromMetadata);
-            }
-            patchedIncrementally = true;
-          })
-          .catch((err) => {
-            console.error("failed to patch project file metadata", err);
-          }),
-      ]);
+      await loadProjectFilesMetadata(currentAgent.id, selectedProject, changedPaths)
+        .then((files) => {
+          applyProjectFilesMetadataPatch(changedPaths, files);
+          const latestPathFromMetadata = pickMostRecentlyModifiedPath(files);
+          if (latestPathFromMetadata) {
+            setLatestUpdatedFilePath(latestPathFromMetadata);
+          }
+          patchedIncrementally = true;
+        })
+        .catch((err) => {
+          console.error("failed to patch project file metadata", err);
+        });
+
+      if (changedDirectoryPaths.length > 0) {
+        setStaleProjectTreeDirectoryPaths((prev) =>
+          mergeExpandedProjectTreeKeys(prev, changedDirectoryPaths));
+      }
+
+      if (shouldRefreshProjectTreeRootForChanges(changedPaths)) {
+        await loadProjectTreeRoot(currentAgent.id, selectedProject);
+        setStaleProjectTreeDirectoryPaths([]);
+      }
     } else {
-      await loadProjectTreeRoot(currentAgent.id, selectedProject);
+      await scheduleProjectTreeRootRefresh(currentAgent.id, selectedProject, {
+        clearStale: true,
+      });
     }
 
     if (!patchedIncrementally) {
@@ -1922,6 +2041,10 @@ export default function ProjectDetailPage() {
         || payload.reason === "resync"
         || changedPaths.length === 0
         || changedPaths.includes(selectedFilePath)
+        || (
+          payload.changedPathsTruncated
+          && isProjectPathUnderDirectories(selectedFilePath, changedDirectoryPaths)
+        )
       ),
     );
     if (shouldRefreshSelectedContent) {
@@ -1941,6 +2064,7 @@ export default function ProjectDetailPage() {
     loadProjectFilesMetadata,
     loadProjectTreeRoot,
     resolveLatestUpdatedPathFromTree,
+    scheduleProjectTreeRootRefresh,
     scheduleProjectFilesRefresh,
     selectedFilePath,
     selectedProject,
@@ -1948,6 +2072,8 @@ export default function ProjectDetailPage() {
 
   const handleRealtimePipelineInvalidated = useCallback(async (_payload?: {
     changedPaths: string[];
+    changedDirs: string[];
+    changedPathsTruncated: boolean;
     reason: string;
   }) => {
     if (!currentAgent || !selectedProject) {
@@ -2017,7 +2143,9 @@ export default function ProjectDetailPage() {
     const performFileFallbackSync = () => {
       void Promise.all([
         loadProjectFileSummary(currentAgent.id, selectedProject).catch(() => null),
-        loadProjectTreeRoot(currentAgent.id, selectedProject),
+        scheduleProjectTreeRootRefresh(currentAgent.id, selectedProject, {
+          clearStale: true,
+        }),
       ]).then(async () => {
         scheduleProjectFilesRefresh(currentAgent.id, selectedProject, {
           preserveSelection: true,
@@ -2066,6 +2194,7 @@ export default function ProjectDetailPage() {
     loadProjectFileSummary,
     loadProjectTreeRoot,
     loadRunDetail,
+    scheduleProjectTreeRootRefresh,
     scheduleProjectFilesRefresh,
     selectedFilePath,
     selectedProject,
@@ -2600,6 +2729,10 @@ export default function ProjectDetailPage() {
       window.clearTimeout(projectFilesRefreshTimerRef.current);
       projectFilesRefreshTimerRef.current = null;
     }
+    resetProjectTreeRefreshSchedulerState({
+      state: projectTreeRootRefreshSchedulerRef.current,
+      clearTimer: (timerId) => window.clearTimeout(timerId),
+    });
     if (assistantTurnFileSyncTimerRef.current !== null) {
       window.clearTimeout(assistantTurnFileSyncTimerRef.current);
       assistantTurnFileSyncTimerRef.current = null;
@@ -2616,6 +2749,7 @@ export default function ProjectDetailPage() {
     setKnownProjectFilesByPath({});
     setSelectedFilePath("");
     setTreeExpandedKeys([]);
+    setStaleProjectTreeDirectoryPaths([]);
     setLatestUpdatedFilePath("");
     setWorkbenchSyncNotice(null);
     setFileContent("");
@@ -2643,17 +2777,16 @@ export default function ProjectDetailPage() {
       const raw = window.localStorage.getItem(storageKey);
       const parsed = parseProjectLayoutPrefs(raw);
       const restoredSelectedTreeFilePath = normalizeProjectTreeKey(parsed.selectedTreeFilePath);
+      const restoredTreeExpandedKeys = budgetRestoredProjectTreeKeys(
+        parsed.treeExpandedKeys,
+        restoredSelectedTreeFilePath,
+      );
       setActiveStage(parsed.activeStage);
       setKnowledgeModuleCollapsed(parsed.knowledgeModuleCollapsed);
       setKnowledgeDockTab(parsed.knowledgeDockTab);
       setSelectedMetricFilter(parsed.selectedMetricFilter);
       setTreeDisplayMode(parsed.treeDisplayMode);
-      setTreeExpandedKeys(
-        mergeExpandedProjectTreeKeys(
-          normalizeProjectTreeKeys(parsed.treeExpandedKeys),
-          buildProjectAncestorDirectoryPaths(restoredSelectedTreeFilePath),
-        ),
-      );
+      setTreeExpandedKeys(restoredTreeExpandedKeys);
       setSelectedFilePath(restoredSelectedTreeFilePath);
       setLeftPaneSize(Math.max(parsed.leftPaneSize, LEFT_PANE_MIN_SIZE));
       setWorkbenchPaneSize(Math.max(parsed.workbenchPaneSize, WORKBENCH_PANE_MIN_SIZE));
@@ -2792,6 +2925,10 @@ export default function ProjectDetailPage() {
         window.clearTimeout(projectFilesRefreshTimerRef.current);
         projectFilesRefreshTimerRef.current = null;
       }
+      resetProjectTreeRefreshSchedulerState({
+        state: projectTreeRootRefreshSchedulerRef.current,
+        clearTimer: (timerId) => window.clearTimeout(timerId),
+      });
       if (assistantTurnFileSyncTimerRef.current !== null) {
         window.clearTimeout(assistantTurnFileSyncTimerRef.current);
         assistantTurnFileSyncTimerRef.current = null;
@@ -3715,6 +3852,7 @@ export default function ProjectDetailPage() {
                             priorityFilePaths={priorityFilePaths}
                             selectedFilePath={selectedFilePath}
                             expandedKeys={treeExpandedKeys}
+                            staleDirectoryPaths={staleProjectTreeDirectoryPaths}
                             selectedAttachPaths={selectedAttachPaths}
                             activeStage={activeStage}
                             selectedMetricFilter={selectedMetricFilter}
@@ -3722,6 +3860,13 @@ export default function ProjectDetailPage() {
                             treeDisplayMode={treeDisplayMode}
                             onTreeDisplayModeChange={setTreeDisplayMode}
                             onExpandedKeysChange={setTreeExpandedKeys}
+                            onConsumeStaleDirectoryPaths={(paths) => {
+                              if (paths.length === 0) {
+                                return;
+                              }
+                              setStaleProjectTreeDirectoryPaths((prev) =>
+                                prev.filter((item) => !paths.includes(item)));
+                            }}
                             onRefreshProjectFiles={handleRefreshProjectFiles}
                             latestUpdatedFilePath={latestUpdatedFilePath}
                             onRefreshProjectTreeDirectory={(path) => {

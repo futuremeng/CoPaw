@@ -6,9 +6,9 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from copaw.app.project_realtime_events import record_project_realtime_paths
-from copaw.app.routers import project_realtime as project_realtime_module
-from copaw.app.routers.agents import _write_project_frontmatter
+from qwenpaw.app.project_realtime_events import record_project_realtime_paths
+from qwenpaw.app.routers import project_realtime as project_realtime_module
+from qwenpaw.app.routers.agents import _write_project_frontmatter
 
 
 class _FakeAgentWorkspace:
@@ -65,7 +65,14 @@ def test_project_realtime_ws_emits_file_tree_updates(tmp_path: Path):
             assert first["event_id"] == 1
             assert first["reason"] == "initial_sync"
             assert first["changed_paths"] == []
-            assert first["snapshot"]["file_tree"]["summary"]["builtin_files"] >= 1
+            assert first["changed_dirs"] == []
+            assert first["changed_paths_truncated"] is False
+            assert first["changed_count"] == 0
+            assert first["snapshot"]["file_tree"]["summary"]["total_files"] >= 1
+            assert (
+                first["snapshot"]["file_tree"]["summary"]["builtin_files"]
+                + first["snapshot"]["file_tree"]["summary"]["visible_files"]
+            ) == first["snapshot"]["file_tree"]["summary"]["total_files"]
             first_fingerprint = first["snapshot"]["file_tree"]["fingerprint"]
 
             target_file = tmp_path / "projects" / project_id / "original" / "note.md"
@@ -77,6 +84,9 @@ def test_project_realtime_ws_emits_file_tree_updates(tmp_path: Path):
             assert second["event_id"] == 2
             assert second["reason"] == "change"
             assert "original/note.md" in second["changed_paths"]
+            assert "original" in second["changed_dirs"]
+            assert second["changed_paths_truncated"] is False
+            assert second["changed_count"] >= len(second["changed_paths"])
             assert second["snapshot"]["file_tree"]["fingerprint"] != first_fingerprint
             assert second["snapshot"]["file_tree"]["file_count"] >= 2
             assert second["snapshot"]["file_tree"]["summary"]["original_files"] == 1
@@ -120,6 +130,9 @@ def test_project_realtime_ws_emits_pipeline_updates(tmp_path: Path):
             assert second["event_id"] == 2
             assert second["reason"] == "change"
             assert ".pipelines/runs/run-1/run_manifest.json" in second["changed_paths"]
+            assert ".pipelines" in second["changed_dirs"]
+            assert ".pipelines/runs" in second["changed_dirs"]
+            assert second["changed_paths_truncated"] is False
             assert second["snapshot"]["pipeline"]["fingerprint"] != first_fingerprint
             assert second["snapshot"]["pipeline"]["run_count"] == 1
 
@@ -170,3 +183,34 @@ def test_project_realtime_ws_emits_explicit_tool_event_without_fingerprint_chang
             assert second["type"] == "snapshot"
             assert second["reason"] == "explicit_event"
             assert "original/note.md" in second["changed_paths"]
+            assert "original" in second["changed_dirs"]
+            assert second["changed_paths_truncated"] is False
+
+
+def test_project_realtime_ws_marks_truncated_changed_paths(tmp_path: Path, monkeypatch):
+    manager = _FakeManager(str(tmp_path))
+    project_id = _seed_project(tmp_path)
+
+    app = FastAPI()
+    app.state.multi_agent_manager = manager
+    app.include_router(project_realtime_module.router)
+    monkeypatch.setattr(project_realtime_module, "_MAX_CHANGED_PATHS", 2)
+
+    with TestClient(app) as client:
+        with client.websocket_connect(
+            f"/agents/default/projects/{project_id}/realtime/ws?interval_ms=750"
+        ) as websocket:
+            first = websocket.receive_json()
+            assert first["type"] == "snapshot"
+
+            for index in range(3):
+                target_file = tmp_path / "projects" / project_id / "original" / f"note-{index}.md"
+                target_file.parent.mkdir(parents=True, exist_ok=True)
+                target_file.write_text(f"hello {index}", encoding="utf-8")
+
+            second = websocket.receive_json()
+            assert second["type"] == "snapshot"
+            assert second["changed_paths_truncated"] is True
+            assert second["changed_count"] == 3
+            assert len(second["changed_paths"]) == 2
+            assert second["changed_dirs"] == ["original"]
