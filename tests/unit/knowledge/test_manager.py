@@ -876,6 +876,103 @@ def test_delete_index_removes_chunk_files(tmp_path: Path):
     assert not chunk_path.exists()
 
 
+def test_index_source_writes_interlinear_and_lightweight_line_stats(tmp_path: Path):
+    config = Config().knowledge
+    source_file = tmp_path / "note.md"
+    source_file.write_text("第一句。Second line 123!第三句？", encoding="utf-8")
+    source = KnowledgeSourceSpec(
+        id="interlinear-line-stats-source",
+        name="Interlinear Line Stats Source",
+        type="file",
+        location=str(source_file),
+        content="",
+        enabled=True,
+        recursive=False,
+        tags=[],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    manager.index_source(source, config)
+
+    source_dir = manager.get_source_storage_dir(source.id)
+    interlinear_manifest = json.loads(
+        (source_dir / "interlinear-manifest.json").read_text(encoding="utf-8")
+    )
+    lightweight_manifest = json.loads(
+        (source_dir / "lightweight-manifest.json").read_text(encoding="utf-8")
+    )
+
+    interlinear_paths = interlinear_manifest["interlinear_paths"]
+    lightweight_paths = lightweight_manifest["lightweight_paths"]
+    interlinear_text_rel = next(path for path in interlinear_paths if path.endswith(".txt"))
+    char_stats_rel = next(path for path in interlinear_paths if path.endswith(".char-stats.json"))
+    lightweight_result_rel = next(
+        path
+        for path in lightweight_paths
+        if path.endswith(".json") and not path.endswith(".token-stats.json")
+    )
+    token_stats_rel = next(path for path in lightweight_paths if path.endswith(".token-stats.json"))
+
+    interlinear_text = (tmp_path / "knowledge" / interlinear_text_rel).read_text(encoding="utf-8")
+    char_stats = json.loads((tmp_path / "knowledge" / char_stats_rel).read_text(encoding="utf-8"))
+    lightweight_result = json.loads(
+        (tmp_path / "knowledge" / lightweight_result_rel).read_text(encoding="utf-8")
+    )
+    token_stats = json.loads((tmp_path / "knowledge" / token_stats_rel).read_text(encoding="utf-8"))
+
+    assert interlinear_text.splitlines() == ["第一句。", "Second line 123!", "第三句？"]
+    assert char_stats == [
+        {"line_no": 1, "char_count": 3},
+        {"line_no": 2, "char_count": 13},
+        {"line_no": 3, "char_count": 3},
+    ]
+    assert [item["line_no"] for item in token_stats] == [1, 2, 3]
+    assert [item["token_count"] for item in token_stats] == [1, 3, 1]
+    assert [item["line_no"] for item in lightweight_result] == [1, 2, 3]
+    assert [item["token_count"] for item in lightweight_result] == [1, 3, 1]
+    assert [item["score"] for item in lightweight_result] == [1, 3, 1]
+
+
+def test_delete_index_removes_interlinear_and_lightweight_files(tmp_path: Path):
+    config = Config().knowledge
+    source_file = tmp_path / "cleanup-note.md"
+    source_file.write_text("第一句。Second line 123!第三句？", encoding="utf-8")
+    source = KnowledgeSourceSpec(
+        id="interlinear-cleanup-source",
+        name="Interlinear Cleanup Source",
+        type="file",
+        location=str(source_file),
+        content="",
+        enabled=True,
+        recursive=False,
+        tags=[],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    manager.index_source(source, config)
+
+    source_dir = manager.get_source_storage_dir(source.id)
+    interlinear_manifest = json.loads(
+        (source_dir / "interlinear-manifest.json").read_text(encoding="utf-8")
+    )
+    lightweight_manifest = json.loads(
+        (source_dir / "lightweight-manifest.json").read_text(encoding="utf-8")
+    )
+    all_paths = [
+        *(interlinear_manifest.get("interlinear_paths") or []),
+        *(lightweight_manifest.get("lightweight_paths") or []),
+    ]
+
+    assert all_paths
+    assert all((tmp_path / "knowledge" / rel).exists() for rel in all_paths)
+
+    manager.delete_index(source.id)
+
+    assert all(not (tmp_path / "knowledge" / rel).exists() for rel in all_paths)
+
+
 def test_delete_index_uses_chunk_manifest_when_index_is_missing(tmp_path: Path):
     config = Config().knowledge
     config.index.chunk_size = 10_000

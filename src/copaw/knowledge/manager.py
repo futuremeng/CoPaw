@@ -149,6 +149,7 @@ _SEMANTIC_STAGE_PATH_KEYS = {
     "ner": ("ner_path", "ner_structured_path", "ner_annotated_path"),
     "syntax": ("syntax_path", "syntax_structured_path", "syntax_annotated_path"),
 }
+_INTERLINEAR_CHAR_RE = re.compile(r"[A-Za-z0-9\u4e00-\u9fff]")
 
 
 def _sanitize_filename(name: str) -> str:
@@ -189,6 +190,8 @@ class KnowledgeManager:
         self.cor_dir = self.root_dir / "cor"
         self.ner_dir = self.root_dir / "ner"
         self.syntax_dir = self.root_dir / "syntax"
+        self.interlinear_dir = self.root_dir / "Interlinear"
+        self.lightweight_dir = self.root_dir / "lightweight"
         self.sources_dir = self.root_dir / "sources"
         self.catalog_path = self.root_dir / "catalog.json"
         self.uploads_dir = self.root_dir / "uploads"
@@ -205,6 +208,8 @@ class KnowledgeManager:
         self.cor_dir.mkdir(parents=True, exist_ok=True)
         self.ner_dir.mkdir(parents=True, exist_ok=True)
         self.syntax_dir.mkdir(parents=True, exist_ok=True)
+        self.interlinear_dir.mkdir(parents=True, exist_ok=True)
+        self.lightweight_dir.mkdir(parents=True, exist_ok=True)
         self.sources_dir.mkdir(parents=True, exist_ok=True)
         self.uploads_dir.mkdir(parents=True, exist_ok=True)
         self.remote_blob_dir.mkdir(parents=True, exist_ok=True)
@@ -714,6 +719,10 @@ class KnowledgeManager:
         self._delete_cor_from_payload(payload)
         self._delete_ner_from_payload(payload)
         self._delete_syntax_from_payload(payload)
+        for interlinear_path in self._load_source_interlinear_manifest(source_id):
+            self._delete_interlinear_path(interlinear_path)
+        for lightweight_path in self._load_source_lightweight_manifest(source_id):
+            self._delete_lightweight_path(lightweight_path)
         raw_dir = self._source_raw_dir(source_id)
         if raw_dir.exists():
             shutil.rmtree(raw_dir, ignore_errors=True)
@@ -737,6 +746,8 @@ class KnowledgeManager:
         self.cor_dir.mkdir(parents=True, exist_ok=True)
         self.ner_dir.mkdir(parents=True, exist_ok=True)
         self.syntax_dir.mkdir(parents=True, exist_ok=True)
+        self.interlinear_dir.mkdir(parents=True, exist_ok=True)
+        self.lightweight_dir.mkdir(parents=True, exist_ok=True)
         self.sources_dir.mkdir(parents=True, exist_ok=True)
         self.uploads_dir.mkdir(parents=True, exist_ok=True)
         self.remote_blob_dir.mkdir(parents=True, exist_ok=True)
@@ -998,6 +1009,12 @@ class KnowledgeManager:
     def _source_snapshot_manifest_path(self, source_id: str) -> Path:
         return self._source_dir(source_id) / "snapshot-manifest.json"
 
+    def _source_interlinear_manifest_path(self, source_id: str) -> Path:
+        return self._source_dir(source_id) / "interlinear-manifest.json"
+
+    def _source_lightweight_manifest_path(self, source_id: str) -> Path:
+        return self._source_dir(source_id) / "lightweight-manifest.json"
+
     def _source_uses_root_raw_dir(self, source: KnowledgeSourceSpec | None) -> bool:
         if source is None:
             return False
@@ -1220,6 +1237,229 @@ class KnowledgeManager:
             encoding="utf-8",
         )
 
+    def _load_source_interlinear_manifest(self, source_id: str) -> set[str]:
+        path = self._source_interlinear_manifest_path(source_id)
+        if not path.exists():
+            return set()
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return set()
+        if not isinstance(payload, dict):
+            return set()
+        interlinear_paths = payload.get("interlinear_paths")
+        if not isinstance(interlinear_paths, list):
+            return set()
+        return {
+            str(item).strip()
+            for item in interlinear_paths
+            if isinstance(item, str) and str(item).strip()
+        }
+
+    def _load_source_lightweight_manifest(self, source_id: str) -> set[str]:
+        path = self._source_lightweight_manifest_path(source_id)
+        if not path.exists():
+            return set()
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return set()
+        if not isinstance(payload, dict):
+            return set()
+        lightweight_paths = payload.get("lightweight_paths")
+        if not isinstance(lightweight_paths, list):
+            return set()
+        return {
+            str(item).strip()
+            for item in lightweight_paths
+            if isinstance(item, str) and str(item).strip()
+        }
+
+    def _write_source_interlinear_manifest(self, source_id: str, interlinear_paths: set[str]) -> None:
+        self._source_interlinear_manifest_path(source_id).write_text(
+            json.dumps(
+                {
+                    "source_id": source_id,
+                    "interlinear_paths": sorted(interlinear_paths),
+                    "updated_at": datetime.now(UTC).isoformat(),
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+    def _write_source_lightweight_manifest(self, source_id: str, lightweight_paths: set[str]) -> None:
+        self._source_lightweight_manifest_path(source_id).write_text(
+            json.dumps(
+                {
+                    "source_id": source_id,
+                    "lightweight_paths": sorted(lightweight_paths),
+                    "updated_at": datetime.now(UTC).isoformat(),
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+    def _build_interlinear_artifact_key(
+        self,
+        source_id: str,
+        snapshot_entry: dict[str, Any],
+    ) -> str:
+        document_path = str(snapshot_entry.get("document_path") or "").strip()
+        snapshot_relative_path = str(snapshot_entry.get("snapshot_relative_path") or "").strip()
+        snapshot_path = str(snapshot_entry.get("snapshot_path") or "").strip()
+        raw_key = f"{source_id}:{document_path}:{snapshot_relative_path or snapshot_path}"
+        digest = hashlib.sha1(raw_key.encode("utf-8")).hexdigest()[:12]
+        base_name = Path(snapshot_relative_path or snapshot_path or document_path or source_id).name
+        stem = self._safe_name(Path(base_name).stem or base_name or source_id)
+        return f"{self._safe_name(source_id)}__{stem}__{digest}"
+
+    @staticmethod
+    def _count_interlinear_line_chars(text: str) -> int:
+        return len(_INTERLINEAR_CHAR_RE.findall(text or ""))
+
+    def _build_interlinear_relative_paths(self, artifact_key: str) -> dict[str, Path]:
+        key = self._safe_name(artifact_key)
+        return {
+            "interlinear": Path("Interlinear") / f"{key}.txt",
+            "char_stats": Path("Interlinear") / f"{key}.char-stats.json",
+            "lightweight_result": Path("lightweight") / f"{key}.json",
+            "token_stats": Path("lightweight") / f"{key}.token-stats.json",
+        }
+
+    def _write_snapshot_interlinear_and_lightweight(
+        self,
+        source_id: str,
+        snapshot_entry: dict[str, Any],
+    ) -> dict[str, str]:
+        snapshot_path = Path(str(snapshot_entry.get("snapshot_path") or "").strip())
+        if not snapshot_path.exists() or not snapshot_path.is_file():
+            return {}
+
+        raw_text = self._read_local_text(snapshot_path)
+        sentence_lines = self._split_chunk_sentences(raw_text)
+        interlinear_lines = sentence_lines if sentence_lines else ([raw_text.strip()] if raw_text.strip() else [])
+
+        artifact_key = self._build_interlinear_artifact_key(source_id, snapshot_entry)
+        relative_paths = self._build_interlinear_relative_paths(artifact_key)
+        interlinear_path = self.root_dir / relative_paths["interlinear"]
+        char_stats_path = self.root_dir / relative_paths["char_stats"]
+        lightweight_result_path = self.root_dir / relative_paths["lightweight_result"]
+        token_stats_path = self.root_dir / relative_paths["token_stats"]
+
+        interlinear_path.parent.mkdir(parents=True, exist_ok=True)
+        lightweight_result_path.parent.mkdir(parents=True, exist_ok=True)
+
+        interlinear_path.write_text("\n".join(interlinear_lines), encoding="utf-8")
+        persisted_lines = [line for line in interlinear_path.read_text(encoding="utf-8").splitlines()]
+        if not persisted_lines and interlinear_lines:
+            persisted_lines = list(interlinear_lines)
+
+        char_stats: list[dict[str, Any]] = []
+        lightweight_result: list[dict[str, Any]] = []
+        token_stats: list[dict[str, Any]] = []
+        for line_no, line_text in enumerate(persisted_lines, start=1):
+            char_count = self._count_interlinear_line_chars(line_text)
+            tokens = self._tokenize_lightweight_text(line_text, exclude_stop_words=False)
+            token_count = len(tokens)
+            char_stats.append({"line_no": line_no, "char_count": char_count})
+            lightweight_result.append(
+                {
+                    "line_no": line_no,
+                    "text": line_text,
+                    "tokens": tokens,
+                    "token_count": token_count,
+                    "score": token_count,
+                },
+            )
+            token_stats.append({"line_no": line_no, "token_count": token_count})
+
+        char_stats_path.write_text(
+            json.dumps(char_stats, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        lightweight_result_path.write_text(
+            json.dumps(lightweight_result, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        token_stats_path.write_text(
+            json.dumps(token_stats, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+        return {
+            "interlinear_path": relative_paths["interlinear"].as_posix(),
+            "interlinear_char_stats_path": relative_paths["char_stats"].as_posix(),
+            "lightweight_path": relative_paths["lightweight_result"].as_posix(),
+            "lightweight_token_stats_path": relative_paths["token_stats"].as_posix(),
+        }
+
+    def _materialize_interlinear_and_lightweight_for_source(
+        self,
+        source_id: str,
+        snapshots: list[dict[str, str]],
+    ) -> None:
+        previous_interlinear_paths = self._load_source_interlinear_manifest(source_id)
+        previous_lightweight_paths = self._load_source_lightweight_manifest(source_id)
+
+        current_interlinear_paths: set[str] = set()
+        current_lightweight_paths: set[str] = set()
+        metadata_rows: list[dict[str, str]] = []
+
+        for snapshot_entry in snapshots:
+            generated = self._write_snapshot_interlinear_and_lightweight(source_id, snapshot_entry)
+            if not generated:
+                continue
+            interlinear_path = str(generated.get("interlinear_path") or "").strip()
+            interlinear_char_stats_path = str(generated.get("interlinear_char_stats_path") or "").strip()
+            lightweight_path = str(generated.get("lightweight_path") or "").strip()
+            lightweight_token_stats_path = str(generated.get("lightweight_token_stats_path") or "").strip()
+
+            for path_value in (interlinear_path, interlinear_char_stats_path):
+                if path_value:
+                    current_interlinear_paths.add(path_value)
+            for path_value in (lightweight_path, lightweight_token_stats_path):
+                if path_value:
+                    current_lightweight_paths.add(path_value)
+
+            metadata_rows.append(
+                {
+                    "document_path": str(snapshot_entry.get("document_path") or "").strip(),
+                    "snapshot_path": str(snapshot_entry.get("snapshot_path") or "").strip(),
+                    "snapshot_relative_path": str(snapshot_entry.get("snapshot_relative_path") or "").strip(),
+                    "interlinear_path": interlinear_path,
+                    "interlinear_char_stats_path": interlinear_char_stats_path,
+                    "lightweight_path": lightweight_path,
+                    "lightweight_token_stats_path": lightweight_token_stats_path,
+                },
+            )
+
+        for interlinear_path in previous_interlinear_paths - current_interlinear_paths:
+            self._delete_interlinear_path(interlinear_path)
+        for lightweight_path in previous_lightweight_paths - current_lightweight_paths:
+            self._delete_lightweight_path(lightweight_path)
+
+        self._write_source_interlinear_manifest(source_id, current_interlinear_paths)
+        self._write_source_lightweight_manifest(source_id, current_lightweight_paths)
+
+        metadata_path = self._source_dir(source_id) / "interlinear-lightweight-map.json"
+        metadata_path.parent.mkdir(parents=True, exist_ok=True)
+        metadata_path.write_text(
+            json.dumps(
+                {
+                    "source_id": source_id,
+                    "generated_at": datetime.now(UTC).isoformat(),
+                    "files": metadata_rows,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
     def _collect_chunk_paths_from_payload(self, payload: dict[str, Any] | None) -> set[str]:
         if not isinstance(payload, dict):
             return set()
@@ -1350,6 +1590,44 @@ class KnowledgeManager:
             return
         current = target.parent
         while current != self.syntax_dir and current.exists():
+            try:
+                current.rmdir()
+            except OSError:
+                break
+            current = current.parent
+
+    def _delete_interlinear_path(self, relative_path: str | Path | None) -> None:
+        text = str(relative_path or "").strip()
+        if not text:
+            return
+        target = self.root_dir / text
+        if not target.exists() or not target.is_file():
+            return
+        try:
+            target.unlink()
+        except FileNotFoundError:
+            return
+        current = target.parent
+        while current != self.interlinear_dir and current.exists():
+            try:
+                current.rmdir()
+            except OSError:
+                break
+            current = current.parent
+
+    def _delete_lightweight_path(self, relative_path: str | Path | None) -> None:
+        text = str(relative_path or "").strip()
+        if not text:
+            return
+        target = self.root_dir / text
+        if not target.exists() or not target.is_file():
+            return
+        try:
+            target.unlink()
+        except FileNotFoundError:
+            return
+        current = target.parent
+        while current != self.lightweight_dir and current.exists():
             try:
                 current.rmdir()
             except OSError:
@@ -3580,7 +3858,8 @@ class KnowledgeManager:
     ) -> list[dict[str, Any]]:
         if source.type not in {"file", "directory"}:
             return documents
-        self._persist_source_snapshots(source, documents, indexed_at=indexed_at)
+        snapshot_manifest = self._persist_source_snapshots(source, documents, indexed_at=indexed_at)
+        self._materialize_interlinear_and_lightweight_for_source(source.id, snapshot_manifest)
         snapshot_documents = self._load_snapshot_documents(source)
         return snapshot_documents or documents
 
