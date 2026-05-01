@@ -21,7 +21,7 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
           <Typography.Text type="secondary">
             {t(
               "projects.knowledge.sourcesRoleHint",
-              "Sources 就是 L1 基础统计层，这里只保留文档数、切片数、句子数、轻量词数、字数。",
+              "Sources（L1 基线，已对齐 Interlinear 工件）—— L1 状态与统计字段全部基于 Interlinear/轻量化工件，包含文档数、切片数、句子数、轻量词数、字数。indexed 字段仅代表 Interlinear 工件存在。",
             )}
           </Typography.Text>
         </div>
@@ -37,15 +37,24 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
           <Typography.Text strong>{knowledgeState.quantMetrics.chunkCount}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("projects.knowledge.signalSentences", "Sentences")}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("projects.knowledge.signalSentences", "Sentences")}
+            <span title="基于 Interlinear 工件逐句统计">🛈</span>
+          </Typography.Text>
           <Typography.Text strong>{knowledgeState.quantMetrics.sentenceCount}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("projects.knowledge.signalTokens", "Lightweight Tokens")}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("projects.knowledge.signalTokens", "Lightweight Tokens")}
+            <span title="基于轻量化工件分词统计">🛈</span>
+          </Typography.Text>
           <Typography.Text strong>{knowledgeState.quantMetrics.tokenCount || 0}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("projects.knowledge.signalCharacters", "Characters")}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("projects.knowledge.signalCharacters", "Characters")}
+            <span title="基于 Interlinear 工件逐句统计">🛈</span>
+          </Typography.Text>
           <Typography.Text strong>{knowledgeState.quantMetrics.charCount || 0}</Typography.Text>
         </div>
       </div>

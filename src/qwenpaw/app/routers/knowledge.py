@@ -198,6 +198,21 @@ def _zip_path(path) -> io.BytesIO:
     return buf
 
 
+def _zip_files(root: Path, files: list[Path]) -> io.BytesIO:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for file_path in sorted(files, key=lambda item: item.as_posix()):
+            if not file_path.exists() or not file_path.is_file():
+                continue
+            try:
+                arcname = file_path.relative_to(root).as_posix()
+            except ValueError:
+                arcname = file_path.name
+            zf.write(file_path, arcname)
+    buf.seek(0)
+    return buf
+
+
 def _validate_zip_data(data: bytes) -> None:
     if not zipfile.is_zipfile(io.BytesIO(data)):
         raise HTTPException(
@@ -247,7 +262,40 @@ def _restore_backup_tree(
                 dest.unlink()
             shutil.copytree(item, dest, dirs_exist_ok=True)
 
-    manager.sources_dir.mkdir(parents=True, exist_ok=True)
+    legacy_sources_dir = manager.root_dir / "sources"
+    if legacy_sources_dir.exists() and legacy_sources_dir.is_dir():
+        for source_dir in sorted(legacy_sources_dir.iterdir(), key=lambda item: item.name):
+            if not source_dir.is_dir():
+                continue
+            source_id = source_dir.name
+            source_json_path = source_dir / "source.json"
+            index_json_path = source_dir / "index.json"
+            if source_json_path.exists() and source_json_path.is_file():
+                try:
+                    source_payload = json.loads(source_json_path.read_text(encoding="utf-8"))
+                    source_obj = source_payload.get("source") if isinstance(source_payload, dict) else None
+                    if isinstance(source_obj, dict):
+                        source_id = str(source_obj.get("id") or source_id).strip() or source_id
+                except Exception:
+                    pass
+            elif index_json_path.exists() and index_json_path.is_file():
+                try:
+                    index_payload = json.loads(index_json_path.read_text(encoding="utf-8"))
+                    source_obj = index_payload.get("source") if isinstance(index_payload, dict) else None
+                    if isinstance(source_obj, dict):
+                        source_id = str(source_obj.get("id") or source_id).strip() or source_id
+                except Exception:
+                    pass
+
+            for file_item in source_dir.iterdir():
+                if not file_item.is_file():
+                    continue
+                flat_path = manager._source_storage_flat_path(source_id, file_item.name)
+                flat_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(file_item, flat_path)
+
+        shutil.rmtree(legacy_sources_dir, ignore_errors=True)
+
     manager.uploads_dir.mkdir(parents=True, exist_ok=True)
     manager.remote_blob_dir.mkdir(parents=True, exist_ok=True)
     manager.remote_meta_dir.mkdir(parents=True, exist_ok=True)
@@ -1292,11 +1340,11 @@ async def backup_knowledge_source(source_id: str, request: Request):
         workspace_dir,
         project_id=_resolve_project_id(request),
     )
-    source_dir = manager.get_source_storage_dir(source_id)
-    if not source_dir.exists() or not source_dir.is_dir():
+    source_files = manager.get_source_storage_files(source_id)
+    if not source_files:
         raise HTTPException(status_code=404, detail="KNOWLEDGE_SOURCE_NOT_FOUND")
 
-    buf = await asyncio.to_thread(_zip_path, source_dir)
+    buf = await asyncio.to_thread(_zip_files, manager.root_dir, source_files)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     safe_name = manager._safe_name(source_id)
     filename = f"copaw_knowledge_{safe_name}_{timestamp}.zip"
@@ -1337,10 +1385,10 @@ async def restore_knowledge_backup(
     try:
         tmp_dir = await asyncio.to_thread(_extract_zip_to_temp, data)
         extract_root = await asyncio.to_thread(_detect_extract_root, tmp_dir)
-        if not (extract_root / "sources").is_dir():
+        if not extract_root.exists() or not extract_root.is_dir():
             raise HTTPException(
                 status_code=400,
-                detail="Invalid knowledge backup: missing sources directory",
+                detail="Invalid knowledge backup: empty archive",
             )
 
         config.knowledge.sources = await asyncio.to_thread(

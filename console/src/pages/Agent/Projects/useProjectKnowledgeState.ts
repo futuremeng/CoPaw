@@ -771,6 +771,7 @@ export function deriveSourceQuantBaseMetrics(
   syncState: ProjectKnowledgeSyncState | null,
 ): ProjectKnowledgeSourceQuantBaseMetrics {
   const totalSources = projectSources.length;
+  // indexed 仅代表 Interlinear 工件存在，统计已与后端一致
   const indexedSources = projectSources.filter((item) => item.status.indexed).length;
 
   const sourceDocumentCount = sumSourceMetric(projectSources, "document_count");

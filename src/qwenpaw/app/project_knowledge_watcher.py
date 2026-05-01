@@ -36,6 +36,7 @@ _PROJECT_METADATA_RELATIVE_PATHS = (
 )
 _IGNORED_DIRS = {
     ".knowledge",
+    "original",
     ".git",
     "__pycache__",
     "node_modules",

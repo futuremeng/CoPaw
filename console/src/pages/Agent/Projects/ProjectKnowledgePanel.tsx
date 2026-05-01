@@ -134,9 +134,11 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
   }, [knowledgeState.syncState?.status]);
 
   const l1Status = useMemo(() => {
+    // L1 状态已完全基于 Interlinear 工件存在性
     if (!selectedSource) {
       return "missing";
     }
+    // indexed 仅代表 Interlinear 工件存在
     if (selectedSource.status?.indexed) {
       return "ready";
     }

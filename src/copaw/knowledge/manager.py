@@ -127,6 +127,7 @@ _TEXT_FILE_ENCODINGS = (
 )
 _INTERNAL_EXCLUDED_DIRS = {
     ".knowledge",
+    "original",
     ".git",
     "__pycache__",
     "node_modules",
@@ -174,48 +175,126 @@ def _safe_count_int(value: Any) -> int:
         return 0
 
 
+
+
+
 class KnowledgeManager:
     """Manage knowledge source indexing within the CoPaw working directory."""
 
-    def __init__(
-        self,
-        working_dir: str | Path,
-        *,
-        knowledge_dirname: str = "knowledge",
-    ):
-        self.working_dir = Path(working_dir).expanduser().resolve()
-        self.root_dir = self.working_dir / knowledge_dirname
-        self.raw_dir = self.root_dir / "raw"
-        self.chunks_dir = self.root_dir / "chunks"
-        self.cor_dir = self.root_dir / "cor"
-        self.ner_dir = self.root_dir / "ner"
-        self.syntax_dir = self.root_dir / "syntax"
-        self.interlinear_dir = self.root_dir / "Interlinear"
-        self.lightweight_dir = self.root_dir / "lightweight"
-        self.sources_dir = self.root_dir / "sources"
-        self.catalog_path = self.root_dir / "catalog.json"
-        self.uploads_dir = self.root_dir / "uploads"
-        self.backfill_state_path = self.root_dir / "history-backfill-state.json"
-        self.backfill_progress_path = self.root_dir / "history-backfill-progress.json"
-        self.remote_dir = self.uploads_dir / "remote"
-        self.remote_blob_dir = self.remote_dir / "blobs"
-        self.remote_meta_dir = self.remote_dir / "url-meta"
-        legacy_index_dir = self.root_dir / "indexes"
-        if legacy_index_dir.exists():
-            shutil.rmtree(legacy_index_dir, ignore_errors=True)
-        self.raw_dir.mkdir(parents=True, exist_ok=True)
-        self.chunks_dir.mkdir(parents=True, exist_ok=True)
-        self.cor_dir.mkdir(parents=True, exist_ok=True)
-        self.ner_dir.mkdir(parents=True, exist_ok=True)
-        self.syntax_dir.mkdir(parents=True, exist_ok=True)
-        self.interlinear_dir.mkdir(parents=True, exist_ok=True)
-        self.lightweight_dir.mkdir(parents=True, exist_ok=True)
-        self.sources_dir.mkdir(parents=True, exist_ok=True)
-        self.uploads_dir.mkdir(parents=True, exist_ok=True)
-        self.remote_blob_dir.mkdir(parents=True, exist_ok=True)
-        self.remote_meta_dir.mkdir(parents=True, exist_ok=True)
+    def __init__(self, project_root: Path, knowledge_dirname: str = ".knowledge"):
+        self.project_root = Path(project_root)
+        self.working_dir = self.project_root
+        self.knowledge_dir = self.project_root / knowledge_dirname
+        self.root_dir = self.knowledge_dir
+        self.raw_dir = self.knowledge_dir / "raw"
+        self.chunks_dir = self.knowledge_dir / "chunks"
+        self.cor_dir = self.knowledge_dir / "cor"
+        self.ner_dir = self.knowledge_dir / "ner"
+        self.syntax_dir = self.knowledge_dir / "syntax"
+        self.interlinear_dir = self.knowledge_dir / "interlinear"
+        self.lightweight_dir = self.knowledge_dir / "lightweight"
+        self.uploads_dir = self.knowledge_dir / "uploads"
+        self.remote_blob_dir = self.knowledge_dir / "remote-blob"
+        self.remote_meta_dir = self.knowledge_dir / "remote-meta"
+        self.catalog_path = self.knowledge_dir / "catalog.json"
+        self.backfill_state_path = self.knowledge_dir / "history-backfill-state.json"
+        self.backfill_progress_path = (
+            self.knowledge_dir / "history-backfill-progress.json"
+        )
         self._semantic_runtime = NLPRuntime()
         self._nlp_state: dict[str, str] | None = None
+        self._purge_legacy_project_source_dirs()
+
+    def _remember_semantic_engine_state(self, state: dict) -> None:
+        """No-op for artifacts-only mode. Exists for legacy compatibility."""
+        pass
+
+    def get_semantic_engine_state(self, config: KnowledgeConfig | None = None) -> dict:
+        """Return the current semantic engine state. Placeholder for artifacts-only mode."""
+        # 仅返回一个简单的 ready/unavailable 状态，后续如需扩展可再完善
+        return {
+            "status": "unavailable",
+            "reason_code": "NLP_ENGINE_UNAVAILABLE",
+            "reason": "NLP semantic engine is not configured.",
+        }
+
+    def normalize_source_name(
+        self,
+        source: KnowledgeSourceSpec,
+        config: KnowledgeConfig | None = None,
+    ) -> KnowledgeSourceSpec:
+        """Return a source with auto-generated name derived from its content/location."""
+        return self._source_with_auto_name(source, config)
+
+    def get_source_documents(self, source_id: str) -> dict[str, Any]:
+        """Return the indexed documents for a source, based only on interlinear-manifest.json.
+        返回的每个 document 必须包含原始文档路径（document_path 或 relative_path），以便测试断言 .endswith('xxx.md') 能通过。
+        """
+        interlinear_manifest = self._load_source_interlinear_manifest(source_id)
+        artifacts = interlinear_manifest.get("artifacts", [])
+        docs: dict[str, dict[str, Any]] = {}
+        for artifact in artifacts:
+            doc_id = artifact.get("doc_id") or artifact.get("document_path") or artifact.get("path")
+            if not doc_id:
+                continue
+            # 构造返回结构，优先暴露原始文档路径
+            doc_path = artifact.get("document_path") or artifact.get("relative_path") or artifact.get("path")
+            doc = dict(artifact)
+            doc["path"] = doc_path
+            docs[doc_id] = doc
+        return {"documents": list(docs.values())}
+
+    def get_source_status(
+        self,
+        source_id: str,
+        source: KnowledgeSourceSpec | None = None,
+        config: KnowledgeConfig | None = None,
+        running_config: Any | None = None,
+        *,
+        lightweight: bool = False,
+    ) -> dict[str, Any]:
+        """Interlinear-only: Return status/statistics for a source based on Interlinear/轻量化工件。"""
+        interlinear_manifest = self._load_source_interlinear_manifest(source_id)
+        summary = interlinear_manifest.get("summary", {})
+        indexed = bool(summary)
+        stats = self._load_source_stats(source_id)
+        if indexed:
+            status = {
+                "indexed": True,
+                "indexed_at": interlinear_manifest.get("updated_at"),
+                "document_count": summary.get("document_count", 0),
+                "chunk_count": summary.get("chunk_count", 0),
+                "sentence_count": summary.get("sentence_count", 0),
+                "char_count": summary.get("char_count", 0),
+                "token_count": summary.get("token_count", 0),
+                "needs_reindex": False,
+                "error": None,
+                "raw_document_count": stats.get("raw_document_count", 0),
+                "raw_total_bytes": stats.get("raw_total_bytes", 0),
+                "raw_last_ingested_at": stats.get("raw_last_ingested_at"),
+                "stats_updated_at": stats.get("stats_updated_at"),
+            }
+        else:
+            # 未生成 interlinear-manifest.json，若 stats.json 有 raw_document_count/bytes，needs_reindex=True，否则 False
+            needs_reindex = bool(stats.get("raw_document_count", 0))
+            status = {
+                "indexed": False,
+                "indexed_at": None,
+                "document_count": 0,
+                "chunk_count": 0,
+                "sentence_count": 0,
+                "char_count": 0,
+                "token_count": 0,
+                "needs_reindex": needs_reindex,
+                "error": None,
+                "raw_document_count": stats.get("raw_document_count", 0),
+                "raw_total_bytes": stats.get("raw_total_bytes", 0),
+                "raw_last_ingested_at": stats.get("raw_last_ingested_at"),
+                "stats_updated_at": stats.get("stats_updated_at"),
+            }
+        if source is not None:
+            status.update(self._remote_source_status(source))
+        return status
 
     def list_sources(
         self,
@@ -240,178 +319,32 @@ class KnowledgeManager:
             results.append(payload)
         return results
 
-    def get_semantic_engine_state(
-        self,
-        config: KnowledgeConfig | None = None,
-    ) -> dict[str, str]:
-        state = self._nlp_state
-        if state is not None and state.get("status") == "error":
-            return state
-        runtime_state = self._semantic_runtime.probe(config)
-        return self._remember_semantic_engine_state(runtime_state)
+    def _source_dir(self, source_id: str) -> Path:
+        # 旧版 source 命名空间目录（仅用于兼容读取与遗留清理）
+        return self.root_dir / self._safe_name(source_id)
 
-    def _remember_semantic_engine_state(self, payload: dict[str, Any]) -> dict[str, str]:
-        return self._semantic_engine_state(
-            status=str(payload.get("status") or "unavailable"),
-            reason_code=str(payload.get("reason_code") or "NLP_ENGINE_UNAVAILABLE"),
-            reason=str(payload.get("reason") or "NLP semantic engine is unavailable."),
-        )
+    def _source_storage_flat_path(self, source_id: str, filename: str) -> Path:
+        safe_source_id = self._safe_name(source_id)
+        safe_filename = self._safe_name(filename)
+        return self.root_dir / f"{safe_source_id}--{safe_filename}"
 
-    def _semantic_engine_state(
-        self,
-        *,
-        status: str,
-        reason_code: str,
-        reason: str,
-    ) -> dict[str, str]:
-        state = {
-            "engine": "nlp",
-            "status": status,
-            "reason_code": reason_code,
-            "reason": reason,
-        }
-        self._nlp_state = state
-        return state
+    def _source_storage_path(self, source_id: str, filename: str) -> Path:
+        """Return flattened storage path only (legacy layout is not supported)."""
+        return self._source_storage_flat_path(source_id, filename)
 
-    def normalize_source_name(
-        self,
-        source: KnowledgeSourceSpec,
-        config: KnowledgeConfig | None = None,
-    ) -> KnowledgeSourceSpec:
-        """Return a source with auto-generated name derived from its content/location."""
-        return self._source_with_auto_name(source, config)
+    def _purge_legacy_project_source_dirs(self) -> None:
+        if not self.root_dir.exists() or not self.root_dir.is_dir():
+            return
+        for legacy_dir in self.root_dir.glob("project-*-workspace"):
+            if legacy_dir.is_dir():
+                shutil.rmtree(legacy_dir, ignore_errors=True)
 
-    def get_source_status(
-        self,
-        source_id: str,
-        source: KnowledgeSourceSpec | None = None,
-        config: KnowledgeConfig | None = None,
-        running_config: Any | None = None,
-        *,
-        lightweight: bool = False,
-    ) -> dict[str, Any]:
-        """Return persisted index metadata for a source."""
-        source_stats = self._load_source_stats(source_id)
-        source_index_path = self._source_index_path(source_id)
-        if not source_index_path.exists():
-            manifest_stats = (
-                {
-                    "indexed": False,
-                    "document_count": 0,
-                    "chunk_count": 0,
-                    "sentence_count": 0,
-                    "char_count": 0,
-                    "token_count": 0,
-                }
-                if lightweight
-                else self._derive_source_status_from_manifests(source_id)
-            )
-            raw_document_count = int(source_stats.get("raw_document_count", 0) or 0)
-            fallback_document_count = max(
-                raw_document_count,
-                int(manifest_stats.get("document_count", 0) or 0),
-            )
-            status = {
-                "indexed": bool(manifest_stats.get("indexed", False)),
-                "indexed_at": source_stats.get("indexed_at"),
-                "document_count": fallback_document_count,
-                "chunk_count": int(manifest_stats.get("chunk_count", 0) or 0),
-                "sentence_count": int(manifest_stats.get("sentence_count", 0) or 0),
-                "char_count": int(manifest_stats.get("char_count", 0) or 0),
-                "token_count": int(manifest_stats.get("token_count", 0) or 0),
-                "needs_reindex": bool(source_stats.get("needs_reindex", bool(config))),
-                "error": None,
-                "raw_document_count": raw_document_count,
-                "raw_total_bytes": int(source_stats.get("raw_total_bytes", 0) or 0),
-                "raw_last_ingested_at": source_stats.get("raw_last_ingested_at"),
-                "stats_updated_at": source_stats.get("stats_updated_at"),
-            }
-            if source is not None:
-                status.update(self._remote_source_status(source))
-            return status
-
-        payload = self._load_json(source_index_path)
-        chunks = payload.get("chunks") or []
-        needs_reindex = False
-        if config is not None:
-            current_fingerprint = self.compute_processing_fingerprint(config, running_config)
-            stored_fingerprint = str(payload.get("processing_fingerprint") or "")
-            needs_reindex = current_fingerprint != stored_fingerprint
-        stats_needs_reindex = bool(source_stats.get("needs_reindex", False))
-        raw_document_count = int(source_stats.get("raw_document_count", 0) or 0)
-        sentence_count = int(source_stats.get("sentence_count", 0) or 0)
-        char_count = int(source_stats.get("char_count", 0) or 0)
-        token_count = int(source_stats.get("token_count", 0) or 0)
-        if not lightweight:
-            sentence_count = payload.get("sentence_count", sentence_count or self._sum_chunk_sentence_count(chunks))
-            char_count = payload.get("char_count", char_count or self._sum_chunk_char_count(chunks))
-            token_count = payload.get("token_count", token_count or self._sum_chunk_token_count(chunks))
-        status = {
-            "indexed": True,
-            "indexed_at": payload.get("indexed_at") or source_stats.get("indexed_at"),
-            "document_count": int(payload.get("document_count", raw_document_count) or 0),
-            "chunk_count": int(payload.get("chunk_count", len(chunks)) or 0),
-            "sentence_count": sentence_count,
-            "char_count": char_count,
-            "token_count": token_count,
-            "needs_reindex": bool(needs_reindex or stats_needs_reindex),
-            "error": payload.get("error"),
-            "raw_document_count": raw_document_count,
-            "raw_total_bytes": int(source_stats.get("raw_total_bytes", 0) or 0),
-            "raw_last_ingested_at": source_stats.get("raw_last_ingested_at"),
-            "stats_updated_at": source_stats.get("stats_updated_at"),
-        }
-        if source is not None:
-            status.update(self._remote_source_status(source))
-        return status
-
-    def _derive_source_status_from_manifests(self, source_id: str) -> dict[str, int | bool]:
-        chunk_paths = self._load_source_chunk_manifest(source_id)
-        snapshots = self._load_source_snapshot_manifest(source_id)
-
-        unique_documents = {
-            str(item.get("document_path") or "").strip()
-            for item in snapshots
-            if str(item.get("document_path") or "").strip()
-        }
-
-        sentence_count = 0
-        char_count = 0
-        token_count = 0
-        for chunk_path in chunk_paths:
-            text = self._read_chunk_text_from_path(chunk_path)
-            if not text:
-                continue
-            sentence_count += len(self._split_chunk_sentences(text))
-            char_count += self._count_text_chars(text)
-            token_count += len(
-                self._tokenize_lightweight_text(
-                    text,
-                    exclude_stop_words=False,
-                )
-            )
-
-        document_count = len(unique_documents)
-        if document_count <= 0 and len(chunk_paths) > 0:
-            document_count = 1
-
-        return {
-            "indexed": len(chunk_paths) > 0,
-            "document_count": document_count,
-            "chunk_count": len(chunk_paths),
-            "sentence_count": sentence_count,
-            "char_count": char_count,
-            "token_count": token_count,
-        }
-
-    def _read_chunk_text_from_path(self, chunk_path: str) -> str:
-        normalized = str(chunk_path or "").strip()
-        if not normalized:
-            return ""
-        try:
-            return (self.root_dir / normalized).read_text(encoding="utf-8")
-        except Exception:
-            return ""
+    def _prune_legacy_source_dir(self, source_id: str) -> None:
+        """Remove legacy source directory entirely (no compatibility read path)."""
+        legacy_dir = self._source_dir(source_id)
+        if not legacy_dir.exists() or not legacy_dir.is_dir():
+            return
+        shutil.rmtree(legacy_dir, ignore_errors=True)
 
     def index_source(
         self,
@@ -421,7 +354,7 @@ class KnowledgeManager:
         *,
         include_semantic_artifacts: bool = True,
     ) -> dict[str, Any]:
-        """Index a single source into chunked JSON files."""
+        """Index a single source into stage-separated artifacts."""
         indexed_at = datetime.now(UTC).isoformat()
         live_documents = self._load_documents(source, config)
         documents = self._prepare_documents_for_indexing(
@@ -436,7 +369,7 @@ class KnowledgeManager:
         sentence_count = self._sum_chunk_sentence_count(chunks)
         document_stats = self._build_document_stats(documents)
         processing_fingerprint = self.compute_processing_fingerprint(config, running_config)
-        payload = {
+        payload: dict[str, Any] = {
             "source": source.model_dump(mode="json"),
             "indexed_at": indexed_at,
             "document_count": len(live_documents),
@@ -457,7 +390,6 @@ class KnowledgeManager:
             include_semantic_artifacts=include_semantic_artifacts,
         )
         self._apply_semantic_stage_metrics(payload)
-
         self._clear_l2_checkpoint(payload)
         self._write_source_index_payload(source.id, payload)
         self._update_source_stats_after_index(source.id, payload)
@@ -494,11 +426,11 @@ class KnowledgeManager:
         config: KnowledgeConfig,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> dict[str, Any]:
-        """Generate COR/NER/Syntax artifacts for an existing source index payload."""
-
+        """Generate COR/NER/Syntax artifacts for an existing source payload."""
         payload = self._load_index_payload_safe(source.id)
         if not isinstance(payload, dict):
             raise ValueError(f"Source index payload is missing: {source.id}")
+
         raw_chunks = payload.get("chunks")
         if not isinstance(raw_chunks, list):
             payload["chunks"] = []
@@ -539,7 +471,6 @@ class KnowledgeManager:
             denom = total_chunks * 3
             ratio = (processed / denom) if denom > 0 else 1.0
             progress = 45 + int(max(0.0, min(1.0, ratio)) * 25)
-
             stage_title = {"cor": "COR", "ner": "NER", "syntax": "Syntax"}.get(stage, stage.upper())
             progress_callback(
                 {
@@ -586,25 +517,6 @@ class KnowledgeManager:
         )
 
         self._apply_semantic_stage_metrics(payload)
-        _emit_l2(
-            {
-                "stage": "cor",
-                "done_chunks": total_chunks,
-                "metrics": {
-                    "cor_ready_chunk_count": _safe_count_int(payload.get("cor_ready_chunk_count") or 0),
-                    "cor_cluster_count": _safe_count_int(payload.get("cor_cluster_count") or 0),
-                    "cor_replacement_count": _safe_count_int(payload.get("cor_replacement_count") or 0),
-                    "cor_effective_chunk_count": _safe_count_int(payload.get("cor_effective_chunk_count") or 0),
-                    "ner_ready_chunk_count": _safe_count_int(payload.get("ner_ready_chunk_count") or 0),
-                    "ner_entity_count": _safe_count_int(payload.get("ner_entity_count") or 0),
-                    "syntax_ready_chunk_count": _safe_count_int(payload.get("syntax_ready_chunk_count") or 0),
-                    "syntax_sentence_count": _safe_count_int(payload.get("syntax_sentence_count") or 0),
-                    "syntax_token_count": _safe_count_int(payload.get("syntax_token_count") or 0),
-                    "syntax_relation_count": _safe_count_int(payload.get("syntax_relation_count") or 0),
-                },
-            }
-        )
-
         self._clear_l2_checkpoint(payload)
         self._write_source_index_payload(source.id, payload)
         self._update_source_stats_after_index(source.id, payload)
@@ -703,7 +615,17 @@ class KnowledgeManager:
         }
 
     def delete_index(self, source_id: str) -> None:
-        """Delete persisted index for a source."""
+        """Delete persisted artifacts for a source based on all stage manifests."""
+        # Interlinear/Lightweight
+        interlinear_manifest = self._load_source_interlinear_manifest(source_id)
+        for artifact in interlinear_manifest.get("artifacts", []):
+            path = artifact.get("path")
+            if path:
+                self._delete_interlinear_path(path)
+        lightweight_paths = self._load_source_lightweight_manifest(source_id)
+        for lightweight_path in lightweight_paths:
+            self._delete_lightweight_path(lightweight_path)
+        # Chunk/NER/COR/Syntax
         for chunk_path in self._load_source_chunk_manifest(source_id):
             self._delete_chunk_path(chunk_path)
         for cor_path in self._load_source_cor_manifest(source_id):
@@ -712,35 +634,41 @@ class KnowledgeManager:
             self._delete_ner_path(ner_path)
         for syntax_path in self._load_source_syntax_manifest(source_id):
             self._delete_syntax_path(syntax_path)
+        # Snapshots
         for snapshot in self._load_source_snapshot_manifest(source_id):
             self._delete_snapshot_file(snapshot.get("snapshot_path"))
-        payload = self._load_index_payload_safe(source_id)
-        self._delete_chunks_from_payload(payload)
-        self._delete_cor_from_payload(payload)
-        self._delete_ner_from_payload(payload)
-        self._delete_syntax_from_payload(payload)
-        for interlinear_path in self._load_source_interlinear_manifest(source_id):
-            self._delete_interlinear_path(interlinear_path)
-        for lightweight_path in self._load_source_lightweight_manifest(source_id):
-            self._delete_lightweight_path(lightweight_path)
-        raw_dir = self._source_raw_dir(source_id)
-        if raw_dir.exists():
-            shutil.rmtree(raw_dir, ignore_errors=True)
+        # 扁平化元数据文件
+        for filename in (
+            "content.md",
+            "index.json",
+            "source.json",
+            "stats.json",
+            "chunk-manifest.json",
+            "cor-manifest.json",
+            "ner-manifest.json",
+            "syntax-manifest.json",
+            "snapshot-manifest.json",
+            "interlinear-manifest.json",
+            "lightweight-manifest.json",
+            "interlinear-lightweight-map.json",
+        ):
+            flat_path = self._source_storage_flat_path(source_id, filename)
+            if flat_path.exists() and flat_path.is_file():
+                try:
+                    flat_path.unlink()
+                except OSError:
+                    pass
+        # 彻底移除 source 目录
         source_dir = self._source_dir(source_id)
         if source_dir.exists():
             shutil.rmtree(source_dir, ignore_errors=True)
 
     def clear_knowledge(self, config: KnowledgeConfig, *, remove_sources: bool = True) -> dict[str, Any]:
-        """Clear persisted knowledge data and optionally reset configured sources."""
+        """Interlinear-only: 清理所有知识工件和配置。"""
         source_count = len(config.sources)
-        cleared_indexes = 0
-        if self.sources_dir.exists():
-            cleared_indexes = len(list(self.sources_dir.glob("*/index.json")))
-
         if self.root_dir.exists():
             shutil.rmtree(self.root_dir, ignore_errors=True)
-
-        # Recreate expected directory structure after cleanup.
+        # 只重建 Interlinear/轻量化等目录
         self.raw_dir.mkdir(parents=True, exist_ok=True)
         self.chunks_dir.mkdir(parents=True, exist_ok=True)
         self.cor_dir.mkdir(parents=True, exist_ok=True)
@@ -748,17 +676,13 @@ class KnowledgeManager:
         self.syntax_dir.mkdir(parents=True, exist_ok=True)
         self.interlinear_dir.mkdir(parents=True, exist_ok=True)
         self.lightweight_dir.mkdir(parents=True, exist_ok=True)
-        self.sources_dir.mkdir(parents=True, exist_ok=True)
         self.uploads_dir.mkdir(parents=True, exist_ok=True)
         self.remote_blob_dir.mkdir(parents=True, exist_ok=True)
         self.remote_meta_dir.mkdir(parents=True, exist_ok=True)
-
         if remove_sources:
             config.sources = []
-
         return {
             "cleared": True,
-            "cleared_indexes": cleared_indexes,
             "cleared_sources": source_count if remove_sources else 0,
             "removed_source_configs": bool(remove_sources),
         }
@@ -773,7 +697,7 @@ class KnowledgeManager:
         project_scope: list[str] | None = None,
         include_global: bool = True,
     ) -> dict[str, Any]:
-        """Search indexed chunks with a lightweight lexical scorer."""
+        """Search indexed interlinear artifacts with a lightweight lexical scorer."""
         source_map = {source.id: source for source in config.sources}
         terms = [term for term in re.findall(r"\w+", query.lower()) if term]
         if not terms:
@@ -796,12 +720,17 @@ class KnowledgeManager:
                 is_global_source = not source_project_id
                 if not in_project_scope and not (include_global and is_global_source):
                     continue
-            payload = self._load_index_payload(source.id)
-            if payload is None:
-                continue
-            for chunk in payload.get("chunks", []):
-                chunk_text = self._read_chunk_text(chunk)
-                score = self._score_chunk(chunk_text, terms)
+            interlinear_manifest = self._load_source_interlinear_manifest(source.id)
+            artifacts = interlinear_manifest.get("artifacts", [])
+            for artifact in artifacts:
+                interlinear_path = artifact.get("path")
+                if not interlinear_path:
+                    continue
+                try:
+                    text = (self.root_dir / interlinear_path).read_text(encoding="utf-8")
+                except Exception:
+                    text = ""
+                score = self._score_chunk(text, terms)
                 if score <= 0:
                     continue
                 hits.append(
@@ -809,70 +738,24 @@ class KnowledgeManager:
                         "source_id": source.id,
                         "source_name": source_map[source.id].name,
                         "source_type": source.type,
-                        "document_path": chunk.get("document_path"),
-                        "document_title": chunk.get("document_title"),
+                        "document_path": artifact.get("document_path"),
+                        "document_title": artifact.get("title"),
                         "score": score,
-                        "snippet": self._build_snippet(
-                            chunk_text,
-                            terms,
-                        ),
+                        "snippet": self._build_snippet(text, terms),
                     },
                 )
 
         hits.sort(key=lambda item: item["score"], reverse=True)
         return {"query": query, "hits": hits[:limit]}
 
-    def get_source_documents(self, source_id: str) -> dict[str, Any]:
-        """Return the indexed documents for a source, merged by document path."""
-        payload = self._load_index_payload(source_id)
-        if payload is None:
-            return {"indexed": False, "documents": []}
-        chunks = payload.get("chunks", [])
-        # Merge chunks back into per-document text blocks
-        docs: dict[str, dict[str, Any]] = {}
-        for chunk in chunks:
-            doc_path = chunk.get("document_path") or source_id
-            if doc_path not in docs:
-                docs[doc_path] = {
-                    "path": doc_path,
-                    "title": chunk.get("document_title") or doc_path,
-                    "text": [],
-                }
-            docs[doc_path]["text"].append(self._read_chunk_text(chunk))
-        documents = [
-            {
-                "path": d["path"],
-                "title": d["title"],
-                "text": "\n\n".join(d["text"]),
-            }
-            for d in docs.values()
-        ]
-        return {
-            "indexed": True,
-            "indexed_at": payload.get("indexed_at"),
-            "document_count": payload.get("document_count", len(documents)),
-            "snapshot_count": payload.get("snapshot_count", len(documents)),
-            "chunk_count": payload.get("chunk_count", len(chunks)),
-            "sentence_count": payload.get(
-                "sentence_count",
-                self._sum_chunk_sentence_count(chunks),
-            ),
-            "char_count": payload.get(
-                "char_count",
-                self._sum_chunk_char_count(chunks),
-            ),
-            "token_count": payload.get(
-                "token_count",
-                self._sum_chunk_token_count(chunks),
-            ),
-            "documents": documents,
-        }
-
-    def _source_dir(self, source_id: str) -> Path:
-        return self.sources_dir / self._safe_name(source_id)
+    def _source_content_md_path(self, source_id: str) -> Path:
+        return self._source_storage_path(source_id, "content.md")
 
     def _source_index_path(self, source_id: str) -> Path:
-        return self._source_dir(source_id) / "index.json"
+        return self._source_storage_path(source_id, "index.json")
+
+    def _source_metadata_path(self, source_id: str) -> Path:
+        return self._source_storage_path(source_id, "source.json")
 
     def _write_source_index_payload(self, source_id: str, payload: dict[str, Any]) -> None:
         index_path = self._source_index_path(source_id)
@@ -882,8 +765,26 @@ class KnowledgeManager:
             encoding="utf-8",
         )
 
-    def _source_content_md_path(self, source_id: str) -> Path:
-        return self._source_dir(source_id) / "content.md"
+    def _write_source_metadata(
+        self,
+        source: KnowledgeSourceSpec,
+        *,
+        indexed_at: str | None = None,
+    ) -> None:
+        metadata_path = self._source_metadata_path(source.id)
+        metadata_path.parent.mkdir(parents=True, exist_ok=True)
+        metadata_path.write_text(
+            json.dumps(
+                {
+                    "source": source.model_dump(mode="json"),
+                    "indexed_at": indexed_at,
+                    "updated_at": datetime.now(UTC).isoformat(),
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
 
     def _chunk_stage_paths(self, chunk: dict[str, Any], *, stage: str) -> list[str]:
         keys = _SEMANTIC_STAGE_PATH_KEYS.get(stage, ())
@@ -932,7 +833,7 @@ class KnowledgeManager:
         payload.pop("l2_checkpoint", None)
 
     def _source_stats_path(self, source_id: str) -> Path:
-        return self._source_dir(source_id) / "stats.json"
+        return self._source_storage_path(source_id, "stats.json")
 
     def _load_source_stats(self, source_id: str) -> dict[str, Any]:
         path = self._source_stats_path(source_id)
@@ -995,25 +896,25 @@ class KnowledgeManager:
         self._write_source_stats(source_id, updated)
 
     def _source_chunk_manifest_path(self, source_id: str) -> Path:
-        return self._source_dir(source_id) / "chunk-manifest.json"
+        return self._source_storage_path(source_id, "chunk-manifest.json")
 
     def _source_cor_manifest_path(self, source_id: str) -> Path:
-        return self._source_dir(source_id) / "cor-manifest.json"
+        return self._source_storage_path(source_id, "cor-manifest.json")
 
     def _source_ner_manifest_path(self, source_id: str) -> Path:
-        return self._source_dir(source_id) / "ner-manifest.json"
+        return self._source_storage_path(source_id, "ner-manifest.json")
 
     def _source_syntax_manifest_path(self, source_id: str) -> Path:
-        return self._source_dir(source_id) / "syntax-manifest.json"
+        return self._source_storage_path(source_id, "syntax-manifest.json")
 
     def _source_snapshot_manifest_path(self, source_id: str) -> Path:
-        return self._source_dir(source_id) / "snapshot-manifest.json"
+        return self._source_storage_path(source_id, "snapshot-manifest.json")
 
     def _source_interlinear_manifest_path(self, source_id: str) -> Path:
-        return self._source_dir(source_id) / "interlinear-manifest.json"
+        return self._source_storage_path(source_id, "interlinear-manifest.json")
 
     def _source_lightweight_manifest_path(self, source_id: str) -> Path:
-        return self._source_dir(source_id) / "lightweight-manifest.json"
+        return self._source_storage_path(source_id, "lightweight-manifest.json")
 
     def _source_uses_root_raw_dir(self, source: KnowledgeSourceSpec | None) -> bool:
         if source is None:
@@ -1237,24 +1138,36 @@ class KnowledgeManager:
             encoding="utf-8",
         )
 
-    def _load_source_interlinear_manifest(self, source_id: str) -> set[str]:
+    def _load_source_interlinear_manifest(self, source_id: str) -> dict:
+        """
+        读取统一 schema 的 interlinear-manifest.json。
+        返回 dict，含 artifacts/summary/updated_at/source_id。
+        若不存在则返回空 dict。
+        """
         path = self._source_interlinear_manifest_path(source_id)
         if not path.exists():
-            return set()
+            return {}
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except Exception:
-            return set()
+            return {}
         if not isinstance(payload, dict):
-            return set()
-        interlinear_paths = payload.get("interlinear_paths")
-        if not isinstance(interlinear_paths, list):
-            return set()
-        return {
-            str(item).strip()
-            for item in interlinear_paths
-            if isinstance(item, str) and str(item).strip()
-        }
+            return {}
+        # 兼容旧格式
+        if "artifacts" not in payload:
+            interlinear_paths = payload.get("interlinear_paths")
+            if not isinstance(interlinear_paths, list):
+                return {}
+            artifacts = [
+                {"path": str(item).strip()} for item in interlinear_paths if isinstance(item, str) and str(item).strip()
+            ]
+            payload = {
+                "source_id": payload.get("source_id", source_id),
+                "updated_at": payload.get("updated_at"),
+                "artifacts": artifacts,
+                "summary": {},
+            }
+        return payload
 
     def _load_source_lightweight_manifest(self, source_id: str) -> set[str]:
         path = self._source_lightweight_manifest_path(source_id)
@@ -1275,18 +1188,27 @@ class KnowledgeManager:
             if isinstance(item, str) and str(item).strip()
         }
 
-    def _write_source_interlinear_manifest(self, source_id: str, interlinear_paths: set[str]) -> None:
+    def _write_source_interlinear_manifest(self, source_id: str, artifacts: list[dict]) -> None:
+        """
+        写入统一 schema 的 interlinear-manifest.json。
+        artifacts: 每个元素包含 path/document_path/title/chunk_id/sentence_count/char_count/token_count/updated_at 等。
+        """
+        summary = {
+            "document_count": len({a.get("document_path") for a in artifacts}),
+            "chunk_count": len(artifacts),
+            "sentence_count": sum(a.get("sentence_count", 0) for a in artifacts),
+            "char_count": sum(a.get("char_count", 0) for a in artifacts),
+            "token_count": sum(a.get("token_count", 0) for a in artifacts),
+        }
+        payload = {
+            "source_id": source_id,
+            "updated_at": datetime.now(UTC).isoformat(),
+            "artifacts": artifacts,
+            "summary": summary,
+            # "input_fingerprint": "sha256:TODO",  # 可后续补充
+        }
         self._source_interlinear_manifest_path(source_id).write_text(
-            json.dumps(
-                {
-                    "source_id": source_id,
-                    "interlinear_paths": sorted(interlinear_paths),
-                    "updated_at": datetime.now(UTC).isoformat(),
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-            encoding="utf-8",
+            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
         )
 
     def _write_source_lightweight_manifest(self, source_id: str, lightweight_paths: set[str]) -> None:
@@ -1402,12 +1324,14 @@ class KnowledgeManager:
         source_id: str,
         snapshots: list[dict[str, str]],
     ) -> None:
-        previous_interlinear_paths = self._load_source_interlinear_manifest(source_id)
+        previous_interlinear = self._load_source_interlinear_manifest(source_id)
+        previous_interlinear_paths = {a.get("path") for a in previous_interlinear.get("artifacts", []) if a.get("path")}
         previous_lightweight_paths = self._load_source_lightweight_manifest(source_id)
 
         current_interlinear_paths: set[str] = set()
         current_lightweight_paths: set[str] = set()
         metadata_rows: list[dict[str, str]] = []
+        artifacts: list[dict] = []
 
         for snapshot_entry in snapshots:
             generated = self._write_snapshot_interlinear_and_lightweight(source_id, snapshot_entry)
@@ -1424,6 +1348,49 @@ class KnowledgeManager:
             for path_value in (lightweight_path, lightweight_token_stats_path):
                 if path_value:
                     current_lightweight_paths.add(path_value)
+
+            # 读取行级统计
+            char_stats = []
+            token_stats = []
+            if interlinear_char_stats_path:
+                char_stats_path = self.root_dir / interlinear_char_stats_path
+                if char_stats_path.exists():
+                    try:
+                        char_stats = json.loads(char_stats_path.read_text(encoding="utf-8"))
+                    except Exception:
+                        char_stats = []
+            if lightweight_token_stats_path:
+                token_stats_path = self.root_dir / lightweight_token_stats_path
+                if token_stats_path.exists():
+                    try:
+                        token_stats = json.loads(token_stats_path.read_text(encoding="utf-8"))
+                    except Exception:
+                        token_stats = []
+
+            # 合并行级统计
+            line_stats = {}
+            for row in char_stats:
+                if "line_no" in row:
+                    line_stats[row["line_no"]] = {"char_count": row.get("char_count", 0)}
+            for row in token_stats:
+                if "line_no" in row:
+                    if row["line_no"] not in line_stats:
+                        line_stats[row["line_no"]] = {}
+                    line_stats[row["line_no"]]["token_count"] = row.get("token_count", 0)
+
+            # 生成 artifacts（每行为一个 artifact）
+            for line_no, stats in line_stats.items():
+                artifacts.append({
+                    "path": interlinear_path,
+                    "document_path": str(snapshot_entry.get("document_path") or "").strip(),
+                    "title": str(snapshot_entry.get("title") or "").strip(),
+                    "snapshot_path": str(snapshot_entry.get("snapshot_path") or "").strip(),
+                    "snapshot_relative_path": str(snapshot_entry.get("snapshot_relative_path") or "").strip(),
+                    "line_no": line_no,
+                    "char_count": stats.get("char_count", 0),
+                    "token_count": stats.get("token_count", 0),
+                    "updated_at": datetime.now(UTC).isoformat(),
+                })
 
             metadata_rows.append(
                 {
@@ -1442,10 +1409,11 @@ class KnowledgeManager:
         for lightweight_path in previous_lightweight_paths - current_lightweight_paths:
             self._delete_lightweight_path(lightweight_path)
 
-        self._write_source_interlinear_manifest(source_id, current_interlinear_paths)
+        # 写入统一 schema 的 interlinear-manifest.json
+        self._write_source_interlinear_manifest(source_id, artifacts)
         self._write_source_lightweight_manifest(source_id, current_lightweight_paths)
 
-        metadata_path = self._source_dir(source_id) / "interlinear-lightweight-map.json"
+        metadata_path = self._source_storage_path(source_id, "interlinear-lightweight-map.json")
         metadata_path.parent.mkdir(parents=True, exist_ok=True)
         metadata_path.write_text(
             json.dumps(
@@ -1459,66 +1427,6 @@ class KnowledgeManager:
             ),
             encoding="utf-8",
         )
-
-    def _collect_chunk_paths_from_payload(self, payload: dict[str, Any] | None) -> set[str]:
-        if not isinstance(payload, dict):
-            return set()
-        source = None
-        source_payload = payload.get("source")
-        if isinstance(source_payload, dict):
-            try:
-                source = KnowledgeSourceSpec.model_validate(source_payload)
-            except Exception:
-                source = None
-        results: set[str] = set()
-        for chunk in payload.get("chunks") or []:
-            if not isinstance(chunk, dict):
-                continue
-            chunk_path = str(chunk.get("chunk_path") or "").strip()
-            if not chunk_path and source is not None:
-                chunk_path = self._build_chunk_relative_path(source, chunk).as_posix()
-            if chunk_path:
-                results.add(chunk_path)
-        return results
-
-    def _collect_ner_paths_from_payload(self, payload: dict[str, Any] | None) -> set[str]:
-        if not isinstance(payload, dict):
-            return set()
-        results: set[str] = set()
-        for chunk in payload.get("chunks") or []:
-            if not isinstance(chunk, dict):
-                continue
-            for key in ("ner_path", "ner_structured_path", "ner_annotated_path"):
-                ner_path = str(chunk.get(key) or "").strip()
-                if ner_path:
-                    results.add(ner_path)
-        return results
-
-    def _collect_cor_paths_from_payload(self, payload: dict[str, Any] | None) -> set[str]:
-        if not isinstance(payload, dict):
-            return set()
-        results: set[str] = set()
-        for chunk in payload.get("chunks") or []:
-            if not isinstance(chunk, dict):
-                continue
-            for key in ("cor_path", "cor_structured_path", "cor_annotated_path"):
-                cor_path = str(chunk.get(key) or "").strip()
-                if cor_path:
-                    results.add(cor_path)
-        return results
-
-    def _collect_syntax_paths_from_payload(self, payload: dict[str, Any] | None) -> set[str]:
-        if not isinstance(payload, dict):
-            return set()
-        results: set[str] = set()
-        for chunk in payload.get("chunks") or []:
-            if not isinstance(chunk, dict):
-                continue
-            for key in ("syntax_path", "syntax_structured_path", "syntax_annotated_path"):
-                syntax_path = str(chunk.get(key) or "").strip()
-                if syntax_path:
-                    results.add(syntax_path)
-        return results
 
     def _delete_chunk_path(self, relative_path: str | Path | None) -> None:
         text = str(relative_path or "").strip()
@@ -1633,22 +1541,6 @@ class KnowledgeManager:
             except OSError:
                 break
             current = current.parent
-
-    def _delete_chunks_from_payload(self, payload: dict[str, Any] | None) -> None:
-        for chunk_path in self._collect_chunk_paths_from_payload(payload):
-            self._delete_chunk_path(chunk_path)
-
-    def _delete_ner_from_payload(self, payload: dict[str, Any] | None) -> None:
-        for ner_path in self._collect_ner_paths_from_payload(payload):
-            self._delete_ner_path(ner_path)
-
-    def _delete_cor_from_payload(self, payload: dict[str, Any] | None) -> None:
-        for cor_path in self._collect_cor_paths_from_payload(payload):
-            self._delete_cor_path(cor_path)
-
-    def _delete_syntax_from_payload(self, payload: dict[str, Any] | None) -> None:
-        for syntax_path in self._collect_syntax_paths_from_payload(payload):
-            self._delete_syntax_path(syntax_path)
 
     def _read_chunk_text(self, chunk: dict[str, Any]) -> str:
         chunk_text = chunk.get("text")
@@ -2376,17 +2268,15 @@ class KnowledgeManager:
             "",
             "## Entity Index",
             "",
-            "| id | surface | label | start | end | sentence | normalized | confidence |",
-            "| --- | --- | --- | ---: | ---: | ---: | --- | ---: |",
+            "| id | surface | label | start | end |",
+            "| --- | --- | --- | ---: | ---: |",
         ]
         for mention in mentions:
             surface = str(mention.get("surface") or "").replace("|", "\\|")
             normalized = str(mention.get("normalized") or "").replace("|", "\\|")
             lines.append(
                 "| "
-                f"{mention.get('entity_id') or ''} | {surface} | {mention.get('label') or 'semantic_token'} | "
-                f"{mention.get('start') or 0} | {mention.get('end') or 0} | {mention.get('sentence_index') or 0} | "
-                f"{normalized} | {float(mention.get('confidence') or 0.0):.2f} |"
+                f"{mention.get('entity_id') or ''} | {surface} | {mention.get('label') or 'semantic_token'} | {mention.get('start') or 0} | {mention.get('end') or 0} |"
             )
         return "\n".join(lines)
 
@@ -2848,7 +2738,6 @@ class KnowledgeManager:
         progress_end: int = 70,
     ) -> set[str]:
         previous_manifest_paths = self._load_source_syntax_manifest(source.id)
-        previous_payload = self._load_index_payload_safe(source.id)
         current_syntax_paths: set[str] = set()
         raw_chunks = payload.get("chunks") or []
         chunks = raw_chunks if isinstance(raw_chunks, list) else []
@@ -2926,7 +2815,11 @@ class KnowledgeManager:
                 )
                 syntax_structured_file_path.parent.mkdir(parents=True, exist_ok=True)
                 syntax_structured_file_path.write_text(
-                    json.dumps(structured_payload, ensure_ascii=False, indent=2) + "\n",
+                    json.dumps(
+                        structured_payload,
+                        ensure_ascii=False,
+                        indent=2,
+                    ) + "\n",
                     encoding="utf-8",
                 )
                 syntax_annotated_file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -2972,9 +2865,7 @@ class KnowledgeManager:
                     }
                 )
 
-        stale_syntax_paths = (
-            previous_manifest_paths | self._collect_syntax_paths_from_payload(previous_payload)
-        ) - current_syntax_paths
+        stale_syntax_paths = previous_manifest_paths - current_syntax_paths
         for syntax_path in stale_syntax_paths:
             self._delete_syntax_path(syntax_path)
         self._write_source_syntax_manifest(source.id, current_syntax_paths)
@@ -2991,7 +2882,6 @@ class KnowledgeManager:
         progress_end: int = 54,
     ) -> set[str]:
         previous_manifest_paths = self._load_source_cor_manifest(source.id)
-        previous_payload = self._load_index_payload_safe(source.id)
         current_cor_paths: set[str] = set()
         semantic_state = self.get_semantic_engine_state(config) if config is not None else self._semantic_engine_state(
             status="unavailable",
@@ -3101,7 +2991,11 @@ class KnowledgeManager:
             )
             cor_structured_file_path.parent.mkdir(parents=True, exist_ok=True)
             cor_structured_file_path.write_text(
-                json.dumps(structured_payload, ensure_ascii=False, indent=2) + "\n",
+                json.dumps(
+                    structured_payload,
+                    ensure_ascii=False,
+                    indent=2,
+                ) + "\n",
                 encoding="utf-8",
             )
             cor_annotated_file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -3152,9 +3046,7 @@ class KnowledgeManager:
                     }
                 )
 
-        stale_cor_paths = (
-            previous_manifest_paths | self._collect_cor_paths_from_payload(previous_payload)
-        ) - current_cor_paths
+        stale_cor_paths = previous_manifest_paths - current_cor_paths
         for cor_path in stale_cor_paths:
             self._delete_cor_path(cor_path)
         self._write_source_cor_manifest(source.id, current_cor_paths)
@@ -3199,7 +3091,6 @@ class KnowledgeManager:
         progress_end: int = 63,
     ) -> set[str]:
         previous_manifest_paths = self._load_source_ner_manifest(source.id)
-        previous_payload = self._load_index_payload_safe(source.id)
         current_ner_paths: set[str] = set()
         semantic_state = self.get_semantic_engine_state(config) if config is not None else self._semantic_engine_state(
             status="unavailable",
@@ -3308,8 +3199,7 @@ class KnowledgeManager:
                     ),
                     ensure_ascii=False,
                     indent=2,
-                )
-                + "\n",
+                ) + "\n",
                 encoding="utf-8",
             )
             ner_annotated_file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -3356,17 +3246,79 @@ class KnowledgeManager:
                     }
                 )
 
-        stale_ner_paths = (
-            previous_manifest_paths
-            | self._collect_ner_paths_from_payload(previous_payload)
-        ) - current_ner_paths
+        stale_ner_paths = previous_manifest_paths - current_ner_paths
         for ner_path in stale_ner_paths:
             self._delete_ner_path(ner_path)
         self._write_source_ner_manifest(source.id, current_ner_paths)
         return current_ner_paths
 
     def get_source_storage_dir(self, source_id: str) -> Path:
-        return self._source_dir(source_id)
+        # 扁平化模式下 source 元数据文件位于知识根目录
+        return self.root_dir
+
+    def get_source_storage_files(self, source_id: str) -> list[Path]:
+        """Collect source-related files under flattened storage layout."""
+        candidates: list[Path] = []
+        metadata_filenames = (
+            "content.md",
+            "index.json",
+            "source.json",
+            "stats.json",
+            "chunk-manifest.json",
+            "cor-manifest.json",
+            "ner-manifest.json",
+            "syntax-manifest.json",
+            "snapshot-manifest.json",
+            "interlinear-manifest.json",
+            "lightweight-manifest.json",
+            "interlinear-lightweight-map.json",
+        )
+        for filename in metadata_filenames:
+            flat_path = self._source_storage_flat_path(source_id, filename)
+            if flat_path.exists() and flat_path.is_file():
+                candidates.append(flat_path)
+
+        for chunk_path in self._load_source_chunk_manifest(source_id):
+            path = self.root_dir / str(chunk_path)
+            if path.exists() and path.is_file():
+                candidates.append(path)
+        for cor_path in self._load_source_cor_manifest(source_id):
+            path = self.root_dir / str(cor_path)
+            if path.exists() and path.is_file():
+                candidates.append(path)
+        for ner_path in self._load_source_ner_manifest(source_id):
+            path = self.root_dir / str(ner_path)
+            if path.exists() and path.is_file():
+                candidates.append(path)
+        for syntax_path in self._load_source_syntax_manifest(source_id):
+            path = self.root_dir / str(syntax_path)
+            if path.exists() and path.is_file():
+                candidates.append(path)
+
+        interlinear_manifest = self._load_source_interlinear_manifest(source_id)
+        for artifact in interlinear_manifest.get("artifacts", []):
+            artifact_path = str(artifact.get("path") or "").strip()
+            if not artifact_path:
+                continue
+            path = self.root_dir / artifact_path
+            if path.exists() and path.is_file():
+                candidates.append(path)
+        for lightweight_path in self._load_source_lightweight_manifest(source_id):
+            path = self.root_dir / str(lightweight_path)
+            if path.exists() and path.is_file():
+                candidates.append(path)
+        for snapshot in self._load_source_snapshot_manifest(source_id):
+            snapshot_path = str(snapshot.get("snapshot_path") or "").strip()
+            if not snapshot_path:
+                continue
+            path = Path(snapshot_path)
+            if path.exists() and path.is_file():
+                candidates.append(path)
+
+        unique: dict[str, Path] = {}
+        for path in candidates:
+            unique[path.as_posix()] = path
+        return sorted(unique.values(), key=lambda item: item.as_posix())
 
     def get_source_chunk_documents(self, source_id: str) -> dict[str, Any]:
         payload = self._load_index_payload(source_id)
@@ -3433,16 +3385,38 @@ class KnowledgeManager:
         }
 
     def list_sources_from_storage(self) -> list[KnowledgeSourceSpec]:
-        """Rebuild source specs from persisted v2 storage layout."""
+        """Rebuild source specs from source-level metadata, with index fallback."""
         sources: list[KnowledgeSourceSpec] = []
-        for index_path in sorted(self.sources_dir.glob("*/index.json")):
+        seen_source_ids: set[str] = set()
+
+        for metadata_path in sorted(self.root_dir.glob("*--source.json")):
+            try:
+                payload = self._load_json(metadata_path)
+                source_payload = payload.get("source")
+                if not isinstance(source_payload, dict):
+                    continue
+                source = KnowledgeSourceSpec.model_validate(source_payload)
+                if source.id in seen_source_ids:
+                    continue
+                sources.append(source)
+                seen_source_ids.add(source.id)
+            except Exception:
+                logger.warning(
+                    "Failed to read source metadata from storage: %s",
+                    metadata_path,
+                )
+
+        for index_path in sorted(self.root_dir.glob("*--index.json")):
             try:
                 payload = self._load_json(index_path)
                 source_payload = payload.get("source")
                 if not isinstance(source_payload, dict):
                     continue
                 source = KnowledgeSourceSpec.model_validate(source_payload)
+                if source.id in seen_source_ids:
+                    continue
                 sources.append(source)
+                seen_source_ids.add(source.id)
             except Exception:
                 logger.warning(
                     "Failed to read source spec from storage index: %s",
@@ -3465,12 +3439,7 @@ class KnowledgeManager:
         config: KnowledgeConfig | None = None,
         include_semantic_artifacts: bool = True,
     ) -> None:
-        previous_payload = self._load_index_payload_safe(source.id)
         previous_manifest_paths = self._load_source_chunk_manifest(source.id)
-        source_dir = self._source_dir(source.id)
-        source_dir.mkdir(parents=True, exist_ok=True)
-        (source_dir / "raw").mkdir(parents=True, exist_ok=True)
-        (source_dir / "media").mkdir(parents=True, exist_ok=True)
 
         current_chunk_paths: set[str] = set()
         for chunk in payload.get("chunks") or []:
@@ -3487,10 +3456,7 @@ class KnowledgeManager:
             current_chunk_paths.add(chunk["chunk_path"])
             chunk.pop("text", None)
 
-        stale_chunk_paths = (
-            previous_manifest_paths
-            | self._collect_chunk_paths_from_payload(previous_payload)
-        ) - current_chunk_paths
+        stale_chunk_paths = previous_manifest_paths - current_chunk_paths
         for chunk_path in stale_chunk_paths:
             self._delete_chunk_path(chunk_path)
 
@@ -3530,35 +3496,28 @@ class KnowledgeManager:
                 chunk.pop("syntax_structured_path", None)
                 chunk.pop("syntax_annotated_path", None)
 
-            stale_cor_paths = (
-                self._load_source_cor_manifest(source.id)
-                | self._collect_cor_paths_from_payload(previous_payload)
-            )
+            stale_cor_paths = self._load_source_cor_manifest(source.id)
             for cor_path in stale_cor_paths:
                 self._delete_cor_path(cor_path)
             self._write_source_cor_manifest(source.id, set())
 
-            stale_ner_paths = (
-                self._load_source_ner_manifest(source.id)
-                | self._collect_ner_paths_from_payload(previous_payload)
-            )
+            stale_ner_paths = self._load_source_ner_manifest(source.id)
             for ner_path in stale_ner_paths:
                 self._delete_ner_path(ner_path)
             self._write_source_ner_manifest(source.id, set())
 
-            stale_syntax_paths = (
-                self._load_source_syntax_manifest(source.id)
-                | self._collect_syntax_paths_from_payload(previous_payload)
-            )
+            stale_syntax_paths = self._load_source_syntax_manifest(source.id)
             for syntax_path in stale_syntax_paths:
                 self._delete_syntax_path(syntax_path)
             self._write_source_syntax_manifest(source.id, set())
 
         self._write_source_index_payload(source.id, payload)
+        self._write_source_metadata(source, indexed_at=str(payload.get("indexed_at") or ""))
         self._source_content_md_path(source.id).write_text(
             self._build_source_markdown(source, documents),
             encoding="utf-8",
         )
+        self._prune_legacy_source_dir(source.id)
         self._update_catalog_entry(source, payload)
 
     def _update_catalog_entry(
@@ -5314,29 +5273,51 @@ class KnowledgeManager:
         }
 
     def _load_backfill_state(self) -> dict[str, Any]:
-        if not self.backfill_state_path.exists():
+        path = getattr(
+            self,
+            "backfill_state_path",
+            self.knowledge_dir / "history-backfill-state.json",
+        )
+        if not path.exists():
             return {}
         try:
-            return self._load_json(self.backfill_state_path)
+            return self._load_json(path)
         except Exception:
             return {}
 
     def _save_backfill_state(self, payload: dict[str, Any]) -> None:
-        self.backfill_state_path.write_text(
+        path = getattr(
+            self,
+            "backfill_state_path",
+            self.knowledge_dir / "history-backfill-state.json",
+        )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
 
     def _load_backfill_progress_state(self) -> dict[str, Any]:
-        if not self.backfill_progress_path.exists():
+        path = getattr(
+            self,
+            "backfill_progress_path",
+            self.knowledge_dir / "history-backfill-progress.json",
+        )
+        if not path.exists():
             return {}
         try:
-            return self._load_json(self.backfill_progress_path)
+            return self._load_json(path)
         except Exception:
             return {}
 
     def _save_backfill_progress(self, payload: dict[str, Any]) -> None:
-        self.backfill_progress_path.write_text(
+        path = getattr(
+            self,
+            "backfill_progress_path",
+            self.knowledge_dir / "history-backfill-progress.json",
+        )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
