@@ -21,7 +21,12 @@ from fastapi.responses import StreamingResponse
 from ...config import load_config, save_config
 from ...config.config import KnowledgeConfig, KnowledgeSourceSpec, load_agent_config, save_agent_config
 from ...constant import WORKING_DIR
-from ...knowledge import GraphOpsManager, KnowledgeManager, ProjectKnowledgeSyncManager
+from ...knowledge import (
+    GraphOpsManager,
+    KnowledgeManager,
+    ProjectKnowledgeSyncManager,
+    QuantizationFacade,
+)
 from ...knowledge.project_sync import ProjectSyncCommand, ProjectSyncCoordinator, ensure_project_source_registered
 from ...knowledge.module_skills import sync_knowledge_module_skills
 from ..agent_context import get_agent_for_request
@@ -373,6 +378,24 @@ def _project_sync_for_workspace(
         workspace_dir,
         knowledge_dirname=_knowledge_dirname_for_project(project_id),
     )
+
+
+def _quantization_facade_for_workspace(
+    workspace_dir: Path | str,
+    *,
+    project_id: str | None = None,
+) -> QuantizationFacade:
+    return QuantizationFacade(
+        workspace_dir,
+        knowledge_dirname=_knowledge_dirname_for_project(project_id),
+    )
+
+
+def _normalize_quant_stage(stage: str) -> str:
+    normalized = (stage or "").strip().lower()
+    if normalized not in {"l1", "l2", "l3"}:
+        raise HTTPException(status_code=400, detail="QUANTIZATION_STAGE_INVALID")
+    return normalized
 
 
 def _project_sync_coordinator_for_workspace(
@@ -808,6 +831,148 @@ async def search_knowledge(
         source_types=types or None,
         project_scope=projects or None,
         include_global=include_global,
+    )
+
+
+@router.post("/quantization/stages/{stage}/run")
+async def run_quantization_stage(
+    stage: str,
+    request: Request,
+    source_id: str = Body(...),
+    snapshot_id: str = Body(default="latest"),
+    metrics: dict[str, object] | None = Body(default=None),
+    metadata: dict[str, object] | None = Body(default=None),
+):
+    _, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    _ensure_knowledge_enabled_flag(knowledge_config.enabled)
+    normalized_stage = _normalize_quant_stage(stage)
+    if not bool(getattr(knowledge_config, "memify_enabled", False)):
+        raise HTTPException(status_code=400, detail="MEMIFY_DISABLED")
+    facade = _quantization_facade_for_workspace(
+        workspace_dir,
+        project_id=_resolve_project_id(request),
+    )
+    try:
+        payload = await asyncio.to_thread(
+            facade.run_stage,
+            stage=normalized_stage,
+            source_id=(source_id or "").strip(),
+            snapshot_id=(snapshot_id or "latest").strip() or "latest",
+            metrics=dict(metrics or {}),
+            metadata=dict(metadata or {}),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return payload
+
+
+@router.get("/quantization/stages/{stage}/stats")
+async def get_quantization_stage_stats(
+    stage: str,
+    request: Request,
+    source_id: str = Query(default=""),
+    snapshot_id: str = Query(default=""),
+    limit: int = Query(default=50, ge=1, le=200),
+):
+    _, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    _ensure_knowledge_enabled_flag(knowledge_config.enabled)
+    normalized_stage = _normalize_quant_stage(stage)
+    if not bool(getattr(knowledge_config, "memify_enabled", False)):
+        raise HTTPException(status_code=400, detail="MEMIFY_DISABLED")
+    facade = _quantization_facade_for_workspace(
+        workspace_dir,
+        project_id=_resolve_project_id(request),
+    )
+    source_text = (source_id or "").strip()
+    snapshot_text = (snapshot_id or "").strip()
+    if source_text and snapshot_text:
+        payload = await asyncio.to_thread(
+            facade.get_stage_stats,
+            stage=normalized_stage,
+            source_id=source_text,
+            snapshot_id=snapshot_text,
+        )
+        if payload is None:
+            raise HTTPException(status_code=404, detail="QUANTIZATION_STAGE_RESULT_NOT_FOUND")
+        return payload
+    return await asyncio.to_thread(
+        facade.list_stage_stats,
+        stage=normalized_stage,
+        source_id=source_text or None,
+        limit=limit,
+    )
+
+
+@router.get("/quantization/compare/stages")
+async def compare_quantization_stages(
+    request: Request,
+    source_id: str = Query(...),
+    snapshot_id: str = Query(...),
+):
+    _, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    _ensure_knowledge_enabled_flag(knowledge_config.enabled)
+    if not bool(getattr(knowledge_config, "memify_enabled", False)):
+        raise HTTPException(status_code=400, detail="MEMIFY_DISABLED")
+    facade = _quantization_facade_for_workspace(
+        workspace_dir,
+        project_id=_resolve_project_id(request),
+    )
+    return await asyncio.to_thread(
+        facade.compare_stages,
+        source_id=(source_id or "").strip(),
+        snapshot_id=(snapshot_id or "").strip(),
+    )
+
+
+@router.get("/quantization/compare/versions")
+async def compare_quantization_versions(
+    request: Request,
+    source_id: str = Query(...),
+    snapshot_a: str = Query(...),
+    snapshot_b: str = Query(...),
+    stage: str = Query(default="l2"),
+):
+    _, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    _ensure_knowledge_enabled_flag(knowledge_config.enabled)
+    normalized_stage = _normalize_quant_stage(stage)
+    if not bool(getattr(knowledge_config, "memify_enabled", False)):
+        raise HTTPException(status_code=400, detail="MEMIFY_DISABLED")
+    facade = _quantization_facade_for_workspace(
+        workspace_dir,
+        project_id=_resolve_project_id(request),
+    )
+    return await asyncio.to_thread(
+        facade.compare_versions,
+        source_id=(source_id or "").strip(),
+        snapshot_a=(snapshot_a or "").strip(),
+        snapshot_b=(snapshot_b or "").strip(),
+        stage=normalized_stage,
+    )
+
+
+@router.get("/quantization/compare/sources")
+async def compare_quantization_sources(
+    request: Request,
+    source_a: str = Query(...),
+    source_b: str = Query(...),
+    stage: str = Query(default="l1"),
+    snapshot_id: str | None = Query(default=None),
+):
+    _, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    _ensure_knowledge_enabled_flag(knowledge_config.enabled)
+    normalized_stage = _normalize_quant_stage(stage)
+    if not bool(getattr(knowledge_config, "memify_enabled", False)):
+        raise HTTPException(status_code=400, detail="MEMIFY_DISABLED")
+    facade = _quantization_facade_for_workspace(
+        workspace_dir,
+        project_id=_resolve_project_id(request),
+    )
+    return await asyncio.to_thread(
+        facade.compare_sources,
+        source_a=(source_a or "").strip(),
+        source_b=(source_b or "").strip(),
+        stage=normalized_stage,
+        snapshot_id=(snapshot_id or "").strip() or None,
     )
 
 

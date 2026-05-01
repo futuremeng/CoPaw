@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from copaw.app.routers import knowledge as knowledge_router_module
 from copaw.config.config import Config
 from copaw.knowledge import GraphOpsManager, KnowledgeManager
+from src.copaw.knowledge.architecture import QuantizationArchitectureManager
 
 
 @pytest.fixture
@@ -1493,3 +1494,163 @@ def test_project_sync_run_auto_registers_source_and_persists_state(
         / "project-sync-state.json"
     )
     assert state_path.exists()
+
+
+def test_quantization_stage_run_and_stats_query(
+    knowledge_api_client: TestClient,
+):
+    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload["enabled"] = True
+    config_payload["memify_enabled"] = True
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    run_resp = knowledge_api_client.post(
+        "/knowledge/quantization/stages/l1/run",
+        json={
+            "source_id": "source-alpha",
+            "snapshot_id": "snapshot-001",
+            "metrics": {"document_count": 3, "chunk_count": 10},
+            "metadata": {"trigger": "test"},
+        },
+    )
+    assert run_resp.status_code == 200
+    run_payload = run_resp.json()
+    assert run_payload["stage"] == "l1"
+    assert run_payload["status"] == "ready"
+
+    stats_resp = knowledge_api_client.get(
+        "/knowledge/quantization/stages/l1/stats",
+        params={"source_id": "source-alpha", "snapshot_id": "snapshot-001"},
+    )
+    assert stats_resp.status_code == 200
+    stats_payload = stats_resp.json()
+    assert stats_payload["stage"] == "l1"
+    assert stats_payload["source_id"] == "source-alpha"
+    assert stats_payload["stats"]["metrics"]["chunk_count"] == 10
+
+
+def test_quantization_compare_endpoints(
+    knowledge_api_client: TestClient,
+):
+    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload["enabled"] = True
+    config_payload["memify_enabled"] = True
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    for stage, metrics in [
+        ("l1", {"document_count": 2, "chunk_count": 8}),
+        ("l2", {"entity_count": 5, "relation_count": 7}),
+        ("l3", {"quality_score": 0.8}),
+    ]:
+        response = knowledge_api_client.post(
+            f"/knowledge/quantization/stages/{stage}/run",
+            json={
+                "source_id": "source-compare-a",
+                "snapshot_id": "snapshot-v1",
+                "metrics": metrics,
+            },
+        )
+        assert response.status_code == 200
+
+    version_resp = knowledge_api_client.post(
+        "/knowledge/quantization/stages/l2/run",
+        json={
+            "source_id": "source-compare-a",
+            "snapshot_id": "snapshot-v2",
+            "metrics": {"entity_count": 9, "relation_count": 12},
+        },
+    )
+    assert version_resp.status_code == 200
+
+    source_b_resp = knowledge_api_client.post(
+        "/knowledge/quantization/stages/l2/run",
+        json={
+            "source_id": "source-compare-b",
+            "snapshot_id": "snapshot-v9",
+            "metrics": {"entity_count": 4, "relation_count": 6},
+        },
+    )
+    assert source_b_resp.status_code == 200
+
+    stages_resp = knowledge_api_client.get(
+        "/knowledge/quantization/compare/stages",
+        params={"source_id": "source-compare-a", "snapshot_id": "snapshot-v1"},
+    )
+    assert stages_resp.status_code == 200
+    assert stages_resp.json()["compare_type"] == "stages"
+
+    versions_resp = knowledge_api_client.get(
+        "/knowledge/quantization/compare/versions",
+        params={
+            "source_id": "source-compare-a",
+            "snapshot_a": "snapshot-v1",
+            "snapshot_b": "snapshot-v2",
+            "stage": "l2",
+        },
+    )
+    assert versions_resp.status_code == 200
+    versions_payload = versions_resp.json()
+    assert versions_payload["compare_type"] == "versions"
+    assert versions_payload["a"]["entity_count"] == 5
+    assert versions_payload["b"]["entity_count"] == 9
+
+    sources_resp = knowledge_api_client.get(
+        "/knowledge/quantization/compare/sources",
+        params={
+            "source_a": "source-compare-a",
+            "source_b": "source-compare-b",
+            "stage": "l2",
+        },
+    )
+    assert sources_resp.status_code == 200
+    sources_payload = sources_resp.json()
+    assert sources_payload["compare_type"] == "sources"
+    assert sources_payload["a"]["entity_count"] == 9
+    assert sources_payload["b"]["entity_count"] == 4
+
+
+def test_project_sync_status_includes_lane_and_quantization_stage_skeleton(
+    knowledge_api_client: TestClient,
+    tmp_path: Path,
+):
+    project_id = "project-sync-lane-skeleton"
+    (tmp_path / "projects" / project_id).mkdir(parents=True, exist_ok=True)
+
+    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload["enabled"] = True
+    config_payload["memify_enabled"] = True
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    response = knowledge_api_client.get(
+        f"/knowledge/project-sync/status?project_id={project_id}"
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "lanes" in payload
+    assert payload["lanes"]["retrieval"]["mode"] == "fast"
+    assert payload["lanes"]["quantization"]["mode"] == "nlp"
+    assert "quantization_stages" in payload
+    assert set(payload["quantization_stages"].keys()) == {"l1", "l2", "l3"}
+
+
+def test_schedule_stage_run_dependencies():
+    manager = QuantizationArchitectureManager("/tmp/test_project")
+
+    # Simulate L1 completion
+    manager.write_stage_result(stage="l1", source_id="source1", snapshot_id="snapshot1")
+
+    # Schedule L2 (should pass as L1 is ready)
+    result = manager.schedule_stage_run(stage="l2", source_id="source1", snapshot_id="snapshot1")
+    assert result["status"] == "ready"
+
+    # Schedule L3 without L2 (should raise an error)
+    try:
+        manager.schedule_stage_run(stage="l3", source_id="source1", snapshot_id="snapshot1")
+    except RuntimeError as e:
+        assert "Dependency not met" in str(e)
+    else:
+        assert False, "Expected RuntimeError for unmet dependency"

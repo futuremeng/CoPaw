@@ -485,6 +485,37 @@ class ProjectKnowledgeSyncManager:
             "l1_metrics": {},
             "l2_metrics": {},
             "l3_metrics": {},
+            "lanes": {
+                "retrieval": {
+                    "lane": "retrieval",
+                    "mode": "fast",
+                    "status": "idle",
+                    "summary": "Retrieval lane idle.",
+                },
+                "quantization": {
+                    "lane": "quantization",
+                    "mode": "nlp",
+                    "status": "idle",
+                    "summary": "Quantization lane idle.",
+                },
+            },
+            "quantization_stages": {
+                "l1": {
+                    "stage": "l1",
+                    "status": "idle",
+                    "summary": "L1 quick scale statistics pending.",
+                },
+                "l2": {
+                    "stage": "l2",
+                    "status": "idle",
+                    "summary": "L2 NLP extraction statistics pending.",
+                },
+                "l3": {
+                    "stage": "l3",
+                    "status": "idle",
+                    "summary": "L3 multi-agent quality statistics pending.",
+                },
+            },
             "semantic_engine": {
                 "engine": "hanlp2",
                 "status": "idle",
@@ -1490,6 +1521,82 @@ class ProjectKnowledgeSyncManager:
             "reason": reason,
         }
 
+    @staticmethod
+    def _lane_status_from_mode_status(mode_status: str) -> str:
+        status = str(mode_status or "").strip().lower()
+        if status in {"running", "queued", "pending", "indexing", "graphifying"}:
+            return "active"
+        if status == "ready":
+            return "ready"
+        if status in {"failed", "blocked"}:
+            return status
+        return "idle"
+
+    def _build_lane_state(
+        self,
+        processing_modes: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        mode_map = {
+            str(item.get("mode") or "").strip(): item
+            for item in processing_modes
+            if isinstance(item, dict)
+        }
+        fast_item = mode_map.get("fast") or {}
+        nlp_item = mode_map.get("nlp") or {}
+        return {
+            "retrieval": {
+                "lane": "retrieval",
+                "mode": "fast",
+                "status": self._lane_status_from_mode_status(str(fast_item.get("status") or "idle")),
+                "summary": str(fast_item.get("summary") or "Retrieval lane status pending.").strip(),
+            },
+            "quantization": {
+                "lane": "quantization",
+                "mode": "nlp",
+                "status": self._lane_status_from_mode_status(str(nlp_item.get("status") or "idle")),
+                "summary": str(nlp_item.get("summary") or "Quantization lane status pending.").strip(),
+            },
+        }
+
+    @staticmethod
+    def _stage_status_from_metric(value: Any) -> str:
+        if _safe_int(value) > 0:
+            return "ready"
+        return "idle"
+
+    def _build_quantization_stage_state(
+        self,
+        l1_metrics: dict[str, Any],
+        l2_metrics: dict[str, Any],
+        l3_metrics: dict[str, Any],
+    ) -> dict[str, Any]:
+        l1_status = self._stage_status_from_metric(l1_metrics.get("chunk_count"))
+        l2_status = self._stage_status_from_metric(
+            max(
+                _safe_int(l2_metrics.get("entity_count")),
+                _safe_int(l2_metrics.get("relation_count")),
+            )
+        )
+        l3_reason_code = str(l3_metrics.get("reason_code") or "").strip().upper()
+        l3_status = "idle" if l3_reason_code == "L3_NOT_READY" else "ready"
+        return {
+            "l1": {
+                "stage": "l1",
+                "status": l1_status,
+                "summary": "L1 quick scale statistics ready." if l1_status == "ready" else "L1 quick scale statistics pending.",
+            },
+            "l2": {
+                "stage": "l2",
+                "status": l2_status,
+                "summary": "L2 NLP extraction statistics ready." if l2_status == "ready" else "L2 NLP extraction statistics pending.",
+            },
+            "l3": {
+                "stage": "l3",
+                "status": l3_status,
+                "summary": "L3 multi-agent quality statistics ready." if l3_status == "ready" else "L3 multi-agent quality statistics pending.",
+            },
+        }
+
     def _hydrate_processing_view(self, state: dict[str, Any]) -> dict[str, Any]:
         hydrated = dict(state)
         hydrated["semantic_engine"] = self._build_semantic_engine_state(hydrated)
@@ -1523,6 +1630,12 @@ class ProjectKnowledgeSyncManager:
         hydrated["l1_metrics"] = l1_metrics
         hydrated["l2_metrics"] = l2_metrics
         hydrated["l3_metrics"] = l3_metrics
+        hydrated["lanes"] = self._build_lane_state(processing_modes)
+        hydrated["quantization_stages"] = self._build_quantization_stage_state(
+            l1_metrics,
+            l2_metrics,
+            l3_metrics,
+        )
         hydrated["global_metrics"] = self._build_global_metrics(hydrated, mode_metrics, source_status)
         hydrated["stage_message"] = self._merge_stage_message_with_semantic_summary(
             str(hydrated.get("stage_message") or "").strip(),
