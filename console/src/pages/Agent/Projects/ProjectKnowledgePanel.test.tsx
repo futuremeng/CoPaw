@@ -293,6 +293,7 @@ describe("ProjectKnowledgePanel interactions", () => {
         indexed_at: "2026-04-29T08:00:00+00:00",
         document_count: 10,
         chunk_count: 40,
+        error: null,
       },
     };
     const sourceB: KnowledgeSourceItem = {
@@ -311,6 +312,7 @@ describe("ProjectKnowledgePanel interactions", () => {
         indexed_at: "",
         document_count: 0,
         chunk_count: 0,
+        error: null,
       },
     };
     knowledgeState.projectSources = [sourceA, sourceB];

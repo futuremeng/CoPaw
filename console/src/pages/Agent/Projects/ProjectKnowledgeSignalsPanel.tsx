@@ -81,6 +81,7 @@ export default function ProjectKnowledgeSignalsPanel(
   const syncOperationId = String(knowledgeState.syncState?.operation_id || "").trim();
   const syncIdempotencyKey = String(knowledgeState.syncState?.idempotency_key || "").trim();
   const syncLastAction = String(knowledgeState.syncState?.last_action || "").trim();
+  const syncQuantizationStage = String(knowledgeState.syncState?.quantization_stage || "").trim().toUpperCase();
   const syncDeduplicated = knowledgeState.syncState?.deduplicated === true;
   const syncOperationUpdatedAt = formatLocalDateTime(
     String(knowledgeState.syncState?.operation_updated_at || "").trim(),
@@ -209,6 +210,9 @@ export default function ProjectKnowledgeSignalsPanel(
               {t("projects.knowledge.syncDeduplicated", "Deduplicated")}: {syncDeduplicated ? t("common.yes", "Yes") : t("common.no", "No")}
               {syncLastAction
                 ? ` · ${t("projects.knowledge.syncLastAction", "Action")}: ${syncLastAction}`
+                : ""}
+              {syncQuantizationStage
+                ? ` · ${t("projects.knowledge.syncQuantizationStage", "Stage")}: ${syncQuantizationStage}`
                 : ""}
             </Typography.Text>
             {syncOperationUpdatedAt ? (

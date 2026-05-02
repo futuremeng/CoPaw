@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { TFunction } from "i18next";
 import {
+  getProjectKnowledgeQuantizationStage,
   getProjectKnowledgeSemanticDescription,
   getProjectKnowledgeSemanticReasonLabel,
   getProjectKnowledgeSemanticSummary,
@@ -9,6 +10,12 @@ import {
 const t = ((key: string, fallback?: string) => fallback || key) as TFunction;
 
 describe("projectKnowledgeSyncUi semantic helpers", () => {
+  it("maps processing modes to quantization stages", () => {
+    expect(getProjectKnowledgeQuantizationStage("fast")).toBe("l1");
+    expect(getProjectKnowledgeQuantizationStage("nlp")).toBe("l2");
+    expect(getProjectKnowledgeQuantizationStage("agentic")).toBe("l3");
+  });
+
   it("maps sidecar unconfigured to localized summary", () => {
     expect(getProjectKnowledgeSemanticSummary({
       engine: "hanlp2",

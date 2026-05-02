@@ -1,5 +1,5 @@
 import type { PropsWithChildren, ReactNode } from "react";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import ProjectDetailPage from "./ProjectDetailPage";
@@ -231,7 +231,14 @@ vi.mock("./ProjectAutomationPanel", () => ({ default: () => <div /> }));
 vi.mock("./ProjectKnowledgePanel", () => ({ default: () => <div /> }));
 vi.mock("./ProjectKnowledgeOutputsPanel", () => ({ default: () => <div /> }));
 vi.mock("./ProjectKnowledgeProcessingPanel", () => ({ default: () => <div /> }));
-vi.mock("./ProjectKnowledgeSignalsPanel", () => ({ default: () => <div /> }));
+vi.mock("./ProjectKnowledgeSignalsPanel", () => ({
+  default: (props: { runtimeSignalValue?: string; runtimeSignalTooltipContent?: ReactNode }) => (
+    <div>
+      <div data-testid="runtime-signal-value">{props.runtimeSignalValue}</div>
+      <div data-testid="runtime-signal-tooltip">{props.runtimeSignalTooltipContent}</div>
+    </div>
+  ),
+}));
 vi.mock("./ProjectKnowledgeSourcesPanel", () => ({ default: () => <div /> }));
 vi.mock("./ProjectKnowledgeSettingsPanel", () => ({ default: () => <div /> }));
 vi.mock("./ProjectOverviewCard", () => ({ default: () => <div /> }));
@@ -282,14 +289,23 @@ function renderPage() {
 }
 
 async function flushRenderWork() {
-  await Promise.resolve();
-  await Promise.resolve();
+  await waitFor(() => {
+    expect(mockedGetProjectFileSummary).toHaveBeenCalled();
+  });
 }
 
 describe("ProjectDetailPage refresh scheduling", () => {
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.clearAllMocks();
+    const mutableKnowledgeState = mockKnowledgeState as {
+      activeKnowledgeTask: Record<string, unknown> | null;
+      activeKnowledgeTasks: Array<Record<string, unknown>>;
+      syncState: Record<string, unknown> | null;
+    };
+    mutableKnowledgeState.activeKnowledgeTask = null;
+    mutableKnowledgeState.activeKnowledgeTasks = [];
+    mutableKnowledgeState.syncState = null;
     realtimeControllerState.status = "connected";
     realtimeControllerState.onFileTreeInvalidated = undefined;
     realtimeControllerState.onPipelineInvalidated = undefined;
@@ -332,8 +348,8 @@ describe("ProjectDetailPage refresh scheduling", () => {
 
     expect(realtimeControllerState.onFileTreeInvalidated).toBeTypeOf("function");
 
-    act(() => {
-      void realtimeControllerState.onFileTreeInvalidated?.({
+    await act(async () => {
+      await realtimeControllerState.onFileTreeInvalidated?.({
         changedPaths: ["original/changed.md"],
         changedDirs: ["original"],
         changedPathsTruncated: false,
@@ -341,9 +357,9 @@ describe("ProjectDetailPage refresh scheduling", () => {
       });
     });
 
-    await flushRenderWork();
-
-    expect(mockedScheduleProjectTreeRefresh).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(mockedScheduleProjectTreeRefresh).toHaveBeenCalledTimes(1);
+    });
     expect(mockedScheduleProjectTreeRefresh).toHaveBeenLastCalledWith(
       expect.objectContaining({
         state: { token: "scheduler-state" },
@@ -358,14 +374,16 @@ describe("ProjectDetailPage refresh scheduling", () => {
     realtimeControllerState.status = "idle";
     renderPage();
     await flushRenderWork();
+    mockedScheduleProjectTreeRefresh.mockClear();
 
-    act(() => {
+    await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "assistant-turn-completed" }));
+      await Promise.resolve();
     });
 
-    await flushRenderWork();
-
-    expect(mockedScheduleProjectTreeRefresh).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(mockedScheduleProjectTreeRefresh).toHaveBeenCalledTimes(1);
+    });
     expect(mockedScheduleProjectTreeRefresh).toHaveBeenLastCalledWith(
       expect.objectContaining({
         state: { token: "scheduler-state" },
@@ -374,5 +392,54 @@ describe("ProjectDetailPage refresh scheduling", () => {
         runRefresh: expect.any(Function),
       }),
     );
+  });
+
+  it("includes quantization stage in the runtime knowledge sync summary", async () => {
+    const mutableKnowledgeState = mockKnowledgeState as {
+      activeKnowledgeTask: Record<string, unknown> | null;
+      activeKnowledgeTasks: Array<Record<string, unknown>>;
+      syncState: Record<string, unknown> | null;
+    };
+    mutableKnowledgeState.activeKnowledgeTask = {
+      task_id: "task-sync-1",
+      task_type: "project_sync",
+      status: "running",
+      current_stage: "indexing",
+      stage_message: "Building structured outputs",
+      progress: 0.42,
+      percent: 42,
+      current: 2,
+      total: 5,
+      updated_at: "2026-04-29T00:00:00Z",
+    };
+    mutableKnowledgeState.activeKnowledgeTasks = [mutableKnowledgeState.activeKnowledgeTask];
+    mutableKnowledgeState.syncState = {
+      project_id: "proj-1",
+      status: "pending",
+      current_stage: "indexing",
+      progress: 42,
+      auto_enabled: true,
+      dirty: false,
+      dirty_after_run: false,
+      last_trigger: "manual-panel",
+      changed_paths: [],
+      pending_changed_paths: [],
+      changed_count: 3,
+      last_error: "",
+      latest_job_id: "",
+      latest_source_id: "project-proj-1-workspace",
+      last_result: {},
+      quantization_stage: "l2",
+    };
+
+    renderPage();
+    await flushRenderWork();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("runtime-signal-value").textContent || "").toContain("Project Sync");
+      expect(screen.getByTestId("runtime-signal-value").textContent || "").toContain("42%");
+      expect(screen.getByTestId("runtime-signal-value").textContent || "").toContain("Stage: L2");
+      expect(screen.getByTestId("runtime-signal-tooltip").textContent || "").toContain("Stage: L2");
+    });
   });
 });

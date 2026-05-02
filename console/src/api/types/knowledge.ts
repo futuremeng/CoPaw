@@ -46,6 +46,7 @@ export interface ProjectKnowledgeSemanticEngineState {
 }
 
 export type ProjectKnowledgeProcessingMode = "fast" | "nlp" | "agentic";
+export type ProjectKnowledgeQuantizationStage = "l1" | "l2" | "l3";
 
 export interface ProjectKnowledgeProcessingModeStatePayload {
   mode: ProjectKnowledgeProcessingMode;
@@ -204,6 +205,8 @@ export interface ProjectKnowledgeSyncState {
   deduplicated?: boolean;
   last_action?: string;
   operation_updated_at?: string;
+  quantization_stage?: ProjectKnowledgeQuantizationStage;
+  latest_requested_mode?: ProjectKnowledgeProcessingMode;
   processing_modes?: ProjectKnowledgeProcessingModeStatePayload[];
   output_resolution?: ProjectKnowledgeOutputResolutionPayload;
   output_scheduler?: ProjectKnowledgeProcessingSchedulerPayload;
@@ -221,6 +224,7 @@ export interface ProjectKnowledgeSyncRunRequest {
   changedPaths?: string[];
   force?: boolean;
   processingMode?: ProjectKnowledgeProcessingMode;
+  quantizationStage?: ProjectKnowledgeQuantizationStage;
   idempotencyKey?: string;
 }
 

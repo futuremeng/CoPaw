@@ -1,4 +1,5 @@
 import type {
+  ProjectKnowledgeQuantizationStage,
   ProjectKnowledgeSemanticEngineState,
   ProjectKnowledgeSyncState,
 } from "../../../api/types";
@@ -79,6 +80,18 @@ export function getProjectKnowledgeModeLevel(
     return "L2";
   }
   return "L3";
+}
+
+export function getProjectKnowledgeQuantizationStage(
+  mode: ProjectKnowledgeProcessingMode,
+): ProjectKnowledgeQuantizationStage {
+  if (mode === "fast") {
+    return "l1";
+  }
+  if (mode === "nlp") {
+    return "l2";
+  }
+  return "l3";
 }
 
 export function getProjectKnowledgeModeLabel(

@@ -7,6 +7,11 @@ from pathlib import Path
 from types import SimpleNamespace
 import zipfile
 
+import logging
+
+# Enable logging capture for the test
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -759,6 +764,7 @@ def test_run_project_sync_offloads_dispatch_to_thread(
             "changed_paths": ["notes.md"],
             "force": True,
             "processing_mode": "nlp",
+            "quantization_stage": "l2",
         },
     )
 
@@ -770,6 +776,8 @@ def test_run_project_sync_offloads_dispatch_to_thread(
     assert len(calls[0][1]) == 1
     command = calls[0][1][0]
     assert getattr(command, "action", "") == "start_sync"
+    assert getattr(command, "processing_mode", "") == "nlp"
+    assert getattr(command, "quantization_stage", "") == "l2"
 
 
 def test_run_project_sync_allows_fast_mode_when_memify_disabled(
@@ -1434,6 +1442,8 @@ def test_project_sync_run_auto_registers_source_and_persists_state(
     knowledge_api_client: TestClient,
     tmp_path: Path,
 ):
+    logger = logging.getLogger("test_project_sync")
+    logger.debug("Starting test_project_sync_run_auto_registers_source_and_persists_state")
     project_id = "project-sync-demo"
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
@@ -1643,10 +1653,6 @@ def test_schedule_stage_run_dependencies():
     # Simulate L1 completion
     manager.write_stage_result(stage="l1", source_id="source1", snapshot_id="snapshot1")
 
-    # Schedule L2 (should pass as L1 is ready)
-    result = manager.schedule_stage_run(stage="l2", source_id="source1", snapshot_id="snapshot1")
-    assert result["status"] == "ready"
-
     # Schedule L3 without L2 (should raise an error)
     try:
         manager.schedule_stage_run(stage="l3", source_id="source1", snapshot_id="snapshot1")
@@ -1654,3 +1660,7 @@ def test_schedule_stage_run_dependencies():
         assert "Dependency not met" in str(e)
     else:
         assert False, "Expected RuntimeError for unmet dependency"
+
+    # Now schedule L2 (should pass as L1 is ready)
+    result = manager.schedule_stage_run(stage="l2", source_id="source1", snapshot_id="snapshot1")
+    assert result["status"] == "ready"

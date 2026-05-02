@@ -11,6 +11,7 @@ import type {
   ProjectKnowledgeModeMetricsPayload,
   ProjectKnowledgeOutputResolutionPayload,
   ProjectKnowledgeModeOutputPayload,
+  ProjectKnowledgeQuantizationStage,
   ProjectKnowledgeProcessingSchedulerPayload,
   ProjectKnowledgeProcessingModeStatePayload,
   ProjectKnowledgeSyncState,
@@ -18,6 +19,7 @@ import type {
 } from "../../../api/types";
 import { filterGraphQuerySourceRecords } from "../Knowledge/graphQuery";
 import {
+  getProjectKnowledgeQuantizationStage,
   prioritizeProjectKnowledgeArtifacts,
   getProjectKnowledgeSemanticSummary,
   getProjectKnowledgeSyncAlertDescription,
@@ -244,7 +246,7 @@ export interface ProjectKnowledgeState {
   ) => Promise<void>;
   startProcessingMode: (
     mode: ProjectKnowledgeProcessingMode,
-    options?: { force?: boolean; trigger?: string },
+    options?: { force?: boolean; trigger?: string; quantizationStage?: ProjectKnowledgeQuantizationStage },
   ) => Promise<void>;
   processingLaunchMode: ProjectKnowledgeProcessingMode | null;
   resetGraphQuery: () => void;
@@ -1476,7 +1478,7 @@ export function useProjectKnowledgeState(
 
   const startProcessingMode = useCallback(async (
     mode: ProjectKnowledgeProcessingMode,
-    options?: { force?: boolean; trigger?: string },
+    options?: { force?: boolean; trigger?: string; quantizationStage?: ProjectKnowledgeQuantizationStage },
   ) => {
     if (!params.projectId) {
       return;
@@ -1488,6 +1490,7 @@ export function useProjectKnowledgeState(
         trigger: options?.trigger ?? `processing-panel:${mode}`,
         force: options?.force ?? true,
         processingMode: mode,
+        quantizationStage: options?.quantizationStage ?? getProjectKnowledgeQuantizationStage(mode),
       });
       setSyncState(response.state);
     } finally {

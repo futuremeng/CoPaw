@@ -18,6 +18,7 @@ import { knowledgeApi } from "../../../api/modules/knowledge";
 import styles from "./index.module.less";
 import { useTranslation } from "react-i18next";
 import {
+  getProjectKnowledgeQuantizationStage,
   getProjectKnowledgeSemanticDescription,
   getProjectKnowledgeSemanticReasonLabel,
   getProjectKnowledgeSyncAlertDescription,
@@ -333,6 +334,7 @@ export default function ProjectKnowledgeSettingsPanel(
             trigger: "memify-enabled",
             force: true,
             processingMode: "nlp",
+            quantizationStage: getProjectKnowledgeQuantizationStage("nlp"),
           });
           setSyncState(response.state);
         } catch {
@@ -359,6 +361,7 @@ export default function ProjectKnowledgeSettingsPanel(
         trigger: "manual-panel",
         force: true,
         processingMode: "agentic",
+        quantizationStage: getProjectKnowledgeQuantizationStage("agentic"),
       });
       setSyncState(response.state);
       message.success(t("projects.knowledge.manualSinkStarted"));
@@ -393,6 +396,7 @@ export default function ProjectKnowledgeSettingsPanel(
     }
     const deduplicated = syncState.deduplicated === true;
     const action = String(syncState.last_action || "").trim();
+    const quantizationStage = String(syncState.quantization_stage || "").trim().toUpperCase();
     const updatedAtRaw = String(syncState.operation_updated_at || "").trim();
     let updatedAt = "";
     if (updatedAtRaw) {
@@ -414,6 +418,7 @@ export default function ProjectKnowledgeSettingsPanel(
       idempotencyKey,
       deduplicated,
       action,
+      quantizationStage,
       updatedAt,
     };
   }, [syncState]);
@@ -768,6 +773,9 @@ export default function ProjectKnowledgeSettingsPanel(
             {t("projects.knowledge.syncDeduplicated", "Deduplicated")}: {syncOperationSummary.deduplicated ? t("common.yes", "Yes") : t("common.no", "No")}
             {syncOperationSummary.action
               ? ` · ${t("projects.knowledge.syncLastAction", "Action")}: ${syncOperationSummary.action}`
+              : ""}
+            {syncOperationSummary.quantizationStage
+              ? ` · ${t("projects.knowledge.syncQuantizationStage", "Stage")}: ${syncOperationSummary.quantizationStage}`
               : ""}
           </Typography.Text>
           {syncOperationSummary.updatedAt ? (

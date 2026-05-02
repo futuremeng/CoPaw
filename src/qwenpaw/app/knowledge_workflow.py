@@ -234,9 +234,11 @@ class KnowledgeWorkflowOrchestrator:
         trigger: str,
         changed_paths: list[str] | None = None,
         processing_mode: str | None = None,
+        quantization_stage: str | None = None,  # 新增参数
         status_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> dict[str, Any]:
         normalized_mode = str(processing_mode or "agentic").strip().lower() or "agentic"
+        quant_stage = (quantization_stage or "").strip().lower() if quantization_stage else None
         if normalized_mode not in KNOWLEDGE_PROCESSING_MODES:
             raise ValueError(f"Unsupported knowledge processing mode: {normalized_mode}")
         normalized_changed_paths = [
@@ -251,6 +253,8 @@ class KnowledgeWorkflowOrchestrator:
             changed_paths=normalized_changed_paths,
         )
         run.parameters["processing_mode"] = normalized_mode
+        if quant_stage:
+            run.parameters["quantization_stage"] = quant_stage
         self._append_run_event(
             run,
             event="workflow.started",
@@ -263,6 +267,44 @@ class KnowledgeWorkflowOrchestrator:
         index_result: dict[str, Any] | None = None
         memify_result: dict[str, Any] | None = None
         quality_loop_result: dict[str, Any] | None = None
+
+        index_path = self.knowledge_manager._source_index_path(source.id)
+        quality_report_path = self.graph_ops.enrichment_quality_report_path
+
+        # 仅调度指定阶段
+        if quant_stage in {"l1", "l2", "l3"}:
+            # 这里只做最简分支，实际可根据需要细化
+            from copaw.knowledge.architecture import QuantizationArchitectureManager
+            quant_manager = QuantizationArchitectureManager(self.workspace_dir, self.knowledge_dirname)
+            # 依赖调度由 QuantizationArchitectureManager 内部保证
+            result = quant_manager.schedule_stage_run(
+                stage=quant_stage,
+                source_id=source.id,
+                snapshot_id="latest",
+            )
+            run.status = "succeeded"
+            run.updated_at = _pipeline_now_iso()
+            self._append_run_event(
+                run,
+                event="workflow.completed",
+                actor="knowledge-workflow",
+                status="succeeded",
+                message=f"Quantization stage {quant_stage} scheduled and completed.",
+            )
+            self._persist(run)
+            return {
+                "run_id": run.id,
+                "run_status": run.status,
+                "processing_mode": normalized_mode,
+                "quantization_stage": quant_stage,
+                "template_id": self.template.id,
+                "processing_fingerprint": self.knowledge_manager.compute_processing_fingerprint(
+                    config,
+                    running_config,
+                ),
+                "quantization_result": result,
+                "artifacts": run.artifacts[:],
+            }
 
         index_path = self.knowledge_manager._source_index_path(source.id)
         quality_report_path = self.graph_ops.enrichment_quality_report_path

@@ -1284,14 +1284,18 @@ async def run_project_sync(
     changed_paths: list[str] | None = Body(default=None),
     force: bool = Body(default=False),
     processing_mode: str = Body(default="agentic"),
+    quantization_stage: str | None = Body(default=None),
     idempotency_key: str = Body(default=""),
 ):
     """Start project-scoped automatic knowledge synchronization."""
     config, knowledge_config, running_config, workspace_dir, _ = await _resolve_knowledge_request_context(request)
     _ensure_knowledge_enabled_flag(knowledge_config.enabled)
     normalized_mode = (processing_mode or "agentic").strip().lower() or "agentic"
+    normalized_stage = (quantization_stage or "").strip().lower() or None
     if normalized_mode not in {"fast", "nlp", "agentic"}:
         raise HTTPException(status_code=400, detail="PROCESSING_MODE_INVALID")
+    if normalized_stage is not None and normalized_stage not in {"l1", "l2", "l3"}:
+        raise HTTPException(status_code=400, detail="QUANTIZATION_STAGE_INVALID")
     if normalized_mode in {"nlp", "agentic"} and not bool(getattr(knowledge_config, "memify_enabled", False)):
         raise HTTPException(status_code=400, detail="MEMIFY_DISABLED")
 
@@ -1327,6 +1331,7 @@ async def run_project_sync(
                 auto_enabled=True,
                 force=bool(force),
                 processing_mode=normalized_mode,
+                quantization_stage=normalized_stage,
                 idempotency_key=(idempotency_key or "").strip() or None,
             ),
         )

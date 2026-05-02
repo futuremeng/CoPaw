@@ -308,6 +308,7 @@ export const knowledgeApi = {
           changed_paths: payload.changedPaths ?? [],
           force: payload.force ?? false,
           processing_mode: payload.processingMode ?? "agentic",
+          quantization_stage: payload.quantizationStage ?? null,
           idempotency_key: payload.idempotencyKey ?? "",
         }),
       },

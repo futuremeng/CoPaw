@@ -1,4 +1,5 @@
-import { Button, Progress, Tag, Tooltip, Typography } from "antd";
+import { useState } from "react";
+import { Button, Progress, Segmented, Tag, Tooltip, Typography } from "antd";
 import { useTranslation } from "react-i18next";
 import styles from "./index.module.less";
 import type {
@@ -9,9 +10,11 @@ import type {
 import {
   getProjectKnowledgeModeLabel,
   getProjectKnowledgeModeRouteHint,
+  getProjectKnowledgeQuantizationStage,
   getProjectKnowledgeSemanticSummary,
   prioritizeProjectKnowledgeArtifacts,
 } from "./projectKnowledgeSyncUi";
+import type { ProjectKnowledgeQuantizationStage } from "../../../api/types";
 
 interface ProjectKnowledgeProcessingPanelProps {
   knowledgeState: ProjectKnowledgeState;
@@ -121,6 +124,31 @@ function actionLabel(
     return t("projects.knowledge.processing.runNlp", "运行 NLP 结构化");
   }
   return t("projects.knowledge.processing.runAgentic", "运行多智能体");
+}
+
+function allowedQuantizationStages(
+  mode: ProjectKnowledgeModeState["mode"],
+): ProjectKnowledgeQuantizationStage[] {
+  if (mode === "fast") {
+    return ["l1"];
+  }
+  if (mode === "nlp") {
+    return ["l1", "l2"];
+  }
+  return ["l1", "l2", "l3"];
+}
+
+function quantizationStageLabel(
+  stage: ProjectKnowledgeQuantizationStage,
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
+  if (stage === "l1") {
+    return t("projects.knowledge.processing.quantStageL1", "L1");
+  }
+  if (stage === "l2") {
+    return t("projects.knowledge.processing.quantStageL2", "L2");
+  }
+  return t("projects.knowledge.processing.quantStageL3", "L3");
 }
 
 function describeL1Hint(
@@ -443,6 +471,11 @@ export default function ProjectKnowledgeProcessingPanel(
   props: ProjectKnowledgeProcessingPanelProps,
 ) {
   const { t } = useTranslation();
+  const [selectedStages, setSelectedStages] = useState<Record<string, ProjectKnowledgeQuantizationStage>>({
+    fast: "l1",
+    nlp: "l2",
+    agentic: "l3",
+  });
   const launchMode = props.knowledgeState.processingLaunchMode;
   const visibleModes = props.knowledgeState.processingCompareModes;
   const staleModes = new Set(props.knowledgeState.processingFreshness.staleModes);
@@ -456,6 +489,8 @@ export default function ProjectKnowledgeProcessingPanel(
   const staleTooltip = describeStaleSources(props.knowledgeState.processingFreshness, t);
   const staleInlineHint = describeInlineStaleHint(props.knowledgeState.processingFreshness, t);
   const l1Hint = describeL1Hint(props.knowledgeState, t);
+  const latestRequestedMode = props.knowledgeState.syncState?.latest_requested_mode;
+  const activeQuantizationStage = String(props.knowledgeState.syncState?.quantization_stage || "").trim().toLowerCase();
 
   return (
     <div className={`${styles.projectKnowledgeWorkbench} ${styles.projectKnowledgeProcessingWorkbench}`}>
@@ -516,6 +551,11 @@ export default function ProjectKnowledgeProcessingPanel(
             const disabledReason = launchDisabledReason(mode, props.knowledgeState, t);
             const launchDisabled = Boolean(disabledReason) && launchMode !== mode.mode;
             const staleStatus = staleModes.has(mode.mode);
+            const stageOptions = allowedQuantizationStages(mode.mode);
+            const selectedStage = selectedStages[mode.mode] ?? getProjectKnowledgeQuantizationStage(mode.mode);
+            const currentLaunchStage = latestRequestedMode === mode.mode
+              ? activeQuantizationStage as ProjectKnowledgeQuantizationStage | ""
+              : "";
             const progress = typeof mode.progress === "number"
               ? mode.progress
               : mode.status === "ready"
@@ -685,19 +725,47 @@ export default function ProjectKnowledgeProcessingPanel(
                 ) : null}
 
                 <div className={styles.projectKnowledgeProcessingCardFooter}>
-                  <Tooltip title={launchDisabled ? disabledReason : ""}>
-                    <span title={launchDisabled ? disabledReason : undefined}>
-                      <Button
+                  <div className={styles.projectKnowledgeProcessingLaunchControls}>
+                    <div className={styles.projectKnowledgeProcessingStageSelector}>
+                      <Typography.Text type="secondary">
+                        {t("projects.knowledge.processing.quantStageLabel", "量化阶段")}
+                      </Typography.Text>
+                      <Segmented
                         size="small"
-                        type="default"
-                        loading={launchMode === mode.mode}
-                        disabled={launchDisabled}
-                        onClick={() => void props.knowledgeState.startProcessingMode(mode.mode)}
-                      >
-                        {actionLabel(mode.mode, t)}
-                      </Button>
-                    </span>
-                  </Tooltip>
+                        value={selectedStage}
+                        options={stageOptions.map((stage) => ({
+                          label: quantizationStageLabel(stage, t),
+                          value: stage,
+                        }))}
+                        onChange={(value) => {
+                          setSelectedStages((prev) => ({
+                            ...prev,
+                            [mode.mode]: value as ProjectKnowledgeQuantizationStage,
+                          }));
+                        }}
+                      />
+                    </div>
+                    <Tooltip title={launchDisabled ? disabledReason : ""}>
+                      <span title={launchDisabled ? disabledReason : undefined}>
+                        <Button
+                          size="small"
+                          type="default"
+                          loading={launchMode === mode.mode}
+                          disabled={launchDisabled}
+                          onClick={() => void props.knowledgeState.startProcessingMode(mode.mode, {
+                            quantizationStage: selectedStage,
+                          })}
+                        >
+                          {actionLabel(mode.mode, t)}
+                        </Button>
+                      </span>
+                    </Tooltip>
+                    {currentLaunchStage ? (
+                      <Typography.Text type="secondary">
+                        {t("projects.knowledge.processing.currentQuantStage", "当前发起阶段")}: {quantizationStageLabel(currentLaunchStage, t)}
+                      </Typography.Text>
+                    ) : null}
+                  </div>
                   {disabledReason ? (
                     <Typography.Text type="secondary">{disabledReason}</Typography.Text>
                   ) : null}

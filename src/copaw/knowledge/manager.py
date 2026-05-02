@@ -1638,7 +1638,7 @@ class KnowledgeManager:
                 str(chunk.get("document_path") or ""),
             )
         parent = normalized_doc_path.parent
-        basename = self._safe_name(normalized_doc_path.name or source.id)
+        basename = self._safe_name(normalized_doc_path.name or "knowledge")
         chunk_id = str(chunk.get("chunk_id") or "")
         try:
             chunk_index = int(chunk_id.rsplit("::", 1)[-1])
@@ -3030,7 +3030,6 @@ class KnowledgeManager:
                     "cor_effective_chunk_count": cor_effective_so_far,
                 },
             )
-
             if progress_callback is not None:
                 progress_callback(
                     {
@@ -5536,14 +5535,6 @@ class KnowledgeManager:
             "summary": self._extract_summary_from_text(normalized, config=config),
             "keywords": self._extract_keywords_from_text(normalized, top_n=top_n, config=config),
         }
-
-    def _collect_source_processing_text(
-        self,
-        source: KnowledgeSourceSpec,
-        config: KnowledgeConfig | None = None,
-    ) -> str:
-        candidates = self._collect_source_processing_candidates(source, config)
-        return self._normalize_text("\n".join(part for part in candidates if part))
 
     def _collect_source_processing_candidates(
         self,

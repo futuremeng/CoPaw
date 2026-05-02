@@ -47,6 +47,7 @@ class ProjectSyncCommand:
         debounce_seconds: float | None = None,
         cooldown_seconds: float | None = None,
         processing_mode: str | None = None,
+        quantization_stage: str | None = None,
         idempotency_key: str | None = None,
     ) -> None:
         self.action = action
@@ -61,6 +62,7 @@ class ProjectSyncCommand:
         self.debounce_seconds = debounce_seconds
         self.cooldown_seconds = cooldown_seconds
         self.processing_mode = (processing_mode or "").strip() or None
+        self.quantization_stage = (quantization_stage or "").strip().lower() or None
         self.idempotency_key = self._normalize_idempotency_key(idempotency_key)
         self.operation_id = self._build_operation_id()
 
@@ -75,6 +77,7 @@ class ProjectSyncCommand:
             "changed_paths": sorted(self.changed_paths),
             "force": bool(self.force),
             "processing_mode": self.processing_mode or "",
+            "quantization_stage": self.quantization_stage or "",
             "source_id": str(getattr(self.source, "id", "") or ""),
         }
         encoded = json.dumps(payload, ensure_ascii=True, sort_keys=True).encode("utf-8")
@@ -99,6 +102,7 @@ class ProjectSyncCommand:
         debounce_seconds: float | None = None,
         cooldown_seconds: float | None = None,
         processing_mode: str | None = None,
+        quantization_stage: str | None = None,
         idempotency_key: str | None = None,
     ) -> "ProjectSyncCommand":
         return cls(
@@ -114,8 +118,15 @@ class ProjectSyncCommand:
             debounce_seconds=debounce_seconds,
             cooldown_seconds=cooldown_seconds,
             processing_mode=processing_mode,
+            quantization_stage=quantization_stage,
             idempotency_key=idempotency_key,
         )
+
+        logger.debug("ProjectSyncCommand created with operation_id: %s", cls._build_operation_id())
+        logger.debug("Debounce seconds: %s, Cooldown seconds: %s", debounce_seconds, cooldown_seconds)
+        logger.debug("Processing mode: %s, Auto enabled: %s", processing_mode, auto_enabled)
+        logger.debug("Changed paths: %s", changed_paths)
+        logger.debug("Force sync: %s", force)
 
     @classmethod
     def resume(
@@ -262,10 +273,11 @@ class ProjectSyncCoordinator:
                 trigger=command.trigger,
                 changed_paths=command.changed_paths,
                 auto_enabled=command.auto_enabled,
-                force=command.force,
-                debounce_seconds=command.debounce_seconds,
-                cooldown_seconds=command.cooldown_seconds,
-                processing_mode=command.processing_mode,
+                force=bool(getattr(command, "force", False)),
+                debounce_seconds=float(command.debounce_seconds or 0),
+                cooldown_seconds=float(command.cooldown_seconds or 0),
+                processing_mode=str(command.processing_mode or "agentic"),
+                quantization_stage=getattr(command, "quantization_stage", None),
             )
             payload = dict(payload or {})
             payload.setdefault("operation_id", command.operation_id)
@@ -901,6 +913,7 @@ class ProjectKnowledgeSyncManager:
     ) -> dict[str, Any]:
         live_l2 = state.get("l2_metrics") if isinstance(state.get("l2_metrics"), dict) else {}
         l2_progress = state.get("l2_progress") if isinstance(state.get("l2_progress"), dict) else {}
+        index_result = index_result or {}
         total_chunks = max(
             _safe_int(l2_progress.get("total_chunks")),
             _safe_int(index_result.get("chunk_count")),
@@ -1848,6 +1861,7 @@ class ProjectKnowledgeSyncManager:
         running_config: Any | None,
         source: KnowledgeSourceSpec,
         processing_mode: str = "agentic",
+        quantization_stage: str | None = None,
     ) -> None:
         worker = threading.Thread(
             target=self._run_sync_loop,
@@ -1857,6 +1871,7 @@ class ProjectKnowledgeSyncManager:
                 "running_config": running_config,
                 "source": source,
                 "processing_mode": processing_mode,
+                "quantization_stage": quantization_stage,
             },
             daemon=True,
         )
@@ -1971,6 +1986,15 @@ class ProjectKnowledgeSyncManager:
             state = self._recover_stale_active_state(state)
             active = self._is_active_state(state)
             if active:
+                state["dirty_after_run"] = True
+                state["last_trigger"] = (trigger or "manual").strip() or "manual"
+                state["latest_requested_mode"] = processing_mode
+                state["pending_changed_paths"] = self._merge_paths(
+                    state.get("pending_changed_paths"),
+                    changed_paths,
+                )
+                if changed_paths:
+                    state["last_change_at"] = self._now_iso()
                 self._save_state(state)
                 return
 
@@ -1991,14 +2015,14 @@ class ProjectKnowledgeSyncManager:
                 self._save_state(state)
                 return
 
-            state, should_start, _ = self._queue_or_start_locked(
+            state, should_start, reason = self._queue_or_start_locked(
                 project_id=project_id,
                 state=state,
                 config=config,
                 running_config=running_config,
                 source=source,
                 trigger=str(state.get("last_trigger") or "auto"),
-                force=True,
+                force=bool(force),
                 processing_mode=str(state.get("latest_requested_mode") or processing_mode or "agentic"),
             )
 
@@ -2008,8 +2032,14 @@ class ProjectKnowledgeSyncManager:
                 config=config,
                 running_config=running_config,
                 source=source,
-                processing_mode=str(state.get("latest_requested_mode") or processing_mode or "agentic"),
+                processing_mode=processing_mode,
+                quantization_stage=state.get("quantization_stage"),
             )
+        return {
+            "accepted": True,
+            "reason": reason,
+            "state": self._hydrate_processing_view(state),
+        }
 
     def mark_dirty(
         self,
@@ -2061,6 +2091,7 @@ class ProjectKnowledgeSyncManager:
         debounce_seconds: float = 0,
         cooldown_seconds: float = 0,
         processing_mode: str = "agentic",
+        quantization_stage: str | None = None,  # 新增参数
     ) -> dict[str, Any]:
         normalized_mode = str(processing_mode or "agentic").strip().lower() or "agentic"
         if normalized_mode not in KNOWLEDGE_PROCESSING_SUPPORTED_MODES:
@@ -2073,6 +2104,10 @@ class ProjectKnowledgeSyncManager:
             state["latest_requested_mode"] = normalized_mode
             state["debounce_seconds"] = self._normalize_seconds(debounce_seconds)
             state["cooldown_seconds"] = self._normalize_seconds(cooldown_seconds)
+            if quantization_stage:
+                state["quantization_stage"] = str(quantization_stage).strip().lower()
+            else:
+                state.pop("quantization_stage", None)
             active = self._is_active_state(state)
             if active:
                 state["dirty_after_run"] = True
@@ -2119,6 +2154,7 @@ class ProjectKnowledgeSyncManager:
                 running_config=running_config,
                 source=source,
                 processing_mode=normalized_mode,
+                quantization_stage=state.get("quantization_stage"),
             )
         return {
             "accepted": True,
@@ -2228,13 +2264,15 @@ class ProjectKnowledgeSyncManager:
         running_config: Any | None,
         source: KnowledgeSourceSpec,
         processing_mode: str = "agentic",
+        quantization_stage: str | None = None,  # 新增参数
     ) -> None:
         while True:
             try:
                 from qwenpaw.app.knowledge_workflow import KnowledgeWorkflowOrchestrator
 
                 normalized_mode = str(processing_mode or "agentic").strip().lower() or "agentic"
-
+                current_state = self.get_state(project_id)
+                quant_stage = quantization_stage or current_state.get("quantization_stage")
                 self._patch_state(
                     project_id,
                     self._normalize_sync_patch({
@@ -2260,7 +2298,6 @@ class ProjectKnowledgeSyncManager:
                     project_id=project_id,
                     knowledge_dirname=self.knowledge_dirname,
                 )
-                current_state = self.get_state(project_id)
                 workflow_result = orchestrator.run(
                     config=config,
                     running_config=running_config,
@@ -2268,10 +2305,8 @@ class ProjectKnowledgeSyncManager:
                     trigger=str(current_state.get("last_trigger") or "project-sync"),
                     changed_paths=list(current_state.get("changed_paths") or []),
                     processing_mode=normalized_mode,
-                    status_callback=lambda patch: self._patch_state(
-                        project_id,
-                        self._normalize_sync_patch(patch),
-                    ),
+                    quantization_stage=quant_stage,  # 传递参数
+                    status_callback=status_callback_wrapper,
                 )
 
                 now = self._now_iso()
@@ -2387,9 +2422,19 @@ class ProjectKnowledgeSyncManager:
                 )
             return
 
-    def _patch_state(self, project_id: str, patch: dict[str, Any]) -> dict[str, Any]:
+    def _patch_state(self, project_id: str, state_patch: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
             state = self._load_state(project_id)
-            state.update(self._normalize_sync_patch(patch))
+            state.update(self._normalize_sync_patch(state_patch))
             self._save_state(state)
             return self._hydrate_processing_view(state)
+
+
+def status_callback_wrapper(patch: dict[str, Any]) -> None:
+    project_id = patch.get("project_id")
+    if project_id:
+        manager = ProjectSyncCoordinator(
+            working_dir=Path("workspace"),
+            manager_factory=None,
+        )
+        manager._patch_state(project_id, patch)

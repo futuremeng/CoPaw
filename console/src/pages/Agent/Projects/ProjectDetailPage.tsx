@@ -231,6 +231,26 @@ function getRuntimeTaskPercent(task: {
   return null;
 }
 
+function formatQuantizationStageLabel(
+  stage: string | null | undefined,
+  translate: (key: string, fallback: string) => string,
+): string {
+  const normalized = String(stage || "").trim().toLowerCase();
+  if (!normalized) {
+    return "";
+  }
+  if (normalized === "l1") {
+    return translate("projects.knowledge.processing.quantStageL1", "L1");
+  }
+  if (normalized === "l2") {
+    return translate("projects.knowledge.processing.quantStageL2", "L2");
+  }
+  if (normalized === "l3") {
+    return translate("projects.knowledge.processing.quantStageL3", "L3");
+  }
+  return normalized.toUpperCase();
+}
+
 function getRuntimeBadgeStatus(status: string): "processing" | "success" | "warning" | "error" | "default" {
   if (["running", "indexing", "graphifying", "pending", "queued"].includes(status)) {
     return "processing";
@@ -805,13 +825,17 @@ export default function ProjectDetailPage() {
     const taskLabel = getRuntimeTaskLabel(primaryTask.task_type, translateWithFallback);
     const percent = getRuntimeTaskPercent(primaryTask);
     const stageLabel = getRuntimeTaskStage(primaryTask);
+    const quantizationStage = primaryTask.task_type === "project_sync"
+      ? formatQuantizationStageLabel(projectKnowledgeState.syncState?.quantization_stage, translateWithFallback)
+      : "";
     return [
       taskLabel,
       typeof percent === "number" ? `${percent}%` : stageLabel,
+      quantizationStage ? `${t("projects.knowledge.syncQuantizationStage", "Stage")}: ${quantizationStage}` : "",
     ]
       .filter(Boolean)
       .join(" · ");
-  }, [projectKnowledgeState.activeKnowledgeTask, t, translateWithFallback]);
+  }, [projectKnowledgeState.activeKnowledgeTask, projectKnowledgeState.syncState?.quantization_stage, t, translateWithFallback]);
 
   const runtimeSignalTooltipContent = useMemo(() => {
     const activeTasks = projectKnowledgeState.activeKnowledgeTasks;
@@ -866,9 +890,13 @@ export default function ProjectDetailPage() {
               ? (detail as QualityLoopJobStatus | null)
               : null;
             const projectSyncDetail = task.task_type === "project_sync"
-              ? (detail as ProjectKnowledgeSyncState | null)
+              ? ((detail as ProjectKnowledgeSyncState | null) || projectKnowledgeState.syncState || null)
               : null;
             const semanticEngine = projectSyncDetail?.semantic_engine;
+            const quantizationStageLabel = formatQuantizationStageLabel(
+              projectSyncDetail?.quantization_stage,
+              translateWithFallback,
+            );
             const semanticReasonLabel = getProjectKnowledgeSemanticReasonLabel(semanticEngine, t);
             const semanticDescription = getProjectKnowledgeSemanticDescription(semanticEngine, t);
             const scoreBefore = typeof qualityLoopDetail?.score_before === "number"
@@ -914,6 +942,11 @@ export default function ProjectDetailPage() {
                   {typeof changedCount === "number" ? (
                     <Text type="secondary">
                       {t("projects.knowledge.syncChangedCount", "Changed files: {{count}}", { count: changedCount })}
+                    </Text>
+                  ) : null}
+                  {quantizationStageLabel ? (
+                    <Text type="secondary">
+                      {t("projects.knowledge.syncQuantizationStage", "Stage")}: {quantizationStageLabel}
                     </Text>
                   ) : null}
                   {scoreBefore !== null && scoreAfter !== null ? (

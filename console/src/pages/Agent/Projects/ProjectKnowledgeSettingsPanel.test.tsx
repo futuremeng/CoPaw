@@ -216,6 +216,7 @@ describe("ProjectKnowledgeSettingsPanel", () => {
           trigger: "manual-panel",
           force: true,
           processingMode: "agentic",
+          quantizationStage: "l3",
         }),
       );
     });
@@ -412,6 +413,7 @@ describe("ProjectKnowledgeSettingsPanel", () => {
       idempotency_key: "manual-op-key-1",
       deduplicated: true,
       last_action: "start_sync",
+      quantization_stage: "l2",
       operation_updated_at: "2026-04-11T23:30:00+00:00",
     }));
 
@@ -433,6 +435,7 @@ describe("ProjectKnowledgeSettingsPanel", () => {
       expect(body).toMatch(/Idempotency:\s*manual-op-key-1/);
       expect(body).toMatch(/Deduplicated:\s*Yes/);
       expect(body).toMatch(/Action:\s*start_sync/);
+      expect(body).toMatch(/Stage:\s*L2/);
       expect(body).toMatch(/Updated:\s*/);
     });
   });

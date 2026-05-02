@@ -33,7 +33,10 @@ class MockWebSocket {
 
   onerror: (() => void) | null = null;
 
-  constructor(public readonly url: string) {
+  readonly url: string;
+
+  constructor(url: string) {
+    this.url = url;
     MockWebSocket.instances.push(this);
   }
 

@@ -419,9 +419,13 @@ class QuantizationArchitectureManager:
         # Ensure dependencies are met
         if normalized_stage != "l1":
             previous_stage = QUANTIZATION_STAGES[QUANTIZATION_STAGES.index(normalized_stage) - 1]
+            # resolve snapshot for previous stage independently
+            prev_snapshot = self._resolve_snapshot_id(previous_stage, normalized_source, snapshot_id)
             previous_result = self.get_stage_result(
-                stage=previous_stage, source_id=normalized_source, snapshot_id=resolved_snapshot
+                stage=previous_stage, source_id=normalized_source, snapshot_id=prev_snapshot
             )
+            # 调试输出
+            print(f"[DEBUG] schedule_stage_run: {previous_stage=}, {prev_snapshot=}, {previous_result=}")
             if not previous_result or previous_result.get("status") != "ready":
                 raise RuntimeError(f"Dependency not met: {previous_stage} must complete before {normalized_stage}.")
 

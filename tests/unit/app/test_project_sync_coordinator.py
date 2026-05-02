@@ -106,6 +106,41 @@ def test_project_sync_command_respects_manual_idempotency_key(tmp_path: Path):
     assert cmd.operation_id.startswith("ps-")
 
 
+def test_project_sync_command_tracks_quantization_stage(tmp_path: Path):
+    project_id = "project-op-stage"
+    project_dir = tmp_path / "projects" / project_id
+    project_dir.mkdir(parents=True, exist_ok=True)
+    cfg = Config().knowledge
+
+    source = _source(project_id, project_dir)
+    cmd_l1 = ProjectSyncCommand.start(
+        project_id=project_id,
+        config=cfg,
+        running_config=None,
+        source=source,
+        trigger="manual",
+        changed_paths=["note.md"],
+        auto_enabled=True,
+        force=False,
+        quantization_stage="l1",
+    )
+    cmd_l2 = ProjectSyncCommand.start(
+        project_id=project_id,
+        config=cfg,
+        running_config=None,
+        source=source,
+        trigger="manual",
+        changed_paths=["note.md"],
+        auto_enabled=True,
+        force=False,
+        quantization_stage="l2",
+    )
+
+    assert cmd_l1.quantization_stage == "l1"
+    assert cmd_l2.quantization_stage == "l2"
+    assert cmd_l1.idempotency_key != cmd_l2.idempotency_key
+
+
 def test_project_sync_coordinator_start_dispatch_injects_operation_metadata(tmp_path: Path):
     project_id = "project-coordinator-start"
     project_dir = tmp_path / "projects" / project_id

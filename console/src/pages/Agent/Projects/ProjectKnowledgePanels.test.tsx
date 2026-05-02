@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import ProjectKnowledgeOutputsPanel from "./ProjectKnowledgeOutputsPanel";
@@ -437,12 +437,17 @@ function buildKnowledgeState(): ProjectKnowledgeState {
 describe("project knowledge supporting panels", () => {
   it("renders health content outside explore", () => {
     const knowledgeState = buildKnowledgeState();
+    const baseSyncState = knowledgeState.syncState;
+    if (!baseSyncState) {
+      throw new Error("syncState fixture missing");
+    }
     knowledgeState.syncState = {
-      ...knowledgeState.syncState,
+      ...baseSyncState,
       operation_id: "ps-test-123",
       idempotency_key: "manual-op-key-1",
       deduplicated: true,
       last_action: "start_sync",
+      quantization_stage: "l3",
       operation_updated_at: "2026-04-11T23:30:00+00:00",
     };
     const runtimeTooltipContent = (
@@ -476,6 +481,7 @@ describe("project knowledge supporting panels", () => {
     expect(screen.getByText(/Key: manual-op-key-1/)).not.toBeNull();
     expect(screen.getByText(/Deduplicated: Yes/)).not.toBeNull();
     expect(screen.getByText(/Action: start_sync/)).not.toBeNull();
+    expect(screen.getByText(/Stage: L3/)).not.toBeNull();
     expect((document.body.textContent || "").match(/Sync Trace[\s\S]*Updated\s*:/)).not.toBeNull();
 
     const signalLabels = Array.from(
@@ -504,14 +510,23 @@ describe("project knowledge supporting panels", () => {
     expect(signalLabels).toEqual([
       "projects.knowledge.signalDocuments",
       "projects.knowledge.signalChunks",
-      "Sentences",
-      "Lightweight Tokens",
-      "Characters",
+      "Sentences🛈",
+      "Lightweight Tokens🛈",
+      "Characters🛈",
     ]);
   });
 
   it("renders processing mode cards", () => {
     const knowledgeState = buildKnowledgeState();
+    const baseSyncState = knowledgeState.syncState;
+    if (!baseSyncState) {
+      throw new Error("syncState fixture missing");
+    }
+    knowledgeState.syncState = {
+      ...baseSyncState,
+      latest_requested_mode: "nlp",
+      quantization_stage: "l2",
+    };
     knowledgeState.processingCompareModes = knowledgeState.processingCompareModes.map((mode) => (
       mode.mode === "nlp"
         ? {
@@ -544,6 +559,7 @@ describe("project knowledge supporting panels", () => {
     const runNlpButton = screen.getByRole("button", { name: "运行 NLP 结构化" }) as HTMLButtonElement;
     expect(runNlpButton.disabled).toBe(false);
     expect(runNlpButton.parentElement?.getAttribute("title")).toBeNull();
+    expect(screen.getByText("当前发起阶段: L2")).not.toBeNull();
     expect(screen.getByText("L2 提供实体与关系的结构化基础，L3 在此基础上继续做多智能体增强与质量提升。")).not.toBeNull();
   });
 
@@ -598,6 +614,27 @@ describe("project knowledge supporting panels", () => {
 
     expect(screen.getAllByText("未产出").length).toBeGreaterThan(1);
     expect(screen.getByText("等待形成独立增强结果")).not.toBeNull();
+  });
+
+  it("passes the explicitly selected quantization stage when launching a mode", async () => {
+    const user = userEvent.setup();
+    const knowledgeState = buildKnowledgeState();
+
+    render(<ProjectKnowledgeProcessingPanel knowledgeState={knowledgeState} />);
+
+    const nlpHeading = screen.getAllByText("NLP 模式")[0];
+    const nlpCard = nlpHeading.closest("[class*='projectKnowledgeModeCard']");
+    if (!nlpCard) {
+      throw new Error("NLP mode card not found");
+    }
+    const nlpCardElement = nlpCard as HTMLElement;
+
+    await user.click(within(nlpCardElement).getByText("L1"));
+    await user.click(within(nlpCardElement).getByRole("button", { name: "运行 NLP 结构化" }));
+
+    expect(knowledgeState.startProcessingMode).toHaveBeenCalledWith("nlp", {
+      quantizationStage: "l1",
+    });
   });
 
   it("keeps the raw graph as the primary L2 artifact when document graphify artifacts exist", () => {
