@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useRef } from "react";
 import { Input } from "antd";
 import { IconButton } from "@agentscope-ai/design";
 import {
@@ -54,6 +54,9 @@ interface ChatSessionItemProps {
 
 const ChatSessionItem: React.FC<ChatSessionItemProps> = (props) => {
   const { t } = useTranslation();
+
+  /** Track IME composition state to prevent premature submit during CJK input */
+  const isComposingRef = useRef(false);
 
   const inProgress =
     props.generating === true || props.chatStatus === "running";
@@ -121,8 +124,36 @@ const ChatSessionItem: React.FC<ChatSessionItemProps> = (props) => {
             size="small"
             value={props.editValue}
             onChange={(e) => props.onEditChange?.(e.target.value)}
-            onPressEnter={props.onEditSubmit}
-            onBlur={props.onEditSubmit}
+            onCompositionStart={() => {
+              isComposingRef.current = true;
+            }}
+            onCompositionEnd={() => {
+              isComposingRef.current = false;
+            }}
+            onKeyDown={(e) => {
+              if (
+                e.key === "Enter" &&
+                !e.nativeEvent.isComposing &&
+                !isComposingRef.current
+              ) {
+                e.preventDefault();
+                props.onEditSubmit?.();
+              }
+              if (e.key === "Escape") {
+                e.preventDefault();
+                props.onEditCancel?.();
+              }
+            }}
+            onBlur={() => {
+              /* Delay slightly so that IME composition end + blur
+                 ordering issues on some browsers don't cause
+                 premature submit */
+              setTimeout(() => {
+                if (!isComposingRef.current) {
+                  props.onEditSubmit?.();
+                }
+              }, 100);
+            }}
             onClick={(e) => e.stopPropagation()}
           />
         ) : (

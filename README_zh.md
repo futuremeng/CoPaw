@@ -60,6 +60,13 @@
 
 ## 新闻
 
+- [2026-04-29] 我们发布了 **v1.1.5**！完整更新说明见 [v1.1.5 发布说明](https://qwenpaw.agentscope.io/release-notes)。
+
+  - **[v1.1.5] 新增**：记忆搜索优化；上下文压缩降级机制；ACP Agent 重命名与删除；QQ 语音与 ASR 支持。
+  - **[v1.1.5] 性能**：配置文件与技能清单加载缓存；模型 API 请求去重；控制台聊天虚拟化渲染。
+  - **[v1.1.5] 修复**：频道审批命令；时区规范化；MCP 执行超时处理。
+  - **[v1.1.5] 感谢新贡献者**：@LinQi0777、@albert-zen、@ideal、@CA-mambo、@bxy3045134656。
+
 - [2026-04-24] 我们发布了 **v1.1.4**！完整更新说明见 [v1.1.4 发布说明](https://qwenpaw.agentscope.io/release-notes)。
 
   - **[v1.1.4] 新增**：记忆与上下文架构重构；计划执行模式；Shell 绕过检测可配置化；免认证主机白名单；SIP 语音频道；会话右键菜单；浏览器启动参数与 Shell 命令超时配置； 内置DeepSeek V4 模型。
@@ -72,7 +79,7 @@
 
 - [2026-04-14] 我们发布了 **v1.1.1**！完整更新说明见 [v1.1.1 发布说明](https://qwenpaw.agentscope.io/release-notes)。
 
-[2026-04-12] **CoPaw 正式更名为 QwenPaw**：这是一次品牌名称焕新，也是我们迈向下一阶段开源的重要一步。
+- [2026-04-12] **CoPaw 正式更名为 QwenPaw**：这是一次品牌名称焕新，也是我们迈向下一阶段开源的重要一步。
 
 新的名字，更好地体现了我们正在构建的开源生态，以及我们持续推进的整体开源方向：
 
@@ -495,6 +502,7 @@ QwenPaw 可在本机完全本地运行大模型，无需 API Key 或云端服务
 | [模型](https://qwenpaw.agentscope.io/docs/models)           | 配置云/本地/自定义提供商             |
 | [频道配置](https://qwenpaw.agentscope.io/docs/channels)     | 钉钉、飞书、微信、Discord、Telegram 等 |
 | [Skills](https://qwenpaw.agentscope.io/docs/skills)         | 扩展与自定义能力                     |
+| [插件系统](https://qwenpaw.agentscope.io/docs/plugins)       | 插件系统                             |
 | [MCP和工具](https://qwenpaw.agentscope.io/docs/mcp)         | 管理 MCP 客户端和工具                |
 | [记忆](https://qwenpaw.agentscope.io/docs/memory)           | 长期记忆机制                         |
 | [记忆进化与主动交互](https://qwenpaw.agentscope.io/docs/memory-evolving-and-proactive) | 智能体记忆进化与主动交互               |

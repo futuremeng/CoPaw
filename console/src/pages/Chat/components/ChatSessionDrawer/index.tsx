@@ -6,7 +6,7 @@ import React, {
   useState,
 } from "react";
 import { Drawer, Spin } from "antd";
-import { FixedSizeList } from "react-window";
+import { FixedSizeList, type ListChildComponentProps } from "react-window";
 import { IconButton } from "@agentscope-ai/design";
 import { SparkOperateRightLine } from "@agentscope-ai/icons";
 import {
@@ -33,6 +33,63 @@ import styles from "./index.module.less";
 
 /** Fixed height of each session item in pixels (matches CSS min-height) */
 const ITEM_HEIGHT = 77;
+
+/** Data passed to each row via FixedSizeList's itemData prop */
+interface SessionRowData {
+  sortedSessions: ExtendedChatSession[];
+  currentSessionId: string | undefined;
+  editingSessionId: string | null;
+  editValue: string;
+  t: ReturnType<typeof useTranslation>["t"];
+  handleSessionClick: (sessionId: string) => void;
+  handleEditStart: (sessionId: string, currentName: string) => void;
+  handleDelete: (sessionId: string) => void;
+  handlePinToggle: (sessionId: string) => void;
+  handleEditChange: (value: string) => void;
+  handleEditSubmit: () => void;
+  handleEditCancel: () => void;
+  handleItemContextMenu: (sessionId: string, event: React.MouseEvent) => void;
+}
+
+/** Memoized row renderer — only re-renders when its specific props change */
+const SessionRow = React.memo(function SessionRow({
+  index,
+  style,
+  data,
+}: ListChildComponentProps<SessionRowData>) {
+  const session = data.sortedSessions[index];
+  const channelKey = session.channel?.trim() || "";
+  const channelLabel = channelKey
+    ? getChannelLabel(channelKey, data.t)
+    : undefined;
+  const isEditing = data.editingSessionId === session.id;
+
+  return (
+    <div style={style}>
+      <ChatSessionItem
+        sessionId={session.id!}
+        name={session.name || "New Chat"}
+        time={formatCreatedAt(session.createdAt ?? null)}
+        channelKey={channelKey || undefined}
+        channelLabel={channelLabel}
+        chatStatus={session.status}
+        generating={session.generating}
+        pinned={session.pinned}
+        active={session.id === data.currentSessionId}
+        editing={isEditing}
+        editValue={isEditing ? data.editValue : undefined}
+        onClick={data.handleSessionClick}
+        onEdit={data.handleEditStart}
+        onDelete={data.handleDelete}
+        onPin={data.handlePinToggle}
+        onEditChange={data.handleEditChange}
+        onEditSubmit={data.handleEditSubmit}
+        onEditCancel={data.handleEditCancel}
+        onContextMenu={data.handleItemContextMenu}
+      />
+    </div>
+  );
+});
 
 /** Sessions from QwenPaw backend include extra fields beyond the runtime UI type */
 interface ExtendedChatSession extends IAgentScopeRuntimeWebUISession {
@@ -347,6 +404,40 @@ const ChatSessionDrawer: React.FC<ChatSessionDrawerProps> = (props) => {
     handleDelete,
   ]);
 
+  /** Stable data object for FixedSizeList — avoids re-creating row renderer on every render */
+  const itemData = useMemo<SessionRowData>(
+    () => ({
+      sortedSessions: sortedSessions as ExtendedChatSession[],
+      currentSessionId,
+      editingSessionId,
+      editValue,
+      t,
+      handleSessionClick,
+      handleEditStart,
+      handleDelete,
+      handlePinToggle,
+      handleEditChange,
+      handleEditSubmit,
+      handleEditCancel,
+      handleItemContextMenu,
+    }),
+    [
+      sortedSessions,
+      currentSessionId,
+      editingSessionId,
+      editValue,
+      t,
+      handleSessionClick,
+      handleEditStart,
+      handleDelete,
+      handlePinToggle,
+      handleEditChange,
+      handleEditSubmit,
+      handleEditCancel,
+      handleItemContextMenu,
+    ],
+  );
+
   return (
     <Drawer
       open={props.open}
@@ -405,53 +496,23 @@ const ChatSessionDrawer: React.FC<ChatSessionDrawerProps> = (props) => {
           </div>
         ) : (
           <>
-            <div className={styles.virtualListBackground}>
-              <Spin size="small" />
-            </div>
+            {/* Background loading — only show when content overflows the container,
+                so it's visible through unrendered gaps during fast scroll */}
+            {sortedSessions.length * ITEM_HEIGHT > listHeight && (
+              <div className={styles.virtualListBackground}>
+                <Spin size="small" />
+              </div>
+            )}
             <FixedSizeList
               height={listHeight}
               width="100%"
               itemCount={sortedSessions.length}
               itemSize={ITEM_HEIGHT}
               overscanCount={20}
+              itemData={itemData}
               className={styles.list}
             >
-              {({ index, style }) => {
-                const session = sortedSessions[index];
-                const ext = session as ExtendedChatSession;
-                const channelKey = ext.channel?.trim() || "";
-                const channelLabel = channelKey
-                  ? getChannelLabel(channelKey, t)
-                  : undefined;
-                return (
-                  <div style={style}>
-                    <ChatSessionItem
-                      key={session.id}
-                      sessionId={session.id!}
-                      name={session.name || "New Chat"}
-                      time={formatCreatedAt(ext.createdAt ?? null)}
-                      channelKey={channelKey || undefined}
-                      channelLabel={channelLabel}
-                      chatStatus={ext.status}
-                      generating={ext.generating}
-                      pinned={ext.pinned}
-                      active={session.id === currentSessionId}
-                      editing={editingSessionId === session.id}
-                      editValue={
-                        editingSessionId === session.id ? editValue : undefined
-                      }
-                      onClick={handleSessionClick}
-                      onEdit={handleEditStart}
-                      onDelete={handleDelete}
-                      onPin={handlePinToggle}
-                      onEditChange={handleEditChange}
-                      onEditSubmit={handleEditSubmit}
-                      onEditCancel={handleEditCancel}
-                      onContextMenu={handleItemContextMenu}
-                    />
-                  </div>
-                );
-              }}
+              {SessionRow}
             </FixedSizeList>
           </>
         )}
