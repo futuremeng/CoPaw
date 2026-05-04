@@ -58,6 +58,16 @@ describe("project layout prefs", () => {
     expect(parsed.selectedTreeFilePath).toBe("");
   });
 
+  it("restores ner knowledge dock tab when persisted", () => {
+    const parsed = parseProjectLayoutPrefs(
+      JSON.stringify({
+        knowledgeDockTab: "ner",
+      }),
+    );
+
+    expect(parsed.knowledgeDockTab).toBe("ner");
+  });
+
   it("drops invalid tree persistence payload while keeping valid string entries", () => {
     const parsed = parseProjectLayoutPrefs(
       JSON.stringify({

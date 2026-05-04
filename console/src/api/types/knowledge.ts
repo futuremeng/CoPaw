@@ -113,6 +113,9 @@ export interface ProjectKnowledgeModeMetricsPayload {
   artifact_count?: number;
   quality_score?: number | null;
   cor_ready_chunk_count?: number;
+  cor_ready_document_count?: number; // Alias
+  syntax_ready_chunk_count?: number;
+  syntax_ready_document_count?: number; // Alias
   cor_cluster_count?: number;
   cor_replacement_count?: number;
   cor_effective_chunk_count?: number;
@@ -373,6 +376,52 @@ export interface KnowledgeSourceDocument {
   path: string;
   title: string;
   text: string;
+  chunk_id?: string;
+  chunk_path?: string;
+  snapshot_path?: string;
+  snapshot_relative_path?: string;
+  snapshot_at?: string;
+  ner_path?: string;
+  ner_structured_path?: string;
+  ner_annotated_path?: string;
+  ner_stats_path?: string;
+  ner_status?: string;
+  ner_reason_code?: string;
+  ner_reason?: string;
+  ner_input_mode?: string;
+  ner_entity_count?: number;
+  ner_text?: string;
+  ner_structured_text?: string;
+  ner_annotated_text?: string;
+  ner_stats_text?: string;
+  cor_path?: string;
+  cor_structured_path?: string;
+  cor_annotated_path?: string;
+  cor_status?: string;
+  cor_reason_code?: string;
+  cor_reason?: string;
+  cor_interlinear_path?: string;
+  cor_input_mode?: string;
+  cor_cluster_count?: number;
+  cor_replacement_count?: number;
+  cor_format_version?: string;
+  cor_resolution_mode?: string;
+  cor_text?: string;
+  cor_structured_text?: string;
+  cor_annotated_text?: string;
+  syntax_path?: string;
+  syntax_structured_path?: string;
+  syntax_annotated_path?: string;
+  syntax_status?: string;
+  syntax_interlinear_path?: string;
+  syntax_input_mode?: string;
+  syntax_sentence_count?: number;
+  syntax_token_count?: number;
+  syntax_relation_count?: number;
+  syntax_format_version?: string;
+  syntax_text?: string;
+  syntax_structured_text?: string;
+  syntax_annotated_text?: string;
 }
 
 export interface KnowledgeSourceContent {

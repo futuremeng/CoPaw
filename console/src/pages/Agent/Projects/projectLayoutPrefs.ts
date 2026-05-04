@@ -2,7 +2,7 @@ import type { ProjectFileFilterKey } from "./filtering";
 
 export type ProjectStageKey = "source" | "knowledge" | "output" | "builtin";
 export type TreeDisplayMode = "filter" | "highlight";
-export type KnowledgeDockTabKey = "explore" | "sources" | "processing" | "outputs" | "health" | "settings";
+export type KnowledgeDockTabKey = "explore" | "sources" | "processing" | "ner" | "outputs" | "health" | "settings";
 
 function parsePaneSize(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) && value > 0
@@ -91,6 +91,7 @@ export function parseProjectLayoutPrefs(raw: string | null): ProjectDetailLayout
         parsedKnowledgeDockTab === "settings"
         || parsedKnowledgeDockTab === "sources"
         || parsedKnowledgeDockTab === "processing"
+        || parsedKnowledgeDockTab === "ner"
         || parsedKnowledgeDockTab === "outputs"
         || parsedKnowledgeDockTab === "health"
           ? parsedKnowledgeDockTab

@@ -309,7 +309,7 @@ function buildNlpStageStats(
     0,
     Number(mode.l2TotalChunks || mode.chunkCount || 0),
   );
-  const stageDoneLabel = t("projects.knowledge.processing.stageDoneChunks", "已处理块数");
+  const stageDoneLabel = t("projects.knowledge.processing.stageDoneChunks", "已处理文档数");
   const formatDone = (done: number): string | number => (
     totalChunks > 0 ? `${Math.max(0, done)}/${totalChunks}` : Math.max(0, done)
   );
@@ -361,7 +361,7 @@ function buildNlpStageStats(
         },
         {
           key: "readyChunks",
-          label: t("projects.knowledge.processing.readyChunks", "就绪块数"),
+          label: t("projects.knowledge.processing.readyChunks", "就绪文档数"),
           value: nerReady,
         },
         {
@@ -384,7 +384,7 @@ function buildNlpStageStats(
         },
         {
           key: "readyChunks",
-          label: t("projects.knowledge.processing.readyChunks", "就绪块数"),
+          label: t("projects.knowledge.processing.readyChunks", "就绪文档数"),
           value: syntaxReady,
         },
         {
@@ -418,7 +418,7 @@ function buildNlpStageStats(
         },
         {
           key: "readyChunks",
-          label: t("projects.knowledge.processing.readyChunks", "就绪块数"),
+          label: t("projects.knowledge.processing.readyChunks", "就绪文档数"),
           value: corReady,
         },
         {

@@ -2,6 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import ProjectKnowledgeOutputsPanel from "./ProjectKnowledgeOutputsPanel";
+import ProjectKnowledgeNerPanel from "./ProjectKnowledgeNerPanel";
 import ProjectKnowledgeProcessingPanel from "./ProjectKnowledgeProcessingPanel";
 import ProjectKnowledgeSignalsPanel from "./ProjectKnowledgeSignalsPanel";
 import ProjectKnowledgeSourcesPanel from "./ProjectKnowledgeSourcesPanel";
@@ -101,6 +102,20 @@ function buildKnowledgeState(): ProjectKnowledgeState {
             path: "original/guide.md",
             title: "guide.md",
             text: "guide body",
+            ner_status: "ready",
+            ner_input_mode: "interlinear_full_document",
+            ner_entity_count: 2,
+            ner_structured_text: JSON.stringify({
+              entity_catalog: [
+                { normalized: "agent", label: "ORG", mention_count: 2 },
+                { normalized: "workflow", label: "PRODUCT", mention_count: 1 },
+              ],
+              entity_mentions: [
+                { surface: "Agent", label: "ORG" },
+                { surface: "agent", label: "ORG" },
+                { surface: "workflow", label: "PRODUCT" },
+              ],
+            }),
           },
         ],
       },
@@ -550,7 +565,7 @@ describe("project knowledge supporting panels", () => {
     expect(screen.getByText("COR")).not.toBeNull();
     expect(screen.getByText("NER")).not.toBeNull();
     expect(screen.getByText("Syntax")).not.toBeNull();
-    expect(screen.getAllByText("就绪块数").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("就绪文档数").length).toBeGreaterThan(0);
     expect(screen.getByText("聚类数")).not.toBeNull();
     expect(screen.getByText("识别实体数")).not.toBeNull();
     expect(screen.getByText("Token 数")).not.toBeNull();
@@ -729,5 +744,18 @@ describe("project knowledge supporting panels", () => {
     );
 
     expect(screen.getByText("No result")).not.toBeNull();
+  });
+
+  it("renders ner panel with aggregated entities", () => {
+    const knowledgeState = buildKnowledgeState();
+
+    render(<ProjectKnowledgeNerPanel knowledgeState={knowledgeState} />);
+
+    expect(screen.getByText("NER")).not.toBeNull();
+    expect(screen.getByText("Unique Entities")).not.toBeNull();
+    expect(screen.getByText("Entity Mentions")).not.toBeNull();
+    expect(screen.getByText("interlinear_full_document: 1")).not.toBeNull();
+    expect(screen.getByText("agent")).not.toBeNull();
+    expect(screen.getByText("workflow")).not.toBeNull();
   });
 });

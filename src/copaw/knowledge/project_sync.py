@@ -1987,14 +1987,8 @@ class ProjectKnowledgeSyncManager:
             active = self._is_active_state(state)
             if active:
                 state["dirty_after_run"] = True
-                state["last_trigger"] = (trigger or "manual").strip() or "manual"
+                state["last_trigger"] = str(state.get("last_trigger") or "auto").strip() or "auto"
                 state["latest_requested_mode"] = processing_mode
-                state["pending_changed_paths"] = self._merge_paths(
-                    state.get("pending_changed_paths"),
-                    changed_paths,
-                )
-                if changed_paths:
-                    state["last_change_at"] = self._now_iso()
                 self._save_state(state)
                 return
 
@@ -2022,7 +2016,7 @@ class ProjectKnowledgeSyncManager:
                 running_config=running_config,
                 source=source,
                 trigger=str(state.get("last_trigger") or "auto"),
-                force=bool(force),
+                force=False,
                 processing_mode=str(state.get("latest_requested_mode") or processing_mode or "agentic"),
             )
 
@@ -2035,11 +2029,7 @@ class ProjectKnowledgeSyncManager:
                 processing_mode=processing_mode,
                 quantization_stage=state.get("quantization_stage"),
             )
-        return {
-            "accepted": True,
-            "reason": reason,
-            "state": self._hydrate_processing_view(state),
-        }
+        return
 
     def mark_dirty(
         self,

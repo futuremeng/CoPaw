@@ -28,6 +28,7 @@ import ProjectChatPanel, {
 } from "./ProjectChatPanel";
 import ProjectKnowledgePanel from "./ProjectKnowledgePanel";
 import ProjectKnowledgeOutputsPanel from "./ProjectKnowledgeOutputsPanel";
+import ProjectKnowledgeNerPanel from "./ProjectKnowledgeNerPanel";
 import ProjectKnowledgeProcessingPanel from "./ProjectKnowledgeProcessingPanel";
 import ProjectKnowledgeSignalsPanel from "./ProjectKnowledgeSignalsPanel";
 import ProjectKnowledgeSourcesPanel from "./ProjectKnowledgeSourcesPanel";
@@ -761,6 +762,7 @@ export default function ProjectDetailPage() {
     onSignalsChange: setKnowledgeHeaderSignals,
     eagerSourceLoad:
       knowledgeDockTab === "sources"
+      || knowledgeDockTab === "ner"
       || knowledgeDockTab === "processing"
       || knowledgeDockTab === "health"
       || knowledgeDockTab === "settings",
@@ -3675,6 +3677,15 @@ export default function ProjectDetailPage() {
           <ProjectKnowledgeProcessingPanel
             knowledgeState={projectKnowledgeState}
             onOpenSettings={handleKnowledgeOpenSettings}
+          />
+        ),
+      },
+      {
+        key: "ner",
+        label: t("projects.knowledgeDock.tabNer", "NER"),
+        children: (
+          <ProjectKnowledgeNerPanel
+            knowledgeState={projectKnowledgeState}
           />
         ),
       },
