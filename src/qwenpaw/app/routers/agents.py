@@ -67,7 +67,7 @@ from ...knowledge import ProjectKnowledgeSyncManager
 from ...knowledge.project_sync import (
     DEFAULT_PROJECT_SYNC_COOLDOWN_SECONDS,
     DEFAULT_PROJECT_SYNC_DEBOUNCE_SECONDS,
-    ensure_project_source_registered,
+    build_project_source_spec,
 )
 from ..project_monitoring_state import (
     PROJECT_FILE_MONITORING_ACTIVE,
@@ -1509,12 +1509,10 @@ def _maybe_start_project_auto_knowledge_sync(
     if not knowledge_config.enabled or not bool(getattr(knowledge_config, "memify_enabled", False)):
         return None
 
-    source, _ = ensure_project_source_registered(
-        config.knowledge,
+    source = build_project_source_spec(
         project_id=project_id,
         project_name=summary.name or project_id,
         project_workspace_dir=str(project_dir),
-        persist=lambda: save_config(config),
     )
     running_config = (
         getattr(getattr(workspace, "config", None), "running", None)

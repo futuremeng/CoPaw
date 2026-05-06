@@ -44,9 +44,6 @@ function launchDisabledReason(
   knowledgeState: ProjectKnowledgeState,
   t: ReturnType<typeof useTranslation>["t"],
 ): string {
-  if (!knowledgeState.sourceRegistered) {
-    return t("projects.knowledge.processing.needSource", "需要先注册项目知识源");
-  }
   if (knowledgeState.processingLaunchMode && knowledgeState.processingLaunchMode !== mode.mode) {
     return t("projects.knowledge.processing.otherLaunchInFlight", "另一个模式正在发起，请稍候");
   }
@@ -155,13 +152,6 @@ function describeL1Hint(
   knowledgeState: ProjectKnowledgeState,
   t: ReturnType<typeof useTranslation>["t"],
 ): string {
-  if (!knowledgeState.sourceRegistered) {
-    return t(
-      "projects.knowledge.processing.l1HintNeedSource",
-      "L1 基础索引尚未注册，请先在 Settings 注册项目知识源。",
-    );
-  }
-
   const indexedSources = Math.max(0, knowledgeState.quantMetrics.indexedSources || 0);
   const totalSources = Math.max(0, knowledgeState.quantMetrics.totalSources || 0);
   if (totalSources > 0 && indexedSources < totalSources) {

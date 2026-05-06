@@ -533,7 +533,7 @@ class ProjectKnowledgeSyncManager:
                 "status": "idle",
                 "reason_code": "SOURCE_NOT_READY",
                 "reason": "Project source has not been prepared for semantic extraction yet.",
-                "summary": "Semantic engine waiting for project source registration.",
+                "summary": "Semantic engine waiting for project source preparation.",
                 "updated_at": None,
             },
         }
@@ -543,7 +543,7 @@ class ProjectKnowledgeSyncManager:
         status = str(payload.get("status") or "").strip().lower()
         reason_code = str(payload.get("reason_code") or "").strip().upper()
         if reason_code == "SOURCE_NOT_READY":
-            return "Semantic engine waiting for project source registration."
+            return "Semantic engine waiting for project source preparation."
         if reason_code == "HANLP2_SIDECAR_UNCONFIGURED":
             return "Semantic engine unavailable: HanLP sidecar is not configured."
         if reason_code == "HANLP2_SIDECAR_PYTHON_MISSING":

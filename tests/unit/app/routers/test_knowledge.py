@@ -432,6 +432,151 @@ def test_search_knowledge_offloads_search_to_thread(
     assert calls[0][0].__name__ == "search"
 
 
+def test_project_sync_run_does_not_expose_project_source_to_global_search(
+    knowledge_api_client: TestClient,
+    tmp_path: Path,
+    monkeypatch,
+):
+    project_id = "global-scope-sync-only"
+    project_dir = tmp_path / "projects" / project_id
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload["enabled"] = True
+    config_payload["memify_enabled"] = True
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    class _FakeProjectSyncManager:
+        def get_state(self, _project_id):
+            return {"project_id": _project_id, "status": "idle"}
+
+    class _FakeCoordinator:
+        def dispatch(self, _command):
+            return SimpleNamespace(
+                action="start_sync",
+                operation_id="ps-global-scope-sync-only",
+                idempotency_key="sync-only-key",
+                deduplicated=False,
+                payload={"accepted": True, "project_id": project_id, "status": "queued"},
+            )
+
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "_project_sync_for_workspace",
+        lambda *_args, **_kwargs: _FakeProjectSyncManager(),
+    )
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "_project_sync_coordinator_for_workspace",
+        lambda *_args, **_kwargs: _FakeCoordinator(),
+    )
+
+    run_response = knowledge_api_client.post(
+        f"/knowledge/project-sync/run?project_id={project_id}",
+        json={
+            "trigger": "manual-test",
+            "changed_paths": ["original/note.md"],
+            "force": True,
+            "processing_mode": "nlp",
+        },
+    )
+    assert run_response.status_code == 200
+
+    captured: dict[str, object] = {}
+
+    class _FakeSearchManager:
+        def search(self, **kwargs):
+            source_ids = [source.id for source in kwargs["config"].sources]
+            captured["source_ids"] = source_ids
+            return {"query": kwargs["query"], "hits": []}
+
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "_manager_for_workspace",
+        lambda *_args, **_kwargs: _FakeSearchManager(),
+    )
+
+    search_response = knowledge_api_client.get("/knowledge/search?q=sync-only-query")
+    assert search_response.status_code == 200
+    assert captured["source_ids"] == []
+
+
+def test_register_project_source_exposes_it_to_global_search_and_graph_query(
+    knowledge_api_client: TestClient,
+    tmp_path: Path,
+    monkeypatch,
+):
+    project_id = "global-scope-registered"
+    source_id = f"project-{project_id}-workspace"
+    project_dir = tmp_path / "projects" / project_id
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload["enabled"] = True
+    config_payload["graph_query_enabled"] = True
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    registered = knowledge_api_client.put(
+        f"/knowledge/sources?project_id={project_id}",
+        json={
+            "id": source_id,
+            "name": f"Project Workspace: {project_id}",
+            "type": "directory",
+            "location": str(project_dir),
+            "content": "",
+            "enabled": True,
+            "recursive": True,
+            "project_id": project_id,
+            "tags": ["project", f"project:{project_id}", "scope:project"],
+            "summary": f"Project-scoped knowledge source for {project_id}",
+        },
+    )
+    assert registered.status_code == 200
+
+    captured_search: dict[str, object] = {}
+
+    class _FakeSearchManager:
+        def search(self, **kwargs):
+            source_ids = [source.id for source in kwargs["config"].sources]
+            captured_search["source_ids"] = source_ids
+            return {"query": kwargs["query"], "hits": []}
+
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "_manager_for_workspace",
+        lambda *_args, **_kwargs: _FakeSearchManager(),
+    )
+
+    search_response = knowledge_api_client.get("/knowledge/search?q=registered-query")
+    assert search_response.status_code == 200
+    assert source_id in captured_search["source_ids"]
+
+    captured_graph: dict[str, object] = {}
+
+    class _FakeGraphOps:
+        def graph_query(self, **kwargs):
+            source_ids = [source.id for source in kwargs["config"].sources]
+            captured_graph["source_ids"] = source_ids
+            return SimpleNamespace(
+                records=[],
+                summary={"ok": True},
+                provenance={"source_count": len(source_ids)},
+                warnings=[],
+            )
+
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "_graph_ops_for_workspace",
+        lambda *_args, **_kwargs: _FakeGraphOps(),
+    )
+
+    graph_response = knowledge_api_client.get("/knowledge/graph-query?q=registered-graph")
+    assert graph_response.status_code == 200
+    assert source_id in captured_graph["source_ids"]
+
+
 def test_graph_query_offloads_query_to_thread(
     knowledge_api_client: TestClient,
     monkeypatch,
@@ -720,6 +865,58 @@ def test_get_project_sync_status_offloads_state_read_to_thread(
     assert any(call[0].__name__ == "get_state" for call in calls)
 
 
+def test_get_project_sync_status_does_not_auto_register_project_source(
+    knowledge_api_client: TestClient,
+    tmp_path: Path,
+    monkeypatch,
+):
+    project_id = "status-no-register"
+    project_dir = tmp_path / "projects" / project_id
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload["enabled"] = True
+    config_payload["memify_enabled"] = True
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    class _FakeProjectSyncManager:
+        def get_state(self, project_id):
+            return {"project_id": project_id, "status": "idle", "latest_source_id": ""}
+
+    captured: dict[str, object] = {}
+
+    class _FakeCoordinator:
+        def dispatch(self, command):
+            captured["source_id"] = getattr(getattr(command, "source", None), "id", "")
+            captured["source_location"] = getattr(getattr(command, "source", None), "location", "")
+            return SimpleNamespace(
+                action="resume_sync",
+                operation_id="ps-status-no-register",
+                idempotency_key="status-key",
+                deduplicated=False,
+                payload={"accepted": True, "reason": "RESUMED"},
+            )
+
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "_project_sync_for_workspace",
+        lambda *_args, **_kwargs: _FakeProjectSyncManager(),
+    )
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "_project_sync_coordinator_for_workspace",
+        lambda *_args, **_kwargs: _FakeCoordinator(),
+    )
+
+    response = knowledge_api_client.get(f"/knowledge/project-sync/status?project_id={project_id}")
+
+    assert response.status_code == 200
+    assert captured["source_id"] == f"project-{project_id}-workspace"
+    assert str(captured["source_location"]).endswith(f"projects/{project_id}")
+    assert knowledge_router_module.load_config().knowledge.sources == []
+
+
 def test_run_project_sync_offloads_dispatch_to_thread(
     knowledge_api_client: TestClient,
     tmp_path: Path,
@@ -778,6 +975,66 @@ def test_run_project_sync_offloads_dispatch_to_thread(
     assert getattr(command, "action", "") == "start_sync"
     assert getattr(command, "processing_mode", "") == "nlp"
     assert getattr(command, "quantization_stage", "") == "l2"
+
+
+def test_run_project_sync_does_not_auto_register_project_source(
+    knowledge_api_client: TestClient,
+    tmp_path: Path,
+    monkeypatch,
+):
+    project_id = "run-no-register"
+    project_dir = tmp_path / "projects" / project_id
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload["enabled"] = True
+    config_payload["memify_enabled"] = True
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    class _FakeProjectSyncManager:
+        def get_state(self, project_id):
+            return {"project_id": project_id, "status": "idle"}
+
+    captured: dict[str, object] = {}
+
+    class _FakeCoordinator:
+        def dispatch(self, command):
+            captured["source_id"] = getattr(getattr(command, "source", None), "id", "")
+            captured["source_location"] = getattr(getattr(command, "source", None), "location", "")
+            return SimpleNamespace(
+                action="start_sync",
+                operation_id="ps-run-no-register",
+                idempotency_key="run-key",
+                deduplicated=False,
+                payload={"accepted": True, "project_id": project_id, "status": "queued"},
+            )
+
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "_project_sync_for_workspace",
+        lambda *_args, **_kwargs: _FakeProjectSyncManager(),
+    )
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "_project_sync_coordinator_for_workspace",
+        lambda *_args, **_kwargs: _FakeCoordinator(),
+    )
+
+    response = knowledge_api_client.post(
+        f"/knowledge/project-sync/run?project_id={project_id}",
+        json={
+            "trigger": "manual-test",
+            "changed_paths": ["notes.md"],
+            "force": True,
+            "processing_mode": "nlp",
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured["source_id"] == f"project-{project_id}-workspace"
+    assert str(captured["source_location"]).endswith(f"projects/{project_id}")
+    assert knowledge_router_module.load_config().knowledge.sources == []
 
 
 def test_run_project_sync_allows_fast_mode_when_memify_disabled(
@@ -1438,12 +1695,12 @@ def test_project_sync_ws_snapshot_includes_latest_run_operation_metadata(
     assert str(payload["state"].get("operation_id") or "").startswith("ps-")
 
 
-def test_project_sync_run_auto_registers_source_and_persists_state(
+def test_project_sync_run_does_not_auto_register_source_and_persists_state(
     knowledge_api_client: TestClient,
     tmp_path: Path,
 ):
     logger = logging.getLogger("test_project_sync")
-    logger.debug("Starting test_project_sync_run_auto_registers_source_and_persists_state")
+    logger.debug("Starting test_project_sync_run_does_not_auto_register_source_and_persists_state")
     project_id = "project-sync-demo"
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
@@ -1494,7 +1751,7 @@ def test_project_sync_run_auto_registers_source_and_persists_state(
     source_ids = {
         source.id for source in knowledge_router_module.load_config().knowledge.sources
     }
-    assert "project-project-sync-demo-workspace" in source_ids
+    assert "project-project-sync-demo-workspace" not in source_ids
 
     state_path = (
         tmp_path

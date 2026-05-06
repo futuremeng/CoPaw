@@ -2618,8 +2618,7 @@ export function useProjectKnowledgeState(
 
   const insightAction = useMemo<ProjectKnowledgeInsightAction>(() => {
     if (
-      !sourceRegistered
-      || quantMetrics.indexedRatio < 1
+      quantMetrics.indexedRatio < 1
       || quantMetrics.documentCount <= 0
       || quantMetrics.chunkCount <= 0
     ) {
@@ -2633,7 +2632,6 @@ export function useProjectKnowledgeState(
     quantMetrics.chunkCount,
     quantMetrics.documentCount,
     quantMetrics.indexedRatio,
-    sourceRegistered,
     trendDelta.relationDelta,
   ]);
 

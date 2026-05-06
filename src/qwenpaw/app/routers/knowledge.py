@@ -27,7 +27,7 @@ from ...knowledge import (
     ProjectKnowledgeSyncManager,
     QuantizationFacade,
 )
-from ...knowledge.project_sync import ProjectSyncCommand, ProjectSyncCoordinator, ensure_project_source_registered
+from ...knowledge.project_sync import ProjectSyncCommand, ProjectSyncCoordinator, build_project_source_spec
 from ...knowledge.module_skills import sync_knowledge_module_skills
 from ..agent_context import get_agent_for_request
 
@@ -1230,7 +1230,7 @@ async def start_memify_job(
 @router.get("/project-sync/status")
 async def get_project_sync_status(request: Request):
     """Get project-scoped automatic knowledge synchronization status."""
-    config, knowledge_config, running_config, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    _, knowledge_config, running_config, workspace_dir, _ = await _resolve_knowledge_request_context(request)
     project_id = _resolve_project_id(request)
     if not project_id:
         raise HTTPException(status_code=400, detail="PROJECT_ID_REQUIRED")
@@ -1244,12 +1244,10 @@ async def get_project_sync_status(request: Request):
     )
     project_workspace_dir = (Path(workspace_dir) / "projects" / project_id).resolve()
     if knowledge_config.enabled and bool(getattr(knowledge_config, "memify_enabled", False)):
-        source, _ = ensure_project_source_registered(
-            config.knowledge,
+        source = build_project_source_spec(
             project_id=project_id,
             project_name=project_id,
             project_workspace_dir=str(project_workspace_dir),
-            persist=lambda: save_config(config),
         )
         event = await asyncio.to_thread(
             coordinator.dispatch,
@@ -1288,7 +1286,7 @@ async def run_project_sync(
     idempotency_key: str = Body(default=""),
 ):
     """Start project-scoped automatic knowledge synchronization."""
-    config, knowledge_config, running_config, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    _, knowledge_config, running_config, workspace_dir, _ = await _resolve_knowledge_request_context(request)
     _ensure_knowledge_enabled_flag(knowledge_config.enabled)
     normalized_mode = (processing_mode or "agentic").strip().lower() or "agentic"
     normalized_stage = (quantization_stage or "").strip().lower() or None
@@ -1307,12 +1305,10 @@ async def run_project_sync(
     if not project_workspace_dir.exists() or not project_workspace_dir.is_dir():
         raise HTTPException(status_code=404, detail="PROJECT_WORKSPACE_NOT_FOUND")
 
-    source, _ = ensure_project_source_registered(
-        config.knowledge,
+    source = build_project_source_spec(
         project_id=project_id,
         project_name=project_id,
         project_workspace_dir=str(project_workspace_dir),
-        persist=lambda: save_config(config),
     )
     coordinator = _project_sync_coordinator_for_workspace(
         workspace_dir,

@@ -16,7 +16,7 @@ from ..knowledge.project_sync import (
     DEFAULT_PROJECT_SYNC_DEBOUNCE_SECONDS,
     ProjectSyncCommand,
     ProjectSyncCoordinator,
-    ensure_project_source_registered,
+    build_project_source_spec,
 )
 from .project_monitoring_state import (
     PROJECT_FILE_MONITORING_ACTIVE,
@@ -190,11 +190,10 @@ class ProjectKnowledgeWatcher:
         self,
         current: dict[str, dict[str, Any]],
     ) -> None:
-        global_config, knowledge_config, running_config = await self._load_runtime_context()
+        _, knowledge_config, running_config = await self._load_runtime_context()
         if not knowledge_config.enabled or not bool(getattr(knowledge_config, "memify_enabled", False)):
             return
 
-        persist_needed = False
         for project_id, snapshot in current.items():
             if not snapshot.get("auto_enabled"):
                 continue
@@ -205,14 +204,11 @@ class ProjectKnowledgeWatcher:
                 != PROJECT_FILE_MONITORING_ACTIVE
             ):
                 continue
-            source, source_changed = ensure_project_source_registered(
-                global_config.knowledge,
+            source = build_project_source_spec(
                 project_id=project_id,
                 project_name=str(snapshot.get("project_name") or project_id),
                 project_workspace_dir=str(snapshot.get("project_dir") or ""),
-                persist=lambda: None,
             )
-            persist_needed = persist_needed or source_changed
             event = self._sync_coordinator.dispatch(
                 ProjectSyncCommand.resume(
                     project_id=project_id,
@@ -231,11 +227,6 @@ class ProjectKnowledgeWatcher:
                     event.idempotency_key,
                     event.deduplicated,
                 )
-
-        if persist_needed:
-            from ..config.utils import save_config
-
-            save_config(global_config)
 
     async def stop(self) -> None:
         if self._task is not None:
@@ -266,11 +257,9 @@ class ProjectKnowledgeWatcher:
         self,
         current: dict[str, dict[str, Any]],
     ) -> None:
-        global_config, knowledge_config, running_config = await self._load_runtime_context()
+        _, knowledge_config, running_config = await self._load_runtime_context()
         if not knowledge_config.enabled or not bool(getattr(knowledge_config, "memify_enabled", False)):
             return
-
-        persist_needed = False
 
         for project_id, snapshot in current.items():
             if not snapshot.get("auto_enabled"):
@@ -299,14 +288,11 @@ class ProjectKnowledgeWatcher:
                 if not should_config_reindex:
                     continue
 
-            source, source_changed = ensure_project_source_registered(
-                global_config.knowledge,
+            source = build_project_source_spec(
                 project_id=project_id,
                 project_name=str(snapshot.get("project_name") or project_id),
                 project_workspace_dir=str(snapshot.get("project_dir") or ""),
-                persist=lambda: None,
             )
-            persist_needed = persist_needed or source_changed
             trigger = (
                 "project_watcher_bootstrap"
                 if should_bootstrap
@@ -337,11 +323,6 @@ class ProjectKnowledgeWatcher:
                     event.idempotency_key,
                     event.deduplicated,
                 )
-
-        if persist_needed:
-            from ..config.utils import save_config
-
-            save_config(global_config)
 
     def _collect_snapshots(self) -> dict[str, dict[str, Any]]:
         if not self._projects_dir.exists():

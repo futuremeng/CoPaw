@@ -587,6 +587,13 @@ export default function ProjectKnowledgeSettingsPanel(
           </Button>
         </div>
 
+        <Typography.Text type="secondary">
+          {t(
+            "projects.knowledge.sourceVisibilityHint",
+            "Registering this source only controls global visibility. Project-local sync and processing run regardless.",
+          )}
+        </Typography.Text>
+
         <div className={styles.projectKnowledgeSettingsRowCompact}>
           <Space size={10} className={styles.projectKnowledgeStatsInline}>
             <Typography.Text type="secondary">
