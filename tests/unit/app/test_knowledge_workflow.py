@@ -123,6 +123,10 @@ def test_knowledge_workflow_orchestrator_persists_pipeline_run(
     assert any(step.id == "quality_review" and step.status == "succeeded" for step in run.steps)
     assert ".knowledge/graphify-out/graph.json" in run.artifacts
     assert ".knowledge/graphify-out/graph.enriched.json" in run.artifacts
+    assert (project_dir / ".knowledge" / "content.md").exists()
+    assert (project_dir / ".knowledge" / "chunk-manifest.json").exists()
+    assert not (project_dir / ".knowledge" / f"{source.id}--content.md").exists()
+    assert not (project_dir / ".knowledge" / f"{source.id}--chunk-manifest.json").exists()
 
 
 def test_project_sync_manager_records_workflow_run_metadata(

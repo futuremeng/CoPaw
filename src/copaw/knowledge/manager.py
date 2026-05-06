@@ -505,10 +505,20 @@ class KnowledgeManager:
         # 旧版 source 命名空间目录（仅用于兼容读取与遗留清理）
         return self.root_dir / self._safe_name(source_id)
 
-    def _source_storage_flat_path(self, source_id: str, filename: str) -> Path:
+    def _uses_unprefixed_project_storage(self, source_id: str) -> bool:
+        safe_source_id = self._safe_name(source_id)
+        return safe_source_id.startswith("project-") and safe_source_id.endswith("-workspace")
+
+    def _prefixed_source_storage_flat_path(self, source_id: str, filename: str) -> Path:
         safe_source_id = self._safe_name(source_id)
         safe_filename = self._safe_name(filename)
         return self.root_dir / f"{safe_source_id}--{safe_filename}"
+
+    def _source_storage_flat_path(self, source_id: str, filename: str) -> Path:
+        safe_filename = self._safe_name(filename)
+        if self._uses_unprefixed_project_storage(source_id):
+            return self.root_dir / safe_filename
+        return self._prefixed_source_storage_flat_path(source_id, filename)
 
     def _source_storage_path(self, source_id: str, filename: str) -> Path:
         """Return flattened storage path only (legacy layout is not supported)."""

@@ -115,6 +115,18 @@ python scripts/run_tests.py -p
 python scripts/run_tests.py -h
 ```
 
+## Cleanup project knowledge filenames
+
+```bash
+python scripts/cleanup_project_workspace_knowledge_names.py --dry-run
+python scripts/cleanup_project_workspace_knowledge_names.py
+```
+
+- Renames legacy project workspace knowledge files like `project-<id>-workspace--content.md`
+	to canonical root names like `content.md` inside each project `.knowledge/` directory.
+- If the canonical file already exists, the legacy prefixed file is deleted.
+- Pass a custom projects root as the first positional argument when cleaning a different workspace.
+
 ## Multibook 24h reproducibility
 
 Trigger one project pipeline run and optionally wait until it reaches a terminal status:
