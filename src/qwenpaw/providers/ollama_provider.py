@@ -44,7 +44,7 @@ class OllamaProvider(OpenAIProvider):
     def _client(self, timeout: float = 5) -> AsyncOpenAI:
         return AsyncOpenAI(
             base_url=self._openai_compatible_base_url(),
-            api_key=self.api_key,
+            api_key=self._effective_api_key(),
             timeout=timeout,
         )
 
@@ -65,7 +65,7 @@ class OllamaProvider(OpenAIProvider):
         return OpenAIChatModelCompat(
             model_name=model_id,
             stream=True,
-            api_key=self.api_key,
+            api_key=self._effective_api_key(),
             stream_tool_parsing=False,
             client_kwargs={"base_url": self._openai_compatible_base_url()},
             generate_kwargs=self.get_effective_generate_kwargs(model_id),

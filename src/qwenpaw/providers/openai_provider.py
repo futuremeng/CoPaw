@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 CODING_DASHSCOPE_BASE_URL = "https://coding.dashscope.aliyuncs.com/v1"
+LOCAL_COMPAT_PLACEHOLDER_API_KEY = "EMPTY"
 
 if os.environ.get("LANGFUSE_SECRET_KEY") and importlib.util.find_spec(
     "langfuse",
@@ -38,6 +39,14 @@ else:
 
 class OpenAIProvider(Provider):
     """Provider implementation for OpenAI API and compatible endpoints."""
+
+    def _effective_api_key(self) -> str:
+        api_key = str(self.api_key or "").strip()
+        if api_key:
+            return api_key
+        if not self.require_api_key:
+            return LOCAL_COMPAT_PLACEHOLDER_API_KEY
+        return api_key
 
     @staticmethod
     def _format_api_error(error: APIError) -> str:
@@ -62,7 +71,7 @@ class OpenAIProvider(Provider):
     def _client(self, timeout: float = 5) -> AsyncOpenAI:
         return AsyncOpenAI(
             base_url=self.base_url,
-            api_key=self.api_key,
+            api_key=self._effective_api_key(),
             timeout=timeout,
         )
 
@@ -198,7 +207,7 @@ class OpenAIProvider(Provider):
         return OpenAIChatModelCompat(
             model_name=model_id,
             stream=True,
-            api_key=self.api_key,
+            api_key=self._effective_api_key(),
             stream_tool_parsing=False,
             client_kwargs=client_kwargs,
             generate_kwargs=self.get_effective_generate_kwargs(model_id),

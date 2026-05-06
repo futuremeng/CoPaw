@@ -103,6 +103,37 @@ def test_client_uses_single_v1_suffix(monkeypatch, base_url: str) -> None:
     }
 
 
+def test_client_uses_placeholder_api_key_when_config_is_empty(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeAsyncOpenAI:
+        def __init__(self, *, base_url, api_key, timeout) -> None:
+            captured["base_url"] = base_url
+            captured["api_key"] = api_key
+            captured["timeout"] = timeout
+
+    monkeypatch.setattr(
+        "qwenpaw.providers.ollama_provider.AsyncOpenAI",
+        FakeAsyncOpenAI,
+    )
+
+    provider = OllamaProvider(
+        id="ollama",
+        name="Ollama",
+        base_url="http://localhost:11434",
+        api_key="",
+        require_api_key=False,
+        chat_model="OpenAIChatModel",
+    )
+    getattr(provider, "_client")(timeout=5)
+
+    assert captured == {
+        "base_url": "http://localhost:11434/v1",
+        "api_key": "EMPTY",
+        "timeout": 5,
+    }
+
+
 @pytest.mark.parametrize(
     "base_url",
     [

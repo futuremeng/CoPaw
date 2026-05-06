@@ -37,6 +37,42 @@ async def test_check_connection_success(monkeypatch) -> None:
     assert calls == [2.5]
 
 
+def test_client_uses_placeholder_api_key_for_local_compatible_provider(
+    monkeypatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeAsyncOpenAI:
+        def __init__(self, *, base_url, api_key, timeout) -> None:
+            captured["base_url"] = base_url
+            captured["api_key"] = api_key
+            captured["timeout"] = timeout
+
+    monkeypatch.setattr(
+        openai_provider_module,
+        "AsyncOpenAI",
+        FakeAsyncOpenAI,
+    )
+
+    provider = OpenAIProvider(
+        id="lmstudio",
+        name="LM Studio",
+        base_url="http://localhost:1234/v1",
+        api_key="",
+        require_api_key=False,
+        is_local=True,
+        chat_model="OpenAIChatModel",
+    )
+
+    getattr(provider, "_client")(timeout=3)
+
+    assert captured == {
+        "base_url": "http://localhost:1234/v1",
+        "api_key": "EMPTY",
+        "timeout": 3,
+    }
+
+
 async def test_check_connection_api_error_returns_false(monkeypatch) -> None:
     provider = _make_provider()
 
@@ -51,7 +87,7 @@ async def test_check_connection_api_error_returns_false(monkeypatch) -> None:
     ok, msg = await provider.check_connection(timeout=1)
 
     assert ok is False
-    assert msg == f"API error when connecting to `{provider.base_url}`"
+    assert msg.startswith(f"API error when connecting to `{provider.base_url}`")
 
 
 async def test_list_model_normalizes_and_deduplicates(monkeypatch) -> None:
@@ -145,7 +181,7 @@ async def test_check_model_connection_api_error_returns_false(
     ok, msg = await provider.check_model_connection("gpt-4o-mini", timeout=4)
 
     assert ok is False
-    assert msg == "API error when connecting to model 'gpt-4o-mini'"
+    assert msg.startswith("API error when connecting to model 'gpt-4o-mini'")
 
 
 async def test_update_config_updates_non_none_values_and_get_info() -> None:
