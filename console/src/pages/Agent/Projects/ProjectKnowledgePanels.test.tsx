@@ -18,9 +18,12 @@ vi.mock("react-i18next", () => ({
       maybeOptions?: Record<string, unknown>,
     ) => {
       const fallback = typeof maybeFallbackOrOptions === "string" ? maybeFallbackOrOptions : undefined;
-      const options = typeof maybeFallbackOrOptions === "object" ? maybeFallbackOrOptions : maybeOptions;
+      const options = (typeof maybeFallbackOrOptions === "object"
+        ? maybeFallbackOrOptions
+        : maybeOptions) as Record<string, unknown> | { value?: number } | undefined;
+      const interpolationValues = options as Record<string, unknown> | undefined;
       if (typeof fallback === "string") {
-        return fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(options?.[name] ?? ""));
+        return fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(interpolationValues?.[name] ?? ""));
       }
       if (typeof maybeFallbackOrOptions === "string") {
         return maybeFallbackOrOptions;
@@ -795,9 +798,9 @@ describe("project knowledge supporting panels", () => {
 
     const expectSignalValue = (label: string, value: string) => {
       const labelNode = screen.getByText(label);
-      const cardNode = labelNode.closest("._projectKnowledgeSignalCard_209b2b");
+      const cardNode = labelNode.closest("div");
       expect(cardNode).not.toBeNull();
-      if (!cardNode) {
+      if (!(cardNode instanceof HTMLElement)) {
         return;
       }
       const valueNode = within(cardNode).getByText(value);

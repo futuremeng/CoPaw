@@ -33,6 +33,7 @@ describe("projectId utils", () => {
       },
       project_auto_knowledge_sink: false,
       preferred_workspace_chat_id: "",
+      created_time: "",
       updated_time: "",
     })).toEqual(["project-abc"]);
   });

@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import type { AgentSummary } from "../../../api/types/agents";
 import ProjectsListPage from "./ProjectsListPage";
 
 const {
@@ -9,6 +10,7 @@ const {
   mockedSuccess,
   mockedError,
   mockedAgentsApi,
+  storeState,
 } = vi.hoisted(() => ({
   navigateMock: vi.fn(),
   setAgentsMock: vi.fn(),
@@ -20,6 +22,24 @@ const {
     cloneProject: vi.fn(),
     deleteProject: vi.fn(),
   },
+  storeState: {
+    selectedAgent: "agent-1",
+    agents: [
+      {
+        id: "agent-1",
+        name: "Agent One",
+        description: "",
+        workspace_dir: "/tmp/agent-1",
+        enabled: true,
+        is_builtin: false,
+        builtin_kind: "",
+        builtin_label: "",
+        system_protected: false,
+        project_count: 0,
+        projects: [],
+      },
+    ],
+  } as { selectedAgent: string; agents: AgentSummary[] },
 }));
 
 vi.mock("react-router-dom", () => ({
@@ -45,22 +65,8 @@ vi.mock("react-i18next", () => ({
 
 vi.mock("../../../stores/agentStore", () => ({
   useAgentStore: () => ({
-    selectedAgent: "agent-1",
-    agents: [
-      {
-        id: "agent-1",
-        name: "Agent One",
-        description: "",
-        workspace_dir: "/tmp/agent-1",
-        enabled: true,
-        is_builtin: false,
-        builtin_kind: "",
-        builtin_label: "",
-        system_protected: false,
-        project_count: 0,
-        projects: [],
-      },
-    ],
+    selectedAgent: storeState.selectedAgent,
+    agents: storeState.agents,
     setAgents: setAgentsMock,
   }),
 }));
@@ -83,6 +89,22 @@ vi.mock("antd", async () => {
 describe("ProjectsListPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    storeState.selectedAgent = "agent-1";
+    storeState.agents = [
+      {
+        id: "agent-1",
+        name: "Agent One",
+        description: "",
+        workspace_dir: "/tmp/agent-1",
+        enabled: true,
+        is_builtin: false,
+        builtin_kind: "",
+        builtin_label: "",
+        system_protected: false,
+        project_count: 0,
+        projects: [],
+      },
+    ];
     Object.defineProperty(window, "matchMedia", {
       writable: true,
       value: vi.fn().mockImplementation((query: string) => ({
@@ -114,8 +136,106 @@ describe("ProjectsListPage", () => {
         cases: [],
       },
       project_auto_knowledge_sink: true,
+      created_time: "2026-04-20T00:00:00Z",
       updated_time: "2026-04-24T00:00:00Z",
     });
+  });
+
+  it("sorts projects by updated time descending by default", () => {
+    storeState.agents = [
+      {
+        ...storeState.agents[0],
+        projects: [
+          {
+            id: "project-old",
+            name: "Project Old",
+            description: "older update",
+            status: "active",
+            workspace_dir: "/tmp/project-old",
+            data_dir: ".data",
+            metadata_file: ".agent/PROJECT.md",
+            tags: [],
+            artifact_distill_mode: "file_scan",
+            artifact_profile: { skills: [], scripts: [], flows: [], cases: [] },
+            project_auto_knowledge_sink: true,
+            created_time: "2026-04-01T00:00:00Z",
+            updated_time: "2026-04-09T00:00:00Z",
+          },
+          {
+            id: "project-new",
+            name: "Project New",
+            description: "newer update",
+            status: "active",
+            workspace_dir: "/tmp/project-new",
+            data_dir: ".data",
+            metadata_file: ".agent/PROJECT.md",
+            tags: [],
+            artifact_distill_mode: "file_scan",
+            artifact_profile: { skills: [], scripts: [], flows: [], cases: [] },
+            project_auto_knowledge_sink: true,
+            created_time: "2026-04-03T00:00:00Z",
+            updated_time: "2026-04-12T00:00:00Z",
+          },
+        ],
+      },
+    ];
+
+    render(<ProjectsListPage />);
+
+    const names = screen.getAllByTestId("project-name").map((item) => item.textContent);
+
+    expect(names).toEqual(["Project New", "Project Old"]);
+  });
+
+  it("switches to created time ascending sort", async () => {
+    const user = userEvent.setup();
+    storeState.agents = [
+      {
+        ...storeState.agents[0],
+        projects: [
+          {
+            id: "project-later",
+            name: "Project Later",
+            description: "later created",
+            status: "active",
+            workspace_dir: "/tmp/project-later",
+            data_dir: ".data",
+            metadata_file: ".agent/PROJECT.md",
+            tags: [],
+            artifact_distill_mode: "file_scan",
+            artifact_profile: { skills: [], scripts: [], flows: [], cases: [] },
+            project_auto_knowledge_sink: true,
+            created_time: "2026-04-08T00:00:00Z",
+            updated_time: "2026-04-10T00:00:00Z",
+          },
+          {
+            id: "project-earlier",
+            name: "Project Earlier",
+            description: "earlier created",
+            status: "active",
+            workspace_dir: "/tmp/project-earlier",
+            data_dir: ".data",
+            metadata_file: ".agent/PROJECT.md",
+            tags: [],
+            artifact_distill_mode: "file_scan",
+            artifact_profile: { skills: [], scripts: [], flows: [], cases: [] },
+            project_auto_knowledge_sink: true,
+            created_time: "2026-04-02T00:00:00Z",
+            updated_time: "2026-04-12T00:00:00Z",
+          },
+        ],
+      },
+    ];
+
+    render(<ProjectsListPage />);
+
+    await user.click(screen.getByRole("combobox", { name: "Sort projects by" }));
+    await user.click(screen.getByText("Created time"));
+    await user.click(screen.getByLabelText("Toggle sort order"));
+
+    const names = screen.getAllByTestId("project-name").map((item) => item.textContent);
+
+    expect(names).toEqual(["Project Earlier", "Project Later"]);
   });
 
   it("creates projects with dot-prefixed default data dir", async () => {

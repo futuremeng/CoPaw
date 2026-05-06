@@ -676,12 +676,19 @@ def test_create_project_defaults_auto_knowledge_sink_enabled(tmp_path: Path):
     assert summary is not None
     assert summary.project_auto_knowledge_sink is True
     assert summary.file_monitoring_state == "idle"
+    assert summary.created_time
+    assert summary.updated_time
 
 
 def test_clone_project_records_realtime_event(
     project_artifact_router_client: tuple[TestClient, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
 ):
     client, workspace_dir, project_id = project_artifact_router_client
+    source_summary = _load_project_summary(workspace_dir / "projects" / project_id)
+    assert source_summary is not None
+    clone_created_ts = 1_800_000_000
+    monkeypatch.setattr(agents_router_module.time, "time", lambda: clone_created_ts)
 
     response = client.post(
         f"/agents/default/projects/{project_id}/clone",
@@ -698,11 +705,35 @@ def test_clone_project_records_realtime_event(
         cloned_project_id,
         0,
     )
+    cloned_summary = _load_project_summary(cloned_project_dir)
 
     assert latest_event_id >= 1
     assert "PROJECT.md" in changed_paths
     assert ".skills/quick_start.md" in changed_paths
     assert (cloned_project_dir / ".skills" / "quick_start.md").exists()
+    assert cloned_summary is not None
+    assert cloned_summary.created_time == agents_router_module._format_iso_time(
+        clone_created_ts,
+    )
+    assert cloned_summary.created_time != source_summary.created_time
+
+
+def test_load_project_summary_falls_back_when_created_time_missing(
+    tmp_path: Path,
+):
+    project_id = _seed_project(tmp_path)
+    project_dir = tmp_path / "projects" / project_id
+    metadata_file = project_dir / "PROJECT.md"
+    metadata, body = agents_router_module._read_project_frontmatter_with_body(
+        metadata_file,
+    )
+    metadata.pop("created_time", None)
+    agents_router_module._write_project_frontmatter(metadata_file, metadata, body)
+
+    summary = _load_project_summary(project_dir)
+
+    assert summary is not None
+    assert summary.created_time
 
 
 def test_distill_draft_uses_conversation_evidence_mode(

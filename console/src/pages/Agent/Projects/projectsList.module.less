@@ -42,6 +42,18 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.sortControls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sortSelect {
+  min-width: 148px;
 }
 
 .inlineAlert {
@@ -232,6 +244,21 @@
 @media (max-width: 768px) {
   .pageHeader {
     padding: 14px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .headerRight {
+    justify-content: flex-start;
+  }
+
+  .sortControls {
+    width: 100%;
+  }
+
+  .sortSelect {
+    flex: 1;
   }
 
   .workspaceInfo {

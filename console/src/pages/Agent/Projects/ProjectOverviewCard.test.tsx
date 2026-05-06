@@ -54,6 +54,7 @@ function buildProjectSummary(): AgentProjectSummary {
       cases: [],
     },
     project_auto_knowledge_sink: true,
+    created_time: "2026-04-01T00:00:00Z",
     updated_time: "2026-04-09T00:00:00Z",
   };
 }

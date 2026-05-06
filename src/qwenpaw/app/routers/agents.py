@@ -190,6 +190,7 @@ class ProjectSummary(BaseModel):
     project_auto_knowledge_sink: bool = True
     file_monitoring_state: str = PROJECT_FILE_MONITORING_ACTIVE
     preferred_workspace_chat_id: str = ""
+    created_time: str
     updated_time: str
 
 
@@ -810,6 +811,37 @@ def _format_iso_time(ts: float) -> str:
     return datetime.fromtimestamp(ts).isoformat(timespec="seconds")
 
 
+def _normalize_project_created_time(raw_value: Any) -> str:
+    created_time = str(raw_value or "").strip()
+    if not created_time:
+        return ""
+    try:
+        normalized = datetime.fromisoformat(
+            created_time.replace("Z", "+00:00")
+        )
+    except ValueError:
+        return created_time
+    return normalized.isoformat(timespec="seconds")
+
+
+def _resolve_project_created_time(
+    metadata: dict[str, Any], metadata_file: Path
+) -> str:
+    created_time = _normalize_project_created_time(
+        metadata.get("created_time") or metadata.get("createdAt")
+    )
+    if created_time:
+        return created_time
+
+    stat_result = metadata_file.stat()
+    birthtime = getattr(stat_result, "st_birthtime", 0.0) or 0.0
+    if birthtime > 0:
+        return _format_iso_time(birthtime)
+
+    fallback_ts = min(stat_result.st_ctime, stat_result.st_mtime)
+    return _format_iso_time(fallback_ts)
+
+
 def _safe_project_data_subdir(raw_value: str) -> str:
     candidate = (raw_value or "").strip() or ".data"
     path = Path(candidate)
@@ -1144,6 +1176,7 @@ def _load_project_summary(project_dir: Path) -> ProjectSummary | None:
         or metadata.get("preferred_workspace_chat")
         or "",
     ).strip()
+    created_time = _resolve_project_created_time(metadata, metadata_file)
     updated_time = _format_iso_time(metadata_file.stat().st_mtime)
 
     return ProjectSummary(
@@ -1160,6 +1193,7 @@ def _load_project_summary(project_dir: Path) -> ProjectSummary | None:
         project_auto_knowledge_sink=project_auto_knowledge_sink,
         file_monitoring_state=file_monitoring_state,
         preferred_workspace_chat_id=preferred_workspace_chat_id,
+        created_time=created_time,
         updated_time=updated_time,
     )
 
@@ -2099,6 +2133,7 @@ def _clone_project(
 
     metadata["id"] = cloned_id
     metadata["name"] = cloned_name
+    metadata["created_time"] = _format_iso_time(time.time())
     tags = _parse_project_tags(metadata.get("tags"))
     if "cloned" not in tags:
         tags.append("cloned")
@@ -2152,6 +2187,7 @@ def _create_project(
         "name": project_name,
         "description": (body.description or "").strip(),
         "status": (body.status or "active").strip() or "active",
+        "created_time": _format_iso_time(time.time()),
         "data_dir": data_subdir,
         "tags": [item.strip() for item in body.tags if str(item).strip()],
         "artifact_distill_mode": _normalize_project_artifact_distill_mode(

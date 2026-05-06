@@ -76,6 +76,7 @@ function TestHarness({ onUploadCompleted }: {
         cases: [],
       },
       project_auto_knowledge_sink: true,
+      created_time: "",
       updated_time: "",
     },
     resolvedProjectRequestId: "proj-1",

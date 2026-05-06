@@ -131,7 +131,6 @@ export interface ProjectKnowledgeModeMetricsPayload {
   ner_batch_count?: number;
   ner_worker_restart_count?: number;
   ner_worker_pid_count?: number;
-  syntax_ready_chunk_count?: number;
   syntax_sentence_count?: number;
   syntax_token_count?: number;
   syntax_relation_count?: number;

@@ -41,6 +41,7 @@ export interface AgentProjectSummary {
   artifact_profile: ProjectArtifactProfile;
   project_auto_knowledge_sink: boolean;
   preferred_workspace_chat_id?: string;
+  created_time: string;
   updated_time: string;
 }
 

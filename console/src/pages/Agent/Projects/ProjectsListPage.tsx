@@ -8,6 +8,7 @@ import {
   Input,
   Modal,
   Popconfirm,
+  Select,
   Spin,
   Tag,
   Typography,
@@ -15,12 +16,51 @@ import {
 } from "antd";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import type { AgentSummary } from "../../../api/types/agents";
+import type { AgentProjectSummary, AgentSummary } from "../../../api/types/agents";
 import { agentsApi } from "../../../api/modules/agents";
 import { useAgentStore } from "../../../stores/agentStore";
 import styles from "./projectsList.module.less";
 
 const { Text } = Typography;
+
+type ProjectSortField = "updated" | "created";
+type ProjectSortOrder = "asc" | "desc";
+
+function toTimestamp(value: string | undefined): number {
+  const parsed = Date.parse(value || "");
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function compareProjects(
+  left: AgentProjectSummary,
+  right: AgentProjectSummary,
+  sortField: ProjectSortField,
+  sortOrder: ProjectSortOrder,
+): number {
+  const direction = sortOrder === "asc" ? 1 : -1;
+  const leftTime = sortField === "created"
+    ? toTimestamp(left.created_time)
+    : toTimestamp(left.updated_time);
+  const rightTime = sortField === "created"
+    ? toTimestamp(right.created_time)
+    : toTimestamp(right.updated_time);
+
+  if (leftTime !== rightTime) {
+    return (leftTime - rightTime) * direction;
+  }
+
+  const nameCompare = left.name.localeCompare(right.name, undefined, {
+    numeric: true,
+    sensitivity: "base",
+  });
+  if (nameCompare !== 0) {
+    return nameCompare * direction;
+  }
+  return left.id.localeCompare(right.id, undefined, {
+    numeric: true,
+    sensitivity: "base",
+  }) * direction;
+}
 
 function getCurrentAgent(
   agents: AgentSummary[],
@@ -41,6 +81,8 @@ export default function ProjectsListPage() {
   const [deleteConfirmOpenId, setDeleteConfirmOpenId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [sortField, setSortField] = useState<ProjectSortField>("updated");
+  const [sortOrder, setSortOrder] = useState<ProjectSortOrder>("desc");
   const [createForm] = Form.useForm<{
     id?: string;
     name: string;
@@ -54,8 +96,10 @@ export default function ProjectsListPage() {
   );
 
   const projects = useMemo(
-    () => currentAgent?.projects ?? [],
-    [currentAgent?.projects],
+    () => (currentAgent?.projects || []).slice().sort((left, right) => (
+      compareProjects(left, right, sortField, sortOrder)
+    )),
+    [currentAgent?.projects, sortField, sortOrder],
   );
 
   const loadAgents = useCallback(async () => {
@@ -202,6 +246,36 @@ export default function ProjectsListPage() {
           <span className={styles.breadcrumbCurrent}>{t("projects.title", "Projects")}</span>
         </div>
         <div className={styles.headerRight}>
+          <div className={styles.sortControls}>
+            <Select
+              size="small"
+              value={sortField}
+              className={styles.sortSelect}
+              aria-label={t("projects.sortField", "Sort projects by")}
+              onChange={(value) => setSortField(value as ProjectSortField)}
+              options={[
+                {
+                  label: t("projects.sort.updated", "Updated time"),
+                  value: "updated",
+                },
+                {
+                  label: t("projects.sort.created", "Created time"),
+                  value: "created",
+                },
+              ]}
+            />
+            <Button
+              size="small"
+              onClick={() => {
+                setSortOrder((current) => (current === "desc" ? "asc" : "desc"));
+              }}
+              aria-label={t("projects.sortOrder", "Toggle sort order")}
+            >
+              {sortOrder === "desc"
+                ? t("projects.sort.desc", "Descending")
+                : t("projects.sort.asc", "Ascending")}
+            </Button>
+          </div>
           <Button size="small" type="primary" onClick={handleOpenCreate}>
             {t("projects.create", "New Project")}
           </Button>
@@ -241,6 +315,7 @@ export default function ProjectsListPage() {
               key={project.id}
               hoverable
               className={styles.projectCard}
+              data-testid="project-card"
               onClick={() => {
                 if (deleteConfirmOpenId === project.id) {
                   return;
@@ -251,7 +326,9 @@ export default function ProjectsListPage() {
               onMouseLeave={() => setHoverKey(null)}
             >
               <div className={styles.cardHeader}>
-                <div className={styles.projectName}>{project.name}</div>
+                <div className={styles.projectName} data-testid="project-name">
+                  {project.name}
+                </div>
                 <div className={styles.cardActions}>
                   <Tag color="blue">{project.status}</Tag>
                 </div>
