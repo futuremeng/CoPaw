@@ -49,9 +49,7 @@ import usePreferredProjectWorkspaceChat from "./usePreferredProjectWorkspaceChat
 import useProjectDesignChatController from "./useProjectDesignChatController";
 import useLeaveConfirmGuard from "./useLeaveConfirmGuard";
 import useOpenUploadQuery from "./useOpenUploadQuery";
-import useProjectRealtimeController, {
-  type ProjectRealtimeConnectionStatus,
-} from "./useProjectRealtimeController";
+import useProjectRealtimeController from "./useProjectRealtimeController";
 import useProjectUploadController from "./useProjectUploadController";
 import {
   type ProjectKnowledgeHeaderSignals,
@@ -74,11 +72,6 @@ import {
   buildProjectIdCandidates,
   matchesRouteProject,
 } from "./projectIdUtils";
-import {
-  createProjectTreeRefreshSchedulerState,
-  resetProjectTreeRefreshSchedulerState,
-  scheduleProjectTreeRefresh,
-} from "./projectTreeRefreshScheduler";
 import {
   buildProjectLayoutStorageKey,
   type KnowledgeDockTabKey,
@@ -127,8 +120,6 @@ const KNOWLEDGE_DOCK_COLLAPSED_SIZE = 52;
 const KNOWLEDGE_DOCK_COLLAPSE_KEY = "knowledge";
 const PROJECT_FILES_DEFER_MS = 420;
 const INITIAL_PROJECT_FILES_IDLE_TIMEOUT_MS = 1200;
-const ASSISTANT_TURN_REALTIME_FALLBACK_MS = 900;
-const PROJECT_TREE_RESYNC_COALESCE_MS = 180;
 const PROJECT_TREE_PREFETCH_DIR_LIMIT = 3;
 const PROJECT_TREE_LATEST_SCAN_LIMIT = 4000;
 const PROJECT_TREE_AUTO_RESTORE_SHALLOW_DEPTH = 2;
@@ -320,41 +311,6 @@ function buildProjectFilesByPath(
   return next;
 }
 
-function reconcileProjectFilesByPath(
-  current: Record<string, AgentProjectFileInfo>,
-  files: AgentProjectFileInfo[],
-  requestedPaths: string[],
-): Record<string, AgentProjectFileInfo> {
-  const next = { ...current };
-  for (const path of requestedPaths) {
-    delete next[path];
-  }
-  for (const file of files) {
-    next[file.path] = file;
-  }
-  return next;
-}
-
-function reconcileProjectFilesList(
-  current: AgentProjectFileInfo[],
-  files: AgentProjectFileInfo[],
-  requestedPaths: string[],
-): AgentProjectFileInfo[] {
-  const requestedPathSet = new Set(requestedPaths);
-  const next = new Map<string, AgentProjectFileInfo>();
-  for (const file of current) {
-    if (!requestedPathSet.has(file.path)) {
-      next.set(file.path, file);
-    }
-  }
-  for (const file of files) {
-    next.set(file.path, file);
-  }
-  return Array.from(next.values()).sort((left, right) =>
-    left.path.localeCompare(right.path),
-  );
-}
-
 function mergeProjectTreeNodesByPath(
   current: Record<string, AgentProjectFileInfo>,
   nodes: AgentProjectFileTreeNode[],
@@ -484,45 +440,6 @@ function buildProjectAncestorDirectoryPaths(path: string): string[] {
   return segments.slice(0, -1).map((_, index) => segments.slice(0, index + 1).join("/"));
 }
 
-function buildChangedProjectTreeDirectoryPaths(paths: string[]): string[] {
-  const next: string[] = [];
-  for (const path of paths) {
-    const normalizedPath = normalizeProjectTreeKey(path);
-    if (!normalizedPath) {
-      continue;
-    }
-    const ancestors = buildProjectAncestorDirectoryPaths(normalizedPath);
-    if (ancestors.length > 0) {
-      next.push(...ancestors);
-      continue;
-    }
-    const lastSlashIndex = normalizedPath.lastIndexOf("/");
-    if (lastSlashIndex > 0) {
-      next.push(normalizedPath.slice(0, lastSlashIndex));
-    }
-  }
-  return normalizeProjectTreeKeys(next);
-}
-
-function shouldRefreshProjectTreeRootForChanges(paths: string[]): boolean {
-  return paths.some((path) => getProjectTreeDepth(path) <= 1);
-}
-
-function isProjectPathUnderDirectories(path: string, directories: string[]): boolean {
-  const normalizedPath = normalizeProjectTreeKey(path);
-  if (!normalizedPath) {
-    return false;
-  }
-
-  return directories.some((directory) => {
-    const normalizedDirectory = normalizeProjectTreeKey(directory);
-    return Boolean(
-      normalizedDirectory
-      && (normalizedPath === normalizedDirectory || normalizedPath.startsWith(`${normalizedDirectory}/`)),
-    );
-  });
-}
-
 function mergeExpandedProjectTreeKeys(current: string[], extra: string[]): string[] {
   const next = normalizeProjectTreeKeys([...current, ...extra]);
   if (next.length === current.length && next.every((item, index) => item === current[index])) {
@@ -563,25 +480,6 @@ function budgetRestoredProjectTreeKeys(paths: string[], selectedFilePath: string
   return mergeExpandedProjectTreeKeys(shallowKeys, [...selectedAncestors, ...deepKeys]);
 }
 
-function isProjectPipelineTemplatePath(path: string): boolean {
-  const normalized = normalizeProjectPath(path);
-  return normalized.startsWith("pipelines/templates/");
-}
-
-function isProjectPipelineRunPath(path: string): boolean {
-  const normalized = normalizeProjectPath(path);
-  return normalized.startsWith("pipelines/runs/");
-}
-
-function getProjectPipelineRunIdFromPath(path: string): string {
-  const normalized = normalizeProjectPath(path);
-  const segments = normalized.split("/").filter(Boolean);
-  if (segments.length < 3 || segments[0] !== "pipelines" || segments[1] !== "runs") {
-    return "";
-  }
-  return segments[2] || "";
-}
-
 function isSucceededStatus(status: string): boolean {
   return status === "succeeded" || status === "completed";
 }
@@ -611,23 +509,6 @@ function pickLatestChangedPath(
     (file) => previousMtimeByPath[file.path] !== file.modified_time,
   );
   return pickMostRecentlyModifiedPath(changedFiles);
-}
-
-function getRealtimeBadgeStatus(status: ProjectRealtimeConnectionStatus) {
-  if (status === "connected") {
-    return "success" as const;
-  }
-  if (status === "degraded") {
-    return "warning" as const;
-  }
-  if (status === "paused" || status === "idle") {
-    return "default" as const;
-  }
-  return "processing" as const;
-}
-
-function shouldShowRealtimeStatus(status: ProjectRealtimeConnectionStatus): boolean {
-  return status === "reconnecting" || status === "degraded";
 }
 
 export default function ProjectDetailPage() {
@@ -724,13 +605,7 @@ export default function ProjectDetailPage() {
   const workspaceFocusChatIdRef = useRef("");
   const designFocusChatIdRef = useRef("");
   const projectFilesRefreshTimerRef = useRef<number | null>(null);
-  const projectTreeRootRefreshSchedulerRef = useRef(createProjectTreeRefreshSchedulerState());
-  const assistantTurnFileSyncTimerRef = useRef<number | null>(null);
-  const assistantTurnPipelineSyncTimerRef = useRef<number | null>(null);
-  const lastFileTreeInvalidationAtRef = useRef(0);
-  const lastPipelineInvalidationAtRef = useRef(0);
   const fileMtimeByPathRef = useRef<Record<string, string>>({});
-  const realtimeConnectionStatusRef = useRef<ProjectRealtimeConnectionStatus>("idle");
   const runRestoreAttemptKeyRef = useRef("");
   const automationDrawerAutoOpenKeyRef = useRef("");
   const pipelineManualActivationRef = useRef(false);
@@ -987,7 +862,15 @@ export default function ProjectDetailPage() {
         </div>
       </div>
     );
-  }, [i18n.language, projectKnowledgeState.activeKnowledgeTasks, runtimeSignalDetails, runtimeSignalLoading, t, translateWithFallback]);
+  }, [
+    i18n.language,
+    projectKnowledgeState.activeKnowledgeTasks,
+    projectKnowledgeState.syncState,
+    runtimeSignalDetails,
+    runtimeSignalLoading,
+    t,
+    translateWithFallback,
+  ]);
 
   const leaveConfirmText = useMemo(
     () =>
@@ -1527,63 +1410,6 @@ export default function ProjectDetailPage() {
     throw new Error("project_file_summary_not_found");
   }, [resolvedProjectRequestId]);
 
-  const loadProjectFilesMetadata = useCallback(async (
-    agentId: string,
-    project: AgentProjectSummary,
-    paths: string[],
-  ) => {
-    const requestedPaths = Array.from(
-      new Set(
-        paths
-          .map((item) => item.trim())
-          .filter((item) => item && !isIgnoredProjectFile(item)),
-      ),
-    );
-    if (requestedPaths.length === 0) {
-      return [] as AgentProjectFileInfo[];
-    }
-
-    const projectIds = [resolvedProjectRequestId, ...buildProjectIdCandidates(project)]
-      .map((item) => item.trim())
-      .filter(Boolean);
-    const uniqueProjectIds = Array.from(new Set(projectIds));
-
-    for (const projectRequestId of uniqueProjectIds) {
-      try {
-        const files = await agentsApi.getProjectFilesMetadata(
-          agentId,
-          projectRequestId,
-          requestedPaths,
-        );
-        const filteredFiles = files.filter((item) => !isIgnoredProjectFile(item.path));
-        setResolvedProjectRequestId(projectRequestId);
-        return filteredFiles;
-      } catch {
-        // Try next candidate id.
-      }
-    }
-
-    throw new Error("project_file_metadata_not_found");
-  }, [resolvedProjectRequestId]);
-
-  const applyProjectFilesMetadataPatch = useCallback((
-    requestedPaths: string[],
-    files: AgentProjectFileInfo[],
-  ) => {
-    if (requestedPaths.length === 0) {
-      return;
-    }
-    setKnownProjectFilesByPath((prev) =>
-      reconcileProjectFilesByPath(prev, files, requestedPaths),
-    );
-    setProjectFiles((prev) => {
-      if (prev.length === 0) {
-        return prev;
-      }
-      return reconcileProjectFilesList(prev, files, requestedPaths);
-    });
-  }, []);
-
   const scheduleProjectFilesRefresh = useCallback((
     agentId: string,
     project: AgentProjectSummary,
@@ -1646,24 +1472,6 @@ export default function ProjectDetailPage() {
       setProjectTreeLoading(false);
     }
   }, [loadProjectTreeDirectory, selectedFilePath]);
-
-  const scheduleProjectTreeRootRefresh = useCallback((
-    agentId: string,
-    project: AgentProjectSummary,
-    options?: { clearStale?: boolean; delay?: number },
-  ) => {
-    return scheduleProjectTreeRefresh({
-      state: projectTreeRootRefreshSchedulerRef.current,
-      delay: options?.delay ?? PROJECT_TREE_RESYNC_COALESCE_MS,
-      scheduleTimer: (callback, delay) => window.setTimeout(callback, delay),
-      clearTimer: (timerId) => window.clearTimeout(timerId),
-      runRefresh: () => loadProjectTreeRoot(agentId, project),
-      clearStale: options?.clearStale,
-      onClearStale: () => {
-        setStaleProjectTreeDirectoryPaths([]);
-      },
-    });
-  }, [loadProjectTreeRoot]);
 
   const handleRefreshProjectFiles = useCallback(async () => {
     if (!currentAgent || !selectedProject) {
@@ -1941,300 +1749,26 @@ export default function ProjectDetailPage() {
     }
   }, [t]);
 
-  const loadProjectPipelineRuns = useCallback(async (
-    agentId: string,
-    project: AgentProjectSummary,
-  ) => {
-    setPipelineLoading(true);
-    const projectIds = [resolvedProjectRequestId, ...buildProjectIdCandidates(project)]
-      .map((item) => item.trim())
-      .filter(Boolean);
-    const uniqueProjectIds = Array.from(new Set(projectIds));
-    try {
-      for (const projectRequestId of uniqueProjectIds) {
-        try {
-          const runs = await agentsApi.listProjectPipelineRuns(agentId, projectRequestId);
-          setPipelineRuns(runs);
-          setResolvedProjectRequestId(projectRequestId);
-          setError("");
-          return runs;
-        } catch {
-          // Try next candidate id.
-        }
-      }
-      throw new Error("project_pipeline_runs_not_found");
-    } catch (err) {
-      console.error("failed to load pipeline runs", err);
-      setPipelineRuns([]);
-      setError(
-        `${t("projects.pipeline.loadFailed")} ${(err as Error)?.message || ""}`.trim(),
-      );
-      return [] as ProjectPipelineRunSummary[];
-    } finally {
-      setPipelineLoading(false);
-    }
-  }, [resolvedProjectRequestId, t]);
-
-  const handleRealtimeFileTreeInvalidated = useCallback(async (payload?: {
+  const handleRealtimeFileTreeInvalidated = useCallback((payload?: {
     changedPaths: string[];
     changedDirs: string[];
     changedPathsTruncated: boolean;
     reason: string;
     fileSummary?: AgentProjectFileSummary;
   }) => {
-    if (!currentAgent || !selectedProject) {
-      return;
-    }
-    lastFileTreeInvalidationAtRef.current = Date.now();
     if (payload?.fileSummary) {
       setProjectFileSummary(payload.fileSummary);
-    } else {
-      void loadProjectFileSummary(currentAgent.id, selectedProject).catch((err) => {
-        console.error("failed to load project file summary", err);
-        setProjectFileSummary(null);
-      });
     }
-    const changedPaths = Array.from(
-      new Set(
-        (payload?.changedPaths || [])
-          .map((item) => item.trim())
-          .filter((item) => item && !isIgnoredProjectFile(item)),
-      ),
-    );
-    if (
-      changedPaths.length > 0
-      && (!selectedFilePath || !changedPaths.includes(selectedFilePath))
-    ) {
-      setWorkbenchSyncNotice({
-        changedPaths,
-        updatedAt: Date.now(),
-      });
-    }
-    if (changedPaths.length > 0) {
-      setLatestUpdatedFilePath(changedPaths[changedPaths.length - 1]);
-    }
-    const shouldPatchIncrementally = Boolean(
-      payload
-      && payload.reason !== "resync"
-      && changedPaths.length > 0,
-    );
-    const changedDirectoryPaths = normalizeProjectTreeKeys(
-      payload?.changedDirs?.length
-        ? payload.changedDirs
-        : buildChangedProjectTreeDirectoryPaths(changedPaths),
-    );
-    let patchedIncrementally = false;
+    // Keep realtime scoped to knowledge-side health signals; file/workbench sync stays manual.
+  }, []);
 
-    if (shouldPatchIncrementally) {
-      await loadProjectFilesMetadata(currentAgent.id, selectedProject, changedPaths)
-        .then((files) => {
-          applyProjectFilesMetadataPatch(changedPaths, files);
-          const latestPathFromMetadata = pickMostRecentlyModifiedPath(files);
-          if (latestPathFromMetadata) {
-            setLatestUpdatedFilePath(latestPathFromMetadata);
-          }
-          patchedIncrementally = true;
-        })
-        .catch((err) => {
-          console.error("failed to patch project file metadata", err);
-        });
+  const handleRealtimePipelineInvalidated = useCallback(() => {
+    // Keep realtime as a lightweight signal channel; pipeline refresh stays manual.
+  }, []);
 
-      if (changedDirectoryPaths.length > 0) {
-        setStaleProjectTreeDirectoryPaths((prev) =>
-          mergeExpandedProjectTreeKeys(prev, changedDirectoryPaths));
-      }
-
-      if (shouldRefreshProjectTreeRootForChanges(changedPaths)) {
-        await loadProjectTreeRoot(currentAgent.id, selectedProject);
-        setStaleProjectTreeDirectoryPaths([]);
-      }
-    } else {
-      await scheduleProjectTreeRootRefresh(currentAgent.id, selectedProject, {
-        clearStale: true,
-      });
-    }
-
-    if (!patchedIncrementally) {
-      scheduleProjectFilesRefresh(currentAgent.id, selectedProject, {
-        preserveSelection: true,
-      });
-    }
-    if (changedPaths.length === 0) {
-      const latestPathFromTree = await resolveLatestUpdatedPathFromTree(
-        currentAgent.id,
-        selectedProject,
-      );
-      if (latestPathFromTree) {
-        setLatestUpdatedFilePath(latestPathFromTree);
-      }
-    }
-    const shouldRefreshSelectedContent = Boolean(
-      selectedFilePath
-      && isPreviewablePath(selectedFilePath)
-      && (
-        !payload
-        || payload.reason === "resync"
-        || changedPaths.length === 0
-        || changedPaths.includes(selectedFilePath)
-        || (
-          payload.changedPathsTruncated
-          && isProjectPathUnderDirectories(selectedFilePath, changedDirectoryPaths)
-        )
-      ),
-    );
-    if (shouldRefreshSelectedContent) {
-      setWorkbenchSyncNotice((prev) => {
-        if (!prev) {
-          return prev;
-        }
-        return changedPaths.includes(selectedFilePath) ? null : prev;
-      });
-      await loadFileContent(currentAgent.id, selectedProject, selectedFilePath);
-    }
-  }, [
-    applyProjectFilesMetadataPatch,
-    currentAgent,
-    loadFileContent,
-    loadProjectFileSummary,
-    loadProjectFilesMetadata,
-    loadProjectTreeRoot,
-    resolveLatestUpdatedPathFromTree,
-    scheduleProjectTreeRootRefresh,
-    scheduleProjectFilesRefresh,
-    selectedFilePath,
-    selectedProject,
-  ]);
-
-  const handleRealtimePipelineInvalidated = useCallback(async (_payload?: {
-    changedPaths: string[];
-    changedDirs: string[];
-    changedPathsTruncated: boolean;
-    reason: string;
-  }) => {
-    if (!currentAgent || !selectedProject) {
-      return;
-    }
-    lastPipelineInvalidationAtRef.current = Date.now();
-    const changedPaths = Array.from(
-      new Set(
-        (_payload?.changedPaths || [])
-          .map((item) => item.trim())
-          .filter(Boolean),
-      ),
-    );
-    const templateChanged = Boolean(
-      !_payload
-      || _payload.reason === "resync"
-      || changedPaths.length === 0
-      || changedPaths.some((item) => isProjectPipelineTemplatePath(item))
-      || changedPaths.some((item) => !isProjectPipelineRunPath(item)),
-    );
-
-    if (templateChanged) {
-      await loadPipelineContext(currentAgent.id, selectedProject);
-      if (selectedRunId) {
-        await loadRunDetail(currentAgent.id, selectedProject, selectedRunId);
-      }
-      return;
-    }
-
-    const runs = await loadProjectPipelineRuns(currentAgent.id, selectedProject);
-    const changedRunIds = Array.from(
-      new Set(
-        changedPaths
-          .map((item) => getProjectPipelineRunIdFromPath(item))
-          .filter(Boolean),
-      ),
-    );
-
-    if (
-      selectedRunId
-      && runs.some((item) => item.id === selectedRunId)
-      && (changedRunIds.length === 0 || changedRunIds.includes(selectedRunId))
-    ) {
-      await loadRunDetail(currentAgent.id, selectedProject, selectedRunId);
-    }
-  }, [currentAgent, loadPipelineContext, loadProjectPipelineRuns, loadRunDetail, selectedProject, selectedRunId]);
-
-  const handleAssistantTurnCompleted = useCallback(async () => {
-    if (!currentAgent || !selectedProject) {
-      return;
-    }
-
-    if (assistantTurnFileSyncTimerRef.current !== null) {
-      window.clearTimeout(assistantTurnFileSyncTimerRef.current);
-      assistantTurnFileSyncTimerRef.current = null;
-    }
-    if (assistantTurnPipelineSyncTimerRef.current !== null) {
-      window.clearTimeout(assistantTurnPipelineSyncTimerRef.current);
-      assistantTurnPipelineSyncTimerRef.current = null;
-    }
-
-    const isRealtimeLikelyToDeliver =
-      realtimeConnectionStatusRef.current === "connected"
-      || realtimeConnectionStatusRef.current === "connecting"
-      || realtimeConnectionStatusRef.current === "reconnecting";
-
-    const performFileFallbackSync = () => {
-      void Promise.all([
-        loadProjectFileSummary(currentAgent.id, selectedProject).catch(() => null),
-        scheduleProjectTreeRootRefresh(currentAgent.id, selectedProject, {
-          clearStale: true,
-        }),
-      ]).then(async () => {
-        scheduleProjectFilesRefresh(currentAgent.id, selectedProject, {
-          preserveSelection: true,
-        }, 120);
-
-        if (selectedFilePath && isPreviewablePath(selectedFilePath)) {
-          await loadFileContent(currentAgent.id, selectedProject, selectedFilePath);
-        }
-
-      });
-    };
-
-    const performPipelineFallbackSync = () => {
-      void loadPipelineContext(currentAgent.id, selectedProject).then(async () => {
-        if (selectedRunId) {
-          await loadRunDetail(currentAgent.id, selectedProject, selectedRunId);
-        }
-      });
-    };
-
-    if (isRealtimeLikelyToDeliver) {
-      const completedAt = Date.now();
-      assistantTurnFileSyncTimerRef.current = window.setTimeout(() => {
-        assistantTurnFileSyncTimerRef.current = null;
-        const fileTreeDelivered = lastFileTreeInvalidationAtRef.current >= completedAt;
-        if (!fileTreeDelivered) {
-          performFileFallbackSync();
-        }
-      }, ASSISTANT_TURN_REALTIME_FALLBACK_MS);
-      assistantTurnPipelineSyncTimerRef.current = window.setTimeout(() => {
-        assistantTurnPipelineSyncTimerRef.current = null;
-        const pipelineDelivered = lastPipelineInvalidationAtRef.current >= completedAt;
-        if (!pipelineDelivered) {
-          performPipelineFallbackSync();
-        }
-      }, ASSISTANT_TURN_REALTIME_FALLBACK_MS);
-      return;
-    }
-
-    performFileFallbackSync();
-    performPipelineFallbackSync();
-  }, [
-    currentAgent,
-    loadFileContent,
-    loadPipelineContext,
-    loadProjectFileSummary,
-    loadProjectTreeRoot,
-    loadRunDetail,
-    scheduleProjectTreeRootRefresh,
-    scheduleProjectFilesRefresh,
-    selectedFilePath,
-    selectedProject,
-    selectedRunId,
-  ]);
+  const handleAssistantTurnCompleted = useCallback(() => {
+    // Assistant completion no longer triggers project file/pipeline auto-refresh.
+  }, []);
 
   const handleOpenImportModal = useCallback(async () => {
     if (!currentAgent) {
@@ -2694,10 +2228,6 @@ export default function ProjectDetailPage() {
     onPipelineInvalidated: handleRealtimePipelineInvalidated,
   });
 
-  useEffect(() => {
-    realtimeConnectionStatusRef.current = realtimeConnectionState.status;
-  }, [realtimeConnectionState.status]);
-
   const realtimeConnectionText = useMemo(() => {
     if (realtimeConnectionState.status === "connected") {
       return t("projects.realtime.connected", "Realtime connected");
@@ -2714,13 +2244,15 @@ export default function ProjectDetailPage() {
     return t("projects.realtime.connecting", "Realtime connecting");
   }, [realtimeConnectionState.status, t]);
 
+  const showRealtimeHealthNotice =
+    realtimeConnectionState.status === "reconnecting"
+    || realtimeConnectionState.status === "degraded";
+
   useEffect(() => {
     fileMtimeByPathRef.current = Object.fromEntries(
       projectFiles.map((file) => [file.path, file.modified_time]),
     );
   }, [projectFiles]);
-
-  const showRealtimeStatus = shouldShowRealtimeStatus(realtimeConnectionState.status);
 
   useEffect(() => {
     if (!currentAgent) {
@@ -2763,18 +2295,6 @@ export default function ProjectDetailPage() {
     if (projectFilesRefreshTimerRef.current !== null) {
       window.clearTimeout(projectFilesRefreshTimerRef.current);
       projectFilesRefreshTimerRef.current = null;
-    }
-    resetProjectTreeRefreshSchedulerState({
-      state: projectTreeRootRefreshSchedulerRef.current,
-      clearTimer: (timerId) => window.clearTimeout(timerId),
-    });
-    if (assistantTurnFileSyncTimerRef.current !== null) {
-      window.clearTimeout(assistantTurnFileSyncTimerRef.current);
-      assistantTurnFileSyncTimerRef.current = null;
-    }
-    if (assistantTurnPipelineSyncTimerRef.current !== null) {
-      window.clearTimeout(assistantTurnPipelineSyncTimerRef.current);
-      assistantTurnPipelineSyncTimerRef.current = null;
     }
     setResolvedProjectRequestId("");
     setProjectFiles([]);
@@ -2960,18 +2480,6 @@ export default function ProjectDetailPage() {
         window.clearTimeout(projectFilesRefreshTimerRef.current);
         projectFilesRefreshTimerRef.current = null;
       }
-      resetProjectTreeRefreshSchedulerState({
-        state: projectTreeRootRefreshSchedulerRef.current,
-        clearTimer: (timerId) => window.clearTimeout(timerId),
-      });
-      if (assistantTurnFileSyncTimerRef.current !== null) {
-        window.clearTimeout(assistantTurnFileSyncTimerRef.current);
-        assistantTurnFileSyncTimerRef.current = null;
-      }
-      if (assistantTurnPipelineSyncTimerRef.current !== null) {
-        window.clearTimeout(assistantTurnPipelineSyncTimerRef.current);
-        assistantTurnPipelineSyncTimerRef.current = null;
-      }
       if (fileTimer !== null) {
         window.clearTimeout(fileTimer);
       }
@@ -2985,14 +2493,6 @@ export default function ProjectDetailPage() {
     if (!currentAgent || !selectedProject || projectFileSummary) {
       return;
     }
-    if (
-      realtimeConnectionState.status === "connected"
-      || realtimeConnectionState.status === "connecting"
-      || realtimeConnectionState.status === "reconnecting"
-    ) {
-      return;
-    }
-
     const timer = window.setTimeout(() => {
       void loadProjectFileSummary(currentAgent.id, selectedProject).catch((err) => {
         console.error("failed to load project file summary", err);
@@ -3007,7 +2507,6 @@ export default function ProjectDetailPage() {
     currentAgent,
     loadProjectFileSummary,
     projectFileSummary,
-    realtimeConnectionState.status,
     selectedProject,
   ]);
 
@@ -3707,6 +3206,10 @@ export default function ProjectDetailPage() {
           <ProjectKnowledgeSignalsPanel
             knowledgeState={projectKnowledgeState}
             knowledgeHeaderSignals={knowledgeHeaderSignals}
+            realtimeConnectionStatus={realtimeConnectionState.status}
+            realtimeConnectionText={realtimeConnectionText}
+            realtimeReconnectAttempt={realtimeConnectionState.reconnectAttempt}
+            showRealtimeConnectionNotice={showRealtimeHealthNotice}
             runtimeSignalValue={runtimeSignalValue}
             runtimeSignalTooltipContent={runtimeSignalTooltipContent}
             runtimeSignalTooltipOpen={runtimeSignalTooltipOpen}
@@ -3751,7 +3254,11 @@ export default function ProjectDetailPage() {
     runtimeSignalTooltipContent,
     runtimeSignalTooltipOpen,
     runtimeSignalValue,
+    realtimeConnectionState.reconnectAttempt,
+    realtimeConnectionState.status,
+    realtimeConnectionText,
     selectedProject,
+    showRealtimeHealthNotice,
     t,
   ]);
 
@@ -3788,21 +3295,6 @@ export default function ProjectDetailPage() {
               currentAgent?.workspace_dir ||
               t("projects.noAgent")}
           </Text>
-          {showRealtimeStatus ? (
-            <div className={styles.realtimeStatusRow}>
-              <Badge
-                status={getRealtimeBadgeStatus(realtimeConnectionState.status)}
-                text={realtimeConnectionText}
-              />
-              {realtimeConnectionState.reconnectAttempt > 0 ? (
-                <Text type="secondary" className={styles.realtimeStatusMeta}>
-                  {t("projects.realtime.retryingAttempt", "Attempt {{count}}", {
-                    count: realtimeConnectionState.reconnectAttempt,
-                  })}
-                </Text>
-              ) : null}
-            </div>
-          ) : null}
         </div>
         <div className={styles.headerActions}>
           {selectedProject ? (

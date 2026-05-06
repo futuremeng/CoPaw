@@ -3,6 +3,7 @@ import { Alert, Button, Select, Space, Tag, Tooltip, Typography } from "antd";
 import { useTranslation } from "react-i18next";
 import styles from "./index.module.less";
 import { getProjectKnowledgeSemanticReasonLabel } from "./projectKnowledgeSyncUi";
+import type { ProjectRealtimeConnectionStatus } from "./useProjectRealtimeController";
 import type {
   ProjectKnowledgeHeaderSignals,
   ProjectKnowledgeState,
@@ -26,6 +27,10 @@ interface QualityLoopSummary {
 interface ProjectKnowledgeSignalsPanelProps {
   knowledgeState: ProjectKnowledgeState;
   knowledgeHeaderSignals: ProjectKnowledgeHeaderSignals;
+  realtimeConnectionStatus?: ProjectRealtimeConnectionStatus;
+  realtimeConnectionText?: string;
+  realtimeReconnectAttempt?: number;
+  showRealtimeConnectionNotice?: boolean;
   runtimeSignalValue: string;
   runtimeSignalTooltipContent: ReactNode;
   runtimeSignalTooltipOpen: boolean;
@@ -71,6 +76,10 @@ export default function ProjectKnowledgeSignalsPanel(
   const {
     knowledgeState,
     knowledgeHeaderSignals,
+    realtimeConnectionStatus,
+    realtimeConnectionText,
+    realtimeReconnectAttempt,
+    showRealtimeConnectionNotice,
     runtimeSignalValue,
     runtimeSignalTooltipContent,
     runtimeSignalTooltipOpen,
@@ -113,6 +122,21 @@ export default function ProjectKnowledgeSignalsPanel(
                 ? ` · ${t("projects.knowledge.metricsUpdatedAt", "Updated")}: ${metricsUpdatedAtLabel}`
                 : ""}
             </Typography.Text>
+          ) : null}
+          {showRealtimeConnectionNotice ? (
+            <Alert
+              style={{ marginTop: 8 }}
+              type={realtimeConnectionStatus === "degraded" ? "warning" : "info"}
+              showIcon
+              message={realtimeConnectionText || t("projects.realtime.connecting", "Realtime connecting")}
+              description={
+                (realtimeReconnectAttempt || 0) > 0
+                  ? t("projects.realtime.retryingAttempt", "Attempt {{count}}", {
+                    count: realtimeReconnectAttempt,
+                  })
+                  : undefined
+              }
+            />
           ) : null}
         </div>
         <div className={styles.projectKnowledgeTabActions}>

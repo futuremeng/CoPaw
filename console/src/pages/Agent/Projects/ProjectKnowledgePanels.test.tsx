@@ -15,7 +15,13 @@ vi.mock("react-i18next", () => ({
     t: (
       key: string,
       maybeFallbackOrOptions?: string | { value?: number },
+      maybeOptions?: Record<string, unknown>,
     ) => {
+      const fallback = typeof maybeFallbackOrOptions === "string" ? maybeFallbackOrOptions : undefined;
+      const options = typeof maybeFallbackOrOptions === "object" ? maybeFallbackOrOptions : maybeOptions;
+      if (typeof fallback === "string") {
+        return fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(options?.[name] ?? ""));
+      }
       if (typeof maybeFallbackOrOptions === "string") {
         return maybeFallbackOrOptions;
       }
@@ -525,6 +531,27 @@ describe("project knowledge supporting panels", () => {
       "Worker Restarts",
       "Worker PID Count",
     ]);
+  });
+
+  it("shows degraded realtime status in the health panel", () => {
+    const knowledgeState = buildKnowledgeState();
+
+    render(
+      <ProjectKnowledgeSignalsPanel
+        knowledgeState={knowledgeState}
+        knowledgeHeaderSignals={buildKnowledgeHeaderSignals(knowledgeState)}
+        realtimeConnectionStatus="degraded"
+        realtimeConnectionText="Realtime degraded"
+        realtimeReconnectAttempt={3}
+        showRealtimeConnectionNotice
+        runtimeSignalValue="Idle"
+        runtimeSignalTooltipContent={<div>Runtime</div>}
+        runtimeSignalTooltipOpen={false}
+      />,
+    );
+
+    expect(screen.getByText("Realtime degraded")).not.toBeNull();
+    expect(screen.getByText("Attempt 3")).not.toBeNull();
   });
 
   it("renders source inventory", () => {
