@@ -22,6 +22,7 @@ from .project_monitoring_state import (
     PROJECT_FILE_MONITORING_ACTIVE,
     normalize_project_file_monitoring_state,
 )
+from .project_realtime_events import record_project_recent_updates
 
 logger = logging.getLogger(__name__)
 
@@ -273,6 +274,12 @@ class ProjectKnowledgeWatcher:
                 continue
             previous = self._snapshots.get(project_id)
             changed_paths = self._diff_paths(previous, snapshot)
+            if changed_paths:
+                record_project_recent_updates(
+                    Path(str(snapshot.get("project_dir") or "")),
+                    project_id,
+                    changed_paths,
+                )
             should_bootstrap = previous is None
             should_config_reindex = False
             if not should_bootstrap and not changed_paths:

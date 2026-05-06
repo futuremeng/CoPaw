@@ -77,7 +77,10 @@ from ..project_monitoring_state import (
     update_project_file_monitoring_state,
     write_project_metadata,
 )
-from ..project_realtime_events import record_project_realtime_paths
+from ..project_realtime_events import (
+    collect_recent_project_updates,
+    record_project_realtime_paths,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -306,6 +309,8 @@ class ProjectFileTreeNode(BaseModel):
     is_directory: bool = False
     child_count: int = 0
     descendant_file_count: int = 0
+    direct_file_count: int = 0
+    has_child_directories: bool = False
 
 
 class ProjectFileSummary(BaseModel):
@@ -329,6 +334,7 @@ class ProjectFileSummary(BaseModel):
     flow_files: int = 0
     case_files: int = 0
     recently_updated_files: int
+    recent_updates: list[ProjectFileInfo] = Field(default_factory=list)
 
 
 class ProjectFileMetadataRequest(BaseModel):
@@ -2268,10 +2274,10 @@ def _count_visible_project_tree_children(target_dir: Path) -> int:
     return count
 
 
-def _count_visible_project_tree_descendant_files(target_dir: Path) -> int:
+def _count_visible_project_tree_direct_files(target_dir: Path) -> int:
     count = 0
     try:
-        for path in target_dir.rglob("*"):
+        for path in target_dir.iterdir():
             if not path.is_file():
                 continue
             rel_path = path.relative_to(target_dir).as_posix()
@@ -2281,6 +2287,20 @@ def _count_visible_project_tree_descendant_files(target_dir: Path) -> int:
     except OSError:
         return 0
     return count
+
+
+def _has_visible_project_tree_child_directories(target_dir: Path) -> bool:
+    try:
+        for path in target_dir.iterdir():
+            if not path.is_dir():
+                continue
+            rel_path = path.relative_to(target_dir).as_posix()
+            if not _is_visible_project_tree_path(rel_path):
+                continue
+            return True
+    except OSError:
+        return False
+    return False
 
 
 def _list_project_file_tree_nodes(
@@ -2338,9 +2358,19 @@ def _list_project_file_tree_nodes(
                     else 0
                 ),
                 descendant_file_count=(
-                    _count_visible_project_tree_descendant_files(child)
+                    _count_visible_project_tree_direct_files(child)
                     if is_directory
                     else 0
+                ),
+                direct_file_count=(
+                    _count_visible_project_tree_direct_files(child)
+                    if is_directory
+                    else 0
+                ),
+                has_child_directories=(
+                    _has_visible_project_tree_child_directories(child)
+                    if is_directory
+                    else False
                 ),
             )
         )
@@ -2448,12 +2478,9 @@ def _is_case_project_metric_file(rel_path: str) -> bool:
     return len(parts) >= 4 and parts[0] == "pipelines" and parts[2] == "runs"
 
 
-def _is_recent_project_metric_file(mtime: float) -> bool:
-    return (time.time() - float(mtime)) <= (7 * 24 * 60 * 60)
-
-
 def _build_project_file_summary(project_dir: Path) -> ProjectFileSummary:
     project_root = project_dir.resolve()
+    project_id = project_root.name
     total_files = 0
     builtin_files = 0
     visible_files = 0
@@ -2471,7 +2498,6 @@ def _build_project_file_summary(project_dir: Path) -> ProjectFileSummary:
     skill_files = 0
     flow_files = 0
     case_files = 0
-    recently_updated_files = 0
 
     for path in project_root.rglob("*"):
         if not path.is_file():
@@ -2524,10 +2550,27 @@ def _build_project_file_summary(project_dir: Path) -> ProjectFileSummary:
                 other_type_files += 1
             if is_text_like:
                 text_like_files += 1
-            if _is_recent_project_metric_file(stat.st_mtime):
-                recently_updated_files += 1
 
     derived_files = intermediate_files + artifact_files
+    recent_update_records = collect_recent_project_updates(project_root, project_id)
+    recent_updates: list[ProjectFileInfo] = []
+    for item in recent_update_records:
+        path = str(item.get("path") or "").strip()
+        if not path:
+            continue
+        target = project_root / path
+        try:
+            stat = target.stat()
+        except OSError:
+            continue
+        recent_updates.append(
+            ProjectFileInfo(
+                filename=target.name,
+                path=path,
+                size=stat.st_size,
+                modified_time=str(item.get("modified_time") or _format_iso_time(stat.st_mtime)),
+            )
+        )
 
     return ProjectFileSummary(
         total_files=total_files,
@@ -2547,7 +2590,8 @@ def _build_project_file_summary(project_dir: Path) -> ProjectFileSummary:
         skill_files=skill_files,
         flow_files=flow_files,
         case_files=case_files,
-        recently_updated_files=recently_updated_files,
+        recently_updated_files=len(recent_updates),
+        recent_updates=recent_updates,
     )
 
 

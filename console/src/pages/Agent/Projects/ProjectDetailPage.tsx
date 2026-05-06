@@ -120,18 +120,8 @@ const KNOWLEDGE_DOCK_COLLAPSED_SIZE = 52;
 const KNOWLEDGE_DOCK_COLLAPSE_KEY = "knowledge";
 const PROJECT_FILES_DEFER_MS = 420;
 const INITIAL_PROJECT_FILES_IDLE_TIMEOUT_MS = 1200;
-const PROJECT_TREE_PREFETCH_DIR_LIMIT = 3;
-const PROJECT_TREE_LATEST_SCAN_LIMIT = 4000;
 const PROJECT_TREE_AUTO_RESTORE_SHALLOW_DEPTH = 2;
 const PROJECT_TREE_AUTO_RESTORE_MAX_DEEP_KEYS = 12;
-const PROJECT_TREE_PREVIEW_DIR_PRIORITY = [
-  "original",
-  "intermediate",
-  "output",
-  "pipelines",
-  ".agent",
-  ".skills",
-];
 
 const DEFAULT_KNOWLEDGE_HEADER_SIGNALS: ProjectKnowledgeHeaderSignals = {
   indexedRatio: 0,
@@ -374,30 +364,8 @@ function buildProjectWorkspaceSummary(params: {
   ].join("\n");
 }
 
-function normalizeProjectPath(path: string): string {
-  return path.replace(/\\/g, "/").replace(/^\.\//, "").toLowerCase();
-}
-
 function buildProjectWorkspaceChatPath(projectId: string, chatId: string): string {
   return `/projects/${encodeURIComponent(projectId)}/chat/${encodeURIComponent(chatId)}`;
-}
-
-function compareProjectTreePreviewPriority(
-  left: AgentProjectFileTreeNode,
-  right: AgentProjectFileTreeNode,
-): number {
-  const leftIndex = PROJECT_TREE_PREVIEW_DIR_PRIORITY.indexOf(
-    normalizeProjectPath(left.path),
-  );
-  const rightIndex = PROJECT_TREE_PREVIEW_DIR_PRIORITY.indexOf(
-    normalizeProjectPath(right.path),
-  );
-  const normalizedLeft = leftIndex >= 0 ? leftIndex : PROJECT_TREE_PREVIEW_DIR_PRIORITY.length;
-  const normalizedRight = rightIndex >= 0 ? rightIndex : PROJECT_TREE_PREVIEW_DIR_PRIORITY.length;
-  if (normalizedLeft !== normalizedRight) {
-    return normalizedLeft - normalizedRight;
-  }
-  return left.path.localeCompare(right.path);
 }
 
 function normalizeProjectTreeKey(path: string): string {
@@ -492,23 +460,8 @@ function toTimestamp(raw?: string | null): number {
   return Number.isFinite(ts) ? ts : 0;
 }
 
-function pickMostRecentlyModifiedPath(files: AgentProjectFileInfo[]): string {
-  if (files.length === 0) {
-    return "";
-  }
-  return files.reduce((latest, file) => (
-    toTimestamp(file.modified_time) >= toTimestamp(latest.modified_time) ? file : latest
-  )).path;
-}
-
-function pickLatestChangedPath(
-  files: AgentProjectFileInfo[],
-  previousMtimeByPath: Record<string, string>,
-): string {
-  const changedFiles = files.filter(
-    (file) => previousMtimeByPath[file.path] !== file.modified_time,
-  );
-  return pickMostRecentlyModifiedPath(changedFiles);
+function pickLatestRecentUpdatePath(summary: AgentProjectFileSummary | null | undefined): string {
+  return String(summary?.recent_updates?.[0]?.path || "").trim();
 }
 
 export default function ProjectDetailPage() {
@@ -1263,18 +1216,8 @@ export default function ProjectDetailPage() {
           const filteredFiles = files.filter(
             (item) => !isIgnoredProjectFile(item.path),
           );
-          const latestChangedPath = pickLatestChangedPath(
-            filteredFiles,
-            fileMtimeByPathRef.current,
-          );
-          const latestPathFallback = pickMostRecentlyModifiedPath(filteredFiles);
           setProjectFiles(filteredFiles);
           setKnownProjectFilesByPath(buildProjectFilesByPath(filteredFiles));
-          if (latestChangedPath) {
-            setLatestUpdatedFilePath(latestChangedPath);
-          } else if (!latestUpdatedFilePath && latestPathFallback) {
-            setLatestUpdatedFilePath(latestPathFallback);
-          }
           setResolvedProjectRequestId(projectRequestId);
           const preservedFile = previousSelection
             ? filteredFiles.find((item) => item.path === previousSelection)
@@ -1305,7 +1248,7 @@ export default function ProjectDetailPage() {
     } finally {
       setFilesLoading(false);
     }
-  }, [latestUpdatedFilePath, selectedFilePath, t]);
+  }, [selectedFilePath, t]);
 
   const loadProjectTreeDirectory = useCallback(async (
     agentId: string,
@@ -1336,57 +1279,6 @@ export default function ProjectDetailPage() {
     throw new Error("project_file_tree_not_found");
   }, [resolvedProjectRequestId]);
 
-  const resolveLatestUpdatedPathFromTree = useCallback(async (
-    agentId: string,
-    project: AgentProjectSummary,
-  ): Promise<string> => {
-    const queue: string[] = [""];
-    const visited = new Set<string>();
-    let scanned = 0;
-    let latestPath = "";
-    let latestTs = 0;
-
-    while (queue.length > 0 && scanned < PROJECT_TREE_LATEST_SCAN_LIMIT) {
-      const dirPath = queue.shift() || "";
-      const normalizedDir = normalizeProjectTreeKey(dirPath);
-      if (visited.has(normalizedDir)) {
-        continue;
-      }
-      visited.add(normalizedDir);
-
-      let nodes: AgentProjectFileTreeNode[] = [];
-      try {
-        nodes = await loadProjectTreeDirectory(agentId, project, normalizedDir);
-      } catch {
-        continue;
-      }
-
-      for (const node of nodes) {
-        if (isIgnoredProjectFile(node.path)) {
-          continue;
-        }
-        if (node.is_directory) {
-          const normalizedChildDir = normalizeProjectTreeKey(node.path);
-          if (!visited.has(normalizedChildDir)) {
-            queue.push(node.path);
-          }
-          continue;
-        }
-        scanned += 1;
-        const ts = toTimestamp(node.modified_time);
-        if (!latestPath || ts >= latestTs) {
-          latestPath = node.path;
-          latestTs = ts;
-        }
-        if (scanned >= PROJECT_TREE_LATEST_SCAN_LIMIT) {
-          break;
-        }
-      }
-    }
-
-    return latestPath;
-  }, [loadProjectTreeDirectory]);
-
   const loadProjectFileSummary = useCallback(async (
     agentId: string,
     project: AgentProjectSummary,
@@ -1400,6 +1292,7 @@ export default function ProjectDetailPage() {
       try {
         const summary = await agentsApi.getProjectFileSummary(agentId, projectRequestId);
         setProjectFileSummary(summary);
+        setLatestUpdatedFilePath((prev) => pickLatestRecentUpdatePath(summary) || prev || "");
         setResolvedProjectRequestId(projectRequestId);
         return summary;
       } catch {
@@ -1435,31 +1328,9 @@ export default function ProjectDetailPage() {
       setProjectTreeNodes(nodes);
 
       if (!selectedFilePath) {
-        const previewDirs = nodes
-          .filter((item) => item.is_directory && item.child_count > 0)
-          .sort(compareProjectTreePreviewPriority)
-          .slice(0, PROJECT_TREE_PREFETCH_DIR_LIMIT);
-        let previewPath = "";
-        for (const dir of previewDirs) {
-          try {
-            const children = await loadProjectTreeDirectory(agentId, project, dir.path);
-            const previewableChild = children.find(
-              (item) => !item.is_directory && isPreviewablePath(item.path),
-            );
-            if (previewableChild) {
-              previewPath = previewableChild.path;
-              break;
-            }
-          } catch {
-            // best-effort prefetch only
-          }
-        }
-
-        if (!previewPath) {
-          previewPath = nodes.find(
-            (item) => !item.is_directory && isPreviewablePath(item.path),
-          )?.path || "";
-        }
+        const previewPath = nodes.find(
+          (item) => !item.is_directory && isPreviewablePath(item.path),
+        )?.path || "";
 
         if (previewPath) {
           setSelectedFilePath((prev) => prev || previewPath);
@@ -1485,19 +1356,11 @@ export default function ProjectDetailPage() {
       loadProjectTreeRoot(agentId, project),
       loadProjectFileSummary(agentId, project),
     ]);
-    if (!latestUpdatedFilePath) {
-      const latestPathFromTree = await resolveLatestUpdatedPathFromTree(agentId, project);
-      if (latestPathFromTree) {
-        setLatestUpdatedFilePath(latestPathFromTree);
-      }
-    }
   }, [
     currentAgent,
-    latestUpdatedFilePath,
     loadProjectFileSummary,
     loadProjectFiles,
     loadProjectTreeRoot,
-    resolveLatestUpdatedPathFromTree,
     selectedProject,
   ]);
 
@@ -2272,24 +2135,11 @@ export default function ProjectDetailPage() {
   }, [selectedFilePath]);
 
   useEffect(() => {
-    if (!currentAgent || !selectedProject || latestUpdatedFilePath) {
+    if (!projectFileSummary) {
       return;
     }
-    let cancelled = false;
-    void resolveLatestUpdatedPathFromTree(currentAgent.id, selectedProject)
-      .then((path) => {
-        if (cancelled || !path) {
-          return;
-        }
-        setLatestUpdatedFilePath(path);
-      })
-      .catch(() => {
-        // best-effort fallback only
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [currentAgent, latestUpdatedFilePath, resolveLatestUpdatedPathFromTree, selectedProject]);
+    setLatestUpdatedFilePath(pickLatestRecentUpdatePath(projectFileSummary));
+  }, [projectFileSummary]);
 
   useEffect(() => {
     if (projectFilesRefreshTimerRef.current !== null) {

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from qwenpaw.app.project_realtime_events import (
     collect_project_realtime_changes,
+    collect_recent_project_updates,
     record_project_realtime_paths,
 )
 from qwenpaw.app.routers.agents_pipeline_core import (
@@ -48,6 +49,63 @@ def test_record_project_realtime_paths_ignores_non_project_files(tmp_path: Path)
 
     assert latest_event_id == 0
     assert changed_paths == []
+
+
+def test_record_project_realtime_paths_updates_recent_files_with_dedupe(tmp_path: Path):
+    workspace_dir = tmp_path
+    project_dir = workspace_dir / "projects" / "project-a"
+    target = project_dir / "original" / "note.md"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("hello", encoding="utf-8")
+
+    record_project_realtime_paths(workspace_dir, [target])
+    target.write_text("hello again", encoding="utf-8")
+    record_project_realtime_paths(workspace_dir, [target])
+
+    recent = collect_recent_project_updates(project_dir, "project-a")
+
+    assert [item["path"] for item in recent] == ["original/note.md"]
+    assert recent[0]["modified_time"]
+    assert recent[0]["recorded_at"]
+
+
+def test_record_project_realtime_paths_keeps_only_five_recent_files(tmp_path: Path):
+    workspace_dir = tmp_path
+    project_dir = workspace_dir / "projects" / "project-a"
+    original_dir = project_dir / "original"
+    original_dir.mkdir(parents=True, exist_ok=True)
+
+    paths: list[Path] = []
+    for index in range(6):
+        target = original_dir / f"note-{index}.md"
+        target.write_text(f"hello {index}", encoding="utf-8")
+        paths.append(target)
+        record_project_realtime_paths(workspace_dir, [target])
+
+    recent = collect_recent_project_updates(project_dir, "project-a")
+
+    assert [item["path"] for item in recent] == [
+        "original/note-5.md",
+        "original/note-4.md",
+        "original/note-3.md",
+        "original/note-2.md",
+        "original/note-1.md",
+    ]
+
+
+def test_collect_recent_project_updates_drops_deleted_files(tmp_path: Path):
+    workspace_dir = tmp_path
+    project_dir = workspace_dir / "projects" / "project-a"
+    target = project_dir / "original" / "note.md"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("hello", encoding="utf-8")
+
+    record_project_realtime_paths(workspace_dir, [target])
+    target.unlink()
+
+    recent = collect_recent_project_updates(project_dir, "project-a")
+
+    assert recent == []
 
 
 def test_persist_project_pipeline_run_records_manifest_changes(tmp_path: Path):

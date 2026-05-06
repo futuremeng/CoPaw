@@ -1,5 +1,5 @@
 import type { PropsWithChildren, ReactNode } from "react";
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import ProjectDetailPage from "./ProjectDetailPage";
@@ -11,6 +11,7 @@ const {
   mockedGetProjectFileSummary,
   mockedMessageError,
   mockedMessageSuccess,
+  projectOverviewCardState,
   mockAgentStoreState,
   mockPreferredWorkspaceChatState,
   mockProjectUploadControllerState,
@@ -25,6 +26,9 @@ const {
   mockedGetProjectFileSummary: vi.fn(),
   mockedMessageError: vi.fn(),
   mockedMessageSuccess: vi.fn(),
+  projectOverviewCardState: {
+    latestProps: null as Record<string, unknown> | null,
+  },
   mockAgentStoreState: {
     selectedAgent: "agent-1",
     agents: [
@@ -246,7 +250,12 @@ vi.mock("./ProjectKnowledgeSignalsPanel", () => ({
 }));
 vi.mock("./ProjectKnowledgeSourcesPanel", () => ({ default: () => <div /> }));
 vi.mock("./ProjectKnowledgeSettingsPanel", () => ({ default: () => <div /> }));
-vi.mock("./ProjectOverviewCard", () => ({ default: () => <div /> }));
+vi.mock("./ProjectOverviewCard", () => ({
+  default: (props: Record<string, unknown>) => {
+    projectOverviewCardState.latestProps = props;
+    return <div />;
+  },
+}));
 vi.mock("./ProjectUploadModal", () => ({ default: () => <div /> }));
 vi.mock("./ProjectWorkbenchPanel", () => ({ default: () => <div /> }));
 vi.mock("./ProjectMetricsPanel", () => ({ default: () => <div /> }));
@@ -313,6 +322,7 @@ describe("ProjectDetailPage refresh scheduling", () => {
     realtimeControllerState.reconnectAttempt = 0;
     realtimeControllerState.onFileTreeInvalidated = undefined;
     realtimeControllerState.onPipelineInvalidated = undefined;
+    projectOverviewCardState.latestProps = null;
     mockedListProjectFileTree.mockResolvedValue([
       {
         filename: "guide.md",
@@ -322,6 +332,8 @@ describe("ProjectDetailPage refresh scheduling", () => {
         is_directory: false,
         child_count: 0,
         descendant_file_count: 0,
+        direct_file_count: 0,
+        has_child_directories: false,
       },
     ]);
     mockedListProjectFiles.mockResolvedValue([
@@ -344,6 +356,56 @@ describe("ProjectDetailPage refresh scheduling", () => {
       text_like_files: 1,
       recently_updated_files: 1,
     });
+  });
+
+  it("uses summary recent updates without prefetching child directories", async () => {
+    mockedListProjectFileTree.mockResolvedValue([
+      {
+        filename: "original",
+        path: "original",
+        size: 0,
+        modified_time: "2026-04-29T00:00:00Z",
+        is_directory: true,
+        child_count: 2,
+        descendant_file_count: 1,
+        direct_file_count: 1,
+        has_child_directories: true,
+      },
+    ]);
+    mockedGetProjectFileSummary.mockResolvedValue({
+      total_files: 2,
+      builtin_files: 0,
+      visible_files: 2,
+      original_files: 2,
+      derived_files: 0,
+      knowledge_candidate_files: 2,
+      markdown_files: 2,
+      text_like_files: 2,
+      recently_updated_files: 1,
+      recent_updates: [
+        {
+          filename: "latest.md",
+          path: "original/latest.md",
+          size: 64,
+          modified_time: "2026-04-29T00:01:00Z",
+        },
+      ],
+    });
+
+    const view = renderPage();
+    try {
+      await waitFor(() => {
+        expect(mockedGetProjectFileSummary).toHaveBeenCalled();
+        expect(projectOverviewCardState.latestProps?.latestUpdatedFilePath).toBe("original/latest.md");
+      });
+
+      await waitFor(() => {
+        expect(mockedListProjectFileTree).toHaveBeenCalledWith("agent-1", "proj-1", "");
+      });
+      expect(mockedListProjectFileTree).not.toHaveBeenCalledWith("agent-1", "proj-1", "original");
+    } finally {
+      view.unmount();
+    }
   });
 
   it("keeps resync invalidations lightweight without auto-refresh scheduling", async () => {

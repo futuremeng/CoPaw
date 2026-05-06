@@ -17,8 +17,10 @@ from typing import Any
 
 _STATE_DIR_NAME = ".knowledge"
 _STATE_FILE_NAME = "project-realtime-events.json"
+_RECENT_UPDATES_FILE_NAME = "recent-updates.json"
 _MAX_EVENTS = 64
 _MAX_PATHS_PER_EVENT = 32
+_MAX_RECENT_UPDATES = 5
 _state_lock = Lock()
 
 
@@ -30,11 +32,23 @@ def _state_path(project_dir: Path) -> Path:
     return project_dir / _STATE_DIR_NAME / _STATE_FILE_NAME
 
 
+def _recent_updates_path(project_dir: Path) -> Path:
+    return project_dir / _STATE_DIR_NAME / _RECENT_UPDATES_FILE_NAME
+
+
 def _default_state(project_id: str) -> dict[str, Any]:
     return {
         "project_id": project_id,
         "next_event_id": 1,
         "events": [],
+        "updated_at": _now_iso(),
+    }
+
+
+def _default_recent_updates_state(project_id: str) -> dict[str, Any]:
+    return {
+        "project_id": project_id,
+        "items": [],
         "updated_at": _now_iso(),
     }
 
@@ -108,6 +122,164 @@ def _save_state(project_dir: Path, state: dict[str, Any]) -> None:
         encoding="utf-8",
     )
     tmp_path.replace(state_path)
+
+
+def _load_recent_updates_state(project_dir: Path, project_id: str) -> dict[str, Any]:
+    state_path = _recent_updates_path(project_dir)
+    if not state_path.exists():
+        return _default_recent_updates_state(project_id)
+
+    try:
+        payload = json.loads(state_path.read_text(encoding="utf-8"))
+    except Exception:
+        return _default_recent_updates_state(project_id)
+
+    if not isinstance(payload, dict):
+        return _default_recent_updates_state(project_id)
+
+    state = _default_recent_updates_state(project_id)
+    state.update(payload)
+    state["project_id"] = project_id
+
+    items: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for raw_item in list(state.get("items") or []):
+        if not isinstance(raw_item, dict):
+            continue
+        path = str(raw_item.get("path") or "").strip().replace("\\", "/")
+        if not path or path in seen or path.startswith(".knowledge/"):
+            continue
+        candidate = (project_dir / path).resolve(strict=False)
+        try:
+            candidate.relative_to(project_dir.resolve())
+        except Exception:
+            continue
+        if not candidate.exists() or not candidate.is_file():
+            continue
+        seen.add(path)
+        items.append(
+            {
+                "path": path,
+                "modified_time": str(raw_item.get("modified_time") or _now_iso()),
+                "recorded_at": str(raw_item.get("recorded_at") or state.get("updated_at") or _now_iso()),
+            }
+        )
+        if len(items) >= _MAX_RECENT_UPDATES:
+            break
+
+    state["items"] = items
+    return state
+
+
+def _save_recent_updates_state(project_dir: Path, state: dict[str, Any]) -> None:
+    state_path = _recent_updates_path(project_dir)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state["updated_at"] = _now_iso()
+    tmp_path = state_path.with_suffix(".tmp")
+    tmp_path.write_text(
+        json.dumps(state, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    tmp_path.replace(state_path)
+
+
+def _record_recent_updates(
+    project_dir: Path,
+    project_id: str,
+    changed_paths: list[str],
+) -> None:
+    if not changed_paths:
+        return
+
+    state = _load_recent_updates_state(project_dir, project_id)
+    items_by_path: dict[str, dict[str, Any]] = {
+        str(item.get("path") or ""): item
+        for item in list(state.get("items") or [])
+        if isinstance(item, dict) and str(item.get("path") or "")
+    }
+    next_items: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    for path in changed_paths:
+        normalized = str(path or "").strip().replace("\\", "/")
+        if not normalized or normalized in seen or normalized.startswith(".knowledge/"):
+            continue
+        candidate = (project_dir / normalized).resolve(strict=False)
+        try:
+            candidate.relative_to(project_dir.resolve())
+        except Exception:
+            continue
+        if not candidate.exists() or not candidate.is_file():
+            items_by_path.pop(normalized, None)
+            continue
+        try:
+            modified_time = datetime.fromtimestamp(
+                candidate.stat().st_mtime,
+                tz=timezone.utc,
+            ).isoformat()
+        except OSError:
+            continue
+        next_items.append(
+            {
+                "path": normalized,
+                "modified_time": modified_time,
+                "recorded_at": _now_iso(),
+            }
+        )
+        seen.add(normalized)
+
+    for item in list(state.get("items") or []):
+        if not isinstance(item, dict):
+            continue
+        path = str(item.get("path") or "").strip().replace("\\", "/")
+        if not path or path in seen:
+            continue
+        candidate = (project_dir / path).resolve(strict=False)
+        try:
+            candidate.relative_to(project_dir.resolve())
+        except Exception:
+            continue
+        if not candidate.exists() or not candidate.is_file():
+            continue
+        next_items.append(item)
+        seen.add(path)
+        if len(next_items) >= _MAX_RECENT_UPDATES:
+            break
+
+    state["items"] = next_items[:_MAX_RECENT_UPDATES]
+    _save_recent_updates_state(project_dir, state)
+
+
+def record_project_recent_updates(
+    project_dir: Path,
+    project_id: str,
+    changed_paths: Sequence[str],
+) -> None:
+    normalized_paths = _normalize_paths(list(changed_paths or []))
+    if not normalized_paths:
+        return
+
+    with _state_lock:
+        _record_recent_updates(project_dir, project_id, normalized_paths)
+
+
+def collect_recent_project_updates(
+    project_dir: Path,
+    project_id: str,
+) -> list[dict[str, str]]:
+    with _state_lock:
+        state = _load_recent_updates_state(project_dir, project_id)
+        _save_recent_updates_state(project_dir, state)
+
+    return [
+        {
+            "path": str(item.get("path") or ""),
+            "modified_time": str(item.get("modified_time") or ""),
+            "recorded_at": str(item.get("recorded_at") or ""),
+        }
+        for item in list(state.get("items") or [])
+        if isinstance(item, dict)
+    ]
 
 
 def _resolve_project_path_context(
@@ -201,6 +373,7 @@ def record_project_realtime_paths(
             ][-_MAX_EVENTS:]
             state["next_event_id"] = event_id + 1
             _save_state(project_dir, state)
+            _record_recent_updates(project_dir, project_id, normalized_paths)
 
 
 def collect_project_realtime_changes(

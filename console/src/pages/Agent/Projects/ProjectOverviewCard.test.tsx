@@ -313,6 +313,8 @@ describe("ProjectOverviewCard interactions", () => {
         is_directory: false,
         child_count: 0,
         descendant_file_count: 0,
+        direct_file_count: 0,
+        has_child_directories: false,
       },
     ]);
 
@@ -328,6 +330,8 @@ describe("ProjectOverviewCard interactions", () => {
           is_directory: true,
           child_count: 1,
           descendant_file_count: 1,
+          direct_file_count: 1,
+          has_child_directories: false,
         },
       ],
       onLoadProjectTreeChildren,
@@ -340,6 +344,28 @@ describe("ProjectOverviewCard interactions", () => {
     expect(await screen.findByText("guide.md")).toBeDefined();
   });
 
+  it("shows direct file count with plus when a directory still has child directories", () => {
+    renderCard([], {
+      treeOnly: true,
+      projectTreeNodes: [
+        {
+          filename: "original",
+          path: "original",
+          size: 0,
+          modified_time: "2026-04-09T00:00:00Z",
+          is_directory: true,
+          child_count: 2,
+          descendant_file_count: 1,
+          direct_file_count: 1,
+          has_child_directories: true,
+        },
+      ],
+    });
+
+    expect(screen.getByText("original")).toBeDefined();
+    expect(screen.getByText("1+")).toBeDefined();
+  });
+
   it("keeps loaded lazy children when root tree nodes refresh", async () => {
     const onLoadProjectTreeChildren = vi.fn(async () => [
       {
@@ -350,6 +376,8 @@ describe("ProjectOverviewCard interactions", () => {
         is_directory: false,
         child_count: 0,
         descendant_file_count: 0,
+        direct_file_count: 0,
+        has_child_directories: false,
       },
     ]);
 
@@ -363,6 +391,8 @@ describe("ProjectOverviewCard interactions", () => {
           is_directory: true,
           child_count: 1,
           descendant_file_count: 1,
+          direct_file_count: 1,
+          has_child_directories: false,
         },
       ]);
 
@@ -380,6 +410,8 @@ describe("ProjectOverviewCard interactions", () => {
                   is_directory: true,
                   child_count: 1,
                   descendant_file_count: 1,
+                  direct_file_count: 1,
+                  has_child_directories: false,
                 },
               ]);
             }}

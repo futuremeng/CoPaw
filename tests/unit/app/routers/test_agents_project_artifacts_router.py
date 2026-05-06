@@ -10,7 +10,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from copaw.config.config import Config
-from qwenpaw.app.project_realtime_events import collect_project_realtime_changes
+from qwenpaw.app.project_realtime_events import (
+    collect_project_realtime_changes,
+    record_project_realtime_paths,
+)
 from qwenpaw.app.routers import agents as agents_router_module
 from qwenpaw.app.routers.agents import (
     CreateProjectRequest,
@@ -420,6 +423,8 @@ def test_list_project_file_tree_endpoint_returns_shallow_nodes(
             "is_directory": True,
             "child_count": 1,
             "descendant_file_count": 1,
+            "direct_file_count": 1,
+            "has_child_directories": False,
         }
     ]
 
@@ -463,6 +468,14 @@ def test_project_file_summary_endpoint_returns_aggregated_counts(
     (project_dir / ".cache" / "session.log").write_text("noop", encoding="utf-8")
     (project_dir / ".gitkeep").write_text("", encoding="utf-8")
     (project_dir / "AGENTS.md").write_text("# agent", encoding="utf-8")
+    record_project_realtime_paths(
+        workspace_dir,
+        [
+            project_dir / "original" / "brief.md",
+            project_dir / ".data" / "notes.txt",
+            project_dir / ".scripts" / "run.py",
+        ],
+    )
 
     response = client.get(f"/agents/default/projects/{project_id}/summary")
 
@@ -475,7 +488,13 @@ def test_project_file_summary_endpoint_returns_aggregated_counts(
     assert payload["knowledge_candidate_files"] >= 3
     assert payload["markdown_files"] >= 2
     assert payload["text_like_files"] >= 3
-    assert payload["recently_updated_files"] == payload["visible_files"]
+    assert payload["recently_updated_files"] == 4
+    assert [item["path"] for item in payload["recent_updates"]] == [
+        "original/brief.md",
+        ".data/notes.txt",
+        ".scripts/run.py",
+        "PROJECT.md",
+    ]
 
     summary = _build_project_file_summary(project_dir)
     assert payload == summary.model_dump()

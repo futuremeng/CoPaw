@@ -10,6 +10,7 @@ import pytest
 
 from copaw.config.config import Config
 from qwenpaw.app import project_knowledge_watcher as watcher_module
+from qwenpaw.app.project_realtime_events import collect_recent_project_updates
 
 
 @pytest.mark.asyncio
@@ -453,7 +454,10 @@ async def test_project_knowledge_watcher_triggers_on_file_change(
     initial = watcher._collect_snapshots()
     watcher._snapshots = initial
 
+    time.sleep(0.02)
     note_path.write_text("v2", encoding="utf-8")
+    bumped = time.time() + 2
+    os.utime(note_path, (bumped, bumped))
     current = watcher._collect_snapshots()
     await watcher._handle_snapshot_changes(current)
 
@@ -464,6 +468,57 @@ async def test_project_knowledge_watcher_triggers_on_file_change(
     assert calls[0]["debounce_seconds"] == watcher_module.DEFAULT_CHANGE_DEBOUNCE_SECONDS
     assert calls[0]["cooldown_seconds"] == watcher_module.DEFAULT_SYNC_COOLDOWN_SECONDS
     assert "original/note.md" in calls[0]["changed_paths"]
+
+
+@pytest.mark.asyncio
+async def test_project_knowledge_watcher_records_recent_updates_for_visible_changed_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    project_dir = tmp_path / "projects" / "project-visible"
+    project_dir.mkdir(parents=True, exist_ok=True)
+    metadata_path = project_dir / "PROJECT.md"
+    metadata_path.write_text(
+        "---\nid: project-visible\nname: Project Visible\nproject_auto_knowledge_sink: true\n---\n",
+        encoding="utf-8",
+    )
+    readme_path = project_dir / "README.md"
+    readme_path.write_text("v1", encoding="utf-8")
+
+    config = Config()
+    config.knowledge.enabled = True
+    config.knowledge.memify_enabled = True
+    monkeypatch.setattr(watcher_module, "load_config", lambda: config)
+    monkeypatch.setattr(
+        watcher_module,
+        "load_agent_config",
+        lambda _agent_id: type("AgentCfg", (), {"running": config.agents.running})(),
+    )
+    monkeypatch.setattr("qwenpaw.config.utils.save_config", lambda _config: None)
+    monkeypatch.setattr(
+        watcher_module.ProjectKnowledgeSyncManager,
+        "start_sync",
+        lambda self, **kwargs: {"accepted": True, "reason": "STARTED", "state": {"project_id": kwargs["project_id"]}},
+    )
+
+    watcher = watcher_module.ProjectKnowledgeWatcher(
+        agent_id="default",
+        workspace_dir=tmp_path,
+        poll_interval=0.01,
+    )
+    initial = watcher._collect_snapshots()
+    watcher._snapshots = initial
+
+    time.sleep(0.02)
+    readme_path.write_text("v2", encoding="utf-8")
+    bumped = time.time() + 2
+    os.utime(readme_path, (bumped, bumped))
+    current = watcher._collect_snapshots()
+
+    await watcher._handle_snapshot_changes(current)
+
+    recent = collect_recent_project_updates(project_dir, "project-visible")
+    assert [item["path"] for item in recent] == ["README.md"]
 
 
 @pytest.mark.asyncio

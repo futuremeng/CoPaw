@@ -30,6 +30,8 @@ describe("project file selection utils", () => {
         is_directory: true,
         child_count: 2,
         descendant_file_count: 2,
+        direct_file_count: 2,
+        has_child_directories: false,
       },
       {
         filename: "manifest.json",
@@ -39,6 +41,8 @@ describe("project file selection utils", () => {
         is_directory: false,
         child_count: 0,
         descendant_file_count: 0,
+        direct_file_count: 0,
+        has_child_directories: false,
       },
     ])).toBe("projects/demo/.knowledge/graphify/manifest.json");
   });
@@ -53,6 +57,8 @@ describe("project file selection utils", () => {
         is_directory: true,
         child_count: 0,
         descendant_file_count: 0,
+        direct_file_count: 0,
+        has_child_directories: false,
       },
     ])).toBe("");
   });
@@ -69,6 +75,8 @@ describe("project file selection utils", () => {
           is_directory: false,
           child_count: 0,
           descendant_file_count: 0,
+          direct_file_count: 0,
+          has_child_directories: false,
         },
       ],
     )).toEqual({

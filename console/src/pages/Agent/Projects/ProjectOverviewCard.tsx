@@ -419,16 +419,17 @@ function updateLazyTreeChildren(
   targetPath: string,
   children: LazyTreeItem[],
 ): LazyTreeItem[] {
-  const descendantFileCount = children.reduce((total, child) => (
-    child.is_directory ? total + child.descendant_file_count : total + 1
-  ), 0);
+  const directFileCount = children.filter((child) => !child.is_directory).length;
+  const hasChildDirectories = children.some((child) => child.is_directory);
 
   return items.map((item) => {
     if (item.path === targetPath) {
       return {
         ...item,
         child_count: children.length,
-        descendant_file_count: descendantFileCount,
+        descendant_file_count: directFileCount,
+        direct_file_count: directFileCount,
+        has_child_directories: hasChildDirectories,
         loaded: true,
         children,
       };
@@ -478,8 +479,9 @@ function buildLazyTreeNodes(
     const isAttached = !item.is_directory && selectedAttachSet.has(item.path);
     const isHighlighted = !item.is_directory && highlightedFileSet.has(item.path);
     const isRefreshingDirectory = item.is_directory && refreshingDirectorySet.has(item.path);
-    const directoryCountLabel = item.is_directory && item.descendant_file_count > 0
-      ? String(item.descendant_file_count)
+    const directFileCount = item.direct_file_count;
+    const directoryCountLabel = item.is_directory && directFileCount > 0
+      ? `${directFileCount}${item.has_child_directories ? "+" : ""}`
       : "";
     const childNodes = item.children
       ? buildLazyTreeNodes(
@@ -568,7 +570,7 @@ function getProjectTreeRootDirectoryFileCount(
   if (!matched) {
     return null;
   }
-  return matched.descendant_file_count;
+  return matched.direct_file_count;
 }
 
 export default function ProjectOverviewCard({

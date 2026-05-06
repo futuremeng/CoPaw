@@ -68,6 +68,8 @@ export interface AgentProjectFileTreeNode {
   is_directory: boolean;
   child_count: number;
   descendant_file_count: number;
+  direct_file_count: number;
+  has_child_directories: boolean;
 }
 
 export interface AgentProjectFileSummary {
@@ -89,6 +91,7 @@ export interface AgentProjectFileSummary {
   flow_files?: number;
   case_files?: number;
   recently_updated_files: number;
+  recent_updates?: AgentProjectFileInfo[];
 }
 
 export interface AgentProjectFileContent {
