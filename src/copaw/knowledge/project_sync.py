@@ -2360,6 +2360,22 @@ class ProjectKnowledgeSyncManager:
                     "Project knowledge sync failed for project %s",
                     project_id,
                 )
+                failure_snapshot = self._load_state(project_id, hydrate=False)
+                previous_l2_progress = (
+                    dict(failure_snapshot.get("l2_progress"))
+                    if isinstance(failure_snapshot.get("l2_progress"), dict)
+                    else {}
+                )
+                previous_l2_metrics = (
+                    dict(failure_snapshot.get("l2_metrics"))
+                    if isinstance(failure_snapshot.get("l2_metrics"), dict)
+                    else {}
+                )
+                failed_stage = str(
+                    failure_snapshot.get("current_stage")
+                    or failure_snapshot.get("stage")
+                    or ""
+                ).strip()
                 self._patch_state(
                     project_id,
                     self._normalize_sync_patch({
@@ -2372,9 +2388,10 @@ class ProjectKnowledgeSyncManager:
                         "eta_seconds": None,
                         "last_finished_at": self._now_iso(),
                         "last_error": str(exc),
+                        "failed_stage": failed_stage,
                         "processing_mode_overrides": {},
-                        "l2_progress": {},
-                        "l2_metrics": {},
+                        "l2_progress": previous_l2_progress,
+                        "l2_metrics": previous_l2_metrics,
                     }),
                 )
 

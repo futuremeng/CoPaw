@@ -813,6 +813,39 @@ def test_index_source_populates_hanlp_syntax_tasks_when_available(tmp_path: Path
     assert "### Constituency" in syntax_annotated
 
 
+def test_normalize_hanlp_dependencies_handles_nested_head_indices(tmp_path: Path):
+    manager = KnowledgeManager(tmp_path)
+    tokens = [
+        {"text": "微软", "start": 0, "end": 2},
+        {"text": "发布", "start": 3, "end": 5},
+    ]
+
+    dep_rows = manager._normalize_hanlp_dependencies(
+        "dep",
+        {
+            "head": [[2], [0]],
+            "deprel": ["nsubj", "root"],
+            "tokens": ["微软", "发布"],
+        },
+        sentence_start=0,
+        tokens=tokens,
+    )
+    assert [row["head_index"] for row in dep_rows] == [2, 0]
+    assert [row["dependent"] for row in dep_rows] == ["微软", "发布"]
+
+    sdp_rows = manager._normalize_hanlp_dependencies(
+        "sdp",
+        [
+            [1, [2], "Agt"],
+            [2, [0], "Root"],
+        ],
+        sentence_start=0,
+        tokens=tokens,
+    )
+    assert [row["head_index"] for row in sdp_rows] == [2, 0]
+    assert [row["dependent_index"] for row in sdp_rows] == [1, 2]
+
+
 def test_index_source_runs_cor_after_ner_and_syntax_uses_original_text(tmp_path: Path):
     config = Config().knowledge
     config.index.chunk_size = 10_000

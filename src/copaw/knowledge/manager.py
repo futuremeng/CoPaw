@@ -2532,7 +2532,7 @@ class KnowledgeManager:
             batch_mentions, batch_state = self._collect_chunk_ner_mentions_with_fallback(batch_text, config=config)
             worker_pid_raw = batch_state.get("worker_pid")
             try:
-                worker_pid = int(worker_pid_raw)
+                worker_pid = int(worker_pid_raw) if worker_pid_raw is not None else -1
             except (TypeError, ValueError):
                 worker_pid = -1
             if worker_pid > 0:
@@ -2897,14 +2897,21 @@ class KnowledgeManager:
             }
             syntax_tasks.append(task_entry)
             if task_key in {"dep", "sdp"}:
-                dependencies.extend(
-                    self._normalize_hanlp_dependencies(
-                        task_key,
-                        raw_result,
-                        sentence_start=sentence_start,
-                        tokens=tokens,
+                try:
+                    dependencies.extend(
+                        self._normalize_hanlp_dependencies(
+                            task_key,
+                            raw_result,
+                            sentence_start=sentence_start,
+                            tokens=tokens,
+                        )
                     )
-                )
+                except Exception:
+                    logger.warning(
+                        "Failed to normalize HanLP dependency payload: task=%s",
+                        task_key,
+                        exc_info=True,
+                    )
             elif task_key == "con":
                 constituency = self._normalize_hanlp_constituency(task_key, raw_result)
 
@@ -2917,6 +2924,45 @@ class KnowledgeManager:
             if isinstance(token, dict):
                 return str(token.get("text") or "")
         return ""
+
+    @staticmethod
+    def _coerce_dependency_index(value: Any, *, default: int = 0) -> int:
+        current: Any = value
+        for _ in range(4):
+            if isinstance(current, bool):
+                return int(current)
+            if isinstance(current, (int, float)):
+                return int(current)
+            if isinstance(current, str):
+                text = current.strip()
+                if not text:
+                    return default
+                try:
+                    return int(float(text))
+                except ValueError:
+                    return default
+            if isinstance(current, dict):
+                next_value = None
+                for key in ("head_index", "head", "index", "id", "value"):
+                    if key in current:
+                        next_value = current.get(key)
+                        break
+                if next_value is None:
+                    return default
+                current = next_value
+                continue
+            if isinstance(current, (list, tuple)):
+                if not current:
+                    return default
+                next_value = None
+                for item in current:
+                    if isinstance(item, (int, float, str, bool, list, tuple, dict)):
+                        next_value = item
+                        break
+                current = next_value if next_value is not None else current[0]
+                continue
+            return default
+        return default
 
     def _normalize_hanlp_dependencies(
         self,
@@ -2934,7 +2980,10 @@ class KnowledgeManager:
             words = raw_result.get("tokens") or raw_result.get("tok") or []
             if isinstance(heads, list) and isinstance(relations, list):
                 for dependent_index, relation in enumerate(relations, start=1):
-                    head_index = int(heads[dependent_index - 1] or 0)
+                    if dependent_index - 1 >= len(heads):
+                        head_index = 0
+                    else:
+                        head_index = self._coerce_dependency_index(heads[dependent_index - 1], default=0)
                     dependent = self._token_text_at(tokens, dependent_index)
                     if not dependent and isinstance(words, list) and dependent_index - 1 < len(words):
                         dependent = str(words[dependent_index - 1] or "")
@@ -2954,20 +3003,26 @@ class KnowledgeManager:
         if isinstance(raw_result, list):
             for fallback_index, item in enumerate(raw_result, start=1):
                 if isinstance(item, dict):
-                    dependent_index = int(item.get("dependent_index") or item.get("id") or fallback_index)
-                    head_index = int(item.get("head_index") or item.get("head") or 0)
+                    dependent_index = self._coerce_dependency_index(
+                        item.get("dependent_index") or item.get("id") or fallback_index,
+                        default=fallback_index,
+                    )
+                    head_index = self._coerce_dependency_index(
+                        item.get("head_index") or item.get("head") or 0,
+                        default=0,
+                    )
                     relation = str(item.get("relation") or item.get("label") or item.get("deprel") or "").strip()
                     dependent = str(item.get("dependent") or item.get("form") or item.get("text") or self._token_text_at(tokens, dependent_index))
                 elif isinstance(item, (list, tuple)) and len(item) >= 3:
                     if isinstance(item[0], int):
-                        dependent_index = int(item[0] or fallback_index)
-                        head_index = int(item[1] or 0)
+                        dependent_index = self._coerce_dependency_index(item[0], default=fallback_index)
+                        head_index = self._coerce_dependency_index(item[1], default=0)
                         relation = str(item[2] or "").strip()
                         dependent = self._token_text_at(tokens, dependent_index)
                     else:
                         dependent_index = fallback_index
                         dependent = str(item[0] or "")
-                        head_index = int(item[1] or 0)
+                        head_index = self._coerce_dependency_index(item[1], default=0)
                         relation = str(item[2] or "").strip()
                 else:
                     continue
