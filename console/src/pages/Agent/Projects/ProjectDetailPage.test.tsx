@@ -411,6 +411,12 @@ describe("ProjectDetailPage refresh scheduling", () => {
   it("keeps resync invalidations lightweight without auto-refresh scheduling", async () => {
     const view = renderPage();
     try {
+      await waitFor(() => {
+        expect(mockedListProjectFiles).toHaveBeenCalledTimes(1);
+        expect(mockedListProjectFileTree).toHaveBeenCalledTimes(1);
+        expect(mockedGetProjectFileSummary).toHaveBeenCalledTimes(1);
+      });
+
       expect(realtimeControllerState.onFileTreeInvalidated).toBeTypeOf("function");
 
       act(() => {
@@ -421,6 +427,10 @@ describe("ProjectDetailPage refresh scheduling", () => {
           reason: "resync",
         });
       });
+
+      expect(mockedListProjectFiles).toHaveBeenCalledTimes(1);
+      expect(mockedListProjectFileTree).toHaveBeenCalledTimes(1);
+      expect(mockedGetProjectFileSummary).toHaveBeenCalledTimes(1);
     } finally {
       view.unmount();
     }

@@ -118,8 +118,6 @@ const KNOWLEDGE_DOCK_DEFAULT_SIZE = 320;
 const KNOWLEDGE_DOCK_MIN_SIZE = 240;
 const KNOWLEDGE_DOCK_COLLAPSED_SIZE = 52;
 const KNOWLEDGE_DOCK_COLLAPSE_KEY = "knowledge";
-const PROJECT_FILES_DEFER_MS = 420;
-const INITIAL_PROJECT_FILES_IDLE_TIMEOUT_MS = 1200;
 const PROJECT_TREE_AUTO_RESTORE_SHALLOW_DEPTH = 2;
 const PROJECT_TREE_AUTO_RESTORE_MAX_DEEP_KEYS = 12;
 
@@ -557,8 +555,7 @@ export default function ProjectDetailPage() {
   const runFocusChatIdRef = useRef("");
   const workspaceFocusChatIdRef = useRef("");
   const designFocusChatIdRef = useRef("");
-  const projectFilesRefreshTimerRef = useRef<number | null>(null);
-  const fileMtimeByPathRef = useRef<Record<string, string>>({});
+  const projectFilesLoadKeyRef = useRef("");
   const runRestoreAttemptKeyRef = useRef("");
   const automationDrawerAutoOpenKeyRef = useRef("");
   const pipelineManualActivationRef = useRef(false);
@@ -1302,21 +1299,6 @@ export default function ProjectDetailPage() {
 
     throw new Error("project_file_summary_not_found");
   }, [resolvedProjectRequestId]);
-
-  const scheduleProjectFilesRefresh = useCallback((
-    agentId: string,
-    project: AgentProjectSummary,
-    options?: { preserveSelection?: boolean },
-    delay = PROJECT_FILES_DEFER_MS,
-  ) => {
-    if (projectFilesRefreshTimerRef.current !== null) {
-      window.clearTimeout(projectFilesRefreshTimerRef.current);
-    }
-    projectFilesRefreshTimerRef.current = window.setTimeout(() => {
-      projectFilesRefreshTimerRef.current = null;
-      void loadProjectFiles(agentId, project, options);
-    }, delay);
-  }, [loadProjectFiles]);
 
   const loadProjectTreeRoot = useCallback(async (
     agentId: string,
@@ -2112,12 +2094,6 @@ export default function ProjectDetailPage() {
     || realtimeConnectionState.status === "degraded";
 
   useEffect(() => {
-    fileMtimeByPathRef.current = Object.fromEntries(
-      projectFiles.map((file) => [file.path, file.modified_time]),
-    );
-  }, [projectFiles]);
-
-  useEffect(() => {
     if (!currentAgent) {
       void loadAgents();
     }
@@ -2142,13 +2118,8 @@ export default function ProjectDetailPage() {
   }, [projectFileSummary]);
 
   useEffect(() => {
-    if (projectFilesRefreshTimerRef.current !== null) {
-      window.clearTimeout(projectFilesRefreshTimerRef.current);
-      projectFilesRefreshTimerRef.current = null;
-    }
     setResolvedProjectRequestId("");
     setProjectFiles([]);
-    fileMtimeByPathRef.current = {};
     setProjectTreeNodes([]);
     setProjectFileSummary(null);
     setKnownProjectFilesByPath({});
@@ -2167,6 +2138,7 @@ export default function ProjectDetailPage() {
     setRunFocusChatId("");
     setWorkspaceFocusChatId("");
     setDesignFocusChatId("");
+    projectFilesLoadKeyRef.current = "";
     resetUploadState();
     setSelectedAttachPaths([]);
     setSendingSelectedFiles(false);
@@ -2288,77 +2260,13 @@ export default function ProjectDetailPage() {
     if (!currentAgent || !selectedProject) {
       return;
     }
-    void loadProjectTreeRoot(currentAgent.id, selectedProject);
-
-    let cancelled = false;
-    let fileTimer: number | null = null;
-    const idleCallback = (window as Window & {
-      requestIdleCallback?: (
-        callback: () => void,
-        options?: { timeout: number },
-      ) => number;
-      cancelIdleCallback?: (handle: number) => void;
-    }).requestIdleCallback;
-    const cancelIdleCallback = (window as Window & {
-      cancelIdleCallback?: (handle: number) => void;
-    }).cancelIdleCallback;
-    let fileIdleHandle: number | null = null;
-
-    const loadDeferredProjectFiles = () => {
-      if (cancelled) {
-        return;
-      }
-      scheduleProjectFilesRefresh(currentAgent.id, selectedProject, {
-        preserveSelection: true,
-      });
-    };
-
-    if (typeof idleCallback === "function") {
-      fileIdleHandle = idleCallback(loadDeferredProjectFiles, {
-        timeout: INITIAL_PROJECT_FILES_IDLE_TIMEOUT_MS,
-      });
-    } else {
-      fileTimer = window.setTimeout(
-        loadDeferredProjectFiles,
-        INITIAL_PROJECT_FILES_IDLE_TIMEOUT_MS,
-      );
-    }
-
-    return () => {
-      cancelled = true;
-      if (projectFilesRefreshTimerRef.current !== null) {
-        window.clearTimeout(projectFilesRefreshTimerRef.current);
-        projectFilesRefreshTimerRef.current = null;
-      }
-      if (fileTimer !== null) {
-        window.clearTimeout(fileTimer);
-      }
-      if (fileIdleHandle !== null && typeof cancelIdleCallback === "function") {
-        cancelIdleCallback(fileIdleHandle);
-      }
-    };
-  }, [currentAgent, selectedProject, loadProjectTreeRoot, scheduleProjectFilesRefresh]);
-
-  useEffect(() => {
-    if (!currentAgent || !selectedProject || projectFileSummary) {
+    const loadKey = `${currentAgent.id}:${selectedProject.id}`;
+    if (projectFilesLoadKeyRef.current === loadKey) {
       return;
     }
-    const timer = window.setTimeout(() => {
-      void loadProjectFileSummary(currentAgent.id, selectedProject).catch((err) => {
-        console.error("failed to load project file summary", err);
-        setProjectFileSummary(null);
-      });
-    }, 400);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [
-    currentAgent,
-    loadProjectFileSummary,
-    projectFileSummary,
-    selectedProject,
-  ]);
+    projectFilesLoadKeyRef.current = loadKey;
+    void handleRefreshProjectFiles();
+  }, [currentAgent, handleRefreshProjectFiles, selectedProject]);
 
   useEffect(() => {
     if (!currentAgent || !selectedProject) {
