@@ -436,41 +436,68 @@ class KnowledgeManager:
         """Interlinear-only: Return status/statistics for a source based on Interlinear/轻量化工件。"""
         interlinear_manifest = self._load_source_interlinear_manifest(source_id)
         summary = interlinear_manifest.get("summary", {})
-        indexed = bool(summary)
         stats = self._load_source_stats(source_id)
-        chunk_count = summary.get("chunk_count", 0)
-        document_count = chunk_count  # Alias for backward compatibility
+        chunk_manifest_count = len(self._load_source_chunk_manifest(source_id))
+        raw_document_count = _safe_count_int(stats.get("raw_document_count") or 0)
+        document_count = max(
+            raw_document_count,
+            _safe_count_int(stats.get("document_count") or 0),
+        )
+        snapshot_count = max(
+            raw_document_count,
+            _safe_count_int(stats.get("snapshot_count") or 0),
+            _safe_count_int(stats.get("document_count") or 0),
+        )
+        chunk_count = max(
+            chunk_manifest_count,
+            _safe_count_int(stats.get("chunk_count") or 0),
+        )
+        sentence_count = max(
+            _safe_count_int(summary.get("sentence_count") or 0),
+            _safe_count_int(stats.get("sentence_count") or 0),
+        )
+        char_count = max(
+            _safe_count_int(summary.get("char_count") or 0),
+            _safe_count_int(stats.get("char_count") or 0),
+        )
+        token_count = max(
+            _safe_count_int(summary.get("token_count") or 0),
+            _safe_count_int(stats.get("token_count") or 0),
+        )
+        indexed = bool(summary) or bool(stats.get("indexed"))
         if indexed:
             status = {
                 "indexed": True,
                 "indexed_at": interlinear_manifest.get("updated_at"),
                 "chunk_count": chunk_count,
                 "document_count": document_count,
-                "sentence_count": summary.get("sentence_count", 0),
-                "char_count": summary.get("char_count", 0),
-                "token_count": summary.get("token_count", 0),
+                "snapshot_count": snapshot_count,
+                "sentence_count": sentence_count,
+                "char_count": char_count,
+                "token_count": token_count,
                 "needs_reindex": False,
                 "error": None,
-                "raw_document_count": stats.get("raw_document_count", 0),
-                "raw_total_bytes": stats.get("raw_total_bytes", 0),
+                "raw_document_count": raw_document_count,
+                "raw_total_bytes": _safe_count_int(stats.get("raw_total_bytes") or 0),
                 "raw_last_ingested_at": stats.get("raw_last_ingested_at"),
                 "stats_updated_at": stats.get("stats_updated_at"),
             }
         else:
             # 未生成 interlinear-manifest.json，若 stats.json 有 raw_document_count/bytes，needs_reindex=True，否则 False
-            needs_reindex = bool(stats.get("raw_document_count", 0))
+            needs_reindex = bool(raw_document_count)
             status = {
                 "indexed": False,
                 "indexed_at": None,
-                "chunk_count": 0,
-                "document_count": 0,
-                "sentence_count": 0,
-                "char_count": 0,
-                "token_count": 0,
+                "chunk_count": chunk_count,
+                "document_count": document_count,
+                "snapshot_count": snapshot_count,
+                "sentence_count": sentence_count,
+                "char_count": char_count,
+                "token_count": token_count,
                 "needs_reindex": needs_reindex,
                 "error": None,
-                "raw_document_count": stats.get("raw_document_count", 0),
-                "raw_total_bytes": stats.get("raw_total_bytes", 0),
+                "raw_document_count": raw_document_count,
+                "raw_total_bytes": _safe_count_int(stats.get("raw_total_bytes") or 0),
                 "raw_last_ingested_at": stats.get("raw_last_ingested_at"),
                 "stats_updated_at": stats.get("stats_updated_at"),
             }
@@ -1096,7 +1123,12 @@ class KnowledgeManager:
             "source_id": source_id,
             "indexed": True,
             "indexed_at": payload.get("indexed_at"),
+            "raw_document_count": max(
+                int(current.get("raw_document_count", 0) or 0),
+                int(payload.get("document_count", 0) or 0),
+            ),
             "document_count": int(payload.get("document_count", 0) or 0),
+            "snapshot_count": int(payload.get("snapshot_count", payload.get("document_count", 0)) or 0),
             "chunk_count": int(payload.get("chunk_count", 0) or 0),
             "sentence_count": int(payload.get("sentence_count", 0) or 0),
             "char_count": int(payload.get("char_count", 0) or 0),

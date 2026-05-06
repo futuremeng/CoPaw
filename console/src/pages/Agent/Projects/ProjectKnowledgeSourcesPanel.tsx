@@ -33,6 +33,10 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
           <Typography.Text strong>{knowledgeState.quantMetrics.documentCount}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
+          <Typography.Text type="secondary">{t("projects.knowledge.signalSnapshots", "Snapshots")}</Typography.Text>
+          <Typography.Text strong>{knowledgeState.quantMetrics.snapshotCount}</Typography.Text>
+        </div>
+        <div className={styles.projectKnowledgeSignalCard}>
           <Typography.Text type="secondary">{t("projects.knowledge.signalChunks")}</Typography.Text>
           <Typography.Text strong>{knowledgeState.quantMetrics.chunkCount}</Typography.Text>
         </div>

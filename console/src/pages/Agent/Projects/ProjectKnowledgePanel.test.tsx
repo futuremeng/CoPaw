@@ -162,6 +162,7 @@ function buildKnowledgeState(projectId: string): ProjectKnowledgeState {
       indexedSources: 1,
       indexedRatio: 1,
       documentCount: 1,
+      snapshotCount: 1,
       chunkCount: 2,
       sentenceCount: 3,
       sentenceWithEntitiesCount: 2,

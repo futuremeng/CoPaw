@@ -891,10 +891,13 @@ class ProjectKnowledgeSyncManager:
         ).strip()
         raw_document_count = _safe_int(source_status.get("raw_document_count"))
         indexed_document_count = _safe_int(source_status.get("document_count"))
+        snapshot_count = _safe_int(source_status.get("snapshot_count"))
         return {
             "source_id": latest_source_id or None,
             "metrics_source": "project_sync_l1_raw",
             "metrics_updated_at": metrics_updated_at or None,
+            "document_count": indexed_document_count,
+            "snapshot_count": snapshot_count,
             "raw_document_count": raw_document_count,
             "indexed_document_count": indexed_document_count,
             "chunk_count": _safe_int(source_status.get("chunk_count")),
@@ -1091,7 +1094,8 @@ class ProjectKnowledgeSyncManager:
 
         l1_metrics = self._build_l1_metrics(state, source_status)
 
-        document_count = _safe_int(l1_metrics.get("raw_document_count"))
+        document_count = _safe_int(l1_metrics.get("document_count"))
+        snapshot_count = _safe_int(l1_metrics.get("snapshot_count"))
         chunk_count = _safe_int(l1_metrics.get("chunk_count"))
         sentence_count = _safe_int(l1_metrics.get("sentence_count"))
         char_count = _safe_int(l1_metrics.get("char_count"))
@@ -1099,6 +1103,7 @@ class ProjectKnowledgeSyncManager:
 
         return {
             "document_count": document_count,
+            "snapshot_count": snapshot_count,
             "chunk_count": chunk_count,
             "sentence_count": sentence_count,
             "char_count": char_count,

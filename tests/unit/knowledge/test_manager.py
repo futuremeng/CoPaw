@@ -1481,8 +1481,9 @@ def test_save_uploaded_file_updates_raw_stats_and_status(tmp_path: Path):
     assert saved.exists()
     assert stats_path.exists()
     assert status["indexed"] is False
-    # artifacts-only 路径下，未生成 interlinear-manifest.json 时结构化统计为 0，但 raw 统计保留
-    assert status["document_count"] == 0
+    # raw 文件数直接用于 Sources 文档数/快照数
+    assert status["document_count"] == 1
+    assert status["snapshot_count"] == 1
     assert status["raw_document_count"] == 1
     assert status["raw_total_bytes"] == 11
     assert status["needs_reindex"] is True
@@ -1505,8 +1506,8 @@ def test_save_uploaded_directory_updates_raw_stats_and_status(tmp_path: Path):
 
     assert saved.exists()
     assert status["indexed"] is False
-    # artifacts-only 路径下，未生成 interlinear-manifest.json 时所有统计为 0
-    assert status["document_count"] == 0
+    assert status["document_count"] == 2
+    assert status["snapshot_count"] == 2
     assert status["raw_document_count"] == 2
     assert status["raw_total_bytes"] == 8
     assert status["needs_reindex"] is True
@@ -1561,13 +1562,64 @@ def test_get_source_status_uses_manifest_metrics_when_index_payload_missing(tmp_
 
     status = manager.get_source_status(source.id, source, config)
 
-    # artifacts-only 路径下，未生成 interlinear-manifest.json 时所有统计为 0
-    assert status["indexed"] is False
-    assert status["document_count"] == 0
-    assert status["chunk_count"] == 0
-    assert status["sentence_count"] == 0
-    assert status["char_count"] == 0
-    assert status["token_count"] == 0
+    # 兼容旧 stats.json：即使索引 payload 丢失，Sources 仍能回退显示已有统计
+    assert status["indexed"] is True
+    assert status["document_count"] == result["document_count"]
+    assert status["snapshot_count"] == result["document_count"]
+    assert status["chunk_count"] == result["chunk_count"]
+    assert status["sentence_count"] == result["sentence_count"]
+
+
+def test_get_source_status_falls_back_to_stats_when_interlinear_manifest_missing(tmp_path: Path):
+    config = Config().knowledge
+    source = KnowledgeSourceSpec(
+        id="missing-interlinear-source",
+        name="Missing Interlinear Source",
+        type="text",
+        content="第一句。第二句!",
+        enabled=True,
+        recursive=False,
+        tags=[],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    result = manager.index_source(source, config)
+
+    status = manager.get_source_status(source.id, source, config)
+
+    assert status["indexed"] is True
+    assert status["document_count"] == result["document_count"]
+    assert status["snapshot_count"] == result["document_count"]
+    assert status["chunk_count"] == result["chunk_count"]
+    assert status["sentence_count"] == result["sentence_count"]
+
+
+def test_get_source_status_prefers_chunk_manifest_count_over_interlinear_summary(tmp_path: Path):
+    config = Config().knowledge
+    source = KnowledgeSourceSpec(
+        id="chunk-manifest-preferred-source",
+        name="Chunk Manifest Preferred Source",
+        type="text",
+        content="\n".join([f"第{i}句。" for i in range(1, 120)]),
+        enabled=True,
+        recursive=False,
+        tags=[],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    result = manager.index_source(source, config)
+
+    manifest_path = manager._source_interlinear_manifest_path(source.id)
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    payload["summary"]["chunk_count"] = result["chunk_count"] + 1000
+    manifest_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    status = manager.get_source_status(source.id, source, config)
+
+    assert status["document_count"] == result["document_count"]
+    assert status["chunk_count"] == result["chunk_count"]
 
 
 def test_semantic_stage_writers_skip_ready_chunks_on_resume(tmp_path: Path, monkeypatch):

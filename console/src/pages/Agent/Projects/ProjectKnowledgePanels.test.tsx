@@ -93,6 +93,7 @@ function buildKnowledgeState(): ProjectKnowledgeState {
           indexed: true,
           indexed_at: "2026-04-11T23:30:00+00:00",
           document_count: 3,
+          snapshot_count: 3,
           chunk_count: 7,
           error: null,
         },
@@ -105,6 +106,7 @@ function buildKnowledgeState(): ProjectKnowledgeState {
         indexed: true,
         indexed_at: "2026-04-11T23:30:00+00:00",
         document_count: 3,
+        snapshot_count: 3,
         chunk_count: 7,
         documents: [
           {
@@ -347,6 +349,7 @@ function buildKnowledgeState(): ProjectKnowledgeState {
       indexedSources: 1,
       indexedRatio: 1,
       documentCount: 3,
+      snapshotCount: 3,
       chunkCount: 7,
       sentenceCount: 11,
       sentenceWithEntitiesCount: 9,
@@ -566,6 +569,7 @@ describe("project knowledge supporting panels", () => {
 
     expect(signalLabels).toEqual([
       "projects.knowledge.signalDocuments",
+      "Snapshots",
       "projects.knowledge.signalChunks",
       "Sentences🛈",
       "Lightweight Tokens🛈",

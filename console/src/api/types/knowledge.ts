@@ -161,6 +161,7 @@ export interface ProjectKnowledgeL2MetricsPayload {
 
 export interface ProjectKnowledgeGlobalMetricsPayload {
   document_count?: number;
+  snapshot_count?: number;
   chunk_count?: number;
   sentence_count?: number;
   char_count?: number;
@@ -268,6 +269,7 @@ export interface KnowledgeSourceStatus {
   indexed: boolean;
   indexed_at: string | null;
   document_count: number;
+  snapshot_count?: number;
   chunk_count: number;
   sentence_count?: number;
   char_count?: number;
@@ -309,6 +311,7 @@ export interface KnowledgeSourcesResponse {
 export interface KnowledgeIndexResult {
   source_id: string;
   document_count: number;
+  snapshot_count?: number;
   chunk_count: number;
   sentence_count?: number;
   char_count?: number;

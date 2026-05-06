@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 
 from pathlib import Path
+from typing import cast
 
 from copaw.config.config import Config, KnowledgeSourceSpec
-from copaw.knowledge.project_sync import ProjectSyncCommand, ProjectSyncCoordinator
+from copaw.knowledge.project_sync import ProjectKnowledgeSyncManager, ProjectSyncCommand, ProjectSyncCoordinator
 
 
 class _FakeSyncManager:
@@ -150,7 +151,7 @@ def test_project_sync_coordinator_start_dispatch_injects_operation_metadata(tmp_
     manager = _FakeSyncManager()
     coordinator = ProjectSyncCoordinator(
         tmp_path,
-        manager_factory=lambda _pid: manager,
+        manager_factory=lambda _pid: cast(ProjectKnowledgeSyncManager, manager),
     )
 
     event = coordinator.dispatch(
@@ -186,7 +187,7 @@ def test_project_sync_coordinator_resume_dispatch_marks_deduplicated(tmp_path: P
     manager = _FakeSyncManager()
     coordinator = ProjectSyncCoordinator(
         tmp_path,
-        manager_factory=lambda _pid: manager,
+        manager_factory=lambda _pid: cast(ProjectKnowledgeSyncManager, manager),
     )
 
     event = coordinator.dispatch(
@@ -214,7 +215,7 @@ def test_project_sync_coordinator_check_reindex_false_marks_noop_dedup(tmp_path:
     manager = _FakeSyncManager()
     coordinator = ProjectSyncCoordinator(
         tmp_path,
-        manager_factory=lambda _pid: manager,
+        manager_factory=lambda _pid: cast(ProjectKnowledgeSyncManager, manager),
     )
 
     event = coordinator.dispatch(
@@ -232,3 +233,38 @@ def test_project_sync_coordinator_check_reindex_false_marks_noop_dedup(tmp_path:
     assert event.idempotency_key == "check-key-1"
     assert event.payload is False
     assert len(manager.check_calls) == 1
+
+
+def test_build_global_metrics_prefers_l1_metrics_values_for_sources(tmp_path: Path):
+    manager = ProjectKnowledgeSyncManager(tmp_path)
+
+    payload = manager._build_global_metrics(
+        {
+            "project_id": "project-1",
+            "latest_source_id": "source-1",
+            "updated_at": "2026-05-06T10:00:00+00:00",
+            "last_result": {
+                "index": {
+                    "document_count": 9,
+                    "chunk_count": 10,
+                    "sentence_count": 11,
+                },
+            },
+        },
+        mode_metrics={},
+        source_status={
+            "raw_document_count": 3,
+            "document_count": 3,
+            "snapshot_count": 3,
+            "chunk_count": 7,
+            "sentence_count": 12,
+            "char_count": 20,
+            "token_count": 5,
+            "stats_updated_at": "2026-05-06T10:00:01+00:00",
+        },
+    )
+
+    assert payload["document_count"] == 3
+    assert payload["snapshot_count"] == 3
+    assert payload["chunk_count"] == 7
+    assert payload["sentence_count"] == 12

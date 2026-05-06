@@ -68,6 +68,7 @@ export interface ProjectKnowledgeMetrics {
   indexedSources: number;
   indexedRatio: number;
   documentCount: number;
+  snapshotCount: number;
   chunkCount: number;
   sentenceCount: number;
   charCount?: number;
@@ -573,7 +574,7 @@ function getSyncNodeCount(syncState: ProjectKnowledgeSyncState | null): number {
 
 function getSyncIndexCount(
   syncState: ProjectKnowledgeSyncState | null,
-  key: "document_count" | "chunk_count" | "sentence_count" | "char_count" | "token_count",
+  key: "document_count" | "snapshot_count" | "chunk_count" | "sentence_count" | "char_count" | "token_count",
 ): number {
   const indexResult = syncState?.last_result?.index;
   if (!indexResult || typeof indexResult !== "object") {
@@ -722,6 +723,7 @@ function getBackendGlobalMetricNumber(
 
 type ProjectKnowledgeCountMetricKey =
   | "document_count"
+  | "snapshot_count"
   | "chunk_count"
   | "sentence_count"
   | "char_count"
@@ -732,6 +734,7 @@ interface ProjectKnowledgeSourceQuantBaseMetrics {
   indexedSources: number;
   indexedRatio: number;
   documentCount: number;
+  snapshotCount: number;
   chunkCount: number;
   sentenceCount: number;
   charCount: number;
@@ -780,20 +783,24 @@ export function deriveSourceQuantBaseMetrics(
   const indexedSources = projectSources.filter((item) => item.status.indexed).length;
 
   const sourceDocumentCount = sumSourceMetric(projectSources, "document_count");
+  const sourceSnapshotCount = sumSourceMetric(projectSources, "snapshot_count");
   const sourceChunkCount = sumSourceMetric(projectSources, "chunk_count");
   const sourceSentenceCount = sumSourceMetric(projectSources, "sentence_count");
   const sourceCharCount = sumSourceMetric(projectSources, "char_count");
   const sourceTokenCount = sumSourceMetric(projectSources, "token_count");
 
   const documentCount = resolveCountMetric(syncState, sourceDocumentCount, "document_count");
+  const snapshotCount = resolveCountMetric(syncState, sourceSnapshotCount, "snapshot_count");
   const chunkCount = resolveCountMetric(syncState, sourceChunkCount, "chunk_count");
   const sentenceCount = resolveCountMetric(syncState, sourceSentenceCount, "sentence_count");
   const charCount = resolveCountMetric(syncState, sourceCharCount, "char_count");
   const tokenCount = resolveCountMetric(syncState, sourceTokenCount, "token_count");
 
   const hasIndexedSignal = documentCount > 0
+    || snapshotCount > 0
     || chunkCount > 0
     || getSyncIndexCount(syncState, "document_count") > 0
+    || getSyncIndexCount(syncState, "snapshot_count") > 0
     || getSyncIndexCount(syncState, "chunk_count") > 0;
   const effectiveTotalSources = totalSources > 0
     ? totalSources
@@ -810,6 +817,7 @@ export function deriveSourceQuantBaseMetrics(
     indexedSources: effectiveIndexedSources,
     indexedRatio,
     documentCount,
+    snapshotCount,
     chunkCount,
     sentenceCount,
     charCount,
@@ -1913,6 +1921,7 @@ export function useProjectKnowledgeState(
       indexedSources,
       indexedRatio,
       documentCount,
+      snapshotCount,
       chunkCount,
       sentenceCount,
       charCount,
@@ -2002,6 +2011,7 @@ export function useProjectKnowledgeState(
       indexedSources,
       indexedRatio,
       documentCount,
+      snapshotCount,
       chunkCount,
       sentenceCount,
       charCount,

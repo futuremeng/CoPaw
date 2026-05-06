@@ -71,6 +71,7 @@ function buildSource(
       indexed: false,
       indexed_at: null,
       document_count: 0,
+      snapshot_count: 0,
       chunk_count: 0,
       sentence_count: 0,
       char_count: 0,
@@ -110,6 +111,7 @@ describe("deriveSourceQuantBaseMetrics", () => {
       buildSource({
         indexed: true,
         document_count: 7,
+        snapshot_count: 7,
         chunk_count: 15,
         sentence_count: 30,
       }),
@@ -117,6 +119,7 @@ describe("deriveSourceQuantBaseMetrics", () => {
     const syncState = buildSyncState({
       global_metrics: {
         document_count: 2,
+        snapshot_count: 2,
         chunk_count: 3,
         sentence_count: 4,
         char_count: 5,
@@ -125,6 +128,7 @@ describe("deriveSourceQuantBaseMetrics", () => {
       last_result: {
         index: {
           document_count: 9,
+          snapshot_count: 9,
           chunk_count: 18,
         },
       },
@@ -133,6 +137,7 @@ describe("deriveSourceQuantBaseMetrics", () => {
     const metrics = deriveSourceQuantBaseMetrics(sources, true, syncState);
 
     expect(metrics.documentCount).toBe(2);
+    expect(metrics.snapshotCount).toBe(2);
     expect(metrics.chunkCount).toBe(3);
     expect(metrics.sentenceCount).toBe(4);
     expect(metrics.charCount).toBe(5);
@@ -141,13 +146,14 @@ describe("deriveSourceQuantBaseMetrics", () => {
 
   it("falls back to source/index aggregation when backend global metrics are absent", () => {
     const sources = [
-      buildSource({ indexed: false, document_count: 1, chunk_count: 2 }),
-      buildSource({ indexed: false, document_count: 2, chunk_count: 4 }),
+      buildSource({ indexed: false, document_count: 1, snapshot_count: 1, chunk_count: 2 }),
+      buildSource({ indexed: false, document_count: 2, snapshot_count: 2, chunk_count: 4 }),
     ];
     const syncState = buildSyncState({
       last_result: {
         index: {
           document_count: 5,
+          snapshot_count: 6,
           chunk_count: 9,
           sentence_count: 12,
         },
@@ -157,6 +163,7 @@ describe("deriveSourceQuantBaseMetrics", () => {
     const metrics = deriveSourceQuantBaseMetrics(sources, false, syncState);
 
     expect(metrics.documentCount).toBe(5);
+    expect(metrics.snapshotCount).toBe(6);
     expect(metrics.chunkCount).toBe(9);
     expect(metrics.sentenceCount).toBe(12);
   });
