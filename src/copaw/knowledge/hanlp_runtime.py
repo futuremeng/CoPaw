@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import subprocess
+import atexit
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +22,14 @@ def emit(payload):
         sys.stdout.write(json.dumps(payload, ensure_ascii=False))
     except BrokenPipeError:
         # Parent process may close the pipe on timeout/cancel; avoid masking root error.
+        pass
+
+
+def emit_line(payload):
+    try:
+        sys.stdout.write(json.dumps(payload, ensure_ascii=False) + "\n")
+        sys.stdout.flush()
+    except BrokenPipeError:
         pass
 
 
@@ -198,6 +208,8 @@ def extract_task_result(document, task_name):
             return document[key]
         except Exception:
             continue
+    if isinstance(document, (list, tuple)):
+        return document
     return None
 
 
@@ -460,28 +472,25 @@ def inspect_task_api(module, task_name):
         )
 
 
-def main():
-    mode = sys.argv[1] if len(sys.argv) > 1 else "probe"
-    payload = load_payload()
+def execute_mode(mode, payload):
     hanlp_home = str(payload.get("hanlp_home") or "").strip()
     if hanlp_home:
         os.environ["HANLP_HOME"] = hanlp_home
 
     if not version_in_range():
-        emit({
+        return {
             "engine": "hanlp2",
             "status": "unavailable",
             "reason_code": "HANLP2_SIDECAR_PYTHON_INCOMPATIBLE",
             "reason": f"HanLP2 sidecar requires Python 3.6-3.10, got {version_text()}.",
             "python_version": version_text(),
             "tokens": [],
-        })
-        return
+        }
 
     try:
         import hanlp  # type: ignore[import-not-found]
     except Exception as exc:
-        emit({
+        return {
             "engine": "hanlp2",
             "status": "unavailable",
             "reason_code": "HANLP2_IMPORT_UNAVAILABLE",
@@ -491,8 +500,7 @@ def main():
             ),
             "python_version": version_text(),
             "tokens": [],
-        })
-        return
+        }
 
     full_required_modes = {"api_status", "model_status", "ensure_model", "task_status", "run_task"}
     if mode in full_required_modes:
@@ -500,7 +508,7 @@ def main():
             import torch  # type: ignore[import-not-found]
             _ = torch.__version__
         except Exception:
-            emit({
+            return {
                 "engine": "hanlp2",
                 "status": "unavailable",
                 "reason_code": "HANLP2_FULL_INSTALL_REQUIRED",
@@ -510,8 +518,7 @@ def main():
                 ),
                 "python_version": version_text(),
                 "tokens": [],
-            })
-            return
+            }
 
     configured_model_id = str(payload.get("model_id") or "").strip()
     requested_task_key = str(payload.get("task_key") or "").strip()
@@ -530,7 +537,7 @@ def main():
         # Check if basic models are available
         basic_available = has_parse_api(hanlp) or has_ner_api(hanlp) or has_sdp_api(hanlp) or has_con_api(hanlp)
         if basic_available:
-            emit({
+            return {
                 "engine": "hanlp2",
                 "status": "ready",
                 "reason_code": "HANLP2_API_READY",
@@ -545,9 +552,8 @@ def main():
                 "has_pipeline": callable(getattr(hanlp, "pipeline", None)),
                 "has_load": callable(getattr(hanlp, "load", None)),
                 "pretrained_categories": categories,
-            })
-            return
-        emit({
+            }
+        return {
             "engine": "hanlp2",
             "status": "unavailable",
             "reason_code": "HANLP2_MODELS_UNAVAILABLE",
@@ -564,8 +570,7 @@ def main():
             "has_pipeline": callable(getattr(hanlp, "pipeline", None)),
             "has_load": callable(getattr(hanlp, "load", None)),
             "pretrained_categories": categories,
-        })
-        return
+        }
 
     if mode == "probe":
         if fn is None:
@@ -574,7 +579,7 @@ def main():
                 configured_model_id,
             )
             if not has_loader:
-                emit({
+                return {
                     "engine": "hanlp2",
                     "status": "unavailable",
                     "reason_code": "HANLP2_ENTRYPOINT_MISSING",
@@ -583,9 +588,8 @@ def main():
                     "model_id": raw_model_id,
                     "resolved_model": resolved_name,
                     "tokens": [],
-                })
-                return
-        emit({
+                }
+        return {
             "engine": "hanlp2",
             "status": "ready",
             "reason_code": "HANLP2_READY",
@@ -595,8 +599,7 @@ def main():
             "model_id": raw_model_id if fn is None else configured_model_id,
             "resolved_model": resolved_name if fn is None else "",
             "tokens": [],
-        })
-        return
+        }
 
     if mode in {"model_status", "ensure_model"}:
         raw_model_id, model, resolved_name, tokens, error_name = validate_model(
@@ -607,7 +610,7 @@ def main():
             reason = "HanLP2 model loader is unavailable or model_id is empty."
             if error_name:
                 reason = f"HanLP2 model load failed: {error_name}."
-            emit({
+            return {
                 "engine": "hanlp2",
                 "status": "unavailable",
                 "reason_code": "HANLP2_MODEL_LOAD_FAILED",
@@ -616,9 +619,8 @@ def main():
                 "model_id": raw_model_id,
                 "resolved_model": resolved_name,
                 "tokens": [],
-            })
-            return
-        emit({
+            }
+        return {
             "engine": "hanlp2",
             "status": "ready",
             "reason_code": "HANLP2_MODEL_READY",
@@ -628,12 +630,11 @@ def main():
             "resolved_model": resolved_name,
             "tokenizer_attr": attr,
             "tokens": tokens,
-        })
-        return
+        }
 
     if mode == "task_status":
         if not requested_task_spec or not requested_task_spec.get("task_name"):
-            emit({
+            return {
                 "engine": "hanlp2",
                 "status": "unavailable",
                 "reason_code": "HANLP2_TASK_NOT_CONFIGURED",
@@ -641,12 +642,11 @@ def main():
                 "python_version": version_text(),
                 "task_key": requested_task_key,
                 "task_name": "",
-            })
-            return
+            }
         task_name = str(requested_task_spec.get("task_name") or "")
         ok, reason_code, reason = inspect_task_api(hanlp, task_name)
         if not ok:
-            emit({
+            return {
                 "engine": "hanlp2",
                 "status": "unavailable",
                 "reason_code": reason_code,
@@ -654,9 +654,8 @@ def main():
                 "python_version": version_text(),
                 "task_key": requested_task_key,
                 "task_name": task_name,
-            })
-            return
-        emit({
+            }
+        return {
             "engine": "hanlp2",
             "status": "ready",
             "reason_code": reason_code,
@@ -665,12 +664,11 @@ def main():
             "task_key": requested_task_key,
             "task_name": task_name,
             "result_kind": "api",
-        })
-        return
+        }
 
     if mode == "run_task":
         if not requested_task_spec or not requested_task_spec.get("task_name"):
-            emit({
+            return {
                 "engine": "hanlp2",
                 "status": "unavailable",
                 "reason_code": "HANLP2_TASK_NOT_CONFIGURED",
@@ -679,8 +677,7 @@ def main():
                 "task_key": requested_task_key,
                 "task_name": "",
                 "task_result": None,
-            })
-            return
+            }
         task_name = str(requested_task_spec.get("task_name") or "")
         text = str(payload.get("text") or "")
         try:
@@ -696,7 +693,7 @@ def main():
                 reason = (
                     "HanLP coreference_resolution is not open-source and is disabled in CoPaw runtime."
                 )
-            emit({
+            return {
                 "engine": "hanlp2",
                 "status": "error",
                 "reason_code": reason_code,
@@ -705,9 +702,8 @@ def main():
                 "task_key": requested_task_key,
                 "task_name": task_name,
                 "task_result": None,
-            })
-            return
-        emit({
+            }
+        return {
             "engine": "hanlp2",
             "status": "ready",
             "reason_code": "HANLP2_TASK_READY",
@@ -716,8 +712,7 @@ def main():
             "task_key": requested_task_key,
             "task_name": task_name,
             "task_result": task_result,
-        })
-        return
+        }
 
     text = str(payload.get("text") or "")
     try:
@@ -734,17 +729,16 @@ def main():
                 raise RuntimeError("HanLP2 tokenizer entry point was not found.")
             result = fn(text)
     except Exception as exc:
-        emit({
+        return {
             "engine": "hanlp2",
             "status": "error",
             "reason_code": "HANLP2_TOKENIZE_FAILED",
             "reason": f"HanLP2 semantic tokenization failed via {attr}: {exc.__class__.__name__}.",
             "python_version": version_text(),
             "tokens": [],
-        })
-        return
+        }
 
-    emit({
+    return {
         "engine": "hanlp2",
         "status": "ready",
         "reason_code": "HANLP2_READY",
@@ -752,7 +746,36 @@ def main():
         "python_version": version_text(),
         "tokenizer_attr": attr,
         "tokens": flatten(result),
-    })
+    }
+
+
+def main():
+    mode = sys.argv[1] if len(sys.argv) > 1 else "probe"
+
+    if mode == "server":
+        while True:
+            line = sys.stdin.readline()
+            if not line:
+                return
+            try:
+                request = json.loads(line)
+            except json.JSONDecodeError:
+                emit_line({
+                    "engine": "hanlp2",
+                    "status": "unavailable",
+                    "reason_code": "HANLP2_WORKER_PROTOCOL_ERROR",
+                    "reason": "HanLP2 worker received malformed request payload.",
+                })
+                continue
+            request_mode = str(request.get("mode") or "probe")
+            request_payload = request.get("payload")
+            if not isinstance(request_payload, dict):
+                request_payload = {}
+            emit_line(execute_mode(request_mode, request_payload))
+        return
+
+    payload = load_payload()
+    emit(execute_mode(mode, payload))
 
 
 if __name__ == "__main__":
@@ -766,6 +789,177 @@ class HanLPSidecarRuntime:
     def __init__(self) -> None:
         self._probe_cache_key: str | None = None
         self._probe_cache_state: dict[str, str] | None = None
+        self._worker_lock = threading.RLock()
+        self._worker_process: subprocess.Popen[str] | None = None
+        self._worker_cache_key: str | None = None
+        self._last_request_cold_start = False
+        self._last_request_restarted = False
+        atexit.register(self.close)
+
+    def close(self) -> None:
+        with self._worker_lock:
+            self._close_worker_locked()
+
+    def _close_worker_locked(self) -> None:
+        process = self._worker_process
+        self._worker_process = None
+        self._worker_cache_key = None
+        if process is None:
+            return
+        try:
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=1.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=1.0)
+        except Exception:
+            return
+
+    @staticmethod
+    def _readline_with_timeout(stream: Any, timeout: float) -> tuple[str | None, str | None]:
+        result: dict[str, str] = {}
+        error: dict[str, str] = {}
+
+        def _worker() -> None:
+            try:
+                result["line"] = stream.readline()
+            except Exception as exc:  # pragma: no cover - defensive branch
+                error["detail"] = f"{exc.__class__.__name__}: {exc}"
+
+        reader = threading.Thread(target=_worker, daemon=True)
+        reader.start()
+        reader.join(timeout=max(float(timeout), 0.1))
+        if reader.is_alive():
+            return None, "timeout"
+        if "detail" in error:
+            return None, error["detail"]
+        return result.get("line", ""), None
+
+    def _start_worker_locked(self, executable: Path, payload: dict[str, Any], cache_key: str) -> None:
+        env = os.environ.copy()
+        hanlp_home = str(payload.get("hanlp_home") or "").strip()
+        if hanlp_home:
+            env["HANLP_HOME"] = hanlp_home
+
+        process = subprocess.Popen(
+            [str(executable), "-u", "-c", _BRIDGE_CODE, "server"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=env,
+            bufsize=1,
+        )
+        self._worker_process = process
+        self._worker_cache_key = cache_key
+
+    def _ensure_worker_locked(self, executable: Path, payload: dict[str, Any], cache_key: str) -> None:
+        process = self._worker_process
+        if process is not None and process.poll() is None and self._worker_cache_key == cache_key:
+            self._last_request_cold_start = False
+            return
+        self._close_worker_locked()
+        self._start_worker_locked(executable, payload, cache_key)
+        self._last_request_cold_start = True
+
+    def _invoke_worker_locked(
+        self,
+        *,
+        executable: Path,
+        mode: str,
+        payload: dict[str, Any],
+        timeout: float,
+    ) -> dict[str, Any]:
+        cache_key = self._cache_key(payload)
+        self._last_request_restarted = False
+        self._ensure_worker_locked(executable, payload, cache_key)
+        if self._worker_process is None or self._worker_process.stdin is None or self._worker_process.stdout is None:
+            self._last_request_restarted = True
+            return self._state(
+                status="unavailable",
+                reason_code="HANLP2_WORKER_CHANNEL_BROKEN",
+                reason="HanLP2 worker channel is unavailable.",
+            )
+
+        request = {
+            "mode": mode,
+            "payload": payload,
+        }
+
+        def _single_attempt() -> dict[str, Any]:
+            process = self._worker_process
+            if process is None or process.stdin is None or process.stdout is None:
+                return self._state(
+                    status="unavailable",
+                    reason_code="HANLP2_WORKER_CHANNEL_BROKEN",
+                    reason="HanLP2 worker channel is unavailable.",
+                )
+            try:
+                process.stdin.write(json.dumps(request, ensure_ascii=False) + "\n")
+                process.stdin.flush()
+            except Exception as exc:
+                return self._state(
+                    status="unavailable",
+                    reason_code="HANLP2_WORKER_CHANNEL_BROKEN",
+                    reason=f"HanLP2 worker write failed: {exc.__class__.__name__}.",
+                )
+
+            line, read_error = self._readline_with_timeout(process.stdout, timeout)
+            if read_error == "timeout":
+                return self._state(
+                    status="unavailable",
+                    reason_code="HANLP2_WORKER_TIMEOUT",
+                    reason=f"HanLP2 worker {mode} timed out after {timeout:.1f}s.",
+                )
+            if read_error:
+                return self._state(
+                    status="unavailable",
+                    reason_code="HANLP2_WORKER_CHANNEL_BROKEN",
+                    reason=f"HanLP2 worker read failed: {read_error}",
+                )
+            if not line:
+                return self._state(
+                    status="unavailable",
+                    reason_code="HANLP2_WORKER_CHANNEL_BROKEN",
+                    reason="HanLP2 worker closed output stream unexpectedly.",
+                )
+            try:
+                parsed = json.loads(line.strip())
+            except json.JSONDecodeError:
+                return self._state(
+                    status="unavailable",
+                    reason_code="HANLP2_WORKER_PROTOCOL_ERROR",
+                    reason="HanLP2 worker returned malformed JSON payload.",
+                )
+            if not isinstance(parsed, dict):
+                return self._state(
+                    status="unavailable",
+                    reason_code="HANLP2_WORKER_PROTOCOL_ERROR",
+                    reason="HanLP2 worker returned an invalid response object.",
+                )
+            return parsed
+
+        result = _single_attempt()
+        if str(result.get("status") or "").lower() == "unavailable" and str(result.get("reason_code") or "").startswith(
+            "HANLP2_WORKER_"
+        ):
+            self._close_worker_locked()
+            self._start_worker_locked(executable, payload, cache_key)
+            self._last_request_restarted = True
+            self._last_request_cold_start = True
+            result = _single_attempt()
+        return result
+
+    def _attach_runtime_meta(self, state: dict[str, Any]) -> dict[str, Any]:
+        enriched = dict(state)
+        process = self._worker_process
+        enriched["transport"] = "persistent_sidecar"
+        enriched["cold_start"] = bool(self._last_request_cold_start)
+        enriched["worker_restarted"] = bool(self._last_request_restarted)
+        enriched["worker_pid"] = int(process.pid) if process is not None and process.poll() is None else -1
+        return enriched
 
     @staticmethod
     def _state(*, status: str, reason_code: str, reason: str) -> dict[str, str]:
@@ -848,52 +1042,21 @@ class HanLPSidecarRuntime:
         payload: dict[str, Any],
         timeout: float,
     ) -> dict[str, Any]:
-        env = os.environ.copy()
-        hanlp_home = str(payload.get("hanlp_home") or "").strip()
-        if hanlp_home:
-            env["HANLP_HOME"] = hanlp_home
-
-        try:
-            completed = subprocess.run(
-                [str(executable), "-c", _BRIDGE_CODE, mode],
-                input=json.dumps(payload, ensure_ascii=False),
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                env=env,
-                check=False,
-            )
-        except subprocess.TimeoutExpired:
-            return self._state(
-                status="unavailable",
-                reason_code="HANLP2_SIDECAR_EXEC_FAILED",
-                reason=f"HanLP2 sidecar {mode} timed out after {timeout:.1f}s.",
-            )
-        except OSError as exc:
-            return self._state(
-                status="unavailable",
-                reason_code="HANLP2_SIDECAR_EXEC_FAILED",
-                reason=f"HanLP2 sidecar {mode} failed to start: {exc.__class__.__name__}.",
-            )
-
-        stdout = str(completed.stdout or "").strip()
-        if stdout:
+        with self._worker_lock:
             try:
-                parsed = json.loads(stdout)
-                if isinstance(parsed, dict):
-                    return parsed
-            except json.JSONDecodeError:
-                pass
-
-        stderr = str(completed.stderr or "").strip()
-        return self._state(
-            status="unavailable",
-            reason_code="HANLP2_SIDECAR_EXEC_FAILED",
-            reason=(
-                f"HanLP2 sidecar {mode} failed with exit code {completed.returncode}."
-                + (f" stderr: {stderr}" if stderr else "")
-            ),
-        )
+                return self._invoke_worker_locked(
+                    executable=executable,
+                    mode=mode,
+                    payload=payload,
+                    timeout=timeout,
+                )
+            except OSError as exc:
+                self._close_worker_locked()
+                return self._state(
+                    status="unavailable",
+                    reason_code="HANLP2_SIDECAR_EXEC_FAILED",
+                    reason=f"HanLP2 sidecar {mode} failed to start: {exc.__class__.__name__}.",
+                )
 
     def probe(self, config: KnowledgeConfig | None) -> dict[str, str]:
         payload = self._config_payload(config)
@@ -922,7 +1085,7 @@ class HanLPSidecarRuntime:
             reason=str(result.get("reason") or "HanLP2 sidecar probe failed."),
         )
         self._probe_cache_state = state
-        return dict(state)
+        return self._attach_runtime_meta(dict(state))
 
     def model_status(self, config: KnowledgeConfig | None) -> dict[str, str]:
         payload = self._config_payload(config)
@@ -947,11 +1110,11 @@ class HanLPSidecarRuntime:
             payload=payload,
             timeout=payload["tokenize_timeout_sec"],
         )
-        return self._state(
+        return self._attach_runtime_meta(self._state(
             status=str(result.get("status") or "unavailable"),
             reason_code=str(result.get("reason_code") or "HANLP2_MODEL_LOAD_FAILED"),
             reason=str(result.get("reason") or "HanLP2 model probe failed."),
-        )
+        ))
 
     def ensure_model(self, config: KnowledgeConfig | None) -> dict[str, str]:
         payload = self._config_payload(config)
@@ -976,11 +1139,11 @@ class HanLPSidecarRuntime:
             payload=payload,
             timeout=payload["tokenize_timeout_sec"],
         )
-        return self._state(
+        return self._attach_runtime_meta(self._state(
             status=str(result.get("status") or "unavailable"),
             reason_code=str(result.get("reason_code") or "HANLP2_MODEL_LOAD_FAILED"),
             reason=str(result.get("reason") or "HanLP2 model verification failed."),
-        )
+        ))
 
     def tokenize(
         self,
@@ -1021,7 +1184,7 @@ class HanLPSidecarRuntime:
         tokens = [str(item) for item in tokens_raw]
         if state.get("status") == "ready":
             self._probe_cache_state = dict(state)
-        return tokens, state
+        return tokens, self._attach_runtime_meta(state)
 
     def task_status(
         self,
@@ -1061,11 +1224,11 @@ class HanLPSidecarRuntime:
             },
             timeout=payload["tokenize_timeout_sec"],
         )
-        return self._state(
+        return self._attach_runtime_meta(self._state(
             status=str(result.get("status") or "unavailable"),
             reason_code=str(result.get("reason_code") or "HANLP2_TASK_LOAD_FAILED"),
             reason=str(result.get("reason") or "HanLP task probe failed."),
-        )
+        ))
 
     def api_status(self, config: KnowledgeConfig | None) -> dict[str, Any]:
         payload = self._config_payload(config)
@@ -1091,7 +1254,7 @@ class HanLPSidecarRuntime:
             payload=payload,
             timeout=payload["probe_timeout_sec"],
         )
-        return {
+        return self._attach_runtime_meta({
             "engine": "hanlp2",
             "status": str(result.get("status") or "unavailable"),
             "reason_code": str(result.get("reason_code") or "HANLP2_API_STATUS_FAILED"),
@@ -1103,7 +1266,7 @@ class HanLPSidecarRuntime:
             "has_pipeline": bool(result.get("has_pipeline")),
             "has_load": bool(result.get("has_load")),
             "pretrained_categories": list(result.get("pretrained_categories") or []),
-        }
+        })
 
     def run_task(
         self,
@@ -1150,7 +1313,7 @@ class HanLPSidecarRuntime:
         )
         if state.get("status") == "ready":
             self._probe_cache_state = dict(state)
-        return result.get("task_result"), state
+        return result.get("task_result"), self._attach_runtime_meta(state)
 
 
 class _PlaceholderRuntime:

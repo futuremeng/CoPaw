@@ -1707,6 +1707,12 @@ class KnowledgeNLPConfig(BaseModel):
     )
     probe_timeout_sec: float = Field(default=5.0, ge=0.5, le=60.0)
     tokenize_timeout_sec: float = Field(default=15.0, ge=0.5, le=120.0)
+    ner_batch_size: int = Field(
+        default=32,
+        ge=1,
+        le=512,
+        description="Sentence batch size for NER processing on Interlinear text.",
+    )
     model_home: str = Field(
         default="",
         description="Optional local cache/model home for NLP runtime.",
@@ -1767,6 +1773,13 @@ class KnowledgeNLPConfig(BaseModel):
         if tokenize_timeout:
             try:
                 self.tokenize_timeout_sec = max(0.5, min(float(tokenize_timeout), 120.0))
+            except ValueError:
+                pass
+
+        ner_batch_size_raw = os.environ.get("COPAW_NLP_NER_BATCH_SIZE", "").strip()
+        if ner_batch_size_raw:
+            try:
+                self.ner_batch_size = max(1, min(int(ner_batch_size_raw), 512))
             except ValueError:
                 pass
 

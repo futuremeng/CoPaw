@@ -125,6 +125,9 @@ export interface ProjectKnowledgeModeState {
   corReason?: string;
   nerReadyChunkCount?: number;
   nerEntityCount?: number;
+  nerBatchCount?: number;
+  nerWorkerRestartCount?: number;
+  nerWorkerPidCount?: number;
   syntaxReadyChunkCount?: number;
   syntaxSentenceCount?: number;
   syntaxTokenCount?: number;
@@ -887,6 +890,36 @@ function parseBackendProcessingModes(
             normalizeNumber(l2Metrics?.ner_entity_count),
           )
           : normalizeNumber(modeMetric?.ner_entity_count),
+        nerBatchCount: isNlpMode
+          ? Math.max(
+            normalizeNumber(modeMetric?.ner_batch_count),
+            normalizeNumber(l2Metrics?.ner_batch_count),
+            normalizeNumber(modePayload.ner_batch_count),
+          )
+          : Math.max(
+            normalizeNumber(modeMetric?.ner_batch_count),
+            normalizeNumber(modePayload.ner_batch_count),
+          ),
+        nerWorkerRestartCount: isNlpMode
+          ? Math.max(
+            normalizeNumber(modeMetric?.ner_worker_restart_count),
+            normalizeNumber(l2Metrics?.ner_worker_restart_count),
+            normalizeNumber(modePayload.ner_worker_restart_count),
+          )
+          : Math.max(
+            normalizeNumber(modeMetric?.ner_worker_restart_count),
+            normalizeNumber(modePayload.ner_worker_restart_count),
+          ),
+        nerWorkerPidCount: isNlpMode
+          ? Math.max(
+            normalizeNumber(modeMetric?.ner_worker_pid_count),
+            normalizeNumber(l2Metrics?.ner_worker_pid_count),
+            normalizeNumber(modePayload.ner_worker_pid_count),
+          )
+          : Math.max(
+            normalizeNumber(modeMetric?.ner_worker_pid_count),
+            normalizeNumber(modePayload.ner_worker_pid_count),
+          ),
         syntaxReadyChunkCount: isNlpMode
           ? Math.max(
             normalizeNumber(modeMetric?.syntax_ready_chunk_count),
@@ -2088,6 +2121,21 @@ export function useProjectKnowledgeState(
       normalizeNumber(syncState?.l2_metrics?.ner_entity_count),
       0,
     );
+    const nlpNerBatchCount = Math.max(
+      getBackendModeMetricNumber(syncState, "nlp", "ner_batch_count"),
+      normalizeNumber(syncState?.l2_metrics?.ner_batch_count),
+      getSyncIndexMetric(syncState, "ner_batch_count"),
+    );
+    const nlpNerWorkerRestartCount = Math.max(
+      getBackendModeMetricNumber(syncState, "nlp", "ner_worker_restart_count"),
+      normalizeNumber(syncState?.l2_metrics?.ner_worker_restart_count),
+      getSyncIndexMetric(syncState, "ner_worker_restart_count"),
+    );
+    const nlpNerWorkerPidCount = Math.max(
+      getBackendModeMetricNumber(syncState, "nlp", "ner_worker_pid_count"),
+      normalizeNumber(syncState?.l2_metrics?.ner_worker_pid_count),
+      getSyncIndexMetric(syncState, "ner_worker_pid_count"),
+    );
     const nlpSyntaxReadyChunkCount = Math.max(
       getBackendModeMetricNumber(syncState, "nlp", "syntax_ready_chunk_count"),
       normalizeNumber(syncState?.l2_metrics?.syntax_ready_chunk_count),
@@ -2216,6 +2264,9 @@ export function useProjectKnowledgeState(
         corEffectiveChunkRatio: nlpCorEffectiveChunkRatio ?? undefined,
         nerReadyChunkCount: nlpNerReadyChunkCount,
         nerEntityCount: nlpNerEntityCount,
+        nerBatchCount: nlpNerBatchCount,
+        nerWorkerRestartCount: nlpNerWorkerRestartCount,
+        nerWorkerPidCount: nlpNerWorkerPidCount,
         syntaxReadyChunkCount: nlpSyntaxReadyChunkCount,
         syntaxSentenceCount: nlpSyntaxSentenceCount,
         syntaxTokenCount: nlpSyntaxTokenCount,

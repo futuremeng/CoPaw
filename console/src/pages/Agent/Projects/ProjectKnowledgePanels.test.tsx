@@ -105,6 +105,9 @@ function buildKnowledgeState(): ProjectKnowledgeState {
             ner_status: "ready",
             ner_input_mode: "interlinear_full_document",
             ner_entity_count: 2,
+            ner_batch_count: 3,
+            ner_worker_restart_count: 1,
+            ner_worker_pids: [83303, 83304],
             ner_structured_text: JSON.stringify({
               entity_catalog: [
                 { normalized: "agent", label: "ORG", mention_count: 2 },
@@ -166,6 +169,9 @@ function buildKnowledgeState(): ProjectKnowledgeState {
         corReplacementCount: 4,
         nerReadyChunkCount: 4,
         nerEntityCount: 9,
+        nerBatchCount: 3,
+        nerWorkerRestartCount: 1,
+        nerWorkerPidCount: 2,
         syntaxReadyChunkCount: 6,
         syntaxSentenceCount: 11,
         syntaxTokenCount: 42,
@@ -205,6 +211,9 @@ function buildKnowledgeState(): ProjectKnowledgeState {
         corReplacementCount: 4,
         nerReadyChunkCount: 4,
         nerEntityCount: 9,
+        nerBatchCount: 3,
+        nerWorkerRestartCount: 1,
+        nerWorkerPidCount: 2,
         syntaxReadyChunkCount: 6,
         syntaxSentenceCount: 11,
         syntaxTokenCount: 42,
@@ -512,6 +521,9 @@ describe("project knowledge supporting panels", () => {
       "Coverage",
       "projects.knowledge.signalRelations",
       "实体数",
+      "NER Batches",
+      "Worker Restarts",
+      "Worker PID Count",
     ]);
   });
 
@@ -568,6 +580,9 @@ describe("project knowledge supporting panels", () => {
     expect(screen.getAllByText("就绪文档数").length).toBeGreaterThan(0);
     expect(screen.getByText("聚类数")).not.toBeNull();
     expect(screen.getByText("识别实体数")).not.toBeNull();
+    expect(screen.getByText("NER Batches")).not.toBeNull();
+    expect(screen.getByText("Worker Restarts")).not.toBeNull();
+    expect(screen.getByText("Worker PID Count")).not.toBeNull();
     expect(screen.getByText("Token 数")).not.toBeNull();
     expect(screen.getByText("句法关系数")).not.toBeNull();
     expect(screen.getByText("42")).not.toBeNull();
@@ -751,9 +766,26 @@ describe("project knowledge supporting panels", () => {
 
     render(<ProjectKnowledgeNerPanel knowledgeState={knowledgeState} />);
 
+    const expectSignalValue = (label: string, value: string) => {
+      const labelNode = screen.getByText(label);
+      const cardNode = labelNode.closest("._projectKnowledgeSignalCard_209b2b");
+      expect(cardNode).not.toBeNull();
+      if (!cardNode) {
+        return;
+      }
+      const valueNode = within(cardNode).getByText(value);
+      expect(valueNode).not.toBeNull();
+    };
+
     expect(screen.getByText("NER")).not.toBeNull();
     expect(screen.getByText("Unique Entities")).not.toBeNull();
     expect(screen.getByText("Entity Mentions")).not.toBeNull();
+    expect(screen.getByText("NER Batches")).not.toBeNull();
+    expect(screen.getByText("Worker Restarts")).not.toBeNull();
+    expect(screen.getByText("Worker PID Count")).not.toBeNull();
+    expectSignalValue("NER Batches", "3");
+    expectSignalValue("Worker Restarts", "1");
+    expectSignalValue("Worker PID Count", "2");
     expect(screen.getByText("interlinear_full_document: 1")).not.toBeNull();
     expect(screen.getByText("agent")).not.toBeNull();
     expect(screen.getByText("workflow")).not.toBeNull();

@@ -63,6 +63,9 @@ export interface ProjectKnowledgeProcessingModeStatePayload {
   entity_count?: number;
   relation_count?: number;
   quality_score?: number | null;
+  ner_batch_count?: number;
+  ner_worker_restart_count?: number;
+  ner_worker_pid_count?: number;
 }
 
 export interface ProjectKnowledgeOutputResolutionPayload {
@@ -125,6 +128,9 @@ export interface ProjectKnowledgeModeMetricsPayload {
   cor_reason?: string;
   ner_ready_chunk_count?: number;
   ner_entity_count?: number;
+  ner_batch_count?: number;
+  ner_worker_restart_count?: number;
+  ner_worker_pid_count?: number;
   syntax_ready_chunk_count?: number;
   syntax_sentence_count?: number;
   syntax_token_count?: number;
@@ -145,6 +151,9 @@ export interface ProjectKnowledgeL2MetricsPayload {
   cor_effective_chunk_count?: number;
   ner_ready_chunk_count?: number;
   ner_entity_count?: number;
+  ner_batch_count?: number;
+  ner_worker_restart_count?: number;
+  ner_worker_pid_count?: number;
   syntax_ready_chunk_count?: number;
   syntax_sentence_count?: number;
   syntax_token_count?: number;
@@ -390,6 +399,10 @@ export interface KnowledgeSourceDocument {
   ner_reason?: string;
   ner_input_mode?: string;
   ner_entity_count?: number;
+  ner_batch_size?: number;
+  ner_batch_count?: number;
+  ner_worker_restart_count?: number;
+  ner_worker_pids?: number[];
   ner_text?: string;
   ner_structured_text?: string;
   ner_annotated_text?: string;

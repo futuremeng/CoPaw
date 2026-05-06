@@ -640,7 +640,7 @@ def _load_dataset_documents(
         source = source_map.get(source_id)
         if source is None or not source.enabled:
             continue
-        payload = manager.get_source_chunk_documents(source_id)
+        payload = manager.get_source_chunk_documents(source_id, source=source)
         if not payload.get("indexed"):
             continue
         for document in payload.get("documents") or []:

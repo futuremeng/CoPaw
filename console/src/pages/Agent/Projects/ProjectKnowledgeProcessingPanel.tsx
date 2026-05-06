@@ -369,6 +369,21 @@ function buildNlpStageStats(
           label: t("projects.knowledge.processing.nerEntities", "识别实体数"),
           value: mode.nerEntityCount || 0,
         },
+        {
+          key: "batchCount",
+          label: t("projects.knowledge.nerBatchCount", "NER Batches"),
+          value: mode.nerBatchCount || 0,
+        },
+        {
+          key: "workerRestartCount",
+          label: t("projects.knowledge.nerWorkerRestartCount", "Worker Restarts"),
+          value: mode.nerWorkerRestartCount || 0,
+        },
+        {
+          key: "workerPidCount",
+          label: t("projects.knowledge.nerWorkerPidCount", "Worker PID Count"),
+          value: mode.nerWorkerPidCount || 0,
+        },
       ],
     },
     {

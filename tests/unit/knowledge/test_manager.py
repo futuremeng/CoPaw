@@ -3,10 +3,10 @@
 import json
 import re
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from copaw.config.config import Config, KnowledgeSourceSpec
-from copaw.knowledge.manager import KnowledgeManager
+from copaw.knowledge.manager import KnowledgeManager, process_ner_with_sliding_window
 
 
 def test_directory_source_skips_internal_knowledge_artifacts(tmp_path: Path):
@@ -297,16 +297,21 @@ def test_search_reads_chunk_text_from_chunk_file_when_index_has_no_text(tmp_path
         assert result["hits"][0]["source_id"] == source.id
 
 
-def test_process_source_candidates_read_chunk_text_from_chunk_file(tmp_path: Path):
+def test_process_source_candidates_reads_snapshot_text_without_chunk_text(tmp_path: Path):
     config = Config().knowledge
     config.index.chunk_size = 10_000
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    document_path = docs_dir / "notes.md"
+    document_path.write_text("第一句。第二句! Third sentence?", encoding="utf-8")
     source = KnowledgeSourceSpec(
         id="candidate-chunk-source",
         name="Candidate Chunk Source",
-        type="text",
-        content="第一句。第二句! Third sentence?",
+        type="directory",
+        location=str(docs_dir),
+        content="",
         enabled=True,
-        recursive=False,
+        recursive=True,
         tags=[],
         summary="",
     )
@@ -314,9 +319,20 @@ def test_process_source_candidates_read_chunk_text_from_chunk_file(tmp_path: Pat
     manager = KnowledgeManager(tmp_path)
     manager.index_source(source, config)
 
+    index_path = manager._source_index_path(source.id)
+    payload = json.loads(index_path.read_text(encoding="utf-8"))
+    for chunk in payload.get("chunks") or []:
+        if not isinstance(chunk, dict):
+            continue
+        chunk.pop("text", None)
+        chunk["chunk_path"] = ""
+    index_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    document_path.unlink()
+
     candidates = manager._collect_source_processing_candidates(source, config)
 
-    assert any("第一句。\n第二句!\nThird sentence?" in item for item in candidates)
+    assert any("第一句。第二句! Third sentence?" in item or "第一句。\n第二句!\nThird sentence?" in item for item in candidates)
 
 
 def test_directory_source_writes_chunks_under_relative_document_path(tmp_path: Path):
@@ -444,7 +460,10 @@ def test_index_source_writes_ner_files_when_semantic_ready(tmp_path: Path):
 
     assert chunk["ner_status"] == "ready"
     assert chunk["ner_entity_count"] == 2
-    assert chunk["ner_input_mode"] == "document_chunk_merge_fallback"
+    assert chunk["ner_input_mode"] == "source_content_fallback"
+    assert chunk["ner_batch_size"] == 32
+    assert chunk["ner_batch_count"] == 1
+    assert chunk["ner_worker_restart_count"] == 0
     assert chunk["version_id"]
     assert chunk["ner_format_version"] == "1.1"
     assert chunk["syntax_status"] == "ready"
@@ -468,6 +487,11 @@ def test_index_source_writes_ner_files_when_semantic_ready(tmp_path: Path):
         "agentrunner",
         "tooldispatcher",
     }
+    ner_stats = json.loads(ner_stats_path.read_text(encoding="utf-8"))
+    assert ner_stats["ner_batch_size"] == 32
+    assert ner_stats["ner_batch_count"] == 1
+    assert ner_stats["ner_worker_restart_count"] == 0
+    assert ner_stats["ner_worker_pids"] == []
     ner_annotated = ner_annotated_path.read_text(encoding="utf-8")
     assert "[[AgentRunner|label=semantic_token|id=e1|norm=agentrunner|score=1.00]]" in ner_annotated
     assert "[[ToolDispatcher|label=semantic_token|id=e2|norm=tooldispatcher|score=1.00]]" in ner_annotated
@@ -513,10 +537,13 @@ def test_index_source_skips_ner_files_when_semantic_unavailable(tmp_path: Path):
     assert result["chunk_count"] == 1
     assert chunk["ner_status"] == "ready"
     assert chunk["ner_entity_count"] == 0
-    assert chunk["ner_reason_code"] == "NLP_ENGINE_UNAVAILABLE"
-    assert chunk["ner_reason"] == "NLP semantic engine is not configured."
-    assert chunk["ner_input_mode"] == "document_chunk_merge_fallback"
+    assert chunk["ner_reason_code"] == "HANLP2_SIDECAR_UNCONFIGURED"
+    assert chunk["ner_reason"] == "HanLP2 sidecar is not configured."
+    assert chunk["ner_input_mode"] == "source_content_fallback"
     assert chunk["ner_format_version"] == "1.1"
+    assert chunk["ner_batch_size"] == 32
+    assert chunk["ner_batch_count"] == 1
+    assert chunk["ner_worker_restart_count"] == 0
     assert chunk["syntax_status"] == "ready"
     assert chunk["syntax_format_version"] == "0.2"
     assert chunk["syntax_sentence_count"] == 1
@@ -594,6 +621,112 @@ def test_index_source_prefers_hanlp_ner_task_mentions_when_available(tmp_path: P
     syntax_structured = json.loads(syntax_structured_path.read_text(encoding="utf-8"))
     assert syntax_structured["sentences"][0]["entities"][0]["label"] == "ORG"
     assert syntax_structured["sentences"][0]["entities"][1]["label"] == "GPE"
+
+
+def test_index_source_accepts_wrapped_hanlp_ner_mentions_payload(tmp_path: Path):
+    config = Config().knowledge
+    config.index.chunk_size = 10_000
+    config.hanlp.enabled = True
+    source = KnowledgeSourceSpec(
+        id="wrapped-ner-task-source",
+        name="Wrapped NER Task Source",
+        type="text",
+        content="微软在北京发布模型。",
+        enabled=True,
+        recursive=False,
+        tags=[],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    ready_state = {
+        "engine": "hanlp2",
+        "status": "ready",
+        "reason_code": "HANLP2_TASK_READY",
+        "reason": "HanLP task is ready.",
+    }
+    with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
+        manager._semantic_runtime,
+        "run_task",
+        return_value=(
+            {
+                "mentions": [
+                    {"text": "微软", "label": "ORG", "span": [0, 2]},
+                    {"text": "北京", "label": "LOC", "span": [3, 5]},
+                ]
+            },
+            ready_state,
+        ),
+    ), patch.object(
+        manager._semantic_runtime,
+        "tokenize",
+        side_effect=AssertionError("tokenize should not be used when wrapped HanLP NER payload succeeds"),
+    ):
+        manager.index_source(source, config)
+
+    payload = json.loads(
+        manager._source_index_path(source.id).read_text(encoding="utf-8")
+    )
+    chunk = payload["chunks"][0]
+    ner_structured = json.loads(
+        (manager.root_dir / chunk["ner_structured_path"]).read_text(encoding="utf-8")
+    )
+
+    assert chunk["ner_status"] == "ready"
+    assert chunk["ner_entity_count"] == 2
+    assert {(item["normalized"], item["label"]) for item in ner_structured["entity_catalog"]} == {
+        ("微软", "ORG"),
+        ("北京", "LOC"),
+    }
+
+
+def test_index_source_does_not_fallback_to_semantic_tokens_when_hanlp_ready_but_empty(tmp_path: Path):
+    config = Config().knowledge
+    config.index.chunk_size = 10_000
+    config.hanlp.enabled = True
+    source = KnowledgeSourceSpec(
+        id="ready-empty-ner-task-source",
+        name="Ready Empty NER Task Source",
+        type="text",
+        content="AgentRunner uses ToolDispatcher.",
+        enabled=True,
+        recursive=False,
+        tags=[],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    ready_state = {
+        "engine": "hanlp2",
+        "status": "ready",
+        "reason_code": "HANLP2_TASK_READY",
+        "reason": "HanLP task is ready.",
+    }
+    with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
+        manager._semantic_runtime,
+        "run_task",
+        return_value=([], ready_state),
+    ), patch.object(
+        manager._semantic_runtime,
+        "tokenize",
+        side_effect=AssertionError("tokenize should not be used when HanLP NER task is ready but empty"),
+    ):
+        manager.index_source(source, config)
+
+    payload = json.loads(
+        manager._source_index_path(source.id).read_text(encoding="utf-8")
+    )
+    chunk = payload["chunks"][0]
+    ner_path = manager.root_dir / chunk["ner_path"]
+    ner_structured = json.loads(
+        (manager.root_dir / chunk["ner_structured_path"]).read_text(encoding="utf-8")
+    )
+
+    assert chunk["ner_status"] == "ready"
+    assert chunk["ner_entity_count"] == 0
+    assert "semantic_token" not in ner_path.read_text(encoding="utf-8")
+    assert ner_structured["entity_catalog"] == []
+    assert ner_structured["entity_mentions"] == []
 
 
 def test_index_source_populates_hanlp_syntax_tasks_when_available(tmp_path: Path):
@@ -737,7 +870,7 @@ def test_index_source_runs_cor_after_ner_and_syntax_uses_original_text(tmp_path:
     syntax_structured_path = manager.root_dir / chunk["syntax_structured_path"]
 
     assert chunk["cor_status"] == "unavailable"
-    assert chunk["cor_reason_code"] == "NLP_ENGINE_UNAVAILABLE"
+    assert chunk["cor_reason_code"] == "HANLP2_SIDECAR_UNCONFIGURED"
     assert chunk["cor_cluster_count"] == 0
     cor_structured = json.loads(cor_structured_path.read_text(encoding="utf-8"))
     assert cor_structured["source_text"].replace("\n", "") == "我姐送我她的猫。我很喜欢它。"
@@ -763,6 +896,51 @@ def test_index_source_runs_cor_after_ner_and_syntax_uses_original_text(tmp_path:
     assert "sdp" in task_order
     assert "con" in task_order
     assert "cor" not in task_order
+
+
+def test_materialize_semantic_artifacts_does_not_read_chunk_files(tmp_path: Path):
+    config = Config().knowledge
+    config.index.chunk_size = 10_000
+    source = KnowledgeSourceSpec(
+        id="semantic-no-chunk-input-source",
+        name="Semantic No Chunk Input Source",
+        type="text",
+        content="AgentRunner uses ToolDispatcher.",
+        enabled=True,
+        recursive=False,
+        tags=[],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    unavailable_state = {
+        "engine": "hanlp2",
+        "status": "unavailable",
+        "reason_code": "HANLP2_SIDECAR_UNCONFIGURED",
+        "reason": "HanLP2 sidecar is not configured.",
+    }
+
+    with patch.object(manager._semantic_runtime, "probe", return_value=unavailable_state):
+        manager.index_source(source, config)
+
+    payload = json.loads(manager._source_index_path(source.id).read_text(encoding="utf-8"))
+    chunk = payload["chunks"][0]
+    chunk_file = manager.root_dir / chunk["chunk_path"]
+    assert chunk_file.exists()
+    chunk_file.unlink()
+
+    with patch.object(manager._semantic_runtime, "probe", return_value=unavailable_state):
+        manager.materialize_semantic_artifacts_for_source(source, config=config)
+
+    refreshed = json.loads(manager._source_index_path(source.id).read_text(encoding="utf-8"))
+    refreshed_chunk = refreshed["chunks"][0]
+
+    assert refreshed_chunk["ner_input_mode"] == "source_content_fallback"
+    assert refreshed_chunk["syntax_input_mode"] == "source_content_fallback"
+    assert refreshed_chunk["cor_input_mode"] == "source_content_fallback"
+    assert (manager.root_dir / refreshed_chunk["ner_path"]).exists()
+    assert (manager.root_dir / refreshed_chunk["syntax_path"]).exists()
+    assert (manager.root_dir / refreshed_chunk["cor_path"]).exists()
 
 
 def test_delete_index_removes_ner_files(tmp_path: Path):
@@ -870,6 +1048,45 @@ def test_get_source_chunk_documents_exposes_syntax_artifacts(tmp_path: Path):
     assert chunk["syntax_annotated_path"].endswith(".syntax.annotated.md")
     assert '"artifact": "syntax_structured"' in chunk["syntax_structured_text"]
     assert "# Syntax Annotated" in chunk["syntax_annotated_text"]
+
+
+def test_get_source_chunk_documents_reads_snapshot_text_without_chunk_text(tmp_path: Path):
+    config = Config().knowledge
+    config.index.chunk_size = 10_000
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    document_path = docs_dir / "knowledge.md"
+    document_path.write_text("ToolDispatcher cooperates with FileSearch.", encoding="utf-8")
+    source = KnowledgeSourceSpec(
+        id="snapshot-doc-source",
+        name="Snapshot Doc Source",
+        type="directory",
+        location=str(docs_dir),
+        content="",
+        enabled=True,
+        recursive=True,
+        tags=[],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    manager.index_source(source, config)
+
+    index_path = manager._source_index_path(source.id)
+    payload = json.loads(index_path.read_text(encoding="utf-8"))
+    for chunk in payload.get("chunks") or []:
+        if not isinstance(chunk, dict):
+            continue
+        chunk.pop("text", None)
+        chunk["chunk_path"] = ""
+    index_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    document_path.unlink()
+
+    documents = manager.get_source_chunk_documents(source.id)["documents"]
+
+    assert len(documents) == 1
+    assert documents[0]["text"] == "ToolDispatcher cooperates with FileSearch."
 
 
 def test_delete_index_removes_chunk_files(tmp_path: Path):
@@ -1394,3 +1611,94 @@ def test_semantic_stage_writers_skip_ready_chunks_on_resume(tmp_path: Path, monk
     assert chunk["cor_status"] == "ready"
     assert chunk["ner_status"] == "ready"
     assert chunk["syntax_status"] == "ready"
+
+
+def test_ner_with_sliding_window():
+    """
+    Test the sentence-batch NER implementation to ensure entities are correctly identified.
+    """
+    interlinear_file = [
+        "This is the first line.",
+        "Microsoft released a new product.",
+        "The product is called Surface Pro.",
+        "It is a popular device.",
+        "End of the document."
+    ]
+
+    # Mock the NER model's predict method
+    mock_ner_model = MagicMock()
+    seen_batches: list[list[str]] = []
+
+    def mock_predict(batch_sentences):
+        if isinstance(batch_sentences, str):
+            batch_sentences = [batch_sentences]
+        seen_batches.append(list(batch_sentences))
+
+        batch_results = []
+        for sentence in batch_sentences:
+            sentence_results = []
+            if "Microsoft" in sentence:
+                start = sentence.index("Microsoft")
+                sentence_results.append(
+                    {
+                        "start": start,
+                        "end": start + len("Microsoft"),
+                        "text": "Microsoft",
+                        "label": "ORG",
+                    }
+                )
+            if "Surface Pro" in sentence:
+                start = sentence.index("Surface Pro")
+                sentence_results.append(
+                    {
+                        "start": start,
+                        "end": start + len("Surface Pro"),
+                        "text": "Surface Pro",
+                        "label": "PRODUCT",
+                    }
+                )
+            batch_results.append(sentence_results)
+        return batch_results
+
+    mock_ner_model.predict = mock_predict
+
+    # Call the sliding window NER processing function
+    results = process_ner_with_sliding_window(
+        interlinear_file,
+        mock_ner_model,
+        batch_size=2,
+    )
+
+    # Validate the results
+    assert len(results) == 2
+    assert results[0]["text"] == "Microsoft"
+    assert results[0]["label"] == "ORG"
+    assert results[1]["text"] == "Surface Pro"
+    assert results[1]["label"] == "PRODUCT"
+    assert len(seen_batches) == 3
+    assert all(len(batch) <= 2 for batch in seen_batches)
+
+
+def test_ner_with_sliding_window_batch_sizes_no_overlap():
+    sentences = [f"Line {index}" for index in range(65)]
+
+    for batch_size, expected_batch_count in ((16, 5), (32, 3), (64, 2)):
+        mock_ner_model = MagicMock()
+        seen_batches: list[list[str]] = []
+
+        def mock_predict(batch_sentences):
+            if isinstance(batch_sentences, str):
+                batch_sentences = [batch_sentences]
+            seen_batches.append(list(batch_sentences))
+            return [[] for _ in batch_sentences]
+
+        mock_ner_model.predict = mock_predict
+        results = process_ner_with_sliding_window(
+            sentences,
+            mock_ner_model,
+            batch_size=batch_size,
+        )
+
+        assert results == []
+        assert len(seen_batches) == expected_batch_count
+        assert all(len(batch) <= batch_size for batch in seen_batches)

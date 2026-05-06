@@ -178,6 +178,142 @@ def _safe_count_int(value: Any) -> int:
 
 
 
+def split_text_into_sentences(text: str) -> list[str]:
+    """Split long text into sentence-like segments for batch NER."""
+    parts = re.split(r"[。！？；;!?]+", str(text or ""))
+    return [part.strip() for part in parts if str(part or "").strip()]
+
+
+def _invoke_ner_batch(ner_model: Any, sentences: list[str]) -> list[list[dict[str, Any]]]:
+    """Invoke model in batch mode when possible, and fallback to per-sentence calls."""
+
+    def _normalize_single_output(output: Any) -> list[dict[str, Any]]:
+        if not isinstance(output, list):
+            return []
+        if not output:
+            return []
+        if isinstance(output[0], dict):
+            return [item for item in output if isinstance(item, dict)]
+        return []
+
+    predict_fn = getattr(ner_model, "predict", None)
+    if callable(predict_fn):
+        try:
+            batch_output = predict_fn(sentences)
+            if isinstance(batch_output, list):
+                if not batch_output:
+                    return [[] for _ in sentences]
+                if isinstance(batch_output[0], list):
+                    normalized: list[list[dict[str, Any]]] = []
+                    for row in batch_output:
+                        normalized.append(_normalize_single_output(row))
+                    if len(normalized) < len(sentences):
+                        normalized.extend([[] for _ in range(len(sentences) - len(normalized))])
+                    return normalized[: len(sentences)]
+                if isinstance(batch_output[0], dict) and len(sentences) == 1:
+                    return [_normalize_single_output(batch_output)]
+        except Exception:
+            pass
+
+    normalized_rows: list[list[dict[str, Any]]] = []
+    for sentence in sentences:
+        output: Any = []
+        if callable(predict_fn):
+            output = predict_fn(sentence)
+        elif callable(ner_model):
+            output = ner_model(sentence)
+        normalized_rows.append(_normalize_single_output(output))
+    return normalized_rows
+
+
+def process_ner_with_sliding_window(
+    interlinear_file: str | list[str],
+    ner_model: Any,
+    *,
+    batch_size: int = 32,
+) -> list[dict[str, Any]]:
+    """Process NER for long text via sentence splitting plus bounded batch calls."""
+    if isinstance(interlinear_file, str):
+        lines = split_text_into_sentences(interlinear_file)
+    else:
+        lines = [line.strip() for line in interlinear_file if str(line or "").strip()]
+
+    if not lines:
+        return []
+
+    safe_batch_size = max(1, int(batch_size or 1))
+    line_offsets: list[int] = []
+    cursor = 0
+    for line in lines:
+        line_offsets.append(cursor)
+        cursor += len(line) + 1
+
+    final_entities: list[dict[str, Any]] = []
+    seen: set[tuple[int, int, str, str]] = set()
+
+    for start_idx in range(0, len(lines), safe_batch_size):
+        batch_lines = lines[start_idx : start_idx + safe_batch_size]
+        batch_results = _invoke_ner_batch(ner_model, batch_lines)
+
+        for local_idx, sentence_entities in enumerate(batch_results):
+            sentence = batch_lines[local_idx] if local_idx < len(batch_lines) else ""
+            global_line_idx = start_idx + local_idx
+            base_offset = line_offsets[global_line_idx]
+            search_cursor = 0
+
+            for entity in sentence_entities:
+                text = str(entity.get("text") or "").strip()
+                label = str(entity.get("label") or entity.get("type") or "entity").strip() or "entity"
+
+                start = entity.get("start")
+                end = entity.get("end")
+                if start is None or end is None:
+                    start_int = -1
+                    end_int = -1
+                else:
+                    try:
+                        start_int = int(start)
+                        end_int = int(end)
+                    except (TypeError, ValueError):
+                        start_int = -1
+                        end_int = -1
+
+                if start_int < 0 or end_int <= start_int:
+                    if not text:
+                        continue
+                    found = sentence.find(text, search_cursor)
+                    if found < 0:
+                        found = sentence.find(text)
+                    if found < 0:
+                        continue
+                    start_int = found
+                    end_int = found + len(text)
+                    search_cursor = end_int
+                else:
+                    search_cursor = max(search_cursor, end_int)
+                    if not text:
+                        text = sentence[start_int:end_int]
+
+                if end_int > len(sentence):
+                    continue
+
+                global_start = base_offset + start_int
+                global_end = base_offset + end_int
+                key = (global_start, global_end, text, label)
+                if key in seen:
+                    continue
+                seen.add(key)
+                final_entities.append(
+                    {
+                        "start": global_start,
+                        "end": global_end,
+                        "text": text,
+                        "label": label,
+                    }
+                )
+
+    return final_entities
+
 class KnowledgeManager:
     """Manage knowledge source indexing within the CoPaw working directory."""
 
@@ -224,13 +360,43 @@ class KnowledgeManager:
         }
 
     def get_semantic_engine_state(self, config: KnowledgeConfig | None = None) -> dict:
-        """Return the current semantic engine state. Placeholder for artifacts-only mode."""
-        # 仅返回一个简单的 ready/unavailable 状态，后续如需扩展可再完善
-        return {
-            "status": "unavailable",
-            "reason_code": "NLP_ENGINE_UNAVAILABLE",
-            "reason": "NLP semantic engine is not configured.",
-        }
+        """Return the current semantic engine state for project-sync gating."""
+        if config is None:
+            return self._semantic_engine_state(
+                status="unavailable",
+                reason_code="NLP_ENGINE_UNAVAILABLE",
+                reason="NLP semantic engine is not configured.",
+            )
+
+        try:
+            task_state = self._semantic_runtime.task_status("ner_msra", config)
+            if isinstance(task_state, dict) and task_state:
+                return {
+                    "engine": str(task_state.get("engine") or "hanlp2"),
+                    "status": str(task_state.get("status") or "unavailable"),
+                    "reason_code": str(task_state.get("reason_code") or "NLP_ENGINE_UNAVAILABLE"),
+                    "reason": str(task_state.get("reason") or "NLP semantic engine is not configured."),
+                }
+        except Exception:
+            pass
+
+        try:
+            probe_state = self._semantic_runtime.probe(config)
+            if isinstance(probe_state, dict) and probe_state:
+                return {
+                    "engine": str(probe_state.get("engine") or "hanlp2"),
+                    "status": str(probe_state.get("status") or "unavailable"),
+                    "reason_code": str(probe_state.get("reason_code") or "NLP_ENGINE_UNAVAILABLE"),
+                    "reason": str(probe_state.get("reason") or "NLP semantic engine is not configured."),
+                }
+        except Exception:
+            pass
+
+        return self._semantic_engine_state(
+            status="unavailable",
+            reason_code="NLP_ENGINE_UNAVAILABLE",
+            reason="NLP semantic engine is not configured.",
+        )
 
     def normalize_source_name(
         self,
@@ -549,6 +715,9 @@ class KnowledgeManager:
         cor_effective_chunk_count = 0
         ner_ready_chunk_count = 0
         ner_entity_count = 0
+        ner_batch_count = 0
+        ner_worker_restart_count = 0
+        ner_worker_pids: set[int] = set()
         syntax_ready_chunk_count = 0
         syntax_sentence_count = 0
         syntax_token_count = 0
@@ -563,6 +732,17 @@ class KnowledgeManager:
             if str(chunk.get("ner_status") or "").strip() == "ready":
                 ner_ready_chunk_count += 1
             ner_entity_count += max(0, _safe_count_int(chunk.get("ner_entity_count") or 0))
+            ner_batch_count += max(0, _safe_count_int(chunk.get("ner_batch_count") or 0))
+            ner_worker_restart_count += max(0, _safe_count_int(chunk.get("ner_worker_restart_count") or 0))
+            raw_worker_pids = chunk.get("ner_worker_pids")
+            if isinstance(raw_worker_pids, list):
+                for item in raw_worker_pids:
+                    try:
+                        worker_pid = int(item)
+                    except (TypeError, ValueError):
+                        continue
+                    if worker_pid > 0:
+                        ner_worker_pids.add(worker_pid)
 
             if str(chunk.get("syntax_status") or "").strip() == "ready":
                 syntax_ready_chunk_count += 1
@@ -611,6 +791,9 @@ class KnowledgeManager:
         )
         payload["ner_ready_chunk_count"] = ner_ready_chunk_count
         payload["ner_entity_count"] = ner_entity_count
+        payload["ner_batch_count"] = ner_batch_count
+        payload["ner_worker_restart_count"] = ner_worker_restart_count
+        payload["ner_worker_pid_count"] = len(ner_worker_pids)
         payload["syntax_ready_chunk_count"] = syntax_ready_chunk_count
         payload["syntax_sentence_count"] = syntax_sentence_count
         payload["syntax_token_count"] = syntax_token_count
@@ -1509,63 +1692,71 @@ class KnowledgeManager:
                 return interlinear_path
         return ""
 
-    def _resolve_chunk_ner_input_text(
-        self,
-        chunk: dict[str, Any],
-        *,
-        map_rows: list[dict[str, str]],
-    ) -> tuple[str, str, str, str]:
-        """Resolve NER input text from Interlinear artifacts first, then fallback to chunk text."""
-        chunk_text = self._read_chunk_text(chunk)
-        interlinear_path = self._resolve_chunk_interlinear_path(chunk, map_rows)
-        if not interlinear_path:
-            return chunk_text, chunk_text, "", "chunk_fallback"
-
+    @staticmethod
+    def _read_text_file_if_exists(path_text: str) -> str:
+        normalized = str(path_text or "").strip()
+        if not normalized:
+            return ""
+        path = Path(normalized)
         try:
-            interlinear_text = (self.root_dir / interlinear_path).read_text(encoding="utf-8")
+            return path.read_text(encoding="utf-8")
         except FileNotFoundError:
-            return chunk_text, chunk_text, interlinear_path, "chunk_fallback"
+            return ""
 
-        normalized_chunk = str(chunk_text or "").strip()
-        normalized_interlinear = str(interlinear_text or "").strip()
-        if not normalized_chunk:
-            return normalized_interlinear, normalized_interlinear, interlinear_path, "interlinear_full"
+    def _resolve_document_source_text(
+        self,
+        chunks: list[dict[str, Any]],
+        *,
+        source: KnowledgeSourceSpec | None = None,
+    ) -> tuple[str, str]:
+        for chunk in chunks:
+            snapshot_path = str(chunk.get("snapshot_path") or "").strip()
+            snapshot_text = self._read_text_file_if_exists(snapshot_path).strip()
+            if snapshot_text:
+                return snapshot_text, "snapshot_full_document"
 
-        interlinear_line_set = {
-            line.strip()
-            for line in normalized_interlinear.splitlines()
-            if line.strip()
-        }
-        chunk_lines = [line.strip() for line in normalized_chunk.splitlines() if line.strip()]
-        if chunk_lines and interlinear_line_set and all(line in interlinear_line_set for line in chunk_lines):
-            aligned_text = "\n".join(chunk_lines)
-            return aligned_text, normalized_interlinear, interlinear_path, "interlinear_aligned_chunk"
+        for chunk in chunks:
+            document_path = str(chunk.get("document_path") or "").strip()
+            document_text = self._read_text_file_if_exists(document_path).strip()
+            if document_text:
+                return document_text, "document_full_text_fallback"
 
-        if normalized_chunk in normalized_interlinear:
-            return normalized_chunk, normalized_interlinear, interlinear_path, "interlinear_substring_chunk"
-        return normalized_chunk, normalized_interlinear, interlinear_path, "chunk_fallback"
+        source_content = str(getattr(source, "content", "") or "").strip()
+        if source_content:
+            return source_content, "source_content_fallback"
+
+        return "", "source_text_unavailable"
 
     @staticmethod
-    def _group_chunks_for_ner(chunks: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+    def _chunk_document_group_key(chunk: dict[str, Any]) -> str:
+        snapshot_relative_path = str(chunk.get("snapshot_relative_path") or "").strip()
+        document_path = str(chunk.get("document_path") or "").strip()
+        chunk_path = str(chunk.get("chunk_path") or "").strip()
+        chunk_id = str(chunk.get("chunk_id") or "").strip()
+        return snapshot_relative_path or document_path or chunk_path or chunk_id
+
+    @classmethod
+    def _group_document_chunks(cls, chunks: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
         grouped: dict[str, list[dict[str, Any]]] = {}
         order: list[str] = []
         for chunk in chunks:
-            snapshot_relative_path = str(chunk.get("snapshot_relative_path") or "").strip()
-            document_path = str(chunk.get("document_path") or "").strip()
-            chunk_path = str(chunk.get("chunk_path") or "").strip()
-            chunk_id = str(chunk.get("chunk_id") or "").strip()
-            group_key = snapshot_relative_path or document_path or chunk_path or chunk_id
+            group_key = cls._chunk_document_group_key(chunk)
             if group_key not in grouped:
                 grouped[group_key] = []
                 order.append(group_key)
             grouped[group_key].append(chunk)
         return [grouped[key] for key in order]
 
+    @staticmethod
+    def _group_chunks_for_ner(chunks: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+        return KnowledgeManager._group_document_chunks(chunks)
+
     def _resolve_document_ner_input_text(
         self,
         chunks: list[dict[str, Any]],
         *,
         map_rows: list[dict[str, str]],
+        source: KnowledgeSourceSpec | None = None,
     ) -> tuple[str, str, str, str]:
         interlinear_path = ""
         for chunk in chunks:
@@ -1587,14 +1778,8 @@ class KnowledgeManager:
             except FileNotFoundError:
                 pass
 
-        merged_lines: list[str] = []
-        for chunk in chunks:
-            text = str(self._read_chunk_text(chunk) or "").strip()
-            if not text:
-                continue
-            merged_lines.extend([line for line in text.splitlines() if line.strip()])
-        merged_text = "\n".join(merged_lines)
-        return merged_text, merged_text, interlinear_path, "document_chunk_merge_fallback"
+        source_text, input_mode = self._resolve_document_source_text(chunks, source=source)
+        return source_text, source_text, interlinear_path, input_mode
 
     def _delete_chunk_path(self, relative_path: str | Path | None) -> None:
         text = str(relative_path or "").strip()
@@ -2176,7 +2361,7 @@ class KnowledgeManager:
         return payload if isinstance(payload, dict) else None
 
     def _resolve_chunk_text_via_cor(self, chunk: dict[str, Any]) -> tuple[str, str, str, str]:
-        original_text = self._read_chunk_text(chunk)
+        original_text, _ = self._resolve_document_source_text([chunk])
         cor_payload = self._load_chunk_cor_structured(chunk)
         if not cor_payload:
             return original_text, "", "identity_fallback", original_text
@@ -2215,12 +2400,22 @@ class KnowledgeManager:
         raw_result: Any,
     ) -> list[dict[str, Any]]:
         source_text = str(text or "")
-        if not source_text or not isinstance(raw_result, list):
+        if not source_text:
+            return []
+
+        normalized_result = raw_result
+        if isinstance(normalized_result, dict):
+            for key in ("mentions", "entities", "items", "results", "data", "ner"):
+                candidate = normalized_result.get(key)
+                if isinstance(candidate, list):
+                    normalized_result = candidate
+                    break
+        if not isinstance(normalized_result, list):
             return []
 
         mentions: list[dict[str, Any]] = []
         search_cursor = 0
-        for item in raw_result:
+        for item in normalized_result:
             surface = ""
             label = "entity"
             start = -1
@@ -2284,16 +2479,111 @@ class KnowledgeManager:
         text: str,
         *,
         config: KnowledgeConfig,
-    ) -> list[dict[str, Any]]:
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         raw_result, state = self._semantic_runtime.run_task("ner_msra", text, config)
         self._remember_semantic_engine_state(state)
         if state.get("status") == "ready":
             mentions = self._normalize_hanlp_ner_mentions(text, raw_result)
-            if mentions:
-                return mentions
+            return mentions, state
 
         entities = self._collect_chunk_ner_entities(text, config=config)
-        return self._build_chunk_ner_mentions(text, entities)
+        return self._build_chunk_ner_mentions(text, entities), state
+
+    @staticmethod
+    def _resolve_ner_batch_size(config: KnowledgeConfig | None) -> int:
+        if config is None:
+            return 32
+        raw = getattr(getattr(config, "nlp", None), "ner_batch_size", 32)
+        try:
+            return max(1, int(raw))
+        except (TypeError, ValueError):
+            return 32
+
+    def _collect_document_ner_mentions_batched(
+        self,
+        text: str,
+        *,
+        config: KnowledgeConfig,
+        batch_size: int,
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        lines = [line.strip() for line in str(text or "").splitlines() if line.strip()]
+        if not lines:
+            return [], {
+                "batch_count": 0,
+                "worker_restart_count": 0,
+                "worker_pids": [],
+            }
+
+        safe_batch_size = max(1, int(batch_size or 1))
+        line_offsets: list[int] = []
+        cursor = 0
+        for line in lines:
+            line_offsets.append(cursor)
+            cursor += len(line) + 1
+
+        merged: list[dict[str, Any]] = []
+        seen: set[tuple[int, int, str, str]] = set()
+        worker_pids: set[int] = set()
+        worker_restart_count = 0
+
+        for start_idx in range(0, len(lines), safe_batch_size):
+            batch_lines = lines[start_idx : start_idx + safe_batch_size]
+            batch_text = "\n".join(batch_lines)
+            batch_mentions, batch_state = self._collect_chunk_ner_mentions_with_fallback(batch_text, config=config)
+            worker_pid_raw = batch_state.get("worker_pid")
+            try:
+                worker_pid = int(worker_pid_raw)
+            except (TypeError, ValueError):
+                worker_pid = -1
+            if worker_pid > 0:
+                worker_pids.add(worker_pid)
+            if bool(batch_state.get("worker_restarted")):
+                worker_restart_count += 1
+            batch_base_offset = line_offsets[start_idx]
+
+            for mention in batch_mentions:
+                local_start = mention.get("start")
+                local_end = mention.get("end")
+                if local_start is None or local_end is None:
+                    continue
+                try:
+                    local_start_int = int(local_start)
+                    local_end_int = int(local_end)
+                except (TypeError, ValueError):
+                    continue
+                if local_start_int < 0 or local_end_int <= local_start_int:
+                    continue
+                if local_end_int > len(batch_text):
+                    continue
+
+                global_start = batch_base_offset + local_start_int
+                global_end = batch_base_offset + local_end_int
+
+                normalized = str(mention.get("normalized") or "").strip()
+                label = str(mention.get("label") or "entity").strip() or "entity"
+                key = (global_start, global_end, normalized, label)
+                if key in seen:
+                    continue
+                seen.add(key)
+
+                updated = dict(mention)
+                updated["start"] = global_start
+                updated["end"] = global_end
+                updated["sentence_index"] = (
+                    start_idx
+                    + 1
+                    + sum(1 for char in batch_text[:local_start_int] if char in _NER_SENTENCE_DELIMITERS)
+                )
+                merged.append(updated)
+
+        merged.sort(key=lambda item: (int(item.get("start") or 0), int(item.get("end") or 0)))
+        for index, mention in enumerate(merged, start=1):
+            mention["entity_id"] = f"e{index}"
+        return merged, {
+            "batch_count": (len(lines) + safe_batch_size - 1) // safe_batch_size,
+            "worker_restart_count": worker_restart_count,
+            "worker_pids": sorted(worker_pids),
+        }
 
     @staticmethod
     def _build_chunk_ner_catalog(mentions: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -2979,6 +3269,7 @@ class KnowledgeManager:
             resolved_text, source_text, interlinear_path, syntax_input_mode = self._resolve_document_ner_input_text(
                 group,
                 map_rows=map_rows,
+                source=source,
             )
             cor_structured_path = ""
             cor_resolution_mode = "identity_fallback"
@@ -3162,6 +3453,7 @@ class KnowledgeManager:
             chunk_text, _, interlinear_path, cor_input_mode = self._resolve_document_ner_input_text(
                 group,
                 map_rows=map_rows,
+                source=source,
             )
             raw_result: Any = {}
             if ready and config is not None:
@@ -3365,10 +3657,27 @@ class KnowledgeManager:
             resolved_text, source_text, interlinear_path, ner_input_mode = self._resolve_document_ner_input_text(
                 group,
                 map_rows=map_rows,
+                source=source,
             )
             cor_structured_path = ""
             cor_resolution_mode = "identity_fallback"
-            mentions = self._collect_chunk_ner_mentions_with_fallback(resolved_text, config=config) if config is not None else []
+            ner_batch_size = self._resolve_ner_batch_size(config)
+            mentions, ner_runtime_stats = (
+                self._collect_document_ner_mentions_batched(
+                    resolved_text,
+                    config=config,
+                    batch_size=ner_batch_size,
+                )
+                if config is not None
+                else (
+                    [],
+                    {
+                        "batch_count": 0,
+                        "worker_restart_count": 0,
+                        "worker_pids": [],
+                    },
+                )
+            )
             catalog = self._build_chunk_ner_catalog(mentions)
             ner_relative_path = self._build_ner_relative_path(str(representative.get("chunk_path") or ""))
             ner_structured_relative_path = self._build_ner_structured_relative_path(
@@ -3427,6 +3736,10 @@ class KnowledgeManager:
                 "version_id": self._chunk_version_id(representative),
                 "interlinear_path": interlinear_path,
                 "ner_input_mode": ner_input_mode,
+                "ner_batch_size": ner_batch_size,
+                "ner_batch_count": int(ner_runtime_stats.get("batch_count") or 0),
+                "ner_worker_restart_count": int(ner_runtime_stats.get("worker_restart_count") or 0),
+                "ner_worker_pids": list(ner_runtime_stats.get("worker_pids") or []),
                 "entity_count": len(catalog),
                 "entity_mentions_count": len(mentions),
                 "sentence_count": len([line for line in str(resolved_text or "").splitlines() if line.strip()]),
@@ -3444,6 +3757,10 @@ class KnowledgeManager:
                 chunk["ner_status"] = "ready"
                 chunk["ner_entity_count"] = len(catalog)
                 chunk["ner_input_mode"] = ner_input_mode
+                chunk["ner_batch_size"] = ner_batch_size
+                chunk["ner_batch_count"] = int(ner_runtime_stats.get("batch_count") or 0)
+                chunk["ner_worker_restart_count"] = int(ner_runtime_stats.get("worker_restart_count") or 0)
+                chunk["ner_worker_pids"] = list(ner_runtime_stats.get("worker_pids") or [])
                 chunk["ner_path"] = ner_relative_path.as_posix()
                 chunk["ner_structured_path"] = ner_structured_relative_path.as_posix()
                 chunk["ner_annotated_path"] = ner_annotated_relative_path.as_posix()
@@ -3554,10 +3871,20 @@ class KnowledgeManager:
             unique[path.as_posix()] = path
         return sorted(unique.values(), key=lambda item: item.as_posix())
 
-    def get_source_chunk_documents(self, source_id: str) -> dict[str, Any]:
+    def get_source_chunk_documents(
+        self,
+        source_id: str,
+        source: KnowledgeSourceSpec | None = None,
+    ) -> dict[str, Any]:
         payload = self._load_index_payload(source_id)
         if payload is None:
             return {"indexed": False, "documents": []}
+        document_text_by_group: dict[str, str] = {}
+        for chunks in self._group_document_chunks(payload.get("chunks") or []):
+            source_text, _ = self._resolve_document_source_text(chunks, source=source)
+            if not chunks:
+                continue
+            document_text_by_group[self._chunk_document_group_key(chunks[0])] = source_text
         documents: list[dict[str, Any]] = []
         for chunk in payload.get("chunks") or []:
             if not isinstance(chunk, dict):
@@ -3566,7 +3893,7 @@ class KnowledgeManager:
                 {
                     "path": str(chunk.get("document_path") or source_id),
                     "title": str(chunk.get("document_title") or chunk.get("document_path") or source_id),
-                    "text": self._read_chunk_text(chunk),
+                    "text": document_text_by_group.get(self._chunk_document_group_key(chunk), ""),
                     "chunk_id": str(chunk.get("chunk_id") or ""),
                     "chunk_path": str(chunk.get("chunk_path") or ""),
                     "snapshot_path": str(chunk.get("snapshot_path") or ""),
@@ -3990,7 +4317,7 @@ class KnowledgeManager:
                 continue
             document_path = str(document.get("path") or source_path.as_posix())
             latest_snapshot = latest_by_document.get(document_path)
-            if self._snapshot_matches_source(source_path, latest_snapshot):
+            if latest_snapshot is not None and self._snapshot_matches_source(source_path, latest_snapshot):
                 reused_entry = dict(latest_snapshot)
                 if self._source_uses_root_raw_dir(source):
                     reused_entry = self._ensure_snapshot_entry_under_raw_root(raw_root, reused_entry)
@@ -5799,21 +6126,22 @@ class KnowledgeManager:
         indexed_payload = self._load_index_payload_safe(source.id)
         if indexed_payload:
             chunk_titles: list[str] = []
-            chunk_texts: list[str] = []
-            for chunk in indexed_payload.get("chunks", []):
-                if not isinstance(chunk, dict):
+            document_texts: list[str] = []
+            chunk_rows = [chunk for chunk in indexed_payload.get("chunks", []) if isinstance(chunk, dict)]
+            for chunks in self._group_document_chunks(chunk_rows):
+                if not chunks:
                     continue
-                chunk_title = chunk.get("document_title")
+                chunk_title = chunks[0].get("document_title")
                 if isinstance(chunk_title, str) and chunk_title.strip():
                     chunk_titles.append(chunk_title)
-                chunk_text = self._read_chunk_text(chunk)
-                if chunk_text.strip():
-                    chunk_texts.append(chunk_text)
+                source_text, _ = self._resolve_document_source_text(chunks, source=source)
+                if source_text.strip():
+                    document_texts.append(source_text)
 
             if chunk_titles:
                 candidates.append("\n".join(chunk_titles))
-            if chunk_texts:
-                candidates.append("\n".join(chunk_texts))
+            if document_texts:
+                candidates.append("\n".join(document_texts))
 
         location = (source.location or "").strip()
         if source.type == "file" and location:

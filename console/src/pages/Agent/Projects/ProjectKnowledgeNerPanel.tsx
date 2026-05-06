@@ -16,6 +16,11 @@ interface NerEntityRow {
   mentionCount: number;
 }
 
+function toSafeNumber(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function safeJsonParse(text: string): Record<string, unknown> | null {
   if (!text.trim()) {
     return null;
@@ -55,6 +60,9 @@ export default function ProjectKnowledgeNerPanel(props: ProjectKnowledgeNerPanel
     let readyDocuments = 0;
     let unavailableDocuments = 0;
     let mentionTotal = 0;
+    let batchTotal = 0;
+    let workerRestartTotal = 0;
+    const workerPidSet = new Set<number>();
 
     for (const doc of documents) {
       const typedDoc = doc as KnowledgeSourceDocument;
@@ -81,6 +89,7 @@ export default function ProjectKnowledgeNerPanel(props: ProjectKnowledgeNerPanel
       }
 
       const structuredPayload = safeJsonParse(String(typedDoc.ner_structured_text || ""));
+      const statsPayload = safeJsonParse(String(typedDoc.ner_stats_text || ""));
       const catalog = Array.isArray(structuredPayload?.entity_catalog)
         ? (structuredPayload?.entity_catalog as Array<Record<string, unknown>>)
         : [];
@@ -92,6 +101,25 @@ export default function ProjectKnowledgeNerPanel(props: ProjectKnowledgeNerPanel
         mentionTotal += mentions.length;
       } else {
         mentionTotal += Number(typedDoc.ner_entity_count || 0);
+      }
+
+      batchTotal += toSafeNumber(
+        typedDoc.ner_batch_count
+        ?? statsPayload?.ner_batch_count,
+      );
+      workerRestartTotal += toSafeNumber(
+        typedDoc.ner_worker_restart_count
+        ?? statsPayload?.ner_worker_restart_count,
+      );
+      const workerPidsRaw = typedDoc.ner_worker_pids
+        ?? statsPayload?.ner_worker_pids;
+      if (Array.isArray(workerPidsRaw)) {
+        for (const item of workerPidsRaw) {
+          const workerPid = toSafeNumber(item);
+          if (workerPid > 0) {
+            workerPidSet.add(workerPid);
+          }
+        }
       }
 
       for (const item of catalog) {
@@ -136,6 +164,9 @@ export default function ProjectKnowledgeNerPanel(props: ProjectKnowledgeNerPanel
       readyDocuments,
       unavailableDocuments,
       mentionTotal,
+      batchTotal,
+      workerRestartTotal,
+      workerPidCount: workerPidSet.size,
       uniqueEntityCount: entityMap.size,
       topEntities,
       labelRanking,
@@ -192,6 +223,24 @@ export default function ProjectKnowledgeNerPanel(props: ProjectKnowledgeNerPanel
                 {t("projects.knowledge.nerEntityMentions", "Entity Mentions")}
               </Typography.Text>
               <Typography.Text strong>{summary.mentionTotal}</Typography.Text>
+            </div>
+            <div className={styles.projectKnowledgeSignalCard}>
+              <Typography.Text type="secondary">
+                {t("projects.knowledge.nerBatchCount", "NER Batches")}
+              </Typography.Text>
+              <Typography.Text strong>{summary.batchTotal}</Typography.Text>
+            </div>
+            <div className={styles.projectKnowledgeSignalCard}>
+              <Typography.Text type="secondary">
+                {t("projects.knowledge.nerWorkerRestartCount", "Worker Restarts")}
+              </Typography.Text>
+              <Typography.Text strong>{summary.workerRestartTotal}</Typography.Text>
+            </div>
+            <div className={styles.projectKnowledgeSignalCard}>
+              <Typography.Text type="secondary">
+                {t("projects.knowledge.nerWorkerPidCount", "Worker PID Count")}
+              </Typography.Text>
+              <Typography.Text strong>{summary.workerPidCount}</Typography.Text>
             </div>
           </div>
 

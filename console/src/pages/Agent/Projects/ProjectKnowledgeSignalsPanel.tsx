@@ -89,6 +89,12 @@ export default function ProjectKnowledgeSignalsPanel(
   const semanticReasonLabel = getProjectKnowledgeSemanticReasonLabel(semanticEngine, t);
   const metricsSourceLabel = formatMetricsSourceLabel(knowledgeState.quantMetricsMeta?.source || "", t);
   const metricsUpdatedAtLabel = formatLocalDateTime(knowledgeState.quantMetricsMeta?.updatedAt || "");
+  const nlpMode = knowledgeState.processingCompareModes.find((mode) => mode.mode === "nlp")
+    || knowledgeState.processingModes.find((mode) => mode.mode === "nlp")
+    || null;
+  const nlpNerBatchCount = Number(nlpMode?.nerBatchCount || 0);
+  const nlpNerWorkerRestartCount = Number(nlpMode?.nerWorkerRestartCount || 0);
+  const nlpNerWorkerPidCount = Number(nlpMode?.nerWorkerPidCount || 0);
 
   return (
     <div className={styles.projectKnowledgeWorkbench}>
@@ -182,6 +188,18 @@ export default function ProjectKnowledgeSignalsPanel(
         <div className={styles.knowledgeModuleHeaderSignal}>
           <Typography.Text type="secondary">{t("projects.knowledge.entities", "实体数")}</Typography.Text>
           <Typography.Text strong>{String(knowledgeHeaderSignals.entityCount)}</Typography.Text>
+        </div>
+        <div className={styles.knowledgeModuleHeaderSignal}>
+          <Typography.Text type="secondary">{t("projects.knowledge.nerBatchCount", "NER Batches")}</Typography.Text>
+          <Typography.Text strong>{String(nlpNerBatchCount)}</Typography.Text>
+        </div>
+        <div className={styles.knowledgeModuleHeaderSignal}>
+          <Typography.Text type="secondary">{t("projects.knowledge.nerWorkerRestartCount", "Worker Restarts")}</Typography.Text>
+          <Typography.Text strong>{String(nlpNerWorkerRestartCount)}</Typography.Text>
+        </div>
+        <div className={styles.knowledgeModuleHeaderSignal}>
+          <Typography.Text type="secondary">{t("projects.knowledge.nerWorkerPidCount", "Worker PID Count")}</Typography.Text>
+          <Typography.Text strong>{String(nlpNerWorkerPidCount)}</Typography.Text>
         </div>
         <div className={styles.knowledgeModuleHeaderSignal}>
           <Typography.Text type="secondary">{t("projects.knowledge.signalQualityScore", "Quality Score")}</Typography.Text>
@@ -365,6 +383,18 @@ export default function ProjectKnowledgeSignalsPanel(
         <div className={styles.projectKnowledgeSignalCard}>
           <Typography.Text type="secondary">{t("projects.knowledge.entities", "实体数")}</Typography.Text>
           <Typography.Text strong>{knowledgeState.quantMetrics.entityCount}</Typography.Text>
+        </div>
+        <div className={styles.projectKnowledgeSignalCard}>
+          <Typography.Text type="secondary">{t("projects.knowledge.nerBatchCount", "NER Batches")}</Typography.Text>
+          <Typography.Text strong>{nlpNerBatchCount}</Typography.Text>
+        </div>
+        <div className={styles.projectKnowledgeSignalCard}>
+          <Typography.Text type="secondary">{t("projects.knowledge.nerWorkerRestartCount", "Worker Restarts")}</Typography.Text>
+          <Typography.Text strong>{nlpNerWorkerRestartCount}</Typography.Text>
+        </div>
+        <div className={styles.projectKnowledgeSignalCard}>
+          <Typography.Text type="secondary">{t("projects.knowledge.nerWorkerPidCount", "Worker PID Count")}</Typography.Text>
+          <Typography.Text strong>{nlpNerWorkerPidCount}</Typography.Text>
         </div>
       </div>
 
