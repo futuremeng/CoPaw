@@ -4,10 +4,16 @@ import { useTranslation } from "react-i18next";
 import api from "../../../api";
 import type { AgentsRunningConfig } from "../../../api/types";
 import { useAppMessage } from "../../../hooks/useAppMessage";
+import { useAgentStore } from "../../../stores/agentStore";
+import {
+  CONTEXT_MANAGER_BACKEND_MAPPINGS,
+  MEMORY_MANAGER_BACKEND_MAPPINGS,
+} from "../../../constants/backendMappings";
 
 export function useAgentConfig() {
   const { t } = useTranslation();
   const { message } = useAppMessage();
+  const { selectedAgent } = useAgentStore();
   const [form] = Form.useForm();
   const [runningConfigSnapshot, setRunningConfigSnapshot] =
     useState<AgentsRunningConfig | null>(null);
@@ -19,6 +25,32 @@ export function useAgentConfig() {
   const [timezone, setTimezone] = useState<string>("UTC");
   const [savingTimezone, setSavingTimezone] = useState(false);
 
+  const normalizeConfigForForm = useCallback(
+    (config: AgentsRunningConfig) => {
+      const contextBackend =
+        config.context_manager_backend &&
+        config.context_manager_backend in CONTEXT_MANAGER_BACKEND_MAPPINGS
+          ? config.context_manager_backend
+          : "light";
+      const memoryBackend =
+        config.memory_manager_backend in MEMORY_MANAGER_BACKEND_MAPPINGS
+          ? config.memory_manager_backend
+          : "remelight";
+      return {
+        ...(config as AgentsRunningConfig),
+        auto_continue_on_text_only: config.auto_continue_on_text_only ?? false,
+        shell_command_timeout: config.shell_command_timeout ?? 60.0,
+        context_manager_backend: contextBackend,
+        memory_manager_backend: memoryBackend,
+        auto_title_config: config.auto_title_config ?? {
+          enabled: true,
+          timeout_seconds: 30.0,
+        },
+      };
+    },
+    [],
+  );
+
   const fetchConfig = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -29,7 +61,7 @@ export function useAgentConfig() {
         api.getUserTimezone(),
       ]);
       setRunningConfigSnapshot(config);
-      form.setFieldsValue(config);
+      form.setFieldsValue(normalizeConfigForForm(config));
       setLanguage(langResp.language);
       setTimezone(tzResp.timezone || "UTC");
     } catch (err) {
@@ -39,7 +71,7 @@ export function useAgentConfig() {
     } finally {
       setLoading(false);
     }
-  }, [form, t]);
+  }, [form, normalizeConfigForForm, t, selectedAgent]);
 
   useEffect(() => {
     fetchConfig();
@@ -55,7 +87,7 @@ export function useAgentConfig() {
       } as AgentsRunningConfig;
       const savedConfig = await api.updateAgentRunningConfig(payload);
       setRunningConfigSnapshot(savedConfig);
-      form.setFieldsValue(savedConfig);
+      form.setFieldsValue(normalizeConfigForForm(savedConfig));
       message.success(t("agentConfig.saveSuccess"));
     } catch (err) {
       if (err instanceof Error && "errorFields" in err) return;
@@ -65,7 +97,7 @@ export function useAgentConfig() {
     } finally {
       setSaving(false);
     }
-  }, [form, runningConfigSnapshot, t]);
+  }, [form, message, normalizeConfigForForm, runningConfigSnapshot, t]);
 
   const handleLanguageChange = useCallback(
     (value: string): void => {

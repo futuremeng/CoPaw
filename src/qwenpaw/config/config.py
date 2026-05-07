@@ -739,6 +739,38 @@ class MemorySummaryConfig(BaseModel):
     )
 
 
+class AutoTitleConfig(BaseModel):
+    """Async chat-title generation configuration.
+
+    The console handler creates each new chat with a 10-character
+    placeholder name and spawns a background task that asks the active
+    LLM for a concise title. Each new chat costs one short extra LLM
+    call; flip ``enabled`` to ``False`` to keep the placeholder and
+    avoid the spend.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool = Field(
+        default=True,
+        description=(
+            "Generate a chat title via the active LLM after the first "
+            "user message. Disable to keep the truncated placeholder "
+            "and skip the extra per-chat LLM call."
+        ),
+    )
+
+    timeout_seconds: float = Field(
+        default=30.0,
+        ge=1.0,
+        description=(
+            "Hard timeout for the title-generation LLM call. The "
+            "background task is swallowed if this fires, leaving the "
+            "placeholder name in place."
+        ),
+    )
+
+
 class AgentsRunningConfig(BaseModel):
     """Agent runtime behavior configuration."""
 
@@ -749,6 +781,15 @@ class AgentsRunningConfig(BaseModel):
         ge=1,
         description=(
             "Maximum number of reasoning-acting iterations for ReAct agent"
+        ),
+    )
+
+    auto_continue_on_text_only: bool = Field(
+        default=False,
+        description=(
+            "When the model returns a text-only assistant message (no tool "
+            "calls), inject one follow-up hint and run one extra reasoning "
+            "pass with the same tool policy."
         ),
     )
 
@@ -824,6 +865,16 @@ class AgentsRunningConfig(BaseModel):
         ),
     )
 
+    shell_command_timeout: float = Field(
+        default=60.0,
+        ge=1.0,
+        description=(
+            "Default timeout in seconds for execute_shell_command. "
+            "The LLM may still override this per-call via the timeout "
+            "parameter."
+        ),
+    )
+
     auto_continue_enabled: bool = Field(
         default=True,
         description=(
@@ -867,6 +918,18 @@ class AgentsRunningConfig(BaseModel):
     tool_result_compact: ToolResultCompactConfig = Field(
         default_factory=ToolResultCompactConfig,
         description="Tool result compaction configuration",
+    )
+
+    auto_title_config: AutoTitleConfig = Field(
+        default_factory=AutoTitleConfig,
+        description=(
+            "Async chat-title generation toggle and timeout. See "
+            "AutoTitleConfig."
+        ),
+    )
+
+    reme_light_memory_config: ReMeLightMemoryConfig = Field(
+        default_factory=ReMeLightMemoryConfig,
     )
 
     memory_summary: MemorySummaryConfig = Field(

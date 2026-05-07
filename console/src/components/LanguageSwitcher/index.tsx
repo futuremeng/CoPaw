@@ -7,14 +7,18 @@ import {
   SparkChinese02Line,
   SparkEnglish02Line,
   SparkJapanLine,
-  SparkUsdLine,
+  SparkRusLine,
 } from "@agentscope-ai/icons";
 
 export default function LanguageSwitcher() {
   const { i18n } = useTranslation();
 
   const currentLanguage = i18n.resolvedLanguage || i18n.language;
-  const currentLangKey = currentLanguage.split("-")[0];
+  // Use full language code (e.g. "pt-BR") when available, fallback to base code (e.g. "en" from "en-US")
+  const knownLanguages = ["en", "zh", "ja", "ru", "pt-BR"];
+  const currentLangKey = knownLanguages.includes(currentLanguage)
+    ? currentLanguage
+    : currentLanguage.split("-")[0];
 
   const changeLanguage = (lang: string) => {
     i18n.changeLanguage(lang);
@@ -47,13 +51,19 @@ export default function LanguageSwitcher() {
       label: "Русский",
       onClick: () => changeLanguage("ru"),
     },
+    {
+      key: "pt-BR",
+      label: "Português (Brasil)",
+      onClick: () => changeLanguage("pt-BR"),
+    },
   ];
 
   const LIGHT_ICON: Record<string, React.ReactElement> = {
     en: <SparkEnglish02Line />,
     zh: <SparkChinese02Line />,
     ja: <SparkJapanLine />,
-    ru: <SparkUsdLine />,
+    ru: <SparkRusLine />,
+    "pt-BR": <SparkEnglish02Line />,
   };
 
   return (
