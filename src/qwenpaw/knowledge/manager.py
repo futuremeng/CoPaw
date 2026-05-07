@@ -1480,7 +1480,7 @@ class KnowledgeManager:
         digest = hashlib.sha1(raw_key.encode("utf-8")).hexdigest()[:12]
         base_name = Path(snapshot_relative_path or snapshot_path or document_path or source_id).name
         stem = self._safe_name(Path(base_name).stem or base_name or source_id)
-        return f"{self._safe_name(source_id)}__{stem}__{digest}"
+        return f"{stem}__{digest}"
 
     @staticmethod
     def _count_interlinear_line_chars(text: str) -> int:

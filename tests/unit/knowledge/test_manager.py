@@ -1276,6 +1276,27 @@ def test_index_source_writes_interlinear_and_lightweight_line_stats(tmp_path: Pa
     assert [item["score"] for item in lightweight_result] == [1, 3, 1]
 
 
+def test_build_interlinear_artifact_key_omits_source_prefix_for_all_sources(tmp_path: Path):
+    manager = KnowledgeManager(tmp_path)
+    project_source_id = "project-project-qznbwx-workspace"
+    regular_source_id = "interlinear-line-stats-source"
+    snapshot_entry = {
+        "snapshot_relative_path": (
+            "aacid__duxiu_files__20240613T213851Z__kTftdqCUQCBG3XMeXyoaPz_260317_002144."
+            "snapshot_20260507T030541187383Z__15d5f6949c07.md"
+        ),
+        "document_path": "aacid__duxiu_files/260317_002144.md",
+    }
+
+    project_key = manager._build_interlinear_artifact_key(project_source_id, snapshot_entry)
+    regular_key = manager._build_interlinear_artifact_key(regular_source_id, snapshot_entry)
+
+    assert not project_key.startswith("project-project-qznbwx-workspace__")
+    assert project_key.startswith("aacid__duxiu_files__")
+    assert not regular_key.startswith("interlinear-line-stats-source__")
+    assert regular_key.startswith("aacid__duxiu_files__")
+
+
 def test_delete_index_removes_interlinear_and_lightweight_files(tmp_path: Path):
     config = Config().knowledge
     source_file = tmp_path / "cleanup-note.md"
