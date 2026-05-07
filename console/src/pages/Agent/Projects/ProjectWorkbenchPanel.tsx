@@ -5,6 +5,7 @@ import type {
   ProjectPipelineArtifactRecord,
 } from "../../../api/types/agents";
 import ProjectArtifactsPanel from "./ProjectArtifactsPanel";
+import type { ProjectKnowledgeState } from "./useProjectKnowledgeState";
 import styles from "./index.module.less";
 
 const { Text } = Typography;
@@ -29,9 +30,11 @@ interface ProjectWorkbenchPanelProps {
   knownProjectFilesByPath: Record<string, AgentProjectFileInfo>;
   projectFiles: AgentProjectFileInfo[];
   fileContent: string;
+  charStatsContent: string;
   selectedAttachPaths: string[];
   autoAnalyzeOnAttach: boolean;
   sendingSelectedFiles: boolean;
+  knowledgeState: ProjectKnowledgeState;
   onToggleAutoAnalyze: (value: boolean) => void;
   onSendSelectedFilesToChat: () => void;
   onDismissSyncNotice: () => void;
@@ -48,9 +51,11 @@ export default function ProjectWorkbenchPanel({
   knownProjectFilesByPath,
   projectFiles,
   fileContent,
+  charStatsContent,
   selectedAttachPaths,
   autoAnalyzeOnAttach,
   sendingSelectedFiles,
+  knowledgeState,
   onToggleAutoAnalyze,
   onSendSelectedFilesToChat,
   onDismissSyncNotice,
@@ -153,9 +158,11 @@ export default function ProjectWorkbenchPanel({
         knownProjectFilesByPath={knownProjectFilesByPath}
         projectFiles={projectFiles}
         fileContent={fileContent}
+        charStatsContent={charStatsContent}
         selectedAttachPaths={selectedAttachPaths}
         autoAnalyzeOnAttach={autoAnalyzeOnAttach}
         sendingSelectedFiles={sendingSelectedFiles}
+        knowledgeState={knowledgeState}
         onToggleAutoAnalyze={onToggleAutoAnalyze}
         onSendSelectedFilesToChat={onSendSelectedFilesToChat}
       />

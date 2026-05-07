@@ -3466,9 +3466,88 @@
   min-height: 0;
   min-width: 0;
   display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  padding: 6px;
+}
+
+.documentKnowledgeVizWrap {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow: auto;
+  padding-right: 2px;
+
+  :global(.ant-card) {
+    flex-shrink: 0;
+    width: 100%;
+  }
+
+  :global(.ant-card-body) {
+    padding: 0;
+  }
+}
+
+.documentKnowledgeVizCard {
+  width: 100%;
+  border: none !important;
+  border-radius: 10px;
+  box-shadow: none !important;
+  background: transparent;
+
+  :global(.ant-card-head) {
+    min-height: 32px;
+    padding: 0 2px;
+    border-bottom: none;
+  }
+
+  :global(.ant-card-head-title) {
+    white-space: normal;
+    padding: 4px 0;
+    font-size: 13px;
+  }
+
+  :global(.ant-card-body) {
+    width: 100%;
+  }
+}
+
+.documentKnowledgeVizChart {
+  width: 100%;
+  min-height: 320px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(91, 143, 249, 0.03);
+
+  :global(.antv-plot-container),
+  :global(.antv-plot-container > div) {
+    width: 100% !important;
+  }
+
+  :global(canvas) {
+    width: 100% !important;
+  }
+}
+
+.documentKnowledgeVizEmpty {
+  min-height: 240px;
+  display: flex;
   align-items: center;
   justify-content: center;
-  padding: 12px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.documentKnowledgeVizHint {
+  display: block;
+  font-size: 12px;
+}
+
+.documentKnowledgeVizHintInline {
+  font-size: 11px;
 }
 
 .artifactList {

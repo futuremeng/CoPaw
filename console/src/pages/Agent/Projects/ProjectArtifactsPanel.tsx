@@ -5,6 +5,8 @@ import type {
   AgentProjectFileInfo,
   ProjectPipelineArtifactRecord,
 } from "../../../api/types/agents";
+import ProjectDocumentKnowledgeVisualization from "./ProjectDocumentKnowledgeVisualization";
+import type { ProjectKnowledgeState } from "./useProjectKnowledgeState";
 import ProjectMdxReadonlyPreview from "./ProjectMdxReadonlyPreview";
 import styles from "./index.module.less";
 
@@ -22,9 +24,11 @@ interface ProjectArtifactsPanelProps {
   knownProjectFilesByPath: Record<string, AgentProjectFileInfo>;
   projectFiles: AgentProjectFileInfo[];
   fileContent: string;
+  charStatsContent: string;
   selectedAttachPaths: string[];
   autoAnalyzeOnAttach: boolean;
   sendingSelectedFiles: boolean;
+  knowledgeState: ProjectKnowledgeState;
   onToggleAutoAnalyze: (value: boolean) => void;
   onSendSelectedFilesToChat: () => void;
 }
@@ -37,9 +41,11 @@ export default function ProjectArtifactsPanel({
   knownProjectFilesByPath,
   projectFiles,
   fileContent,
+  charStatsContent,
   selectedAttachPaths,
   autoAnalyzeOnAttach,
   sendingSelectedFiles,
+  knowledgeState,
   onToggleAutoAnalyze,
   onSendSelectedFilesToChat,
 }: ProjectArtifactsPanelProps) {
@@ -115,12 +121,11 @@ export default function ProjectArtifactsPanel({
                   </Text>
                 </div>
                 <div className={styles.knowledgePreviewBody}>
-                  <Empty
-                    image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description={t(
-                      "projects.workbench.knowledgePreviewPlaceholder",
-                      "Knowledge visualization will be available here for the current document.",
-                    )}
+                  <ProjectDocumentKnowledgeVisualization
+                    selectedFilePath={selectedFilePath}
+                    fileContent={fileContent}
+                    charStatsContent={charStatsContent}
+                    knowledgeState={knowledgeState}
                   />
                 </div>
               </div>

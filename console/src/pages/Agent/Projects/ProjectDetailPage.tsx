@@ -462,6 +462,38 @@ function pickLatestRecentUpdatePath(summary: AgentProjectFileSummary | null | un
   return String(summary?.recent_updates?.[0]?.path || "").trim();
 }
 
+function normalizeProjectPath(path: string): string {
+  return String(path || "").trim().replace(/\\/g, "/").replace(/^\//, "");
+}
+
+function resolveCharStatsArtifactPath(
+  selectedFilePath: string,
+  files: AgentProjectFileInfo[],
+): string {
+  const normalized = normalizeProjectPath(selectedFilePath);
+  if (!normalized) {
+    return "";
+  }
+  const fileName = normalized.split("/").pop() || "";
+  const stem = fileName.replace(/\.[^.]+$/, "");
+  if (!stem) {
+    return "";
+  }
+
+  const prefix = `.knowledge/interlinear/${stem}.snapshot_`;
+  const candidates = files
+    .map((item) => normalizeProjectPath(item.path))
+    .filter((item) => item.startsWith(prefix) && item.endsWith(".char-stats.json"));
+
+  if (candidates.length === 0) {
+    return "";
+  }
+
+  // Snapshot 文件名内含时间戳，按倒序取最新。
+  candidates.sort((left, right) => right.localeCompare(left));
+  return candidates[0];
+}
+
 export default function ProjectDetailPage() {
   const { t, i18n } = useTranslation();
   const translateWithFallback = useCallback(
@@ -499,6 +531,7 @@ export default function ProjectDetailPage() {
     updatedAt: number;
   } | null>(null);
   const [fileContent, setFileContent] = useState("");
+  const [charStatsContent, setCharStatsContent] = useState("");
   const [filesLoading, setFilesLoading] = useState(false);
   const [projectTreeLoading, setProjectTreeLoading] = useState(false);
   const [contentLoading, setContentLoading] = useState(false);
@@ -2310,6 +2343,62 @@ export default function ProjectDetailPage() {
   }, [currentAgent, selectedProject, selectedFilePath, loadFileContent, t]);
 
   useEffect(() => {
+    if (!currentAgent || !selectedProject || !selectedFilePath) {
+      setCharStatsContent("");
+      return;
+    }
+
+    const charStatsPath = resolveCharStatsArtifactPath(selectedFilePath, effectiveProjectFiles);
+    if (!charStatsPath) {
+      setCharStatsContent("");
+      return;
+    }
+
+    const projectIds = [resolvedProjectRequestId, ...buildProjectIdCandidates(selectedProject)]
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const uniqueProjectIds = Array.from(new Set(projectIds));
+
+    let disposed = false;
+    setCharStatsContent("");
+
+    const load = async () => {
+      for (const projectRequestId of uniqueProjectIds) {
+        try {
+          const data = await agentsApi.readProjectFile(
+            currentAgent.id,
+            projectRequestId,
+            charStatsPath,
+          );
+          if (disposed) {
+            return;
+          }
+          setResolvedProjectRequestId(projectRequestId);
+          setCharStatsContent(data.content || "");
+          return;
+        } catch {
+          // Try next candidate id.
+        }
+      }
+      if (!disposed) {
+        setCharStatsContent("");
+      }
+    };
+
+    void load();
+
+    return () => {
+      disposed = true;
+    };
+  }, [
+    currentAgent,
+    effectiveProjectFiles,
+    resolvedProjectRequestId,
+    selectedFilePath,
+    selectedProject,
+  ]);
+
+  useEffect(() => {
     if (!selectedTemplateId) {
       setSelectedRunId("");
       setRunDetail(null);
@@ -3215,9 +3304,11 @@ export default function ProjectDetailPage() {
                             knownProjectFilesByPath={knownProjectFilesByPath}
                             projectFiles={effectiveProjectFiles}
                             fileContent={fileContent}
+                            charStatsContent={charStatsContent}
                             selectedAttachPaths={selectedAttachPaths}
                             autoAnalyzeOnAttach={autoAnalyzeOnAttach}
                             sendingSelectedFiles={sendingSelectedFiles}
+                            knowledgeState={projectKnowledgeState}
                             onToggleAutoAnalyze={setAutoAnalyzeOnAttach}
                             onSendSelectedFilesToChat={() => {
                               void handleSendSelectedFilesToChat();

@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import ProjectWorkbenchPanel from "./ProjectWorkbenchPanel";
+import type { ProjectKnowledgeState } from "./useProjectKnowledgeState";
 
 vi.mock("./ProjectArtifactsPanel", () => ({
   default: () => <div>artifacts</div>,
@@ -53,9 +54,15 @@ describe("ProjectWorkbenchPanel", () => {
         }}
         projectFiles={[]}
         fileContent="content"
+        charStatsContent=""
         selectedAttachPaths={[]}
         autoAnalyzeOnAttach={false}
         sendingSelectedFiles={false}
+        knowledgeState={{
+          selectedSourceId: "",
+          projectSourceId: "",
+          sourceContentById: {},
+        } as unknown as ProjectKnowledgeState}
         onToggleAutoAnalyze={vi.fn()}
         onSendSelectedFilesToChat={vi.fn()}
         onDismissSyncNotice={onDismissSyncNotice}

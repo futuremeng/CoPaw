@@ -1,10 +1,17 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import ProjectArtifactsPanel from "./ProjectArtifactsPanel";
+import type { ProjectKnowledgeState } from "./useProjectKnowledgeState";
 
 vi.mock("./ProjectMdxReadonlyPreview", () => ({
   default: ({ markdown }: { filePath: string; markdown: string }) => (
     <div data-testid="project-mdx-preview">{markdown}</div>
+  ),
+}));
+
+vi.mock("./ProjectDocumentKnowledgeVisualization", () => ({
+  default: ({ selectedFilePath }: { selectedFilePath: string }) => (
+    <div data-testid="project-knowledge-visualization">viz:{selectedFilePath}</div>
   ),
 }));
 
@@ -34,9 +41,15 @@ describe("ProjectArtifactsPanel", () => {
     },
     projectFiles: [],
     fileContent: "",
+    charStatsContent: "",
     selectedAttachPaths: [],
     autoAnalyzeOnAttach: false,
     sendingSelectedFiles: false,
+    knowledgeState: {
+      selectedSourceId: "",
+      projectSourceId: "",
+      sourceContentById: {},
+    } as unknown as ProjectKnowledgeState,
     onToggleAutoAnalyze: vi.fn(),
     onSendSelectedFilesToChat: vi.fn(),
     formatBytes: () => "0 B",
@@ -47,6 +60,7 @@ describe("ProjectArtifactsPanel", () => {
 
     expect(screen.getByText("This file is empty")).toBeTruthy();
     expect(screen.queryByText("Select a file to preview")).toBeNull();
+    expect(screen.getByTestId("project-knowledge-visualization")).toBeTruthy();
   });
 
   it("renders file content when the file is not empty", () => {
