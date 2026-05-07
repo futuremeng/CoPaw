@@ -517,7 +517,7 @@ def test_index_source_directory_ner_requires_interlinear_without_fallback(tmp_pa
     config.index.chunk_size = 10_000
     source = KnowledgeSourceSpec(
         id="project-ner-interlinear-required",
-        name="Project NER Interlinear Required",
+        name="Project NER interlinear Required",
         type="directory",
         location=str(project_root),
         content="",
@@ -1221,7 +1221,7 @@ def test_index_source_writes_interlinear_and_lightweight_line_stats(tmp_path: Pa
     source_file.write_text("第一句。Second line 123!第三句？", encoding="utf-8")
     source = KnowledgeSourceSpec(
         id="interlinear-line-stats-source",
-        name="Interlinear Line Stats Source",
+        name="interlinear Line Stats Source",
         type="file",
         location=str(source_file),
         content="",
@@ -1282,7 +1282,7 @@ def test_delete_index_removes_interlinear_and_lightweight_files(tmp_path: Path):
     source_file.write_text("第一句。Second line 123!第三句？", encoding="utf-8")
     source = KnowledgeSourceSpec(
         id="interlinear-cleanup-source",
-        name="Interlinear Cleanup Source",
+        name="interlinear Cleanup Source",
         type="file",
         location=str(source_file),
         content="",
@@ -1314,7 +1314,7 @@ def test_delete_index_removes_interlinear_and_lightweight_files(tmp_path: Path):
 
     manager.delete_index(source.id)
 
-    # artifacts-only 路径下，所有 Interlinear/Lightweight 路径应被清理
+    # artifacts-only 路径下，所有 interlinear/Lightweight 路径应被清理
     for rel in all_paths:
         if rel:
             assert not (manager.root_dir / rel).exists(), f"{rel} 未被正确清理"
@@ -1642,7 +1642,7 @@ def test_get_source_status_falls_back_to_stats_when_interlinear_manifest_missing
     config = Config().knowledge
     source = KnowledgeSourceSpec(
         id="missing-interlinear-source",
-        name="Missing Interlinear Source",
+        name="Missing interlinear Source",
         type="text",
         content="第一句。第二句!",
         enabled=True,

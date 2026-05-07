@@ -433,7 +433,7 @@ class KnowledgeManager:
         *,
         lightweight: bool = False,
     ) -> dict[str, Any]:
-        """Interlinear-only: Return status/statistics for a source based on Interlinear/轻量化工件。"""
+        """interlinear-only: Return status/statistics for a source based on interlinear/轻量化工件。"""
         interlinear_manifest = self._load_source_interlinear_manifest(source_id)
         summary = interlinear_manifest.get("summary", {})
         stats = self._load_source_stats(source_id)
@@ -854,7 +854,7 @@ class KnowledgeManager:
 
     def delete_index(self, source_id: str) -> None:
         """Delete persisted artifacts for a source based on all stage manifests."""
-        # Interlinear/Lightweight
+        # interlinear/Lightweight
         interlinear_manifest = self._load_source_interlinear_manifest(source_id)
         for artifact in interlinear_manifest.get("artifacts", []):
             path = artifact.get("path")
@@ -902,11 +902,11 @@ class KnowledgeManager:
             shutil.rmtree(source_dir, ignore_errors=True)
 
     def clear_knowledge(self, config: KnowledgeConfig, *, remove_sources: bool = True) -> dict[str, Any]:
-        """Interlinear-only: 清理所有知识工件和配置。"""
+        """interlinear-only: 清理所有知识工件和配置。"""
         source_count = len(config.sources)
         if self.root_dir.exists():
             shutil.rmtree(self.root_dir, ignore_errors=True)
-        # 只重建 Interlinear/轻量化等目录
+        # 只重建 interlinear/轻量化等目录
         self.raw_dir.mkdir(parents=True, exist_ok=True)
         self.chunks_dir.mkdir(parents=True, exist_ok=True)
         self.cor_dir.mkdir(parents=True, exist_ok=True)
@@ -1489,8 +1489,8 @@ class KnowledgeManager:
     def _build_interlinear_relative_paths(self, artifact_key: str) -> dict[str, Path]:
         key = self._safe_name(artifact_key)
         return {
-            "interlinear": Path("Interlinear") / f"{key}.txt",
-            "char_stats": Path("Interlinear") / f"{key}.char-stats.json",
+            "interlinear": Path("interlinear") / f"{key}.txt",
+            "char_stats": Path("interlinear") / f"{key}.char-stats.json",
             "lightweight_result": Path("lightweight") / f"{key}.json",
             "token_stats": Path("lightweight") / f"{key}.token-stats.json",
         }
