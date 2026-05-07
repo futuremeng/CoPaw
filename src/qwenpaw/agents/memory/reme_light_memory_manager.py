@@ -15,22 +15,22 @@ from typing import TYPE_CHECKING
 from agentscope.message import Msg, TextBlock
 from agentscope.tool import Toolkit, ToolResponse
 
-from copaw.agents.memory.base_memory_manager import BaseMemoryManager
-from copaw.agents.model_factory import create_model_and_formatter
-from copaw.agents.tools import (
+from qwenpaw.agents.memory.base_memory_manager import BaseMemoryManager
+from qwenpaw.agents.model_factory import create_model_and_formatter
+from qwenpaw.agents.tools import (
     create_memory_search_tool,
     edit_file,
     read_file,
     write_file,
 )
-from copaw.agents.utils import get_copaw_token_counter
-from copaw.config import load_config
-from copaw.config.config import load_agent_config
-from copaw.config.context import (
+from qwenpaw.agents.utils import get_copaw_token_counter
+from qwenpaw.config import load_config
+from qwenpaw.config.config import load_agent_config
+from qwenpaw.config.context import (
     set_current_workspace_dir,
     set_current_recent_max_bytes,
 )
-from copaw.constant import EnvVarLoader
+from qwenpaw.constant import EnvVarLoader
 from .prompts import MEMORY_GUIDANCE_EN, MEMORY_GUIDANCE_ZH
 
 if TYPE_CHECKING:

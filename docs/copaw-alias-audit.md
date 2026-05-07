@@ -69,3 +69,18 @@ These are shared-path modules where copaw is not a thin forward shim and differs
   - or copaw thin shim to qwenpaw.
 - Extension whitelist:
   - allow copaw-only modules only under approved extension directories.
+
+## Upstream Comparison Mode
+
+Use the boundary check script to compare current state against an upstream ref.
+
+- Local boundary check:
+   - `python scripts/check_namespace_boundaries.py`
+- Compare against upstream ref:
+   - `python scripts/check_namespace_boundaries.py --upstream-ref agentscope-ai/main`
+
+Recommended policy:
+
+- Block merges when `reverse_imports` is non-zero for non-allowlisted files.
+- Block merges when `non_thin_shared` grows versus upstream baseline.
+- Keep extension-only modules in copaw under approved prefixes.
