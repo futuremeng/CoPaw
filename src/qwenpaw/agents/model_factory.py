@@ -1048,14 +1048,14 @@ def create_model_and_formatter(
     runtime_status_recorder = None
     if agent_config is not None:
         try:
-            from ..agents.utils import get_copaw_token_counter
+            from ..agents.utils import get_token_counter
             from ..app.runner.runtime_status_store import (
                 RuntimeStatusRecorder,
                 resolve_context_window_tokens,
                 resolve_reserved_response_tokens,
             )
 
-            token_counter = get_copaw_token_counter(agent_config)
+            token_counter = get_token_counter(agent_config)
             reserved_response_tokens = resolve_reserved_response_tokens(provider)
             context_window_tokens = resolve_context_window_tokens(
                 provider,

@@ -23,7 +23,7 @@ from qwenpaw.agents.tools import (
     read_file,
     write_file,
 )
-from qwenpaw.agents.utils import get_copaw_token_counter
+from qwenpaw.agents.utils import get_token_counter
 from qwenpaw.config import load_config
 from qwenpaw.config.config import load_agent_config
 from qwenpaw.config.context import (
@@ -341,7 +341,7 @@ See: https://docs.trychroma.com/docs/overview/troubleshooting#sqlite
                 messages=messages,
                 as_llm=self.chat_model,
                 as_llm_formatter=self.formatter,
-                as_token_counter=get_copaw_token_counter(agent_config),
+                as_token_counter=get_token_counter(agent_config),
                 language=agent_config.language,
                 max_input_length=agent_config.running.max_input_length,
                 compact_ratio=cc.memory_compact_ratio,
@@ -356,7 +356,7 @@ See: https://docs.trychroma.com/docs/overview/troubleshooting#sqlite
                 messages=messages,
                 as_llm=self.chat_model,
                 as_llm_formatter=self.formatter,
-                as_token_counter=get_copaw_token_counter(agent_config),
+                as_token_counter=get_token_counter(agent_config),
                 language=agent_config.language,
                 max_input_length=agent_config.running.max_input_length,
                 compact_ratio=cc.memory_compact_ratio,
@@ -419,7 +419,7 @@ See: https://docs.trychroma.com/docs/overview/troubleshooting#sqlite
             messages=messages,
             as_llm=self.chat_model,
             as_llm_formatter=self.formatter,
-            as_token_counter=get_copaw_token_counter(agent_config),
+            as_token_counter=get_token_counter(agent_config),
             toolkit=self.summary_toolkit,
             language=agent_config.language,
             max_input_length=agent_config.running.max_input_length,
@@ -547,5 +547,5 @@ See: https://docs.trychroma.com/docs/overview/troubleshooting#sqlite
             return None
         agent_config = load_agent_config(self.agent_id)
         return self._reme.get_in_memory_memory(
-            as_token_counter=get_copaw_token_counter(agent_config),
+            as_token_counter=get_token_counter(agent_config),
         )

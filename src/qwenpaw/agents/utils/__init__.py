@@ -34,10 +34,6 @@ from .setup_utils import (
 # Token counting
 from .token_counter import get_token_counter
 
-
-def get_copaw_token_counter(*args, **kwargs):
-    return get_token_counter(*args, **kwargs)
-
 # Tool message utilities
 from .tool_message_utils import (
     _dedup_tool_blocks,
@@ -64,7 +60,6 @@ __all__ = [
     "normalize_agent_language",
     # Token counting
     "get_token_counter",
-    "get_copaw_token_counter",
     # Tool message utilities
     "_dedup_tool_blocks",
     "_remove_invalid_tool_blocks",
