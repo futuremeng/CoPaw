@@ -2443,13 +2443,17 @@ export default function ProjectDetailPage() {
     })();
 
     if (currentAgent && selectedProject) {
-      const treeProbePath = parentDirPath || normalizedPath;
+      const treeProbePath = parentDirPath;
       try {
         const children = await loadProjectTreeDirectory(
           currentAgent.id,
           selectedProject,
           treeProbePath,
         );
+        if (!parentDirPath) {
+          setSelectedFilePath(normalizedPath);
+          return;
+        }
         const selection = resolveArtifactSelectionPath(treeProbePath, children);
         const expandedDirectoryPath = selection.expandedDirectoryPath;
         if (typeof expandedDirectoryPath === "string" && expandedDirectoryPath.length > 0) {

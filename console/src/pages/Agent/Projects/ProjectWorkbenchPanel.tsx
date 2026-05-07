@@ -96,6 +96,7 @@ export default function ProjectWorkbenchPanel({
       styles={{
         body: {
           padding: 0,
+          height: "100%",
           display: "flex",
           flexDirection: "column",
           minHeight: 0,

@@ -64,7 +64,7 @@ describe("ProjectWorkbenchPanel", () => {
     );
 
     expect(screen.getByText("Background sync updated project files.")).toBeTruthy();
-    expect(screen.getByText("existing.md")).toBeTruthy();
+    expect(screen.getByText("original/existing.md")).toBeTruthy();
     expect(
       screen.getByText("2 files changed in the background. Workbench stays on your current selection."),
     ).toBeTruthy();

@@ -2,6 +2,12 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import ProjectArtifactsPanel from "./ProjectArtifactsPanel";
 
+vi.mock("./ProjectMdxReadonlyPreview", () => ({
+  default: ({ markdown }: { filePath: string; markdown: string }) => (
+    <div data-testid="project-mdx-preview">{markdown}</div>
+  ),
+}));
+
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, maybeFallback?: string | Record<string, unknown>) =>
@@ -57,7 +63,29 @@ describe("ProjectArtifactsPanel", () => {
       />,
     );
 
+    expect(screen.getByTestId("project-mdx-preview")).toBeTruthy();
     expect(screen.getByText("# Baseline")).toBeTruthy();
     expect(screen.queryByText("This file is empty")).toBeNull();
+  });
+
+  it("falls back to raw text preview for non-markdown files", () => {
+    render(
+      <ProjectArtifactsPanel
+        {...baseProps}
+        selectedFilePath="scripts/build.sh"
+        knownProjectFilesByPath={{
+          "scripts/build.sh": {
+            filename: "build.sh",
+            path: "scripts/build.sh",
+            size: 11,
+            modified_time: "2026-04-24 10:00:00",
+          },
+        }}
+        fileContent={"echo ready"}
+      />,
+    );
+
+    expect(screen.queryByTestId("project-mdx-preview")).toBeNull();
+    expect(screen.getByText("echo ready")).toBeTruthy();
   });
 });

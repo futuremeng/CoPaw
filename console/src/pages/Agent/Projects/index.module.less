@@ -3439,6 +3439,38 @@
   overflow: hidden;
 }
 
+.artifactPreviewSplitter {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.knowledgePreviewPane {
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid #f0f0f0;
+  background: #fafcff;
+}
+
+.knowledgePreviewHeader {
+  padding: 10px 12px;
+  border-bottom: 1px solid #eef4ff;
+}
+
+.knowledgePreviewBody {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+
 .artifactList {
   width: 340px;
   flex-shrink: 0;
@@ -3492,9 +3524,55 @@
 
 .previewPane {
   flex: 1;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   min-height: 0;
   overflow: auto;
+}
+
+.mdxPreviewPane {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
+
+  :global(.mdxeditor) {
+    min-height: 100%;
+    border: none;
+    box-shadow: none;
+    background: transparent;
+  }
+
+  :global(.mdxeditor-root-contenteditable) {
+    padding: 16px;
+    font-size: 14px;
+    line-height: 1.7;
+    min-height: 100%;
+  }
+
+  :global(.mdxeditor-root-contenteditable img) {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 12px auto;
+    border-radius: 6px;
+  }
+
+  :global(.mdxeditor-root-contenteditable table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+    margin: 12px 0;
+  }
+
+  :global(.mdxeditor-root-contenteditable th),
+  :global(.mdxeditor-root-contenteditable td) {
+    border: 1px solid #e6e6e6;
+    padding: 6px 8px;
+    white-space: nowrap;
+  }
 }
 
 .lineageRow {
@@ -3991,6 +4069,11 @@
 
   .artifactPanel {
     flex-direction: column;
+  }
+
+  .knowledgePreviewPane {
+    border-left: none;
+    border-top: 1px solid #f0f0f0;
   }
 
   .artifactList {
@@ -4579,9 +4662,14 @@
   .treeToolbarSticky,
   .artifactToolbar,
   .artifactDetailCard,
-  .overviewSummary {
+  .overviewSummary,
+  .knowledgePreviewPane {
     border-color: rgba(255, 255, 255, 0.08);
     background: rgba(255, 255, 255, 0.035);
+  }
+
+  .knowledgePreviewHeader {
+    border-bottom-color: rgba(255, 255, 255, 0.08);
   }
 
   .focusBar,
@@ -5348,5 +5436,140 @@
   .stepPreviewCellText .previewContent {
     background: #171717;
     color: rgba(255, 255, 255, 0.84);
+  }
+
+  .mdxPreviewPane {
+    :global(.mdxeditor),
+    :global(.mdxeditor-root-contenteditable) {
+      background: transparent;
+      color: rgba(255, 255, 255, 0.84);
+    }
+
+    :global(.mdxeditor-root-contenteditable p),
+    :global(.mdxeditor-root-contenteditable li),
+    :global(.mdxeditor-root-contenteditable ol),
+    :global(.mdxeditor-root-contenteditable ul),
+    :global(.mdxeditor-root-contenteditable h1),
+    :global(.mdxeditor-root-contenteditable h2),
+    :global(.mdxeditor-root-contenteditable h3),
+    :global(.mdxeditor-root-contenteditable h4),
+    :global(.mdxeditor-root-contenteditable h5),
+    :global(.mdxeditor-root-contenteditable h6),
+    :global(.mdxeditor-root-contenteditable span[data-lexical-text='true']) {
+      color: rgba(255, 255, 255, 0.84);
+    }
+
+    :global(.mdxeditor-root-contenteditable ::selection) {
+      background: rgba(66, 153, 225, 0.38);
+      color: #ffffff;
+    }
+
+    :global(.mdxeditor-root-contenteditable li::marker) {
+      color: rgba(255, 255, 255, 0.72);
+    }
+
+    :global(.mdxeditor-root-contenteditable a) {
+      color: #8fc5ff;
+    }
+
+    :global(.mdxeditor-root-contenteditable blockquote) {
+      border-left-color: rgba(255, 255, 255, 0.2);
+      color: rgba(255, 255, 255, 0.72);
+    }
+
+    :global(.mdxeditor-root-contenteditable pre),
+    :global(.mdxeditor-root-contenteditable code) {
+      background: rgba(198, 221, 255, 0.11);
+      color: rgba(241, 247, 255, 0.96);
+    }
+
+    :global(.mdxeditor-root-contenteditable code) {
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 6px;
+      padding: 1px 5px;
+    }
+
+    :global(.mdxeditor-root-contenteditable pre) {
+      background: rgba(10, 18, 30, 0.94);
+      border: 1px solid rgba(159, 195, 255, 0.24);
+      border-radius: 8px;
+      padding: 10px 12px;
+      overflow-x: auto;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+
+    :global(.mdxeditor-root-contenteditable pre code) {
+      background: transparent;
+      border: none;
+      color: #e6f0ff;
+      font-family: "SF Mono", Monaco, Menlo, Consolas, monospace;
+      padding: 0;
+    }
+
+    :global(.mdxeditor-root-contenteditable pre code .token.comment),
+    :global(.mdxeditor-root-contenteditable pre code .hljs-comment) {
+      color: #9aa9be;
+    }
+
+    :global(.mdxeditor-root-contenteditable pre code .token.keyword),
+    :global(.mdxeditor-root-contenteditable pre code .hljs-keyword) {
+      color: #8db8ff;
+    }
+
+    :global(.mdxeditor-root-contenteditable pre code .token.string),
+    :global(.mdxeditor-root-contenteditable pre code .hljs-string) {
+      color: #9ce6bf;
+    }
+
+    :global(.mdxeditor-root-contenteditable pre code .token.function),
+    :global(.mdxeditor-root-contenteditable pre code .hljs-title.function_) {
+      color: #ffd38e;
+    }
+
+    :global(.mdxeditor-root-contenteditable pre code .token.number),
+    :global(.mdxeditor-root-contenteditable pre code .hljs-number) {
+      color: #ffb88c;
+    }
+
+    :global(.mdxeditor-root-contenteditable hr) {
+      border: 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.16);
+    }
+
+    :global(.mdxeditor-root-contenteditable img) {
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 8px;
+    }
+
+    :global(.mdxeditor-root-contenteditable table) {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    :global(.mdxeditor-root-contenteditable th),
+    :global(.mdxeditor-root-contenteditable td) {
+      border-color: rgba(255, 255, 255, 0.16) !important;
+      color: rgba(255, 255, 255, 0.84);
+    }
+
+    :global(.mdxeditor-root-contenteditable th) {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    :global(.mdxeditor-root-contenteditable .katex),
+    :global(.mdxeditor-root-contenteditable .katex .mord),
+    :global(.mdxeditor-root-contenteditable .katex .mbin),
+    :global(.mdxeditor-root-contenteditable .katex .mrel),
+    :global(.mdxeditor-root-contenteditable .katex .mopen),
+    :global(.mdxeditor-root-contenteditable .katex .mclose),
+    :global(.mdxeditor-root-contenteditable .katex .mpunct),
+    :global(.mdxeditor-root-contenteditable .katex .mop) {
+      color: rgba(255, 255, 255, 0.92) !important;
+    }
+
+    :global(.mdxeditor-root-contenteditable .katex-display) {
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 4px 0;
+    }
   }
 }

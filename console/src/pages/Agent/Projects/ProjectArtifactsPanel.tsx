@@ -1,11 +1,18 @@
 import { SendOutlined } from "@ant-design/icons";
-import { Button, Checkbox, Empty, Spin } from "antd";
+import { Button, Checkbox, Empty, Splitter, Spin, Typography } from "antd";
 import { useTranslation } from "react-i18next";
 import type {
   AgentProjectFileInfo,
   ProjectPipelineArtifactRecord,
 } from "../../../api/types/agents";
+import ProjectMdxReadonlyPreview from "./ProjectMdxReadonlyPreview";
 import styles from "./index.module.less";
+
+const { Text } = Typography;
+
+function isMarkdownFilePath(filePath: string): boolean {
+  return /\.(md|markdown|mdx)$/i.test(filePath);
+}
 
 interface ProjectArtifactsPanelProps {
   filesLoading: boolean;
@@ -47,6 +54,11 @@ export default function ProjectArtifactsPanel({
     && fileContent === ""
     && selectedFileInfo?.size === 0,
   );
+  const shouldRenderMdxPreview = Boolean(
+    selectedFilePath
+    && !isEmptyFilePreview
+    && isMarkdownFilePath(selectedFilePath),
+  );
 
   return (
     <div className={`${styles.previewBody} ${styles.previewBodyArtifacts}`}>
@@ -61,29 +73,59 @@ export default function ProjectArtifactsPanel({
         />
       ) : (
         <div className={styles.artifactPanel}>
-          <div className={styles.previewPane}>
-            {contentLoading ? (
-              <div className={styles.centerState}>
-                <Spin />
-              </div>
-            ) : selectedFilePath ? (
-              <>
-                {isEmptyFilePreview ? (
+          <Splitter className={styles.artifactPreviewSplitter}>
+            <Splitter.Panel defaultSize="68%" min="45%">
+              <div className={styles.previewPane}>
+                {contentLoading ? (
+                  <div className={styles.centerState}>
+                    <Spin />
+                  </div>
+                ) : selectedFilePath ? (
+                  <>
+                    {isEmptyFilePreview ? (
+                      <Empty
+                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                        description={t("projects.emptyFile", "This file is empty")}
+                      />
+                    ) : shouldRenderMdxPreview ? (
+                      <ProjectMdxReadonlyPreview
+                        filePath={selectedFilePath}
+                        markdown={fileContent}
+                      />
+                    ) : (
+                      <pre className={styles.previewContent}>{fileContent}</pre>
+                    )}
+                  </>
+                ) : (
                   <Empty
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description={t("projects.emptyFile", "This file is empty")}
+                    description={t("projects.selectFile", "Select a file to preview")}
                   />
-                ) : (
-                  <pre className={styles.previewContent}>{fileContent}</pre>
                 )}
-              </>
-            ) : (
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={t("projects.selectFile", "Select a file to preview")}
-              />
-            )}
-          </div>
+              </div>
+            </Splitter.Panel>
+            <Splitter.Panel min="28%">
+              <div className={styles.knowledgePreviewPane}>
+                <div className={styles.knowledgePreviewHeader}>
+                  <Text strong>
+                    {t(
+                      "projects.workbench.knowledgePreviewTitle",
+                      "Current Document Knowledge Visualization",
+                    )}
+                  </Text>
+                </div>
+                <div className={styles.knowledgePreviewBody}>
+                  <Empty
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    description={t(
+                      "projects.workbench.knowledgePreviewPlaceholder",
+                      "Knowledge visualization will be available here for the current document.",
+                    )}
+                  />
+                </div>
+              </div>
+            </Splitter.Panel>
+          </Splitter>
           {selectedAttachPaths.length > 0 && (
             <div className={styles.attachFloatingBar}>
               <div className={styles.attachCountText}>

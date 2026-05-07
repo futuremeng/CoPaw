@@ -436,6 +436,74 @@ describe("ProjectDetailPage refresh scheduling", () => {
     }
   });
 
+  it("selects a root-level recent file without probing file-tree by file path", async () => {
+    mockedListProjectFileTree.mockResolvedValue([
+      {
+        filename: "guide.md",
+        path: "guide.md",
+        size: 128,
+        modified_time: "2026-04-29T00:00:00Z",
+        is_directory: false,
+        child_count: 0,
+        descendant_file_count: 0,
+        direct_file_count: 0,
+        has_child_directories: false,
+      },
+    ]);
+    mockedListProjectFiles.mockResolvedValue([
+      {
+        filename: "guide.md",
+        path: "guide.md",
+        size: 128,
+        modified_time: "2026-04-29T00:00:00Z",
+      },
+      {
+        filename: "notes.md",
+        path: "notes.md",
+        size: 64,
+        modified_time: "2026-04-29T00:01:00Z",
+      },
+    ]);
+    mockedGetProjectFileSummary.mockResolvedValue({
+      total_files: 2,
+      builtin_files: 0,
+      visible_files: 2,
+      original_files: 2,
+      derived_files: 0,
+      knowledge_candidate_files: 2,
+      markdown_files: 2,
+      text_like_files: 2,
+      recently_updated_files: 1,
+      recent_updates: [
+        {
+          filename: "notes.md",
+          path: "notes.md",
+          size: 64,
+          modified_time: "2026-04-29T00:01:00Z",
+        },
+      ],
+    });
+    mockedReadProjectFile.mockResolvedValue({ content: "root" });
+
+    const view = renderPage();
+    try {
+      await waitFor(() => {
+        expect(projectOverviewCardState.latestProps?.latestUpdatedFilePath).toBe("notes.md");
+      });
+
+      act(() => {
+        (projectOverviewCardState.latestProps?.onSelectLatestUpdatedFile as ((path: string) => void) | undefined)?.("notes.md");
+      });
+
+      await waitFor(() => {
+        expect(mockedReadProjectFile).toHaveBeenCalledWith("agent-1", "proj-1", "notes.md");
+      });
+      expect(mockedListProjectFileTree).not.toHaveBeenCalledWith("agent-1", "proj-1", "notes.md");
+    } finally {
+      view.unmount();
+    }
+  });
+
   it("surfaces degraded realtime status only through the knowledge health panel", async () => {
     realtimeControllerState.status = "degraded";
     realtimeControllerState.reconnectAttempt = 3;
