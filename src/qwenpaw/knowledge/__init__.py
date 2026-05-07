@@ -1,22 +1,19 @@
 # -*- coding: utf-8 -*-
-"""Compatibility bridge for knowledge modules.
+"""Knowledge module exports for qwenpaw canonical implementation."""
 
-The fork keeps the active implementation under ``copaw.knowledge`` while
-upstream-renamed modules import from ``qwenpaw.knowledge``.
-"""
-
-from copaw.knowledge import (
-	GraphOpsManager,
-	KnowledgeManager,
-	ProjectKnowledgeSyncManager,
-	QuantizationFacade,
-)
-from copaw.knowledge.hanlp_runtime import HanLPSidecarRuntime
+from .graph_ops import GraphOpsManager
+from .manager import KnowledgeManager
+from .project_sync import ProjectKnowledgeSyncManager
+from .hanlp_runtime import HanLPSidecarRuntime
+from .architecture import QuantizationArchitectureManager
+from .facades import RetrievalFacade, QuantizationFacade
 
 __all__ = [
 	"KnowledgeManager",
 	"GraphOpsManager",
 	"ProjectKnowledgeSyncManager",
+	"QuantizationArchitectureManager",
+	"RetrievalFacade",
 	"QuantizationFacade",
 	"HanLPSidecarRuntime",
 ]

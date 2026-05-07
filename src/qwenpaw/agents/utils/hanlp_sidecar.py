@@ -10,7 +10,7 @@ import threading
 import time
 from pathlib import Path
 
-from copaw.knowledge.hanlp_runtime import HanLPSidecarRuntime
+from qwenpaw.knowledge.hanlp_runtime import HanLPSidecarRuntime
 
 from ...config import load_config, save_config
 from ...constant import WORKING_DIR

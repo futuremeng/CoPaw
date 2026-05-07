@@ -9,8 +9,8 @@ from typing import Any, Callable
 
 from fastapi import HTTPException
 
-from copaw.knowledge import GraphOpsManager, KnowledgeManager
-from copaw.knowledge.project_sync import DEFAULT_PROJECT_SYNC_QUALITY_LOOP_ROUNDS
+from qwenpaw.knowledge import GraphOpsManager, KnowledgeManager
+from qwenpaw.knowledge.project_sync import DEFAULT_PROJECT_SYNC_QUALITY_LOOP_ROUNDS
 
 from .builtin_agents import (
     BUILTIN_UNDERSTAND_DOMAIN_ANALYZER_ID,
@@ -274,7 +274,7 @@ class KnowledgeWorkflowOrchestrator:
         # 仅调度指定阶段
         if quant_stage in {"l1", "l2", "l3"}:
             # 这里只做最简分支，实际可根据需要细化
-            from copaw.knowledge.architecture import QuantizationArchitectureManager
+            from qwenpaw.knowledge.architecture import QuantizationArchitectureManager
             quant_manager = QuantizationArchitectureManager(self.workspace_dir, self.knowledge_dirname)
             # 依赖调度由 QuantizationArchitectureManager 内部保证
             result = quant_manager.schedule_stage_run(
