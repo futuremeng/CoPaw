@@ -680,6 +680,10 @@ def test_project_sync_processing_modes_block_when_semantic_engine_unavailable(tm
     assert hydrated["output_resolution"]["available_modes"] == []
     assert hydrated["output_resolution"]["reason_code"] == "SEMANTIC_ENGINE_UNAVAILABLE"
     assert hydrated["output_scheduler"]["ready_modes"] == ["fast"]
+    assert hydrated["nlp_progress"]["mode"] == "nlp"
+    assert hydrated["nlp_progress"]["status"] == "blocked"
+    assert hydrated["nlp_progress"]["stages"]["ner"]["status"] == "pending"
+    assert hydrated["nlp_progress"]["stages"]["syntax"]["status"] == "pending"
 
 
 def test_project_sync_agentic_mode_does_not_reuse_memify_counts_while_pending(tmp_path: Path, monkeypatch):
@@ -776,10 +780,12 @@ def test_project_sync_agentic_mode_prefers_quality_snapshot_metrics(tmp_path: Pa
     assert modes["nlp"]["entity_count"] == 6
     assert modes["nlp"]["relation_count"] == 11
     assert modes["agentic"]["status"] == "ready"
-    assert modes["agentic"]["available"] is False
-    assert modes["agentic"]["entity_count"] == 0
-    assert modes["agentic"]["relation_count"] == 0
-    assert modes["agentic"]["quality_score"] is None
+    assert modes["agentic"]["available"] is True
+    assert modes["agentic"]["entity_count"] == 14
+    assert modes["agentic"]["relation_count"] == 22
+    assert modes["agentic"]["quality_score"] == 0.91
+    assert hydrated["output_resolution"]["active_mode"] == "agentic"
+    assert hydrated["output_resolution"]["available_modes"] == ["agentic", "nlp"]
 
 
 def test_project_sync_global_metrics_merge_live_source_status(tmp_path: Path, monkeypatch):
@@ -892,6 +898,13 @@ def test_project_sync_nlp_ready_when_required_stages_complete_even_if_cor_unavai
     assert "COR remains optional" in modes["nlp"]["stage"]
     assert hydrated["output_resolution"]["active_mode"] == "nlp"
     assert hydrated["output_resolution"]["reason_code"] == "FALLBACK_TO_NLP"
+    assert hydrated["nlp_progress"]["mode"] == "nlp"
+    assert hydrated["nlp_progress"]["status"] == "ready"
+    assert hydrated["nlp_progress"]["entity_count"] == 12
+    assert hydrated["nlp_progress"]["relation_count"] == 42
+    assert hydrated["nlp_progress"]["stages"]["ner"]["status"] == "ready"
+    assert hydrated["nlp_progress"]["stages"]["syntax"]["status"] == "ready"
+    assert hydrated["nlp_progress"]["stages"]["cor"]["status"] == "unavailable"
 
 
 def test_project_sync_nlp_not_available_when_required_syntax_stage_missing(

@@ -6,7 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from copaw.app.project_realtime_events import collect_project_realtime_changes
@@ -57,3 +57,25 @@ def test_workspace_upload_records_project_realtime_event(
     assert latest_event_id >= 1
     assert "original/note.md" in changed_paths
     assert (project_dir / "original" / "note.md").read_text(encoding="utf-8") == "hello from upload"
+
+
+def test_workspace_files_preserves_agent_http_exception(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    async def _mock_get_agent_for_request(_request):
+        raise HTTPException(status_code=404, detail="Agent 'missing' not found")
+
+    monkeypatch.setattr(
+        workspace_router_module,
+        "get_agent_for_request",
+        _mock_get_agent_for_request,
+    )
+
+    app = FastAPI()
+    app.include_router(workspace_router_module.router)
+    client = TestClient(app)
+
+    response = client.get("/workspace/files")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Agent 'missing' not found"}

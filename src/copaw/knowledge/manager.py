@@ -1799,6 +1799,7 @@ class KnowledgeManager:
         *,
         map_rows: list[dict[str, str]],
         source: KnowledgeSourceSpec | None = None,
+        allow_fallback: bool = True,
     ) -> tuple[str, str, str, str]:
         interlinear_path = ""
         for chunk in chunks:
@@ -1819,6 +1820,9 @@ class KnowledgeManager:
                     )
             except FileNotFoundError:
                 pass
+
+        if not allow_fallback:
+            return "", "", interlinear_path, "interlinear_required"
 
         source_text, input_mode = self._resolve_document_source_text(chunks, source=source)
         return source_text, source_text, interlinear_path, input_mode
@@ -3367,7 +3371,31 @@ class KnowledgeManager:
                 group,
                 map_rows=map_rows,
                 source=source,
+                allow_fallback=source.type in {"text", "chat"},
             )
+            if syntax_input_mode == "interlinear_required" or not str(resolved_text or "").strip():
+                for chunk in group:
+                    chunk["syntax_status"] = "unavailable"
+                    chunk["syntax_input_mode"] = "interlinear_required"
+                    chunk["syntax_interlinear_path"] = str(interlinear_path or "")
+                    chunk["syntax_sentence_count"] = 0
+                    chunk["syntax_token_count"] = 0
+                    chunk["syntax_relation_count"] = 0
+                if progress_callback is not None:
+                    progress_callback(
+                        {
+                            "stage": "syntax",
+                            "done_chunks": index,
+                            "total_chunks": total_documents,
+                            "metrics": {
+                                "syntax_ready_chunk_count": syntax_ready_so_far,
+                                "syntax_sentence_count": syntax_sentence_so_far,
+                                "syntax_token_count": syntax_token_so_far,
+                                "syntax_relation_count": syntax_relation_so_far,
+                            },
+                        }
+                    )
+                continue
             cor_structured_path = ""
             cor_resolution_mode = "identity_fallback"
             mentions = self._load_chunk_ner_mentions(representative)
@@ -3551,7 +3579,30 @@ class KnowledgeManager:
                 group,
                 map_rows=map_rows,
                 source=source,
+                allow_fallback=source.type in {"text", "chat"},
             )
+            if cor_input_mode == "interlinear_required" or not str(chunk_text or "").strip():
+                for chunk in group:
+                    chunk["cor_status"] = "unavailable"
+                    chunk["cor_input_mode"] = "interlinear_required"
+                    chunk["cor_interlinear_path"] = str(interlinear_path or "")
+                    chunk["cor_reason_code"] = "INTERLINEAR_REQUIRED"
+                    chunk["cor_reason"] = "COR requires interlinear input and fallback is disabled."
+                if progress_callback is not None:
+                    progress_callback(
+                        {
+                            "stage": "cor",
+                            "done_chunks": index,
+                            "total_chunks": total_documents,
+                            "metrics": {
+                                "cor_ready_chunk_count": cor_ready_so_far,
+                                "cor_cluster_count": cor_cluster_so_far,
+                                "cor_replacement_count": cor_replacement_so_far,
+                                "cor_effective_chunk_count": cor_effective_so_far,
+                            },
+                        }
+                    )
+                continue
             raw_result: Any = {}
             if ready and config is not None:
                 # HanLP coreference is intentionally disabled in CoPaw runtime.
@@ -3755,7 +3806,28 @@ class KnowledgeManager:
                 group,
                 map_rows=map_rows,
                 source=source,
+                allow_fallback=source.type in {"text", "chat"},
             )
+            if ner_input_mode == "interlinear_required" or not str(resolved_text or "").strip():
+                for chunk in group:
+                    chunk["ner_status"] = "unavailable"
+                    chunk["ner_entity_count"] = 0
+                    chunk["ner_input_mode"] = "interlinear_required"
+                    chunk["ner_reason_code"] = "INTERLINEAR_REQUIRED"
+                    chunk["ner_reason"] = "NER requires interlinear input and fallback is disabled."
+                if progress_callback is not None:
+                    progress_callback(
+                        {
+                            "stage": "ner",
+                            "done_chunks": index,
+                            "total_chunks": total_documents,
+                            "metrics": {
+                                "ner_ready_chunk_count": ner_ready_so_far,
+                                "ner_entity_count": ner_entity_so_far,
+                            },
+                        }
+                    )
+                continue
             cor_structured_path = ""
             cor_resolution_mode = "identity_fallback"
             ner_batch_size = self._resolve_ner_batch_size(config)
@@ -3827,9 +3899,6 @@ class KnowledgeManager:
                 "artifact": "ner_stats",
                 "format_version": _NER_FORMAT_VERSION,
                 "document_path": str(representative.get("document_path") or ""),
-                "chunk_count": len(group),
-                "chunk_ids": [str(chunk.get("chunk_id") or "") for chunk in group],
-                "chunk_paths": [str(chunk.get("chunk_path") or "") for chunk in group],
                 "version_id": self._chunk_version_id(representative),
                 "interlinear_path": interlinear_path,
                 "ner_input_mode": ner_input_mode,

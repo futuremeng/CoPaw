@@ -443,7 +443,7 @@ def test_index_source_writes_ner_files_when_semantic_ready(tmp_path: Path):
             ["AgentRunner", "ToolDispatcher"],
             ready_state,
         ),
-    ):
+    ), patch.object(manager, "_resolve_chunk_interlinear_path", return_value=""):
         manager.index_source(source, config)
 
     payload = json.loads(
@@ -492,6 +492,9 @@ def test_index_source_writes_ner_files_when_semantic_ready(tmp_path: Path):
     assert ner_stats["ner_batch_count"] == 1
     assert ner_stats["ner_worker_restart_count"] == 0
     assert ner_stats["ner_worker_pids"] == []
+    assert "chunk_count" not in ner_stats
+    assert "chunk_ids" not in ner_stats
+    assert "chunk_paths" not in ner_stats
     ner_annotated = ner_annotated_path.read_text(encoding="utf-8")
     assert "[[AgentRunner|label=semantic_token|id=e1|norm=agentrunner|score=1.00]]" in ner_annotated
     assert "[[ToolDispatcher|label=semantic_token|id=e2|norm=tooldispatcher|score=1.00]]" in ner_annotated
@@ -503,6 +506,71 @@ def test_index_source_writes_ner_files_when_semantic_ready(tmp_path: Path):
     syntax_annotated = syntax_annotated_path.read_text(encoding="utf-8")
     assert "# Syntax Annotated" in syntax_annotated
     assert "## Sentence 1" in syntax_annotated
+
+
+def test_index_source_directory_ner_requires_interlinear_without_fallback(tmp_path: Path):
+    project_root = tmp_path / "project-no-interlinear"
+    project_root.mkdir(parents=True, exist_ok=True)
+    (project_root / "README.md").write_text("AgentRunner uses ToolDispatcher.", encoding="utf-8")
+
+    config = Config().knowledge
+    config.index.chunk_size = 10_000
+    source = KnowledgeSourceSpec(
+        id="project-ner-interlinear-required",
+        name="Project NER Interlinear Required",
+        type="directory",
+        location=str(project_root),
+        content="",
+        enabled=True,
+        recursive=True,
+        tags=["project"],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    ready_state = {
+        "engine": "hanlp2",
+        "status": "ready",
+        "reason_code": "HANLP2_READY",
+        "reason": "HanLP2 semantic engine is ready.",
+    }
+    with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
+        manager._semantic_runtime,
+        "tokenize",
+        return_value=(
+            ["AgentRunner", "ToolDispatcher"],
+            ready_state,
+        ),
+    ), patch.object(manager, "_resolve_chunk_interlinear_path", return_value=""):
+        manager.index_source(source, config)
+
+    payload = json.loads(manager._source_index_path(source.id).read_text(encoding="utf-8"))
+    chunk = payload["chunks"][0]
+
+    assert chunk["ner_status"] == "unavailable"
+    assert chunk["ner_entity_count"] == 0
+    assert chunk["ner_input_mode"] == "interlinear_required"
+    assert chunk["ner_reason_code"] == "INTERLINEAR_REQUIRED"
+    assert chunk["ner_reason"] == "NER requires interlinear input and fallback is disabled."
+    assert "ner_path" not in chunk
+    assert "ner_structured_path" not in chunk
+    assert "ner_annotated_path" not in chunk
+    assert "ner_stats_path" not in chunk
+    assert chunk["syntax_status"] == "unavailable"
+    assert chunk["syntax_input_mode"] == "interlinear_required"
+    assert chunk["syntax_sentence_count"] == 0
+    assert chunk["syntax_token_count"] == 0
+    assert chunk["syntax_relation_count"] == 0
+    assert "syntax_path" not in chunk
+    assert "syntax_structured_path" not in chunk
+    assert "syntax_annotated_path" not in chunk
+    assert chunk["cor_status"] == "unavailable"
+    assert chunk["cor_input_mode"] == "interlinear_required"
+    assert chunk["cor_reason_code"] == "INTERLINEAR_REQUIRED"
+    assert chunk["cor_reason"] == "COR requires interlinear input and fallback is disabled."
+    assert "cor_path" not in chunk
+    assert "cor_structured_path" not in chunk
+    assert "cor_annotated_path" not in chunk
 
 
 def test_index_source_skips_ner_files_when_semantic_unavailable(tmp_path: Path):

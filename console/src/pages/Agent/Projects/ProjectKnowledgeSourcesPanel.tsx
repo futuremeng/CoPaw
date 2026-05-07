@@ -21,7 +21,7 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
           <Typography.Text type="secondary">
             {t(
               "projects.knowledge.sourcesRoleHint",
-              "Sources（L1 基线，已对齐 Interlinear 工件）—— L1 状态与统计字段全部基于 Interlinear/轻量化工件，包含文档数、切片数、句子数、轻量词数、字数。indexed 字段仅代表 Interlinear 工件存在。",
+              "Sources（L1 基线，已对齐 interlinear 工件）—— L1 状态与统计字段全部基于 interlinear/轻量化工件，包含文档数、切片数、句子数、轻量词数、字数。indexed 字段仅代表 interlinear 工件存在。",
             )}
           </Typography.Text>
         </div>
@@ -43,7 +43,7 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
         <div className={styles.projectKnowledgeSignalCard}>
           <Typography.Text type="secondary">
             {t("projects.knowledge.signalSentences", "Sentences")}
-            <span title="基于 Interlinear 工件逐句统计">🛈</span>
+            <span title="基于 interlinear 工件逐句统计">🛈</span>
           </Typography.Text>
           <Typography.Text strong>{knowledgeState.quantMetrics.sentenceCount}</Typography.Text>
         </div>
@@ -57,7 +57,7 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
         <div className={styles.projectKnowledgeSignalCard}>
           <Typography.Text type="secondary">
             {t("projects.knowledge.signalCharacters", "Characters")}
-            <span title="基于 Interlinear 工件逐句统计">🛈</span>
+            <span title="基于 interlinear 工件逐句统计">🛈</span>
           </Typography.Text>
           <Typography.Text strong>{knowledgeState.quantMetrics.charCount || 0}</Typography.Text>
         </div>

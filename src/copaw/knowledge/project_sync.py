@@ -496,6 +496,7 @@ class ProjectKnowledgeSyncManager:
             "global_metrics": {},
             "l1_metrics": {},
             "l2_metrics": {},
+            "nlp_progress": {},
             "l3_metrics": {},
             "lanes": {
                 "retrieval": {
@@ -695,7 +696,7 @@ class ProjectKnowledgeSyncManager:
         last_result = state.get("last_result") or {}
         if not isinstance(last_result, dict):
             last_result = {}
-        index_result = last_result.get("index") or {}
+        index_result = last_result.get("index") if isinstance(last_result, dict) else {}
         memify_result = last_result.get("memify") or {}
         quality_loop_result = last_result.get("quality_loop") or {}
         workflow_run = last_result.get("workflow_run") or {}
@@ -869,9 +870,9 @@ class ProjectKnowledgeSyncManager:
                     }
                 )
             if mode == "agentic":
-                metrics[mode]["entity_count"] = 0
-                metrics[mode]["relation_count"] = 0
-                metrics[mode]["quality_score"] = None
+                metrics[mode]["entity_count"] = _safe_int(item.get("entity_count"))
+                metrics[mode]["relation_count"] = _safe_int(item.get("relation_count"))
+                metrics[mode]["quality_score"] = quality_score
         return metrics
 
     def _build_l1_metrics(
@@ -952,6 +953,122 @@ class ProjectKnowledgeSyncManager:
             "entity_count": 0,
             "relation_count": 0,
             "quality_score": None,
+        }
+
+    @staticmethod
+    def _resolve_nlp_stage_status(
+        *,
+        mode_status: str,
+        total_chunks: int,
+        ready_chunks: int,
+        done_chunks: int,
+        optional: bool = False,
+        reason_code: str = "",
+    ) -> str:
+        if ready_chunks > 0:
+            if mode_status == "running" and total_chunks > 0 and done_chunks < total_chunks:
+                return "running"
+            return "ready"
+        if optional:
+            normalized_reason = str(reason_code or "").strip()
+            cor_unavailable = (
+                normalized_reason
+                and normalized_reason != "HANLP2_TASK_READY"
+                and normalized_reason != "HANLP2_COREF_HEURISTIC_READY"
+                and mode_status not in {"running", "queued"}
+            )
+            if cor_unavailable:
+                return "unavailable"
+        if mode_status == "running":
+            return "running"
+        return "pending"
+
+    def _build_nlp_progress(
+        self,
+        processing_modes: list[dict[str, Any]],
+        l2_metrics: dict[str, Any],
+    ) -> dict[str, Any]:
+        mode_map = {
+            str(item.get("mode") or "").strip(): item
+            for item in processing_modes
+            if isinstance(item, dict)
+        }
+        nlp_mode = mode_map.get("nlp") or {}
+        mode_status = str(nlp_mode.get("status") or "idle").strip().lower()
+        total_chunks = _safe_int(l2_metrics.get("total_chunks"))
+
+        cor_done = _safe_int(l2_metrics.get("cor_done_chunks"))
+        ner_done = _safe_int(l2_metrics.get("ner_done_chunks"))
+        syntax_done = _safe_int(l2_metrics.get("syntax_done_chunks"))
+        cor_ready = _safe_int(l2_metrics.get("cor_ready_chunk_count"))
+        ner_ready = _safe_int(l2_metrics.get("ner_ready_chunk_count"))
+        syntax_ready = _safe_int(l2_metrics.get("syntax_ready_chunk_count"))
+        cor_reason_code = str(l2_metrics.get("cor_reason_code") or "").strip()
+        cor_reason = str(l2_metrics.get("cor_reason") or "").strip()
+
+        return {
+            "mode": "nlp",
+            "status": mode_status,
+            "stage": str(nlp_mode.get("stage") or "").strip(),
+            "summary": str(nlp_mode.get("summary") or "").strip(),
+            "updated_at": str(
+                l2_metrics.get("metrics_updated_at")
+                or nlp_mode.get("last_updated_at")
+                or ""
+            ).strip()
+            or None,
+            "total_chunks": total_chunks,
+            "entity_count": _safe_int(l2_metrics.get("ner_entity_count")),
+            "relation_count": _safe_int(l2_metrics.get("syntax_relation_count")),
+            "stages": {
+                "ner": {
+                    "key": "ner",
+                    "required": True,
+                    "status": self._resolve_nlp_stage_status(
+                        mode_status=mode_status,
+                        total_chunks=total_chunks,
+                        ready_chunks=ner_ready,
+                        done_chunks=ner_done,
+                    ),
+                    "done_chunks": ner_done,
+                    "ready_chunks": ner_ready,
+                    "entity_count": _safe_int(l2_metrics.get("ner_entity_count")),
+                },
+                "syntax": {
+                    "key": "syntax",
+                    "required": True,
+                    "status": self._resolve_nlp_stage_status(
+                        mode_status=mode_status,
+                        total_chunks=total_chunks,
+                        ready_chunks=syntax_ready,
+                        done_chunks=syntax_done,
+                    ),
+                    "done_chunks": syntax_done,
+                    "ready_chunks": syntax_ready,
+                    "sentence_count": _safe_int(l2_metrics.get("syntax_sentence_count")),
+                    "token_count": _safe_int(l2_metrics.get("syntax_token_count")),
+                    "relation_count": _safe_int(l2_metrics.get("syntax_relation_count")),
+                },
+                "cor": {
+                    "key": "cor",
+                    "required": False,
+                    "status": self._resolve_nlp_stage_status(
+                        mode_status=mode_status,
+                        total_chunks=total_chunks,
+                        ready_chunks=cor_ready,
+                        done_chunks=cor_done,
+                        optional=True,
+                        reason_code=cor_reason_code,
+                    ),
+                    "done_chunks": cor_done,
+                    "ready_chunks": cor_ready,
+                    "cluster_count": _safe_int(l2_metrics.get("cor_cluster_count")),
+                    "replacement_count": _safe_int(l2_metrics.get("cor_replacement_count")),
+                    "effective_chunk_count": _safe_int(l2_metrics.get("cor_effective_chunk_count")),
+                    "reason_code": cor_reason_code,
+                    "reason": cor_reason,
+                },
+            },
         }
 
     def _resolve_index_result(self, state: dict[str, Any]) -> dict[str, Any]:
@@ -1173,9 +1290,11 @@ class ProjectKnowledgeSyncManager:
             if isinstance(snapshot, dict):
                 agentic_snapshot = snapshot
 
-        agentic_entity_count = 0
-        agentic_relation_count = 0
-        agentic_quality_score = None
+        agentic_entity_count = _safe_int(agentic_snapshot.get("entity_count"))
+        agentic_relation_count = _safe_int(agentic_snapshot.get("relation_count"))
+        agentic_quality_score = _safe_float(agentic_snapshot.get("quality_score"))
+        if agentic_quality_score is None:
+            agentic_quality_score = quality_score
 
         semantic_state = state.get("semantic_engine")
         if not isinstance(semantic_state, dict):
@@ -1216,7 +1335,11 @@ class ProjectKnowledgeSyncManager:
         )
         required_stage_ready = ner_stage_ready and syntax_stage_ready
         nlp_available = required_stage_ready
-        agentic_available = False
+        agentic_available = (
+            agentic_entity_count > 0
+            or agentic_relation_count > 0
+            or agentic_quality_score is not None
+        )
 
         fast_running = sync_status in {"pending", "indexing"} or sync_stage in {"pending", "indexing"}
         nlp_running = semantic_ready and (sync_status == "graphifying" or sync_stage == "graphifying" or sync_stage.startswith("graphify"))
@@ -1334,7 +1457,7 @@ class ProjectKnowledgeSyncManager:
                     if agentic_status == "running"
                     else semantic_summary
                     if agentic_status == "blocked"
-                    else "Multi-agent outputs ready"
+                    else "Agentic audit-enhanced outputs ready"
                     if agentic_available
                     else "Workflow run exists but outputs are incomplete"
                     if workflow_run_id
@@ -1344,7 +1467,7 @@ class ProjectKnowledgeSyncManager:
                     semantic_summary
                     if agentic_status == "blocked"
                     else
-                    "Multi-agent knowledge outputs are ready and preferred for consumption."
+                    "Agentic audit-enhanced outputs are ready and extend the NLP baseline with review and quality improvements."
                     if agentic_available
                     else "High-quality long-running processing continues in the background."
                 ),
@@ -1647,6 +1770,7 @@ class ProjectKnowledgeSyncManager:
         hydrated["mode_metrics"] = mode_metrics
         hydrated["l1_metrics"] = l1_metrics
         hydrated["l2_metrics"] = l2_metrics
+        hydrated["nlp_progress"] = self._build_nlp_progress(processing_modes, l2_metrics)
         hydrated["l3_metrics"] = l3_metrics
         hydrated["lanes"] = self._build_lane_state(processing_modes)
         hydrated["quantization_stages"] = self._build_quantization_stage_state(

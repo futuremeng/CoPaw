@@ -1711,7 +1711,7 @@ class KnowledgeNLPConfig(BaseModel):
         default=32,
         ge=1,
         le=512,
-        description="Sentence batch size for NER processing on Interlinear text.",
+        description="Sentence batch size for NER processing on interlinear text.",
     )
     model_home: str = Field(
         default="",

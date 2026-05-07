@@ -2096,7 +2096,7 @@
       "autoSinkUpdateFailed": "更新自动沉淀设置失败",
       "manualSinkStarted": "已启动知识沉淀任务",
       "manualSinkFailed": "启动知识沉淀任务失败",
-      "nerRoleHint": "NER 以 Interlinear 行句标准化文本为输入，并将结果与统计写入 .knowledge/ner。",
+      "nerRoleHint": "NER 以 interlinear 行句标准化文本为输入，并将结果与统计写入 .knowledge/ner。",
       "nerEmptySource": "尚未加载来源内容，请先打开 Sources 或触发同步。",
       "nerReadyChunks": "就绪文档数",
       "nerUnavailableChunks": "不可用文档数",
@@ -2271,7 +2271,7 @@
         "compareNote": "L2 提供实体与关系的结构化基础，L3 在此基础上继续做多智能体增强与质量提升。"
       },
       "outputsHint": "按模式查看知识产物，系统在高阶产物缺失时会自动降级。",
-      "sourcesRoleHint": "Sources 是 L1 基础统计层：文档数与快照数按 raw 文件夹文件数统计，切片数按 chunks 文件夹文件数统计，句子数与字数按 Interlinear 工件统计，并展示轻量词数与索引覆盖率。",
+      "sourcesRoleHint": "Sources 是 L1 基础统计层：文档数与快照数按 raw 文件夹文件数统计，切片数按 chunks 文件夹文件数统计，句子数与字数按 interlinear 工件统计，并展示轻量词数与索引覆盖率。",
       "processingRoleHint": "这里只展示 L2 与 L3 的处理进度，重点聚焦实体与关系的构建、增强与呈现。",
       "outputsRoleHint": "这里聚焦最终消费层与产物清单，不重复展示加工调度细节。",
       "sourcesInventoryHint": "先确认项目知识源是否齐全、是否已索引，并核对每个来源的 L1 基础统计是否完整。",

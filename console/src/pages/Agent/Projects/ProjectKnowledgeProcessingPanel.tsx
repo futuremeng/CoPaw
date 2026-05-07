@@ -28,6 +28,26 @@ function modeHasIndependentOutputs(mode: ProjectKnowledgeModeState | null): bool
   return mode.available || mode.entityCount > 0 || mode.relationCount > 0 || mode.qualityScore != null;
 }
 
+function displayEntityCount(mode: ProjectKnowledgeModeState | null): number {
+  if (!mode) {
+    return 0;
+  }
+  if (mode.mode === "nlp") {
+    return Math.max(0, Number(mode.nerEntityCount || mode.entityCount || 0));
+  }
+  return Math.max(0, Number(mode.entityCount || 0));
+}
+
+function displayRelationCount(mode: ProjectKnowledgeModeState | null): number {
+  if (!mode) {
+    return 0;
+  }
+  if (mode.mode === "nlp") {
+    return Math.max(0, Number(mode.syntaxRelationCount || mode.relationCount || 0));
+  }
+  return Math.max(0, Number(mode.relationCount || 0));
+}
+
 function formatModeCountValue(
   mode: ProjectKnowledgeModeState | null,
   value: number,
@@ -359,21 +379,6 @@ function buildNlpStageStats(
           label: t("projects.knowledge.processing.nerEntities", "识别实体数"),
           value: mode.nerEntityCount || 0,
         },
-        {
-          key: "batchCount",
-          label: t("projects.knowledge.nerBatchCount", "NER Batches"),
-          value: mode.nerBatchCount || 0,
-        },
-        {
-          key: "workerRestartCount",
-          label: t("projects.knowledge.nerWorkerRestartCount", "Worker Restarts"),
-          value: mode.nerWorkerRestartCount || 0,
-        },
-        {
-          key: "workerPidCount",
-          label: t("projects.knowledge.nerWorkerPidCount", "Worker PID Count"),
-          value: mode.nerWorkerPidCount || 0,
-        },
       ],
     },
     {
@@ -534,11 +539,11 @@ export default function ProjectKnowledgeProcessingPanel(
       <div className={styles.projectKnowledgeSignalGrid}>
         <div className={styles.projectKnowledgeSignalCard}>
           <Typography.Text type="secondary">{t("projects.knowledge.processing.l2Entities", "L2 实体数")}</Typography.Text>
-          <Typography.Text strong>{l2Mode?.entityCount || 0}</Typography.Text>
+          <Typography.Text strong>{displayEntityCount(l2Mode)}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
           <Typography.Text type="secondary">{t("projects.knowledge.processing.l2Relations", "L2 关系数")}</Typography.Text>
-          <Typography.Text strong>{l2Mode?.relationCount || 0}</Typography.Text>
+          <Typography.Text strong>{displayRelationCount(l2Mode)}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
           <Typography.Text type="secondary">{t("projects.knowledge.processing.l3Entities", "L3 实体数")}</Typography.Text>
@@ -637,11 +642,11 @@ export default function ProjectKnowledgeProcessingPanel(
                 <div className={styles.projectKnowledgeModeMetrics}>
                   <div className={styles.projectKnowledgeModeMetric}>
                     <Typography.Text type="secondary">{t("projects.knowledge.entities", "实体数")}</Typography.Text>
-                    <Typography.Text strong>{formatModeCountValue(mode, mode.entityCount, t)}</Typography.Text>
+                    <Typography.Text strong>{formatModeCountValue(mode, displayEntityCount(mode), t)}</Typography.Text>
                   </div>
                   <div className={styles.projectKnowledgeModeMetric}>
                     <Typography.Text type="secondary">{t("projects.knowledge.signalRelations", "关系数")}</Typography.Text>
-                    <Typography.Text strong>{formatModeCountValue(mode, mode.relationCount, t)}</Typography.Text>
+                    <Typography.Text strong>{formatModeCountValue(mode, displayRelationCount(mode), t)}</Typography.Text>
                   </div>
                   <div className={styles.projectKnowledgeModeMetric}>
                     <Typography.Text type="secondary">
@@ -785,7 +790,7 @@ export default function ProjectKnowledgeProcessingPanel(
             <Typography.Text type="secondary">
               {t(
                 "projects.knowledge.processing.compareNote",
-                "L2 提供实体与关系的结构化基础，L3 在此基础上继续做多智能体增强与质量提升。",
+                "L2 提供实体与关系的结构化基础，L3 通过智能体对 NLP 结果进行审计增强与质量提升。",
               )}
             </Typography.Text>
           </div>

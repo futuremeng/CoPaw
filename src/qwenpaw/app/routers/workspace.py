@@ -110,6 +110,8 @@ async def list_working_files(
             for file in workspace_manager.list_working_mds()
         ]
         return files
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -135,6 +137,8 @@ async def read_working_file(
         return MdFileContent(content=content)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -159,6 +163,8 @@ async def write_working_file(
         )
         workspace_manager.write_working_md(md_name, body.content)
         return {"written": True}
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -184,6 +190,8 @@ async def list_memory_files(
             for file in workspace_manager.list_memory_mds()
         ]
         return files
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -209,6 +217,8 @@ async def read_memory_file(
         return MdFileContent(content=content)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -233,6 +243,8 @@ async def write_memory_file(
         )
         workspace_manager.write_memory_md(md_name, body.content)
         return {"written": True}
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 

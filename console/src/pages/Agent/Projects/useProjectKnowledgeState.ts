@@ -9,6 +9,7 @@ import type {
   KnowledgeSourceSemanticStatus,
   ProjectKnowledgeGlobalMetricsPayload,
   ProjectKnowledgeModeMetricsPayload,
+  ProjectKnowledgeNlpProgressPayload,
   ProjectKnowledgeOutputResolutionPayload,
   ProjectKnowledgeModeOutputPayload,
   ProjectKnowledgeQuantizationStage,
@@ -779,7 +780,7 @@ export function deriveSourceQuantBaseMetrics(
   syncState: ProjectKnowledgeSyncState | null,
 ): ProjectKnowledgeSourceQuantBaseMetrics {
   const totalSources = projectSources.length;
-  // indexed 仅代表 Interlinear 工件存在，统计已与后端一致
+  // indexed 仅代表 interlinear 工件存在，统计已与后端一致
   const indexedSources = projectSources.filter((item) => item.status.indexed).length;
 
   const sourceDocumentCount = sumSourceMetric(projectSources, "document_count");
@@ -842,6 +843,11 @@ function parseBackendProcessingModes(
       const modeMetric = getBackendModeMetric(syncState, modePayload.mode);
       const l2Progress = syncState?.l2_progress;
       const l2Metrics = syncState?.l2_metrics;
+      const nlpProgress = syncState?.nlp_progress as ProjectKnowledgeNlpProgressPayload | undefined;
+      const nlpStages = nlpProgress?.stages;
+      const nlpNerStage = nlpStages?.ner;
+      const nlpSyntaxStage = nlpStages?.syntax;
+      const nlpCorStage = nlpStages?.cor;
       const isNlpMode = modePayload.mode === "nlp";
       const next: ProjectKnowledgeModeState = {
         mode: modePayload.mode,
@@ -855,11 +861,26 @@ function parseBackendProcessingModes(
         jobId: String(modePayload.job_id || "").trim(),
         documentCount: normalizeNumber(modePayload.document_count),
         chunkCount: normalizeNumber(modePayload.chunk_count),
-        entityCount: normalizeNumber(modePayload.entity_count),
-        relationCount: normalizeNumber(modePayload.relation_count),
+        entityCount: isNlpMode
+          ? Math.max(
+            normalizeNumber(nlpNerStage?.entity_count),
+            normalizeNumber(modeMetric?.ner_entity_count),
+            normalizeNumber(l2Metrics?.ner_entity_count),
+            normalizeNumber(modePayload.entity_count),
+          )
+          : normalizeNumber(modePayload.entity_count),
+        relationCount: isNlpMode
+          ? Math.max(
+            normalizeNumber(nlpSyntaxStage?.relation_count),
+            normalizeNumber(modeMetric?.syntax_relation_count),
+            normalizeNumber(l2Metrics?.syntax_relation_count),
+            normalizeNumber(modePayload.relation_count),
+          )
+          : normalizeNumber(modePayload.relation_count),
         qualityScore: normalizeNullableNumber(modePayload.quality_score),
         corReadyChunkCount: isNlpMode
           ? Math.max(
+            normalizeNumber(nlpCorStage?.ready_chunks),
             normalizeNumber(modeMetric?.cor_ready_chunk_count),
             normalizeNumber(l2Metrics?.cor_ready_chunk_count),
           )
@@ -888,12 +909,14 @@ function parseBackendProcessingModes(
         corReason: String(modeMetric?.cor_reason || "").trim(),
         nerReadyChunkCount: isNlpMode
           ? Math.max(
+            normalizeNumber(nlpNerStage?.ready_chunks),
             normalizeNumber(modeMetric?.ner_ready_chunk_count),
             normalizeNumber(l2Metrics?.ner_ready_chunk_count),
           )
           : normalizeNumber(modeMetric?.ner_ready_chunk_count),
         nerEntityCount: isNlpMode
           ? Math.max(
+            normalizeNumber(nlpNerStage?.entity_count),
             normalizeNumber(modeMetric?.ner_entity_count),
             normalizeNumber(l2Metrics?.ner_entity_count),
           )
@@ -930,33 +953,61 @@ function parseBackendProcessingModes(
           ),
         syntaxReadyChunkCount: isNlpMode
           ? Math.max(
+            normalizeNumber(nlpSyntaxStage?.ready_chunks),
             normalizeNumber(modeMetric?.syntax_ready_chunk_count),
             normalizeNumber(l2Metrics?.syntax_ready_chunk_count),
           )
           : normalizeNumber(modeMetric?.syntax_ready_chunk_count),
         syntaxSentenceCount: isNlpMode
           ? Math.max(
+            normalizeNumber(nlpSyntaxStage?.sentence_count),
             normalizeNumber(modeMetric?.syntax_sentence_count),
             normalizeNumber(l2Metrics?.syntax_sentence_count),
           )
           : normalizeNumber(modeMetric?.syntax_sentence_count),
         syntaxTokenCount: isNlpMode
           ? Math.max(
+            normalizeNumber(nlpSyntaxStage?.token_count),
             normalizeNumber(modeMetric?.syntax_token_count),
             normalizeNumber(l2Metrics?.syntax_token_count),
           )
           : normalizeNumber(modeMetric?.syntax_token_count),
         syntaxRelationCount: isNlpMode
           ? Math.max(
+            normalizeNumber(nlpSyntaxStage?.relation_count),
             normalizeNumber(modeMetric?.syntax_relation_count),
             normalizeNumber(l2Metrics?.syntax_relation_count),
           )
           : normalizeNumber(modeMetric?.syntax_relation_count),
-        l2TotalChunks: isNlpMode ? normalizeNumber(l2Progress?.total_chunks) : undefined,
-        corDoneChunks: isNlpMode ? normalizeNumber(l2Progress?.cor_done_chunks) : undefined,
-        nerDoneChunks: isNlpMode ? normalizeNumber(l2Progress?.ner_done_chunks) : undefined,
-        syntaxDoneChunks: isNlpMode ? normalizeNumber(l2Progress?.syntax_done_chunks) : undefined,
+        l2TotalChunks: isNlpMode
+          ? Math.max(
+            normalizeNumber(nlpProgress?.total_chunks),
+            normalizeNumber(l2Progress?.total_chunks),
+          )
+          : undefined,
+        corDoneChunks: isNlpMode
+          ? Math.max(
+            normalizeNumber(nlpCorStage?.done_chunks),
+            normalizeNumber(l2Progress?.cor_done_chunks),
+          )
+          : undefined,
+        nerDoneChunks: isNlpMode
+          ? Math.max(
+            normalizeNumber(nlpNerStage?.done_chunks),
+            normalizeNumber(l2Progress?.ner_done_chunks),
+          )
+          : undefined,
+        syntaxDoneChunks: isNlpMode
+          ? Math.max(
+            normalizeNumber(nlpSyntaxStage?.done_chunks),
+            normalizeNumber(l2Progress?.syntax_done_chunks),
+          )
+          : undefined,
       };
+      if (isNlpMode) {
+        next.corReasonCode = String(nlpCorStage?.reason_code || next.corReasonCode || "").trim();
+        next.corReason = String(nlpCorStage?.reason || next.corReason || "").trim();
+      }
       return next;
     })
     .filter((item): item is ProjectKnowledgeModeState => item !== null);
@@ -2094,12 +2145,14 @@ export function useProjectKnowledgeState(
       quantMetrics.chunkCount,
     );
     const nlpEntityCount = Math.max(
-      getBackendModeMetricNumber(syncState, "nlp", "entity_count"),
-      getSyncNodeCount(syncState),
+      getBackendModeMetricNumber(syncState, "nlp", "ner_entity_count"),
+      normalizeNumber(syncState?.l2_metrics?.ner_entity_count),
+      getSyncIndexMetric(syncState, "ner_entity_count"),
     );
     const nlpRelationCount = Math.max(
-      getBackendModeMetricNumber(syncState, "nlp", "relation_count"),
-      getSyncRelationCount(syncState),
+      getBackendModeMetricNumber(syncState, "nlp", "syntax_relation_count"),
+      normalizeNumber(syncState?.l2_metrics?.syntax_relation_count),
+      getSyncIndexMetric(syncState, "syntax_relation_count"),
     );
     const nlpCorReadyChunkCount = Math.max(
       getBackendModeMetricNumber(syncState, "nlp", "cor_ready_chunk_count"),

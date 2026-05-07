@@ -159,6 +159,39 @@ export interface ProjectKnowledgeL2MetricsPayload {
   syntax_relation_count?: number;
 }
 
+export interface ProjectKnowledgeNlpStagePayload {
+  key: "ner" | "syntax" | "cor";
+  required: boolean;
+  status: "ready" | "running" | "pending" | "unavailable";
+  done_chunks?: number;
+  ready_chunks?: number;
+  entity_count?: number;
+  sentence_count?: number;
+  token_count?: number;
+  relation_count?: number;
+  cluster_count?: number;
+  replacement_count?: number;
+  effective_chunk_count?: number;
+  reason_code?: string;
+  reason?: string;
+}
+
+export interface ProjectKnowledgeNlpProgressPayload {
+  mode: "nlp";
+  status: "idle" | "queued" | "running" | "ready" | "failed" | "blocked";
+  stage?: string;
+  summary?: string;
+  updated_at?: string | null;
+  total_chunks?: number;
+  entity_count?: number;
+  relation_count?: number;
+  stages?: {
+    ner?: ProjectKnowledgeNlpStagePayload;
+    syntax?: ProjectKnowledgeNlpStagePayload;
+    cor?: ProjectKnowledgeNlpStagePayload;
+  };
+}
+
 export interface ProjectKnowledgeGlobalMetricsPayload {
   document_count?: number;
   snapshot_count?: number;
@@ -227,6 +260,7 @@ export interface ProjectKnowledgeSyncState {
   global_metrics?: ProjectKnowledgeGlobalMetricsPayload;
   l2_progress?: ProjectKnowledgeL2ProgressPayload;
   l2_metrics?: ProjectKnowledgeL2MetricsPayload;
+  nlp_progress?: ProjectKnowledgeNlpProgressPayload;
   semantic_engine?: ProjectKnowledgeSemanticEngineState;
 }
 

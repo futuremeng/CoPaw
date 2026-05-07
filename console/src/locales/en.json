@@ -2251,7 +2251,7 @@
       "autoSinkUpdateFailed": "Failed to update auto sink setting",
       "manualSinkStarted": "Knowledge sink started",
       "manualSinkFailed": "Failed to start knowledge sink",
-      "nerRoleHint": "NER uses Interlinear sentence-normalized text as input and persists results/statistics under .knowledge/ner.",
+      "nerRoleHint": "NER uses interlinear sentence-normalized text as input and persists results/statistics under .knowledge/ner.",
       "nerEmptySource": "No source content loaded yet. Open Sources or trigger sync first.",
       "nerReadyChunks": "Ready Documents",
       "nerUnavailableChunks": "Unavailable Documents",
@@ -2410,7 +2410,7 @@
         "stageUnavailable": "Unavailable"
       },
       "outputsHint": "View knowledge outputs by mode. The system automatically falls back when higher layers are unavailable.",
-      "sourcesRoleHint": "This tab is the L1 stats layer: documents and snapshots come from raw files, chunks come from files under chunks, and sentences/characters come from Interlinear artifacts, alongside lightweight token count and index coverage.",
+      "sourcesRoleHint": "This tab is the L1 stats layer: documents and snapshots come from raw files, chunks come from files under chunks, and sentences/characters come from interlinear artifacts, alongside lightweight token count and index coverage.",
       "processingRoleHint": "This tab focuses on the three processing lanes, scheduler state, and run readiness only.",
       "outputsRoleHint": "This tab focuses on active consumption layer and artifacts, without duplicating scheduler details.",
       "sourcesInventoryHint": "Confirm that project sources are complete, indexed, and covering the expected document inventory.",

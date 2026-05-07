@@ -184,7 +184,7 @@ export default function ProjectKnowledgeNerPanel(props: ProjectKnowledgeNerPanel
           <Typography.Text type="secondary">
             {t(
               "projects.knowledge.nerRoleHint",
-              "NER uses Interlinear sentence-normalized text as input and persists results/statistics under .knowledge/ner.",
+              "NER uses interlinear sentence-normalized text as input and persists results/statistics under .knowledge/ner.",
             )}
           </Typography.Text>
         </div>

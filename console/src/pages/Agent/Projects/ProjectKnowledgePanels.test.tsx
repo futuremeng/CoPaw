@@ -599,24 +599,37 @@ describe("project knowledge supporting panels", () => {
 
     render(<ProjectKnowledgeProcessingPanel knowledgeState={knowledgeState} />);
 
+    const expectSignalValue = (label: string, value: string) => {
+      const labelNode = screen.getByText(label);
+      const cardNode = labelNode.closest("div");
+      expect(cardNode).not.toBeNull();
+      if (!(cardNode instanceof HTMLElement)) {
+        return;
+      }
+      const valueNode = within(cardNode).getByText(value);
+      expect(valueNode).not.toBeNull();
+    };
+
     expect(screen.getByText("Processing")).not.toBeNull();
     expect(screen.queryByText("极速模式")).toBeNull();
     expect(screen.getAllByText("NLP 模式").length).toBeGreaterThan(0);
     expect(screen.getAllByText("多智能体模式").length).toBeGreaterThan(0);
     expect(screen.getByText("L2 实体数")).not.toBeNull();
     expect(screen.getByText("L3 关系数")).not.toBeNull();
+    expectSignalValue("L2 实体数", "9");
+    expectSignalValue("L2 关系数", "13");
     expect(screen.getByText("实体关系抽取")).not.toBeNull();
     expect(screen.getByText("多智能体增强")).not.toBeNull();
     expect(screen.getAllByText(/Semantic engine unavailable: HanLP2 module is not installed\./).length).toBeGreaterThan(0);
     expect(screen.getByText("COR")).not.toBeNull();
-    expect(screen.getByText("NER")).not.toBeNull();
-    expect(screen.getByText("Syntax")).not.toBeNull();
+    expect(screen.getAllByText("NER").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Syntax").length).toBeGreaterThan(0);
     expect(screen.getAllByText("就绪文档数").length).toBeGreaterThan(0);
     expect(screen.getByText("聚类数")).not.toBeNull();
     expect(screen.getByText("识别实体数")).not.toBeNull();
-    expect(screen.getByText("NER Batches")).not.toBeNull();
-    expect(screen.getByText("Worker Restarts")).not.toBeNull();
-    expect(screen.getByText("Worker PID Count")).not.toBeNull();
+    expect(screen.queryByText("NER Batches")).toBeNull();
+    expect(screen.queryByText("Worker Restarts")).toBeNull();
+    expect(screen.queryByText("Worker PID Count")).toBeNull();
     expect(screen.getByText("Token 数")).not.toBeNull();
     expect(screen.getByText("句法关系数")).not.toBeNull();
     expect(screen.getByText("42")).not.toBeNull();
@@ -624,7 +637,7 @@ describe("project knowledge supporting panels", () => {
     expect(runNlpButton.disabled).toBe(false);
     expect(runNlpButton.parentElement?.getAttribute("title")).toBeNull();
     expect(screen.getByText("当前发起阶段: L2")).not.toBeNull();
-    expect(screen.getByText("L2 提供实体与关系的结构化基础，L3 在此基础上继续做多智能体增强与质量提升。")).not.toBeNull();
+    expect(screen.getByText("L2 提供实体与关系的结构化基础，L3 通过智能体对 NLP 结果进行审计增强与质量提升。")).not.toBeNull();
   });
 
   it("marks stale queued processing snapshots", () => {
