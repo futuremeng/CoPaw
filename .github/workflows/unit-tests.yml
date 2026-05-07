@@ -4,17 +4,21 @@ on:
   push:
     branches: [main, master, dev, develop]
     paths:
+      - 'src/copaw/**'
       - 'src/qwenpaw/**'
       - 'tests/unit/**'
       - 'tests/conftest.py'
+      - 'scripts/check_namespace_boundaries.py'
       - 'pyproject.toml'
       - '.github/workflows/unit-tests.yml'
   pull_request:
     branches: [main, master, dev, develop]
     paths:
+      - 'src/copaw/**'
       - 'src/qwenpaw/**'
       - 'tests/unit/**'
       - 'tests/conftest.py'
+      - 'scripts/check_namespace_boundaries.py'
       - 'pyproject.toml'
       - '.github/workflows/unit-tests.yml'
   workflow_dispatch:
@@ -45,6 +49,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
+
+      - name: Check namespace boundaries (gate)
+        if: matrix.python-version == '3.10'
+        run: |
+          git fetch --depth=1 https://github.com/agentscope-ai/QwenPaw.git main:qwenpaw_upstream_main || true
+          python scripts/check_namespace_boundaries.py --upstream-ref qwenpaw_upstream_main
 
       - name: Run all unit tests (informational — pre-existing failures tolerated)
         continue-on-error: true
