@@ -5,7 +5,7 @@ import os
 import json
 import re
 from pathlib import Path
-from typing import Optional, Union, Dict, List, Literal, Any, Set
+from typing import Optional, Union, Dict, List, Literal, Any, Set, cast
 
 from pydantic import (
     BaseModel,
@@ -501,6 +501,118 @@ class EmbeddingConfig(BaseModel):
     max_batch_size: int = Field(
         default=10,
         description="Maximum batch size for embedding",
+    )
+
+
+class AutoMemorySearchConfig(BaseModel):
+    """Auto memory search configuration."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether to enable automatic memory search",
+    )
+
+    max_results: int = Field(
+        default=1,
+        ge=1,
+        description=(
+            "Maximum number of results to return when auto memory "
+            "search is enabled"
+        ),
+    )
+
+    min_score: float = Field(
+        default=0.3,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Minimum relevance score for results when auto memory "
+            "search is enabled"
+        ),
+    )
+
+
+class EmbeddingModelConfig(BaseModel):
+    """Embedding model configuration for ReMeLight."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    backend: str = Field(
+        default="openai",
+        description="Embedding backend (openai, etc.)",
+    )
+    api_key: str = Field(
+        default="",
+        description="API key for embedding provider",
+    )
+    base_url: str = Field(default="", description="Base URL for embedding API")
+    model_name: str = Field(default="", description="Embedding model name")
+    dimensions: int = Field(default=1024, description="Embedding dimensions")
+    enable_cache: bool = Field(
+        default=True,
+        description="Whether to enable embedding cache",
+    )
+    use_dimensions: bool = Field(
+        default=False,
+        description="Whether to use custom dimensions",
+    )
+    max_cache_size: int = Field(default=3000, description="Maximum cache size")
+    max_input_length: int = Field(
+        default=8192,
+        description="Maximum input length for embedding",
+    )
+    max_batch_size: int = Field(
+        default=10,
+        description="Maximum batch size for embedding",
+    )
+
+
+class ReMeLightMemoryConfig(BaseModel):
+    """ReMeLight memory manager configuration."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    summarize_when_compact: bool = Field(
+        default=True,
+        description="Whether to enable memory summarization during compaction",
+    )
+
+    auto_memory_interval: int | None = Field(
+        default=None,
+        description=(
+            "Auto memory every N user queries. None disables periodic auto "
+            "memory."
+        ),
+    )
+
+    dream_cron: str = Field(
+        default="0 23 * * *",
+        description="Cron expression for dream-based memory optimization job",
+    )
+
+    auto_memory_search_config: AutoMemorySearchConfig = Field(
+        default_factory=AutoMemorySearchConfig,
+    )
+
+    embedding_model_config: EmbeddingModelConfig = Field(
+        default_factory=EmbeddingModelConfig,
+    )
+
+    rebuild_memory_index_on_start: bool = Field(
+        default=False,
+        description=(
+            "Whether to clear and rebuild the memory search index when the "
+            "agent starts."
+        ),
+    )
+
+    recursive_file_watcher: bool = Field(
+        default=False,
+        description=(
+            "Whether to watch memory directory recursively for indexing."
+        ),
     )
 
 
@@ -1789,7 +1901,10 @@ class KnowledgeNLPConfig(BaseModel):
     def _inject_from_env(self) -> "KnowledgeNLPConfig":
         provider = os.environ.get("COPAW_NLP_PROVIDER", "").strip().lower()
         if provider in {"hanlp", "rex_uninlu", "placeholder"}:
-            self.provider = provider
+            self.provider = cast(
+                Literal["hanlp", "rex_uninlu", "placeholder"],
+                provider,
+            )
 
         enabled_raw = (
             os.environ.get("COPAW_NLP_ENABLED", "").strip()
@@ -2375,7 +2490,13 @@ def load_agent_config(agent_id: str) -> AgentProfileConfig:
         except Exception:
             pass
 
-        agent_config = AgentProfileConfig(**data)
+        if not isinstance(data, dict):
+            raise ConfigurationException(
+                config_key="agent",
+                message="Invalid agent.json format: expected object",
+            )
+
+        agent_config = AgentProfileConfig.model_validate(data)
 
         # Cache the config with its mtime
         _agent_config_cache[agent_id] = (agent_config, current_mtime)
