@@ -148,6 +148,17 @@
 
 .demoTableRow {
   border-top: 1px solid #f3ede5;
+  background: transparent;
+  border-left: 0;
+  border-right: 0;
+  border-bottom: 0;
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+}
+
+.demoTableRowActive {
+  background: rgba(255, 127, 22, 0.16);
 }
 
 .demoTokenWrap {
@@ -171,6 +182,11 @@
   border-radius: 999px;
   padding: 3px 10px;
   background: #fffaf1;
+}
+
+.demoTokenNodeActive {
+  border-color: #ff7f16;
+  box-shadow: 0 4px 12px rgba(255, 127, 22, 0.25);
 }
 
 .demoTokenIndex {
@@ -203,6 +219,10 @@
   padding: 0 4px;
   border-radius: 4px;
   background: rgba(255, 166, 77, 0.28);
+}
+
+.demoHighlightEntityActive {
+  background: rgba(255, 127, 22, 0.42);
 }
 
 .demoHighlightLabel {
@@ -299,6 +319,10 @@
 
   .demoTableRow {
     border-top-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .demoTableRowActive {
+    background: rgba(255, 127, 22, 0.2);
   }
 
   .footerButtons {

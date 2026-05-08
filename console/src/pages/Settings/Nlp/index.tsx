@@ -122,14 +122,17 @@ function asNumber(value: unknown): number | null {
   return null;
 }
 
-function renderTokenRail(tokens: string[]) {
+function renderTokenRail(tokens: string[], activeTokenIndex?: number | null) {
   if (tokens.length === 0) {
     return null;
   }
   return (
     <div className={styles.demoTokenRail}>
       {tokens.map((token, index) => (
-        <span key={`${token}-${index}`} className={styles.demoTokenNode}>
+        <span
+          key={`${token}-${index}`}
+          className={`${styles.demoTokenNode} ${activeTokenIndex === index ? styles.demoTokenNodeActive : ""}`}
+        >
           <span className={styles.demoTokenIndex}>{index + 1}</span>
           <span>{token}</span>
         </span>
@@ -138,7 +141,11 @@ function renderTokenRail(tokens: string[]) {
   );
 }
 
-function renderNerHighlightedText(sourceText: string, rows: Array<Record<string, unknown>>) {
+function renderNerHighlightedText(
+  sourceText: string,
+  rows: Array<Record<string, unknown>>,
+  activeEntityIndex?: number | null,
+) {
   const text = String(sourceText || "");
   if (!text) {
     return null;
@@ -165,16 +172,16 @@ function renderNerHighlightedText(sourceText: string, rows: Array<Record<string,
     return null;
   }
 
-  const blocks: Array<{ text: string; label?: string; isEntity: boolean }> = [];
+  const blocks: Array<{ text: string; label?: string; isEntity: boolean; entityIndex?: number }> = [];
   let cursor = 0;
-  for (const entity of entities) {
+  for (const [entityIndex, entity] of entities.entries()) {
     if (entity.start < cursor) {
       continue;
     }
     if (entity.start > cursor) {
       blocks.push({ text: text.slice(cursor, entity.start), isEntity: false });
     }
-    blocks.push({ text: text.slice(entity.start, entity.end), label: entity.label, isEntity: true });
+    blocks.push({ text: text.slice(entity.start, entity.end), label: entity.label, isEntity: true, entityIndex });
     cursor = entity.end;
   }
   if (cursor < text.length) {
@@ -185,7 +192,10 @@ function renderNerHighlightedText(sourceText: string, rows: Array<Record<string,
     <div className={styles.demoHighlightBox}>
       {blocks.map((block, index) =>
         block.isEntity ? (
-          <span key={`entity-${index}`} className={styles.demoHighlightEntity}>
+          <span
+            key={`entity-${index}`}
+            className={`${styles.demoHighlightEntity} ${block.entityIndex === activeEntityIndex ? styles.demoHighlightEntityActive : ""}`}
+          >
             {block.text}
             <span className={styles.demoHighlightLabel}>{block.label}</span>
           </span>
@@ -241,7 +251,13 @@ function renderRecordRows(
   );
 }
 
-function renderResultByTask(taskKey: string, result: unknown, sourceText: string) {
+function renderResultByTask(
+  taskKey: string,
+  result: unknown,
+  sourceText: string,
+  activeRowIndex: number | null,
+  onSelectRow: (index: number | null) => void,
+) {
   if (taskKey === "tokenize") {
     const tokens = Array.isArray(result) ? result : [];
     return (
@@ -257,7 +273,7 @@ function renderResultByTask(taskKey: string, result: unknown, sourceText: string
             ))
           )}
         </div>
-        {renderTokenRail(tokens.map((token) => String(token)))}
+        {renderTokenRail(tokens.map((token) => String(token)), activeRowIndex)}
       </>
     );
   }
@@ -275,14 +291,19 @@ function renderResultByTask(taskKey: string, result: unknown, sourceText: string
             <span>Span</span>
           </div>
           {rows.map((row, index) => (
-            <div key={`ner-row-${index}`} className={styles.demoTableRow}>
+            <button
+              type="button"
+              key={`ner-row-${index}`}
+              className={`${styles.demoTableRow} ${activeRowIndex === index ? styles.demoTableRowActive : ""}`}
+              onClick={() => onSelectRow(activeRowIndex === index ? null : index)}
+            >
               <span>{String(row.text || "")}</span>
               <span>{String(row.label || "")}</span>
               <span>{`${String(row.start ?? "")}-${String(row.end ?? "")}`}</span>
-            </div>
+            </button>
           ))}
         </div>
-        {renderNerHighlightedText(sourceText, rows)}
+        {renderNerHighlightedText(sourceText, rows, activeRowIndex)}
       </>
     );
   }
@@ -301,14 +322,19 @@ function renderResultByTask(taskKey: string, result: unknown, sourceText: string
             <span>DepRel</span>
           </div>
           {rows.map((row, index) => (
-            <div key={`dep-row-${index}`} className={styles.demoTableRow}>
+            <button
+              type="button"
+              key={`dep-row-${index}`}
+              className={`${styles.demoTableRow} ${activeRowIndex === index ? styles.demoTableRowActive : ""}`}
+              onClick={() => onSelectRow(activeRowIndex === index ? null : index)}
+            >
               <span>{String(row.token || "")}</span>
               <span>{String(row.head ?? "")}</span>
               <span>{String(row.deprel || "")}</span>
-            </div>
+            </button>
           ))}
         </div>
-        {renderTokenRail(tokens)}
+        {renderTokenRail(tokens, activeRowIndex)}
       </>
     );
   }
@@ -321,8 +347,10 @@ function renderResultByTask(taskKey: string, result: unknown, sourceText: string
       const tokens = rows.map((row) => String(row.token || row.text || row.word || "")).filter(Boolean);
       return (
         <>
-          {renderRecordRows(rows, ["token", "head", "deprel", "relation", "score"])}
-          {renderTokenRail(tokens)}
+          <div className={styles.demoTable}>
+            {renderRecordRows(rows, ["token", "head", "deprel", "relation", "score"])}
+          </div>
+          {renderTokenRail(tokens, activeRowIndex)}
         </>
       );
     }
@@ -440,6 +468,7 @@ function NlpPage() {
   const [previewText, setPreviewText] = useState("吾之道也");
   const [demoInputs, setDemoInputs] = useState<Record<string, string>>({});
   const [activeDemoTaskKey, setActiveDemoTaskKey] = useState("tokenize");
+  const [activeDemoRowIndex, setActiveDemoRowIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (Object.keys(demoInputs).length > 0) {
@@ -615,6 +644,10 @@ function NlpPage() {
     reason: "No status available",
   };
   const activeDemoResult = (demoResults[activeDemoMethod.backendTaskKey] || null) as NlpDemoMeta | null;
+
+  useEffect(() => {
+    setActiveDemoRowIndex(null);
+  }, [activeDemoMethod.backendTaskKey, activeDemoResult?.request_id]);
 
   if (loading) {
     return (
@@ -988,7 +1021,13 @@ function NlpPage() {
                     <Typography.Paragraph className={styles.operationOutput}>
                       {activeDemoResult.reason}
                     </Typography.Paragraph>
-                    {renderResultByTask(activeDemoMethod.backendTaskKey, activeDemoResult.result, activeDemoInput)}
+                    {renderResultByTask(
+                      activeDemoMethod.backendTaskKey,
+                      activeDemoResult.result,
+                      activeDemoInput,
+                      activeDemoRowIndex,
+                      setActiveDemoRowIndex,
+                    )}
                     <Typography.Paragraph className={styles.operationOutput}>
                       rules: {(activeDemoResult.matched_rules || []).join(", ") || "(none)"}
                     </Typography.Paragraph>
