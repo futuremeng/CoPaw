@@ -926,7 +926,7 @@ function NlpPage() {
           </Card>
         </div>
 
-        <Card className={styles.card}>
+        <Card className={`${styles.card} ${styles.sectionNavCard}`}>
           <Typography.Title level={5} className={styles.cardTitle}>
             Workbench Navigation
           </Typography.Title>

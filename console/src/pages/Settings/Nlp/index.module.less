@@ -16,7 +16,7 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
 }
 
 .sectionAnchorOffset {
@@ -30,6 +30,10 @@
 .sectionNavButtonActive {
   border-color: #ff7f16 !important;
   box-shadow: 0 4px 12px rgba(255, 127, 22, 0.25);
+}
+
+.sectionNavButtonActive :global(span) {
+  font-weight: 600;
 }
 
 .alertStack {
@@ -47,6 +51,10 @@
 .metricCard {
   border-radius: 10px;
   background: linear-gradient(180deg, #fff 0%, #fffaf2 100%);
+}
+
+.metricCard :global(.ant-card-body) {
+  padding: 16px;
 }
 
 .metricValue {
@@ -75,6 +83,17 @@
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.08);
 }
 
+.sectionNavCard {
+  position: sticky;
+  top: 8px;
+  z-index: 2;
+}
+
+.sectionNavCard :global(.ant-card-body) {
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
 .sideGroupCollapse {
   width: 100%;
 }
@@ -101,7 +120,7 @@
 
 .card {
   width: 100%;
-  margin-bottom: 16px;
+  margin-bottom: 0;
 
   &:hover {
     border: 1px solid #ff7f16;
@@ -364,10 +383,6 @@
     gap: 12px;
   }
 
-  .card {
-    margin-bottom: 12px;
-  }
-
   .demoMethodList {
     grid-template-columns: 1fr;
   }
@@ -383,6 +398,15 @@
 
   .kpiGrid {
     grid-template-columns: 1fr;
+  }
+
+  .sectionNavCard {
+    position: static;
+  }
+
+  .sectionNavCard :global(.ant-card-body) {
+    padding-top: 12px;
+    padding-bottom: 12px;
   }
 }
 
@@ -403,9 +427,13 @@
   }
 }
 
-@media (max-width: 1120px) {
+@media (max-width: 1360px) {
   .workspaceLayout {
     grid-template-columns: 1fr;
+  }
+
+  .sideColumn {
+    gap: 12px;
   }
 }
 
@@ -435,6 +463,10 @@
   .sectionNavButtonActive {
     border-color: #ffa45a !important;
     box-shadow: 0 4px 12px rgba(255, 164, 90, 0.28);
+  }
+
+  .sectionNavCard {
+    background: rgba(255, 255, 255, 0.02);
   }
 
   .cardDescription {
