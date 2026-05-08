@@ -60,7 +60,7 @@ _MODERN_HINT_TOKENS = (
     "所以",
     "以及",
 )
-_SUPPORTED_TASK_KEYS = {"tokenize", "ner", "dep", "sdp", "con", "cor"}
+_SUPPORTED_TASK_KEYS = {"tokenize", "ner", "dep", "sdp", "con", "cor", "pos_ctb", "pos_pku", "pos_863"}
 _TASK_ALIASES = {
     "ner_msra": "ner",
 }
@@ -71,12 +71,21 @@ _TASK_MATRIX_KEY_MAP = {
     "sdp": "sdp",
     "con": "con",
     "cor": "coref",
+    "pos_ctb": "pos_ctb",
+    "pos_pku": "pos_pku",
+    "pos_863": "pos_863",
 }
 _TASK_MODEL_DEFAULTS = {
     "ner_msra": "MSRA_NER_BERT_BASE_ZH",
+    "pos_ctb": "CTB9_POS_ELECTRA_SMALL",
+    "pos_pku": "PKU_POS_ELECTRA_SMALL",
+    "pos_863": "C863_POS_ELECTRA_SMALL",
 }
 _TASK_TIMEOUT_DEFAULTS = {
     "ner_msra": 90.0,
+    "pos_ctb": 60.0,
+    "pos_pku": 60.0,
+    "pos_863": 60.0,
 }
 _TASK_TIMEOUT_MIN_FOR_BERT = {
     "ner_msra": 60.0,
@@ -279,6 +288,24 @@ def _normalize_dep_result(raw: Any) -> list[dict[str, Any]]:
         if not token and not deprel and head == 0:
             continue
         normalized.append({"token": token, "head": head, "deprel": deprel})
+    return normalized
+
+
+def _normalize_pos_result(raw: Any) -> list[dict[str, Any]]:
+    if not isinstance(raw, list):
+        return []
+    normalized: list[dict[str, Any]] = []
+    for item in raw:
+        if isinstance(item, dict):
+            token = str(item.get("token") or item.get("text") or item.get("word") or "").strip()
+            pos = str(item.get("pos") or item.get("tag") or "").strip()
+            if token or pos:
+                normalized.append({"token": token, "pos": pos})
+        elif isinstance(item, (list, tuple)) and len(item) >= 2:
+            token = str(item[0] or "").strip()
+            pos = str(item[1] or "").strip()
+            if token or pos:
+                normalized.append({"token": token, "pos": pos})
     return normalized
 
 
@@ -566,6 +593,15 @@ async def _run_hanlp_task(task_key: str, request: HanLPTaskRunRequest, http_requ
         result, state = await asyncio.to_thread(runtime.run_dep, request.text, effective_config)
         raw_result = result
         normalized_result = _normalize_dep_result(result)
+    elif normalized_task_key in {"pos_ctb", "pos_pku", "pos_863"}:
+        result, state = await asyncio.to_thread(
+            runtime.run_task,
+            normalized_task_key,
+            request.text,
+            effective_config,
+        )
+        raw_result = result
+        normalized_result = _normalize_pos_result(result)
     else:
         result, state = await asyncio.to_thread(
             runtime.run_task,

@@ -2077,6 +2077,30 @@ def _default_hanlp_tasks() -> Dict[str, KnowledgeHanLPTaskConfig]:
             artifact_key="con",
             eval_role="auxiliary",
         ),
+        "pos_ctb": KnowledgeHanLPTaskConfig(
+            enabled=True,
+            task_name="pos",
+            model_id="CTB9_POS_ELECTRA_SMALL",
+            artifact_key="pos_ctb",
+            eval_role="compare",
+            timeout_sec=60.0,
+        ),
+        "pos_pku": KnowledgeHanLPTaskConfig(
+            enabled=True,
+            task_name="pos",
+            model_id="PKU_POS_ELECTRA_SMALL",
+            artifact_key="pos_pku",
+            eval_role="compare",
+            timeout_sec=60.0,
+        ),
+        "pos_863": KnowledgeHanLPTaskConfig(
+            enabled=True,
+            task_name="pos",
+            model_id="C863_POS_ELECTRA_SMALL",
+            artifact_key="pos_863",
+            eval_role="compare",
+            timeout_sec=60.0,
+        ),
     }
 
 

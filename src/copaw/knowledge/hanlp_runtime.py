@@ -18,6 +18,7 @@ import os
 import sys
 import time
 import warnings
+import traceback
 
 
 _MODEL_CACHE = {}
@@ -249,6 +250,44 @@ def locate_con_resolver(module):
                 continue
     return None
 
+def locate_pos_resolver(module, preferred_model_id=""):
+    # For POS tagging: CTB9/PKU/863 Electra Small models
+    loader = getattr(module, "load", None)
+    if not callable(loader):
+        return None
+    preferred = str(preferred_model_id or "").strip()
+    if preferred:
+        try:
+            model = load_with_cache(module, preferred)
+            if model is not None:
+                return model
+        except Exception:
+            pass
+    for model_id in ["CTB9_POS_ELECTRA_SMALL", "PKU_POS_ELECTRA_SMALL", "C863_POS_ELECTRA_SMALL"]:
+        try:
+            model = load_with_cache(module, model_id)
+            if model is not None:
+                return model
+        except Exception:
+            continue
+    return None
+
+
+def has_pos_api(module):
+    try:
+        loader = getattr(module, "load", None)
+        if callable(loader):
+            for model_id in ["CTB9_POS_ELECTRA_SMALL", "PKU_POS_ELECTRA_SMALL", "C863_POS_ELECTRA_SMALL"]:
+                try:
+                    test_model = load_with_cache(module, model_id)
+                    if test_model is not None:
+                        return True
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    return False
+
 
 def load_with_cache(module, model_id):
     key = str(model_id or "").strip()
@@ -360,7 +399,9 @@ def run_task_entrypoint(module, text, task_name, task_spec=None):
         preferred_model_id = ""
         if isinstance(task_spec, dict):
             preferred_model_id = str(task_spec.get("model_id") or "").strip()
-        if "BERT_BASE_ZH" in preferred_model_id.upper() and not has_local_bert_backbone(os.environ.get("HANLP_HOME", "")):
+        if "BERT_BASE_ZH" in preferred_model_id.upper() and not has_local_bert_backbone(
+            os.environ.get("HANLP_HOME", "")
+        ):
             raise RuntimeError(
                 "BERT_BACKBONE_MISSING_LOCAL_CACHE: bert-base-chinese is not found in local cache. "
                 "Populate ~/.hanlp/transformers/bert_base_chinese (or enable COPAW_HANLP_ALLOW_ONLINE=1)."
@@ -384,6 +425,35 @@ def run_task_entrypoint(module, text, task_name, task_spec=None):
                 except Exception:
                     pass
             raise RuntimeError(f"HanLP NER ({ner_type}) failed: {exc}") from exc
+    elif normalized in {"pos", "pos_tagging"}:
+        preferred_model_id = ""
+        if isinstance(task_spec, dict):
+            preferred_model_id = str(task_spec.get("model_id") or "").strip()
+        model = locate_pos_resolver(module, preferred_model_id)
+        if model is None:
+            raise RuntimeError(
+                f"HanLP POS model could not be loaded "
+                f"(tried: {preferred_model_id or 'CTB9/PKU/863 Electra Small'})."
+            )
+        # POS taggers expect a list of tokens; tokenize first.
+        _, tok_fn = locate_tokenizer(module)
+        try:
+            if tok_fn is not None:
+                tokens = flatten(tok_fn(text))
+            else:
+                tokens = list(text)
+        except Exception:
+            tokens = list(text)
+        try:
+            tags = model(tokens)
+        except Exception as exc:
+            raise RuntimeError(f"HanLP POS tagging failed: {exc}") from exc
+        if not isinstance(tags, list):
+            tags = list(tags) if hasattr(tags, "__iter__") else []
+        return [
+            {"token": str(tok), "pos": str(tag)}
+            for tok, tag in zip(tokens, tags)
+        ]
     else:
         # Fallback to parser for unknown tasks
         model = locate_parser(module)
@@ -556,6 +626,12 @@ def inspect_task_api(module, task_name):
         return False, "HANLP2_NER_ENTRYPOINT_MISSING", (
             f"HanLP NER ({ner_type}) model is unavailable in current local runtime."
         )
+    elif normalized in {"pos", "pos_tagging"}:
+        if has_pos_api(module):
+            return True, "HANLP2_TASK_API_READY", "HanLP POS tagging model is available."
+        return False, "HANLP2_POS_ENTRYPOINT_MISSING", (
+            "HanLP POS tagging model is unavailable in current local runtime."
+        )
     else:
         if has_parse_api(module):
             return True, "HANLP2_TASK_API_READY", "HanLP parsing model is available for general tasks."
@@ -627,8 +703,12 @@ def execute_mode(mode, payload):
                 name for name in dir(pretrained)
                 if not str(name).startswith("_")
             ]
-        # Check if basic models are available
-        basic_available = has_parse_api(hanlp) or has_ner_api(hanlp) or has_sdp_api(hanlp) or has_con_api(hanlp)
+        has_dep = has_parse_api(hanlp)
+        has_ner = has_ner_api(hanlp)
+        has_sdp = has_sdp_api(hanlp)
+        has_con = has_con_api(hanlp)
+        has_pos = has_pos_api(hanlp)
+        basic_available = has_dep or has_ner or has_sdp or has_con or has_pos
         if basic_available:
             return {
                 "engine": "hanlp2",
@@ -638,10 +718,11 @@ def execute_mode(mode, payload):
                 "python_version": version_text(),
                 "hanlp_version": str(getattr(hanlp, "__version__", "")),
                 "has_coreference_resolution": has_coref_api(hanlp),
-                "has_dependency_parsing": has_parse_api(hanlp),
-                "has_ner": has_ner_api(hanlp),
-                "has_sdp": has_sdp_api(hanlp),
-                "has_constituency": has_con_api(hanlp),
+                "has_dependency_parsing": has_dep,
+                "has_ner": has_ner,
+                "has_sdp": has_sdp,
+                "has_constituency": has_con,
+                "has_pos": has_pos,
                 "has_pipeline": callable(getattr(hanlp, "pipeline", None)),
                 "has_load": callable(getattr(hanlp, "load", None)),
                 "pretrained_categories": categories,
@@ -649,49 +730,19 @@ def execute_mode(mode, payload):
         return {
             "engine": "hanlp2",
             "status": "unavailable",
-            "reason_code": "HANLP2_MODELS_UNAVAILABLE",
-            "reason": (
-                "HanLP models are unavailable in current local runtime."
-            ),
+            "reason_code": "HANLP2_API_UNAVAILABLE",
+            "reason": "HanLP task APIs are unavailable in current runtime.",
             "python_version": version_text(),
             "hanlp_version": str(getattr(hanlp, "__version__", "")),
-            "has_coreference_resolution": False,
-            "has_dependency_parsing": False,
-            "has_ner": False,
-            "has_sdp": False,
-            "has_constituency": False,
+            "has_coreference_resolution": has_coref_api(hanlp),
+            "has_dependency_parsing": has_dep,
+            "has_ner": has_ner,
+            "has_sdp": has_sdp,
+            "has_constituency": has_con,
+            "has_pos": has_pos,
             "has_pipeline": callable(getattr(hanlp, "pipeline", None)),
             "has_load": callable(getattr(hanlp, "load", None)),
             "pretrained_categories": categories,
-        }
-
-    if mode == "probe":
-        if fn is None:
-            raw_model_id, has_loader, resolved_name = has_model_loader(
-                hanlp,
-                configured_model_id,
-            )
-            if not has_loader:
-                return {
-                    "engine": "hanlp2",
-                    "status": "unavailable",
-                    "reason_code": "HANLP2_ENTRYPOINT_MISSING",
-                    "reason": "HanLP2 tokenizer entry point was not found.",
-                    "python_version": version_text(),
-                    "model_id": raw_model_id,
-                    "resolved_model": resolved_name,
-                    "tokens": [],
-                }
-        return {
-            "engine": "hanlp2",
-            "status": "ready",
-            "reason_code": "HANLP2_READY",
-            "reason": "HanLP2 semantic engine is ready.",
-            "python_version": version_text(),
-            "tokenizer_attr": attr,
-            "model_id": raw_model_id if fn is None else configured_model_id,
-            "resolved_model": resolved_name if fn is None else "",
-            "tokens": [],
         }
 
     if mode in {"model_status", "ensure_model"}:
@@ -879,7 +930,20 @@ def main():
             request_payload = request.get("payload")
             if not isinstance(request_payload, dict):
                 request_payload = {}
-            emit_line(execute_mode(request_mode, request_payload))
+            try:
+                emit_line(execute_mode(request_mode, request_payload))
+            except Exception as exc:
+                # Keep the worker process alive and return a structured payload
+                # so caller can see actionable diagnostics instead of a broken pipe.
+                detail = f"{exc.__class__.__name__}: {str(exc)[:200]}"
+                trace = traceback.format_exc(limit=1)
+                emit_line({
+                    "engine": "hanlp2",
+                    "status": "unavailable",
+                    "reason_code": "HANLP2_WORKER_INTERNAL_ERROR",
+                    "reason": f"HanLP2 worker internal error: {detail}",
+                    "trace_hint": str(trace or "").strip()[:300],
+                })
         return
 
     payload = load_payload()
@@ -1038,14 +1102,30 @@ class HanLPSidecarRuntime:
                     reason_code="HANLP2_WORKER_CHANNEL_BROKEN",
                     reason="HanLP2 worker channel is unavailable.",
                 )
+            if process.poll() is not None:
+                stderr_hint = self._stderr_hint_locked()
+                hint = f" stderr={stderr_hint}" if stderr_hint else ""
+                return self._state(
+                    status="unavailable",
+                    reason_code="HANLP2_WORKER_CHANNEL_BROKEN",
+                    reason=(
+                        f"HanLP2 worker exited before request write "
+                        f"(code {process.returncode}).{hint}"
+                    ),
+                )
             try:
                 process.stdin.write(json.dumps(request, ensure_ascii=False) + "\n")
                 process.stdin.flush()
             except Exception as exc:
+                stderr_hint = self._stderr_hint_locked()
+                hint = f" stderr={stderr_hint}" if stderr_hint else ""
                 return self._state(
                     status="unavailable",
                     reason_code="HANLP2_WORKER_CHANNEL_BROKEN",
-                    reason=f"HanLP2 worker write failed: {exc.__class__.__name__}.",
+                    reason=(
+                        f"HanLP2 worker write failed: {exc.__class__.__name__}."
+                        f" code={process.returncode}.{hint}"
+                    ),
                 )
 
             line, read_error = self._readline_with_timeout(process.stdout, timeout)
@@ -1058,16 +1138,20 @@ class HanLPSidecarRuntime:
                     reason=f"HanLP2 worker {mode} timed out after {timeout:.1f}s.{hint}",
                 )
             if read_error:
+                stderr_hint = self._stderr_hint_locked()
+                hint = f" stderr={stderr_hint}" if stderr_hint else ""
                 return self._state(
                     status="unavailable",
                     reason_code="HANLP2_WORKER_CHANNEL_BROKEN",
-                    reason=f"HanLP2 worker read failed: {read_error}",
+                    reason=f"HanLP2 worker read failed: {read_error}{hint}",
                 )
             if not line:
+                stderr_hint = self._stderr_hint_locked()
+                hint = f" stderr={stderr_hint}" if stderr_hint else ""
                 return self._state(
                     status="unavailable",
                     reason_code="HANLP2_WORKER_CHANNEL_BROKEN",
-                    reason="HanLP2 worker closed output stream unexpectedly.",
+                    reason=f"HanLP2 worker closed output stream unexpectedly.{hint}",
                 )
             try:
                 parsed = json.loads(line.strip())

@@ -37,6 +37,7 @@ type NlpDemoMeta = {
   reason_code: string;
   reason: string;
   result: unknown;
+  raw_result?: unknown;
   resolved_model: string;
   strategy_mode: string;
   detected_style: string;
@@ -66,41 +67,31 @@ const DEMO_METHODS: DemoMethod[] = [
     examples: ["微软在北京发布Copaw。", "阿里巴巴位于杭州。"],
   },
   {
-    key: "dep",
-    backendTaskKey: "dep",
-    title: "Dependency Parsing",
-    placeholder: "输入依存句法文本，例如：微软发布新模型。",
-    examples: ["微软发布新模型。", "我们正在测试模型自动选择能力。"],
+    key: "pos_ctb",
+    backendTaskKey: "pos_ctb",
+    title: "POS Tagging (CTB9)",
+    placeholder: "输入词性标注文本，例如：微软发布新模型。",
+    examples: ["微软发布新模型。", "我们在北京举行会议。"],
   },
   {
-    key: "sdp",
-    backendTaskKey: "sdp",
-    title: "Semantic Dependency Parsing",
-    placeholder: "输入语义依存文本。",
-    examples: ["微软发布新模型。", "他们在上海召开会议。"],
+    key: "pos_pku",
+    backendTaskKey: "pos_pku",
+    title: "POS Tagging (PKU)",
+    placeholder: "输入词性标注文本，例如：微软发布新模型。",
+    examples: ["微软发布新模型。", "我们在北京举行会议。"],
   },
   {
-    key: "con",
-    backendTaskKey: "con",
-    title: "Constituency Parsing",
-    placeholder: "输入短语结构分析文本。",
-    examples: ["微软发布新模型。", "这个系统运行稳定。"],
-  },
-  {
-    key: "cor",
-    backendTaskKey: "cor",
-    title: "Coreference Resolution",
-    placeholder: "输入指代消解文本。",
-    examples: ["张三到了公司，他开始写代码。", "李雷见到韩梅梅，她很高兴。"],
+    key: "pos_863",
+    backendTaskKey: "pos_863",
+    title: "POS Tagging (863)",
+    placeholder: "输入词性标注文本，例如：微软发布新模型。",
+    examples: ["微软发布新模型。", "我们在北京举行会议。"],
   },
 ];
 
-function resolveTagColor(status: string): "success" | "warning" | "error" | "default" {
+function resolveTagColor(status: string): string {
   if (status === "ready") {
     return "success";
-  }
-  if (status === "error") {
-    return "error";
   }
   if (status === "disabled") {
     return "default";
@@ -183,6 +174,13 @@ function getTokenListFromResult(taskKey: string, result: unknown): string[] {
       .map((row) => String(row.token || row.text || row.word || ""))
       .filter(Boolean);
   }
+  if ((taskKey === "pos_ctb" || taskKey === "pos_pku" || taskKey === "pos_863") && Array.isArray(result)) {
+    return result
+      .map((item) => asRecord(item))
+      .filter((item): item is Record<string, unknown> => Boolean(item))
+      .map((row) => String(row.token || ""))
+      .filter(Boolean);
+  }
   return [];
 }
 
@@ -194,6 +192,9 @@ function getSelectableCount(taskKey: string, result: unknown): number {
     return result.length;
   }
   if (taskKey === "ner" || taskKey === "dep" || taskKey === "sdp") {
+    return result.length;
+  }
+  if (taskKey === "pos_ctb" || taskKey === "pos_pku" || taskKey === "pos_863") {
     return result.length;
   }
   return 0;
@@ -441,6 +442,36 @@ function renderResultByTask(
     );
   }
 
+    if ((taskKey === "pos_ctb" || taskKey === "pos_pku" || taskKey === "pos_863") && Array.isArray(result)) {
+      const rows = result
+        .map((item) => asRecord(item))
+        .filter((item): item is Record<string, unknown> => Boolean(item));
+      const tokens = rows.map((row) => String(row.token || "")).filter(Boolean);
+      return (
+        <>
+          <div className={styles.demoTable}>
+            <div className={styles.demoTableHeader}>
+              <span>Token</span>
+              <span>POS</span>
+            </div>
+            {rows.map((row, index) => (
+              <button
+                type="button"
+                key={`pos-row-${index}`}
+                className={`${styles.demoTableRow} ${highlightedRowIndex === index ? styles.demoTableRowActive : ""}`}
+                onClick={() => onSelectRow(activeRowIndex === index ? null : index)}
+                onMouseEnter={() => onHoverRow(index)}
+                onMouseLeave={() => onHoverRow(null)}
+              >
+                <span>{String(row.token || "")}</span>
+                <span>{String(row.pos || "")}</span>
+              </button>
+            ))}
+          </div>
+          {renderTokenRail(tokens, highlightedRowIndex)}
+        </>
+      );
+    }
   if (taskKey === "sdp") {
     if (Array.isArray(result)) {
       const rows = result
@@ -687,6 +718,45 @@ function NlpPage() {
       },
     },
     {
+      key: "pos_ctb",
+      taskKey: "pos_ctb",
+      status: {
+        status: taskStates.pos_ctb?.status || (sidecarReady ? "ready" : "unavailable"),
+        reasonCode:
+          taskStates.pos_ctb?.reason_code ||
+          (sidecarReady ? "HANLP2_TASK_API_READY" : "HANLP2_SIDECAR_UNCONFIGURED"),
+        reason:
+          taskStates.pos_ctb?.reason ||
+          (sidecarReady ? "CTB9_POS_ELECTRA_SMALL" : t("nlpConfig.methods.defaultUnavailableReason")),
+      },
+    },
+    {
+      key: "pos_pku",
+      taskKey: "pos_pku",
+      status: {
+        status: taskStates.pos_pku?.status || (sidecarReady ? "ready" : "unavailable"),
+        reasonCode:
+          taskStates.pos_pku?.reason_code ||
+          (sidecarReady ? "HANLP2_TASK_API_READY" : "HANLP2_SIDECAR_UNCONFIGURED"),
+        reason:
+          taskStates.pos_pku?.reason ||
+          (sidecarReady ? "PKU_POS_ELECTRA_SMALL" : t("nlpConfig.methods.defaultUnavailableReason")),
+      },
+    },
+    {
+      key: "pos_863",
+      taskKey: "pos_863",
+      status: {
+        status: taskStates.pos_863?.status || (sidecarReady ? "ready" : "unavailable"),
+        reasonCode:
+          taskStates.pos_863?.reason_code ||
+          (sidecarReady ? "HANLP2_TASK_API_READY" : "HANLP2_SIDECAR_UNCONFIGURED"),
+        reason:
+          taskStates.pos_863?.reason ||
+          (sidecarReady ? "C863_POS_ELECTRA_SMALL" : t("nlpConfig.methods.defaultUnavailableReason")),
+      },
+    },
+    {
       key: "dep",
       taskKey: "dep",
       status: {
@@ -731,6 +801,21 @@ function NlpPage() {
       reason: "No status available",
     },
     ner: methods.find((item) => item.key === "nerMsra")?.status || {
+      status: "unavailable",
+      reasonCode: "UNKNOWN",
+      reason: "No status available",
+    },
+    pos_ctb: methods.find((item) => item.key === "pos_ctb")?.status || {
+      status: "unavailable",
+      reasonCode: "UNKNOWN",
+      reason: "No status available",
+    },
+    pos_pku: methods.find((item) => item.key === "pos_pku")?.status || {
+      status: "unavailable",
+      reasonCode: "UNKNOWN",
+      reason: "No status available",
+    },
+    pos_863: methods.find((item) => item.key === "pos_863")?.status || {
       status: "unavailable",
       reasonCode: "UNKNOWN",
       reason: "No status available",
