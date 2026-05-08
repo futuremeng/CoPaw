@@ -7,6 +7,15 @@ import { PageHeader } from "@/components/PageHeader";
 import { useNlp } from "./useNlp";
 import styles from "./index.module.less";
 
+const NAV_SECTION_IDS = [
+  "nlp-section-demo",
+  "nlp-section-methods",
+  "nlp-section-strategy",
+  "nlp-section-dryrun",
+  "nlp-section-runtime",
+  "nlp-section-maintenance",
+] as const;
+
 type MethodStatus = {
   status: string;
   reasonCode: string;
@@ -540,6 +549,8 @@ function NlpPage() {
   const [activeDemoTaskKey, setActiveDemoTaskKey] = useState("tokenize");
   const [activeDemoRowIndex, setActiveDemoRowIndex] = useState<number | null>(null);
   const [hoveredDemoRowIndex, setHoveredDemoRowIndex] = useState<number | null>(null);
+  const [activeAnchorSection, setActiveAnchorSection] = useState<string>("nlp-section-demo");
+  const [sideGroupKeys, setSideGroupKeys] = useState<string[]>(["strategy", "runtime"]);
 
   useEffect(() => {
     if (Object.keys(demoInputs).length > 0) {
@@ -732,6 +743,72 @@ function NlpPage() {
     setHoveredDemoRowIndex(null);
   }, [activeDemoMethod.backendTaskKey, activeDemoResult?.request_id]);
 
+  useEffect(() => {
+    const raw = window.localStorage.getItem("copaw-nlp-side-groups");
+    if (!raw) {
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (Array.isArray(parsed)) {
+        const cleaned = parsed
+          .map((item) => String(item || "").trim())
+          .filter(Boolean);
+        if (cleaned.length > 0) {
+          setSideGroupKeys(cleaned);
+        }
+      }
+    } catch {
+      // ignore malformed local cache
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem("copaw-nlp-side-groups", JSON.stringify(sideGroupKeys));
+  }, [sideGroupKeys]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof IntersectionObserver === "undefined") {
+      return;
+    }
+
+    const candidates = NAV_SECTION_IDS
+      .map((id) => document.getElementById(id))
+      .filter((element): element is HTMLElement => Boolean(element));
+
+    if (candidates.length === 0) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+        if (visible.length === 0) {
+          return;
+        }
+        const id = visible[0].target.id;
+        if (id) {
+          setActiveAnchorSection(id);
+        }
+      },
+      {
+        root: null,
+        rootMargin: "-120px 0px -55% 0px",
+        threshold: [0.2, 0.5, 0.8],
+      },
+    );
+
+    candidates.forEach((element) => observer.observe(element));
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
   const handleDemoResultKeyDown: KeyboardEventHandler<HTMLDivElement> = (event) => {
     if (!activeDemoResult || activeSelectableCount <= 0) {
       return;
@@ -765,6 +842,7 @@ function NlpPage() {
     if (!element) {
       return;
     }
+    setActiveAnchorSection(sectionId);
     element.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
@@ -855,13 +933,49 @@ function NlpPage() {
           <Typography.Paragraph type="secondary" className={styles.cardDescription}>
             快速跳转到演示、策略、健康与维护区域。
           </Typography.Paragraph>
-          <Space wrap>
-            <Button size="small" onClick={() => scrollToSection("nlp-section-demo")}>Demo Lab</Button>
-            <Button size="small" onClick={() => scrollToSection("nlp-section-methods")}>Methods Matrix</Button>
-            <Button size="small" onClick={() => scrollToSection("nlp-section-strategy")}>Strategy</Button>
-            <Button size="small" onClick={() => scrollToSection("nlp-section-dryrun")}>Dry-Run</Button>
-            <Button size="small" onClick={() => scrollToSection("nlp-section-runtime")}>Runtime</Button>
-            <Button size="small" onClick={() => scrollToSection("nlp-section-maintenance")}>Maintenance</Button>
+          <Space wrap className={styles.navButtonWrap}>
+            <Button
+              size="small"
+              className={activeAnchorSection === "nlp-section-demo" ? styles.sectionNavButtonActive : ""}
+              onClick={() => scrollToSection("nlp-section-demo")}
+            >
+              Demo Lab
+            </Button>
+            <Button
+              size="small"
+              className={activeAnchorSection === "nlp-section-methods" ? styles.sectionNavButtonActive : ""}
+              onClick={() => scrollToSection("nlp-section-methods")}
+            >
+              Methods Matrix
+            </Button>
+            <Button
+              size="small"
+              className={activeAnchorSection === "nlp-section-strategy" ? styles.sectionNavButtonActive : ""}
+              onClick={() => scrollToSection("nlp-section-strategy")}
+            >
+              Strategy
+            </Button>
+            <Button
+              size="small"
+              className={activeAnchorSection === "nlp-section-dryrun" ? styles.sectionNavButtonActive : ""}
+              onClick={() => scrollToSection("nlp-section-dryrun")}
+            >
+              Dry-Run
+            </Button>
+            <Button
+              size="small"
+              className={activeAnchorSection === "nlp-section-runtime" ? styles.sectionNavButtonActive : ""}
+              onClick={() => scrollToSection("nlp-section-runtime")}
+            >
+              Runtime
+            </Button>
+            <Button
+              size="small"
+              className={activeAnchorSection === "nlp-section-maintenance" ? styles.sectionNavButtonActive : ""}
+              onClick={() => scrollToSection("nlp-section-maintenance")}
+            >
+              Maintenance
+            </Button>
           </Space>
         </Card>
 
@@ -1028,7 +1142,13 @@ function NlpPage() {
           <div className={styles.sideColumn}>
             <Collapse
               className={styles.sideGroupCollapse}
-              defaultActiveKey={["strategy", "runtime"]}
+              activeKey={sideGroupKeys}
+              onChange={(keys) => {
+                const nextKeys = Array.isArray(keys)
+                  ? keys.map((item) => String(item))
+                  : [String(keys)];
+                setSideGroupKeys(nextKeys);
+              }}
               items={[
                 {
                   key: "strategy",

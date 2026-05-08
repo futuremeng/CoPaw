@@ -23,6 +23,15 @@
   scroll-margin-top: 96px;
 }
 
+.navButtonWrap {
+  row-gap: 8px;
+}
+
+.sectionNavButtonActive {
+  border-color: #ff7f16 !important;
+  box-shadow: 0 4px 12px rgba(255, 127, 22, 0.25);
+}
+
 .alertStack {
   display: flex;
   flex-direction: column;
@@ -349,6 +358,34 @@
   }
 }
 
+@media (max-width: 760px) {
+  .content {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .card {
+    margin-bottom: 12px;
+  }
+
+  .demoMethodList {
+    grid-template-columns: 1fr;
+  }
+
+  .demoMethodButton {
+    padding: 8px 10px;
+  }
+
+  .demoInputPanel,
+  .demoResultPanel {
+    padding: 10px;
+  }
+
+  .kpiGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .footerButtons {
   display: flex;
   justify-content: flex-end;
@@ -393,6 +430,11 @@
 
   .sideGroupCollapse :global(.ant-collapse-content) {
     background: rgba(255, 255, 255, 0.01);
+  }
+
+  .sectionNavButtonActive {
+    border-color: #ffa45a !important;
+    box-shadow: 0 4px 12px rgba(255, 164, 90, 0.28);
   }
 
   .cardDescription {
