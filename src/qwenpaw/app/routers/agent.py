@@ -5,7 +5,7 @@ import asyncio
 import re
 from typing import Literal
 
-from fastapi import APIRouter, Body, HTTPException, Request
+from fastapi import APIRouter, Body, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from ..utils import schedule_agent_reload
@@ -186,6 +186,45 @@ def _build_nlp_strategy_payload(nlp_cfg) -> dict:
             else 0.22,
             "model_id": str(getattr(auto_cfg, "model_id", "") or "") if auto_cfg is not None else "",
         },
+    }
+
+
+def _build_hanlp_api_snapshot(payload: dict) -> dict:
+    """Build a lightweight API capability snapshot from cached HanLP status."""
+    sidecar = payload.get("sidecar") or {}
+    model = payload.get("model") or {}
+    tasks = payload.get("tasks") or {}
+    task_entries = tasks.values() if isinstance(tasks, dict) else []
+
+    def _task_ready(task_key: str) -> bool:
+        if not isinstance(tasks, dict):
+            return False
+        task = tasks.get(task_key)
+        if not isinstance(task, dict):
+            return False
+        return str(task.get("status") or "") == "ready"
+
+    status = str(sidecar.get("status") or "unavailable")
+    reason_code = str(sidecar.get("reason_code") or "HANLP2_SIDECAR_UNCONFIGURED")
+    reason = str(sidecar.get("reason") or "HanLP2 sidecar is not configured.")
+    if status == "ready" and str(model.get("status") or "") != "ready":
+        status = str(model.get("status") or "unavailable")
+        reason_code = str(model.get("reason_code") or "HANLP2_MODEL_LOAD_FAILED")
+        reason = str(model.get("reason") or "HanLP2 tokenizer model is unavailable.")
+
+    return {
+        "engine": "hanlp2",
+        "status": status,
+        "reason_code": reason_code,
+        "reason": reason,
+        "python_version": "",
+        "hanlp_version": "",
+        "has_coreference_resolution": _task_ready("cor"),
+        "has_parse": _task_ready("dep") or _task_ready("sdp") or _task_ready("con"),
+        "has_pipeline": status == "ready",
+        "has_load": status == "ready",
+        "pretrained_categories": [],
+        "task_ready_count": sum(1 for task in task_entries if isinstance(task, dict) and str(task.get("status") or "") == "ready"),
     }
 
 
@@ -637,7 +676,12 @@ async def post_local_whisper_install() -> dict:
         "HanLP has been removed and RexUniNLU integration is pending."
     ),
 )
-async def get_nlp_status() -> dict:
+async def get_nlp_status(
+    include_runtime_api: bool = Query(
+        default=False,
+        description="When true, run full runtime api probe (slower).",
+    ),
+) -> dict:
     """Return provider-aware NLP runtime status."""
     config = load_config()
     nlp_cfg = config.knowledge.nlp
@@ -648,10 +692,13 @@ async def get_nlp_status() -> dict:
     if provider == "hanlp":
         from ...agents.utils.hanlp_sidecar import get_hanlp_sidecar_status
 
-        payload = await asyncio.to_thread(get_hanlp_sidecar_status)
+        payload = await asyncio.to_thread(get_hanlp_sidecar_status, include_task_status=False)
         payload["provider"] = "hanlp"
         payload["strategy"] = strategy_payload
-        payload["api"] = NLPRuntime().api_status(config.knowledge)
+        if include_runtime_api:
+            payload["api"] = await asyncio.to_thread(NLPRuntime().api_status, config.knowledge)
+        else:
+            payload["api"] = _build_hanlp_api_snapshot(payload)
         return payload
 
     runtime = NLPRuntime()

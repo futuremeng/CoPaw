@@ -17,7 +17,7 @@ from ...constant import WORKING_DIR
 
 _STATUS_CACHE: dict | None = None
 _STATUS_CACHE_TIME = 0.0
-_STATUS_CACHE_TTL_SEC = 10.0
+_STATUS_CACHE_TTL_SEC = 60.0
 _STATUS_CACHE_LOCK = threading.Lock()
 _SUPPORTED_HANLP_PYTHON_VERSIONS = ("3.10", "3.9", "3.8", "3.7", "3.6")
 
@@ -387,6 +387,66 @@ def _build_task_status(runtime: HanLPSidecarRuntime, config) -> dict[str, dict]:
     return task_states
 
 
+def _build_task_status_snapshot(config, *, sidecar_state: dict, model_state: dict) -> dict[str, dict]:
+    """Build a lightweight task matrix snapshot without active runtime probing."""
+    task_states: dict[str, dict] = {}
+    sidecar_ready = str(sidecar_state.get("status") or "") == "ready"
+    model_ready = str(model_state.get("status") or "") == "ready"
+    for task_key, task_cfg in _task_specs(config).items():
+        enabled = bool(getattr(task_cfg, "enabled", True))
+        task_name = str(getattr(task_cfg, "task_name", task_key) or task_key).strip()
+        normalized_task = str(task_key or "").strip().replace("/", "_").replace("-", "_")
+        task_entry = {
+            "enabled": enabled,
+            "task_name": task_name,
+            "artifact_key": str(getattr(task_cfg, "artifact_key", task_key) or task_key).strip(),
+            "eval_role": str(getattr(task_cfg, "eval_role", "compare") or "compare").strip(),
+            "model_id": str(getattr(task_cfg, "model_id", "") or "").strip(),
+        }
+        if not enabled:
+            task_entry.update(
+                {
+                    "status": "disabled",
+                    "reason_code": "HANLP2_TASK_DISABLED",
+                    "reason": "HanLP task is disabled in the task matrix.",
+                }
+            )
+        elif normalized_task in {"cor", "coref", "coreference", "coreference_resolution"}:
+            task_entry.update(
+                {
+                    "status": "unavailable",
+                    "reason_code": "HANLP2_COREF_NOT_OPEN_SOURCE",
+                    "reason": "HanLP coreference_resolution is not open-source and is disabled in CoPaw runtime.",
+                }
+            )
+        elif not sidecar_ready:
+            task_entry.update(
+                {
+                    "status": "unavailable",
+                    "reason_code": str(sidecar_state.get("reason_code") or "HANLP2_SIDECAR_UNCONFIGURED"),
+                    "reason": str(sidecar_state.get("reason") or "HanLP2 sidecar is not configured."),
+                }
+            )
+        elif not model_ready:
+            task_entry.update(
+                {
+                    "status": "unavailable",
+                    "reason_code": str(model_state.get("reason_code") or "HANLP2_MODEL_LOAD_FAILED"),
+                    "reason": str(model_state.get("reason") or "HanLP2 tokenizer model is unavailable."),
+                }
+            )
+        else:
+            task_entry.update(
+                {
+                    "status": "ready",
+                    "reason_code": "HANLP2_TASK_READY_UNVERIFIED",
+                    "reason": "HanLP task is configured. Run task demo to verify model availability.",
+                }
+            )
+        task_states[task_key] = task_entry
+    return task_states
+
+
 def _invalidate_cache() -> None:
     global _STATUS_CACHE  # noqa: PLW0603
     global _STATUS_CACHE_TIME  # noqa: PLW0603
@@ -395,11 +455,15 @@ def _invalidate_cache() -> None:
         _STATUS_CACHE_TIME = 0.0
 
 
-def _build_status(config) -> dict:
+def _build_status(config, *, include_task_status: bool = True) -> dict:
     runtime = _runtime()
     probe_state = runtime.probe(config.knowledge)
     model_state = runtime.model_status(config.knowledge)
-    task_states = _build_task_status(runtime, config)
+    task_states = (
+        _build_task_status(runtime, config)
+        if include_task_status
+        else _build_task_status_snapshot(config, sidecar_state=probe_state, model_state=model_state)
+    )
     python_executable = str(config.knowledge.nlp.python_executable or "").strip()
     managed_python = str(_managed_python_path(_managed_venv()))
     uv_executable = _find_uv_executable()
@@ -426,7 +490,7 @@ def _build_status(config) -> dict:
     }
 
 
-def get_hanlp_sidecar_status(*, force_refresh: bool = False) -> dict:
+def get_hanlp_sidecar_status(*, force_refresh: bool = False, include_task_status: bool = True) -> dict:
     global _STATUS_CACHE  # noqa: PLW0603
     global _STATUS_CACHE_TIME  # noqa: PLW0603
 
@@ -434,17 +498,20 @@ def get_hanlp_sidecar_status(*, force_refresh: bool = False) -> dict:
     with _STATUS_CACHE_LOCK:
         if (
             not force_refresh
+            and include_task_status
             and _STATUS_CACHE is not None
             and (now - _STATUS_CACHE_TIME) < _STATUS_CACHE_TTL_SEC
         ):
             return dict(_STATUS_CACHE)
 
     config = load_config()
-    status = _build_status(config)
+    status = _build_status(config, include_task_status=include_task_status)
 
-    with _STATUS_CACHE_LOCK:
-        _STATUS_CACHE = status
-        _STATUS_CACHE_TIME = now
+    if include_task_status:
+        with _STATUS_CACHE_LOCK:
+            _STATUS_CACHE = status
+            # Record cache time after status build; build itself can take seconds.
+            _STATUS_CACHE_TIME = time.monotonic()
     return dict(status)
 
 

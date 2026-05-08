@@ -846,16 +846,6 @@ function NlpPage() {
     element.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  if (loading) {
-    return (
-      <div className={styles.page}>
-        <div className={styles.centerState}>
-          <Spin />
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className={styles.nlpPage}>
       <PageHeader
@@ -867,6 +857,15 @@ function NlpPage() {
 
       <div className={styles.content}>
         <div className={styles.alertStack}>
+          {loading ? (
+            <Alert
+              type="info"
+              showIcon
+              message="Loading NLP runtime status"
+              description={<Space size={8}><Spin size="small" /><span>页面已可用，运行态信息正在刷新。</span></Space>}
+            />
+          ) : null}
+
           <Alert
             type="info"
             showIcon

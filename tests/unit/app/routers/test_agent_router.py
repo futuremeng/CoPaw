@@ -52,7 +52,7 @@ def test_get_hanlp_status_offloads_to_thread(monkeypatch):
     monkeypatch.setattr(agent_router_module.asyncio, "to_thread", fake_to_thread)
     monkeypatch.setattr(
         "qwenpaw.agents.utils.hanlp_sidecar.get_hanlp_sidecar_status",
-        lambda: {
+        lambda **_kwargs: {
             "sidecar": {
                 "status": "ready",
                 "reason_code": "HANLP2_READY",
