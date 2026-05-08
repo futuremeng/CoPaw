@@ -58,6 +58,16 @@ export interface NlpStrategyUpdatePayload {
   };
 }
 
+export interface NlpStrategyDryRunDecision {
+  task_key: string;
+  strategy_mode: string;
+  detected_style: string;
+  detection_score: number;
+  selected_model: string;
+  matched_rules: string[];
+  fallback_used: boolean;
+}
+
 export interface HanlpOperation {
   name: string;
   attempted: boolean;
@@ -76,9 +86,11 @@ export function useNlp() {
   const [installing, setInstalling] = useState(false);
   const [downloadingModel, setDownloadingModel] = useState(false);
   const [savingStrategy, setSavingStrategy] = useState(false);
+  const [dryRunningDecision, setDryRunningDecision] = useState(false);
   const [status, setStatus] = useState<NlpStatus | null>(null);
   const [lastManualSteps, setLastManualSteps] = useState<string[]>([]);
   const [lastOperations, setLastOperations] = useState<HanlpOperation[]>([]);
+  const [lastStrategyDecision, setLastStrategyDecision] = useState<NlpStrategyDryRunDecision | null>(null);
 
   const fetchStatus = async () => {
     setLoading(true);
@@ -163,6 +175,26 @@ export function useNlp() {
     }
   };
 
+  const handleDryRunStrategy = async (text: string, taskKey: string) => {
+    const normalizedText = String(text || "").trim();
+    if (!normalizedText) {
+      message.warning("Please enter text for strategy preview");
+      return null;
+    }
+    setDryRunningDecision(true);
+    try {
+      const res = await api.dryRunNlpStrategy({ text: normalizedText, task_key: taskKey });
+      setLastStrategyDecision(res.decision || null);
+      return res.decision || null;
+    } catch (error) {
+      console.error("Failed to preview NLP strategy decision:", error);
+      message.error("Failed to preview NLP strategy decision");
+      return null;
+    } finally {
+      setDryRunningDecision(false);
+    }
+  };
+
   const sidecarReady = status?.sidecar.status === "ready";
   const modelReady = status?.model.status === "ready";
   const provider = String(status?.provider || "hanlp").toLowerCase();
@@ -173,6 +205,7 @@ export function useNlp() {
     installing,
     downloadingModel,
     savingStrategy,
+    dryRunningDecision,
     status,
     provider,
     hanlpProviderActive,
@@ -184,5 +217,7 @@ export function useNlp() {
     handleInstall,
     handleDownloadModel,
     handleUpdateStrategy,
+    handleDryRunStrategy,
+    lastStrategyDecision,
   };
 }

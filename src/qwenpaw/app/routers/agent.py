@@ -2,6 +2,7 @@
 """Agent file management API."""
 
 import asyncio
+import re
 from typing import Literal
 
 from fastapi import APIRouter, Body, HTTPException, Request
@@ -133,6 +134,30 @@ class NLPStrategyUpdateBody(BaseModel):
     )
 
 
+class NLPStrategyDryRunBody(BaseModel):
+    """Request body for NLP strategy decision dry-run."""
+
+    text: str = Field(..., min_length=1, description="Input text used to evaluate routing strategy")
+    task_key: str = Field(default="ner", description="Task key, e.g. ner/dep")
+
+
+_CLASSICAL_HINT_CHARS = frozenset("之乎者也焉矣其乃若夫盖兮耳哉")
+_CLASSICAL_HINT_PATTERNS = (
+    re.compile(r"[吾余予汝尔卿]"),
+    re.compile(r"[不无未弗毋勿]\w?"),
+)
+_MODERN_HINT_TOKENS = (
+    "我们",
+    "你们",
+    "他们",
+    "这个",
+    "那个",
+    "因为",
+    "所以",
+    "以及",
+)
+
+
 def _normalize_task_overrides(raw: dict[str, str] | None) -> dict[str, str]:
     """Normalize task overrides by trimming keys/values and dropping empties."""
     normalized: dict[str, str] = {}
@@ -161,6 +186,75 @@ def _build_nlp_strategy_payload(nlp_cfg) -> dict:
             else 0.22,
             "model_id": str(getattr(auto_cfg, "model_id", "") or "") if auto_cfg is not None else "",
         },
+    }
+
+
+def _classical_detection_score(text: str) -> float:
+    """Compute a lightweight heuristic score for classical-Chinese style."""
+    normalized = str(text or "").strip()
+    if not normalized:
+        return 0.0
+    classical_hits = sum(1 for ch in normalized if ch in _CLASSICAL_HINT_CHARS)
+    for pattern in _CLASSICAL_HINT_PATTERNS:
+        classical_hits += len(pattern.findall(normalized))
+    modern_hits = 0
+    for token in _MODERN_HINT_TOKENS:
+        modern_hits += normalized.count(token)
+    density_score = min(1.0, (classical_hits / max(len(normalized), 1)) * 10.0)
+    contrast_score = max(0.0, (classical_hits - modern_hits) / max(classical_hits + modern_hits, 1))
+    score = (density_score * 0.65) + (contrast_score * 0.35)
+    return max(0.0, min(score, 1.0))
+
+
+def _resolve_nlp_model_decision(task_key: str, text: str, knowledge_config) -> dict:
+    """Resolve selected model and decision metadata for a given input text/task."""
+    normalized_task_key = str(task_key or "ner").strip().lower() or "ner"
+    nlp_cfg = getattr(knowledge_config, "nlp", None)
+    strategy = getattr(nlp_cfg, "strategy", None)
+    base_model = str(getattr(nlp_cfg, "model_id", "") or "").strip()
+    selected_model = base_model
+    detected_style = "modern"
+    detection_score = 0.0
+    matched_rules: list[str] = []
+    mode = str(getattr(strategy, "mode", "auto") or "auto").strip().lower() or "auto"
+
+    default_model = str(getattr(strategy, "default_model_id", "") or "").strip() if strategy else ""
+    if default_model:
+        selected_model = default_model
+        matched_rules.append("strategy.default_model_id")
+
+    task_overrides = getattr(strategy, "task_overrides", {}) if strategy is not None else {}
+    if isinstance(task_overrides, dict):
+        override_model = str(task_overrides.get(normalized_task_key) or "").strip()
+        if override_model:
+            selected_model = override_model
+            matched_rules.append(f"strategy.task_overrides.{normalized_task_key}")
+
+    auto_cfg = getattr(strategy, "auto_classical_chinese", None)
+    auto_enabled = bool(getattr(auto_cfg, "enabled", False)) if auto_cfg is not None else False
+    if mode in {"auto", "hybrid"} and auto_enabled:
+        detection_score = _classical_detection_score(text)
+        threshold = float(getattr(auto_cfg, "threshold", 0.22) or 0.22)
+        if detection_score >= max(0.0, min(threshold, 1.0)):
+            detected_style = "classical_chinese"
+            classical_model = str(getattr(auto_cfg, "model_id", "") or "").strip()
+            if classical_model:
+                selected_model = classical_model
+                matched_rules.append("strategy.auto_classical_chinese")
+
+    if not selected_model:
+        selected_model = base_model
+        if base_model:
+            matched_rules.append("knowledge.nlp.model_id")
+
+    return {
+        "task_key": normalized_task_key,
+        "strategy_mode": mode,
+        "detected_style": detected_style,
+        "detection_score": round(detection_score, 4),
+        "selected_model": selected_model,
+        "matched_rules": matched_rules,
+        "fallback_used": False,
     }
 
 
@@ -617,6 +711,26 @@ async def put_nlp_strategy(
 
     save_config(config)
     return {
+        "strategy": _build_nlp_strategy_payload(config.knowledge.nlp),
+    }
+
+
+@router.post(
+    "/nlp-strategy/dry-run",
+    summary="Preview NLP strategy decision",
+    description="Return request-level model routing decision metadata without executing NLP runtime.",
+)
+async def post_nlp_strategy_dry_run(
+    body: NLPStrategyDryRunBody = Body(
+        ...,
+        description="Dry-run request payload",
+    ),
+) -> dict:
+    """Preview model routing strategy decision for input text/task."""
+    config = load_config()
+    decision = _resolve_nlp_model_decision(body.task_key, body.text, config.knowledge)
+    return {
+        "decision": decision,
         "strategy": _build_nlp_strategy_payload(config.knowledge.nlp),
     }
 

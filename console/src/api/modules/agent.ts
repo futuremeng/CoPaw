@@ -12,6 +12,16 @@ type NlpStrategyPayload = {
   };
 };
 
+type NlpStrategyDecisionPayload = {
+  task_key: string;
+  strategy_mode: string;
+  detected_style: string;
+  detection_score: number;
+  selected_model: string;
+  matched_rules: string[];
+  fallback_used: boolean;
+};
+
 // Agent API
 export const agentApi = {
   agentRoot: () => request<unknown>("/agent/"),
@@ -165,6 +175,15 @@ export const agentApi = {
     }>("/agent/nlp-strategy", {
       method: "PUT",
       body: JSON.stringify(strategy),
+    }),
+
+  dryRunNlpStrategy: (payload: { text: string; task_key: string }) =>
+    request<{
+      decision: NlpStrategyDecisionPayload;
+      strategy: NlpStrategyPayload;
+    }>("/agent/nlp-strategy/dry-run", {
+      method: "POST",
+      body: JSON.stringify(payload),
     }),
 
   getHanlpStatus: () =>

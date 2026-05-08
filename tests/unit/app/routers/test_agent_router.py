@@ -225,3 +225,86 @@ def test_put_nlp_strategy_updates_config(monkeypatch):
     assert payload["strategy"]["auto_classical_chinese"]["threshold"] == 0.23
     assert payload["strategy"]["auto_classical_chinese"]["model_id"] == "model-lzh-new"
     assert saved["called"] is True
+
+
+def test_post_nlp_strategy_dry_run_classical_chinese(monkeypatch):
+    app = FastAPI()
+    app.include_router(agent_router_module.router)
+
+    config = SimpleNamespace(
+        knowledge=SimpleNamespace(
+            nlp=SimpleNamespace(
+                model_id="model-default",
+                strategy=SimpleNamespace(
+                    mode="auto",
+                    default_model_id="model-default",
+                    task_overrides={},
+                    auto_classical_chinese=SimpleNamespace(
+                        enabled=True,
+                        threshold=0.2,
+                        model_id="model-lzh",
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    monkeypatch.setattr(agent_router_module, "load_config", lambda: config)
+
+    client = TestClient(app)
+    response = client.post(
+        "/agent/nlp-strategy/dry-run",
+        json={
+            "task_key": "ner",
+            "text": "吾之道也",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    decision = payload["decision"]
+    assert decision["detected_style"] == "classical_chinese"
+    assert decision["selected_model"] == "model-lzh"
+    assert decision["detection_score"] >= 0.2
+    assert "strategy.auto_classical_chinese" in decision["matched_rules"]
+
+
+def test_post_nlp_strategy_dry_run_modern_text(monkeypatch):
+    app = FastAPI()
+    app.include_router(agent_router_module.router)
+
+    config = SimpleNamespace(
+        knowledge=SimpleNamespace(
+            nlp=SimpleNamespace(
+                model_id="model-default",
+                strategy=SimpleNamespace(
+                    mode="auto",
+                    default_model_id="model-default",
+                    task_overrides={},
+                    auto_classical_chinese=SimpleNamespace(
+                        enabled=True,
+                        threshold=0.5,
+                        model_id="model-lzh",
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    monkeypatch.setattr(agent_router_module, "load_config", lambda: config)
+
+    client = TestClient(app)
+    response = client.post(
+        "/agent/nlp-strategy/dry-run",
+        json={
+            "task_key": "ner",
+            "text": "我们正在测试模型自动选择能力",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    decision = payload["decision"]
+    assert decision["detected_style"] == "modern"
+    assert decision["selected_model"] == "model-default"
+    assert decision["detection_score"] < 0.5

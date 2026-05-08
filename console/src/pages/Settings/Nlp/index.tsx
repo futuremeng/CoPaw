@@ -32,6 +32,7 @@ function NlpPage() {
     installing,
     downloadingModel,
     savingStrategy,
+    dryRunningDecision,
     status,
     provider,
     hanlpProviderActive,
@@ -43,6 +44,8 @@ function NlpPage() {
     handleInstall,
     handleDownloadModel,
     handleUpdateStrategy,
+    handleDryRunStrategy,
+    lastStrategyDecision,
   } = useNlp();
 
   const taskStates = status?.tasks ?? {};
@@ -56,6 +59,8 @@ function NlpPage() {
   const [classicalModelDraft, setClassicalModelDraft] = useState("");
   const [taskOverridesText, setTaskOverridesText] = useState("{}");
   const [strategyParseError, setStrategyParseError] = useState("");
+  const [previewTaskKey, setPreviewTaskKey] = useState("ner");
+  const [previewText, setPreviewText] = useState("吾之道也");
 
   useEffect(() => {
     const nextMode = strategy?.mode === "manual" || strategy?.mode === "hybrid" ? strategy.mode : "auto";
@@ -313,6 +318,63 @@ function NlpPage() {
                 ))
               )}
             </div>
+          </Space>
+        </Card>
+
+        <Card className={styles.card}>
+          <Typography.Title level={5} className={styles.cardTitle}>
+            Strategy Dry-Run Preview
+          </Typography.Title>
+          <Typography.Paragraph type="secondary" className={styles.cardDescription}>
+            Simulate model selection for current strategy without executing NLP tasks.
+          </Typography.Paragraph>
+          <Space direction="vertical" size={12} style={{ width: "100%" }}>
+            <Select
+              value={previewTaskKey}
+              options={[
+                { label: "ner", value: "ner" },
+                { label: "dep", value: "dep" },
+                { label: "sdp", value: "sdp" },
+                { label: "con", value: "con" },
+                { label: "cor", value: "cor" },
+              ]}
+              onChange={(value) => setPreviewTaskKey(value)}
+              style={{ width: 220 }}
+            />
+            <Input.TextArea
+              rows={4}
+              value={previewText}
+              onChange={(event) => setPreviewText(event.target.value)}
+              placeholder="Enter text for dry-run decision preview"
+            />
+            <Button
+              onClick={() => handleDryRunStrategy(previewText, previewTaskKey)}
+              loading={dryRunningDecision}
+            >
+              Run dry-run
+            </Button>
+            {lastStrategyDecision ? (
+              <div className={styles.operationBlock}>
+                <Typography.Paragraph className={styles.operationOutput}>
+                  task: {lastStrategyDecision.task_key}
+                </Typography.Paragraph>
+                <Typography.Paragraph className={styles.operationOutput}>
+                  mode: {lastStrategyDecision.strategy_mode}
+                </Typography.Paragraph>
+                <Typography.Paragraph className={styles.operationOutput}>
+                  detected_style: {lastStrategyDecision.detected_style}
+                </Typography.Paragraph>
+                <Typography.Paragraph className={styles.operationOutput}>
+                  detection_score: {lastStrategyDecision.detection_score}
+                </Typography.Paragraph>
+                <Typography.Paragraph className={styles.operationOutput}>
+                  selected_model: {lastStrategyDecision.selected_model || "(empty)"}
+                </Typography.Paragraph>
+                <Typography.Paragraph className={styles.operationOutput}>
+                  matched_rules: {(lastStrategyDecision.matched_rules || []).join(", ") || "(none)"}
+                </Typography.Paragraph>
+              </div>
+            ) : null}
           </Space>
         </Card>
 
