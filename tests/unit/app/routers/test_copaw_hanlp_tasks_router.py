@@ -27,6 +27,22 @@ class _FakeRuntime:
             "reason": "HanLP task is ready.",
         }
 
+    def tokenize(self, text: str, config):
+        _ = config
+        return [token for token in text.split(" ") if token], {
+            "status": "ready",
+            "reason_code": "HANLP2_TASK_READY",
+            "reason": "HanLP task is ready.",
+        }
+
+    def run_task(self, task_key: str, text: str, config):
+        _ = config
+        return {"task": task_key, "text": text}, {
+            "status": "ready",
+            "reason_code": "HANLP2_TASK_READY",
+            "reason": "HanLP task is ready.",
+        }
+
 
 class _UnavailableRuntime:
     def run_ner(self, text: str, config):
@@ -40,6 +56,22 @@ class _UnavailableRuntime:
     def run_dep(self, text: str, config):
         _ = (text, config)
         return [{"token": "微软", "head": 0, "deprel": "root"}], {
+            "status": "unavailable",
+            "reason_code": "HANLP2_MODEL_LOAD_FAILED",
+            "reason": "HanLP model load failed.",
+        }
+
+    def tokenize(self, text: str, config):
+        _ = (text, config)
+        return [], {
+            "status": "unavailable",
+            "reason_code": "HANLP2_MODEL_LOAD_FAILED",
+            "reason": "HanLP model load failed.",
+        }
+
+    def run_task(self, task_key: str, text: str, config):
+        _ = (task_key, text, config)
+        return None, {
             "status": "unavailable",
             "reason_code": "HANLP2_MODEL_LOAD_FAILED",
             "reason": "HanLP model load failed.",
@@ -221,3 +253,54 @@ def test_copaw_hanlp_auto_route_modern_text_uses_default_model(monkeypatch):
     assert payload["resolved_model"] == "hanlp.pretrained.mtl.CLOSE_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH"
     assert payload["detection_score"] < 0.2
     assert _FakeRuntime.last_ner_model_id == "hanlp.pretrained.mtl.CLOSE_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH"
+
+
+def test_copaw_hanlp_tokenize_run_endpoint(monkeypatch):
+    _install_runtime_mocks(monkeypatch)
+
+    from copaw.app._app import app
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/knowledge/tasks/tokenize:run",
+            json={"text": "微软 发布 新模型", "request_id": "req-tokenize-1"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["task_key"] == "tokenize"
+    assert payload["status"] == "ready"
+    assert payload["result"] == ["微软", "发布", "新模型"]
+
+
+def test_copaw_hanlp_sdp_run_endpoint(monkeypatch):
+    _install_runtime_mocks(monkeypatch)
+
+    from copaw.app._app import app
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/knowledge/tasks/sdp:run",
+            json={"text": "微软发布新模型", "request_id": "req-sdp-1"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["task_key"] == "sdp"
+    assert payload["status"] == "ready"
+    assert payload["result"]["task"] == "sdp"
+
+
+def test_copaw_hanlp_unknown_task_rejected(monkeypatch):
+    _install_runtime_mocks(monkeypatch)
+
+    from copaw.app._app import app
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/knowledge/tasks/unknown:run",
+            json={"text": "微软发布新模型", "request_id": "req-unknown-1"},
+        )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "HANLP_TASK_UNSUPPORTED"

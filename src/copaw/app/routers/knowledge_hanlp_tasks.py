@@ -54,6 +54,10 @@ _MODERN_HINT_TOKENS = (
     "所以",
     "以及",
 )
+_SUPPORTED_TASK_KEYS = {"tokenize", "ner", "dep", "sdp", "con", "cor"}
+_TASK_ALIASES = {
+    "ner_msra": "ner",
+}
 
 
 def _normalize_ner_result(raw: Any) -> list[dict[str, Any]]:
@@ -138,8 +142,12 @@ def _task_matrix_model_override(task_key: str, selected_model: str, effective_co
     if not selected_model:
         return
     task_map = {
+        "tokenize": "tok",
         "ner": "ner_msra",
         "dep": "dep",
+        "sdp": "sdp",
+        "con": "con",
+        "cor": "coref",
     }
     matrix_key = task_map.get(task_key)
     if not matrix_key:
@@ -174,6 +182,7 @@ def _classical_detection_score(text: str) -> float:
 
 
 def _resolve_model_decision(task_key: str, text: str, knowledge_config: KnowledgeConfig) -> dict[str, Any]:
+    normalized_task_key = _normalize_task_key(task_key)
     nlp_cfg = getattr(knowledge_config, "nlp", None)
     strategy = getattr(nlp_cfg, "strategy", None)
     base_model = _extract_hanlp_model_id(knowledge_config)
@@ -190,10 +199,10 @@ def _resolve_model_decision(task_key: str, text: str, knowledge_config: Knowledg
 
     task_overrides = getattr(strategy, "task_overrides", {}) if strategy is not None else {}
     if isinstance(task_overrides, dict):
-        override_model = str(task_overrides.get(task_key) or "").strip()
+        override_model = str(task_overrides.get(normalized_task_key) or "").strip()
         if override_model:
             selected_model = override_model
-            matched_rules.append(f"strategy.task_overrides.{task_key}")
+            matched_rules.append(f"strategy.task_overrides.{normalized_task_key}")
 
     auto_cfg = getattr(strategy, "auto_classical_chinese", None)
     auto_enabled = bool(getattr(auto_cfg, "enabled", False)) if auto_cfg is not None else False
@@ -220,6 +229,13 @@ def _resolve_model_decision(task_key: str, text: str, knowledge_config: Knowledg
         "matched_rules": matched_rules,
         "fallback_used": False,
     }
+
+
+def _normalize_task_key(task_key: str) -> str:
+    normalized = str(task_key or "").strip().lower()
+    if normalized in _TASK_ALIASES:
+        return _TASK_ALIASES[normalized]
+    return normalized
 
 
 def _effective_knowledge_config(knowledge_config: KnowledgeConfig, running_config) -> KnowledgeConfig:
@@ -284,26 +300,34 @@ async def _resolve_knowledge_config(request: Request) -> KnowledgeConfig:
 
 
 async def _run_hanlp_task(task_key: str, request: HanLPTaskRunRequest, http_request: Request) -> HanLPTaskRunResponse:
+    normalized_task_key = _normalize_task_key(task_key)
+    if normalized_task_key not in _SUPPORTED_TASK_KEYS:
+        raise HTTPException(status_code=400, detail="HANLP_TASK_UNSUPPORTED")
+
     knowledge_config = await _resolve_knowledge_config(http_request)
-    decision = _resolve_model_decision(task_key, request.text, knowledge_config)
+    decision = _resolve_model_decision(normalized_task_key, request.text, knowledge_config)
     effective_config = _clone_effective_config(knowledge_config)
     if decision["selected_model"]:
         nlp_cfg = getattr(effective_config, "nlp", None)
         if nlp_cfg is not None:
             nlp_cfg.model_id = str(decision["selected_model"])
-            _task_matrix_model_override(task_key, str(decision["selected_model"]), effective_config)
+            _task_matrix_model_override(normalized_task_key, str(decision["selected_model"]), effective_config)
     runtime = NLPRuntime()
     request_id = _effective_request_id(request.request_id)
     started = time.perf_counter()
 
-    if task_key == "ner":
+    if normalized_task_key == "tokenize":
+        result, state = runtime.tokenize(request.text, effective_config)
+        normalized_result = list(result) if isinstance(result, list) else []
+    elif normalized_task_key == "ner":
         result, state = runtime.run_ner(request.text, effective_config)
         normalized_result = _normalize_ner_result(result)
-    elif task_key == "dep":
+    elif normalized_task_key == "dep":
         result, state = runtime.run_dep(request.text, effective_config)
         normalized_result = _normalize_dep_result(result)
     else:
-        raise HTTPException(status_code=400, detail="HANLP_TASK_UNSUPPORTED")
+        result, state = runtime.run_task(normalized_task_key, request.text, effective_config)
+        normalized_result = result
 
     duration_ms = int((time.perf_counter() - started) * 1000)
     status = str(state.get("status") or "unavailable")
@@ -314,7 +338,7 @@ async def _run_hanlp_task(task_key: str, request: HanLPTaskRunRequest, http_requ
         decision["fallback_used"] = True
 
     return HanLPTaskRunResponse(
-        task_key=task_key,
+        task_key=normalized_task_key,
         request_id=request_id,
         status=status,
         reason_code=reason_code,
@@ -338,3 +362,12 @@ async def run_ner_task(request: HanLPTaskRunRequest, http_request: Request) -> H
 @router.post("/tasks/dep:run", response_model=HanLPTaskRunResponse)
 async def run_dep_task(request: HanLPTaskRunRequest, http_request: Request) -> HanLPTaskRunResponse:
     return await _run_hanlp_task("dep", request, http_request)
+
+
+@router.post("/tasks/{task_key}:run", response_model=HanLPTaskRunResponse)
+async def run_generic_task(
+    task_key: str,
+    request: HanLPTaskRunRequest,
+    http_request: Request,
+) -> HanLPTaskRunResponse:
+    return await _run_hanlp_task(task_key, request, http_request)

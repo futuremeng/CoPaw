@@ -12,6 +12,59 @@ type MethodStatus = {
   reason: string;
 };
 
+type DemoMethod = {
+  key: string;
+  backendTaskKey: string;
+  title: string;
+  placeholder: string;
+  examples: string[];
+};
+
+const DEMO_METHODS: DemoMethod[] = [
+  {
+    key: "tokenize",
+    backendTaskKey: "tokenize",
+    title: "Tokenize",
+    placeholder: "输入一段中文文本，例如：微软发布新模型。",
+    examples: ["微软发布新模型。", "吾之道也。"],
+  },
+  {
+    key: "nerMsra",
+    backendTaskKey: "ner",
+    title: "NER (MSRA)",
+    placeholder: "输入命名实体识别文本，例如：微软在北京发布Copaw。",
+    examples: ["微软在北京发布Copaw。", "阿里巴巴位于杭州。"],
+  },
+  {
+    key: "dep",
+    backendTaskKey: "dep",
+    title: "Dependency Parsing",
+    placeholder: "输入依存句法文本，例如：微软发布新模型。",
+    examples: ["微软发布新模型。", "我们正在测试模型自动选择能力。"],
+  },
+  {
+    key: "sdp",
+    backendTaskKey: "sdp",
+    title: "Semantic Dependency Parsing",
+    placeholder: "输入语义依存文本。",
+    examples: ["微软发布新模型。", "他们在上海召开会议。"],
+  },
+  {
+    key: "con",
+    backendTaskKey: "con",
+    title: "Constituency Parsing",
+    placeholder: "输入短语结构分析文本。",
+    examples: ["微软发布新模型。", "这个系统运行稳定。"],
+  },
+  {
+    key: "cor",
+    backendTaskKey: "cor",
+    title: "Coreference Resolution",
+    placeholder: "输入指代消解文本。",
+    examples: ["张三到了公司，他开始写代码。", "李雷见到韩梅梅，她很高兴。"],
+  },
+];
+
 function resolveTagColor(status: string): "success" | "warning" | "error" | "default" {
   if (status === "ready") {
     return "success";
@@ -46,6 +99,9 @@ function NlpPage() {
     handleUpdateStrategy,
     handleDryRunStrategy,
     lastStrategyDecision,
+    runMethodDemo,
+    runningDemoTask,
+    demoResults,
   } = useNlp();
 
   const taskStates = status?.tasks ?? {};
@@ -61,6 +117,17 @@ function NlpPage() {
   const [strategyParseError, setStrategyParseError] = useState("");
   const [previewTaskKey, setPreviewTaskKey] = useState("ner");
   const [previewText, setPreviewText] = useState("吾之道也");
+  const [demoInputs, setDemoInputs] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (Object.keys(demoInputs).length > 0) {
+      return;
+    }
+    const initial = Object.fromEntries(
+      DEMO_METHODS.map((item) => [item.backendTaskKey, item.examples[0] || ""]),
+    ) as Record<string, string>;
+    setDemoInputs(initial);
+  }, [demoInputs]);
 
   useEffect(() => {
     const nextMode = strategy?.mode === "manual" || strategy?.mode === "hybrid" ? strategy.mode : "auto";
@@ -465,6 +532,72 @@ function NlpPage() {
                 ) : null}
               </div>
             ))}
+          </Space>
+        </Card>
+
+        <Card className={styles.card}>
+          <Typography.Title level={5} className={styles.cardTitle}>
+            NLP Method Demos
+          </Typography.Title>
+          <Typography.Paragraph type="secondary" className={styles.cardDescription}>
+            每个方法都提供示例输入与一键测试，结果与错误原因会直接显示，便于快速验证。
+          </Typography.Paragraph>
+          <Space direction="vertical" size={16} style={{ width: "100%" }}>
+            {DEMO_METHODS.map((method) => {
+              const methodStatus = methods.find((item) => item.key === method.key)?.status;
+              const demoResult = demoResults[method.backendTaskKey];
+              const currentInput = demoInputs[method.backendTaskKey] || "";
+              return (
+                <div key={method.backendTaskKey} className={styles.operationBlock}>
+                  <div className={styles.statusRow}>
+                    <Typography.Text strong>{method.title}</Typography.Text>
+                    <Tag color={resolveTagColor(methodStatus?.status || "unavailable")}>{methodStatus?.reasonCode || "UNKNOWN"}</Tag>
+                  </div>
+                  <Typography.Paragraph className={styles.operationOutput}>
+                    {methodStatus?.reason || "No status available"}
+                  </Typography.Paragraph>
+                  <Space wrap size={8}>
+                    {method.examples.map((sample) => (
+                      <Button
+                        key={`${method.backendTaskKey}-${sample}`}
+                        size="small"
+                        onClick={() =>
+                          setDemoInputs((prev) => ({
+                            ...prev,
+                            [method.backendTaskKey]: sample,
+                          }))
+                        }
+                      >
+                        示例
+                      </Button>
+                    ))}
+                  </Space>
+                  <Input.TextArea
+                    rows={3}
+                    value={currentInput}
+                    placeholder={method.placeholder}
+                    onChange={(event) =>
+                      setDemoInputs((prev) => ({
+                        ...prev,
+                        [method.backendTaskKey]: event.target.value,
+                      }))
+                    }
+                  />
+                  <Button
+                    type="primary"
+                    loading={runningDemoTask === method.backendTaskKey}
+                    onClick={() => runMethodDemo(method.backendTaskKey, currentInput)}
+                  >
+                    运行测试
+                  </Button>
+                  {demoResult ? (
+                    <Typography.Paragraph className={styles.operationOutput}>
+                      {JSON.stringify(demoResult, null, 2)}
+                    </Typography.Paragraph>
+                  ) : null}
+                </div>
+              );
+            })}
           </Space>
         </Card>
 

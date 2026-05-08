@@ -160,6 +160,26 @@ export const knowledgeApi = {
       withProjectId("/knowledge/tasks/snapshot", options?.projectId),
     ),
 
+  runNlpTaskDemo: (taskKey: string, payload: { text: string; request_id?: string }) =>
+    request<{
+      task_key: string;
+      request_id: string;
+      status: string;
+      reason_code: string;
+      reason: string;
+      result: unknown;
+      resolved_model: string;
+      strategy_mode: string;
+      detected_style: string;
+      detection_score: number;
+      matched_rules: string[];
+      fallback_used: boolean;
+      duration_ms: number;
+    }>(`/knowledge/tasks/${encodeURIComponent(taskKey)}:run`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
   runKnowledgeHistoryBackfillNow: () =>
     request<KnowledgeHistoryBackfillRunResponse>("/knowledge/history-backfill/run", {
       method: "POST",

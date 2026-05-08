@@ -68,6 +68,22 @@ export interface NlpStrategyDryRunDecision {
   fallback_used: boolean;
 }
 
+export interface NlpMethodDemoResult {
+  task_key: string;
+  request_id: string;
+  status: string;
+  reason_code: string;
+  reason: string;
+  result: unknown;
+  resolved_model: string;
+  strategy_mode: string;
+  detected_style: string;
+  detection_score: number;
+  matched_rules: string[];
+  fallback_used: boolean;
+  duration_ms: number;
+}
+
 export interface HanlpOperation {
   name: string;
   attempted: boolean;
@@ -91,6 +107,8 @@ export function useNlp() {
   const [lastManualSteps, setLastManualSteps] = useState<string[]>([]);
   const [lastOperations, setLastOperations] = useState<HanlpOperation[]>([]);
   const [lastStrategyDecision, setLastStrategyDecision] = useState<NlpStrategyDryRunDecision | null>(null);
+  const [runningDemoTask, setRunningDemoTask] = useState<string | null>(null);
+  const [demoResults, setDemoResults] = useState<Record<string, NlpMethodDemoResult>>({});
 
   const fetchStatus = async () => {
     setLoading(true);
@@ -195,6 +213,35 @@ export function useNlp() {
     }
   };
 
+  const runMethodDemo = async (taskKey: string, text: string) => {
+    const normalizedTaskKey = String(taskKey || "").trim();
+    const normalizedText = String(text || "").trim();
+    if (!normalizedTaskKey || !normalizedText) {
+      message.warning("Please select a method and provide test text");
+      return null;
+    }
+
+    setRunningDemoTask(normalizedTaskKey);
+    try {
+      const result = await api.runNlpTaskDemo(normalizedTaskKey, {
+        text: normalizedText,
+      });
+      setDemoResults((prev) => ({ ...prev, [normalizedTaskKey]: result }));
+      if (result.status === "ready") {
+        message.success(`${normalizedTaskKey} demo finished`);
+      } else {
+        message.warning(`${normalizedTaskKey} demo: ${result.reason_code}`);
+      }
+      return result;
+    } catch (error) {
+      console.error("Failed to run NLP method demo:", error);
+      message.error("Failed to run NLP method demo");
+      return null;
+    } finally {
+      setRunningDemoTask(null);
+    }
+  };
+
   const sidecarReady = status?.sidecar.status === "ready";
   const modelReady = status?.model.status === "ready";
   const provider = String(status?.provider || "hanlp").toLowerCase();
@@ -211,6 +258,8 @@ export function useNlp() {
     hanlpProviderActive,
     lastManualSteps,
     lastOperations,
+    runningDemoTask,
+    demoResults,
     sidecarReady,
     modelReady,
     fetchStatus,
@@ -219,5 +268,6 @@ export function useNlp() {
     handleUpdateStrategy,
     handleDryRunStrategy,
     lastStrategyDecision,
+    runMethodDemo,
   };
 }
