@@ -273,6 +273,24 @@ def test_copaw_hanlp_tokenize_run_endpoint(monkeypatch):
     assert payload["result"] == ["微软", "发布", "新模型"]
 
 
+def test_copaw_hanlp_tokenize_run_slash_endpoint(monkeypatch):
+    _install_runtime_mocks(monkeypatch)
+
+    from copaw.app._app import app
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/knowledge/tasks/tokenize/run",
+            json={"text": "微软 发布 新模型", "request_id": "req-tokenize-2"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["task_key"] == "tokenize"
+    assert payload["status"] == "ready"
+    assert payload["result"] == ["微软", "发布", "新模型"]
+
+
 def test_copaw_hanlp_sdp_run_endpoint(monkeypatch):
     _install_runtime_mocks(monkeypatch)
 

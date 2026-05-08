@@ -175,7 +175,7 @@ export const knowledgeApi = {
       matched_rules: string[];
       fallback_used: boolean;
       duration_ms: number;
-    }>(`/knowledge/tasks/${encodeURIComponent(taskKey)}:run`, {
+    }>(`/knowledge/tasks/${encodeURIComponent(taskKey)}/run`, {
       method: "POST",
       body: JSON.stringify(payload),
     }),

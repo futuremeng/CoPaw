@@ -835,6 +835,43 @@ def test_get_knowledge_tasks_snapshot_offloads_collection_to_thread(
     assert calls[0][0].__name__ == "<lambda>"
 
 
+def test_run_knowledge_nlp_task_delegates_to_hanlp_runner(
+    knowledge_api_client: TestClient,
+    monkeypatch,
+):
+    from copaw.app.routers import knowledge_hanlp_tasks as hanlp_tasks_module
+
+    async def fake_run_hanlp_task(task_key, request_body, _http_request):
+        return {
+            "task_key": task_key,
+            "request_id": request_body.request_id or "req-test",
+            "status": "ready",
+            "reason_code": "HANLP2_TASK_READY",
+            "reason": "ok",
+            "result": ["微软", "发布", "新模型"],
+            "resolved_model": "FINE_ELECTRA_SMALL_ZH",
+            "strategy_mode": "auto",
+            "detected_style": "modern",
+            "detection_score": 0.0,
+            "matched_rules": [],
+            "fallback_used": False,
+            "duration_ms": 1,
+        }
+
+    monkeypatch.setattr(hanlp_tasks_module, "_run_hanlp_task", fake_run_hanlp_task)
+
+    response = knowledge_api_client.post(
+        "/knowledge/tasks/tokenize/run",
+        json={"text": "微软发布新模型", "request_id": "demo-1"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["task_key"] == "tokenize"
+    assert payload["request_id"] == "demo-1"
+    assert payload["status"] == "ready"
+
+
 def test_get_project_sync_status_offloads_state_read_to_thread(
     knowledge_api_client: TestClient,
     monkeypatch,

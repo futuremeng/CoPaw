@@ -371,3 +371,12 @@ async def run_generic_task(
     http_request: Request,
 ) -> HanLPTaskRunResponse:
     return await _run_hanlp_task(task_key, request, http_request)
+
+
+@router.post("/tasks/{task_key}/run", response_model=HanLPTaskRunResponse)
+async def run_generic_task_slash(
+    task_key: str,
+    request: HanLPTaskRunRequest,
+    http_request: Request,
+) -> HanLPTaskRunResponse:
+    return await _run_hanlp_task(task_key, request, http_request)

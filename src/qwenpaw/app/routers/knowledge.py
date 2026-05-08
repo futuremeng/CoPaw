@@ -1189,6 +1189,38 @@ async def get_knowledge_tasks_snapshot(request: Request):
     )
 
 
+@router.post("/tasks/{task_key}/run")
+async def run_knowledge_nlp_task(
+    task_key: str,
+    request: Request,
+    body: dict = Body(...),
+):
+    """Run NLP task demo (compat endpoint for settings /nlp page)."""
+    text = str((body or {}).get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=422, detail="text is required")
+
+    request_id_raw = (body or {}).get("request_id")
+    request_id = str(request_id_raw).strip() if request_id_raw is not None else None
+
+    try:
+        from copaw.app.routers.knowledge_hanlp_tasks import (
+            HanLPTaskRunRequest,
+            _run_hanlp_task,
+        )
+    except Exception as exc:  # pragma: no cover - compatibility guard
+        raise HTTPException(
+            status_code=501,
+            detail="NLP task demo runtime is unavailable in current deployment.",
+        ) from exc
+
+    return await _run_hanlp_task(
+        task_key,
+        HanLPTaskRunRequest(text=text, request_id=request_id),
+        request,
+    )
+
+
 @router.post("/history-backfill/run")
 async def run_history_backfill_now(request: Request):
     """Run history backfill immediately regardless of runtime auto-backfill toggle."""
