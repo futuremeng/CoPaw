@@ -2,6 +2,7 @@
 """Agent file management API."""
 
 import asyncio
+from typing import Literal
 
 from fastapi import APIRouter, Body, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -111,6 +112,56 @@ class MdFileContent(BaseModel):
     """Markdown file content."""
 
     content: str = Field(..., description="File content")
+
+
+class NLPAutoClassicalChineseBody(BaseModel):
+    """Request body for classical-Chinese auto routing settings."""
+
+    enabled: bool = Field(default=True)
+    threshold: float = Field(default=0.22, ge=0.0, le=1.0)
+    model_id: str = Field(default="")
+
+
+class NLPStrategyUpdateBody(BaseModel):
+    """Request body for NLP strategy updates."""
+
+    mode: Literal["auto", "manual", "hybrid"] = Field(default="auto")
+    default_model_id: str = Field(default="")
+    task_overrides: dict[str, str] = Field(default_factory=dict)
+    auto_classical_chinese: NLPAutoClassicalChineseBody = Field(
+        default_factory=NLPAutoClassicalChineseBody,
+    )
+
+
+def _normalize_task_overrides(raw: dict[str, str] | None) -> dict[str, str]:
+    """Normalize task overrides by trimming keys/values and dropping empties."""
+    normalized: dict[str, str] = {}
+    if not isinstance(raw, dict):
+        return normalized
+    for task_key, model_id in raw.items():
+        key = str(task_key or "").strip()
+        value = str(model_id or "").strip()
+        if key and value:
+            normalized[key] = value
+    return normalized
+
+
+def _build_nlp_strategy_payload(nlp_cfg) -> dict:
+    """Build strategy payload for NLP status and update responses."""
+    strategy_cfg = getattr(nlp_cfg, "strategy", None)
+    auto_cfg = getattr(strategy_cfg, "auto_classical_chinese", None)
+    return {
+        "mode": str(getattr(strategy_cfg, "mode", "auto") or "auto"),
+        "default_model_id": str(getattr(strategy_cfg, "default_model_id", "") or ""),
+        "task_overrides": dict(getattr(strategy_cfg, "task_overrides", {}) or {}),
+        "auto_classical_chinese": {
+            "enabled": bool(getattr(auto_cfg, "enabled", False)) if auto_cfg is not None else False,
+            "threshold": float(getattr(auto_cfg, "threshold", 0.22) or 0.22)
+            if auto_cfg is not None
+            else 0.22,
+            "model_id": str(getattr(auto_cfg, "model_id", "") or "") if auto_cfg is not None else "",
+        },
+    }
 
 
 @router.get(
@@ -498,20 +549,7 @@ async def get_nlp_status() -> dict:
     nlp_cfg = config.knowledge.nlp
     provider = str(getattr(nlp_cfg, "provider", "hanlp") or "hanlp").strip().lower()
 
-    strategy_cfg = getattr(nlp_cfg, "strategy", None)
-    auto_cfg = getattr(strategy_cfg, "auto_classical_chinese", None)
-    strategy_payload = {
-        "mode": str(getattr(strategy_cfg, "mode", "auto") or "auto"),
-        "default_model_id": str(getattr(strategy_cfg, "default_model_id", "") or ""),
-        "task_overrides": dict(getattr(strategy_cfg, "task_overrides", {}) or {}),
-        "auto_classical_chinese": {
-            "enabled": bool(getattr(auto_cfg, "enabled", False)) if auto_cfg is not None else False,
-            "threshold": float(getattr(auto_cfg, "threshold", 0.22) or 0.22)
-            if auto_cfg is not None
-            else 0.22,
-            "model_id": str(getattr(auto_cfg, "model_id", "") or "") if auto_cfg is not None else "",
-        },
-    }
+    strategy_payload = _build_nlp_strategy_payload(nlp_cfg)
 
     if provider == "hanlp":
         from ...agents.utils.hanlp_sidecar import get_hanlp_sidecar_status
@@ -547,6 +585,39 @@ async def get_nlp_status() -> dict:
         },
         "strategy": strategy_payload,
         "api": api_payload,
+    }
+
+
+@router.put(
+    "/nlp-strategy",
+    summary="Update NLP routing strategy",
+    description="Update request-scoped NLP model routing strategy in global knowledge config.",
+)
+async def put_nlp_strategy(
+    body: NLPStrategyUpdateBody = Body(
+        ...,
+        description="NLP routing strategy payload",
+    ),
+) -> dict:
+    """Update request-scoped NLP model routing strategy."""
+    config = load_config()
+    strategy = config.knowledge.nlp.strategy
+
+    strategy.mode = str(body.mode)
+    strategy.default_model_id = str(body.default_model_id or "").strip()
+    strategy.task_overrides = _normalize_task_overrides(body.task_overrides)
+    strategy.auto_classical_chinese.enabled = bool(body.auto_classical_chinese.enabled)
+    strategy.auto_classical_chinese.threshold = max(
+        0.0,
+        min(1.0, float(body.auto_classical_chinese.threshold)),
+    )
+    strategy.auto_classical_chinese.model_id = str(
+        body.auto_classical_chinese.model_id or "",
+    ).strip()
+
+    save_config(config)
+    return {
+        "strategy": _build_nlp_strategy_payload(config.knowledge.nlp),
     }
 
 

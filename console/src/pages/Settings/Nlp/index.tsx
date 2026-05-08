@@ -1,5 +1,6 @@
 import { Button } from "@agentscope-ai/design";
-import { Alert, Card, Space, Spin, Tag, Typography } from "antd";
+import { Alert, Card, Input, InputNumber, Select, Space, Spin, Switch, Tag, Typography } from "antd";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
 import { useNlp } from "./useNlp";
@@ -30,6 +31,7 @@ function NlpPage() {
     loading,
     installing,
     downloadingModel,
+    savingStrategy,
     status,
     provider,
     hanlpProviderActive,
@@ -40,12 +42,75 @@ function NlpPage() {
     fetchStatus,
     handleInstall,
     handleDownloadModel,
+    handleUpdateStrategy,
   } = useNlp();
 
   const taskStates = status?.tasks ?? {};
   const strategy = status?.strategy;
   const autoClassical = strategy?.auto_classical_chinese;
   const overrideEntries = Object.entries(strategy?.task_overrides ?? {});
+  const [modeDraft, setModeDraft] = useState<"auto" | "manual" | "hybrid">("auto");
+  const [defaultModelDraft, setDefaultModelDraft] = useState("");
+  const [autoEnabledDraft, setAutoEnabledDraft] = useState(true);
+  const [thresholdDraft, setThresholdDraft] = useState<number>(0.22);
+  const [classicalModelDraft, setClassicalModelDraft] = useState("");
+  const [taskOverridesText, setTaskOverridesText] = useState("{}");
+  const [strategyParseError, setStrategyParseError] = useState("");
+
+  useEffect(() => {
+    const nextMode = strategy?.mode === "manual" || strategy?.mode === "hybrid" ? strategy.mode : "auto";
+    setModeDraft(nextMode);
+    setDefaultModelDraft(strategy?.default_model_id || status?.model.model_id || "");
+    setAutoEnabledDraft(Boolean(autoClassical?.enabled ?? true));
+    setThresholdDraft(typeof autoClassical?.threshold === "number" ? autoClassical.threshold : 0.22);
+    setClassicalModelDraft(autoClassical?.model_id || "");
+    setTaskOverridesText(JSON.stringify(strategy?.task_overrides ?? {}, null, 2));
+    setStrategyParseError("");
+  }, [
+    autoClassical?.enabled,
+    autoClassical?.model_id,
+    autoClassical?.threshold,
+    status?.model.model_id,
+    strategy?.default_model_id,
+    strategy?.mode,
+    strategy?.task_overrides,
+  ]);
+
+  const handleSaveStrategy = async () => {
+    let parsedOverrides: Record<string, string> = {};
+    const rawText = taskOverridesText.trim();
+    if (rawText) {
+      try {
+        const parsed = JSON.parse(rawText) as unknown;
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          setStrategyParseError("");
+          parsedOverrides = Object.fromEntries(
+            Object.entries(parsed as Record<string, unknown>).map(([key, value]) => [
+              String(key || "").trim(),
+              String(value || "").trim(),
+            ]).filter(([key, value]) => key && value),
+          );
+        } else {
+          setStrategyParseError("Task overrides must be a JSON object.");
+          return;
+        }
+      } catch {
+        setStrategyParseError("Task overrides JSON is invalid.");
+        return;
+      }
+    }
+
+    await handleUpdateStrategy({
+      mode: modeDraft,
+      default_model_id: defaultModelDraft.trim(),
+      task_overrides: parsedOverrides,
+      auto_classical_chinese: {
+        enabled: autoEnabledDraft,
+        threshold: Number.isFinite(thresholdDraft) ? thresholdDraft : 0.22,
+        model_id: classicalModelDraft.trim(),
+      },
+    });
+  };
 
   const methods: Array<{ key: string; taskKey?: string; status: MethodStatus }> = [
     {
@@ -176,6 +241,52 @@ function NlpPage() {
                 {strategy?.mode || "auto"}
               </Tag>
             </div>
+            <div className={styles.statusRow}>
+              <span>Edit mode</span>
+              <Select
+                value={modeDraft}
+                style={{ width: 180 }}
+                options={[
+                  { label: "auto", value: "auto" },
+                  { label: "manual", value: "manual" },
+                  { label: "hybrid", value: "hybrid" },
+                ]}
+                onChange={(value) => setModeDraft(value)}
+              />
+            </div>
+            <Input
+              placeholder="Default model id"
+              value={defaultModelDraft}
+              onChange={(event) => setDefaultModelDraft(event.target.value)}
+            />
+            <div className={styles.statusRow}>
+              <span>Auto classical Chinese</span>
+              <Switch checked={autoEnabledDraft} onChange={setAutoEnabledDraft} />
+            </div>
+            <InputNumber
+              min={0}
+              max={1}
+              step={0.01}
+              value={thresholdDraft}
+              onChange={(value) => setThresholdDraft(typeof value === "number" ? value : 0.22)}
+            />
+            <Input
+              placeholder="Classical Chinese model id"
+              value={classicalModelDraft}
+              onChange={(event) => setClassicalModelDraft(event.target.value)}
+            />
+            <Input.TextArea
+              rows={6}
+              value={taskOverridesText}
+              onChange={(event) => setTaskOverridesText(event.target.value)}
+              placeholder='Task overrides JSON, e.g. {"ner":"model_a"}'
+            />
+            {strategyParseError ? (
+              <Typography.Text type="danger">{strategyParseError}</Typography.Text>
+            ) : null}
+            <Button type="primary" onClick={handleSaveStrategy} loading={savingStrategy}>
+              Save strategy
+            </Button>
             <Typography.Text>
               Default model: {strategy?.default_model_id || status?.model.model_id || t("nlpConfig.notConfigured")}
             </Typography.Text>

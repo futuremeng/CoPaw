@@ -47,6 +47,17 @@ export interface NlpStatus {
   };
 }
 
+export interface NlpStrategyUpdatePayload {
+  mode?: "auto" | "manual" | "hybrid";
+  default_model_id?: string;
+  task_overrides?: Record<string, string>;
+  auto_classical_chinese?: {
+    enabled?: boolean;
+    threshold?: number;
+    model_id?: string;
+  };
+}
+
 export interface HanlpOperation {
   name: string;
   attempted: boolean;
@@ -64,6 +75,7 @@ export function useNlp() {
   const [loading, setLoading] = useState(true);
   const [installing, setInstalling] = useState(false);
   const [downloadingModel, setDownloadingModel] = useState(false);
+  const [savingStrategy, setSavingStrategy] = useState(false);
   const [status, setStatus] = useState<NlpStatus | null>(null);
   const [lastManualSteps, setLastManualSteps] = useState<string[]>([]);
   const [lastOperations, setLastOperations] = useState<HanlpOperation[]>([]);
@@ -135,6 +147,22 @@ export function useNlp() {
     }
   };
 
+  const handleUpdateStrategy = async (payload: NlpStrategyUpdatePayload) => {
+    setSavingStrategy(true);
+    try {
+      await api.updateNlpStrategy(payload);
+      message.success("NLP strategy updated");
+      await fetchStatus();
+      return true;
+    } catch (error) {
+      console.error("Failed to update NLP strategy:", error);
+      message.error("Failed to update NLP strategy");
+      return false;
+    } finally {
+      setSavingStrategy(false);
+    }
+  };
+
   const sidecarReady = status?.sidecar.status === "ready";
   const modelReady = status?.model.status === "ready";
   const provider = String(status?.provider || "hanlp").toLowerCase();
@@ -144,6 +172,7 @@ export function useNlp() {
     loading,
     installing,
     downloadingModel,
+    savingStrategy,
     status,
     provider,
     hanlpProviderActive,
@@ -154,5 +183,6 @@ export function useNlp() {
     fetchStatus,
     handleInstall,
     handleDownloadModel,
+    handleUpdateStrategy,
   };
 }

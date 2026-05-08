@@ -1,6 +1,17 @@
 import { request } from "../request";
 import type { AgentRequest, AgentsRunningConfig } from "../types";
 
+type NlpStrategyPayload = {
+  mode?: "auto" | "manual" | "hybrid";
+  default_model_id?: string;
+  task_overrides?: Record<string, string>;
+  auto_classical_chinese?: {
+    enabled?: boolean;
+    threshold?: number;
+    model_id?: string;
+  };
+};
+
 // Agent API
 export const agentApi = {
   agentRoot: () => request<unknown>("/agent/"),
@@ -147,6 +158,14 @@ export const agentApi = {
         target_endpoint?: string;
       };
     }>("/agent/nlp-status"),
+
+  updateNlpStrategy: (strategy: NlpStrategyPayload) =>
+    request<{
+      strategy: NlpStrategyPayload;
+    }>("/agent/nlp-strategy", {
+      method: "PUT",
+      body: JSON.stringify(strategy),
+    }),
 
   getHanlpStatus: () =>
     request<{
