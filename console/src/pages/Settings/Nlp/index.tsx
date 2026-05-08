@@ -102,6 +102,57 @@ function prettyJson(value: unknown): string {
   }
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function renderRecordRows(
+  rows: Array<Record<string, unknown>>,
+  preferredColumns: string[],
+) {
+  if (rows.length === 0) {
+    return <Typography.Text type="secondary">No rows returned.</Typography.Text>;
+  }
+
+  const firstRowKeys = Object.keys(rows[0] || {});
+  const remainingKeys = firstRowKeys.filter((key) => !preferredColumns.includes(key));
+  const columns = [...preferredColumns, ...remainingKeys].filter((key) =>
+    rows.some((row) => row[key] !== undefined),
+  );
+
+  if (columns.length === 0) {
+    return (
+      <Typography.Paragraph className={styles.operationOutput}>
+        {prettyJson(rows)}
+      </Typography.Paragraph>
+    );
+  }
+
+  return (
+    <div className={styles.demoTable}>
+      <div className={styles.demoTableHeader} style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))` }}>
+        {columns.map((column) => (
+          <span key={`header-${column}`}>{column}</span>
+        ))}
+      </div>
+      {rows.map((row, index) => (
+        <div
+          key={`row-${index}`}
+          className={styles.demoTableRow}
+          style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))` }}
+        >
+          {columns.map((column) => (
+            <span key={`row-${index}-${column}`}>{String(row[column] ?? "")}</span>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function renderResultByTask(taskKey: string, result: unknown) {
   if (taskKey === "tokenize") {
     const tokens = Array.isArray(result) ? result : [];
@@ -162,6 +213,79 @@ function renderResultByTask(taskKey: string, result: unknown) {
         })}
       </div>
     );
+  }
+
+  if (taskKey === "sdp") {
+    if (Array.isArray(result)) {
+      const rows = result
+        .map((item) => asRecord(item))
+        .filter((item): item is Record<string, unknown> => Boolean(item));
+      return renderRecordRows(rows, ["token", "head", "deprel", "relation", "score"]);
+    }
+    const record = asRecord(result);
+    if (record) {
+      return renderRecordRows([record], ["task", "text", "status"]);
+    }
+  }
+
+  if (taskKey === "con") {
+    if (typeof result === "string") {
+      return (
+        <Typography.Paragraph className={styles.operationOutput}>
+          {result}
+        </Typography.Paragraph>
+      );
+    }
+    if (Array.isArray(result)) {
+      const rows = result
+        .map((item) => asRecord(item))
+        .filter((item): item is Record<string, unknown> => Boolean(item));
+      return renderRecordRows(rows, ["label", "text", "start", "end"]);
+    }
+    const record = asRecord(result);
+    if (record) {
+      const treeLike = record.tree || record.bracket || record.parse;
+      if (typeof treeLike === "string") {
+        return (
+          <Typography.Paragraph className={styles.operationOutput}>
+            {treeLike}
+          </Typography.Paragraph>
+        );
+      }
+      return renderRecordRows([record], ["task", "text", "status"]);
+    }
+  }
+
+  if (taskKey === "cor") {
+    if (Array.isArray(result)) {
+      const maybeCluster = result.every((item) => Array.isArray(item));
+      if (maybeCluster) {
+        return (
+          <div className={styles.demoClusterWrap}>
+            {result.map((cluster, clusterIndex) => (
+              <div key={`cluster-${clusterIndex}`} className={styles.demoClusterCard}>
+                <Typography.Text strong>Cluster {clusterIndex + 1}</Typography.Text>
+                <div className={styles.demoTokenWrap}>
+                  {(cluster as unknown[]).map((mention, mentionIndex) => (
+                    <Tag key={`cluster-${clusterIndex}-${mentionIndex}`} className={styles.demoChip}>
+                      {String(mention)}
+                    </Tag>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+      }
+      const rows = result
+        .map((item) => asRecord(item))
+        .filter((item): item is Record<string, unknown> => Boolean(item));
+      return renderRecordRows(rows, ["mention", "cluster", "start", "end"]);
+    }
+    const record = asRecord(result);
+    if (record) {
+      return renderRecordRows([record], ["task", "text", "status"]);
+    }
   }
 
   return (
