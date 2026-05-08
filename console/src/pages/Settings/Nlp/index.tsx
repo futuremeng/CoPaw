@@ -1001,7 +1001,13 @@ function NlpPage() {
                           onClick={() => setActiveDemoTaskKey(method.backendTaskKey)}
                         >
                           <span>{method.title}</span>
-                          <Tag color={resolveTagColor(methodStatus?.status || "unavailable")}>{methodStatus?.reasonCode || "UNKNOWN"}</Tag>
+                          <Tag
+                            className={styles.demoStatusTag}
+                            color={resolveTagColor(methodStatus?.status || "unavailable")}
+                            title={methodStatus?.reasonCode || "UNKNOWN"}
+                          >
+                            {methodStatus?.reasonCode || "UNKNOWN"}
+                          </Tag>
                         </button>
                       );
                     })}
