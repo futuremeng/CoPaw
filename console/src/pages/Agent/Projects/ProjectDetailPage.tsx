@@ -494,6 +494,33 @@ function resolveCharStatsArtifactPath(
   return candidates[0];
 }
 
+function resolveNerStructuredArtifactPath(
+  selectedFilePath: string,
+  files: AgentProjectFileInfo[],
+): string {
+  const normalized = normalizeProjectPath(selectedFilePath);
+  if (!normalized) {
+    return "";
+  }
+  const fileName = normalized.split("/").pop() || "";
+  const stem = fileName.replace(/\.[^.]+$/, "");
+  if (!stem) {
+    return "";
+  }
+
+  const prefix = `.knowledge/ner/${stem}.snapshot_`;
+  const candidates = files
+    .map((item) => normalizeProjectPath(item.path))
+    .filter((item) => item.startsWith(prefix) && item.endsWith(".ner.json"));
+
+  if (candidates.length === 0) {
+    return "";
+  }
+
+  candidates.sort((left, right) => right.localeCompare(left));
+  return candidates[0];
+}
+
 export default function ProjectDetailPage() {
   const { t, i18n } = useTranslation();
   const translateWithFallback = useCallback(
@@ -532,6 +559,7 @@ export default function ProjectDetailPage() {
   } | null>(null);
   const [fileContent, setFileContent] = useState("");
   const [charStatsContent, setCharStatsContent] = useState("");
+  const [nerStructuredContent, setNerStructuredContent] = useState("");
   const [filesLoading, setFilesLoading] = useState(false);
   const [projectTreeLoading, setProjectTreeLoading] = useState(false);
   const [contentLoading, setContentLoading] = useState(false);
@@ -2399,6 +2427,62 @@ export default function ProjectDetailPage() {
   ]);
 
   useEffect(() => {
+    if (!currentAgent || !selectedProject || !selectedFilePath) {
+      setNerStructuredContent("");
+      return;
+    }
+
+    const nerPath = resolveNerStructuredArtifactPath(selectedFilePath, effectiveProjectFiles);
+    if (!nerPath) {
+      setNerStructuredContent("");
+      return;
+    }
+
+    const projectIds = [resolvedProjectRequestId, ...buildProjectIdCandidates(selectedProject)]
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const uniqueProjectIds = Array.from(new Set(projectIds));
+
+    let disposed = false;
+    setNerStructuredContent("");
+
+    const load = async () => {
+      for (const projectRequestId of uniqueProjectIds) {
+        try {
+          const data = await agentsApi.readProjectFile(
+            currentAgent.id,
+            projectRequestId,
+            nerPath,
+          );
+          if (disposed) {
+            return;
+          }
+          setResolvedProjectRequestId(projectRequestId);
+          setNerStructuredContent(data.content || "");
+          return;
+        } catch {
+          // Try next candidate id.
+        }
+      }
+      if (!disposed) {
+        setNerStructuredContent("");
+      }
+    };
+
+    void load();
+
+    return () => {
+      disposed = true;
+    };
+  }, [
+    currentAgent,
+    effectiveProjectFiles,
+    resolvedProjectRequestId,
+    selectedFilePath,
+    selectedProject,
+  ]);
+
+  useEffect(() => {
     if (!selectedTemplateId) {
       setSelectedRunId("");
       setRunDetail(null);
@@ -3305,6 +3389,7 @@ export default function ProjectDetailPage() {
                             projectFiles={effectiveProjectFiles}
                             fileContent={fileContent}
                             charStatsContent={charStatsContent}
+                            nerStructuredContent={nerStructuredContent}
                             selectedAttachPaths={selectedAttachPaths}
                             autoAnalyzeOnAttach={autoAnalyzeOnAttach}
                             sendingSelectedFiles={sendingSelectedFiles}

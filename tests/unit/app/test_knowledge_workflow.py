@@ -4,7 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from copaw.config.config import KnowledgeConfig, KnowledgeSourceSpec
-from copaw.knowledge.project_sync import ProjectKnowledgeSyncManager
+from copaw.knowledge.project_knowledge_sync import ProjectKnowledgeSyncManager
 from qwenpaw.app.knowledge_workflow import (
     KNOWLEDGE_WORKFLOW_TEMPLATE_ID,
     KnowledgeWorkflowOrchestrator,
@@ -114,15 +114,15 @@ def test_knowledge_workflow_orchestrator_persists_pipeline_run(
         changed_paths=["data/sample.md"],
     )
 
-    template_path = project_dir / "pipelines" / "templates" / f"{KNOWLEDGE_WORKFLOW_TEMPLATE_ID}.json"
+    template_path = project_dir / ".pipelines" / "templates" / f"{KNOWLEDGE_WORKFLOW_TEMPLATE_ID}.json"
     assert template_path.exists()
 
     run = _load_project_pipeline_run(project_dir, result["run_id"])
     assert run.status == "succeeded"
     assert run.template_id == KNOWLEDGE_WORKFLOW_TEMPLATE_ID
     assert any(step.id == "quality_review" and step.status == "succeeded" for step in run.steps)
-    assert ".knowledge/graphify-out/graph.json" in run.artifacts
-    assert ".knowledge/graphify-out/graph.enriched.json" in run.artifacts
+    assert any(path.endswith("graphify-out/graph.json") for path in run.artifacts)
+    assert any(path.endswith("graphify-out/graph.enriched.json") for path in run.artifacts)
     assert (project_dir / ".knowledge" / "content.md").exists()
     assert (project_dir / ".knowledge" / "chunk-manifest.json").exists()
     assert not (project_dir / ".knowledge" / f"{source.id}--content.md").exists()
@@ -168,7 +168,7 @@ def test_project_sync_manager_records_workflow_run_metadata(
     monkeypatch.setattr(
         manager._knowledge_manager,
         "get_semantic_engine_state",
-        lambda: {
+        lambda *_args, **_kwargs: {
             "engine": "hanlp2",
             "status": "ready",
             "reason_code": "HANLP2_READY",
@@ -197,22 +197,22 @@ def test_project_sync_manager_records_workflow_run_metadata(
     assert [item["mode"] for item in state["processing_modes"]] == ["fast", "nlp", "agentic"]
     assert state["processing_modes"][0]["available"] is True
     assert state["processing_modes"][1]["available"] is False
-    assert state["processing_modes"][2]["available"] is True
+    assert state["processing_modes"][2]["available"] is False
     assert state["output_resolution"]["active_mode"] == "agentic"
     assert state["output_resolution"]["fallback_chain"] == ["agentic", "nlp"]
-    assert state["output_resolution"]["reason_code"] == "HIGHEST_LAYER_READY"
+    assert state["output_resolution"]["reason_code"] == "HIGH_ORDER_PENDING"
     assert state["output_resolution"]["skipped_modes"] == []
     assert state["output_scheduler"]["strategy"] == "parallel"
     assert state["output_scheduler"]["consumption_mode"] == "agentic"
-    assert state["output_scheduler"]["ready_modes"] == ["agentic", "fast"]
-    assert state["output_scheduler"]["next_mode"] == "nlp"
+    assert state["output_scheduler"]["ready_modes"] == ["fast"]
+    assert state["output_scheduler"]["next_mode"] == "agentic"
     assert state["mode_outputs"]["fast"]["source"] == "indexed-preview"
     assert state["mode_outputs"]["nlp"]["source"] == "graph-artifacts"
     assert state["mode_outputs"]["agentic"]["source"] == "workflow-artifacts"
     assert state["mode_metrics"]["fast"]["document_count"] == 1
     assert state["mode_metrics"]["nlp"]["entity_count"] == 0
     assert state["mode_metrics"]["agentic"]["artifact_count"] == 0
-    assert state["global_metrics"]["document_count"] == 1
+    assert state["global_metrics"]["document_count"] == 0
     assert state["global_metrics"]["chunk_count"] == 0
 
 

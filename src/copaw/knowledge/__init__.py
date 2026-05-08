@@ -10,9 +10,10 @@ _EXPORTS = {
 	"KnowledgeManager": ("copaw.knowledge.manager", "KnowledgeManager"),
 	"GraphOpsManager": ("copaw.knowledge.graph_ops", "GraphOpsManager"),
 	"ProjectKnowledgeSyncManager": (
-		"copaw.knowledge.project_sync",
+		"copaw.knowledge.project_knowledge_sync",
 		"ProjectKnowledgeSyncManager",
 	),
+	"HanLPSidecarRuntime": ("copaw.knowledge.hanlp_runtime", "HanLPSidecarRuntime"),
 	"QuantizationArchitectureManager": (
 		"copaw.knowledge.architecture",
 		"QuantizationArchitectureManager",

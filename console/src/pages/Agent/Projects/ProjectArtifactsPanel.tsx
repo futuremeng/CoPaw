@@ -25,6 +25,7 @@ interface ProjectArtifactsPanelProps {
   projectFiles: AgentProjectFileInfo[];
   fileContent: string;
   charStatsContent: string;
+  nerStructuredContent: string;
   selectedAttachPaths: string[];
   autoAnalyzeOnAttach: boolean;
   sendingSelectedFiles: boolean;
@@ -42,6 +43,7 @@ export default function ProjectArtifactsPanel({
   projectFiles,
   fileContent,
   charStatsContent,
+  nerStructuredContent,
   selectedAttachPaths,
   autoAnalyzeOnAttach,
   sendingSelectedFiles,
@@ -125,6 +127,7 @@ export default function ProjectArtifactsPanel({
                     selectedFilePath={selectedFilePath}
                     fileContent={fileContent}
                     charStatsContent={charStatsContent}
+                    nerStructuredContent={nerStructuredContent}
                     knowledgeState={knowledgeState}
                   />
                 </div>

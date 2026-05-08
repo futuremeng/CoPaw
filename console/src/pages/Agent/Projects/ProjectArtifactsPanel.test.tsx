@@ -42,6 +42,7 @@ describe("ProjectArtifactsPanel", () => {
     projectFiles: [],
     fileContent: "",
     charStatsContent: "",
+    nerStructuredContent: "",
     selectedAttachPaths: [],
     autoAnalyzeOnAttach: false,
     sendingSelectedFiles: false,

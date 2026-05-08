@@ -10,7 +10,7 @@ from typing import Any, Callable
 from fastapi import HTTPException
 
 from qwenpaw.knowledge import GraphOpsManager, KnowledgeManager
-from qwenpaw.knowledge.project_sync import DEFAULT_PROJECT_SYNC_QUALITY_LOOP_ROUNDS
+from copaw.knowledge.project_knowledge_sync import DEFAULT_PROJECT_SYNC_QUALITY_LOOP_ROUNDS
 
 from .builtin_agents import (
     BUILTIN_UNDERSTAND_DOMAIN_ANALYZER_ID,

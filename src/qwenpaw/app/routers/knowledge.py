@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import io
 import json
 import re
@@ -27,7 +28,11 @@ from ...knowledge import (
     ProjectKnowledgeSyncManager,
     QuantizationFacade,
 )
-from ...knowledge.project_sync import ProjectSyncCommand, ProjectSyncCoordinator, build_project_source_spec
+from copaw.knowledge.project_knowledge_sync import (
+    ProjectSyncCommand,
+    ProjectSyncCoordinator,
+    build_project_source_spec,
+)
 from ...knowledge.module_skills import sync_knowledge_module_skills
 from ..agent_context import get_agent_for_request
 
@@ -356,6 +361,50 @@ def _manager_for_workspace(
         workspace_dir,
         knowledge_dirname=_knowledge_dirname_for_project(project_id),
     )
+
+
+def _resolve_project_workspace_dir(
+    workspace_dir: Path | str,
+    project_id: str | None,
+) -> Path:
+    root = Path(workspace_dir).expanduser().resolve()
+    normalized_project_id = _normalize_project_id(project_id)
+    if not normalized_project_id:
+        return root
+    return (root / "projects" / normalized_project_id).resolve()
+
+
+def _resolve_ner_target_file_path(
+    *,
+    workspace_dir: Path | str,
+    project_id: str | None,
+    file_path: str,
+) -> Path:
+    text = str(file_path or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="NER_FILE_PATH_REQUIRED")
+
+    project_workspace = _resolve_project_workspace_dir(workspace_dir, project_id)
+    if not project_workspace.exists() or not project_workspace.is_dir():
+        raise HTTPException(status_code=404, detail="PROJECT_WORKSPACE_NOT_FOUND")
+
+    candidate = Path(text).expanduser()
+    resolved = candidate.resolve() if candidate.is_absolute() else (project_workspace / candidate).resolve()
+
+    try:
+        resolved.relative_to(project_workspace)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="NER_FILE_PATH_OUT_OF_SCOPE") from exc
+
+    if not resolved.exists() or not resolved.is_file():
+        raise HTTPException(status_code=404, detail="NER_FILE_NOT_FOUND")
+
+    return resolved
+
+
+def _build_manual_ner_source_id(file_path: Path) -> str:
+    digest = hashlib.sha1(file_path.as_posix().encode("utf-8")).hexdigest()[:16]
+    return f"manual-ner-{digest}"
 
 
 def _graph_ops_for_workspace(
@@ -803,6 +852,81 @@ async def index_all_sources(request: Request):
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
+@router.post("/ner/process-file")
+async def process_ner_for_file(
+    request: Request,
+    file_path: str = Body(...),
+    overwrite: bool = Body(default=True),
+    source_id: str | None = Body(default=None),
+    source_name: str | None = Body(default=None),
+):
+    """Run NER processing for a single file path.
+
+    - `file_path` accepts an absolute path or a project/workspace-relative path.
+    - `overwrite` defaults to `True` and will replace previous results for the same source id.
+    """
+    _, knowledge_config, running_config, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    _ensure_knowledge_enabled_flag(knowledge_config.enabled)
+
+    project_id = _resolve_project_id(request)
+    resolved_file = _resolve_ner_target_file_path(
+        workspace_dir=workspace_dir,
+        project_id=project_id,
+        file_path=file_path,
+    )
+
+    normalized_source_id = str(source_id or "").strip() or _build_manual_ner_source_id(resolved_file)
+    normalized_source_name = str(source_name or "").strip() or f"Manual NER: {resolved_file.name}"
+
+    manager = _manager_for_workspace(
+        workspace_dir,
+        project_id=project_id,
+    )
+
+    existing_status = await asyncio.to_thread(manager.get_source_status, normalized_source_id)
+    if bool(existing_status.get("indexed")) and not bool(overwrite):
+        raise HTTPException(status_code=409, detail="NER_RESULT_ALREADY_EXISTS")
+
+    if bool(overwrite):
+        await asyncio.to_thread(manager.delete_index, normalized_source_id)
+
+    source = KnowledgeSourceSpec(
+        id=normalized_source_id,
+        name=normalized_source_name,
+        type="file",
+        location=resolved_file.as_posix(),
+        content="",
+        enabled=True,
+        recursive=False,
+        tags=["manual", "ner", "single-file"],
+        summary="Manual NER processing request",
+        project_id=project_id or "",
+    )
+
+    try:
+        index_result = await asyncio.to_thread(
+            manager.index_source,
+            source,
+            knowledge_config,
+            running_config,
+        )
+        documents_payload = await asyncio.to_thread(manager.get_source_documents, normalized_source_id)
+    except (FileNotFoundError, ValueError, OSError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {
+        "accepted": True,
+        "source_id": normalized_source_id,
+        "source_name": normalized_source_name,
+        "file_path": resolved_file.as_posix(),
+        "overwrite": bool(overwrite),
+        "index": index_result,
+        "documents": list((documents_payload or {}).get("documents") or []),
+    }
+
+
 @router.get("/search")
 async def search_knowledge(
     request: Request,
@@ -1243,31 +1367,40 @@ async def get_project_sync_status(request: Request):
         project_id=project_id,
     )
     project_workspace_dir = (Path(workspace_dir) / "projects" / project_id).resolve()
-    if knowledge_config.enabled and bool(getattr(knowledge_config, "memify_enabled", False)):
-        source = build_project_source_spec(
-            project_id=project_id,
-            project_name=project_id,
-            project_workspace_dir=str(project_workspace_dir),
-        )
-        event = await asyncio.to_thread(
-            coordinator.dispatch,
-            ProjectSyncCommand.resume(
-                project_id=project_id,
-                config=knowledge_config,
-                running_config=running_config,
-                source=source,
-                idempotency_key=f"route-status-resume:{project_id}",
-            ),
-        )
-        _record_project_sync_runtime_event(
-            workspace_dir=workspace_dir,
-            project_id=project_id,
-            operation_id=event.operation_id,
-            idempotency_key=event.idempotency_key,
-            deduplicated=event.deduplicated,
-            action=event.action,
-        )
     state = await asyncio.to_thread(manager.get_state, project_id)
+    status_text = str(state.get("status") or "").strip().lower()
+    is_active = status_text in {"pending", "queued", "running"}
+    has_resumable_work = (
+        bool(state.get("dirty"))
+        or bool(state.get("dirty_after_run"))
+        or status_text in {"failed", "cancelled"}
+    )
+    if knowledge_config.enabled and bool(getattr(knowledge_config, "memify_enabled", False)):
+        if (not is_active) and has_resumable_work:
+            source = build_project_source_spec(
+                project_id=project_id,
+                project_name=project_id,
+                project_workspace_dir=str(project_workspace_dir),
+            )
+            event = await asyncio.to_thread(
+                coordinator.dispatch,
+                ProjectSyncCommand.resume(
+                    project_id=project_id,
+                    config=knowledge_config,
+                    running_config=running_config,
+                    source=source,
+                    idempotency_key=f"route-status-resume:{project_id}",
+                ),
+            )
+            _record_project_sync_runtime_event(
+                workspace_dir=workspace_dir,
+                project_id=project_id,
+                operation_id=event.operation_id,
+                idempotency_key=event.idempotency_key,
+                deduplicated=event.deduplicated,
+                action=event.action,
+            )
+            state = await asyncio.to_thread(manager.get_state, project_id)
     return _project_sync_state_with_runtime_meta(
         workspace_dir=workspace_dir,
         project_id=project_id,

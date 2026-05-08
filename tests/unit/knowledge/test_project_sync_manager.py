@@ -5,7 +5,7 @@ import types
 from pathlib import Path
 
 from copaw.config.config import Config, KnowledgeSourceSpec
-from copaw.knowledge.project_sync import ProjectKnowledgeSyncManager
+from copaw.knowledge.project_knowledge_sync import ProjectKnowledgeSyncManager
 
 
 def test_run_sync_loop_failure_preserves_l2_snapshot(tmp_path: Path, monkeypatch):

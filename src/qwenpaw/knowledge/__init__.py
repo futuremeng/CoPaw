@@ -1,19 +1,33 @@
 # -*- coding: utf-8 -*-
-"""Knowledge module exports for qwenpaw canonical implementation."""
 
-from .graph_ops import GraphOpsManager
-from .manager import KnowledgeManager
-from .project_sync import ProjectKnowledgeSyncManager
-from .hanlp_runtime import HanLPSidecarRuntime
-from .architecture import QuantizationArchitectureManager
-from .facades import RetrievalFacade, QuantizationFacade
+from __future__ import annotations
 
-__all__ = [
-	"KnowledgeManager",
-	"GraphOpsManager",
-	"ProjectKnowledgeSyncManager",
-	"QuantizationArchitectureManager",
-	"RetrievalFacade",
-	"QuantizationFacade",
-	"HanLPSidecarRuntime",
-]
+from importlib import import_module
+from typing import Any
+
+
+_EXPORTS = {
+	"KnowledgeManager": ("copaw.knowledge.manager", "KnowledgeManager"),
+	"GraphOpsManager": ("copaw.knowledge.graph_ops", "GraphOpsManager"),
+	"ProjectKnowledgeSyncManager": (
+		"copaw.knowledge.project_knowledge_sync",
+		"ProjectKnowledgeSyncManager",
+	),
+	"QuantizationArchitectureManager": (
+		"copaw.knowledge.architecture",
+		"QuantizationArchitectureManager",
+	),
+	"RetrievalFacade": ("copaw.knowledge.facades", "RetrievalFacade"),
+	"QuantizationFacade": ("copaw.knowledge.facades", "QuantizationFacade"),
+	"HanLPSidecarRuntime": ("copaw.knowledge.hanlp_runtime", "HanLPSidecarRuntime"),
+}
+
+__all__ = list(_EXPORTS)
+
+
+def __getattr__(name: str) -> Any:
+	if name not in _EXPORTS:
+		raise AttributeError(name)
+	module_name, attr_name = _EXPORTS[name]
+	module = import_module(module_name)
+	return getattr(module, attr_name)

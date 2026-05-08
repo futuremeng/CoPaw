@@ -4,7 +4,11 @@ from pathlib import Path
 from typing import cast
 
 from copaw.config.config import Config, KnowledgeSourceSpec
-from copaw.knowledge.project_sync import ProjectKnowledgeSyncManager, ProjectSyncCommand, ProjectSyncCoordinator
+from copaw.knowledge.project_knowledge_sync import (
+    ProjectKnowledgeSyncManager,
+    ProjectSyncCommand,
+    ProjectSyncCoordinator,
+)
 
 
 class _FakeSyncManager:

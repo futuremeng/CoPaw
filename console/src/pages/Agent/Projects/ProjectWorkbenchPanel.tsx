@@ -31,6 +31,7 @@ interface ProjectWorkbenchPanelProps {
   projectFiles: AgentProjectFileInfo[];
   fileContent: string;
   charStatsContent: string;
+  nerStructuredContent: string;
   selectedAttachPaths: string[];
   autoAnalyzeOnAttach: boolean;
   sendingSelectedFiles: boolean;
@@ -52,6 +53,7 @@ export default function ProjectWorkbenchPanel({
   projectFiles,
   fileContent,
   charStatsContent,
+  nerStructuredContent,
   selectedAttachPaths,
   autoAnalyzeOnAttach,
   sendingSelectedFiles,
@@ -159,6 +161,7 @@ export default function ProjectWorkbenchPanel({
         projectFiles={projectFiles}
         fileContent={fileContent}
         charStatsContent={charStatsContent}
+        nerStructuredContent={nerStructuredContent}
         selectedAttachPaths={selectedAttachPaths}
         autoAnalyzeOnAttach={autoAnalyzeOnAttach}
         sendingSelectedFiles={sendingSelectedFiles}

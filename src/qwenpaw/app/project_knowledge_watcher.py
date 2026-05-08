@@ -11,7 +11,7 @@ from typing import Any
 from ..config.config import load_agent_config
 from ..config.utils import get_config_path, load_config
 from ..knowledge import ProjectKnowledgeSyncManager
-from ..knowledge.project_sync import (
+from copaw.knowledge.project_knowledge_sync import (
     DEFAULT_PROJECT_SYNC_COOLDOWN_SECONDS,
     DEFAULT_PROJECT_SYNC_DEBOUNCE_SECONDS,
     ProjectSyncCommand,

@@ -2,6 +2,7 @@
 
 import json
 import re
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -487,11 +488,23 @@ def test_index_source_writes_ner_files_when_semantic_ready(tmp_path: Path):
         "agentrunner",
         "tooldispatcher",
     }
+    assert ner_structured["execution_started_at"]
+    assert ner_structured["execution_finished_at"]
+    assert ner_structured["execution_duration_ms"] >= 0
+    assert datetime.fromisoformat(ner_structured["execution_finished_at"]) >= datetime.fromisoformat(
+        ner_structured["execution_started_at"]
+    )
     ner_stats = json.loads(ner_stats_path.read_text(encoding="utf-8"))
     assert ner_stats["ner_batch_size"] == 32
     assert ner_stats["ner_batch_count"] == 1
     assert ner_stats["ner_worker_restart_count"] == 0
     assert ner_stats["ner_worker_pids"] == []
+    assert ner_stats["execution_started_at"]
+    assert ner_stats["execution_finished_at"]
+    assert ner_stats["execution_duration_ms"] >= 0
+    assert datetime.fromisoformat(ner_stats["execution_finished_at"]) >= datetime.fromisoformat(
+        ner_stats["execution_started_at"]
+    )
     assert "chunk_count" not in ner_stats
     assert "chunk_ids" not in ner_stats
     assert "chunk_paths" not in ner_stats
@@ -683,6 +696,14 @@ def test_index_source_prefers_hanlp_ner_task_mentions_when_available(tmp_path: P
         ("微软", "ORG"),
         ("北京", "GPE"),
     }
+    assert {(item["normalized"], item["type"]) for item in ner_structured["entity_catalog"]} == {
+        ("微软", "ORG"),
+        ("北京", "GPE"),
+    }
+    assert {(item["normalized"], item["type"]) for item in ner_structured["entity_mentions"]} == {
+        ("微软", "ORG"),
+        ("北京", "GPE"),
+    }
     ner_annotated = ner_annotated_path.read_text(encoding="utf-8")
     assert "[[微软|label=ORG|id=e1|norm=微软|score=1.00]]" in ner_annotated
     assert "[[北京|label=GPE|id=e2|norm=北京|score=1.00]]" in ner_annotated
@@ -743,6 +764,65 @@ def test_index_source_accepts_wrapped_hanlp_ner_mentions_payload(tmp_path: Path)
     assert chunk["ner_status"] == "ready"
     assert chunk["ner_entity_count"] == 2
     assert {(item["normalized"], item["label"]) for item in ner_structured["entity_catalog"]} == {
+        ("微软", "ORG"),
+        ("北京", "LOC"),
+    }
+
+
+def test_index_source_accepts_label_keyed_hanlp_ner_payload(tmp_path: Path):
+    config = Config().knowledge
+    config.index.chunk_size = 10_000
+    config.hanlp.enabled = True
+    source = KnowledgeSourceSpec(
+        id="label-key-ner-task-source",
+        name="Label-Key NER Task Source",
+        type="text",
+        content="微软在北京发布模型。",
+        enabled=True,
+        recursive=False,
+        tags=[],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    ready_state = {
+        "engine": "hanlp2",
+        "status": "ready",
+        "reason_code": "HANLP2_TASK_READY",
+        "reason": "HanLP task is ready.",
+    }
+    with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
+        manager._semantic_runtime,
+        "run_task",
+        return_value=(
+            {
+                "ORG": [["微软", 0, 2]],
+                "LOC": [["北京", 3, 5]],
+            },
+            ready_state,
+        ),
+    ), patch.object(
+        manager._semantic_runtime,
+        "tokenize",
+        side_effect=AssertionError("tokenize should not be used when label-keyed HanLP payload succeeds"),
+    ):
+        manager.index_source(source, config)
+
+    payload = json.loads(
+        manager._source_index_path(source.id).read_text(encoding="utf-8")
+    )
+    chunk = payload["chunks"][0]
+    ner_structured = json.loads(
+        (manager.root_dir / chunk["ner_structured_path"]).read_text(encoding="utf-8")
+    )
+
+    assert chunk["ner_status"] == "ready"
+    assert chunk["ner_entity_count"] == 2
+    assert {(item["normalized"], item["label"]) for item in ner_structured["entity_catalog"]} == {
+        ("微软", "ORG"),
+        ("北京", "LOC"),
+    }
+    assert {(item["normalized"], item["type"]) for item in ner_structured["entity_mentions"]} == {
         ("微软", "ORG"),
         ("北京", "LOC"),
     }
@@ -852,6 +932,14 @@ def test_index_source_populates_hanlp_syntax_tasks_when_available(tmp_path: Path
         side_effect=fake_run_task,
     ), patch.object(
         manager._semantic_runtime,
+        "run_ner",
+        side_effect=lambda text, current_config: fake_run_task("ner_msra", text, current_config),
+    ), patch.object(
+        manager._semantic_runtime,
+        "run_dep",
+        side_effect=lambda text, current_config: fake_run_task("dep", text, current_config),
+    ), patch.object(
+        manager._semantic_runtime,
         "tokenize",
         side_effect=AssertionError("tokenize should not be used when HanLP NER task succeeds"),
     ):
@@ -955,6 +1043,14 @@ def test_index_source_runs_cor_after_ner_and_syntax_uses_original_text(tmp_path:
         manager._semantic_runtime,
         "run_task",
         side_effect=fake_run_task,
+    ), patch.object(
+        manager._semantic_runtime,
+        "run_ner",
+        side_effect=lambda text, current_config: fake_run_task("ner_msra", text, current_config),
+    ), patch.object(
+        manager._semantic_runtime,
+        "run_dep",
+        side_effect=lambda text, current_config: fake_run_task("dep", text, current_config),
     ), patch.object(
         manager._semantic_runtime,
         "tokenize",

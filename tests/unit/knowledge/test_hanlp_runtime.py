@@ -373,6 +373,76 @@ def test_run_task_returns_structured_result_from_sidecar() -> None:
     assert result == [{"span": [0, 5], "label": "组织名"}]
 
 
+def test_run_ner_returns_structured_result_from_sidecar() -> None:
+    runtime = HanLPSidecarRuntime()
+    config = Config().knowledge
+    config.hanlp.enabled = True
+    config.hanlp.python_executable = "/bin/python3"
+
+    mode_payloads = {
+        "probe": {
+            "engine": "hanlp2",
+            "status": "ready",
+            "reason_code": "HANLP2_READY",
+            "reason": "HanLP2 semantic engine is ready.",
+        },
+        "run_task": {
+            "engine": "hanlp2",
+            "status": "ready",
+            "reason_code": "HANLP2_TASK_READY",
+            "reason": "HanLP task is ready.",
+            "task_result": [{"text": "微软", "label": "ORG", "span": [0, 2]}],
+        },
+    }
+
+    with patch("pathlib.Path.exists", return_value=True), patch(
+        "subprocess.Popen",
+        return_value=_FakePopen(mode_payloads),
+    ):
+        result, state = runtime.run_ner("微软发布新模型", config)
+
+    assert state["status"] == "ready"
+    assert result == [{"text": "微软", "label": "ORG", "span": [0, 2]}]
+
+
+def test_run_dep_returns_structured_result_from_sidecar() -> None:
+    runtime = HanLPSidecarRuntime()
+    config = Config().knowledge
+    config.hanlp.enabled = True
+    config.hanlp.python_executable = "/bin/python3"
+
+    mode_payloads = {
+        "probe": {
+            "engine": "hanlp2",
+            "status": "ready",
+            "reason_code": "HANLP2_READY",
+            "reason": "HanLP2 semantic engine is ready.",
+        },
+        "run_task": {
+            "engine": "hanlp2",
+            "status": "ready",
+            "reason_code": "HANLP2_TASK_READY",
+            "reason": "HanLP task is ready.",
+            "task_result": [
+                {"token": "微软", "head": 2, "deprel": "nsubj"},
+                {"token": "发布", "head": 0, "deprel": "root"},
+            ],
+        },
+    }
+
+    with patch("pathlib.Path.exists", return_value=True), patch(
+        "subprocess.Popen",
+        return_value=_FakePopen(mode_payloads),
+    ):
+        result, state = runtime.run_dep("微软发布新模型", config)
+
+    assert state["status"] == "ready"
+    assert result == [
+        {"token": "微软", "head": 2, "deprel": "nsubj"},
+        {"token": "发布", "head": 0, "deprel": "root"},
+    ]
+
+
 def test_bridge_run_task_uses_parse_entrypoint_for_configured_task(tmp_path: Path) -> None:
     hanlp_pkg = tmp_path / "hanlp"
     hanlp_pkg.mkdir()

@@ -1,4 +1,4 @@
-import { Column, Line, Pie } from "@ant-design/plots";
+import { Column, Pie } from "@ant-design/plots";
 import { Card, Empty, Typography } from "antd";
 import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -10,6 +10,7 @@ interface ProjectDocumentKnowledgeVisualizationProps {
   selectedFilePath: string;
   fileContent: string;
   charStatsContent: string;
+  nerStructuredContent: string;
   knowledgeState: ProjectKnowledgeState;
 }
 
@@ -30,6 +31,28 @@ interface RelationEdgeDatum {
   edge: string;
   relation: string;
   count: number;
+}
+
+interface NerTopEntityDatum {
+  entity: string;
+  count: number;
+}
+
+interface TemporalNodeDatum {
+  id: string;
+  label: string;
+  type: string;
+  count: number;
+  sentenceIndex: number;
+  x: number;
+  y: number;
+  radius: number;
+}
+
+interface TemporalEdgeDatum {
+  sourceId: string;
+  targetId: string;
+  weight: number;
 }
 
 const requestedSourceIds = new Set<string>();
@@ -97,12 +120,35 @@ function resolveCurrentDocument(
   documents: KnowledgeSourceDocument[],
   selectedFilePath: string,
 ): KnowledgeSourceDocument | null {
+  const normalizedBaseName = (value: string): string => {
+    const text = normalizePath(value);
+    if (!text) {
+      return "";
+    }
+    const base = text.split("/").pop() || text;
+    return base.replace(/\.[^/.]+$/g, "").toLowerCase();
+  };
+
+  const normalizedStem = (value: string): string => {
+    const base = normalizedBaseName(value);
+    if (!base) {
+      return "";
+    }
+    return base
+      .replace(/\.snapshot_[^/.]+$/i, "")
+      .replace(/\.__[a-f0-9]{8,}$/i, "")
+      .toLowerCase();
+  };
+
   const selected = normalizePath(selectedFilePath);
   if (!selected) {
     return null;
   }
+  const selectedBase = normalizedBaseName(selectedFilePath);
+  const selectedStem = normalizedStem(selectedFilePath);
 
   for (const doc of documents) {
+    const rawDoc = doc as Record<string, unknown>;
     const candidates = [
       doc.path,
       doc.title,
@@ -111,11 +157,39 @@ function resolveCurrentDocument(
       doc.chunk_path,
       doc.ner_structured_path,
       doc.syntax_structured_path,
+      String(rawDoc.document_path || ""),
+      String(rawDoc.source_path || ""),
+      String(rawDoc.original_path || ""),
+      String(rawDoc.relative_path || ""),
+      String(rawDoc.file_path || ""),
     ]
       .map((item) => normalizePath(String(item || "")))
       .filter(Boolean);
 
-    if (candidates.some((item) => item === selected || item.endsWith(`/${selected}`) || selected.endsWith(`/${item}`))) {
+    if (
+      candidates.some(
+        (item) =>
+          item === selected ||
+          item.endsWith(`/${selected}`) ||
+          selected.endsWith(`/${item}`),
+      )
+    ) {
+      return doc;
+    }
+
+    if (
+      selectedStem &&
+      candidates.some((item) => {
+        const itemBase = normalizedBaseName(item);
+        const itemStem = normalizedStem(item);
+        return (
+          itemBase === selectedBase ||
+          itemStem === selectedStem ||
+          itemBase.startsWith(`${selectedStem}.snapshot_`) ||
+          item.includes(`/${selectedStem}.snapshot_`)
+        );
+      })
+    ) {
       return doc;
     }
   }
@@ -310,6 +384,129 @@ function buildRelationEdges(
     .slice(0, 20);
 }
 
+function colorFromLabel(label: string): string {
+  const palette = [
+    "#1677ff",
+    "#13c2c2",
+    "#52c41a",
+    "#fa8c16",
+    "#eb2f96",
+    "#722ed1",
+    "#2f54eb",
+    "#faad14",
+  ];
+  const text = String(label || "entity");
+  let hash = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
+  }
+  return palette[hash % palette.length];
+}
+
+function buildTemporalSpiralGraph(
+  mappedMentions: MentionDatum[],
+): {
+  nodes: TemporalNodeDatum[];
+  edges: TemporalEdgeDatum[];
+} {
+  const mentionBySentence = new Map<number, Array<{ surface: string; label: string }>>();
+  const nodeCounter = new Map<string, { label: string; type: string; count: number; firstSentence: number }>();
+  const edgeCounter = new Map<string, TemporalEdgeDatum>();
+
+  for (const mention of mappedMentions) {
+    const surface = String(mention.surface || "").trim();
+    const label = String(mention.label || "entity").trim() || "entity";
+    if (!surface) {
+      continue;
+    }
+    const sentenceIndex = normalizeSentenceIndex(mention.sentenceIndex);
+    if (!sentenceIndex) {
+      continue;
+    }
+
+    const bucket = mentionBySentence.get(sentenceIndex) || [];
+    bucket.push({ surface, label });
+    mentionBySentence.set(sentenceIndex, bucket);
+
+    const current = nodeCounter.get(surface) || {
+      label: surface,
+      type: label,
+      count: 0,
+      firstSentence: sentenceIndex,
+    };
+    current.count += 1;
+    current.firstSentence = Math.min(current.firstSentence, sentenceIndex);
+    nodeCounter.set(surface, current);
+  }
+
+  for (const entries of mentionBySentence.values()) {
+    const unique = new Set(entries.map((item) => item.surface));
+    const values = Array.from(unique).slice(0, 14);
+    for (let i = 0; i < values.length; i += 1) {
+      for (let j = i + 1; j < values.length; j += 1) {
+        const left = values[i];
+        const right = values[j];
+        const sourceId = left.localeCompare(right) <= 0 ? left : right;
+        const targetId = left.localeCompare(right) <= 0 ? right : left;
+        const key = `${sourceId}||${targetId}`;
+        const edge = edgeCounter.get(key) || { sourceId, targetId, weight: 0 };
+        edge.weight += 1;
+        edgeCounter.set(key, edge);
+      }
+    }
+  }
+
+  const rawNodes = Array.from(nodeCounter.entries())
+    .map(([id, value]) => ({ id, ...value }))
+    .sort((left, right) => {
+      if (left.firstSentence !== right.firstSentence) {
+        return left.firstSentence - right.firstSentence;
+      }
+      if (right.count !== left.count) {
+        return right.count - left.count;
+      }
+      return left.id.localeCompare(right.id);
+    })
+    .slice(0, 140);
+
+  if (rawNodes.length === 0) {
+    return { nodes: [], edges: [] };
+  }
+
+  const maxCount = rawNodes.reduce((max, item) => Math.max(max, item.count), 1);
+  const centerX = 320;
+  const centerY = 180;
+  const startRadius = 24;
+  const endRadius = 160;
+  const turns = 6;
+  const nodeCount = rawNodes.length;
+
+  const nodes: TemporalNodeDatum[] = rawNodes.map((item, index) => {
+    const progress = nodeCount > 1 ? index / (nodeCount - 1) : 0;
+    const theta = progress * turns * Math.PI * 2;
+    const spiralRadius = startRadius + (endRadius - startRadius) * progress;
+    const radius = 3 + 11 * Math.sqrt(item.count / maxCount);
+    return {
+      id: item.id,
+      label: item.label,
+      type: item.type,
+      count: item.count,
+      sentenceIndex: item.firstSentence,
+      x: centerX + Math.cos(theta) * spiralRadius,
+      y: centerY + Math.sin(theta) * spiralRadius,
+      radius,
+    };
+  });
+
+  const nodeIds = new Set(nodes.map((item) => item.id));
+  const edges = Array.from(edgeCounter.values())
+    .filter((item) => nodeIds.has(item.sourceId) && nodeIds.has(item.targetId))
+    .sort((left, right) => right.weight - left.weight)
+    .slice(0, 260);
+
+  return { nodes, edges };
+}
+
 export default function ProjectDocumentKnowledgeVisualization(
   props: ProjectDocumentKnowledgeVisualizationProps,
 ) {
@@ -317,6 +514,7 @@ export default function ProjectDocumentKnowledgeVisualization(
     selectedFilePath,
     fileContent,
     charStatsContent,
+    nerStructuredContent,
     knowledgeState,
   } = props;
   const { t } = useTranslation();
@@ -390,7 +588,9 @@ export default function ProjectDocumentKnowledgeVisualization(
   );
 
   const chartData = useMemo(() => {
-    const nerPayload = safeJsonParse(currentDocument?.ner_structured_text);
+    const nerPayload =
+      safeJsonParse(currentDocument?.ner_structured_text)
+      || safeJsonParse(nerStructuredContent);
     const syntaxPayload = safeJsonParse(currentDocument?.syntax_structured_text);
     const sentenceRanges = buildSentenceRanges(fileContent, syntaxPayload);
     const sentenceWordData = parseSentenceCharStats(charStatsContent);
@@ -401,6 +601,7 @@ export default function ProjectDocumentKnowledgeVisualization(
 
     const entitiesBySentence = new Map<number, number>();
     const labelCounter = new Map<string, number>();
+    const topEntityCounter = new Map<string, number>();
 
     for (const mention of mappedMentions) {
       entitiesBySentence.set(
@@ -408,7 +609,12 @@ export default function ProjectDocumentKnowledgeVisualization(
         (entitiesBySentence.get(mention.sentenceIndex) || 0) + 1,
       );
       labelCounter.set(mention.label, (labelCounter.get(mention.label) || 0) + 1);
+      if (mention.surface) {
+        topEntityCounter.set(mention.surface, (topEntityCounter.get(mention.surface) || 0) + 1);
+      }
     }
+
+    let mentionTotal = mappedMentions.length;
 
     if (labelCounter.size === 0) {
       const catalog = Array.isArray(nerPayload?.entity_catalog)
@@ -417,7 +623,13 @@ export default function ProjectDocumentKnowledgeVisualization(
       for (const item of catalog) {
         const label = String(item.label || "entity").trim() || "entity";
         const count = Number(item.mention_count || 0);
-        labelCounter.set(label, (labelCounter.get(label) || 0) + (Number.isFinite(count) ? count : 0));
+        const mentionCount = Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0;
+        labelCounter.set(label, (labelCounter.get(label) || 0) + mentionCount);
+        const entity = String(item.normalized || item.surface || item.text || "").trim();
+        if (entity) {
+          topEntityCounter.set(entity, (topEntityCounter.get(entity) || 0) + mentionCount);
+        }
+        mentionTotal += mentionCount;
       }
     }
 
@@ -430,17 +642,41 @@ export default function ProjectDocumentKnowledgeVisualization(
       .map(([type, value]) => ({ type, value }))
       .sort((left, right) => right.value - left.value);
 
+    const topEntityData: NerTopEntityDatum[] = Array.from(topEntityCounter.entries())
+      .map(([entity, count]) => ({ entity, count }))
+      .filter((item) => item.count > 0)
+      .sort((left, right) => {
+        if (right.count !== left.count) {
+          return right.count - left.count;
+        }
+        return left.entity.localeCompare(right.entity);
+      })
+      .slice(0, 20);
+
     const relationEdges = buildRelationEdges(syntaxPayload, mappedMentions);
+    const temporalSpiral = buildTemporalSpiralGraph(mappedMentions);
+
+    const sentenceTotal = sentenceWordData.length || sentenceRanges.length || 0;
+    const entityTotal = topEntityCounter.size;
+    const avgMentionsPerSentence = sentenceTotal > 0 ? mentionTotal / sentenceTotal : 0;
 
     return {
       sentenceWordData,
       sentenceEntityData,
+      topEntityData,
       entityTypeData,
       relationEdges,
-      hasNer: mentions.length > 0 || entityTypeData.length > 0,
+      temporalSpiral,
+      hasNer: topEntityData.length > 0 || entityTypeData.length > 0,
+      nerSummary: {
+        entityTotal,
+        mentionTotal,
+        sentenceTotal,
+        avgMentionsPerSentence,
+      },
       hasSyntax: relationEdges.length > 0,
     };
-  }, [charStatsContent, currentDocument, fileContent]);
+  }, [charStatsContent, currentDocument, fileContent, nerStructuredContent]);
 
   if (!selectedFilePath) {
     return (
@@ -498,18 +734,29 @@ export default function ProjectDocumentKnowledgeVisualization(
       <Card
         size="small"
         className={styles.documentKnowledgeVizCard}
-        title={t("projects.workbench.knowledgeNerLine", "NER 逐句实体数量曲线")}
+        title={t("projects.workbench.knowledgeNerTopEntities", "NER Top 实体词频（Top 20）")}
+        extra={
+          <Typography.Text type="secondary" className={styles.documentKnowledgeVizHintInline}>
+            {t(
+              "projects.workbench.knowledgeNerSummary",
+              "Entities: {{entityTotal}} · Mentions: {{mentionTotal}} · Avg/sentence: {{avg}}",
+              {
+                entityTotal: chartData.nerSummary.entityTotal,
+                mentionTotal: chartData.nerSummary.mentionTotal,
+                avg: chartData.nerSummary.avgMentionsPerSentence.toFixed(2),
+              },
+            )}
+          </Typography.Text>
+        }
       >
-        {chartData.hasNer ? (
+        {chartData.topEntityData.length > 0 ? (
           <div className={styles.documentKnowledgeVizChart}>
-            <Line
-              data={chartData.sentenceEntityData}
-              xField="sentence"
+            <Column
+              data={chartData.topEntityData}
+              xField="entity"
               yField="count"
               height={320}
-              point={{ size: 2 }}
-              smooth
-              color="#5ad8a6"
+              color="#36cfc9"
               padding="auto"
               axis={{
                 x: false,
@@ -560,6 +807,79 @@ export default function ProjectDocumentKnowledgeVisualization(
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
               description={t("projects.workbench.knowledgeNerTypeEmpty", "No entity type distribution yet")}
+            />
+          </div>
+        )}
+      </Card>
+
+      <Card
+        size="small"
+        className={styles.documentKnowledgeVizCard}
+        title={t("projects.workbench.knowledgeTemporalSpiral", "NER 准时序螺旋共现图（原始计数）")}
+        extra={
+          <Typography.Text type="secondary" className={styles.documentKnowledgeVizHintInline}>
+            {t(
+              "projects.workbench.knowledgeTemporalSpiralHint",
+              "Time base: sentence_index (quasi-time), Weight: raw count (non-normalized)",
+            )}
+          </Typography.Text>
+        }
+      >
+        {chartData.temporalSpiral.nodes.length > 0 ? (
+          <div className={styles.documentKnowledgeVizChart}>
+            <svg viewBox="0 0 640 360" width="100%" height="100%" role="img" aria-label="Temporal spiral co-occurrence map">
+              <g>
+                {chartData.temporalSpiral.edges.map((edge) => {
+                  const source = chartData.temporalSpiral.nodes.find((item) => item.id === edge.sourceId);
+                  const target = chartData.temporalSpiral.nodes.find((item) => item.id === edge.targetId);
+                  if (!source || !target) {
+                    return null;
+                  }
+                  const strokeWidth = Math.max(0.6, Math.min(4.4, edge.weight * 0.55));
+                  const opacity = Math.max(0.12, Math.min(0.55, 0.08 + edge.weight * 0.04));
+                  return (
+                    <line
+                      key={`${edge.sourceId}-${edge.targetId}`}
+                      x1={source.x}
+                      y1={source.y}
+                      x2={target.x}
+                      y2={target.y}
+                      stroke="#8c8c8c"
+                      strokeOpacity={opacity}
+                      strokeWidth={strokeWidth}
+                    >
+                      <title>{`${edge.sourceId} ↔ ${edge.targetId} : ${edge.weight}`}</title>
+                    </line>
+                  );
+                })}
+              </g>
+
+              <g>
+                {chartData.temporalSpiral.nodes.map((node) => (
+                  <circle
+                    key={node.id}
+                    cx={node.x}
+                    cy={node.y}
+                    r={node.radius}
+                    fill={colorFromLabel(node.type)}
+                    fillOpacity={0.86}
+                    stroke="#ffffff"
+                    strokeWidth={1}
+                  >
+                    <title>{`${node.label} | type=${node.type} | count=${node.count} | S${node.sentenceIndex}`}</title>
+                  </circle>
+                ))}
+              </g>
+            </svg>
+          </div>
+        ) : (
+          <div className={styles.documentKnowledgeVizEmpty}>
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={t(
+                "projects.workbench.knowledgeTemporalSpiralEmpty",
+                "No sentence-level mentions, temporal co-occurrence cannot be built",
+              )}
             />
           </div>
         )}

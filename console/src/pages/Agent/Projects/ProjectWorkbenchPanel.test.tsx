@@ -55,6 +55,7 @@ describe("ProjectWorkbenchPanel", () => {
         projectFiles={[]}
         fileContent="content"
         charStatsContent=""
+        nerStructuredContent=""
         selectedAttachPaths={[]}
         autoAnalyzeOnAttach={false}
         sendingSelectedFiles={false}

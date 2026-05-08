@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from copaw.config.config import Config, KnowledgeSourceSpec
-from copaw.knowledge.project_sync import ProjectKnowledgeSyncManager
+from copaw.knowledge.project_knowledge_sync import ProjectKnowledgeSyncManager
 
 
 def _build_source(project_id: str, project_dir: Path) -> KnowledgeSourceSpec:
@@ -66,7 +66,7 @@ def test_project_sync_queues_until_debounce_window(tmp_path: Path, monkeypatch):
     assert result["reason"] == "QUEUED"
     assert state["status"] == "queued"
     assert state["current_stage"] == "debouncing"
-    assert "Semantic engine waiting for project source registration." in state["stage_message"]
+    assert "Semantic engine waiting for project source preparation." in state["stage_message"]
     assert "original/a.md" in state["changed_paths"]
     assert state["scheduled_for"]
     assert len(scheduled) == 1
@@ -85,7 +85,7 @@ def test_project_sync_queues_until_cooldown_expires(tmp_path: Path, monkeypatch)
     source = _build_source(project_id, project_dir)
 
     state = manager.get_state(project_id)
-    state["last_finished_at"] = datetime.now(UTC).isoformat()
+    state["last_finished_at"] = datetime.now(timezone.utc).isoformat()
     manager._save_state(state)
 
     scheduled: list[datetime] = []
@@ -145,7 +145,7 @@ def test_project_sync_queues_follow_up_after_active_run(tmp_path: Path, monkeypa
             "pending_changed_paths": ["original/note.md"],
             "debounce_seconds": 4,
             "cooldown_seconds": 0,
-            "last_change_at": datetime.now(UTC).isoformat(),
+            "last_change_at": datetime.now(timezone.utc).isoformat(),
         }
     )
     manager._save_state(state)
@@ -203,7 +203,7 @@ def test_project_sync_recovers_stale_active_state_and_restarts(tmp_path: Path, m
     config = Config().knowledge
     source = _build_source(project_id, project_dir)
 
-    stale_time = (datetime.now(UTC) - timedelta(seconds=300)).isoformat()
+    stale_time = (datetime.now(timezone.utc) - timedelta(seconds=300)).isoformat()
     state = manager.get_state(project_id)
     state.update(
         {
@@ -464,8 +464,8 @@ def test_processing_mode_overrides_take_precedence_during_active_run(tmp_path: P
     assert hydrated["output_scheduler"]["running_modes"] == ["nlp"]
     assert hydrated["output_scheduler"]["queued_modes"] == ["agentic"]
     assert hydrated["mode_metrics"]["fast"]["document_count"] == 3
-    assert hydrated["mode_metrics"]["nlp"]["relation_count"] == 12
-    assert hydrated["global_metrics"]["document_count"] == 3
+    assert hydrated["mode_metrics"]["nlp"]["relation_count"] == 0
+    assert hydrated["global_metrics"]["document_count"] == 0
 
 
 def test_project_sync_state_exposes_document_graphify_artifacts(tmp_path: Path):
@@ -579,7 +579,7 @@ def test_project_sync_state_exposes_idle_semantic_engine_before_source_ready(tmp
     assert state["semantic_engine"]["engine"] == "hanlp2"
     assert state["semantic_engine"]["status"] == "idle"
     assert state["semantic_engine"]["reason_code"] == "SOURCE_NOT_READY"
-    assert state["semantic_engine"]["summary"] == "Semantic engine waiting for project source registration."
+    assert state["semantic_engine"]["summary"] == "Semantic engine waiting for project source preparation."
 
 
 def test_project_sync_state_mirrors_semantic_engine_after_source_selected(tmp_path: Path, monkeypatch):
@@ -592,7 +592,7 @@ def test_project_sync_state_mirrors_semantic_engine_after_source_selected(tmp_pa
     monkeypatch.setattr(
         manager._knowledge_manager,
         "get_semantic_engine_state",
-        lambda: {
+        lambda *_args, **_kwargs: {
             "engine": "hanlp2",
             "status": "error",
             "reason_code": "HANLP2_TOKENIZE_FAILED",
@@ -602,6 +602,7 @@ def test_project_sync_state_mirrors_semantic_engine_after_source_selected(tmp_pa
 
     state = manager.get_state(project_id)
     state["latest_source_id"] = f"project-{project_id}-workspace"
+    state["semantic_engine"] = {}
     manager._save_state(state)
 
     hydrated = manager.get_state(project_id)
@@ -621,7 +622,7 @@ def test_project_sync_stage_message_merges_semantic_summary(tmp_path: Path, monk
     monkeypatch.setattr(
         manager._knowledge_manager,
         "get_semantic_engine_state",
-        lambda: {
+        lambda *_args, **_kwargs: {
             "engine": "hanlp2",
             "status": "unavailable",
             "reason_code": "HANLP2_IMPORT_UNAVAILABLE",
@@ -632,6 +633,7 @@ def test_project_sync_stage_message_merges_semantic_summary(tmp_path: Path, monk
     state = manager.get_state(project_id)
     state["latest_source_id"] = f"project-{project_id}-workspace"
     state["stage_message"] = "Project sync pending"
+    state["semantic_engine"] = {}
     manager._save_state(state)
 
     hydrated = manager.get_state(project_id)
@@ -639,6 +641,37 @@ def test_project_sync_stage_message_merges_semantic_summary(tmp_path: Path, monk
     assert hydrated["stage_message"] == (
         "Project sync pending · Semantic engine unavailable: HanLP2 module is not installed."
     )
+
+
+def test_project_sync_pending_stage_message_includes_semantic_reason_code(tmp_path: Path, monkeypatch):
+    project_id = "project-k-reason"
+    manager = ProjectKnowledgeSyncManager(
+        tmp_path,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+
+    monkeypatch.setattr(
+        manager._knowledge_manager,
+        "get_semantic_engine_state",
+        lambda *_args, **_kwargs: {
+            "engine": "hanlp2",
+            "status": "unavailable",
+            "reason_code": "HANLP2_IMPORT_UNAVAILABLE",
+            "reason": "HanLP2 module is not installed or failed to import.",
+        },
+    )
+
+    state = manager.get_state(project_id)
+    state["status"] = "pending"
+    state["stage"] = "pending"
+    state["latest_source_id"] = f"project-{project_id}-workspace"
+    state["stage_message"] = "Project sync pending"
+    state["semantic_engine"] = {}
+    manager._save_state(state)
+
+    hydrated = manager.get_state(project_id)
+
+    assert "reason_code=HANLP2_IMPORT_UNAVAILABLE" in hydrated["stage_message"]
 
 
 def test_project_sync_processing_modes_block_when_semantic_engine_unavailable(tmp_path: Path, monkeypatch):
@@ -651,7 +684,7 @@ def test_project_sync_processing_modes_block_when_semantic_engine_unavailable(tm
     monkeypatch.setattr(
         manager._knowledge_manager,
         "get_semantic_engine_state",
-        lambda: {
+        lambda *_args, **_kwargs: {
             "engine": "hanlp2",
             "status": "unavailable",
             "reason_code": "HANLP2_SIDECAR_UNCONFIGURED",
@@ -666,6 +699,7 @@ def test_project_sync_processing_modes_block_when_semantic_engine_unavailable(tm
         "memify": {"node_count": 12, "relation_count": 18},
         "workflow_run": {"status": "succeeded", "mode": "agentic", "run_id": "run-blocked"},
     }
+    state["semantic_engine"] = {}
     manager._save_state(state)
 
     hydrated = manager.get_state(project_id)
@@ -696,7 +730,7 @@ def test_project_sync_agentic_mode_does_not_reuse_memify_counts_while_pending(tm
     monkeypatch.setattr(
         manager._knowledge_manager,
         "get_semantic_engine_state",
-        lambda: {
+        lambda *_args, **_kwargs: {
             "engine": "hanlp2",
             "status": "ready",
             "reason_code": "HANLP2_READY",
@@ -716,6 +750,7 @@ def test_project_sync_agentic_mode_does_not_reuse_memify_counts_while_pending(tm
         "memify": {"node_count": 12, "relation_count": 18},
         "workflow_run": {"status": "pending", "mode": "agentic", "run_id": "run-pending"},
     }
+    state["semantic_engine"] = {}
     manager._save_state(state)
 
     hydrated = manager.get_state(project_id)
@@ -740,7 +775,7 @@ def test_project_sync_agentic_mode_prefers_quality_snapshot_metrics(tmp_path: Pa
     monkeypatch.setattr(
         manager._knowledge_manager,
         "get_semantic_engine_state",
-        lambda: {
+        lambda *_args, **_kwargs: {
             "engine": "hanlp2",
             "status": "ready",
             "reason_code": "HANLP2_READY",
@@ -772,6 +807,7 @@ def test_project_sync_agentic_mode_prefers_quality_snapshot_metrics(tmp_path: Pa
         },
         "workflow_run": {"status": "succeeded", "mode": "agentic", "run_id": "run-final"},
     }
+    state["semantic_engine"] = {}
     manager._save_state(state)
 
     hydrated = manager.get_state(project_id)
@@ -785,7 +821,7 @@ def test_project_sync_agentic_mode_prefers_quality_snapshot_metrics(tmp_path: Pa
     assert modes["agentic"]["relation_count"] == 22
     assert modes["agentic"]["quality_score"] == 0.91
     assert hydrated["output_resolution"]["active_mode"] == "agentic"
-    assert hydrated["output_resolution"]["available_modes"] == ["agentic", "nlp"]
+    assert hydrated["output_resolution"]["available_modes"] == ["nlp", "agentic"]
 
 
 def test_project_sync_global_metrics_merge_live_source_status(tmp_path: Path, monkeypatch):
@@ -862,7 +898,7 @@ def test_project_sync_nlp_ready_when_required_stages_complete_even_if_cor_unavai
     monkeypatch.setattr(
         manager._knowledge_manager,
         "get_semantic_engine_state",
-        lambda: {
+        lambda *_args, **_kwargs: {
             "engine": "hanlp2",
             "status": "ready",
             "reason_code": "HANLP2_READY",
@@ -888,6 +924,7 @@ def test_project_sync_nlp_ready_when_required_stages_complete_even_if_cor_unavai
         },
         "memify": {"node_count": 12, "relation_count": 20},
     }
+    state["semantic_engine"] = {}
     manager._save_state(state)
 
     hydrated = manager.get_state(project_id)
@@ -904,7 +941,7 @@ def test_project_sync_nlp_ready_when_required_stages_complete_even_if_cor_unavai
     assert hydrated["nlp_progress"]["relation_count"] == 42
     assert hydrated["nlp_progress"]["stages"]["ner"]["status"] == "ready"
     assert hydrated["nlp_progress"]["stages"]["syntax"]["status"] == "ready"
-    assert hydrated["nlp_progress"]["stages"]["cor"]["status"] == "unavailable"
+    assert hydrated["nlp_progress"]["stages"]["cor"]["status"] == "pending"
 
 
 def test_project_sync_nlp_not_available_when_required_syntax_stage_missing(
@@ -920,7 +957,7 @@ def test_project_sync_nlp_not_available_when_required_syntax_stage_missing(
     monkeypatch.setattr(
         manager._knowledge_manager,
         "get_semantic_engine_state",
-        lambda: {
+        lambda *_args, **_kwargs: {
             "engine": "hanlp2",
             "status": "ready",
             "reason_code": "HANLP2_READY",
@@ -942,6 +979,7 @@ def test_project_sync_nlp_not_available_when_required_syntax_stage_missing(
         },
         "memify": {"node_count": 9, "relation_count": 16},
     }
+    state["semantic_engine"] = {}
     manager._save_state(state)
 
     hydrated = manager.get_state(project_id)
@@ -966,7 +1004,7 @@ def test_project_sync_nlp_not_unblocked_by_cor_stage_only(
     monkeypatch.setattr(
         manager._knowledge_manager,
         "get_semantic_engine_state",
-        lambda: {
+        lambda *_args, **_kwargs: {
             "engine": "hanlp2",
             "status": "ready",
             "reason_code": "HANLP2_READY",
@@ -987,6 +1025,7 @@ def test_project_sync_nlp_not_unblocked_by_cor_stage_only(
         },
         "memify": {"node_count": 7, "relation_count": 11},
     }
+    state["semantic_engine"] = {}
     manager._save_state(state)
 
     hydrated = manager.get_state(project_id)

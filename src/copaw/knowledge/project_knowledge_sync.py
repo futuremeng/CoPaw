@@ -634,6 +634,18 @@ class ProjectKnowledgeSyncManager:
             "reason": str(semantic_state.get("reason") or "Semantic engine state is unavailable."),
             "updated_at": updated_at,
         }
+        request_id = str(semantic_state.get("request_id") or "").strip()
+        if request_id:
+            payload["request_id"] = request_id
+        task_key = str(semantic_state.get("task_key") or "").strip()
+        if task_key:
+            payload["task_key"] = task_key
+        task_name = str(semantic_state.get("task_name") or "").strip()
+        if task_name:
+            payload["task_name"] = task_name
+        transport = str(semantic_state.get("transport") or "").strip()
+        if transport:
+            payload["transport"] = transport
         payload["summary"] = self._build_semantic_engine_summary(payload)
         return payload
 
@@ -1741,6 +1753,12 @@ class ProjectKnowledgeSyncManager:
     def _hydrate_processing_view(self, state: dict[str, Any]) -> dict[str, Any]:
         hydrated = dict(state)
         hydrated["semantic_engine"] = self._build_semantic_engine_state(hydrated)
+        semantic_payload = dict(hydrated.get("semantic_engine") or {})
+        hydrated["semantic_status"] = str(semantic_payload.get("status") or "idle")
+        hydrated["semantic_reason_code"] = str(semantic_payload.get("reason_code") or "")
+        hydrated["semantic_reason"] = str(semantic_payload.get("reason") or "")
+        hydrated["semantic_summary"] = str(semantic_payload.get("summary") or "")
+        hydrated["semantic_request_id"] = str(semantic_payload.get("request_id") or "")
         index_result = self._resolve_index_result(hydrated)
         latest_source_id = str(hydrated.get("latest_source_id") or "").strip()
         source_status: dict[str, Any] = {}
@@ -1783,6 +1801,16 @@ class ProjectKnowledgeSyncManager:
             str(hydrated.get("stage_message") or "").strip(),
             str((hydrated.get("semantic_engine") or {}).get("summary") or "").strip(),
         )
+        sync_status = str(hydrated.get("status") or "").strip().lower()
+        semantic_code = str(hydrated.get("semantic_reason_code") or "").strip()
+        if (
+            semantic_code
+            and sync_status in {"pending", "queued", "running", "indexing", "graphifying", "failed"}
+            and semantic_code not in str(hydrated.get("stage_message") or "")
+        ):
+            hydrated["stage_message"] = (
+                f"{str(hydrated.get('stage_message') or '').strip()} · reason_code={semantic_code}"
+            ).strip()
         return hydrated
 
     def check_needs_reindex(
