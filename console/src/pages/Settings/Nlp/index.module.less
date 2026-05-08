@@ -14,6 +14,52 @@
   padding: 20px;
   flex: 1;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.alertStack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.kpiGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.metricCard {
+  border-radius: 10px;
+  background: linear-gradient(180deg, #fff 0%, #fffaf2 100%);
+}
+
+.metricValue {
+  margin: 8px 0 4px !important;
+}
+
+.metricLabel {
+  margin: 8px 0 !important;
+}
+
+.workspaceLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr);
+  gap: 16px;
+}
+
+.primaryColumn,
+.sideColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.primaryCard {
+  border: 1px solid #f0dfc8;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.08);
 }
 
 .centerState {
@@ -293,7 +339,29 @@
   flex-shrink: 0;
 }
 
+@media (max-width: 1320px) {
+  .kpiGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1120px) {
+  .workspaceLayout {
+    grid-template-columns: 1fr;
+  }
+}
+
 :global(.dark-mode) {
+  .metricCard {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .primaryCard {
+    border-color: rgba(255, 160, 77, 0.4);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+  }
+
   .cardDescription {
     color: rgba(255, 255, 255, 0.45);
   }
