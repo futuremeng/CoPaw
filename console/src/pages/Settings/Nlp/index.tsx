@@ -1,6 +1,7 @@
 import { Button } from "@agentscope-ai/design";
 import { Alert, Card, Input, InputNumber, Select, Space, Spin, Switch, Tag, Typography } from "antd";
 import { useEffect, useState } from "react";
+import type { KeyboardEventHandler } from "react";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
 import { useNlp } from "./useNlp";
@@ -141,6 +142,33 @@ function renderTokenRail(tokens: string[], activeTokenIndex?: number | null) {
   );
 }
 
+function getTokenListFromResult(taskKey: string, result: unknown): string[] {
+  if (taskKey === "tokenize" && Array.isArray(result)) {
+    return result.map((item) => String(item || "")).filter(Boolean);
+  }
+  if ((taskKey === "dep" || taskKey === "sdp") && Array.isArray(result)) {
+    return result
+      .map((item) => asRecord(item))
+      .filter((item): item is Record<string, unknown> => Boolean(item))
+      .map((row) => String(row.token || row.text || row.word || ""))
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function getSelectableCount(taskKey: string, result: unknown): number {
+  if (!Array.isArray(result)) {
+    return 0;
+  }
+  if (taskKey === "tokenize") {
+    return result.length;
+  }
+  if (taskKey === "ner" || taskKey === "dep" || taskKey === "sdp") {
+    return result.length;
+  }
+  return 0;
+}
+
 function renderNerHighlightedText(
   sourceText: string,
   rows: Array<Record<string, unknown>>,
@@ -210,6 +238,13 @@ function renderNerHighlightedText(
 function renderRecordRows(
   rows: Array<Record<string, unknown>>,
   preferredColumns: string[],
+  options?: {
+    interactive?: boolean;
+    selectedRowIndex?: number | null;
+    hoveredRowIndex?: number | null;
+    onSelectRow?: (index: number | null) => void;
+    onHoverRow?: (index: number | null) => void;
+  },
 ) {
   if (rows.length === 0) {
     return <Typography.Text type="secondary">No rows returned.</Typography.Text>;
@@ -236,17 +271,37 @@ function renderRecordRows(
           <span key={`header-${column}`}>{column}</span>
         ))}
       </div>
-      {rows.map((row, index) => (
-        <div
-          key={`row-${index}`}
-          className={styles.demoTableRow}
-          style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))` }}
-        >
-          {columns.map((column) => (
-            <span key={`row-${index}-${column}`}>{String(row[column] ?? "")}</span>
-          ))}
-        </div>
-      ))}
+      {rows.map((row, index) => {
+        const highlighted = (options?.hoveredRowIndex ?? options?.selectedRowIndex) === index;
+        if (options?.interactive && options.onSelectRow) {
+          return (
+            <button
+              type="button"
+              key={`row-${index}`}
+              className={`${styles.demoTableRow} ${highlighted ? styles.demoTableRowActive : ""}`}
+              style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))` }}
+              onClick={() => options.onSelectRow?.(options.selectedRowIndex === index ? null : index)}
+              onMouseEnter={() => options.onHoverRow?.(index)}
+              onMouseLeave={() => options.onHoverRow?.(null)}
+            >
+              {columns.map((column) => (
+                <span key={`row-${index}-${column}`}>{String(row[column] ?? "")}</span>
+              ))}
+            </button>
+          );
+        }
+        return (
+          <div
+            key={`row-${index}`}
+            className={styles.demoTableRow}
+            style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))` }}
+          >
+            {columns.map((column) => (
+              <span key={`row-${index}-${column}`}>{String(row[column] ?? "")}</span>
+            ))}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -256,8 +311,11 @@ function renderResultByTask(
   result: unknown,
   sourceText: string,
   activeRowIndex: number | null,
+  hoveredRowIndex: number | null,
   onSelectRow: (index: number | null) => void,
+  onHoverRow: (index: number | null) => void,
 ) {
+  const highlightedRowIndex = hoveredRowIndex ?? activeRowIndex;
   if (taskKey === "tokenize") {
     const tokens = Array.isArray(result) ? result : [];
     return (
@@ -267,13 +325,17 @@ function renderResultByTask(
             <Typography.Text type="secondary">No tokens returned.</Typography.Text>
           ) : (
             tokens.map((token, index) => (
-              <Tag key={`${String(token)}-${index}`} className={styles.demoChip}>
+              <Tag
+                key={`${String(token)}-${index}`}
+                className={`${styles.demoChip} ${highlightedRowIndex === index ? styles.demoChipActive : ""}`}
+                onClick={() => onSelectRow(activeRowIndex === index ? null : index)}
+              >
                 {String(token)}
               </Tag>
             ))
           )}
         </div>
-        {renderTokenRail(tokens.map((token) => String(token)), activeRowIndex)}
+        {renderTokenRail(tokens.map((token) => String(token)), highlightedRowIndex)}
       </>
     );
   }
@@ -294,8 +356,10 @@ function renderResultByTask(
             <button
               type="button"
               key={`ner-row-${index}`}
-              className={`${styles.demoTableRow} ${activeRowIndex === index ? styles.demoTableRowActive : ""}`}
+              className={`${styles.demoTableRow} ${highlightedRowIndex === index ? styles.demoTableRowActive : ""}`}
               onClick={() => onSelectRow(activeRowIndex === index ? null : index)}
+              onMouseEnter={() => onHoverRow(index)}
+              onMouseLeave={() => onHoverRow(null)}
             >
               <span>{String(row.text || "")}</span>
               <span>{String(row.label || "")}</span>
@@ -303,7 +367,7 @@ function renderResultByTask(
             </button>
           ))}
         </div>
-        {renderNerHighlightedText(sourceText, rows, activeRowIndex)}
+        {renderNerHighlightedText(sourceText, rows, highlightedRowIndex)}
       </>
     );
   }
@@ -325,8 +389,10 @@ function renderResultByTask(
             <button
               type="button"
               key={`dep-row-${index}`}
-              className={`${styles.demoTableRow} ${activeRowIndex === index ? styles.demoTableRowActive : ""}`}
+              className={`${styles.demoTableRow} ${highlightedRowIndex === index ? styles.demoTableRowActive : ""}`}
               onClick={() => onSelectRow(activeRowIndex === index ? null : index)}
+              onMouseEnter={() => onHoverRow(index)}
+              onMouseLeave={() => onHoverRow(null)}
             >
               <span>{String(row.token || "")}</span>
               <span>{String(row.head ?? "")}</span>
@@ -334,7 +400,7 @@ function renderResultByTask(
             </button>
           ))}
         </div>
-        {renderTokenRail(tokens, activeRowIndex)}
+        {renderTokenRail(tokens, highlightedRowIndex)}
       </>
     );
   }
@@ -347,10 +413,14 @@ function renderResultByTask(
       const tokens = rows.map((row) => String(row.token || row.text || row.word || "")).filter(Boolean);
       return (
         <>
-          <div className={styles.demoTable}>
-            {renderRecordRows(rows, ["token", "head", "deprel", "relation", "score"])}
-          </div>
-          {renderTokenRail(tokens, activeRowIndex)}
+          {renderRecordRows(rows, ["token", "head", "deprel", "relation", "score"], {
+            interactive: true,
+            selectedRowIndex: activeRowIndex,
+            hoveredRowIndex,
+            onSelectRow,
+            onHoverRow,
+          })}
+          {renderTokenRail(tokens, highlightedRowIndex)}
         </>
       );
     }
@@ -469,6 +539,7 @@ function NlpPage() {
   const [demoInputs, setDemoInputs] = useState<Record<string, string>>({});
   const [activeDemoTaskKey, setActiveDemoTaskKey] = useState("tokenize");
   const [activeDemoRowIndex, setActiveDemoRowIndex] = useState<number | null>(null);
+  const [hoveredDemoRowIndex, setHoveredDemoRowIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (Object.keys(demoInputs).length > 0) {
@@ -644,10 +715,47 @@ function NlpPage() {
     reason: "No status available",
   };
   const activeDemoResult = (demoResults[activeDemoMethod.backendTaskKey] || null) as NlpDemoMeta | null;
+  const activeSelectableCount = getSelectableCount(
+    activeDemoMethod.backendTaskKey,
+    activeDemoResult?.result,
+  );
+  const activeResultTokens = getTokenListFromResult(
+    activeDemoMethod.backendTaskKey,
+    activeDemoResult?.result,
+  );
 
   useEffect(() => {
     setActiveDemoRowIndex(null);
+    setHoveredDemoRowIndex(null);
   }, [activeDemoMethod.backendTaskKey, activeDemoResult?.request_id]);
+
+  const handleDemoResultKeyDown: KeyboardEventHandler<HTMLDivElement> = (event) => {
+    if (!activeDemoResult || activeSelectableCount <= 0) {
+      return;
+    }
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      const next = activeDemoRowIndex === null ? 0 : (activeDemoRowIndex + 1) % activeSelectableCount;
+      setActiveDemoRowIndex(next);
+      setHoveredDemoRowIndex(null);
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      const next =
+        activeDemoRowIndex === null
+          ? activeSelectableCount - 1
+          : (activeDemoRowIndex - 1 + activeSelectableCount) % activeSelectableCount;
+      setActiveDemoRowIndex(next);
+      setHoveredDemoRowIndex(null);
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setActiveDemoRowIndex(null);
+      setHoveredDemoRowIndex(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -1004,6 +1112,9 @@ function NlpPage() {
                 <Typography.Title level={5} className={styles.cardTitle}>
                   结果面板
                 </Typography.Title>
+                <Typography.Text type="secondary">
+                  支持交互：点击结果行高亮映射，或在本区域按 ↑/↓ 键逐行浏览，按 Esc 清空选择。
+                </Typography.Text>
                 {!activeDemoResult ? (
                   <Typography.Paragraph type="secondary" className={styles.cardDescription}>
                     点击“运行测试”查看结构化输出。
@@ -1021,13 +1132,26 @@ function NlpPage() {
                     <Typography.Paragraph className={styles.operationOutput}>
                       {activeDemoResult.reason}
                     </Typography.Paragraph>
-                    {renderResultByTask(
-                      activeDemoMethod.backendTaskKey,
-                      activeDemoResult.result,
-                      activeDemoInput,
-                      activeDemoRowIndex,
-                      setActiveDemoRowIndex,
-                    )}
+                    <div
+                      className={styles.demoInteractiveArea}
+                      tabIndex={0}
+                      onKeyDown={handleDemoResultKeyDown}
+                    >
+                      {renderResultByTask(
+                        activeDemoMethod.backendTaskKey,
+                        activeDemoResult.result,
+                        activeDemoInput,
+                        activeDemoRowIndex,
+                        hoveredDemoRowIndex,
+                        setActiveDemoRowIndex,
+                        setHoveredDemoRowIndex,
+                      )}
+                    </div>
+                    {activeResultTokens.length > 0 ? (
+                      <Typography.Text type="secondary">
+                        当前 token 数：{activeResultTokens.length}
+                      </Typography.Text>
+                    ) : null}
                     <Typography.Paragraph className={styles.operationOutput}>
                       rules: {(activeDemoResult.matched_rules || []).join(", ") || "(none)"}
                     </Typography.Paragraph>
