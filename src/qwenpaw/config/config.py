@@ -1920,6 +1920,14 @@ class KnowledgeNLPConfig(BaseModel):
         default="",
         description="Optional local cache/model home for NLP runtime.",
     )
+    preload_on_startup: bool = Field(
+        default=False,
+        description="Whether to preload HanLP models in the background after app startup.",
+    )
+    preload_scope: Literal["critical", "all_enabled_tasks"] = Field(
+        default="critical",
+        description="Which HanLP task models should be warmed when preload is enabled.",
+    )
     task_matrix: KnowledgeHanLPTaskMatrixConfig = Field(
         default_factory=lambda: KnowledgeHanLPTaskMatrixConfig(),
         description="NLP task matrix for L2 annotation and evaluation.",
@@ -1965,6 +1973,23 @@ class KnowledgeNLPConfig(BaseModel):
         )
         if model_home:
             self.model_home = model_home
+
+        preload_enabled_raw = (
+            os.environ.get("COPAW_NLP_PRELOAD_ON_STARTUP", "").strip()
+            or os.environ.get("COPAW_HANLP_PRELOAD_ON_STARTUP", "").strip()
+        )
+        if preload_enabled_raw:
+            self.preload_on_startup = preload_enabled_raw.lower() not in {"0", "false", "no"}
+
+        preload_scope = (
+            os.environ.get("COPAW_NLP_PRELOAD_SCOPE", "").strip().lower()
+            or os.environ.get("COPAW_HANLP_PRELOAD_SCOPE", "").strip().lower()
+        )
+        if preload_scope in {"critical", "all_enabled_tasks"}:
+            self.preload_scope = cast(
+                Literal["critical", "all_enabled_tasks"],
+                preload_scope,
+            )
 
         probe_timeout = (
             os.environ.get("COPAW_NLP_PROBE_TIMEOUT_SEC", "").strip()

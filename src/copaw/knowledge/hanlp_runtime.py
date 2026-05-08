@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import threading
 import subprocess
 import atexit
@@ -15,6 +16,67 @@ _BRIDGE_CODE = r"""
 import json
 import os
 import sys
+import time
+import warnings
+
+
+_MODEL_CACHE = {}
+
+
+def configure_runtime_env():
+    # Keep tokenizer workers deterministic and avoid excessive thread contention.
+    os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+    # Allow PyTorch ops to fall back cleanly on Apple Silicon when MPS kernels are missing.
+    os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
+    # On macOS, explicitly disable CUDA device visibility to avoid unnecessary CUDA/NVML probing.
+    if sys.platform == "darwin":
+        os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
+        os.environ.setdefault("PYTORCH_NVML_BASED_CUDA_CHECK", "0")
+    hf_endpoint = (
+        str(os.environ.get("COPAW_HF_ENDPOINT", "") or "").strip()
+        or str(os.environ.get("COPAW_HANLP_HF_ENDPOINT", "") or "").strip()
+    )
+    if hf_endpoint:
+        os.environ["HF_ENDPOINT"] = hf_endpoint
+    allow_online = (
+        str(os.environ.get("COPAW_HANLP_ALLOW_ONLINE", "")).strip() == "1"
+        or bool(hf_endpoint)
+    )
+    if not allow_online:
+        # Prefer deterministic local-cache execution in sidecar to avoid long network stalls.
+        os.environ.setdefault("HF_HUB_OFFLINE", "1")
+        os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+        os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
+    else:
+        os.environ.pop("HF_HUB_OFFLINE", None)
+        os.environ.pop("TRANSFORMERS_OFFLINE", None)
+    warnings.filterwarnings(
+        "ignore",
+        message=r".*pynvml package is deprecated.*",
+        category=FutureWarning,
+    )
+
+
+def has_local_bert_backbone(hanlp_home=""):
+    home = str(hanlp_home or "").strip()
+    candidates = []
+    if home:
+        candidates.append(os.path.join(home, "transformers", "bert_base_chinese"))
+    candidates.append(os.path.join(os.path.expanduser("~"), ".hanlp", "transformers", "bert_base_chinese"))
+    # Optional HuggingFace cache path for bert-base-chinese.
+    candidates.append(
+        os.path.join(
+            os.path.expanduser("~"),
+            ".cache",
+            "huggingface",
+            "hub",
+            "models--bert-base-chinese",
+        )
+    )
+    for path in candidates:
+        if os.path.isdir(path):
+            return True
+    return False
 
 
 def emit(payload):
@@ -123,7 +185,7 @@ def locate_parser(module):
     if callable(loader):
         for model_id in ["CTB9_DEP_ELECTRA_SMALL", "CTB7_BIAFFINE_DEP_ZH", "CTB5_BIAFFINE_DEP_ZH"]:
             try:
-                model = loader(model_id)
+                model = load_with_cache(module, model_id)
                 if model is not None:
                     return model
             except Exception:
@@ -137,14 +199,22 @@ def locate_coref_resolver(module):
     return None
 
 
-def locate_ner_resolver(module, ner_type="msra"):
+def locate_ner_resolver(module, ner_type="msra", preferred_model_id=""):
     # For NER tasks
     loader = getattr(module, "load", None)
     if callable(loader):
+        preferred = str(preferred_model_id or "").strip()
+        if preferred:
+            try:
+                preferred_model = load_with_cache(module, preferred)
+                if preferred_model is not None:
+                    return preferred_model
+            except Exception:
+                pass
         if ner_type.lower() == "msra":
-            for model_id in ["MSRA_NER_ELECTRA_SMALL_ZH", "MSRA_NER_BERT_BASE_ZH", "MSRA_NER_ALBERT_BASE_ZH"]:
+            for model_id in ["MSRA_NER_BERT_BASE_ZH", "MSRA_NER_ELECTRA_SMALL_ZH", "MSRA_NER_ALBERT_BASE_ZH"]:
                 try:
-                    model = loader(model_id)
+                    model = load_with_cache(module, model_id)
                     if model is not None:
                         return model
                 except Exception:
@@ -158,7 +228,7 @@ def locate_sdp_resolver(module):
     if callable(loader):
         for model_id in ["OPEN_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH", "CLOSE_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH"]:
             try:
-                model = loader(model_id)
+                model = load_with_cache(module, model_id)
                 if model is not None:
                     return model
             except Exception:
@@ -172,12 +242,26 @@ def locate_con_resolver(module):
     if callable(loader):
         for model_id in ["CTB9_CON_ELECTRA_SMALL", "CTB9_CON_FULL_TAG_ELECTRA_SMALL"]:
             try:
-                model = loader(model_id)
+                model = load_with_cache(module, model_id)
                 if model is not None:
                     return model
             except Exception:
                 continue
     return None
+
+
+def load_with_cache(module, model_id):
+    key = str(model_id or "").strip()
+    if not key:
+        return None
+    if key in _MODEL_CACHE:
+        return _MODEL_CACHE[key]
+    loader = getattr(module, "load", None)
+    if not callable(loader):
+        return None
+    model = loader(model_id)
+    _MODEL_CACHE[key] = model
+    return model
 
 
 def validate_model(module, model_id, text="HanLP 模型校验"):
@@ -223,7 +307,7 @@ def run_parse_task(module, text, task_name):
         raise RuntimeError(f"HanLP parse failed: {exc}") from exc
 
 
-def run_task_entrypoint(module, text, task_name):
+def run_task_entrypoint(module, text, task_name, task_spec=None):
     normalized = normalize_task_key(task_name)
     parse_fn = getattr(module, "parse", None)
     
@@ -273,7 +357,15 @@ def run_task_entrypoint(module, text, task_name):
         ner_type = "msra"  # default
         if "/" in task_name:
             ner_type = task_name.split("/", 1)[1]
-        model = locate_ner_resolver(module, ner_type)
+        preferred_model_id = ""
+        if isinstance(task_spec, dict):
+            preferred_model_id = str(task_spec.get("model_id") or "").strip()
+        if "BERT_BASE_ZH" in preferred_model_id.upper() and not has_local_bert_backbone(os.environ.get("HANLP_HOME", "")):
+            raise RuntimeError(
+                "BERT_BACKBONE_MISSING_LOCAL_CACHE: bert-base-chinese is not found in local cache. "
+                "Populate ~/.hanlp/transformers/bert_base_chinese (or enable COPAW_HANLP_ALLOW_ONLINE=1)."
+            )
+        model = locate_ner_resolver(module, ner_type, preferred_model_id)
         if model is None and callable(parse_fn):
             try:
                 return parse_fn(text, tasks=task_name)
@@ -339,7 +431,7 @@ def load_model(module, model_id):
     loader = getattr(module, "load", None)
     if not callable(loader):
         return raw, None, resolved_name
-    return raw, loader(resolved_value), resolved_name
+    return raw, load_with_cache(module, resolved_value), resolved_name
 
 
 def has_model_loader(module, model_id):
@@ -366,7 +458,7 @@ def has_parse_api(module):
             # Try to load a known parse model from available models
             for model_id in ["CTB9_DEP_ELECTRA_SMALL", "CTB7_BIAFFINE_DEP_ZH", "CTB5_BIAFFINE_DEP_ZH"]:
                 try:
-                    test_model = loader(model_id)
+                    test_model = load_with_cache(module, model_id)
                     if test_model is not None:
                         return True
                 except Exception:
@@ -385,9 +477,9 @@ def has_ner_api(module, ner_type="msra"):
         loader = getattr(module, "load", None)
         if callable(loader):
             if ner_type.lower() == "msra":
-                for model_id in ["MSRA_NER_ELECTRA_SMALL_ZH", "MSRA_NER_BERT_BASE_ZH", "MSRA_NER_ALBERT_BASE_ZH"]:
+                for model_id in ["MSRA_NER_BERT_BASE_ZH", "MSRA_NER_ELECTRA_SMALL_ZH", "MSRA_NER_ALBERT_BASE_ZH"]:
                     try:
-                        test_model = loader(model_id)
+                        test_model = load_with_cache(module, model_id)
                         if test_model is not None:
                             return True
                     except Exception:
@@ -404,7 +496,7 @@ def has_sdp_api(module):
         if callable(loader):
             for model_id in ["OPEN_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH", "CLOSE_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH"]:
                 try:
-                    test_model = loader(model_id)
+                    test_model = load_with_cache(module, model_id)
                     if test_model is not None:
                         return True
                 except Exception:
@@ -421,7 +513,7 @@ def has_con_api(module):
         if callable(loader):
             for model_id in ["CTB9_CON_ELECTRA_SMALL", "CTB9_CON_FULL_TAG_ELECTRA_SMALL"]:
                 try:
-                    test_model = loader(model_id)
+                    test_model = load_with_cache(module, model_id)
                     if test_model is not None:
                         return True
                 except Exception:
@@ -476,6 +568,7 @@ def execute_mode(mode, payload):
     hanlp_home = str(payload.get("hanlp_home") or "").strip()
     if hanlp_home:
         os.environ["HANLP_HOME"] = hanlp_home
+    configure_runtime_env()
 
     if not version_in_range():
         return {
@@ -680,14 +773,28 @@ def execute_mode(mode, payload):
             }
         task_name = str(requested_task_spec.get("task_name") or "")
         text = str(payload.get("text") or "")
+        started = time.perf_counter()
         try:
-            document = run_task_entrypoint(hanlp, text, task_name)
+            document = run_task_entrypoint(hanlp, text, task_name, requested_task_spec)
             task_result = extract_task_result(document, task_name)
             if task_result is None and is_coref_task_name(task_name):
                 task_result = document
         except Exception as exc:
             reason_code = "HANLP2_TASK_RUN_FAILED"
-            reason = f"HanLP task execution failed: {exc.__class__.__name__}: {str(exc)[:200]}"
+            message = str(exc)
+            reason = f"HanLP task execution failed: {exc.__class__.__name__}: {message[:200]}"
+            if "BERT_BACKBONE_MISSING_LOCAL_CACHE" in message:
+                reason_code = "HANLP2_BERT_BACKBONE_MISSING"
+                reason = (
+                    "MSRA_NER_BERT_BASE_ZH requires local bert-base-chinese backbone cache. "
+                    "Either prepare ~/.hanlp/transformers/bert_base_chinese or switch to MSRA_NER_ELECTRA_SMALL_ZH."
+                )
+            elif "huggingface.co" in message or "ReadTimeoutError" in message:
+                reason_code = "HANLP2_REMOTE_BACKBONE_TIMEOUT"
+                reason = (
+                    "Remote backbone fetch from HuggingFace timed out. "
+                    "Use local cache or set COPAW_HANLP_ALLOW_ONLINE=1 in a network-ready environment."
+                )
             if is_coref_task_name(task_name):
                 reason_code = "HANLP2_COREF_NOT_OPEN_SOURCE"
                 reason = (
@@ -712,6 +819,7 @@ def execute_mode(mode, payload):
             "task_key": requested_task_key,
             "task_name": task_name,
             "task_result": task_result,
+            "elapsed_ms": int((time.perf_counter() - started) * 1000),
         }
 
     text = str(payload.get("text") or "")
@@ -842,6 +950,25 @@ class HanLPSidecarRuntime:
         hanlp_home = str(payload.get("hanlp_home") or "").strip()
         if hanlp_home:
             env["HANLP_HOME"] = hanlp_home
+        env.setdefault("TOKENIZERS_PARALLELISM", "false")
+        env.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
+        hf_endpoint = (
+            str(env.get("COPAW_HF_ENDPOINT", "") or "").strip()
+            or str(env.get("COPAW_HANLP_HF_ENDPOINT", "") or "").strip()
+        )
+        if hf_endpoint:
+            env["HF_ENDPOINT"] = hf_endpoint
+        allow_online = str(env.get("COPAW_HANLP_ALLOW_ONLINE", "")).strip() == "1" or bool(hf_endpoint)
+        if not allow_online:
+            env.setdefault("HF_HUB_OFFLINE", "1")
+            env.setdefault("TRANSFORMERS_OFFLINE", "1")
+            env.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
+        else:
+            env.pop("HF_HUB_OFFLINE", None)
+            env.pop("TRANSFORMERS_OFFLINE", None)
+        if sys.platform == "darwin":
+            env.setdefault("CUDA_VISIBLE_DEVICES", "")
+            env.setdefault("PYTORCH_NVML_BASED_CUDA_CHECK", "0")
 
         process = subprocess.Popen(
             [str(executable), "-u", "-c", _BRIDGE_CODE, "server"],
@@ -854,6 +981,20 @@ class HanLPSidecarRuntime:
         )
         self._worker_process = process
         self._worker_cache_key = cache_key
+
+    def _stderr_hint_locked(self, limit: int = 240) -> str:
+        process = self._worker_process
+        if process is None or process.stderr is None:
+            return ""
+        line, read_error = self._readline_with_timeout(process.stderr, 0.05)
+        if read_error or not line:
+            return ""
+        text = line.strip()
+        if not text:
+            return ""
+        if len(text) > limit:
+            text = text[:limit] + "..."
+        return text
 
     def _ensure_worker_locked(self, executable: Path, payload: dict[str, Any], cache_key: str) -> None:
         process = self._worker_process
@@ -871,6 +1012,7 @@ class HanLPSidecarRuntime:
         mode: str,
         payload: dict[str, Any],
         timeout: float,
+        retry_on_timeout: bool = True,
     ) -> dict[str, Any]:
         cache_key = self._cache_key(payload)
         self._last_request_restarted = False
@@ -908,10 +1050,12 @@ class HanLPSidecarRuntime:
 
             line, read_error = self._readline_with_timeout(process.stdout, timeout)
             if read_error == "timeout":
+                stderr_hint = self._stderr_hint_locked()
+                hint = f" stderr={stderr_hint}" if stderr_hint else ""
                 return self._state(
                     status="unavailable",
                     reason_code="HANLP2_WORKER_TIMEOUT",
-                    reason=f"HanLP2 worker {mode} timed out after {timeout:.1f}s.",
+                    reason=f"HanLP2 worker {mode} timed out after {timeout:.1f}s.{hint}",
                 )
             if read_error:
                 return self._state(
@@ -942,9 +1086,9 @@ class HanLPSidecarRuntime:
             return parsed
 
         result = _single_attempt()
-        if str(result.get("status") or "").lower() == "unavailable" and str(result.get("reason_code") or "").startswith(
-            "HANLP2_WORKER_"
-        ):
+        reason_code = str(result.get("reason_code") or "")
+        can_retry = reason_code.startswith("HANLP2_WORKER_") and (retry_on_timeout or reason_code != "HANLP2_WORKER_TIMEOUT")
+        if str(result.get("status") or "").lower() == "unavailable" and can_retry:
             self._close_worker_locked()
             self._start_worker_locked(executable, payload, cache_key)
             self._last_request_restarted = True
@@ -1041,6 +1185,7 @@ class HanLPSidecarRuntime:
         mode: str,
         payload: dict[str, Any],
         timeout: float,
+        retry_on_timeout: bool = True,
     ) -> dict[str, Any]:
         with self._worker_lock:
             try:
@@ -1049,6 +1194,7 @@ class HanLPSidecarRuntime:
                     mode=mode,
                     payload=payload,
                     timeout=timeout,
+                    retry_on_timeout=retry_on_timeout,
                 )
             except OSError as exc:
                 self._close_worker_locked()
@@ -1058,6 +1204,22 @@ class HanLPSidecarRuntime:
                     reason=f"HanLP2 sidecar {mode} failed to start: {exc.__class__.__name__}.",
                 )
 
+    @staticmethod
+    def _task_timeout(payload: dict[str, Any], task_key: str) -> float:
+        default_timeout = float(payload.get("tokenize_timeout_sec") or 15.0)
+        raw_matrix = payload.get("task_matrix") or {}
+        if not isinstance(raw_matrix, dict):
+            return default_timeout
+        raw_tasks = raw_matrix.get("tasks") or {}
+        if not isinstance(raw_tasks, dict):
+            return default_timeout
+        task_cfg = raw_tasks.get(str(task_key or "").strip())
+        if not isinstance(task_cfg, dict):
+            return default_timeout
+        try:
+            return float(task_cfg.get("timeout_sec") or default_timeout)
+        except (TypeError, ValueError):
+            return default_timeout
     def probe(self, config: KnowledgeConfig | None) -> dict[str, str]:
         payload = self._config_payload(config)
         cache_key = self._cache_key(payload)
@@ -1222,7 +1384,8 @@ class HanLPSidecarRuntime:
                 **payload,
                 "task_key": task_key,
             },
-            timeout=payload["tokenize_timeout_sec"],
+            timeout=self._task_timeout(payload, task_key),
+            retry_on_timeout=False,
         )
         return self._attach_runtime_meta(self._state(
             status=str(result.get("status") or "unavailable"),
@@ -1304,13 +1467,16 @@ class HanLPSidecarRuntime:
                 "task_key": task_key,
                 "text": text,
             },
-            timeout=payload["tokenize_timeout_sec"],
+            timeout=self._task_timeout(payload, task_key),
+            retry_on_timeout=False,
         )
         state = self._state(
             status=str(result.get("status") or "unavailable"),
             reason_code=str(result.get("reason_code") or "HANLP2_TASK_RUN_FAILED"),
             reason=str(result.get("reason") or "HanLP task execution failed."),
         )
+        if isinstance(result.get("elapsed_ms"), (int, float)):
+            state["sidecar_elapsed_ms"] = str(int(result.get("elapsed_ms") or 0))
         if state.get("status") == "ready":
             self._probe_cache_state = dict(state)
         return result.get("task_result"), self._attach_runtime_meta(state)

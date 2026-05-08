@@ -25,6 +25,7 @@ export interface NlpStatus {
     uv_available: boolean;
     uv_executable: string;
     model_home?: string;
+    model_cache_path?: string;
     hanlp_home?: string;
   };
   model: {
@@ -40,6 +41,26 @@ export interface NlpStatus {
     reason_code?: string;
     reason?: string;
   }>;
+  preload?: {
+    enabled: boolean;
+    scope: "critical" | "all_enabled_tasks";
+    status: string;
+    reason: string;
+    model_cache_path?: string;
+    started_at?: number | null;
+    finished_at?: number | null;
+    preloaded_models?: Array<{
+      task_key: string;
+      model_id: string;
+      status: string;
+    }>;
+    task_results?: Record<string, {
+      status: string;
+      reason_code?: string;
+      reason?: string;
+      model_id?: string;
+    }>;
+  };
   deprecated?: boolean;
   migration?: {
     message?: string;
@@ -75,6 +96,7 @@ export interface NlpMethodDemoResult {
   reason_code: string;
   reason: string;
   result: unknown;
+  raw_result?: unknown;
   resolved_model: string;
   strategy_mode: string;
   detected_style: string;
@@ -82,6 +104,10 @@ export interface NlpMethodDemoResult {
   matched_rules: string[];
   fallback_used: boolean;
   duration_ms: number;
+  model_cache_path?: string;
+  runtime_python_executable?: string;
+  effective_task_model_id?: string;
+  preload_status?: string;
 }
 
 export interface HanlpOperation {
@@ -101,6 +127,8 @@ export function useNlp() {
   const [loading, setLoading] = useState(true);
   const [installing, setInstalling] = useState(false);
   const [downloadingModel, setDownloadingModel] = useState(false);
+  const [savingPreload, setSavingPreload] = useState(false);
+  const [runningPreload, setRunningPreload] = useState(false);
   const [savingStrategy, setSavingStrategy] = useState(false);
   const [dryRunningDecision, setDryRunningDecision] = useState(false);
   const [status, setStatus] = useState<NlpStatus | null>(null);
@@ -193,6 +221,41 @@ export function useNlp() {
     }
   };
 
+  const handleUpdatePreload = async (payload: {
+    enabled: boolean;
+    scope: "critical" | "all_enabled_tasks";
+  }) => {
+    setSavingPreload(true);
+    try {
+      await api.updateNlpPreload(payload);
+      message.success("NLP preload settings updated");
+      await fetchStatus();
+      return true;
+    } catch (error) {
+      console.error("Failed to update NLP preload settings:", error);
+      message.error("Failed to update NLP preload settings");
+      return false;
+    } finally {
+      setSavingPreload(false);
+    }
+  };
+
+  const handleTriggerPreload = async (force = false) => {
+    setRunningPreload(true);
+    try {
+      await api.triggerNlpPreload({ force });
+      message.success("HanLP preload started");
+      await fetchStatus();
+      return true;
+    } catch (error) {
+      console.error("Failed to start HanLP preload:", error);
+      message.error("Failed to start HanLP preload");
+      return false;
+    } finally {
+      setRunningPreload(false);
+    }
+  };
+
   const handleDryRunStrategy = async (text: string, taskKey: string) => {
     const normalizedText = String(text || "").trim();
     if (!normalizedText) {
@@ -251,6 +314,8 @@ export function useNlp() {
     loading,
     installing,
     downloadingModel,
+    savingPreload,
+    runningPreload,
     savingStrategy,
     dryRunningDecision,
     status,
@@ -265,6 +330,8 @@ export function useNlp() {
     fetchStatus,
     handleInstall,
     handleDownloadModel,
+    handleUpdatePreload,
+    handleTriggerPreload,
     handleUpdateStrategy,
     handleDryRunStrategy,
     lastStrategyDecision,

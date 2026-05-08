@@ -19,7 +19,30 @@ _STATUS_CACHE: dict | None = None
 _STATUS_CACHE_TIME = 0.0
 _STATUS_CACHE_TTL_SEC = 60.0
 _STATUS_CACHE_LOCK = threading.Lock()
+_PRELOAD_STATE_LOCK = threading.Lock()
+_PRELOAD_THREAD: threading.Thread | None = None
+_PRELOAD_STATE: dict[str, object] = {
+    "enabled": False,
+    "scope": "critical",
+    "status": "idle",
+    "reason": "Startup preload is disabled.",
+    "started_at": None,
+    "finished_at": None,
+    "model_result": {},
+    "preloaded_models": [],
+    "task_results": {},
+}
 _SUPPORTED_HANLP_PYTHON_VERSIONS = ("3.10", "3.9", "3.8", "3.7", "3.6")
+_DEFAULT_TASK_MODEL_IDS = {
+    "ner_msra": "MSRA_NER_BERT_BASE_ZH",
+}
+_CRITICAL_PRELOAD_TASKS = ("ner_msra",)
+_PRELOAD_SAMPLE_TEXTS = {
+    "ner_msra": "微软在北京发布Copaw。",
+    "dep": "微软发布新模型。",
+    "sdp": "他们在上海召开会议。",
+    "con": "这个系统运行稳定。",
+}
 
 
 def _managed_root() -> Path:
@@ -346,12 +369,206 @@ def _runtime() -> HanLPSidecarRuntime:
     return HanLPSidecarRuntime()
 
 
+def _nlp_config(config):
+    knowledge = getattr(config, "knowledge", None)
+    if knowledge is None:
+        return None
+    return getattr(knowledge, "nlp", None) or getattr(knowledge, "hanlp", None)
+
+
 def _task_specs(config) -> dict[str, object]:
-    task_matrix = getattr(getattr(config.knowledge, "nlp", None), "task_matrix", None)
+    task_matrix = getattr(_nlp_config(config), "task_matrix", None)
     tasks = getattr(task_matrix, "tasks", None)
     if not isinstance(tasks, dict):
         return {}
     return {str(task_key): task_cfg for task_key, task_cfg in tasks.items() if str(task_key).strip()}
+
+
+def _normalized_model_home(config) -> str:
+    nlp_cfg = _nlp_config(config)
+    if nlp_cfg is None:
+        return str(Path.home() / ".hanlp")
+    model_home = str(getattr(nlp_cfg, "model_home", "") or "").strip()
+    if model_home:
+        return model_home
+    legacy_home = str(getattr(nlp_cfg, "hanlp_home", "") or "").strip()
+    if legacy_home:
+        return legacy_home
+    return str(Path.home() / ".hanlp")
+
+
+def _preload_settings(config) -> tuple[bool, str]:
+    nlp_cfg = _nlp_config(config)
+    if nlp_cfg is None:
+        return False, "critical"
+    enabled = bool(getattr(nlp_cfg, "preload_on_startup", False))
+    scope = str(getattr(nlp_cfg, "preload_scope", "critical") or "critical")
+    if scope not in {"critical", "all_enabled_tasks"}:
+        scope = "critical"
+    return enabled, scope
+
+
+def _effective_task_model_id(config, task_key: str, task_cfg) -> str:
+    configured = str(getattr(task_cfg, "model_id", "") or "").strip()
+    if configured:
+        return configured
+    fallback = str(_DEFAULT_TASK_MODEL_IDS.get(task_key, "") or "").strip()
+    if fallback:
+        return fallback
+    nlp_cfg = _nlp_config(config)
+    return str(getattr(nlp_cfg, "model_id", "") or "").strip() if nlp_cfg is not None else ""
+
+
+def _preload_task_keys(config, scope: str) -> list[str]:
+    if scope == "critical":
+        return [task_key for task_key in _CRITICAL_PRELOAD_TASKS if task_key in _task_specs(config)]
+
+    task_keys: list[str] = []
+    for task_key, task_cfg in _task_specs(config).items():
+        if not bool(getattr(task_cfg, "enabled", True)):
+            continue
+        normalized = str(task_key or "").strip().replace("/", "_").replace("-", "_")
+        if normalized in {"cor", "coref", "coreference", "coreference_resolution"}:
+            continue
+        task_keys.append(task_key)
+    return task_keys
+
+
+def _copy_preload_state() -> dict:
+    with _PRELOAD_STATE_LOCK:
+        return {
+            **_PRELOAD_STATE,
+            "model_result": dict(_PRELOAD_STATE.get("model_result") or {}),
+            "preloaded_models": list(_PRELOAD_STATE.get("preloaded_models") or []),
+            "task_results": dict(_PRELOAD_STATE.get("task_results") or {}),
+        }
+
+
+def _set_preload_state(**updates) -> dict:
+    with _PRELOAD_STATE_LOCK:
+        _PRELOAD_STATE.update(updates)
+    return _copy_preload_state()
+
+
+def get_hanlp_model_cache_path(config=None) -> str:
+    if config is None:
+        config = load_config()
+    return _normalized_model_home(config)
+
+
+def get_hanlp_preload_status(config=None) -> dict:
+    if config is None:
+        config = load_config()
+    enabled, scope = _preload_settings(config)
+    state = _copy_preload_state()
+    state["enabled"] = enabled
+    state["scope"] = scope
+    state["model_cache_path"] = _normalized_model_home(config)
+    if not enabled and state.get("status") in {"idle", "disabled"}:
+        state["status"] = "disabled"
+        state["reason"] = "Startup preload is disabled."
+    return state
+
+
+def _run_hanlp_preload(force: bool = False) -> None:
+    global _PRELOAD_THREAD  # noqa: PLW0603
+    config = load_config()
+    enabled, scope = _preload_settings(config)
+    if not enabled and not force:
+        _set_preload_state(
+            enabled=False,
+            scope=scope,
+            status="disabled",
+            reason="Startup preload is disabled.",
+            started_at=None,
+            finished_at=None,
+            model_result={},
+            preloaded_models=[],
+            task_results={},
+        )
+        return
+
+    _set_preload_state(
+        enabled=enabled,
+        scope=scope,
+        status="warming",
+        reason="Preloading HanLP models in background.",
+        started_at=time.time(),
+        finished_at=None,
+        model_result={},
+        preloaded_models=[],
+        task_results={},
+    )
+
+    runtime = _runtime()
+    model_state = runtime.ensure_model(config.knowledge)
+    model_ready = model_state.get("status") == "ready"
+    nlp_cfg = _nlp_config(config)
+    preloaded_models: list[dict[str, str]] = []
+    task_results: dict[str, dict[str, str]] = {}
+    default_model_id = str(getattr(nlp_cfg, "model_id", "") or "").strip() if nlp_cfg is not None else ""
+    if default_model_id:
+        preloaded_models.append(
+            {
+                "task_key": "tokenize",
+                "model_id": default_model_id,
+                "status": str(model_state.get("status") or "unavailable"),
+            }
+        )
+
+    for task_key in _preload_task_keys(config, scope):
+        task_cfg = _task_specs(config).get(task_key)
+        task_model_id = _effective_task_model_id(config, task_key, task_cfg)
+        sample_text = _PRELOAD_SAMPLE_TEXTS.get(task_key, "微软发布新模型。")
+        _result, task_state = runtime.run_task(task_key, sample_text, config.knowledge)
+        task_status = str(task_state.get("status") or "unavailable")
+        model_ready = model_ready and task_status == "ready"
+        task_results[task_key] = {
+            "status": task_status,
+            "reason_code": str(task_state.get("reason_code") or "HANLP2_TASK_LOAD_FAILED"),
+            "reason": str(task_state.get("reason") or "HanLP task preload failed."),
+            "model_id": task_model_id,
+        }
+        preloaded_models.append(
+            {
+                "task_key": task_key,
+                "model_id": task_model_id,
+                "status": task_status,
+            }
+        )
+
+    _set_preload_state(
+        enabled=enabled,
+        scope=scope,
+        status="ready" if model_ready else "failed",
+        reason="HanLP preload completed." if model_ready else "HanLP preload completed with failures.",
+        finished_at=time.time(),
+        model_result={
+            "status": str(model_state.get("status") or "unavailable"),
+            "reason_code": str(model_state.get("reason_code") or "HANLP2_MODEL_LOAD_FAILED"),
+            "reason": str(model_state.get("reason") or "HanLP model preload failed."),
+            "model_id": default_model_id,
+        },
+        preloaded_models=preloaded_models,
+        task_results=task_results,
+    )
+    with _PRELOAD_STATE_LOCK:
+        _PRELOAD_THREAD = None
+
+
+def kickoff_hanlp_preload(force: bool = False) -> dict:
+    global _PRELOAD_THREAD  # noqa: PLW0603
+    config = load_config()
+    with _PRELOAD_STATE_LOCK:
+        if _PRELOAD_THREAD is not None and _PRELOAD_THREAD.is_alive():
+            return get_hanlp_preload_status(config)
+        _PRELOAD_THREAD = threading.Thread(
+            target=_run_hanlp_preload,
+            kwargs={"force": force},
+            daemon=True,
+        )
+        _PRELOAD_THREAD.start()
+    return get_hanlp_preload_status(config)
 
 
 def _build_task_status(runtime: HanLPSidecarRuntime, config) -> dict[str, dict]:
@@ -464,7 +681,8 @@ def _build_status(config, *, include_task_status: bool = True) -> dict:
         if include_task_status
         else _build_task_status_snapshot(config, sidecar_state=probe_state, model_state=model_state)
     )
-    python_executable = str(config.knowledge.nlp.python_executable or "").strip()
+    nlp_cfg = _nlp_config(config)
+    python_executable = str(getattr(nlp_cfg, "python_executable", "") or "").strip()
     managed_python = str(_managed_python_path(_managed_venv()))
     uv_executable = _find_uv_executable()
     return {
@@ -472,21 +690,23 @@ def _build_status(config, *, include_task_status: bool = True) -> dict:
             "status": probe_state.get("status") or "unavailable",
             "reason_code": probe_state.get("reason_code") or "HANLP2_SIDECAR_UNCONFIGURED",
             "reason": probe_state.get("reason") or "HanLP2 sidecar is not configured.",
-            "enabled": bool(config.knowledge.nlp.enabled),
-            "provider": str(config.knowledge.nlp.provider or "hanlp").strip(),
+            "enabled": bool(getattr(nlp_cfg, "enabled", False)),
+            "provider": str(getattr(nlp_cfg, "provider", "hanlp") or "hanlp").strip(),
             "python_executable": python_executable,
             "managed": python_executable == managed_python,
             "uv_available": bool(uv_executable),
             "uv_executable": uv_executable,
-            "model_home": str(config.knowledge.nlp.model_home or "").strip(),
+            "model_home": str(getattr(nlp_cfg, "model_home", "") or "").strip(),
+            "model_cache_path": _normalized_model_home(config),
         },
         "model": {
             "status": model_state.get("status") or "unavailable",
             "reason_code": model_state.get("reason_code") or "HANLP2_MODEL_LOAD_FAILED",
             "reason": model_state.get("reason") or "HanLP2 tokenizer model is unavailable.",
-            "model_id": str(config.knowledge.nlp.model_id or "").strip(),
+            "model_id": str(getattr(nlp_cfg, "model_id", "") or "").strip(),
         },
         "tasks": task_states,
+        "preload": get_hanlp_preload_status(config),
     }
 
 
@@ -521,11 +741,17 @@ def _persist_hanlp_runtime_config(
     python_executable: Path,
     model_home: Path | None = None,
 ) -> None:
-    config.knowledge.nlp.provider = "hanlp"
-    config.knowledge.nlp.enabled = True
-    config.knowledge.nlp.python_executable = str(python_executable)
+    nlp_cfg = _nlp_config(config)
+    if nlp_cfg is None:
+        raise RuntimeError("Missing knowledge NLP config")
+    nlp_cfg.provider = "hanlp"
+    nlp_cfg.enabled = True
+    nlp_cfg.python_executable = str(python_executable)
     if model_home is not None:
-        config.knowledge.nlp.model_home = str(model_home)
+        if hasattr(nlp_cfg, "model_home"):
+            nlp_cfg.model_home = str(model_home)
+        elif hasattr(nlp_cfg, "hanlp_home"):
+            nlp_cfg.hanlp_home = str(model_home)
     save_config(config)
 
 
@@ -573,7 +799,7 @@ def auto_install_hanlp_sidecar() -> dict:
         _persist_hanlp_runtime_config(
             config,
             python_executable=main_python,
-            model_home=Path(str(config.knowledge.nlp.model_home or "").strip()) if str(config.knowledge.nlp.model_home or "").strip() else None,
+            model_home=Path(_normalized_model_home(config)) if _normalized_model_home(config).strip() else None,
         )
         _invalidate_cache()
         status_after = get_hanlp_sidecar_status(force_refresh=True)
@@ -712,7 +938,7 @@ def ensure_hanlp_model() -> dict:
             "status": model_state.get("status") or "unavailable",
             "reason_code": model_state.get("reason_code") or "HANLP2_MODEL_LOAD_FAILED",
             "reason": model_state.get("reason") or "HanLP2 tokenizer model is unavailable.",
-            "model_id": str(config.knowledge.nlp.model_id or "").strip(),
+            "model_id": str(getattr(_nlp_config(config), "model_id", "") or "").strip(),
         },
         "task_results": task_results,
         "manual_steps": manual_steps,

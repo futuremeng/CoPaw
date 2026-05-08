@@ -307,6 +307,16 @@ async def lifespan(  # pylint: disable=too-many-statements,too-many-branches
             # Start all configured agents (truly parallel now)
             await multi_agent_manager.start_all_configured_agents()
 
+            try:
+                from ..agents.utils.hanlp_sidecar import kickoff_hanlp_preload
+
+                kickoff_hanlp_preload(False)
+            except Exception:
+                logger.debug(
+                    "HanLP preload kickoff skipped due to error",
+                    exc_info=True,
+                )
+
             provider_manager.start_local_model_resume(local_model_manager)
 
             # ---- Plugin System ----

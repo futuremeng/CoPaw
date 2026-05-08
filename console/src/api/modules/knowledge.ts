@@ -168,6 +168,7 @@ export const knowledgeApi = {
       reason_code: string;
       reason: string;
       result: unknown;
+      raw_result?: unknown;
       resolved_model: string;
       strategy_mode: string;
       detected_style: string;
@@ -175,6 +176,10 @@ export const knowledgeApi = {
       matched_rules: string[];
       fallback_used: boolean;
       duration_ms: number;
+      model_cache_path?: string;
+      runtime_python_executable?: string;
+      effective_task_model_id?: string;
+      preload_status?: string;
     }>(`/knowledge/tasks/${encodeURIComponent(taskKey)}/run`, {
       method: "POST",
       body: JSON.stringify(payload),

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 import time
 import uuid
@@ -30,6 +31,7 @@ class HanLPTaskRunResponse(BaseModel):
     reason_code: str
     reason: str
     result: object | None
+    raw_result: object | None = None
     resolved_model: str
     strategy_mode: str
     detected_style: str
@@ -37,6 +39,10 @@ class HanLPTaskRunResponse(BaseModel):
     matched_rules: list[str]
     fallback_used: bool
     duration_ms: int
+    model_cache_path: str = ""
+    runtime_python_executable: str = ""
+    effective_task_model_id: str = ""
+    preload_status: str = "idle"
 
 
 _CLASSICAL_HINT_CHARS = frozenset("之乎者也焉矣其乃若夫盖兮耳哉")
@@ -58,13 +64,126 @@ _SUPPORTED_TASK_KEYS = {"tokenize", "ner", "dep", "sdp", "con", "cor"}
 _TASK_ALIASES = {
     "ner_msra": "ner",
 }
+_TASK_MATRIX_KEY_MAP = {
+    "tokenize": "tok",
+    "ner": "ner_msra",
+    "dep": "dep",
+    "sdp": "sdp",
+    "con": "con",
+    "cor": "coref",
+}
+_TASK_MODEL_DEFAULTS = {
+    "ner_msra": "MSRA_NER_BERT_BASE_ZH",
+}
+_TASK_TIMEOUT_DEFAULTS = {
+    "ner_msra": 90.0,
+}
+_TASK_TIMEOUT_MIN_FOR_BERT = {
+    "ner_msra": 60.0,
+}
+_NER_NOISE_TOKENS = {
+    "在",
+    "发布",
+    "召开",
+    "进行",
+    "以及",
+    "并且",
+}
 
 
-def _normalize_ner_result(raw: Any) -> list[dict[str, Any]]:
+def _entity_quality_score(item: dict[str, Any]) -> int:
+    mention = str(item.get("text") or "")
+    label = str(item.get("label") or "").upper()
+    score = 0
+    length = len(mention)
+    if length >= 2:
+        score += 2
+    else:
+        score -= 2
+    if length <= 8:
+        score += 1
+    else:
+        score -= 1
+    if any(token in mention for token in _NER_NOISE_TOKENS):
+        score -= 3
+    if re.search(r"[，。！？、；：\s]", mention):
+        score -= 2
+    if label == "PERSON" and length <= 1:
+        score -= 3
+    return score
+
+
+def _filter_overlapping_ner_entities(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    ordered = sorted(
+        items,
+        key=lambda row: (
+            int(row.get("start") or 0),
+            int(row.get("end") or 0),
+        ),
+    )
+    picked: list[dict[str, Any]] = []
+    for item in ordered:
+        start = item.get("start")
+        end = item.get("end")
+        if not isinstance(start, int) or not isinstance(end, int) or end <= start:
+            continue
+        if _entity_quality_score(item) < 0:
+            continue
+        if not picked:
+            picked.append(item)
+            continue
+        prev = picked[-1]
+        prev_start = int(prev.get("start") or 0)
+        prev_end = int(prev.get("end") or 0)
+        overlaps = start < prev_end and prev_start < end
+        if not overlaps:
+            picked.append(item)
+            continue
+        prev_score = _entity_quality_score(prev)
+        item_score = _entity_quality_score(item)
+        if item_score > prev_score:
+            picked[-1] = item
+            continue
+        if item_score == prev_score:
+            prev_len = len(str(prev.get("text") or ""))
+            item_len = len(str(item.get("text") or ""))
+            if item_len < prev_len:
+                picked[-1] = item
+    return picked
+
+
+def _normalize_ner_result(raw: Any, source_text: str = "") -> list[dict[str, Any]]:
     if not isinstance(raw, list):
         return []
     normalized: list[dict[str, Any]] = []
-    for item in raw:
+    pending: list[Any] = list(raw)
+    while pending:
+        item = pending.pop(0)
+        if isinstance(item, list):
+            if len(item) >= 4 and not any(isinstance(part, (list, dict, tuple)) for part in item[:4]):
+                text = str(item[0] or "").strip()
+                label = str(item[1] or "").strip()
+                try:
+                    start = int(item[2]) if item[2] is not None else None
+                    end = int(item[3]) if item[3] is not None else None
+                except (TypeError, ValueError):
+                    start, end = None, None
+                if text or (start is not None and end is not None):
+                    normalized.append(
+                        {
+                            "text": text,
+                            "label": label,
+                            "start": start,
+                            "end": end,
+                            "score": None,
+                        }
+                    )
+                continue
+            pending[0:0] = list(item)
+            continue
+        if isinstance(item, tuple):
+            pending.insert(0, list(item))
+            continue
         if not isinstance(item, dict):
             continue
         text = str(item.get("text") or item.get("surface") or "").strip()
@@ -95,7 +214,53 @@ def _normalize_ner_result(raw: Any) -> list[dict[str, Any]]:
                 "score": item.get("score") if isinstance(item.get("score"), (int, float)) else None,
             }
         )
-    return normalized
+    text = str(source_text or "")
+    cursor = 0
+    for item in normalized:
+        mention = str(item.get("text") or "")
+        start = item.get("start")
+        end = item.get("end")
+        invalid_span = (
+            start is None
+            or end is None
+            or int(start) < 0
+            or int(end) < int(start)
+            or (text and text[int(start):int(end)] != mention)
+        )
+        if mention and text and invalid_span:
+            index = text.find(mention, cursor)
+            if index < 0:
+                index = text.find(mention)
+            if index >= 0:
+                item["start"] = index
+                item["end"] = index + len(mention)
+                cursor = index + len(mention)
+
+    # Merge adjacent fragments (e.g. "北" + "京") for a cleaner demo view.
+    merged: list[dict[str, Any]] = []
+    for item in normalized:
+        if not merged:
+            merged.append(item)
+            continue
+        prev = merged[-1]
+        same_label = str(prev.get("label") or "") == str(item.get("label") or "")
+        prev_text = str(prev.get("text") or "")
+        item_text = str(item.get("text") or "")
+        prev_end = prev.get("end")
+        item_start = item.get("start")
+        if (
+            same_label
+            and prev_text
+            and item_text
+            and isinstance(prev_end, int)
+            and isinstance(item_start, int)
+            and item_start == prev_end
+        ):
+            prev["text"] = prev_text + item_text
+            prev["end"] = item.get("end")
+            continue
+        merged.append(item)
+    return _filter_overlapping_ner_entities(merged)
 
 
 def _normalize_dep_result(raw: Any) -> list[dict[str, Any]]:
@@ -141,15 +306,7 @@ def _clone_effective_config(knowledge_config: Any) -> Any:
 def _task_matrix_model_override(task_key: str, selected_model: str, effective_config: KnowledgeConfig) -> None:
     if not selected_model:
         return
-    task_map = {
-        "tokenize": "tok",
-        "ner": "ner_msra",
-        "dep": "dep",
-        "sdp": "sdp",
-        "con": "con",
-        "cor": "coref",
-    }
-    matrix_key = task_map.get(task_key)
+    matrix_key = _TASK_MATRIX_KEY_MAP.get(task_key)
     if not matrix_key:
         return
     task_matrix = getattr(getattr(effective_config, "nlp", None), "task_matrix", None)
@@ -163,6 +320,85 @@ def _task_matrix_model_override(task_key: str, selected_model: str, effective_co
         task_cfg.model_id = selected_model
     except Exception:
         return
+
+
+def _task_matrix_model_id(task_key: str, effective_config: KnowledgeConfig) -> str:
+    matrix_key = _TASK_MATRIX_KEY_MAP.get(task_key)
+    if not matrix_key:
+        return ""
+    task_matrix = getattr(getattr(effective_config, "nlp", None), "task_matrix", None)
+    tasks = getattr(task_matrix, "tasks", None) if task_matrix is not None else None
+    if not isinstance(tasks, dict):
+        return ""
+    task_cfg = tasks.get(matrix_key)
+    if task_cfg is None:
+        return str(_TASK_MODEL_DEFAULTS.get(matrix_key, "") or "").strip()
+    configured = str(getattr(task_cfg, "model_id", "") or "").strip()
+    if configured:
+        return configured
+    return str(_TASK_MODEL_DEFAULTS.get(matrix_key, "") or "").strip()
+
+
+def _ensure_runtime_task_model_defaults(task_key: str, effective_config: KnowledgeConfig) -> None:
+    matrix_key = _TASK_MATRIX_KEY_MAP.get(task_key)
+    if not matrix_key:
+        return
+    default_model = str(_TASK_MODEL_DEFAULTS.get(matrix_key, "") or "").strip()
+    if not default_model:
+        return
+    task_matrix = getattr(getattr(effective_config, "nlp", None), "task_matrix", None)
+    tasks = getattr(task_matrix, "tasks", None) if task_matrix is not None else None
+    if not isinstance(tasks, dict):
+        return
+    task_cfg = tasks.get(matrix_key)
+    if task_cfg is None:
+        return
+
+    def _safe_float(value: Any) -> float | None:
+        try:
+            if value is None:
+                return None
+            parsed = float(value)
+            if parsed <= 0:
+                return None
+            return parsed
+        except (TypeError, ValueError):
+            return None
+
+    def _set_timeout(value: float) -> None:
+        try:
+            task_cfg.timeout_sec = float(value)
+        except Exception:
+            return
+
+    configured = str(getattr(task_cfg, "model_id", "") or "").strip()
+    if configured:
+        effective_model = configured
+    else:
+        try:
+            task_cfg.model_id = default_model
+        except Exception:
+            pass
+        effective_model = str(getattr(task_cfg, "model_id", "") or default_model).strip()
+
+    default_timeout = float(_TASK_TIMEOUT_DEFAULTS.get(matrix_key, 0.0) or 0.0)
+    timeout_sec = _safe_float(getattr(task_cfg, "timeout_sec", None))
+    if default_timeout > 0 and timeout_sec is None:
+        _set_timeout(default_timeout)
+        timeout_sec = default_timeout
+
+    bert_min_timeout = float(_TASK_TIMEOUT_MIN_FOR_BERT.get(matrix_key, 0.0) or 0.0)
+    if bert_min_timeout > 0 and "BERT" in str(effective_model or "").upper():
+        if timeout_sec is None or timeout_sec < bert_min_timeout:
+            _set_timeout(max(default_timeout, bert_min_timeout))
+
+
+def _should_override_task_matrix(decision: dict[str, Any]) -> bool:
+    rules = [str(item or "") for item in decision.get("matched_rules", [])]
+    return any(
+        rule.startswith("strategy.task_overrides.") or rule == "strategy.auto_classical_chinese"
+        for rule in rules
+    )
 
 
 def _classical_detection_score(text: str) -> float:
@@ -307,26 +543,37 @@ async def _run_hanlp_task(task_key: str, request: HanLPTaskRunRequest, http_requ
     knowledge_config = await _resolve_knowledge_config(http_request)
     decision = _resolve_model_decision(normalized_task_key, request.text, knowledge_config)
     effective_config = _clone_effective_config(knowledge_config)
+    _ensure_runtime_task_model_defaults(normalized_task_key, effective_config)
     if decision["selected_model"]:
         nlp_cfg = getattr(effective_config, "nlp", None)
         if nlp_cfg is not None:
             nlp_cfg.model_id = str(decision["selected_model"])
-            _task_matrix_model_override(normalized_task_key, str(decision["selected_model"]), effective_config)
+            if _should_override_task_matrix(decision):
+                _task_matrix_model_override(normalized_task_key, str(decision["selected_model"]), effective_config)
     runtime = NLPRuntime()
     request_id = _effective_request_id(request.request_id)
     started = time.perf_counter()
 
     if normalized_task_key == "tokenize":
-        result, state = runtime.tokenize(request.text, effective_config)
+        result, state = await asyncio.to_thread(runtime.tokenize, request.text, effective_config)
+        raw_result = result
         normalized_result = list(result) if isinstance(result, list) else []
     elif normalized_task_key == "ner":
-        result, state = runtime.run_ner(request.text, effective_config)
-        normalized_result = _normalize_ner_result(result)
+        result, state = await asyncio.to_thread(runtime.run_ner, request.text, effective_config)
+        raw_result = result
+        normalized_result = _normalize_ner_result(result, request.text)
     elif normalized_task_key == "dep":
-        result, state = runtime.run_dep(request.text, effective_config)
+        result, state = await asyncio.to_thread(runtime.run_dep, request.text, effective_config)
+        raw_result = result
         normalized_result = _normalize_dep_result(result)
     else:
-        result, state = runtime.run_task(normalized_task_key, request.text, effective_config)
+        result, state = await asyncio.to_thread(
+            runtime.run_task,
+            normalized_task_key,
+            request.text,
+            effective_config,
+        )
+        raw_result = result
         normalized_result = result
 
     duration_ms = int((time.perf_counter() - started) * 1000)
@@ -334,8 +581,27 @@ async def _run_hanlp_task(task_key: str, request: HanLPTaskRunRequest, http_requ
     reason_code = str(state.get("reason_code") or "HANLP_TASK_FAILED")
     reason = str(state.get("reason") or "HanLP task failed.")
     response_result: object | None = normalized_result if status == "ready" else None
+    response_raw_result: object | None = raw_result if status == "ready" else None
     if status != "ready":
         decision["fallback_used"] = True
+
+    nlp_cfg = getattr(effective_config, "nlp", None)
+    model_cache_path = str(getattr(nlp_cfg, "model_home", "") or "").strip()
+    runtime_python_executable = str(getattr(nlp_cfg, "python_executable", "") or "").strip()
+    effective_task_model_id = str(
+        _task_matrix_model_id(normalized_task_key, effective_config)
+        or decision["selected_model"]
+        or _extract_hanlp_model_id(knowledge_config)
+    )
+    preload_status = "idle"
+    try:
+        from qwenpaw.agents.utils.hanlp_sidecar import get_hanlp_model_cache_path, get_hanlp_preload_status
+
+        if not model_cache_path:
+            model_cache_path = str(get_hanlp_model_cache_path() or "")
+        preload_status = str(get_hanlp_preload_status().get("status") or "idle")
+    except Exception:
+        pass
 
     return HanLPTaskRunResponse(
         task_key=normalized_task_key,
@@ -344,37 +610,27 @@ async def _run_hanlp_task(task_key: str, request: HanLPTaskRunRequest, http_requ
         reason_code=reason_code,
         reason=reason,
         result=response_result,
-        resolved_model=str(decision["selected_model"] or _extract_hanlp_model_id(knowledge_config)),
+        raw_result=response_raw_result,
+        resolved_model=str(
+            _task_matrix_model_id(normalized_task_key, effective_config)
+            or decision["selected_model"]
+            or _extract_hanlp_model_id(knowledge_config)
+        ),
         strategy_mode=str(decision["strategy_mode"]),
         detected_style=str(decision["detected_style"]),
         detection_score=float(decision["detection_score"]),
         matched_rules=list(decision["matched_rules"]),
         fallback_used=bool(decision["fallback_used"]),
         duration_ms=duration_ms,
+        model_cache_path=model_cache_path,
+        runtime_python_executable=runtime_python_executable,
+        effective_task_model_id=effective_task_model_id,
+        preload_status=preload_status,
     )
 
 
-@router.post("/tasks/ner:run", response_model=HanLPTaskRunResponse)
-async def run_ner_task(request: HanLPTaskRunRequest, http_request: Request) -> HanLPTaskRunResponse:
-    return await _run_hanlp_task("ner", request, http_request)
-
-
-@router.post("/tasks/dep:run", response_model=HanLPTaskRunResponse)
-async def run_dep_task(request: HanLPTaskRunRequest, http_request: Request) -> HanLPTaskRunResponse:
-    return await _run_hanlp_task("dep", request, http_request)
-
-
-@router.post("/tasks/{task_key}:run", response_model=HanLPTaskRunResponse)
-async def run_generic_task(
-    task_key: str,
-    request: HanLPTaskRunRequest,
-    http_request: Request,
-) -> HanLPTaskRunResponse:
-    return await _run_hanlp_task(task_key, request, http_request)
-
-
 @router.post("/tasks/{task_key}/run", response_model=HanLPTaskRunResponse)
-async def run_generic_task_slash(
+async def run_generic_task(
     task_key: str,
     request: HanLPTaskRunRequest,
     http_request: Request,

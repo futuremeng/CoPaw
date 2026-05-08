@@ -373,6 +373,98 @@ def test_run_task_returns_structured_result_from_sidecar() -> None:
     assert result == [{"span": [0, 5], "label": "组织名"}]
 
 
+def test_run_task_uses_task_specific_timeout_and_disables_timeout_retry() -> None:
+    runtime = HanLPSidecarRuntime()
+    config = Config().knowledge
+    config.hanlp.enabled = True
+    config.hanlp.python_executable = "/bin/python3"
+    config.hanlp.tokenize_timeout_sec = 90.0
+    config.hanlp.task_matrix.tasks["ner_msra"].timeout_sec = 12.5
+
+    captured: dict[str, object] = {}
+
+    def _fake_probe(_config):
+        _ = _config
+        return {
+            "engine": "hanlp2",
+            "status": "ready",
+            "reason_code": "HANLP2_READY",
+            "reason": "ready",
+        }
+
+    def _fake_run_bridge(executable, *, mode, payload, timeout, retry_on_timeout=True):
+        _ = executable
+        captured["mode"] = mode
+        captured["timeout"] = timeout
+        captured["retry_on_timeout"] = retry_on_timeout
+        captured["task_key"] = payload.get("task_key")
+        return {
+            "engine": "hanlp2",
+            "status": "ready",
+            "reason_code": "HANLP2_TASK_READY",
+            "reason": "HanLP task is ready.",
+            "task_result": [{"text": "微软", "label": "ORG"}],
+        }
+
+    runtime.probe = _fake_probe  # type: ignore[method-assign]
+    runtime._ensure_sidecar = lambda payload: Path("/bin/python3")  # type: ignore[assignment]
+    runtime._run_bridge = _fake_run_bridge  # type: ignore[assignment]
+
+    result, state = runtime.run_task("ner_msra", "微软发布新模型", config)
+
+    assert state["status"] == "ready"
+    assert result == [{"text": "微软", "label": "ORG"}]
+    assert captured["mode"] == "run_task"
+    assert captured["task_key"] == "ner_msra"
+    assert captured["timeout"] == 12.5
+    assert captured["retry_on_timeout"] is False
+
+
+def test_task_status_uses_task_specific_timeout_and_disables_timeout_retry() -> None:
+    runtime = HanLPSidecarRuntime()
+    config = Config().knowledge
+    config.hanlp.enabled = True
+    config.hanlp.python_executable = "/bin/python3"
+    config.hanlp.tokenize_timeout_sec = 90.0
+    config.hanlp.task_matrix.tasks["ner_msra"].timeout_sec = 7.0
+
+    captured: dict[str, object] = {}
+
+    def _fake_probe(_config):
+        _ = _config
+        return {
+            "engine": "hanlp2",
+            "status": "ready",
+            "reason_code": "HANLP2_READY",
+            "reason": "ready",
+        }
+
+    def _fake_run_bridge(executable, *, mode, payload, timeout, retry_on_timeout=True):
+        _ = executable
+        captured["mode"] = mode
+        captured["timeout"] = timeout
+        captured["retry_on_timeout"] = retry_on_timeout
+        captured["task_key"] = payload.get("task_key")
+        return {
+            "engine": "hanlp2",
+            "status": "ready",
+            "reason_code": "HANLP2_TASK_READY",
+            "reason": "HanLP task is ready.",
+        }
+
+    runtime.probe = _fake_probe  # type: ignore[method-assign]
+    runtime._ensure_sidecar = lambda payload: Path("/bin/python3")  # type: ignore[assignment]
+    runtime._run_bridge = _fake_run_bridge  # type: ignore[assignment]
+
+    state = runtime.task_status("ner_msra", config)
+
+    assert state["status"] == "ready"
+    assert captured["mode"] == "task_status"
+    assert captured["task_key"] == "ner_msra"
+    assert captured["timeout"] == 7.0
+    assert captured["retry_on_timeout"] is False
+
+
 def test_run_ner_returns_structured_result_from_sidecar() -> None:
     runtime = HanLPSidecarRuntime()
     config = Config().knowledge

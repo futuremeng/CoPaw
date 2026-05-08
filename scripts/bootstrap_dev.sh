@@ -95,6 +95,32 @@ choose_pypi_mirror() {
 
 PYPI_MIRROR=$(choose_pypi_mirror)
 
+choose_hf_endpoint() {
+    if [[ -n "${COPAW_HF_ENDPOINT:-}" ]]; then
+        echo "$COPAW_HF_ENDPOINT"
+        return
+    fi
+    if [[ -n "${COPAW_HANLP_HF_ENDPOINT:-}" ]]; then
+        echo "$COPAW_HANLP_HF_ENDPOINT"
+        return
+    fi
+    if [[ "${COPAW_DISABLE_HF_MIRROR:-0}" == "1" ]]; then
+        echo ""
+        return
+    fi
+
+    if curl -fsSL --connect-timeout 3 --max-time 5 https://huggingface.co/ > /dev/null 2>&1; then
+        echo ""
+    else
+        echo "https://hf-mirror.com"
+    fi
+}
+
+HF_ENDPOINT=$(choose_hf_endpoint)
+if [[ -n "$HF_ENDPOINT" ]]; then
+    export COPAW_HF_ENDPOINT="$HF_ENDPOINT"
+fi
+
 ensure_uv() {
     if command -v uv &>/dev/null; then
         info "uv found: $(command -v uv)"
@@ -278,5 +304,10 @@ if [[ $BOOTSTRAP_SIDECAR -eq 1 ]]; then
     echo "  - HanLP sidecar initialized and verified."
 else
     echo "  - HanLP sidecar not initialized in this run (use --with-sidecar or --sidecar-only)."
+fi
+if [[ -n "${COPAW_HF_ENDPOINT:-}" ]]; then
+    echo "  - HuggingFace endpoint: $COPAW_HF_ENDPOINT"
+else
+    echo "  - HuggingFace endpoint: default (https://huggingface.co)"
 fi
 echo "  - Optional cache path: export COPAW_HANLP_HOME=~/.hanlp"

@@ -155,12 +155,33 @@ export const agentApi = {
         uv_available: boolean;
         uv_executable: string;
         model_home: string;
+        model_cache_path?: string;
       };
       model: {
         status: string;
         reason_code: string;
         reason: string;
         model_id: string;
+      };
+      preload?: {
+        enabled: boolean;
+        scope: "critical" | "all_enabled_tasks";
+        status: string;
+        reason: string;
+        model_cache_path?: string;
+        started_at?: number | null;
+        finished_at?: number | null;
+        preloaded_models?: Array<{
+          task_key: string;
+          model_id: string;
+          status: string;
+        }>;
+        task_results?: Record<string, {
+          status: string;
+          reason_code?: string;
+          reason?: string;
+          model_id?: string;
+        }>;
       };
       deprecated?: boolean;
       migration?: {
@@ -186,6 +207,35 @@ export const agentApi = {
       body: JSON.stringify(payload),
     }),
 
+  updateNlpPreload: (payload: {
+    enabled: boolean;
+    scope: "critical" | "all_enabled_tasks";
+  }) =>
+    request<{
+      preload: {
+        enabled: boolean;
+        scope: "critical" | "all_enabled_tasks";
+        status: string;
+        reason: string;
+      };
+    }>("/agent/nlp-preload", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+
+  triggerNlpPreload: (payload?: { force?: boolean }) =>
+    request<{
+      preload: {
+        enabled: boolean;
+        scope: "critical" | "all_enabled_tasks";
+        status: string;
+        reason: string;
+      };
+    }>("/agent/nlp-preload", {
+      method: "POST",
+      body: JSON.stringify(payload ?? {}),
+    }),
+
   getHanlpStatus: () =>
     request<{
       sidecar: {
@@ -199,6 +249,7 @@ export const agentApi = {
         uv_executable: string;
         model_home?: string;
         hanlp_home?: string;
+        model_cache_path?: string;
       };
       model: {
         status: string;

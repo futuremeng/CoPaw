@@ -44,6 +44,10 @@ type NlpDemoMeta = {
   matched_rules: string[];
   fallback_used: boolean;
   duration_ms: number;
+  model_cache_path?: string;
+  runtime_python_executable?: string;
+  effective_task_model_id?: string;
+  preload_status?: string;
 };
 
 const DEMO_METHODS: DemoMethod[] = [
@@ -132,6 +136,23 @@ function asNumber(value: unknown): number | null {
   return null;
 }
 
+function normalizeNerLabel(value: unknown): { raw: string; display: string } {
+  const raw = String(value || "").trim();
+  const key = raw.toUpperCase();
+  const mapped =
+    key === "NS"
+      ? "LOCATION"
+      : key === "NT"
+        ? "ORGANIZATION"
+        : key === "NR"
+          ? "PERSON"
+          : raw;
+  if (mapped && raw && mapped !== raw) {
+    return { raw, display: `${mapped} (${raw})` };
+  }
+  return { raw: raw || "ENTITY", display: mapped || raw || "ENTITY" };
+}
+
 function renderTokenRail(tokens: string[], activeTokenIndex?: number | null) {
   if (tokens.length === 0) {
     return null;
@@ -181,6 +202,7 @@ function getSelectableCount(taskKey: string, result: unknown): number {
 function renderNerHighlightedText(
   sourceText: string,
   rows: Array<Record<string, unknown>>,
+  entityOnlyView: boolean,
   activeEntityIndex?: number | null,
 ) {
   const text = String(sourceText || "");
@@ -194,7 +216,7 @@ function renderNerHighlightedText(
       if (start === null || end === null) {
         return null;
       }
-      const label = String(row.label || "").trim() || "ENTITY";
+      const label = normalizeNerLabel(row.label).display;
       return {
         start: Math.max(0, Math.min(start, text.length)),
         end: Math.max(0, Math.min(end, text.length)),
@@ -215,13 +237,13 @@ function renderNerHighlightedText(
     if (entity.start < cursor) {
       continue;
     }
-    if (entity.start > cursor) {
+    if (!entityOnlyView && entity.start > cursor) {
       blocks.push({ text: text.slice(cursor, entity.start), isEntity: false });
     }
     blocks.push({ text: text.slice(entity.start, entity.end), label: entity.label, isEntity: true, entityIndex });
     cursor = entity.end;
   }
-  if (cursor < text.length) {
+  if (!entityOnlyView && cursor < text.length) {
     blocks.push({ text: text.slice(cursor), isEntity: false });
   }
 
@@ -319,6 +341,7 @@ function renderResultByTask(
   taskKey: string,
   result: unknown,
   sourceText: string,
+  nerEntityOnlyView: boolean,
   activeRowIndex: number | null,
   hoveredRowIndex: number | null,
   onSelectRow: (index: number | null) => void,
@@ -362,6 +385,7 @@ function renderResultByTask(
             <span>Span</span>
           </div>
           {rows.map((row, index) => (
+            
             <button
               type="button"
               key={`ner-row-${index}`}
@@ -371,12 +395,15 @@ function renderResultByTask(
               onMouseLeave={() => onHoverRow(null)}
             >
               <span>{String(row.text || "")}</span>
-              <span>{String(row.label || "")}</span>
+              <span>{normalizeNerLabel(row.label).display}</span>
               <span>{`${String(row.start ?? "")}-${String(row.end ?? "")}`}</span>
             </button>
           ))}
         </div>
-        {renderNerHighlightedText(sourceText, rows, highlightedRowIndex)}
+        <Typography.Text type="secondary">
+          高亮区域中的非标签文本是上下文，不代表新增实体。
+        </Typography.Text>
+        {renderNerHighlightedText(sourceText, rows, nerEntityOnlyView, highlightedRowIndex)}
       </>
     );
   }
@@ -512,6 +539,8 @@ function NlpPage() {
     loading,
     installing,
     downloadingModel,
+    savingPreload,
+    runningPreload,
     savingStrategy,
     dryRunningDecision,
     status,
@@ -524,6 +553,8 @@ function NlpPage() {
     fetchStatus,
     handleInstall,
     handleDownloadModel,
+    handleUpdatePreload,
+    handleTriggerPreload,
     handleUpdateStrategy,
     handleDryRunStrategy,
     lastStrategyDecision,
@@ -543,6 +574,9 @@ function NlpPage() {
   const [classicalModelDraft, setClassicalModelDraft] = useState("");
   const [taskOverridesText, setTaskOverridesText] = useState("{}");
   const [strategyParseError, setStrategyParseError] = useState("");
+  const [nerEntityOnlyView, setNerEntityOnlyView] = useState(false);
+  const [preloadEnabledDraft, setPreloadEnabledDraft] = useState(false);
+  const [preloadScopeDraft, setPreloadScopeDraft] = useState<"critical" | "all_enabled_tasks">("critical");
   const [previewTaskKey, setPreviewTaskKey] = useState("ner");
   const [previewText, setPreviewText] = useState("吾之道也");
   const [demoInputs, setDemoInputs] = useState<Record<string, string>>({});
@@ -580,6 +614,11 @@ function NlpPage() {
     strategy?.mode,
     strategy?.task_overrides,
   ]);
+
+  useEffect(() => {
+    setPreloadEnabledDraft(Boolean(status?.preload?.enabled));
+    setPreloadScopeDraft(status?.preload?.scope === "all_enabled_tasks" ? "all_enabled_tasks" : "critical");
+  }, [status?.preload?.enabled, status?.preload?.scope]);
 
   const handleSaveStrategy = async () => {
     let parsedOverrides: Record<string, string> = {};
@@ -1072,13 +1111,27 @@ function NlpPage() {
                             <div className={styles.demoMetaItem}><span>status</span><Tag color={resolveTagColor(activeDemoResult.status)}>{activeDemoResult.reason_code}</Tag></div>
                             <div className={styles.demoMetaItem}><span>task</span><span>{activeDemoResult.task_key}</span></div>
                             <div className={styles.demoMetaItem}><span>model</span><span>{activeDemoResult.resolved_model || "(empty)"}</span></div>
+                            <div className={styles.demoMetaItem}><span>task model</span><span>{activeDemoResult.effective_task_model_id || "(inherit)"}</span></div>
                             <div className={styles.demoMetaItem}><span>style</span><span>{activeDemoResult.detected_style}</span></div>
                             <div className={styles.demoMetaItem}><span>score</span><span>{activeDemoResult.detection_score}</span></div>
                             <div className={styles.demoMetaItem}><span>duration</span><span>{activeDemoResult.duration_ms} ms</span></div>
+                            <div className={styles.demoMetaItem}><span>preload</span><span>{activeDemoResult.preload_status || "idle"}</span></div>
                           </div>
+                          <Typography.Paragraph className={styles.operationOutput}>
+                            cache_path: {activeDemoResult.model_cache_path || status?.sidecar.model_cache_path || status?.sidecar.model_home || status?.sidecar.hanlp_home || t("nlpConfig.notConfigured")}
+                          </Typography.Paragraph>
                           <Typography.Paragraph className={styles.operationOutput}>
                             {activeDemoResult.reason}
                           </Typography.Paragraph>
+                          {activeDemoMethod.backendTaskKey === "ner" ? (
+                            <Space size={8} wrap>
+                              <Typography.Text type="secondary">仅显示实体片段</Typography.Text>
+                              <Switch
+                                checked={nerEntityOnlyView}
+                                onChange={(checked) => setNerEntityOnlyView(checked)}
+                              />
+                            </Space>
+                          ) : null}
                           <div
                             className={styles.demoInteractiveArea}
                             tabIndex={0}
@@ -1088,6 +1141,7 @@ function NlpPage() {
                               activeDemoMethod.backendTaskKey,
                               activeDemoResult.result,
                               activeDemoInput,
+                              nerEntityOnlyView,
                               activeDemoRowIndex,
                               hoveredDemoRowIndex,
                               setActiveDemoRowIndex,
@@ -1101,6 +1155,16 @@ function NlpPage() {
                           ) : null}
                           <Typography.Paragraph className={styles.operationOutput}>
                             rules: {(activeDemoResult.matched_rules || []).join(", ") || "(none)"}
+                          </Typography.Paragraph>
+                          <Typography.Title level={5} className={styles.cardTitle}>
+                            原始输出
+                          </Typography.Title>
+                          <Typography.Paragraph className={styles.operationOutput}>
+                            {prettyJson(
+                              activeDemoResult.raw_result !== undefined
+                                ? activeDemoResult.raw_result
+                                : activeDemoResult.result,
+                            )}
                           </Typography.Paragraph>
                         </>
                       )}
@@ -1330,6 +1394,9 @@ function NlpPage() {
                             <Typography.Text type="secondary">{status?.sidecar.reason}</Typography.Text>
                             <Typography.Text>{t("nlpConfig.pythonPath")} {status?.sidecar.python_executable || t("nlpConfig.notConfigured")}</Typography.Text>
                             <Typography.Text>{t("nlpConfig.hanlpHome")} {(status?.sidecar.model_home || status?.sidecar.hanlp_home) || t("nlpConfig.notConfigured")}</Typography.Text>
+                            <Typography.Paragraph className={styles.operationOutput}>
+                              cache_path: {status?.sidecar.model_cache_path || status?.sidecar.model_home || status?.sidecar.hanlp_home || t("nlpConfig.notConfigured")}
+                            </Typography.Paragraph>
                             <Typography.Text>
                               {t("nlpConfig.installStrategy", {
                                 value: status?.sidecar.uv_available
@@ -1344,6 +1411,58 @@ function NlpPage() {
                             </div>
                             <Typography.Text type="secondary">{status?.model.reason}</Typography.Text>
                             <Typography.Text>{t("nlpConfig.modelId")} {status?.model.model_id || t("nlpConfig.notConfigured")}</Typography.Text>
+                            <div className={styles.statusRow}>
+                              <span>Startup Preload</span>
+                              <Tag color={status?.preload?.status === "ready" ? "success" : status?.preload?.status === "warming" ? "processing" : status?.preload?.status === "failed" ? "error" : "default"}>
+                                {status?.preload?.status || "disabled"}
+                              </Tag>
+                            </div>
+                            <Typography.Text type="secondary">{status?.preload?.reason || "Startup preload is disabled."}</Typography.Text>
+                            <Space wrap>
+                              <span>启用</span>
+                              <Switch
+                                checked={preloadEnabledDraft}
+                                loading={savingPreload}
+                                onChange={async (checked) => {
+                                  setPreloadEnabledDraft(checked);
+                                  const ok = await handleUpdatePreload({
+                                    enabled: checked,
+                                    scope: preloadScopeDraft,
+                                  });
+                                  if (!ok) {
+                                    setPreloadEnabledDraft(Boolean(status?.preload?.enabled));
+                                  }
+                                }}
+                                disabled={!hanlpProviderActive}
+                              />
+                              <Select
+                                value={preloadScopeDraft}
+                                style={{ width: 220 }}
+                                options={[
+                                  { value: "critical", label: "critical: 仅预热核心任务" },
+                                  { value: "all_enabled_tasks", label: "all_enabled_tasks: 预热所有启用任务" },
+                                ]}
+                                onChange={async (value) => {
+                                  const nextValue = value as "critical" | "all_enabled_tasks";
+                                  setPreloadScopeDraft(nextValue);
+                                  const ok = await handleUpdatePreload({
+                                    enabled: preloadEnabledDraft,
+                                    scope: nextValue,
+                                  });
+                                  if (!ok) {
+                                    setPreloadScopeDraft(status?.preload?.scope === "all_enabled_tasks" ? "all_enabled_tasks" : "critical");
+                                  }
+                                }}
+                                disabled={!hanlpProviderActive || savingPreload}
+                              />
+                              <Button
+                                onClick={() => handleTriggerPreload(true)}
+                                loading={runningPreload}
+                                disabled={!hanlpProviderActive || !sidecarReady}
+                              >
+                                立即预热
+                              </Button>
+                            </Space>
                           </Space>
                         </Card>
                       </div>

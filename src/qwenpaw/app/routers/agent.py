@@ -141,6 +141,19 @@ class NLPStrategyDryRunBody(BaseModel):
     task_key: str = Field(default="ner", description="Task key, e.g. ner/dep")
 
 
+class NLPPreloadUpdateBody(BaseModel):
+    """Request body for startup preload settings."""
+
+    enabled: bool = Field(default=False)
+    scope: Literal["critical", "all_enabled_tasks"] = Field(default="critical")
+
+
+class NLPPreloadTriggerBody(BaseModel):
+    """Request body for manual preload trigger."""
+
+    force: bool = Field(default=False)
+
+
 _CLASSICAL_HINT_CHARS = frozenset("之乎者也焉矣其乃若夫盖兮耳哉")
 _CLASSICAL_HINT_PATTERNS = (
     re.compile(r"[吾余予汝尔卿]"),
@@ -705,6 +718,7 @@ async def get_nlp_status(
     sidecar_state = runtime.probe(config.knowledge)
     model_state = runtime.model_status(config.knowledge)
     api_payload = runtime.api_status(config.knowledge)
+    model_home = str(getattr(nlp_cfg, "model_home", "") or "")
     return {
         "provider": provider,
         "sidecar": {
@@ -716,7 +730,8 @@ async def get_nlp_status(
             "managed": False,
             "uv_available": False,
             "uv_executable": "",
-            "model_home": str(getattr(nlp_cfg, "model_home", "") or ""),
+            "model_home": model_home,
+            "model_cache_path": model_home,
         },
         "model": {
             "status": str(model_state.get("status") or "unavailable"),
@@ -726,6 +741,59 @@ async def get_nlp_status(
         },
         "strategy": strategy_payload,
         "api": api_payload,
+        "preload": {
+            "enabled": bool(getattr(nlp_cfg, "preload_on_startup", False)),
+            "scope": str(getattr(nlp_cfg, "preload_scope", "critical") or "critical"),
+            "status": "disabled",
+            "reason": "Startup preload is only available for HanLP.",
+            "model_cache_path": model_home,
+            "preloaded_models": [],
+            "task_results": {},
+        },
+    }
+
+
+@router.put(
+    "/nlp-preload",
+    summary="Update NLP preload settings",
+    description="Update HanLP startup preload settings in knowledge.nlp config.",
+)
+async def put_nlp_preload(
+    body: NLPPreloadUpdateBody = Body(
+        ...,
+        description="Startup preload settings payload",
+    ),
+) -> dict:
+    config = load_config()
+    config.knowledge.nlp.preload_on_startup = bool(body.enabled)
+    config.knowledge.nlp.preload_scope = str(body.scope)
+    save_config(config)
+
+    from ...agents.utils.hanlp_sidecar import get_hanlp_preload_status, kickoff_hanlp_preload
+
+    if body.enabled and str(getattr(config.knowledge.nlp, "provider", "hanlp") or "hanlp").strip().lower() == "hanlp":
+        await asyncio.to_thread(kickoff_hanlp_preload, True)
+
+    return {
+        "preload": await asyncio.to_thread(get_hanlp_preload_status, config),
+    }
+
+
+@router.post(
+    "/nlp-preload",
+    summary="Trigger NLP preload",
+    description="Start HanLP preload in the background using the current preload settings.",
+)
+async def post_nlp_preload(
+    body: NLPPreloadTriggerBody = Body(
+        default=NLPPreloadTriggerBody(),
+        description="Manual preload trigger payload",
+    ),
+) -> dict:
+    from ...agents.utils.hanlp_sidecar import kickoff_hanlp_preload
+
+    return {
+        "preload": await asyncio.to_thread(kickoff_hanlp_preload, bool(body.force)),
     }
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from pathlib import Path
 
 import click
@@ -12,6 +13,14 @@ from ..constant import LOG_LEVEL_ENV
 from ..config.utils import write_last_api
 from ..runtime_mode import get_runtime_app_import_path
 from ..utils.logging import setup_logger, SuppressPathAccessLogFilter
+
+
+def _debugger_attached() -> bool:
+    """Return True when running under a debugger (debugpy/pdb/pydevd)."""
+    trace_fn = sys.gettrace()
+    if trace_fn is not None:
+        return True
+    return bool(os.environ.get("DEBUGPY_LAUNCHER_PORT"))
 
 
 @click.command("app")
@@ -63,6 +72,16 @@ def app_cmd(
     hide_access_paths: tuple[str, ...],
 ) -> None:
     """Run CoPaw FastAPI app."""
+    # Uvicorn reload mode spawns a supervisor/worker process pair and can make
+    # VS Code debug sessions appear frozen or stop after Continue.
+    if reload and _debugger_attached() and os.environ.get("QWENPAW_DEBUG_ALLOW_RELOAD") != "1":
+        click.echo(
+            "[copaw] Debugger detected: disabling --reload for stable single-process debugging. "
+            "Set QWENPAW_DEBUG_ALLOW_RELOAD=1 to force reload mode.",
+            err=True,
+        )
+        reload = False
+
     # Handle deprecated --workers parameter
     if workers is not None:
         click.echo(
