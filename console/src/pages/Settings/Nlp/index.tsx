@@ -109,6 +109,94 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
+function asNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return null;
+}
+
+function renderTokenRail(tokens: string[]) {
+  if (tokens.length === 0) {
+    return null;
+  }
+  return (
+    <div className={styles.demoTokenRail}>
+      {tokens.map((token, index) => (
+        <span key={`${token}-${index}`} className={styles.demoTokenNode}>
+          <span className={styles.demoTokenIndex}>{index + 1}</span>
+          <span>{token}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function renderNerHighlightedText(sourceText: string, rows: Array<Record<string, unknown>>) {
+  const text = String(sourceText || "");
+  if (!text) {
+    return null;
+  }
+  const entities = rows
+    .map((row) => {
+      const start = asNumber(row.start);
+      const end = asNumber(row.end);
+      if (start === null || end === null) {
+        return null;
+      }
+      const label = String(row.label || "").trim() || "ENTITY";
+      return {
+        start: Math.max(0, Math.min(start, text.length)),
+        end: Math.max(0, Math.min(end, text.length)),
+        label,
+      };
+    })
+    .filter((item): item is { start: number; end: number; label: string } => Boolean(item))
+    .filter((item) => item.end > item.start)
+    .sort((a, b) => a.start - b.start || b.end - a.end);
+
+  if (entities.length === 0) {
+    return null;
+  }
+
+  const blocks: Array<{ text: string; label?: string; isEntity: boolean }> = [];
+  let cursor = 0;
+  for (const entity of entities) {
+    if (entity.start < cursor) {
+      continue;
+    }
+    if (entity.start > cursor) {
+      blocks.push({ text: text.slice(cursor, entity.start), isEntity: false });
+    }
+    blocks.push({ text: text.slice(entity.start, entity.end), label: entity.label, isEntity: true });
+    cursor = entity.end;
+  }
+  if (cursor < text.length) {
+    blocks.push({ text: text.slice(cursor), isEntity: false });
+  }
+
+  return (
+    <div className={styles.demoHighlightBox}>
+      {blocks.map((block, index) =>
+        block.isEntity ? (
+          <span key={`entity-${index}`} className={styles.demoHighlightEntity}>
+            {block.text}
+            <span className={styles.demoHighlightLabel}>{block.label}</span>
+          </span>
+        ) : (
+          <span key={`text-${index}`}>{block.text}</span>
+        ),
+      )}
+    </div>
+  );
+}
+
 function renderRecordRows(
   rows: Array<Record<string, unknown>>,
   preferredColumns: string[],
@@ -153,65 +241,75 @@ function renderRecordRows(
   );
 }
 
-function renderResultByTask(taskKey: string, result: unknown) {
+function renderResultByTask(taskKey: string, result: unknown, sourceText: string) {
   if (taskKey === "tokenize") {
     const tokens = Array.isArray(result) ? result : [];
     return (
-      <div className={styles.demoTokenWrap}>
-        {tokens.length === 0 ? (
-          <Typography.Text type="secondary">No tokens returned.</Typography.Text>
-        ) : (
-          tokens.map((token, index) => (
-            <Tag key={`${String(token)}-${index}`} className={styles.demoChip}>
-              {String(token)}
-            </Tag>
-          ))
-        )}
-      </div>
+      <>
+        <div className={styles.demoTokenWrap}>
+          {tokens.length === 0 ? (
+            <Typography.Text type="secondary">No tokens returned.</Typography.Text>
+          ) : (
+            tokens.map((token, index) => (
+              <Tag key={`${String(token)}-${index}`} className={styles.demoChip}>
+                {String(token)}
+              </Tag>
+            ))
+          )}
+        </div>
+        {renderTokenRail(tokens.map((token) => String(token)))}
+      </>
     );
   }
 
   if (taskKey === "ner" && Array.isArray(result)) {
+    const rows = result
+      .map((item) => asRecord(item))
+      .filter((item): item is Record<string, unknown> => Boolean(item));
     return (
-      <div className={styles.demoTable}>
-        <div className={styles.demoTableHeader}>
-          <span>Text</span>
-          <span>Label</span>
-          <span>Span</span>
-        </div>
-        {result.map((item, index) => {
-          const row = (item || {}) as Record<string, unknown>;
-          return (
+      <>
+        <div className={styles.demoTable}>
+          <div className={styles.demoTableHeader}>
+            <span>Text</span>
+            <span>Label</span>
+            <span>Span</span>
+          </div>
+          {rows.map((row, index) => (
             <div key={`ner-row-${index}`} className={styles.demoTableRow}>
               <span>{String(row.text || "")}</span>
               <span>{String(row.label || "")}</span>
               <span>{`${String(row.start ?? "")}-${String(row.end ?? "")}`}</span>
             </div>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+        {renderNerHighlightedText(sourceText, rows)}
+      </>
     );
   }
 
   if (taskKey === "dep" && Array.isArray(result)) {
+    const rows = result
+      .map((item) => asRecord(item))
+      .filter((item): item is Record<string, unknown> => Boolean(item));
+    const tokens = rows.map((row) => String(row.token || row.text || row.word || "")).filter(Boolean);
     return (
-      <div className={styles.demoTable}>
-        <div className={styles.demoTableHeader}>
-          <span>Token</span>
-          <span>Head</span>
-          <span>DepRel</span>
-        </div>
-        {result.map((item, index) => {
-          const row = (item || {}) as Record<string, unknown>;
-          return (
+      <>
+        <div className={styles.demoTable}>
+          <div className={styles.demoTableHeader}>
+            <span>Token</span>
+            <span>Head</span>
+            <span>DepRel</span>
+          </div>
+          {rows.map((row, index) => (
             <div key={`dep-row-${index}`} className={styles.demoTableRow}>
               <span>{String(row.token || "")}</span>
               <span>{String(row.head ?? "")}</span>
               <span>{String(row.deprel || "")}</span>
             </div>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+        {renderTokenRail(tokens)}
+      </>
     );
   }
 
@@ -220,7 +318,13 @@ function renderResultByTask(taskKey: string, result: unknown) {
       const rows = result
         .map((item) => asRecord(item))
         .filter((item): item is Record<string, unknown> => Boolean(item));
-      return renderRecordRows(rows, ["token", "head", "deprel", "relation", "score"]);
+      const tokens = rows.map((row) => String(row.token || row.text || row.word || "")).filter(Boolean);
+      return (
+        <>
+          {renderRecordRows(rows, ["token", "head", "deprel", "relation", "score"])}
+          {renderTokenRail(tokens)}
+        </>
+      );
     }
     const record = asRecord(result);
     if (record) {
@@ -884,7 +988,7 @@ function NlpPage() {
                     <Typography.Paragraph className={styles.operationOutput}>
                       {activeDemoResult.reason}
                     </Typography.Paragraph>
-                    {renderResultByTask(activeDemoMethod.backendTaskKey, activeDemoResult.result)}
+                    {renderResultByTask(activeDemoMethod.backendTaskKey, activeDemoResult.result, activeDemoInput)}
                     <Typography.Paragraph className={styles.operationOutput}>
                       rules: {(activeDemoResult.matched_rules || []).join(", ") || "(none)"}
                     </Typography.Paragraph>

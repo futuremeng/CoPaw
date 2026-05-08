@@ -156,6 +156,65 @@
   gap: 6px;
 }
 
+.demoTokenRail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.demoTokenNode {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #f0e5d3;
+  border-radius: 999px;
+  padding: 3px 10px;
+  background: #fffaf1;
+}
+
+.demoTokenIndex {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #ffb46a;
+  color: #4a2b06;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.demoHighlightBox {
+  margin-top: 10px;
+  border: 1px dashed #f2cfab;
+  border-radius: 8px;
+  background: #fffaf3;
+  padding: 10px;
+  line-height: 1.9;
+}
+
+.demoHighlightEntity {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin: 0 2px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: rgba(255, 166, 77, 0.28);
+}
+
+.demoHighlightLabel {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #ff7f16;
+  color: #fff;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
 .demoClusterWrap {
   display: flex;
   flex-direction: column;
@@ -224,6 +283,18 @@
 
   .demoTableHeader {
     background: rgba(255, 255, 255, 0.08);
+  }
+
+  .demoTokenNode,
+  .demoHighlightBox,
+  .demoHighlightEntity {
+    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .demoTokenIndex {
+    background: #ff9f4d;
+    color: #2c1805;
   }
 
   .demoTableRow {
