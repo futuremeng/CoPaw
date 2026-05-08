@@ -19,6 +19,10 @@
   gap: 16px;
 }
 
+.sectionAnchorOffset {
+  scroll-margin-top: 96px;
+}
+
 .alertStack {
   display: flex;
   flex-direction: column;
@@ -60,6 +64,23 @@
 .primaryCard {
   border: 1px solid #f0dfc8;
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.08);
+}
+
+.sideGroupCollapse {
+  width: 100%;
+}
+
+.sideGroupCollapse :global(.ant-collapse-item) {
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.sideGroupCollapse :global(.ant-collapse-header) {
+  font-weight: 600;
+}
+
+.sideGroupCollapse :global(.ant-collapse-content-box) {
+  padding: 12px !important;
 }
 
 .centerState {
@@ -360,6 +381,18 @@
   .primaryCard {
     border-color: rgba(255, 160, 77, 0.4);
     box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+  }
+
+  .sideGroupCollapse :global(.ant-collapse-item) {
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+
+  .sideGroupCollapse :global(.ant-collapse-header) {
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .sideGroupCollapse :global(.ant-collapse-content) {
+    background: rgba(255, 255, 255, 0.01);
   }
 
   .cardDescription {
