@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 import uuid
 from typing import Any
@@ -30,7 +31,29 @@ class HanLPTaskRunResponse(BaseModel):
     reason: str
     result: object | None
     resolved_model: str
+    strategy_mode: str
+    detected_style: str
+    detection_score: float
+    matched_rules: list[str]
+    fallback_used: bool
     duration_ms: int
+
+
+_CLASSICAL_HINT_CHARS = frozenset("之乎者也焉矣其乃若夫盖兮耳哉")
+_CLASSICAL_HINT_PATTERNS = (
+    re.compile(r"[吾余予汝尔卿]"),
+    re.compile(r"[不无未弗毋勿]\w?"),
+)
+_MODERN_HINT_TOKENS = (
+    "我们",
+    "你们",
+    "他们",
+    "这个",
+    "那个",
+    "因为",
+    "所以",
+    "以及",
+)
 
 
 def _normalize_ner_result(raw: Any) -> list[dict[str, Any]]:
@@ -97,6 +120,108 @@ def _effective_request_id(candidate: str | None) -> str:
     return f"copaw-hanlp-{uuid.uuid4().hex[:16]}"
 
 
+def _extract_hanlp_model_id(knowledge_config: Any) -> str:
+    nlp_cfg = getattr(knowledge_config, "nlp", None)
+    if nlp_cfg is None:
+        nlp_cfg = getattr(knowledge_config, "hanlp", None)
+    return str(getattr(nlp_cfg, "model_id", "") or "").strip()
+
+
+def _clone_effective_config(knowledge_config: Any) -> Any:
+    clone = getattr(knowledge_config, "model_copy", None)
+    if callable(clone):
+        return clone(deep=True)
+    return knowledge_config
+
+
+def _task_matrix_model_override(task_key: str, selected_model: str, effective_config: KnowledgeConfig) -> None:
+    if not selected_model:
+        return
+    task_map = {
+        "ner": "ner_msra",
+        "dep": "dep",
+    }
+    matrix_key = task_map.get(task_key)
+    if not matrix_key:
+        return
+    task_matrix = getattr(getattr(effective_config, "nlp", None), "task_matrix", None)
+    tasks = getattr(task_matrix, "tasks", None) if task_matrix is not None else None
+    if not isinstance(tasks, dict):
+        return
+    task_cfg = tasks.get(matrix_key)
+    if task_cfg is None:
+        return
+    try:
+        task_cfg.model_id = selected_model
+    except Exception:
+        return
+
+
+def _classical_detection_score(text: str) -> float:
+    normalized = str(text or "").strip()
+    if not normalized:
+        return 0.0
+    classical_hits = sum(1 for ch in normalized if ch in _CLASSICAL_HINT_CHARS)
+    for pattern in _CLASSICAL_HINT_PATTERNS:
+        classical_hits += len(pattern.findall(normalized))
+    modern_hits = 0
+    for token in _MODERN_HINT_TOKENS:
+        modern_hits += normalized.count(token)
+    density_score = min(1.0, (classical_hits / max(len(normalized), 1)) * 10.0)
+    contrast_score = max(0.0, (classical_hits - modern_hits) / max(classical_hits + modern_hits, 1))
+    score = (density_score * 0.65) + (contrast_score * 0.35)
+    return max(0.0, min(score, 1.0))
+
+
+def _resolve_model_decision(task_key: str, text: str, knowledge_config: KnowledgeConfig) -> dict[str, Any]:
+    nlp_cfg = getattr(knowledge_config, "nlp", None)
+    strategy = getattr(nlp_cfg, "strategy", None)
+    base_model = _extract_hanlp_model_id(knowledge_config)
+    selected_model = base_model
+    detected_style = "modern"
+    detection_score = 0.0
+    matched_rules: list[str] = []
+    mode = str(getattr(strategy, "mode", "auto") or "auto").strip().lower() or "auto"
+
+    default_model = str(getattr(strategy, "default_model_id", "") or "").strip() if strategy else ""
+    if default_model:
+        selected_model = default_model
+        matched_rules.append("strategy.default_model_id")
+
+    task_overrides = getattr(strategy, "task_overrides", {}) if strategy is not None else {}
+    if isinstance(task_overrides, dict):
+        override_model = str(task_overrides.get(task_key) or "").strip()
+        if override_model:
+            selected_model = override_model
+            matched_rules.append(f"strategy.task_overrides.{task_key}")
+
+    auto_cfg = getattr(strategy, "auto_classical_chinese", None)
+    auto_enabled = bool(getattr(auto_cfg, "enabled", False)) if auto_cfg is not None else False
+    if mode in {"auto", "hybrid"} and auto_enabled:
+        detection_score = _classical_detection_score(text)
+        threshold = float(getattr(auto_cfg, "threshold", 0.22) or 0.22)
+        if detection_score >= max(0.0, min(threshold, 1.0)):
+            detected_style = "classical_chinese"
+            classical_model = str(getattr(auto_cfg, "model_id", "") or "").strip()
+            if classical_model:
+                selected_model = classical_model
+                matched_rules.append("strategy.auto_classical_chinese")
+
+    if not selected_model:
+        selected_model = base_model
+        if base_model:
+            matched_rules.append("knowledge.nlp.model_id")
+
+    return {
+        "strategy_mode": mode,
+        "detected_style": detected_style,
+        "detection_score": round(detection_score, 4),
+        "selected_model": selected_model,
+        "matched_rules": matched_rules,
+        "fallback_used": False,
+    }
+
+
 def _effective_knowledge_config(knowledge_config: KnowledgeConfig, running_config) -> KnowledgeConfig:
     effective = knowledge_config.model_copy(deep=True)
     effective.enabled = bool(getattr(running_config, "knowledge_enabled", effective.enabled))
@@ -160,15 +285,22 @@ async def _resolve_knowledge_config(request: Request) -> KnowledgeConfig:
 
 async def _run_hanlp_task(task_key: str, request: HanLPTaskRunRequest, http_request: Request) -> HanLPTaskRunResponse:
     knowledge_config = await _resolve_knowledge_config(http_request)
+    decision = _resolve_model_decision(task_key, request.text, knowledge_config)
+    effective_config = _clone_effective_config(knowledge_config)
+    if decision["selected_model"]:
+        nlp_cfg = getattr(effective_config, "nlp", None)
+        if nlp_cfg is not None:
+            nlp_cfg.model_id = str(decision["selected_model"])
+            _task_matrix_model_override(task_key, str(decision["selected_model"]), effective_config)
     runtime = NLPRuntime()
     request_id = _effective_request_id(request.request_id)
     started = time.perf_counter()
 
     if task_key == "ner":
-        result, state = runtime.run_ner(request.text, knowledge_config)
+        result, state = runtime.run_ner(request.text, effective_config)
         normalized_result = _normalize_ner_result(result)
     elif task_key == "dep":
-        result, state = runtime.run_dep(request.text, knowledge_config)
+        result, state = runtime.run_dep(request.text, effective_config)
         normalized_result = _normalize_dep_result(result)
     else:
         raise HTTPException(status_code=400, detail="HANLP_TASK_UNSUPPORTED")
@@ -178,6 +310,8 @@ async def _run_hanlp_task(task_key: str, request: HanLPTaskRunRequest, http_requ
     reason_code = str(state.get("reason_code") or "HANLP_TASK_FAILED")
     reason = str(state.get("reason") or "HanLP task failed.")
     response_result: object | None = normalized_result if status == "ready" else None
+    if status != "ready":
+        decision["fallback_used"] = True
 
     return HanLPTaskRunResponse(
         task_key=task_key,
@@ -186,7 +320,12 @@ async def _run_hanlp_task(task_key: str, request: HanLPTaskRunRequest, http_requ
         reason_code=reason_code,
         reason=reason,
         result=response_result,
-        resolved_model=str(getattr(knowledge_config.hanlp, "model_id", "") or ""),
+        resolved_model=str(decision["selected_model"] or _extract_hanlp_model_id(knowledge_config)),
+        strategy_mode=str(decision["strategy_mode"]),
+        detected_style=str(decision["detected_style"]),
+        detection_score=float(decision["detection_score"]),
+        matched_rules=list(decision["matched_rules"]),
+        fallback_used=bool(decision["fallback_used"]),
         duration_ms=duration_ms,
     )
 

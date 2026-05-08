@@ -43,6 +43,9 @@ function NlpPage() {
   } = useNlp();
 
   const taskStates = status?.tasks ?? {};
+  const strategy = status?.strategy;
+  const autoClassical = strategy?.auto_classical_chinese;
+  const overrideEntries = Object.entries(strategy?.task_overrides ?? {});
 
   const methods: Array<{ key: string; taskKey?: string; status: MethodStatus }> = [
     {
@@ -159,6 +162,49 @@ function NlpPage() {
       ) : null}
 
       <div className={styles.content}>
+        <Card className={styles.card}>
+          <Typography.Title level={5} className={styles.cardTitle}>
+            Model Selection Strategy
+          </Typography.Title>
+          <Typography.Paragraph type="secondary" className={styles.cardDescription}>
+            Request-scoped policy used by backend auto-adaptation.
+          </Typography.Paragraph>
+          <Space direction="vertical" size={12} style={{ width: "100%" }}>
+            <div className={styles.statusRow}>
+              <span>Mode</span>
+              <Tag color={strategy?.mode === "manual" ? "default" : "processing"}>
+                {strategy?.mode || "auto"}
+              </Tag>
+            </div>
+            <Typography.Text>
+              Default model: {strategy?.default_model_id || status?.model.model_id || t("nlpConfig.notConfigured")}
+            </Typography.Text>
+            <Typography.Text>
+              Classical Chinese auto-route: {autoClassical?.enabled ? "enabled" : "disabled"}
+            </Typography.Text>
+            <Typography.Text>
+              Detection threshold: {typeof autoClassical?.threshold === "number" ? autoClassical.threshold : 0.22}
+            </Typography.Text>
+            <Typography.Text>
+              Classical target model: {autoClassical?.model_id || t("nlpConfig.notConfigured")}
+            </Typography.Text>
+            <div className={styles.operationBlock}>
+              <Typography.Text strong>Task overrides</Typography.Text>
+              {overrideEntries.length === 0 ? (
+                <Typography.Paragraph className={styles.operationOutput}>
+                  No task-level overrides configured.
+                </Typography.Paragraph>
+              ) : (
+                overrideEntries.map(([taskKey, modelId]) => (
+                  <Typography.Paragraph key={`${taskKey}:${modelId}`} className={styles.operationOutput}>
+                    {taskKey}: {modelId}
+                  </Typography.Paragraph>
+                ))
+              )}
+            </div>
+          </Space>
+        </Card>
+
         <Card className={styles.card}>
           <Typography.Title level={5} className={styles.cardTitle}>
             {t("nlpConfig.sidecarTitle")}

@@ -497,11 +497,28 @@ async def get_nlp_status() -> dict:
     config = load_config()
     nlp_cfg = config.knowledge.nlp
     provider = str(getattr(nlp_cfg, "provider", "hanlp") or "hanlp").strip().lower()
+
+    strategy_cfg = getattr(nlp_cfg, "strategy", None)
+    auto_cfg = getattr(strategy_cfg, "auto_classical_chinese", None)
+    strategy_payload = {
+        "mode": str(getattr(strategy_cfg, "mode", "auto") or "auto"),
+        "default_model_id": str(getattr(strategy_cfg, "default_model_id", "") or ""),
+        "task_overrides": dict(getattr(strategy_cfg, "task_overrides", {}) or {}),
+        "auto_classical_chinese": {
+            "enabled": bool(getattr(auto_cfg, "enabled", False)) if auto_cfg is not None else False,
+            "threshold": float(getattr(auto_cfg, "threshold", 0.22) or 0.22)
+            if auto_cfg is not None
+            else 0.22,
+            "model_id": str(getattr(auto_cfg, "model_id", "") or "") if auto_cfg is not None else "",
+        },
+    }
+
     if provider == "hanlp":
         from ...agents.utils.hanlp_sidecar import get_hanlp_sidecar_status
 
         payload = await asyncio.to_thread(get_hanlp_sidecar_status)
         payload["provider"] = "hanlp"
+        payload["strategy"] = strategy_payload
         payload["api"] = NLPRuntime().api_status(config.knowledge)
         return payload
 
@@ -528,6 +545,7 @@ async def get_nlp_status() -> dict:
             "reason": str(model_state.get("reason") or "NLP model is unavailable."),
             "model_id": str(getattr(nlp_cfg, "model_id", "") or ""),
         },
+        "strategy": strategy_payload,
         "api": api_payload,
     }
 

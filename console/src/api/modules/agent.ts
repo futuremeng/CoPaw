@@ -114,6 +114,16 @@ export const agentApi = {
   getNlpStatus: () =>
     request<{
       provider: string;
+      strategy?: {
+        mode?: string;
+        default_model_id?: string;
+        task_overrides?: Record<string, string>;
+        auto_classical_chinese?: {
+          enabled?: boolean;
+          threshold?: number;
+          model_id?: string;
+        };
+      };
       sidecar: {
         status: string;
         reason_code: string;

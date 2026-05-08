@@ -1863,6 +1863,34 @@ class KnowledgeAutomationConfig(BaseModel):
     url_exclude_patterns: List[str] = Field(default_factory=list)
 
 
+class KnowledgeNLPAutoClassicalChineseConfig(BaseModel):
+    """Automatic routing options for classical Chinese text."""
+
+    enabled: bool = Field(default=True)
+    threshold: float = Field(default=0.22, ge=0.0, le=1.0)
+    model_id: str = Field(
+        default="hanlp.pretrained.mtl.KYOTO_EVAHAN_TOK_LEM_POS_UDEP_LZH",
+        description="Model id used when classical Chinese detection score exceeds threshold.",
+    )
+
+
+class KnowledgeNLPStrategyConfig(BaseModel):
+    """Model routing strategy for request-scoped NLP execution."""
+
+    mode: Literal["auto", "manual", "hybrid"] = Field(default="auto")
+    default_model_id: str = Field(
+        default="",
+        description="Default model id for request-scoped routing; fallback to nlp.model_id when empty.",
+    )
+    task_overrides: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Optional model id overrides keyed by task key, e.g. ner_msra/dep.",
+    )
+    auto_classical_chinese: KnowledgeNLPAutoClassicalChineseConfig = Field(
+        default_factory=KnowledgeNLPAutoClassicalChineseConfig,
+    )
+
+
 class KnowledgeNLPConfig(BaseModel):
     """Generic NLP runtime configuration."""
 
@@ -1895,6 +1923,10 @@ class KnowledgeNLPConfig(BaseModel):
     task_matrix: KnowledgeHanLPTaskMatrixConfig = Field(
         default_factory=lambda: KnowledgeHanLPTaskMatrixConfig(),
         description="NLP task matrix for L2 annotation and evaluation.",
+    )
+    strategy: KnowledgeNLPStrategyConfig = Field(
+        default_factory=KnowledgeNLPStrategyConfig,
+        description="Request-scoped NLP model routing strategy.",
     )
 
     @model_validator(mode="after")
