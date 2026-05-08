@@ -20,6 +20,22 @@ type DemoMethod = {
   examples: string[];
 };
 
+type NlpDemoMeta = {
+  task_key: string;
+  request_id: string;
+  status: string;
+  reason_code: string;
+  reason: string;
+  result: unknown;
+  resolved_model: string;
+  strategy_mode: string;
+  detected_style: string;
+  detection_score: number;
+  matched_rules: string[];
+  fallback_used: boolean;
+  duration_ms: number;
+};
+
 const DEMO_METHODS: DemoMethod[] = [
   {
     key: "tokenize",
@@ -78,6 +94,83 @@ function resolveTagColor(status: string): "success" | "warning" | "error" | "def
   return "warning";
 }
 
+function prettyJson(value: unknown): string {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value ?? "");
+  }
+}
+
+function renderResultByTask(taskKey: string, result: unknown) {
+  if (taskKey === "tokenize") {
+    const tokens = Array.isArray(result) ? result : [];
+    return (
+      <div className={styles.demoTokenWrap}>
+        {tokens.length === 0 ? (
+          <Typography.Text type="secondary">No tokens returned.</Typography.Text>
+        ) : (
+          tokens.map((token, index) => (
+            <Tag key={`${String(token)}-${index}`} className={styles.demoChip}>
+              {String(token)}
+            </Tag>
+          ))
+        )}
+      </div>
+    );
+  }
+
+  if (taskKey === "ner" && Array.isArray(result)) {
+    return (
+      <div className={styles.demoTable}>
+        <div className={styles.demoTableHeader}>
+          <span>Text</span>
+          <span>Label</span>
+          <span>Span</span>
+        </div>
+        {result.map((item, index) => {
+          const row = (item || {}) as Record<string, unknown>;
+          return (
+            <div key={`ner-row-${index}`} className={styles.demoTableRow}>
+              <span>{String(row.text || "")}</span>
+              <span>{String(row.label || "")}</span>
+              <span>{`${String(row.start ?? "")}-${String(row.end ?? "")}`}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  if (taskKey === "dep" && Array.isArray(result)) {
+    return (
+      <div className={styles.demoTable}>
+        <div className={styles.demoTableHeader}>
+          <span>Token</span>
+          <span>Head</span>
+          <span>DepRel</span>
+        </div>
+        {result.map((item, index) => {
+          const row = (item || {}) as Record<string, unknown>;
+          return (
+            <div key={`dep-row-${index}`} className={styles.demoTableRow}>
+              <span>{String(row.token || "")}</span>
+              <span>{String(row.head ?? "")}</span>
+              <span>{String(row.deprel || "")}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  return (
+    <Typography.Paragraph className={styles.operationOutput}>
+      {prettyJson(result)}
+    </Typography.Paragraph>
+  );
+}
+
 function NlpPage() {
   const { t } = useTranslation();
   const {
@@ -118,6 +211,7 @@ function NlpPage() {
   const [previewTaskKey, setPreviewTaskKey] = useState("ner");
   const [previewText, setPreviewText] = useState("吾之道也");
   const [demoInputs, setDemoInputs] = useState<Record<string, string>>({});
+  const [activeDemoTaskKey, setActiveDemoTaskKey] = useState("tokenize");
 
   useEffect(() => {
     if (Object.keys(demoInputs).length > 0) {
@@ -251,6 +345,48 @@ function NlpPage() {
       },
     },
   ];
+
+  const methodStatusByTask: Record<string, MethodStatus> = {
+    tokenize: methods.find((item) => item.key === "tokenize")?.status || {
+      status: "unavailable",
+      reasonCode: "UNKNOWN",
+      reason: "No status available",
+    },
+    ner: methods.find((item) => item.key === "nerMsra")?.status || {
+      status: "unavailable",
+      reasonCode: "UNKNOWN",
+      reason: "No status available",
+    },
+    dep: methods.find((item) => item.key === "dep")?.status || {
+      status: "unavailable",
+      reasonCode: "UNKNOWN",
+      reason: "No status available",
+    },
+    sdp: methods.find((item) => item.key === "sdp")?.status || {
+      status: "unavailable",
+      reasonCode: "UNKNOWN",
+      reason: "No status available",
+    },
+    con: methods.find((item) => item.key === "con")?.status || {
+      status: "unavailable",
+      reasonCode: "UNKNOWN",
+      reason: "No status available",
+    },
+    cor: methods.find((item) => item.key === "cor")?.status || {
+      status: "unavailable",
+      reasonCode: "UNKNOWN",
+      reason: "No status available",
+    },
+  };
+
+  const activeDemoMethod = DEMO_METHODS.find((item) => item.backendTaskKey === activeDemoTaskKey) || DEMO_METHODS[0];
+  const activeDemoInput = demoInputs[activeDemoMethod.backendTaskKey] || "";
+  const activeDemoStatus = methodStatusByTask[activeDemoMethod.backendTaskKey] || {
+    status: "unavailable",
+    reasonCode: "UNKNOWN",
+    reason: "No status available",
+  };
+  const activeDemoResult = (demoResults[activeDemoMethod.backendTaskKey] || null) as NlpDemoMeta | null;
 
   if (loading) {
     return (
@@ -542,63 +678,97 @@ function NlpPage() {
           <Typography.Paragraph type="secondary" className={styles.cardDescription}>
             每个方法都提供示例输入与一键测试，结果与错误原因会直接显示，便于快速验证。
           </Typography.Paragraph>
-          <Space direction="vertical" size={16} style={{ width: "100%" }}>
-            {DEMO_METHODS.map((method) => {
-              const methodStatus = methods.find((item) => item.key === method.key)?.status;
-              const demoResult = demoResults[method.backendTaskKey];
-              const currentInput = demoInputs[method.backendTaskKey] || "";
-              return (
-                <div key={method.backendTaskKey} className={styles.operationBlock}>
-                  <div className={styles.statusRow}>
-                    <Typography.Text strong>{method.title}</Typography.Text>
-                    <Tag color={resolveTagColor(methodStatus?.status || "unavailable")}>{methodStatus?.reasonCode || "UNKNOWN"}</Tag>
-                  </div>
-                  <Typography.Paragraph className={styles.operationOutput}>
-                    {methodStatus?.reason || "No status available"}
-                  </Typography.Paragraph>
-                  <Space wrap size={8}>
-                    {method.examples.map((sample) => (
-                      <Button
-                        key={`${method.backendTaskKey}-${sample}`}
-                        size="small"
-                        onClick={() =>
-                          setDemoInputs((prev) => ({
-                            ...prev,
-                            [method.backendTaskKey]: sample,
-                          }))
-                        }
-                      >
-                        示例
-                      </Button>
-                    ))}
-                  </Space>
-                  <Input.TextArea
-                    rows={3}
-                    value={currentInput}
-                    placeholder={method.placeholder}
-                    onChange={(event) =>
-                      setDemoInputs((prev) => ({
-                        ...prev,
-                        [method.backendTaskKey]: event.target.value,
-                      }))
-                    }
-                  />
-                  <Button
-                    type="primary"
-                    loading={runningDemoTask === method.backendTaskKey}
-                    onClick={() => runMethodDemo(method.backendTaskKey, currentInput)}
+          <div className={styles.demoWorkbench}>
+            <div className={styles.demoMethodList}>
+              {DEMO_METHODS.map((method) => {
+                const methodStatus = methodStatusByTask[method.backendTaskKey];
+                const active = method.backendTaskKey === activeDemoMethod.backendTaskKey;
+                return (
+                  <button
+                    key={method.backendTaskKey}
+                    type="button"
+                    className={`${styles.demoMethodButton} ${active ? styles.demoMethodButtonActive : ""}`}
+                    onClick={() => setActiveDemoTaskKey(method.backendTaskKey)}
                   >
-                    运行测试
-                  </Button>
-                  {demoResult ? (
+                    <span>{method.title}</span>
+                    <Tag color={resolveTagColor(methodStatus?.status || "unavailable")}>{methodStatus?.reasonCode || "UNKNOWN"}</Tag>
+                  </button>
+                );
+              })}
+            </div>
+            <div className={styles.demoPanel}>
+              <div className={styles.demoInputPanel}>
+                <Typography.Title level={5} className={styles.cardTitle}>
+                  {activeDemoMethod.title}
+                </Typography.Title>
+                <Typography.Paragraph type="secondary" className={styles.cardDescription}>
+                  {activeDemoStatus.reason}
+                </Typography.Paragraph>
+                <Space wrap size={8} className={styles.demoExamples}>
+                  {activeDemoMethod.examples.map((sample, index) => (
+                    <Button
+                      key={`${activeDemoMethod.backendTaskKey}-${index}`}
+                      size="small"
+                      onClick={() =>
+                        setDemoInputs((prev) => ({
+                          ...prev,
+                          [activeDemoMethod.backendTaskKey]: sample,
+                        }))
+                      }
+                    >
+                      示例 {index + 1}
+                    </Button>
+                  ))}
+                </Space>
+                <Input.TextArea
+                  rows={6}
+                  value={activeDemoInput}
+                  placeholder={activeDemoMethod.placeholder}
+                  onChange={(event) =>
+                    setDemoInputs((prev) => ({
+                      ...prev,
+                      [activeDemoMethod.backendTaskKey]: event.target.value,
+                    }))
+                  }
+                />
+                <Button
+                  type="primary"
+                  loading={runningDemoTask === activeDemoMethod.backendTaskKey}
+                  onClick={() => runMethodDemo(activeDemoMethod.backendTaskKey, activeDemoInput)}
+                >
+                  运行测试
+                </Button>
+              </div>
+              <div className={styles.demoResultPanel}>
+                <Typography.Title level={5} className={styles.cardTitle}>
+                  结果面板
+                </Typography.Title>
+                {!activeDemoResult ? (
+                  <Typography.Paragraph type="secondary" className={styles.cardDescription}>
+                    点击“运行测试”查看结构化输出。
+                  </Typography.Paragraph>
+                ) : (
+                  <>
+                    <div className={styles.demoMetaGrid}>
+                      <div className={styles.demoMetaItem}><span>status</span><Tag color={resolveTagColor(activeDemoResult.status)}>{activeDemoResult.reason_code}</Tag></div>
+                      <div className={styles.demoMetaItem}><span>task</span><span>{activeDemoResult.task_key}</span></div>
+                      <div className={styles.demoMetaItem}><span>model</span><span>{activeDemoResult.resolved_model || "(empty)"}</span></div>
+                      <div className={styles.demoMetaItem}><span>style</span><span>{activeDemoResult.detected_style}</span></div>
+                      <div className={styles.demoMetaItem}><span>score</span><span>{activeDemoResult.detection_score}</span></div>
+                      <div className={styles.demoMetaItem}><span>duration</span><span>{activeDemoResult.duration_ms} ms</span></div>
+                    </div>
                     <Typography.Paragraph className={styles.operationOutput}>
-                      {JSON.stringify(demoResult, null, 2)}
+                      {activeDemoResult.reason}
                     </Typography.Paragraph>
-                  ) : null}
-                </div>
-              );
-            })}
-          </Space>
+                    {renderResultByTask(activeDemoMethod.backendTaskKey, activeDemoResult.result)}
+                    <Typography.Paragraph className={styles.operationOutput}>
+                      rules: {(activeDemoResult.matched_rules || []).join(", ") || "(none)"}
+                    </Typography.Paragraph>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
         </Card>
 
         {lastManualSteps.length > 0 ? (

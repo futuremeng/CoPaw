@@ -60,6 +60,121 @@
   word-break: break-word;
 }
 
+.demoWorkbench {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 16px;
+}
+
+.demoMethodList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.demoMethodButton {
+  border: 1px solid #e9e2d6;
+  background: linear-gradient(180deg, #fffdf8 0%, #fff8ed 100%);
+  border-radius: 10px;
+  padding: 10px 12px;
+  text-align: left;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.demoMethodButtonActive {
+  border-color: #ff7f16;
+  box-shadow: 0 6px 20px rgba(255, 127, 22, 0.2);
+}
+
+.demoPanel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.demoInputPanel,
+.demoResultPanel {
+  border: 1px solid #ece7de;
+  border-radius: 10px;
+  padding: 12px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.demoExamples {
+  margin-bottom: 4px;
+}
+
+.demoMetaGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.demoMetaItem {
+  border: 1px solid #f2ece2;
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  background: #fffcf7;
+}
+
+.demoTable {
+  border: 1px solid #efe7da;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.demoTableHeader,
+.demoTableRow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+.demoTableHeader {
+  background: #f8f2e8;
+  font-weight: 600;
+}
+
+.demoTableRow {
+  border-top: 1px solid #f3ede5;
+}
+
+.demoTokenWrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.demoChip {
+  border-radius: 999px;
+}
+
+@media (max-width: 980px) {
+  .demoWorkbench {
+    grid-template-columns: 1fr;
+  }
+
+  .demoMethodList {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .demoPanel {
+    grid-template-columns: 1fr;
+  }
+}
+
 .footerButtons {
   display: flex;
   justify-content: flex-end;
@@ -78,6 +193,27 @@
 
   .operationBlock {
     background: rgba(255, 255, 255, 0.06);
+  }
+
+  .demoMethodButton {
+    border-color: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .demoInputPanel,
+  .demoResultPanel,
+  .demoMetaItem,
+  .demoTable {
+    border-color: rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .demoTableHeader {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .demoTableRow {
+    border-top-color: rgba(255, 255, 255, 0.08);
   }
 
   .footerButtons {
