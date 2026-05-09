@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -21,6 +22,56 @@ def _debugger_attached() -> bool:
     if trace_fn is not None:
         return True
     return bool(os.environ.get("DEBUGPY_LAUNCHER_PORT"))
+
+
+def _kill_port(port: int, signal: str = "TERM") -> None:
+    """Kill process(es) occupying the specified port."""
+    try:
+        # Try lsof first (macOS, Linux)
+        result = subprocess.run(
+            ["lsof", "-ti", f":{port}"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        pids = result.stdout.strip().split() if result.stdout.strip() else []
+        
+        if not pids:
+            # Fallback: try netstat (Linux)
+            result = subprocess.run(
+                ["netstat", "-tlnp"],
+                capture_output=True,
+                text=True,
+                timeout=2,
+            )
+            for line in result.stdout.split("\n"):
+                if f":{port} " in line:
+                    parts = line.split()
+                    if len(parts) > 0:
+                        pid_part = parts[-1].split("/")[0]
+                        if pid_part.isdigit():
+                            pids.append(pid_part)
+        
+        # Kill found processes
+        for pid_str in pids:
+            try:
+                pid = int(pid_str)
+                if pid > 0:
+                    click.echo(
+                        f"[copaw] Killing PID {pid} on port {port}...",
+                        err=True,
+                    )
+                    subprocess.run(
+                        ["kill", f"-{signal}", str(pid)],
+                        timeout=2,
+                        check=False,
+                    )
+            except (ValueError, subprocess.TimeoutExpired):
+                pass
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        # lsof/netstat not available or timeout, silently continue
+        pass
+
 
 
 @click.command("app")
@@ -72,6 +123,9 @@ def app_cmd(
     hide_access_paths: tuple[str, ...],
 ) -> None:
     """Run CoPaw FastAPI app."""
+    # Kill any existing process on this port
+    _kill_port(port)
+    
     # Uvicorn reload mode spawns a supervisor/worker process pair and can make
     # VS Code debug sessions appear frozen or stop after Continue.
     if reload and _debugger_attached() and os.environ.get("QWENPAW_DEBUG_ALLOW_RELOAD") != "1":
