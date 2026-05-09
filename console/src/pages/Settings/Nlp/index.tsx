@@ -673,6 +673,7 @@ function NlpPage() {
     installing,
     downloadingModel,
     downloadingMissingLocalModels,
+    lastDownloadAttempts,
     status,
     localModelsStatus,
     provider,
@@ -683,6 +684,7 @@ function NlpPage() {
     handleUpdatePreload,
     handleDownloadModel,
     handleDownloadMissingLocalModels,
+    clearDownloadAttempts,
     runMethodDemo,
     runningDemoTask,
     demoResults,
@@ -1191,6 +1193,34 @@ function NlpPage() {
                         一键下载缺失模型
                       </Button>
                     </Space>
+                  </div>
+                }
+              />
+            ) : null}
+            {lastDownloadAttempts && lastDownloadAttempts.length > 0 ? (
+              <Alert
+                type="info"
+                showIcon
+                closable
+                onClose={() => clearDownloadAttempts()}
+                message="上次下载结果"
+                description={
+                  <div className={styles.maintenanceInfoBlock}>
+                    {lastDownloadAttempts.map((attempt) => (
+                      <div key={attempt.model_id} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 4 }}>
+                        <Tag color={attempt.status === "ready" ? "success" : "error"} style={{ flexShrink: 0 }}>
+                          {attempt.status === "ready" ? "✓" : "✗"}
+                        </Tag>
+                        <span>
+                          <Typography.Text code style={{ fontSize: 12 }}>{attempt.model_id}</Typography.Text>
+                          {attempt.status !== "ready" ? (
+                            <Typography.Text type="secondary" style={{ fontSize: 12, marginLeft: 6 }}>
+                              {attempt.reason_code}: {attempt.reason}
+                            </Typography.Text>
+                          ) : null}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 }
               />

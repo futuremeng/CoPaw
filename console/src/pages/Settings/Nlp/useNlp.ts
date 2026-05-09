@@ -150,6 +150,12 @@ export function useNlp() {
   const [installing, setInstalling] = useState(false);
   const [downloadingModel, setDownloadingModel] = useState(false);
   const [downloadingMissingLocalModels, setDownloadingMissingLocalModels] = useState(false);
+  const [lastDownloadAttempts, setLastDownloadAttempts] = useState<Array<{
+    model_id: string;
+    status: string;
+    reason_code: string;
+    reason: string;
+  }> | null>(null);
   const [savingPreload, setSavingPreload] = useState(false);
   const [runningPreload, setRunningPreload] = useState(false);
   const [savingStrategy, setSavingStrategy] = useState(false);
@@ -235,12 +241,15 @@ export function useNlp() {
 
   const handleDownloadMissingLocalModels = async () => {
     setDownloadingMissingLocalModels(true);
+    setLastDownloadAttempts(null);
     try {
       const res = await api.downloadMissingNlpLocalModels();
+      setLastDownloadAttempts(res.attempts ?? null);
       if (res.success) {
         message.success("本地缺失模型已全部下载完成");
       } else {
-        message.warning(`仍有 ${res.after?.missing_count ?? 0} 个模型未就绪`);
+        const remaining = res.after?.missing_count ?? (res.attempts ?? []).filter((a) => a.status !== "ready").length;
+        message.warning(`下载完成，仍有 ${remaining} 个模型未就绪，请查看详情`);
       }
       await fetchStatus();
       return res;
@@ -363,6 +372,7 @@ export function useNlp() {
     installing,
     downloadingModel,
     downloadingMissingLocalModels,
+    lastDownloadAttempts,
     savingPreload,
     runningPreload,
     savingStrategy,
@@ -382,6 +392,7 @@ export function useNlp() {
     handleDownloadModel,
     handleDownloadMissingLocalModels,
     handleUpdatePreload,
+    clearDownloadAttempts: () => setLastDownloadAttempts(null),
     handleTriggerPreload,
     handleUpdateStrategy,
     handleDryRunStrategy,

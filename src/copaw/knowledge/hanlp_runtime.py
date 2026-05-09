@@ -120,8 +120,38 @@ def _extract_model_cache_keys(model_id):
     return dedup
 
 
+def _resolve_hanlp_constant_url(model_id):
+    # Resolve a HanLP pretrained constant (e.g. FINE_ELECTRA_SMALL_ZH) to its download URL.
+    # HanLP stores downloaded models under the URL-derived filename, not the constant name.
+    raw = str(model_id or "").strip()
+    if not raw or raw.startswith("http://") or raw.startswith("https://"):
+        return None
+    try:
+        import hanlp  # noqa: PLC0415
+        pretrained = getattr(hanlp, "pretrained", None)
+        if pretrained is None:
+            return None
+        for cat_name in dir(pretrained):
+            cat = getattr(pretrained, cat_name, None)
+            if not isinstance(cat, dict):
+                continue
+            url = cat.get(raw)
+            if isinstance(url, str) and (url.startswith("http://") or url.startswith("https://")):
+                return url
+    except Exception:
+        pass
+    return None
+
+
 def has_local_model_artifact(model_id, hanlp_home=""):
     keys = _extract_model_cache_keys(model_id)
+    # Resolve HanLP symbolic constant names (e.g. FINE_ELECTRA_SMALL_ZH) to
+    # their actual download URL so we find the real artifact directory name.
+    resolved_url = _resolve_hanlp_constant_url(model_id)
+    if resolved_url:
+        for k in _extract_model_cache_keys(resolved_url):
+            if k not in keys:
+                keys.append(k)
     if not keys:
         return False
     subdirs = ("", "tok", "mtl", "ner", "dep", "pos", "sdp", "con", "classification", "transformers")
@@ -1627,11 +1657,16 @@ class HanLPSidecarRuntime:
                 ),
             )
 
+        # When downloading models allow a much longer timeout; the default
+        # tokenize_timeout_sec (~15 s) is far too short for a real download.
+        download_timeout = 600.0
+        effective_timeout = download_timeout if allow_download else payload["tokenize_timeout_sec"]
         result = self._run_bridge(
             executable,
             mode="ensure_model",
             payload=payload,
-            timeout=payload["tokenize_timeout_sec"],
+            timeout=effective_timeout,
+            retry_on_timeout=False,
         )
         return self._attach_runtime_meta(self._state(
             status=str(result.get("status") or "unavailable"),
