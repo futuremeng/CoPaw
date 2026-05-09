@@ -1009,8 +1009,8 @@ function NlpPage() {
       taskStatus !== "ready" &&
       /(MODEL|DOWNLOAD|MISSING|INSTALL_REQUIRED|NOT_CONFIGURED|UNAVAILABLE)/.test(reasonHint);
     return {
-      modelText: `model: ${modelId || "(未配置)"}`,
-      fileText: `file: ${cachePath || t("nlpConfig.notConfigured")}`,
+      modelText: modelId || "(未配置)",
+      fileText: cachePath || t("nlpConfig.notConfigured"),
       missing,
     };
   };
@@ -1190,9 +1190,9 @@ function NlpPage() {
                               <Tag
                                 className={styles.demoStatusTag}
                                 color={resolveTagColor(methodStatus?.status || "unavailable")}
-                                title={`${methodStatus?.reasonCode || "UNKNOWN"} | ${modelInfo.modelText} | ${modelInfo.fileText}`}
+                                title={modelInfo.modelText}
                               >
-                                {`${methodStatus?.reasonCode || "UNKNOWN"} | ${modelInfo.modelText} | ${modelInfo.fileText}`}
+                                {modelInfo.modelText}
                               </Tag>
                             </div>
                             <Typography.Text type="secondary" className={styles.demoMethodDescription}>
@@ -1386,9 +1386,9 @@ function NlpPage() {
                               <Tag
                                 className={styles.demoStatusTag}
                                 color={resolveTagColor(methodStatus?.status || "unavailable")}
-                                title={`${methodStatus?.reasonCode || "UNKNOWN"} | ${modelInfo.modelText} | ${modelInfo.fileText}`}
+                                title={modelInfo.modelText}
                               >
-                                {`${methodStatus?.reasonCode || "UNKNOWN"} | ${modelInfo.modelText} | ${modelInfo.fileText}`}
+                                {modelInfo.modelText}
                               </Tag>
                             </div>
                             <Typography.Text type="secondary" className={styles.demoMethodDescription}>
