@@ -1964,17 +1964,37 @@ class HanLPSidecarRuntime:
             )
             return None, dict(state)
 
+        run_payload = {
+            **payload,
+            "task_key": task_key,
+            "text": text,
+        }
         result = self._run_bridge(
             executable,
             mode="run_task",
-            payload={
-                **payload,
-                "task_key": task_key,
-                "text": text,
-            },
+            payload=run_payload,
             timeout=self._task_timeout(payload, task_key),
             retry_on_timeout=False,
         )
+        # Self-heal stale persistent worker: if worker reports model not local
+        # but host-side filesystem probe says artifact exists, restart once and retry.
+        reason_code = str(result.get("reason_code") or "")
+        normalized_task_key = str(task_key or "").strip()
+        raw_tasks = ((payload.get("task_matrix") or {}).get("tasks") or {}) if isinstance(payload.get("task_matrix"), dict) else {}
+        task_cfg = raw_tasks.get(normalized_task_key) if isinstance(raw_tasks, dict) else None
+        task_model_id = str(task_cfg.get("model_id") or "").strip() if isinstance(task_cfg, dict) else ""
+        candidate_model_id = task_model_id or str(payload.get("model_id") or "").strip()
+        hanlp_home = str(payload.get("hanlp_home") or "")
+        if reason_code == "HANLP2_MODEL_NOT_LOCAL" and candidate_model_id and _host_has_local_model_artifact(candidate_model_id, hanlp_home):
+            with self._worker_lock:
+                self._close_worker_locked()
+            result = self._run_bridge(
+                executable,
+                mode="run_task",
+                payload=run_payload,
+                timeout=self._task_timeout(payload, task_key),
+                retry_on_timeout=False,
+            )
         state = self._state(
             status=str(result.get("status") or "unavailable"),
             reason_code=str(result.get("reason_code") or "HANLP2_TASK_RUN_FAILED"),
