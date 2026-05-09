@@ -1120,7 +1120,7 @@ function NlpPage() {
           </div>
           <div className={styles.alertActionBlock}>
             <Button
-              className={styles.maintenanceInstallButton}
+              className={`${styles.maintenanceInstallButton} ${sidecarReady ? styles.maintenanceInstallButtonReady : ""}`}
               type="primary"
               onClick={handleInstall}
               loading={sidecarActionBusy}
