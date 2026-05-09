@@ -997,8 +997,13 @@ def execute_mode(mode, payload):
 
     if mode in {"model_status", "ensure_model"}:
         prev_require_local = os.environ.get("COPAW_HANLP_REQUIRE_LOCAL_MODELS")
+        prev_hf_offline = os.environ.get("HF_HUB_OFFLINE")
+        prev_transformers_offline = os.environ.get("TRANSFORMERS_OFFLINE")
         if mode == "ensure_model" and allow_download:
             os.environ["COPAW_HANLP_REQUIRE_LOCAL_MODELS"] = "0"
+            # Explicit download flow should bypass offline-only runtime defaults.
+            os.environ.pop("HF_HUB_OFFLINE", None)
+            os.environ.pop("TRANSFORMERS_OFFLINE", None)
         try:
             raw_model_id, model, resolved_name, tokens, error_name = validate_model(
                 hanlp,
@@ -1010,6 +1015,14 @@ def execute_mode(mode, payload):
                     os.environ.pop("COPAW_HANLP_REQUIRE_LOCAL_MODELS", None)
                 else:
                     os.environ["COPAW_HANLP_REQUIRE_LOCAL_MODELS"] = prev_require_local
+                if prev_hf_offline is None:
+                    os.environ.pop("HF_HUB_OFFLINE", None)
+                else:
+                    os.environ["HF_HUB_OFFLINE"] = prev_hf_offline
+                if prev_transformers_offline is None:
+                    os.environ.pop("TRANSFORMERS_OFFLINE", None)
+                else:
+                    os.environ["TRANSFORMERS_OFFLINE"] = prev_transformers_offline
         if model is None:
             reason = "HanLP2 model loader is unavailable or model_id is empty."
             if error_name:
