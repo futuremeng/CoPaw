@@ -1231,6 +1231,85 @@ if __name__ == "__main__":
     main()
 """
 
+# ---------------------------------------------------------------------------
+# Host-side local model artifact helpers (mirror of the bridge-code versions)
+# These run in the main backend process so they always reflect the latest code
+# even when the sidecar subprocess was started before a code update.
+# ---------------------------------------------------------------------------
+
+def _host_extract_model_cache_keys(model_id: str) -> list[str]:
+    raw = str(model_id or "").strip()
+    if not raw:
+        return []
+    keys: list[str] = []
+    name = raw
+    if name.lower().endswith(".zip"):
+        name = name[:-4]
+    if name.startswith("http://") or name.startswith("https://"):
+        name = name.rstrip("/").split("/")[-1]
+        if name.lower().endswith(".zip"):
+            name = name[:-4]
+        keys.append(name)
+    else:
+        keys.append(name)
+    dedup: list[str] = []
+    for k in keys:
+        if k not in dedup:
+            dedup.append(k)
+    return dedup
+
+
+def _host_model_cache_homes(hanlp_home: str = "") -> list[str]:
+    homes: list[str] = []
+    custom = str(hanlp_home or "").strip()
+    if custom:
+        homes.append(custom)
+    default = os.path.join(str(Path.home()), ".hanlp")
+    if default not in homes:
+        homes.append(default)
+    return homes
+
+
+def _host_resolve_hanlp_constant_url(model_id: str) -> str | None:
+    raw = str(model_id or "").strip()
+    if not raw or raw.startswith("http://") or raw.startswith("https://"):
+        return None
+    try:
+        import hanlp  # type: ignore[import]
+        pretrained = getattr(hanlp, "pretrained", None)
+        if pretrained is None:
+            return None
+        for cat_name in dir(pretrained):
+            cat = getattr(pretrained, cat_name, None)
+            if not isinstance(cat, dict):
+                continue
+            url = cat.get(raw)
+            if isinstance(url, str) and (url.startswith("http://") or url.startswith("https://")):
+                return url
+    except Exception:
+        pass
+    return None
+
+
+def _host_has_local_model_artifact(model_id: str, hanlp_home: str = "") -> bool:
+    keys = _host_extract_model_cache_keys(model_id)
+    resolved_url = _host_resolve_hanlp_constant_url(model_id)
+    if resolved_url:
+        for k in _host_extract_model_cache_keys(resolved_url):
+            if k not in keys:
+                keys.append(k)
+    if not keys:
+        return False
+    subdirs = ("", "tok", "mtl", "ner", "dep", "pos", "sdp", "con", "classification", "transformers")
+    for home in _host_model_cache_homes(hanlp_home):
+        for subdir in subdirs:
+            base = os.path.join(home, subdir) if subdir else home
+            for key in keys:
+                path = os.path.join(base, key)
+                if os.path.isdir(path) or os.path.isfile(path):
+                    return True
+    return False
+
 
 class HanLPSidecarRuntime:
     """Run HanLP 2.x tokenization in a dedicated Python sidecar."""
@@ -1820,15 +1899,41 @@ class HanLPSidecarRuntime:
             payload=payload,
             timeout=payload["probe_timeout_sec"],
         )
+        raw_items = list(result.get("items") or [])
+        hanlp_home = str(result.get("hanlp_home") or payload.get("hanlp_home") or "")
+        # Re-verify items that the sidecar subprocess marked as missing.
+        # The subprocess may be running old bridge code that cannot resolve
+        # HanLP symbolic constant names to their real artifact filenames.
+        # The host-side _host_has_local_model_artifact uses the latest code.
+        items: list[dict] = []
+        for item in raw_items:
+            updated = dict(item)
+            if not bool(item.get("local_available", False)):
+                model_id = str(item.get("model_id") or "").strip()
+                if model_id and _host_has_local_model_artifact(model_id, hanlp_home):
+                    updated["local_available"] = True
+            items.append(updated)
+        all_local = all(bool(it.get("local_available")) for it in items) if items else True
+        override_status = "ready" if all_local else str(result.get("status") or "unavailable")
+        override_code = (
+            "HANLP2_LOCAL_MODELS_READY"
+            if all_local
+            else str(result.get("reason_code") or "HANLP2_LOCAL_MODELS_STATUS_FAILED")
+        )
+        override_reason = (
+            "All required HanLP models are present in local cache."
+            if all_local
+            else str(result.get("reason") or "HanLP local model status check failed.")
+        )
         return self._attach_runtime_meta({
             "engine": "hanlp2",
-            "status": str(result.get("status") or "unavailable"),
-            "reason_code": str(result.get("reason_code") or "HANLP2_LOCAL_MODELS_STATUS_FAILED"),
-            "reason": str(result.get("reason") or "HanLP local model status check failed."),
+            "status": override_status,
+            "reason_code": override_code,
+            "reason": override_reason,
             "python_version": str(result.get("python_version") or ""),
             "require_local_models": bool(result.get("require_local_models", True)),
-            "hanlp_home": str(result.get("hanlp_home") or ""),
-            "items": list(result.get("items") or []),
+            "hanlp_home": hanlp_home,
+            "items": items,
         })
 
     def run_task(
