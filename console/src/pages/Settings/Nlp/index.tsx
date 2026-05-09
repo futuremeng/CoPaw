@@ -1000,7 +1000,7 @@ function NlpPage() {
             <div id="nlp-section-demo" className={styles.sectionAnchorOffset}>
               <Card className={`${styles.card} ${styles.primaryCard}`}>
                 <Typography.Title level={5} className={styles.cardTitle}>
-                  NLP Method Demos
+                  通用NLP方法与DEMO
                 </Typography.Title>
                 <Typography.Paragraph type="secondary" className={styles.cardDescription}>
                   首屏工作区：选择任务、填入示例、运行并查看结构化结果与映射高亮。
