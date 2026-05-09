@@ -101,6 +101,58 @@ const DEMO_METHODS: DemoMethod[] = [
   },
 ];
 
+const CLASSICAL_DEMO_METHODS: DemoMethod[] = [
+  {
+    key: "lzh_tok_fine",
+    backendTaskKey: "lzh_tok_fine",
+    title: "古汉语分词（细分）",
+    placeholder: "输入古汉语文本，例如：晋太元中，武陵人捕鱼为业。",
+    examples: ["晋太元中，武陵人捕鱼为业。", "司馬牛問君子", "吾之道也。"],
+  },
+  {
+    key: "lzh_tok_coarse",
+    backendTaskKey: "lzh_tok_coarse",
+    title: "古汉语分词（粗分）",
+    placeholder: "输入古汉语文本进行粗分词，例如：司馬牛問君子。",
+    examples: ["司馬牛問君子", "晋太元中，武陵人捕鱼为业。", "吾之道也。"],
+  },
+  {
+    key: "lzh_lem",
+    backendTaskKey: "lzh_lem",
+    title: "古汉语词形还原（LEM）",
+    placeholder: "输入古汉语文本进行词形还原，例如：晋太元中，武陵人捕鱼为业。",
+    examples: ["晋太元中，武陵人捕鱼为业。", "司馬牛問君子", "吾之道也。"],
+  },
+  {
+    key: "lzh_pos_upos",
+    backendTaskKey: "lzh_pos_upos",
+    title: "古汉语词性（UPOS）",
+    placeholder: "输入古汉语文本进行 UPOS 词性标注。",
+    examples: ["晋太元中，武陵人捕鱼为业。", "司馬牛問君子", "吾之道也。"],
+  },
+  {
+    key: "lzh_pos_xpos",
+    backendTaskKey: "lzh_pos_xpos",
+    title: "古汉语词性（XPOS）",
+    placeholder: "输入古汉语文本进行 XPOS 词性标注。",
+    examples: ["晋太元中，武陵人捕鱼为业。", "司馬牛問君子", "吾之道也。"],
+  },
+  {
+    key: "lzh_pos_pku",
+    backendTaskKey: "lzh_pos_pku",
+    title: "古汉语词性（PKU）",
+    placeholder: "输入古汉语文本进行 PKU 词性标注。",
+    examples: ["晋太元中，武陵人捕鱼为业。", "司馬牛問君子", "吾之道也。"],
+  },
+  {
+    key: "lzh_dep",
+    backendTaskKey: "lzh_dep",
+    title: "古汉语依存句法",
+    placeholder: "输入古汉语文本进行依存分析，例如：司馬牛問君子。",
+    examples: ["司馬牛問君子", "晋太元中，武陵人捕鱼为业。", "吾之道也。"],
+  },
+];
+
 function resolveTagColor(status: string): string {
   if (status === "ready") {
     return "success";
@@ -176,21 +228,29 @@ function renderTokenRail(tokens: string[], activeTokenIndex?: number | null) {
 }
 
 function getTokenListFromResult(taskKey: string, result: unknown): string[] {
-  if (taskKey === "tokenize" && Array.isArray(result)) {
+  if ((taskKey === "tokenize" || taskKey === "lzh_tok_fine" || taskKey === "lzh_tok_coarse") && Array.isArray(result)) {
     return result.map((item) => String(item || "")).filter(Boolean);
   }
-  if ((taskKey === "dep" || taskKey === "sdp") && Array.isArray(result)) {
+  if ((taskKey === "dep" || taskKey === "sdp" || taskKey === "lzh_dep") && Array.isArray(result)) {
     return result
       .map((item) => asRecord(item))
       .filter((item): item is Record<string, unknown> => Boolean(item))
       .map((row) => String(row.token || row.text || row.word || ""))
       .filter(Boolean);
   }
-  if ((taskKey === "pos_ctb" || taskKey === "pos_pku" || taskKey === "pos_863") && Array.isArray(result)) {
+  if (
+    (taskKey === "pos_ctb" ||
+      taskKey === "pos_pku" ||
+      taskKey === "pos_863" ||
+      taskKey === "lzh_pos_upos" ||
+      taskKey === "lzh_pos_xpos" ||
+      taskKey === "lzh_pos_pku") &&
+    Array.isArray(result)
+  ) {
     return result
       .map((item) => asRecord(item))
       .filter((item): item is Record<string, unknown> => Boolean(item))
-      .map((row) => String(row.token || ""))
+      .map((row) => String(row.token || row.index || ""))
       .filter(Boolean);
   }
   return [];
@@ -200,13 +260,21 @@ function getSelectableCount(taskKey: string, result: unknown): number {
   if (!Array.isArray(result)) {
     return 0;
   }
-  if (taskKey === "tokenize") {
+  if (taskKey === "tokenize" || taskKey === "lzh_tok_fine" || taskKey === "lzh_tok_coarse") {
     return result.length;
   }
-  if (taskKey === "ner" || taskKey === "dep" || taskKey === "sdp") {
+  if (taskKey === "ner" || taskKey === "dep" || taskKey === "sdp" || taskKey === "lzh_dep") {
     return result.length;
   }
-  if (taskKey === "pos_ctb" || taskKey === "pos_pku" || taskKey === "pos_863") {
+  if (
+    taskKey === "pos_ctb" ||
+    taskKey === "pos_pku" ||
+    taskKey === "pos_863" ||
+    taskKey === "lzh_pos_upos" ||
+    taskKey === "lzh_pos_xpos" ||
+    taskKey === "lzh_pos_pku" ||
+    taskKey === "lzh_lem"
+  ) {
     return result.length;
   }
   return 0;
@@ -361,7 +429,7 @@ function renderResultByTask(
   onHoverRow: (index: number | null) => void,
 ) {
   const highlightedRowIndex = hoveredRowIndex ?? activeRowIndex;
-  if (taskKey === "tokenize") {
+  if (taskKey === "tokenize" || taskKey === "lzh_tok_fine" || taskKey === "lzh_tok_coarse") {
     const tokens = Array.isArray(result) ? result : [];
     return (
       <>
@@ -421,7 +489,7 @@ function renderResultByTask(
     );
   }
 
-  if (taskKey === "dep" && Array.isArray(result)) {
+  if ((taskKey === "dep" || taskKey === "lzh_dep") && Array.isArray(result)) {
     const rows = result
       .map((item) => asRecord(item))
       .filter((item): item is Record<string, unknown> => Boolean(item));
@@ -454,16 +522,26 @@ function renderResultByTask(
     );
   }
 
-    if ((taskKey === "pos_ctb" || taskKey === "pos_pku" || taskKey === "pos_863") && Array.isArray(result)) {
+    if (
+      (
+        taskKey === "pos_ctb" ||
+        taskKey === "pos_pku" ||
+        taskKey === "pos_863" ||
+        taskKey === "lzh_pos_upos" ||
+        taskKey === "lzh_pos_xpos" ||
+        taskKey === "lzh_pos_pku"
+      ) &&
+      Array.isArray(result)
+    ) {
       const rows = result
         .map((item) => asRecord(item))
         .filter((item): item is Record<string, unknown> => Boolean(item));
-      const tokens = rows.map((row) => String(row.token || "")).filter(Boolean);
+      const tokens = rows.map((row) => String(row.token || row.index || "")).filter(Boolean);
       return (
         <>
           <div className={styles.demoTable}>
             <div className={styles.demoTableHeader}>
-              <span>Token</span>
+              <span>{taskKey.startsWith("lzh_") ? "Index" : "Token"}</span>
               <span>POS</span>
             </div>
             {rows.map((row, index) => (
@@ -475,7 +553,7 @@ function renderResultByTask(
                 onMouseEnter={() => onHoverRow(index)}
                 onMouseLeave={() => onHoverRow(null)}
               >
-                <span>{String(row.token || "")}</span>
+                <span>{String(row.token || row.index || "")}</span>
                 <span>{String(row.pos || "")}</span>
               </button>
             ))}
@@ -484,6 +562,18 @@ function renderResultByTask(
         </>
       );
     }
+  if (taskKey === "lzh_lem" && Array.isArray(result)) {
+    const rows = result
+      .map((item) => asRecord(item))
+      .filter((item): item is Record<string, unknown> => Boolean(item));
+    return renderRecordRows(rows, ["sentence", "index", "lemma"], {
+      interactive: true,
+      selectedRowIndex: activeRowIndex,
+      hoveredRowIndex,
+      onSelectRow,
+      onHoverRow,
+    });
+  }
   if (taskKey === "sdp") {
     if (Array.isArray(result)) {
       const rows = result
@@ -626,6 +716,10 @@ function NlpPage() {
   const [activeDemoTaskKey, setActiveDemoTaskKey] = useState("tokenize");
   const [activeDemoRowIndex, setActiveDemoRowIndex] = useState<number | null>(null);
   const [hoveredDemoRowIndex, setHoveredDemoRowIndex] = useState<number | null>(null);
+  const [classicalDemoInputs, setClassicalDemoInputs] = useState<Record<string, string>>({});
+  const [activeClassicalDemoMethodKey, setActiveClassicalDemoMethodKey] = useState(CLASSICAL_DEMO_METHODS[0]?.key || "");
+  const [activeClassicalDemoRowIndex, setActiveClassicalDemoRowIndex] = useState<number | null>(null);
+  const [hoveredClassicalDemoRowIndex, setHoveredClassicalDemoRowIndex] = useState<number | null>(null);
 
   const [sideGroupKeys, setSideGroupKeys] = useState<string[]>(["strategy", "runtime"]);
 
@@ -638,6 +732,16 @@ function NlpPage() {
     ) as Record<string, string>;
     setDemoInputs(initial);
   }, [demoInputs]);
+
+  useEffect(() => {
+    if (Object.keys(classicalDemoInputs).length > 0) {
+      return;
+    }
+    const initial = Object.fromEntries(
+      CLASSICAL_DEMO_METHODS.map((item) => [item.key, item.examples[0] || ""]),
+    ) as Record<string, string>;
+    setClassicalDemoInputs(initial);
+  }, [classicalDemoInputs]);
 
   useEffect(() => {
     const nextMode = strategy?.mode === "manual" || strategy?.mode === "hybrid" ? strategy.mode : "auto";
@@ -852,6 +956,41 @@ function NlpPage() {
       reasonCode: "UNKNOWN",
       reason: "No status available",
     },
+    lzh_tok_fine: methods.find((item) => item.key === "tokenize")?.status || {
+      status: "unavailable",
+      reasonCode: "UNKNOWN",
+      reason: "No status available",
+    },
+    lzh_tok_coarse: methods.find((item) => item.key === "tokenize")?.status || {
+      status: "unavailable",
+      reasonCode: "UNKNOWN",
+      reason: "No status available",
+    },
+    lzh_lem: methods.find((item) => item.key === "tokenize")?.status || {
+      status: "unavailable",
+      reasonCode: "UNKNOWN",
+      reason: "No status available",
+    },
+    lzh_pos_upos: methods.find((item) => item.key === "pos_pku")?.status || {
+      status: "unavailable",
+      reasonCode: "UNKNOWN",
+      reason: "No status available",
+    },
+    lzh_pos_xpos: methods.find((item) => item.key === "pos_pku")?.status || {
+      status: "unavailable",
+      reasonCode: "UNKNOWN",
+      reason: "No status available",
+    },
+    lzh_pos_pku: methods.find((item) => item.key === "pos_pku")?.status || {
+      status: "unavailable",
+      reasonCode: "UNKNOWN",
+      reason: "No status available",
+    },
+    lzh_dep: methods.find((item) => item.key === "dep")?.status || {
+      status: "unavailable",
+      reasonCode: "UNKNOWN",
+      reason: "No status available",
+    },
   };
 
   const activeDemoMethod = DEMO_METHODS.find((item) => item.backendTaskKey === activeDemoTaskKey) || DEMO_METHODS[0];
@@ -871,6 +1010,25 @@ function NlpPage() {
     activeDemoResult?.result,
   );
 
+  const activeClassicalDemoMethod =
+    CLASSICAL_DEMO_METHODS.find((item) => item.key === activeClassicalDemoMethodKey) || CLASSICAL_DEMO_METHODS[0];
+  const activeClassicalDemoInput = classicalDemoInputs[activeClassicalDemoMethod?.key || ""] || "";
+  const activeClassicalDemoStatus = methodStatusByTask[activeClassicalDemoMethod?.backendTaskKey || ""] || {
+    status: "unavailable",
+    reasonCode: "UNKNOWN",
+    reason: "No status available",
+  };
+  const activeClassicalDemoResult =
+    (demoResults[activeClassicalDemoMethod?.backendTaskKey || ""] || null) as NlpDemoMeta | null;
+  const activeClassicalSelectableCount = getSelectableCount(
+    activeClassicalDemoMethod?.backendTaskKey || "",
+    activeClassicalDemoResult?.result,
+  );
+  const activeClassicalResultTokens = getTokenListFromResult(
+    activeClassicalDemoMethod?.backendTaskKey || "",
+    activeClassicalDemoResult?.result,
+  );
+
   const methodDetailByTaskKey: Record<string, { key: string; taskKey?: string; status: MethodStatus } | undefined> = {
     tokenize: methods.find((item) => item.key === "tokenize"),
     ner: methods.find((item) => item.key === "nerMsra"),
@@ -887,6 +1045,11 @@ function NlpPage() {
     setActiveDemoRowIndex(null);
     setHoveredDemoRowIndex(null);
   }, [activeDemoMethod.backendTaskKey, activeDemoResult?.request_id]);
+
+  useEffect(() => {
+    setActiveClassicalDemoRowIndex(null);
+    setHoveredClassicalDemoRowIndex(null);
+  }, [activeClassicalDemoMethod?.key, activeClassicalDemoResult?.request_id]);
 
   useEffect(() => {
     const raw = window.localStorage.getItem("copaw-nlp-side-groups");
@@ -942,6 +1105,35 @@ function NlpPage() {
       event.preventDefault();
       setActiveDemoRowIndex(null);
       setHoveredDemoRowIndex(null);
+    }
+  };
+
+  const handleClassicalDemoResultKeyDown: KeyboardEventHandler<HTMLDivElement> = (event) => {
+    if (!activeClassicalDemoResult || activeClassicalSelectableCount <= 0) {
+      return;
+    }
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      const next =
+        activeClassicalDemoRowIndex === null ? 0 : (activeClassicalDemoRowIndex + 1) % activeClassicalSelectableCount;
+      setActiveClassicalDemoRowIndex(next);
+      setHoveredClassicalDemoRowIndex(null);
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      const next =
+        activeClassicalDemoRowIndex === null
+          ? activeClassicalSelectableCount - 1
+          : (activeClassicalDemoRowIndex - 1 + activeClassicalSelectableCount) % activeClassicalSelectableCount;
+      setActiveClassicalDemoRowIndex(next);
+      setHoveredClassicalDemoRowIndex(null);
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setActiveClassicalDemoRowIndex(null);
+      setHoveredClassicalDemoRowIndex(null);
     }
   };
 
@@ -1169,6 +1361,176 @@ function NlpPage() {
                               activeDemoResult.raw_result !== undefined
                                 ? activeDemoResult.raw_result
                                 : activeDemoResult.result,
+                            )}
+                          </Typography.Paragraph>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            </div>
+
+            <div id="nlp-section-classical-demo" className={styles.sectionAnchorOffset}>
+              <Card className={`${styles.card} ${styles.primaryCard}`}>
+                <Typography.Title level={5} className={styles.cardTitle}>
+                  古汉语NLP与DEMO
+                </Typography.Title>
+                <Typography.Paragraph type="secondary" className={styles.cardDescription}>
+                  采用 HanLP 单一多任务模型（KYOTO_EVAHAN_TOK_LEM_POS_UDEP_LZH）统一支持古汉语分词、词性与依存分析。
+                </Typography.Paragraph>
+                <Typography.Paragraph type="secondary" className={styles.cardDescription}>
+                  与通用区不同：本区默认按单模型路线进行测试，不区分任务级模型切换。若需粗分效果，可结合 skip tok/fine 的服务端能力。
+                </Typography.Paragraph>
+                <div className={styles.demoWorkbench}>
+                  <div className={styles.demoMethodList}>
+                    {CLASSICAL_DEMO_METHODS.map((method) => {
+                      const methodStatus = methodStatusByTask[method.backendTaskKey];
+                      const methodDetail = methodDetailByTaskKey[method.backendTaskKey];
+                      const active = method.key === activeClassicalDemoMethod?.key;
+                      const methodReason = methodDetail?.status.reason || methodStatus?.reason || "";
+                      return (
+                        <button
+                          key={method.key}
+                          type="button"
+                          className={`${styles.demoMethodButton} ${active ? styles.demoMethodButtonActive : ""}`}
+                          onClick={() => setActiveClassicalDemoMethodKey(method.key)}
+                        >
+                          <div className={styles.demoMethodMain}>
+                            <div className={styles.demoMethodHeader}>
+                              <Typography.Text strong className={styles.demoMethodTitle}>
+                                {method.title}
+                              </Typography.Text>
+                              <Tag
+                                className={styles.demoStatusTag}
+                                color={resolveTagColor(methodStatus?.status || "unavailable")}
+                                title={methodStatus?.reasonCode || "UNKNOWN"}
+                              >
+                                {methodStatus?.reasonCode || "UNKNOWN"}
+                              </Tag>
+                            </div>
+                            <Typography.Text type="secondary" className={styles.demoMethodDescription}>
+                              {method.placeholder}
+                            </Typography.Text>
+                            {methodReason ? (
+                              <Typography.Text type="secondary" className={styles.demoMethodReason}>
+                                {methodReason}
+                              </Typography.Text>
+                            ) : null}
+                            <Typography.Text type="secondary" className={styles.demoMethodTaskKey}>
+                              {`${t("nlpConfig.taskKey")} ${method.backendTaskKey}`}
+                            </Typography.Text>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className={styles.demoPanel}>
+                    <div className={styles.demoInputPanel}>
+                      <Typography.Title level={5} className={styles.cardTitle}>
+                        {activeClassicalDemoMethod?.title || "古汉语任务"}
+                      </Typography.Title>
+                      <Typography.Paragraph type="secondary" className={styles.cardDescription}>
+                        {activeClassicalDemoStatus.reason}
+                      </Typography.Paragraph>
+                      <Space wrap size={8} className={styles.demoExamples}>
+                        {(activeClassicalDemoMethod?.examples || []).map((sample, index) => (
+                          <Button
+                            key={`${activeClassicalDemoMethod?.key || "classical"}-${index}`}
+                            size="small"
+                            onClick={() =>
+                              setClassicalDemoInputs((prev) => ({
+                                ...prev,
+                                [activeClassicalDemoMethod?.key || ""]: sample,
+                              }))
+                            }
+                          >
+                            示例 {index + 1}
+                          </Button>
+                        ))}
+                      </Space>
+                      <Input.TextArea
+                        rows={6}
+                        value={activeClassicalDemoInput}
+                        placeholder={activeClassicalDemoMethod?.placeholder || "输入古汉语文本"}
+                        onChange={(event) =>
+                          setClassicalDemoInputs((prev) => ({
+                            ...prev,
+                            [activeClassicalDemoMethod?.key || ""]: event.target.value,
+                          }))
+                        }
+                      />
+                      <Button
+                        type="primary"
+                        loading={runningDemoTask === activeClassicalDemoMethod?.backendTaskKey}
+                        onClick={() =>
+                          runMethodDemo(activeClassicalDemoMethod?.backendTaskKey || "tokenize", activeClassicalDemoInput)
+                        }
+                      >
+                        运行古汉语测试
+                      </Button>
+                    </div>
+                    <div className={styles.demoResultPanel}>
+                      <Typography.Title level={5} className={styles.cardTitle}>
+                        结果面板
+                      </Typography.Title>
+                      <Typography.Text type="secondary">
+                        支持交互：点击结果行高亮映射，或在本区域按 ↑/↓ 键逐行浏览，按 Esc 清空选择。
+                      </Typography.Text>
+                      {!activeClassicalDemoResult ? (
+                        <Typography.Paragraph type="secondary" className={styles.cardDescription}>
+                          点击“运行古汉语测试”查看结构化输出。
+                        </Typography.Paragraph>
+                      ) : (
+                        <>
+                          <div className={styles.demoMetaGrid}>
+                            <div className={styles.demoMetaItem}><span>status</span><Tag color={resolveTagColor(activeClassicalDemoResult.status)}>{activeClassicalDemoResult.reason_code}</Tag></div>
+                            <div className={styles.demoMetaItem}><span>task</span><span>{activeClassicalDemoResult.task_key}</span></div>
+                            <div className={styles.demoMetaItem}><span>model</span><span>{activeClassicalDemoResult.resolved_model || "(empty)"}</span></div>
+                            <div className={styles.demoMetaItem}><span>mode</span><span>single-model classical</span></div>
+                            <div className={styles.demoMetaItem}><span>style</span><span>{activeClassicalDemoResult.detected_style}</span></div>
+                            <div className={styles.demoMetaItem}><span>score</span><span>{activeClassicalDemoResult.detection_score}</span></div>
+                            <div className={styles.demoMetaItem}><span>duration</span><span>{activeClassicalDemoResult.duration_ms} ms</span></div>
+                            <div className={styles.demoMetaItem}><span>preload</span><span>{activeClassicalDemoResult.preload_status || "idle"}</span></div>
+                          </div>
+                          <Typography.Paragraph className={styles.operationOutput}>
+                            cache_path: {activeClassicalDemoResult.model_cache_path || status?.sidecar.model_cache_path || status?.sidecar.model_home || status?.sidecar.hanlp_home || t("nlpConfig.notConfigured")}
+                          </Typography.Paragraph>
+                          <Typography.Paragraph className={styles.operationOutput}>
+                            {activeClassicalDemoResult.reason}
+                          </Typography.Paragraph>
+                          <div
+                            className={styles.demoInteractiveArea}
+                            tabIndex={0}
+                            onKeyDown={handleClassicalDemoResultKeyDown}
+                          >
+                            {renderResultByTask(
+                              activeClassicalDemoMethod?.backendTaskKey || "tokenize",
+                              activeClassicalDemoResult.result,
+                              activeClassicalDemoInput,
+                              false,
+                              activeClassicalDemoRowIndex,
+                              hoveredClassicalDemoRowIndex,
+                              setActiveClassicalDemoRowIndex,
+                              setHoveredClassicalDemoRowIndex,
+                            )}
+                          </div>
+                          {activeClassicalResultTokens.length > 0 ? (
+                            <Typography.Text type="secondary">
+                              当前 token 数：{activeClassicalResultTokens.length}
+                            </Typography.Text>
+                          ) : null}
+                          <Typography.Paragraph className={styles.operationOutput}>
+                            rules: {(activeClassicalDemoResult.matched_rules || []).join(", ") || "(none)"}
+                          </Typography.Paragraph>
+                          <Typography.Title level={5} className={styles.cardTitle}>
+                            原始输出
+                          </Typography.Title>
+                          <Typography.Paragraph className={styles.operationOutput}>
+                            {prettyJson(
+                              activeClassicalDemoResult.raw_result !== undefined
+                                ? activeClassicalDemoResult.raw_result
+                                : activeClassicalDemoResult.result,
                             )}
                           </Typography.Paragraph>
                         </>

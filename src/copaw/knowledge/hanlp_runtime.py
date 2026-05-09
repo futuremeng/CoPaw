@@ -349,9 +349,32 @@ def run_parse_task(module, text, task_name):
 def run_task_entrypoint(module, text, task_name, task_spec=None):
     normalized = normalize_task_key(task_name)
     parse_fn = getattr(module, "parse", None)
+    mtl_task_names = {
+        "tok",
+        "tok_fine",
+        "tok_coarse",
+        "lem",
+        "pos_upos",
+        "pos_xpos",
+        "pos_pku",
+    }
     
     if is_coref_task_name(task_name):
         raise RuntimeError("HanLP coreference_resolution is not open-source in this runtime.")
+    elif normalized in mtl_task_names:
+        if callable(parse_fn):
+            try:
+                return parse_fn(text, tasks=task_name)
+            except TypeError:
+                return parse_fn(text)
+            except Exception as exc:
+                raise RuntimeError(f"HanLP multi-task parse failed ({task_name}): {exc}") from exc
+        if normalized in {"tok", "tok_fine", "tok_coarse"}:
+            _, tok_fn = locate_tokenizer(module)
+            if tok_fn is None:
+                raise RuntimeError("HanLP tokenizer is unavailable for tok tasks.")
+            return tok_fn(text)
+        raise RuntimeError(f"HanLP parse API is unavailable for task '{task_name}'.")
     elif normalized in {"dep", "dependency"}:
         model = locate_parser(module)
         if model is None and callable(parse_fn):

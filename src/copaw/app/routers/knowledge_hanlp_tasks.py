@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from ...config import load_config
-from ...config.config import KnowledgeConfig
+from ...config.config import KnowledgeConfig, KnowledgeHanLPTaskConfig
 from ...knowledge.hanlp_runtime import NLPRuntime
 from qwenpaw.app.agent_context import get_agent_for_request
 
@@ -61,6 +61,16 @@ _MODERN_HINT_TOKENS = (
     "以及",
 )
 _SUPPORTED_TASK_KEYS = {"tokenize", "ner", "dep", "sdp", "con", "cor", "pos_ctb", "pos_pku", "pos_863"}
+_SUPPORTED_CLASSICAL_TASK_KEYS = {
+    "lzh_tok_fine",
+    "lzh_tok_coarse",
+    "lzh_lem",
+    "lzh_pos_upos",
+    "lzh_pos_xpos",
+    "lzh_pos_pku",
+    "lzh_dep",
+}
+_SUPPORTED_TASK_KEYS = _SUPPORTED_TASK_KEYS | _SUPPORTED_CLASSICAL_TASK_KEYS
 _TASK_ALIASES = {
     "ner_msra": "ner",
 }
@@ -74,6 +84,13 @@ _TASK_MATRIX_KEY_MAP = {
     "pos_ctb": "pos_ctb",
     "pos_pku": "pos_pku",
     "pos_863": "pos_863",
+    "lzh_tok_fine": "lzh_tok_fine",
+    "lzh_tok_coarse": "lzh_tok_coarse",
+    "lzh_lem": "lzh_lem",
+    "lzh_pos_upos": "lzh_pos_upos",
+    "lzh_pos_xpos": "lzh_pos_xpos",
+    "lzh_pos_pku": "lzh_pos_pku",
+    "lzh_dep": "lzh_dep",
 }
 _TASK_MODEL_DEFAULTS = {
     "ner_msra": "MSRA_NER_BERT_BASE_ZH",
@@ -89,6 +106,23 @@ _TASK_TIMEOUT_DEFAULTS = {
     "pos_ctb": 60.0,
     "pos_pku": 60.0,
     "pos_863": 60.0,
+    "lzh_tok_fine": 60.0,
+    "lzh_tok_coarse": 60.0,
+    "lzh_lem": 60.0,
+    "lzh_pos_upos": 60.0,
+    "lzh_pos_xpos": 60.0,
+    "lzh_pos_pku": 60.0,
+    "lzh_dep": 60.0,
+}
+_CLASSICAL_SINGLE_MODEL_ID = "hanlp.pretrained.mtl.KYOTO_EVAHAN_TOK_LEM_POS_UDEP_LZH"
+_CLASSICAL_TASK_SPECS: dict[str, dict[str, Any]] = {
+    "lzh_tok_fine": {"task_name": "tok/fine", "artifact_key": "lzh_tok_fine", "eval_role": "primary"},
+    "lzh_tok_coarse": {"task_name": "tok/coarse", "artifact_key": "lzh_tok_coarse", "eval_role": "primary"},
+    "lzh_lem": {"task_name": "lem", "artifact_key": "lzh_lem", "eval_role": "primary"},
+    "lzh_pos_upos": {"task_name": "pos/upos", "artifact_key": "lzh_pos_upos", "eval_role": "primary"},
+    "lzh_pos_xpos": {"task_name": "pos/xpos", "artifact_key": "lzh_pos_xpos", "eval_role": "primary"},
+    "lzh_pos_pku": {"task_name": "pos/pku", "artifact_key": "lzh_pos_pku", "eval_role": "primary"},
+    "lzh_dep": {"task_name": "dep", "artifact_key": "lzh_dep", "eval_role": "primary"},
 }
 _TASK_TIMEOUT_MIN_FOR_BERT = {
     "ner_msra": 60.0,
@@ -352,11 +386,80 @@ def _normalize_pos_result(raw: Any) -> list[dict[str, Any]]:
     return normalized
 
 
+def _normalize_token_result(raw: Any) -> list[str]:
+    if isinstance(raw, str):
+        text = raw.strip()
+        return [text] if text else []
+    if not isinstance(raw, list):
+        return []
+    flattened: list[str] = []
+    for item in raw:
+        if isinstance(item, list):
+            for token in item:
+                text = str(token or "").strip()
+                if text:
+                    flattened.append(text)
+            continue
+        text = str(item or "").strip()
+        if text:
+            flattened.append(text)
+    return flattened
+
+
+def _normalize_sequence_labels(raw: Any, label_key: str) -> list[dict[str, Any]]:
+    if not isinstance(raw, list):
+        return []
+    rows: list[dict[str, Any]] = []
+    for sentence_index, item in enumerate(raw, start=1):
+        if isinstance(item, list):
+            for token_index, value in enumerate(item, start=1):
+                text = str(value or "").strip()
+                if text:
+                    rows.append({"sentence": sentence_index, "index": token_index, label_key: text})
+            continue
+        text = str(item or "").strip()
+        if text:
+            rows.append({"sentence": sentence_index, "index": 1, label_key: text})
+    return rows
+
+
 def _effective_request_id(candidate: str | None) -> str:
     request_id = str(candidate or "").strip()
     if request_id:
         return request_id
     return f"copaw-hanlp-{uuid.uuid4().hex[:16]}"
+
+
+def _prepare_classical_task_config(task_key: str, effective_config: KnowledgeConfig) -> None:
+    spec = _CLASSICAL_TASK_SPECS.get(task_key)
+    if spec is None:
+        return
+    nlp_cfg = getattr(effective_config, "nlp", None)
+    if nlp_cfg is None:
+        return
+    nlp_cfg.model_id = _CLASSICAL_SINGLE_MODEL_ID
+    task_matrix = getattr(nlp_cfg, "task_matrix", None)
+    tasks = getattr(task_matrix, "tasks", None) if task_matrix is not None else None
+    if not isinstance(tasks, dict):
+        return
+    timeout = float(_TASK_TIMEOUT_DEFAULTS.get(task_key, 60.0) or 60.0)
+    task_cfg = tasks.get(task_key)
+    if isinstance(task_cfg, KnowledgeHanLPTaskConfig):
+        task_cfg.enabled = True
+        task_cfg.task_name = str(spec["task_name"])
+        task_cfg.model_id = _CLASSICAL_SINGLE_MODEL_ID
+        task_cfg.timeout_sec = timeout
+        task_cfg.artifact_key = str(spec["artifact_key"])
+        task_cfg.eval_role = str(spec["eval_role"])
+        return
+    tasks[task_key] = KnowledgeHanLPTaskConfig(
+        enabled=True,
+        task_name=str(spec["task_name"]),
+        model_id=_CLASSICAL_SINGLE_MODEL_ID,
+        timeout_sec=timeout,
+        artifact_key=str(spec["artifact_key"]),
+        eval_role=str(spec["eval_role"]),
+    )
 
 
 def _extract_hanlp_model_id(knowledge_config: Any) -> str:
@@ -612,7 +715,14 @@ async def _run_hanlp_task(task_key: str, request: HanLPTaskRunRequest, http_requ
 
     knowledge_config = await _resolve_knowledge_config(http_request)
     decision = _resolve_model_decision(normalized_task_key, request.text, knowledge_config)
+    if normalized_task_key in _SUPPORTED_CLASSICAL_TASK_KEYS:
+        decision["selected_model"] = _CLASSICAL_SINGLE_MODEL_ID
+        matched = list(decision.get("matched_rules") or [])
+        if "classical.single_model" not in matched:
+            matched.append("classical.single_model")
+        decision["matched_rules"] = matched
     effective_config = _clone_effective_config(knowledge_config)
+    _prepare_classical_task_config(normalized_task_key, effective_config)
     _ensure_runtime_task_model_defaults(normalized_task_key, effective_config)
     if decision["selected_model"]:
         nlp_cfg = getattr(effective_config, "nlp", None)
@@ -663,6 +773,24 @@ async def _run_hanlp_task(task_key: str, request: HanLPTaskRunRequest, http_requ
         )
         raw_result = result
         normalized_result = _normalize_pos_result(result)
+    elif normalized_task_key in _SUPPORTED_CLASSICAL_TASK_KEYS:
+        result, state = await asyncio.to_thread(
+            runtime.run_task,
+            normalized_task_key,
+            request.text,
+            effective_config,
+        )
+        raw_result = result
+        if normalized_task_key in {"lzh_tok_fine", "lzh_tok_coarse"}:
+            normalized_result = _normalize_token_result(result)
+        elif normalized_task_key == "lzh_lem":
+            normalized_result = _normalize_sequence_labels(result, "lemma")
+        elif normalized_task_key in {"lzh_pos_upos", "lzh_pos_xpos", "lzh_pos_pku"}:
+            normalized_result = _normalize_sequence_labels(result, "pos")
+        elif normalized_task_key == "lzh_dep":
+            normalized_result = _normalize_dep_result(result)
+        else:
+            normalized_result = result
     else:
         result, state = await asyncio.to_thread(
             runtime.run_task,
