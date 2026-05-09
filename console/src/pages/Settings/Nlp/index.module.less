@@ -23,46 +23,10 @@
   scroll-margin-top: 96px;
 }
 
-.navButtonWrap {
-  row-gap: 8px;
-}
-
-.sectionNavButtonActive {
-  border-color: #ff7f16 !important;
-  box-shadow: 0 4px 12px rgba(255, 127, 22, 0.25);
-}
-
-.sectionNavButtonActive :global(span) {
-  font-weight: 600;
-}
-
 .alertStack {
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-
-.kpiGrid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.metricCard {
-  border-radius: 10px;
-  background: linear-gradient(180deg, #fff 0%, #fffaf2 100%);
-}
-
-.metricCard :global(.ant-card-body) {
-  padding: 16px;
-}
-
-.metricValue {
-  margin: 8px 0 4px !important;
-}
-
-.metricLabel {
-  margin: 8px 0 !important;
 }
 
 .workspaceLayout {
@@ -81,15 +45,6 @@
 .primaryCard {
   border: 1px solid #f0dfc8;
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.08);
-}
-
-.sectionNavCard {
-  position: static;
-}
-
-.sectionNavCard :global(.ant-card-body) {
-  padding-top: 14px;
-  padding-bottom: 14px;
 }
 
 .sideGroupCollapse {
@@ -412,18 +367,6 @@
     padding: 10px;
   }
 
-  .kpiGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .sectionNavCard {
-    position: static;
-  }
-
-  .sectionNavCard :global(.ant-card-body) {
-    padding-top: 12px;
-    padding-bottom: 12px;
-  }
 }
 
 .footerButtons {
@@ -437,12 +380,6 @@
   flex-shrink: 0;
 }
 
-@media (max-width: 1320px) {
-  .kpiGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 1360px) {
   .workspaceLayout {
     grid-template-columns: 1fr;
@@ -454,11 +391,6 @@
 }
 
 :global(.dark-mode) {
-  .metricCard {
-    background: rgba(255, 255, 255, 0.03);
-    border-color: rgba(255, 255, 255, 0.08);
-  }
-
   .primaryCard {
     border-color: rgba(255, 160, 77, 0.4);
     box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
@@ -474,11 +406,6 @@
 
   .sideGroupCollapse :global(.ant-collapse-content) {
     background: rgba(255, 255, 255, 0.01);
-  }
-
-  .sectionNavButtonActive {
-    border-color: #ffa45a !important;
-    box-shadow: 0 4px 12px rgba(255, 164, 90, 0.28);
   }
 
   .sectionNavCard {
