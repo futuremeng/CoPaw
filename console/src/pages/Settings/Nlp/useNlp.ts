@@ -109,6 +109,11 @@ export interface NlpMethodDemoResult {
   runtime_python_executable?: string;
   effective_task_model_id?: string;
   preload_status?: string;
+  sidecar_elapsed_ms?: number;
+  sidecar_trace_elapsed_ms?: number;
+  sidecar_execution_path?: string;
+  sidecar_execution_detail?: string;
+  sidecar_trace_stage_ms?: Record<string, number>;
 }
 
 export interface NlpLocalModelItem {

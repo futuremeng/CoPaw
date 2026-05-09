@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 import time
 import uuid
@@ -43,6 +44,11 @@ class HanLPTaskRunResponse(BaseModel):
     runtime_python_executable: str = ""
     effective_task_model_id: str = ""
     preload_status: str = "idle"
+    sidecar_elapsed_ms: int = 0
+    sidecar_trace_elapsed_ms: int = 0
+    sidecar_execution_path: str = ""
+    sidecar_execution_detail: str = ""
+    sidecar_trace_stage_ms: dict[str, int] = Field(default_factory=dict)
 
 
 _CLASSICAL_HINT_CHARS = frozenset("之乎者也焉矣其乃若夫盖兮耳哉")
@@ -828,6 +834,30 @@ async def _run_hanlp_task(task_key: str, request: HanLPTaskRunRequest, http_requ
     nlp_cfg = getattr(effective_config, "nlp", None)
     model_cache_path = str(getattr(nlp_cfg, "model_home", "") or "").strip()
     runtime_python_executable = str(getattr(nlp_cfg, "python_executable", "") or "").strip()
+    try:
+        sidecar_elapsed_ms = int(float(str(state.get("sidecar_elapsed_ms") or "0") or 0))
+    except (TypeError, ValueError):
+        sidecar_elapsed_ms = 0
+    try:
+        sidecar_trace_elapsed_ms = int(float(str(state.get("sidecar_trace_elapsed_ms") or "0") or 0))
+    except (TypeError, ValueError):
+        sidecar_trace_elapsed_ms = 0
+    sidecar_execution_path = str(state.get("sidecar_execution_path") or "").strip()
+    sidecar_execution_detail = str(state.get("sidecar_execution_detail") or "").strip()
+    sidecar_trace_stage_ms: dict[str, int] = {}
+    trace_stage_raw = state.get("sidecar_trace_stage_ms")
+    if isinstance(trace_stage_raw, str) and trace_stage_raw.strip():
+        try:
+            decoded = json.loads(trace_stage_raw)
+            if isinstance(decoded, dict):
+                for key, value in decoded.items():
+                    try:
+                        sidecar_trace_stage_ms[str(key)] = int(value)
+                    except (TypeError, ValueError):
+                        continue
+        except json.JSONDecodeError:
+            pass
+
     effective_task_model_id = str(
         _task_matrix_model_id(normalized_task_key, effective_config)
         or decision["selected_model"]
@@ -866,6 +896,11 @@ async def _run_hanlp_task(task_key: str, request: HanLPTaskRunRequest, http_requ
         runtime_python_executable=runtime_python_executable,
         effective_task_model_id=effective_task_model_id,
         preload_status=preload_status,
+        sidecar_elapsed_ms=sidecar_elapsed_ms,
+        sidecar_trace_elapsed_ms=sidecar_trace_elapsed_ms,
+        sidecar_execution_path=sidecar_execution_path,
+        sidecar_execution_detail=sidecar_execution_detail,
+        sidecar_trace_stage_ms=sidecar_trace_stage_ms,
     )
 
 

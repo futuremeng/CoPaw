@@ -12,6 +12,81 @@ from typing import Any
 
 from ..config.config import KnowledgeConfig
 
+# ---------------------------------------------------------------------------
+# Authoritative HanLP pretrained model → download URL mapping.
+# Source: https://hanlp.hankcs.com/docs/api/hanlp/pretrained/
+# Only models hosted on file.hankcs.com or download.hanlp.com are listed.
+# Used by both the host-side artifact check and the sidecar bridge code to
+# resolve symbolic constant names without requiring hanlp.pretrained at runtime.
+# ---------------------------------------------------------------------------
+_HANLP_PRETRAINED_URLS: dict[str, str] = {
+    # --- mtl ---
+    "CLOSE_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_BASE_ZH": "https://file.hankcs.com/hanlp/mtl/close_tok_pos_ner_srl_dep_sdp_con_electra_base_20210111_124519.zip",
+    "CLOSE_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH": "https://file.hankcs.com/hanlp/mtl/close_tok_pos_ner_srl_dep_sdp_con_electra_small_20210111_124159.zip",
+    "CLOSE_TOK_POS_NER_SRL_DEP_SDP_CON_ERNIE_GRAM_ZH": "https://file.hankcs.com/hanlp/mtl/close_tok_pos_ner_srl_dep_sdp_con_ernie_gram_base_aug_20210904_145403.zip",
+    "CLOSE_TOK_POS_NER_SRL_UDEP_SDP_CON_ELECTRA_SMALL_ZH": "https://file.hankcs.com/hanlp/mtl/close_tok_pos_ner_srl_dep_sdp_con_electra_small_20220626_175100.zip",
+    "EN_TOK_LEM_POS_NER_SRL_UDEP_SDP_CON_MODERNBERT_BASE": "https://file.hankcs.com/hanlp/mtl/en_tok_lem_pos_ner_srl_udep_sdp_con_modernbert_base_prepend_false_20241229_053838.zip",
+    "EN_TOK_LEM_POS_NER_SRL_UDEP_SDP_CON_MODERNBERT_LARGE": "https://file.hankcs.com/hanlp/mtl/en_tok_lem_pos_ner_srl_udep_sdp_con_modernbert_large_prepend_false_20250107_181612.zip",
+    "KYOTO_EVAHAN_TOK_LEM_POS_UDEP_LZH": "https://file.hankcs.com/hanlp/mtl/kyoto_evahan_tok_lem_pos_udep_bert-ancient-chinese_lr_1_aug_dict_20250112_154422.zip",
+    "NPCMJ_UD_KYOTO_TOK_POS_CON_BERT_BASE_CHAR_JA": "https://file.hankcs.com/hanlp/mtl/npcmj_ud_kyoto_tok_pos_ner_dep_con_srl_bert_base_char_ja_20210914_133742.zip",
+    "OPEN_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_BASE_ZH": "https://file.hankcs.com/hanlp/mtl/open_tok_pos_ner_srl_dep_sdp_con_electra_base_20201223_201906.zip",
+    "OPEN_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH": "https://file.hankcs.com/hanlp/mtl/open_tok_pos_ner_srl_dep_sdp_con_electra_small_20201223_035557.zip",
+    "UD_ONTONOTES_TOK_POS_LEM_FEA_NER_SRL_DEP_SDP_CON_MMINILMV2L12": "https://file.hankcs.com/hanlp/mtl/ud_ontonotes_tok_pos_lem_fea_ner_srl_dep_sdp_con_mMiniLMv2L12_no_space_20220807_133143.zip",
+    "UD_ONTONOTES_TOK_POS_LEM_FEA_NER_SRL_DEP_SDP_CON_MMINILMV2L6": "https://file.hankcs.com/hanlp/mtl/ud_ontonotes_tok_pos_lem_fea_ner_srl_dep_sdp_con_mMiniLMv2L6_no_space_20220731_161526.zip",
+    "UD_ONTONOTES_TOK_POS_LEM_FEA_NER_SRL_DEP_SDP_CON_XLMR_BASE": "https://file.hankcs.com/hanlp/mtl/ud_ontonotes_tok_pos_lem_fea_ner_srl_dep_sdp_con_xlm_base_20220608_003435.zip",
+    # --- tok ---
+    "COARSE_ELECTRA_SMALL_ZH": "https://file.hankcs.com/hanlp/tok/coarse_electra_small_20220616_012050.zip",
+    "CTB6_CONVSEG": "https://file.hankcs.com/hanlp/tok/ctb6_convseg_nowe_nocrf_20200110_004046.zip",
+    "CTB9_TOK_ELECTRA_BASE": "http://download.hanlp.com/tok/extra/ctb9_tok_electra_base_20220426_111949.zip",
+    "CTB9_TOK_ELECTRA_BASE_CRF": "http://download.hanlp.com/tok/extra/ctb9_tok_electra_base_crf_20220426_161255.zip",
+    "CTB9_TOK_ELECTRA_SMALL": "https://file.hankcs.com/hanlp/tok/ctb9_electra_small_20220215_205427.zip",
+    "FINE_ELECTRA_SMALL_ZH": "https://file.hankcs.com/hanlp/tok/fine_electra_small_20220615_231803.zip",
+    "KYOTO_EVAHAN_TOK_LZH": "http://download.hanlp.com/tok/extra/kyoto_evahan_tok_bert-ancient-chinese_tau_0.5_20250111_234146.zip",
+    "LARGE_ALBERT_BASE": "https://file.hankcs.com/hanlp/tok/large_corpus_cws_albert_base_20211228_160926.zip",
+    "MSR_TOK_ELECTRA_BASE_CRF": "http://download.hanlp.com/tok/extra/msra_crf_electra_base_20220507_113936.zip",
+    "PKU_NAME_MERGED_SIX_MONTHS_CONVSEG": "https://file.hankcs.com/hanlp/tok/pku98_6m_conv_ngram_20200110_134736.zip",
+    "SIGHAN2005_MSR_CONVSEG": "https://file.hankcs.com/hanlp/tok/convseg-msr-nocrf-noembed_20200110_153524.zip",
+    "SIGHAN2005_PKU_BERT_BASE_ZH": "https://file.hankcs.com/hanlp/tok/sighan2005_pku_bert_base_zh_20201231_141130.zip",
+    "SIGHAN2005_PKU_CONVSEG": "https://file.hankcs.com/hanlp/tok/sighan2005-pku-convseg_20200110_153722.zip",
+    "UD_TOK_MMINILMV2L12": "https://file.hankcs.com/hanlp/tok/ud_tok_mMiniLMv2L12_no_space_mul_20220619_091159.zip",
+    "UD_TOK_MMINILMV2L6": "https://file.hankcs.com/hanlp/tok/ud_tok_mMiniLMv2L6_no_space_mul_20220619_091824.zip",
+    # --- pos ---
+    "C863_POS_ELECTRA_SMALL": "https://file.hankcs.com/hanlp/pos/pos_863_electra_small_20220217_101958.zip",
+    "CTB5_POS_RNN": "https://file.hankcs.com/hanlp/pos/ctb5_pos_rnn_20200113_235925.zip",
+    "CTB5_POS_RNN_FASTTEXT_ZH": "https://file.hankcs.com/hanlp/pos/ctb5_pos_rnn_fasttext_20191230_202639.zip",
+    "CTB9_POS_ALBERT_BASE": "https://file.hankcs.com/hanlp/pos/ctb9_albert_base_20211228_163935.zip",
+    "CTB9_POS_ELECTRA_SMALL": "https://file.hankcs.com/hanlp/pos/pos_ctb_electra_small_20220215_111944.zip",
+    "CTB9_POS_ELECTRA_SMALL_TF": "https://file.hankcs.com/hanlp/pos/pos_ctb_electra_small_20211227_121341.zip",
+    "CTB9_POS_RADICAL_ELECTRA_SMALL": "https://file.hankcs.com/hanlp/pos/pos_ctb_radical_electra_small_20220215_111932.zip",
+    "PKU_POS_ELECTRA_SMALL": "https://file.hankcs.com/hanlp/pos/pos_pku_electra_small_20220217_142436.zip",
+    "PTB_POS_RNN_FASTTEXT_EN": "https://file.hankcs.com/hanlp/pos/ptb_pos_rnn_fasttext_20220418_101708.zip",
+    # --- ner ---
+    "CONLL03_NER_BERT_BASE_CASED_EN": "https://file.hankcs.com/hanlp/ner/ner_conll03_bert_base_cased_en_20211227_121443.zip",
+    "MSRA_NER_ALBERT_BASE_ZH": "https://file.hankcs.com/hanlp/ner/msra_ner_albert_base_20211228_173323.zip",
+    "MSRA_NER_BERT_BASE_ZH": "https://file.hankcs.com/hanlp/ner/ner_bert_base_msra_20211227_114712.zip",
+    "MSRA_NER_ELECTRA_SMALL_ZH": "https://file.hankcs.com/hanlp/ner/msra_ner_electra_small_20220215_205503.zip",
+    # --- dep ---
+    "CTB5_BIAFFINE_DEP_ZH": "https://file.hankcs.com/hanlp/dep/biaffine_ctb5_20191229_025833.zip",
+    "CTB7_BIAFFINE_DEP_ZH": "https://file.hankcs.com/hanlp/dep/biaffine_ctb7_20200109_022431.zip",
+    "CTB9_DEP_ELECTRA_SMALL": "https://file.hankcs.com/hanlp/dep/ctb9_dep_electra_small_20220216_100306.zip",
+    "CTB9_UDC_ELECTRA_SMALL": "https://file.hankcs.com/hanlp/dep/udc_dep_electra_small_20220218_095452.zip",
+    "PMT1_DEP_ELECTRA_SMALL": "https://file.hankcs.com/hanlp/dep/pmt_dep_electra_small_20220218_134518.zip",
+    "PTB_BIAFFINE_DEP_EN": "https://file.hankcs.com/hanlp/dep/ptb_dep_biaffine_20200101_174624.zip",
+    # --- constituency ---
+    "CTB9_CON_ELECTRA_SMALL": "https://file.hankcs.com/hanlp/constituency/ctb9_con_electra_small_20220215_230116.zip",
+    "CTB9_CON_FULL_TAG_ELECTRA_SMALL": "https://file.hankcs.com/hanlp/constituency/ctb9_full_tag_con_electra_small_20220118_103119.zip",
+    "CTB9_CON_FULL_TAG_ERNIE_GRAM": "http://download.hanlp.com/constituency/extra/ctb9_full_tag_con_ernie_20220331_121430.zip",
+    # --- srl ---
+    "CPB3_SRL_ELECTRA_SMALL": "https://file.hankcs.com/hanlp/srl/cpb3_electra_small_crf_has_transform_20220218_135910.zip",
+    # --- sdp ---
+    "SEMEVAL15_DM_BIAFFINE_EN": "https://file.hankcs.com/hanlp/sdp/semeval15_biaffine_dm_20200106_122808.zip",
+    "SEMEVAL15_PAS_BIAFFINE_EN": "https://file.hankcs.com/hanlp/sdp/semeval15_biaffine_pas_20200103_152405.zip",
+    "SEMEVAL15_PSD_BIAFFINE_EN": "https://file.hankcs.com/hanlp/sdp/semeval15_biaffine_psd_20200106_123009.zip",
+    "SEMEVAL16_ALL_ELECTRA_SMALL_ZH": "https://file.hankcs.com/hanlp/sdp/semeval16_sdp_electra_small_20220719_171433.zip",
+    "SEMEVAL16_NEWS_BIAFFINE_ZH": "https://file.hankcs.com/hanlp/sdp/semeval16-news-biaffine_20191231_235407.zip",
+    "SEMEVAL16_TEXT_BIAFFINE_ZH": "https://file.hankcs.com/hanlp/sdp/semeval16-text-biaffine_20200101_002257.zip",
+}
+
 _BRIDGE_CODE = r"""
 import json
 import os
@@ -126,6 +201,10 @@ def _resolve_hanlp_constant_url(model_id):
     raw = str(model_id or "").strip()
     if not raw or raw.startswith("http://") or raw.startswith("https://"):
         return None
+    # Check authoritative hardcoded dict first (works without hanlp installed)
+    hardcoded = _HANLP_PRETRAINED_URLS.get(raw)
+    if hardcoded:
+        return hardcoded
     try:
         import hanlp  # noqa: PLC0415
         pretrained = getattr(hanlp, "pretrained", None)
@@ -190,6 +269,21 @@ def flatten(value):
             tokens.extend(flatten(item))
         return tokens
     return []
+
+
+_LAST_TASK_TRACE = {}
+
+
+def _set_task_trace(trace):
+    global _LAST_TASK_TRACE
+    if isinstance(trace, dict):
+        _LAST_TASK_TRACE = trace
+    else:
+        _LAST_TASK_TRACE = {}
+
+
+def _clear_task_trace():
+    _set_task_trace({})
 
 
 def normalize_task_key(task_name):
@@ -269,7 +363,13 @@ def locate_parser(module):
     # For dep task, try dependency parsing models
     loader = getattr(module, "load", None)
     if callable(loader):
-        for model_id in ["CTB9_DEP_ELECTRA_SMALL", "CTB7_BIAFFINE_DEP_ZH", "CTB5_BIAFFINE_DEP_ZH"]:
+        for model_id in [
+            "CTB9_DEP_ELECTRA_SMALL",
+            "CTB7_BIAFFINE_DEP_ZH",
+            "CTB5_BIAFFINE_DEP_ZH",
+            "OPEN_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH",
+            "CLOSE_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH",
+        ]:
             try:
                 model = load_with_cache(module, model_id)
                 if model is not None:
@@ -305,6 +405,18 @@ def locate_ner_resolver(module, ner_type="msra", preferred_model_id=""):
                         return model
                 except Exception:
                     continue
+        # Keep NER aligned with HanLP parse(tasks=...) by allowing MTL models
+        # as direct candidates when standalone STL NER is unavailable.
+        for model_id in [
+            "OPEN_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH",
+            "CLOSE_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH",
+        ]:
+            try:
+                model = load_with_cache(module, model_id)
+                if model is not None:
+                    return model
+            except Exception:
+                continue
     return None
 
 
@@ -326,7 +438,12 @@ def locate_con_resolver(module):
     # For constituency parsing
     loader = getattr(module, "load", None)
     if callable(loader):
-        for model_id in ["CTB9_CON_ELECTRA_SMALL", "CTB9_CON_FULL_TAG_ELECTRA_SMALL"]:
+        for model_id in [
+            "CTB9_CON_ELECTRA_SMALL",
+            "CTB9_CON_FULL_TAG_ELECTRA_SMALL",
+            "OPEN_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH",
+            "CLOSE_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH",
+        ]:
             try:
                 model = load_with_cache(module, model_id)
                 if model is not None:
@@ -360,6 +477,9 @@ def locate_pos_resolver(module, preferred_model_id=""):
 
 def has_pos_api(module):
     try:
+        parse = getattr(module, "parse", None)
+        if callable(parse):
+            return True
         loader = getattr(module, "load", None)
         if callable(loader):
             for model_id in ["CTB9_POS_ELECTRA_SMALL", "PKU_POS_ELECTRA_SMALL", "C863_POS_ELECTRA_SMALL"]:
@@ -449,6 +569,9 @@ def run_parse_task(module, text, task_name):
 
 
 def run_task_entrypoint(module, text, task_name, task_spec=None):
+    _clear_task_trace()
+    started = time.perf_counter()
+
     normalized = normalize_task_key(task_name)
     parse_fn = getattr(module, "parse", None)
     mtl_task_names = {
@@ -460,17 +583,63 @@ def run_task_entrypoint(module, text, task_name, task_spec=None):
         "pos_xpos",
         "pos_pku",
     }
+
+    def _trace_payload(execution_path, stage_ms=None, detail=""):
+        payload = {
+            "task_name": str(task_name or ""),
+            "normalized_task": normalized,
+            "execution_path": str(execution_path or ""),
+            "detail": str(detail or ""),
+            "elapsed_ms": int((time.perf_counter() - started) * 1000),
+        }
+        if isinstance(stage_ms, dict):
+            compact = {}
+            for key, value in stage_ms.items():
+                try:
+                    compact[str(key)] = int(value)
+                except (TypeError, ValueError):
+                    continue
+            if compact:
+                payload["stage_ms"] = compact
+        return payload
+
+    def _trace_return(value, execution_path, stage_ms=None, detail=""):
+        _set_task_trace(_trace_payload(execution_path, stage_ms=stage_ms, detail=detail))
+        return value
+
+    def _trace_raise(exc, execution_path, stage_ms=None, detail=""):
+        _set_task_trace(_trace_payload(execution_path, stage_ms=stage_ms, detail=detail))
+        raise exc
     
     if is_coref_task_name(task_name):
-        raise RuntimeError("HanLP coreference_resolution is not open-source in this runtime.")
+        _trace_raise(
+            RuntimeError("HanLP coreference_resolution is not open-source in this runtime."),
+            "blocked.coref_not_open_source",
+        )
     elif normalized in mtl_task_names:
         if callable(parse_fn):
+            parse_started = time.perf_counter()
             try:
-                return parse_fn(text, tasks=task_name)
+                output = parse_fn(text, tasks=task_name)
+                return _trace_return(
+                    output,
+                    "parse.tasks",
+                    {"parse_ms": int((time.perf_counter() - parse_started) * 1000)},
+                )
             except TypeError:
-                return parse_fn(text)
+                output = parse_fn(text)
+                return _trace_return(
+                    output,
+                    "parse.default",
+                    {"parse_ms": int((time.perf_counter() - parse_started) * 1000)},
+                )
             except Exception as exc:
-                raise RuntimeError(f"HanLP multi-task parse failed ({task_name}): {exc}") from exc
+                _trace_raise(
+                    RuntimeError(f"HanLP multi-task parse failed ({task_name}): {exc}"),
+                    "parse.error",
+                    {"parse_ms": int((time.perf_counter() - parse_started) * 1000)},
+                    detail=exc.__class__.__name__,
+                )
 
         # Some HanLP runtimes do not expose module.parse/tokenize, but can still
         # run the configured MTL model directly via hanlp.load(model_id).
@@ -478,60 +647,199 @@ def run_task_entrypoint(module, text, task_name, task_spec=None):
         if isinstance(task_spec, dict):
             preferred_model_id = str(task_spec.get("model_id") or "").strip()
         if preferred_model_id:
+            load_started = time.perf_counter()
             try:
                 _, model, _ = load_model(module, preferred_model_id)
                 if model is not None:
-                    return model(text)
+                    infer_started = time.perf_counter()
+                    output = model(text)
+                    return _trace_return(
+                        output,
+                        "model.preferred",
+                        {
+                            "model_load_ms": int((infer_started - load_started) * 1000),
+                            "model_infer_ms": int((time.perf_counter() - infer_started) * 1000),
+                        },
+                        detail=preferred_model_id,
+                    )
             except Exception as exc:
-                raise RuntimeError(
-                    f"HanLP multi-task model load/execute failed ({preferred_model_id}): {exc}"
-                ) from exc
+                _trace_raise(
+                    RuntimeError(
+                        f"HanLP multi-task model load/execute failed ({preferred_model_id}): {exc}"
+                    ),
+                    "model.preferred.error",
+                    {"model_total_ms": int((time.perf_counter() - load_started) * 1000)},
+                    detail=preferred_model_id,
+                )
 
         if normalized in {"tok", "tok_fine", "tok_coarse"}:
             _, tok_fn = locate_tokenizer(module)
             if tok_fn is None:
-                raise RuntimeError("HanLP tokenizer is unavailable for tok tasks.")
-            return tok_fn(text)
-        raise RuntimeError(f"HanLP parse API is unavailable for task '{task_name}'.")
+                _trace_raise(
+                    RuntimeError("HanLP tokenizer is unavailable for tok tasks."),
+                    "tokenizer.unavailable",
+                )
+            tok_started = time.perf_counter()
+            output = tok_fn(text)
+            return _trace_return(
+                output,
+                "tokenizer.direct",
+                {"tokenize_ms": int((time.perf_counter() - tok_started) * 1000)},
+            )
+        _trace_raise(
+            RuntimeError(f"HanLP parse API is unavailable for task '{task_name}'."),
+            "parse.unavailable",
+        )
     elif normalized in {"dep", "dependency"}:
+        if callable(parse_fn):
+            parse_started = time.perf_counter()
+            try:
+                output = parse_fn(text, tasks=task_name)
+                return _trace_return(
+                    output,
+                    "parse.tasks",
+                    {"parse_ms": int((time.perf_counter() - parse_started) * 1000)},
+                )
+            except TypeError:
+                try:
+                    output = parse_fn(text)
+                    return _trace_return(
+                        output,
+                        "parse.default",
+                        {"parse_ms": int((time.perf_counter() - parse_started) * 1000)},
+                    )
+                except Exception:
+                    pass
+            except Exception:
+                pass
         model = locate_parser(module)
-        if model is None and callable(parse_fn):
-            try:
-                return parse_fn(text, tasks=task_name)
-            except TypeError:
-                return parse_fn(text)
         if model is None:
-            raise RuntimeError("HanLP dependency parsing model could not be loaded.")
+            _trace_raise(
+                RuntimeError("HanLP dependency parsing model could not be loaded."),
+                "model.dep.unavailable",
+            )
         try:
-            return model(text)
+            infer_started = time.perf_counter()
+            output = model(text, tasks=task_name)
+            return _trace_return(
+                output,
+                "model.dep.tasks",
+                {"model_infer_ms": int((time.perf_counter() - infer_started) * 1000)},
+            )
+        except TypeError:
+            infer_started = time.perf_counter()
+            output = model(text)
+            return _trace_return(
+                output,
+                "model.dep.default",
+                {"model_infer_ms": int((time.perf_counter() - infer_started) * 1000)},
+            )
         except Exception as exc:
-            raise RuntimeError(f"HanLP dependency parsing failed: {exc}") from exc
+            _trace_raise(
+                RuntimeError(f"HanLP dependency parsing failed: {exc}"),
+                "model.dep.error",
+                detail=exc.__class__.__name__,
+            )
     elif normalized in {"sdp", "semantic_dependency"}:
+        if callable(parse_fn):
+            parse_started = time.perf_counter()
+            try:
+                output = parse_fn(text, tasks=task_name)
+                return _trace_return(
+                    output,
+                    "parse.tasks",
+                    {"parse_ms": int((time.perf_counter() - parse_started) * 1000)},
+                )
+            except TypeError:
+                try:
+                    output = parse_fn(text)
+                    return _trace_return(
+                        output,
+                        "parse.default",
+                        {"parse_ms": int((time.perf_counter() - parse_started) * 1000)},
+                    )
+                except Exception:
+                    pass
+            except Exception:
+                pass
         model = locate_sdp_resolver(module)
-        if model is None and callable(parse_fn):
-            try:
-                return parse_fn(text, tasks=task_name)
-            except TypeError:
-                return parse_fn(text)
         if model is None:
-            raise RuntimeError("HanLP semantic dependency parsing model could not be loaded.")
+            _trace_raise(
+                RuntimeError("HanLP semantic dependency parsing model could not be loaded."),
+                "model.sdp.unavailable",
+            )
         try:
-            return model(text)
+            infer_started = time.perf_counter()
+            output = model(text, tasks=task_name)
+            return _trace_return(
+                output,
+                "model.sdp.tasks",
+                {"model_infer_ms": int((time.perf_counter() - infer_started) * 1000)},
+            )
+        except TypeError:
+            infer_started = time.perf_counter()
+            output = model(text)
+            return _trace_return(
+                output,
+                "model.sdp.default",
+                {"model_infer_ms": int((time.perf_counter() - infer_started) * 1000)},
+            )
         except Exception as exc:
-            raise RuntimeError(f"HanLP semantic dependency parsing failed: {exc}") from exc
+            _trace_raise(
+                RuntimeError(f"HanLP semantic dependency parsing failed: {exc}"),
+                "model.sdp.error",
+                detail=exc.__class__.__name__,
+            )
     elif normalized in {"con", "constituency"}:
-        model = locate_con_resolver(module)
-        if model is None and callable(parse_fn):
+        if callable(parse_fn):
+            parse_started = time.perf_counter()
             try:
-                return parse_fn(text, tasks=task_name)
+                output = parse_fn(text, tasks=task_name)
+                return _trace_return(
+                    output,
+                    "parse.tasks",
+                    {"parse_ms": int((time.perf_counter() - parse_started) * 1000)},
+                )
             except TypeError:
-                return parse_fn(text)
+                try:
+                    output = parse_fn(text)
+                    return _trace_return(
+                        output,
+                        "parse.default",
+                        {"parse_ms": int((time.perf_counter() - parse_started) * 1000)},
+                    )
+                except Exception:
+                    pass
+            except Exception:
+                pass
+        model = locate_con_resolver(module)
         if model is None:
-            raise RuntimeError("HanLP constituency parsing model could not be loaded.")
+            _trace_raise(
+                RuntimeError("HanLP constituency parsing model could not be loaded."),
+                "model.con.unavailable",
+            )
         try:
-            return model(text)
+            infer_started = time.perf_counter()
+            output = model(text, tasks=task_name)
+            return _trace_return(
+                output,
+                "model.con.tasks",
+                {"model_infer_ms": int((time.perf_counter() - infer_started) * 1000)},
+            )
+        except TypeError:
+            infer_started = time.perf_counter()
+            output = model(text)
+            return _trace_return(
+                output,
+                "model.con.default",
+                {"model_infer_ms": int((time.perf_counter() - infer_started) * 1000)},
+            )
         except Exception as exc:
-            raise RuntimeError(f"HanLP constituency parsing failed: {exc}") from exc
+            _trace_raise(
+                RuntimeError(f"HanLP constituency parsing failed: {exc}"),
+                "model.con.error",
+                detail=exc.__class__.__name__,
+            )
     elif "ner" in normalized:
         # Extract NER type from task_name like "ner/msra"
         ner_type = "msra"  # default
@@ -543,41 +851,150 @@ def run_task_entrypoint(module, text, task_name, task_spec=None):
         if "BERT_BASE_ZH" in preferred_model_id.upper() and not has_local_bert_backbone(
             os.environ.get("HANLP_HOME", "")
         ):
-            raise RuntimeError(
-                "BERT_BACKBONE_MISSING_LOCAL_CACHE: bert-base-chinese is not found in local cache. "
-                "Populate ~/.hanlp/transformers/bert_base_chinese (or enable COPAW_HANLP_ALLOW_ONLINE=1)."
+            _trace_raise(
+                RuntimeError(
+                    "BERT_BACKBONE_MISSING_LOCAL_CACHE: bert-base-chinese is not found in local cache. "
+                    "Populate ~/.hanlp/transformers/bert_base_chinese (or enable COPAW_HANLP_ALLOW_ONLINE=1)."
+                ),
+                "model.ner.bert_backbone_missing",
             )
         model = locate_ner_resolver(module, ner_type, preferred_model_id)
         if model is None and callable(parse_fn):
+            parse_started = time.perf_counter()
             try:
-                return parse_fn(text, tasks=task_name)
+                output = parse_fn(text, tasks=task_name)
+                return _trace_return(
+                    output,
+                    "parse.tasks",
+                    {"parse_ms": int((time.perf_counter() - parse_started) * 1000)},
+                )
             except TypeError:
-                return parse_fn(text)
+                output = parse_fn(text)
+                return _trace_return(
+                    output,
+                    "parse.default",
+                    {"parse_ms": int((time.perf_counter() - parse_started) * 1000)},
+                )
         if model is None:
-            raise RuntimeError(f"HanLP NER ({ner_type}) model could not be loaded.")
+            _trace_raise(
+                RuntimeError(f"HanLP NER ({ner_type}) model could not be loaded."),
+                "model.ner.unavailable",
+            )
         try:
-            return model(text)
-        except Exception as exc:
-            if callable(parse_fn):
+            # Prefer MTL-style invocation so behavior matches parse(tasks=...).
+            infer_started = time.perf_counter()
+            output = model(text, tasks=task_name)
+            return _trace_return(
+                output,
+                "model.ner.tasks",
+                {"model_infer_ms": int((time.perf_counter() - infer_started) * 1000)},
+            )
+        except TypeError:
+            # STL NER expects tokenized input. Tokenize first when tasks kwarg
+            # is unsupported, then pass a single-sentence batch.
+            _, tok_fn = locate_tokenizer(module)
+            if tok_fn is not None:
                 try:
-                    return parse_fn(text, tasks=task_name)
-                except TypeError:
-                    return parse_fn(text)
+                    tok_started = time.perf_counter()
+                    tokenized = tok_fn(text)
+                    tok_ms = int((time.perf_counter() - tok_started) * 1000)
+                    tokens = flatten(tokenized)
+                    if tokens:
+                        infer_started = time.perf_counter()
+                        ner_output = model([tokens])
+                        if (
+                            isinstance(ner_output, list)
+                            and len(ner_output) == 1
+                            and isinstance(ner_output[0], (list, tuple))
+                        ):
+                            return _trace_return(
+                                ner_output[0],
+                                "model.ner.tokenized_batch",
+                                {
+                                    "tokenize_ms": tok_ms,
+                                    "model_infer_ms": int((time.perf_counter() - infer_started) * 1000),
+                                },
+                            )
+                        return _trace_return(
+                            ner_output,
+                            "model.ner.tokenized_batch",
+                            {
+                                "tokenize_ms": tok_ms,
+                                "model_infer_ms": int((time.perf_counter() - infer_started) * 1000),
+                            },
+                        )
                 except Exception:
                     pass
-            raise RuntimeError(f"HanLP NER ({ner_type}) failed: {exc}") from exc
+            infer_started = time.perf_counter()
+            output = model(text)
+            return _trace_return(
+                output,
+                "model.ner.default",
+                {"model_infer_ms": int((time.perf_counter() - infer_started) * 1000)},
+            )
+        except Exception as exc:
+            if callable(parse_fn):
+                parse_started = time.perf_counter()
+                try:
+                    output = parse_fn(text, tasks=task_name)
+                    return _trace_return(
+                        output,
+                        "parse.tasks.recovery",
+                        {"parse_ms": int((time.perf_counter() - parse_started) * 1000)},
+                        detail=exc.__class__.__name__,
+                    )
+                except TypeError:
+                    output = parse_fn(text)
+                    return _trace_return(
+                        output,
+                        "parse.default.recovery",
+                        {"parse_ms": int((time.perf_counter() - parse_started) * 1000)},
+                        detail=exc.__class__.__name__,
+                    )
+                except Exception:
+                    pass
+            _trace_raise(
+                RuntimeError(f"HanLP NER ({ner_type}) failed: {exc}"),
+                "model.ner.error",
+                detail=exc.__class__.__name__,
+            )
     elif normalized in {"pos", "pos_tagging"}:
+        if callable(parse_fn):
+            parse_started = time.perf_counter()
+            try:
+                output = parse_fn(text, tasks=task_name)
+                return _trace_return(
+                    output,
+                    "parse.tasks",
+                    {"parse_ms": int((time.perf_counter() - parse_started) * 1000)},
+                )
+            except TypeError:
+                try:
+                    output = parse_fn(text)
+                    return _trace_return(
+                        output,
+                        "parse.default",
+                        {"parse_ms": int((time.perf_counter() - parse_started) * 1000)},
+                    )
+                except Exception:
+                    pass
+            except Exception:
+                pass
         preferred_model_id = ""
         if isinstance(task_spec, dict):
             preferred_model_id = str(task_spec.get("model_id") or "").strip()
         model = locate_pos_resolver(module, preferred_model_id)
         if model is None:
-            raise RuntimeError(
-                f"HanLP POS model could not be loaded "
-                f"(tried: {preferred_model_id or 'CTB9/PKU/863 Electra Small'})."
+            _trace_raise(
+                RuntimeError(
+                    f"HanLP POS model could not be loaded "
+                    f"(tried: {preferred_model_id or 'CTB9/PKU/863 Electra Small'})."
+                ),
+                "model.pos.unavailable",
             )
         # POS taggers expect a list of tokens; tokenize first.
         _, tok_fn = locate_tokenizer(module)
+        tok_started = time.perf_counter()
         try:
             if tok_fn is not None:
                 tokens = flatten(tok_fn(text))
@@ -585,25 +1002,53 @@ def run_task_entrypoint(module, text, task_name, task_spec=None):
                 tokens = list(text)
         except Exception:
             tokens = list(text)
+        tok_ms = int((time.perf_counter() - tok_started) * 1000)
         try:
+            infer_started = time.perf_counter()
             tags = model(tokens)
         except Exception as exc:
-            raise RuntimeError(f"HanLP POS tagging failed: {exc}") from exc
+            _trace_raise(
+                RuntimeError(f"HanLP POS tagging failed: {exc}"),
+                "model.pos.error",
+                {"tokenize_ms": tok_ms},
+                detail=exc.__class__.__name__,
+            )
         if not isinstance(tags, list):
             tags = list(tags) if hasattr(tags, "__iter__") else []
-        return [
+        output = [
             {"token": str(tok), "pos": str(tag)}
             for tok, tag in zip(tokens, tags)
         ]
+        return _trace_return(
+            output,
+            "model.pos.tokenized",
+            {
+                "tokenize_ms": tok_ms,
+                "model_infer_ms": int((time.perf_counter() - infer_started) * 1000),
+            },
+        )
     else:
         # Fallback to parser for unknown tasks
         model = locate_parser(module)
         if model is None:
-            raise RuntimeError(f"HanLP model for task '{task_name}' could not be loaded.")
+            _trace_raise(
+                RuntimeError(f"HanLP model for task '{task_name}' could not be loaded."),
+                "model.generic.unavailable",
+            )
         try:
-            return model(text)
+            infer_started = time.perf_counter()
+            output = model(text)
+            return _trace_return(
+                output,
+                "model.generic",
+                {"model_infer_ms": int((time.perf_counter() - infer_started) * 1000)},
+            )
         except Exception as exc:
-            raise RuntimeError(f"HanLP task '{task_name}' failed: {exc}") from exc
+            _trace_raise(
+                RuntimeError(f"HanLP task '{task_name}' failed: {exc}"),
+                "model.generic.error",
+                detail=exc.__class__.__name__,
+            )
 
 
 def validate_task(module, task_name, text="HanLP 任务校验"):
@@ -661,6 +1106,12 @@ def resolve_model_id(module, model_id):
             if bucket is not None and hasattr(bucket, raw):
                 return raw, getattr(bucket, raw), raw
 
+    # Fall back to the hardcoded URL dict so the correct download URL is used
+    # even when hanlp.pretrained does not expose the constant at runtime.
+    hardcoded_url = _HANLP_PRETRAINED_URLS.get(raw)
+    if hardcoded_url:
+        return raw, hardcoded_url, raw
+
     return raw, raw, raw
 
 
@@ -696,7 +1147,13 @@ def has_parse_api(module):
         loader = getattr(module, "load", None)
         if callable(loader):
             # Try to load a known parse model from available models
-            for model_id in ["CTB9_DEP_ELECTRA_SMALL", "CTB7_BIAFFINE_DEP_ZH", "CTB5_BIAFFINE_DEP_ZH"]:
+            for model_id in [
+                "CTB9_DEP_ELECTRA_SMALL",
+                "CTB7_BIAFFINE_DEP_ZH",
+                "CTB5_BIAFFINE_DEP_ZH",
+                "OPEN_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH",
+                "CLOSE_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH",
+            ]:
                 try:
                     test_model = load_with_cache(module, model_id)
                     if test_model is not None:
@@ -732,6 +1189,9 @@ def has_ner_api(module, ner_type="msra"):
 def has_sdp_api(module):
     # Check if semantic dependency parsing models are available
     try:
+        parse = getattr(module, "parse", None)
+        if callable(parse):
+            return True
         loader = getattr(module, "load", None)
         if callable(loader):
             for model_id in ["OPEN_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH", "CLOSE_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH"]:
@@ -749,9 +1209,17 @@ def has_sdp_api(module):
 def has_con_api(module):
     # Check if constituency parsing models are available
     try:
+        parse = getattr(module, "parse", None)
+        if callable(parse):
+            return True
         loader = getattr(module, "load", None)
         if callable(loader):
-            for model_id in ["CTB9_CON_ELECTRA_SMALL", "CTB9_CON_FULL_TAG_ELECTRA_SMALL"]:
+            for model_id in [
+                "CTB9_CON_ELECTRA_SMALL",
+                "CTB9_CON_FULL_TAG_ELECTRA_SMALL",
+                "OPEN_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH",
+                "CLOSE_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH",
+            ]:
                 try:
                     test_model = load_with_cache(module, model_id)
                     if test_model is not None:
@@ -1114,7 +1582,9 @@ def execute_mode(mode, payload):
             task_result = extract_task_result(document, task_name)
             if task_result is None and is_coref_task_name(task_name):
                 task_result = document
+            task_trace = dict(_LAST_TASK_TRACE) if isinstance(_LAST_TASK_TRACE, dict) else {}
         except Exception as exc:
+            task_trace = dict(_LAST_TASK_TRACE) if isinstance(_LAST_TASK_TRACE, dict) else {}
             reason_code = "HANLP2_TASK_RUN_FAILED"
             message = str(exc)
             reason = f"HanLP task execution failed: {exc.__class__.__name__}: {message[:200]}"
@@ -1150,6 +1620,10 @@ def execute_mode(mode, payload):
                 "task_key": requested_task_key,
                 "task_name": task_name,
                 "task_result": None,
+                "execution_path": str(task_trace.get("execution_path") or ""),
+                "execution_detail": str(task_trace.get("detail") or ""),
+                "trace_elapsed_ms": int(task_trace.get("elapsed_ms") or 0) if isinstance(task_trace.get("elapsed_ms"), (int, float)) else None,
+                "trace_stage_ms": task_trace.get("stage_ms") if isinstance(task_trace.get("stage_ms"), dict) else {},
             }
         return {
             "engine": "hanlp2",
@@ -1161,6 +1635,10 @@ def execute_mode(mode, payload):
             "task_name": task_name,
             "task_result": task_result,
             "elapsed_ms": int((time.perf_counter() - started) * 1000),
+            "execution_path": str(task_trace.get("execution_path") or ""),
+            "execution_detail": str(task_trace.get("detail") or ""),
+            "trace_elapsed_ms": int(task_trace.get("elapsed_ms") or 0) if isinstance(task_trace.get("elapsed_ms"), (int, float)) else None,
+            "trace_stage_ms": task_trace.get("stage_ms") if isinstance(task_trace.get("stage_ms"), dict) else {},
         }
 
     text = str(payload.get("text") or "")
@@ -1243,6 +1721,9 @@ def main():
 if __name__ == "__main__":
     main()
 """
+# Inject the authoritative URL dict into the bridge code so the sidecar
+# subprocess can resolve symbolic constants without importing hanlp.pretrained.
+_BRIDGE_CODE = "_HANLP_PRETRAINED_URLS = " + repr(_HANLP_PRETRAINED_URLS) + "\n" + _BRIDGE_CODE
 
 # ---------------------------------------------------------------------------
 # Host-side local model artifact helpers (mirror of the bridge-code versions)
@@ -1287,6 +1768,10 @@ def _host_resolve_hanlp_constant_url(model_id: str) -> str | None:
     raw = str(model_id or "").strip()
     if not raw or raw.startswith("http://") or raw.startswith("https://"):
         return None
+    # Check authoritative hardcoded dict first (no hanlp import needed)
+    hardcoded = _HANLP_PRETRAINED_URLS.get(raw)
+    if hardcoded:
+        return hardcoded
     try:
         import hanlp  # type: ignore[import]
         pretrained = getattr(hanlp, "pretrained", None)
@@ -2015,6 +2500,20 @@ class HanLPSidecarRuntime:
         )
         if isinstance(result.get("elapsed_ms"), (int, float)):
             state["sidecar_elapsed_ms"] = str(int(result.get("elapsed_ms") or 0))
+        if isinstance(result.get("trace_elapsed_ms"), (int, float)):
+            state["sidecar_trace_elapsed_ms"] = str(int(result.get("trace_elapsed_ms") or 0))
+        execution_path = str(result.get("execution_path") or "").strip()
+        if execution_path:
+            state["sidecar_execution_path"] = execution_path
+        execution_detail = str(result.get("execution_detail") or "").strip()
+        if execution_detail:
+            state["sidecar_execution_detail"] = execution_detail
+        trace_stage_ms = result.get("trace_stage_ms")
+        if isinstance(trace_stage_ms, dict) and trace_stage_ms:
+            try:
+                state["sidecar_trace_stage_ms"] = json.dumps(trace_stage_ms, ensure_ascii=False)
+            except TypeError:
+                pass
         if state.get("status") == "ready":
             self._probe_cache_state = dict(state)
         return result.get("task_result"), self._attach_runtime_meta(state)

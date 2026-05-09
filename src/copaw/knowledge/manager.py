@@ -2475,6 +2475,21 @@ class KnowledgeManager:
         if not isinstance(normalized_result, list):
             return []
 
+        # MTL NER can return sentence-grouped rows: [[...], [...]].
+        if (
+            normalized_result
+            and isinstance(normalized_result[0], list)
+            and normalized_result[0]
+            and isinstance(normalized_result[0][0], (list, tuple, dict))
+        ):
+            flattened: list[Any] = []
+            for row in normalized_result:
+                if isinstance(row, list):
+                    flattened.extend(row)
+                else:
+                    flattened.append(row)
+            normalized_result = flattened
+
         mentions: list[dict[str, Any]] = []
         search_cursor = 0
         for index, item in enumerate(normalized_result):
@@ -2515,8 +2530,10 @@ class KnowledgeManager:
                     start = int(item[1] or -1)
                     end = int(item[2] or -1)
                 elif len(item) >= 4:
-                    start = int(item[2] or -1)
-                    end = int(item[3] or -1)
+                    # HanLP NER 4-tuple uses token indices instead of char offsets.
+                    # Fall back to text search below to recover character spans.
+                    start = -1
+                    end = -1
             else:
                 continue
 

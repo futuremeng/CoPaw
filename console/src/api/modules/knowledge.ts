@@ -180,6 +180,11 @@ export const knowledgeApi = {
       runtime_python_executable?: string;
       effective_task_model_id?: string;
       preload_status?: string;
+      sidecar_elapsed_ms?: number;
+      sidecar_trace_elapsed_ms?: number;
+      sidecar_execution_path?: string;
+      sidecar_execution_detail?: string;
+      sidecar_trace_stage_ms?: Record<string, number>;
     }>(`/knowledge/tasks/${encodeURIComponent(taskKey)}/run`, {
       method: "POST",
       body: JSON.stringify(payload),

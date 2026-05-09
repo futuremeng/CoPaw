@@ -40,6 +40,11 @@ type NlpDemoMeta = {
   runtime_python_executable?: string;
   effective_task_model_id?: string;
   preload_status?: string;
+  sidecar_elapsed_ms?: number;
+  sidecar_trace_elapsed_ms?: number;
+  sidecar_execution_path?: string;
+  sidecar_execution_detail?: string;
+  sidecar_trace_stage_ms?: Record<string, number>;
 };
 
 const DEMO_METHODS: DemoMethod[] = [
@@ -1382,8 +1387,21 @@ function NlpPage() {
                             <div className={styles.demoMetaItem}><span>style</span><span>{activeDemoResult.detected_style}</span></div>
                             <div className={styles.demoMetaItem}><span>score</span><span>{activeDemoResult.detection_score}</span></div>
                             <div className={styles.demoMetaItem}><span>duration</span><span>{activeDemoResult.duration_ms} ms</span></div>
+                            <div className={styles.demoMetaItem}><span>sidecar total</span><span>{activeDemoResult.sidecar_elapsed_ms ?? 0} ms</span></div>
+                            <div className={styles.demoMetaItem}><span>trace total</span><span>{activeDemoResult.sidecar_trace_elapsed_ms ?? 0} ms</span></div>
+                            <div className={styles.demoMetaItem}><span>execution path</span><span>{activeDemoResult.sidecar_execution_path || "(unknown)"}</span></div>
                             <div className={styles.demoMetaItem}><span>preload</span><span>{activeDemoResult.preload_status || "idle"}</span></div>
                           </div>
+                          {activeDemoResult.sidecar_execution_detail ? (
+                            <Typography.Paragraph className={styles.operationOutput}>
+                              execution_detail: {activeDemoResult.sidecar_execution_detail}
+                            </Typography.Paragraph>
+                          ) : null}
+                          {activeDemoResult.sidecar_trace_stage_ms && Object.keys(activeDemoResult.sidecar_trace_stage_ms).length > 0 ? (
+                            <Typography.Paragraph className={styles.operationOutput}>
+                              stage_ms: {prettyJson(activeDemoResult.sidecar_trace_stage_ms)}
+                            </Typography.Paragraph>
+                          ) : null}
                           <Typography.Paragraph className={styles.operationOutput}>
                             cache_path: {activeDemoResult.model_cache_path || status?.sidecar.model_cache_path || status?.sidecar.model_home || status?.sidecar.hanlp_home || t("nlpConfig.notConfigured")}
                           </Typography.Paragraph>
@@ -1579,8 +1597,21 @@ function NlpPage() {
                             <div className={styles.demoMetaItem}><span>style</span><span>{activeClassicalDemoResult.detected_style}</span></div>
                             <div className={styles.demoMetaItem}><span>score</span><span>{activeClassicalDemoResult.detection_score}</span></div>
                             <div className={styles.demoMetaItem}><span>duration</span><span>{activeClassicalDemoResult.duration_ms} ms</span></div>
+                            <div className={styles.demoMetaItem}><span>sidecar total</span><span>{activeClassicalDemoResult.sidecar_elapsed_ms ?? 0} ms</span></div>
+                            <div className={styles.demoMetaItem}><span>trace total</span><span>{activeClassicalDemoResult.sidecar_trace_elapsed_ms ?? 0} ms</span></div>
+                            <div className={styles.demoMetaItem}><span>execution path</span><span>{activeClassicalDemoResult.sidecar_execution_path || "(unknown)"}</span></div>
                             <div className={styles.demoMetaItem}><span>preload</span><span>{activeClassicalDemoResult.preload_status || "idle"}</span></div>
                           </div>
+                          {activeClassicalDemoResult.sidecar_execution_detail ? (
+                            <Typography.Paragraph className={styles.operationOutput}>
+                              execution_detail: {activeClassicalDemoResult.sidecar_execution_detail}
+                            </Typography.Paragraph>
+                          ) : null}
+                          {activeClassicalDemoResult.sidecar_trace_stage_ms && Object.keys(activeClassicalDemoResult.sidecar_trace_stage_ms).length > 0 ? (
+                            <Typography.Paragraph className={styles.operationOutput}>
+                              stage_ms: {prettyJson(activeClassicalDemoResult.sidecar_trace_stage_ms)}
+                            </Typography.Paragraph>
+                          ) : null}
                           <Typography.Paragraph className={styles.operationOutput}>
                             cache_path: {activeClassicalDemoResult.model_cache_path || status?.sidecar.model_cache_path || status?.sidecar.model_home || status?.sidecar.hanlp_home || t("nlpConfig.notConfigured")}
                           </Typography.Paragraph>
