@@ -114,3 +114,65 @@ async def get_sidecar_nlp_local_models() -> dict:
     payload["provider"] = provider
     payload["model_cache_path"] = str(getattr(nlp_cfg, "model_home", "") or "")
     return payload
+
+
+@router.post(
+    "/nlp-local-models/download-missing",
+    summary="Download missing local models for NLP sidecar",
+    description=(
+        "Download all models reported as missing by nlp-local-models and "
+        "re-check local availability after download attempts."
+    ),
+)
+async def download_missing_local_models() -> dict:
+    """Download all currently missing local models in sequence."""
+    config = load_config()
+    nlp_cfg = config.knowledge.nlp
+    provider = str(getattr(nlp_cfg, "provider", "hanlp") or "hanlp").strip().lower()
+
+    runtime = NLPRuntime()
+    before = await asyncio.to_thread(runtime.local_models_status, config.knowledge)
+    before_items = list(before.get("items") or [])
+    missing_items = [item for item in before_items if not bool(item.get("local_available", False))]
+
+    model_ids: list[str] = []
+    for item in missing_items:
+        model_id = str(item.get("model_id") or "").strip()
+        if model_id and model_id not in model_ids:
+            model_ids.append(model_id)
+
+    attempts: list[dict] = []
+    for model_id in model_ids:
+        local_config = config.knowledge.model_copy(deep=True)
+        local_config.nlp.model_id = model_id
+        result = await asyncio.to_thread(runtime.ensure_model, local_config, allow_download=True)
+        attempts.append(
+            {
+                "model_id": model_id,
+                "status": str(result.get("status") or "unavailable"),
+                "reason_code": str(result.get("reason_code") or "HANLP2_MODEL_LOAD_FAILED"),
+                "reason": str(result.get("reason") or "Model ensure failed."),
+            }
+        )
+
+    after = await asyncio.to_thread(runtime.local_models_status, config.knowledge)
+    remaining = [item for item in list(after.get("items") or []) if not bool(item.get("local_available", False))]
+
+    return {
+        "provider": provider,
+        "success": len(remaining) == 0,
+        "requested": model_ids,
+        "attempts": attempts,
+        "before": {
+            "status": str(before.get("status") or "unavailable"),
+            "reason_code": str(before.get("reason_code") or "HANLP2_LOCAL_MODELS_STATUS_FAILED"),
+            "missing_count": len(missing_items),
+        },
+        "after": {
+            "status": str(after.get("status") or "unavailable"),
+            "reason_code": str(after.get("reason_code") or "HANLP2_LOCAL_MODELS_STATUS_FAILED"),
+            "missing_count": len(remaining),
+        },
+        "remaining": remaining,
+        "model_cache_path": str(getattr(nlp_cfg, "model_home", "") or ""),
+    }

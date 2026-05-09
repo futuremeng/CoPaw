@@ -833,6 +833,7 @@ def execute_mode(mode, payload):
     requested_task_key = str(payload.get("task_key") or "").strip()
     requested_task_spec = lookup_task_spec(payload, requested_task_key)
     hanlp_home = str(payload.get("hanlp_home") or "").strip()
+    allow_download = bool(payload.get("allow_download", False))
 
     attr, fn = locate_tokenizer(hanlp)
 
@@ -965,10 +966,20 @@ def execute_mode(mode, payload):
         }
 
     if mode in {"model_status", "ensure_model"}:
-        raw_model_id, model, resolved_name, tokens, error_name = validate_model(
-            hanlp,
-            configured_model_id,
-        )
+        prev_require_local = os.environ.get("COPAW_HANLP_REQUIRE_LOCAL_MODELS")
+        if mode == "ensure_model" and allow_download:
+            os.environ["COPAW_HANLP_REQUIRE_LOCAL_MODELS"] = "0"
+        try:
+            raw_model_id, model, resolved_name, tokens, error_name = validate_model(
+                hanlp,
+                configured_model_id,
+            )
+        finally:
+            if mode == "ensure_model" and allow_download:
+                if prev_require_local is None:
+                    os.environ.pop("COPAW_HANLP_REQUIRE_LOCAL_MODELS", None)
+                else:
+                    os.environ["COPAW_HANLP_REQUIRE_LOCAL_MODELS"] = prev_require_local
         if model is None:
             reason = "HanLP2 model loader is unavailable or model_id is empty."
             if error_name:
@@ -1002,6 +1013,7 @@ def execute_mode(mode, payload):
             "model_id": raw_model_id,
             "resolved_model": resolved_name,
             "tokenizer_attr": attr,
+            "download_mode": bool(mode == "ensure_model" and allow_download),
             "tokens": tokens,
         }
 
@@ -1434,7 +1446,7 @@ class HanLPSidecarRuntime:
         }
 
     @staticmethod
-    def _config_payload(config: KnowledgeConfig | None) -> dict[str, Any]:
+    def _config_payload(config: KnowledgeConfig | None, *, allow_download: bool = False) -> dict[str, Any]:
         hanlp_cfg = getattr(config, "nlp", None)
         task_matrix = getattr(hanlp_cfg, "task_matrix", None)
         raw_tasks = getattr(task_matrix, "tasks", {}) if task_matrix is not None else {}
@@ -1453,6 +1465,7 @@ class HanLPSidecarRuntime:
             "enabled": bool(getattr(hanlp_cfg, "enabled", False)),
             "python_executable": str(getattr(hanlp_cfg, "python_executable", "") or "").strip(),
             "model_id": str(getattr(hanlp_cfg, "model_id", "") or "").strip(),
+            "allow_download": bool(allow_download),
             "probe_timeout_sec": float(getattr(hanlp_cfg, "probe_timeout_sec", 5.0) or 5.0),
             "tokenize_timeout_sec": float(getattr(hanlp_cfg, "tokenize_timeout_sec", 15.0) or 15.0),
             "hanlp_home": (
@@ -1597,8 +1610,8 @@ class HanLPSidecarRuntime:
             reason=str(result.get("reason") or "HanLP2 model probe failed."),
         ))
 
-    def ensure_model(self, config: KnowledgeConfig | None) -> dict[str, str]:
-        payload = self._config_payload(config)
+    def ensure_model(self, config: KnowledgeConfig | None, *, allow_download: bool = False) -> dict[str, str]:
+        payload = self._config_payload(config, allow_download=allow_download)
         probe_state = self.probe(config)
         if probe_state.get("status") != "ready":
             return dict(probe_state)
@@ -1891,7 +1904,8 @@ class _PlaceholderRuntime:
             reason="Model status is unavailable in placeholder NLP runtime.",
         )
 
-    def ensure_model(self, config: KnowledgeConfig | None) -> dict[str, str]:
+    def ensure_model(self, config: KnowledgeConfig | None, *, allow_download: bool = False) -> dict[str, str]:
+        _ = allow_download
         return self.model_status(config)
 
     def tokenize(self, text: str, config: KnowledgeConfig | None) -> tuple[list[str], dict[str, str]]:
@@ -1977,8 +1991,8 @@ class NLPRuntime:
     def model_status(self, config: KnowledgeConfig | None) -> dict[str, str]:
         return self._runtime(config).model_status(config)
 
-    def ensure_model(self, config: KnowledgeConfig | None) -> dict[str, str]:
-        return self._runtime(config).ensure_model(config)
+    def ensure_model(self, config: KnowledgeConfig | None, *, allow_download: bool = False) -> dict[str, str]:
+        return self._runtime(config).ensure_model(config, allow_download=allow_download)
 
     def tokenize(self, text: str, config: KnowledgeConfig | None) -> tuple[list[str], dict[str, str]]:
         return self._runtime(config).tokenize(text, config)

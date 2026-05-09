@@ -672,6 +672,7 @@ function NlpPage() {
     loading,
     installing,
     downloadingModel,
+    downloadingMissingLocalModels,
     status,
     localModelsStatus,
     provider,
@@ -681,6 +682,7 @@ function NlpPage() {
     handleInstall,
     handleUpdatePreload,
     handleDownloadModel,
+    handleDownloadMissingLocalModels,
     runMethodDemo,
     runningDemoTask,
     demoResults,
@@ -1176,6 +1178,19 @@ function NlpPage() {
                         以及其他 {missingLocalModelItems.length - 8} 个模型
                       </Typography.Text>
                     ) : null}
+                    <Space size={8}>
+                      <Button
+                        size="small"
+                        type="primary"
+                        loading={downloadingMissingLocalModels}
+                        disabled={!sidecarReady || installing || downloadingMissingLocalModels}
+                        onClick={() => {
+                          void handleDownloadMissingLocalModels();
+                        }}
+                      >
+                        一键下载缺失模型
+                      </Button>
+                    </Space>
                   </div>
                 }
               />

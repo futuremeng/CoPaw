@@ -211,6 +211,40 @@ export const agentApi = {
       }>;
     }>("/sidecar/nlp-local-models"),
 
+    downloadMissingNlpLocalModels: () =>
+      request<{
+        provider?: string;
+        success: boolean;
+        requested: string[];
+        attempts: Array<{
+          model_id: string;
+          status: string;
+          reason_code: string;
+          reason: string;
+        }>;
+        before: {
+          status: string;
+          reason_code: string;
+          missing_count: number;
+        };
+        after: {
+          status: string;
+          reason_code: string;
+          missing_count: number;
+        };
+        remaining: Array<{
+          scope: string;
+          task_key: string;
+          task_name: string;
+          model_id: string;
+          local_available: boolean;
+        }>;
+        model_cache_path?: string;
+      }>("/sidecar/nlp-local-models/download-missing", {
+        method: "POST",
+        body: JSON.stringify({}),
+      }),
+
   updateNlpStrategy: (strategy: NlpStrategyPayload) =>
     request<{
       strategy: NlpStrategyPayload;

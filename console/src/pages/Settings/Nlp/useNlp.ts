@@ -149,6 +149,7 @@ export function useNlp() {
   const [loading, setLoading] = useState(true);
   const [installing, setInstalling] = useState(false);
   const [downloadingModel, setDownloadingModel] = useState(false);
+  const [downloadingMissingLocalModels, setDownloadingMissingLocalModels] = useState(false);
   const [savingPreload, setSavingPreload] = useState(false);
   const [runningPreload, setRunningPreload] = useState(false);
   const [savingStrategy, setSavingStrategy] = useState(false);
@@ -229,6 +230,26 @@ export function useNlp() {
       message.error(t("nlpConfig.downloadFailed"));
     } finally {
       setDownloadingModel(false);
+    }
+  };
+
+  const handleDownloadMissingLocalModels = async () => {
+    setDownloadingMissingLocalModels(true);
+    try {
+      const res = await api.downloadMissingNlpLocalModels();
+      if (res.success) {
+        message.success("本地缺失模型已全部下载完成");
+      } else {
+        message.warning(`仍有 ${res.after?.missing_count ?? 0} 个模型未就绪`);
+      }
+      await fetchStatus();
+      return res;
+    } catch (error) {
+      console.error("Failed to download missing local NLP models:", error);
+      message.error("批量下载本地模型失败");
+      return null;
+    } finally {
+      setDownloadingMissingLocalModels(false);
     }
   };
 
@@ -341,6 +362,7 @@ export function useNlp() {
     loading,
     installing,
     downloadingModel,
+    downloadingMissingLocalModels,
     savingPreload,
     runningPreload,
     savingStrategy,
@@ -358,6 +380,7 @@ export function useNlp() {
     fetchStatus,
     handleInstall,
     handleDownloadModel,
+    handleDownloadMissingLocalModels,
     handleUpdatePreload,
     handleTriggerPreload,
     handleUpdateStrategy,
