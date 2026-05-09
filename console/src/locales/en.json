@@ -195,7 +195,7 @@
     "modelStatus": "Model status",
     "modelId": "Model:",
     "methodsTitle": "Supported Methods",
-    "methodsDescription": "Availability below reflects the current runtime status at /agent/nlp-status.",
+    "methodsDescription": "Availability below reflects the current runtime status at /sidecar/nlp-status.",
     "taskKey": "Task key:",
     "methods": {
       "defaultUnavailableReason": "Method is unavailable in current runtime.",

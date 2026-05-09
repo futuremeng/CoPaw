@@ -151,6 +151,7 @@ export const agentApi = {
         reason: string;
         enabled: boolean;
         python_executable: string;
+        python_version?: string;
         managed: boolean;
         uv_available: boolean;
         uv_executable: string;
@@ -188,7 +189,7 @@ export const agentApi = {
         message?: string;
         target_endpoint?: string;
       };
-    }>("/agent/nlp-status"),
+    }>("/sidecar/nlp-status"),
 
   updateNlpStrategy: (strategy: NlpStrategyPayload) =>
     request<{

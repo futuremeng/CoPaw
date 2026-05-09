@@ -1,5 +1,5 @@
 import { Button } from "@agentscope-ai/design";
-import { Alert, Card, Collapse, Input, Select, Space, Switch, Tag, Typography } from "antd";
+import { Alert, Card, Input, Space, Switch, Tag, Typography } from "antd";
 import { useEffect, useState } from "react";
 import type { KeyboardEventHandler } from "react";
 import { useTranslation } from "react-i18next";
@@ -671,18 +671,15 @@ function NlpPage() {
   const {
     loading,
     installing,
-    savingPreload,
-    runningPreload,
+    downloadingModel,
     status,
     provider,
     hanlpProviderActive,
-    lastManualSteps,
-    lastOperations,
     sidecarReady,
     modelReady,
     handleInstall,
     handleUpdatePreload,
-    handleTriggerPreload,
+    handleDownloadModel,
     runMethodDemo,
     runningDemoTask,
     demoResults,
@@ -690,8 +687,6 @@ function NlpPage() {
 
   const taskStates = status?.tasks ?? {};
   const [nerEntityOnlyView, setNerEntityOnlyView] = useState(false);
-  const [preloadEnabledDraft, setPreloadEnabledDraft] = useState(false);
-  const [preloadScopeDraft, setPreloadScopeDraft] = useState<"critical" | "all_enabled_tasks">("critical");
   const [demoInputs, setDemoInputs] = useState<Record<string, string>>({});
   const [activeDemoTaskKey, setActiveDemoTaskKey] = useState("tokenize");
   const [activeDemoRowIndex, setActiveDemoRowIndex] = useState<number | null>(null);
@@ -700,8 +695,6 @@ function NlpPage() {
   const [activeClassicalDemoMethodKey, setActiveClassicalDemoMethodKey] = useState(CLASSICAL_DEMO_METHODS[0]?.key || "");
   const [activeClassicalDemoRowIndex, setActiveClassicalDemoRowIndex] = useState<number | null>(null);
   const [hoveredClassicalDemoRowIndex, setHoveredClassicalDemoRowIndex] = useState<number | null>(null);
-
-  const [sideGroupKeys, setSideGroupKeys] = useState<string[]>(["runtime"]);
 
   useEffect(() => {
     if (Object.keys(demoInputs).length > 0) {
@@ -724,9 +717,19 @@ function NlpPage() {
   }, [classicalDemoInputs]);
 
   useEffect(() => {
-    setPreloadEnabledDraft(Boolean(status?.preload?.enabled));
-    setPreloadScopeDraft(status?.preload?.scope === "all_enabled_tasks" ? "all_enabled_tasks" : "critical");
-  }, [status?.preload?.enabled, status?.preload?.scope]);
+    if (!hanlpProviderActive || !sidecarReady) {
+      return;
+    }
+    const preloadEnabled = Boolean(status?.preload?.enabled);
+    const preloadScope = status?.preload?.scope || "critical";
+    if (preloadEnabled && preloadScope === "all_enabled_tasks") {
+      return;
+    }
+    void handleUpdatePreload({
+      enabled: true,
+      scope: "all_enabled_tasks",
+    });
+  }, [hanlpProviderActive, sidecarReady, status?.preload?.enabled, status?.preload?.scope]);
 
   const methods: Array<{ key: string; taskKey?: string; status: MethodStatus }> = [
     {
@@ -966,6 +969,54 @@ function NlpPage() {
     cor: methods.find((item) => item.key === "cor"),
   };
 
+  const resolveMethodTaskCandidates = (taskKey: string): string[] => {
+    const mapping: Record<string, string[]> = {
+      tokenize: ["tokenize", "tok", "tok/fine"],
+      ner: ["ner", "ner_msra"],
+      pos_ctb: ["pos_ctb", "pos"],
+      pos_pku: ["pos_pku", "pos"],
+      pos_863: ["pos_863", "pos"],
+      dep: ["dep"],
+      sdp: ["sdp"],
+      con: ["con"],
+      lzh_tok_fine: ["lzh_tok_fine", "tok/fine", "lzh_tok"],
+      lzh_tok_coarse: ["lzh_tok_coarse", "tok/coarse", "lzh_tok"],
+      lzh_lem: ["lzh_lem", "lem"],
+      lzh_pos_upos: ["lzh_pos_upos", "pos/upos"],
+      lzh_pos_xpos: ["lzh_pos_xpos", "pos/xpos"],
+      lzh_pos_pku: ["lzh_pos_pku", "pos/pku"],
+      lzh_dep: ["lzh_dep", "dep"],
+    };
+    return mapping[taskKey] || [taskKey];
+  };
+
+  const resolveMethodModelInfo = (taskKey: string, methodStatus: MethodStatus) => {
+    const taskResults = status?.preload?.task_results || {};
+    const taskResult = resolveMethodTaskCandidates(taskKey)
+      .map((candidate) => taskResults[candidate])
+      .find((item) => Boolean(item));
+    const modelId = String(taskResult?.model_id || status?.model.model_id || "").trim();
+    const cachePath = String(
+      status?.preload?.model_cache_path ||
+      status?.sidecar.model_cache_path ||
+      status?.sidecar.model_home ||
+      status?.sidecar.hanlp_home ||
+      "",
+    ).trim();
+    const reasonHint = `${methodStatus.reasonCode} ${methodStatus.reason}`.toUpperCase();
+    const taskStatus = String(taskResult?.status || methodStatus.status || "").toLowerCase();
+    const missing =
+      taskStatus !== "ready" &&
+      /(MODEL|DOWNLOAD|MISSING|INSTALL_REQUIRED|NOT_CONFIGURED|UNAVAILABLE)/.test(reasonHint);
+    return {
+      modelText: `model: ${modelId || "(未配置)"}`,
+      fileText: `file: ${cachePath || t("nlpConfig.notConfigured")}`,
+      missing,
+    };
+  };
+
+  const pythonVersion = String(status?.sidecar?.python_version || "").trim();
+
   useEffect(() => {
     setActiveDemoRowIndex(null);
     setHoveredDemoRowIndex(null);
@@ -975,35 +1026,6 @@ function NlpPage() {
     setActiveClassicalDemoRowIndex(null);
     setHoveredClassicalDemoRowIndex(null);
   }, [activeClassicalDemoMethod?.key, activeClassicalDemoResult?.request_id]);
-
-  useEffect(() => {
-    const raw = window.localStorage.getItem("copaw-nlp-side-groups");
-    if (!raw) {
-      return;
-    }
-    try {
-      const parsed = JSON.parse(raw) as unknown;
-      if (Array.isArray(parsed)) {
-        const cleaned = parsed
-          .map((item) => String(item || "").trim())
-          .filter(Boolean);
-        if (cleaned.length > 0) {
-          setSideGroupKeys(cleaned);
-        }
-      }
-    } catch {
-      // ignore malformed local cache
-    }
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    window.localStorage.setItem("copaw-nlp-side-groups", JSON.stringify(sideGroupKeys));
-  }, [sideGroupKeys]);
-
-
 
   const handleDemoResultKeyDown: KeyboardEventHandler<HTMLDivElement> = (event) => {
     if (!activeDemoResult || activeSelectableCount <= 0) {
@@ -1071,6 +1093,8 @@ function NlpPage() {
         : "立即部署";
 
   const sidecarActionBusy = installing || (!sidecarReady && loading);
+  const runtimeAlertType: "success" | "warning" =
+    hanlpProviderActive && sidecarReady && modelReady ? "success" : "warning";
 
 
 
@@ -1087,7 +1111,7 @@ function NlpPage() {
         <div id="nlp-section-maintenance" className={`${styles.alertRow} ${styles.sectionAnchorOffset}`}>
           <div className={styles.alertStack}>
             <Alert
-              type={hanlpProviderActive ? "success" : "warning"}
+              type={runtimeAlertType}
               showIcon
               message={t("nlpConfig.infoTitle")}
               description={
@@ -1097,13 +1121,9 @@ function NlpPage() {
                   </Typography.Text>
 
                   <Typography.Text className={styles.maintenanceSecondaryText}>
-                    {t("nlpConfig.providerMessage", { provider: provider || "hanlp" })}
-                  </Typography.Text>
-
-                  <Typography.Text type="secondary" className={styles.maintenanceMutedText}>
-                    {hanlpProviderActive
+                    {`${t("nlpConfig.providerMessage", { provider: provider || "hanlp" })} · ${hanlpProviderActive
                       ? t("nlpConfig.providerActive")
-                      : t("nlpConfig.providerInactive")}
+                      : t("nlpConfig.providerInactive")} · ${t("nlpConfig.pythonPath")} ${status?.sidecar.python_executable || t("nlpConfig.notConfigured")} · Python ${pythonVersion || t("nlpConfig.notConfigured")}`}
                   </Typography.Text>
                 </div>
               }
@@ -1146,6 +1166,7 @@ function NlpPage() {
                     {DEMO_METHODS.map((method) => {
                       const methodStatus = methodStatusByTask[method.backendTaskKey];
                       const methodDetail = methodDetailByTaskKey[method.backendTaskKey];
+                      const modelInfo = resolveMethodModelInfo(method.backendTaskKey, methodStatus);
                       const active = method.backendTaskKey === activeDemoMethod.backendTaskKey;
                       const methodName = methodDetail
                         ? t(`nlpConfig.methods.${methodDetail.key}.name`)
@@ -1169,9 +1190,9 @@ function NlpPage() {
                               <Tag
                                 className={styles.demoStatusTag}
                                 color={resolveTagColor(methodStatus?.status || "unavailable")}
-                                title={methodStatus?.reasonCode || "UNKNOWN"}
+                                title={`${methodStatus?.reasonCode || "UNKNOWN"} | ${modelInfo.modelText} | ${modelInfo.fileText}`}
                               >
-                                {methodStatus?.reasonCode || "UNKNOWN"}
+                                {`${methodStatus?.reasonCode || "UNKNOWN"} | ${modelInfo.modelText} | ${modelInfo.fileText}`}
                               </Tag>
                             </div>
                             <Typography.Text type="secondary" className={styles.demoMethodDescription}>
@@ -1186,6 +1207,22 @@ function NlpPage() {
                               <Typography.Text type="secondary" className={styles.demoMethodTaskKey}>
                                 {`${t("nlpConfig.taskKey")} ${methodDetail.taskKey}`}
                               </Typography.Text>
+                            ) : null}
+                            {modelInfo.missing ? (
+                              <Button
+                                size="small"
+                                type="link"
+                                className={styles.demoDownloadButton}
+                                loading={downloadingModel}
+                                disabled={installing || downloadingModel || !sidecarReady || !hanlpProviderActive}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  void handleDownloadModel();
+                                }}
+                              >
+                                下载
+                              </Button>
                             ) : null}
                           </div>
                         </button>
@@ -1331,6 +1368,7 @@ function NlpPage() {
                     {CLASSICAL_DEMO_METHODS.map((method) => {
                       const methodStatus = methodStatusByTask[method.backendTaskKey];
                       const methodDetail = methodDetailByTaskKey[method.backendTaskKey];
+                      const modelInfo = resolveMethodModelInfo(method.backendTaskKey, methodStatus);
                       const active = method.key === activeClassicalDemoMethod?.key;
                       const methodReason = methodDetail?.status.reason || methodStatus?.reason || "";
                       return (
@@ -1348,9 +1386,9 @@ function NlpPage() {
                               <Tag
                                 className={styles.demoStatusTag}
                                 color={resolveTagColor(methodStatus?.status || "unavailable")}
-                                title={methodStatus?.reasonCode || "UNKNOWN"}
+                                title={`${methodStatus?.reasonCode || "UNKNOWN"} | ${modelInfo.modelText} | ${modelInfo.fileText}`}
                               >
-                                {methodStatus?.reasonCode || "UNKNOWN"}
+                                {`${methodStatus?.reasonCode || "UNKNOWN"} | ${modelInfo.modelText} | ${modelInfo.fileText}`}
                               </Tag>
                             </div>
                             <Typography.Text type="secondary" className={styles.demoMethodDescription}>
@@ -1364,6 +1402,22 @@ function NlpPage() {
                             <Typography.Text type="secondary" className={styles.demoMethodTaskKey}>
                               {`${t("nlpConfig.taskKey")} ${method.backendTaskKey}`}
                             </Typography.Text>
+                            {modelInfo.missing ? (
+                              <Button
+                                size="small"
+                                type="link"
+                                className={styles.demoDownloadButton}
+                                loading={downloadingModel}
+                                disabled={installing || downloadingModel || !sidecarReady || !hanlpProviderActive}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  void handleDownloadModel();
+                                }}
+                              >
+                                下载
+                              </Button>
+                            ) : null}
                           </div>
                         </button>
                       );
@@ -1487,156 +1541,6 @@ function NlpPage() {
 
           </div>
 
-          <div className={styles.sideColumn}>
-            <Collapse
-              className={styles.sideGroupCollapse}
-              activeKey={sideGroupKeys}
-              onChange={(keys) => {
-                const nextKeys = Array.isArray(keys)
-                  ? keys.map((item) => String(item))
-                  : [String(keys)];
-                setSideGroupKeys(nextKeys);
-              }}
-              items={[
-                {
-                  key: "runtime",
-                  label: "Runtime & Logs",
-                  children: (
-                    <Space direction="vertical" size={16} style={{ width: "100%" }}>
-                      <div id="nlp-section-runtime" className={styles.sectionAnchorOffset}>
-                        <Card className={styles.card}>
-                          <Typography.Title level={5} className={styles.cardTitle}>
-                            Runtime Health
-                          </Typography.Title>
-                          <Space direction="vertical" size={10} style={{ width: "100%" }}>
-                            <div className={styles.statusRow}>
-                              <span>{t("nlpConfig.sidecarStatus")}</span>
-                              <Tag color={sidecarReady ? "success" : "warning"}>{status?.sidecar.reason_code || status?.sidecar.status}</Tag>
-                            </div>
-                            <Typography.Text type="secondary">{status?.sidecar.reason}</Typography.Text>
-                            <Typography.Text>{t("nlpConfig.pythonPath")} {status?.sidecar.python_executable || t("nlpConfig.notConfigured")}</Typography.Text>
-                            <Typography.Text>{t("nlpConfig.hanlpHome")} {(status?.sidecar.model_home || status?.sidecar.hanlp_home) || t("nlpConfig.notConfigured")}</Typography.Text>
-                            <Typography.Paragraph className={styles.operationOutput}>
-                              cache_path: {status?.sidecar.model_cache_path || status?.sidecar.model_home || status?.sidecar.hanlp_home || t("nlpConfig.notConfigured")}
-                            </Typography.Paragraph>
-                            <Typography.Text>
-                              {t("nlpConfig.installStrategy", {
-                                value: status?.sidecar.uv_available
-                                  ? t("nlpConfig.installStrategyUv")
-                                  : t("nlpConfig.installStrategyMissingUv"),
-                              })}
-                            </Typography.Text>
-                            <Typography.Text>{t("nlpConfig.uvPath")} {status?.sidecar.uv_executable || t("nlpConfig.notConfigured")}</Typography.Text>
-                            <div className={styles.statusRow}>
-                              <span>{t("nlpConfig.modelStatus")}</span>
-                              <Tag color={modelReady ? "success" : sidecarReady ? "warning" : "default"}>{status?.model.reason_code || status?.model.status}</Tag>
-                            </div>
-                            <Typography.Text type="secondary">{status?.model.reason}</Typography.Text>
-                            <Typography.Text>{t("nlpConfig.modelId")} {status?.model.model_id || t("nlpConfig.notConfigured")}</Typography.Text>
-                            <div className={styles.statusRow}>
-                              <span>Startup Preload</span>
-                              <Tag color={status?.preload?.status === "ready" ? "success" : status?.preload?.status === "warming" ? "processing" : status?.preload?.status === "failed" ? "error" : "default"}>
-                                {status?.preload?.status || "disabled"}
-                              </Tag>
-                            </div>
-                            <Typography.Text type="secondary">{status?.preload?.reason || "Startup preload is disabled."}</Typography.Text>
-                            <Space wrap>
-                              <span>启用</span>
-                              <Switch
-                                checked={preloadEnabledDraft}
-                                loading={savingPreload}
-                                onChange={async (checked) => {
-                                  setPreloadEnabledDraft(checked);
-                                  const ok = await handleUpdatePreload({
-                                    enabled: checked,
-                                    scope: preloadScopeDraft,
-                                  });
-                                  if (!ok) {
-                                    setPreloadEnabledDraft(Boolean(status?.preload?.enabled));
-                                  }
-                                }}
-                                disabled={!hanlpProviderActive}
-                              />
-                              <Select
-                                value={preloadScopeDraft}
-                                style={{ width: 220 }}
-                                options={[
-                                  { value: "critical", label: "critical: 仅预热核心任务" },
-                                  { value: "all_enabled_tasks", label: "all_enabled_tasks: 预热所有启用任务" },
-                                ]}
-                                onChange={async (value) => {
-                                  const nextValue = value as "critical" | "all_enabled_tasks";
-                                  setPreloadScopeDraft(nextValue);
-                                  const ok = await handleUpdatePreload({
-                                    enabled: preloadEnabledDraft,
-                                    scope: nextValue,
-                                  });
-                                  if (!ok) {
-                                    setPreloadScopeDraft(status?.preload?.scope === "all_enabled_tasks" ? "all_enabled_tasks" : "critical");
-                                  }
-                                }}
-                                disabled={!hanlpProviderActive || savingPreload}
-                              />
-                              <Button
-                                onClick={() => handleTriggerPreload(true)}
-                                loading={runningPreload}
-                                disabled={!hanlpProviderActive || !sidecarReady}
-                              >
-                                立即预热
-                              </Button>
-                            </Space>
-                          </Space>
-                        </Card>
-                      </div>
-
-                      {lastManualSteps.length > 0 ? (
-                        <Alert
-                          type="warning"
-                          showIcon
-                          message={t("nlpConfig.manualStepsTitle")}
-                          description={
-                            <div>
-                              {lastManualSteps.map((step) => (
-                                <div key={step}>{step}</div>
-                              ))}
-                            </div>
-                          }
-                        />
-                      ) : null}
-
-                      {lastOperations.length > 0 ? (
-                        <Card className={styles.card}>
-                          <Typography.Title level={5} className={styles.cardTitle}>
-                            {t("nlpConfig.operationsTitle")}
-                          </Typography.Title>
-                          <Space direction="vertical" size={12} style={{ width: "100%" }}>
-                            {lastOperations.map((operation) => (
-                              <div key={`${operation.name}-${operation.command}`} className={styles.operationBlock}>
-                                <div className={styles.statusRow}>
-                                  <Typography.Text strong>{operation.name}</Typography.Text>
-                                  <Tag color={operation.ok ? "success" : "error"}>
-                                    {operation.ok ? t("nlpConfig.operationOk") : t("nlpConfig.operationFailed")}
-                                  </Tag>
-                                </div>
-                                <Typography.Text type="secondary">
-                                  {operation.command || operation.installer || t("nlpConfig.notConfigured")}
-                                </Typography.Text>
-                                {operation.output ? (
-                                  <Typography.Paragraph className={styles.operationOutput}>
-                                    {operation.output}
-                                  </Typography.Paragraph>
-                                ) : null}
-                              </div>
-                            ))}
-                          </Space>
-                        </Card>
-                      ) : null}
-                    </Space>
-                  ),
-                },
-              ]}
-            />
-          </div>
         </div>
 
       </div>

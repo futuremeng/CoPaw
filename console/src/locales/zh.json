@@ -1982,7 +1982,7 @@
     "modelStatus": "模型状态",
     "modelId": "模型：",
     "methodsTitle": "支持的方法",
-    "methodsDescription": "以下可用性来自当前 /agent/nlp-status 运行态信息。",
+    "methodsDescription": "以下可用性来自当前 /sidecar/nlp-status 运行态信息。",
     "taskKey": "任务键：",
     "methods": {
       "defaultUnavailableReason": "当前运行时不可用。",

@@ -3,9 +3,10 @@
 
 import asyncio
 import re
+import subprocess
 from typing import Literal
 
-from fastapi import APIRouter, Body, HTTPException, Query, Request
+from fastapi import APIRouter, Body, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from ..utils import schedule_agent_reload
@@ -230,7 +231,7 @@ def _build_hanlp_api_snapshot(payload: dict) -> dict:
         "status": status,
         "reason_code": reason_code,
         "reason": reason,
-        "python_version": "",
+        "python_version": str(sidecar.get("python_version") or ""),
         "hanlp_version": "",
         "has_coreference_resolution": _task_ready("cor"),
         "has_parse": _task_ready("dep") or _task_ready("sdp") or _task_ready("con"),
@@ -239,6 +240,34 @@ def _build_hanlp_api_snapshot(payload: dict) -> dict:
         "pretrained_categories": [],
         "task_ready_count": sum(1 for task in task_entries if isinstance(task, dict) and str(task.get("status") or "") == "ready"),
     }
+
+
+def _detect_python_version(python_executable: str) -> str:
+    """Best-effort python version probe from executable path."""
+    executable = str(python_executable or "").strip()
+    if not executable:
+        return ""
+    try:
+        result = subprocess.run(
+            [
+                executable,
+                "-c",
+                "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+        )
+    except Exception:
+        return ""
+    if result.returncode != 0:
+        return ""
+    output = (result.stdout or "").strip()
+    match = re.search(r"(\d+)\.(\d+)", output)
+    if not match:
+        return ""
+    return f"{match.group(1)}.{match.group(2)}"
 
 
 def _classical_detection_score(text: str) -> float:
@@ -681,78 +710,6 @@ async def post_local_whisper_install() -> dict:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-@router.get(
-    "/nlp-status",
-    summary="Check NLP runtime availability",
-    description=(
-        "Check whether the generic NLP runtime is configured. "
-        "HanLP has been removed and RexUniNLU integration is pending."
-    ),
-)
-async def get_nlp_status(
-    include_runtime_api: bool = Query(
-        default=False,
-        description="When true, run full runtime api probe (slower).",
-    ),
-) -> dict:
-    """Return provider-aware NLP runtime status."""
-    config = load_config()
-    nlp_cfg = config.knowledge.nlp
-    provider = str(getattr(nlp_cfg, "provider", "hanlp") or "hanlp").strip().lower()
-
-    strategy_payload = _build_nlp_strategy_payload(nlp_cfg)
-
-    if provider == "hanlp":
-        from ...agents.utils.hanlp_sidecar import get_hanlp_sidecar_status
-
-        payload = await asyncio.to_thread(get_hanlp_sidecar_status, include_task_status=False)
-        payload["provider"] = "hanlp"
-        payload["strategy"] = strategy_payload
-        if include_runtime_api:
-            payload["api"] = await asyncio.to_thread(NLPRuntime().api_status, config.knowledge)
-        else:
-            payload["api"] = _build_hanlp_api_snapshot(payload)
-        return payload
-
-    runtime = NLPRuntime()
-    sidecar_state = runtime.probe(config.knowledge)
-    model_state = runtime.model_status(config.knowledge)
-    api_payload = runtime.api_status(config.knowledge)
-    model_home = str(getattr(nlp_cfg, "model_home", "") or "")
-    return {
-        "provider": provider,
-        "sidecar": {
-            "status": str(sidecar_state.get("status") or "unavailable"),
-            "reason_code": str(sidecar_state.get("reason_code") or "NLP_ENGINE_UNAVAILABLE"),
-            "reason": str(sidecar_state.get("reason") or "NLP runtime is unavailable."),
-            "enabled": bool(getattr(nlp_cfg, "enabled", False)),
-            "python_executable": str(getattr(nlp_cfg, "python_executable", "") or ""),
-            "managed": False,
-            "uv_available": False,
-            "uv_executable": "",
-            "model_home": model_home,
-            "model_cache_path": model_home,
-        },
-        "model": {
-            "status": str(model_state.get("status") or "unavailable"),
-            "reason_code": str(model_state.get("reason_code") or "NLP_ENGINE_UNAVAILABLE"),
-            "reason": str(model_state.get("reason") or "NLP model is unavailable."),
-            "model_id": str(getattr(nlp_cfg, "model_id", "") or ""),
-        },
-        "strategy": strategy_payload,
-        "api": api_payload,
-        "preload": {
-            "enabled": bool(getattr(nlp_cfg, "preload_on_startup", False)),
-            "scope": str(getattr(nlp_cfg, "preload_scope", "critical") or "critical"),
-            "status": "disabled",
-            "reason": "Startup preload is only available for HanLP.",
-            "model_cache_path": model_home,
-            "preloaded_models": [],
-            "task_results": {},
-        },
-    }
-
-
 @router.put(
     "/nlp-preload",
     summary="Update NLP preload settings",
@@ -860,11 +817,13 @@ async def post_nlp_strategy_dry_run(
 )
 async def get_hanlp_status() -> dict:
     """Compatibility wrapper for legacy HanLP status API."""
-    payload = await get_nlp_status()
+    from .sidecar import get_sidecar_nlp_status
+
+    payload = await get_sidecar_nlp_status()
     payload["deprecated"] = True
     payload["migration"] = {
-        "message": "Use /agent/nlp-status and knowledge.nlp configuration.",
-        "target_endpoint": "/agent/nlp-status",
+        "message": "Use /sidecar/nlp-status and knowledge.nlp configuration.",
+        "target_endpoint": "/sidecar/nlp-status",
     }
     return payload
 

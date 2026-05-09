@@ -242,11 +242,18 @@
 }
 
 .demoStatusTag {
-  max-width: 145px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  max-width: 100%;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  word-break: break-all;
   flex-shrink: 1;
+}
+
+.demoDownloadButton {
+  align-self: flex-start;
+  padding: 0;
+  height: auto;
 }
 
 .demoMethodButtonActive {

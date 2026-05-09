@@ -683,6 +683,12 @@ def _build_status(config, *, include_task_status: bool = True) -> dict:
     )
     nlp_cfg = _nlp_config(config)
     python_executable = str(getattr(nlp_cfg, "python_executable", "") or "").strip()
+    python_version_tuple = _python_version(python_executable) if python_executable else None
+    python_version = (
+        f"{python_version_tuple[0]}.{python_version_tuple[1]}"
+        if python_version_tuple is not None
+        else ""
+    )
     managed_python = str(_managed_python_path(_managed_venv()))
     uv_executable = _find_uv_executable()
     return {
@@ -693,6 +699,7 @@ def _build_status(config, *, include_task_status: bool = True) -> dict:
             "enabled": bool(getattr(nlp_cfg, "enabled", False)),
             "provider": str(getattr(nlp_cfg, "provider", "hanlp") or "hanlp").strip(),
             "python_executable": python_executable,
+            "python_version": python_version,
             "managed": python_executable == managed_python,
             "uv_available": bool(uv_executable),
             "uv_executable": uv_executable,

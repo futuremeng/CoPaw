@@ -1944,7 +1944,7 @@
     "modelStatus": "Статус модели",
     "modelId": "Модель:",
     "methodsTitle": "Поддерживаемые методы",
-    "methodsDescription": "Доступность ниже отражает текущее состояние рантайма из /agent/nlp-status.",
+    "methodsDescription": "Доступность ниже отражает текущее состояние рантайма из /sidecar/nlp-status.",
     "taskKey": "Ключ задачи:",
     "methods": {
       "defaultUnavailableReason": "Метод недоступен в текущем рантайме.",

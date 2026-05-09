@@ -21,6 +21,7 @@ export interface NlpStatus {
     reason: string;
     enabled: boolean;
     python_executable: string;
+    python_version?: string;
     managed: boolean;
     uv_available: boolean;
     uv_executable: string;

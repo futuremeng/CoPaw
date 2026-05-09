@@ -1934,7 +1934,7 @@
     "modelStatus": "モデル状態",
     "modelId": "モデル:",
     "methodsTitle": "対応メソッド",
-    "methodsDescription": "以下の可用性は現在の /agent/nlp-status 実行状態を反映しています。",
+    "methodsDescription": "以下の可用性は現在の /sidecar/nlp-status 実行状態を反映しています。",
     "taskKey": "タスクキー:",
     "methods": {
       "defaultUnavailableReason": "現在のランタイムでは利用できません。",
