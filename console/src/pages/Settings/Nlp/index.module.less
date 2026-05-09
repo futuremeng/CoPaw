@@ -408,6 +408,76 @@
   line-height: 1.4;
 }
 
+.bratLikeOverlay {
+  margin-top: 10px;
+  border: 1px solid #ecdabf;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #fffef8 0%, #fff9ee 100%);
+  padding: 10px;
+  line-height: 1.9;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.bratSegment {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin: 1px 2px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  transition: all 0.16s ease;
+}
+
+.bratSegmentNer {
+  background: rgba(255, 132, 147, 0.18);
+}
+
+.bratSegmentPos {
+  background: rgba(68, 203, 255, 0.14);
+}
+
+.bratSegmentActive {
+  box-shadow: 0 0 0 1px rgba(255, 127, 22, 0.7), 0 4px 12px rgba(255, 127, 22, 0.2);
+}
+
+.bratLabels {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+
+.bratLabelChip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 16px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  line-height: 1.6;
+  font-weight: 700;
+  letter-spacing: 0.15px;
+  border: 1px solid transparent;
+}
+
+.bratLabelChipNer {
+  background: #ffedf0;
+  color: #8f1e39;
+  border-color: #ef8ca1;
+}
+
+.bratLabelChipPos {
+  background: #e7f9ff;
+  color: #075772;
+  border-color: #67cce9;
+}
+
+.bratLabelChipActive {
+  filter: saturate(1.25);
+}
+
 .demoClusterWrap {
   display: flex;
   flex-direction: column;
@@ -578,9 +648,30 @@
 
   .demoTokenNode,
   .demoHighlightBox,
-  .demoHighlightEntity {
+  .demoHighlightEntity,
+  .bratLikeOverlay {
     border-color: rgba(255, 255, 255, 0.2);
     background: rgba(255, 255, 255, 0.06);
+  }
+
+  .bratSegmentNer {
+    background: rgba(255, 173, 186, 0.24);
+  }
+
+  .bratSegmentPos {
+    background: rgba(118, 224, 255, 0.2);
+  }
+
+  .bratLabelChipNer {
+    background: rgba(255, 187, 202, 0.26);
+    color: #ffd5df;
+    border-color: rgba(255, 173, 193, 0.45);
+  }
+
+  .bratLabelChipPos {
+    background: rgba(122, 226, 255, 0.24);
+    color: #d6f7ff;
+    border-color: rgba(117, 216, 245, 0.5);
   }
 
   .demoTokenIndex {

@@ -2021,6 +2021,7 @@
       "currentTokenCount": "現在のトークン数: {{count}}",
       "rules": "rules",
       "none": "(none)",
+      "prettyPrint": "Pretty Print",
       "rawOutput": "生出力",
       "empty": "(empty)",
       "inherit": "(inherit)",

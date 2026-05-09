@@ -169,6 +169,7 @@ export const knowledgeApi = {
       reason: string;
       result: unknown;
       raw_result?: unknown;
+      pretty_print?: string;
       resolved_model: string;
       strategy_mode: string;
       detected_style: string;

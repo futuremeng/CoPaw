@@ -282,6 +282,7 @@
       "currentTokenCount": "Current token count: {{count}}",
       "rules": "rules",
       "none": "(none)",
+      "prettyPrint": "Pretty Print",
       "rawOutput": "Raw output",
       "empty": "(empty)",
       "inherit": "(inherit)",

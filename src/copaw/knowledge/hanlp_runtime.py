@@ -88,6 +88,8 @@ _HANLP_PRETRAINED_URLS: dict[str, str] = {
 }
 
 _BRIDGE_CODE = r"""
+import contextlib
+import io
 import json
 import os
 import sys
@@ -556,6 +558,37 @@ def extract_task_result(document, task_name):
     if isinstance(document, (list, tuple)):
         return document
     return None
+
+
+def extract_task_pretty(document, task_name):
+    if document is None:
+        return ""
+
+    pretty_callable = getattr(document, "pretty_print", None)
+    if callable(pretty_callable):
+        try:
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                returned = pretty_callable()
+            printed = buf.getvalue().strip()
+            if isinstance(returned, str) and returned.strip():
+                return returned.strip()[:20000]
+            if printed:
+                return printed[:20000]
+        except Exception:
+            pass
+
+    # Fallback: pretty JSON of extracted task payload when Document.pretty_print
+    # is unavailable in specific runtimes.
+    try:
+        data = extract_task_result(document, task_name)
+        if data is None and isinstance(document, dict):
+            data = document
+        if data is None:
+            return ""
+        return json.dumps(data, ensure_ascii=False, indent=2)[:20000]
+    except Exception:
+        return ""
 
 
 def run_parse_task(module, text, task_name):
@@ -1580,8 +1613,11 @@ def execute_mode(mode, payload):
         try:
             document = run_task_entrypoint(hanlp, text, task_name, requested_task_spec)
             task_result = extract_task_result(document, task_name)
+            task_pretty = extract_task_pretty(document, task_name)
             if task_result is None and is_coref_task_name(task_name):
                 task_result = document
+            if not task_pretty:
+                task_pretty = extract_task_pretty(task_result, task_name)
             task_trace = dict(_LAST_TASK_TRACE) if isinstance(_LAST_TASK_TRACE, dict) else {}
         except Exception as exc:
             task_trace = dict(_LAST_TASK_TRACE) if isinstance(_LAST_TASK_TRACE, dict) else {}
@@ -1620,6 +1656,7 @@ def execute_mode(mode, payload):
                 "task_key": requested_task_key,
                 "task_name": task_name,
                 "task_result": None,
+                "task_pretty": "",
                 "execution_path": str(task_trace.get("execution_path") or ""),
                 "execution_detail": str(task_trace.get("detail") or ""),
                 "trace_elapsed_ms": int(task_trace.get("elapsed_ms") or 0) if isinstance(task_trace.get("elapsed_ms"), (int, float)) else None,
@@ -1634,6 +1671,7 @@ def execute_mode(mode, payload):
             "task_key": requested_task_key,
             "task_name": task_name,
             "task_result": task_result,
+            "task_pretty": task_pretty,
             "elapsed_ms": int((time.perf_counter() - started) * 1000),
             "execution_path": str(task_trace.get("execution_path") or ""),
             "execution_detail": str(task_trace.get("detail") or ""),
@@ -2508,6 +2546,9 @@ class HanLPSidecarRuntime:
         execution_detail = str(result.get("execution_detail") or "").strip()
         if execution_detail:
             state["sidecar_execution_detail"] = execution_detail
+        task_pretty = str(result.get("task_pretty") or "").strip()
+        if task_pretty:
+            state["sidecar_task_pretty"] = task_pretty
         trace_stage_ms = result.get("trace_stage_ms")
         if isinstance(trace_stage_ms, dict) and trace_stage_ms:
             try:

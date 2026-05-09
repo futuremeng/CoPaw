@@ -1,6 +1,6 @@
 import { Button } from "@agentscope-ai/design";
 import { Alert, Card, Input, Space, Switch, Tag, Typography } from "antd";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { KeyboardEventHandler } from "react";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
@@ -29,6 +29,7 @@ type NlpDemoMeta = {
   reason: string;
   result: unknown;
   raw_result?: unknown;
+  pretty_print?: string;
   resolved_model: string;
   strategy_mode: string;
   detected_style: string;
@@ -196,6 +197,15 @@ function asNumber(value: unknown): number | null {
   return null;
 }
 
+type OverlayAnnotation = {
+  start: number;
+  end: number;
+  label: string;
+  rawLabel: string;
+  kind: "ner" | "pos";
+  rowIndex?: number;
+};
+
 function normalizeNerLabel(value: unknown): { raw: string; display: string } {
   const raw = String(value || "").trim();
   const key = raw.toUpperCase();
@@ -211,6 +221,108 @@ function normalizeNerLabel(value: unknown): { raw: string; display: string } {
     return { raw, display: `${mapped} (${raw})` };
   }
   return { raw: raw || "ENTITY", display: mapped || raw || "ENTITY" };
+}
+
+function normalizeOverlayLabel(label: string): string {
+  return String(label || "").trim().toUpperCase();
+}
+
+function resolvePosTokenOffset(sourceText: string, token: string, from: number): { start: number; end: number } | null {
+  const text = String(sourceText || "");
+  const tok = String(token || "");
+  if (!text || !tok) {
+    return null;
+  }
+  const direct = text.indexOf(tok, Math.max(0, from));
+  if (direct >= 0) {
+    return { start: direct, end: direct + tok.length };
+  }
+  const compactText = text.replace(/\s+/g, "");
+  const compactTok = tok.replace(/\s+/g, "");
+  if (!compactTok) {
+    return null;
+  }
+  const compactIndex = compactText.indexOf(compactTok);
+  if (compactIndex < 0) {
+    return null;
+  }
+  let seen = 0;
+  let start = -1;
+  let end = -1;
+  for (let i = 0; i < text.length; i += 1) {
+    if (!/\s/.test(text[i])) {
+      if (seen === compactIndex) {
+        start = i;
+      }
+      if (seen === compactIndex + compactTok.length - 1) {
+        end = i + 1;
+        break;
+      }
+      seen += 1;
+    }
+  }
+  if (start >= 0 && end > start) {
+    return { start, end };
+  }
+  return null;
+}
+
+function buildNerAnnotations(
+  sourceText: string,
+  rows: Array<Record<string, unknown>>,
+): OverlayAnnotation[] {
+  const text = String(sourceText || "");
+  const items: OverlayAnnotation[] = [];
+  rows.forEach((row, rowIndex) => {
+    const start = asNumber(row.start);
+    const end = asNumber(row.end);
+    if (start === null || end === null) {
+      return;
+    }
+    const normalized = normalizeNerLabel(row.label);
+    const item: OverlayAnnotation = {
+      start: Math.max(0, Math.min(start, text.length)),
+      end: Math.max(0, Math.min(end, text.length)),
+      label: normalized.display,
+      rawLabel: normalizeOverlayLabel(normalized.raw || normalized.display),
+      kind: "ner",
+      rowIndex,
+    };
+    if (item.end > item.start) {
+      items.push(item);
+    }
+  });
+  return items.sort((a, b) => a.start - b.start || b.end - a.end);
+}
+
+function buildPosAnnotations(
+  sourceText: string,
+  rows: Array<Record<string, unknown>>,
+): OverlayAnnotation[] {
+  const text = String(sourceText || "");
+  let cursor = 0;
+  const items: OverlayAnnotation[] = [];
+  rows.forEach((row, rowIndex) => {
+    const token = String(row.token || row.word || row.text || "");
+    const pos = String(row.pos || row.tag || "").trim();
+    if (!token || !pos) {
+      return;
+    }
+    const offset = resolvePosTokenOffset(text, token, cursor);
+    if (!offset) {
+      return;
+    }
+    cursor = Math.max(cursor, offset.end);
+    items.push({
+      start: offset.start,
+      end: offset.end,
+      label: pos,
+      rawLabel: normalizeOverlayLabel(pos),
+      kind: "pos",
+      rowIndex,
+    });
+  });
+  return items;
 }
 
 function renderTokenRail(tokens: string[], activeTokenIndex?: number | null) {
@@ -295,23 +407,7 @@ function renderNerHighlightedText(
   if (!text) {
     return null;
   }
-  const entities = rows
-    .map((row) => {
-      const start = asNumber(row.start);
-      const end = asNumber(row.end);
-      if (start === null || end === null) {
-        return null;
-      }
-      const label = normalizeNerLabel(row.label).display;
-      return {
-        start: Math.max(0, Math.min(start, text.length)),
-        end: Math.max(0, Math.min(end, text.length)),
-        label,
-      };
-    })
-    .filter((item): item is { start: number; end: number; label: string } => Boolean(item))
-    .filter((item) => item.end > item.start)
-    .sort((a, b) => a.start - b.start || b.end - a.end);
+  const entities = buildNerAnnotations(text, rows);
 
   if (entities.length === 0) {
     return null;
@@ -348,6 +444,82 @@ function renderNerHighlightedText(
           <span key={`text-${index}`}>{block.text}</span>
         ),
       )}
+    </div>
+  );
+}
+
+function renderBratLikeOverlay(
+  sourceText: string,
+  annotations: OverlayAnnotation[],
+  activeRowIndex?: number | null,
+) {
+  const text = String(sourceText || "");
+  if (!text || annotations.length === 0) {
+    return null;
+  }
+  const boundaries = new Set<number>([0, text.length]);
+  annotations.forEach((annotation) => {
+    boundaries.add(annotation.start);
+    boundaries.add(annotation.end);
+  });
+  const sortedBoundaries = Array.from(boundaries)
+    .filter((point) => point >= 0 && point <= text.length)
+    .sort((a, b) => a - b);
+  const segments: Array<{
+    text: string;
+    covers: OverlayAnnotation[];
+  }> = [];
+  for (let i = 0; i < sortedBoundaries.length - 1; i += 1) {
+    const start = sortedBoundaries[i];
+    const end = sortedBoundaries[i + 1];
+    if (end <= start) {
+      continue;
+    }
+    const segmentText = text.slice(start, end);
+    const covers = annotations
+      .filter((annotation) => annotation.start <= start && annotation.end >= end)
+      .sort((a, b) => {
+        if (a.kind !== b.kind) {
+          return a.kind === "ner" ? -1 : 1;
+        }
+        const lenA = a.end - a.start;
+        const lenB = b.end - b.start;
+        return lenA - lenB;
+      });
+    segments.push({ text: segmentText, covers });
+  }
+  return (
+    <div className={styles.bratLikeOverlay}>
+      {segments.map((segment, index) => {
+        if (segment.covers.length === 0) {
+          return <span key={`plain-${index}`}>{segment.text}</span>;
+        }
+        const active = segment.covers.some((cover) => cover.rowIndex === activeRowIndex);
+        const primary = segment.covers[0];
+        return (
+          <span
+            key={`seg-${index}`}
+            className={`${styles.bratSegment} ${
+              primary.kind === "ner" ? styles.bratSegmentNer : styles.bratSegmentPos
+            } ${active ? styles.bratSegmentActive : ""}`}
+          >
+            <span className={styles.bratLabels}>
+              {segment.covers.map((cover, coverIndex) => (
+                <span
+                  key={`label-${index}-${coverIndex}-${cover.rawLabel}`}
+                  className={`${styles.bratLabelChip} ${
+                    cover.kind === "ner" ? styles.bratLabelChipNer : styles.bratLabelChipPos
+                  } ${active ? styles.bratLabelChipActive : ""}`}
+                  data-label={cover.rawLabel}
+                >
+                  {cover.rawLabel}
+                </span>
+              ))}
+            </span>
+            <span>{segment.text}</span>
+          </span>
+        );
+      })}
     </div>
   );
 }
@@ -489,6 +661,7 @@ function renderResultByTask(
         <Typography.Text type="secondary">
           高亮区域中的非标签文本是上下文，不代表新增实体。
         </Typography.Text>
+        {renderBratLikeOverlay(sourceText, buildNerAnnotations(sourceText, rows), highlightedRowIndex)}
         {renderNerHighlightedText(sourceText, rows, nerEntityOnlyView, highlightedRowIndex)}
       </>
     );
@@ -564,6 +737,7 @@ function renderResultByTask(
             ))}
           </div>
           {renderTokenRail(tokens, highlightedRowIndex)}
+          {renderBratLikeOverlay(sourceText, buildPosAnnotations(sourceText, rows), highlightedRowIndex)}
         </>
       );
     }
@@ -705,6 +879,11 @@ function NlpPage() {
   const [activeClassicalDemoMethodKey, setActiveClassicalDemoMethodKey] = useState(CLASSICAL_DEMO_METHODS[0]?.key || "");
   const [activeClassicalDemoRowIndex, setActiveClassicalDemoRowIndex] = useState<number | null>(null);
   const [hoveredClassicalDemoRowIndex, setHoveredClassicalDemoRowIndex] = useState<number | null>(null);
+  const updatePreloadRef = useRef(handleUpdatePreload);
+
+  useEffect(() => {
+    updatePreloadRef.current = handleUpdatePreload;
+  }, [handleUpdatePreload]);
 
   useEffect(() => {
     if (Object.keys(demoInputs).length > 0) {
@@ -735,7 +914,7 @@ function NlpPage() {
     if (preloadEnabled && preloadScope === "all_enabled_tasks") {
       return;
     }
-    void handleUpdatePreload({
+    void updatePreloadRef.current({
       enabled: true,
       scope: "all_enabled_tasks",
     });
@@ -1441,6 +1620,16 @@ function NlpPage() {
                           <Typography.Paragraph className={styles.operationOutput}>
                             {t("nlpConfig.demo.rules")}: {(activeDemoResult.matched_rules || []).join(", ") || t("nlpConfig.demo.none")}
                           </Typography.Paragraph>
+                          {activeDemoResult.pretty_print ? (
+                            <>
+                              <Typography.Title level={5} className={styles.cardTitle}>
+                                {t("nlpConfig.demo.prettyPrint")}
+                              </Typography.Title>
+                              <Typography.Paragraph className={styles.operationOutput}>
+                                {activeDemoResult.pretty_print}
+                              </Typography.Paragraph>
+                            </>
+                          ) : null}
                           <Typography.Title level={5} className={styles.cardTitle}>
                             {t("nlpConfig.demo.rawOutput")}
                           </Typography.Title>
@@ -1642,6 +1831,16 @@ function NlpPage() {
                           <Typography.Paragraph className={styles.operationOutput}>
                             {t("nlpConfig.demo.rules")}: {(activeClassicalDemoResult.matched_rules || []).join(", ") || t("nlpConfig.demo.none")}
                           </Typography.Paragraph>
+                          {activeClassicalDemoResult.pretty_print ? (
+                            <>
+                              <Typography.Title level={5} className={styles.cardTitle}>
+                                {t("nlpConfig.demo.prettyPrint")}
+                              </Typography.Title>
+                              <Typography.Paragraph className={styles.operationOutput}>
+                                {activeClassicalDemoResult.pretty_print}
+                              </Typography.Paragraph>
+                            </>
+                          ) : null}
                           <Typography.Title level={5} className={styles.cardTitle}>
                             {t("nlpConfig.demo.rawOutput")}
                           </Typography.Title>

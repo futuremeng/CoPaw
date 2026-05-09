@@ -33,6 +33,7 @@ class HanLPTaskRunResponse(BaseModel):
     reason: str
     result: object | None
     raw_result: object | None = None
+    pretty_print: str = ""
     resolved_model: str
     strategy_mode: str
     detected_style: str
@@ -844,6 +845,7 @@ async def _run_hanlp_task(task_key: str, request: HanLPTaskRunRequest, http_requ
         sidecar_trace_elapsed_ms = 0
     sidecar_execution_path = str(state.get("sidecar_execution_path") or "").strip()
     sidecar_execution_detail = str(state.get("sidecar_execution_detail") or "").strip()
+    sidecar_task_pretty = str(state.get("sidecar_task_pretty") or "")
     sidecar_trace_stage_ms: dict[str, int] = {}
     trace_stage_raw = state.get("sidecar_trace_stage_ms")
     if isinstance(trace_stage_raw, str) and trace_stage_raw.strip():
@@ -881,6 +883,7 @@ async def _run_hanlp_task(task_key: str, request: HanLPTaskRunRequest, http_requ
         reason=reason,
         result=response_result,
         raw_result=response_raw_result,
+        pretty_print=sidecar_task_pretty,
         resolved_model=str(
             _task_matrix_model_id(normalized_task_key, effective_config)
             or decision["selected_model"]
