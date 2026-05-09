@@ -1958,6 +1958,18 @@
         "name": "ner/msra",
         "description": "Задача распознавания именованных сущностей по схеме MSRA."
       },
+      "pos_ctb": {
+        "name": "pos/ctb",
+        "description": "Задача POS-разметки CTB."
+      },
+      "pos_pku": {
+        "name": "pos/pku",
+        "description": "Задача POS-разметки PKU."
+      },
+      "pos_863": {
+        "name": "pos/863",
+        "description": "Задача POS-разметки 863."
+      },
       "dep": {
         "name": "dep",
         "description": "Задача синтаксического зависимого разбора."
@@ -1984,7 +1996,47 @@
     "installButton": "Установить HanLP",
     "downloadButton": "Скачать и проверить модель",
     "sidecarReady": "Sidecar готов",
-    "modelReady": "Модель готова"
+    "modelReady": "Модель готова",
+    "telemetry": {
+      "sidecarTotal": "общее время sidecar",
+      "traceTotal": "общее время трассировки",
+      "executionPath": "путь выполнения",
+      "executionDetail": "детали выполнения",
+      "stageMs": "время этапов (мс)",
+      "unknown": "(неизвестно)",
+      "mode": "режим",
+      "classicalSingleModel": "классический единый модельный режим"
+    },
+    "maintenance": {
+      "deploying": "Развёртывание",
+      "ready": "Готово",
+      "loading": "Загрузка",
+      "deployNow": "Развернуть сейчас",
+      "localModelPrecheckFailed": "Предпроверка локальных моделей не пройдена",
+      "localModelPrecheckDesc": "Текущая стратегия требует сначала скачать модели локально. Отсутствуют:",
+      "moreModels": "и ещё {{count}} моделей",
+      "downloadMissingModels": "Скачать отсутствующие модели",
+      "lastDownloadResult": "Результат последней загрузки"
+    },
+    "demo": {
+      "example": "Пример {{index}}",
+      "runTest": "Запустить тест",
+      "runClassicalTest": "Запустить классический тест",
+      "resultPanel": "Панель результатов",
+      "interactionHint": "Интерактивно: щёлкните строку для подсветки, используйте ↑/↓ для навигации и Esc для сброса.",
+      "clickRunTestHint": "Нажмите \"Запустить тест\", чтобы увидеть структурированный вывод.",
+      "clickRunClassicalHint": "Нажмите \"Запустить классический тест\", чтобы увидеть структурированный вывод.",
+      "cachePath": "cache_path",
+      "entityOnlyView": "Показывать только сущности",
+      "currentTokenCount": "Текущее число токенов: {{count}}",
+      "rules": "rules",
+      "none": "(none)",
+      "rawOutput": "Сырой вывод",
+      "empty": "(empty)",
+      "inherit": "(inherit)",
+      "classicalTask": "Классическая китайская задача",
+      "classicalInputPlaceholder": "Введите текст на классическом китайском"
+    }
   },
   "projects": {
     "title": "Проекты",

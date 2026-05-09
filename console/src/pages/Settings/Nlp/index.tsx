@@ -1029,7 +1029,7 @@ function NlpPage() {
         /(MODEL|DOWNLOAD|MISSING|INSTALL_REQUIRED|NOT_CONFIGURED|UNAVAILABLE)/.test(reasonHint)) ||
       Boolean(localItem && localItem.local_available === false);
     return {
-      modelText: String(localItem?.model_id || modelId || "(未配置)").trim() || "(未配置)",
+      modelText: String(localItem?.model_id || modelId || t("nlpConfig.notConfigured")).trim() || t("nlpConfig.notConfigured"),
       fileText: cachePath || t("nlpConfig.notConfigured"),
       missing,
     };
@@ -1111,12 +1111,12 @@ function NlpPage() {
   };
 
   const sidecarActionLabel = installing
-    ? "部署中"
+    ? t("nlpConfig.maintenance.deploying")
     : sidecarReady
-      ? "已就绪"
+      ? t("nlpConfig.maintenance.ready")
       : loading
-        ? "加载中"
-        : "立即部署";
+        ? t("nlpConfig.maintenance.loading")
+        : t("nlpConfig.maintenance.deployNow");
 
   const sidecarActionBusy = installing || (!sidecarReady && loading);
   const runtimeAlertType: "success" | "warning" =
@@ -1168,11 +1168,11 @@ function NlpPage() {
               <Alert
                 type="warning"
                 showIcon
-                message="本地模型预检未通过"
+                message={t("nlpConfig.maintenance.localModelPrecheckFailed")}
                 description={
                   <div className={styles.maintenanceInfoBlock}>
                     <Typography.Text className={styles.maintenanceSecondaryText}>
-                      当前策略要求先下载到本地再加载。以下模型缺失：
+                      {t("nlpConfig.maintenance.localModelPrecheckDesc")}
                     </Typography.Text>
                     <Typography.Text className={styles.maintenanceMutedText}>
                       {missingLocalModelItems
@@ -1182,7 +1182,7 @@ function NlpPage() {
                     </Typography.Text>
                     {missingLocalModelItems.length > 8 ? (
                       <Typography.Text className={styles.maintenanceMutedText}>
-                        以及其他 {missingLocalModelItems.length - 8} 个模型
+                        {t("nlpConfig.maintenance.moreModels", { count: missingLocalModelItems.length - 8 })}
                       </Typography.Text>
                     ) : null}
                     <Space size={8}>
@@ -1195,7 +1195,7 @@ function NlpPage() {
                           void handleDownloadMissingLocalModels();
                         }}
                       >
-                        一键下载缺失模型
+                        {t("nlpConfig.maintenance.downloadMissingModels")}
                       </Button>
                     </Space>
                   </div>
@@ -1208,7 +1208,7 @@ function NlpPage() {
                 showIcon
                 closable
                 onClose={() => clearDownloadAttempts()}
-                message="上次下载结果"
+                message={t("nlpConfig.maintenance.lastDownloadResult")}
                 description={
                   <div className={styles.maintenanceInfoBlock}>
                     {lastDownloadAttempts.map((attempt) => (
@@ -1342,7 +1342,7 @@ function NlpPage() {
                               }))
                             }
                           >
-                            示例 {index + 1}
+                            {t("nlpConfig.demo.example", { index: index + 1 })}
                           </Button>
                         ))}
                       </Space>
@@ -1363,54 +1363,54 @@ function NlpPage() {
                         disabled={runDemoDisabled}
                         onClick={() => runMethodDemo(activeDemoMethod.backendTaskKey, activeDemoInput)}
                       >
-                        运行测试
+                        {t("nlpConfig.demo.runTest")}
                       </Button>
                     </div>
                     <div className={styles.demoResultPanel}>
                       <Typography.Title level={5} className={styles.cardTitle}>
-                        结果面板
+                        {t("nlpConfig.demo.resultPanel")}
                       </Typography.Title>
                       <Typography.Text type="secondary">
-                        支持交互：点击结果行高亮映射，或在本区域按 ↑/↓ 键逐行浏览，按 Esc 清空选择。
+                        {t("nlpConfig.demo.interactionHint")}
                       </Typography.Text>
                       {!activeDemoResult ? (
                         <Typography.Paragraph type="secondary" className={styles.cardDescription}>
-                          点击“运行测试”查看结构化输出。
+                          {t("nlpConfig.demo.clickRunTestHint")}
                         </Typography.Paragraph>
                       ) : (
                         <>
                           <div className={styles.demoMetaGrid}>
                             <div className={styles.demoMetaItem}><span>status</span><Tag color={resolveTagColor(activeDemoResult.status)}>{activeDemoResult.reason_code}</Tag></div>
                             <div className={styles.demoMetaItem}><span>task</span><span>{activeDemoResult.task_key}</span></div>
-                            <div className={styles.demoMetaItem}><span>model</span><span>{activeDemoResult.resolved_model || "(empty)"}</span></div>
-                            <div className={styles.demoMetaItem}><span>task model</span><span>{activeDemoResult.effective_task_model_id || "(inherit)"}</span></div>
+                            <div className={styles.demoMetaItem}><span>model</span><span>{activeDemoResult.resolved_model || t("nlpConfig.demo.empty")}</span></div>
+                            <div className={styles.demoMetaItem}><span>task model</span><span>{activeDemoResult.effective_task_model_id || t("nlpConfig.demo.inherit")}</span></div>
                             <div className={styles.demoMetaItem}><span>style</span><span>{activeDemoResult.detected_style}</span></div>
                             <div className={styles.demoMetaItem}><span>score</span><span>{activeDemoResult.detection_score}</span></div>
                             <div className={styles.demoMetaItem}><span>duration</span><span>{activeDemoResult.duration_ms} ms</span></div>
-                            <div className={styles.demoMetaItem}><span>sidecar total</span><span>{activeDemoResult.sidecar_elapsed_ms ?? 0} ms</span></div>
-                            <div className={styles.demoMetaItem}><span>trace total</span><span>{activeDemoResult.sidecar_trace_elapsed_ms ?? 0} ms</span></div>
-                            <div className={styles.demoMetaItem}><span>execution path</span><span>{activeDemoResult.sidecar_execution_path || "(unknown)"}</span></div>
+                            <div className={styles.demoMetaItem}><span>{t("nlpConfig.telemetry.sidecarTotal")}</span><span>{activeDemoResult.sidecar_elapsed_ms ?? 0} ms</span></div>
+                            <div className={styles.demoMetaItem}><span>{t("nlpConfig.telemetry.traceTotal")}</span><span>{activeDemoResult.sidecar_trace_elapsed_ms ?? 0} ms</span></div>
+                            <div className={styles.demoMetaItem}><span>{t("nlpConfig.telemetry.executionPath")}</span><span>{activeDemoResult.sidecar_execution_path || t("nlpConfig.telemetry.unknown")}</span></div>
                             <div className={styles.demoMetaItem}><span>preload</span><span>{activeDemoResult.preload_status || "idle"}</span></div>
                           </div>
                           {activeDemoResult.sidecar_execution_detail ? (
                             <Typography.Paragraph className={styles.operationOutput}>
-                              execution_detail: {activeDemoResult.sidecar_execution_detail}
+                              {t("nlpConfig.telemetry.executionDetail")}: {activeDemoResult.sidecar_execution_detail}
                             </Typography.Paragraph>
                           ) : null}
                           {activeDemoResult.sidecar_trace_stage_ms && Object.keys(activeDemoResult.sidecar_trace_stage_ms).length > 0 ? (
                             <Typography.Paragraph className={styles.operationOutput}>
-                              stage_ms: {prettyJson(activeDemoResult.sidecar_trace_stage_ms)}
+                              {t("nlpConfig.telemetry.stageMs")}: {prettyJson(activeDemoResult.sidecar_trace_stage_ms)}
                             </Typography.Paragraph>
                           ) : null}
                           <Typography.Paragraph className={styles.operationOutput}>
-                            cache_path: {activeDemoResult.model_cache_path || status?.sidecar.model_cache_path || status?.sidecar.model_home || status?.sidecar.hanlp_home || t("nlpConfig.notConfigured")}
+                            {t("nlpConfig.demo.cachePath")}: {activeDemoResult.model_cache_path || status?.sidecar.model_cache_path || status?.sidecar.model_home || status?.sidecar.hanlp_home || t("nlpConfig.notConfigured")}
                           </Typography.Paragraph>
                           <Typography.Paragraph className={styles.operationOutput}>
                             {activeDemoResult.reason}
                           </Typography.Paragraph>
                           {activeDemoMethod.backendTaskKey === "ner" ? (
                             <Space size={8} wrap>
-                              <Typography.Text type="secondary">仅显示实体片段</Typography.Text>
+                              <Typography.Text type="secondary">{t("nlpConfig.demo.entityOnlyView")}</Typography.Text>
                               <Switch
                                 checked={nerEntityOnlyView}
                                 onChange={(checked) => setNerEntityOnlyView(checked)}
@@ -1435,14 +1435,14 @@ function NlpPage() {
                           </div>
                           {activeResultTokens.length > 0 ? (
                             <Typography.Text type="secondary">
-                              当前 token 数：{activeResultTokens.length}
+                              {t("nlpConfig.demo.currentTokenCount", { count: activeResultTokens.length })}
                             </Typography.Text>
                           ) : null}
                           <Typography.Paragraph className={styles.operationOutput}>
-                            rules: {(activeDemoResult.matched_rules || []).join(", ") || "(none)"}
+                            {t("nlpConfig.demo.rules")}: {(activeDemoResult.matched_rules || []).join(", ") || t("nlpConfig.demo.none")}
                           </Typography.Paragraph>
                           <Typography.Title level={5} className={styles.cardTitle}>
-                            原始输出
+                            {t("nlpConfig.demo.rawOutput")}
                           </Typography.Title>
                           <Typography.Paragraph className={styles.operationOutput}>
                             {prettyJson(
@@ -1533,7 +1533,7 @@ function NlpPage() {
                   <div className={styles.demoPanel}>
                     <div className={styles.demoInputPanel}>
                       <Typography.Title level={5} className={styles.cardTitle}>
-                        {activeClassicalDemoMethod?.title || "古汉语任务"}
+                        {activeClassicalDemoMethod?.title || t("nlpConfig.demo.classicalTask")}
                       </Typography.Title>
                       <Typography.Paragraph type="secondary" className={styles.cardDescription}>
                         {activeClassicalDemoStatus.reason}
@@ -1550,14 +1550,14 @@ function NlpPage() {
                               }))
                             }
                           >
-                            示例 {index + 1}
+                            {t("nlpConfig.demo.example", { index: index + 1 })}
                           </Button>
                         ))}
                       </Space>
                       <Input.TextArea
                         rows={6}
                         value={activeClassicalDemoInput}
-                        placeholder={activeClassicalDemoMethod?.placeholder || "输入古汉语文本"}
+                        placeholder={activeClassicalDemoMethod?.placeholder || t("nlpConfig.demo.classicalInputPlaceholder")}
                         onChange={(event) =>
                           setClassicalDemoInputs((prev) => ({
                             ...prev,
@@ -1573,47 +1573,47 @@ function NlpPage() {
                           runMethodDemo(activeClassicalDemoMethod?.backendTaskKey || "tokenize", activeClassicalDemoInput)
                         }
                       >
-                        运行古汉语测试
+                        {t("nlpConfig.demo.runClassicalTest")}
                       </Button>
                     </div>
                     <div className={styles.demoResultPanel}>
                       <Typography.Title level={5} className={styles.cardTitle}>
-                        结果面板
+                        {t("nlpConfig.demo.resultPanel")}
                       </Typography.Title>
                       <Typography.Text type="secondary">
-                        支持交互：点击结果行高亮映射，或在本区域按 ↑/↓ 键逐行浏览，按 Esc 清空选择。
+                        {t("nlpConfig.demo.interactionHint")}
                       </Typography.Text>
                       {!activeClassicalDemoResult ? (
                         <Typography.Paragraph type="secondary" className={styles.cardDescription}>
-                          点击“运行古汉语测试”查看结构化输出。
+                          {t("nlpConfig.demo.clickRunClassicalHint")}
                         </Typography.Paragraph>
                       ) : (
                         <>
                           <div className={styles.demoMetaGrid}>
                             <div className={styles.demoMetaItem}><span>status</span><Tag color={resolveTagColor(activeClassicalDemoResult.status)}>{activeClassicalDemoResult.reason_code}</Tag></div>
                             <div className={styles.demoMetaItem}><span>task</span><span>{activeClassicalDemoResult.task_key}</span></div>
-                            <div className={styles.demoMetaItem}><span>model</span><span>{activeClassicalDemoResult.resolved_model || "(empty)"}</span></div>
-                            <div className={styles.demoMetaItem}><span>mode</span><span>single-model classical</span></div>
+                            <div className={styles.demoMetaItem}><span>model</span><span>{activeClassicalDemoResult.resolved_model || t("nlpConfig.demo.empty")}</span></div>
+                            <div className={styles.demoMetaItem}><span>{t("nlpConfig.telemetry.mode")}</span><span>{t("nlpConfig.telemetry.classicalSingleModel")}</span></div>
                             <div className={styles.demoMetaItem}><span>style</span><span>{activeClassicalDemoResult.detected_style}</span></div>
                             <div className={styles.demoMetaItem}><span>score</span><span>{activeClassicalDemoResult.detection_score}</span></div>
                             <div className={styles.demoMetaItem}><span>duration</span><span>{activeClassicalDemoResult.duration_ms} ms</span></div>
-                            <div className={styles.demoMetaItem}><span>sidecar total</span><span>{activeClassicalDemoResult.sidecar_elapsed_ms ?? 0} ms</span></div>
-                            <div className={styles.demoMetaItem}><span>trace total</span><span>{activeClassicalDemoResult.sidecar_trace_elapsed_ms ?? 0} ms</span></div>
-                            <div className={styles.demoMetaItem}><span>execution path</span><span>{activeClassicalDemoResult.sidecar_execution_path || "(unknown)"}</span></div>
+                            <div className={styles.demoMetaItem}><span>{t("nlpConfig.telemetry.sidecarTotal")}</span><span>{activeClassicalDemoResult.sidecar_elapsed_ms ?? 0} ms</span></div>
+                            <div className={styles.demoMetaItem}><span>{t("nlpConfig.telemetry.traceTotal")}</span><span>{activeClassicalDemoResult.sidecar_trace_elapsed_ms ?? 0} ms</span></div>
+                            <div className={styles.demoMetaItem}><span>{t("nlpConfig.telemetry.executionPath")}</span><span>{activeClassicalDemoResult.sidecar_execution_path || t("nlpConfig.telemetry.unknown")}</span></div>
                             <div className={styles.demoMetaItem}><span>preload</span><span>{activeClassicalDemoResult.preload_status || "idle"}</span></div>
                           </div>
                           {activeClassicalDemoResult.sidecar_execution_detail ? (
                             <Typography.Paragraph className={styles.operationOutput}>
-                              execution_detail: {activeClassicalDemoResult.sidecar_execution_detail}
+                              {t("nlpConfig.telemetry.executionDetail")}: {activeClassicalDemoResult.sidecar_execution_detail}
                             </Typography.Paragraph>
                           ) : null}
                           {activeClassicalDemoResult.sidecar_trace_stage_ms && Object.keys(activeClassicalDemoResult.sidecar_trace_stage_ms).length > 0 ? (
                             <Typography.Paragraph className={styles.operationOutput}>
-                              stage_ms: {prettyJson(activeClassicalDemoResult.sidecar_trace_stage_ms)}
+                              {t("nlpConfig.telemetry.stageMs")}: {prettyJson(activeClassicalDemoResult.sidecar_trace_stage_ms)}
                             </Typography.Paragraph>
                           ) : null}
                           <Typography.Paragraph className={styles.operationOutput}>
-                            cache_path: {activeClassicalDemoResult.model_cache_path || status?.sidecar.model_cache_path || status?.sidecar.model_home || status?.sidecar.hanlp_home || t("nlpConfig.notConfigured")}
+                            {t("nlpConfig.demo.cachePath")}: {activeClassicalDemoResult.model_cache_path || status?.sidecar.model_cache_path || status?.sidecar.model_home || status?.sidecar.hanlp_home || t("nlpConfig.notConfigured")}
                           </Typography.Paragraph>
                           <Typography.Paragraph className={styles.operationOutput}>
                             {activeClassicalDemoResult.reason}
@@ -1636,14 +1636,14 @@ function NlpPage() {
                           </div>
                           {activeClassicalResultTokens.length > 0 ? (
                             <Typography.Text type="secondary">
-                              当前 token 数：{activeClassicalResultTokens.length}
+                              {t("nlpConfig.demo.currentTokenCount", { count: activeClassicalResultTokens.length })}
                             </Typography.Text>
                           ) : null}
                           <Typography.Paragraph className={styles.operationOutput}>
-                            rules: {(activeClassicalDemoResult.matched_rules || []).join(", ") || "(none)"}
+                            {t("nlpConfig.demo.rules")}: {(activeClassicalDemoResult.matched_rules || []).join(", ") || t("nlpConfig.demo.none")}
                           </Typography.Paragraph>
                           <Typography.Title level={5} className={styles.cardTitle}>
-                            原始输出
+                            {t("nlpConfig.demo.rawOutput")}
                           </Typography.Title>
                           <Typography.Paragraph className={styles.operationOutput}>
                             {prettyJson(

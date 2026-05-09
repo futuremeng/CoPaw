@@ -1996,6 +1996,18 @@
         "name": "ner/msra",
         "description": "MSRA 标签体系的命名实体识别任务。"
       },
+      "pos_ctb": {
+        "name": "pos/ctb",
+        "description": "CTB 词性标注任务。"
+      },
+      "pos_pku": {
+        "name": "pos/pku",
+        "description": "PKU 词性标注任务。"
+      },
+      "pos_863": {
+        "name": "pos/863",
+        "description": "863 词性标注任务。"
+      },
       "dep": {
         "name": "Dependency Parsing",
         "description": "依存句法分析任务，输出句法结构中词之间的依存关系。"
@@ -2022,7 +2034,47 @@
     "installButton": "安装 HanLP",
     "downloadButton": "下载并验证模型",
     "sidecarReady": "Sidecar 已就绪",
-    "modelReady": "模型已就绪"
+    "modelReady": "模型已就绪",
+    "telemetry": {
+      "sidecarTotal": "侧车总耗时",
+      "traceTotal": "链路总耗时",
+      "executionPath": "执行路径",
+      "executionDetail": "执行详情",
+      "stageMs": "阶段耗时(ms)",
+      "unknown": "(未知)",
+      "mode": "模式",
+      "classicalSingleModel": "古汉语单模型"
+    },
+    "maintenance": {
+      "deploying": "部署中",
+      "ready": "已就绪",
+      "loading": "加载中",
+      "deployNow": "立即部署",
+      "localModelPrecheckFailed": "本地模型预检未通过",
+      "localModelPrecheckDesc": "当前策略要求先下载到本地再加载。以下模型缺失：",
+      "moreModels": "以及其他 {{count}} 个模型",
+      "downloadMissingModels": "一键下载缺失模型",
+      "lastDownloadResult": "上次下载结果"
+    },
+    "demo": {
+      "example": "示例 {{index}}",
+      "runTest": "运行测试",
+      "runClassicalTest": "运行古汉语测试",
+      "resultPanel": "结果面板",
+      "interactionHint": "支持交互：点击结果行高亮映射，或在本区域按 ↑/↓ 键逐行浏览，按 Esc 清空选择。",
+      "clickRunTestHint": "点击“运行测试”查看结构化输出。",
+      "clickRunClassicalHint": "点击“运行古汉语测试”查看结构化输出。",
+      "cachePath": "cache_path",
+      "entityOnlyView": "仅显示实体片段",
+      "currentTokenCount": "当前 token 数：{{count}}",
+      "rules": "rules",
+      "none": "(none)",
+      "rawOutput": "原始输出",
+      "empty": "(empty)",
+      "inherit": "(inherit)",
+      "classicalTask": "古汉语任务",
+      "classicalInputPlaceholder": "输入古汉语文本"
+    }
   },
   "projects": {
     "title": "项目",

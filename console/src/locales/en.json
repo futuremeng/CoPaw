@@ -209,6 +209,18 @@
         "name": "ner/msra",
         "description": "Named entity recognition task for MSRA labels."
       },
+      "pos_ctb": {
+        "name": "pos/ctb",
+        "description": "CTB POS tagging task."
+      },
+      "pos_pku": {
+        "name": "pos/pku",
+        "description": "PKU POS tagging task."
+      },
+      "pos_863": {
+        "name": "pos/863",
+        "description": "863 POS tagging task."
+      },
       "dep": {
         "name": "dep",
         "description": "Dependency parsing task."
@@ -235,7 +247,47 @@
     "installButton": "Install HanLP",
     "downloadButton": "Download and verify model",
     "sidecarReady": "Sidecar ready",
-    "modelReady": "Model ready"
+    "modelReady": "Model ready",
+    "telemetry": {
+      "sidecarTotal": "sidecar total",
+      "traceTotal": "trace total",
+      "executionPath": "execution path",
+      "executionDetail": "execution detail",
+      "stageMs": "stage ms",
+      "unknown": "(unknown)",
+      "mode": "mode",
+      "classicalSingleModel": "single-model classical"
+    },
+    "maintenance": {
+      "deploying": "Deploying",
+      "ready": "Ready",
+      "loading": "Loading",
+      "deployNow": "Deploy now",
+      "localModelPrecheckFailed": "Local model precheck failed",
+      "localModelPrecheckDesc": "Current strategy requires downloading models locally before loading. Missing models:",
+      "moreModels": "and {{count}} more models",
+      "downloadMissingModels": "Download missing models",
+      "lastDownloadResult": "Last download result"
+    },
+    "demo": {
+      "example": "Example {{index}}",
+      "runTest": "Run test",
+      "runClassicalTest": "Run classical test",
+      "resultPanel": "Result panel",
+      "interactionHint": "Interactive mode: click rows to highlight mapping, or use ↑/↓ to browse and Esc to clear selection.",
+      "clickRunTestHint": "Click \"Run test\" to view structured output.",
+      "clickRunClassicalHint": "Click \"Run classical test\" to view structured output.",
+      "cachePath": "cache_path",
+      "entityOnlyView": "Show entities only",
+      "currentTokenCount": "Current token count: {{count}}",
+      "rules": "rules",
+      "none": "(none)",
+      "rawOutput": "Raw output",
+      "empty": "(empty)",
+      "inherit": "(inherit)",
+      "classicalTask": "Classical Chinese task",
+      "classicalInputPlaceholder": "Enter classical Chinese text"
+    }
   },
   "backup": {
     "title": "Backups",

@@ -1948,6 +1948,18 @@
         "name": "ner/msra",
         "description": "MSRA ラベル向けの固有表現抽出タスクです。"
       },
+      "pos_ctb": {
+        "name": "pos/ctb",
+        "description": "CTB 品詞タグ付けタスクです。"
+      },
+      "pos_pku": {
+        "name": "pos/pku",
+        "description": "PKU 品詞タグ付けタスクです。"
+      },
+      "pos_863": {
+        "name": "pos/863",
+        "description": "863 品詞タグ付けタスクです。"
+      },
       "dep": {
         "name": "dep",
         "description": "係り受け解析タスクです。"
@@ -1974,7 +1986,47 @@
     "installButton": "HanLP をインストール",
     "downloadButton": "モデルをダウンロードして検証",
     "sidecarReady": "Sidecar 準備完了",
-    "modelReady": "モデル準備完了"
+    "modelReady": "モデル準備完了",
+    "telemetry": {
+      "sidecarTotal": "サイドカー合計",
+      "traceTotal": "トレース合計",
+      "executionPath": "実行パス",
+      "executionDetail": "実行詳細",
+      "stageMs": "段階時間(ms)",
+      "unknown": "(不明)",
+      "mode": "モード",
+      "classicalSingleModel": "古典中国語単一モデル"
+    },
+    "maintenance": {
+      "deploying": "デプロイ中",
+      "ready": "準備完了",
+      "loading": "読み込み中",
+      "deployNow": "今すぐデプロイ",
+      "localModelPrecheckFailed": "ローカルモデル事前チェックに失敗しました",
+      "localModelPrecheckDesc": "現在の戦略では、読み込み前にローカルへダウンロードが必要です。不足モデル:",
+      "moreModels": "ほか {{count}} モデル",
+      "downloadMissingModels": "不足モデルを一括ダウンロード",
+      "lastDownloadResult": "前回のダウンロード結果"
+    },
+    "demo": {
+      "example": "例 {{index}}",
+      "runTest": "テスト実行",
+      "runClassicalTest": "古漢語テスト実行",
+      "resultPanel": "結果パネル",
+      "interactionHint": "インタラクション対応：行をクリックしてマッピングを強調、または ↑/↓ で移動し Esc で選択解除。",
+      "clickRunTestHint": "「テスト実行」をクリックして構造化出力を表示します。",
+      "clickRunClassicalHint": "「古漢語テスト実行」をクリックして構造化出力を表示します。",
+      "cachePath": "cache_path",
+      "entityOnlyView": "エンティティ断片のみ表示",
+      "currentTokenCount": "現在のトークン数: {{count}}",
+      "rules": "rules",
+      "none": "(none)",
+      "rawOutput": "生出力",
+      "empty": "(empty)",
+      "inherit": "(inherit)",
+      "classicalTask": "古漢語タスク",
+      "classicalInputPlaceholder": "古漢語テキストを入力"
+    }
   },
   "projects": {
     "title": "プロジェクト",
