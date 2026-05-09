@@ -647,6 +647,17 @@ def _normalize_task_key(task_key: str) -> str:
     return normalized
 
 
+def _get_actual_task_name_for_runtime(normalized_task_key: str) -> str:
+    """Get the actual task name to use with HanLP runtime.
+    
+    For classical tasks, maps the internal key to the actual task name
+    expected by HanLP (e.g., lzh_tok_fine -> tok/fine).
+    """
+    if normalized_task_key in _CLASSICAL_TASK_SPECS:
+        return _CLASSICAL_TASK_SPECS[normalized_task_key].get("task_name", normalized_task_key)
+    return normalized_task_key
+
+
 def _effective_knowledge_config(knowledge_config: KnowledgeConfig, running_config) -> KnowledgeConfig:
     effective = knowledge_config.model_copy(deep=True)
     effective.enabled = bool(getattr(running_config, "knowledge_enabled", effective.enabled))
@@ -774,9 +785,11 @@ async def _run_hanlp_task(task_key: str, request: HanLPTaskRunRequest, http_requ
         raw_result = result
         normalized_result = _normalize_pos_result(result)
     elif normalized_task_key in _SUPPORTED_CLASSICAL_TASK_KEYS:
+        # For classical tasks, use the mapped task name (e.g., tok/fine instead of lzh_tok_fine)
+        actual_task_name = _get_actual_task_name_for_runtime(normalized_task_key)
         result, state = await asyncio.to_thread(
             runtime.run_task,
-            normalized_task_key,
+            actual_task_name,
             request.text,
             effective_config,
         )
