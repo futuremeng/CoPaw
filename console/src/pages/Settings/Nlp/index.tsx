@@ -1,5 +1,5 @@
 import { Button } from "@agentscope-ai/design";
-import { Alert, Card, Collapse, Input, Select, Space, Spin, Switch, Tag, Typography } from "antd";
+import { Alert, Card, Collapse, Input, Select, Space, Switch, Tag, Typography } from "antd";
 import { useEffect, useState } from "react";
 import type { KeyboardEventHandler } from "react";
 import { useTranslation } from "react-i18next";
@@ -671,7 +671,6 @@ function NlpPage() {
   const {
     loading,
     installing,
-    downloadingModel,
     savingPreload,
     runningPreload,
     status,
@@ -681,9 +680,7 @@ function NlpPage() {
     lastOperations,
     sidecarReady,
     modelReady,
-    fetchStatus,
     handleInstall,
-    handleDownloadModel,
     handleUpdatePreload,
     handleTriggerPreload,
     runMethodDemo,
@@ -1065,6 +1062,16 @@ function NlpPage() {
     }
   };
 
+  const sidecarActionLabel = installing
+    ? "部署中"
+    : sidecarReady
+      ? "已就绪"
+      : loading
+        ? "加载中"
+        : "立即部署";
+
+  const sidecarActionBusy = installing || (!sidecarReady && loading);
+
 
 
   return (
@@ -1077,42 +1084,51 @@ function NlpPage() {
       />
 
       <div className={styles.content}>
-        <div className={styles.alertStack}>
-          {loading ? (
+        <div id="nlp-section-maintenance" className={`${styles.alertRow} ${styles.sectionAnchorOffset}`}>
+          <div className={styles.alertStack}>
             <Alert
-              type="info"
+              type={hanlpProviderActive ? "success" : "warning"}
               showIcon
-              message="Loading NLP runtime status"
-              description={<Space size={8}><Spin size="small" /><span>页面已可用，运行态信息正在刷新。</span></Space>}
+              message={t("nlpConfig.infoTitle")}
+              description={
+                <div className={styles.maintenanceInfoBlock}>
+                  <Typography.Text className={styles.maintenancePrimaryText}>
+                    {t("nlpConfig.infoDescription")}
+                  </Typography.Text>
+
+                  <Typography.Text className={styles.maintenanceSecondaryText}>
+                    {t("nlpConfig.providerMessage", { provider: provider || "hanlp" })}
+                  </Typography.Text>
+
+                  <Typography.Text type="secondary" className={styles.maintenanceMutedText}>
+                    {hanlpProviderActive
+                      ? t("nlpConfig.providerActive")
+                      : t("nlpConfig.providerInactive")}
+                  </Typography.Text>
+                </div>
+              }
             />
-          ) : null}
 
-          <Alert
-            type="info"
-            showIcon
-            message={t("nlpConfig.infoTitle")}
-            description={t("nlpConfig.infoDescription")}
-          />
-
-          <Alert
-            type={hanlpProviderActive ? "success" : "warning"}
-            showIcon
-            message={t("nlpConfig.providerMessage", { provider: provider || "hanlp" })}
-            description={
-              hanlpProviderActive
-                ? t("nlpConfig.providerActive")
-                : t("nlpConfig.providerInactive")
-            }
-          />
-
-          {status?.sidecar.reason_code === "HANLP2_FULL_INSTALL_REQUIRED" ? (
-            <Alert
-              type="warning"
-              showIcon
-              message={t("nlpConfig.fullInstallTitle")}
-              description={t("nlpConfig.fullInstallDescription")}
-            />
-          ) : null}
+            {status?.sidecar.reason_code === "HANLP2_FULL_INSTALL_REQUIRED" ? (
+              <Alert
+                type="warning"
+                showIcon
+                message={t("nlpConfig.fullInstallTitle")}
+                description={t("nlpConfig.fullInstallDescription")}
+              />
+            ) : null}
+          </div>
+          <div className={styles.alertActionBlock}>
+            <Button
+              className={styles.maintenanceInstallButton}
+              type="primary"
+              onClick={handleInstall}
+              loading={sidecarActionBusy}
+              disabled={sidecarReady || !hanlpProviderActive || sidecarActionBusy}
+            >
+              {sidecarActionLabel}
+            </Button>
+          </div>
         </div>
 
         <div className={styles.workspaceLayout}>
@@ -1623,36 +1639,6 @@ function NlpPage() {
           </div>
         </div>
 
-        <div id="nlp-section-maintenance" className={styles.sectionAnchorOffset}>
-          <Card className={styles.card}>
-          <Typography.Title level={5} className={styles.cardTitle}>
-            Environment Maintenance
-          </Typography.Title>
-          <Typography.Paragraph type="secondary" className={styles.cardDescription}>
-            环境治理操作保留在底部，不干扰首屏实验流。
-          </Typography.Paragraph>
-          <Space size={8}>
-            <Button onClick={fetchStatus} disabled={installing || downloadingModel}>
-              {t("common.refresh")}
-            </Button>
-            <Button
-              type="primary"
-              onClick={handleInstall}
-              loading={installing}
-              disabled={downloadingModel || sidecarReady || !hanlpProviderActive}
-            >
-              {sidecarReady ? t("nlpConfig.sidecarReady") : t("nlpConfig.installButton")}
-            </Button>
-            <Button
-              onClick={handleDownloadModel}
-              loading={downloadingModel}
-              disabled={installing || !sidecarReady || modelReady || !hanlpProviderActive}
-            >
-              {modelReady ? t("nlpConfig.modelReady") : t("nlpConfig.downloadButton")}
-            </Button>
-          </Space>
-          </Card>
-        </div>
       </div>
 
     </div>
