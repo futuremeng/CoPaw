@@ -673,6 +673,7 @@ function NlpPage() {
     installing,
     downloadingModel,
     status,
+    localModelsStatus,
     provider,
     hanlpProviderActive,
     sidecarReady,
@@ -1005,17 +1006,33 @@ function NlpPage() {
     ).trim();
     const reasonHint = `${methodStatus.reasonCode} ${methodStatus.reason}`.toUpperCase();
     const taskStatus = String(taskResult?.status || methodStatus.status || "").toLowerCase();
+    const localItems = localModelsStatus?.items || [];
+    const taskCandidates = resolveMethodTaskCandidates(taskKey).map((item) => String(item || "").toLowerCase());
+    const localItem =
+      localItems.find((item) => {
+        const itemTaskKey = String(item.task_key || "").toLowerCase();
+        const itemTaskName = String(item.task_name || "").toLowerCase();
+        return taskCandidates.includes(itemTaskKey) || taskCandidates.includes(itemTaskName);
+      }) ||
+      (taskKey.startsWith("lzh_") || taskKey === "tokenize" ? localItems.find((item) => item.scope === "default") : undefined);
     const missing =
-      taskStatus !== "ready" &&
-      /(MODEL|DOWNLOAD|MISSING|INSTALL_REQUIRED|NOT_CONFIGURED|UNAVAILABLE)/.test(reasonHint);
+      (taskStatus !== "ready" &&
+        /(MODEL|DOWNLOAD|MISSING|INSTALL_REQUIRED|NOT_CONFIGURED|UNAVAILABLE)/.test(reasonHint)) ||
+      Boolean(localItem && localItem.local_available === false);
     return {
-      modelText: modelId || "(未配置)",
+      modelText: String(localItem?.model_id || modelId || "(未配置)").trim() || "(未配置)",
       fileText: cachePath || t("nlpConfig.notConfigured"),
       missing,
     };
   };
 
   const pythonVersion = String(status?.sidecar?.python_version || "").trim();
+  const missingLocalModelItems = (localModelsStatus?.items || []).filter((item) => !item.local_available);
+  const hasMissingLocalModels =
+    hanlpProviderActive &&
+    Boolean(localModelsStatus?.require_local_models) &&
+    missingLocalModelItems.length > 0;
+  const runDemoDisabled = hasMissingLocalModels || !hanlpProviderActive || !sidecarReady;
 
   useEffect(() => {
     setActiveDemoRowIndex(null);
@@ -1135,6 +1152,32 @@ function NlpPage() {
                 showIcon
                 message={t("nlpConfig.fullInstallTitle")}
                 description={t("nlpConfig.fullInstallDescription")}
+              />
+            ) : null}
+
+            {hasMissingLocalModels ? (
+              <Alert
+                type="warning"
+                showIcon
+                message="本地模型预检未通过"
+                description={
+                  <div className={styles.maintenanceInfoBlock}>
+                    <Typography.Text className={styles.maintenanceSecondaryText}>
+                      当前策略要求先下载到本地再加载。以下模型缺失：
+                    </Typography.Text>
+                    <Typography.Text className={styles.maintenanceMutedText}>
+                      {missingLocalModelItems
+                        .slice(0, 8)
+                        .map((item) => item.model_id)
+                        .join(" · ")}
+                    </Typography.Text>
+                    {missingLocalModelItems.length > 8 ? (
+                      <Typography.Text className={styles.maintenanceMutedText}>
+                        以及其他 {missingLocalModelItems.length - 8} 个模型
+                      </Typography.Text>
+                    ) : null}
+                  </div>
+                }
               />
             ) : null}
           </div>
@@ -1267,6 +1310,7 @@ function NlpPage() {
                       <Button
                         type="primary"
                         loading={runningDemoTask === activeDemoMethod.backendTaskKey}
+                        disabled={runDemoDisabled}
                         onClick={() => runMethodDemo(activeDemoMethod.backendTaskKey, activeDemoInput)}
                       >
                         运行测试
@@ -1461,6 +1505,7 @@ function NlpPage() {
                       <Button
                         type="primary"
                         loading={runningDemoTask === activeClassicalDemoMethod?.backendTaskKey}
+                        disabled={runDemoDisabled}
                         onClick={() =>
                           runMethodDemo(activeClassicalDemoMethod?.backendTaskKey || "tokenize", activeClassicalDemoInput)
                         }

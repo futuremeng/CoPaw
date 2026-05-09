@@ -191,6 +191,26 @@ export const agentApi = {
       };
     }>("/sidecar/nlp-status"),
 
+  getNlpLocalModelsStatus: () =>
+    request<{
+      provider?: string;
+      engine: string;
+      status: string;
+      reason_code: string;
+      reason: string;
+      python_version?: string;
+      require_local_models: boolean;
+      hanlp_home?: string;
+      model_cache_path?: string;
+      items: Array<{
+        scope: string;
+        task_key: string;
+        task_name: string;
+        model_id: string;
+        local_available: boolean;
+      }>;
+    }>("/sidecar/nlp-local-models"),
+
   updateNlpStrategy: (strategy: NlpStrategyPayload) =>
     request<{
       strategy: NlpStrategyPayload;

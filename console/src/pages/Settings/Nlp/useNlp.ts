@@ -111,6 +111,27 @@ export interface NlpMethodDemoResult {
   preload_status?: string;
 }
 
+export interface NlpLocalModelItem {
+  scope: string;
+  task_key: string;
+  task_name: string;
+  model_id: string;
+  local_available: boolean;
+}
+
+export interface NlpLocalModelsStatus {
+  provider?: string;
+  engine: string;
+  status: string;
+  reason_code: string;
+  reason: string;
+  python_version?: string;
+  require_local_models: boolean;
+  hanlp_home?: string;
+  model_cache_path?: string;
+  items: NlpLocalModelItem[];
+}
+
 export interface HanlpOperation {
   name: string;
   attempted: boolean;
@@ -133,6 +154,7 @@ export function useNlp() {
   const [savingStrategy, setSavingStrategy] = useState(false);
   const [dryRunningDecision, setDryRunningDecision] = useState(false);
   const [status, setStatus] = useState<NlpStatus | null>(null);
+  const [localModelsStatus, setLocalModelsStatus] = useState<NlpLocalModelsStatus | null>(null);
   const [lastManualSteps, setLastManualSteps] = useState<string[]>([]);
   const [lastOperations, setLastOperations] = useState<HanlpOperation[]>([]);
   const [lastStrategyDecision, setLastStrategyDecision] = useState<NlpStrategyDryRunDecision | null>(null);
@@ -142,8 +164,12 @@ export function useNlp() {
   const fetchStatus = async () => {
     setLoading(true);
     try {
-      const res = await api.getNlpStatus();
-      setStatus(res);
+      const [statusRes, localModelsRes] = await Promise.all([
+        api.getNlpStatus(),
+        api.getNlpLocalModelsStatus().catch(() => null),
+      ]);
+      setStatus(statusRes);
+      setLocalModelsStatus(localModelsRes);
     } catch (error) {
       console.error("Failed to load NLP settings:", error);
       message.error(t("nlpConfig.loadFailed"));
@@ -320,6 +346,7 @@ export function useNlp() {
     savingStrategy,
     dryRunningDecision,
     status,
+    localModelsStatus,
     provider,
     hanlpProviderActive,
     lastManualSteps,
