@@ -62,12 +62,14 @@ Your personal AI assistant — easy to install, deploy locally or in the cloud, 
 
 ## News
 
-- [2026-04-29] We've released **v1.1.5**! See the full [v1.1.5 Release Notes](https://qwenpaw.agentscope.io/release-notes).
+- [2026-05-09] We've released **v1.1.6**! See the full [v1.1.6 Release Notes](https://qwenpaw.agentscope.io/release-notes).
 
-  - **[v1.1.5] Added**: Memory search optimization; context compaction fallback; ACP agent rename & delete; QQ voice & ASR support.
-  - **[v1.1.5] Performance**: Config and skill manifest loading cache; model API request deduplication; console chat virtualized rendering.
-  - **[v1.1.5] Fixed**: Channel approval commands; timezone normalization; MCP execution timeout handling.
-  - **[v1.1.5] New Contributors**: @LinQi0777, @albert-zen, @ideal, @CA-mambo, @bxy3045134656.
+  - **[v1.1.6] Added**: LLM-generated session titles; token usage trends; Mermaid diagram rendering; Feishu/WeCom interactive approval cards; Volcano Engine & Aliyun Token Plan providers; skill install/uninstall/test CLI; agent status API; cron session isolation; GPT Image 2 plugin.
+  - **[v1.1.6] Performance**: Console rendering optimization; chat history navigation optimization; QR polling cleanup.
+  - **[v1.1.6] Fixed**: MCP execution timeout & lifecycle leak; agent config reload & persistence fix.
+  - **[v1.1.6] New Contributors**: @karls0r, @Jailtonfonseca, @hllqkb, @yutai78786, @tqjason, @JingHou1215, @wjt0321, @1105623876, @Keillion, @q1023884985.
+
+- [2026-04-29] We've released **v1.1.5**! See the full [v1.1.5 Release Notes](https://qwenpaw.agentscope.io/release-notes).
 
 - [2026-04-24] We've released **v1.1.4**! See the full [v1.1.4 Release Notes](https://qwenpaw.agentscope.io/release-notes).
 
@@ -86,6 +88,7 @@ Your personal AI assistant — easy to install, deploy locally or in the cloud, 
 - [2026-04-14] We've released **v1.1.1**! See the full [v1.1.1 Release Notes](https://qwenpaw.agentscope.io/release-notes).
 
 - [2026-04-12] **This fork keeps the CoPaw brand on top of the upstream QwenPaw codebase**: upstream renamed the project to QwenPaw, while this fork keeps CoPaw as the user-facing brand.
+- [2026-04-12] **CoPaw is Officially Rebranding to QwenPaw**: This rebranding marks an important step forward into our next phase of open-source development.
 
 The new name better reflects the open ecosystem we are building and the broader direction we are continuing to pursue:
 

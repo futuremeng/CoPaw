@@ -134,6 +134,7 @@ def _build_spec_from_cli(
     timezone: str,
     enabled: bool,
     mode: str,
+    share_session: bool = True,
 ) -> dict:
     """Build CronJobSpec JSON payload from CLI args (no id)."""
     schedule = {"type": "cron", "cron": cron, "timezone": timezone}
@@ -145,6 +146,7 @@ def _build_spec_from_cli(
         "meta": {},
     }
     runtime = {
+        "share_session": share_session,
         "max_concurrency": 1,
         "timeout_seconds": 120,
         "misfire_grace_seconds": 60,
@@ -185,8 +187,6 @@ def _build_spec_from_cli(
                         "content": [{"type": "text", "text": text.strip()}],
                     },
                 ],
-                "session_id": target_session,
-                "user_id": "cron",
             },
             "dispatch": dispatch,
             "runtime": runtime,
@@ -287,6 +287,14 @@ def _build_spec_from_cli(
     ),
 )
 @click.option(
+    "--share-session/--no-share-session",
+    default=True,
+    help=(
+        "Share session with target user. "
+        "When disabled, creates isolated context for each run."
+    ),
+)
+@click.option(
     "--base-url",
     default=None,
     help="Override the API base URL. Defaults to global --host/--port.",
@@ -310,6 +318,7 @@ def create_job(
     timezone: Optional[str],
     enabled: bool,
     mode: str,
+    share_session: bool,
     base_url: Optional[str],
     agent_id: str,
 ) -> None:
@@ -350,6 +359,7 @@ def create_job(
             timezone=timezone,
             enabled=enabled,
             mode=mode,
+            share_session=share_session,
         )
     # Early local validation: catch obvious errors before hitting the server.
     schedule = payload.get("schedule", {})

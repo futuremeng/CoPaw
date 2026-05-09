@@ -1,6 +1,23 @@
 import { request } from "../request";
+import { getApiUrl } from "../config";
+import { buildAuthHeaders } from "../authHeaders";
 import type { AgentRequest, AgentsRunningConfig } from "../types";
 
+export type TranscriptionErrorCode =
+  | "TRANSCRIPTION_DISABLED"
+  | "FILE_TOO_LARGE"
+  | "UNSUPPORTED_FILE_TYPE";
+
+export class TranscriptionError extends Error {
+  status: number;
+  code?: TranscriptionErrorCode;
+  constructor(status: number, msg: string, code?: TranscriptionErrorCode) {
+    super(`Transcription failed: ${status} ${msg}`);
+    this.name = "TranscriptionError";
+    this.status = status;
+    this.code = code;
+  }
+}
 type NlpStrategyPayload = {
   mode?: "auto" | "manual" | "hybrid";
   default_model_id?: string;
@@ -104,6 +121,32 @@ export const agentApi = {
       whisper_installed: boolean;
     }>("/agent/local-whisper-status"),
 
+  transcribeAudio: async (file: File | Blob): Promise<{ text: string }> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await fetch(getApiUrl("/workspace/transcribe"), {
+      method: "POST",
+      headers: buildAuthHeaders(),
+      body: formData,
+    });
+    if (!response.ok) {
+      let msg = response.statusText;
+      let code: TranscriptionErrorCode | undefined;
+      try {
+        const body = await response.json();
+        if (typeof body?.detail === "object" && body.detail !== null) {
+          code = body.detail.code;
+          msg = body.detail.message || msg;
+        } else if (typeof body?.detail === "string") {
+          msg = body.detail;
+        }
+      } catch {
+        // response body not JSON, use status text
+      }
+      throw new TranscriptionError(response.status, msg, code);
+    }
+    return response.json();
+  },
   installLocalWhisper: () =>
     request<{
       success: boolean;
