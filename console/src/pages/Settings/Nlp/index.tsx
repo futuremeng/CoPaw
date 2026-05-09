@@ -870,7 +870,18 @@ function NlpPage() {
     activeDemoMethod.backendTaskKey,
     activeDemoResult?.result,
   );
-  const methodStatuses = Object.values(methodStatusByTask);
+
+  const methodDetailByTaskKey: Record<string, { key: string; taskKey?: string; status: MethodStatus } | undefined> = {
+    tokenize: methods.find((item) => item.key === "tokenize"),
+    ner: methods.find((item) => item.key === "nerMsra"),
+    pos_ctb: methods.find((item) => item.key === "pos_ctb"),
+    pos_pku: methods.find((item) => item.key === "pos_pku"),
+    pos_863: methods.find((item) => item.key === "pos_863"),
+    dep: methods.find((item) => item.key === "dep"),
+    sdp: methods.find((item) => item.key === "sdp"),
+    con: methods.find((item) => item.key === "con"),
+    cor: methods.find((item) => item.key === "cor"),
+  };
 
   useEffect(() => {
     setActiveDemoRowIndex(null);
@@ -998,7 +1009,15 @@ function NlpPage() {
                   <div className={styles.demoMethodList}>
                     {DEMO_METHODS.map((method) => {
                       const methodStatus = methodStatusByTask[method.backendTaskKey];
+                      const methodDetail = methodDetailByTaskKey[method.backendTaskKey];
                       const active = method.backendTaskKey === activeDemoMethod.backendTaskKey;
+                      const methodName = methodDetail
+                        ? t(`nlpConfig.methods.${methodDetail.key}.name`)
+                        : method.title;
+                      const methodDescription = methodDetail
+                        ? t(`nlpConfig.methods.${methodDetail.key}.description`)
+                        : method.placeholder;
+                      const methodReason = methodDetail?.status.reason || methodStatus?.reason || "";
                       return (
                         <button
                           key={method.backendTaskKey}
@@ -1006,14 +1025,33 @@ function NlpPage() {
                           className={`${styles.demoMethodButton} ${active ? styles.demoMethodButtonActive : ""}`}
                           onClick={() => setActiveDemoTaskKey(method.backendTaskKey)}
                         >
-                          <span>{method.title}</span>
-                          <Tag
-                            className={styles.demoStatusTag}
-                            color={resolveTagColor(methodStatus?.status || "unavailable")}
-                            title={methodStatus?.reasonCode || "UNKNOWN"}
-                          >
-                            {methodStatus?.reasonCode || "UNKNOWN"}
-                          </Tag>
+                          <div className={styles.demoMethodMain}>
+                            <div className={styles.demoMethodHeader}>
+                              <Typography.Text strong className={styles.demoMethodTitle}>
+                                {methodName}
+                              </Typography.Text>
+                              <Tag
+                                className={styles.demoStatusTag}
+                                color={resolveTagColor(methodStatus?.status || "unavailable")}
+                                title={methodStatus?.reasonCode || "UNKNOWN"}
+                              >
+                                {methodStatus?.reasonCode || "UNKNOWN"}
+                              </Tag>
+                            </div>
+                            <Typography.Text type="secondary" className={styles.demoMethodDescription}>
+                              {methodDescription}
+                            </Typography.Text>
+                            {methodReason ? (
+                              <Typography.Text type="secondary" className={styles.demoMethodReason}>
+                                {methodReason}
+                              </Typography.Text>
+                            ) : null}
+                            {methodDetail?.taskKey ? (
+                              <Typography.Text type="secondary" className={styles.demoMethodTaskKey}>
+                                {`${t("nlpConfig.taskKey")} ${methodDetail.taskKey}`}
+                              </Typography.Text>
+                            ) : null}
+                          </div>
                         </button>
                       );
                     })}
@@ -1141,38 +1179,6 @@ function NlpPage() {
               </Card>
             </div>
 
-            <div id="nlp-section-methods" className={styles.sectionAnchorOffset}>
-              <Card className={styles.card}>
-                <Typography.Title level={5} className={styles.cardTitle}>
-                  {t("nlpConfig.methodsTitle")}
-                </Typography.Title>
-                <Typography.Paragraph type="secondary" className={styles.cardDescription}>
-                  {t("nlpConfig.methodsDescription")}
-                </Typography.Paragraph>
-                <Space direction="vertical" size={12} style={{ width: "100%" }}>
-                  {methods.map((method) => (
-                    <div key={method.key} className={styles.operationBlock}>
-                      <div className={styles.statusRow}>
-                        <Typography.Text strong>{t(`nlpConfig.methods.${method.key}.name`)}</Typography.Text>
-                        <Tag color={resolveTagColor(method.status.status)}>
-                          {method.status.reasonCode || method.status.status}
-                        </Tag>
-                      </div>
-                      <Typography.Paragraph className={styles.operationOutput}>
-                        {t(`nlpConfig.methods.${method.key}.description`)}
-                      </Typography.Paragraph>
-                      <Typography.Text type="secondary">{method.status.reason}</Typography.Text>
-                      {method.taskKey ? (
-                        <Typography.Text type="secondary">
-                          {` `}
-                          {t("nlpConfig.taskKey")} {method.taskKey}
-                        </Typography.Text>
-                      ) : null}
-                    </div>
-                  ))}
-                </Space>
-              </Card>
-            </div>
           </div>
 
           <div className={styles.sideColumn}>
