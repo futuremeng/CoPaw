@@ -3,6 +3,9 @@ import { useTranslation } from "react-i18next";
 import api from "../../../api";
 import { useAppMessage } from "../../../hooks/useAppMessage";
 
+const NLP_STATUS_SNAPSHOT_KEY = "copaw:nlp-status-snapshot:v1";
+const NLP_STATUS_SNAPSHOT_TTL_MS = 5 * 60 * 1000;
+
 export interface NlpStatus {
   provider?: string;
   strategy?: {
@@ -147,11 +150,56 @@ export interface HanlpOperation {
   returncode: number | null;
 }
 
+type NlpStatusSnapshot = {
+  ts: number;
+  status: NlpStatus | null;
+  localModelsStatus: NlpLocalModelsStatus | null;
+};
+
+function readNlpStatusSnapshot(): NlpStatusSnapshot | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    const raw = window.localStorage.getItem(NLP_STATUS_SNAPSHOT_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as NlpStatusSnapshot;
+    if (!parsed || typeof parsed.ts !== "number") {
+      return null;
+    }
+    if (Date.now() - parsed.ts > NLP_STATUS_SNAPSHOT_TTL_MS) {
+      return null;
+    }
+    return {
+      ts: parsed.ts,
+      status: (parsed.status || null) as NlpStatus | null,
+      localModelsStatus: (parsed.localModelsStatus || null) as NlpLocalModelsStatus | null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeNlpStatusSnapshot(snapshot: NlpStatusSnapshot): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(NLP_STATUS_SNAPSHOT_KEY, JSON.stringify(snapshot));
+  } catch {
+    // Best-effort cache; ignore quota or serialization errors.
+  }
+}
+
 export function useNlp() {
   const { t } = useTranslation();
   const { message } = useAppMessage();
 
-  const [loading, setLoading] = useState(true);
+  const [snapshotSeed] = useState<NlpStatusSnapshot | null>(() => readNlpStatusSnapshot());
+
+  const [loading, setLoading] = useState(snapshotSeed == null);
   const [installing, setInstalling] = useState(false);
   const [downloadingModel, setDownloadingModel] = useState(false);
   const [downloadingMissingLocalModels, setDownloadingMissingLocalModels] = useState(false);
@@ -165,16 +213,20 @@ export function useNlp() {
   const [runningPreload, setRunningPreload] = useState(false);
   const [savingStrategy, setSavingStrategy] = useState(false);
   const [dryRunningDecision, setDryRunningDecision] = useState(false);
-  const [status, setStatus] = useState<NlpStatus | null>(null);
-  const [localModelsStatus, setLocalModelsStatus] = useState<NlpLocalModelsStatus | null>(null);
+  const [status, setStatus] = useState<NlpStatus | null>(snapshotSeed?.status ?? null);
+  const [localModelsStatus, setLocalModelsStatus] = useState<NlpLocalModelsStatus | null>(
+    snapshotSeed?.localModelsStatus ?? null,
+  );
   const [lastManualSteps, setLastManualSteps] = useState<string[]>([]);
   const [lastOperations, setLastOperations] = useState<HanlpOperation[]>([]);
   const [lastStrategyDecision, setLastStrategyDecision] = useState<NlpStrategyDryRunDecision | null>(null);
   const [runningDemoTask, setRunningDemoTask] = useState<string | null>(null);
   const [demoResults, setDemoResults] = useState<Record<string, NlpMethodDemoResult>>({});
 
-  const fetchStatus = async () => {
-    setLoading(true);
+  const fetchStatus = async (showLoading = false) => {
+    if (showLoading) {
+      setLoading(true);
+    }
     try {
       const [statusRes, localModelsRes] = await Promise.all([
         api.getNlpStatus(),
@@ -182,16 +234,23 @@ export function useNlp() {
       ]);
       setStatus(statusRes);
       setLocalModelsStatus(localModelsRes);
+      writeNlpStatusSnapshot({
+        ts: Date.now(),
+        status: statusRes,
+        localModelsStatus: localModelsRes,
+      });
     } catch (error) {
       console.error("Failed to load NLP settings:", error);
       message.error(t("nlpConfig.loadFailed"));
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    fetchStatus();
+    void fetchStatus(snapshotSeed == null);
   }, []);
 
   const handleInstall = async () => {

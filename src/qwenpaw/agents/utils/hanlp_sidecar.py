@@ -18,6 +18,12 @@ from ...constant import WORKING_DIR
 _STATUS_CACHE: dict | None = None
 _STATUS_CACHE_TIME = 0.0
 _STATUS_CACHE_TTL_SEC = 60.0
+_STATUS_SNAPSHOT_CACHE: dict | None = None
+_STATUS_SNAPSHOT_CACHE_TIME = 0.0
+_STATUS_SNAPSHOT_CACHE_TTL_SEC = 20.0
+_HANLP_READY_SNAPSHOT: dict | None = None
+_HANLP_READY_SNAPSHOT_TIME = 0.0
+_HANLP_READY_SNAPSHOT_TTL_SEC = 300.0
 _STATUS_CACHE_LOCK = threading.Lock()
 _PRELOAD_STATE_LOCK = threading.Lock()
 _PRELOAD_THREAD: threading.Thread | None = None
@@ -667,9 +673,17 @@ def _build_task_status_snapshot(config, *, sidecar_state: dict, model_state: dic
 def _invalidate_cache() -> None:
     global _STATUS_CACHE  # noqa: PLW0603
     global _STATUS_CACHE_TIME  # noqa: PLW0603
+    global _STATUS_SNAPSHOT_CACHE  # noqa: PLW0603
+    global _STATUS_SNAPSHOT_CACHE_TIME  # noqa: PLW0603
+    global _HANLP_READY_SNAPSHOT  # noqa: PLW0603
+    global _HANLP_READY_SNAPSHOT_TIME  # noqa: PLW0603
     with _STATUS_CACHE_LOCK:
         _STATUS_CACHE = None
         _STATUS_CACHE_TIME = 0.0
+        _STATUS_SNAPSHOT_CACHE = None
+        _STATUS_SNAPSHOT_CACHE_TIME = 0.0
+        _HANLP_READY_SNAPSHOT = None
+        _HANLP_READY_SNAPSHOT_TIME = 0.0
 
 
 def _build_status(config, *, include_task_status: bool = True) -> dict:
@@ -720,25 +734,53 @@ def _build_status(config, *, include_task_status: bool = True) -> dict:
 def get_hanlp_sidecar_status(*, force_refresh: bool = False, include_task_status: bool = True) -> dict:
     global _STATUS_CACHE  # noqa: PLW0603
     global _STATUS_CACHE_TIME  # noqa: PLW0603
+    global _STATUS_SNAPSHOT_CACHE  # noqa: PLW0603
+    global _STATUS_SNAPSHOT_CACHE_TIME  # noqa: PLW0603
+    global _HANLP_READY_SNAPSHOT  # noqa: PLW0603
+    global _HANLP_READY_SNAPSHOT_TIME  # noqa: PLW0603
 
     now = time.monotonic()
     with _STATUS_CACHE_LOCK:
-        if (
-            not force_refresh
-            and include_task_status
-            and _STATUS_CACHE is not None
-            and (now - _STATUS_CACHE_TIME) < _STATUS_CACHE_TTL_SEC
-        ):
-            return dict(_STATUS_CACHE)
+        if not force_refresh and include_task_status:
+            if _STATUS_CACHE is not None and (now - _STATUS_CACHE_TIME) < _STATUS_CACHE_TTL_SEC:
+                return dict(_STATUS_CACHE)
+
+        if not force_refresh and not include_task_status:
+            # Fast path: if HanLP was recently confirmed ready, return the
+            # in-memory ready snapshot without running runtime probes.
+            if (
+                _HANLP_READY_SNAPSHOT is not None
+                and (now - _HANLP_READY_SNAPSHOT_TIME) < _HANLP_READY_SNAPSHOT_TTL_SEC
+            ):
+                return dict(_HANLP_READY_SNAPSHOT)
+
+            # Fallback to lightweight snapshot cache.
+            if (
+                _STATUS_SNAPSHOT_CACHE is not None
+                and (now - _STATUS_SNAPSHOT_CACHE_TIME) < _STATUS_SNAPSHOT_CACHE_TTL_SEC
+            ):
+                return dict(_STATUS_SNAPSHOT_CACHE)
 
     config = load_config()
     status = _build_status(config, include_task_status=include_task_status)
 
-    if include_task_status:
-        with _STATUS_CACHE_LOCK:
+    sidecar_ready = str((status.get("sidecar") or {}).get("status") or "") == "ready"
+    model_ready = str((status.get("model") or {}).get("status") or "") == "ready"
+
+    with _STATUS_CACHE_LOCK:
+        # Record cache time after status build; build itself can take seconds.
+        built_at = time.monotonic()
+        if include_task_status:
             _STATUS_CACHE = status
-            # Record cache time after status build; build itself can take seconds.
-            _STATUS_CACHE_TIME = time.monotonic()
+            _STATUS_CACHE_TIME = built_at
+        else:
+            _STATUS_SNAPSHOT_CACHE = status
+            _STATUS_SNAPSHOT_CACHE_TIME = built_at
+
+        if sidecar_ready and model_ready and not include_task_status:
+            _HANLP_READY_SNAPSHOT = status
+            _HANLP_READY_SNAPSHOT_TIME = built_at
+
     return dict(status)
 
 
