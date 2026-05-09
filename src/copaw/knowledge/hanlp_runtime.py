@@ -39,6 +39,8 @@ def configure_runtime_env():
     )
     if hf_endpoint:
         os.environ["HF_ENDPOINT"] = hf_endpoint
+    # Require local model artifacts by default. Set to 0 only for explicit troubleshooting.
+    os.environ.setdefault("COPAW_HANLP_REQUIRE_LOCAL_MODELS", "1")
     allow_online = (
         str(os.environ.get("COPAW_HANLP_ALLOW_ONLINE", "")).strip() == "1"
         or bool(hf_endpoint)
@@ -77,6 +79,59 @@ def has_local_bert_backbone(hanlp_home=""):
     for path in candidates:
         if os.path.isdir(path):
             return True
+    return False
+
+
+def _model_cache_homes(hanlp_home=""):
+    home = str(hanlp_home or "").strip()
+    homes = []
+    if home:
+        homes.append(home)
+    homes.append(os.path.join(os.path.expanduser("~"), ".hanlp"))
+    unique = []
+    for item in homes:
+        norm = os.path.abspath(os.path.expanduser(item))
+        if norm not in unique:
+            unique.append(norm)
+    return unique
+
+
+def _extract_model_cache_keys(model_id):
+    raw = str(model_id or "").strip()
+    if not raw:
+        return []
+    keys = []
+    candidates = [raw]
+    if raw.startswith("http://") or raw.startswith("https://"):
+        candidates.append(raw.rsplit("/", 1)[-1])
+    for item in candidates:
+        name = str(item or "").strip()
+        if not name:
+            continue
+        if name.endswith(".zip"):
+            keys.append(name[:-4])
+            keys.append(name)
+        else:
+            keys.append(name)
+    dedup = []
+    for key in keys:
+        if key not in dedup:
+            dedup.append(key)
+    return dedup
+
+
+def has_local_model_artifact(model_id, hanlp_home=""):
+    keys = _extract_model_cache_keys(model_id)
+    if not keys:
+        return False
+    subdirs = ("", "tok", "mtl", "ner", "dep", "pos", "sdp", "con", "classification", "transformers")
+    for home in _model_cache_homes(hanlp_home):
+        for subdir in subdirs:
+            base = os.path.join(home, subdir) if subdir else home
+            for key in keys:
+                path = os.path.join(base, key)
+                if os.path.isdir(path) or os.path.isfile(path):
+                    return True
     return False
 
 
@@ -295,6 +350,17 @@ def load_with_cache(module, model_id):
         return None
     if key in _MODEL_CACHE:
         return _MODEL_CACHE[key]
+
+    require_local_models = str(os.environ.get("COPAW_HANLP_REQUIRE_LOCAL_MODELS", "1")).strip() != "0"
+    if require_local_models:
+        hanlp_home = str(os.environ.get("HANLP_HOME", "") or "").strip()
+        if not has_local_model_artifact(model_id, hanlp_home):
+            raise FileNotFoundError(
+                "MODEL_NOT_DOWNLOADED_LOCAL_CACHE: "
+                f"{key} is not found in local HanLP cache. "
+                "Please download and confirm local availability before loading."
+            )
+
     loader = getattr(module, "load", None)
     if not callable(loader):
         return None
@@ -304,7 +370,13 @@ def load_with_cache(module, model_id):
 
 
 def validate_model(module, model_id, text="HanLP 模型校验"):
-    raw_model_id, model, resolved_name = load_model(module, model_id)
+    try:
+        raw_model_id, model, resolved_name = load_model(module, model_id)
+    except Exception as exc:
+        message = str(exc)
+        if "MODEL_NOT_DOWNLOADED_LOCAL_CACHE" in message:
+            return str(model_id or ""), None, "", [], "MODEL_NOT_DOWNLOADED_LOCAL_CACHE"
+        return str(model_id or ""), None, "", [], exc.__class__.__name__
     if model is None:
         return raw_model_id, None, resolved_name, [], ""
     try:
@@ -369,6 +441,22 @@ def run_task_entrypoint(module, text, task_name, task_spec=None):
                 return parse_fn(text)
             except Exception as exc:
                 raise RuntimeError(f"HanLP multi-task parse failed ({task_name}): {exc}") from exc
+
+        # Some HanLP runtimes do not expose module.parse/tokenize, but can still
+        # run the configured MTL model directly via hanlp.load(model_id).
+        preferred_model_id = ""
+        if isinstance(task_spec, dict):
+            preferred_model_id = str(task_spec.get("model_id") or "").strip()
+        if preferred_model_id:
+            try:
+                _, model, _ = load_model(module, preferred_model_id)
+                if model is not None:
+                    return model(text)
+            except Exception as exc:
+                raise RuntimeError(
+                    f"HanLP multi-task model load/execute failed ({preferred_model_id}): {exc}"
+                ) from exc
+
         if normalized in {"tok", "tok_fine", "tok_coarse"}:
             _, tok_fn = locate_tokenizer(module)
             if tok_fn is None:
@@ -510,10 +598,39 @@ def resolve_model_id(module, model_id):
     raw = str(model_id or "").strip()
     if not raw:
         return "", None, ""
+
+    # Compatibility: accept dotted ids like
+    # "hanlp.pretrained.mtl.KYOTO_EVAHAN_TOK_LEM_POS_UDEP_LZH".
+    if raw.startswith("hanlp.pretrained."):
+        node = module
+        for part in raw.split(".")[1:]:
+            if hasattr(node, part):
+                node = getattr(node, part)
+            else:
+                node = None
+                break
+        if node is not None:
+            return raw, node, raw
+
+        short_name = raw.split(".")[-1]
+        pretrained = getattr(module, "pretrained", None)
+        for namespace in ("tok", "mtl", "ner", "dep", "pos", "sdp", "con"):
+            bucket = getattr(pretrained, namespace, None) if pretrained is not None else None
+            if bucket is not None and hasattr(bucket, short_name):
+                return raw, getattr(bucket, short_name), short_name
+
     pretrained = getattr(module, "pretrained", None)
     tok = getattr(pretrained, "tok", None)
     if tok is not None and hasattr(tok, raw):
         return raw, getattr(tok, raw), raw
+
+    # Support canonical names outside tok namespace (e.g. mtl constants).
+    if pretrained is not None:
+        for namespace in ("mtl", "ner", "dep", "pos", "sdp", "con"):
+            bucket = getattr(pretrained, namespace, None)
+            if bucket is not None and hasattr(bucket, raw):
+                return raw, getattr(bucket, raw), raw
+
     return raw, raw, raw
 
 
@@ -715,8 +832,37 @@ def execute_mode(mode, payload):
     configured_model_id = str(payload.get("model_id") or "").strip()
     requested_task_key = str(payload.get("task_key") or "").strip()
     requested_task_spec = lookup_task_spec(payload, requested_task_key)
+    hanlp_home = str(payload.get("hanlp_home") or "").strip()
 
     attr, fn = locate_tokenizer(hanlp)
+
+    if mode == "probe":
+        has_dep = has_parse_api(hanlp)
+        has_ner = has_ner_api(hanlp)
+        has_sdp = has_sdp_api(hanlp)
+        has_con = has_con_api(hanlp)
+        has_pos = has_pos_api(hanlp)
+        has_load = callable(getattr(hanlp, "load", None))
+        basic_available = bool(fn is not None or has_dep or has_ner or has_sdp or has_con or has_pos or has_load)
+        if not basic_available:
+            return {
+                "engine": "hanlp2",
+                "status": "unavailable",
+                "reason_code": "HANLP2_API_UNAVAILABLE",
+                "reason": "HanLP task APIs are unavailable in current runtime.",
+                "python_version": version_text(),
+                "tokenizer_attr": attr,
+                "tokens": [],
+            }
+        return {
+            "engine": "hanlp2",
+            "status": "ready",
+            "reason_code": "HANLP2_READY",
+            "reason": "HanLP2 sidecar runtime is ready.",
+            "python_version": version_text(),
+            "tokenizer_attr": attr,
+            "tokens": [],
+        }
 
     if mode == "api_status":
         pretrained = getattr(hanlp, "pretrained", None)
@@ -768,6 +914,56 @@ def execute_mode(mode, payload):
             "pretrained_categories": categories,
         }
 
+    if mode == "local_models_status":
+        require_local_models = str(os.environ.get("COPAW_HANLP_REQUIRE_LOCAL_MODELS", "1")).strip() != "0"
+        task_specs = load_task_specs(payload)
+        items = []
+
+        if configured_model_id:
+            items.append(
+                {
+                    "scope": "default",
+                    "task_key": "",
+                    "task_name": "",
+                    "model_id": configured_model_id,
+                    "local_available": has_local_model_artifact(configured_model_id, hanlp_home),
+                }
+            )
+
+        for task_key, task_cfg in task_specs.items():
+            if not isinstance(task_cfg, dict):
+                continue
+            if not bool(task_cfg.get("enabled", True)):
+                continue
+            task_model_id = str(task_cfg.get("model_id") or "").strip()
+            if not task_model_id:
+                continue
+            items.append(
+                {
+                    "scope": "task",
+                    "task_key": str(task_key),
+                    "task_name": str(task_cfg.get("task_name") or ""),
+                    "model_id": task_model_id,
+                    "local_available": has_local_model_artifact(task_model_id, hanlp_home),
+                }
+            )
+
+        all_local = all(bool(item.get("local_available")) for item in items) if items else True
+        return {
+            "engine": "hanlp2",
+            "status": "ready" if all_local else "unavailable",
+            "reason_code": "HANLP2_LOCAL_MODELS_READY" if all_local else "HANLP2_MODEL_NOT_LOCAL",
+            "reason": (
+                "All required HanLP models are present in local cache."
+                if all_local
+                else "Some HanLP models are missing from local cache."
+            ),
+            "python_version": version_text(),
+            "require_local_models": require_local_models,
+            "hanlp_home": hanlp_home,
+            "items": items,
+        }
+
     if mode in {"model_status", "ensure_model"}:
         raw_model_id, model, resolved_name, tokens, error_name = validate_model(
             hanlp,
@@ -776,11 +972,21 @@ def execute_mode(mode, payload):
         if model is None:
             reason = "HanLP2 model loader is unavailable or model_id is empty."
             if error_name:
-                reason = f"HanLP2 model load failed: {error_name}."
+                if error_name == "MODEL_NOT_DOWNLOADED_LOCAL_CACHE":
+                    reason = (
+                        "HanLP2 model is not present in local cache. "
+                        "Download and confirm local model artifacts before loading."
+                    )
+                else:
+                    reason = f"HanLP2 model load failed: {error_name}."
             return {
                 "engine": "hanlp2",
                 "status": "unavailable",
-                "reason_code": "HANLP2_MODEL_LOAD_FAILED",
+                "reason_code": (
+                    "HANLP2_MODEL_NOT_LOCAL"
+                    if error_name == "MODEL_NOT_DOWNLOADED_LOCAL_CACHE"
+                    else "HANLP2_MODEL_LOAD_FAILED"
+                ),
                 "reason": reason,
                 "python_version": version_text(),
                 "model_id": raw_model_id,
@@ -857,6 +1063,12 @@ def execute_mode(mode, payload):
             reason_code = "HANLP2_TASK_RUN_FAILED"
             message = str(exc)
             reason = f"HanLP task execution failed: {exc.__class__.__name__}: {message[:200]}"
+            if "MODEL_NOT_DOWNLOADED_LOCAL_CACHE" in message:
+                reason_code = "HANLP2_MODEL_NOT_LOCAL"
+                reason = (
+                    "HanLP model is not present in local cache. "
+                    "Download all required models locally and retry."
+                )
             if "BERT_BACKBONE_MISSING_LOCAL_CACHE" in message:
                 reason_code = "HANLP2_BERT_BACKBONE_MISSING"
                 reason = (
@@ -1538,6 +1750,39 @@ class HanLPSidecarRuntime:
             "pretrained_categories": list(result.get("pretrained_categories") or []),
         })
 
+    def local_models_status(self, config: KnowledgeConfig | None) -> dict[str, Any]:
+        payload = self._config_payload(config)
+        executable = self._ensure_sidecar(payload)
+        if executable is None:
+            state = self._probe_cache_state or self._state(
+                status="unavailable",
+                reason_code="HANLP2_SIDECAR_UNCONFIGURED",
+                reason="HanLP2 sidecar is not configured.",
+            )
+            return {
+                **state,
+                "require_local_models": True,
+                "hanlp_home": str(payload.get("hanlp_home") or ""),
+                "items": [],
+            }
+
+        result = self._run_bridge(
+            executable,
+            mode="local_models_status",
+            payload=payload,
+            timeout=payload["probe_timeout_sec"],
+        )
+        return self._attach_runtime_meta({
+            "engine": "hanlp2",
+            "status": str(result.get("status") or "unavailable"),
+            "reason_code": str(result.get("reason_code") or "HANLP2_LOCAL_MODELS_STATUS_FAILED"),
+            "reason": str(result.get("reason") or "HanLP local model status check failed."),
+            "python_version": str(result.get("python_version") or ""),
+            "require_local_models": bool(result.get("require_local_models", True)),
+            "hanlp_home": str(result.get("hanlp_home") or ""),
+            "items": list(result.get("items") or []),
+        })
+
     def run_task(
         self,
         task_key: str,
@@ -1699,6 +1944,14 @@ class _PlaceholderRuntime:
             },
         }
 
+    def local_models_status(self, config: KnowledgeConfig | None) -> dict[str, Any]:
+        state = self.probe(config)
+        return {
+            **state,
+            "require_local_models": False,
+            "items": [],
+        }
+
 
 class NLPRuntime:
     """Provider-aware NLP runtime facade."""
@@ -1750,3 +2003,6 @@ class NLPRuntime:
 
     def api_status(self, config: KnowledgeConfig | None) -> dict[str, Any]:
         return self._runtime(config).api_status(config)
+
+    def local_models_status(self, config: KnowledgeConfig | None) -> dict[str, Any]:
+        return self._runtime(config).local_models_status(config)

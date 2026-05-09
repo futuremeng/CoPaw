@@ -114,7 +114,7 @@ _TASK_TIMEOUT_DEFAULTS = {
     "lzh_pos_pku": 60.0,
     "lzh_dep": 60.0,
 }
-_CLASSICAL_SINGLE_MODEL_ID = "hanlp.pretrained.mtl.KYOTO_EVAHAN_TOK_LEM_POS_UDEP_LZH"
+_CLASSICAL_SINGLE_MODEL_ID = "KYOTO_EVAHAN_TOK_LEM_POS_UDEP_LZH"
 _CLASSICAL_TASK_SPECS: dict[str, dict[str, Any]] = {
     "lzh_tok_fine": {"task_name": "tok/fine", "artifact_key": "lzh_tok_fine", "eval_role": "primary"},
     "lzh_tok_coarse": {"task_name": "tok/coarse", "artifact_key": "lzh_tok_coarse", "eval_role": "primary"},
@@ -437,7 +437,6 @@ def _prepare_classical_task_config(task_key: str, effective_config: KnowledgeCon
     nlp_cfg = getattr(effective_config, "nlp", None)
     if nlp_cfg is None:
         return
-    nlp_cfg.model_id = _CLASSICAL_SINGLE_MODEL_ID
     task_matrix = getattr(nlp_cfg, "task_matrix", None)
     tasks = getattr(task_matrix, "tasks", None) if task_matrix is not None else None
     if not isinstance(tasks, dict):
@@ -738,7 +737,10 @@ async def _run_hanlp_task(task_key: str, request: HanLPTaskRunRequest, http_requ
     if decision["selected_model"]:
         nlp_cfg = getattr(effective_config, "nlp", None)
         if nlp_cfg is not None:
-            nlp_cfg.model_id = str(decision["selected_model"])
+            # Keep classical routing on task-matrix level only. Forcing global
+            # nlp.model_id here can break sidecar probe/tokenize pre-checks.
+            if normalized_task_key not in _SUPPORTED_CLASSICAL_TASK_KEYS:
+                nlp_cfg.model_id = str(decision["selected_model"])
             if _should_override_task_matrix(decision):
                 _task_matrix_model_override(normalized_task_key, str(decision["selected_model"]), effective_config)
     runtime = NLPRuntime()

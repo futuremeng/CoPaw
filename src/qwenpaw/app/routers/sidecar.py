@@ -93,3 +93,24 @@ async def get_sidecar_nlp_status(
             "task_results": {},
         },
     }
+
+
+@router.get(
+    "/nlp-local-models",
+    summary="Check local model availability for NLP sidecar",
+    description=(
+        "Return local cache availability for configured NLP default model and "
+        "all enabled task models."
+    ),
+)
+async def get_sidecar_nlp_local_models() -> dict:
+    """Return local model readiness for current NLP configuration."""
+    config = load_config()
+    nlp_cfg = config.knowledge.nlp
+    provider = str(getattr(nlp_cfg, "provider", "hanlp") or "hanlp").strip().lower()
+
+    runtime = NLPRuntime()
+    payload = await asyncio.to_thread(runtime.local_models_status, config.knowledge)
+    payload["provider"] = provider
+    payload["model_cache_path"] = str(getattr(nlp_cfg, "model_home", "") or "")
+    return payload
