@@ -87,6 +87,27 @@ const DEMO_METHODS: DemoMethod[] = [
     placeholder: "输入词性标注文本，例如：微软发布新模型。",
     examples: ["微软发布新模型。", "我们在北京举行会议。"],
   },
+  {
+    key: "dep",
+    backendTaskKey: "dep",
+    title: "Dependency Parsing",
+    placeholder: "输入依存句法分析文本，例如：微软发布新模型。",
+    examples: ["微软发布新模型。", "我们在北京举行会议。", "吾之道也。"],
+  },
+  {
+    key: "sdp",
+    backendTaskKey: "sdp",
+    title: "Semantic Dependency Parsing",
+    placeholder: "输入语义依存分析文本，例如：微软发布新模型。",
+    examples: ["微软发布新模型。", "我们在北京举行会议。", "吾之道也。"],
+  },
+  {
+    key: "con",
+    backendTaskKey: "con",
+    title: "Constituency Parsing",
+    placeholder: "输入短语结构分析文本，例如：微软发布新模型。",
+    examples: ["微软发布新模型。", "我们在北京举行会议。", "吾之道也。"],
+  },
 ];
 
 function resolveTagColor(status: string): string {

@@ -1997,16 +1997,16 @@
         "description": "MSRA 标签体系的命名实体识别任务。"
       },
       "dep": {
-        "name": "dep",
-        "description": "依存句法分析任务。"
+        "name": "Dependency Parsing",
+        "description": "依存句法分析任务，输出句法结构中词之间的依存关系。"
       },
       "sdp": {
-        "name": "sdp",
-        "description": "语义依存分析任务。"
+        "name": "Semantic Dependency Parsing",
+        "description": "语义依存分析任务，输出语义层面的依存关系。"
       },
       "con": {
-        "name": "con",
-        "description": "成分句法分析任务。"
+        "name": "Constituency Parsing",
+        "description": "成分句法分析任务，输出短语层级的句法结构。"
       },
       "cor": {
         "name": "coreference_resolution (cor)",

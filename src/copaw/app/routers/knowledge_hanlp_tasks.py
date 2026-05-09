@@ -83,6 +83,9 @@ _TASK_MODEL_DEFAULTS = {
 }
 _TASK_TIMEOUT_DEFAULTS = {
     "ner_msra": 90.0,
+    "dep": 60.0,
+    "sdp": 60.0,
+    "con": 60.0,
     "pos_ctb": 60.0,
     "pos_pku": 60.0,
     "pos_863": 60.0,
@@ -289,6 +292,46 @@ def _normalize_dep_result(raw: Any) -> list[dict[str, Any]]:
             continue
         normalized.append({"token": token, "head": head, "deprel": deprel})
     return normalized
+
+
+def _normalize_sdp_result(raw: Any) -> list[dict[str, Any]] | dict[str, Any]:
+    """Normalize semantic dependency parsing result. Preserve dict if returned as-is, normalize lists."""
+    if isinstance(raw, dict):
+        return raw
+    if not isinstance(raw, list):
+        return {}
+    normalized: list[dict[str, Any]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        token = str(item.get("token") or item.get("text") or item.get("word") or "").strip()
+        deprel = str(item.get("deprel") or item.get("relation") or "").strip()
+        try:
+            head = int(item.get("head")) if item.get("head") is not None else 0
+        except (TypeError, ValueError):
+            head = 0
+        try:
+            score = float(item.get("score")) if item.get("score") is not None else None
+        except (TypeError, ValueError):
+            score = None
+        if not token and not deprel and head == 0:
+            continue
+        normalized.append({"token": token, "head": head, "deprel": deprel, "relation": deprel, "score": score})
+    return normalized if normalized else {}
+
+
+def _normalize_con_result(raw: Any) -> list[dict[str, Any]] | dict[str, Any] | str:
+    """Normalize constituency parsing result to list, dict, or tree string format."""
+    if isinstance(raw, str):
+        return raw
+    if isinstance(raw, dict):
+        tree = raw.get("tree") or raw.get("bracket") or raw.get("parse")
+        if isinstance(tree, str):
+            return tree
+        return raw
+    if isinstance(raw, list):
+        return raw if raw else {}
+    return {}
 
 
 def _normalize_pos_result(raw: Any) -> list[dict[str, Any]]:
@@ -593,6 +636,24 @@ async def _run_hanlp_task(task_key: str, request: HanLPTaskRunRequest, http_requ
         result, state = await asyncio.to_thread(runtime.run_dep, request.text, effective_config)
         raw_result = result
         normalized_result = _normalize_dep_result(result)
+    elif normalized_task_key == "sdp":
+        result, state = await asyncio.to_thread(
+            runtime.run_task,
+            normalized_task_key,
+            request.text,
+            effective_config,
+        )
+        raw_result = result
+        normalized_result = _normalize_sdp_result(result)
+    elif normalized_task_key == "con":
+        result, state = await asyncio.to_thread(
+            runtime.run_task,
+            normalized_task_key,
+            request.text,
+            effective_config,
+        )
+        raw_result = result
+        normalized_result = _normalize_con_result(result)
     elif normalized_task_key in {"pos_ctb", "pos_pku", "pos_863"}:
         result, state = await asyncio.to_thread(
             runtime.run_task,
