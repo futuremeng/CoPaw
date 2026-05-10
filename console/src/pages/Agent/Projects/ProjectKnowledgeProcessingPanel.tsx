@@ -443,8 +443,6 @@ export default function ProjectKnowledgeProcessingPanel(
   const hasStaleProcessing = props.knowledgeState.processingFreshness.stale;
   const l2Mode = visibleModes.find((mode) => mode.mode === "nlp") || null;
   const l3Mode = visibleModes.find((mode) => mode.mode === "agentic") || null;
-  const l2Output = l2Mode ? props.knowledgeState.modeOutputs[l2Mode.mode] : null;
-  const l3Output = l3Mode ? props.knowledgeState.modeOutputs[l3Mode.mode] : null;
   const { entityDelta, relationDelta } = props.knowledgeState.processingCompareDelta;
   const staleTooltip = describeStaleSources(props.knowledgeState.processingFreshness, t);
   const layerRows = buildKnowledgeLayerRows({
@@ -562,16 +560,6 @@ export default function ProjectKnowledgeProcessingPanel(
           ))}
         </div>
 
-        {(l2Output || l3Output) ? (
-          <div className={styles.projectKnowledgeProcessingCompareNote}>
-            <Typography.Text type="secondary">
-              {t(
-                "projects.knowledge.processing.compareNote",
-                "L2 提供实体与关系的结构化基础，L3 通过智能体对 NLP 结果进行审计增强与质量提升。",
-              )}
-            </Typography.Text>
-          </div>
-        ) : null}
       </div>
     </div>
   );
