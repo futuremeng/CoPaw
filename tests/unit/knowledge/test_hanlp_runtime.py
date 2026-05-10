@@ -759,6 +759,71 @@ def load(model_id):
     assert parsed["task_result"] == [{"text": "微软", "label": "ORG", "span": [0, 2]}]
 
 
+def test_bridge_run_task_ner_tokenized_fallback_accepts_token_list_input(tmp_path: Path) -> None:
+    hanlp_pkg = tmp_path / "hanlp"
+    hanlp_pkg.mkdir()
+    torch_pkg = tmp_path / "torch"
+    torch_pkg.mkdir()
+    (hanlp_pkg / "__init__.py").write_text(
+        """
+class _NERModel:
+    def __call__(self, value):
+        if isinstance(value, list) and value and isinstance(value[0], str):
+            return [{"text": "微软", "label": "ORG", "span": [0, 2]}]
+        raise IndexError("too many indices for tensor of dimension 2")
+
+
+def load(model_id):
+    return _NERModel()
+
+
+def tokenize(text):
+    return ["微软", "发布", "新模型"]
+""".strip(),
+        encoding="utf-8",
+    )
+    (torch_pkg / "__init__.py").write_text("__version__='0.test'", encoding="utf-8")
+
+    bridge_code = hanlp_runtime_module._BRIDGE_CODE.replace(
+        "return (3, 6) <= current <= (3, 10)",
+        "return True",
+    )
+    payload = {
+        "task_key": "ner_msra",
+        "task_matrix": {
+            "tasks": {
+                "ner_msra": {
+                    "enabled": True,
+                    "task_name": "ner/msra",
+                    "artifact_key": "ner_msra",
+                    "eval_role": "primary",
+                    "timeout_sec": 30,
+                },
+            },
+        },
+        "text": "微软发布新模型",
+    }
+    env = {
+        **os.environ,
+        "PYTHONPATH": str(tmp_path),
+    }
+
+    completed = subprocess.run(
+        [sys.executable, "-c", bridge_code, "run_task"],
+        input=json.dumps(payload, ensure_ascii=False),
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+
+    assert completed.returncode == 0
+    parsed = json.loads(completed.stdout)
+    assert parsed["status"] == "ready"
+    assert parsed["reason_code"] == "HANLP2_TASK_READY"
+    assert parsed["task_result"] == [{"text": "微软", "label": "ORG", "span": [0, 2]}]
+
+
 def test_persistent_worker_reuses_same_pid_between_calls() -> None:
     runtime = HanLPSidecarRuntime()
     config = Config().knowledge

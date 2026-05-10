@@ -932,39 +932,83 @@ def run_task_entrypoint(module, text, task_name, task_spec=None):
                     tokenized = tok_fn(text)
                     tok_ms = int((time.perf_counter() - tok_started) * 1000)
                     tokens = flatten(tokenized)
+                    sentence_batches = []
+                    if isinstance(tokenized, (list, tuple)):
+                        for row in tokenized:
+                            row_tokens = flatten(row)
+                            if row_tokens:
+                                sentence_batches.append(row_tokens)
+                    attempts = []
                     if tokens:
-                        infer_started = time.perf_counter()
-                        ner_output = model([tokens])
-                        if (
-                            isinstance(ner_output, list)
-                            and len(ner_output) == 1
-                            and isinstance(ner_output[0], (list, tuple))
-                        ):
+                        attempts.append(("model.ner.tokenized", tokens))
+                        attempts.append(("model.ner.tokenized_batch", [tokens]))
+                    if sentence_batches:
+                        attempts.append(("model.ner.tokenized_multi_batch", sentence_batches))
+
+                    for trace_name, ner_input in attempts:
+                        try:
+                            infer_started = time.perf_counter()
+                            ner_output = model(ner_input)
+                            infer_ms = int((time.perf_counter() - infer_started) * 1000)
+                            if (
+                                isinstance(ner_output, list)
+                                and len(ner_output) == 1
+                                and isinstance(ner_output[0], (list, tuple))
+                            ):
+                                return _trace_return(
+                                    ner_output[0],
+                                    trace_name,
+                                    {
+                                        "tokenize_ms": tok_ms,
+                                        "model_infer_ms": infer_ms,
+                                    },
+                                )
                             return _trace_return(
-                                ner_output[0],
-                                "model.ner.tokenized_batch",
+                                ner_output,
+                                trace_name,
                                 {
                                     "tokenize_ms": tok_ms,
-                                    "model_infer_ms": int((time.perf_counter() - infer_started) * 1000),
+                                    "model_infer_ms": infer_ms,
                                 },
                             )
-                        return _trace_return(
-                            ner_output,
-                            "model.ner.tokenized_batch",
-                            {
-                                "tokenize_ms": tok_ms,
-                                "model_infer_ms": int((time.perf_counter() - infer_started) * 1000),
-                            },
-                        )
+                        except Exception:
+                            continue
                 except Exception:
                     pass
-            infer_started = time.perf_counter()
-            output = model(text)
-            return _trace_return(
-                output,
-                "model.ner.default",
-                {"model_infer_ms": int((time.perf_counter() - infer_started) * 1000)},
-            )
+            try:
+                infer_started = time.perf_counter()
+                output = model(text)
+                return _trace_return(
+                    output,
+                    "model.ner.default",
+                    {"model_infer_ms": int((time.perf_counter() - infer_started) * 1000)},
+                )
+            except Exception as exc:
+                if callable(parse_fn):
+                    parse_started = time.perf_counter()
+                    try:
+                        output = parse_fn(text, tasks=task_name)
+                        return _trace_return(
+                            output,
+                            "parse.tasks.recovery",
+                            {"parse_ms": int((time.perf_counter() - parse_started) * 1000)},
+                            detail=exc.__class__.__name__,
+                        )
+                    except TypeError:
+                        output = parse_fn(text)
+                        return _trace_return(
+                            output,
+                            "parse.default.recovery",
+                            {"parse_ms": int((time.perf_counter() - parse_started) * 1000)},
+                            detail=exc.__class__.__name__,
+                        )
+                    except Exception:
+                        pass
+                _trace_raise(
+                    RuntimeError(f"HanLP NER ({ner_type}) failed: {exc}"),
+                    "model.ner.error",
+                    detail=exc.__class__.__name__,
+                )
         except Exception as exc:
             if callable(parse_fn):
                 parse_started = time.perf_counter()

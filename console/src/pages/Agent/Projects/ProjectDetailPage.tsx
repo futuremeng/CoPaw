@@ -14,7 +14,6 @@ import {
   Spin,
   Tabs,
   Typography,
-  message,
 } from "antd";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -28,7 +27,6 @@ import ProjectChatPanel, {
 } from "./ProjectChatPanel";
 import ProjectKnowledgePanel from "./ProjectKnowledgePanel";
 import ProjectKnowledgeOutputsPanel from "./ProjectKnowledgeOutputsPanel";
-import ProjectKnowledgeNerPanel from "./ProjectKnowledgeNerPanel";
 import ProjectKnowledgeProcessingPanel from "./ProjectKnowledgeProcessingPanel";
 import ProjectKnowledgeSignalsPanel from "./ProjectKnowledgeSignalsPanel";
 import ProjectKnowledgeSourcesPanel from "./ProjectKnowledgeSourcesPanel";
@@ -53,6 +51,7 @@ import useProjectRealtimeController from "./useProjectRealtimeController";
 import useProjectUploadController from "./useProjectUploadController";
 import {
   type ProjectKnowledgeHeaderSignals,
+  type ProjectKnowledgeProcessingMode,
   useProjectKnowledgeState,
 } from "./useProjectKnowledgeState";
 import {
@@ -599,6 +598,10 @@ export default function ProjectDetailPage() {
   const [activeStage, setActiveStage] = useState<ProjectStageKey>("source");
   const [knowledgeModuleCollapsed, setKnowledgeModuleCollapsed] = useState(false);
   const [knowledgeDockTab, setKnowledgeDockTab] = useState<KnowledgeDockTabKey>("explore");
+  const effectiveKnowledgeDockTab = knowledgeDockTab === "ner" ? "processing" : knowledgeDockTab;
+  const [knowledgeProcessingFocusMode, setKnowledgeProcessingFocusMode] = useState<ProjectKnowledgeProcessingMode | "">("");
+  const [knowledgeProcessingFocusStage, setKnowledgeProcessingFocusStage] = useState<"ner" | "syntax" | "cor" | "">("");
+  const [knowledgeProcessingFocusToken, setKnowledgeProcessingFocusToken] = useState(0);
   const [projectKnowledgeIncludeGlobal, setProjectKnowledgeIncludeGlobal] = useState(true);
   const [knowledgeHeaderSignals, setKnowledgeHeaderSignals] =
     useState<ProjectKnowledgeHeaderSignals>(DEFAULT_KNOWLEDGE_HEADER_SIGNALS);
@@ -648,8 +651,7 @@ export default function ProjectDetailPage() {
     onSignalsChange: setKnowledgeHeaderSignals,
     eagerSourceLoad:
       knowledgeDockTab === "sources"
-      || knowledgeDockTab === "ner"
-      || knowledgeDockTab === "processing"
+      || effectiveKnowledgeDockTab === "processing"
       || knowledgeDockTab === "health"
       || knowledgeDockTab === "settings",
     eagerExploreLoad: knowledgeDockTab === "explore",
@@ -3023,6 +3025,22 @@ export default function ProjectDetailPage() {
     setKnowledgeDockTab("settings");
   }, []);
 
+  useEffect(() => {
+    if (knowledgeDockTab === "ner") {
+      setKnowledgeDockTab("processing");
+    }
+  }, [knowledgeDockTab]);
+
+  const handleKnowledgeOpenProcessing = useCallback((
+    mode?: ProjectKnowledgeProcessingMode,
+    stage?: "ner" | "syntax" | "cor",
+  ) => {
+    setKnowledgeDockTab("processing");
+    setKnowledgeProcessingFocusMode(mode || "nlp");
+    setKnowledgeProcessingFocusStage(stage || "");
+    setKnowledgeProcessingFocusToken((prev) => prev + 1);
+  }, []);
+
   const handleKnowledgeRunSuggestedQuery = useCallback((query: string) => {
     setPendingKnowledgeQuery(query);
     setKnowledgeDockTab("explore");
@@ -3092,6 +3110,7 @@ export default function ProjectDetailPage() {
             requestedQuery={pendingKnowledgeQuery}
             onRequestedQueryHandled={handleKnowledgeRequestedQueryHandled}
             onOpenOutputs={handleKnowledgeOpenOutputs}
+            onOpenProcessing={handleKnowledgeOpenProcessing}
           />
         ),
       },
@@ -3111,15 +3130,9 @@ export default function ProjectDetailPage() {
           <ProjectKnowledgeProcessingPanel
             knowledgeState={projectKnowledgeState}
             onOpenSettings={handleKnowledgeOpenSettings}
-          />
-        ),
-      },
-      {
-        key: "ner",
-        label: t("projects.knowledgeDock.tabNer", "NER"),
-        children: (
-          <ProjectKnowledgeNerPanel
-            knowledgeState={projectKnowledgeState}
+            focusedMode={knowledgeProcessingFocusMode || undefined}
+            focusedStage={knowledgeProcessingFocusStage || undefined}
+            focusToken={knowledgeProcessingFocusToken}
           />
         ),
       },
@@ -3176,6 +3189,7 @@ export default function ProjectDetailPage() {
     currentAgent?.id,
     currentAgent?.workspace_dir,
     handleKnowledgeOpenOutputs,
+    handleKnowledgeOpenProcessing,
     handleKnowledgeOpenSettings,
     handleKnowledgeRequestedQueryHandled,
     handleKnowledgeRunSuggestedQuery,
@@ -3184,6 +3198,9 @@ export default function ProjectDetailPage() {
     handleSelectArtifactFile,
     knowledgeHeaderSignals,
     pendingKnowledgeQuery,
+    knowledgeProcessingFocusMode,
+    knowledgeProcessingFocusStage,
+    knowledgeProcessingFocusToken,
     projectKnowledgeIncludeGlobal,
     projectKnowledgeState,
     runtimeSignalTooltipContent,
@@ -3445,7 +3462,7 @@ export default function ProjectDetailPage() {
                             <div className={styles.knowledgeDockBody}>
                               <Tabs
                                 className={styles.knowledgeDockTabs}
-                                activeKey={knowledgeDockTab}
+                                activeKey={effectiveKnowledgeDockTab}
                                 tabPosition="left"
                                 destroyOnHidden
                                 onChange={(key) => setKnowledgeDockTab(key as KnowledgeDockTabKey)}

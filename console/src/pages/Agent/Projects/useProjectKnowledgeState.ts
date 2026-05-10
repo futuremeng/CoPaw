@@ -133,6 +133,10 @@ export interface ProjectKnowledgeModeState {
   syntaxReadyChunkCount?: number;
   syntaxSentenceCount?: number;
   syntaxTokenCount?: number;
+  syntaxPosCount?: number;
+  syntaxPosTagTypeCount?: number;
+  posCoverageOnSyntaxTokens?: number;
+  posCoverageOnDocumentTokens?: number;
   syntaxRelationCount?: number;
   l2TotalChunks?: number;
   corDoneChunks?: number;
@@ -972,6 +976,34 @@ function parseBackendProcessingModes(
             normalizeNumber(l2Metrics?.syntax_token_count),
           )
           : normalizeNumber(modeMetric?.syntax_token_count),
+        syntaxPosCount: isNlpMode
+          ? Math.max(
+            normalizeNumber(nlpSyntaxStage?.pos_count),
+            normalizeNumber(modeMetric?.syntax_pos_count),
+            normalizeNumber(l2Metrics?.syntax_pos_count),
+          )
+          : normalizeNumber(modeMetric?.syntax_pos_count),
+        syntaxPosTagTypeCount: isNlpMode
+          ? Math.max(
+            normalizeNumber(nlpSyntaxStage?.pos_tag_type_count),
+            normalizeNumber(modeMetric?.syntax_pos_tag_type_count),
+            normalizeNumber(l2Metrics?.syntax_pos_tag_type_count),
+          )
+          : normalizeNumber(modeMetric?.syntax_pos_tag_type_count),
+        posCoverageOnSyntaxTokens: isNlpMode
+          ? Math.max(
+            normalizeNullableNumber(nlpSyntaxStage?.pos_coverage_on_syntax_tokens) ?? 0,
+            normalizeNullableNumber(modeMetric?.pos_coverage_on_syntax_tokens) ?? 0,
+            normalizeNullableNumber(l2Metrics?.pos_coverage_on_syntax_tokens) ?? 0,
+          )
+          : (normalizeNullableNumber(modeMetric?.pos_coverage_on_syntax_tokens) ?? undefined),
+        posCoverageOnDocumentTokens: isNlpMode
+          ? Math.max(
+            normalizeNullableNumber(nlpSyntaxStage?.pos_coverage_on_document_tokens) ?? 0,
+            normalizeNullableNumber(modeMetric?.pos_coverage_on_document_tokens) ?? 0,
+            normalizeNullableNumber(l2Metrics?.pos_coverage_on_document_tokens) ?? 0,
+          )
+          : (normalizeNullableNumber(modeMetric?.pos_coverage_on_document_tokens) ?? undefined),
         syntaxRelationCount: isNlpMode
           ? Math.max(
             normalizeNumber(nlpSyntaxStage?.relation_count),
@@ -2214,6 +2246,20 @@ export function useProjectKnowledgeState(
       normalizeNumber(syncState?.l2_metrics?.syntax_token_count),
       0,
     );
+    const nlpSyntaxPosCount = Math.max(
+      getBackendModeMetricNumber(syncState, "nlp", "syntax_pos_count"),
+      normalizeNumber(syncState?.l2_metrics?.syntax_pos_count),
+      0,
+    );
+    const nlpSyntaxPosTagTypeCount = Math.max(
+      getBackendModeMetricNumber(syncState, "nlp", "syntax_pos_tag_type_count"),
+      normalizeNumber(syncState?.l2_metrics?.syntax_pos_tag_type_count),
+      0,
+    );
+    const nlpPosCoverageOnSyntaxTokens = getBackendModeMetricNullableNumber(syncState, "nlp", "pos_coverage_on_syntax_tokens")
+      ?? normalizeNullableNumber(getSyncIndexMetric(syncState, "pos_coverage_on_syntax_tokens"));
+    const nlpPosCoverageOnDocumentTokens = getBackendModeMetricNullableNumber(syncState, "nlp", "pos_coverage_on_document_tokens")
+      ?? normalizeNullableNumber(getSyncIndexMetric(syncState, "pos_coverage_on_document_tokens"));
     const nlpSyntaxRelationCount = Math.max(
       getBackendModeMetricNumber(syncState, "nlp", "syntax_relation_count"),
       normalizeNumber(syncState?.l2_metrics?.syntax_relation_count),
@@ -2333,6 +2379,10 @@ export function useProjectKnowledgeState(
         syntaxReadyChunkCount: nlpSyntaxReadyChunkCount,
         syntaxSentenceCount: nlpSyntaxSentenceCount,
         syntaxTokenCount: nlpSyntaxTokenCount,
+        syntaxPosCount: nlpSyntaxPosCount,
+        syntaxPosTagTypeCount: nlpSyntaxPosTagTypeCount,
+        posCoverageOnSyntaxTokens: nlpPosCoverageOnSyntaxTokens ?? undefined,
+        posCoverageOnDocumentTokens: nlpPosCoverageOnDocumentTokens ?? undefined,
         syntaxRelationCount: nlpSyntaxRelationCount,
         l2TotalChunks,
         corDoneChunks: l2CorDoneChunks,

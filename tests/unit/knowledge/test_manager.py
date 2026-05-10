@@ -471,6 +471,8 @@ def test_index_source_writes_ner_files_when_semantic_ready(tmp_path: Path):
     assert chunk["syntax_format_version"] == "0.2"
     assert chunk["syntax_sentence_count"] == 1
     assert chunk["syntax_token_count"] == 3
+    assert "syntax_pos_count" in chunk
+    assert "syntax_pos_tag_type_count" in chunk
     assert ner_path.exists()
     assert ner_structured_path.exists()
     assert ner_annotated_path.exists()
@@ -515,6 +517,9 @@ def test_index_source_writes_ner_files_when_semantic_ready(tmp_path: Path):
     assert syntax_structured["artifact"] == "syntax_structured"
     assert syntax_structured["parse_mode"] == "tokenized_only"
     assert syntax_structured["sentence_count"] == 1
+    assert "pos_count" in syntax_structured
+    assert "pos_tag_type_count" in syntax_structured
+    assert "pos_tag_types" in syntax_structured
     assert syntax_structured["sentences"][0]["entities"][0]["entity_id"] == "e1"
     syntax_annotated = syntax_annotated_path.read_text(encoding="utf-8")
     assert "# Syntax Annotated" in syntax_annotated

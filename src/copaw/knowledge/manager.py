@@ -637,6 +637,10 @@ class KnowledgeManager:
             "syntax_ready_document_count": _safe_count_int(payload.get("syntax_ready_chunk_count") or 0),  # Alias
             "syntax_sentence_count": _safe_count_int(payload.get("syntax_sentence_count") or 0),
             "syntax_token_count": _safe_count_int(payload.get("syntax_token_count") or 0),
+            "syntax_pos_count": _safe_count_int(payload.get("syntax_pos_count") or 0),
+            "syntax_pos_tag_type_count": _safe_count_int(payload.get("syntax_pos_tag_type_count") or 0),
+            "pos_coverage_on_syntax_tokens": float(payload.get("pos_coverage_on_syntax_tokens") or 0.0),
+            "pos_coverage_on_document_tokens": float(payload.get("pos_coverage_on_document_tokens") or 0.0),
             "syntax_relation_count": _safe_count_int(payload.get("syntax_relation_count") or 0),
         }
 
@@ -669,6 +673,8 @@ class KnowledgeManager:
             "syntax_ready_chunk_count": 0,
             "syntax_sentence_count": 0,
             "syntax_token_count": 0,
+            "syntax_pos_count": 0,
+            "syntax_pos_tag_type_count": 0,
             "syntax_relation_count": 0,
         }
 
@@ -758,6 +764,8 @@ class KnowledgeManager:
         syntax_ready_chunk_count = 0
         syntax_sentence_count = 0
         syntax_token_count = 0
+        syntax_pos_count = 0
+        syntax_pos_tag_types: set[str] = set()
         syntax_relation_count = 0
         cor_reason_counts: dict[str, int] = {}
         cor_reason_messages: dict[str, str] = {}
@@ -785,6 +793,13 @@ class KnowledgeManager:
                 syntax_ready_chunk_count += 1
             syntax_sentence_count += max(0, _safe_count_int(chunk.get("syntax_sentence_count") or 0))
             syntax_token_count += max(0, _safe_count_int(chunk.get("syntax_token_count") or 0))
+            syntax_pos_count += max(0, _safe_count_int(chunk.get("syntax_pos_count") or 0))
+            raw_pos_tag_types = chunk.get("syntax_pos_tag_types")
+            if isinstance(raw_pos_tag_types, list):
+                for item in raw_pos_tag_types:
+                    tag = str(item or "").strip()
+                    if tag:
+                        syntax_pos_tag_types.add(tag)
             syntax_relation_count += max(0, _safe_count_int(chunk.get("syntax_relation_count") or 0))
 
             reason_code = str(chunk.get("cor_reason_code") or "").strip()
@@ -834,6 +849,15 @@ class KnowledgeManager:
         payload["syntax_ready_chunk_count"] = syntax_ready_chunk_count
         payload["syntax_sentence_count"] = syntax_sentence_count
         payload["syntax_token_count"] = syntax_token_count
+        payload["syntax_pos_count"] = syntax_pos_count
+        payload["syntax_pos_tag_type_count"] = len(syntax_pos_tag_types)
+        payload["pos_coverage_on_syntax_tokens"] = (
+            float(syntax_pos_count / syntax_token_count) if syntax_token_count > 0 else 0.0
+        )
+        document_token_count = _safe_count_int(payload.get("token_count") or 0)
+        payload["pos_coverage_on_document_tokens"] = (
+            float(syntax_pos_count / document_token_count) if document_token_count > 0 else 0.0
+        )
         payload["syntax_relation_count"] = syntax_relation_count
 
     def index_all(
@@ -2920,10 +2944,12 @@ class KnowledgeManager:
         mentions: list[dict[str, Any]],
         *,
         config: KnowledgeConfig | None = None,
-    ) -> tuple[list[dict[str, Any]], int]:
+    ) -> tuple[list[dict[str, Any]], int, int, list[str]]:
         sentences = self._split_chunk_sentence_spans(text)
         syntax_sentences: list[dict[str, Any]] = []
         total_tokens = 0
+        total_pos = 0
+        pos_tag_types: set[str] = set()
         for sentence_index, sentence in enumerate(sentences, start=1):
             sentence_text = str(sentence.get("text") or "")
             sentence_start = int(sentence.get("start") or 0)
@@ -2969,13 +2995,24 @@ class KnowledgeManager:
             syntax_tasks: list[dict[str, Any]] = []
             dependencies: list[dict[str, Any]] = []
             constituency: dict[str, Any] | None = None
+            pos_tags: list[dict[str, Any]] = []
             if config is not None and sentence_text.strip():
-                syntax_tasks, dependencies, constituency = self._collect_sentence_syntax_tasks(
+                syntax_tasks, dependencies, constituency, pos_tags = self._collect_sentence_syntax_tasks(
                     sentence_text,
                     sentence_start=sentence_start,
                     tokens=tokens,
                     config=config,
                 )
+            sentence_pos_count = 0
+            for pos_item in pos_tags:
+                if not isinstance(pos_item, dict):
+                    continue
+                pos_value = str(pos_item.get("pos") or "").strip()
+                if not pos_value:
+                    continue
+                sentence_pos_count += 1
+                pos_tag_types.add(pos_value)
+            total_pos += sentence_pos_count
 
             parse_mode = "nlp_task_matrix" if syntax_tasks else "tokenized_only"
             parse_confidence = 1.0 if syntax_tasks else 0.0
@@ -2989,13 +3026,15 @@ class KnowledgeManager:
                     "tokens": tokens,
                     "dependencies": dependencies,
                     "entities": sentence_entities,
+                    "pos_tags": pos_tags,
+                    "pos_count": sentence_pos_count,
                     "parse_mode": parse_mode,
                     "parse_confidence": parse_confidence,
                     "syntax_tasks": syntax_tasks,
                     "constituency": constituency,
                 }
             )
-        return syntax_sentences, total_tokens
+        return syntax_sentences, total_tokens, total_pos, sorted(pos_tag_types)
 
     def _collect_sentence_syntax_tasks(
         self,
@@ -3004,12 +3043,13 @@ class KnowledgeManager:
         sentence_start: int,
         tokens: list[dict[str, Any]],
         config: KnowledgeConfig,
-    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any] | None]:
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any] | None, list[dict[str, Any]]]:
         task_specs = getattr(getattr(config.nlp, "task_matrix", None), "tasks", {}) or {}
-        task_order = ("dep", "sdp", "con")
+        task_order = ("pos", "dep", "sdp", "con")
         syntax_tasks: list[dict[str, Any]] = []
         dependencies: list[dict[str, Any]] = []
         constituency: dict[str, Any] | None = None
+        pos_tags: list[dict[str, Any]] = []
 
         for task_key in task_order:
             task_cfg = task_specs.get(task_key)
@@ -3048,10 +3088,60 @@ class KnowledgeManager:
                         task_key,
                         exc_info=True,
                     )
+            elif task_key == "pos":
+                try:
+                    pos_tags = self._normalize_hanlp_pos_tags(raw_result, tokens=tokens)
+                except Exception:
+                    logger.warning(
+                        "Failed to normalize HanLP POS payload",
+                        exc_info=True,
+                    )
             elif task_key == "con":
                 constituency = self._normalize_hanlp_constituency(task_key, raw_result)
 
-        return syntax_tasks, dependencies, constituency
+        return syntax_tasks, dependencies, constituency, pos_tags
+
+    @staticmethod
+    def _normalize_hanlp_pos_tags(
+        raw_result: Any,
+        *,
+        tokens: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        labels: list[Any] = []
+        if isinstance(raw_result, dict):
+            for key in ("pos", "tags", "label", "labels"):
+                candidate = raw_result.get(key)
+                if isinstance(candidate, list):
+                    labels = candidate
+                    break
+        elif isinstance(raw_result, list):
+            labels = raw_result
+
+        rows: list[dict[str, Any]] = []
+        if not labels:
+            return rows
+        for index, item in enumerate(labels, start=1):
+            if isinstance(item, dict):
+                tag = str(item.get("pos") or item.get("tag") or item.get("label") or "").strip()
+                token_index = _safe_count_int(item.get("token_index") or item.get("index") or index)
+                token_text = str(item.get("text") or "")
+            else:
+                tag = str(item or "").strip()
+                token_index = index
+                token_text = ""
+            if token_index <= 0:
+                token_index = index
+            token = tokens[token_index - 1] if 1 <= token_index <= len(tokens) else {}
+            if not token_text:
+                token_text = str(token.get("text") or "")
+            rows.append(
+                {
+                    "token_index": token_index,
+                    "text": token_text,
+                    "pos": tag,
+                }
+            )
+        return rows
 
     @staticmethod
     def _is_valid_dep_payload(raw_result: Any) -> bool:
@@ -3243,7 +3333,11 @@ class KnowledgeManager:
         mentions: list[dict[str, Any]],
         config: KnowledgeConfig | None = None,
     ) -> dict[str, Any]:
-        sentences, token_count = self._build_chunk_syntax_sentences(input_text, mentions, config=config)
+        sentences, token_count, pos_count, pos_tag_types = self._build_chunk_syntax_sentences(
+            input_text,
+            mentions,
+            config=config,
+        )
         task_keys = sorted(
             {
                 str(task.get("task_key") or "")
@@ -3277,6 +3371,9 @@ class KnowledgeManager:
             "cor_resolution_mode": cor_resolution_mode,
             "sentence_count": len(sentences),
             "token_count": token_count,
+            "pos_count": pos_count,
+            "pos_tag_type_count": len(pos_tag_types),
+            "pos_tag_types": pos_tag_types,
             "relation_count": relation_count,
             "task_keys": task_keys,
             "entity_alignment_source": str(chunk.get("ner_structured_path") or ""),
@@ -3295,6 +3392,8 @@ class KnowledgeManager:
             f"parse_mode={structured_payload.get('parse_mode') or 'tokenized_only'}",
             f"sentence_count={structured_payload.get('sentence_count') or 0}",
             f"token_count={structured_payload.get('token_count') or 0}",
+            f"pos_count={structured_payload.get('pos_count') or 0}",
+            f"pos_tag_type_count={structured_payload.get('pos_tag_type_count') or 0}",
             f"relation_count={structured_payload.get('relation_count') or 0}",
             f"task_keys={'|'.join(structured_payload.get('task_keys') or [])}",
             f"entity_alignment_source={chunk.get('ner_structured_path') or ''}",
@@ -3317,6 +3416,13 @@ class KnowledgeManager:
                 if isinstance(entity, dict)
             ]
             lines.append(f"tokens={' | '.join(token_labels)}")
+            pos_labels = [
+                f"{pos.get('token_index') or 0}:{pos.get('text') or ''}/{pos.get('pos') or ''}"
+                for pos in (sentence.get("pos_tags") or [])
+                if isinstance(pos, dict)
+            ]
+            if pos_labels:
+                lines.append(f"pos={' | '.join(pos_labels)}")
             lines.append(f"entities={' | '.join(entity_labels)}")
             dependency_labels = [
                 f"{dep.get('task_key') or ''}:{dep.get('dependent_index') or 0}->{dep.get('head_index') or 0}:{dep.get('relation') or ''}"
@@ -3342,6 +3448,8 @@ class KnowledgeManager:
             f"snapshot_at: {json.dumps(str(chunk.get('snapshot_at') or ''), ensure_ascii=False)}",
             f"sentence_count: {_safe_count_int(structured_payload.get('sentence_count') or 0)}",
             f"token_count: {_safe_count_int(structured_payload.get('token_count') or 0)}",
+            f"pos_count: {_safe_count_int(structured_payload.get('pos_count') or 0)}",
+            f"pos_tag_type_count: {_safe_count_int(structured_payload.get('pos_tag_type_count') or 0)}",
             f"relation_count: {_safe_count_int(structured_payload.get('relation_count') or 0)}",
             f"structured_ref: {json.dumps(str(chunk.get('syntax_structured_path') or ''), ensure_ascii=False)}",
             f"ner_structured_ref: {json.dumps(str(chunk.get('ner_structured_path') or ''), ensure_ascii=False)}",
@@ -3372,6 +3480,13 @@ class KnowledgeManager:
                 lines.append(
                     f"| {token.get('token_index') or 0} | {token_text} | {token.get('start') or 0} | {token.get('end') or 0} |"
                 )
+            pos_tags = [item for item in (sentence.get("pos_tags") or []) if isinstance(item, dict)]
+            if pos_tags:
+                lines.extend(["", "### POS Tags", "", "| token_index | text | pos |", "| ---: | --- | --- |"])
+                for pos in pos_tags:
+                    pos_text = str(pos.get("text") or "").replace("|", "\\|")
+                    pos_label = str(pos.get("pos") or "").replace("|", "\\|")
+                    lines.append(f"| {pos.get('token_index') or 0} | {pos_text} | {pos_label} |")
             lines.extend(["", "### Entity Alignment", "", "| id | surface | label | token_start | token_end |", "| --- | --- | --- | ---: | ---: |"])
             for entity in sentence.get("entities") or []:
                 if not isinstance(entity, dict):
@@ -3429,6 +3544,8 @@ class KnowledgeManager:
         syntax_ready_so_far = 0
         syntax_sentence_so_far = 0
         syntax_token_so_far = 0
+        syntax_pos_so_far = 0
+        syntax_pos_tag_types_so_far: set[str] = set()
         syntax_relation_so_far = 0
 
         for index, group in enumerate(chunk_groups, start=1):
@@ -3446,6 +3563,18 @@ class KnowledgeManager:
                     max(0, _safe_count_int(chunk.get("syntax_token_count") or 0))
                     for chunk in group
                 )
+                syntax_pos_so_far += max(
+                    max(0, _safe_count_int(chunk.get("syntax_pos_count") or 0))
+                    for chunk in group
+                )
+                for chunk in group:
+                    raw_pos_tag_types = chunk.get("syntax_pos_tag_types")
+                    if not isinstance(raw_pos_tag_types, list):
+                        continue
+                    for item in raw_pos_tag_types:
+                        tag = str(item or "").strip()
+                        if tag:
+                            syntax_pos_tag_types_so_far.add(tag)
                 syntax_relation_so_far += max(
                     max(0, _safe_count_int(chunk.get("syntax_relation_count") or 0))
                     for chunk in group
@@ -3460,6 +3589,8 @@ class KnowledgeManager:
                                 "syntax_ready_chunk_count": syntax_ready_so_far,
                                 "syntax_sentence_count": syntax_sentence_so_far,
                                 "syntax_token_count": syntax_token_so_far,
+                                "syntax_pos_count": syntax_pos_so_far,
+                                "syntax_pos_tag_type_count": len(syntax_pos_tag_types_so_far),
                                 "syntax_relation_count": syntax_relation_so_far,
                             },
                         }
@@ -3486,6 +3617,9 @@ class KnowledgeManager:
                     chunk["syntax_interlinear_path"] = str(interlinear_path or "")
                     chunk["syntax_sentence_count"] = 0
                     chunk["syntax_token_count"] = 0
+                    chunk["syntax_pos_count"] = 0
+                    chunk["syntax_pos_tag_type_count"] = 0
+                    chunk["syntax_pos_tag_types"] = []
                     chunk["syntax_relation_count"] = 0
                 if progress_callback is not None:
                     progress_callback(
@@ -3497,6 +3631,8 @@ class KnowledgeManager:
                                 "syntax_ready_chunk_count": syntax_ready_so_far,
                                 "syntax_sentence_count": syntax_sentence_so_far,
                                 "syntax_token_count": syntax_token_so_far,
+                                "syntax_pos_count": syntax_pos_so_far,
+                                "syntax_pos_tag_type_count": len(syntax_pos_tag_types_so_far),
                                 "syntax_relation_count": syntax_relation_so_far,
                             },
                         }
@@ -3519,6 +3655,13 @@ class KnowledgeManager:
 
             syntax_sentence_count = _safe_count_int(structured_payload.get("sentence_count") or 0)
             syntax_token_count = _safe_count_int(structured_payload.get("token_count") or 0)
+            syntax_pos_count = _safe_count_int(structured_payload.get("pos_count") or 0)
+            syntax_pos_tag_type_count = _safe_count_int(structured_payload.get("pos_tag_type_count") or 0)
+            syntax_pos_tag_types = [
+                str(item).strip()
+                for item in (structured_payload.get("pos_tag_types") or [])
+                if str(item).strip()
+            ]
             syntax_relation_count = _safe_count_int(structured_payload.get("relation_count") or 0)
 
             syntax_relative_path = self._build_syntax_relative_path(str(representative.get("chunk_path") or ""))
@@ -3557,6 +3700,9 @@ class KnowledgeManager:
                 chunk["syntax_interlinear_path"] = str(interlinear_path or "")
                 chunk["syntax_sentence_count"] = syntax_sentence_count
                 chunk["syntax_token_count"] = syntax_token_count
+                chunk["syntax_pos_count"] = syntax_pos_count
+                chunk["syntax_pos_tag_type_count"] = syntax_pos_tag_type_count
+                chunk["syntax_pos_tag_types"] = syntax_pos_tag_types
                 chunk["syntax_relation_count"] = syntax_relation_count
                 chunk["syntax_path"] = syntax_relative_path.as_posix()
                 chunk["syntax_structured_path"] = syntax_structured_relative_path.as_posix()
@@ -3569,6 +3715,10 @@ class KnowledgeManager:
             syntax_ready_so_far += 1
             syntax_sentence_so_far += syntax_sentence_count
             syntax_token_so_far += syntax_token_count
+            syntax_pos_so_far += syntax_pos_count
+            for tag in syntax_pos_tag_types:
+                if tag:
+                    syntax_pos_tag_types_so_far.add(tag)
             syntax_relation_so_far += syntax_relation_count
             self._write_source_syntax_manifest(source.id, current_syntax_paths)
             self._write_l2_checkpoint(
@@ -3581,6 +3731,8 @@ class KnowledgeManager:
                     "syntax_ready_chunk_count": syntax_ready_so_far,
                     "syntax_sentence_count": syntax_sentence_so_far,
                     "syntax_token_count": syntax_token_so_far,
+                    "syntax_pos_count": syntax_pos_so_far,
+                    "syntax_pos_tag_type_count": len(syntax_pos_tag_types_so_far),
                     "syntax_relation_count": syntax_relation_so_far,
                 },
             )
@@ -3595,6 +3747,8 @@ class KnowledgeManager:
                             "syntax_ready_chunk_count": syntax_ready_so_far,
                             "syntax_sentence_count": syntax_sentence_so_far,
                             "syntax_token_count": syntax_token_so_far,
+                            "syntax_pos_count": syntax_pos_so_far,
+                            "syntax_pos_tag_type_count": len(syntax_pos_tag_types_so_far),
                             "syntax_relation_count": syntax_relation_so_far,
                         },
                     }
@@ -4252,6 +4406,8 @@ class KnowledgeManager:
                     "syntax_input_mode": str(chunk.get("syntax_input_mode") or ""),
                     "syntax_sentence_count": _safe_count_int(chunk.get("syntax_sentence_count") or 0),
                     "syntax_token_count": _safe_count_int(chunk.get("syntax_token_count") or 0),
+                    "syntax_pos_count": _safe_count_int(chunk.get("syntax_pos_count") or 0),
+                    "syntax_pos_tag_type_count": _safe_count_int(chunk.get("syntax_pos_tag_type_count") or 0),
                     "syntax_relation_count": _safe_count_int(chunk.get("syntax_relation_count") or 0),
                     "syntax_format_version": str(chunk.get("syntax_format_version") or ""),
                     "syntax_text": self._read_artifact_text(chunk, "syntax_path"),
@@ -4379,6 +4535,9 @@ class KnowledgeManager:
                 chunk["syntax_format_version"] = _SYNTAX_FORMAT_VERSION
                 chunk["syntax_sentence_count"] = 0
                 chunk["syntax_token_count"] = 0
+                chunk["syntax_pos_count"] = 0
+                chunk["syntax_pos_tag_type_count"] = 0
+                chunk["syntax_pos_tag_types"] = []
                 chunk["syntax_relation_count"] = 0
                 chunk.pop("syntax_path", None)
                 chunk.pop("syntax_structured_path", None)

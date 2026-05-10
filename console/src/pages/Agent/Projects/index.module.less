@@ -1267,6 +1267,27 @@
   gap: 8px;
 }
 
+.projectKnowledgeProcessingNerEmbed {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.projectKnowledgeFocusPulse {
+  border-color: #73b5ff !important;
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.22);
+  animation: projectKnowledgeFocusPulse 1.2s ease-out 1;
+}
+
+@keyframes projectKnowledgeFocusPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(22, 119, 255, 0.38);
+  }
+  100% {
+    box-shadow: 0 0 0 10px rgba(22, 119, 255, 0);
+  }
+}
+
 .projectKnowledgeProcessingStageMetrics {
   display: grid;
   gap: 6px;

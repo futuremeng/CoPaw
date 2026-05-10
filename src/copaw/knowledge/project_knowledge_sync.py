@@ -878,6 +878,10 @@ class ProjectKnowledgeSyncManager:
                         "syntax_ready_chunk_count": _safe_int(index_result.get("syntax_ready_chunk_count")),
                         "syntax_sentence_count": _safe_int(index_result.get("syntax_sentence_count")),
                         "syntax_token_count": _safe_int(index_result.get("syntax_token_count")),
+                        "syntax_pos_count": _safe_int(index_result.get("syntax_pos_count")),
+                        "syntax_pos_tag_type_count": _safe_int(index_result.get("syntax_pos_tag_type_count")),
+                        "pos_coverage_on_syntax_tokens": _safe_float(index_result.get("pos_coverage_on_syntax_tokens")),
+                        "pos_coverage_on_document_tokens": _safe_float(index_result.get("pos_coverage_on_document_tokens")),
                         "syntax_relation_count": _safe_int(index_result.get("syntax_relation_count")),
                     }
                 )
@@ -950,6 +954,16 @@ class ProjectKnowledgeSyncManager:
             "syntax_ready_chunk_count": max(_safe_int(live_l2.get("syntax_ready_chunk_count")), _safe_int(index_result.get("syntax_ready_chunk_count"))),
             "syntax_sentence_count": max(_safe_int(live_l2.get("syntax_sentence_count")), _safe_int(index_result.get("syntax_sentence_count"))),
             "syntax_token_count": max(_safe_int(live_l2.get("syntax_token_count")), _safe_int(index_result.get("syntax_token_count"))),
+            "syntax_pos_count": max(_safe_int(live_l2.get("syntax_pos_count")), _safe_int(index_result.get("syntax_pos_count"))),
+            "syntax_pos_tag_type_count": max(_safe_int(live_l2.get("syntax_pos_tag_type_count")), _safe_int(index_result.get("syntax_pos_tag_type_count"))),
+            "pos_coverage_on_syntax_tokens": max(
+                _safe_float(live_l2.get("pos_coverage_on_syntax_tokens")) or 0.0,
+                _safe_float(index_result.get("pos_coverage_on_syntax_tokens")) or 0.0,
+            ),
+            "pos_coverage_on_document_tokens": max(
+                _safe_float(live_l2.get("pos_coverage_on_document_tokens")) or 0.0,
+                _safe_float(index_result.get("pos_coverage_on_document_tokens")) or 0.0,
+            ),
             "syntax_relation_count": max(_safe_int(live_l2.get("syntax_relation_count")), _safe_int(index_result.get("syntax_relation_count"))),
             "entity_count": max(_safe_int(live_l2.get("ner_entity_count")), _safe_int(index_result.get("ner_entity_count"))),
             "relation_count": max(_safe_int(live_l2.get("syntax_relation_count")), _safe_int(index_result.get("syntax_relation_count"))),
@@ -1059,6 +1073,10 @@ class ProjectKnowledgeSyncManager:
                     "ready_chunks": syntax_ready,
                     "sentence_count": _safe_int(l2_metrics.get("syntax_sentence_count")),
                     "token_count": _safe_int(l2_metrics.get("syntax_token_count")),
+                    "pos_count": _safe_int(l2_metrics.get("syntax_pos_count")),
+                    "pos_tag_type_count": _safe_int(l2_metrics.get("syntax_pos_tag_type_count")),
+                    "pos_coverage_on_syntax_tokens": _safe_float(l2_metrics.get("pos_coverage_on_syntax_tokens")),
+                    "pos_coverage_on_document_tokens": _safe_float(l2_metrics.get("pos_coverage_on_document_tokens")),
                     "relation_count": _safe_int(l2_metrics.get("syntax_relation_count")),
                 },
                 "cor": {
@@ -1120,6 +1138,8 @@ class ProjectKnowledgeSyncManager:
             "syntax_ready_chunk_count",
             "syntax_sentence_count",
             "syntax_token_count",
+            "syntax_pos_count",
+            "syntax_pos_tag_type_count",
             "syntax_relation_count",
         )
         for key in nlp_metric_keys:
@@ -1160,12 +1180,27 @@ class ProjectKnowledgeSyncManager:
                 "syntax_ready_chunk_count",
                 "syntax_sentence_count",
                 "syntax_token_count",
+                "syntax_pos_count",
+                "syntax_pos_tag_type_count",
                 "syntax_relation_count",
             ):
                 live_value = _safe_int(live_l2_metrics.get(key))
                 current_value = _safe_int(merged.get(key))
                 if live_value > current_value:
                     merged[key] = live_value
+
+        if _safe_float(merged.get("pos_coverage_on_syntax_tokens")) is None and _safe_float(
+            fallback_payload.get("pos_coverage_on_syntax_tokens")
+        ) is not None:
+            merged["pos_coverage_on_syntax_tokens"] = _safe_float(
+                fallback_payload.get("pos_coverage_on_syntax_tokens")
+            )
+        if _safe_float(merged.get("pos_coverage_on_document_tokens")) is None and _safe_float(
+            fallback_payload.get("pos_coverage_on_document_tokens")
+        ) is not None:
+            merged["pos_coverage_on_document_tokens"] = _safe_float(
+                fallback_payload.get("pos_coverage_on_document_tokens")
+            )
 
         return merged
 
@@ -1333,6 +1368,8 @@ class ProjectKnowledgeSyncManager:
                 "syntax_ready_chunk_count",
                 "syntax_sentence_count",
                 "syntax_token_count",
+                "syntax_pos_count",
+                "syntax_pos_tag_type_count",
                 "syntax_relation_count",
             )
         )
@@ -1730,6 +1767,111 @@ class ProjectKnowledgeSyncManager:
                 _safe_int(l2_metrics.get("relation_count")),
             )
         )
+
+    @staticmethod
+    def _build_pipeline_trace(
+        state: dict[str, Any],
+        processing_modes: list[dict[str, Any]],
+        mode_outputs: dict[str, Any],
+        mode_metrics: dict[str, Any],
+        l1_metrics: dict[str, Any],
+        l2_metrics: dict[str, Any],
+        l3_metrics: dict[str, Any],
+    ) -> dict[str, Any]:
+        def _artifact_payloads(raw_artifacts: Any) -> list[dict[str, str]]:
+            artifacts: list[dict[str, str]] = []
+            if not isinstance(raw_artifacts, list):
+                return artifacts
+            for artifact in raw_artifacts:
+                if not isinstance(artifact, dict):
+                    continue
+                path = str(artifact.get("path") or "").strip()
+                label = str(artifact.get("label") or "").strip()
+                kind = str(artifact.get("kind") or "").strip()
+                if not path and not label and not kind:
+                    continue
+                artifacts.append({"kind": kind, "label": label, "path": path})
+            return artifacts
+
+        mode_map = {
+            str(item.get("mode") or "").strip(): item
+            for item in processing_modes
+            if isinstance(item, dict)
+        }
+        stage_specs = [
+            (
+                "fast",
+                "L1 · Fast",
+                False,
+                {
+                    "document_count": _safe_int(l1_metrics.get("document_count")),
+                    "chunk_count": _safe_int(l1_metrics.get("chunk_count")),
+                    "snapshot_count": _safe_int(l1_metrics.get("snapshot_count")),
+                },
+            ),
+            (
+                "nlp",
+                "L2 · NLP",
+                False,
+                {
+                    "total_chunks": _safe_int(l2_metrics.get("total_chunks")),
+                    "ner_ready_chunk_count": _safe_int(l2_metrics.get("ner_ready_chunk_count")),
+                    "syntax_ready_chunk_count": _safe_int(l2_metrics.get("syntax_ready_chunk_count")),
+                    "cor_ready_chunk_count": _safe_int(l2_metrics.get("cor_ready_chunk_count")),
+                    "ner_entity_count": _safe_int(l2_metrics.get("ner_entity_count")),
+                    "syntax_token_count": _safe_int(l2_metrics.get("syntax_token_count")),
+                    "syntax_pos_count": _safe_int(l2_metrics.get("syntax_pos_count")),
+                    "syntax_pos_tag_type_count": _safe_int(l2_metrics.get("syntax_pos_tag_type_count")),
+                    "pos_coverage_on_syntax_tokens": _safe_float(l2_metrics.get("pos_coverage_on_syntax_tokens")),
+                    "pos_coverage_on_document_tokens": _safe_float(l2_metrics.get("pos_coverage_on_document_tokens")),
+                    "syntax_relation_count": _safe_int(l2_metrics.get("syntax_relation_count")),
+                },
+            ),
+            (
+                "agentic",
+                "L3 · Agentic",
+                True,
+                {
+                    "entity_count": _safe_int(l3_metrics.get("entity_count")),
+                    "relation_count": _safe_int(l3_metrics.get("relation_count")),
+                    "quality_score": l3_metrics.get("quality_score"),
+                },
+            ),
+        ]
+
+        stages: list[dict[str, Any]] = []
+        for mode, label, optional, base_metrics in stage_specs:
+            mode_state = mode_map.get(mode) or {}
+            output = mode_outputs.get(mode) if isinstance(mode_outputs, dict) else {}
+            output_dict = output if isinstance(output, dict) else {}
+            summary_lines = [str(line or "").strip() for line in output_dict.get("summary_lines") or [] if str(line or "").strip()]
+            summary = str(mode_state.get("summary") or "").strip() or " · ".join(summary_lines[:2])
+            metrics = dict(base_metrics)
+            mode_metric_payload = mode_metrics.get(mode) if isinstance(mode_metrics, dict) else {}
+            if isinstance(mode_metric_payload, dict):
+                for key, value in mode_metric_payload.items():
+                    if key in {"mode"}:
+                        continue
+                    metrics[key] = value
+            stages.append(
+                {
+                    "key": mode,
+                    "label": label,
+                    "optional": optional,
+                    "status": str(mode_state.get("status") or "idle").strip() or "idle",
+                    "available": bool(mode_state.get("available")),
+                    "summary": summary,
+                    "summary_lines": summary_lines,
+                    "metrics": metrics,
+                    "artifacts": _artifact_payloads(output_dict.get("artifacts")),
+                }
+            )
+
+        return {
+            "source_id": str(state.get("latest_source_id") or "").strip(),
+            "generated_at": str(state.get("updated_at") or state.get("last_finished_at") or "").strip() or None,
+            "stages": stages,
+        }
         l3_reason_code = str(l3_metrics.get("reason_code") or "").strip().upper()
         l3_status = "idle" if l3_reason_code == "L3_NOT_READY" else "ready"
         return {
@@ -1790,6 +1932,15 @@ class ProjectKnowledgeSyncManager:
         hydrated["l2_metrics"] = l2_metrics
         hydrated["nlp_progress"] = self._build_nlp_progress(processing_modes, l2_metrics)
         hydrated["l3_metrics"] = l3_metrics
+        hydrated["pipeline_trace"] = self._build_pipeline_trace(
+            hydrated,
+            processing_modes,
+            mode_outputs,
+            mode_metrics,
+            l1_metrics,
+            l2_metrics,
+            l3_metrics,
+        )
         hydrated["lanes"] = self._build_lane_state(processing_modes)
         hydrated["quantization_stages"] = self._build_quantization_stage_state(
             l1_metrics,
@@ -2491,6 +2642,10 @@ class ProjectKnowledgeSyncManager:
                             "syntax_ready_chunk_count": _safe_int((workflow_result.get("index") or {}).get("syntax_ready_chunk_count")),
                             "syntax_sentence_count": _safe_int((workflow_result.get("index") or {}).get("syntax_sentence_count")),
                             "syntax_token_count": _safe_int((workflow_result.get("index") or {}).get("syntax_token_count")),
+                            "syntax_pos_count": _safe_int((workflow_result.get("index") or {}).get("syntax_pos_count")),
+                            "syntax_pos_tag_type_count": _safe_int((workflow_result.get("index") or {}).get("syntax_pos_tag_type_count")),
+                            "pos_coverage_on_syntax_tokens": _safe_float((workflow_result.get("index") or {}).get("pos_coverage_on_syntax_tokens")),
+                            "pos_coverage_on_document_tokens": _safe_float((workflow_result.get("index") or {}).get("pos_coverage_on_document_tokens")),
                             "syntax_relation_count": _safe_int((workflow_result.get("index") or {}).get("syntax_relation_count")),
                         },
                         "semantic_engine": self._build_semantic_engine_state(

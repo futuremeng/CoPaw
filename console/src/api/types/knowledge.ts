@@ -133,6 +133,10 @@ export interface ProjectKnowledgeModeMetricsPayload {
   ner_worker_pid_count?: number;
   syntax_sentence_count?: number;
   syntax_token_count?: number;
+  syntax_pos_count?: number;
+  syntax_pos_tag_type_count?: number;
+  pos_coverage_on_syntax_tokens?: number;
+  pos_coverage_on_document_tokens?: number;
   syntax_relation_count?: number;
 }
 
@@ -156,6 +160,10 @@ export interface ProjectKnowledgeL2MetricsPayload {
   syntax_ready_chunk_count?: number;
   syntax_sentence_count?: number;
   syntax_token_count?: number;
+  syntax_pos_count?: number;
+  syntax_pos_tag_type_count?: number;
+  pos_coverage_on_syntax_tokens?: number;
+  pos_coverage_on_document_tokens?: number;
   syntax_relation_count?: number;
 }
 
@@ -168,6 +176,10 @@ export interface ProjectKnowledgeNlpStagePayload {
   entity_count?: number;
   sentence_count?: number;
   token_count?: number;
+  pos_count?: number;
+  pos_tag_type_count?: number;
+  pos_coverage_on_syntax_tokens?: number | null;
+  pos_coverage_on_document_tokens?: number | null;
   relation_count?: number;
   cluster_count?: number;
   replacement_count?: number;
@@ -203,6 +215,30 @@ export interface ProjectKnowledgeGlobalMetricsPayload {
   metrics_updated_at?: string | null;
   source_id?: string | null;
   source_stats_updated_at?: string | null;
+}
+
+export interface ProjectKnowledgePipelineArtifactPayload {
+  kind: string;
+  label: string;
+  path: string;
+}
+
+export interface ProjectKnowledgePipelineStagePayload {
+  key: ProjectKnowledgeProcessingMode;
+  label: string;
+  optional?: boolean;
+  status: "idle" | "queued" | "running" | "ready" | "failed" | "blocked";
+  available?: boolean;
+  summary: string;
+  summary_lines?: string[];
+  metrics?: Record<string, unknown>;
+  artifacts?: ProjectKnowledgePipelineArtifactPayload[];
+}
+
+export interface ProjectKnowledgePipelineTracePayload {
+  source_id?: string | null;
+  generated_at?: string | null;
+  stages?: ProjectKnowledgePipelineStagePayload[];
 }
 
 export interface ProjectKnowledgeSyncState {
@@ -262,6 +298,7 @@ export interface ProjectKnowledgeSyncState {
   l2_metrics?: ProjectKnowledgeL2MetricsPayload;
   nlp_progress?: ProjectKnowledgeNlpProgressPayload;
   semantic_engine?: ProjectKnowledgeSemanticEngineState;
+  pipeline_trace?: ProjectKnowledgePipelineTracePayload;
 }
 
 export interface ProjectKnowledgeSyncRunRequest {

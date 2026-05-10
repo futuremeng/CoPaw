@@ -1,6 +1,7 @@
 import { Suspense, lazy, memo, useCallback, useEffect, useMemo, useRef } from "react";
 import {
   Alert,
+  Button,
   Empty,
   Input,
   Select,
@@ -24,7 +25,9 @@ import {
   formatGraphRelationTypeLabel,
 } from "./projectKnowledgeFilterLabels";
 import styles from "./index.module.less";
-import type { ProjectKnowledgeState } from "./useProjectKnowledgeState";
+import type { ProjectKnowledgeProcessingMode, ProjectKnowledgeState } from "./useProjectKnowledgeState";
+
+type ProjectKnowledgeNlpStageKey = "ner" | "syntax" | "cor";
 
 const GraphQueryResults = lazy(async () => {
   const module = await import("../Knowledge/graphVisualization");
@@ -43,6 +46,10 @@ interface ProjectKnowledgePanelProps {
   requestedQuery?: string;
   onRequestedQueryHandled?: () => void;
   onOpenOutputs?: () => void;
+  onOpenProcessing?: (
+    mode?: ProjectKnowledgeProcessingMode,
+    stage?: ProjectKnowledgeNlpStageKey,
+  ) => void;
   graphComponents?: {
     GraphQueryResults: React.ComponentType<Record<string, unknown>>;
     GraphVisualization: React.ComponentType<Record<string, unknown>>;
@@ -55,6 +62,7 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
   const {
     graphComponents,
     knowledgeState,
+    onOpenProcessing,
     onOpenOutputs,
     onRequestedQueryHandled,
     requestedQuery,
@@ -226,6 +234,143 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
     ];
   }, [formatLayerStatus, l1Status, l2Mode?.status, l3Mode?.status, t]);
 
+  const knowledgeSnapshotCards = useMemo(() => {
+    const metrics = knowledgeState.quantMetrics;
+    return [
+      {
+        key: "documents",
+        label: t("projects.knowledge.metricDocuments", "文档数"),
+        value: metrics.documentCount || 0,
+        hint: `${metrics.snapshotCount || 0} snapshots`,
+      },
+      {
+        key: "chunks",
+        label: t("projects.knowledge.metricChunks", "Chunk 数"),
+        value: metrics.chunkCount || 0,
+        hint: t("projects.knowledge.metricChunkHint", "切块是后续实体与句法的输入层"),
+      },
+      {
+        key: "sentences",
+        label: t("projects.knowledge.metricSentences", "句子数"),
+        value: metrics.sentenceCount || 0,
+        hint: `${metrics.sentenceWithEntitiesCount || 0} sentences with entities`,
+      },
+      {
+        key: "entities",
+        label: t("projects.knowledge.metricEntities", "实体 / 关系"),
+        value: `${metrics.entityCount || 0} / ${metrics.relationCount || 0}`,
+        hint: t("projects.knowledge.metricEntityHint", "当前图谱可见性与抽取质量的核心指标"),
+      },
+    ];
+  }, [knowledgeState.quantMetrics, t]);
+
+  const pipelineStageTags = useMemo(() => {
+    const stages = knowledgeState.syncState?.pipeline_trace?.stages || [];
+    return stages.slice(0, 3).map((stage) => ({
+      key: `${stage.key}-${stage.label}`,
+      label: stage.label,
+      status: String(stage.status || "idle").trim().toLowerCase(),
+      summary: stage.summary,
+    }));
+  }, [knowledgeState.syncState?.pipeline_trace?.stages]);
+
+  const diagnosticsIssues = useMemo(() => {
+    const issues: Array<{
+      key: string;
+      level: "warning" | "error";
+      text: string;
+      targetMode?: ProjectKnowledgeProcessingMode;
+      targetStage?: ProjectKnowledgeNlpStageKey;
+    }> = [];
+    const l2ChunkCount = Math.max(0, Number(l2Mode?.chunkCount || quantMetrics.chunkCount || 0));
+    const nlpStatus = String(l2Mode?.status || "idle").trim().toLowerCase();
+    const nlpBusy = nlpStatus === "running" || nlpStatus === "queued";
+    const nerReadyChunks = Math.max(0, Number(l2Mode?.nerReadyChunkCount || 0));
+    const syntaxReadyChunks = Math.max(0, Number(l2Mode?.syntaxReadyChunkCount || 0));
+    const corReadyChunks = Math.max(0, Number(l2Mode?.corReadyChunkCount || 0));
+    const corReason = String(l2Mode?.corReason || l2Mode?.corReasonCode || "").trim();
+
+    if ((nlpStatus === "failed" || nlpStatus === "blocked") && String(l2Mode?.summary || "").trim()) {
+      issues.push({
+        key: "nlp-blocked",
+        level: "error",
+        targetMode: "nlp",
+        text: t("projects.knowledge.gapNlpBlocked", "NLP 主流程异常：{{reason}}", {
+          reason: String(l2Mode?.summary || "").trim(),
+        }),
+      });
+    }
+
+    if (nlpBusy && l2ChunkCount > 0 && (nerReadyChunks <= 0 || syntaxReadyChunks <= 0)) {
+      issues.push({
+        key: "nlp-pending",
+        level: "warning",
+        targetMode: "nlp",
+        targetStage: "ner",
+        text: t("projects.knowledge.gapNlpPending", "NLP 处理中：NER/Syntax 关键产物尚未就绪"),
+      });
+    }
+
+    if (!nlpBusy && l2ChunkCount > 0 && nerReadyChunks <= 0) {
+      issues.push({
+        key: "ner-empty",
+        level: "error",
+        targetMode: "nlp",
+        targetStage: "ner",
+        text: t("projects.knowledge.gapNerEmpty", "NER 未产出可用结果（0/{{documents}} 标准化文档）", {
+          documents: l2ChunkCount,
+        }),
+      });
+    }
+
+    if (!nlpBusy && l2ChunkCount > 0 && syntaxReadyChunks <= 0) {
+      issues.push({
+        key: "syntax-empty",
+        level: "warning",
+        targetMode: "nlp",
+        targetStage: "syntax",
+        text: t("projects.knowledge.gapSyntaxEmpty", "Syntax 未产出可用结果（0/{{documents}} 标准化文档）", {
+          documents: l2ChunkCount,
+        }),
+      });
+    }
+
+    if (!nlpBusy && l2ChunkCount > 0 && corReadyChunks <= 0 && corReason) {
+      issues.push({
+        key: "cor-unavailable",
+        level: "warning",
+        targetMode: "nlp",
+        targetStage: "cor",
+        text: t("projects.knowledge.gapCorUnavailable", "COR 不可用：{{reason}}", {
+          reason: corReason,
+        }),
+      });
+    }
+
+    const nlpTraceStage = (knowledgeState.syncState?.pipeline_trace?.stages || [])
+      .find((stage) => stage.key === "nlp");
+    const nlpStageMetrics = nlpTraceStage?.metrics;
+    const graphDocCount = typeof nlpStageMetrics?.document_graph_count === "number"
+      ? nlpStageMetrics.document_graph_count
+      : typeof nlpStageMetrics?.graph_document_count === "number"
+        ? nlpStageMetrics.graph_document_count
+        : null;
+    if (!nlpBusy && graphDocCount === 0 && (quantMetrics.documentCount || 0) > 0) {
+      issues.push({
+        key: "graphify-empty",
+        level: "warning",
+        targetMode: "nlp",
+        text: t("projects.knowledge.gapGraphifyEmpty", "Graphify 文档图为空：document_count=0"),
+      });
+    }
+
+    return issues;
+  }, [knowledgeState.syncState?.pipeline_trace?.stages, l2Mode, quantMetrics.chunkCount, quantMetrics.documentCount, t]);
+
+  const diagnosticsAlertType = useMemo(() => (
+    diagnosticsIssues.some((item) => item.level === "error") ? "error" : "warning"
+  ), [diagnosticsIssues]);
+
   const activeEntityDetail = useMemo(() => {
     const nodeId = knowledgeState.activeGraphNodeId;
     if (!nodeId || !visualizationData) {
@@ -363,6 +508,68 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
     <div className={`${styles.projectKnowledgeWorkbench} ${styles.projectKnowledgeWorkbenchCompact}`}>
       {props.knowledgeState.graphError ? (
         <Alert type="error" showIcon message={props.knowledgeState.graphError} />
+      ) : null}
+
+      <div className={styles.projectKnowledgeSignalGrid}>
+        {knowledgeSnapshotCards.map((card) => (
+          <div key={card.key} className={styles.projectKnowledgeSignalCard}>
+            <Typography.Text type="secondary">{card.label}</Typography.Text>
+            <Typography.Text strong>{card.value}</Typography.Text>
+            <Typography.Text type="secondary">{card.hint}</Typography.Text>
+          </div>
+        ))}
+      </div>
+
+      {diagnosticsIssues.length ? (
+        <Alert
+          className={styles.projectKnowledgeQueryNotice}
+          type={diagnosticsAlertType}
+          showIcon
+          message={t("projects.knowledge.gapSummaryTitle", "量化缺口摘要")}
+          description={(
+            <div>
+              {diagnosticsIssues.map((item) => (
+                <div key={item.key}>
+                  {item.text}
+                  {item.targetMode && onOpenProcessing ? (
+                    <Button
+                      type="link"
+                      size="small"
+                      onClick={() => onOpenProcessing(item.targetMode, item.targetStage)}
+                    >
+                      {t("projects.knowledge.openProcessingAction", "查看 Processing")}
+                    </Button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          )}
+        />
+      ) : null}
+
+      {pipelineStageTags.length ? (
+        <div className={styles.projectKnowledgeLayerStatusRow}>
+          {pipelineStageTags.map((stage) => (
+            <div key={stage.key} className={styles.projectKnowledgeLayerStatusItem}>
+              <Typography.Text type="secondary">{stage.label}</Typography.Text>
+              <Tag
+                color={
+                  stage.status === "ready"
+                    ? "success"
+                    : stage.status === "failed"
+                      ? "error"
+                      : stage.status === "blocked"
+                        ? "orange"
+                        : stage.status === "running"
+                          ? "processing"
+                          : "default"
+                }
+              >
+                {stage.summary}
+              </Tag>
+            </div>
+          ))}
+        </div>
       ) : null}
 
       <div className={styles.projectKnowledgeWorkbenchSplit}>

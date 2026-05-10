@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button, Progress, Segmented, Tag, Tooltip, Typography } from "antd";
 import { useTranslation } from "react-i18next";
 import styles from "./index.module.less";
@@ -15,10 +15,16 @@ import {
   prioritizeProjectKnowledgeArtifacts,
 } from "./projectKnowledgeSyncUi";
 import type { ProjectKnowledgeQuantizationStage } from "../../../api/types";
+import ProjectKnowledgeNerPanel from "./ProjectKnowledgeNerPanel";
+
+type ProjectKnowledgeNlpStageKey = "ner" | "syntax" | "cor";
 
 interface ProjectKnowledgeProcessingPanelProps {
   knowledgeState: ProjectKnowledgeState;
   onOpenSettings?: () => void;
+  focusedMode?: ProjectKnowledgeModeState["mode"];
+  focusedStage?: ProjectKnowledgeNlpStageKey;
+  focusToken?: number;
 }
 
 function modeHasIndependentOutputs(mode: ProjectKnowledgeModeState | null): boolean {
@@ -36,6 +42,30 @@ function displayEntityCount(mode: ProjectKnowledgeModeState | null): number {
     return Math.max(0, Number(mode.nerEntityCount || mode.entityCount || 0));
   }
   return Math.max(0, Number(mode.entityCount || 0));
+}
+
+function formatEntityValue(
+  mode: ProjectKnowledgeModeState | null,
+  t: ReturnType<typeof useTranslation>["t"],
+): string | number {
+  if (!mode) {
+    return 0;
+  }
+  const value = displayEntityCount(mode);
+  if (mode.mode !== "nlp") {
+    return value;
+  }
+  if (value > 0) {
+    return value;
+  }
+  if (mode.status === "running" || mode.status === "queued") {
+    return t("projects.knowledge.processing.metricPending", "生成中");
+  }
+  const readyCount = Math.max(0, Number(mode.nerReadyChunkCount || 0));
+  if (readyCount <= 0) {
+    return t("projects.knowledge.processing.metricUnavailable", "未产出");
+  }
+  return value;
 }
 
 function displayRelationCount(mode: ProjectKnowledgeModeState | null): number {
@@ -304,11 +334,12 @@ function buildNlpStageStats(
   mode: ProjectKnowledgeModeState,
   t: ReturnType<typeof useTranslation>["t"],
 ): Array<{
-  key: string;
+  key: ProjectKnowledgeNlpStageKey;
   title: string;
   optional?: boolean;
   status: "ready" | "running" | "pending" | "unavailable";
   subtitle: string;
+  reason?: string;
   metrics: Array<{ key: string; label: string; value: string | number }>;
 }> {
   if (mode.mode !== "nlp") {
@@ -319,7 +350,7 @@ function buildNlpStageStats(
     0,
     Number(mode.l2TotalChunks || mode.chunkCount || 0),
   );
-  const stageDoneLabel = t("projects.knowledge.processing.stageDoneChunks", "已处理文档数");
+  const stageDoneLabel = t("projects.knowledge.processing.stageDoneChunks", "已处理标准化文档数");
   const formatDone = (done: number): string | number => (
     totalChunks > 0 ? `${Math.max(0, done)}/${totalChunks}` : Math.max(0, done)
   );
@@ -363,6 +394,7 @@ function buildNlpStageStats(
       title: t("projects.knowledge.processing.nerStage", "NER"),
       status: resolveStageStatus(nerReady, nerDone),
       subtitle: t("projects.knowledge.processing.requiredStageLabel", "必需阶段"),
+      reason: "",
       metrics: [
         {
           key: "doneChunks",
@@ -371,7 +403,7 @@ function buildNlpStageStats(
         },
         {
           key: "readyChunks",
-          label: t("projects.knowledge.processing.readyChunks", "就绪文档数"),
+          label: t("projects.knowledge.processing.readyChunks", "就绪标准化文档数"),
           value: nerReady,
         },
         {
@@ -386,6 +418,7 @@ function buildNlpStageStats(
       title: t("projects.knowledge.processing.syntaxStage", "Syntax"),
       status: resolveStageStatus(syntaxReady, syntaxDone),
       subtitle: t("projects.knowledge.processing.requiredStageLabel", "必需阶段"),
+      reason: "",
       metrics: [
         {
           key: "doneChunks",
@@ -394,7 +427,7 @@ function buildNlpStageStats(
         },
         {
           key: "readyChunks",
-          label: t("projects.knowledge.processing.readyChunks", "就绪文档数"),
+          label: t("projects.knowledge.processing.readyChunks", "就绪标准化文档数"),
           value: syntaxReady,
         },
         {
@@ -406,6 +439,26 @@ function buildNlpStageStats(
           key: "tokens",
           label: t("projects.knowledge.processing.syntaxTokens", "Token 数"),
           value: mode.syntaxTokenCount || 0,
+        },
+        {
+          key: "posCount",
+          label: t("projects.knowledge.processing.syntaxPosCount", "词性标注数"),
+          value: mode.syntaxPosCount || 0,
+        },
+        {
+          key: "posTagTypes",
+          label: t("projects.knowledge.processing.syntaxPosTagTypeCount", "词性标签种类数"),
+          value: mode.syntaxPosTagTypeCount || 0,
+        },
+        {
+          key: "posCoverageSyntax",
+          label: t("projects.knowledge.processing.posCoverageSyntax", "词性覆盖率(语法分词口径)"),
+          value: formatPercent(Number(mode.posCoverageOnSyntaxTokens || 0)),
+        },
+        {
+          key: "posCoverageDocument",
+          label: t("projects.knowledge.processing.posCoverageDocument", "词性覆盖率(文档分词口径)"),
+          value: formatPercent(Number(mode.posCoverageOnDocumentTokens || 0)),
         },
         {
           key: "relations",
@@ -420,6 +473,7 @@ function buildNlpStageStats(
       optional: true,
       status: resolveStageStatus(corReady, corDone, true),
       subtitle: t("projects.knowledge.processing.optionalStageLabel", "备用阶段"),
+      reason: mode.corReason || mode.corReasonCode || "",
       metrics: [
         {
           key: "doneChunks",
@@ -428,7 +482,7 @@ function buildNlpStageStats(
         },
         {
           key: "readyChunks",
-          label: t("projects.knowledge.processing.readyChunks", "就绪文档数"),
+          label: t("projects.knowledge.processing.readyChunks", "就绪标准化文档数"),
           value: corReady,
         },
         {
@@ -477,6 +531,140 @@ function nlpStageStatusLabel(
   return t("projects.knowledge.processing.stagePending", "待执行");
 }
 
+function formatTraceMetricValue(value: unknown): string | number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.length;
+  }
+  if (value == null) {
+    return "—";
+  }
+  if (typeof value === "object") {
+    return JSON.stringify(value);
+  }
+  return String(value);
+}
+
+function formatTraceMetricLabel(
+  key: string,
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
+  const normalized = String(key || "").trim().toLowerCase();
+  if (normalized === "document_count") {
+    return t("projects.knowledge.documents", "文档数");
+  }
+  if (normalized === "entity_count" || normalized === "ner_entity_count") {
+    return t("projects.knowledge.entities", "实体数");
+  }
+  if (normalized === "relation_count" || normalized === "syntax_relation_count") {
+    return t("projects.knowledge.signalRelations", "关系数");
+  }
+  if (normalized === "syntax_token_count") {
+    return t("projects.knowledge.processing.syntaxTokens", "Token 数");
+  }
+  if (normalized === "syntax_pos_count") {
+    return t("projects.knowledge.processing.syntaxPosCount", "词性标注数");
+  }
+  if (normalized === "syntax_pos_tag_type_count") {
+    return t("projects.knowledge.processing.syntaxPosTagTypeCount", "词性标签种类数");
+  }
+  if (normalized === "pos_coverage_on_syntax_tokens") {
+    return t("projects.knowledge.processing.posCoverageSyntax", "词性覆盖率(语法分词口径)");
+  }
+  if (normalized === "pos_coverage_on_document_tokens") {
+    return t("projects.knowledge.processing.posCoverageDocument", "词性覆盖率(文档分词口径)");
+  }
+  if (normalized === "quality_score") {
+    return t("projects.knowledge.processing.qualityScore", "质量分");
+  }
+  if (normalized === "chunk_count" || normalized === "total_chunks") {
+    return t("projects.knowledge.chunkCount", "Chunk 数");
+  }
+  return key;
+}
+
+function selectTraceMetricEntries(metrics: Record<string, unknown>): Array<[string, unknown]> {
+  const entries = Object.entries(metrics || {});
+  if (entries.length <= 4) {
+    return entries;
+  }
+
+  const preferredOrder = [
+    "document_count",
+    "entity_count",
+    "relation_count",
+    "quality_score",
+    "ner_entity_count",
+    "syntax_relation_count",
+    "chunk_count",
+    "total_chunks",
+    "ner_ready_chunk_count",
+    "syntax_ready_chunk_count",
+    "cor_ready_chunk_count",
+  ];
+  const picked = new Map<string, unknown>();
+  for (const key of preferredOrder) {
+    if (Object.prototype.hasOwnProperty.call(metrics, key)) {
+      picked.set(key, metrics[key]);
+    }
+    if (picked.size >= 4) {
+      break;
+    }
+  }
+  if (picked.size < 4) {
+    for (const [key, value] of entries) {
+      if (!picked.has(key)) {
+        picked.set(key, value);
+      }
+      if (picked.size >= 4) {
+        break;
+      }
+    }
+  }
+  return Array.from(picked.entries());
+}
+
+function extractTraceStageReason(stage: {
+  status?: string;
+  metrics?: Record<string, unknown>;
+  summary?: string;
+}): string {
+  const metrics = stage.metrics || {};
+  const reasonCandidates = [
+    metrics.reason,
+    metrics.reason_code,
+    metrics.cor_reason,
+    metrics.cor_reason_code,
+    metrics.semantic_reason,
+    metrics.semantic_reason_code,
+  ];
+  for (const candidate of reasonCandidates) {
+    const text = String(candidate || "").trim();
+    if (text) {
+      return text;
+    }
+  }
+  if (stage.status === "failed" || stage.status === "blocked") {
+    return String(stage.summary || "").trim();
+  }
+  return "";
+}
+
+function formatArtifactLabel(artifact: { label?: string; kind?: string; path?: string }): string {
+  const path = String(artifact.path || "").trim();
+  const baseName = path ? path.split("/").filter(Boolean).pop() || path : "";
+  const label = String(artifact.label || "").trim() || String(artifact.kind || "").trim();
+  if (label && baseName) {
+    return `${label} · ${baseName}`;
+  }
+  return label || baseName || "artifact";
+}
+
 export default function ProjectKnowledgeProcessingPanel(
   props: ProjectKnowledgeProcessingPanelProps,
 ) {
@@ -501,6 +689,55 @@ export default function ProjectKnowledgeProcessingPanel(
   const l1Hint = describeL1Hint(props.knowledgeState, t);
   const latestRequestedMode = props.knowledgeState.syncState?.latest_requested_mode;
   const activeQuantizationStage = String(props.knowledgeState.syncState?.quantization_stage || "").trim().toLowerCase();
+  const pipelineTraceStages = props.knowledgeState.syncState?.pipeline_trace?.stages || [];
+  const modeCardRefs = useRef<Partial<Record<ProjectKnowledgeModeState["mode"], HTMLDivElement | null>>>({});
+  const nlpStageRefs = useRef<Partial<Record<ProjectKnowledgeNlpStageKey, HTMLDivElement | null>>>({});
+  const [showNerDiagnostics, setShowNerDiagnostics] = useState(false);
+  const [focusedModeHighlight, setFocusedModeHighlight] = useState<ProjectKnowledgeModeState["mode"] | "">("");
+  const [focusedStageHighlight, setFocusedStageHighlight] = useState<ProjectKnowledgeNlpStageKey | "">("");
+  const focusHighlightTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!props.focusedMode) {
+      return;
+    }
+    const card = modeCardRefs.current[props.focusedMode];
+    if (card) {
+      card.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [props.focusToken, props.focusedMode]);
+
+  useEffect(() => {
+    if (props.focusedMode !== "nlp" || !props.focusedStage) {
+      return;
+    }
+    const stageCard = nlpStageRefs.current[props.focusedStage];
+    if (stageCard) {
+      stageCard.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [props.focusToken, props.focusedMode, props.focusedStage]);
+
+  useEffect(() => {
+    if (!props.focusToken || !props.focusedMode) {
+      return;
+    }
+    setFocusedModeHighlight(props.focusedMode);
+    setFocusedStageHighlight(props.focusedMode === "nlp" ? (props.focusedStage || "") : "");
+    if (focusHighlightTimerRef.current) {
+      window.clearTimeout(focusHighlightTimerRef.current);
+    }
+    focusHighlightTimerRef.current = window.setTimeout(() => {
+      setFocusedModeHighlight("");
+      setFocusedStageHighlight("");
+      focusHighlightTimerRef.current = null;
+    }, 1600);
+    return () => {
+      if (focusHighlightTimerRef.current) {
+        window.clearTimeout(focusHighlightTimerRef.current);
+        focusHighlightTimerRef.current = null;
+      }
+    };
+  }, [props.focusToken, props.focusedMode, props.focusedStage]);
 
   return (
     <div className={`${styles.projectKnowledgeWorkbench} ${styles.projectKnowledgeProcessingWorkbench}`}>
@@ -538,11 +775,11 @@ export default function ProjectKnowledgeProcessingPanel(
 
       <div className={styles.projectKnowledgeSignalGrid}>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("projects.knowledge.processing.l2Entities", "L2 实体数")}</Typography.Text>
-          <Typography.Text strong>{displayEntityCount(l2Mode)}</Typography.Text>
+          <Typography.Text type="secondary">{t("projects.knowledge.processing.l2Entities", "NER 实体数")}</Typography.Text>
+          <Typography.Text strong>{formatEntityValue(l2Mode, t)}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("projects.knowledge.processing.l2Relations", "L2 关系数")}</Typography.Text>
+          <Typography.Text type="secondary">{t("projects.knowledge.processing.l2Relations", "Syntax 句法关系数")}</Typography.Text>
           <Typography.Text strong>{displayRelationCount(l2Mode)}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
@@ -578,6 +815,7 @@ export default function ProjectKnowledgeProcessingPanel(
             const prioritizedArtifacts = prioritizeProjectKnowledgeArtifacts(output?.artifacts || []);
             const corBenefitSummary = describeCorBenefit(mode, t);
             const nlpStageStats = buildNlpStageStats(mode, t);
+            const entityValue = formatEntityValue(mode, t);
             const highlightValue = isL3
               ? mode.qualityScore != null
                 ? `${Math.round(mode.qualityScore * 100)}%`
@@ -587,7 +825,10 @@ export default function ProjectKnowledgeProcessingPanel(
             return (
               <div
                 key={mode.mode}
-                className={`${styles.projectKnowledgeModeCard} ${styles.projectKnowledgeProcessingCompareCard}`}
+                ref={(node) => {
+                  modeCardRefs.current[mode.mode] = node;
+                }}
+                className={`${styles.projectKnowledgeModeCard} ${styles.projectKnowledgeProcessingCompareCard} ${focusedModeHighlight === mode.mode ? styles.projectKnowledgeFocusPulse : ""}`}
               >
                 <div className={styles.projectKnowledgeModeHeader}>
                   <div>
@@ -641,8 +882,16 @@ export default function ProjectKnowledgeProcessingPanel(
 
                 <div className={styles.projectKnowledgeModeMetrics}>
                   <div className={styles.projectKnowledgeModeMetric}>
+                    <Typography.Text type="secondary">{t("projects.knowledge.documents", "文档数")}</Typography.Text>
+                    <Typography.Text strong>{mode.documentCount || 0}</Typography.Text>
+                  </div>
+                  <div className={styles.projectKnowledgeModeMetric}>
                     <Typography.Text type="secondary">{t("projects.knowledge.entities", "实体数")}</Typography.Text>
-                    <Typography.Text strong>{formatModeCountValue(mode, displayEntityCount(mode), t)}</Typography.Text>
+                    <Typography.Text strong>
+                      {typeof entityValue === "number"
+                        ? formatModeCountValue(mode, entityValue, t)
+                        : entityValue}
+                    </Typography.Text>
                   </div>
                   <div className={styles.projectKnowledgeModeMetric}>
                     <Typography.Text type="secondary">{t("projects.knowledge.signalRelations", "关系数")}</Typography.Text>
@@ -697,7 +946,10 @@ export default function ProjectKnowledgeProcessingPanel(
                       {nlpStageStats.map((section) => (
                         <div
                           key={section.key}
-                          className={`${styles.projectKnowledgeProcessingStageCard} ${styles.projectKnowledgeNlpFlowStage} ${section.optional ? styles.projectKnowledgeNlpFlowStageOptional : ""}`}
+                          ref={(node) => {
+                            nlpStageRefs.current[section.key] = node;
+                          }}
+                          className={`${styles.projectKnowledgeProcessingStageCard} ${styles.projectKnowledgeNlpFlowStage} ${section.optional ? styles.projectKnowledgeNlpFlowStageOptional : ""} ${focusedModeHighlight === "nlp" && focusedStageHighlight === section.key ? styles.projectKnowledgeFocusPulse : ""}`}
                         >
                           <div className={styles.projectKnowledgeNlpFlowStageHeader}>
                             <div>
@@ -718,6 +970,100 @@ export default function ProjectKnowledgeProcessingPanel(
                               </div>
                             ))}
                           </div>
+                          {section.reason && section.status !== "ready" ? (
+                            <Typography.Text type="secondary">
+                              {t("projects.knowledge.processing.stageReason", "原因")}: {section.reason}
+                            </Typography.Text>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {pipelineTraceStages.length ? (
+                  <div className={styles.projectKnowledgeNlpFlow}>
+                    <div className={styles.projectKnowledgeNlpFlowHeader}>
+                      <Typography.Text strong>
+                        {t("projects.knowledge.processing.pipelineTraceTitle", "加工证据链")}
+                      </Typography.Text>
+                      <Typography.Text type="secondary">
+                        {t("projects.knowledge.processing.pipelineTraceHint", "展示各层中间产物、摘要与落盘痕迹。")}
+                      </Typography.Text>
+                    </div>
+                    <div className={styles.projectKnowledgeNlpFlowTrack}>
+                      {pipelineTraceStages.map((stage) => (
+                        <div
+                          key={`${stage.key}-${stage.label}`}
+                          className={`${styles.projectKnowledgeProcessingStageCard} ${styles.projectKnowledgeNlpFlowStage}`}
+                        >
+                          {(() => {
+                            const stageReason = extractTraceStageReason({
+                              status: stage.status,
+                              metrics: stage.metrics,
+                              summary: stage.summary,
+                            });
+                            return stageReason ? (
+                              <Typography.Text type="secondary">
+                                {t("projects.knowledge.processing.stageReason", "原因")}: {stageReason}
+                              </Typography.Text>
+                            ) : null;
+                          })()}
+                          <div className={styles.projectKnowledgeNlpFlowStageHeader}>
+                            <div>
+                              <Typography.Text strong>{stage.label}</Typography.Text>
+                              <div className={styles.projectKnowledgeModeMeta}>
+                                <Tag color={statusColor(stage.status)}>{statusLabel(stage.status, t)}</Tag>
+                                <Tag bordered={false}>
+                                  {stage.optional
+                                    ? t("projects.knowledge.processing.optionalStage", "可选")
+                                    : t("projects.knowledge.processing.requiredStageLabel", "必需阶段")}
+                                </Tag>
+                              </div>
+                            </div>
+                          </div>
+
+                          <Typography.Paragraph type="secondary" className={styles.projectKnowledgeModeSummary}>
+                            {stage.summary}
+                          </Typography.Paragraph>
+
+                          {Array.isArray(stage.summary_lines) && stage.summary_lines.length ? (
+                            <div className={styles.projectKnowledgeProcessingArtifacts}>
+                              {stage.summary_lines.slice(0, 3).map((line) => (
+                                <Tag key={`${stage.key}-${line}`} bordered={false}>
+                                  {line}
+                                </Tag>
+                              ))}
+                            </div>
+                          ) : null}
+
+                          <div className={styles.projectKnowledgeProcessingStageMetrics}>
+                            {selectTraceMetricEntries(stage.metrics || {}).map(([metricKey, metricValue]) => (
+                              <div key={`${stage.key}-${metricKey}`} className={styles.projectKnowledgeProcessingStageMetric}>
+                                <Typography.Text type="secondary">{formatTraceMetricLabel(metricKey, t)}</Typography.Text>
+                                <Typography.Text strong>{formatTraceMetricValue(metricValue)}</Typography.Text>
+                              </div>
+                            ))}
+                          </div>
+
+                          {Array.isArray(stage.artifacts) && stage.artifacts.length ? (
+                            <div className={styles.projectKnowledgeProcessingArtifacts}>
+                              {stage.artifacts.slice(0, 3).map((artifact) => (
+                                <Tooltip
+                                  key={`${stage.key}-${artifact.kind}-${artifact.path}`}
+                                  title={artifact.path || artifact.label || artifact.kind}
+                                >
+                                  <Tag bordered={false}>
+                                    {formatArtifactLabel(artifact)}
+                                  </Tag>
+                                </Tooltip>
+                              ))}
+                            </div>
+                          ) : (
+                            <Typography.Text type="secondary">
+                              {t("projects.knowledge.processing.noArtifacts", "当前阶段暂无可见落盘工件")}
+                            </Typography.Text>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -733,6 +1079,24 @@ export default function ProjectKnowledgeProcessingPanel(
                     ))}
                   </div>
                 ) : null}
+
+                <div className={styles.projectKnowledgeNlpFlow}>
+                  <div className={styles.projectKnowledgeNlpFlowHeader}>
+                    <Typography.Text strong>
+                      {t("projects.knowledge.processing.nerDiagnosticsTitle", "NER 诊断")}
+                    </Typography.Text>
+                    <Button size="small" onClick={() => setShowNerDiagnostics((prev) => !prev)}>
+                      {showNerDiagnostics
+                        ? t("projects.knowledge.processing.collapse", "收起")
+                        : t("projects.knowledge.processing.expand", "展开")}
+                    </Button>
+                  </div>
+                  {showNerDiagnostics ? (
+                    <div className={styles.projectKnowledgeProcessingNerEmbed}>
+                      <ProjectKnowledgeNerPanel knowledgeState={props.knowledgeState} />
+                    </div>
+                  ) : null}
+                </div>
 
                 <div className={styles.projectKnowledgeProcessingCardFooter}>
                   <div className={styles.projectKnowledgeProcessingLaunchControls}>
