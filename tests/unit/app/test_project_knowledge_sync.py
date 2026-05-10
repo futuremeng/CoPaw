@@ -726,6 +726,12 @@ def test_project_sync_document_count_evidence_bundle_uses_source_samples(tmp_pat
     assert document_bundle["metric_key"] == "document_count"
     assert document_bundle["metric_kind"] == "aggregate"
     assert document_bundle["sample_source_paths"] == [".agent/AGENTS.md", "docs/spec.md"]
+    assert document_bundle["artifact_paths"] == [".agent/AGENTS.md", "docs/spec.md"]
+
+    token_bundle = nlp_bundles["syntax_token_count"]
+    assert token_bundle["metric_key"] == "syntax_token_count"
+    assert token_bundle["sample_source_paths"] == [".agent/AGENTS.md", "docs/spec.md"]
+    assert token_bundle["artifact_paths"] == [".agent/AGENTS.md", "docs/spec.md"]
 
 
 def test_project_sync_state_exposes_idle_semantic_engine_before_source_ready(tmp_path: Path):

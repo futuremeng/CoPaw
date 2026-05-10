@@ -1043,22 +1043,37 @@ class ProjectKnowledgeSyncManager:
                 path_hints: list[str] | None = None,
                 text_hints: list[str] | None = None,
                 sample_paths: list[str] | None = None,
+                strict_sample_paths: bool = False,
             ) -> None:
-                candidate_paths = ProjectKnowledgeSyncManager._pick_mode_evidence_paths(
-                    artifacts,
-                    preferred_kinds=preferred_kinds,
-                    path_hints=path_hints,
-                    text_hints=text_hints,
-                    max_paths=3,
-                )
-                evidence_paths[metric_key] = candidate_paths[0] if candidate_paths else ""
+                normalized_samples: list[str] = []
+                for sample in sample_paths or []:
+                    sample_text = str(sample or "").strip()
+                    if sample_text and sample_text not in normalized_samples:
+                        normalized_samples.append(sample_text)
+
+                candidate_paths: list[str] = []
+                if not strict_sample_paths:
+                    candidate_paths = ProjectKnowledgeSyncManager._pick_mode_evidence_paths(
+                        artifacts,
+                        preferred_kinds=preferred_kinds,
+                        path_hints=path_hints,
+                        text_hints=text_hints,
+                        max_paths=3,
+                    )
+
+                if strict_sample_paths and normalized_samples:
+                    display_paths = normalized_samples
+                else:
+                    display_paths = candidate_paths
+
+                evidence_paths[metric_key] = display_paths[0] if display_paths else ""
                 evidence_bundles[metric_key] = {
                     "metric_key": metric_key,
                     "metric_kind": metric_kind,
                     "formula": formula,
-                    "source_count": len(candidate_paths),
-                    "artifact_paths": candidate_paths,
-                    "sample_source_paths": list(sample_paths or candidate_paths[:2]),
+                    "source_count": len(display_paths),
+                    "artifact_paths": display_paths,
+                    "sample_source_paths": normalized_samples if normalized_samples else display_paths[:2],
                 }
 
             if mode == "nlp":
@@ -1094,6 +1109,7 @@ class ProjectKnowledgeSyncManager:
                     path_hints=["manifest", "index"],
                     text_hints=["document", "source"],
                     sample_paths=source_document_samples,
+                    strict_sample_paths=True,
                 )
                 _assign_metric_evidence(
                     "syntax_token_count",
@@ -1102,6 +1118,8 @@ class ProjectKnowledgeSyncManager:
                     preferred_kinds=["graph", "document_graph_manifest"],
                     path_hints=["graphify", "manifest"],
                     text_hints=["token", "syntax"],
+                    sample_paths=source_document_samples,
+                    strict_sample_paths=True,
                 )
                 _assign_metric_evidence(
                     "syntax_pos_count",

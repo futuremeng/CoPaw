@@ -527,7 +527,10 @@ export default function ProjectKnowledgeProcessingPanel(
     const merged: string[] = [];
     const samplePaths = activeEvidence?.bundle?.sample_source_paths || [];
     const artifactPaths = activeEvidence?.bundle?.artifact_paths || [];
-    if (activeEvidence?.metricKey === "document_count" && samplePaths.length > 0) {
+    if (
+      (activeEvidence?.metricKey === "document_count" || activeEvidence?.metricKey === "syntax_token_count")
+      && samplePaths.length > 0
+    ) {
       for (const pathText of samplePaths) {
         const normalizedPath = String(pathText || "").trim();
         if (!normalizedPath || merged.includes(normalizedPath)) {
