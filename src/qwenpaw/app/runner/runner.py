@@ -1417,6 +1417,9 @@ class AgentRunner(Runner):
                     yield skill_response, True
                     return
 
+            # Plan notebook can be absent depending on agent/model features.
+            plan_notebook = getattr(agent, "plan_notebook", None)
+
             # Ensure session file has a valid plan_notebook dict
             # to prevent TypeError/KeyError during load_state_dict
             if plan_notebook is not None:
