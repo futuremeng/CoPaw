@@ -483,3 +483,23 @@ def test_local_graph_all_records_query_returns_full_relation_set(tmp_path: Path)
     assert result["relation_count"] > 0
     assert len(records) == result["relation_count"]
     assert any(record.get("predicate") == "co_occurs_with" for record in records)
+
+
+def test_local_graph_empty_documents_cleanup_graphify_manifest(tmp_path: Path):
+    config = Config().knowledge
+    manager = KnowledgeManager(tmp_path)
+    graph_path = tmp_path / "knowledge" / "graphify-out" / "graph.json"
+
+    graphify_dir = tmp_path / "knowledge" / "graphify"
+    graphify_dir.mkdir(parents=True, exist_ok=True)
+    stale_manifest = graphify_dir / "manifest.json"
+    stale_manifest.write_text(
+        json.dumps({"artifact": "graphify_manifest", "document_count": 0, "documents": []}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    result = persist_local_graph(manager, config, [], graph_path)
+
+    assert result["document_graph_count"] == 0
+    assert result["document_graph_manifest_path"] == ""
+    assert not stale_manifest.exists()

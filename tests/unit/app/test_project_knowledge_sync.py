@@ -567,6 +567,47 @@ def test_project_sync_state_recovers_document_graphify_artifacts_from_graph_path
     assert "Document graphify payloads: 1" in nlp_output["summary_lines"]
 
 
+def test_project_sync_state_ignores_empty_document_graph_manifest(tmp_path: Path):
+    project_id = "project-h4"
+    manager = ProjectKnowledgeSyncManager(
+        tmp_path,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+
+    graphify_dir = tmp_path / "projects" / project_id / ".knowledge" / "graphify"
+    graphify_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = graphify_dir / "manifest.json"
+    manifest_path.write_text(
+        json.dumps({"artifact": "graphify_manifest", "document_count": 0, "documents": []}),
+        encoding="utf-8",
+    )
+
+    graph_path = tmp_path / "projects" / project_id / ".knowledge" / "graphify-out" / "graph.json"
+    graph_path.parent.mkdir(parents=True, exist_ok=True)
+    graph_path.write_text("{}", encoding="utf-8")
+
+    state = manager.get_state(project_id)
+    state.update(
+        {
+            "last_result": {
+                "index": {"document_count": 0, "chunk_count": 0},
+                "memify": {
+                    "graph_path": str(graph_path),
+                    "document_graph_count": 0,
+                },
+            },
+        }
+    )
+    manager._save_state(state)
+
+    hydrated = manager.get_state(project_id)
+    nlp_output = hydrated["mode_outputs"]["nlp"]
+    artifact_kinds = [item["kind"] for item in nlp_output["artifacts"]]
+
+    assert "document_graph_manifest" not in artifact_kinds
+    assert "Document graphify payloads: 0" in nlp_output["summary_lines"]
+
+
 def test_project_sync_mode_metrics_agentic_evidence_paths_fallback_to_quality_artifacts(tmp_path: Path):
     project_id = "project-agentic-evidence-fallback"
     manager = ProjectKnowledgeSyncManager(
@@ -641,6 +682,50 @@ def test_project_sync_mode_metrics_agentic_evidence_paths_fallback_to_quality_ar
     assert evidence_bundles["quality_score"]["source_count"] >= 1
     assert evidence_bundles["quality_score"]["artifact_paths"]
     assert evidence_bundles["enhancement_delta"]["formula"]
+
+
+def test_project_sync_document_count_evidence_bundle_uses_source_samples(tmp_path: Path, monkeypatch):
+    project_id = "project-document-evidence-samples"
+    manager = ProjectKnowledgeSyncManager(
+        tmp_path,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+
+    source_id = f"project-{project_id}-workspace"
+    monkeypatch.setattr(
+        manager._knowledge_manager,
+        "get_source_chunk_documents",
+        lambda *_args, **_kwargs: {
+            "indexed": True,
+            "documents": [
+                {"path": ".agent/AGENTS.md"},
+                {"path": "docs/spec.md"},
+            ],
+        },
+    )
+
+    state = manager.get_state(project_id)
+    state["latest_source_id"] = source_id
+    state["last_result"] = {
+        "index": {
+            "document_count": 2,
+            "chunk_count": 4,
+            "ner_entity_count": 5,
+            "syntax_relation_count": 7,
+        },
+        "memify": {
+            "document_graph_count": 2,
+        },
+    }
+    manager._save_state(state)
+
+    hydrated = manager.get_state(project_id)
+    nlp_bundles = hydrated["mode_metrics"]["nlp"]["evidence_bundles"]
+    document_bundle = nlp_bundles["document_count"]
+
+    assert document_bundle["metric_key"] == "document_count"
+    assert document_bundle["metric_kind"] == "aggregate"
+    assert document_bundle["sample_source_paths"] == [".agent/AGENTS.md", "docs/spec.md"]
 
 
 def test_project_sync_state_exposes_idle_semantic_engine_before_source_ready(tmp_path: Path):

@@ -654,6 +654,8 @@ class ProjectKnowledgeSyncManager:
         if not text:
             return ""
         candidate = Path(text)
+        if not candidate.is_absolute():
+            return text.replace("\\", "/")
         try:
             resolved = candidate.resolve()
         except Exception:
@@ -686,15 +688,15 @@ class ProjectKnowledgeSyncManager:
 
         manifest_candidate = Path(manifest_path) if manifest_path else inferred_manifest_path
         if not manifest_candidate.exists():
-            return manifest_path, document_graph_dir, document_graph_count
+            return "", document_graph_dir, document_graph_count
 
         try:
             manifest_payload = json.loads(manifest_candidate.read_text(encoding="utf-8"))
         except Exception:
-            return manifest_path, document_graph_dir, document_graph_count
+            return "", document_graph_dir, document_graph_count
 
         if not isinstance(manifest_payload, dict):
-            return manifest_path, document_graph_dir, document_graph_count
+            return "", document_graph_dir, document_graph_count
 
         derived_count = max(
             _safe_int(manifest_payload.get("document_count")),
@@ -702,7 +704,9 @@ class ProjectKnowledgeSyncManager:
             if isinstance(manifest_payload.get("documents"), list)
             else 0,
         )
-        return manifest_path, document_graph_dir, derived_count
+        if derived_count <= 0:
+            return "", document_graph_dir, 0
+        return str(manifest_candidate), document_graph_dir, derived_count
 
     def _build_mode_outputs(self, state: dict[str, Any]) -> dict[str, Any]:
         last_result = state.get("last_result") or {}
@@ -966,13 +970,49 @@ class ProjectKnowledgeSyncManager:
         )
         return candidates[0] if candidates else ""
 
-    @staticmethod
+    def _collect_source_document_sample_paths(
+        self,
+        source_id: str,
+        *,
+        max_paths: int = 5,
+    ) -> list[str]:
+        if not source_id:
+            return []
+        try:
+            payload = self._knowledge_manager.get_source_chunk_documents(source_id)
+        except Exception:
+            return []
+        documents = payload.get("documents") if isinstance(payload, dict) else []
+        if not isinstance(documents, list):
+            return []
+        samples: list[str] = []
+        for item in documents:
+            if not isinstance(item, dict):
+                continue
+            raw_path = str(item.get("path") or item.get("document_path") or "").strip()
+            if not raw_path:
+                continue
+            normalized_path = self._relative_workspace_path(raw_path)
+            if not normalized_path or normalized_path in samples:
+                continue
+            samples.append(normalized_path)
+            if len(samples) >= max(1, int(max_paths)):
+                break
+        return samples
+
     def _build_mode_metrics(
+        self,
         processing_modes: list[dict[str, Any]],
         mode_outputs: dict[str, Any],
         index_result: dict[str, Any],
+        *,
+        latest_source_id: str = "",
     ) -> dict[str, Any]:
         metrics: dict[str, Any] = {}
+        source_document_samples = self._collect_source_document_sample_paths(
+            latest_source_id,
+            max_paths=5,
+        )
         for item in processing_modes:
             mode = str(item.get("mode") or "").strip()
             if not mode:
@@ -1002,6 +1042,7 @@ class ProjectKnowledgeSyncManager:
                 preferred_kinds: list[str] | None = None,
                 path_hints: list[str] | None = None,
                 text_hints: list[str] | None = None,
+                sample_paths: list[str] | None = None,
             ) -> None:
                 candidate_paths = ProjectKnowledgeSyncManager._pick_mode_evidence_paths(
                     artifacts,
@@ -1017,7 +1058,7 @@ class ProjectKnowledgeSyncManager:
                     "formula": formula,
                     "source_count": len(candidate_paths),
                     "artifact_paths": candidate_paths,
-                    "sample_source_paths": candidate_paths[:2],
+                    "sample_source_paths": list(sample_paths or candidate_paths[:2]),
                 }
 
             if mode == "nlp":
@@ -1052,6 +1093,7 @@ class ProjectKnowledgeSyncManager:
                     preferred_kinds=["document_graph_manifest", "index"],
                     path_hints=["manifest", "index"],
                     text_hints=["document", "source"],
+                    sample_paths=source_document_samples,
                 )
                 _assign_metric_evidence(
                     "syntax_token_count",
@@ -2204,7 +2246,12 @@ class ProjectKnowledgeSyncManager:
         processing_modes = self._build_processing_modes(hydrated)
         output_resolution = self._build_output_resolution(processing_modes)
         mode_outputs = self._build_mode_outputs(hydrated)
-        mode_metrics = self._build_mode_metrics(processing_modes, mode_outputs, index_result)
+        mode_metrics = self._build_mode_metrics(
+            processing_modes,
+            mode_outputs,
+            index_result,
+            latest_source_id=latest_source_id,
+        )
         l1_metrics = self._build_l1_metrics(hydrated, source_status)
         l2_metrics = self._build_l2_metrics(hydrated, index_result)
         l3_metrics = self._build_l3_metrics(hydrated)

@@ -523,11 +523,32 @@ export default function ProjectKnowledgeProcessingPanel(
   );
   const { entityDelta, relationDelta } = props.knowledgeState.processingCompareDelta;
   const staleTooltip = describeStaleSources(props.knowledgeState.processingFreshness, t);
-  const evidencePathsForModal = activeEvidence?.bundle?.artifact_paths?.length
-    ? activeEvidence.bundle.artifact_paths
-    : activeEvidence?.fallbackPath
-      ? [activeEvidence.fallbackPath]
-      : [];
+  const evidencePathsForModal = useMemo(() => {
+    const merged: string[] = [];
+    const samplePaths = activeEvidence?.bundle?.sample_source_paths || [];
+    const artifactPaths = activeEvidence?.bundle?.artifact_paths || [];
+    if (activeEvidence?.metricKey === "document_count" && samplePaths.length > 0) {
+      for (const pathText of samplePaths) {
+        const normalizedPath = String(pathText || "").trim();
+        if (!normalizedPath || merged.includes(normalizedPath)) {
+          continue;
+        }
+        merged.push(normalizedPath);
+      }
+      return merged;
+    }
+    for (const pathText of [...samplePaths, ...artifactPaths]) {
+      const normalizedPath = String(pathText || "").trim();
+      if (!normalizedPath || merged.includes(normalizedPath)) {
+        continue;
+      }
+      merged.push(normalizedPath);
+    }
+    if (!merged.length && activeEvidence?.fallbackPath) {
+      merged.push(activeEvidence.fallbackPath);
+    }
+    return merged;
+  }, [activeEvidence]);
   const layerRows = buildKnowledgeLayerRows({
     l2Mode,
     l3Mode,
@@ -640,6 +661,7 @@ export default function ProjectKnowledgeProcessingPanel(
                             : null;
                           const hasEvidence = Boolean(
                             metric.evidencePath
+                            || (evidenceBundle?.sample_source_paths && evidenceBundle.sample_source_paths.length > 0)
                             || (evidenceBundle?.artifact_paths && evidenceBundle.artifact_paths.length > 0),
                           );
                           return (

@@ -1124,6 +1124,9 @@ def persist_local_graph(
     graphify_dir = graph_path.parent.parent / "graphify"
     graphify_dir.mkdir(parents=True, exist_ok=True)
     manifest_documents: list[dict[str, Any]] = []
+    for stale_payload in graphify_dir.glob("*.graphify.json"):
+        if stale_payload.is_file():
+            stale_payload.unlink(missing_ok=True)
     for payload in document_payloads:
         document_path = str(payload.get("document_path") or "")
         payload_name = _graphify_document_filename(document_path)
@@ -1140,18 +1143,21 @@ def persist_local_graph(
             }
         )
     manifest_path = graphify_dir / "manifest.json"
-    manifest_path.write_text(
-        json.dumps(
-            {
-                "artifact": "graphify_manifest",
-                "document_count": len(document_payloads),
-                "documents": manifest_documents,
-            },
-            ensure_ascii=False,
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
+    if document_payloads:
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "artifact": "graphify_manifest",
+                    "document_count": len(document_payloads),
+                    "documents": manifest_documents,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+    elif manifest_path.exists():
+        manifest_path.unlink(missing_ok=True)
 
     payload = _build_project_graph_payload_from_documents(document_payloads)
     graph_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1163,7 +1169,7 @@ def persist_local_graph(
         "warnings": [] if stats.get("relation_count", 0) > 0 else ["LOCAL_GRAPH_EMPTY"],
         "graph_path": str(graph_path),
         "document_graph_dir": str(graphify_dir),
-        "document_graph_manifest_path": str(manifest_path),
+        "document_graph_manifest_path": str(manifest_path) if document_payloads else "",
         "document_graph_count": len(document_payloads),
         "document_count": int(stats.get("document_count") or 0),
         "node_count": int(stats.get("node_count") or 0),
