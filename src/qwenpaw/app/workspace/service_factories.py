@@ -136,7 +136,8 @@ async def create_agent_config_watcher(ws: "Workspace", _):
     watcher = AgentConfigWatcher(
         agent_id=ws.agent_id,
         workspace_dir=ws.workspace_dir,
-        workspace=ws,
+        channel_manager=channel_mgr,
+        cron_manager=cron_mgr,
     )
     ws._service_manager.services["agent_config_watcher"] = watcher
     return watcher

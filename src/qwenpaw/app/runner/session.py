@@ -470,3 +470,52 @@ class SafeJSONSession(SessionBase):
                 f"because it does not exist"
             ),
         )
+
+
+def migrate_legacy_weixin_session_files(sessions_dir: str) -> None:
+    """Rename legacy ``weixin--`` session files to ``wechat--``.
+
+    Session IDs like ``weixin:<user>`` are sanitized to ``weixin--<user>``
+    in filenames.  This function renames matching ``.json`` and
+    ``.json.snapshot`` files so the new ``wechat:`` prefix convention is
+    reflected on disk.  Idempotent; safe to call even if no legacy files exist.
+    """
+    from pathlib import Path
+
+    sessions_path = Path(sessions_dir).expanduser()
+    if not sessions_path.is_dir():
+        return
+
+    renamed = 0
+    for entry in list(sessions_path.iterdir()):
+        name = entry.name
+        # Match both plain session files and sidecar snapshots.
+        if "weixin--" not in name:
+            continue
+        new_name = name.replace("weixin--", "wechat--", 1)
+        new_path = entry.parent / new_name
+        if new_path.exists():
+            logger.debug(
+                "Skipping rename of %s: target %s already exists.",
+                entry,
+                new_path,
+            )
+            continue
+        try:
+            os.replace(entry, new_path)
+            renamed += 1
+            logger.debug("Renamed session file %s -> %s", entry.name, new_name)
+        except OSError as exc:
+            logger.warning(
+                "Failed to rename session file %s -> %s: %s",
+                entry,
+                new_path,
+                exc,
+            )
+
+    if renamed:
+        logger.warning(
+            "Migrated %d legacy 'weixin' session file(s) to 'wechat' in %s",
+            renamed,
+            sessions_path,
+        )
