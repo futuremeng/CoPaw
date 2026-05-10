@@ -109,6 +109,7 @@ export interface ProjectKnowledgeModeOutputPayload {
 
 export interface ProjectKnowledgeModeMetricsPayload {
   mode: ProjectKnowledgeProcessingMode;
+  evidence_paths?: Record<string, string>;
   document_count?: number;
   chunk_count?: number;
   entity_count?: number;

@@ -6,6 +6,7 @@ import type {
   ProjectKnowledgeModeState,
   ProjectKnowledgeState,
 } from "./useProjectKnowledgeState";
+import type { ProjectKnowledgeModeMetricsPayload } from "../../../api/types";
 
 type ProjectKnowledgeNlpStageKey = "ner" | "syntax" | "cor";
 type ProjectKnowledgeLayerKey =
@@ -20,6 +21,7 @@ type ProjectKnowledgeLayerStatus = "ready" | "running" | "pending" | "unavailabl
 interface ProjectKnowledgeLayerCellMetric {
   label: string;
   value: string | number;
+  evidencePath?: string;
 }
 
 interface ProjectKnowledgeLayerCell {
@@ -40,6 +42,7 @@ interface ProjectKnowledgeLayerRow {
 interface ProjectKnowledgeProcessingPanelProps {
   knowledgeState: ProjectKnowledgeState;
   onOpenSettings?: () => void;
+  onSelectArtifactPath?: (path: string) => void | Promise<void>;
   focusedMode?: ProjectKnowledgeModeState["mode"];
   focusedStage?: ProjectKnowledgeNlpStageKey;
   focusToken?: number;
@@ -130,6 +133,14 @@ function formatPercent(value: number): string {
   return `${Math.max(0, Math.min(100, Math.round(value * 100)))}%`;
 }
 
+function resolveEvidencePathByKey(
+  evidencePaths: Record<string, string>,
+  key: string,
+): string {
+  const path = String(evidencePaths[key] || "").trim();
+  return path;
+}
+
 function mapModeToLayerStatus(
   mode: ProjectKnowledgeModeState | null,
   ready: boolean,
@@ -151,13 +162,24 @@ function buildKnowledgeLayerRows(
   params: {
     l2Mode: ProjectKnowledgeModeState | null;
     l3Mode: ProjectKnowledgeModeState | null;
+    l2EvidencePaths: Record<string, string>;
+    l3EvidencePaths: Record<string, string>;
     quantMetrics: ProjectKnowledgeState["quantMetrics"];
     entityDelta: number;
     relationDelta: number;
     t: ReturnType<typeof useTranslation>["t"];
   },
 ): ProjectKnowledgeLayerRow[] {
-  const { l2Mode, l3Mode, quantMetrics, entityDelta, relationDelta, t } = params;
+  const {
+    l2Mode,
+    l3Mode,
+    l2EvidencePaths,
+    l3EvidencePaths,
+    quantMetrics,
+    entityDelta,
+    relationDelta,
+    t,
+  } = params;
   const hasL3Outputs = modeHasIndependentOutputs(l3Mode);
   const l3Running = l3Mode?.status === "running" || l3Mode?.status === "queued";
   const l3Ready = Boolean(l3Mode && hasL3Outputs && l3Mode.status === "ready");
@@ -204,10 +226,12 @@ function buildKnowledgeLayerRows(
           {
             label: t("projects.knowledge.documents", "文档数"),
             value: l2DocumentCount,
+            evidencePath: resolveEvidencePathByKey(l2EvidencePaths, "document_count"),
           },
           {
             label: t("projects.knowledge.processing.syntaxTokens", "Token 数"),
             value: l2TokenCount,
+            evidencePath: resolveEvidencePathByKey(l2EvidencePaths, "syntax_token_count"),
           },
         ],
       },
@@ -222,6 +246,7 @@ function buildKnowledgeLayerRows(
               : l3Running
                 ? t("projects.knowledge.processing.stageRunning", "运行中")
                 : t("projects.knowledge.processing.stagePending", "待执行"),
+            evidencePath: resolveEvidencePathByKey(l3EvidencePaths, "audit_status"),
           },
         ],
       ),
@@ -240,10 +265,12 @@ function buildKnowledgeLayerRows(
           {
             label: t("projects.knowledge.processing.syntaxPosCount", "词性标注数"),
             value: l2PosCount,
+            evidencePath: resolveEvidencePathByKey(l2EvidencePaths, "syntax_pos_count"),
           },
           {
             label: t("projects.knowledge.processing.posCoverageDocument", "词性覆盖率(文档分词口径)"),
             value: l2PosCoverage,
+            evidencePath: resolveEvidencePathByKey(l2EvidencePaths, "pos_coverage_on_document_tokens"),
           },
         ],
       },
@@ -254,6 +281,7 @@ function buildKnowledgeLayerRows(
           {
             label: t("projects.knowledge.processing.auditFocus", "审计焦点"),
             value: t("projects.knowledge.processing.auditFocusLexical", "词性一致性/异常词分布"),
+            evidencePath: resolveEvidencePathByKey(l3EvidencePaths, "audit_focus"),
           },
         ],
       ),
@@ -302,10 +330,12 @@ function buildKnowledgeLayerRows(
           {
             label: t("projects.knowledge.processing.syntaxSentences", "句子数"),
             value: l2SyntaxSentences,
+            evidencePath: resolveEvidencePathByKey(l2EvidencePaths, "syntax_sentence_count"),
           },
           {
             label: t("projects.knowledge.processing.syntaxRelations", "句法关系数"),
             value: l2SyntaxRelations,
+            evidencePath: resolveEvidencePathByKey(l2EvidencePaths, "syntax_relation_count"),
           },
         ],
       },
@@ -316,6 +346,7 @@ function buildKnowledgeLayerRows(
           {
             label: t("projects.knowledge.processing.auditFocus", "审计焦点"),
             value: t("projects.knowledge.processing.auditFocusSyntax", "依存关系一致性"),
+            evidencePath: resolveEvidencePathByKey(l3EvidencePaths, "audit_focus"),
           },
         ],
       ),
@@ -334,10 +365,12 @@ function buildKnowledgeLayerRows(
           {
             label: t("projects.knowledge.processing.nerEntities", "识别实体数"),
             value: l2NerEntities,
+            evidencePath: resolveEvidencePathByKey(l2EvidencePaths, "ner_entity_count"),
           },
           {
             label: t("projects.knowledge.processing.readyChunks", "就绪标准化文档数"),
             value: l2NerReadyChunks,
+            evidencePath: resolveEvidencePathByKey(l2EvidencePaths, "ner_ready_chunk_count"),
           },
         ],
       },
@@ -348,6 +381,7 @@ function buildKnowledgeLayerRows(
           {
             label: t("projects.knowledge.processing.auditFocus", "审计焦点"),
             value: t("projects.knowledge.processing.auditFocusSemantic", "语义冲突/实体归一"),
+            evidencePath: resolveEvidencePathByKey(l3EvidencePaths, "audit_focus"),
           },
         ],
       ),
@@ -380,12 +414,14 @@ function buildKnowledgeLayerRows(
           {
             label: t("projects.knowledge.processing.qualityScore", "质量分"),
             value: l3Quality,
+            evidencePath: resolveEvidencePathByKey(l3EvidencePaths, "quality_score"),
           },
           {
             label: t("projects.knowledge.processing.auditRound", "审计轮次"),
             value: l3Mode?.auditRound
               ? `#${l3Mode.auditRound}`
               : l3Mode?.runId || t("projects.knowledge.processing.metricUnavailable", "未产出"),
+            evidencePath: resolveEvidencePathByKey(l3EvidencePaths, "audit_round"),
           },
           {
             label: t("projects.knowledge.processing.enhancementDelta", "相对 L2 增量"),
@@ -395,6 +431,7 @@ function buildKnowledgeLayerRows(
                 relations: relationDelta,
               })
               : t("projects.knowledge.processing.outputPendingLong", "等待形成独立增强结果"),
+            evidencePath: resolveEvidencePathByKey(l3EvidencePaths, "enhancement_delta"),
           },
         ],
       },
@@ -443,11 +480,16 @@ export default function ProjectKnowledgeProcessingPanel(
   const hasStaleProcessing = props.knowledgeState.processingFreshness.stale;
   const l2Mode = visibleModes.find((mode) => mode.mode === "nlp") || null;
   const l3Mode = visibleModes.find((mode) => mode.mode === "agentic") || null;
+  const modeMetricsPayload = (props.knowledgeState.syncState?.mode_metrics || {}) as Partial<Record<string, ProjectKnowledgeModeMetricsPayload>>;
+  const l2EvidencePaths = (modeMetricsPayload.nlp?.evidence_paths || {}) as Record<string, string>;
+  const l3EvidencePaths = (modeMetricsPayload.agentic?.evidence_paths || {}) as Record<string, string>;
   const { entityDelta, relationDelta } = props.knowledgeState.processingCompareDelta;
   const staleTooltip = describeStaleSources(props.knowledgeState.processingFreshness, t);
   const layerRows = buildKnowledgeLayerRows({
     l2Mode,
     l3Mode,
+    l2EvidencePaths,
+    l3EvidencePaths,
     quantMetrics: props.knowledgeState.quantMetrics,
     entityDelta,
     relationDelta,
@@ -544,8 +586,24 @@ export default function ProjectKnowledgeProcessingPanel(
                   <div className={styles.projectKnowledgeProcessingStageMetrics}>
                     {cell.metrics.map((metric) => (
                       <div key={`${row.key}-${index}-${metric.label}`} className={styles.projectKnowledgeProcessingStageMetric}>
-                        <Typography.Text type="secondary">{metric.label}</Typography.Text>
-                        <Typography.Text strong>{metric.value}</Typography.Text>
+                        <div className={styles.projectKnowledgeProcessingStageMetricMain}>
+                          <Typography.Text type="secondary">{metric.label}</Typography.Text>
+                          <Typography.Text strong>{metric.value}</Typography.Text>
+                        </div>
+                        <Button
+                          type="link"
+                          size="small"
+                          disabled={!metric.evidencePath || !props.onSelectArtifactPath}
+                          style={{ paddingInline: 0, height: "auto" }}
+                          onClick={() => {
+                            if (!metric.evidencePath || !props.onSelectArtifactPath) {
+                              return;
+                            }
+                            void props.onSelectArtifactPath(metric.evidencePath);
+                          }}
+                        >
+                          {t("projects.knowledge.processing.viewEvidence", "查看证据")}
+                        </Button>
                       </div>
                     ))}
                   </div>

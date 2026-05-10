@@ -3130,6 +3130,7 @@ export default function ProjectDetailPage() {
           <ProjectKnowledgeProcessingPanel
             knowledgeState={projectKnowledgeState}
             onOpenSettings={handleKnowledgeOpenSettings}
+            onSelectArtifactPath={handleSelectArtifactFile}
             focusedMode={knowledgeProcessingFocusMode || undefined}
             focusedStage={knowledgeProcessingFocusStage || undefined}
             focusToken={knowledgeProcessingFocusToken}
