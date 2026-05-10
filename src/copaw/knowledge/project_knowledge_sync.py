@@ -792,12 +792,16 @@ class ProjectKnowledgeSyncManager:
             )
 
         agentic_artifacts: list[dict[str, str]] = []
+        seen_agentic_paths: set[str] = set()
         workflow_artifacts = workflow_run.get("artifacts")
         if isinstance(workflow_artifacts, list):
             for raw_path in workflow_artifacts:
                 rel_path = self._relative_workspace_path(raw_path)
                 if not rel_path:
                     continue
+                if rel_path in seen_agentic_paths:
+                    continue
+                seen_agentic_paths.add(rel_path)
                 agentic_artifacts.append(
                     {
                         "kind": "workflow_artifact",
@@ -805,6 +809,37 @@ class ProjectKnowledgeSyncManager:
                         "path": rel_path,
                     }
                 )
+
+        for kind, label, raw_path in [
+            (
+                "quality_report",
+                "Knowledge quality report",
+                quality_loop_result.get("enrichment_quality_report_path")
+                or memify_result.get("enrichment_quality_report_path")
+                or self._graph_ops.enrichment_quality_report_path,
+            ),
+            (
+                "enriched_graph",
+                "Enriched knowledge graph",
+                memify_result.get("enriched_graph_path") or self._graph_ops.enriched_graph_path,
+            ),
+            (
+                "graph",
+                "Raw knowledge graph",
+                memify_result.get("graph_path") or self._graph_ops.local_graph_path,
+            ),
+        ]:
+            rel_path = self._relative_workspace_path(raw_path)
+            if not rel_path or rel_path in seen_agentic_paths:
+                continue
+            seen_agentic_paths.add(rel_path)
+            agentic_artifacts.append(
+                {
+                    "kind": kind,
+                    "label": label,
+                    "path": rel_path,
+                }
+            )
         return {
             "fast": {
                 "mode": "fast",
@@ -857,9 +892,9 @@ class ProjectKnowledgeSyncManager:
         if not isinstance(artifacts, list) or not artifacts:
             return ""
 
-        normalized_kinds = ProjectKnowledgeSync._normalize_evidence_list(preferred_kinds)
-        normalized_path_hints = ProjectKnowledgeSync._normalize_evidence_list(path_hints)
-        normalized_text_hints = ProjectKnowledgeSync._normalize_evidence_list(text_hints)
+        normalized_kinds = ProjectKnowledgeSyncManager._normalize_evidence_list(preferred_kinds)
+        normalized_path_hints = ProjectKnowledgeSyncManager._normalize_evidence_list(path_hints)
+        normalized_text_hints = ProjectKnowledgeSyncManager._normalize_evidence_list(text_hints)
 
         best_path = ""
         best_score = -1
@@ -942,49 +977,49 @@ class ProjectKnowledgeSyncManager:
                 )
                 evidence_paths.update(
                     {
-                        "document_count": ProjectKnowledgeSync._pick_mode_evidence_path(
+                        "document_count": ProjectKnowledgeSyncManager._pick_mode_evidence_path(
                             artifacts,
                             preferred_kinds=["document_graph_manifest", "index"],
                             path_hints=["manifest", "index"],
                             text_hints=["document", "source"],
                         ),
-                        "syntax_token_count": ProjectKnowledgeSync._pick_mode_evidence_path(
+                        "syntax_token_count": ProjectKnowledgeSyncManager._pick_mode_evidence_path(
                             artifacts,
                             preferred_kinds=["graph", "document_graph_manifest"],
                             path_hints=["graphify", "manifest"],
                             text_hints=["token", "syntax"],
                         ),
-                        "syntax_pos_count": ProjectKnowledgeSync._pick_mode_evidence_path(
+                        "syntax_pos_count": ProjectKnowledgeSyncManager._pick_mode_evidence_path(
                             artifacts,
                             preferred_kinds=["graph", "document_graph_manifest"],
                             path_hints=["graphify"],
                             text_hints=["pos", "syntax", "token"],
                         ),
-                        "pos_coverage_on_document_tokens": ProjectKnowledgeSync._pick_mode_evidence_path(
+                        "pos_coverage_on_document_tokens": ProjectKnowledgeSyncManager._pick_mode_evidence_path(
                             artifacts,
                             preferred_kinds=["graph", "document_graph_manifest"],
                             path_hints=["graphify"],
                             text_hints=["coverage", "pos", "syntax"],
                         ),
-                        "syntax_sentence_count": ProjectKnowledgeSync._pick_mode_evidence_path(
+                        "syntax_sentence_count": ProjectKnowledgeSyncManager._pick_mode_evidence_path(
                             artifacts,
                             preferred_kinds=["graph"],
                             path_hints=["graph", "graphify"],
                             text_hints=["sentence", "syntax"],
                         ),
-                        "syntax_relation_count": ProjectKnowledgeSync._pick_mode_evidence_path(
+                        "syntax_relation_count": ProjectKnowledgeSyncManager._pick_mode_evidence_path(
                             artifacts,
                             preferred_kinds=["graph"],
                             path_hints=["graph", "graphify"],
                             text_hints=["relation", "dependency", "syntax"],
                         ),
-                        "ner_entity_count": ProjectKnowledgeSync._pick_mode_evidence_path(
+                        "ner_entity_count": ProjectKnowledgeSyncManager._pick_mode_evidence_path(
                             artifacts,
                             preferred_kinds=["graph", "document_graph_manifest"],
                             path_hints=["graph", "graphify"],
                             text_hints=["ner", "entity"],
                         ),
-                        "ner_ready_chunk_count": ProjectKnowledgeSync._pick_mode_evidence_path(
+                        "ner_ready_chunk_count": ProjectKnowledgeSyncManager._pick_mode_evidence_path(
                             artifacts,
                             preferred_kinds=["document_graph_manifest", "document_graph_dir", "graph"],
                             path_hints=["manifest", "graphify"],
@@ -998,47 +1033,47 @@ class ProjectKnowledgeSyncManager:
                 metrics[mode]["quality_score"] = quality_score
                 evidence_paths.update(
                     {
-                        "entity_count": ProjectKnowledgeSync._pick_mode_evidence_path(
+                        "entity_count": ProjectKnowledgeSyncManager._pick_mode_evidence_path(
                             artifacts,
-                            preferred_kinds=["workflow_artifact", "graph"],
+                            preferred_kinds=["enriched_graph", "workflow_artifact", "graph"],
                             path_hints=["enriched", "graph"],
-                            text_hints=["entity", "agentic", "audit"],
+                            text_hints=["entity", "agentic", "audit", "quality"],
                         ),
-                        "relation_count": ProjectKnowledgeSync._pick_mode_evidence_path(
+                        "relation_count": ProjectKnowledgeSyncManager._pick_mode_evidence_path(
                             artifacts,
-                            preferred_kinds=["workflow_artifact", "graph"],
+                            preferred_kinds=["enriched_graph", "workflow_artifact", "graph"],
                             path_hints=["enriched", "graph"],
-                            text_hints=["relation", "agentic", "audit"],
+                            text_hints=["relation", "agentic", "audit", "quality"],
                         ),
-                        "quality_score": ProjectKnowledgeSync._pick_mode_evidence_path(
+                        "quality_score": ProjectKnowledgeSyncManager._pick_mode_evidence_path(
                             artifacts,
-                            preferred_kinds=["workflow_artifact"],
-                            path_hints=["enriched", "workflow"],
+                            preferred_kinds=["quality_report", "workflow_artifact", "enriched_graph"],
+                            path_hints=["quality", "report", "enriched", "workflow"],
                             text_hints=["quality", "audit"],
                         ),
-                        "audit_status": ProjectKnowledgeSync._pick_mode_evidence_path(
+                        "audit_status": ProjectKnowledgeSyncManager._pick_mode_evidence_path(
                             artifacts,
-                            preferred_kinds=["workflow_artifact", "graph"],
-                            path_hints=["enriched", "workflow"],
-                            text_hints=["audit", "agentic"],
+                            preferred_kinds=["workflow_artifact", "quality_report", "enriched_graph", "graph"],
+                            path_hints=["audit", "quality", "enriched", "workflow"],
+                            text_hints=["audit", "agentic", "quality"],
                         ),
-                        "audit_focus": ProjectKnowledgeSync._pick_mode_evidence_path(
+                        "audit_focus": ProjectKnowledgeSyncManager._pick_mode_evidence_path(
                             artifacts,
-                            preferred_kinds=["workflow_artifact", "graph"],
-                            path_hints=["enriched", "workflow"],
-                            text_hints=["audit", "semantic", "syntax", "lexical"],
+                            preferred_kinds=["workflow_artifact", "quality_report", "enriched_graph", "graph"],
+                            path_hints=["audit", "quality", "enriched", "workflow"],
+                            text_hints=["audit", "semantic", "syntax", "lexical", "entity", "relation"],
                         ),
-                        "audit_round": ProjectKnowledgeSync._pick_mode_evidence_path(
+                        "audit_round": ProjectKnowledgeSyncManager._pick_mode_evidence_path(
                             artifacts,
-                            preferred_kinds=["workflow_artifact"],
-                            path_hints=["workflow", "enriched"],
-                            text_hints=["audit", "run"],
+                            preferred_kinds=["workflow_artifact", "quality_report", "enriched_graph"],
+                            path_hints=["workflow", "audit", "quality", "enriched"],
+                            text_hints=["audit", "run", "quality"],
                         ),
-                        "enhancement_delta": ProjectKnowledgeSync._pick_mode_evidence_path(
+                        "enhancement_delta": ProjectKnowledgeSyncManager._pick_mode_evidence_path(
                             artifacts,
-                            preferred_kinds=["workflow_artifact", "graph"],
-                            path_hints=["enriched", "graph"],
-                            text_hints=["agentic", "audit", "delta"],
+                            preferred_kinds=["enriched_graph", "workflow_artifact", "quality_report", "graph"],
+                            path_hints=["enriched", "graph", "quality", "workflow"],
+                            text_hints=["agentic", "audit", "delta", "entity", "relation"],
                         ),
                     }
                 )

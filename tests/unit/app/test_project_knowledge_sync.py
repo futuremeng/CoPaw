@@ -567,6 +567,77 @@ def test_project_sync_state_recovers_document_graphify_artifacts_from_graph_path
     assert "Document graphify payloads: 1" in nlp_output["summary_lines"]
 
 
+def test_project_sync_mode_metrics_agentic_evidence_paths_fallback_to_quality_artifacts(tmp_path: Path):
+    project_id = "project-agentic-evidence-fallback"
+    manager = ProjectKnowledgeSyncManager(
+        tmp_path,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+
+    knowledge_dir = tmp_path / "projects" / project_id / ".knowledge"
+    graphify_out_dir = knowledge_dir / "graphify-out"
+    graphify_out_dir.mkdir(parents=True, exist_ok=True)
+    graph_path = graphify_out_dir / "graph.json"
+    graph_path.write_text("{}", encoding="utf-8")
+
+    enriched_graph_path = knowledge_dir / "enriched_graph.json"
+    enriched_graph_path.write_text("{}", encoding="utf-8")
+
+    quality_report_path = knowledge_dir / "enrichment_quality_report.json"
+    quality_report_path.write_text("{}", encoding="utf-8")
+
+    state = manager.get_state(project_id)
+    state["last_result"] = {
+        "index": {
+            "document_count": 2,
+            "chunk_count": 6,
+            "ner_entity_count": 8,
+            "syntax_relation_count": 13,
+        },
+        "memify": {
+            "graph_path": str(graph_path),
+            "enriched_graph_path": str(enriched_graph_path),
+            "enrichment_quality_report_path": str(quality_report_path),
+        },
+        "quality_loop": {
+            "score_after": 0.88,
+            "enrichment_quality_report_path": str(quality_report_path),
+            "rounds": [
+                {
+                    "after": {
+                        "entity_count": 17,
+                        "relation_count": 26,
+                        "quality_score": 0.88,
+                    }
+                }
+            ],
+        },
+        "workflow_run": {
+            "status": "succeeded",
+            "mode": "agentic",
+            "run_id": "run-agentic-evidence-fallback",
+            "artifacts": [],
+        },
+    }
+    manager._save_state(state)
+
+    hydrated = manager.get_state(project_id)
+    agentic_output = hydrated["mode_outputs"]["agentic"]
+    artifact_kinds = [item["kind"] for item in agentic_output["artifacts"]]
+    evidence_paths = hydrated["mode_metrics"]["agentic"]["evidence_paths"]
+
+    assert "quality_report" in artifact_kinds
+    assert "enriched_graph" in artifact_kinds
+    assert "graph" in artifact_kinds
+    assert evidence_paths["quality_score"].endswith("enrichment_quality_report.json")
+    assert evidence_paths["audit_status"]
+    assert evidence_paths["audit_focus"]
+    assert evidence_paths["audit_round"]
+    assert evidence_paths["enhancement_delta"]
+    assert evidence_paths["entity_count"].endswith("enriched_graph.json")
+    assert evidence_paths["relation_count"].endswith("enriched_graph.json")
+
+
 def test_project_sync_state_exposes_idle_semantic_engine_before_source_ready(tmp_path: Path):
     project_id = "project-i"
     manager = ProjectKnowledgeSyncManager(
