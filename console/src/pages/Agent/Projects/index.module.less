@@ -1166,6 +1166,21 @@
   flex-direction: column;
   gap: 10px;
   overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable both-edges;
+  padding-right: 2px;
+}
+
+.projectKnowledgeProcessingStickySummary {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 6px;
+  background: linear-gradient(180deg, rgba(250, 252, 255, 0.98) 0%, rgba(250, 252, 255, 0.9) 76%, rgba(250, 252, 255, 0) 100%);
+  backdrop-filter: blur(10px);
 }
 
 .projectKnowledgeProcessingCompareGrid {
@@ -1704,6 +1719,60 @@
   border-radius: 6px;
   background: #ffffff;
   padding: 6px;
+}
+
+.projectKnowledgeLayerMatrix {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.projectKnowledgeLayerMatrixHeader {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr;
+  gap: 8px;
+  align-items: center;
+
+  :global(.ant-typography) {
+    font-size: 12px;
+  }
+}
+
+.projectKnowledgeLayerMatrixRow {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr;
+  gap: 8px;
+}
+
+.projectKnowledgeLayerMatrixDimension {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid #e6edf9;
+  border-radius: 8px;
+  background: #fcfdff;
+  padding: 8px;
+}
+
+.projectKnowledgeLayerMatrixCell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid #e6edf9;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 8px;
+}
+
+@media (max-width: 1100px) {
+  .projectKnowledgeLayerMatrixHeader {
+    grid-template-columns: 1fr;
+  }
+
+  .projectKnowledgeLayerMatrixRow {
+    grid-template-columns: 1fr;
+  }
 }
 
 .projectKnowledgeTrendChart {
@@ -4881,6 +4950,8 @@
   .projectKnowledgeHeaderStat,
   .projectKnowledgeTrendSection,
   .projectKnowledgeSignalCard,
+  .projectKnowledgeLayerMatrixDimension,
+  .projectKnowledgeLayerMatrixCell,
   .projectKnowledgeTrendChart,
   .projectKnowledgeInsightBox,
   .projectKnowledgeInsightBar,
@@ -4893,6 +4964,10 @@
   .progressCoach {
     border-color: rgba(255, 255, 255, 0.08);
     background: rgba(255, 255, 255, 0.035);
+  }
+
+  .projectKnowledgeProcessingStickySummary {
+    background: linear-gradient(180deg, rgba(22, 22, 22, 0.96) 0%, rgba(22, 22, 22, 0.86) 76%, rgba(22, 22, 22, 0) 100%);
   }
 
   .projectKnowledgeProcessingCompareNote {

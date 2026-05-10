@@ -156,7 +156,24 @@ function buildKnowledgeState(): ProjectKnowledgeState {
     },
     activeKnowledgeTasks: [],
     activeKnowledgeTask: null,
-    latestQualityLoopJob: null,
+    latestQualityLoopJob: {
+      job_id: "quality-loop-job-1",
+      status: "succeeded",
+      rounds: [
+        {
+          round: 1,
+          after: {
+            quality_score: 0.76,
+          },
+        },
+        {
+          round: 2,
+          after: {
+            quality_score: 0.81,
+          },
+        },
+      ],
+    },
     memifyEnabled: true,
     processingModes: [
       buildModeState({
@@ -583,6 +600,14 @@ describe("project knowledge supporting panels", () => {
     if (!baseSyncState) {
       throw new Error("syncState fixture missing");
     }
+    knowledgeState.processingCompareModes = knowledgeState.processingCompareModes.map((mode) => (
+      mode.mode === "agentic"
+        ? {
+          ...mode,
+          auditRound: 2,
+        }
+        : mode
+    ));
     knowledgeState.syncState = {
       ...baseSyncState,
       latest_requested_mode: "nlp",
@@ -620,23 +645,24 @@ describe("project knowledge supporting panels", () => {
     expectSignalValue("Syntax 句法关系数", "13");
     expect(screen.getByText("实体关系抽取")).not.toBeNull();
     expect(screen.getByText("多智能体增强")).not.toBeNull();
+    expect(screen.getByText("#2")).not.toBeNull();
     expect(screen.getAllByText(/Semantic engine unavailable: HanLP2 module is not installed\./).length).toBeGreaterThan(0);
     expect(screen.getByText("COR")).not.toBeNull();
     expect(screen.getAllByText("NER").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Syntax").length).toBeGreaterThan(0);
     expect(screen.getAllByText("就绪标准化文档数").length).toBeGreaterThan(0);
     expect(screen.getByText("聚类数")).not.toBeNull();
-    expect(screen.getByText("识别实体数")).not.toBeNull();
-    expect(screen.getByText("词性标注数")).not.toBeNull();
+    expect(screen.getAllByText("识别实体数").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("词性标注数").length).toBeGreaterThan(0);
     expect(screen.getByText("词性标签种类数")).not.toBeNull();
-    expect(screen.getByText("词性覆盖率(语法分词口径)")).not.toBeNull();
-    expect(screen.getByText("词性覆盖率(文档分词口径)")).not.toBeNull();
+    expect(screen.getAllByText("词性覆盖率(语法分词口径)").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("词性覆盖率(文档分词口径)").length).toBeGreaterThan(0);
     expect(screen.queryByText("NER Batches")).toBeNull();
     expect(screen.queryByText("Worker Restarts")).toBeNull();
     expect(screen.queryByText("Worker PID Count")).toBeNull();
-    expect(screen.getByText("Token 数")).not.toBeNull();
-    expect(screen.getByText("句法关系数")).not.toBeNull();
-    expect(screen.getByText("42")).not.toBeNull();
+    expect(screen.getAllByText("Token 数").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("句法关系数").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("42").length).toBeGreaterThan(0);
     const runNlpButton = screen.getByRole("button", { name: "运行 NLP 结构化" }) as HTMLButtonElement;
     expect(runNlpButton.disabled).toBe(false);
     expect(runNlpButton.parentElement?.getAttribute("title")).toBeNull();
@@ -663,7 +689,7 @@ describe("project knowledge supporting panels", () => {
     expect(screen.getByText("tasks 通道重连中，等待新的运行快照，当前展示可能落后于实际执行状态。")).not.toBeNull();
   });
 
-  it("shows a lightweight l1 indexing hint in the processing header", () => {
+  it("hides L1-specific indexing hints in processing header", () => {
     const knowledgeState = buildKnowledgeState();
     knowledgeState.quantMetrics = {
       ...knowledgeState.quantMetrics,
@@ -673,7 +699,14 @@ describe("project knowledge supporting panels", () => {
 
     render(<ProjectKnowledgeProcessingPanel knowledgeState={knowledgeState} />);
 
-    expect(screen.getByText("L1 基础索引进度 1/3，详细状态请看 Sources / Signals。")).not.toBeNull();
+    expect(screen.queryByText("L1 基础索引进度 1/3，详细状态请看 Sources / Signals。")).toBeNull();
+    expect(screen.getByText("知识计量六层")).not.toBeNull();
+    expect(screen.getByText("数据层与预处理层")).not.toBeNull();
+    expect(screen.getByText("词汇层次")).not.toBeNull();
+    expect(screen.getByText("短语层次")).not.toBeNull();
+    expect(screen.getByText("句法层次")).not.toBeNull();
+    expect(screen.getByText("语义层次")).not.toBeNull();
+    expect(screen.getByText("语用与推理层次")).not.toBeNull();
   });
 
   it("shows pending labels when agentic outputs are not independently available", () => {
@@ -710,11 +743,10 @@ describe("project knowledge supporting panels", () => {
     }
     const nlpCardElement = nlpCard as HTMLElement;
 
-    await user.click(within(nlpCardElement).getByText("L1"));
     await user.click(within(nlpCardElement).getByRole("button", { name: "运行 NLP 结构化" }));
 
     expect(knowledgeState.startProcessingMode).toHaveBeenCalledWith("nlp", {
-      quantizationStage: "l1",
+      quantizationStage: "l2",
     });
   });
 

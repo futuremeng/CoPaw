@@ -1079,6 +1079,15 @@ class ProjectKnowledgeSyncManager:
                     "pos_coverage_on_document_tokens": _safe_float(l2_metrics.get("pos_coverage_on_document_tokens")),
                     "relation_count": _safe_int(l2_metrics.get("syntax_relation_count")),
                 },
+                "phrase": {
+                    "key": "phrase",
+                    "required": False,
+                    "status": "unavailable",
+                    "done_chunks": 0,
+                    "ready_chunks": 0,
+                    "reason_code": "PHRASE_LAYER_NOT_IMPLEMENTED",
+                    "reason": "Phrase-layer extraction is reserved for a later release.",
+                },
                 "cor": {
                     "key": "cor",
                     "required": False,

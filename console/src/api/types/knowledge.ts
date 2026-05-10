@@ -168,7 +168,7 @@ export interface ProjectKnowledgeL2MetricsPayload {
 }
 
 export interface ProjectKnowledgeNlpStagePayload {
-  key: "ner" | "syntax" | "cor";
+  key: "ner" | "syntax" | "phrase" | "cor";
   required: boolean;
   status: "ready" | "running" | "pending" | "unavailable";
   done_chunks?: number;
@@ -200,6 +200,7 @@ export interface ProjectKnowledgeNlpProgressPayload {
   stages?: {
     ner?: ProjectKnowledgeNlpStagePayload;
     syntax?: ProjectKnowledgeNlpStagePayload;
+    phrase?: ProjectKnowledgeNlpStagePayload;
     cor?: ProjectKnowledgeNlpStagePayload;
   };
 }

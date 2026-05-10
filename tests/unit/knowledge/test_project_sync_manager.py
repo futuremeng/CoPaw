@@ -140,3 +140,40 @@ def test_build_pipeline_trace_includes_stage_artifacts(tmp_path: Path):
     assert trace["stages"][1]["metrics"]["syntax_pos_tag_type_count"] == 7
     assert trace["stages"][1]["metrics"]["pos_coverage_on_syntax_tokens"] == 0.9048
     assert trace["stages"][1]["artifacts"][0]["kind"] == "ner_stats"
+
+
+def test_build_nlp_progress_contains_phrase_placeholder_stage(tmp_path: Path):
+    manager = ProjectKnowledgeSyncManager(tmp_path, knowledge_dirname="knowledge")
+
+    payload = manager._build_nlp_progress(  # type: ignore[attr-defined]
+        [
+            {
+                "mode": "nlp",
+                "status": "ready",
+                "stage": "Extraction done",
+                "summary": "NLP complete",
+            },
+        ],
+        {
+            "metrics_updated_at": "2026-05-10T10:00:00Z",
+            "total_chunks": 6,
+            "ner_done_chunks": 6,
+            "ner_ready_chunk_count": 6,
+            "ner_entity_count": 12,
+            "syntax_done_chunks": 6,
+            "syntax_ready_chunk_count": 6,
+            "syntax_sentence_count": 18,
+            "syntax_token_count": 120,
+            "syntax_pos_count": 118,
+            "syntax_relation_count": 42,
+            "cor_done_chunks": 0,
+            "cor_ready_chunk_count": 0,
+            "cor_reason_code": "HANLP2_TASK_READY",
+            "cor_reason": "optional",
+        },
+    )
+
+    phrase_stage = (payload.get("stages") or {}).get("phrase")
+    assert isinstance(phrase_stage, dict)
+    assert phrase_stage.get("status") == "unavailable"
+    assert phrase_stage.get("reason_code") == "PHRASE_LAYER_NOT_IMPLEMENTED"

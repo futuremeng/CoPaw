@@ -117,6 +117,7 @@ export interface ProjectKnowledgeModeState {
   entityCount: number;
   relationCount: number;
   qualityScore: number | null;
+  auditRound?: number;
   corReadyChunkCount?: number;
   corClusterCount?: number;
   corReplacementCount?: number;
@@ -832,6 +833,7 @@ export function deriveSourceQuantBaseMetrics(
 
 function parseBackendProcessingModes(
   syncState: ProjectKnowledgeSyncState | null,
+  latestQualityLoopJob?: QualityLoopJobStatus | null,
 ): ProjectKnowledgeModeState[] | null {
   const payload = syncState?.processing_modes;
   if (!Array.isArray(payload) || payload.length === 0) {
@@ -853,6 +855,17 @@ function parseBackendProcessingModes(
       const nlpSyntaxStage = nlpStages?.syntax;
       const nlpCorStage = nlpStages?.cor;
       const isNlpMode = modePayload.mode === "nlp";
+      const latestQualityLoopRound = Array.isArray(latestQualityLoopJob?.rounds)
+        ? latestQualityLoopJob.rounds[latestQualityLoopJob.rounds.length - 1] as Record<string, unknown> | undefined
+        : undefined;
+      const qualityLoopRoundValue = latestQualityLoopRound
+        ? normalizeNumber(
+          latestQualityLoopRound.round
+          ?? latestQualityLoopRound.round_index
+          ?? latestQualityLoopRound.roundNo
+          ?? latestQualityLoopRound.index,
+        )
+        : 0;
       const next: ProjectKnowledgeModeState = {
         mode: modePayload.mode,
         status: normalizeModeStatus(modePayload.status),
@@ -882,6 +895,7 @@ function parseBackendProcessingModes(
           )
           : normalizeNumber(modePayload.relation_count),
         qualityScore: normalizeNullableNumber(modePayload.quality_score),
+        auditRound: qualityLoopRoundValue > 0 ? qualityLoopRoundValue : undefined,
         corReadyChunkCount: isNlpMode
           ? Math.max(
             normalizeNumber(nlpCorStage?.ready_chunks),
@@ -2150,7 +2164,7 @@ export function useProjectKnowledgeState(
   );
 
   const processingModes = useMemo<ProjectKnowledgeModeState[]>(() => {
-    const backendModes = parseBackendProcessingModes(syncState);
+    const backendModes = parseBackendProcessingModes(syncState, latestQualityLoopJob);
     if (backendModes) {
       return backendModes;
     }

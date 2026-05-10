@@ -18,6 +18,34 @@ import type { ProjectKnowledgeQuantizationStage } from "../../../api/types";
 import ProjectKnowledgeNerPanel from "./ProjectKnowledgeNerPanel";
 
 type ProjectKnowledgeNlpStageKey = "ner" | "syntax" | "cor";
+type ProjectKnowledgeLayerKey =
+  | "dataPreprocess"
+  | "lexical"
+  | "phrase"
+  | "syntax"
+  | "semantic"
+  | "pragmatic";
+type ProjectKnowledgeLayerStatus = "ready" | "running" | "pending" | "unavailable";
+
+interface ProjectKnowledgeLayerCellMetric {
+  label: string;
+  value: string | number;
+}
+
+interface ProjectKnowledgeLayerCell {
+  status: ProjectKnowledgeLayerStatus;
+  summary: string;
+  reason?: string;
+  metrics: ProjectKnowledgeLayerCellMetric[];
+}
+
+interface ProjectKnowledgeLayerRow {
+  key: ProjectKnowledgeLayerKey;
+  title: string;
+  description: string;
+  l2: ProjectKnowledgeLayerCell;
+  l3: ProjectKnowledgeLayerCell;
+}
 
 interface ProjectKnowledgeProcessingPanelProps {
   knowledgeState: ProjectKnowledgeState;
@@ -176,13 +204,10 @@ function actionLabel(
 function allowedQuantizationStages(
   mode: ProjectKnowledgeModeState["mode"],
 ): ProjectKnowledgeQuantizationStage[] {
-  if (mode === "fast") {
-    return ["l1"];
-  }
   if (mode === "nlp") {
-    return ["l1", "l2"];
+    return ["l2"];
   }
-  return ["l1", "l2", "l3"];
+  return ["l3"];
 }
 
 function quantizationStageLabel(
@@ -196,28 +221,6 @@ function quantizationStageLabel(
     return t("projects.knowledge.processing.quantStageL2", "L2");
   }
   return t("projects.knowledge.processing.quantStageL3", "L3");
-}
-
-function describeL1Hint(
-  knowledgeState: ProjectKnowledgeState,
-  t: ReturnType<typeof useTranslation>["t"],
-): string {
-  const indexedSources = Math.max(0, knowledgeState.quantMetrics.indexedSources || 0);
-  const totalSources = Math.max(0, knowledgeState.quantMetrics.totalSources || 0);
-  if (totalSources > 0 && indexedSources < totalSources) {
-    return `${t(
-      "projects.knowledge.processing.l1HintProgressPrefix",
-      "L1 基础索引进度",
-    )} ${indexedSources}/${totalSources}，${t(
-      "projects.knowledge.processing.l1HintProgressSuffix",
-      "详细状态请看 Sources / Signals。",
-    )}`;
-  }
-
-  return t(
-    "projects.knowledge.processing.l1HintReady",
-    "L1 基础索引状态请看 Sources / Signals；Processing 这里聚焦 L2 / L3 深加工。",
-  );
 }
 
 function describeStaleSources(
@@ -500,6 +503,262 @@ function buildNlpStageStats(
   ];
 }
 
+function mapModeToLayerStatus(
+  mode: ProjectKnowledgeModeState | null,
+  ready: boolean,
+  unavailable = false,
+): ProjectKnowledgeLayerStatus {
+  if (unavailable) {
+    return "unavailable";
+  }
+  if (ready) {
+    return mode?.status === "running" || mode?.status === "queued" ? "running" : "ready";
+  }
+  if (mode?.status === "running" || mode?.status === "queued") {
+    return "running";
+  }
+  return "pending";
+}
+
+function buildKnowledgeLayerRows(
+  params: {
+    l2Mode: ProjectKnowledgeModeState | null;
+    l3Mode: ProjectKnowledgeModeState | null;
+    quantMetrics: ProjectKnowledgeState["quantMetrics"];
+    t: ReturnType<typeof useTranslation>["t"];
+  },
+): ProjectKnowledgeLayerRow[] {
+  const { l2Mode, l3Mode, quantMetrics, t } = params;
+  const hasL3Outputs = modeHasIndependentOutputs(l3Mode);
+  const l3Running = l3Mode?.status === "running" || l3Mode?.status === "queued";
+  const l3Ready = Boolean(l3Mode && hasL3Outputs && l3Mode.status === "ready");
+  const l2TokenCount = Math.max(0, Number(l2Mode?.syntaxTokenCount || quantMetrics.tokenCount || 0));
+  const l2PosCount = Math.max(0, Number(l2Mode?.syntaxPosCount || 0));
+  const l2PosCoverage = formatPercent(Number(l2Mode?.posCoverageOnDocumentTokens || 0));
+  const l2SyntaxRelations = Math.max(0, Number(l2Mode?.syntaxRelationCount || 0));
+  const l2SyntaxSentences = Math.max(0, Number(l2Mode?.syntaxSentenceCount || 0));
+  const l2NerEntities = Math.max(0, Number(l2Mode?.nerEntityCount || 0));
+  const l2NerReadyChunks = Math.max(0, Number(l2Mode?.nerReadyChunkCount || 0));
+  const l3Quality = l3Mode?.qualityScore != null
+    ? `${Math.round(Number(l3Mode.qualityScore) * 100)}%`
+    : t("projects.knowledge.processing.metricPending", "生成中");
+
+  const buildL3Cell = (
+    summaryKey: string,
+    summaryFallback: string,
+    metrics: ProjectKnowledgeLayerCellMetric[],
+    reason?: string,
+  ): ProjectKnowledgeLayerCell => ({
+    status: mapModeToLayerStatus(l3Mode, l3Ready, false),
+    summary: l3Ready
+      ? t(summaryKey, summaryFallback)
+      : l3Running
+        ? t("projects.knowledge.processing.l3AuditRunning", "多智能体审计运行中")
+        : t("projects.knowledge.processing.l3AuditPending", "等待多智能体增强产物"),
+    reason,
+    metrics,
+  });
+
+  return [
+    {
+      key: "dataPreprocess",
+      title: t("projects.knowledge.processing.layerDataPreprocessTitle", "数据层与预处理层"),
+      description: t(
+        "projects.knowledge.processing.layerDataPreprocessDesc",
+        "以 inlinear 为输入基础，完成分词标准化并建立后续分析入口。",
+      ),
+      l2: {
+        status: mapModeToLayerStatus(l2Mode, l2TokenCount > 0),
+        summary: t("projects.knowledge.processing.layerDataPreprocessL2", "inlinear 分词已纳入 L2 精确计量"),
+        metrics: [
+          {
+            label: t("projects.knowledge.processing.syntaxTokens", "Token 数"),
+            value: l2TokenCount,
+          },
+        ],
+      },
+      l3: buildL3Cell(
+        "projects.knowledge.processing.layerDataPreprocessL3",
+        "审计预处理完整性与输入一致性",
+        [
+          {
+            label: t("projects.knowledge.processing.auditStatus", "审计状态"),
+            value: l3Ready
+              ? t("projects.knowledge.processing.stageReady", "已就绪")
+              : l3Running
+                ? t("projects.knowledge.processing.stageRunning", "运行中")
+                : t("projects.knowledge.processing.stagePending", "待执行"),
+          },
+        ],
+      ),
+    },
+    {
+      key: "lexical",
+      title: t("projects.knowledge.processing.layerLexicalTitle", "词汇层次"),
+      description: t(
+        "projects.knowledge.processing.layerLexicalDesc",
+        "聚焦分词与词性标注，反映词法处理覆盖度与稳定性。",
+      ),
+      l2: {
+        status: mapModeToLayerStatus(l2Mode, l2PosCount > 0),
+        summary: t("projects.knowledge.processing.layerLexicalL2", "分词与词性已进入 L2 精确统计"),
+        metrics: [
+          {
+            label: t("projects.knowledge.processing.syntaxPosCount", "词性标注数"),
+            value: l2PosCount,
+          },
+          {
+            label: t("projects.knowledge.processing.posCoverageDocument", "词性覆盖率(文档分词口径)"),
+            value: l2PosCoverage,
+          },
+        ],
+      },
+      l3: buildL3Cell(
+        "projects.knowledge.processing.layerLexicalL3",
+        "审计词法质量与异常分布",
+        [
+          {
+            label: t("projects.knowledge.processing.auditFocus", "审计焦点"),
+            value: t("projects.knowledge.processing.auditFocusLexical", "词性一致性/异常词分布"),
+          },
+        ],
+      ),
+    },
+    {
+      key: "phrase",
+      title: t("projects.knowledge.processing.layerPhraseTitle", "短语层次"),
+      description: t(
+        "projects.knowledge.processing.layerPhraseDesc",
+        "短语边界与短语类型识别能力，当前以占位状态呈现。",
+      ),
+      l2: {
+        status: mapModeToLayerStatus(l2Mode, false, true),
+        summary: t("projects.knowledge.processing.layerPhraseL2", "短语层指标待实现"),
+        reason: "PHRASE_LAYER_NOT_IMPLEMENTED",
+        metrics: [
+          {
+            label: t("projects.knowledge.processing.stageReason", "原因"),
+            value: "PHRASE_LAYER_NOT_IMPLEMENTED",
+          },
+        ],
+      },
+      l3: {
+        status: mapModeToLayerStatus(l3Mode, false, true),
+        summary: t("projects.knowledge.processing.layerPhraseL3", "短语层审计占位，等待底层能力接入"),
+        reason: "PHRASE_LAYER_NOT_IMPLEMENTED",
+        metrics: [
+          {
+            label: t("projects.knowledge.processing.auditStatus", "审计状态"),
+            value: t("projects.knowledge.processing.stageUnavailable", "不可用"),
+          },
+        ],
+      },
+    },
+    {
+      key: "syntax",
+      title: t("projects.knowledge.processing.layerSyntaxTitle", "句法层次"),
+      description: t(
+        "projects.knowledge.processing.layerSyntaxDesc",
+        "面向句法依存关系与句子结构化，提供关系构建的基础。",
+      ),
+      l2: {
+        status: mapModeToLayerStatus(l2Mode, l2SyntaxRelations > 0),
+        summary: t("projects.knowledge.processing.layerSyntaxL2", "句法结构化指标已进入 L2"),
+        metrics: [
+          {
+            label: t("projects.knowledge.processing.syntaxSentences", "句子数"),
+            value: l2SyntaxSentences,
+          },
+          {
+            label: t("projects.knowledge.processing.syntaxRelations", "句法关系数"),
+            value: l2SyntaxRelations,
+          },
+        ],
+      },
+      l3: buildL3Cell(
+        "projects.knowledge.processing.layerSyntaxL3",
+        "审计句法关系一致性与结构完整性",
+        [
+          {
+            label: t("projects.knowledge.processing.auditFocus", "审计焦点"),
+            value: t("projects.knowledge.processing.auditFocusSyntax", "依存关系一致性"),
+          },
+        ],
+      ),
+    },
+    {
+      key: "semantic",
+      title: t("projects.knowledge.processing.layerSemanticTitle", "语义层次"),
+      description: t(
+        "projects.knowledge.processing.layerSemanticDesc",
+        "关注上下文语义角色与实体语义关联，支撑知识图谱语义质量。",
+      ),
+      l2: {
+        status: mapModeToLayerStatus(l2Mode, l2NerEntities > 0 || l2NerReadyChunks > 0),
+        summary: t("projects.knowledge.processing.layerSemanticL2", "NER 语义抽取作为 L2 核心计量"),
+        metrics: [
+          {
+            label: t("projects.knowledge.processing.nerEntities", "识别实体数"),
+            value: l2NerEntities,
+          },
+          {
+            label: t("projects.knowledge.processing.readyChunks", "就绪标准化文档数"),
+            value: l2NerReadyChunks,
+          },
+        ],
+      },
+      l3: buildL3Cell(
+        "projects.knowledge.processing.layerSemanticL3",
+        "审计语义冲突并增强实体关系一致性",
+        [
+          {
+            label: t("projects.knowledge.processing.auditFocus", "审计焦点"),
+            value: t("projects.knowledge.processing.auditFocusSemantic", "语义冲突/实体归一"),
+          },
+        ],
+      ),
+    },
+    {
+      key: "pragmatic",
+      title: t("projects.knowledge.processing.layerPragmaticTitle", "语用与推理层次"),
+      description: t(
+        "projects.knowledge.processing.layerPragmaticDesc",
+        "结合上下文与多智能体协作进行高阶推理、审计与知识增强。",
+      ),
+      l2: {
+        status: "pending",
+        summary: t("projects.knowledge.processing.layerPragmaticL2", "该层由 L3 负责，L2 仅保留占位说明"),
+        metrics: [
+          {
+            label: t("projects.knowledge.processing.layerOwner", "负责层"),
+            value: "L3",
+          },
+        ],
+      },
+      l3: {
+        status: mapModeToLayerStatus(l3Mode, l3Ready),
+        summary: l3Ready
+          ? t("projects.knowledge.processing.layerPragmaticL3", "多智能体推理增强已产出可消费结果")
+          : l3Running
+            ? t("projects.knowledge.processing.l3ReasoningRunning", "多智能体推理增强运行中")
+            : t("projects.knowledge.processing.l3ReasoningPending", "等待多智能体推理增强结果"),
+        metrics: [
+          {
+            label: t("projects.knowledge.processing.qualityScore", "质量分"),
+            value: l3Quality,
+          },
+          {
+            label: t("projects.knowledge.processing.auditRound", "审计轮次"),
+            value: l3Mode?.auditRound
+              ? `#${l3Mode.auditRound}`
+              : l3Mode?.runId || t("projects.knowledge.processing.metricUnavailable", "未产出"),
+          },
+        ],
+      },
+    },
+  ];
+}
+
 function nlpStageTagColor(
   status: "ready" | "running" | "pending" | "unavailable",
 ): string {
@@ -670,12 +929,13 @@ export default function ProjectKnowledgeProcessingPanel(
 ) {
   const { t } = useTranslation();
   const [selectedStages, setSelectedStages] = useState<Record<string, ProjectKnowledgeQuantizationStage>>({
-    fast: "l1",
     nlp: "l2",
     agentic: "l3",
   });
   const launchMode = props.knowledgeState.processingLaunchMode;
-  const visibleModes = props.knowledgeState.processingCompareModes;
+  const visibleModes = props.knowledgeState.processingCompareModes.filter(
+    (mode) => mode.mode === "nlp" || mode.mode === "agentic",
+  );
   const staleModes = new Set(props.knowledgeState.processingFreshness.staleModes);
   const hasStaleProcessing = props.knowledgeState.processingFreshness.stale;
   const l2Mode = visibleModes.find((mode) => mode.mode === "nlp") || null;
@@ -686,7 +946,12 @@ export default function ProjectKnowledgeProcessingPanel(
   const { entityDelta, relationDelta } = props.knowledgeState.processingCompareDelta;
   const staleTooltip = describeStaleSources(props.knowledgeState.processingFreshness, t);
   const staleInlineHint = describeInlineStaleHint(props.knowledgeState.processingFreshness, t);
-  const l1Hint = describeL1Hint(props.knowledgeState, t);
+  const layerRows = buildKnowledgeLayerRows({
+    l2Mode,
+    l3Mode,
+    quantMetrics: props.knowledgeState.quantMetrics,
+    t,
+  });
   const latestRequestedMode = props.knowledgeState.syncState?.latest_requested_mode;
   const activeQuantizationStage = String(props.knowledgeState.syncState?.quantization_stage || "").trim().toLowerCase();
   const pipelineTraceStages = props.knowledgeState.syncState?.pipeline_trace?.stages || [];
@@ -750,10 +1015,9 @@ export default function ProjectKnowledgeProcessingPanel(
             <Typography.Text type="secondary">
               {t(
                 "projects.knowledge.processingRoleHint",
-                "这里只展示 L2 与 L3 的处理进度，重点聚焦实体与关系的构建、增强与呈现。",
+                "Processing 仅展示 L2 精确计量与 L3 多智能体审计增强，不再承载 L1 展示。",
               )}
             </Typography.Text>
-            <Typography.Text type="secondary">{l1Hint}</Typography.Text>
             {hasStaleProcessing ? (
               <Tooltip title={staleTooltip}>
                 <Tag color="orange">
@@ -773,26 +1037,71 @@ export default function ProjectKnowledgeProcessingPanel(
         </div>
       </div>
 
-      <div className={styles.projectKnowledgeSignalGrid}>
-        <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("projects.knowledge.processing.l2Entities", "NER 实体数")}</Typography.Text>
-          <Typography.Text strong>{formatEntityValue(l2Mode, t)}</Typography.Text>
-        </div>
-        <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("projects.knowledge.processing.l2Relations", "Syntax 句法关系数")}</Typography.Text>
-          <Typography.Text strong>{displayRelationCount(l2Mode)}</Typography.Text>
-        </div>
-        <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("projects.knowledge.processing.l3Entities", "L3 实体数")}</Typography.Text>
-          <Typography.Text strong>{formatModeCountValue(l3Mode, l3Mode?.entityCount || 0, t)}</Typography.Text>
-        </div>
-        <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("projects.knowledge.processing.l3Relations", "L3 关系数")}</Typography.Text>
-          <Typography.Text strong>{formatModeCountValue(l3Mode, l3Mode?.relationCount || 0, t)}</Typography.Text>
-        </div>
-      </div>
-
       <div className={styles.projectKnowledgeProcessingScrollBody}>
+        <div className={styles.projectKnowledgeProcessingStickySummary}>
+          <div className={styles.projectKnowledgeSignalGrid}>
+            <div className={styles.projectKnowledgeSignalCard}>
+              <Typography.Text type="secondary">{t("projects.knowledge.processing.l2Entities", "NER 实体数")}</Typography.Text>
+              <Typography.Text strong>{formatEntityValue(l2Mode, t)}</Typography.Text>
+            </div>
+            <div className={styles.projectKnowledgeSignalCard}>
+              <Typography.Text type="secondary">{t("projects.knowledge.processing.l2Relations", "Syntax 句法关系数")}</Typography.Text>
+              <Typography.Text strong>{displayRelationCount(l2Mode)}</Typography.Text>
+            </div>
+            <div className={styles.projectKnowledgeSignalCard}>
+              <Typography.Text type="secondary">{t("projects.knowledge.processing.l3Entities", "L3 实体数")}</Typography.Text>
+              <Typography.Text strong>{formatModeCountValue(l3Mode, l3Mode?.entityCount || 0, t)}</Typography.Text>
+            </div>
+            <div className={styles.projectKnowledgeSignalCard}>
+              <Typography.Text type="secondary">{t("projects.knowledge.processing.l3Relations", "L3 关系数")}</Typography.Text>
+              <Typography.Text strong>{formatModeCountValue(l3Mode, l3Mode?.relationCount || 0, t)}</Typography.Text>
+            </div>
+          </div>
+        </div>
+
+        <div className={styles.projectKnowledgeLayerMatrix}>
+          <div className={styles.projectKnowledgeLayerMatrixHeader}>
+            <Typography.Text strong>
+              {t("projects.knowledge.processing.layerDimension", "知识计量六层")}
+            </Typography.Text>
+            <Typography.Text strong>
+              {t("projects.knowledge.processing.layerL2Column", "L2 精确量化")}
+            </Typography.Text>
+            <Typography.Text strong>
+              {t("projects.knowledge.processing.layerL3Column", "L3 审计增强")}
+            </Typography.Text>
+          </div>
+          {layerRows.map((row) => (
+            <div key={row.key} className={styles.projectKnowledgeLayerMatrixRow}>
+              <div className={styles.projectKnowledgeLayerMatrixDimension}>
+                <Typography.Text strong>{row.title}</Typography.Text>
+                <Typography.Text type="secondary">{row.description}</Typography.Text>
+              </div>
+              {[row.l2, row.l3].map((cell, index) => (
+                <div key={`${row.key}-${index}`} className={styles.projectKnowledgeLayerMatrixCell}>
+                  <div className={styles.projectKnowledgeModeMeta}>
+                    <Tag color={nlpStageTagColor(cell.status)}>{nlpStageStatusLabel(cell.status, t)}</Tag>
+                  </div>
+                  <Typography.Text>{cell.summary}</Typography.Text>
+                  <div className={styles.projectKnowledgeProcessingStageMetrics}>
+                    {cell.metrics.map((metric) => (
+                      <div key={`${row.key}-${index}-${metric.label}`} className={styles.projectKnowledgeProcessingStageMetric}>
+                        <Typography.Text type="secondary">{metric.label}</Typography.Text>
+                        <Typography.Text strong>{metric.value}</Typography.Text>
+                      </div>
+                    ))}
+                  </div>
+                  {cell.reason ? (
+                    <Typography.Text type="secondary">
+                      {t("projects.knowledge.processing.stageReason", "原因")}: {cell.reason}
+                    </Typography.Text>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+
         <div className={styles.projectKnowledgeProcessingCompareGrid}>
           {visibleModes.map((mode) => {
             const disabledReason = launchDisabledReason(mode, props.knowledgeState, t);

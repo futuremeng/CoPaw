@@ -148,7 +148,7 @@ function resolveCurrentDocument(
   const selectedStem = normalizedStem(selectedFilePath);
 
   for (const doc of documents) {
-    const rawDoc = doc as Record<string, unknown>;
+    const rawDoc = doc as unknown as Record<string, unknown>;
     const candidates = [
       doc.path,
       doc.title,
@@ -529,14 +529,24 @@ export default function ProjectDocumentKnowledgeVisualization(
 
   const fallbackSourceId = useMemo(() => {
     const first = projectSources.find((item) => {
-      const sourceId = String(item.source_id || item.id || "").trim();
+      const sourceId = String(item.id || "").trim();
       return sourceId.length > 0;
     });
-    return String(first?.source_id || first?.id || "").trim();
+    return String(first?.id || "").trim();
   }, [projectSources]);
 
+  const mappedProjectSourceId = useMemo(() => {
+    const normalized = String(projectSourceId || "").trim();
+    if (!normalized) {
+      return "";
+    }
+    return projectSources.some((item) => String(item.id || "").trim() === normalized)
+      ? normalized
+      : "";
+  }, [projectSourceId, projectSources]);
+
   const selectedSourceId = String(
-    preferredSourceId || projectSourceId || fallbackSourceId || "",
+    preferredSourceId || mappedProjectSourceId || fallbackSourceId || "",
   ).trim();
 
   useEffect(() => {
