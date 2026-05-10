@@ -63,10 +63,19 @@ class LazyGroup(click.Group):
         super().__init__(*args, **kwargs)
         self.lazy_subcommands = lazy_subcommands or {}
 
+    @staticmethod
+    def _is_copaw_entry(ctx: click.Context | None) -> bool:
+        name = str(getattr(ctx, "info_name", "") or "").strip().lower()
+        return name == "copaw"
+
     def list_commands(self, ctx):
         """Return all command names (both eager and lazy)."""
         base = super().list_commands(ctx)
-        return sorted(set(base) | set(self.lazy_subcommands.keys()))
+        lazy = set(self.lazy_subcommands.keys())
+        # Keep NLP commands under `copaw` entrypoint.
+        if not self._is_copaw_entry(ctx):
+            lazy.discard("nlp")
+        return sorted(set(base) | lazy)
 
     def get_command(self, ctx, cmd_name):
         """Get command, loading lazily if needed."""
@@ -74,6 +83,10 @@ class LazyGroup(click.Group):
         cmd = super().get_command(ctx, cmd_name)
         if cmd is not None:
             return cmd
+
+        # Keep NLP commands under `copaw` entrypoint.
+        if cmd_name == "nlp" and not self._is_copaw_entry(ctx):
+            return None
 
         # Try lazy commands
         if cmd_name in self.lazy_subcommands:
@@ -116,6 +129,7 @@ class LazyGroup(click.Group):
         "cron": ("qwenpaw.cli.cron_cmd", "cron_group", ".cron_cmd"),
         "env": ("qwenpaw.cli.env_cmd", "env_group", ".env_cmd"),
         "init": ("qwenpaw.cli.init_cmd", "init_cmd", ".init_cmd"),
+        "nlp": ("qwenpaw.cli.nlp_cmd", "nlp_group", ".nlp_cmd"),
         "models": (
             "qwenpaw.cli.providers_cmd",
             "models_group",
