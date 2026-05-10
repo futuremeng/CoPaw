@@ -110,6 +110,7 @@ export interface ProjectKnowledgeModeOutputPayload {
 export interface ProjectKnowledgeModeMetricsPayload {
   mode: ProjectKnowledgeProcessingMode;
   evidence_paths?: Record<string, string>;
+  evidence_bundles?: Record<string, ProjectKnowledgeMetricEvidenceBundlePayload>;
   document_count?: number;
   chunk_count?: number;
   entity_count?: number;
@@ -139,6 +140,15 @@ export interface ProjectKnowledgeModeMetricsPayload {
   pos_coverage_on_syntax_tokens?: number;
   pos_coverage_on_document_tokens?: number;
   syntax_relation_count?: number;
+}
+
+export interface ProjectKnowledgeMetricEvidenceBundlePayload {
+  metric_key: string;
+  metric_kind: "aggregate" | "derived" | "single_artifact";
+  formula?: string;
+  source_count?: number;
+  artifact_paths?: string[];
+  sample_source_paths?: string[];
 }
 
 export interface ProjectKnowledgeL2ProgressPayload {

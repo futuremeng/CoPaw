@@ -1,4 +1,5 @@
-import { Button, Tag, Tooltip, Typography } from "antd";
+import { Button, Modal, Tag, Tooltip, Typography } from "antd";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import styles from "./index.module.less";
 import type {
@@ -6,7 +7,11 @@ import type {
   ProjectKnowledgeModeState,
   ProjectKnowledgeState,
 } from "./useProjectKnowledgeState";
-import type { ProjectKnowledgeModeMetricsPayload } from "../../../api/types";
+import type {
+  ProjectKnowledgeMetricEvidenceBundlePayload,
+  ProjectKnowledgeModeMetricsPayload,
+  ProjectKnowledgeProcessingMode,
+} from "../../../api/types";
 
 type ProjectKnowledgeNlpStageKey = "ner" | "syntax" | "cor";
 type ProjectKnowledgeLayerKey =
@@ -21,6 +26,7 @@ type ProjectKnowledgeLayerStatus = "ready" | "running" | "pending" | "unavailabl
 interface ProjectKnowledgeLayerCellMetric {
   label: string;
   value: string | number;
+  evidenceKey?: string;
   evidencePath?: string;
 }
 
@@ -226,11 +232,13 @@ function buildKnowledgeLayerRows(
           {
             label: t("projects.knowledge.documents", "文档数"),
             value: l2DocumentCount,
+            evidenceKey: "document_count",
             evidencePath: resolveEvidencePathByKey(l2EvidencePaths, "document_count"),
           },
           {
             label: t("projects.knowledge.processing.syntaxTokens", "Token 数"),
             value: l2TokenCount,
+            evidenceKey: "syntax_token_count",
             evidencePath: resolveEvidencePathByKey(l2EvidencePaths, "syntax_token_count"),
           },
         ],
@@ -246,6 +254,7 @@ function buildKnowledgeLayerRows(
               : l3Running
                 ? t("projects.knowledge.processing.stageRunning", "运行中")
                 : t("projects.knowledge.processing.stagePending", "待执行"),
+            evidenceKey: "audit_status",
             evidencePath: resolveEvidencePathByKey(l3EvidencePaths, "audit_status"),
           },
         ],
@@ -265,11 +274,13 @@ function buildKnowledgeLayerRows(
           {
             label: t("projects.knowledge.processing.syntaxPosCount", "词性标注数"),
             value: l2PosCount,
+            evidenceKey: "syntax_pos_count",
             evidencePath: resolveEvidencePathByKey(l2EvidencePaths, "syntax_pos_count"),
           },
           {
             label: t("projects.knowledge.processing.posCoverageDocument", "词性覆盖率(文档分词口径)"),
             value: l2PosCoverage,
+            evidenceKey: "pos_coverage_on_document_tokens",
             evidencePath: resolveEvidencePathByKey(l2EvidencePaths, "pos_coverage_on_document_tokens"),
           },
         ],
@@ -281,6 +292,7 @@ function buildKnowledgeLayerRows(
           {
             label: t("projects.knowledge.processing.auditFocus", "审计焦点"),
             value: t("projects.knowledge.processing.auditFocusLexical", "词性一致性/异常词分布"),
+            evidenceKey: "audit_focus",
             evidencePath: resolveEvidencePathByKey(l3EvidencePaths, "audit_focus"),
           },
         ],
@@ -330,11 +342,13 @@ function buildKnowledgeLayerRows(
           {
             label: t("projects.knowledge.processing.syntaxSentences", "句子数"),
             value: l2SyntaxSentences,
+            evidenceKey: "syntax_sentence_count",
             evidencePath: resolveEvidencePathByKey(l2EvidencePaths, "syntax_sentence_count"),
           },
           {
             label: t("projects.knowledge.processing.syntaxRelations", "句法关系数"),
             value: l2SyntaxRelations,
+            evidenceKey: "syntax_relation_count",
             evidencePath: resolveEvidencePathByKey(l2EvidencePaths, "syntax_relation_count"),
           },
         ],
@@ -346,6 +360,7 @@ function buildKnowledgeLayerRows(
           {
             label: t("projects.knowledge.processing.auditFocus", "审计焦点"),
             value: t("projects.knowledge.processing.auditFocusSyntax", "依存关系一致性"),
+            evidenceKey: "audit_focus",
             evidencePath: resolveEvidencePathByKey(l3EvidencePaths, "audit_focus"),
           },
         ],
@@ -365,11 +380,13 @@ function buildKnowledgeLayerRows(
           {
             label: t("projects.knowledge.processing.nerEntities", "识别实体数"),
             value: l2NerEntities,
+            evidenceKey: "ner_entity_count",
             evidencePath: resolveEvidencePathByKey(l2EvidencePaths, "ner_entity_count"),
           },
           {
             label: t("projects.knowledge.processing.readyChunks", "就绪标准化文档数"),
             value: l2NerReadyChunks,
+            evidenceKey: "ner_ready_chunk_count",
             evidencePath: resolveEvidencePathByKey(l2EvidencePaths, "ner_ready_chunk_count"),
           },
         ],
@@ -381,6 +398,7 @@ function buildKnowledgeLayerRows(
           {
             label: t("projects.knowledge.processing.auditFocus", "审计焦点"),
             value: t("projects.knowledge.processing.auditFocusSemantic", "语义冲突/实体归一"),
+            evidenceKey: "audit_focus",
             evidencePath: resolveEvidencePathByKey(l3EvidencePaths, "audit_focus"),
           },
         ],
@@ -414,6 +432,7 @@ function buildKnowledgeLayerRows(
           {
             label: t("projects.knowledge.processing.qualityScore", "质量分"),
             value: l3Quality,
+            evidenceKey: "quality_score",
             evidencePath: resolveEvidencePathByKey(l3EvidencePaths, "quality_score"),
           },
           {
@@ -421,6 +440,7 @@ function buildKnowledgeLayerRows(
             value: l3Mode?.auditRound
               ? `#${l3Mode.auditRound}`
               : l3Mode?.runId || t("projects.knowledge.processing.metricUnavailable", "未产出"),
+            evidenceKey: "audit_round",
             evidencePath: resolveEvidencePathByKey(l3EvidencePaths, "audit_round"),
           },
           {
@@ -431,6 +451,7 @@ function buildKnowledgeLayerRows(
                 relations: relationDelta,
               })
               : t("projects.knowledge.processing.outputPendingLong", "等待形成独立增强结果"),
+            evidenceKey: "enhancement_delta",
             evidencePath: resolveEvidencePathByKey(l3EvidencePaths, "enhancement_delta"),
           },
         ],
@@ -474,6 +495,15 @@ export default function ProjectKnowledgeProcessingPanel(
   props: ProjectKnowledgeProcessingPanelProps,
 ) {
   const { t } = useTranslation();
+  const [activeEvidence, setActiveEvidence] = useState<{
+    mode: ProjectKnowledgeProcessingMode;
+    metricLabel: string;
+    metricValue: string | number;
+    metricKey: string;
+    summary: string;
+    bundle: ProjectKnowledgeMetricEvidenceBundlePayload | null;
+    fallbackPath: string;
+  } | null>(null);
   const visibleModes = props.knowledgeState.processingCompareModes.filter(
     (mode) => mode.mode === "nlp" || mode.mode === "agentic",
   );
@@ -483,8 +513,21 @@ export default function ProjectKnowledgeProcessingPanel(
   const modeMetricsPayload = (props.knowledgeState.syncState?.mode_metrics || {}) as Partial<Record<string, ProjectKnowledgeModeMetricsPayload>>;
   const l2EvidencePaths = (modeMetricsPayload.nlp?.evidence_paths || {}) as Record<string, string>;
   const l3EvidencePaths = (modeMetricsPayload.agentic?.evidence_paths || {}) as Record<string, string>;
+  const l2EvidenceBundles = useMemo(
+    () => (modeMetricsPayload.nlp?.evidence_bundles || {}) as Record<string, ProjectKnowledgeMetricEvidenceBundlePayload>,
+    [modeMetricsPayload.nlp?.evidence_bundles],
+  );
+  const l3EvidenceBundles = useMemo(
+    () => (modeMetricsPayload.agentic?.evidence_bundles || {}) as Record<string, ProjectKnowledgeMetricEvidenceBundlePayload>,
+    [modeMetricsPayload.agentic?.evidence_bundles],
+  );
   const { entityDelta, relationDelta } = props.knowledgeState.processingCompareDelta;
   const staleTooltip = describeStaleSources(props.knowledgeState.processingFreshness, t);
+  const evidencePathsForModal = activeEvidence?.bundle?.artifact_paths?.length
+    ? activeEvidence.bundle.artifact_paths
+    : activeEvidence?.fallbackPath
+      ? [activeEvidence.fallbackPath]
+      : [];
   const layerRows = buildKnowledgeLayerRows({
     l2Mode,
     l3Mode,
@@ -590,20 +633,40 @@ export default function ProjectKnowledgeProcessingPanel(
                           <Typography.Text type="secondary">{metric.label}</Typography.Text>
                           <Typography.Text strong>{metric.value}</Typography.Text>
                         </div>
+                        {(() => {
+                          const modeForCell: ProjectKnowledgeProcessingMode = index === 0 ? "nlp" : "agentic";
+                          const evidenceBundle = metric.evidenceKey
+                            ? ((modeForCell === "nlp" ? l2EvidenceBundles : l3EvidenceBundles)[metric.evidenceKey] || null)
+                            : null;
+                          const hasEvidence = Boolean(
+                            metric.evidencePath
+                            || (evidenceBundle?.artifact_paths && evidenceBundle.artifact_paths.length > 0),
+                          );
+                          return (
                         <Button
                           type="link"
                           size="small"
-                          disabled={!metric.evidencePath || !props.onSelectArtifactPath}
+                          disabled={!hasEvidence}
                           style={{ paddingInline: 0, height: "auto" }}
                           onClick={() => {
-                            if (!metric.evidencePath || !props.onSelectArtifactPath) {
+                            if (!metric.evidenceKey || !hasEvidence) {
                               return;
                             }
-                            void props.onSelectArtifactPath(metric.evidencePath);
+                            setActiveEvidence({
+                              mode: modeForCell,
+                              metricLabel: metric.label,
+                              metricValue: metric.value,
+                              metricKey: metric.evidenceKey,
+                              summary: cell.summary,
+                              bundle: evidenceBundle,
+                              fallbackPath: metric.evidencePath || "",
+                            });
                           }}
                         >
-                          {t("projects.knowledge.processing.viewEvidence", "查看证据")}
+                          {t("projects.knowledge.processing.viewBasis", "查看依据")}
                         </Button>
+                          );
+                        })()}
                       </div>
                     ))}
                   </div>
@@ -619,6 +682,72 @@ export default function ProjectKnowledgeProcessingPanel(
         </div>
 
       </div>
+
+      <Modal
+        title={t("projects.knowledge.processing.evidenceDetailTitle", "指标依据详情")}
+        open={Boolean(activeEvidence)}
+        onCancel={() => setActiveEvidence(null)}
+        footer={null}
+        width={680}
+      >
+        {activeEvidence ? (
+          <div className={styles.projectKnowledgeEvidenceDetail}>
+            <Typography.Text strong>{activeEvidence.metricLabel}</Typography.Text>
+            <Typography.Text type="secondary">
+              {t("projects.knowledge.processing.evidenceMetricValue", "当前值")}: {activeEvidence.metricValue}
+            </Typography.Text>
+            <Typography.Text type="secondary">{activeEvidence.summary}</Typography.Text>
+            <Typography.Text>
+              {t(
+                "projects.knowledge.processing.evidenceAggregationHint",
+                "该指标为聚合或派生结果，建议通过计算口径与样本文件联合核实，而非单文件断言。",
+              )}
+            </Typography.Text>
+
+            <div className={styles.projectKnowledgeEvidenceSection}>
+              <Typography.Text strong>
+                {t("projects.knowledge.processing.evidenceFormula", "计算口径")}
+              </Typography.Text>
+              <Typography.Text type="secondary">
+                {activeEvidence.bundle?.formula
+                  || t("projects.knowledge.processing.evidenceFormulaFallback", "未提供明确公式，请结合下方样本文件复核。")}
+              </Typography.Text>
+            </div>
+
+            <div className={styles.projectKnowledgeEvidenceSection}>
+              <Typography.Text strong>
+                {t("projects.knowledge.processing.evidenceSampleFiles", "相关样本文件")}
+              </Typography.Text>
+              <Typography.Text type="secondary">
+                {t("projects.knowledge.processing.evidenceSourceCount", "可用样本数")}: {activeEvidence.bundle?.source_count || evidencePathsForModal.length || 0}
+              </Typography.Text>
+              <div className={styles.projectKnowledgeEvidencePaths}>
+                {evidencePathsForModal.length ? evidencePathsForModal.map((pathText) => (
+                  <div key={pathText} className={styles.projectKnowledgeEvidencePathRow}>
+                    <Typography.Text ellipsis={{ tooltip: pathText }}>{pathText}</Typography.Text>
+                    <Button
+                      size="small"
+                      disabled={!props.onSelectArtifactPath}
+                      onClick={() => {
+                        if (!props.onSelectArtifactPath) {
+                          return;
+                        }
+                        void props.onSelectArtifactPath(pathText);
+                      }}
+                    >
+                      {t("projects.knowledge.processing.evidenceLocateFile", "定位文件")}
+                    </Button>
+                  </div>
+                )) : (
+                  <Typography.Text type="secondary">
+                    {t("projects.knowledge.processing.evidenceNone", "暂无可用依据文件")}
+                  </Typography.Text>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
     </div>
   );
 }

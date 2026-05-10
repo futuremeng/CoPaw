@@ -882,6 +882,74 @@ class ProjectKnowledgeSyncManager:
         return normalized
 
     @staticmethod
+    def _score_mode_evidence_candidate(
+        item: dict[str, Any],
+        *,
+        normalized_kinds: list[str],
+        normalized_path_hints: list[str],
+        normalized_text_hints: list[str],
+    ) -> tuple[int, str]:
+        path_text = str(item.get("path") or "").strip()
+        if not path_text:
+            return -1, ""
+
+        kind_text = str(item.get("kind") or "").strip().lower()
+        label_text = str(item.get("label") or "").strip().lower()
+        lower_path_text = path_text.lower()
+        corpus = f"{kind_text} {label_text} {lower_path_text}"
+
+        score = 0 if not normalized_kinds else -100
+        if normalized_kinds and kind_text in normalized_kinds:
+            score += 120
+        for hint in normalized_path_hints:
+            if hint in lower_path_text:
+                score += 12
+        for hint in normalized_text_hints:
+            if hint in corpus:
+                score += 6
+
+        return score, path_text
+
+    @staticmethod
+    def _pick_mode_evidence_paths(
+        artifacts: list[dict[str, Any]],
+        *,
+        preferred_kinds: list[str] | None = None,
+        path_hints: list[str] | None = None,
+        text_hints: list[str] | None = None,
+        max_paths: int = 3,
+    ) -> list[str]:
+        if not isinstance(artifacts, list) or not artifacts:
+            return []
+
+        normalized_kinds = ProjectKnowledgeSyncManager._normalize_evidence_list(preferred_kinds)
+        normalized_path_hints = ProjectKnowledgeSyncManager._normalize_evidence_list(path_hints)
+        normalized_text_hints = ProjectKnowledgeSyncManager._normalize_evidence_list(text_hints)
+
+        ranked: list[tuple[int, str]] = []
+        for item in artifacts:
+            if not isinstance(item, dict):
+                continue
+            score, path_text = ProjectKnowledgeSyncManager._score_mode_evidence_candidate(
+                item,
+                normalized_kinds=normalized_kinds,
+                normalized_path_hints=normalized_path_hints,
+                normalized_text_hints=normalized_text_hints,
+            )
+            if score > 0 and path_text:
+                ranked.append((score, path_text))
+
+        ranked.sort(key=lambda pair: pair[0], reverse=True)
+        selected: list[str] = []
+        for _score, path_text in ranked:
+            if path_text in selected:
+                continue
+            selected.append(path_text)
+            if len(selected) >= max(1, int(max_paths)):
+                break
+        return selected
+
+    @staticmethod
     def _pick_mode_evidence_path(
         artifacts: list[dict[str, Any]],
         *,
@@ -889,41 +957,14 @@ class ProjectKnowledgeSyncManager:
         path_hints: list[str] | None = None,
         text_hints: list[str] | None = None,
     ) -> str:
-        if not isinstance(artifacts, list) or not artifacts:
-            return ""
-
-        normalized_kinds = ProjectKnowledgeSyncManager._normalize_evidence_list(preferred_kinds)
-        normalized_path_hints = ProjectKnowledgeSyncManager._normalize_evidence_list(path_hints)
-        normalized_text_hints = ProjectKnowledgeSyncManager._normalize_evidence_list(text_hints)
-
-        best_path = ""
-        best_score = -1
-        for item in artifacts:
-            if not isinstance(item, dict):
-                continue
-            path_text = str(item.get("path") or "").strip()
-            if not path_text:
-                continue
-            kind_text = str(item.get("kind") or "").strip().lower()
-            label_text = str(item.get("label") or "").strip().lower()
-            lower_path_text = path_text.lower()
-            corpus = f"{kind_text} {label_text} {lower_path_text}"
-
-            score = 0 if not normalized_kinds else -100
-            if normalized_kinds and kind_text in normalized_kinds:
-                score += 120
-            for hint in normalized_path_hints:
-                if hint in lower_path_text:
-                    score += 12
-            for hint in normalized_text_hints:
-                if hint in corpus:
-                    score += 6
-
-            if score > best_score:
-                best_score = score
-                best_path = path_text
-
-        return best_path if best_score > 0 else ""
+        candidates = ProjectKnowledgeSyncManager._pick_mode_evidence_paths(
+            artifacts,
+            preferred_kinds=preferred_kinds,
+            path_hints=path_hints,
+            text_hints=text_hints,
+            max_paths=1,
+        )
+        return candidates[0] if candidates else ""
 
     @staticmethod
     def _build_mode_metrics(
@@ -939,6 +980,7 @@ class ProjectKnowledgeSyncManager:
             output = mode_outputs.get(mode)
             artifacts = output.get("artifacts") if isinstance(output, dict) else []
             evidence_paths: dict[str, str] = {}
+            evidence_bundles: dict[str, Any] = {}
             quality_score = _safe_float(item.get("quality_score"))
             metrics[mode] = {
                 "mode": mode,
@@ -949,7 +991,35 @@ class ProjectKnowledgeSyncManager:
                 "artifact_count": len(artifacts) if isinstance(artifacts, list) else 0,
                 "quality_score": quality_score,
                 "evidence_paths": evidence_paths,
+                "evidence_bundles": evidence_bundles,
             }
+
+            def _assign_metric_evidence(
+                metric_key: str,
+                *,
+                metric_kind: str,
+                formula: str,
+                preferred_kinds: list[str] | None = None,
+                path_hints: list[str] | None = None,
+                text_hints: list[str] | None = None,
+            ) -> None:
+                candidate_paths = ProjectKnowledgeSyncManager._pick_mode_evidence_paths(
+                    artifacts,
+                    preferred_kinds=preferred_kinds,
+                    path_hints=path_hints,
+                    text_hints=text_hints,
+                    max_paths=3,
+                )
+                evidence_paths[metric_key] = candidate_paths[0] if candidate_paths else ""
+                evidence_bundles[metric_key] = {
+                    "metric_key": metric_key,
+                    "metric_kind": metric_kind,
+                    "formula": formula,
+                    "source_count": len(candidate_paths),
+                    "artifact_paths": candidate_paths,
+                    "sample_source_paths": candidate_paths[:2],
+                }
+
             if mode == "nlp":
                 metrics[mode]["entity_count"] = _safe_int(index_result.get("ner_entity_count"))
                 metrics[mode]["relation_count"] = _safe_int(index_result.get("syntax_relation_count"))
@@ -975,107 +1045,129 @@ class ProjectKnowledgeSyncManager:
                         "syntax_relation_count": _safe_int(index_result.get("syntax_relation_count")),
                     }
                 )
-                evidence_paths.update(
-                    {
-                        "document_count": ProjectKnowledgeSyncManager._pick_mode_evidence_path(
-                            artifacts,
-                            preferred_kinds=["document_graph_manifest", "index"],
-                            path_hints=["manifest", "index"],
-                            text_hints=["document", "source"],
-                        ),
-                        "syntax_token_count": ProjectKnowledgeSyncManager._pick_mode_evidence_path(
-                            artifacts,
-                            preferred_kinds=["graph", "document_graph_manifest"],
-                            path_hints=["graphify", "manifest"],
-                            text_hints=["token", "syntax"],
-                        ),
-                        "syntax_pos_count": ProjectKnowledgeSyncManager._pick_mode_evidence_path(
-                            artifacts,
-                            preferred_kinds=["graph", "document_graph_manifest"],
-                            path_hints=["graphify"],
-                            text_hints=["pos", "syntax", "token"],
-                        ),
-                        "pos_coverage_on_document_tokens": ProjectKnowledgeSyncManager._pick_mode_evidence_path(
-                            artifacts,
-                            preferred_kinds=["graph", "document_graph_manifest"],
-                            path_hints=["graphify"],
-                            text_hints=["coverage", "pos", "syntax"],
-                        ),
-                        "syntax_sentence_count": ProjectKnowledgeSyncManager._pick_mode_evidence_path(
-                            artifacts,
-                            preferred_kinds=["graph"],
-                            path_hints=["graph", "graphify"],
-                            text_hints=["sentence", "syntax"],
-                        ),
-                        "syntax_relation_count": ProjectKnowledgeSyncManager._pick_mode_evidence_path(
-                            artifacts,
-                            preferred_kinds=["graph"],
-                            path_hints=["graph", "graphify"],
-                            text_hints=["relation", "dependency", "syntax"],
-                        ),
-                        "ner_entity_count": ProjectKnowledgeSyncManager._pick_mode_evidence_path(
-                            artifacts,
-                            preferred_kinds=["graph", "document_graph_manifest"],
-                            path_hints=["graph", "graphify"],
-                            text_hints=["ner", "entity"],
-                        ),
-                        "ner_ready_chunk_count": ProjectKnowledgeSyncManager._pick_mode_evidence_path(
-                            artifacts,
-                            preferred_kinds=["document_graph_manifest", "document_graph_dir", "graph"],
-                            path_hints=["manifest", "graphify"],
-                            text_hints=["ner", "chunk"],
-                        ),
-                    }
+                _assign_metric_evidence(
+                    "document_count",
+                    metric_kind="aggregate",
+                    formula="Count distinct indexed documents in NLP-ready scope.",
+                    preferred_kinds=["document_graph_manifest", "index"],
+                    path_hints=["manifest", "index"],
+                    text_hints=["document", "source"],
+                )
+                _assign_metric_evidence(
+                    "syntax_token_count",
+                    metric_kind="aggregate",
+                    formula="Sum syntax token_count over processed chunks.",
+                    preferred_kinds=["graph", "document_graph_manifest"],
+                    path_hints=["graphify", "manifest"],
+                    text_hints=["token", "syntax"],
+                )
+                _assign_metric_evidence(
+                    "syntax_pos_count",
+                    metric_kind="aggregate",
+                    formula="Sum POS tagged tokens in syntax output.",
+                    preferred_kinds=["graph", "document_graph_manifest"],
+                    path_hints=["graphify"],
+                    text_hints=["pos", "syntax", "token"],
+                )
+                _assign_metric_evidence(
+                    "pos_coverage_on_document_tokens",
+                    metric_kind="derived",
+                    formula="syntax_pos_count / syntax_token_count.",
+                    preferred_kinds=["graph", "document_graph_manifest"],
+                    path_hints=["graphify"],
+                    text_hints=["coverage", "pos", "syntax"],
+                )
+                _assign_metric_evidence(
+                    "syntax_sentence_count",
+                    metric_kind="aggregate",
+                    formula="Sum parsed sentence_count across syntax stage.",
+                    preferred_kinds=["graph"],
+                    path_hints=["graph", "graphify"],
+                    text_hints=["sentence", "syntax"],
+                )
+                _assign_metric_evidence(
+                    "syntax_relation_count",
+                    metric_kind="aggregate",
+                    formula="Sum dependency relation edges from syntax graph.",
+                    preferred_kinds=["graph"],
+                    path_hints=["graph", "graphify"],
+                    text_hints=["relation", "dependency", "syntax"],
+                )
+                _assign_metric_evidence(
+                    "ner_entity_count",
+                    metric_kind="aggregate",
+                    formula="Sum extracted named entities after NER normalization.",
+                    preferred_kinds=["graph", "document_graph_manifest"],
+                    path_hints=["graph", "graphify"],
+                    text_hints=["ner", "entity"],
+                )
+                _assign_metric_evidence(
+                    "ner_ready_chunk_count",
+                    metric_kind="aggregate",
+                    formula="Count chunks/documents that passed NER-ready conditions.",
+                    preferred_kinds=["document_graph_manifest", "document_graph_dir", "graph"],
+                    path_hints=["manifest", "graphify"],
+                    text_hints=["ner", "chunk"],
                 )
             if mode == "agentic":
                 metrics[mode]["entity_count"] = _safe_int(item.get("entity_count"))
                 metrics[mode]["relation_count"] = _safe_int(item.get("relation_count"))
                 metrics[mode]["quality_score"] = quality_score
-                evidence_paths.update(
-                    {
-                        "entity_count": ProjectKnowledgeSyncManager._pick_mode_evidence_path(
-                            artifacts,
-                            preferred_kinds=["enriched_graph", "workflow_artifact", "graph"],
-                            path_hints=["enriched", "graph"],
-                            text_hints=["entity", "agentic", "audit", "quality"],
-                        ),
-                        "relation_count": ProjectKnowledgeSyncManager._pick_mode_evidence_path(
-                            artifacts,
-                            preferred_kinds=["enriched_graph", "workflow_artifact", "graph"],
-                            path_hints=["enriched", "graph"],
-                            text_hints=["relation", "agentic", "audit", "quality"],
-                        ),
-                        "quality_score": ProjectKnowledgeSyncManager._pick_mode_evidence_path(
-                            artifacts,
-                            preferred_kinds=["quality_report", "workflow_artifact", "enriched_graph"],
-                            path_hints=["quality", "report", "enriched", "workflow"],
-                            text_hints=["quality", "audit"],
-                        ),
-                        "audit_status": ProjectKnowledgeSyncManager._pick_mode_evidence_path(
-                            artifacts,
-                            preferred_kinds=["workflow_artifact", "quality_report", "enriched_graph", "graph"],
-                            path_hints=["audit", "quality", "enriched", "workflow"],
-                            text_hints=["audit", "agentic", "quality"],
-                        ),
-                        "audit_focus": ProjectKnowledgeSyncManager._pick_mode_evidence_path(
-                            artifacts,
-                            preferred_kinds=["workflow_artifact", "quality_report", "enriched_graph", "graph"],
-                            path_hints=["audit", "quality", "enriched", "workflow"],
-                            text_hints=["audit", "semantic", "syntax", "lexical", "entity", "relation"],
-                        ),
-                        "audit_round": ProjectKnowledgeSyncManager._pick_mode_evidence_path(
-                            artifacts,
-                            preferred_kinds=["workflow_artifact", "quality_report", "enriched_graph"],
-                            path_hints=["workflow", "audit", "quality", "enriched"],
-                            text_hints=["audit", "run", "quality"],
-                        ),
-                        "enhancement_delta": ProjectKnowledgeSyncManager._pick_mode_evidence_path(
-                            artifacts,
-                            preferred_kinds=["enriched_graph", "workflow_artifact", "quality_report", "graph"],
-                            path_hints=["enriched", "graph", "quality", "workflow"],
-                            text_hints=["agentic", "audit", "delta", "entity", "relation"],
-                        ),
-                    }
+                _assign_metric_evidence(
+                    "entity_count",
+                    metric_kind="aggregate",
+                    formula="Count entities after agentic enrichment merge.",
+                    preferred_kinds=["enriched_graph", "workflow_artifact", "graph"],
+                    path_hints=["enriched", "graph"],
+                    text_hints=["entity", "agentic", "audit", "quality"],
+                )
+                _assign_metric_evidence(
+                    "relation_count",
+                    metric_kind="aggregate",
+                    formula="Count relations after agentic enrichment merge.",
+                    preferred_kinds=["enriched_graph", "workflow_artifact", "graph"],
+                    path_hints=["enriched", "graph"],
+                    text_hints=["relation", "agentic", "audit", "quality"],
+                )
+                _assign_metric_evidence(
+                    "quality_score",
+                    metric_kind="derived",
+                    formula="Quality loop score_after / audited quality summary.",
+                    preferred_kinds=["quality_report", "workflow_artifact", "enriched_graph"],
+                    path_hints=["quality", "report", "enriched", "workflow"],
+                    text_hints=["quality", "audit"],
+                )
+                _assign_metric_evidence(
+                    "audit_status",
+                    metric_kind="derived",
+                    formula="Agentic workflow status derived from run state + audit outputs.",
+                    preferred_kinds=["workflow_artifact", "quality_report", "enriched_graph", "graph"],
+                    path_hints=["audit", "quality", "enriched", "workflow"],
+                    text_hints=["audit", "agentic", "quality"],
+                )
+                _assign_metric_evidence(
+                    "audit_focus",
+                    metric_kind="derived",
+                    formula="Audit focus dimensions derived from lexical/syntax/semantic checks.",
+                    preferred_kinds=["workflow_artifact", "quality_report", "enriched_graph", "graph"],
+                    path_hints=["audit", "quality", "enriched", "workflow"],
+                    text_hints=["audit", "semantic", "syntax", "lexical", "entity", "relation"],
+                )
+                _assign_metric_evidence(
+                    "audit_round",
+                    metric_kind="derived",
+                    formula="Audit round index from workflow/quality loop execution trace.",
+                    preferred_kinds=["workflow_artifact", "quality_report", "enriched_graph"],
+                    path_hints=["workflow", "audit", "quality", "enriched"],
+                    text_hints=["audit", "run", "quality"],
+                )
+                _assign_metric_evidence(
+                    "enhancement_delta",
+                    metric_kind="derived",
+                    formula="(L3 entities,relations) - (L2 entities,relations).",
+                    preferred_kinds=["enriched_graph", "workflow_artifact", "quality_report", "graph"],
+                    path_hints=["enriched", "graph", "quality", "workflow"],
+                    text_hints=["agentic", "audit", "delta", "entity", "relation"],
                 )
         return metrics
 

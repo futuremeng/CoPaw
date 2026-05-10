@@ -625,6 +625,7 @@ def test_project_sync_mode_metrics_agentic_evidence_paths_fallback_to_quality_ar
     agentic_output = hydrated["mode_outputs"]["agentic"]
     artifact_kinds = [item["kind"] for item in agentic_output["artifacts"]]
     evidence_paths = hydrated["mode_metrics"]["agentic"]["evidence_paths"]
+    evidence_bundles = hydrated["mode_metrics"]["agentic"]["evidence_bundles"]
 
     assert "quality_report" in artifact_kinds
     assert "enriched_graph" in artifact_kinds
@@ -636,6 +637,10 @@ def test_project_sync_mode_metrics_agentic_evidence_paths_fallback_to_quality_ar
     assert evidence_paths["enhancement_delta"]
     assert evidence_paths["entity_count"].endswith("enriched_graph.json")
     assert evidence_paths["relation_count"].endswith("enriched_graph.json")
+    assert evidence_bundles["quality_score"]["metric_kind"] == "derived"
+    assert evidence_bundles["quality_score"]["source_count"] >= 1
+    assert evidence_bundles["quality_score"]["artifact_paths"]
+    assert evidence_bundles["enhancement_delta"]["formula"]
 
 
 def test_project_sync_state_exposes_idle_semantic_engine_before_source_ready(tmp_path: Path):
