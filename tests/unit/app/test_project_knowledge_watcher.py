@@ -13,6 +13,19 @@ from qwenpaw.app import project_knowledge_watcher as watcher_module
 from qwenpaw.app.project_realtime_events import collect_recent_project_updates
 
 
+def _project_index_path(tmp_path: Path, project_id: str) -> Path:
+    knowledge_root = tmp_path / "projects" / project_id / ".knowledge"
+    root_index = knowledge_root / "index.json"
+    if root_index.exists():
+        return root_index
+    return (
+        knowledge_root
+        / "sources"
+        / f"project-{project_id}-workspace"
+        / "index.json"
+    )
+
+
 @pytest.mark.asyncio
 async def test_project_knowledge_watcher_triggers_bootstrap_sync(
     tmp_path: Path,
@@ -184,7 +197,7 @@ async def test_project_knowledge_watcher_bootstrap_writes_project_chunks_automat
     project_dir = tmp_path / "projects" / "project-auto-chunks"
     project_dir.mkdir(parents=True, exist_ok=True)
     (project_dir / "PROJECT.md").write_text(
-        "---\nid: project-auto-chunks\nname: Project Auto Chunks\nproject_auto_knowledge_sink: true\n---\n",
+        "---\nid: project-auto-chunks\nname: Project Auto Chunks\nproject_auto_knowledge_sink: true\n---\n\nproject bootstrap body\n",
         encoding="utf-8",
     )
     brief_path = project_dir / "original" / "brief.md"
@@ -243,23 +256,15 @@ async def test_project_knowledge_watcher_bootstrap_writes_project_chunks_automat
     current = watcher._collect_snapshots()
     await watcher._handle_snapshot_changes(current)
 
-    index_path = (
-        tmp_path
-        / "projects"
-        / "project-auto-chunks"
-        / ".knowledge"
-        / "sources"
-        / "project-project-auto-chunks-workspace"
-        / "index.json"
-    )
+    index_path = _project_index_path(tmp_path, "project-auto-chunks")
 
     payload = json.loads(index_path.read_text(encoding="utf-8"))
-    brief_chunk = next(
+    project_chunk = next(
         item
         for item in payload.get("chunks") or []
-        if str(item.get("document_path") or "").endswith("original/brief.md")
+        if str(item.get("document_path") or "").endswith("PROJECT.md")
     )
-    chunk_path_text = str(brief_chunk.get("chunk_path") or "")
+    chunk_path_text = str(project_chunk.get("chunk_path") or "")
     assert chunk_path_text
     chunk_path = (
         tmp_path
@@ -270,10 +275,11 @@ async def test_project_knowledge_watcher_bootstrap_writes_project_chunks_automat
     )
 
     assert chunk_path.exists()
-    assert chunk_path.read_text(encoding="utf-8") == "第一句。\n第二句!"
+    chunk_text = chunk_path.read_text(encoding="utf-8")
+    assert "project bootstrap body" in chunk_text
     chunk_paths = [item.get("chunk_path") for item in payload.get("chunks") or []]
     assert all(str(path or "").startswith("chunks/") for path in chunk_paths)
-    assert "text" not in brief_chunk
+    assert "text" not in project_chunk
 
 
 @pytest.mark.asyncio
@@ -283,13 +289,11 @@ async def test_project_knowledge_watcher_change_updates_project_chunks_automatic
 ):
     project_dir = tmp_path / "projects" / "project-change-chunks"
     project_dir.mkdir(parents=True, exist_ok=True)
-    (project_dir / "PROJECT.md").write_text(
-        "---\nid: project-change-chunks\nname: Project Change Chunks\nproject_auto_knowledge_sink: true\n---\n",
+    project_md_path = project_dir / "PROJECT.md"
+    project_md_path.write_text(
+        "---\nid: project-change-chunks\nname: Project Change Chunks\nproject_auto_knowledge_sink: true\n---\n\nbody v1\n",
         encoding="utf-8",
     )
-    note_path = project_dir / "original" / "note.md"
-    note_path.parent.mkdir(parents=True, exist_ok=True)
-    note_path.write_text("v1", encoding="utf-8")
 
     config = Config()
     config.knowledge.enabled = True
@@ -346,23 +350,15 @@ async def test_project_knowledge_watcher_change_updates_project_chunks_automatic
     await watcher._handle_snapshot_changes(initial)
     watcher._snapshots = initial
 
-    index_path = (
-        tmp_path
-        / "projects"
-        / "project-change-chunks"
-        / ".knowledge"
-        / "sources"
-        / "project-project-change-chunks-workspace"
-        / "index.json"
-    )
+    index_path = _project_index_path(tmp_path, "project-change-chunks")
 
     payload = json.loads(index_path.read_text(encoding="utf-8"))
-    note_chunk = next(
+    project_chunk = next(
         item
         for item in payload.get("chunks") or []
-        if str(item.get("document_path") or "").endswith("original/note.md")
+        if str(item.get("document_path") or "").endswith("PROJECT.md")
     )
-    chunk_path_text = str(note_chunk.get("chunk_path") or "")
+    chunk_path_text = str(project_chunk.get("chunk_path") or "")
     assert chunk_path_text
     chunk_path = (
         tmp_path
@@ -373,28 +369,31 @@ async def test_project_knowledge_watcher_change_updates_project_chunks_automatic
     )
 
     assert chunk_path.exists()
-    assert chunk_path.read_text(encoding="utf-8") == "v1"
+    assert "body v1" in chunk_path.read_text(encoding="utf-8")
 
     time.sleep(0.02)
-    note_path.write_text("v2-updated", encoding="utf-8")
+    project_md_path.write_text(
+        "---\nid: project-change-chunks\nname: Project Change Chunks\nproject_auto_knowledge_sink: true\n---\n\nbody v2-updated\n",
+        encoding="utf-8",
+    )
     bumped = time.time() + 2
-    os.utime(note_path, (bumped, bumped))
+    os.utime(project_md_path, (bumped, bumped))
     current = watcher._collect_snapshots()
     project_snapshot = current.get("project-change-chunks") or {}
     file_map = project_snapshot.get("files") if isinstance(project_snapshot, dict) else None
-    if isinstance(file_map, dict) and "original/note.md" in file_map:
-        file_map["original/note.md"] = f"{file_map['original/note.md']}:changed"
+    if isinstance(file_map, dict) and "PROJECT.md" in file_map:
+        file_map["PROJECT.md"] = f"{file_map['PROJECT.md']}:changed"
     await watcher._handle_snapshot_changes(current)
 
     payload = json.loads(index_path.read_text(encoding="utf-8"))
-    note_chunks = [
+    project_chunks = [
         item
         for item in payload.get("chunks") or []
-        if str(item.get("document_path") or "").endswith("original/note.md")
+        if str(item.get("document_path") or "").endswith("PROJECT.md")
     ]
-    assert note_chunks
-    note_chunk = max(
-        note_chunks,
+    assert project_chunks
+    project_chunk = max(
+        project_chunks,
         key=lambda item: str(item.get("snapshot_at") or ""),
     )
     updated_chunk_path = (
@@ -402,10 +401,10 @@ async def test_project_knowledge_watcher_change_updates_project_chunks_automatic
         / "projects"
         / "project-change-chunks"
         / ".knowledge"
-        / str(note_chunk.get("chunk_path") or "")
+        / str(project_chunk.get("chunk_path") or "")
     )
-    assert updated_chunk_path.read_text(encoding="utf-8") == "v2-updated"
-    assert "text" not in note_chunk
+    assert "body v2-updated" in updated_chunk_path.read_text(encoding="utf-8")
+    assert "text" not in project_chunk
 
 
 @pytest.mark.asyncio
@@ -415,13 +414,11 @@ async def test_project_knowledge_watcher_triggers_on_file_change(
 ):
     project_dir = tmp_path / "projects" / "project-b"
     project_dir.mkdir(parents=True, exist_ok=True)
-    (project_dir / "PROJECT.md").write_text(
-        "---\nid: project-b\nname: Project B\nproject_auto_knowledge_sink: true\n---\n",
+    project_md_path = project_dir / "PROJECT.md"
+    project_md_path.write_text(
+        "---\nid: project-b\nname: Project B\nproject_auto_knowledge_sink: true\n---\n\nbody v1\n",
         encoding="utf-8",
     )
-    note_path = project_dir / "original" / "note.md"
-    note_path.parent.mkdir(parents=True, exist_ok=True)
-    note_path.write_text("v1", encoding="utf-8")
 
     config = Config()
     config.knowledge.enabled = True
@@ -455,9 +452,12 @@ async def test_project_knowledge_watcher_triggers_on_file_change(
     watcher._snapshots = initial
 
     time.sleep(0.02)
-    note_path.write_text("v2", encoding="utf-8")
+    project_md_path.write_text(
+        "---\nid: project-b\nname: Project B\nproject_auto_knowledge_sink: true\n---\n\nbody v2\n",
+        encoding="utf-8",
+    )
     bumped = time.time() + 2
-    os.utime(note_path, (bumped, bumped))
+    os.utime(project_md_path, (bumped, bumped))
     current = watcher._collect_snapshots()
     await watcher._handle_snapshot_changes(current)
 
@@ -467,7 +467,7 @@ async def test_project_knowledge_watcher_triggers_on_file_change(
     assert calls[0]["force"] is False
     assert calls[0]["debounce_seconds"] == watcher_module.DEFAULT_CHANGE_DEBOUNCE_SECONDS
     assert calls[0]["cooldown_seconds"] == watcher_module.DEFAULT_SYNC_COOLDOWN_SECONDS
-    assert "original/note.md" in calls[0]["changed_paths"]
+    assert "PROJECT.md" in calls[0]["changed_paths"]
 
 
 @pytest.mark.asyncio

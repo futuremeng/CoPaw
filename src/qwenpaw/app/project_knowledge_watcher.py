@@ -9,14 +9,16 @@ from pathlib import Path
 from typing import Any
 
 from ..config.config import load_agent_config
+from ..config import utils as config_utils
 from ..config.utils import get_config_path, load_config
-from ..knowledge import ProjectKnowledgeSyncManager
-from copaw.knowledge.project_knowledge_sync import (
+from copaw.knowledge.project_sync_manager import (
     DEFAULT_PROJECT_SYNC_COOLDOWN_SECONDS,
     DEFAULT_PROJECT_SYNC_DEBOUNCE_SECONDS,
+    ProjectKnowledgeSyncManager,
     ProjectSyncCommand,
     ProjectSyncCoordinator,
     build_project_source_spec,
+    ensure_project_source_registered,
 )
 from .project_monitoring_state import (
     PROJECT_FILE_MONITORING_ACTIVE,
@@ -127,6 +129,29 @@ class ProjectKnowledgeWatcher:
             "running_config": None,
         }
 
+    async def _dispatch_sync_command_async(
+        self,
+        command: ProjectSyncCommand,
+    ):
+        return await asyncio.to_thread(self._sync_coordinator.dispatch, command)
+
+    async def _ensure_project_source_registered_async(
+        self,
+        global_config: Any,
+        *,
+        project_id: str,
+        project_name: str,
+        project_workspace_dir: str,
+    ) -> None:
+        await asyncio.to_thread(
+            ensure_project_source_registered,
+            global_config.knowledge,
+            project_id=project_id,
+            project_name=project_name,
+            project_workspace_dir=project_workspace_dir,
+            persist=lambda: config_utils.save_config(global_config),
+        )
+
     def _build_project_sync_manager(self, project_id: str) -> ProjectKnowledgeSyncManager:
         return ProjectKnowledgeSyncManager(
             self._workspace_dir,
@@ -191,7 +216,7 @@ class ProjectKnowledgeWatcher:
         self,
         current: dict[str, dict[str, Any]],
     ) -> None:
-        _, knowledge_config, running_config = await self._load_runtime_context()
+        global_config, knowledge_config, running_config = await self._load_runtime_context()
         if not knowledge_config.enabled or not bool(getattr(knowledge_config, "memify_enabled", False)):
             return
 
@@ -210,7 +235,13 @@ class ProjectKnowledgeWatcher:
                 project_name=str(snapshot.get("project_name") or project_id),
                 project_workspace_dir=str(snapshot.get("project_dir") or ""),
             )
-            event = self._sync_coordinator.dispatch(
+            await self._ensure_project_source_registered_async(
+                global_config,
+                project_id=project_id,
+                project_name=str(snapshot.get("project_name") or project_id),
+                project_workspace_dir=str(snapshot.get("project_dir") or ""),
+            )
+            event = await self._dispatch_sync_command_async(
                 ProjectSyncCommand.resume(
                     project_id=project_id,
                     config=knowledge_config,
@@ -258,7 +289,7 @@ class ProjectKnowledgeWatcher:
         self,
         current: dict[str, dict[str, Any]],
     ) -> None:
-        _, knowledge_config, running_config = await self._load_runtime_context()
+        global_config, knowledge_config, running_config = await self._load_runtime_context()
         if not knowledge_config.enabled or not bool(getattr(knowledge_config, "memify_enabled", False)):
             return
 
@@ -283,7 +314,7 @@ class ProjectKnowledgeWatcher:
             should_bootstrap = previous is None
             should_config_reindex = False
             if not should_bootstrap and not changed_paths:
-                reindex_event = self._sync_coordinator.dispatch(
+                reindex_event = await self._dispatch_sync_command_async(
                     ProjectSyncCommand.check_reindex(
                         project_id=project_id,
                         config=knowledge_config,
@@ -300,12 +331,18 @@ class ProjectKnowledgeWatcher:
                 project_name=str(snapshot.get("project_name") or project_id),
                 project_workspace_dir=str(snapshot.get("project_dir") or ""),
             )
+            await self._ensure_project_source_registered_async(
+                global_config,
+                project_id=project_id,
+                project_name=str(snapshot.get("project_name") or project_id),
+                project_workspace_dir=str(snapshot.get("project_dir") or ""),
+            )
             trigger = (
                 "project_watcher_bootstrap"
                 if should_bootstrap
                 else ("project_watcher_config_change" if should_config_reindex else "project_watcher_change")
             )
-            event = self._sync_coordinator.dispatch(
+            event = await self._dispatch_sync_command_async(
                 ProjectSyncCommand.start(
                     project_id=project_id,
                     config=knowledge_config,

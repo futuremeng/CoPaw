@@ -66,6 +66,7 @@ interface UseProjectRealtimeControllerParams {
 const RECONNECT_BASE_DELAY_MS = 1000;
 const RECONNECT_MAX_DELAY_MS = 15000;
 const RECONNECT_JITTER_MS = 250;
+const PROJECT_REALTIME_WS_ENABLED = false;
 
 export default function useProjectRealtimeController({
   agentId,
@@ -93,6 +94,11 @@ export default function useProjectRealtimeController({
   useEffect(() => {
     if (!agentId || !projectId || typeof WebSocket === "undefined") {
       setConnectionState({ status: "idle", reconnectAttempt: 0 });
+      return;
+    }
+
+    if (!PROJECT_REALTIME_WS_ENABLED) {
+      setConnectionState({ status: "paused", reconnectAttempt: 0 });
       return;
     }
 

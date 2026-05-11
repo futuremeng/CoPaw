@@ -473,9 +473,15 @@ class MultiAgentManager:
         Only agents with enabled=True will be started.
         Disabled agents are skipped to save resources.
 
-        Agents are started truly in parallel: get_agent() only holds the
-        manager lock briefly for dict checks, releasing it during the slow
-        workspace initialization.
+        Startup-time eager preloading is intentionally staggered instead of
+        launching all agents at once. In practice, workspace startup can
+        trigger substantial synchronous work in thread-backed services,
+        and starting every enabled agent concurrently can starve the main
+        event loop enough to delay even lightweight HTTP endpoints.
+
+        We still reuse get_agent() for the actual workspace creation, but we
+        preload one agent at a time and explicitly yield between agents so
+        the server stays responsive while background startup is in progress.
 
         Returns:
             dict[str, bool]: Mapping of agent_id to success status
@@ -514,11 +520,11 @@ class MultiAgentManager:
                 )
                 return (agent_id, False)
 
-        # Truly parallel: get_agent releases lock during workspace startup
-        results = await asyncio.gather(
-            *[start_single_agent(agent_id) for agent_id in agent_ids],
-            return_exceptions=False,
-        )
+        results: list[tuple[str, bool]] = []
+        for agent_id in agent_ids:
+            results.append(await start_single_agent(agent_id))
+            # Keep the HTTP loop responsive during background preload.
+            await asyncio.sleep(0)
 
         # Build result mapping
         result_map = dict(results)

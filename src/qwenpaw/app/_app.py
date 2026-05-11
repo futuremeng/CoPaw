@@ -315,8 +315,16 @@ async def lifespan(  # pylint: disable=too-many-statements,too-many-branches
 
     async def _background_startup():  # pylint: disable=too-many-statements
         try:
-            # Start all configured agents (truly parallel now)
-            await multi_agent_manager.start_all_configured_agents()
+            eager_agent_startup = (
+                os.environ.get("COPAW_EAGER_AGENT_STARTUP", "").strip().lower()
+                in {"1", "true", "yes", "on"}
+            )
+            if eager_agent_startup:
+                await multi_agent_manager.start_all_configured_agents()
+            else:
+                logger.info(
+                    "Skipping eager agent startup; agents will load lazily on first use",
+                )
 
             try:
                 from ..agents.utils.hanlp_sidecar import kickoff_hanlp_preload
