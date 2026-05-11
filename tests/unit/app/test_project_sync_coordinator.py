@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import cast
 
 from copaw.config.config import Config, KnowledgeSourceSpec
-from copaw.knowledge.project_knowledge_sync import (
+from copaw.knowledge.project_sync_manager import (
     ProjectKnowledgeSyncManager,
     ProjectSyncCommand,
     ProjectSyncCoordinator,

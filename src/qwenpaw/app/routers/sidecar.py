@@ -2,13 +2,14 @@
 """Sidecar status API routes."""
 
 import asyncio
+import os
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Query
 
 from ...config import load_config
-from ...knowledge.hanlp_runtime import NLPRuntime
-from copaw.knowledge.hanlp_runtime import _host_has_local_model_artifact
+from copaw.knowledge.hanlp_nlp_runtime import NLPRuntime, _HANLP_PRETRAINED_URLS
 from .agent import (
     _build_hanlp_api_snapshot,
     _build_nlp_strategy_payload,
@@ -18,6 +19,67 @@ from .agent import (
 router = APIRouter(prefix="/sidecar", tags=["sidecar"])
 
 _CLASSICAL_SINGLE_MODEL_ID = "KYOTO_EVAHAN_TOK_LEM_POS_UDEP_LZH"
+
+
+def _extract_model_cache_keys(model_id: str) -> list[str]:
+    raw = str(model_id or "").strip()
+    if not raw:
+        return []
+    keys: list[str] = []
+    name = raw
+    if name.lower().endswith(".zip"):
+        name = name[:-4]
+    if name.startswith("http://") or name.startswith("https://"):
+        name = name.rstrip("/").split("/")[-1]
+        if name.lower().endswith(".zip"):
+            name = name[:-4]
+        keys.append(name)
+    else:
+        keys.append(name)
+    dedup: list[str] = []
+    for key in keys:
+        if key not in dedup:
+            dedup.append(key)
+    return dedup
+
+
+def _model_cache_homes(hanlp_home: str = "") -> list[str]:
+    homes: list[str] = []
+    custom = str(hanlp_home or "").strip()
+    if custom:
+        homes.append(custom)
+    default = os.path.join(str(Path.home()), ".hanlp")
+    if default not in homes:
+        homes.append(default)
+    return homes
+
+
+def _resolve_hanlp_constant_url(model_id: str) -> str | None:
+    raw = str(model_id or "").strip()
+    if not raw or raw.startswith("http://") or raw.startswith("https://"):
+        return None
+    url = _HANLP_PRETRAINED_URLS.get(raw)
+    return url if isinstance(url, str) and url else None
+
+
+def _host_has_local_model_artifact(model_id: str, hanlp_home: str = "") -> bool:
+    keys = _extract_model_cache_keys(model_id)
+    resolved_url = _resolve_hanlp_constant_url(model_id)
+    if resolved_url:
+        for key in _extract_model_cache_keys(resolved_url):
+            if key not in keys:
+                keys.append(key)
+    if not keys:
+        return False
+    subdirs = ("", "tok", "mtl", "ner", "dep", "pos", "sdp", "con", "classification", "transformers")
+    for home in _model_cache_homes(hanlp_home):
+        for subdir in subdirs:
+            base = os.path.join(home, subdir) if subdir else home
+            for key in keys:
+                path = os.path.join(base, key)
+                if os.path.isdir(path) or os.path.isfile(path):
+                    return True
+    return False
 
 
 def _classical_local_item(config) -> dict[str, Any]:

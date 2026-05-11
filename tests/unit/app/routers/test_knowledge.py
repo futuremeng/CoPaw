@@ -19,7 +19,7 @@ from fastapi.testclient import TestClient
 from copaw.app.routers import knowledge as knowledge_router_module
 from copaw.config.config import Config
 from copaw.knowledge import GraphOpsManager, KnowledgeManager
-from src.copaw.knowledge.architecture import QuantizationArchitectureManager
+from copaw.knowledge.knowledge_quantization_architecture import QuantizationArchitectureManager
 
 
 @pytest.fixture

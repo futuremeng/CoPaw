@@ -4,7 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from copaw.config.config import KnowledgeConfig, KnowledgeSourceSpec
-from copaw.knowledge.project_knowledge_sync import ProjectKnowledgeSyncManager
+from copaw.knowledge.project_sync_manager import ProjectKnowledgeSyncManager
 from qwenpaw.app.knowledge_workflow import (
     KNOWLEDGE_WORKFLOW_TEMPLATE_ID,
     KnowledgeWorkflowOrchestrator,

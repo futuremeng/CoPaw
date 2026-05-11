@@ -25,10 +25,10 @@ from ...constant import WORKING_DIR
 from ...knowledge import (
     GraphOpsManager,
     KnowledgeManager,
-    ProjectKnowledgeSyncManager,
-    QuantizationFacade,
 )
-from copaw.knowledge.project_knowledge_sync import (
+from copaw.knowledge.knowledge_quantization_facade import QuantizationFacade
+from copaw.knowledge.project_sync_manager import (
+    ProjectKnowledgeSyncManager,
     ProjectSyncCommand,
     ProjectSyncCoordinator,
     build_project_source_spec,

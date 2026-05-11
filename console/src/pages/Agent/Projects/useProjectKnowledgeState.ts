@@ -851,6 +851,7 @@ function parseBackendProcessingModes(
       const l2Metrics = syncState?.l2_metrics;
       const nlpProgress = syncState?.nlp_progress as ProjectKnowledgeNlpProgressPayload | undefined;
       const nlpStages = nlpProgress?.stages;
+      const nlpTokenizeStage = nlpStages?.tokenize;
       const nlpNerStage = nlpStages?.ner;
       const nlpSyntaxStage = nlpStages?.syntax;
       const nlpCorStage = nlpStages?.cor;
@@ -985,11 +986,11 @@ function parseBackendProcessingModes(
           : normalizeNumber(modeMetric?.syntax_sentence_count),
         syntaxTokenCount: isNlpMode
           ? Math.max(
-            normalizeNumber(nlpSyntaxStage?.token_count),
-            normalizeNumber(modeMetric?.syntax_token_count),
-            normalizeNumber(l2Metrics?.syntax_token_count),
+            normalizeNumber(nlpTokenizeStage?.token_count),
+            normalizeNumber(modeMetric?.tokenize_token_count),
+            normalizeNumber(l2Metrics?.tokenize_token_count),
           )
-          : normalizeNumber(modeMetric?.syntax_token_count),
+          : normalizeNumber(modeMetric?.tokenize_token_count),
         syntaxPosCount: isNlpMode
           ? Math.max(
             normalizeNumber(nlpSyntaxStage?.pos_count),
@@ -2256,8 +2257,8 @@ export function useProjectKnowledgeState(
       0,
     );
     const nlpSyntaxTokenCount = Math.max(
-      getBackendModeMetricNumber(syncState, "nlp", "syntax_token_count"),
-      normalizeNumber(syncState?.l2_metrics?.syntax_token_count),
+      getBackendModeMetricNumber(syncState, "nlp", "tokenize_token_count"),
+      normalizeNumber(syncState?.l2_metrics?.tokenize_token_count),
       0,
     );
     const nlpSyntaxPosCount = Math.max(

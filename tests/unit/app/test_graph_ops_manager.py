@@ -10,7 +10,7 @@ import pytest
 
 from copaw.config.config import Config, GraphifyConfig, KnowledgeSourceSpec
 from copaw.knowledge import GraphOpsManager, KnowledgeManager
-from copaw.knowledge.enrichment_pipeline import run_system_knowledge_enrichment
+from copaw.knowledge.graph_enrichment_pipeline import run_system_knowledge_enrichment
 from copaw.knowledge.graphify_provider import GraphifyNotConfiguredError
 
 

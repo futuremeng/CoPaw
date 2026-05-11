@@ -130,6 +130,9 @@ export interface ProjectKnowledgeModeMetricsPayload {
   cor_reason?: string;
   ner_ready_chunk_count?: number;
   ner_entity_count?: number;
+  tokenize_ready_chunk_count?: number;
+  tokenize_line_count?: number;
+  tokenize_token_count?: number;
   ner_batch_count?: number;
   ner_worker_restart_count?: number;
   ner_worker_pid_count?: number;
@@ -153,12 +156,16 @@ export interface ProjectKnowledgeMetricEvidenceBundlePayload {
 
 export interface ProjectKnowledgeL2ProgressPayload {
   total_chunks?: number;
+  tokenize_done_chunks?: number;
   cor_done_chunks?: number;
   ner_done_chunks?: number;
   syntax_done_chunks?: number;
 }
 
 export interface ProjectKnowledgeL2MetricsPayload {
+  tokenize_ready_chunk_count?: number;
+  tokenize_line_count?: number;
+  tokenize_token_count?: number;
   cor_ready_chunk_count?: number;
   cor_cluster_count?: number;
   cor_replacement_count?: number;
@@ -179,11 +186,12 @@ export interface ProjectKnowledgeL2MetricsPayload {
 }
 
 export interface ProjectKnowledgeNlpStagePayload {
-  key: "ner" | "syntax" | "phrase" | "cor";
+  key: "tokenize" | "ner" | "syntax" | "phrase" | "cor";
   required: boolean;
   status: "ready" | "running" | "pending" | "unavailable";
   done_chunks?: number;
   ready_chunks?: number;
+  line_count?: number;
   entity_count?: number;
   sentence_count?: number;
   token_count?: number;
@@ -209,6 +217,7 @@ export interface ProjectKnowledgeNlpProgressPayload {
   entity_count?: number;
   relation_count?: number;
   stages?: {
+    tokenize?: ProjectKnowledgeNlpStagePayload;
     ner?: ProjectKnowledgeNlpStagePayload;
     syntax?: ProjectKnowledgeNlpStagePayload;
     phrase?: ProjectKnowledgeNlpStagePayload;

@@ -10,7 +10,7 @@ import threading
 import time
 from pathlib import Path
 
-from qwenpaw.knowledge.hanlp_runtime import HanLPSidecarRuntime
+from copaw.knowledge.hanlp_nlp_runtime import NLPRuntime
 
 from ...config import load_config, save_config
 from ...constant import WORKING_DIR
@@ -371,8 +371,8 @@ def _failure_result(
     }
 
 
-def _runtime() -> HanLPSidecarRuntime:
-    return HanLPSidecarRuntime()
+def _runtime() -> NLPRuntime:
+    return NLPRuntime()
 
 
 def _nlp_config(config):
@@ -577,7 +577,7 @@ def kickoff_hanlp_preload(force: bool = False) -> dict:
     return get_hanlp_preload_status(config)
 
 
-def _build_task_status(runtime: HanLPSidecarRuntime, config) -> dict[str, dict]:
+def _build_task_status(runtime: NLPRuntime, config) -> dict[str, dict]:
     task_states: dict[str, dict] = {}
     for task_key, task_cfg in _task_specs(config).items():
         enabled = bool(getattr(task_cfg, "enabled", True))

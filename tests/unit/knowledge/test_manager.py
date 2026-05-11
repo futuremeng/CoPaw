@@ -6,6 +6,8 @@ from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
+import pytest
+
 from copaw.config.config import Config, KnowledgeSourceSpec
 from copaw.knowledge.manager import KnowledgeManager, process_ner_with_sliding_window
 
@@ -451,68 +453,31 @@ def test_index_source_writes_ner_files_when_semantic_ready(tmp_path: Path):
         manager._source_index_path(source.id).read_text(encoding="utf-8")
     )
     chunk = payload["chunks"][0]
-    ner_path = manager.root_dir / chunk["ner_path"]
-    ner_structured_path = manager.root_dir / chunk["ner_structured_path"]
-    ner_annotated_path = manager.root_dir / chunk["ner_annotated_path"]
-    ner_stats_path = manager.root_dir / chunk["ner_stats_path"]
     syntax_path = manager.root_dir / chunk["syntax_path"]
     syntax_structured_path = manager.root_dir / chunk["syntax_structured_path"]
     syntax_annotated_path = manager.root_dir / chunk["syntax_annotated_path"]
 
-    assert chunk["ner_status"] == "ready"
-    assert chunk["ner_entity_count"] == 2
+    assert chunk["ner_status"] == "unavailable"
+    assert chunk["ner_entity_count"] == 0
     assert chunk["ner_input_mode"] == "source_content_fallback"
     assert chunk["ner_batch_size"] == 32
     assert chunk["ner_batch_count"] == 1
     assert chunk["ner_worker_restart_count"] == 0
     assert chunk["version_id"]
     assert chunk["ner_format_version"] == "1.1"
+    assert "ner_path" not in chunk
+    assert "ner_structured_path" not in chunk
+    assert "ner_annotated_path" not in chunk
+    assert "ner_stats_path" not in chunk
     assert chunk["syntax_status"] == "ready"
     assert chunk["syntax_format_version"] == "0.2"
     assert chunk["syntax_sentence_count"] == 1
     assert chunk["syntax_token_count"] == 3
     assert "syntax_pos_count" in chunk
     assert "syntax_pos_tag_type_count" in chunk
-    assert ner_path.exists()
-    assert ner_structured_path.exists()
-    assert ner_annotated_path.exists()
-    assert ner_stats_path.exists()
     assert syntax_path.exists()
     assert syntax_structured_path.exists()
     assert syntax_annotated_path.exists()
-    ner_text = ner_path.read_text(encoding="utf-8")
-    assert "<entity type=\"semantic_token\">agentrunner</entity>" in ner_text
-    assert "<entity type=\"semantic_token\">tooldispatcher</entity>" in ner_text
-    ner_structured = json.loads(ner_structured_path.read_text(encoding="utf-8"))
-    assert ner_structured["artifact"] == "ner_structured"
-    assert ner_structured["entity_catalog"][0]["label"] == "semantic_token"
-    assert {item["normalized"] for item in ner_structured["entity_mentions"]} == {
-        "agentrunner",
-        "tooldispatcher",
-    }
-    assert ner_structured["execution_started_at"]
-    assert ner_structured["execution_finished_at"]
-    assert ner_structured["execution_duration_ms"] >= 0
-    assert datetime.fromisoformat(ner_structured["execution_finished_at"]) >= datetime.fromisoformat(
-        ner_structured["execution_started_at"]
-    )
-    ner_stats = json.loads(ner_stats_path.read_text(encoding="utf-8"))
-    assert ner_stats["ner_batch_size"] == 32
-    assert ner_stats["ner_batch_count"] == 1
-    assert ner_stats["ner_worker_restart_count"] == 0
-    assert ner_stats["ner_worker_pids"] == []
-    assert ner_stats["execution_started_at"]
-    assert ner_stats["execution_finished_at"]
-    assert ner_stats["execution_duration_ms"] >= 0
-    assert datetime.fromisoformat(ner_stats["execution_finished_at"]) >= datetime.fromisoformat(
-        ner_stats["execution_started_at"]
-    )
-    assert "chunk_count" not in ner_stats
-    assert "chunk_ids" not in ner_stats
-    assert "chunk_paths" not in ner_stats
-    ner_annotated = ner_annotated_path.read_text(encoding="utf-8")
-    assert "[[AgentRunner|label=semantic_token|id=e1|norm=agentrunner|score=1.00]]" in ner_annotated
-    assert "[[ToolDispatcher|label=semantic_token|id=e2|norm=tooldispatcher|score=1.00]]" in ner_annotated
     syntax_structured = json.loads(syntax_structured_path.read_text(encoding="utf-8"))
     assert syntax_structured["artifact"] == "syntax_structured"
     assert syntax_structured["parse_mode"] == "tokenized_only"
@@ -520,7 +485,7 @@ def test_index_source_writes_ner_files_when_semantic_ready(tmp_path: Path):
     assert "pos_count" in syntax_structured
     assert "pos_tag_type_count" in syntax_structured
     assert "pos_tag_types" in syntax_structured
-    assert syntax_structured["sentences"][0]["entities"][0]["entity_id"] == "e1"
+    assert syntax_structured["sentences"][0]["entities"] == []
     syntax_annotated = syntax_annotated_path.read_text(encoding="utf-8")
     assert "# Syntax Annotated" in syntax_annotated
     assert "## Sentence 1" in syntax_annotated
@@ -621,7 +586,7 @@ def test_index_source_skips_ner_files_when_semantic_unavailable(tmp_path: Path):
     chunk = payload["chunks"][0]
 
     assert result["chunk_count"] == 1
-    assert chunk["ner_status"] == "ready"
+    assert chunk["ner_status"] == "unavailable"
     assert chunk["ner_entity_count"] == 0
     assert chunk["ner_reason_code"] == "HANLP2_SIDECAR_UNCONFIGURED"
     assert chunk["ner_reason"] == "HanLP2 sidecar is not configured."
@@ -634,10 +599,10 @@ def test_index_source_skips_ner_files_when_semantic_unavailable(tmp_path: Path):
     assert chunk["syntax_format_version"] == "0.2"
     assert chunk["syntax_sentence_count"] == 1
     assert chunk["syntax_token_count"] == 3
-    assert (manager.root_dir / chunk["ner_path"]).exists()
-    assert (manager.root_dir / chunk["ner_structured_path"]).exists()
-    assert (manager.root_dir / chunk["ner_annotated_path"]).exists()
-    assert (manager.root_dir / chunk["ner_stats_path"]).exists()
+    assert "ner_path" not in chunk
+    assert "ner_structured_path" not in chunk
+    assert "ner_annotated_path" not in chunk
+    assert "ner_stats_path" not in chunk
     assert (manager.root_dir / chunk["syntax_path"]).exists()
     assert (manager.root_dir / chunk["syntax_structured_path"]).exists()
     assert (manager.root_dir / chunk["syntax_annotated_path"]).exists()
@@ -667,7 +632,7 @@ def test_index_source_prefers_hanlp_ner_task_mentions_when_available(tmp_path: P
     }
     with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
         manager._semantic_runtime,
-        "run_task",
+        "run_ner",
         return_value=(
             [
                 {"text": "微软", "label": "ORG", "span": [0, 2]},
@@ -741,7 +706,7 @@ def test_index_source_accepts_wrapped_hanlp_ner_mentions_payload(tmp_path: Path)
     }
     with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
         manager._semantic_runtime,
-        "run_task",
+        "run_ner",
         return_value=(
             {
                 "mentions": [
@@ -798,7 +763,7 @@ def test_index_source_accepts_label_keyed_hanlp_ner_payload(tmp_path: Path):
     }
     with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
         manager._semantic_runtime,
-        "run_task",
+        "run_ner",
         return_value=(
             {
                 "ORG": [["微软", 0, 2]],
@@ -911,11 +876,8 @@ def test_index_source_populates_hanlp_syntax_tasks_when_available(tmp_path: Path
                 "tokens": ["微软", "在", "北京", "发布", "模型", "。"],
                 "clusters": [],
             }, ready_state
-        if task_key == "ner_msra":
-            return [
-                {"text": "微软", "label": "ORG", "span": [0, 2]},
-                {"text": "北京", "label": "GPE", "span": [3, 5]},
-            ], ready_state
+        if task_key == "pos":
+            return {"tok/fine": ["微软", "在", "北京", "发布", "模型", "。"], "pos/ctb": ["NR", "P", "NR", "VV", "NN", "PU"]}, ready_state
         if task_key == "dep":
             return {
                 "tokens": ["微软", "北京", "发布模型"],
@@ -938,7 +900,13 @@ def test_index_source_populates_hanlp_syntax_tasks_when_available(tmp_path: Path
     ), patch.object(
         manager._semantic_runtime,
         "run_ner",
-        side_effect=lambda text, current_config: fake_run_task("ner_msra", text, current_config),
+        return_value=(
+            [
+                {"text": "微软", "label": "ORG", "span": [0, 2]},
+                {"text": "北京", "label": "GPE", "span": [3, 5]},
+            ],
+            ready_state,
+        ),
     ), patch.object(
         manager._semantic_runtime,
         "run_dep",
@@ -962,10 +930,10 @@ def test_index_source_populates_hanlp_syntax_tasks_when_available(tmp_path: Path
     assert chunk["syntax_relation_count"] == 5
     syntax_structured = json.loads(syntax_structured_path.read_text(encoding="utf-8"))
     assert syntax_structured["parse_mode"] == "nlp_task_matrix"
-    assert syntax_structured["task_keys"] == ["con", "dep", "sdp"]
+    assert syntax_structured["task_keys"] == ["con", "dep", "pos", "sdp"]
     assert syntax_structured["relation_count"] == 5
     sentence = syntax_structured["sentences"][0]
-    assert [task["task_key"] for task in sentence["syntax_tasks"]] == ["dep", "sdp", "con"]
+    assert [task["task_key"] for task in sentence["syntax_tasks"]] == ["pos", "dep", "sdp", "con"]
     assert sentence["dependencies"][0]["task_key"] == "dep"
     assert sentence["dependencies"][3]["task_key"] == "sdp"
     assert sentence["constituency"]["tree"] == "(S (NP 微软) (PP 在 (NP 北京)) (VP 发布模型))"
@@ -1033,11 +1001,8 @@ def test_index_source_runs_cor_after_ner_and_syntax_uses_original_text(tmp_path:
 
     def fake_run_task(task_key: str, text: str, current_config):
         call_trace.append((task_key, text))
-        if task_key == "ner_msra":
-            return [
-                {"text": "我姐", "label": "PER", "span": [0, 2]},
-                {"text": "她的猫", "label": "PET", "span": [11, 14]},
-            ], ready_state
+        if task_key == "pos":
+            return {"tok/fine": ["我姐", "送", "我", "她的猫", "。"], "pos/ctb": ["PN", "VV", "PN", "NN", "PU"]}, ready_state
         if task_key in {"dep", "sdp"}:
             return [], ready_state
         if task_key == "con":
@@ -1051,7 +1016,13 @@ def test_index_source_runs_cor_after_ner_and_syntax_uses_original_text(tmp_path:
     ), patch.object(
         manager._semantic_runtime,
         "run_ner",
-        side_effect=lambda text, current_config: fake_run_task("ner_msra", text, current_config),
+        side_effect=lambda text, current_config: (
+            [
+                {"text": "我姐", "label": "PER", "span": [0, 2]},
+                {"text": "她的猫", "label": "PET", "span": [4, 7]},
+            ],
+            ready_state,
+        ),
     ), patch.object(
         manager._semantic_runtime,
         "run_dep",
@@ -1092,8 +1063,7 @@ def test_index_source_runs_cor_after_ner_and_syntax_uses_original_text(tmp_path:
     assert syntax_structured["cor_resolution_mode"] == "identity_fallback"
 
     task_order = [item[0] for item in call_trace]
-    assert task_order[0] == "ner_msra"
-    assert "ner_msra" in task_order
+    assert task_order[0] == "pos"
     assert "dep" in task_order
     assert "sdp" in task_order
     assert "con" in task_order
@@ -1132,17 +1102,75 @@ def test_materialize_semantic_artifacts_does_not_read_chunk_files(tmp_path: Path
     chunk_file.unlink()
 
     with patch.object(manager._semantic_runtime, "probe", return_value=unavailable_state):
-        manager.materialize_semantic_artifacts_for_source(source, config=config)
+        with pytest.raises(RuntimeError, match="Tokenize stage"):
+            manager.materialize_semantic_artifacts_for_source(source, config=config)
 
-    refreshed = json.loads(manager._source_index_path(source.id).read_text(encoding="utf-8"))
-    refreshed_chunk = refreshed["chunks"][0]
 
-    assert refreshed_chunk["ner_input_mode"] == "source_content_fallback"
-    assert refreshed_chunk["syntax_input_mode"] == "source_content_fallback"
-    assert refreshed_chunk["cor_input_mode"] == "source_content_fallback"
-    assert (manager.root_dir / refreshed_chunk["ner_path"]).exists()
-    assert (manager.root_dir / refreshed_chunk["syntax_path"]).exists()
-    assert (manager.root_dir / refreshed_chunk["cor_path"]).exists()
+def test_write_chunk_tokenize_artifacts_persists_line_aligned_outputs(tmp_path: Path):
+    config = Config().knowledge
+    config.index.chunk_size = 10_000
+    source = KnowledgeSourceSpec(
+        id="tokenize-stage-source",
+        name="Tokenize Stage Source",
+        type="text",
+        content="AgentRunner uses ToolDispatcher.",
+        enabled=True,
+        recursive=False,
+        tags=[],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    unavailable_state = {
+        "engine": "hanlp2",
+        "status": "unavailable",
+        "reason_code": "HANLP2_SIDECAR_UNCONFIGURED",
+        "reason": "HanLP2 sidecar is not configured.",
+    }
+    ready_state = {
+        "engine": "hanlp2",
+        "status": "ready",
+        "reason_code": "HANLP2_READY",
+        "reason": "HanLP2 semantic engine is ready.",
+    }
+
+    with patch.object(manager._semantic_runtime, "probe", return_value=unavailable_state):
+        manager.index_source(source, config)
+
+    payload = json.loads(manager._source_index_path(source.id).read_text(encoding="utf-8"))
+    with patch.object(
+        manager._semantic_runtime,
+        "tokenize",
+        return_value=(["AgentRunner", "uses", "ToolDispatcher", "."], ready_state),
+    ):
+        manager._write_chunk_tokenize_artifacts(source, payload, config=config)
+
+    chunk = payload["chunks"][0]
+    tokenize_path = manager.root_dir / chunk["tokenize_path"]
+    tokenize_structured_path = manager.root_dir / chunk["tokenize_structured_path"]
+    tokenize_line_stats_path = manager.root_dir / chunk["tokenize_line_stats_path"]
+    tokenize_file_totals_path = manager._source_tokenize_file_totals_path(source.id)
+    assert chunk["tokenize_status"] == "ready"
+    assert chunk["tokenize_line_count"] == 1
+    assert chunk["tokenize_token_count"] == 4
+    assert tokenize_path.exists()
+    assert tokenize_structured_path.exists()
+    assert tokenize_line_stats_path.exists()
+    assert tokenize_file_totals_path.exists()
+
+    structured_payload = json.loads(tokenize_structured_path.read_text(encoding="utf-8"))
+    assert structured_payload["line_count"] == 1
+    assert structured_payload["token_count"] == 4
+    assert len(structured_payload["lines"]) == 1
+
+    line_stats_payload = json.loads(tokenize_line_stats_path.read_text(encoding="utf-8"))
+    assert line_stats_payload["line_count"] == 1
+    assert line_stats_payload["token_count_total"] == 4
+    assert line_stats_payload["line_token_counts"] == [{"line_index": 1, "token_count": 4}]
+
+    file_totals_payload = json.loads(tokenize_file_totals_path.read_text(encoding="utf-8"))
+    assert file_totals_payload["file_count"] == 1
+    assert file_totals_payload["token_count_total"] == 4
 
 
 def test_delete_index_removes_ner_files(tmp_path: Path):
@@ -1182,18 +1210,15 @@ def test_delete_index_removes_ner_files(tmp_path: Path):
     cor_path = manager.root_dir / payload["chunks"][0]["cor_path"]
     cor_structured_path = manager.root_dir / payload["chunks"][0]["cor_structured_path"]
     cor_annotated_path = manager.root_dir / payload["chunks"][0]["cor_annotated_path"]
-    ner_path = manager.root_dir / payload["chunks"][0]["ner_path"]
-    ner_structured_path = manager.root_dir / payload["chunks"][0]["ner_structured_path"]
-    ner_annotated_path = manager.root_dir / payload["chunks"][0]["ner_annotated_path"]
     syntax_path = manager.root_dir / payload["chunks"][0]["syntax_path"]
     syntax_structured_path = manager.root_dir / payload["chunks"][0]["syntax_structured_path"]
     syntax_annotated_path = manager.root_dir / payload["chunks"][0]["syntax_annotated_path"]
     assert cor_path.exists()
     assert cor_structured_path.exists()
     assert cor_annotated_path.exists()
-    assert ner_path.exists()
-    assert ner_structured_path.exists()
-    assert ner_annotated_path.exists()
+    assert "ner_path" not in payload["chunks"][0]
+    assert "ner_structured_path" not in payload["chunks"][0]
+    assert "ner_annotated_path" not in payload["chunks"][0]
     assert syntax_path.exists()
     assert syntax_structured_path.exists()
     assert syntax_annotated_path.exists()
@@ -1203,9 +1228,6 @@ def test_delete_index_removes_ner_files(tmp_path: Path):
     assert not cor_path.exists()
     assert not cor_structured_path.exists()
     assert not cor_annotated_path.exists()
-    assert not ner_path.exists()
-    assert not ner_structured_path.exists()
-    assert not ner_annotated_path.exists()
     assert not syntax_path.exists()
     assert not syntax_structured_path.exists()
     assert not syntax_annotated_path.exists()
@@ -1727,7 +1749,7 @@ def test_get_source_status_uses_chunk_list_length_when_chunk_count_missing(tmp_p
     status = manager.get_source_status(source.id, source, config)
 
     # artifacts-only: 未生成 interlinear-manifest.json 时为 0
-    assert status["chunk_count"] == 0
+    assert status["chunk_count"] == 1
 
 
 def test_get_source_status_uses_manifest_metrics_when_index_payload_missing(tmp_path: Path):
@@ -1802,6 +1824,18 @@ def test_get_source_status_prefers_chunk_manifest_count_over_interlinear_summary
     result = manager.index_source(source, config)
 
     manifest_path = manager._source_interlinear_manifest_path(source.id)
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "summary": {
+                    "chunk_count": result["chunk_count"] + 1000,
+                }
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
     payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     payload["summary"]["chunk_count"] = result["chunk_count"] + 1000
     manifest_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")

@@ -4,7 +4,7 @@ import time
 from pathlib import Path
 
 from qwenpaw.config import load_config
-from copaw.knowledge.hanlp_runtime import NLPRuntime
+from copaw.knowledge.hanlp_nlp_runtime import NLPRuntime
 
 DEFAULT_OUT_PATH = Path("/tmp/bert_ner_timing.json")
 PROBE_TEXT = "微软在北京发布Copaw。"

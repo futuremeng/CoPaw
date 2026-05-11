@@ -17,7 +17,7 @@ from ...config import (
 )
 from ...config.config import load_agent_config, save_agent_config
 from ...knowledge.module_skills import sync_knowledge_module_skills
-from ...knowledge.hanlp_runtime import NLPRuntime
+from copaw.knowledge.hanlp_nlp_runtime import NLPRuntime
 from ...agents.memory.agent_md_manager import AgentMdManager
 from ...agents.utils import (
     copy_builtin_agent_md_files,

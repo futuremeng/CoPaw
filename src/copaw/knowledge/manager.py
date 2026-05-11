@@ -23,7 +23,11 @@ import httpx
 
 from ..constant import CHATS_FILE
 from ..config.config import KnowledgeConfig, KnowledgeSourceSpec
-from .hanlp_runtime import NLPRuntime
+from .hanlp_nlp_runtime import NLPRuntime
+from .knowledge_manager_cor import write_chunk_cor_artifacts
+from .knowledge_manager_ner import write_chunk_ner_artifacts
+from .knowledge_manager_semantic import write_chunk_tokenize_artifacts
+from .knowledge_manager_syntax import write_chunk_syntax_artifacts
 
 _UNSAFE_FILENAME_RE = re.compile(r'[\\/:*?"<>|]')
 _CHAT_URL_RE = re.compile(
@@ -142,6 +146,8 @@ _INTERNAL_EXCLUDED_FILENAMES = {
 logger = logging.getLogger(__name__)
 _AUTO_COLLECT_URL_MIN_CONTENT_CHARS = 1000
 _NER_SENTENCE_DELIMITERS = {"。", "！", "？", "!", "?", ";", "；", ".", "\n"}
+_TOKENIZE_FORMAT_VERSION = "0.1"
+_TOKENIZE_LINE_STATS_FORMAT_VERSION = "0.1"
 _COR_FORMAT_VERSION = "0.1"
 _NER_FORMAT_VERSION = "1.1"
 _SYNTAX_FORMAT_VERSION = "0.2"
@@ -327,6 +333,7 @@ class KnowledgeManager:
         self.cor_dir = self.knowledge_dir / "cor"
         self.ner_dir = self.knowledge_dir / "ner"
         self.syntax_dir = self.knowledge_dir / "syntax"
+        self.tokenize_dir = self.knowledge_dir / "tokenize"
         self.interlinear_dir = self.knowledge_dir / "interlinear"
         self.lightweight_dir = self.knowledge_dir / "lightweight"
         self.uploads_dir = self.knowledge_dir / "uploads"
@@ -633,6 +640,9 @@ class KnowledgeManager:
             "cor_effective_chunk_ratio": float(payload.get("cor_effective_chunk_ratio") or 0.0),
             "ner_ready_chunk_count": _safe_count_int(payload.get("ner_ready_chunk_count") or 0),
             "ner_entity_count": _safe_count_int(payload.get("ner_entity_count") or 0),
+            "tokenize_ready_chunk_count": _safe_count_int(payload.get("tokenize_ready_chunk_count") or 0),
+            "tokenize_line_count": _safe_count_int(payload.get("tokenize_line_count") or 0),
+            "tokenize_token_count": _safe_count_int(payload.get("tokenize_token_count") or 0),
             "syntax_ready_chunk_count": _safe_count_int(payload.get("syntax_ready_chunk_count") or 0),
             "syntax_ready_document_count": _safe_count_int(payload.get("syntax_ready_chunk_count") or 0),  # Alias
             "syntax_sentence_count": _safe_count_int(payload.get("syntax_sentence_count") or 0),
@@ -651,7 +661,7 @@ class KnowledgeManager:
         config: KnowledgeConfig,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> dict[str, Any]:
-        """Generate COR/NER/Syntax artifacts for an existing source payload."""
+        """Generate tokenize/COR/NER/Syntax artifacts for an existing source payload."""
         payload = self._load_index_payload_safe(source.id)
         if not isinstance(payload, dict):
             raise ValueError(f"Source index payload is missing: {source.id}")
@@ -662,8 +672,11 @@ class KnowledgeManager:
             raw_chunks = []
         total_chunks = len(raw_chunks)
 
-        stage_done = {"cor": 0, "ner": 0, "syntax": 0}
+        stage_done = {"tokenize": 0, "cor": 0, "ner": 0, "syntax": 0}
         live_metrics: dict[str, Any] = {
+            "tokenize_ready_chunk_count": 0,
+            "tokenize_line_count": 0,
+            "tokenize_token_count": 0,
             "cor_ready_chunk_count": 0,
             "cor_cluster_count": 0,
             "cor_replacement_count": 0,
@@ -682,7 +695,7 @@ class KnowledgeManager:
             if progress_callback is None:
                 return
             stage = str(stage_payload.get("stage") or "").strip().lower()
-            if stage not in {"cor", "ner", "syntax"}:
+            if stage not in {"tokenize", "cor", "ner", "syntax"}:
                 return
             done_chunks = max(0, _safe_count_int(stage_payload.get("done_chunks") or 0))
             if total_chunks > 0:
@@ -694,15 +707,19 @@ class KnowledgeManager:
                     if key in live_metrics:
                         live_metrics[key] = max(0, _safe_count_int(value))
 
-            processed = stage_done["cor"] + stage_done["ner"] + stage_done["syntax"]
-            denom = total_chunks * 3
+            processed = stage_done["tokenize"] + stage_done["cor"] + stage_done["ner"] + stage_done["syntax"]
+            denom = total_chunks * 4
             ratio = (processed / denom) if denom > 0 else 1.0
             progress = 45 + int(max(0.0, min(1.0, ratio)) * 25)
-            stage_title = {"cor": "COR", "ner": "NER", "syntax": "Syntax"}.get(stage, stage.upper())
+            stage_title = {"tokenize": "Tokenize", "cor": "COR", "ner": "NER", "syntax": "Syntax"}.get(
+                stage,
+                stage.upper(),
+            )
             progress_callback(
                 {
                     "stage_message": (
                         f"L2 {stage_title} {stage_done[stage]}/{total_chunks}"
+                        f" · Tokenize {stage_done['tokenize']}/{total_chunks}"
                         f" · COR {stage_done['cor']}/{total_chunks}"
                         f" · NER {stage_done['ner']}/{total_chunks}"
                         f" · Syntax {stage_done['syntax']}/{total_chunks}"
@@ -710,6 +727,7 @@ class KnowledgeManager:
                     "progress": max(45, min(70, progress)),
                     "l2_progress": {
                         "total_chunks": total_chunks,
+                        "tokenize_done_chunks": stage_done["tokenize"],
                         "cor_done_chunks": stage_done["cor"],
                         "ner_done_chunks": stage_done["ner"],
                         "syntax_done_chunks": stage_done["syntax"],
@@ -718,29 +736,37 @@ class KnowledgeManager:
                 }
             )
 
+        self._write_chunk_tokenize_artifacts(
+            source,
+            payload,
+            config=config,
+            progress_callback=_emit_l2,
+            progress_start=45,
+            progress_end=52,
+        )
         self._write_chunk_ner_artifacts(
             source,
             payload,
             config=config,
             progress_callback=_emit_l2,
-            progress_start=55,
-            progress_end=63,
+            progress_start=53,
+            progress_end=60,
         )
         self._write_chunk_syntax_artifacts(
             source,
             payload,
             config=config,
             progress_callback=_emit_l2,
-            progress_start=64,
-            progress_end=70,
+            progress_start=61,
+            progress_end=67,
         )
         self._write_chunk_cor_artifacts(
             source,
             payload,
             config=config,
             progress_callback=_emit_l2,
-            progress_start=45,
-            progress_end=54,
+            progress_start=68,
+            progress_end=70,
         )
 
         self._apply_semantic_stage_metrics(payload)
@@ -756,6 +782,9 @@ class KnowledgeManager:
         cor_cluster_count = 0
         cor_replacement_count = 0
         cor_effective_chunk_count = 0
+        tokenize_ready_chunk_count = 0
+        tokenize_line_count = 0
+        tokenize_token_count = 0
         ner_ready_chunk_count = 0
         ner_entity_count = 0
         ner_batch_count = 0
@@ -773,6 +802,11 @@ class KnowledgeManager:
         for chunk in chunks:
             if not isinstance(chunk, dict):
                 continue
+
+            if str(chunk.get("tokenize_status") or "").strip() == "ready":
+                tokenize_ready_chunk_count += 1
+            tokenize_line_count += max(0, _safe_count_int(chunk.get("tokenize_line_count") or 0))
+            tokenize_token_count += max(0, _safe_count_int(chunk.get("tokenize_token_count") or 0))
 
             if str(chunk.get("ner_status") or "").strip() == "ready":
                 ner_ready_chunk_count += 1
@@ -841,6 +875,9 @@ class KnowledgeManager:
             if cor_ready_chunk_count > 0
             else 0.0
         )
+        payload["tokenize_ready_chunk_count"] = tokenize_ready_chunk_count
+        payload["tokenize_line_count"] = tokenize_line_count
+        payload["tokenize_token_count"] = tokenize_token_count
         payload["ner_ready_chunk_count"] = ner_ready_chunk_count
         payload["ner_entity_count"] = ner_entity_count
         payload["ner_batch_count"] = ner_batch_count
@@ -854,6 +891,13 @@ class KnowledgeManager:
         payload["pos_coverage_on_syntax_tokens"] = (
             float(syntax_pos_count / syntax_token_count) if syntax_token_count > 0 else 0.0
         )
+        source_id = str(payload.get("source_id") or "").strip()
+        tokenize_file_token_total = self._load_source_tokenize_file_total_count(source_id) if source_id else 0
+        if tokenize_file_token_total > 0:
+            payload["token_count"] = tokenize_file_token_total
+            payload["tokenize_file_token_total"] = tokenize_file_token_total
+        else:
+            payload["tokenize_file_token_total"] = 0
         document_token_count = _safe_count_int(payload.get("token_count") or 0)
         payload["pos_coverage_on_document_tokens"] = (
             float(syntax_pos_count / document_token_count) if document_token_count > 0 else 0.0
@@ -887,7 +931,7 @@ class KnowledgeManager:
         lightweight_paths = self._load_source_lightweight_manifest(source_id)
         for lightweight_path in lightweight_paths:
             self._delete_lightweight_path(lightweight_path)
-        # Chunk/NER/COR/Syntax
+        # Chunk/NER/COR/Syntax/Tokenize
         for chunk_path in self._load_source_chunk_manifest(source_id):
             self._delete_chunk_path(chunk_path)
         for cor_path in self._load_source_cor_manifest(source_id):
@@ -896,6 +940,8 @@ class KnowledgeManager:
             self._delete_ner_path(ner_path)
         for syntax_path in self._load_source_syntax_manifest(source_id):
             self._delete_syntax_path(syntax_path)
+        for tokenize_path in self._load_source_tokenize_manifest(source_id):
+            self._delete_tokenize_path(tokenize_path)
         # Snapshots
         for snapshot in self._load_source_snapshot_manifest(source_id):
             self._delete_snapshot_file(snapshot.get("snapshot_path"))
@@ -909,6 +955,8 @@ class KnowledgeManager:
             "cor-manifest.json",
             "ner-manifest.json",
             "syntax-manifest.json",
+            "tokenize-manifest.json",
+            "tokenize-file-totals.json",
             "snapshot-manifest.json",
             "interlinear-manifest.json",
             "lightweight-manifest.json",
@@ -936,6 +984,7 @@ class KnowledgeManager:
         self.cor_dir.mkdir(parents=True, exist_ok=True)
         self.ner_dir.mkdir(parents=True, exist_ok=True)
         self.syntax_dir.mkdir(parents=True, exist_ok=True)
+        self.tokenize_dir.mkdir(parents=True, exist_ok=True)
         self.interlinear_dir.mkdir(parents=True, exist_ok=True)
         self.lightweight_dir.mkdir(parents=True, exist_ok=True)
         self.uploads_dir.mkdir(parents=True, exist_ok=True)
@@ -1174,6 +1223,9 @@ class KnowledgeManager:
     def _source_syntax_manifest_path(self, source_id: str) -> Path:
         return self._source_storage_path(source_id, "syntax-manifest.json")
 
+    def _source_tokenize_manifest_path(self, source_id: str) -> Path:
+        return self._source_storage_path(source_id, "tokenize-manifest.json")
+
     def _source_snapshot_manifest_path(self, source_id: str) -> Path:
         return self._source_storage_path(source_id, "snapshot-manifest.json")
 
@@ -1182,6 +1234,9 @@ class KnowledgeManager:
 
     def _source_lightweight_manifest_path(self, source_id: str) -> Path:
         return self._source_storage_path(source_id, "lightweight-manifest.json")
+
+    def _source_tokenize_file_totals_path(self, source_id: str) -> Path:
+        return self._source_storage_path(source_id, "tokenize-file-totals.json")
 
     def _source_uses_root_raw_dir(self, source: KnowledgeSourceSpec | None) -> bool:
         if source is None:
@@ -1308,6 +1363,25 @@ class KnowledgeManager:
             if isinstance(item, str) and str(item).strip()
         }
 
+    def _load_source_tokenize_manifest(self, source_id: str) -> set[str]:
+        path = self._source_tokenize_manifest_path(source_id)
+        if not path.exists():
+            return set()
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return set()
+        if not isinstance(payload, dict):
+            return set()
+        tokenize_paths = payload.get("tokenize_paths")
+        if not isinstance(tokenize_paths, list):
+            return set()
+        return {
+            str(item).strip()
+            for item in tokenize_paths
+            if isinstance(item, str) and str(item).strip()
+        }
+
     def _write_source_ner_manifest(self, source_id: str, ner_paths: set[str]) -> None:
         self._source_ner_manifest_path(source_id).write_text(
             json.dumps(
@@ -1342,6 +1416,20 @@ class KnowledgeManager:
                 {
                     "source_id": source_id,
                     "syntax_paths": sorted(syntax_paths),
+                    "updated_at": datetime.now(UTC).isoformat(),
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+    def _write_source_tokenize_manifest(self, source_id: str, tokenize_paths: set[str]) -> None:
+        self._source_tokenize_manifest_path(source_id).write_text(
+            json.dumps(
+                {
+                    "source_id": source_id,
+                    "tokenize_paths": sorted(tokenize_paths),
                     "updated_at": datetime.now(UTC).isoformat(),
                 },
                 ensure_ascii=False,
@@ -1927,6 +2015,25 @@ class KnowledgeManager:
                 break
             current = current.parent
 
+    def _delete_tokenize_path(self, relative_path: str | Path | None) -> None:
+        text = str(relative_path or "").strip()
+        if not text:
+            return
+        target = self.root_dir / text
+        if not target.exists() or not target.is_file():
+            return
+        try:
+            target.unlink()
+        except FileNotFoundError:
+            return
+        current = target.parent
+        while current != self.tokenize_dir and current.exists():
+            try:
+                current.rmdir()
+            except OSError:
+                break
+            current = current.parent
+
     def _delete_interlinear_path(self, relative_path: str | Path | None) -> None:
         text = str(relative_path or "").strip()
         if not text:
@@ -2145,6 +2252,29 @@ class KnowledgeManager:
         syntax_path = self._build_syntax_relative_path(chunk_relative_path)
         base = syntax_path.name[:-4] if syntax_path.name.endswith(".txt") else syntax_path.name
         return syntax_path.with_name(f"{base}.annotated.md")
+
+    def _build_tokenize_relative_path(self, chunk_relative_path: str) -> Path:
+        chunk_path = Path(str(chunk_relative_path or "").strip())
+        if not chunk_path.parts:
+            return self.tokenize_dir.relative_to(self.root_dir) / "knowledge.tokenize.txt"
+        relative_parts = chunk_path.parts[1:] if chunk_path.parts[0] == self.chunks_dir.name else chunk_path.parts
+        basename = chunk_path.name
+        if basename.endswith(".txt"):
+            basename = f"{basename[:-4]}.tokenize.txt"
+        else:
+            basename = f"{basename}.tokenize.txt"
+        target = self.tokenize_dir.joinpath(*relative_parts[:-1], basename)
+        return target.relative_to(self.root_dir)
+
+    def _build_tokenize_structured_relative_path(self, chunk_relative_path: str) -> Path:
+        tokenize_path = self._build_tokenize_relative_path(chunk_relative_path)
+        base = tokenize_path.name[:-4] if tokenize_path.name.endswith(".txt") else tokenize_path.name
+        return tokenize_path.with_name(f"{base}.json")
+
+    def _build_tokenize_line_stats_relative_path(self, chunk_relative_path: str) -> Path:
+        tokenize_path = self._build_tokenize_relative_path(chunk_relative_path)
+        base = tokenize_path.name[:-4] if tokenize_path.name.endswith(".txt") else tokenize_path.name
+        return tokenize_path.with_name(f"{base}.line-stats.json")
 
     def _chunk_file_key(self, chunk: dict[str, Any]) -> str:
         return str(chunk.get("document_path") or chunk.get("document_title") or "knowledge").strip()
@@ -3524,6 +3654,111 @@ class KnowledgeManager:
             lines.append("")
         return "\n".join(lines)
 
+    @staticmethod
+    def _flatten_tokenize_items(raw_tokens: list[Any]) -> list[str]:
+        tokens: list[str] = []
+
+        def _flatten(item: Any) -> None:
+            if isinstance(item, list):
+                for child in item:
+                    _flatten(child)
+                return
+            text = str(item or "").strip()
+            if text:
+                tokens.append(text)
+
+        for value in raw_tokens:
+            _flatten(value)
+        return tokens
+
+    def _render_chunk_tokenize_text(
+        self,
+        chunk: dict[str, Any],
+        structured_payload: dict[str, Any],
+    ) -> str:
+        lines = [
+            f"document_path={chunk.get('document_path') or ''}",
+            f"chunk_id={chunk.get('chunk_id') or ''}",
+            f"version_id={self._chunk_version_id(chunk)}",
+            f"line_count={structured_payload.get('line_count') or 0}",
+            f"token_count={structured_payload.get('token_count') or 0}",
+        ]
+        for line in structured_payload.get("lines") or []:
+            if not isinstance(line, dict):
+                continue
+            line_text = str(line.get("text") or "")
+            line_tokens = line.get("tokens") or []
+            token_labels = [
+                str(token.get("text") or "")
+                for token in line_tokens
+                if isinstance(token, dict)
+            ]
+            lines.append("")
+            lines.append(f"[Line {line.get('line_index')}] {line_text}")
+            lines.append(f"tokens={' | '.join(token_labels)}")
+        return "\n".join(lines)
+
+    def _write_source_tokenize_file_totals(
+        self,
+        source_id: str,
+        file_totals: dict[str, int],
+    ) -> None:
+        entries = [
+            {
+                "document_path": path_text,
+                "token_count": max(0, _safe_count_int(count)),
+            }
+            for path_text, count in sorted(file_totals.items())
+            if str(path_text or "").strip()
+        ]
+        payload = {
+            "artifact": "tokenize_file_totals",
+            "format_version": _TOKENIZE_LINE_STATS_FORMAT_VERSION,
+            "source_id": source_id,
+            "file_count": len(entries),
+            "token_count_total": sum(int(item.get("token_count") or 0) for item in entries),
+            "files": entries,
+            "updated_at": datetime.now(UTC).isoformat(),
+        }
+        path = self._source_tokenize_file_totals_path(source_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+    def _load_source_tokenize_file_total_count(self, source_id: str) -> int:
+        path = self._source_tokenize_file_totals_path(source_id)
+        if not path.exists():
+            return 0
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return 0
+        if not isinstance(payload, dict):
+            return 0
+        return max(0, _safe_count_int(payload.get("token_count_total") or 0))
+
+    def _write_chunk_tokenize_artifacts(
+        self,
+        source: KnowledgeSourceSpec,
+        payload: dict[str, Any],
+        *,
+        config: KnowledgeConfig | None,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
+        progress_start: int = 45,
+        progress_end: int = 52,
+    ) -> set[str]:
+        return write_chunk_tokenize_artifacts(
+            self,
+            source,
+            payload,
+            config=config,
+            progress_callback=progress_callback,
+            progress_start=progress_start,
+            progress_end=progress_end,
+        )
+
     def _write_chunk_syntax_artifacts(
         self,
         source: KnowledgeSourceSpec,
@@ -3534,231 +3769,15 @@ class KnowledgeManager:
         progress_start: int = 64,
         progress_end: int = 70,
     ) -> set[str]:
-        previous_manifest_paths = self._load_source_syntax_manifest(source.id)
-        current_syntax_paths: set[str] = set()
-        map_rows = self._load_source_interlinear_lightweight_map_rows(source.id)
-        raw_chunks = payload.get("chunks") or []
-        chunks = [item for item in raw_chunks if isinstance(item, dict)] if isinstance(raw_chunks, list) else []
-        chunk_groups = self._group_chunks_for_ner(chunks)
-        total_documents = len(chunk_groups)
-        syntax_ready_so_far = 0
-        syntax_sentence_so_far = 0
-        syntax_token_so_far = 0
-        syntax_pos_so_far = 0
-        syntax_pos_tag_types_so_far: set[str] = set()
-        syntax_relation_so_far = 0
-
-        for index, group in enumerate(chunk_groups, start=1):
-            representative = group[0]
-
-            if all(self._chunk_stage_ready_for_resume(chunk, stage="syntax") for chunk in group):
-                for chunk in group:
-                    current_syntax_paths.update(self._chunk_stage_paths(chunk, stage="syntax"))
-                syntax_ready_so_far += 1
-                syntax_sentence_so_far += max(
-                    max(0, _safe_count_int(chunk.get("syntax_sentence_count") or 0))
-                    for chunk in group
-                )
-                syntax_token_so_far += max(
-                    max(0, _safe_count_int(chunk.get("syntax_token_count") or 0))
-                    for chunk in group
-                )
-                syntax_pos_so_far += max(
-                    max(0, _safe_count_int(chunk.get("syntax_pos_count") or 0))
-                    for chunk in group
-                )
-                for chunk in group:
-                    raw_pos_tag_types = chunk.get("syntax_pos_tag_types")
-                    if not isinstance(raw_pos_tag_types, list):
-                        continue
-                    for item in raw_pos_tag_types:
-                        tag = str(item or "").strip()
-                        if tag:
-                            syntax_pos_tag_types_so_far.add(tag)
-                syntax_relation_so_far += max(
-                    max(0, _safe_count_int(chunk.get("syntax_relation_count") or 0))
-                    for chunk in group
-                )
-                if progress_callback is not None:
-                    progress_callback(
-                        {
-                            "stage": "syntax",
-                            "done_chunks": index,
-                            "total_chunks": total_documents,
-                            "metrics": {
-                                "syntax_ready_chunk_count": syntax_ready_so_far,
-                                "syntax_sentence_count": syntax_sentence_so_far,
-                                "syntax_token_count": syntax_token_so_far,
-                                "syntax_pos_count": syntax_pos_so_far,
-                                "syntax_pos_tag_type_count": len(syntax_pos_tag_types_so_far),
-                                "syntax_relation_count": syntax_relation_so_far,
-                            },
-                        }
-                    )
-                continue
-
-            for chunk in group:
-                chunk["syntax_status"] = "ready"
-                chunk["syntax_format_version"] = _SYNTAX_FORMAT_VERSION
-                chunk.pop("syntax_path", None)
-                chunk.pop("syntax_structured_path", None)
-                chunk.pop("syntax_annotated_path", None)
-
-            resolved_text, source_text, interlinear_path, syntax_input_mode = self._resolve_document_ner_input_text(
-                group,
-                map_rows=map_rows,
-                source=source,
-                allow_fallback=source.type in {"text", "chat"},
-            )
-            if syntax_input_mode == "interlinear_required" or not str(resolved_text or "").strip():
-                for chunk in group:
-                    chunk["syntax_status"] = "unavailable"
-                    chunk["syntax_input_mode"] = "interlinear_required"
-                    chunk["syntax_interlinear_path"] = str(interlinear_path or "")
-                    chunk["syntax_sentence_count"] = 0
-                    chunk["syntax_token_count"] = 0
-                    chunk["syntax_pos_count"] = 0
-                    chunk["syntax_pos_tag_type_count"] = 0
-                    chunk["syntax_pos_tag_types"] = []
-                    chunk["syntax_relation_count"] = 0
-                if progress_callback is not None:
-                    progress_callback(
-                        {
-                            "stage": "syntax",
-                            "done_chunks": index,
-                            "total_chunks": total_documents,
-                            "metrics": {
-                                "syntax_ready_chunk_count": syntax_ready_so_far,
-                                "syntax_sentence_count": syntax_sentence_so_far,
-                                "syntax_token_count": syntax_token_so_far,
-                                "syntax_pos_count": syntax_pos_so_far,
-                                "syntax_pos_tag_type_count": len(syntax_pos_tag_types_so_far),
-                                "syntax_relation_count": syntax_relation_so_far,
-                            },
-                        }
-                    )
-                continue
-            cor_structured_path = ""
-            cor_resolution_mode = "identity_fallback"
-            mentions = self._load_chunk_ner_mentions(representative)
-            structured_payload = self._render_chunk_syntax_structured_payload(
-                representative,
-                source_text=source_text,
-                input_text=resolved_text,
-                interlinear_path=interlinear_path,
-                syntax_input_mode=syntax_input_mode,
-                cor_structured_path=cor_structured_path,
-                cor_resolution_mode=cor_resolution_mode,
-                mentions=mentions,
-                config=config,
-            )
-
-            syntax_sentence_count = _safe_count_int(structured_payload.get("sentence_count") or 0)
-            syntax_token_count = _safe_count_int(structured_payload.get("token_count") or 0)
-            syntax_pos_count = _safe_count_int(structured_payload.get("pos_count") or 0)
-            syntax_pos_tag_type_count = _safe_count_int(structured_payload.get("pos_tag_type_count") or 0)
-            syntax_pos_tag_types = [
-                str(item).strip()
-                for item in (structured_payload.get("pos_tag_types") or [])
-                if str(item).strip()
-            ]
-            syntax_relation_count = _safe_count_int(structured_payload.get("relation_count") or 0)
-
-            syntax_relative_path = self._build_syntax_relative_path(str(representative.get("chunk_path") or ""))
-            syntax_structured_relative_path = self._build_syntax_structured_relative_path(
-                str(representative.get("chunk_path") or "")
-            )
-            syntax_annotated_relative_path = self._build_syntax_annotated_relative_path(
-                str(representative.get("chunk_path") or "")
-            )
-
-            syntax_file_path = self.root_dir / syntax_relative_path
-            syntax_structured_file_path = self.root_dir / syntax_structured_relative_path
-            syntax_annotated_file_path = self.root_dir / syntax_annotated_relative_path
-            syntax_file_path.parent.mkdir(parents=True, exist_ok=True)
-            syntax_file_path.write_text(
-                self._render_chunk_syntax_text(representative, structured_payload),
-                encoding="utf-8",
-            )
-            syntax_structured_file_path.parent.mkdir(parents=True, exist_ok=True)
-            syntax_structured_file_path.write_text(
-                json.dumps(
-                    structured_payload,
-                    ensure_ascii=False,
-                    indent=2,
-                ) + "\n",
-                encoding="utf-8",
-            )
-            syntax_annotated_file_path.parent.mkdir(parents=True, exist_ok=True)
-            syntax_annotated_file_path.write_text(
-                self._render_chunk_syntax_annotated_markdown(representative, structured_payload),
-                encoding="utf-8",
-            )
-
-            for chunk in group:
-                chunk["syntax_input_mode"] = str(syntax_input_mode or "")
-                chunk["syntax_interlinear_path"] = str(interlinear_path or "")
-                chunk["syntax_sentence_count"] = syntax_sentence_count
-                chunk["syntax_token_count"] = syntax_token_count
-                chunk["syntax_pos_count"] = syntax_pos_count
-                chunk["syntax_pos_tag_type_count"] = syntax_pos_tag_type_count
-                chunk["syntax_pos_tag_types"] = syntax_pos_tag_types
-                chunk["syntax_relation_count"] = syntax_relation_count
-                chunk["syntax_path"] = syntax_relative_path.as_posix()
-                chunk["syntax_structured_path"] = syntax_structured_relative_path.as_posix()
-                chunk["syntax_annotated_path"] = syntax_annotated_relative_path.as_posix()
-
-            current_syntax_paths.add(syntax_relative_path.as_posix())
-            current_syntax_paths.add(syntax_structured_relative_path.as_posix())
-            current_syntax_paths.add(syntax_annotated_relative_path.as_posix())
-
-            syntax_ready_so_far += 1
-            syntax_sentence_so_far += syntax_sentence_count
-            syntax_token_so_far += syntax_token_count
-            syntax_pos_so_far += syntax_pos_count
-            for tag in syntax_pos_tag_types:
-                if tag:
-                    syntax_pos_tag_types_so_far.add(tag)
-            syntax_relation_so_far += syntax_relation_count
-            self._write_source_syntax_manifest(source.id, current_syntax_paths)
-            self._write_l2_checkpoint(
-                source.id,
-                payload,
-                stage="syntax",
-                done_chunks=index,
-                total_chunks=total_documents,
-                metrics={
-                    "syntax_ready_chunk_count": syntax_ready_so_far,
-                    "syntax_sentence_count": syntax_sentence_so_far,
-                    "syntax_token_count": syntax_token_so_far,
-                    "syntax_pos_count": syntax_pos_so_far,
-                    "syntax_pos_tag_type_count": len(syntax_pos_tag_types_so_far),
-                    "syntax_relation_count": syntax_relation_so_far,
-                },
-            )
-
-            if progress_callback is not None:
-                progress_callback(
-                    {
-                        "stage": "syntax",
-                        "done_chunks": index,
-                        "total_chunks": total_documents,
-                        "metrics": {
-                            "syntax_ready_chunk_count": syntax_ready_so_far,
-                            "syntax_sentence_count": syntax_sentence_so_far,
-                            "syntax_token_count": syntax_token_so_far,
-                            "syntax_pos_count": syntax_pos_so_far,
-                            "syntax_pos_tag_type_count": len(syntax_pos_tag_types_so_far),
-                            "syntax_relation_count": syntax_relation_so_far,
-                        },
-                    }
-                )
-
-        stale_syntax_paths = previous_manifest_paths - current_syntax_paths
-        for syntax_path in stale_syntax_paths:
-            self._delete_syntax_path(syntax_path)
-        self._write_source_syntax_manifest(source.id, current_syntax_paths)
-        return current_syntax_paths
+        return write_chunk_syntax_artifacts(
+            self,
+            source,
+            payload,
+            config=config,
+            progress_callback=progress_callback,
+            progress_start=progress_start,
+            progress_end=progress_end,
+        )
 
     def _write_chunk_cor_artifacts(
         self,
@@ -3770,205 +3789,15 @@ class KnowledgeManager:
         progress_start: int = 45,
         progress_end: int = 54,
     ) -> set[str]:
-        previous_manifest_paths = self._load_source_cor_manifest(source.id)
-        current_cor_paths: set[str] = set()
-        map_rows = self._load_source_interlinear_lightweight_map_rows(source.id)
-        semantic_state = self.get_semantic_engine_state(config) if config is not None else self._semantic_engine_state(
-            status="unavailable",
-            reason_code="NLP_ENGINE_UNAVAILABLE",
-            reason="NLP semantic engine is not configured.",
+        return write_chunk_cor_artifacts(
+            self,
+            source,
+            payload,
+            config=config,
+            progress_callback=progress_callback,
+            progress_start=progress_start,
+            progress_end=progress_end,
         )
-        ready = semantic_state.get("status") == "ready"
-
-        raw_chunks = payload.get("chunks") or []
-        chunks = [item for item in raw_chunks if isinstance(item, dict)] if isinstance(raw_chunks, list) else []
-        chunk_groups = self._group_chunks_for_ner(chunks)
-        total_documents = len(chunk_groups)
-        cor_ready_so_far = 0
-        cor_cluster_so_far = 0
-        cor_replacement_so_far = 0
-        cor_effective_so_far = 0
-
-        for index, group in enumerate(chunk_groups, start=1):
-            representative = group[0]
-
-            if all(self._chunk_stage_ready_for_resume(chunk, stage="cor") for chunk in group):
-                for chunk in group:
-                    current_cor_paths.update(self._chunk_stage_paths(chunk, stage="cor"))
-                cor_ready_so_far += 1
-                cor_cluster_so_far += max(
-                    max(0, _safe_count_int(chunk.get("cor_cluster_count") or 0))
-                    for chunk in group
-                )
-                chunk_replacement_count = max(
-                    max(0, _safe_count_int(chunk.get("cor_replacement_count") or 0))
-                    for chunk in group
-                )
-                cor_replacement_so_far += chunk_replacement_count
-                if chunk_replacement_count > 0:
-                    cor_effective_so_far += 1
-                if progress_callback is not None:
-                    progress_callback(
-                        {
-                            "stage": "cor",
-                            "done_chunks": index,
-                            "total_chunks": total_documents,
-                            "metrics": {
-                                "cor_ready_chunk_count": cor_ready_so_far,
-                                "cor_cluster_count": cor_cluster_so_far,
-                                "cor_replacement_count": cor_replacement_so_far,
-                                "cor_effective_chunk_count": cor_effective_so_far,
-                            },
-                        }
-                    )
-                continue
-
-            for chunk in group:
-                chunk["cor_status"] = "unavailable"
-                chunk["cor_format_version"] = _COR_FORMAT_VERSION
-                chunk["cor_cluster_count"] = 0
-                chunk["cor_replacement_count"] = 0
-                chunk["cor_resolution_mode"] = "identity_fallback"
-                chunk["cor_reason_code"] = str(semantic_state.get("reason_code") or "NLP_ENGINE_UNAVAILABLE")
-                chunk["cor_reason"] = str(semantic_state.get("reason") or "NLP semantic engine is not configured.")
-                chunk.pop("cor_path", None)
-                chunk.pop("cor_structured_path", None)
-                chunk.pop("cor_annotated_path", None)
-
-            chunk_text, _, interlinear_path, cor_input_mode = self._resolve_document_ner_input_text(
-                group,
-                map_rows=map_rows,
-                source=source,
-                allow_fallback=source.type in {"text", "chat"},
-            )
-            if cor_input_mode == "interlinear_required" or not str(chunk_text or "").strip():
-                for chunk in group:
-                    chunk["cor_status"] = "unavailable"
-                    chunk["cor_input_mode"] = "interlinear_required"
-                    chunk["cor_interlinear_path"] = str(interlinear_path or "")
-                    chunk["cor_reason_code"] = "INTERLINEAR_REQUIRED"
-                    chunk["cor_reason"] = "COR requires interlinear input and fallback is disabled."
-                if progress_callback is not None:
-                    progress_callback(
-                        {
-                            "stage": "cor",
-                            "done_chunks": index,
-                            "total_chunks": total_documents,
-                            "metrics": {
-                                "cor_ready_chunk_count": cor_ready_so_far,
-                                "cor_cluster_count": cor_cluster_so_far,
-                                "cor_replacement_count": cor_replacement_so_far,
-                                "cor_effective_chunk_count": cor_effective_so_far,
-                            },
-                        }
-                    )
-                continue
-            raw_result: Any = {}
-            if ready and config is not None:
-                # HanLP coreference is intentionally disabled in CoPaw runtime.
-                for chunk in group:
-                    chunk["cor_reason_code"] = "HANLP2_COREF_NOT_OPEN_SOURCE"
-                    chunk["cor_reason"] = (
-                        "HanLP coreference_resolution is not open-source and is disabled in CoPaw runtime."
-                    )
-
-            cor_relative_path = self._build_cor_relative_path(str(representative.get("chunk_path") or ""))
-            cor_structured_relative_path = self._build_cor_structured_relative_path(
-                str(representative.get("chunk_path") or "")
-            )
-            cor_annotated_relative_path = self._build_cor_annotated_relative_path(
-                str(representative.get("chunk_path") or "")
-            )
-
-            structured_payload = self._render_chunk_cor_structured_payload(
-                representative,
-                text=chunk_text,
-                raw_result=raw_result,
-                interlinear_path=interlinear_path,
-                cor_input_mode=cor_input_mode,
-            )
-            cor_cluster_count = _safe_count_int(structured_payload.get("cluster_count") or 0)
-            cor_replacement_count = _safe_count_int(structured_payload.get("replacement_count") or 0)
-            cor_resolution_mode = str(structured_payload.get("resolution_mode") or "identity_fallback")
-
-            cor_file_path = self.root_dir / cor_relative_path
-            cor_structured_file_path = self.root_dir / cor_structured_relative_path
-            cor_annotated_file_path = self.root_dir / cor_annotated_relative_path
-            cor_file_path.parent.mkdir(parents=True, exist_ok=True)
-            cor_file_path.write_text(
-                self._render_chunk_cor_text(representative, structured_payload),
-                encoding="utf-8",
-            )
-            cor_structured_file_path.parent.mkdir(parents=True, exist_ok=True)
-            cor_structured_file_path.write_text(
-                json.dumps(
-                    structured_payload,
-                    ensure_ascii=False,
-                    indent=2,
-                ) + "\n",
-                encoding="utf-8",
-            )
-            cor_annotated_file_path.parent.mkdir(parents=True, exist_ok=True)
-            cor_annotated_file_path.write_text(
-                self._render_chunk_cor_annotated_markdown(representative, structured_payload),
-                encoding="utf-8",
-            )
-
-            for chunk in group:
-                chunk["cor_input_mode"] = str(cor_input_mode or "")
-                chunk["cor_interlinear_path"] = str(interlinear_path or "")
-                chunk["cor_cluster_count"] = cor_cluster_count
-                chunk["cor_replacement_count"] = cor_replacement_count
-                chunk["cor_resolution_mode"] = cor_resolution_mode
-                chunk["cor_path"] = cor_relative_path.as_posix()
-                chunk["cor_structured_path"] = cor_structured_relative_path.as_posix()
-                chunk["cor_annotated_path"] = cor_annotated_relative_path.as_posix()
-
-            current_cor_paths.add(cor_relative_path.as_posix())
-            current_cor_paths.add(cor_structured_relative_path.as_posix())
-            current_cor_paths.add(cor_annotated_relative_path.as_posix())
-
-            if str(representative.get("cor_status") or "").strip() == "ready":
-                cor_ready_so_far += 1
-            cor_cluster_so_far += cor_cluster_count
-            cor_replacement_so_far += cor_replacement_count
-            if cor_replacement_count > 0:
-                cor_effective_so_far += 1
-
-            self._write_source_cor_manifest(source.id, current_cor_paths)
-            self._write_l2_checkpoint(
-                source.id,
-                payload,
-                stage="cor",
-                done_chunks=index,
-                total_chunks=total_documents,
-                metrics={
-                    "cor_ready_chunk_count": cor_ready_so_far,
-                    "cor_cluster_count": cor_cluster_so_far,
-                    "cor_replacement_count": cor_replacement_so_far,
-                    "cor_effective_chunk_count": cor_effective_so_far,
-                },
-            )
-            if progress_callback is not None:
-                progress_callback(
-                    {
-                        "stage": "cor",
-                        "done_chunks": index,
-                        "total_chunks": total_documents,
-                        "metrics": {
-                            "cor_ready_chunk_count": cor_ready_so_far,
-                            "cor_cluster_count": cor_cluster_so_far,
-                            "cor_replacement_count": cor_replacement_so_far,
-                            "cor_effective_chunk_count": cor_effective_so_far,
-                        },
-                    }
-                )
-
-        stale_cor_paths = previous_manifest_paths - current_cor_paths
-        for cor_path in stale_cor_paths:
-            self._delete_cor_path(cor_path)
-        self._write_source_cor_manifest(source.id, current_cor_paths)
-        return current_cor_paths
 
     def _render_chunk_ner_text(
         self,
@@ -4008,268 +3837,15 @@ class KnowledgeManager:
         progress_start: int = 55,
         progress_end: int = 63,
     ) -> set[str]:
-        previous_manifest_paths = self._load_source_ner_manifest(source.id)
-        current_ner_paths: set[str] = set()
-        map_rows = self._load_source_interlinear_lightweight_map_rows(source.id)
-        semantic_state = self.get_semantic_engine_state(config) if config is not None else self._semantic_engine_state(
-            status="unavailable",
-            reason_code="NLP_ENGINE_UNAVAILABLE",
-            reason="NLP semantic engine is not configured.",
+        return write_chunk_ner_artifacts(
+            self,
+            source,
+            payload,
+            config=config,
+            progress_callback=progress_callback,
+            progress_start=progress_start,
+            progress_end=progress_end,
         )
-
-        raw_chunks = payload.get("chunks") or []
-        chunks = [item for item in raw_chunks if isinstance(item, dict)] if isinstance(raw_chunks, list) else []
-        chunk_groups = self._group_chunks_for_ner(chunks)
-        total_documents = len(chunk_groups)
-        ner_ready_so_far = 0
-        ner_entity_so_far = 0
-
-        for index, group in enumerate(chunk_groups, start=1):
-            representative = group[0]
-
-            if all(self._chunk_stage_ready_for_resume(chunk, stage="ner") for chunk in group):
-                for chunk in group:
-                    current_ner_paths.update(self._chunk_stage_paths(chunk, stage="ner"))
-                ner_ready_so_far += 1
-                ner_entity_so_far += max(
-                    max(0, _safe_count_int(chunk.get("ner_entity_count") or 0))
-                    for chunk in group
-                )
-                if progress_callback is not None:
-                    progress_callback(
-                        {
-                            "stage": "ner",
-                            "done_chunks": index,
-                            "total_chunks": total_documents,
-                            "metrics": {
-                                "ner_ready_chunk_count": ner_ready_so_far,
-                                "ner_entity_count": ner_entity_so_far,
-                            },
-                        }
-                    )
-                continue
-
-            for chunk in group:
-                chunk["file_key"] = self._chunk_file_key(chunk)
-                chunk["version_id"] = self._chunk_version_id(chunk)
-                chunk["ner_status"] = "unavailable"
-                chunk["ner_entity_count"] = 0
-                chunk["ner_format_version"] = _NER_FORMAT_VERSION
-                chunk["ner_reason_code"] = str(semantic_state.get("reason_code") or "")
-                chunk["ner_reason"] = str(semantic_state.get("reason") or "")
-                chunk.pop("ner_path", None)
-                chunk.pop("ner_structured_path", None)
-                chunk.pop("ner_annotated_path", None)
-                chunk.pop("ner_stats_path", None)
-
-            resolved_text, source_text, interlinear_path, ner_input_mode = self._resolve_document_ner_input_text(
-                group,
-                map_rows=map_rows,
-                source=source,
-                allow_fallback=source.type in {"text", "chat"},
-            )
-            if ner_input_mode == "interlinear_required" or not str(resolved_text or "").strip():
-                for chunk in group:
-                    chunk["ner_status"] = "unavailable"
-                    chunk["ner_entity_count"] = 0
-                    chunk["ner_input_mode"] = "interlinear_required"
-                    chunk["ner_reason_code"] = "INTERLINEAR_REQUIRED"
-                    chunk["ner_reason"] = "NER requires interlinear input and fallback is disabled."
-                if progress_callback is not None:
-                    progress_callback(
-                        {
-                            "stage": "ner",
-                            "done_chunks": index,
-                            "total_chunks": total_documents,
-                            "metrics": {
-                                "ner_ready_chunk_count": ner_ready_so_far,
-                                "ner_entity_count": ner_entity_so_far,
-                            },
-                        }
-                    )
-                continue
-            cor_structured_path = ""
-            cor_resolution_mode = "identity_fallback"
-            ner_execution_started_at = datetime.now(UTC)
-            ner_batch_size = self._resolve_ner_batch_size(config)
-            mentions, ner_runtime_stats = (
-                self._collect_document_ner_mentions_batched(
-                    resolved_text,
-                    config=config,
-                    batch_size=ner_batch_size,
-                )
-                if config is not None
-                else (
-                    [],
-                    {
-                        "batch_count": 0,
-                        "worker_restart_count": 0,
-                        "worker_pids": [],
-                        "status": "unavailable",
-                        "reason_code": "NLP_ENGINE_UNAVAILABLE",
-                        "reason": "NLP semantic engine is not configured.",
-                    },
-                )
-            )
-            ner_runtime_status = str(ner_runtime_stats.get("status") or "ready").strip().lower()
-            if ner_runtime_status != "ready":
-                reason_code = str(ner_runtime_stats.get("reason_code") or "NLP_ENGINE_UNAVAILABLE")
-                reason = str(ner_runtime_stats.get("reason") or "NER runtime is unavailable.")
-                for chunk in group:
-                    chunk["ner_status"] = "unavailable"
-                    chunk["ner_entity_count"] = 0
-                    chunk["ner_input_mode"] = ner_input_mode
-                    chunk["ner_batch_size"] = ner_batch_size
-                    chunk["ner_batch_count"] = int(ner_runtime_stats.get("batch_count") or 0)
-                    chunk["ner_worker_restart_count"] = int(ner_runtime_stats.get("worker_restart_count") or 0)
-                    chunk["ner_worker_pids"] = list(ner_runtime_stats.get("worker_pids") or [])
-                    chunk["ner_reason_code"] = reason_code
-                    chunk["ner_reason"] = reason
-                if progress_callback is not None:
-                    progress_callback(
-                        {
-                            "stage": "ner",
-                            "done_chunks": index,
-                            "total_chunks": total_documents,
-                            "metrics": {
-                                "ner_ready_chunk_count": ner_ready_so_far,
-                                "ner_entity_count": ner_entity_so_far,
-                            },
-                        }
-                    )
-                continue
-            catalog = self._build_chunk_ner_catalog(mentions)
-            ner_execution_finished_at = datetime.now(UTC)
-            ner_execution_duration_ms = max(
-                0,
-                int((ner_execution_finished_at - ner_execution_started_at).total_seconds() * 1000),
-            )
-            ner_relative_path = self._build_ner_relative_path(str(representative.get("chunk_path") or ""))
-            ner_structured_relative_path = self._build_ner_structured_relative_path(
-                str(representative.get("chunk_path") or "")
-            )
-            ner_annotated_relative_path = self._build_ner_annotated_relative_path(
-                str(representative.get("chunk_path") or "")
-            )
-            ner_stats_relative_path = self._build_ner_stats_relative_path(str(representative.get("chunk_path") or ""))
-            ner_file_path = self.root_dir / ner_relative_path
-            ner_structured_file_path = self.root_dir / ner_structured_relative_path
-            ner_annotated_file_path = self.root_dir / ner_annotated_relative_path
-            ner_stats_file_path = self.root_dir / ner_stats_relative_path
-            ner_file_path.parent.mkdir(parents=True, exist_ok=True)
-            ner_file_path.write_text(
-                self._render_chunk_ner_text(representative, text=resolved_text, catalog=catalog),
-                encoding="utf-8",
-            )
-            ner_structured_file_path.parent.mkdir(parents=True, exist_ok=True)
-            ner_structured_file_path.write_text(
-                json.dumps(
-                    self._render_chunk_ner_structured_payload(
-                        representative,
-                        source_text=source_text,
-                        input_text=resolved_text,
-                        interlinear_path=interlinear_path,
-                        ner_input_mode=ner_input_mode,
-                        cor_structured_path=cor_structured_path,
-                        cor_resolution_mode=cor_resolution_mode,
-                        catalog=catalog,
-                        mentions=mentions,
-                        execution_started_at=ner_execution_started_at.isoformat(),
-                        execution_finished_at=ner_execution_finished_at.isoformat(),
-                        execution_duration_ms=ner_execution_duration_ms,
-                    ),
-                    ensure_ascii=False,
-                    indent=2,
-                ) + "\n",
-                encoding="utf-8",
-            )
-            ner_annotated_file_path.parent.mkdir(parents=True, exist_ok=True)
-            ner_annotated_file_path.write_text(
-                self._render_chunk_ner_annotated_markdown(
-                    representative,
-                    text=resolved_text,
-                    mentions=mentions,
-                    structured_relative_path=ner_structured_relative_path,
-                ),
-                encoding="utf-8",
-            )
-            ner_stats_file_path.parent.mkdir(parents=True, exist_ok=True)
-            ner_stats_payload = {
-                "artifact": "ner_stats",
-                "format_version": _NER_FORMAT_VERSION,
-                "document_path": str(representative.get("document_path") or ""),
-                "version_id": self._chunk_version_id(representative),
-                "interlinear_path": interlinear_path,
-                "ner_input_mode": ner_input_mode,
-                "ner_batch_size": ner_batch_size,
-                "ner_batch_count": int(ner_runtime_stats.get("batch_count") or 0),
-                "ner_worker_restart_count": int(ner_runtime_stats.get("worker_restart_count") or 0),
-                "ner_worker_pids": list(ner_runtime_stats.get("worker_pids") or []),
-                "entity_count": len(catalog),
-                "entity_mentions_count": len(mentions),
-                "execution_started_at": ner_execution_started_at.isoformat(),
-                "execution_finished_at": ner_execution_finished_at.isoformat(),
-                "execution_duration_ms": ner_execution_duration_ms,
-                "sentence_count": len([line for line in str(resolved_text or "").splitlines() if line.strip()]),
-                "avg_entities_per_sentence": (
-                    float(len(catalog))
-                    / max(1, len([line for line in str(resolved_text or "").splitlines() if line.strip()]))
-                ),
-                "updated_at": datetime.now(UTC).isoformat(),
-            }
-            ner_stats_file_path.write_text(
-                json.dumps(ner_stats_payload, ensure_ascii=False, indent=2) + "\n",
-                encoding="utf-8",
-            )
-            for chunk in group:
-                chunk["ner_status"] = "ready"
-                chunk["ner_entity_count"] = len(catalog)
-                chunk["ner_input_mode"] = ner_input_mode
-                chunk["ner_batch_size"] = ner_batch_size
-                chunk["ner_batch_count"] = int(ner_runtime_stats.get("batch_count") or 0)
-                chunk["ner_worker_restart_count"] = int(ner_runtime_stats.get("worker_restart_count") or 0)
-                chunk["ner_worker_pids"] = list(ner_runtime_stats.get("worker_pids") or [])
-                chunk["ner_path"] = ner_relative_path.as_posix()
-                chunk["ner_structured_path"] = ner_structured_relative_path.as_posix()
-                chunk["ner_annotated_path"] = ner_annotated_relative_path.as_posix()
-                chunk["ner_stats_path"] = ner_stats_relative_path.as_posix()
-
-            current_ner_paths.add(ner_relative_path.as_posix())
-            current_ner_paths.add(ner_structured_relative_path.as_posix())
-            current_ner_paths.add(ner_annotated_relative_path.as_posix())
-            current_ner_paths.add(ner_stats_relative_path.as_posix())
-            ner_ready_so_far += 1
-            ner_entity_so_far += len(catalog)
-            self._write_source_ner_manifest(source.id, current_ner_paths)
-            self._write_l2_checkpoint(
-                source.id,
-                payload,
-                stage="ner",
-                done_chunks=index,
-                total_chunks=total_documents,
-                metrics={
-                    "ner_ready_chunk_count": ner_ready_so_far,
-                    "ner_entity_count": ner_entity_so_far,
-                },
-            )
-            if progress_callback is not None:
-                progress_callback(
-                    {
-                        "stage": "ner",
-                        "done_chunks": index,
-                        "total_chunks": total_documents,
-                        "metrics": {
-                            "ner_ready_chunk_count": ner_ready_so_far,
-                            "ner_entity_count": ner_entity_so_far,
-                        },
-                    }
-                )
-
-        stale_ner_paths = previous_manifest_paths - current_ner_paths
-        for ner_path in stale_ner_paths:
-            self._delete_ner_path(ner_path)
-        self._write_source_ner_manifest(source.id, current_ner_paths)
-        return current_ner_paths
 
     def get_source_storage_dir(self, source_id: str) -> Path:
         # 扁平化模式下 source 元数据文件位于知识根目录
@@ -4287,6 +3863,8 @@ class KnowledgeManager:
             "cor-manifest.json",
             "ner-manifest.json",
             "syntax-manifest.json",
+            "tokenize-manifest.json",
+            "tokenize-file-totals.json",
             "snapshot-manifest.json",
             "interlinear-manifest.json",
             "lightweight-manifest.json",
@@ -4311,6 +3889,10 @@ class KnowledgeManager:
                 candidates.append(path)
         for syntax_path in self._load_source_syntax_manifest(source_id):
             path = self.root_dir / str(syntax_path)
+            if path.exists() and path.is_file():
+                candidates.append(path)
+        for tokenize_path in self._load_source_tokenize_manifest(source_id):
+            path = self.root_dir / str(tokenize_path)
             if path.exists() and path.is_file():
                 candidates.append(path)
 
@@ -4509,6 +4091,13 @@ class KnowledgeManager:
             for chunk in payload.get("chunks") or []:
                 if not isinstance(chunk, dict):
                     continue
+                chunk["tokenize_status"] = "unavailable"
+                chunk["tokenize_format_version"] = _TOKENIZE_FORMAT_VERSION
+                chunk["tokenize_line_count"] = 0
+                chunk["tokenize_token_count"] = 0
+                chunk.pop("tokenize_path", None)
+                chunk.pop("tokenize_structured_path", None)
+
                 chunk["cor_status"] = "unavailable"
                 chunk["cor_format_version"] = _COR_FORMAT_VERSION
                 chunk["cor_cluster_count"] = 0
@@ -4557,6 +4146,12 @@ class KnowledgeManager:
             for syntax_path in stale_syntax_paths:
                 self._delete_syntax_path(syntax_path)
             self._write_source_syntax_manifest(source.id, set())
+
+            stale_tokenize_paths = self._load_source_tokenize_manifest(source.id)
+            for tokenize_path in stale_tokenize_paths:
+                self._delete_tokenize_path(tokenize_path)
+            self._write_source_tokenize_manifest(source.id, set())
+            self._write_source_tokenize_file_totals(source.id, {})
 
         self._write_source_index_payload(source.id, payload)
         self._write_source_metadata(source, indexed_at=str(payload.get("indexed_at") or ""))

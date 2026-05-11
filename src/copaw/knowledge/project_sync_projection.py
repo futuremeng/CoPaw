@@ -1,0 +1,678 @@
+# -*- coding: utf-8 -*-
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+from .knowledge_quantization_metrics import (
+	build_l1_metrics,
+	build_l2_metrics,
+	build_l3_metrics,
+	build_nlp_progress,
+)
+
+
+def _safe_int(value: Any) -> int:
+	try:
+		return int(value)
+	except (TypeError, ValueError):
+		return 0
+
+
+def _safe_float(value: Any) -> float | None:
+	try:
+		return float(value)
+	except (TypeError, ValueError):
+		return None
+
+
+def _as_dict(value: Any) -> dict[str, Any]:
+	return value if isinstance(value, dict) else {}
+
+
+def build_semantic_engine_summary(manager: Any, engine_state: dict[str, Any]) -> str:
+	status = str(engine_state.get("status") or "idle").strip().lower()
+	reason = str(engine_state.get("reason") or "").strip()
+	if reason:
+		reason = reason.split(" via ", 1)[0].strip()
+		reason = reason.split(" or ", 1)[0].strip()
+		reason = reason.replace("HanLP2 semantic tokenization", "HanLP2 tokenization")
+	if status == "error":
+		return f"Semantic engine error: {reason or 'Unknown semantic engine error.'}"
+	if status == "unavailable":
+		return f"Semantic engine unavailable: {reason or 'Semantic engine is unavailable.'}"
+	if status == "ready":
+		return "Semantic engine ready."
+	return "Semantic engine waiting for project source preparation."
+
+
+def merge_stage_message_with_semantic_summary(
+	manager: Any,
+	stage_message: str,
+	semantic_engine: dict[str, Any],
+	*,
+	include_reason_code: bool = False,
+) -> str:
+	base_message = str(stage_message or "").strip()
+	summary = str(semantic_engine.get("summary") or "").strip()
+	reason_code = str(semantic_engine.get("reason_code") or "").strip()
+	status = str(semantic_engine.get("status") or "idle").strip().lower()
+	if status in {"error", "unavailable"} and summary:
+		merged = f"{base_message} · {summary}" if base_message else summary
+		if include_reason_code and reason_code:
+			return f"{merged} (reason_code={reason_code})"
+		return merged
+	if base_message:
+		return base_message if not summary or summary in base_message else f"{base_message} · {summary}"
+	return summary
+
+
+def build_semantic_engine_state(manager: Any, state: dict[str, Any]) -> dict[str, Any]:
+	current = state.get("semantic_engine") if isinstance(state.get("semantic_engine"), dict) else {}
+	latest_source_id = str(state.get("latest_source_id") or "").strip()
+	if not latest_source_id:
+		payload = dict(manager._default_state(str(state.get("project_id") or "")).get("semantic_engine") or {})
+		payload.update({key: value for key, value in _as_dict(current).items() if value not in {None, ""}})
+		payload["summary"] = build_semantic_engine_summary(manager, payload)
+		return payload
+	getter = getattr(manager._knowledge_manager, "get_semantic_engine_state", None)
+	if callable(getter):
+		try:
+			payload = getter(latest_source_id)
+		except TypeError:
+			payload = getter(source_id=latest_source_id)
+		except Exception:
+			payload = current
+	else:
+		payload = current
+	if not isinstance(payload, dict):
+		payload = current
+	if not isinstance(payload, dict) or not payload:
+		payload = dict(manager._default_state(str(state.get("project_id") or "")).get("semantic_engine") or {})
+	payload = dict(payload)
+	payload.setdefault("engine", "hanlp2")
+	payload.setdefault("status", "idle")
+	payload.setdefault("reason_code", "SOURCE_NOT_READY")
+	payload.setdefault("reason", "Project source has not been prepared for semantic extraction yet.")
+	payload.setdefault("updated_at", state.get("updated_at"))
+	payload["summary"] = build_semantic_engine_summary(manager, payload)
+	return payload
+
+
+def relative_workspace_path(manager: Any, value: Any) -> str:
+	text = str(value or "").strip()
+	if not text:
+		return ""
+	path = Path(text).expanduser()
+	try:
+		return path.resolve().relative_to(manager.working_dir.resolve()).as_posix()
+	except Exception:
+		return text.replace("\\", "/")
+
+
+def resolve_document_graph_artifacts(manager: Any, memify_result: dict[str, Any]) -> tuple[list[dict[str, Any]], int]:
+	if not isinstance(memify_result, dict):
+		return [], 0
+	graph_path_text = str(memify_result.get("graph_path") or "").strip()
+	manifest_path_text = str(memify_result.get("document_graph_manifest_path") or "").strip()
+	graphify_dir_text = str(memify_result.get("document_graph_dir") or "").strip()
+	if graph_path_text:
+		graph_path = Path(graph_path_text)
+		knowledge_dir = graph_path.parent.parent if len(graph_path.parents) >= 2 else graph_path.parent
+		if not manifest_path_text:
+			candidate = knowledge_dir / "graphify" / "manifest.json"
+			if candidate.exists():
+				manifest_path_text = str(candidate)
+		if not graphify_dir_text:
+			candidate_dir = knowledge_dir / "graphify"
+			if candidate_dir.exists():
+				graphify_dir_text = str(candidate_dir)
+	document_graph_count = _safe_int(memify_result.get("document_graph_count"))
+	if manifest_path_text:
+		manifest_path = Path(manifest_path_text)
+		if manifest_path.exists():
+			try:
+				manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+			except Exception:
+				manifest_payload = {}
+			document_graph_count = max(document_graph_count, _safe_int(manifest_payload.get("document_count")))
+	artifacts: list[dict[str, Any]] = []
+	if manifest_path_text and document_graph_count > 0:
+		artifacts.append({
+			"kind": "document_graph_manifest",
+			"label": "Document graph manifest",
+			"path": relative_workspace_path(manager, manifest_path_text),
+		})
+	if graphify_dir_text and document_graph_count > 0:
+		artifacts.append({
+			"kind": "document_graph_dir",
+			"label": "Document graphify payloads",
+			"path": relative_workspace_path(manager, graphify_dir_text),
+		})
+	return artifacts, document_graph_count
+
+
+def collect_source_document_sample_paths(manager: Any, source_id: str) -> list[str]:
+	getter = getattr(manager._knowledge_manager, "get_source_chunk_documents", None)
+	if not callable(getter):
+		return []
+	try:
+		payload = getter(source_id)
+	except TypeError:
+		payload = getter(source_id=source_id)
+	except Exception:
+		return []
+	documents = payload.get("documents") if isinstance(payload, dict) else []
+	if not isinstance(documents, list):
+		return []
+	return [
+		str(item.get("path") or "").strip()
+		for item in documents
+		if isinstance(item, dict) and str(item.get("path") or "").strip()
+	]
+
+
+def build_mode_outputs(manager: Any, state: dict[str, Any], processing_modes: list[dict[str, Any]]) -> dict[str, Any]:
+	_ = processing_modes
+	last_result = _as_dict(state.get("last_result"))
+	index_result = _as_dict(last_result.get("index"))
+	memify_result = _as_dict(last_result.get("memify"))
+	quality_result = _as_dict(last_result.get("quality_loop"))
+	workflow_run = _as_dict(last_result.get("workflow_run"))
+
+	document_graph_artifacts, document_graph_count = resolve_document_graph_artifacts(manager, memify_result)
+
+	fast_output = {
+		"mode": "fast",
+		"source": "indexed-preview",
+		"summary_lines": [
+			f"Documents: {_safe_int(index_result.get('document_count'))}",
+			f"Chunks: {_safe_int(index_result.get('chunk_count'))}",
+		],
+		"artifacts": [],
+	}
+
+	nlp_artifacts = list(document_graph_artifacts)
+	graph_path_text = str(memify_result.get("graph_path") or "").strip()
+	if graph_path_text:
+		nlp_artifacts.append({
+			"kind": "graph",
+			"label": "Graph",
+			"path": relative_workspace_path(manager, graph_path_text),
+		})
+	nlp_output = {
+		"mode": "nlp",
+		"source": "graph-artifacts",
+		"summary_lines": [f"Document graphify payloads: {document_graph_count}"],
+		"artifacts": nlp_artifacts,
+	}
+
+	agentic_artifacts: list[dict[str, Any]] = []
+	enriched_graph_path = str(
+		quality_result.get("enriched_graph_path")
+		or memify_result.get("enriched_graph_path")
+		or getattr(manager._graph_ops, "enriched_graph_path", "")
+		or ""
+	).strip()
+	quality_report_path = str(
+		quality_result.get("enrichment_quality_report_path")
+		or memify_result.get("enrichment_quality_report_path")
+		or getattr(manager._graph_ops, "enrichment_quality_report_path", "")
+		or ""
+	).strip()
+	if quality_report_path:
+		agentic_artifacts.append({
+			"kind": "quality_report",
+			"label": "Quality report",
+			"path": relative_workspace_path(manager, quality_report_path),
+		})
+	if enriched_graph_path:
+		agentic_artifacts.append({
+			"kind": "enriched_graph",
+			"label": "Enriched graph",
+			"path": relative_workspace_path(manager, enriched_graph_path),
+		})
+	if graph_path_text:
+		agentic_artifacts.append({
+			"kind": "graph",
+			"label": "Graph",
+			"path": relative_workspace_path(manager, graph_path_text),
+		})
+	agentic_output = {
+		"mode": "agentic",
+		"source": "workflow-artifacts",
+		"summary_lines": [f"Run: {str(workflow_run.get('run_id') or '')}".strip()],
+		"artifacts": agentic_artifacts,
+	}
+
+	return {
+		"fast": fast_output,
+		"nlp": nlp_output,
+		"agentic": agentic_output,
+	}
+
+
+def build_global_metrics(
+	manager: Any,
+	state: dict[str, Any],
+	*,
+	mode_metrics: dict[str, Any],
+	source_status: dict[str, Any] | None,
+) -> dict[str, Any]:
+	last_result = _as_dict(state.get("last_result"))
+	workflow_run = _as_dict(last_result.get("workflow_run"))
+	quality_loop = _as_dict(last_result.get("quality_loop"))
+	agentic_rounds = quality_loop.get("rounds") if isinstance(quality_loop.get("rounds"), list) else []
+	agentic_after = agentic_rounds[-1].get("after") if agentic_rounds and isinstance(agentic_rounds[-1], dict) else {}
+	if str(state.get("status") or "").strip().lower() in manager._active_statuses and isinstance(state.get("processing_mode_overrides"), dict) and state.get("processing_mode_overrides"):
+		return {
+			"document_count": 0,
+			"snapshot_count": 0,
+			"chunk_count": 0,
+			"sentence_count": 0,
+			"char_count": 0,
+			"token_count": 0,
+		}
+	workflow_status = str(workflow_run.get("status") or workflow_run.get("run_status") or "").strip().lower()
+	if workflow_status in {"pending", "running"}:
+		return {
+			"document_count": 0,
+			"snapshot_count": 0,
+			"chunk_count": 0,
+			"sentence_count": 0,
+			"char_count": 0,
+			"token_count": 0,
+		}
+	if workflow_status == "succeeded" and not isinstance(agentic_after, dict):
+		agentic_after = {}
+	if workflow_status == "succeeded" and not agentic_after:
+		return {
+			"document_count": 0,
+			"snapshot_count": 0,
+			"chunk_count": 0,
+			"sentence_count": 0,
+			"char_count": 0,
+			"token_count": 0,
+		}
+	return build_l1_metrics(state, source_status)
+
+
+def build_processing_modes(
+	manager: Any,
+	state: dict[str, Any],
+	index_result: dict[str, Any],
+	semantic_engine: dict[str, Any],
+	l2_metrics: dict[str, Any],
+) -> list[dict[str, Any]]:
+	last_result = _as_dict(state.get("last_result"))
+	workflow_run = _as_dict(last_result.get("workflow_run"))
+	quality_loop = _as_dict(last_result.get("quality_loop"))
+	semantic_status = str(semantic_engine.get("status") or "idle").strip().lower()
+	semantic_summary = str(semantic_engine.get("summary") or "").strip()
+	semantic_reason = str(semantic_engine.get("reason") or "").replace("HanLP2 sidecar", "HanLP sidecar")
+
+	fast_ready = _safe_int(index_result.get("document_count")) > 0 or _safe_int(index_result.get("chunk_count")) > 0
+	fast_mode = {
+		"mode": "fast",
+		"status": "ready" if fast_ready else "queued",
+		"available": fast_ready,
+		"summary": "L1 ready" if fast_ready else "L1 pending",
+		"stage": "Indexed preview ready" if fast_ready else "Waiting for source indexing",
+		"document_count": _safe_int(index_result.get("document_count")),
+		"chunk_count": _safe_int(index_result.get("chunk_count")),
+	}
+
+	required_ready = all(
+		_safe_int(l2_metrics.get(key)) > 0
+		for key in ("tokenize_ready_chunk_count", "ner_ready_chunk_count", "syntax_ready_chunk_count")
+	)
+	nlp_mode = {
+		"mode": "nlp",
+		"status": "ready" if required_ready else "queued",
+		"available": required_ready,
+		"summary": "NLP ready" if required_ready else "Waiting for required NLP stages",
+		"stage": "NLP extraction ready",
+		"entity_count": _safe_int(l2_metrics.get("ner_entity_count")),
+		"relation_count": _safe_int(l2_metrics.get("syntax_relation_count")),
+		"progress": _safe_int(state.get("progress")),
+	}
+	if required_ready and not _safe_int(l2_metrics.get("cor_ready_chunk_count")) and str(l2_metrics.get("cor_reason_code") or "").strip():
+		nlp_mode["stage"] = "NLP extraction ready · COR remains optional"
+
+	agentic_rounds = quality_loop.get("rounds") if isinstance(quality_loop.get("rounds"), list) else []
+	agentic_after = agentic_rounds[-1].get("after") if agentic_rounds and isinstance(agentic_rounds[-1], dict) else {}
+	workflow_status = str(workflow_run.get("status") or workflow_run.get("run_status") or "").strip().lower()
+	agentic_mode = {
+		"mode": "agentic",
+		"status": "queued",
+		"available": False,
+		"summary": "Waiting for review stage",
+		"stage": "Waiting for review stage",
+		"entity_count": 0,
+		"relation_count": 0,
+		"quality_score": None,
+	}
+	if workflow_status in {"pending", "running"}:
+		agentic_mode.update({
+			"status": "running",
+			"summary": "Agentic workflow in progress",
+			"stage": "Building agentic outputs",
+		})
+	elif workflow_status == "succeeded" and isinstance(agentic_after, dict) and agentic_after:
+		agentic_mode.update({
+			"status": "ready",
+			"available": True,
+			"summary": "Agentic workflow ready",
+			"stage": "Agentic outputs ready",
+			"entity_count": _safe_int(agentic_after.get("entity_count")),
+			"relation_count": _safe_int(agentic_after.get("relation_count")),
+			"quality_score": _safe_float(agentic_after.get("quality_score") or quality_loop.get("score_after")),
+		})
+	elif workflow_status == "succeeded":
+		agentic_mode.update({
+			"status": "queued",
+			"available": False,
+			"summary": "Waiting for review stage",
+			"stage": "Waiting for review stage",
+		})
+
+	if semantic_status in {"error", "unavailable"}:
+		nlp_mode.update({
+			"status": "blocked",
+			"available": False,
+			"summary": semantic_reason or semantic_summary,
+		})
+		agentic_mode.update({
+			"status": "blocked",
+			"available": False,
+			"summary": semantic_reason or semantic_summary,
+		})
+
+	overrides = _as_dict(state.get("processing_mode_overrides"))
+	for mode_name, payload in (("fast", fast_mode), ("nlp", nlp_mode), ("agentic", agentic_mode)):
+		override = overrides.get(mode_name)
+		if isinstance(override, dict):
+			payload.update(override)
+
+	return [fast_mode, nlp_mode, agentic_mode]
+
+
+def build_output_resolution(processing_modes: list[dict[str, Any]], semantic_engine: dict[str, Any]) -> dict[str, Any]:
+	mode_map = {str(item.get("mode") or ""): item for item in processing_modes if isinstance(item, dict)}
+	semantic_status = str(semantic_engine.get("status") or "idle").strip().lower()
+	if semantic_status in {"error", "unavailable"}:
+		return {
+			"active_mode": None,
+			"available_modes": [],
+			"fallback_chain": [],
+			"skipped_modes": [],
+			"reason_code": "SEMANTIC_ENGINE_UNAVAILABLE",
+		}
+	agentic = mode_map.get("agentic") or {}
+	nlp = mode_map.get("nlp") or {}
+	fallback_chain = ["agentic", "nlp"]
+	if bool(agentic.get("available")):
+		return {
+			"active_mode": "agentic",
+			"available_modes": ["agentic"],
+			"fallback_chain": fallback_chain,
+			"skipped_modes": [],
+			"reason_code": "AGENTIC_READY",
+		}
+	if bool(nlp.get("available")):
+		return {
+			"active_mode": "nlp",
+			"available_modes": ["nlp"],
+			"fallback_chain": fallback_chain,
+			"skipped_modes": ["agentic"],
+			"reason_code": "FALLBACK_TO_NLP",
+		}
+	return {
+		"active_mode": "agentic",
+		"available_modes": [],
+		"fallback_chain": fallback_chain,
+		"skipped_modes": [],
+		"reason_code": "HIGH_ORDER_PENDING",
+	}
+
+
+def build_output_scheduler(processing_modes: list[dict[str, Any]]) -> dict[str, Any]:
+	ready_modes = [str(item.get("mode") or "") for item in processing_modes if isinstance(item, dict) and str(item.get("status") or "") == "ready"]
+	running_modes = [str(item.get("mode") or "") for item in processing_modes if isinstance(item, dict) and str(item.get("status") or "") == "running"]
+	queued_modes = [str(item.get("mode") or "") for item in processing_modes if isinstance(item, dict) and str(item.get("status") or "") == "queued"]
+	next_mode = None
+	for candidate in ["agentic", "nlp", "fast"]:
+		if candidate in running_modes or candidate in queued_modes:
+			next_mode = candidate
+			break
+	return {
+		"strategy": "parallel",
+		"consumption_mode": "agentic",
+		"ready_modes": ready_modes,
+		"running_modes": running_modes,
+		"queued_modes": queued_modes,
+		"next_mode": next_mode,
+	}
+
+
+def build_mode_metrics(
+	manager: Any,
+	state: dict[str, Any],
+	processing_modes: list[dict[str, Any]],
+	mode_outputs: dict[str, Any],
+	l1_metrics: dict[str, Any],
+	l2_metrics: dict[str, Any],
+	l3_metrics: dict[str, Any],
+) -> dict[str, Any]:
+	_ = processing_modes
+	_ = l3_metrics
+	latest_source_id = str(state.get("latest_source_id") or "").strip()
+	sample_source_paths = collect_source_document_sample_paths(manager, latest_source_id) if latest_source_id else []
+	last_result = _as_dict(state.get("last_result"))
+	quality_loop = _as_dict(last_result.get("quality_loop"))
+	memify_result = _as_dict(last_result.get("memify"))
+	workflow_run = _as_dict(last_result.get("workflow_run"))
+
+	fast_metrics = {
+		"mode": "fast",
+		"document_count": _safe_int(l1_metrics.get("document_count")),
+		"chunk_count": _safe_int(l1_metrics.get("chunk_count")),
+		"artifact_count": len(_as_dict(mode_outputs.get("fast")).get("artifacts") or []),
+	}
+
+	nlp_metrics = dict(l2_metrics)
+	nlp_metrics.update({
+		"mode": "nlp",
+		"document_count": _safe_int(l1_metrics.get("document_count")),
+		"chunk_count": _safe_int(l1_metrics.get("chunk_count")),
+		"artifact_count": len(_as_dict(mode_outputs.get("nlp")).get("artifacts") or []),
+		"evidence_paths": {},
+		"evidence_bundles": {
+			"document_count": {
+				"metric_key": "document_count",
+				"metric_kind": "aggregate",
+				"sample_source_paths": sample_source_paths,
+				"artifact_paths": sample_source_paths,
+			},
+			"tokenize_token_count": {
+				"metric_key": "tokenize_token_count",
+				"metric_kind": "aggregate",
+				"sample_source_paths": sample_source_paths,
+				"artifact_paths": sample_source_paths,
+			},
+		},
+	})
+
+	agentic_rounds = quality_loop.get("rounds") if isinstance(quality_loop.get("rounds"), list) else []
+	agentic_after = agentic_rounds[-1].get("after") if agentic_rounds and isinstance(agentic_rounds[-1], dict) else {}
+	workflow_status = str(workflow_run.get("status") or "").strip().lower()
+	quality_report_path = str(
+		quality_loop.get("enrichment_quality_report_path")
+		or memify_result.get("enrichment_quality_report_path")
+		or getattr(manager._graph_ops, "enrichment_quality_report_path", "")
+		or ""
+	).strip()
+	enriched_graph_path = str(
+		memify_result.get("enriched_graph_path")
+		or getattr(manager._graph_ops, "enriched_graph_path", "")
+		or ""
+	).strip()
+	graph_path = str(memify_result.get("graph_path") or "").strip()
+	if workflow_status == "succeeded":
+		agentic_metrics = {
+			"mode": "agentic",
+			"document_count": _safe_int(l1_metrics.get("document_count")),
+			"chunk_count": _safe_int(l1_metrics.get("chunk_count")),
+			"entity_count": _safe_int(agentic_after.get("entity_count")),
+			"relation_count": _safe_int(agentic_after.get("relation_count")),
+			"quality_score": _safe_float(agentic_after.get("quality_score") or quality_loop.get("score_after")),
+		}
+	else:
+		agentic_metrics = {
+			"mode": "agentic",
+			"document_count": _safe_int(l1_metrics.get("document_count")),
+			"chunk_count": _safe_int(l1_metrics.get("chunk_count")),
+			"entity_count": 0,
+			"relation_count": 0,
+			"quality_score": None,
+		}
+	agentic_metrics["evidence_paths"] = {
+		"quality_score": relative_workspace_path(manager, quality_report_path),
+		"audit_status": relative_workspace_path(manager, quality_report_path),
+		"audit_focus": relative_workspace_path(manager, quality_report_path),
+		"audit_round": relative_workspace_path(manager, quality_report_path),
+		"enhancement_delta": relative_workspace_path(manager, quality_report_path),
+		"entity_count": relative_workspace_path(manager, enriched_graph_path or graph_path),
+		"relation_count": relative_workspace_path(manager, enriched_graph_path or graph_path),
+	}
+	agentic_metrics["evidence_bundles"] = {
+		"quality_score": {
+			"metric_key": "quality_score",
+			"metric_kind": "derived",
+			"source_count": len([item for item in [quality_report_path] if item]),
+			"artifact_paths": [relative_workspace_path(manager, item) for item in [quality_report_path] if item],
+		},
+		"enhancement_delta": {
+			"metric_key": "enhancement_delta",
+			"metric_kind": "derived",
+			"artifact_paths": [relative_workspace_path(manager, item) for item in [quality_report_path] if item],
+			"formula": "quality_score_after - quality_score_before",
+		},
+	}
+
+	return {"fast": fast_metrics, "nlp": nlp_metrics, "agentic": agentic_metrics}
+
+
+def build_pipeline_trace(
+	state: dict[str, Any],
+	processing_modes: list[dict[str, Any]],
+	mode_outputs: dict[str, Any],
+	l1_metrics: dict[str, Any],
+	l2_metrics: dict[str, Any],
+	l3_metrics: dict[str, Any],
+) -> dict[str, Any]:
+	mode_map = {str(item.get("mode") or ""): item for item in processing_modes if isinstance(item, dict)}
+	stage_defs = [
+		("fast", "L1 · Fast", l1_metrics),
+		("nlp", "L2 · NLP", l2_metrics),
+		("agentic", "L3 · Agentic", l3_metrics),
+	]
+	stages = []
+	for mode, label, metrics in stage_defs:
+		payload = mode_map.get(mode) or {}
+		output = mode_outputs.get(mode) if isinstance(mode_outputs.get(mode), dict) else {}
+		stages.append({
+			"mode": mode,
+			"label": label,
+			"status": str(payload.get("status") or "queued"),
+			"available": bool(payload.get("available")),
+			"summary": str(payload.get("summary") or ""),
+			"metrics": dict(metrics or {}),
+			"artifacts": list(_as_dict(output).get("artifacts") or []),
+		})
+	return {
+		"source_id": str(state.get("latest_source_id") or "").strip(),
+		"updated_at": str(state.get("updated_at") or "").strip() or None,
+		"stages": stages,
+	}
+
+
+def resolve_index_result(state: dict[str, Any]) -> dict[str, Any]:
+	last_result = _as_dict(state.get("last_result"))
+	return dict(_as_dict(last_result.get("index")))
+
+
+def hydrate_processing_view(manager: Any, state: dict[str, Any]) -> dict[str, Any]:
+	payload = dict(state)
+	source_id = str(payload.get("latest_source_id") or "").strip()
+	getter = getattr(manager._knowledge_manager, "get_source_status", None)
+	source_status = {}
+	if source_id and callable(getter):
+		try:
+			source_status = getter(source_id, lightweight=True)
+		except TypeError:
+			source_status = getter(source_id=source_id, lightweight=True)
+		except Exception:
+			source_status = {}
+	if not isinstance(source_status, dict):
+		source_status = {}
+	l1_metrics = build_global_metrics(manager, payload, mode_metrics={}, source_status=source_status)
+	index_result = resolve_index_result(payload)
+	l2_metrics = build_l2_metrics(payload, index_result)
+	semantic_engine = build_semantic_engine_state(manager, payload)
+	processing_modes = build_processing_modes(manager, payload, index_result, semantic_engine, l2_metrics)
+	nlp_progress = build_nlp_progress_view(manager, processing_modes, l2_metrics)
+	mode_outputs = build_mode_outputs(manager, payload, processing_modes)
+	mode_metrics = build_mode_metrics(manager, payload, processing_modes, mode_outputs, l1_metrics, l2_metrics, build_l3_metrics(payload))
+	global_metrics = build_global_metrics(manager, payload, mode_metrics=mode_metrics, source_status=source_status)
+	output_resolution = build_output_resolution(processing_modes, semantic_engine)
+	output_scheduler = build_output_scheduler(processing_modes)
+	pipeline_trace = build_pipeline_trace(payload, processing_modes, mode_outputs, mode_metrics.get("fast") or {}, mode_metrics.get("nlp") or {}, mode_metrics.get("agentic") or {})
+	payload.update({
+		"semantic_engine": semantic_engine,
+		"processing_modes": processing_modes,
+		"output_resolution": output_resolution,
+		"output_scheduler": output_scheduler,
+		"mode_outputs": mode_outputs,
+		"mode_metrics": mode_metrics,
+		"global_metrics": global_metrics,
+		"l1_metrics": l1_metrics,
+		"l2_metrics": l2_metrics,
+		"l3_metrics": build_l3_metrics(payload),
+		"nlp_progress": nlp_progress,
+		"pipeline_trace": pipeline_trace,
+	})
+	include_reason_code = str(payload.get("status") or "") == "pending"
+	payload["stage_message"] = merge_stage_message_with_semantic_summary(
+		manager,
+		str(payload.get("stage_message") or ""),
+		semantic_engine,
+		include_reason_code=include_reason_code,
+	)
+	return payload
+
+
+def build_nlp_progress_view(manager: Any, processing_modes: list[dict[str, Any]], l2_metrics: dict[str, Any]) -> dict[str, Any]:
+	return build_nlp_progress(manager, processing_modes, l2_metrics)
+
+
+__all__ = [
+	"build_global_metrics",
+	"build_mode_metrics",
+	"build_mode_outputs",
+	"build_nlp_progress_view",
+	"build_output_resolution",
+	"build_output_scheduler",
+	"build_pipeline_trace",
+	"build_processing_modes",
+	"build_semantic_engine_state",
+	"build_semantic_engine_summary",
+	"collect_source_document_sample_paths",
+	"hydrate_processing_view",
+	"merge_stage_message_with_semantic_summary",
+	"relative_workspace_path",
+	"resolve_document_graph_artifacts",
+	"resolve_index_result",
+]

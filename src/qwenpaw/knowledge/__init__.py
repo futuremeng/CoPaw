@@ -9,17 +9,7 @@ from typing import Any
 _EXPORTS = {
 	"KnowledgeManager": ("copaw.knowledge.manager", "KnowledgeManager"),
 	"GraphOpsManager": ("copaw.knowledge.graph_ops", "GraphOpsManager"),
-	"ProjectKnowledgeSyncManager": (
-		"copaw.knowledge.project_knowledge_sync",
-		"ProjectKnowledgeSyncManager",
-	),
-	"QuantizationArchitectureManager": (
-		"copaw.knowledge.architecture",
-		"QuantizationArchitectureManager",
-	),
 	"RetrievalFacade": ("copaw.knowledge.facades", "RetrievalFacade"),
-	"QuantizationFacade": ("copaw.knowledge.facades", "QuantizationFacade"),
-	"HanLPSidecarRuntime": ("copaw.knowledge.hanlp_runtime", "HanLPSidecarRuntime"),
 }
 
 __all__ = list(_EXPORTS)

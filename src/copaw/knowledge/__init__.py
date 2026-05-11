@@ -10,16 +10,35 @@ _EXPORTS = {
 	"KnowledgeManager": ("copaw.knowledge.manager", "KnowledgeManager"),
 	"GraphOpsManager": ("copaw.knowledge.graph_ops", "GraphOpsManager"),
 	"ProjectKnowledgeSyncManager": (
-		"copaw.knowledge.project_knowledge_sync",
+		"copaw.knowledge.project_sync_manager",
 		"ProjectKnowledgeSyncManager",
 	),
-	"HanLPSidecarRuntime": ("copaw.knowledge.hanlp_runtime", "HanLPSidecarRuntime"),
 	"QuantizationArchitectureManager": (
-		"copaw.knowledge.architecture",
+		"copaw.knowledge.knowledge_quantization_architecture",
 		"QuantizationArchitectureManager",
 	),
 	"RetrievalFacade": ("copaw.knowledge.facades", "RetrievalFacade"),
-	"QuantizationFacade": ("copaw.knowledge.facades", "QuantizationFacade"),
+	"QuantizationFacade": ("copaw.knowledge.knowledge_quantization_facade", "QuantizationFacade"),
+	"build_l2_quantization_scorecard": (
+		"copaw.knowledge.knowledge_quantization_assessment",
+		"build_l2_quantization_scorecard",
+	),
+	"grade_l2_quantization_assessment": (
+		"copaw.knowledge.knowledge_quantization_assessment",
+		"grade_l2_quantization_assessment",
+	),
+	"summarize_l2_quantization_risk_label_hits": (
+		"copaw.knowledge.knowledge_quantization_assessment",
+		"summarize_l2_quantization_risk_label_hits",
+	),
+	"normalize_l2_quantization_grade_thresholds": (
+		"copaw.knowledge.knowledge_quantization_assessment",
+		"normalize_l2_quantization_grade_thresholds",
+	),
+	"sort_l2_quantization_assessment_items": (
+		"copaw.knowledge.knowledge_quantization_assessment",
+		"sort_l2_quantization_assessment_items",
+	),
 }
 
 __all__ = list(_EXPORTS)

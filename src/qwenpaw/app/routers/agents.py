@@ -63,10 +63,10 @@ from ...agents.utils import (
 from ...agents.skills_manager import SkillPoolService, get_workspace_skills_dir
 from ..multi_agent_manager import MultiAgentManager
 from ...constant import WORKING_DIR
-from ...knowledge import ProjectKnowledgeSyncManager
-from copaw.knowledge.project_knowledge_sync import (
+from copaw.knowledge.project_sync_manager import (
     DEFAULT_PROJECT_SYNC_COOLDOWN_SECONDS,
     DEFAULT_PROJECT_SYNC_DEBOUNCE_SECONDS,
+    ProjectKnowledgeSyncManager,
     build_project_source_spec,
 )
 from ..project_monitoring_state import (

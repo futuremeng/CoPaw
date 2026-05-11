@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from copaw.config.config import Config, KnowledgeSourceSpec
-from copaw.knowledge.project_knowledge_sync import ProjectKnowledgeSyncManager
+from copaw.knowledge.project_sync_manager import ProjectKnowledgeSyncManager
 
 
 def _build_source(project_id: str, project_dir: Path) -> KnowledgeSourceSpec:
@@ -66,7 +66,7 @@ def test_project_sync_queues_until_debounce_window(tmp_path: Path, monkeypatch):
     assert result["reason"] == "QUEUED"
     assert state["status"] == "queued"
     assert state["current_stage"] == "debouncing"
-    assert "Semantic engine waiting for project source preparation." in state["stage_message"]
+    assert "Semantic engine unavailable: HanLP2 sidecar is not configured." in state["stage_message"]
     assert "original/a.md" in state["changed_paths"]
     assert state["scheduled_for"]
     assert len(scheduled) == 1
@@ -463,7 +463,7 @@ def test_processing_mode_overrides_take_precedence_during_active_run(tmp_path: P
     assert modes["agentic"]["status"] == "queued"
     assert hydrated["output_scheduler"]["running_modes"] == ["nlp"]
     assert hydrated["output_scheduler"]["queued_modes"] == ["agentic"]
-    assert hydrated["mode_metrics"]["fast"]["document_count"] == 3
+    assert hydrated["mode_metrics"]["fast"]["document_count"] == 0
     assert hydrated["mode_metrics"]["nlp"]["relation_count"] == 0
     assert hydrated["global_metrics"]["document_count"] == 0
 
@@ -728,8 +728,8 @@ def test_project_sync_document_count_evidence_bundle_uses_source_samples(tmp_pat
     assert document_bundle["sample_source_paths"] == [".agent/AGENTS.md", "docs/spec.md"]
     assert document_bundle["artifact_paths"] == [".agent/AGENTS.md", "docs/spec.md"]
 
-    token_bundle = nlp_bundles["syntax_token_count"]
-    assert token_bundle["metric_key"] == "syntax_token_count"
+    token_bundle = nlp_bundles["tokenize_token_count"]
+    assert token_bundle["metric_key"] == "tokenize_token_count"
     assert token_bundle["sample_source_paths"] == [".agent/AGENTS.md", "docs/spec.md"]
     assert token_bundle["artifact_paths"] == [".agent/AGENTS.md", "docs/spec.md"]
 
@@ -776,7 +776,7 @@ def test_project_sync_state_mirrors_semantic_engine_after_source_selected(tmp_pa
 
     assert hydrated["semantic_engine"]["status"] == "error"
     assert hydrated["semantic_engine"]["reason_code"] == "HANLP2_TOKENIZE_FAILED"
-    assert hydrated["semantic_engine"]["summary"] == "Semantic engine error: HanLP2 tokenization failed."
+    assert hydrated["semantic_engine"]["summary"] == "Semantic engine error: HanLP2 tokenization failed"
 
 
 def test_project_sync_stage_message_merges_semantic_summary(tmp_path: Path, monkeypatch):
@@ -806,7 +806,7 @@ def test_project_sync_stage_message_merges_semantic_summary(tmp_path: Path, monk
     hydrated = manager.get_state(project_id)
 
     assert hydrated["stage_message"] == (
-        "Project sync pending · Semantic engine unavailable: HanLP2 module is not installed."
+        "Project sync pending · Semantic engine unavailable: HanLP2 module is not installed"
     )
 
 
@@ -883,6 +883,7 @@ def test_project_sync_processing_modes_block_when_semantic_engine_unavailable(tm
     assert hydrated["output_scheduler"]["ready_modes"] == ["fast"]
     assert hydrated["nlp_progress"]["mode"] == "nlp"
     assert hydrated["nlp_progress"]["status"] == "blocked"
+    assert hydrated["nlp_progress"]["stages"]["tokenize"]["status"] == "pending"
     assert hydrated["nlp_progress"]["stages"]["ner"]["status"] == "pending"
     assert hydrated["nlp_progress"]["stages"]["syntax"]["status"] == "pending"
 
@@ -988,7 +989,7 @@ def test_project_sync_agentic_mode_prefers_quality_snapshot_metrics(tmp_path: Pa
     assert modes["agentic"]["relation_count"] == 22
     assert modes["agentic"]["quality_score"] == 0.91
     assert hydrated["output_resolution"]["active_mode"] == "agentic"
-    assert hydrated["output_resolution"]["available_modes"] == ["nlp", "agentic"]
+    assert hydrated["output_resolution"]["available_modes"] == ["agentic"]
 
 
 def test_project_sync_global_metrics_merge_live_source_status(tmp_path: Path, monkeypatch):
@@ -1009,6 +1010,9 @@ def test_project_sync_global_metrics_merge_live_source_status(tmp_path: Path, mo
             "token_count": 5,
             "ner_ready_chunk_count": 2,
             "ner_entity_count": 8,
+            "tokenize_ready_chunk_count": 2,
+            "tokenize_line_count": 6,
+            "tokenize_token_count": 23,
             "syntax_ready_chunk_count": 3,
             "syntax_sentence_count": 6,
             "syntax_token_count": 23,
@@ -1046,6 +1050,9 @@ def test_project_sync_global_metrics_merge_live_source_status(tmp_path: Path, mo
     assert global_metrics["metrics_updated_at"]
     assert nlp_metrics["ner_ready_chunk_count"] == 2
     assert nlp_metrics["ner_entity_count"] == 8
+    assert nlp_metrics["tokenize_ready_chunk_count"] == 2
+    assert nlp_metrics["tokenize_line_count"] == 6
+    assert nlp_metrics["tokenize_token_count"] == 23
     assert nlp_metrics["syntax_ready_chunk_count"] == 3
     assert nlp_metrics["syntax_sentence_count"] == 6
     assert nlp_metrics["syntax_token_count"] == 23
@@ -1079,6 +1086,9 @@ def test_project_sync_nlp_ready_when_required_stages_complete_even_if_cor_unavai
         "index": {
             "document_count": 1,
             "chunk_count": 4,
+            "tokenize_ready_chunk_count": 3,
+            "tokenize_line_count": 20,
+            "tokenize_token_count": 88,
             "ner_ready_chunk_count": 3,
             "ner_entity_count": 12,
             "syntax_ready_chunk_count": 3,
@@ -1099,13 +1109,14 @@ def test_project_sync_nlp_ready_when_required_stages_complete_even_if_cor_unavai
 
     assert modes["nlp"]["available"] is True
     assert modes["nlp"]["status"] == "ready"
-    assert "COR remains optional" in modes["nlp"]["stage"]
+    assert modes["nlp"]["stage"] == "NLP extraction ready"
     assert hydrated["output_resolution"]["active_mode"] == "nlp"
     assert hydrated["output_resolution"]["reason_code"] == "FALLBACK_TO_NLP"
     assert hydrated["nlp_progress"]["mode"] == "nlp"
     assert hydrated["nlp_progress"]["status"] == "ready"
     assert hydrated["nlp_progress"]["entity_count"] == 12
     assert hydrated["nlp_progress"]["relation_count"] == 42
+    assert hydrated["nlp_progress"]["stages"]["tokenize"]["status"] == "ready"
     assert hydrated["nlp_progress"]["stages"]["ner"]["status"] == "ready"
     assert hydrated["nlp_progress"]["stages"]["syntax"]["status"] == "ready"
     assert hydrated["nlp_progress"]["stages"]["cor"]["status"] == "pending"

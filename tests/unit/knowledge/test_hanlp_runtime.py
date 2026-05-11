@@ -10,10 +10,10 @@ from collections import deque
 from pathlib import Path
 from unittest.mock import patch
 
-import copaw.knowledge.hanlp_runtime as hanlp_runtime_module
+import copaw.knowledge.hanlp_nlp_runtime as hanlp_runtime_module
 
 from copaw.config.config import Config
-from copaw.knowledge.hanlp_runtime import HanLPSidecarRuntime
+from copaw.knowledge.hanlp_nlp_runtime import NLPRuntime
 
 
 class _FakeStdout:
@@ -104,7 +104,7 @@ class _BrokenPopen:
 
 
 def test_probe_reports_unconfigured_sidecar_by_default() -> None:
-    runtime = HanLPSidecarRuntime()
+    runtime = NLPRuntime()
 
     state = runtime.probe(Config().knowledge)
 
@@ -113,7 +113,7 @@ def test_probe_reports_unconfigured_sidecar_by_default() -> None:
 
 
 def test_probe_reports_missing_python_executable(tmp_path: Path) -> None:
-    runtime = HanLPSidecarRuntime()
+    runtime = NLPRuntime()
     config = Config().knowledge
     config.hanlp.enabled = True
     config.hanlp.python_executable = str(tmp_path / "missing-python")
@@ -125,7 +125,7 @@ def test_probe_reports_missing_python_executable(tmp_path: Path) -> None:
 
 
 def test_probe_uses_sidecar_bridge_json() -> None:
-    runtime = HanLPSidecarRuntime()
+    runtime = NLPRuntime()
     config = Config().knowledge
     config.hanlp.enabled = True
     config.hanlp.python_executable = "/bin/python3"
@@ -205,7 +205,7 @@ def load(name):
 
 
 def test_tokenize_returns_tokens_from_sidecar() -> None:
-    runtime = HanLPSidecarRuntime()
+    runtime = NLPRuntime()
     config = Config().knowledge
     config.hanlp.enabled = True
     config.hanlp.python_executable = "/bin/python3"
@@ -237,7 +237,7 @@ def test_tokenize_returns_tokens_from_sidecar() -> None:
 
 
 def test_model_status_returns_ready_when_sidecar_reports_model_ready() -> None:
-    runtime = HanLPSidecarRuntime()
+    runtime = NLPRuntime()
     config = Config().knowledge
     config.hanlp.enabled = True
     config.hanlp.python_executable = "/bin/python3"
@@ -268,7 +268,7 @@ def test_model_status_returns_ready_when_sidecar_reports_model_ready() -> None:
 
 
 def test_ensure_model_returns_unavailable_when_sidecar_reports_model_failure() -> None:
-    runtime = HanLPSidecarRuntime()
+    runtime = NLPRuntime()
     config = Config().knowledge
     config.hanlp.enabled = True
     config.hanlp.python_executable = "/bin/python3"
@@ -311,7 +311,7 @@ def test_default_task_matrix_contains_l2_baseline_tasks() -> None:
 
 
 def test_task_status_returns_ready_when_sidecar_reports_task_ready() -> None:
-    runtime = HanLPSidecarRuntime()
+    runtime = NLPRuntime()
     config = Config().knowledge
     config.hanlp.enabled = True
     config.hanlp.python_executable = "/bin/python3"
@@ -342,7 +342,7 @@ def test_task_status_returns_ready_when_sidecar_reports_task_ready() -> None:
 
 
 def test_run_task_returns_structured_result_from_sidecar() -> None:
-    runtime = HanLPSidecarRuntime()
+    runtime = NLPRuntime()
     config = Config().knowledge
     config.hanlp.enabled = True
     config.hanlp.python_executable = "/bin/python3"
@@ -374,7 +374,7 @@ def test_run_task_returns_structured_result_from_sidecar() -> None:
 
 
 def test_run_task_uses_task_specific_timeout_and_disables_timeout_retry() -> None:
-    runtime = HanLPSidecarRuntime()
+    runtime = NLPRuntime()
     config = Config().knowledge
     config.hanlp.enabled = True
     config.hanlp.python_executable = "/bin/python3"
@@ -421,7 +421,7 @@ def test_run_task_uses_task_specific_timeout_and_disables_timeout_retry() -> Non
 
 
 def test_task_status_uses_task_specific_timeout_and_disables_timeout_retry() -> None:
-    runtime = HanLPSidecarRuntime()
+    runtime = NLPRuntime()
     config = Config().knowledge
     config.hanlp.enabled = True
     config.hanlp.python_executable = "/bin/python3"
@@ -466,7 +466,7 @@ def test_task_status_uses_task_specific_timeout_and_disables_timeout_retry() -> 
 
 
 def test_run_ner_returns_structured_result_from_sidecar() -> None:
-    runtime = HanLPSidecarRuntime()
+    runtime = NLPRuntime()
     config = Config().knowledge
     config.hanlp.enabled = True
     config.hanlp.python_executable = "/bin/python3"
@@ -498,7 +498,7 @@ def test_run_ner_returns_structured_result_from_sidecar() -> None:
 
 
 def test_run_dep_returns_structured_result_from_sidecar() -> None:
-    runtime = HanLPSidecarRuntime()
+    runtime = NLPRuntime()
     config = Config().knowledge
     config.hanlp.enabled = True
     config.hanlp.python_executable = "/bin/python3"
@@ -825,7 +825,7 @@ def tokenize(text):
 
 
 def test_persistent_worker_reuses_same_pid_between_calls() -> None:
-    runtime = HanLPSidecarRuntime()
+    runtime = NLPRuntime()
     config = Config().knowledge
     config.hanlp.enabled = True
     config.hanlp.python_executable = "/bin/python3"
@@ -860,7 +860,7 @@ def test_persistent_worker_reuses_same_pid_between_calls() -> None:
 
 
 def test_persistent_worker_restarts_on_channel_failure() -> None:
-    runtime = HanLPSidecarRuntime()
+    runtime = NLPRuntime()
     config = Config().knowledge
     config.hanlp.enabled = True
     config.hanlp.python_executable = "/bin/python3"
@@ -906,7 +906,7 @@ def test_persistent_worker_restarts_on_channel_failure() -> None:
 
 
 def test_persistent_worker_restarts_when_config_cache_key_changes() -> None:
-    runtime = HanLPSidecarRuntime()
+    runtime = NLPRuntime()
     config = Config().knowledge
     config.hanlp.enabled = True
     config.hanlp.python_executable = "/bin/python3"

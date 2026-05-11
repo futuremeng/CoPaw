@@ -27,7 +27,7 @@ import {
 import styles from "./index.module.less";
 import type { ProjectKnowledgeProcessingMode, ProjectKnowledgeState } from "./useProjectKnowledgeState";
 
-type ProjectKnowledgeNlpStageKey = "ner" | "syntax" | "cor";
+type ProjectKnowledgeNlpStageKey = "tokenize" | "ner" | "syntax" | "cor";
 
 const GraphQueryResults = lazy(async () => {
   const module = await import("../Knowledge/graphVisualization");

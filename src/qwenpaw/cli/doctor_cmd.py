@@ -21,7 +21,7 @@ from ..config import load_config
 from ..config.utils import strict_validate_config_file
 from ..constant import WORKING_DIR
 from ..constant import PROJECT_NAME, WORKING_DIR
-from ..knowledge.hanlp_runtime import HanLPSidecarRuntime
+from copaw.knowledge.hanlp_nlp_runtime import NLPRuntime
 from ..providers.provider import Provider
 from ..providers.provider_manager import ProviderManager
 from ..utils.console_static import (
@@ -233,7 +233,7 @@ def _check_web_auth(base: str) -> tuple[bool, str]:
 
 
 def _check_hanlp_sidecar(cfg) -> tuple[bool, str, list[str]]:
-    runtime = HanLPSidecarRuntime()
+    runtime = NLPRuntime()
     state = runtime.probe(cfg.knowledge)
     status = str(state.get("status") or "unavailable").strip().lower()
     reason_code = str(state.get("reason_code") or "").strip().upper()

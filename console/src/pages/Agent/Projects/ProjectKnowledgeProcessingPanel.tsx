@@ -13,7 +13,7 @@ import type {
   ProjectKnowledgeProcessingMode,
 } from "../../../api/types";
 
-type ProjectKnowledgeNlpStageKey = "ner" | "syntax" | "cor";
+type ProjectKnowledgeNlpStageKey = "tokenize" | "ner" | "syntax" | "cor";
 type ProjectKnowledgeLayerKey =
   | "dataPreprocess"
   | "lexical"
@@ -238,8 +238,8 @@ function buildKnowledgeLayerRows(
           {
             label: t("projects.knowledge.processing.syntaxTokens", "Token 数"),
             value: l2TokenCount,
-            evidenceKey: "syntax_token_count",
-            evidencePath: resolveEvidencePathByKey(l2EvidencePaths, "syntax_token_count"),
+            evidenceKey: "tokenize_token_count",
+            evidencePath: resolveEvidencePathByKey(l2EvidencePaths, "tokenize_token_count"),
           },
         ],
       },
@@ -528,7 +528,7 @@ export default function ProjectKnowledgeProcessingPanel(
     const samplePaths = activeEvidence?.bundle?.sample_source_paths || [];
     const artifactPaths = activeEvidence?.bundle?.artifact_paths || [];
     if (
-      (activeEvidence?.metricKey === "document_count" || activeEvidence?.metricKey === "syntax_token_count")
+      (activeEvidence?.metricKey === "document_count" || activeEvidence?.metricKey === "tokenize_token_count")
       && samplePaths.length > 0
     ) {
       for (const pathText of samplePaths) {

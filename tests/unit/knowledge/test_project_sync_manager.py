@@ -5,7 +5,7 @@ import types
 from pathlib import Path
 
 from copaw.config.config import Config, KnowledgeSourceSpec
-from copaw.knowledge.project_knowledge_sync import ProjectKnowledgeSyncManager
+from copaw.knowledge.project_sync_manager import ProjectKnowledgeSyncManager
 
 
 def test_run_sync_loop_failure_preserves_l2_snapshot(tmp_path: Path, monkeypatch):
@@ -109,11 +109,6 @@ def test_build_pipeline_trace_includes_stage_artifacts(tmp_path: Path):
                 "summary_lines": ["Run: run-1"],
                 "artifacts": [],
             },
-        },
-        {
-            "fast": {"mode": "fast", "document_count": 2, "chunk_count": 4, "artifact_count": 1, "quality_score": 0.5},
-            "nlp": {"mode": "nlp", "document_count": 2, "chunk_count": 4, "entity_count": 8, "relation_count": 5, "artifact_count": 2},
-            "agentic": {"mode": "agentic", "document_count": 2, "chunk_count": 4, "entity_count": 10, "relation_count": 4, "quality_score": 0.8},
         },
         {"document_count": 2, "chunk_count": 4, "snapshot_count": 1},
         {

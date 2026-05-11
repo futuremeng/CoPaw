@@ -42,7 +42,6 @@ _RELATION_NORMALIZATION_MAP = {
     "uses": "uses",
 }
 
-
 def _now_iso() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
