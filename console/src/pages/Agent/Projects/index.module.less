@@ -785,6 +785,17 @@
 }
 
 .projectKnowledgeWorkbench {
+  --project-knowledge-soft-border: #e6edf9;
+  --project-knowledge-soft-border-subtle: #eef2fb;
+  --project-knowledge-soft-surface: #ffffff;
+  --project-knowledge-soft-surface-muted: #fbfdff;
+  --project-knowledge-soft-surface-raised: rgba(255, 255, 255, 0.92);
+  --project-knowledge-hero-surface: linear-gradient(135deg, #fffdf8 0%, #f6fbff 100%);
+  --project-knowledge-sticky-surface: linear-gradient(180deg, rgba(250, 252, 255, 0.98) 0%, rgba(250, 252, 255, 0.9) 76%, rgba(250, 252, 255, 0) 100%);
+  --project-knowledge-stage-surface: rgba(255, 255, 255, 0.82);
+  --project-knowledge-flow-connector: #c9d6ee;
+  --project-knowledge-lane-gradient: linear-gradient(180deg, #ffc069 0%, #1677ff 100%);
+  --project-knowledge-hint-color: rgba(26, 23, 22, 0.45);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -826,7 +837,7 @@
 }
 
 .projectKnowledgeHintIcon {
-  color: rgba(26, 23, 22, 0.45);
+  color: var(--project-knowledge-hint-color);
   font-size: 14px;
   cursor: help;
 }
@@ -1135,13 +1146,13 @@
 
 .projectKnowledgeSourcesHeroMain,
 .projectKnowledgeOutputsHeroMain {
-  border: 1px solid #e6edf9;
+  border: 1px solid var(--project-knowledge-soft-border);
   border-radius: 14px;
   padding: 14px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: linear-gradient(135deg, #fffdf8 0%, #f6fbff 100%);
+  background: var(--project-knowledge-hero-surface);
 }
 
 .projectKnowledgeSourcesHeroHeader {
@@ -1191,7 +1202,7 @@
   flex-direction: column;
   gap: 8px;
   padding-bottom: 6px;
-  background: linear-gradient(180deg, rgba(250, 252, 255, 0.98) 0%, rgba(250, 252, 255, 0.9) 76%, rgba(250, 252, 255, 0) 100%);
+  background: var(--project-knowledge-sticky-surface);
   backdrop-filter: blur(10px);
 }
 
@@ -1241,7 +1252,7 @@
   right: -12px;
   width: 8px;
   height: 2px;
-  background: #c9d6ee;
+  background: var(--project-knowledge-flow-connector);
 
   @media (max-width: 1260px) {
     top: auto;
@@ -1271,9 +1282,9 @@
 }
 
 .projectKnowledgeProcessingStageCard {
-  border: 1px solid #edf2ff;
+  border: 1px solid var(--project-knowledge-soft-border-subtle);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--project-knowledge-stage-surface);
   padding: 8px;
   display: flex;
   flex-direction: column;
@@ -1357,7 +1368,7 @@
   bottom: 12px;
   width: 4px;
   border-radius: 999px;
-  background: linear-gradient(180deg, #ffc069 0%, #1677ff 100%);
+  background: var(--project-knowledge-lane-gradient);
 }
 
 .projectKnowledgeModeCard,
@@ -1714,9 +1725,9 @@
   display: flex;
   flex-direction: column;
   gap: 1px;
-  border: 1px solid #e6edf9;
+  border: 1px solid var(--project-knowledge-soft-border);
   border-radius: 6px;
-  background: #ffffff;
+  background: var(--project-knowledge-soft-surface);
   padding: 6px;
 }
 
@@ -1724,9 +1735,9 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  border: 1px solid #e6edf9;
+  border: 1px solid var(--project-knowledge-soft-border);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--project-knowledge-soft-surface-raised);
   padding: 8px;
 }
 
@@ -1748,9 +1759,9 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  border: 1px solid #eef2fb;
+  border: 1px solid var(--project-knowledge-soft-border-subtle);
   border-radius: 6px;
-  background: #fbfdff;
+  background: var(--project-knowledge-soft-surface-muted);
   padding: 6px;
 }
 
@@ -4327,6 +4338,20 @@
 }
 
 :global(.dark-mode) {
+  .projectKnowledgeWorkbench {
+    --project-knowledge-soft-border: rgba(255, 255, 255, 0.1);
+    --project-knowledge-soft-border-subtle: rgba(255, 255, 255, 0.08);
+    --project-knowledge-soft-surface: rgba(255, 255, 255, 0.04);
+    --project-knowledge-soft-surface-muted: rgba(255, 255, 255, 0.03);
+    --project-knowledge-soft-surface-raised: rgba(255, 255, 255, 0.045);
+    --project-knowledge-hero-surface: linear-gradient(145deg, rgba(255, 176, 87, 0.12) 0%, rgba(76, 121, 219, 0.14) 100%);
+    --project-knowledge-sticky-surface: linear-gradient(180deg, rgba(22, 22, 22, 0.96) 0%, rgba(22, 22, 22, 0.86) 76%, rgba(22, 22, 22, 0) 100%);
+    --project-knowledge-stage-surface: rgba(255, 255, 255, 0.05);
+    --project-knowledge-flow-connector: rgba(255, 255, 255, 0.24);
+    --project-knowledge-lane-gradient: linear-gradient(180deg, #ffbe82 0%, #78b1ff 100%);
+    --project-knowledge-hint-color: rgba(255, 248, 240, 0.58);
+  }
+
   .pathParent,
   .pathParentLink,
   .description,
