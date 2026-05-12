@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -341,3 +342,129 @@ def test_knowledge_workflow_status_callback_emits_lane_ready_transitions(
         patch.get("processing_mode_overrides", {}).get("agentic", {}).get("status") == "ready"
         for patch in patches
     )
+
+
+def test_execute_source_scan_writes_project_step_stats(tmp_path: Path):
+    project_id = "project-source-scan"
+    project_dir = tmp_path / "projects" / project_id
+    data_dir = project_dir / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    _write_project_metadata(project_dir, project_id)
+    (data_dir / "sample.md").write_text("# Sample\n", encoding="utf-8")
+
+    orchestrator = KnowledgeWorkflowOrchestrator(
+        workspace_dir=tmp_path,
+        project_id=project_id,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+    source = _build_source(project_dir, project_id)
+
+    result = orchestrator._execute_source_scan(
+        source=source,
+        changed_paths=["data/sample.md"],
+    )
+
+    assert result["metrics"]["data_file_count"] == 1
+    latest_path = project_dir / ".knowledge" / "stats" / "source_scan" / "latest.json"
+    history_path = project_dir / ".knowledge" / "stats" / "source_scan" / "history.jsonl"
+    assert latest_path.exists()
+    assert history_path.exists()
+    payload = json.loads(latest_path.read_text(encoding="utf-8"))
+    assert payload["project_id"] == project_id
+    assert payload["step_id"] == "source_scan"
+    assert payload["metrics"]["changed_path_count"] == 1
+    assert payload["metrics"]["data_file_count"] == 1
+    assert payload["changed_paths"] == ["data/sample.md"]
+
+
+def test_execute_domain_graph_build_writes_project_step_stats(tmp_path: Path, monkeypatch):
+    project_id = "project-domain-graph"
+    project_dir = tmp_path / "projects" / project_id
+    project_dir.mkdir(parents=True, exist_ok=True)
+    _write_project_metadata(project_dir, project_id)
+
+    orchestrator = KnowledgeWorkflowOrchestrator(
+        workspace_dir=tmp_path,
+        project_id=project_id,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+    source = _build_source(project_dir, project_id)
+    quality_report_path = orchestrator.graph_ops.enrichment_quality_report_path
+
+    monkeypatch.setattr(
+        orchestrator.knowledge_manager,
+        "materialize_semantic_artifacts_for_source",
+        lambda *args, **kwargs: None,
+    )
+
+    def fake_execute_memify_once(**kwargs):
+        orchestrator.graph_ops.local_graph_path.parent.mkdir(parents=True, exist_ok=True)
+        orchestrator.graph_ops.local_graph_path.write_text('{"nodes": [], "edges": []}', encoding="utf-8")
+        orchestrator.graph_ops.enriched_graph_path.write_text('{"nodes": [], "edges": []}', encoding="utf-8")
+        quality_report_path.write_text('{"quality_score": 0.95}', encoding="utf-8")
+        return {
+            "status": "succeeded",
+            "relation_count": 3,
+            "node_count": 2,
+            "document_count": 1,
+        }
+
+    monkeypatch.setattr(orchestrator.graph_ops, "execute_memify_once", fake_execute_memify_once)
+
+    result = orchestrator._execute_domain_graph_build(
+        config=KnowledgeConfig(enabled=True, memify_enabled=True),
+        source=source,
+        progress_callback=None,
+        quality_report_path=quality_report_path,
+    )
+
+    assert result["metrics"]["relation_count"] == 3
+    latest_path = project_dir / ".knowledge" / "stats" / "domain_graph_build" / "latest.json"
+    payload = json.loads(latest_path.read_text(encoding="utf-8"))
+    assert payload["step_id"] == "domain_graph_build"
+    assert payload["metrics"]["relation_count"] == 3
+    assert payload["status"] == "succeeded"
+
+
+def test_execute_quality_review_writes_project_step_stats(tmp_path: Path, monkeypatch):
+    project_id = "project-quality-review"
+    project_dir = tmp_path / "projects" / project_id
+    project_dir.mkdir(parents=True, exist_ok=True)
+    _write_project_metadata(project_dir, project_id)
+
+    orchestrator = KnowledgeWorkflowOrchestrator(
+        workspace_dir=tmp_path,
+        project_id=project_id,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+    source = _build_source(project_dir, project_id)
+    quality_report_path = orchestrator.graph_ops.enrichment_quality_report_path
+    quality_report_path.parent.mkdir(parents=True, exist_ok=True)
+    quality_report_path.write_text('{"quality_score": 0.95}', encoding="utf-8")
+
+    monkeypatch.setattr(
+        orchestrator.graph_ops,
+        "maybe_start_quality_self_drive",
+        lambda **kwargs: {
+            "accepted": False,
+            "status": "succeeded",
+            "score_before": 0.95,
+            "score_after": 0.95,
+            "delta": 0.0,
+            "rounds": [],
+        },
+    )
+
+    result = orchestrator._execute_quality_review(
+        config=KnowledgeConfig(enabled=True, memify_enabled=True),
+        source=source,
+        memify_result={"status": "succeeded"},
+        quality_report_path=quality_report_path,
+    )
+
+    assert result["metrics"]["quality_score_after"] == 0.95
+    latest_path = project_dir / ".knowledge" / "stats" / "quality_review" / "latest.json"
+    payload = json.loads(latest_path.read_text(encoding="utf-8"))
+    assert payload["step_id"] == "quality_review"
+    assert payload["metrics"]["quality_score_after"] == 0.95
+    assert payload["status"] == "succeeded"

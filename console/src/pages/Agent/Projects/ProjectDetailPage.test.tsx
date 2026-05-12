@@ -5,8 +5,10 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import ProjectDetailPage from "./ProjectDetailPage";
 
 const {
+  mockedAcquireProjectKnowledgeWatchLease,
   mockedListProjectFileTree,
   mockedListProjectFiles,
+  mockedReleaseProjectKnowledgeWatchLease,
   mockedReadProjectFile,
   mockedGetProjectFileSummary,
   mockedMessageError,
@@ -20,8 +22,10 @@ const {
   mockKnowledgeState,
   realtimeControllerState,
 } = vi.hoisted(() => ({
+  mockedAcquireProjectKnowledgeWatchLease: vi.fn(),
   mockedListProjectFileTree: vi.fn(),
   mockedListProjectFiles: vi.fn(),
+  mockedReleaseProjectKnowledgeWatchLease: vi.fn(),
   mockedReadProjectFile: vi.fn(),
   mockedGetProjectFileSummary: vi.fn(),
   mockedMessageError: vi.fn(),
@@ -184,8 +188,10 @@ vi.mock("../../../stores/agentStore", () => ({
 
 vi.mock("../../../api/modules/agents", () => ({
   agentsApi: {
+    acquireProjectKnowledgeWatchLease: mockedAcquireProjectKnowledgeWatchLease,
     listProjectFileTree: mockedListProjectFileTree,
     listProjectFiles: mockedListProjectFiles,
+    releaseProjectKnowledgeWatchLease: mockedReleaseProjectKnowledgeWatchLease,
     readProjectFile: mockedReadProjectFile,
     getProjectFileSummary: mockedGetProjectFileSummary,
     listProjectPipelineTemplates: vi.fn().mockResolvedValue([]),
@@ -310,6 +316,12 @@ describe("ProjectDetailPage refresh scheduling", () => {
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.clearAllMocks();
+    mockedAcquireProjectKnowledgeWatchLease.mockResolvedValue({
+      lease_id: "lease-project-detail",
+      active_count: 1,
+      file_monitoring_state: "active",
+      acquired_at: "2026-05-12T00:00:00Z",
+    });
     const mutableKnowledgeState = mockKnowledgeState as {
       activeKnowledgeTask: Record<string, unknown> | null;
       activeKnowledgeTasks: Array<Record<string, unknown>>;
@@ -355,6 +367,27 @@ describe("ProjectDetailPage refresh scheduling", () => {
       markdown_files: 1,
       text_like_files: 1,
       recently_updated_files: 1,
+    });
+    mockedReleaseProjectKnowledgeWatchLease.mockResolvedValue({
+      lease_id: "lease-project-detail",
+      released: true,
+      active_count: 0,
+      file_monitoring_state: "idle",
+      updated_at: "2026-05-12T00:01:00Z",
+    });
+  });
+
+  it("acquires and releases project knowledge watch lease with page lifecycle", async () => {
+    const view = renderPage();
+
+    await waitFor(() => {
+      expect(mockedAcquireProjectKnowledgeWatchLease).toHaveBeenCalledWith("agent-1", "proj-1");
+    });
+
+    view.unmount();
+
+    await waitFor(() => {
+      expect(mockedReleaseProjectKnowledgeWatchLease).toHaveBeenCalledWith("agent-1", "proj-1", "lease-project-detail");
     });
   });
 

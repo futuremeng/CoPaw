@@ -68,12 +68,15 @@ from copaw.knowledge.project_sync_manager import (
     DEFAULT_PROJECT_SYNC_DEBOUNCE_SECONDS,
     ProjectKnowledgeSyncManager,
     build_project_source_spec,
+    ensure_project_source_registered,
 )
 from ..project_monitoring_state import (
     PROJECT_FILE_MONITORING_ACTIVE,
     PROJECT_FILE_MONITORING_IDLE,
+    acquire_project_watch_lease,
     normalize_project_file_monitoring_state,
     read_project_metadata_with_body,
+    release_project_watch_lease,
     update_project_file_monitoring_state,
     write_project_metadata,
 )
@@ -389,6 +392,25 @@ class UpdateProjectKnowledgeSinkRequest(BaseModel):
     """Request body for updating project auto knowledge sink switch."""
 
     project_auto_knowledge_sink: bool = True
+
+
+class AcquireProjectKnowledgeWatchLeaseResponse(BaseModel):
+    """Response body for acquiring a project knowledge watch lease."""
+
+    lease_id: str
+    active_count: int = 0
+    file_monitoring_state: str = PROJECT_FILE_MONITORING_IDLE
+    acquired_at: str = ""
+
+
+class ReleaseProjectKnowledgeWatchLeaseResponse(BaseModel):
+    """Response body for releasing a project knowledge watch lease."""
+
+    lease_id: str
+    released: bool = False
+    active_count: int = 0
+    file_monitoring_state: str = PROJECT_FILE_MONITORING_IDLE
+    updated_at: str = ""
 
 
 class DeleteProjectResponse(BaseModel):
@@ -1548,6 +1570,14 @@ def _maybe_start_project_auto_knowledge_sync(
     knowledge_config = config.knowledge
     if not knowledge_config.enabled or not bool(getattr(knowledge_config, "memify_enabled", False)):
         return None
+
+    ensure_project_source_registered(
+        config.knowledge,
+        project_id=project_id,
+        project_name=summary.name or project_id,
+        project_workspace_dir=str(project_dir),
+        persist=lambda: save_config(config),
+    )
 
     source = build_project_source_spec(
         project_id=project_id,
@@ -4634,6 +4664,65 @@ async def update_project_knowledge_sink(
             Path(workspace.workspace_dir),
             projectId,
             body.project_auto_knowledge_sink,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post(
+    "/{agentId}/projects/{projectId}/knowledge-watch-leases",
+    response_model=AcquireProjectKnowledgeWatchLeaseResponse,
+    summary="Acquire project knowledge watch lease",
+    description="Mark a project detail page instance as actively watching this project.",
+)
+async def acquire_project_knowledge_watch_lease(
+    request: Request,
+    agentId: str = PathParam(...),
+    projectId: str = PathParam(...),
+) -> AcquireProjectKnowledgeWatchLeaseResponse:
+    manager = _get_multi_agent_manager(request)
+
+    try:
+        workspace = await manager.get_agent(agentId)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    try:
+        project_dir = _resolve_project_dir(Path(workspace.workspace_dir), projectId)
+        return AcquireProjectKnowledgeWatchLeaseResponse.model_validate(
+            acquire_project_watch_lease(project_dir)
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.delete(
+    "/{agentId}/projects/{projectId}/knowledge-watch-leases/{leaseId}",
+    response_model=ReleaseProjectKnowledgeWatchLeaseResponse,
+    summary="Release project knowledge watch lease",
+    description="Release a project detail page watch lease and idle monitoring when no lease remains.",
+)
+async def release_project_knowledge_watch_lease(
+    request: Request,
+    agentId: str = PathParam(...),
+    projectId: str = PathParam(...),
+    leaseId: str = PathParam(...),
+) -> ReleaseProjectKnowledgeWatchLeaseResponse:
+    manager = _get_multi_agent_manager(request)
+
+    try:
+        workspace = await manager.get_agent(agentId)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    try:
+        project_dir = _resolve_project_dir(Path(workspace.workspace_dir), projectId)
+        return ReleaseProjectKnowledgeWatchLeaseResponse.model_validate(
+            release_project_watch_lease(project_dir, leaseId)
         )
     except HTTPException:
         raise

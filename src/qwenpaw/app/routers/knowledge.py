@@ -32,14 +32,17 @@ from copaw.knowledge.project_sync_manager import (
     ProjectSyncCommand,
     ProjectSyncCoordinator,
     build_project_source_spec,
+    ensure_project_source_registered,
 )
 from ...knowledge.module_skills import sync_knowledge_module_skills
+from ..knowledge_workflow_steps import KNOWLEDGE_WORKFLOW_STEP_IDS
 from ..agent_context import get_agent_for_request
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
 _PROJECT_SYNC_RUNTIME_LOCK = Lock()
 _PROJECT_SYNC_RUNTIME_META: dict[str, dict[str, object]] = {}
+_SUPPORTED_PROJECT_STEP_STATS = frozenset(KNOWLEDGE_WORKFLOW_STEP_IDS)
 
 
 def _project_sync_runtime_key(workspace_dir: str | Path, project_id: str) -> str:
@@ -363,6 +366,45 @@ def _manager_for_workspace(
     )
 
 
+async def _project_step_stats_response(
+    request: Request,
+    *,
+    step_id: str,
+    limit: int,
+) -> dict[str, object]:
+    normalized_step_id = str(step_id or "").strip().replace("-", "_")
+    if normalized_step_id not in _SUPPORTED_PROJECT_STEP_STATS:
+        raise HTTPException(status_code=404, detail="PROJECT_STEP_STATS_NOT_FOUND")
+    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    project_id = _resolve_project_id(request)
+    if not project_id:
+        raise HTTPException(status_code=400, detail="PROJECT_ID_REQUIRED")
+    project_workspace_dir = (Path(workspace_dir) / "projects" / project_id).resolve()
+    manager = _manager_for_workspace(
+        workspace_dir,
+        project_id=project_id,
+    )
+    latest = await asyncio.to_thread(
+        manager.load_project_step_stats,
+        project_id=project_id,
+        project_workspace_dir=project_workspace_dir,
+        step_id=normalized_step_id,
+    )
+    history = await asyncio.to_thread(
+        manager.load_project_step_history,
+        project_id=project_id,
+        project_workspace_dir=project_workspace_dir,
+        step_id=normalized_step_id,
+        limit=int(limit),
+    )
+    return {
+        "project_id": project_id,
+        "step_id": normalized_step_id,
+        "latest": latest,
+        "history": history,
+    }
+
+
 def _resolve_project_workspace_dir(
     workspace_dir: Path | str,
     project_id: str | None,
@@ -661,6 +703,19 @@ async def list_sources(
         "enabled": bool(knowledge_config.enabled),
         "sources": sources,
     }
+
+
+@router.get("/project-stats/{step_id}")
+async def get_project_step_stats(
+    step_id: str,
+    request: Request,
+    limit: int = Query(default=20, ge=1, le=200),
+):
+    return await _project_step_stats_response(
+        request,
+        step_id=step_id,
+        limit=limit,
+    )
 
 
 @router.put("/sources", response_model=KnowledgeSourceSpec)
@@ -1386,7 +1441,7 @@ async def start_memify_job(
 @router.get("/project-sync/status")
 async def get_project_sync_status(request: Request):
     """Get project-scoped automatic knowledge synchronization status."""
-    _, knowledge_config, running_config, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    config, knowledge_config, running_config, workspace_dir, _ = await _resolve_knowledge_request_context(request)
     project_id = _resolve_project_id(request)
     if not project_id:
         raise HTTPException(status_code=400, detail="PROJECT_ID_REQUIRED")
@@ -1408,6 +1463,13 @@ async def get_project_sync_status(request: Request):
         or status_text in {"failed", "cancelled"}
     )
     if knowledge_config.enabled and bool(getattr(knowledge_config, "memify_enabled", False)):
+        ensure_project_source_registered(
+            config.knowledge,
+            project_id=project_id,
+            project_name=project_id,
+            project_workspace_dir=str(project_workspace_dir),
+            persist=lambda: save_config(config),
+        )
         if (not is_active) and has_resumable_work:
             source = build_project_source_spec(
                 project_id=project_id,
@@ -1451,7 +1513,7 @@ async def run_project_sync(
     idempotency_key: str = Body(default=""),
 ):
     """Start project-scoped automatic knowledge synchronization."""
-    _, knowledge_config, running_config, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    config, knowledge_config, running_config, workspace_dir, _ = await _resolve_knowledge_request_context(request)
     _ensure_knowledge_enabled_flag(knowledge_config.enabled)
     normalized_mode = (processing_mode or "agentic").strip().lower() or "agentic"
     normalized_stage = (quantization_stage or "").strip().lower() or None
@@ -1469,6 +1531,14 @@ async def run_project_sync(
     project_workspace_dir = (Path(workspace_dir) / "projects" / project_id).resolve()
     if not project_workspace_dir.exists() or not project_workspace_dir.is_dir():
         raise HTTPException(status_code=404, detail="PROJECT_WORKSPACE_NOT_FOUND")
+
+    ensure_project_source_registered(
+        config.knowledge,
+        project_id=project_id,
+        project_name=project_id,
+        project_workspace_dir=str(project_workspace_dir),
+        persist=lambda: save_config(config),
+    )
 
     source = build_project_source_spec(
         project_id=project_id,

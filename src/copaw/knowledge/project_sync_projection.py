@@ -32,6 +32,24 @@ def _as_dict(value: Any) -> dict[str, Any]:
 	return value if isinstance(value, dict) else {}
 
 
+def _merge_file_analysis_l1_metrics(
+	source_status: dict[str, Any],
+	file_analysis_stats: dict[str, Any],
+) -> dict[str, Any]:
+	metrics = _as_dict(file_analysis_stats.get("metrics"))
+	if not metrics:
+		return dict(source_status)
+	merged = dict(source_status)
+	for key in ("document_count", "snapshot_count", "chunk_count", "sentence_count", "char_count", "token_count"):
+		merged[key] = max(_safe_int(merged.get(key)), _safe_int(metrics.get(key)))
+	merged["indexed"] = bool(merged.get("indexed")) or any(
+		_safe_int(metrics.get(key)) > 0 for key in ("document_count", "snapshot_count", "chunk_count")
+	)
+	merged["indexed_at"] = str(merged.get("indexed_at") or file_analysis_stats.get("indexed_at") or "").strip() or None
+	merged["stats_updated_at"] = str(merged.get("stats_updated_at") or file_analysis_stats.get("updated_at") or "").strip() or None
+	return merged
+
+
 def build_semantic_engine_summary(manager: Any, engine_state: dict[str, Any]) -> str:
 	status = str(engine_state.get("status") or "idle").strip().lower()
 	reason = str(engine_state.get("reason") or "").strip()
@@ -606,6 +624,7 @@ def resolve_index_result(state: dict[str, Any]) -> dict[str, Any]:
 
 def hydrate_processing_view(manager: Any, state: dict[str, Any]) -> dict[str, Any]:
 	payload = dict(state)
+	project_id = str(payload.get("project_id") or "").strip()
 	source_id = str(payload.get("latest_source_id") or "").strip()
 	getter = getattr(manager._knowledge_manager, "get_source_status", None)
 	source_status = {}
@@ -618,6 +637,16 @@ def hydrate_processing_view(manager: Any, state: dict[str, Any]) -> dict[str, An
 			source_status = {}
 	if not isinstance(source_status, dict):
 		source_status = {}
+	file_analysis_stats: dict[str, Any] = {}
+	file_stats_loader = getattr(manager._knowledge_manager, "load_project_step_stats", None)
+	if project_id and callable(file_stats_loader):
+		try:
+			file_analysis_stats = file_stats_loader(project_id=project_id, step_id="file_analysis")
+		except Exception:
+			file_analysis_stats = {}
+	if not isinstance(file_analysis_stats, dict):
+		file_analysis_stats = {}
+	source_status = _merge_file_analysis_l1_metrics(source_status, file_analysis_stats)
 	l1_metrics = build_global_metrics(manager, payload, mode_metrics={}, source_status=source_status)
 	index_result = resolve_index_result(payload)
 	l2_metrics = build_l2_metrics(payload, index_result)
@@ -631,6 +660,7 @@ def hydrate_processing_view(manager: Any, state: dict[str, Any]) -> dict[str, An
 	output_scheduler = build_output_scheduler(processing_modes)
 	pipeline_trace = build_pipeline_trace(payload, processing_modes, mode_outputs, mode_metrics.get("fast") or {}, mode_metrics.get("nlp") or {}, mode_metrics.get("agentic") or {})
 	payload.update({
+		"file_analysis_stats": file_analysis_stats,
 		"semantic_engine": semantic_engine,
 		"processing_modes": processing_modes,
 		"output_resolution": output_resolution,

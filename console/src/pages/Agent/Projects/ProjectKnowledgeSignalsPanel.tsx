@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Alert, Button, Select, Space, Tag, Tooltip, Typography } from "antd";
 import { useTranslation } from "react-i18next";
 import styles from "./index.module.less";
+import { buildProjectKnowledgeLatestSummaryModelFromState } from "./projectKnowledgeLatestSummaryModel";
 import { getProjectKnowledgeSemanticReasonLabel } from "./projectKnowledgeSyncUi";
 import type { ProjectRealtimeConnectionStatus } from "./useProjectRealtimeController";
 import type {
@@ -98,6 +99,7 @@ export default function ProjectKnowledgeSignalsPanel(
   const semanticReasonLabel = getProjectKnowledgeSemanticReasonLabel(semanticEngine, t);
   const metricsSourceLabel = formatMetricsSourceLabel(knowledgeState.quantMetricsMeta?.source || "", t);
   const metricsUpdatedAtLabel = formatLocalDateTime(knowledgeState.quantMetricsMeta?.updatedAt || "");
+  const latestSummaryModel = buildProjectKnowledgeLatestSummaryModelFromState(t, knowledgeState);
   const nlpMode = knowledgeState.processingCompareModes.find((mode) => mode.mode === "nlp")
     || knowledgeState.processingModes.find((mode) => mode.mode === "nlp")
     || null;
@@ -121,6 +123,16 @@ export default function ProjectKnowledgeSignalsPanel(
               {metricsUpdatedAtLabel
                 ? ` · ${t("projects.knowledge.metricsUpdatedAt", "Updated")}: ${metricsUpdatedAtLabel}`
                 : ""}
+            </Typography.Text>
+          ) : null}
+          {latestSummaryModel.l1Parts.length ? (
+            <Typography.Text type="secondary">
+              {t("projects.knowledge.latestL1Summary", "Latest L1")}: {latestSummaryModel.l1Parts.join(" · ")}
+            </Typography.Text>
+          ) : null}
+          {latestSummaryModel.l23Parts.length ? (
+            <Typography.Text type="secondary">
+              {t("projects.knowledge.latestL23Summary", "Latest L2/L3")}: {latestSummaryModel.l23Parts.join(" · ")}
             </Typography.Text>
           ) : null}
           {showRealtimeConnectionNotice ? (

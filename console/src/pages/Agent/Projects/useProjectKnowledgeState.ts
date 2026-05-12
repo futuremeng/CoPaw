@@ -7,6 +7,7 @@ import type {
   KnowledgeSourceContent,
   KnowledgeSourceItem,
   KnowledgeSourceSemanticStatus,
+  ProjectKnowledgeFileAnalysisStatsResponse,
   ProjectKnowledgeGlobalMetricsPayload,
   ProjectKnowledgeModeMetricsPayload,
   ProjectKnowledgeNlpProgressPayload,
@@ -15,6 +16,9 @@ import type {
   ProjectKnowledgeQuantizationStage,
   ProjectKnowledgeProcessingSchedulerPayload,
   ProjectKnowledgeProcessingModeStatePayload,
+  ProjectKnowledgeStepStatsResponse,
+  ProjectKnowledgeStepStatsStepId,
+  ProjectKnowledgeSourceScanStatsResponse,
   ProjectKnowledgeSyncState,
   QualityLoopJobStatus,
 } from "../../../api/types";
@@ -202,6 +206,12 @@ export interface ProjectKnowledgeState {
   projectSourceId: string;
   sourceLoaded: boolean;
   sourceRegistered: boolean;
+  projectStepStats: Partial<Record<
+    ProjectKnowledgeStepStatsStepId,
+    ProjectKnowledgeStepStatsResponse<ProjectKnowledgeStepStatsStepId> | null
+  >>;
+  fileAnalysisStats: ProjectKnowledgeFileAnalysisStatsResponse | null;
+  sourceScanStats: ProjectKnowledgeSourceScanStatsResponse | null;
   projectSources: KnowledgeSourceItem[];
   selectedSourceId: string;
   setSelectedSourceId: (value: string) => void;
@@ -296,12 +306,83 @@ interface ProjectKnowledgeUiPrefs {
   trendExpanded: boolean;
 }
 
+interface ProjectKnowledgeL1StepStatsState {
+  fileAnalysis: ProjectKnowledgeFileAnalysisStatsResponse | null;
+  sourceScan: ProjectKnowledgeSourceScanStatsResponse | null;
+}
+
+type ProjectKnowledgeStepStatsState = Partial<Record<
+  ProjectKnowledgeStepStatsStepId,
+  ProjectKnowledgeStepStatsResponse<ProjectKnowledgeStepStatsStepId> | null
+>>;
+
+type ProjectKnowledgeL1StepStatsKey = keyof ProjectKnowledgeL1StepStatsState;
+
 const PROJECT_TREND_STORAGE_PREFIX = "copaw.project.knowledge.trend.v1";
 const PROJECT_KNOWLEDGE_UI_PREFS_PREFIX = "copaw.project.knowledge.ui.v1";
 const DAY_MS = 24 * 60 * 60 * 1000;
 const PROJECT_GRAPH_QUERY_TOP_K = 200;
 const HIGH_ORDER_OUTPUT_MODES: ProjectKnowledgeProcessingMode[] = ["agentic", "nlp"];
 const PROCESSING_STALE_AFTER_MS = 15_000;
+const PROJECT_KNOWLEDGE_STEP_STATS_HISTORY_LIMIT = 5;
+
+const EMPTY_PROJECT_KNOWLEDGE_STEP_STATS: ProjectKnowledgeStepStatsState = {};
+
+const EMPTY_PROJECT_KNOWLEDGE_L1_STEP_STATS: ProjectKnowledgeL1StepStatsState = {
+  fileAnalysis: null,
+  sourceScan: null,
+};
+
+const PROJECT_KNOWLEDGE_STEP_STATS_IDS = [
+  "source_scan",
+  "file_analysis",
+  "domain_graph_build",
+  "quality_review",
+] as const satisfies ReadonlyArray<ProjectKnowledgeStepStatsStepId>;
+
+const PROJECT_KNOWLEDGE_L1_STEP_STATS_DESCRIPTORS = [
+  {
+    stateKey: "fileAnalysis",
+    stepId: "file_analysis",
+  },
+  {
+    stateKey: "sourceScan",
+    stepId: "source_scan",
+  },
+] as const satisfies ReadonlyArray<{
+  stateKey: ProjectKnowledgeL1StepStatsKey;
+  stepId: ProjectKnowledgeStepStatsStepId;
+}>;
+
+export function resolveProjectKnowledgeL1StepStats(
+  results: Array<PromiseSettledResult<ProjectKnowledgeStepStatsResponse<ProjectKnowledgeStepStatsStepId>>>,
+): ProjectKnowledgeL1StepStatsState {
+  const nextState: ProjectKnowledgeL1StepStatsState = {
+    ...EMPTY_PROJECT_KNOWLEDGE_L1_STEP_STATS,
+  };
+  PROJECT_KNOWLEDGE_L1_STEP_STATS_DESCRIPTORS.forEach((descriptor, index) => {
+    const result = results[index];
+    nextState[descriptor.stateKey] = result?.status === "fulfilled"
+      ? result.value as ProjectKnowledgeL1StepStatsState[typeof descriptor.stateKey]
+      : null;
+  });
+  return nextState;
+}
+
+export function resolveProjectKnowledgeStepStats(
+  results: Array<PromiseSettledResult<ProjectKnowledgeStepStatsResponse<ProjectKnowledgeStepStatsStepId>>>,
+): ProjectKnowledgeStepStatsState {
+  const nextState: ProjectKnowledgeStepStatsState = {
+    ...EMPTY_PROJECT_KNOWLEDGE_STEP_STATS,
+  };
+  PROJECT_KNOWLEDGE_STEP_STATS_IDS.forEach((stepId, index) => {
+    const result = results[index];
+    nextState[stepId] = result?.status === "fulfilled"
+      ? result.value as ProjectKnowledgeStepStatsResponse<typeof stepId>
+      : null;
+  });
+  return nextState;
+}
 
 const ACTIVE_KNOWLEDGE_STATUSES = new Set([
   "pending",
@@ -1301,6 +1382,8 @@ export function useProjectKnowledgeState(
   const { onSignalsChange } = params;
   const [sourceLoaded, setSourceLoaded] = useState(false);
   const [projectSources, setProjectSources] = useState<KnowledgeSourceItem[]>([]);
+  const [projectStepStats, setProjectStepStats] = useState<ProjectKnowledgeStepStatsState>(EMPTY_PROJECT_KNOWLEDGE_STEP_STATS);
+  const [l1StepStats, setL1StepStats] = useState<ProjectKnowledgeL1StepStatsState>(EMPTY_PROJECT_KNOWLEDGE_L1_STEP_STATS);
   const [selectedSourceId, setSelectedSourceId] = useState("");
   const [sourceContentById, setSourceContentById] = useState<Record<string, KnowledgeSourceContent>>({});
   const [sourceContentLoadingById, setSourceContentLoadingById] =
@@ -1346,21 +1429,46 @@ export function useProjectKnowledgeState(
     return `project-${safeId || "default"}-workspace`;
   }, [params.projectId]);
 
+  const fileAnalysisStats = l1StepStats.fileAnalysis;
+  const sourceScanStats = l1StepStats.sourceScan;
+
   const loadProjectSourceStatus = useCallback(async () => {
     if (!params.projectId) {
       setProjectSources([]);
+      setProjectStepStats(EMPTY_PROJECT_KNOWLEDGE_STEP_STATS);
+      setL1StepStats(EMPTY_PROJECT_KNOWLEDGE_L1_STEP_STATS);
       setSourceLoaded(false);
       return;
     }
     try {
-      const response = await api.listKnowledgeSources({ projectId: params.projectId });
+      const [[sourcesResult], stepStatsResults] = await Promise.all([
+        Promise.allSettled([
+          api.listKnowledgeSources({ projectId: params.projectId }),
+        ]),
+        Promise.allSettled(
+          PROJECT_KNOWLEDGE_STEP_STATS_IDS.map((stepId) => (
+            api.getProjectStepStats(stepId, params.projectId, {
+              limit: PROJECT_KNOWLEDGE_STEP_STATS_HISTORY_LIMIT,
+            })
+          )),
+        ),
+      ]);
+      const resolvedProjectStepStats = resolveProjectKnowledgeStepStats(stepStatsResults);
+      const resolvedL1StepStats = resolveProjectKnowledgeL1StepStats(stepStatsResults);
+      const response = sourcesResult.status === "fulfilled"
+        ? sourcesResult.value
+        : { enabled: false, sources: [] };
       const currentProjectId = normalizeProjectId(params.projectId);
       const scopedSources = (response.sources || []).filter((source) => (
         normalizeProjectId(source.project_id) === currentProjectId
       ));
       setProjectSources(scopedSources);
+      setProjectStepStats(resolvedProjectStepStats);
+      setL1StepStats(resolvedL1StepStats);
     } catch {
       setProjectSources([]);
+      setProjectStepStats(EMPTY_PROJECT_KNOWLEDGE_STEP_STATS);
+      setL1StepStats(EMPTY_PROJECT_KNOWLEDGE_L1_STEP_STATS);
     } finally {
       setSourceLoaded(true);
     }
@@ -1605,7 +1713,6 @@ export function useProjectKnowledgeState(
     }
     setGraphResult(applySourceFilterToGraphQueryResponse(graphBaseResult, selectedSourceId));
   }, [
-    applySourceFilterToGraphQueryResponse,
     buildLocalFilteredGraphResult,
     graphBaseResult,
     graphEntityTypeFilters,
@@ -2132,7 +2239,6 @@ export function useProjectKnowledgeState(
     };
   }, [
     activeKnowledgeTask?.enrichment_metrics,
-    graphBaseResult?.records,
     latestQualityLoopJob?.rounds,
     projectSources,
     sourceRegistered,
@@ -2434,7 +2540,7 @@ export function useProjectKnowledgeState(
     activeKnowledgeTask?.job_id,
     activeKnowledgeTask?.stage_message,
     activeKnowledgeTask?.task_type,
-    latestQualityLoopJob?.updated_at,
+    latestQualityLoopJob,
     quantMetrics.chunkCount,
     quantMetrics.documentCount,
     sourceRegistered,
@@ -2777,6 +2883,9 @@ export function useProjectKnowledgeState(
     projectSourceId,
     sourceLoaded,
     sourceRegistered,
+    projectStepStats,
+    fileAnalysisStats,
+    sourceScanStats,
     projectSources,
     selectedSourceId,
     setSelectedSourceId,
@@ -2872,8 +2981,11 @@ export function useProjectKnowledgeState(
     processingFreshness,
     processingModes,
     processingScheduler,
+    projectStepStats,
     projectSourceId,
     projectSources,
+    fileAnalysisStats,
+    sourceScanStats,
     quantMetrics,
     quantMetricsMeta,
     relationKeywordSeed,

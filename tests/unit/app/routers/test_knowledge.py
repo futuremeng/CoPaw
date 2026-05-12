@@ -250,6 +250,236 @@ def test_list_sources_filters_by_project_id(
     assert sources[0].get("project_id") == "project-A"
 
 
+def test_list_sources_uses_project_file_analysis_stats_for_project_source(
+    knowledge_api_client: TestClient,
+    tmp_path: Path,
+):
+    project_id = "project-l1-api"
+    project_dir = tmp_path / "projects" / project_id
+    stats_dir = project_dir / ".knowledge" / "stats" / "file_analysis"
+    stats_dir.mkdir(parents=True, exist_ok=True)
+    (stats_dir / "latest.json").write_text(
+        json.dumps(
+            {
+                "project_id": project_id,
+                "source_id": "project-source-l1-api",
+                "step_id": "file_analysis",
+                "indexed_at": "2026-05-12T11:00:00Z",
+                "updated_at": "2026-05-12T11:00:01Z",
+                "metrics": {
+                    "document_count": 4,
+                    "snapshot_count": 4,
+                    "chunk_count": 9,
+                    "sentence_count": 12,
+                    "char_count": 40,
+                    "token_count": 20,
+                },
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    registered = knowledge_api_client.put(
+        f"/knowledge/sources?project_id={project_id}",
+        json={
+            "id": "project-source-l1-api",
+            "name": "Project Source L1 API",
+            "type": "directory",
+            "location": str(project_dir),
+            "content": "",
+            "enabled": True,
+            "recursive": True,
+            "tags": ["project"],
+            "summary": "",
+            "project_id": project_id,
+        },
+    )
+    assert registered.status_code == 200
+
+    listing = knowledge_api_client.get(f"/knowledge/sources?project_id={project_id}")
+    assert listing.status_code == 200
+    sources = listing.json()["sources"]
+
+    assert len(sources) == 1
+    status = sources[0]["status"]
+    assert status["indexed"] is True
+    assert status["document_count"] == 4
+    assert status["snapshot_count"] == 4
+    assert status["chunk_count"] == 9
+    assert status["sentence_count"] == 12
+
+
+def test_get_project_step_stats_accepts_file_analysis_hyphen_alias(
+    knowledge_api_client: TestClient,
+    tmp_path: Path,
+):
+    project_id = "project-l1-history-api"
+    project_dir = tmp_path / "projects" / project_id
+    stats_dir = project_dir / ".knowledge" / "stats" / "file_analysis"
+    stats_dir.mkdir(parents=True, exist_ok=True)
+    latest_payload = {
+        "project_id": project_id,
+        "source_id": "project-source-l1-history-api",
+        "step_id": "file_analysis",
+        "indexed_at": "2026-05-12T12:00:00Z",
+        "updated_at": "2026-05-12T12:00:01Z",
+        "metrics": {
+            "document_count": 5,
+            "snapshot_count": 5,
+            "chunk_count": 11,
+            "sentence_count": 14,
+        },
+    }
+    history_rows = [
+        {
+            **latest_payload,
+            "updated_at": "2026-05-12T11:59:00Z",
+            "metrics": {
+                "document_count": 4,
+                "snapshot_count": 4,
+                "chunk_count": 9,
+                "sentence_count": 12,
+            },
+        },
+        latest_payload,
+    ]
+    (stats_dir / "latest.json").write_text(
+        json.dumps(latest_payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    (stats_dir / "history.jsonl").write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False) for row in history_rows) + "\n",
+        encoding="utf-8",
+    )
+
+    response = knowledge_api_client.get(
+        f"/knowledge/project-stats/file-analysis?project_id={project_id}&limit=1"
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["project_id"] == project_id
+    assert payload["step_id"] == "file_analysis"
+    assert payload["latest"]["metrics"]["chunk_count"] == 11
+    assert len(payload["history"]) == 1
+    assert payload["history"][0]["updated_at"] == "2026-05-12T12:00:01Z"
+
+
+def test_get_project_step_stats_accepts_source_scan_hyphen_alias(
+    knowledge_api_client: TestClient,
+    tmp_path: Path,
+):
+    project_id = "project-source-scan-api"
+    project_dir = tmp_path / "projects" / project_id
+    stats_dir = project_dir / ".knowledge" / "stats" / "source_scan"
+    stats_dir.mkdir(parents=True, exist_ok=True)
+    latest_payload = {
+        "project_id": project_id,
+        "source_id": "project-source-source-scan-api",
+        "step_id": "source_scan",
+        "updated_at": "2026-05-12T12:10:01Z",
+        "metrics": {
+            "changed_path_count": 2,
+            "data_file_count": 7,
+            "source_count": 1,
+        },
+        "changed_paths": ["data/a.md", "data/b.md"],
+    }
+    (stats_dir / "latest.json").write_text(
+        json.dumps(latest_payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    (stats_dir / "history.jsonl").write_text(
+        json.dumps(latest_payload, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+    response = knowledge_api_client.get(
+        f"/knowledge/project-stats/source-scan?project_id={project_id}&limit=1"
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["project_id"] == project_id
+    assert payload["step_id"] == "source_scan"
+    assert payload["latest"]["metrics"]["data_file_count"] == 7
+    assert len(payload["history"]) == 1
+    assert payload["history"][0]["metrics"]["changed_path_count"] == 2
+
+
+def test_get_project_step_stats_generic_route_returns_latest_and_history(
+    knowledge_api_client: TestClient,
+    tmp_path: Path,
+):
+    project_id = "project-step-generic-api"
+    project_dir = tmp_path / "projects" / project_id
+    stats_dir = project_dir / ".knowledge" / "stats" / "file_analysis"
+    stats_dir.mkdir(parents=True, exist_ok=True)
+    latest_payload = {
+        "project_id": project_id,
+        "source_id": "project-source-step-generic-api",
+        "step_id": "file_analysis",
+        "updated_at": "2026-05-12T12:20:01Z",
+        "metrics": {
+            "document_count": 6,
+            "chunk_count": 12,
+            "sentence_count": 15,
+        },
+    }
+    (stats_dir / "latest.json").write_text(
+        json.dumps(latest_payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    (stats_dir / "history.jsonl").write_text(
+        json.dumps(latest_payload, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+    response = knowledge_api_client.get(
+        f"/knowledge/project-stats/file_analysis?project_id={project_id}&limit=1"
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["project_id"] == project_id
+    assert payload["step_id"] == "file_analysis"
+    assert payload["latest"]["metrics"]["document_count"] == 6
+    assert len(payload["history"]) == 1
+
+
+def test_get_project_step_stats_generic_route_accepts_workflow_step_without_stats(
+    knowledge_api_client: TestClient,
+    tmp_path: Path,
+):
+    project_id = "project-step-empty-api"
+    project_dir = tmp_path / "projects" / project_id
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    response = knowledge_api_client.get(
+        f"/knowledge/project-stats/domain_graph_build?project_id={project_id}&limit=1"
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["project_id"] == project_id
+    assert payload["step_id"] == "domain_graph_build"
+    assert payload["latest"] == {}
+    assert payload["history"] == []
+
+
+def test_get_project_step_stats_rejects_unknown_step(
+    knowledge_api_client: TestClient,
+):
+    response = knowledge_api_client.get(
+        "/knowledge/project-stats/unknown-step?project_id=project-abc"
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "PROJECT_STEP_STATS_NOT_FOUND"
+
+
 def test_list_sources_offloads_processing_to_thread(
     knowledge_api_client: TestClient,
     monkeypatch,
@@ -1014,7 +1244,7 @@ def test_run_project_sync_offloads_dispatch_to_thread(
     assert getattr(command, "quantization_stage", "") == "l2"
 
 
-def test_run_project_sync_does_not_auto_register_project_source(
+def test_run_project_sync_auto_registers_project_source(
     knowledge_api_client: TestClient,
     tmp_path: Path,
     monkeypatch,
@@ -1071,7 +1301,11 @@ def test_run_project_sync_does_not_auto_register_project_source(
     assert response.status_code == 200
     assert captured["source_id"] == f"project-{project_id}-workspace"
     assert str(captured["source_location"]).endswith(f"projects/{project_id}")
-    assert knowledge_router_module.load_config().knowledge.sources == []
+    sources = knowledge_router_module.load_config().knowledge.sources
+    assert len(sources) == 1
+    assert sources[0].id == f"project-{project_id}-workspace"
+    assert str(sources[0].project_id) == project_id
+    assert str(sources[0].location).endswith(f"projects/{project_id}")
 
 
 def test_run_project_sync_allows_fast_mode_when_memify_disabled(

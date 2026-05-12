@@ -2,6 +2,9 @@ import { Button, Modal, Tag, Tooltip, Typography } from "antd";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import styles from "./index.module.less";
+import { buildProjectKnowledgeProcessingRecentHistorySectionsFromState } from "./projectKnowledgeRecentHistoryModel";
+import {
+} from "./projectKnowledgeL1StatsUi";
 import type {
   ProjectKnowledgeProcessingFreshness,
   ProjectKnowledgeModeState,
@@ -523,6 +526,16 @@ export default function ProjectKnowledgeProcessingPanel(
   );
   const { entityDelta, relationDelta } = props.knowledgeState.processingCompareDelta;
   const staleTooltip = describeStaleSources(props.knowledgeState.processingFreshness, t);
+  const recentHistorySections = useMemo(
+    () => buildProjectKnowledgeProcessingRecentHistorySectionsFromState(t, props.knowledgeState),
+    [
+      props.knowledgeState.fileAnalysisStats?.history,
+      props.knowledgeState.projectStepStats.domain_graph_build?.history,
+      props.knowledgeState.projectStepStats.quality_review?.history,
+      props.knowledgeState.sourceScanStats?.history,
+      t,
+    ],
+  );
   const evidencePathsForModal = useMemo(() => {
     const merged: string[] = [];
     const samplePaths = activeEvidence?.bundle?.sample_source_paths || [];
@@ -624,6 +637,30 @@ export default function ProjectKnowledgeProcessingPanel(
               </Typography.Text>
             </div>
           </div>
+          {recentHistorySections.map((section) => (
+            <div key={section.key} className={styles.projectKnowledgeHistoryStrip}>
+              <div className={styles.projectKnowledgeHistoryHeader}>
+                <Typography.Text strong>
+                  {section.title}
+                </Typography.Text>
+                <Typography.Text type="secondary">
+                  {section.hint}
+                </Typography.Text>
+              </div>
+              <div className={styles.projectKnowledgeHistoryList}>
+                {section.items.map((item) => (
+                  <div key={item.key} className={styles.projectKnowledgeHistoryItem}>
+                    <Typography.Text strong>
+                      {item.timestamp}
+                    </Typography.Text>
+                    <Typography.Text type="secondary">
+                      {item.summary}
+                    </Typography.Text>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
 
         <div className={styles.projectKnowledgeLayerMatrix}>

@@ -628,6 +628,11 @@ export default function ProjectDetailPage() {
   const knowledgeDockResizeFrameRef = useRef<number | null>(null);
   const pendingWorkspaceSizesRef = useRef<number[] | null>(null);
   const pendingKnowledgeDockSizesRef = useRef<number[] | null>(null);
+  const knowledgeWatchLeaseRef = useRef<{
+    agentId: string;
+    projectId: string;
+    leaseId: string;
+  } | null>(null);
 
   const currentAgent = useMemo(
     () => getCurrentAgent(agents, selectedAgent),
@@ -664,6 +669,51 @@ export default function ProjectDetailPage() {
     setRuntimeSignalLoading(false);
     setRuntimeSignalDetails({});
   }, [selectedProject?.id]);
+
+  useEffect(() => {
+    const agentId = currentAgent?.id || "";
+    const activeProjectId = selectedProject?.id || "";
+    if (!agentId || !activeProjectId) {
+      return;
+    }
+
+    let disposed = false;
+
+    void agentsApi.acquireProjectKnowledgeWatchLease(agentId, activeProjectId)
+      .then((payload) => {
+        const leaseId = String(payload?.lease_id || "").trim();
+        if (!leaseId) {
+          return;
+        }
+        if (disposed) {
+          void agentsApi.releaseProjectKnowledgeWatchLease(agentId, activeProjectId, leaseId).catch(() => undefined);
+          return;
+        }
+        knowledgeWatchLeaseRef.current = {
+          agentId,
+          projectId: activeProjectId,
+          leaseId,
+        };
+      })
+      .catch(() => undefined);
+
+    return () => {
+      disposed = true;
+      const currentLease = knowledgeWatchLeaseRef.current;
+      if (!currentLease) {
+        return;
+      }
+      if (currentLease.agentId !== agentId || currentLease.projectId !== activeProjectId) {
+        return;
+      }
+      knowledgeWatchLeaseRef.current = null;
+      void agentsApi.releaseProjectKnowledgeWatchLease(
+        currentLease.agentId,
+        currentLease.projectId,
+        currentLease.leaseId,
+      ).catch(() => undefined);
+    };
+  }, [currentAgent?.id, selectedProject?.id]);
 
   const fetchRuntimeSignalDetails = useCallback(async () => {
     if (!selectedProject?.id || !projectKnowledgeState.activeKnowledgeTasks.length) {

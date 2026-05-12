@@ -18,6 +18,57 @@ export interface KnowledgeSourceSpec {
   summary: string;
 }
 
+export interface ProjectKnowledgeStepStatsRecord {
+  project_id: string;
+  source_id: string;
+  source_location?: string;
+  step_id: string;
+  indexed_at?: string | null;
+  updated_at?: string | null;
+  metrics: ProjectKnowledgeStepStatsMetrics;
+}
+
+export interface ProjectKnowledgeStepStatsMetrics {
+  document_count?: number;
+  snapshot_count?: number;
+  chunk_count?: number;
+  sentence_count?: number;
+  char_count?: number;
+  token_count?: number;
+  data_file_count?: number;
+  changed_path_count?: number;
+  source_count?: number;
+  relation_count?: number;
+  node_count?: number;
+  quality_score_before?: number;
+  quality_score_after?: number;
+  quality_delta?: number;
+  quality_rounds?: number;
+}
+
+export type ProjectKnowledgeStepStatsStepId =
+  | "file_analysis"
+  | "source_scan"
+  | "domain_graph_build"
+  | "quality_review";
+
+export interface ProjectKnowledgeStepStatsResponse<
+  TStepId extends ProjectKnowledgeStepStatsStepId = ProjectKnowledgeStepStatsStepId,
+> {
+  project_id: string;
+  step_id: TStepId;
+  latest: ProjectKnowledgeStepStatsRecord | Record<string, never>;
+  history: ProjectKnowledgeStepStatsRecord[];
+}
+
+export type ProjectKnowledgeFileAnalysisStatsResponse = ProjectKnowledgeStepStatsResponse<"file_analysis">;
+
+export type ProjectKnowledgeSourceScanStatsResponse = ProjectKnowledgeStepStatsResponse<"source_scan">;
+
+export type ProjectKnowledgeDomainGraphBuildStatsResponse = ProjectKnowledgeStepStatsResponse<"domain_graph_build">;
+
+export type ProjectKnowledgeQualityReviewStatsResponse = ProjectKnowledgeStepStatsResponse<"quality_review">;
+
 export interface KnowledgeIndexConfig {
   engine: string;
   chunk_size: number;

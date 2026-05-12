@@ -376,21 +376,55 @@ def _worker_dispatch(mode: str, payload: dict[str, Any]) -> dict[str, Any]:
 		)
 
 
-_WORKER_CODE = r"""
+_WORKER_CODE = f"""
 import json
+import subprocess
 import sys
-from copaw.knowledge.hanlp_nlp_runtime import _worker_dispatch
+
+_BRIDGE_CODE = {json.dumps(_BRIDGE_CODE)}
+
+
+def unavailable_payload(reason_code, reason, **extra):
+	payload = {{
+		"engine": "hanlp2",
+		"status": "unavailable",
+		"reason_code": reason_code,
+		"reason": reason,
+	}}
+	payload.update(extra)
+	return payload
+
 
 for line in sys.stdin:
-    raw = str(line or "").strip()
-    if not raw:
-        continue
-    request = json.loads(raw)
-    mode = str(request.get("mode") or "probe")
-    payload = request.get("payload") or {}
-    response = _worker_dispatch(mode, payload)
-    sys.stdout.write(json.dumps(response, ensure_ascii=False) + "\n")
-    sys.stdout.flush()
+	raw = str(line or "").strip()
+	if not raw:
+		continue
+	request = json.loads(raw)
+	mode = str(request.get("mode") or "probe")
+	payload = request.get("payload") or {{}}
+	bridge_input = json.dumps(payload, ensure_ascii=False)
+	completed = subprocess.run(
+		[sys.executable, "-c", _BRIDGE_CODE, mode],
+		input=bridge_input,
+		capture_output=True,
+		text=True,
+		check=False,
+	)
+	if completed.returncode != 0:
+		response = unavailable_payload(
+			"HANLP2_BRIDGE_CRASHED",
+			(completed.stderr or "HanLP bridge exited unexpectedly.").strip() or "HanLP bridge exited unexpectedly.",
+		)
+	else:
+		try:
+			response = json.loads(completed.stdout or "{{}}")
+		except Exception:
+			response = unavailable_payload(
+				"HANLP2_WORKER_PROTOCOL_ERROR",
+				"HanLP worker returned invalid JSON.",
+			)
+	sys.stdout.write(json.dumps(response, ensure_ascii=False) + "\\n")
+	sys.stdout.flush()
 """
 
 
@@ -479,6 +513,20 @@ class NLPRuntime:
 			reason="HanLP2 sidecar is not configured.",
 		)
 
+	@staticmethod
+	def _worker_env() -> dict[str, str]:
+		env = dict(os.environ)
+		src_root = Path(__file__).resolve().parents[2]
+		existing_pythonpath = str(env.get("PYTHONPATH") or "").strip()
+		pythonpath_parts = [str(src_root)]
+		if existing_pythonpath:
+			for part in existing_pythonpath.split(os.pathsep):
+				normalized = str(part or "").strip()
+				if normalized and normalized not in pythonpath_parts:
+					pythonpath_parts.append(normalized)
+		env["PYTHONPATH"] = os.pathsep.join(pythonpath_parts)
+		return env
+
 	def _start_worker_locked(self, executable: Path, payload: dict[str, Any], *, cache_key: str) -> subprocess.Popen[str]:
 		_ = payload
 		process = subprocess.Popen(
@@ -487,6 +535,7 @@ class NLPRuntime:
 			stdout=subprocess.PIPE,
 			stderr=subprocess.PIPE,
 			text=True,
+			env=self._worker_env(),
 		)
 		self._worker_process = process
 		self._worker_cache_key = cache_key
@@ -628,6 +677,10 @@ class NLPRuntime:
 			payload=payload,
 			timeout=float(payload.get("probe_timeout_sec") or 5.0),
 		)
+
+	def local_models_status(self, config: KnowledgeConfig | None = None) -> dict[str, Any]:
+		"""Backward-compatible alias for sidecar local model availability probes."""
+		return self.model_status(config)
 
 	def ensure_model(self, config: KnowledgeConfig | None = None) -> dict[str, Any]:
 		probe_state = self.probe(config)

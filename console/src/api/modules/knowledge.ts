@@ -21,6 +21,10 @@ import type {
   QualityLoopJobsListResponse,
   QualityLoopStartRequest,
   QualityLoopStartResponse,
+  ProjectKnowledgeFileAnalysisStatsResponse,
+  ProjectKnowledgeStepStatsStepId,
+  ProjectKnowledgeStepStatsResponse,
+  ProjectKnowledgeSourceScanStatsResponse,
   ProjectKnowledgeSyncRunRequest,
   ProjectKnowledgeSyncRunResponse,
   ProjectKnowledgeSyncState,
@@ -34,6 +38,12 @@ const withProjectId = (path: string, projectId?: string) => {
   const sep = path.includes("?") ? "&" : "?";
   return `${path}${sep}project_id=${encodeURIComponent(normalized)}`;
 };
+
+const withLimit = (path: string, limit?: number) => (
+  typeof limit === "number"
+    ? `${path}?limit=${encodeURIComponent(String(limit))}`
+    : path
+);
 
 export const knowledgeApi = {
   getKnowledgeConfig: () => request<KnowledgeConfig>("/knowledge/config"),
@@ -53,6 +63,24 @@ export const knowledgeApi = {
         options?.projectId,
       ),
     ),
+
+  getProjectStepStats: <TStepId extends ProjectKnowledgeStepStatsStepId>(
+    stepId: TStepId,
+    projectId: string,
+    options?: { limit?: number },
+  ) =>
+    request<ProjectKnowledgeStepStatsResponse<TStepId>>(
+      withProjectId(
+        withLimit(`/knowledge/project-stats/${encodeURIComponent(stepId)}`, options?.limit),
+        projectId,
+      ),
+    ),
+
+  getProjectFileAnalysisStats: (projectId: string, options?: { limit?: number }) =>
+    knowledgeApi.getProjectStepStats("file_analysis", projectId, options) as Promise<ProjectKnowledgeFileAnalysisStatsResponse>,
+
+  getProjectSourceScanStats: (projectId: string, options?: { limit?: number }) =>
+    knowledgeApi.getProjectStepStats("source_scan", projectId, options) as Promise<ProjectKnowledgeSourceScanStatsResponse>,
 
   upsertKnowledgeSource: (
     payload: KnowledgeSourceSpec,

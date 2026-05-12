@@ -24,6 +24,7 @@ import {
   formatGraphEntityTypeLabel,
   formatGraphRelationTypeLabel,
 } from "./projectKnowledgeFilterLabels";
+import { buildProjectKnowledgeLatestSummaryModelFromState } from "./projectKnowledgeLatestSummaryModel";
 import styles from "./index.module.less";
 import type { ProjectKnowledgeProcessingMode, ProjectKnowledgeState } from "./useProjectKnowledgeState";
 
@@ -263,6 +264,15 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
       },
     ];
   }, [knowledgeState.quantMetrics, t]);
+
+  const latestSummaryModel = useMemo(() => buildProjectKnowledgeLatestSummaryModelFromState(t, knowledgeState), [
+    knowledgeState.fileAnalysisStats?.latest,
+    knowledgeState.outputResolution.activeMode,
+    knowledgeState.projectStepStats.domain_graph_build?.latest,
+    knowledgeState.projectStepStats.quality_review?.latest,
+    knowledgeState.sourceScanStats?.latest,
+    t,
+  ]);
 
   const pipelineStageTags = useMemo(() => {
     const stages = knowledgeState.syncState?.pipeline_trace?.stages || [];
@@ -519,6 +529,16 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
           </div>
         ))}
       </div>
+
+      {latestSummaryModel.workflowParts.length ? (
+        <Alert
+          className={styles.projectKnowledgeQueryNotice}
+          type="info"
+          showIcon
+          message={t("projects.knowledge.latestWorkflowSummary", "Latest workflow snapshot")}
+          description={latestSummaryModel.workflowParts.join(" · ")}
+        />
+      ) : null}
 
       {diagnosticsIssues.length ? (
         <Alert

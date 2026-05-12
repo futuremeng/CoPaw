@@ -185,6 +185,60 @@ def test_update_project_knowledge_sink_endpoint(
     assert after.project_auto_knowledge_sink is False
 
 
+def test_project_knowledge_watch_lease_endpoint_toggles_monitoring_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    manager = _FakeManager(str(tmp_path))
+    monkeypatch.setattr(
+        agents_router_module,
+        "_get_multi_agent_manager",
+        lambda _request: manager,
+    )
+
+    app = FastAPI()
+    app.include_router(agents_router_module.router)
+    client = TestClient(app)
+
+    project = _create_project(
+        tmp_path,
+        CreateProjectRequest(
+            name="Watch Lease Toggle",
+            description="Acquire and release should toggle monitoring state",
+        ),
+    )
+
+    before = _load_project_summary(tmp_path / "projects" / project.id)
+    assert before is not None
+    assert before.file_monitoring_state == "idle"
+
+    acquired = client.post(
+        f"/agents/default/projects/{project.id}/knowledge-watch-leases",
+    )
+    assert acquired.status_code == 200
+    acquired_payload = acquired.json()
+    assert acquired_payload["lease_id"]
+    assert acquired_payload["active_count"] == 1
+    assert acquired_payload["file_monitoring_state"] == "active"
+
+    active = _load_project_summary(tmp_path / "projects" / project.id)
+    assert active is not None
+    assert active.file_monitoring_state == "active"
+
+    released = client.delete(
+        f"/agents/default/projects/{project.id}/knowledge-watch-leases/{acquired_payload['lease_id']}",
+    )
+    assert released.status_code == 200
+    released_payload = released.json()
+    assert released_payload["released"] is True
+    assert released_payload["active_count"] == 0
+    assert released_payload["file_monitoring_state"] == "idle"
+
+    after = _load_project_summary(tmp_path / "projects" / project.id)
+    assert after is not None
+    assert after.file_monitoring_state == "idle"
+
+
 def test_upload_project_file_triggers_auto_knowledge_sync(
     project_artifact_router_client: tuple[TestClient, Path, str],
     monkeypatch: pytest.MonkeyPatch,

@@ -508,6 +508,7 @@ class KnowledgeManager:
                 "raw_last_ingested_at": stats.get("raw_last_ingested_at"),
                 "stats_updated_at": stats.get("stats_updated_at"),
             }
+        status = self._merge_status_with_project_file_analysis_stats(status, source)
         if source is not None:
             status.update(self._remote_source_status(source))
         return status
@@ -619,6 +620,7 @@ class KnowledgeManager:
         self._clear_l2_checkpoint(payload)
         self._write_source_index_payload(source.id, payload)
         self._update_source_stats_after_index(source.id, payload)
+        self._update_project_file_analysis_stats_after_index(source, payload)
 
         return {
             "source_id": source.id,
@@ -773,6 +775,7 @@ class KnowledgeManager:
         self._clear_l2_checkpoint(payload)
         self._write_source_index_payload(source.id, payload)
         self._update_source_stats_after_index(source.id, payload)
+        self._update_project_file_analysis_stats_after_index(source, payload)
         return payload
 
     def _apply_semantic_stage_metrics(self, payload: dict[str, Any]) -> None:
@@ -1210,6 +1213,254 @@ class KnowledgeManager:
             "stats_updated_at": now,
         }
         self._write_source_stats(source_id, updated)
+
+    def _resolve_project_workspace_dir(
+        self,
+        *,
+        project_id: str = "",
+        project_workspace_dir: str | Path | None = None,
+    ) -> Path | None:
+        if project_workspace_dir is not None and str(project_workspace_dir).strip():
+            candidate = Path(project_workspace_dir).expanduser()
+        elif project_id:
+            project_candidate = self.project_root / "projects" / str(project_id).strip()
+            if project_candidate.exists() and project_candidate.is_dir():
+                candidate = project_candidate
+            elif self.project_root.exists() and self.project_root.is_dir() and self.project_root.name == str(project_id).strip():
+                candidate = self.project_root
+            else:
+                return None
+        else:
+            return None
+        try:
+            resolved = candidate.resolve()
+        except Exception:
+            resolved = candidate
+        if not resolved.exists() or not resolved.is_dir():
+            return None
+        return resolved
+
+    def _project_step_stats_dir(
+        self,
+        *,
+        project_id: str = "",
+        project_workspace_dir: str | Path | None = None,
+        step_id: str,
+    ) -> Path | None:
+        resolved_project_dir = self._resolve_project_workspace_dir(
+            project_id=project_id,
+            project_workspace_dir=project_workspace_dir,
+        )
+        if resolved_project_dir is None:
+            return None
+        return resolved_project_dir / ".knowledge" / "stats" / self._safe_name(step_id)
+
+    def _project_step_latest_stats_path(
+        self,
+        *,
+        project_id: str = "",
+        project_workspace_dir: str | Path | None = None,
+        step_id: str,
+    ) -> Path | None:
+        stats_dir = self._project_step_stats_dir(
+            project_id=project_id,
+            project_workspace_dir=project_workspace_dir,
+            step_id=step_id,
+        )
+        if stats_dir is None:
+            return None
+        return stats_dir / "latest.json"
+
+    def _project_step_history_stats_path(
+        self,
+        *,
+        project_id: str = "",
+        project_workspace_dir: str | Path | None = None,
+        step_id: str,
+    ) -> Path | None:
+        stats_dir = self._project_step_stats_dir(
+            project_id=project_id,
+            project_workspace_dir=project_workspace_dir,
+            step_id=step_id,
+        )
+        if stats_dir is None:
+            return None
+        return stats_dir / "history.jsonl"
+
+    def load_project_step_stats(
+        self,
+        *,
+        project_id: str = "",
+        project_workspace_dir: str | Path | None = None,
+        step_id: str,
+    ) -> dict[str, Any]:
+        latest_path = self._project_step_latest_stats_path(
+            project_id=project_id,
+            project_workspace_dir=project_workspace_dir,
+            step_id=step_id,
+        )
+        if latest_path is None or not latest_path.exists() or not latest_path.is_file():
+            return {}
+        try:
+            payload = json.loads(latest_path.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+        return payload if isinstance(payload, dict) else {}
+
+    def load_project_step_history(
+        self,
+        *,
+        project_id: str = "",
+        project_workspace_dir: str | Path | None = None,
+        step_id: str,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        history_path = self._project_step_history_stats_path(
+            project_id=project_id,
+            project_workspace_dir=project_workspace_dir,
+            step_id=step_id,
+        )
+        if history_path is None or not history_path.exists() or not history_path.is_file():
+            return []
+        try:
+            lines = history_path.read_text(encoding="utf-8").splitlines()
+        except Exception:
+            return []
+        normalized_limit = max(1, min(int(limit or 20), 200))
+        rows: list[dict[str, Any]] = []
+        for line in reversed(lines):
+            if not line.strip():
+                continue
+            try:
+                payload = json.loads(line)
+            except Exception:
+                continue
+            if isinstance(payload, dict):
+                rows.append(payload)
+            if len(rows) >= normalized_limit:
+                break
+        return rows
+
+    def write_project_step_stats(
+        self,
+        *,
+        project_id: str,
+        project_workspace_dir: str | Path,
+        step_id: str,
+        source_id: str,
+        source_location: str,
+        metrics: dict[str, Any],
+        indexed_at: str | None = None,
+        extra_fields: dict[str, Any] | None = None,
+    ) -> None:
+        normalized_project_id = str(project_id or "").strip()
+        normalized_step_id = str(step_id or "").strip()
+        if not normalized_project_id or not normalized_step_id:
+            return
+        latest_path = self._project_step_latest_stats_path(
+            project_id=normalized_project_id,
+            project_workspace_dir=project_workspace_dir,
+            step_id=normalized_step_id,
+        )
+        history_path = self._project_step_history_stats_path(
+            project_id=normalized_project_id,
+            project_workspace_dir=project_workspace_dir,
+            step_id=normalized_step_id,
+        )
+        if latest_path is None or history_path is None:
+            return
+        now = datetime.now(UTC).isoformat()
+        record = {
+            "project_id": normalized_project_id,
+            "source_id": str(source_id or "").strip(),
+            "source_location": str(source_location or "").strip(),
+            "step_id": normalized_step_id,
+            "indexed_at": str(indexed_at or "").strip() or None,
+            "updated_at": now,
+            "metrics": {
+                key: value
+                for key, value in (metrics or {}).items()
+            },
+        }
+        if isinstance(extra_fields, dict):
+            record.update({
+                key: value
+                for key, value in extra_fields.items()
+                if key not in record
+            })
+        latest_path.parent.mkdir(parents=True, exist_ok=True)
+        latest_path.write_text(
+            json.dumps(record, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        with history_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+    def _merge_status_with_project_file_analysis_stats(
+        self,
+        status: dict[str, Any],
+        source: KnowledgeSourceSpec | None,
+    ) -> dict[str, Any]:
+        if source is None:
+            return status
+        project_id = str(source.project_id or "").strip()
+        if not project_id:
+            return status
+        project_stats = self.load_project_step_stats(
+            project_id=project_id,
+            project_workspace_dir=source.location,
+            step_id="file_analysis",
+        )
+        metrics = project_stats.get("metrics") if isinstance(project_stats, dict) else None
+        if not isinstance(metrics, dict) or not metrics:
+            return status
+        merged = dict(status)
+        for key in ("document_count", "snapshot_count", "chunk_count", "sentence_count", "char_count", "token_count"):
+            merged[key] = max(
+                _safe_count_int(merged.get(key) or 0),
+                _safe_count_int(metrics.get(key) or 0),
+            )
+        merged["indexed"] = bool(merged.get("indexed")) or any(
+            _safe_count_int(metrics.get(key) or 0) > 0
+            for key in ("document_count", "snapshot_count", "chunk_count")
+        )
+        merged["indexed_at"] = str(
+            merged.get("indexed_at")
+            or project_stats.get("indexed_at")
+            or ""
+        ).strip() or None
+        merged["stats_updated_at"] = str(
+            merged.get("stats_updated_at")
+            or project_stats.get("updated_at")
+            or ""
+        ).strip() or None
+        return merged
+
+    def _update_project_file_analysis_stats_after_index(
+        self,
+        source: KnowledgeSourceSpec,
+        payload: dict[str, Any],
+    ) -> None:
+        project_id = str(source.project_id or "").strip()
+        if not project_id:
+            return
+        metrics = {
+            "document_count": int(payload.get("document_count", 0) or 0),
+            "snapshot_count": int(payload.get("snapshot_count", payload.get("document_count", 0)) or 0),
+            "chunk_count": int(payload.get("chunk_count", 0) or 0),
+            "sentence_count": int(payload.get("sentence_count", 0) or 0),
+            "char_count": int(payload.get("char_count", 0) or 0),
+            "token_count": int(payload.get("token_count", 0) or 0),
+        }
+        self.write_project_step_stats(
+            project_id=project_id,
+            project_workspace_dir=source.location,
+            step_id="file_analysis",
+            source_id=source.id,
+            source_location=str(source.location or "").strip(),
+            indexed_at=str(payload.get("indexed_at") or "").strip() or None,
+            metrics=metrics,
+        )
 
     def _source_chunk_manifest_path(self, source_id: str) -> Path:
         return self._source_storage_path(source_id, "chunk-manifest.json")

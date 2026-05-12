@@ -17,10 +17,13 @@ vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (
       key: string,
-      maybeFallbackOrOptions?: string | { project?: string },
+      maybeFallbackOrOptions?: string | Record<string, unknown>,
+      maybeOptions?: Record<string, unknown>,
     ) => {
       if (typeof maybeFallbackOrOptions === "string") {
-        return maybeFallbackOrOptions;
+        return maybeFallbackOrOptions.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => (
+          String(maybeOptions?.[name] ?? `{{${name}}}`)
+        ));
       }
       return key;
     },
@@ -47,6 +50,9 @@ function buildKnowledgeState(projectId: string): ProjectKnowledgeState {
     projectSourceId: `project-${projectId.toLowerCase()}-workspace`,
     sourceLoaded: true,
     sourceRegistered: true,
+    projectStepStats: {},
+    fileAnalysisStats: null,
+    sourceScanStats: null,
     projectSources: [],
     selectedSourceId: "",
     setSelectedSourceId: vi.fn(),
@@ -341,6 +347,92 @@ describe("ProjectKnowledgePanel interactions", () => {
     await user.click(await screen.findByText("Docs Source"));
 
     expect(knowledgeState.setSelectedSourceId).toHaveBeenCalledWith("project-project-abc-docs");
+  });
+
+  it("renders latest workflow snapshot across L1-L3 in Explore", () => {
+    const knowledgeState = buildKnowledgeState(projectId);
+    knowledgeState.sourceScanStats = {
+      project_id: projectId,
+      step_id: "source_scan",
+      latest: {
+        project_id: projectId,
+        source_id: `project-${projectId.toLowerCase()}-workspace`,
+        step_id: "source_scan",
+        updated_at: "2026-05-12T10:21:00Z",
+        metrics: {
+          data_file_count: 5,
+          changed_path_count: 2,
+          source_count: 1,
+        },
+      },
+      history: [],
+    };
+    knowledgeState.fileAnalysisStats = {
+      project_id: projectId,
+      step_id: "file_analysis",
+      latest: {
+        project_id: projectId,
+        source_id: `project-${projectId.toLowerCase()}-workspace`,
+        step_id: "file_analysis",
+        updated_at: "2026-05-12T10:31:00Z",
+        metrics: {
+          document_count: 3,
+          chunk_count: 7,
+          sentence_count: 11,
+        },
+      },
+      history: [],
+    };
+    knowledgeState.projectStepStats = {
+      domain_graph_build: {
+        project_id: projectId,
+        step_id: "domain_graph_build",
+        latest: {
+          project_id: projectId,
+          source_id: `project-${projectId.toLowerCase()}-workspace`,
+          step_id: "domain_graph_build",
+          updated_at: "2026-05-12T10:41:00Z",
+          metrics: {
+            document_count: 3,
+            node_count: 9,
+            relation_count: 12,
+          },
+        },
+        history: [],
+      },
+      quality_review: {
+        project_id: projectId,
+        step_id: "quality_review",
+        latest: {
+          project_id: projectId,
+          source_id: `project-${projectId.toLowerCase()}-workspace`,
+          step_id: "quality_review",
+          updated_at: "2026-05-12T10:51:00Z",
+          metrics: {
+            quality_score_before: 0.91,
+            quality_score_after: 0.95,
+            quality_delta: 0.04,
+            quality_rounds: 1,
+          },
+        },
+        history: [],
+      },
+    };
+
+    render(
+      <ProjectKnowledgePanel
+        projectId={projectId}
+        projectName="Project ABC"
+        knowledgeState={knowledgeState}
+        graphComponents={testGraphComponents}
+      />,
+    );
+
+    expect(screen.getByText("Latest workflow snapshot")).not.toBeNull();
+    expect(screen.getByText(/5 files \/ 2 changed/)).not.toBeNull();
+    expect(screen.getByText(/3 docs \/ 7 chunks \/ 11 sentences/)).not.toBeNull();
+    expect(screen.getByText(/3 docs \/ 9 nodes \/ 12 relations/)).not.toBeNull();
+    expect(screen.getByText(/0.91 -> 0.95 \/ delta 0.04 \/ 1 rounds/)).not.toBeNull();
   });
 
   it("formats graph filter labels into readable text", () => {

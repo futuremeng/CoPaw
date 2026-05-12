@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import json
 import sys
 import types
 from pathlib import Path
@@ -172,3 +173,51 @@ def test_build_nlp_progress_contains_phrase_placeholder_stage(tmp_path: Path):
     assert isinstance(phrase_stage, dict)
     assert phrase_stage.get("status") == "unavailable"
     assert phrase_stage.get("reason_code") == "PHRASE_LAYER_NOT_IMPLEMENTED"
+
+
+def test_hydrate_processing_view_uses_project_file_analysis_stats(tmp_path: Path):
+    project_id = "project-file-analysis-stats"
+    project_root = tmp_path / "projects" / project_id
+    project_root.mkdir(parents=True, exist_ok=True)
+    stats_dir = project_root / ".knowledge" / "stats" / "file_analysis"
+    stats_dir.mkdir(parents=True, exist_ok=True)
+    (stats_dir / "latest.json").write_text(
+        json.dumps(
+            {
+                "project_id": project_id,
+                "source_id": "project-source-1",
+                "step_id": "file_analysis",
+                "indexed_at": "2026-05-12T10:00:00Z",
+                "updated_at": "2026-05-12T10:00:01Z",
+                "metrics": {
+                    "document_count": 3,
+                    "snapshot_count": 3,
+                    "chunk_count": 5,
+                    "sentence_count": 8,
+                    "char_count": 21,
+                    "token_count": 13,
+                },
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    manager = ProjectKnowledgeSyncManager(tmp_path, knowledge_dirname="knowledge")
+    manager._knowledge_manager.get_source_status = lambda *args, **kwargs: {}  # type: ignore[method-assign]
+
+    hydrated = manager._hydrate_processing_view(
+        {
+            "project_id": project_id,
+            "latest_source_id": "project-source-1",
+            "status": "idle",
+            "updated_at": "2026-05-12T10:00:02Z",
+            "last_result": {},
+        }
+    )
+
+    assert hydrated["file_analysis_stats"]["project_id"] == project_id
+    assert hydrated["l1_metrics"]["document_count"] == 3
+    assert hydrated["global_metrics"]["snapshot_count"] == 3
+    assert hydrated["mode_metrics"]["fast"]["chunk_count"] == 5

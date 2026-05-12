@@ -78,6 +78,9 @@ function buildKnowledgeState(): ProjectKnowledgeState {
     projectSourceId: "project-project-abc-workspace",
     sourceLoaded: true,
     sourceRegistered: true,
+    projectStepStats: {},
+    fileAnalysisStats: null,
+    sourceScanStats: null,
     projectSources: [
       {
         id: "project-project-abc-workspace",
@@ -490,6 +493,75 @@ function buildKnowledgeState(): ProjectKnowledgeState {
 describe("project knowledge supporting panels", () => {
   it("renders health content outside explore", () => {
     const knowledgeState = buildKnowledgeState();
+    knowledgeState.sourceScanStats = {
+      project_id: "project-abc",
+      step_id: "source_scan",
+      latest: {
+        project_id: "project-abc",
+        source_id: "project-project-abc-workspace",
+        step_id: "source_scan",
+        updated_at: "2026-05-12T09:21:00Z",
+        metrics: {
+          data_file_count: 5,
+          changed_path_count: 2,
+          source_count: 1,
+        },
+      },
+      history: [],
+    };
+    knowledgeState.fileAnalysisStats = {
+      project_id: "project-abc",
+      step_id: "file_analysis",
+      latest: {
+        project_id: "project-abc",
+        source_id: "project-project-abc-workspace",
+        step_id: "file_analysis",
+        updated_at: "2026-05-12T09:31:00Z",
+        metrics: {
+          document_count: 3,
+          chunk_count: 7,
+          sentence_count: 11,
+        },
+      },
+      history: [],
+    };
+    knowledgeState.projectStepStats = {
+      domain_graph_build: {
+        project_id: "project-abc",
+        step_id: "domain_graph_build",
+        latest: {
+          project_id: "project-abc",
+          source_id: "project-project-abc-workspace",
+          step_id: "domain_graph_build",
+          indexed_at: "2026-05-12T10:40:00Z",
+          updated_at: "2026-05-12T10:41:00Z",
+          metrics: {
+            document_count: 3,
+            node_count: 9,
+            relation_count: 12,
+          },
+        },
+        history: [],
+      },
+      quality_review: {
+        project_id: "project-abc",
+        step_id: "quality_review",
+        latest: {
+          project_id: "project-abc",
+          source_id: "project-project-abc-workspace",
+          step_id: "quality_review",
+          indexed_at: "2026-05-12T10:50:00Z",
+          updated_at: "2026-05-12T10:51:00Z",
+          metrics: {
+            quality_score_before: 0.91,
+            quality_score_after: 0.95,
+            quality_delta: 0.04,
+            quality_rounds: 1,
+          },
+        },
+        history: [],
+      },
+    };
     const baseSyncState = knowledgeState.syncState;
     if (!baseSyncState) {
       throw new Error("syncState fixture missing");
@@ -523,6 +595,12 @@ describe("project knowledge supporting panels", () => {
     expect(screen.getByText("projects.knowledge.signalsTitle")).not.toBeNull();
     expect(screen.getByText(/Metrics Source/)).not.toBeNull();
     expect(screen.getByText(/Backend merged sync metrics/)).not.toBeNull();
+    expect(screen.getByText(/Latest L1:/)).not.toBeNull();
+    expect(screen.getByText(/5 files \/ 2 changed/)).not.toBeNull();
+    expect(screen.getByText(/3 docs \/ 7 chunks \/ 11 sentences/)).not.toBeNull();
+    expect(screen.getByText(/Latest L2\/L3:/)).not.toBeNull();
+    expect(screen.getByText(/3 docs \/ 9 nodes \/ 12 relations/)).not.toBeNull();
+    expect(screen.getByText(/0.91 -> 0.95 \/ delta 0.04 \/ 1 rounds/)).not.toBeNull();
     expect(screen.getAllByText("projects.knowledge.signalRelations").length).toBeGreaterThan(0);
     expect(screen.getAllByText("实体数").length).toBeGreaterThan(0);
     expect(screen.getByText("Semantic Engine")).not.toBeNull();
@@ -594,7 +672,82 @@ describe("project knowledge supporting panels", () => {
     ]);
   });
 
-  it("renders processing mode cards", () => {
+  it("renders recent L1 runs in sources panel when project stats history is available", () => {
+    const knowledgeState = buildKnowledgeState();
+    knowledgeState.sourceScanStats = {
+      project_id: "project-abc",
+      step_id: "source_scan",
+      latest: {
+        project_id: "project-abc",
+        source_id: "project-project-abc-workspace",
+        step_id: "source_scan",
+        indexed_at: "2026-05-12T10:20:00Z",
+        updated_at: "2026-05-12T10:21:00Z",
+        metrics: {
+          data_file_count: 5,
+          changed_path_count: 2,
+          source_count: 1,
+        },
+      },
+      history: [
+        {
+          project_id: "project-abc",
+          source_id: "project-project-abc-workspace",
+          step_id: "source_scan",
+          indexed_at: "2026-05-12T10:20:00Z",
+          updated_at: "2026-05-12T10:21:00Z",
+          metrics: {
+            data_file_count: 5,
+            changed_path_count: 2,
+            source_count: 1,
+          },
+        },
+      ],
+    };
+    knowledgeState.fileAnalysisStats = {
+      project_id: "project-abc",
+      step_id: "file_analysis",
+      latest: {
+        project_id: "project-abc",
+        source_id: "project-project-abc-workspace",
+        step_id: "file_analysis",
+        indexed_at: "2026-05-12T10:30:00Z",
+        updated_at: "2026-05-12T10:31:00Z",
+        metrics: {
+          document_count: 3,
+          snapshot_count: 3,
+          chunk_count: 7,
+          sentence_count: 11,
+        },
+      },
+      history: [
+        {
+          project_id: "project-abc",
+          source_id: "project-project-abc-workspace",
+          step_id: "file_analysis",
+          indexed_at: "2026-05-12T10:30:00Z",
+          updated_at: "2026-05-12T10:31:00Z",
+          metrics: {
+            document_count: 3,
+            snapshot_count: 3,
+            chunk_count: 7,
+            sentence_count: 11,
+          },
+        },
+      ],
+    };
+
+    render(<ProjectKnowledgeSourcesPanel knowledgeState={knowledgeState} />);
+
+    expect(screen.getByText("最近扫描")).not.toBeNull();
+    expect(screen.getByText("最近的 source_scan 项目统计")).not.toBeNull();
+    expect(screen.getByText("5 files / 2 changed / 1 sources")).not.toBeNull();
+    expect(screen.getByText("最近 L1 运行")).not.toBeNull();
+    expect(screen.getByText("最近的 file_analysis 项目统计")).not.toBeNull();
+    expect(screen.getByText("3 docs / 7 chunks / 11 sentences")).not.toBeNull();
+  });
+
+  it("renders processing summary and layer matrix", () => {
     const knowledgeState = buildKnowledgeState();
     const baseSyncState = knowledgeState.syncState;
     if (!baseSyncState) {
@@ -621,6 +774,73 @@ describe("project knowledge supporting panels", () => {
         }
         : mode
     ));
+    knowledgeState.sourceScanStats = {
+      latest: null,
+      history: [
+        {
+          project_id: "project-abc",
+          source_id: "project-project-abc-workspace",
+          step_id: "source_scan",
+          updated_at: "2026-05-12T10:21:00Z",
+          metrics: {
+            data_file_count: 5,
+            changed_path_count: 2,
+            source_count: 1,
+          },
+        },
+      ],
+    } as typeof knowledgeState.sourceScanStats;
+    knowledgeState.fileAnalysisStats = {
+      latest: null,
+      history: [
+        {
+          project_id: "project-abc",
+          source_id: "project-project-abc-workspace",
+          step_id: "file_analysis",
+          updated_at: "2026-05-12T10:31:00Z",
+          metrics: {
+            document_count: 3,
+            chunk_count: 7,
+            sentence_count: 11,
+          },
+        },
+      ],
+    } as typeof knowledgeState.fileAnalysisStats;
+    knowledgeState.projectStepStats = {
+      domain_graph_build: {
+        latest: null,
+        history: [
+          {
+            project_id: "project-abc",
+            source_id: "project-project-abc-workspace",
+            step_id: "domain_graph_build",
+            updated_at: "2026-05-12T10:41:00Z",
+            metrics: {
+              document_count: 3,
+              node_count: 9,
+              relation_count: 12,
+            },
+          },
+        ],
+      },
+      quality_review: {
+        latest: null,
+        history: [
+          {
+            project_id: "project-abc",
+            source_id: "project-project-abc-workspace",
+            step_id: "quality_review",
+            updated_at: "2026-05-12T10:51:00Z",
+            metrics: {
+              quality_score_before: 0.91,
+              quality_score_after: 0.95,
+              quality_delta: 0.04,
+              quality_rounds: 1,
+            },
+          },
+        ],
+      },
+    } as typeof knowledgeState.projectStepStats;
 
     render(<ProjectKnowledgeProcessingPanel knowledgeState={knowledgeState} />);
 
@@ -637,37 +857,32 @@ describe("project knowledge supporting panels", () => {
 
     expect(screen.getByText("Processing")).not.toBeNull();
     expect(screen.queryByText("极速模式")).toBeNull();
-    expect(screen.getAllByText("NLP 模式").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("多智能体模式").length).toBeGreaterThan(0);
     expect(screen.getByText("NER 实体数")).not.toBeNull();
     expect(screen.getByText("L3 关系数")).not.toBeNull();
     expectSignalValue("NER 实体数", "9");
     expectSignalValue("Syntax 句法关系数", "13");
-    expect(screen.getByText("实体关系抽取")).not.toBeNull();
-    expect(screen.getByText("多智能体增强")).not.toBeNull();
+    expect(screen.getByText("最近扫描")).not.toBeNull();
+    expect(screen.getByText("5 files / 2 changed / 1 sources")).not.toBeNull();
+    expect(screen.getByText("最近 L1 运行")).not.toBeNull();
+    expect(screen.getByText("3 docs / 7 chunks / 11 sentences")).not.toBeNull();
+    expect(screen.getByText("最近 L2 图构建")).not.toBeNull();
+    expect(screen.getByText("3 docs / 9 nodes / 12 relations")).not.toBeNull();
+    expect(screen.getByText("最近 L3 质量审校")).not.toBeNull();
+    expect(screen.getByText("0.91 -> 0.95 / delta 0.04 / 1 rounds")).not.toBeNull();
+    expect(screen.getByText("知识计量六层")).not.toBeNull();
+    expect(screen.getByText("L2 精确量化")).not.toBeNull();
+    expect(screen.getByText("L3 审计增强")).not.toBeNull();
+    expect(screen.getByText("数据层与预处理层")).not.toBeNull();
+    expect(screen.getByText("语义层次")).not.toBeNull();
+    expect(screen.getByText("语用与推理层次")).not.toBeNull();
     expect(screen.getByText("#2")).not.toBeNull();
-    expect(screen.getAllByText(/Semantic engine unavailable: HanLP2 module is not installed\./).length).toBeGreaterThan(0);
-    expect(screen.getByText("COR")).not.toBeNull();
-    expect(screen.getAllByText("NER").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Syntax").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("查看依据").length).toBeGreaterThan(0);
     expect(screen.getAllByText("就绪标准化文档数").length).toBeGreaterThan(0);
-    expect(screen.getByText("聚类数")).not.toBeNull();
     expect(screen.getAllByText("识别实体数").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("词性标注数").length).toBeGreaterThan(0);
-    expect(screen.getByText("词性标签种类数")).not.toBeNull();
-    expect(screen.getAllByText("词性覆盖率(语法分词口径)").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("词性覆盖率(文档分词口径)").length).toBeGreaterThan(0);
-    expect(screen.queryByText("NER Batches")).toBeNull();
-    expect(screen.queryByText("Worker Restarts")).toBeNull();
-    expect(screen.queryByText("Worker PID Count")).toBeNull();
-    expect(screen.getAllByText("Token 数").length).toBeGreaterThan(0);
     expect(screen.getAllByText("句法关系数").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("42").length).toBeGreaterThan(0);
-    const runNlpButton = screen.getByRole("button", { name: "运行 NLP 结构化" }) as HTMLButtonElement;
-    expect(runNlpButton.disabled).toBe(false);
-    expect(runNlpButton.parentElement?.getAttribute("title")).toBeNull();
-    expect(screen.getByText("当前发起阶段: L2")).not.toBeNull();
-    expect(screen.getByText("L2 提供实体与关系的结构化基础，L3 通过智能体对 NLP 结果进行审计增强与质量提升。")).not.toBeNull();
+    expect(screen.getByText("质量分")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Refresh" })).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Open settings" })).not.toBeNull();
   });
 
   it("marks stale queued processing snapshots", () => {
@@ -685,8 +900,6 @@ describe("project knowledge supporting panels", () => {
     render(<ProjectKnowledgeProcessingPanel knowledgeState={knowledgeState} />);
 
     expect(screen.getByText("状态可能已过期")).not.toBeNull();
-    expect(screen.getByText("快照过期")).not.toBeNull();
-    expect(screen.getByText("tasks 通道重连中，等待新的运行快照，当前展示可能落后于实际执行状态。")).not.toBeNull();
   });
 
   it("hides L1-specific indexing hints in processing header", () => {
@@ -730,28 +943,196 @@ describe("project knowledge supporting panels", () => {
     expect(screen.getByText("等待形成独立增强结果")).not.toBeNull();
   });
 
-  it("passes the explicitly selected quantization stage when launching a mode", async () => {
+  it("opens settings from the processing header actions", async () => {
     const user = userEvent.setup();
     const knowledgeState = buildKnowledgeState();
+    const onOpenSettings = vi.fn();
+
+    render(<ProjectKnowledgeProcessingPanel knowledgeState={knowledgeState} onOpenSettings={onOpenSettings} />);
+
+    await user.click(screen.getByRole("button", { name: "Open settings" }));
+
+    expect(onOpenSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders recent source_scan, L1, L2 and L3 runs when project stats history is available", () => {
+    const knowledgeState = buildKnowledgeState();
+    knowledgeState.sourceScanStats = {
+      project_id: "project-abc",
+      step_id: "source_scan",
+      latest: {
+        project_id: "project-abc",
+        source_id: "project-project-abc-workspace",
+        step_id: "source_scan",
+        indexed_at: "2026-05-12T10:20:00Z",
+        updated_at: "2026-05-12T10:21:00Z",
+        metrics: {
+          data_file_count: 5,
+          changed_path_count: 2,
+          source_count: 1,
+        },
+      },
+      history: [
+        {
+          project_id: "project-abc",
+          source_id: "project-project-abc-workspace",
+          step_id: "source_scan",
+          indexed_at: "2026-05-12T10:20:00Z",
+          updated_at: "2026-05-12T10:21:00Z",
+          metrics: {
+            data_file_count: 5,
+            changed_path_count: 2,
+            source_count: 1,
+          },
+        },
+      ],
+    };
+    knowledgeState.fileAnalysisStats = {
+      project_id: "project-abc",
+      step_id: "file_analysis",
+      latest: {
+        project_id: "project-abc",
+        source_id: "project-project-abc-workspace",
+        step_id: "file_analysis",
+        indexed_at: "2026-05-12T10:30:00Z",
+        updated_at: "2026-05-12T10:31:00Z",
+        metrics: {
+          document_count: 3,
+          snapshot_count: 3,
+          chunk_count: 7,
+          sentence_count: 11,
+        },
+      },
+      history: [
+        {
+          project_id: "project-abc",
+          source_id: "project-project-abc-workspace",
+          step_id: "file_analysis",
+          indexed_at: "2026-05-12T10:30:00Z",
+          updated_at: "2026-05-12T10:31:00Z",
+          metrics: {
+            document_count: 3,
+            snapshot_count: 3,
+            chunk_count: 7,
+            sentence_count: 11,
+          },
+        },
+        {
+            project_id: "project-abc",
+            source_id: "project-project-abc-workspace",
+            step_id: "file_analysis",
+            indexed_at: "2026-05-12T10:00:00Z",
+            updated_at: "2026-05-12T10:01:00Z",
+            metrics: {
+              document_count: 2,
+              snapshot_count: 2,
+              chunk_count: 5,
+              sentence_count: 8,
+            },
+          },
+        ],
+      };
+      knowledgeState.projectStepStats = {
+        domain_graph_build: {
+          project_id: "project-abc",
+          step_id: "domain_graph_build",
+          latest: {
+            project_id: "project-abc",
+            source_id: "project-project-abc-workspace",
+            step_id: "domain_graph_build",
+            indexed_at: "2026-05-12T10:40:00Z",
+            updated_at: "2026-05-12T10:41:00Z",
+            metrics: {
+              document_count: 3,
+              node_count: 9,
+              relation_count: 12,
+            },
+          },
+          history: [
+            {
+              project_id: "project-abc",
+              source_id: "project-project-abc-workspace",
+              step_id: "domain_graph_build",
+              indexed_at: "2026-05-12T10:40:00Z",
+              updated_at: "2026-05-12T10:41:00Z",
+              metrics: {
+                document_count: 3,
+                node_count: 9,
+                relation_count: 12,
+              },
+            },
+          ],
+        },
+        quality_review: {
+          project_id: "project-abc",
+          step_id: "quality_review",
+          latest: {
+            project_id: "project-abc",
+            source_id: "project-project-abc-workspace",
+            step_id: "quality_review",
+            indexed_at: "2026-05-12T10:50:00Z",
+            updated_at: "2026-05-12T10:51:00Z",
+            metrics: {
+              quality_score_before: 0.91,
+              quality_score_after: 0.95,
+              quality_delta: 0.04,
+              quality_rounds: 1,
+            },
+          },
+          history: [
+            {
+              project_id: "project-abc",
+              source_id: "project-project-abc-workspace",
+              step_id: "quality_review",
+              indexed_at: "2026-05-12T10:50:00Z",
+              updated_at: "2026-05-12T10:51:00Z",
+              metrics: {
+                quality_score_before: 0.91,
+                quality_score_after: 0.95,
+                quality_delta: 0.04,
+                quality_rounds: 1,
+              },
+            },
+          ],
+        },
+      };
 
     render(<ProjectKnowledgeProcessingPanel knowledgeState={knowledgeState} />);
 
-    const nlpHeading = screen.getAllByText("NLP 模式")[0];
-    const nlpCard = nlpHeading.closest("[class*='projectKnowledgeModeCard']");
-    if (!nlpCard) {
-      throw new Error("NLP mode card not found");
-    }
-    const nlpCardElement = nlpCard as HTMLElement;
-
-    await user.click(within(nlpCardElement).getByRole("button", { name: "运行 NLP 结构化" }));
-
-    expect(knowledgeState.startProcessingMode).toHaveBeenCalledWith("nlp", {
-      quantizationStage: "l2",
-    });
+      expect(screen.getByText("最近扫描")).not.toBeNull();
+      expect(screen.getByText("来自 source_scan 项目统计文件")).not.toBeNull();
+      expect(screen.getByText("5 files / 2 changed / 1 sources")).not.toBeNull();
+    expect(screen.getByText("最近 L1 运行")).not.toBeNull();
+    expect(screen.getByText("来自 file_analysis 项目统计文件")).not.toBeNull();
+    expect(screen.getByText("3 docs / 7 chunks / 11 sentences")).not.toBeNull();
+    expect(screen.getByText("2 docs / 5 chunks / 8 sentences")).not.toBeNull();
+      expect(screen.getByText("最近 L2 图构建")).not.toBeNull();
+      expect(screen.getByText("3 docs / 9 nodes / 12 relations")).not.toBeNull();
+      expect(screen.getByText("最近 L3 质量审校")).not.toBeNull();
+      expect(screen.getByText("0.91 -> 0.95 / delta 0.04 / 1 rounds")).not.toBeNull();
   });
 
-  it("keeps the raw graph as the primary L2 artifact when document graphify artifacts exist", () => {
+  it("shows raw graph and document graphify artifacts in the outputs panel", () => {
     const knowledgeState = buildKnowledgeState();
+    knowledgeState.projectStepStats = {
+      domain_graph_build: {
+        project_id: "project-abc",
+        step_id: "domain_graph_build",
+        latest: {
+          project_id: "project-abc",
+          source_id: "project-project-abc-workspace",
+          step_id: "domain_graph_build",
+          indexed_at: "2026-05-12T10:40:00Z",
+          updated_at: "2026-05-12T10:41:00Z",
+          metrics: {
+            document_count: 3,
+            node_count: 9,
+            relation_count: 12,
+          },
+        },
+        history: [],
+      },
+    };
     knowledgeState.modeOutputs.nlp.artifacts = [
       {
         kind: "document_graph_manifest",
@@ -770,10 +1151,18 @@ describe("project knowledge supporting panels", () => {
       },
     ];
 
-    render(<ProjectKnowledgeProcessingPanel knowledgeState={knowledgeState} />);
+    render(
+      <ProjectKnowledgeOutputsPanel
+        knowledgeState={knowledgeState}
+        onRunSuggestedQuery={vi.fn()}
+        onSelectArtifactPath={vi.fn()}
+      />,
+    );
 
     expect(screen.getAllByText("Raw knowledge graph").length).toBeGreaterThan(0);
     expect(screen.getByText("Document graphify manifest")).not.toBeNull();
+    expect(screen.getByText("Latest output provenance")).not.toBeNull();
+    expect(screen.getByText(/3 docs \/ 9 nodes \/ 12 relations/)).not.toBeNull();
   });
 
   it("renders output records through the new outputs panel", async () => {

@@ -3,6 +3,7 @@ import { startTransition, useDeferredValue, useEffect, useMemo, useState } from 
 import { useTranslation } from "react-i18next";
 import { isPreviewablePath } from "./projectFileSelectionUtils";
 import { formatGraphRelationTypeLabel } from "./projectKnowledgeFilterLabels";
+import { buildProjectKnowledgeLatestSummaryModelFromState } from "./projectKnowledgeLatestSummaryModel";
 import styles from "./index.module.less";
 import type {
   ProjectKnowledgeProcessingMode,
@@ -213,6 +214,17 @@ export default function ProjectKnowledgeOutputsPanel(
       details,
     };
   }, [props, selectedMode, selectedModeOutput?.summaryLines, sortedArtifacts, t]);
+  const latestSummaryModel = useMemo(
+    () => buildProjectKnowledgeLatestSummaryModelFromState(t, props.knowledgeState, selectedMode),
+    [
+      props.knowledgeState.fileAnalysisStats?.latest,
+      props.knowledgeState.projectStepStats.domain_graph_build?.latest,
+      props.knowledgeState.projectStepStats.quality_review?.latest,
+      props.knowledgeState.sourceScanStats?.latest,
+      selectedMode,
+      t,
+    ],
+  );
 
   const visibleRelations = useMemo(
     () => filteredRecords.slice(0, visibleRelationCount),
@@ -331,6 +343,15 @@ export default function ProjectKnowledgeOutputsPanel(
           ...(selectedModeOutput?.summaryLines || []),
         ].filter(Boolean).join(" · ")}
       />
+
+      {latestSummaryModel.outputParts.length ? (
+        <Alert
+          type="info"
+          showIcon
+          message={t("projects.knowledge.outputs.latestOutputSummary", "Latest output provenance")}
+          description={latestSummaryModel.outputParts.join(" · ")}
+        />
+      ) : null}
 
       {documentGraphSummary ? (
         <div className={styles.artifactSummaryBlock}>

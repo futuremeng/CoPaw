@@ -19,6 +19,7 @@ from .builtin_agents import (
     BUILTIN_UNDERSTAND_GRAPH_REVIEWER_ID,
     BUILTIN_UNDERSTAND_PROJECT_SCANNER_ID,
 )
+from .knowledge_workflow_steps import KNOWLEDGE_WORKFLOW_STEP_IDS, KNOWLEDGE_WORKFLOW_STEP_SPECS
 from .routers import agents as agents_router_impl
 from .routers.agents_pipeline_core import (
     PipelineRunDetail,
@@ -52,32 +53,11 @@ def _lane_overrides(
 
 
 def _knowledge_workflow_steps() -> list[PipelineTemplateStep]:
-    return [
-        PipelineTemplateStep(
-            id="source_scan",
-            name="Source Scan",
-            kind="analysis",
-            description="Inventory project sources and confirm the project-scoped knowledge input boundary.",
-        ),
-        PipelineTemplateStep(
-            id="file_analysis",
-            name="File Analysis",
-            kind="transform",
-            description="Parse and index project files into the project-scoped knowledge store.",
-        ),
-        PipelineTemplateStep(
-            id="domain_graph_build",
-            name="Domain Graph Build",
-            kind="transform",
-            description="Build graph artifacts and domain-level enrichment from indexed project knowledge.",
-        ),
-        PipelineTemplateStep(
-            id="quality_review",
-            name="Quality Review",
-            kind="validation",
-            description="Review graph quality, run the quality loop when needed, and summarize next actions.",
-        ),
-    ]
+    return [PipelineTemplateStep(**spec) for spec in KNOWLEDGE_WORKFLOW_STEP_SPECS]
+
+
+def get_knowledge_workflow_step_ids() -> tuple[str, ...]:
+    return KNOWLEDGE_WORKFLOW_STEP_IDS
 
 
 def build_knowledge_workflow_template() -> PipelineTemplateInfo:
@@ -838,6 +818,15 @@ class KnowledgeWorkflowOrchestrator:
             "changed_paths": changed_paths,
             "data_files": data_files[:20],
         }
+        self.knowledge_manager.write_project_step_stats(
+            project_id=self.project_id,
+            project_workspace_dir=self.project_dir,
+            step_id="source_scan",
+            source_id=source.id,
+            source_location=str(source.location or "").strip(),
+            metrics=metrics,
+            extra_fields=result,
+        )
         return {
             "metrics": metrics,
             "result": result,
@@ -924,6 +913,19 @@ class KnowledgeWorkflowOrchestrator:
             "node_count": int(memify_result.get("node_count") or 0),
             "document_count": int(memify_result.get("document_count") or 0),
         }
+        self.knowledge_manager.write_project_step_stats(
+            project_id=self.project_id,
+            project_workspace_dir=self.project_dir,
+            step_id="domain_graph_build",
+            source_id=source.id,
+            source_location=str(source.location or "").strip(),
+            metrics=metrics,
+            extra_fields={
+                "evidence": evidence,
+                "artifacts": artifacts,
+                "status": str(memify_result.get("status") or "").strip() or "succeeded",
+            },
+        )
         return {
             "metrics": metrics,
             "result": memify_result,
@@ -991,6 +993,19 @@ class KnowledgeWorkflowOrchestrator:
             "quality_delta": float(quality_result.get("delta") or 0.0),
             "quality_rounds": len(quality_result.get("rounds") or []),
         }
+        self.knowledge_manager.write_project_step_stats(
+            project_id=self.project_id,
+            project_workspace_dir=self.project_dir,
+            step_id="quality_review",
+            source_id=source.id,
+            source_location=str(source.location or "").strip(),
+            metrics=metrics,
+            extra_fields={
+                "evidence": evidence,
+                "artifacts": artifacts,
+                "status": status or "succeeded",
+            },
+        )
         return {
             "metrics": metrics,
             "result": quality_result,

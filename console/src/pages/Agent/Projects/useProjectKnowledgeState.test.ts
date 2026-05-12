@@ -7,6 +7,8 @@ import {
   filterGraphQueryRecordsBySourceId,
   getActiveKnowledgeTasks,
   pickActiveKnowledgeTask,
+  resolveProjectKnowledgeStepStats,
+  resolveProjectKnowledgeL1StepStats,
 } from "./useProjectKnowledgeState";
 
 function buildTask(
@@ -228,5 +230,102 @@ describe("graph source filtering helpers", () => {
     expect(filtered.records).toHaveLength(1);
     expect(filtered.provenance.source_filter_mode).toBe("selected_source");
     expect(filtered.provenance.source_filter_id).toBe("source-a");
+  });
+});
+
+describe("resolveProjectKnowledgeL1StepStats", () => {
+  it("maps settled step stats results into the L1 step stats state shape", () => {
+    const resolved = resolveProjectKnowledgeL1StepStats([
+      {
+        status: "fulfilled",
+        value: {
+          project_id: "project-1",
+          step_id: "file_analysis",
+          latest: {},
+          history: [],
+        },
+      },
+      {
+        status: "fulfilled",
+        value: {
+          project_id: "project-1",
+          step_id: "source_scan",
+          latest: {},
+          history: [],
+        },
+      },
+    ]);
+
+    expect(resolved.fileAnalysis?.step_id).toBe("file_analysis");
+    expect(resolved.sourceScan?.step_id).toBe("source_scan");
+  });
+
+  it("falls back to null for rejected step stats results", () => {
+    const resolved = resolveProjectKnowledgeL1StepStats([
+      {
+        status: "rejected",
+        reason: new Error("boom"),
+      },
+      {
+        status: "fulfilled",
+        value: {
+          project_id: "project-1",
+          step_id: "source_scan",
+          latest: {},
+          history: [],
+        },
+      },
+    ]);
+
+    expect(resolved.fileAnalysis).toBeNull();
+    expect(resolved.sourceScan?.step_id).toBe("source_scan");
+  });
+});
+
+describe("resolveProjectKnowledgeStepStats", () => {
+  it("maps fulfilled responses by workflow step id", () => {
+    const resolved = resolveProjectKnowledgeStepStats([
+      {
+        status: "fulfilled",
+        value: {
+          project_id: "project-1",
+          step_id: "source_scan",
+          latest: {},
+          history: [],
+        },
+      },
+      {
+        status: "fulfilled",
+        value: {
+          project_id: "project-1",
+          step_id: "file_analysis",
+          latest: {},
+          history: [],
+        },
+      },
+      {
+        status: "fulfilled",
+        value: {
+          project_id: "project-1",
+          step_id: "domain_graph_build",
+          latest: {},
+          history: [],
+        },
+      },
+      {
+        status: "fulfilled",
+        value: {
+          project_id: "project-1",
+          step_id: "quality_review",
+          latest: {},
+          history: [],
+        },
+      },
+    ]);
+
+    expect(resolved.source_scan?.step_id).toBe("source_scan");
+    expect(resolved.file_analysis?.step_id).toBe("file_analysis");
+    expect(resolved.domain_graph_build?.step_id).toBe("domain_graph_build");
+    expect(resolved.quality_review?.step_id).toBe("quality_review");
   });
 });

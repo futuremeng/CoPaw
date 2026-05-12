@@ -1,6 +1,7 @@
 import { Typography } from "antd";
 import { useTranslation } from "react-i18next";
 import styles from "./index.module.less";
+import { buildProjectKnowledgeSourcesRecentHistorySectionsFromState } from "./projectKnowledgeRecentHistoryModel";
 import type { ProjectKnowledgeState } from "./useProjectKnowledgeState";
 
 interface ProjectKnowledgeSourcesPanelProps {
@@ -10,6 +11,7 @@ interface ProjectKnowledgeSourcesPanelProps {
 export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSourcesPanelProps) {
   const { t } = useTranslation();
   const { knowledgeState } = props;
+  const recentHistorySections = buildProjectKnowledgeSourcesRecentHistorySectionsFromState(t, knowledgeState);
 
   return (
     <div className={styles.projectKnowledgeWorkbench}>
@@ -62,6 +64,31 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
           <Typography.Text strong>{knowledgeState.quantMetrics.charCount || 0}</Typography.Text>
         </div>
       </div>
+
+      {recentHistorySections.map((section) => (
+        <div key={section.key} className={styles.projectKnowledgeHistoryStrip}>
+          <div className={styles.projectKnowledgeHistoryHeader}>
+            <Typography.Text strong>
+              {section.title}
+            </Typography.Text>
+            <Typography.Text type="secondary">
+              {section.hint}
+            </Typography.Text>
+          </div>
+          <div className={styles.projectKnowledgeHistoryList}>
+            {section.items.map((item) => (
+              <div key={item.key} className={styles.projectKnowledgeHistoryItem}>
+                <Typography.Text strong>
+                  {item.timestamp}
+                </Typography.Text>
+                <Typography.Text type="secondary">
+                  {item.summary}
+                </Typography.Text>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

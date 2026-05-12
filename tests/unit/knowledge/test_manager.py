@@ -1807,6 +1807,47 @@ def test_get_source_status_falls_back_to_stats_when_interlinear_manifest_missing
     assert status["sentence_count"] == result["sentence_count"]
 
 
+def test_index_source_writes_project_file_analysis_stats_files(tmp_path: Path):
+    project_root = tmp_path / "projects" / "project-l1-stats"
+    project_root.mkdir(parents=True, exist_ok=True)
+    (project_root / "README.md").write_text("第一句。第二句！", encoding="utf-8")
+
+    config = Config().knowledge
+    source = KnowledgeSourceSpec(
+        id="project-project-l1-stats-workspace",
+        name="Project Workspace: project-l1-stats",
+        type="directory",
+        location=str(project_root),
+        content="",
+        enabled=True,
+        recursive=True,
+        project_id="project-l1-stats",
+        tags=["project"],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    result = manager.index_source(source, config)
+
+    latest_path = project_root / ".knowledge" / "stats" / "file_analysis" / "latest.json"
+    history_path = project_root / ".knowledge" / "stats" / "file_analysis" / "history.jsonl"
+
+    assert latest_path.exists()
+    assert history_path.exists()
+
+    latest_payload = json.loads(latest_path.read_text(encoding="utf-8"))
+    history_lines = [line for line in history_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    history_payload = json.loads(history_lines[-1])
+
+    assert latest_payload["project_id"] == "project-l1-stats"
+    assert latest_payload["source_id"] == source.id
+    assert latest_payload["step_id"] == "file_analysis"
+    assert latest_payload["metrics"]["document_count"] == result["document_count"]
+    assert latest_payload["metrics"]["snapshot_count"] == result["snapshot_count"]
+    assert latest_payload["metrics"]["chunk_count"] == result["chunk_count"]
+    assert history_payload["metrics"]["sentence_count"] == result["sentence_count"]
+
+
 def test_get_source_status_prefers_chunk_manifest_count_over_interlinear_summary(tmp_path: Path):
     config = Config().knowledge
     source = KnowledgeSourceSpec(

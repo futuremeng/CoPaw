@@ -40,6 +40,7 @@ export interface AgentProjectSummary {
   artifact_distill_mode: "file_scan" | "conversation_evidence";
   artifact_profile: ProjectArtifactProfile;
   project_auto_knowledge_sink: boolean;
+  file_monitoring_state?: string;
   preferred_workspace_chat_id?: string;
   created_time: string;
   updated_time: string;
@@ -51,6 +52,21 @@ export interface UpdateProjectWorkspaceChatBindingRequest {
 
 export interface UpdateProjectKnowledgeSinkRequest {
   project_auto_knowledge_sink: boolean;
+}
+
+export interface AcquireProjectKnowledgeWatchLeaseResponse {
+  lease_id: string;
+  active_count: number;
+  file_monitoring_state: string;
+  acquired_at: string;
+}
+
+export interface ReleaseProjectKnowledgeWatchLeaseResponse {
+  lease_id: string;
+  released: boolean;
+  active_count: number;
+  file_monitoring_state: string;
+  updated_at: string;
 }
 
 export interface AgentProjectFileInfo {

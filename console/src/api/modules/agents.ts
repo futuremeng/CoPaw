@@ -16,6 +16,7 @@ import type {
   AgentProjectFileContent,
   AgentProjectFileSummary,
   AgentProjectSummary,
+  AcquireProjectKnowledgeWatchLeaseResponse,
   ProjectArtifactProfile,
   AgentProjectFileTreeNode,
   CloneProjectRequest,
@@ -25,6 +26,7 @@ import type {
   PromoteProjectArtifactResponse,
   UpdateProjectArtifactDistillModeRequest,
   UpdateProjectKnowledgeSinkRequest,
+  ReleaseProjectKnowledgeWatchLeaseResponse,
   UpdateProjectWorkspaceChatBindingRequest,
   AutoDistillProjectSkillsDraftRequest,
   DistillProjectSkillsDraftResponse,
@@ -219,6 +221,29 @@ export const agentsApi = {
       {
         method: "PUT",
         body: JSON.stringify(body),
+      },
+    ),
+
+  acquireProjectKnowledgeWatchLease: (
+    agentId: string,
+    projectId: string,
+  ) =>
+    request<AcquireProjectKnowledgeWatchLeaseResponse>(
+      `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/knowledge-watch-leases`,
+      {
+        method: "POST",
+      },
+    ),
+
+  releaseProjectKnowledgeWatchLease: (
+    agentId: string,
+    projectId: string,
+    leaseId: string,
+  ) =>
+    request<ReleaseProjectKnowledgeWatchLeaseResponse>(
+      `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/knowledge-watch-leases/${encodeURIComponent(leaseId)}`,
+      {
+        method: "DELETE",
       },
     ),
 

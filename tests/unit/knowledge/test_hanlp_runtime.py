@@ -149,6 +149,31 @@ def test_probe_uses_sidecar_bridge_json() -> None:
     assert state["reason_code"] == "HANLP2_READY"
 
 
+def test_start_worker_injects_repo_src_into_pythonpath() -> None:
+    runtime = NLPRuntime()
+    config = Config().knowledge
+    config.hanlp.enabled = True
+    config.hanlp.python_executable = "/bin/python3"
+    payload = runtime._config_payload(config)
+    captured_kwargs: dict[str, object] = {}
+
+    def _fake_popen(*args, **kwargs):
+        captured_kwargs.update(kwargs)
+        return _FakePopen({})
+
+    with patch("pathlib.Path.exists", return_value=True), patch(
+        "subprocess.Popen",
+        side_effect=_fake_popen,
+    ):
+        runtime._start_worker_locked(Path("/bin/python3"), payload, cache_key="cache-key")
+
+    env = captured_kwargs.get("env")
+    assert isinstance(env, dict)
+    pythonpath = str(env.get("PYTHONPATH") or "")
+    repo_src = str(Path(hanlp_runtime_module.__file__).resolve().parents[2])
+    assert repo_src in pythonpath
+
+
 def test_bridge_probe_accepts_model_loader_without_top_level_tokenizer(tmp_path: Path) -> None:
     hanlp_pkg = tmp_path / "hanlp"
     hanlp_pkg.mkdir()
@@ -262,6 +287,37 @@ def test_model_status_returns_ready_when_sidecar_reports_model_ready() -> None:
         return_value=_FakePopen(mode_payloads),
     ):
         state = runtime.model_status(config)
+
+    assert state["status"] == "ready"
+    assert state["reason_code"] == "HANLP2_MODEL_READY"
+
+
+def test_local_models_status_alias_returns_model_status() -> None:
+    runtime = NLPRuntime()
+    config = Config().knowledge
+    config.hanlp.enabled = True
+    config.hanlp.python_executable = "/bin/python3"
+
+    mode_payloads = {
+        "probe": {
+            "engine": "hanlp2",
+            "status": "ready",
+            "reason_code": "HANLP2_READY",
+            "reason": "HanLP2 semantic engine is ready.",
+        },
+        "model_status": {
+            "engine": "hanlp2",
+            "status": "ready",
+            "reason_code": "HANLP2_MODEL_READY",
+            "reason": "HanLP2 tokenizer model is ready.",
+        },
+    }
+
+    with patch("pathlib.Path.exists", return_value=True), patch(
+        "subprocess.Popen",
+        return_value=_FakePopen(mode_payloads),
+    ):
+        state = runtime.local_models_status(config)
 
     assert state["status"] == "ready"
     assert state["reason_code"] == "HANLP2_MODEL_READY"
