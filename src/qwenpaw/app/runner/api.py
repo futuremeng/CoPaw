@@ -213,6 +213,12 @@ async def get_workspace(request: Request):
     """Get the workspace for the active agent."""
     return await get_agent_for_request(request)
 
+def _resolve_chat_workspace_dir(request: Request) -> Path:
+    """Resolve workspace_dir without forcing workspace startup for read-only chat APIs."""
+    agent_id = resolve_agent_id_for_request(request)
+    config = load_config()
+    return Path(config.agents.profiles[agent_id].workspace_dir).expanduser()
+
 
 async def get_chat_manager(
     request: Request,
@@ -330,6 +336,7 @@ async def batch_delete_chats(
 
 @router.get("/{chat_id}", response_model=ChatHistory)
 async def get_chat(
+    request: Request,
     chat_id: str,
     offset: int = Query(
         0,
@@ -342,9 +349,6 @@ async def get_chat(
         le=500,
         description="History page size",
     ),
-    mgr: ChatManager = Depends(get_chat_manager),
-    session: SafeJSONSession = Depends(get_session),
-    workspace=Depends(get_workspace),
 ):
     """Get detailed information about a specific chat by UUID.
 
@@ -360,6 +364,17 @@ async def get_chat(
     Raises:
         HTTPException: If chat not found (404)
     """
+    workspace = get_loaded_agent_for_request(request)
+    if workspace is not None and workspace.chat_manager is not None:
+        mgr = workspace.chat_manager
+        session = workspace.runner.session
+        task_tracker = workspace.task_tracker
+    else:
+        workspace_dir = _resolve_chat_workspace_dir(request)
+        mgr = JsonChatRepository(workspace_dir / "chats.json")
+        session = SafeJSONSession(workspace_dir)
+        task_tracker = None
+
     chat_spec = await mgr.get_chat(chat_id)
     if not chat_spec:
         raise HTTPException(
@@ -370,9 +385,8 @@ async def get_chat(
     state = await session.get_session_state_dict(
         chat_spec.session_id,
         chat_spec.user_id,
-        chat_spec.channel,
     )
-    status = await workspace.task_tracker.get_status(chat_id)
+    status = await task_tracker.get_status(chat_id) if task_tracker is not None else "idle"
     if not state:
         return ChatHistory(messages=[], status=status)
     memories = state.get("agent", {}).get("memory", {})

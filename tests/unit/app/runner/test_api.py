@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from agentscope_runtime.engine.schemas.agent_schemas import Message
 
-from copaw.app.runner.api import (
+from qwenpaw.app.runner.api import (
     _load_chat_history_preview_from_memory_state,
     _compact_chat_history_messages,
     _paginate_chat_history_messages,
@@ -287,4 +287,73 @@ def test_list_chats_reads_repo_without_loading_workspace(
             "pinned": False,
         }
     ]
+    manager.get_agent.assert_not_called()
+
+
+def test_get_chat_reads_repo_without_loading_workspace(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workspace_dir = tmp_path / "workspace"
+    workspace_dir.mkdir()
+    chats_path = workspace_dir / "chats.json"
+    chats_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "chats": [
+                    {
+                        "id": "chat-1",
+                        "name": "Chat One",
+                        "session_id": "console:user-1",
+                        "user_id": "user-1",
+                        "channel": "console",
+                        "created_at": "2025-01-01T00:00:00Z",
+                        "updated_at": "2025-01-01T00:00:00Z",
+                        "meta": {},
+                        "status": "idle",
+                        "pinned": False,
+                    }
+                ],
+            },
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        runner_api_module,
+        "resolve_agent_id_for_request",
+        lambda request: "default",
+    )
+    monkeypatch.setattr(
+        runner_api_module,
+        "get_loaded_agent_for_request",
+        lambda request: None,
+    )
+    monkeypatch.setattr(
+        runner_api_module,
+        "load_config",
+        lambda: SimpleNamespace(
+            agents=SimpleNamespace(
+                profiles={
+                    "default": SimpleNamespace(
+                        workspace_dir=str(workspace_dir),
+                    ),
+                },
+            ),
+        ),
+    )
+
+    app = FastAPI()
+    app.include_router(runner_api_module.router)
+    manager = MagicMock()
+    manager.get_agent.side_effect = AssertionError("workspace should not start")
+    app.state.multi_agent_manager = manager
+
+    client = TestClient(app)
+    response = client.get("/chats/chat-1")
+
+    assert response.status_code == 200
+    assert response.json()["messages"] == []
+    assert response.json()["status"] == "idle"
     manager.get_agent.assert_not_called()

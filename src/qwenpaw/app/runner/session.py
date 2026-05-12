@@ -74,6 +74,7 @@ def _coerce_message_dict(message: dict[str, Any]) -> dict[str, Any] | None:
         return None
 
     coerced = dict(message)
+    message_type = coerced.get("type")
     role = coerced.get("role")
     default_name = {
         "user": "user",
@@ -90,7 +91,10 @@ def _coerce_message_dict(message: dict[str, Any]) -> dict[str, Any] | None:
         msg = Msg.from_dict(coerced)
     except Exception:
         return None
-    return msg.to_dict()
+    normalized = msg.to_dict()
+    if isinstance(message_type, str) and message_type.strip():
+        normalized["type"] = message_type
+    return normalized
 
 
 def _normalize_memory_state_item(item: Any) -> list[Any] | dict[str, Any] | None:
