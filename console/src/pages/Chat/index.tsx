@@ -2191,6 +2191,7 @@ export default function ChatPage() {
         beforeSubmit: handleBeforeSubmit,
         allowSpeech: true,
         attachments: {
+          multiple: true,
           trigger: function (props: AttachmentTriggerProps) {
             const tooltipKey = multimodalCaps.supportsMultimodal
               ? multimodalCaps.supportsImage && !multimodalCaps.supportsVideo

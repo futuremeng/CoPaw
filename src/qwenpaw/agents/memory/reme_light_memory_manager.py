@@ -8,11 +8,15 @@ import json
 import logging
 import os
 import platform
+import shutil
 import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from agentscope.agent import ReActAgent
 from agentscope.message import Msg, TextBlock
+from agentscope.message import ToolResultBlock, ToolUseBlock
 from agentscope.tool import Toolkit, ToolResponse
 
 from qwenpaw.agents.memory.base_memory_manager import BaseMemoryManager
@@ -31,7 +35,12 @@ from qwenpaw.config.context import (
     set_current_recent_max_bytes,
 )
 from qwenpaw.constant import EnvVarLoader
-from .prompts import MEMORY_GUIDANCE_EN, MEMORY_GUIDANCE_ZH
+from .prompts import (
+    DREAM_OPTIMIZATION_EN,
+    DREAM_OPTIMIZATION_ZH,
+    MEMORY_GUIDANCE_EN,
+    MEMORY_GUIDANCE_ZH,
+)
 
 if TYPE_CHECKING:
     from reme.memory.file_based.reme_in_memory_memory import ReMeInMemoryMemory
@@ -549,3 +558,245 @@ See: https://docs.trychroma.com/docs/overview/troubleshooting#sqlite
         return self._reme.get_in_memory_memory(
             as_token_counter=get_token_counter(agent_config),
         )
+
+    async def retrieve(
+        self,
+        messages: list[Msg] | Msg,
+        agent_name: str = "",
+        **_kwargs,
+    ) -> dict | None:
+        """Retrieve relevant memory and return updated kwargs dict.
+
+        Args:
+            messages: One or more conversation messages used as the query.
+            agent_name: Agent name for constructing Msg.
+
+        Returns:
+            None: No relevant memory found, caller should not update kwargs.
+            dict: {"msg": msgs + [assistant_msg, tool_result_msg]} to merge
+                with kwargs via {**kwargs, **result}.
+        """
+        msgs: list[Msg] = (
+            [messages] if isinstance(messages, Msg) else list(messages)
+        )
+
+        # Build query from the newest messages, preserving tail.
+        query_parts: list[str] = []
+        total = 0
+        for msg in reversed(msgs):
+            remaining = 100 - total
+            if remaining <= 0:
+                break
+
+            text = (msg.get_text_content() or "").strip()
+            if not text:
+                continue
+
+            chunk = text[:remaining]
+            query_parts.insert(0, chunk)
+            total += len(chunk)
+
+        query = " ".join(query_parts).strip()
+        if not query:
+            return None
+
+        agent_config = load_agent_config(self.agent_id)
+        reme_cfg = agent_config.running.reme_light_memory_config
+        ms = reme_cfg.auto_memory_search_config
+        max_results = ms.max_results
+        min_score = ms.min_score
+
+        try:
+            result = await self.memory_search(
+                query=query,
+                max_results=max_results,
+                min_score=min_score,
+            )
+            content_blocks = result.content
+
+            text_content = "\n".join(
+                b.get("text", "")
+                for b in content_blocks
+                if isinstance(b, dict) and b.get("text")
+            )
+            if not text_content:
+                return None
+
+            # Construct assistant_msg and tool_result_msg
+            _id = uuid.uuid4().hex
+            tool_use_input = {
+                "query": query,
+                "max_results": max_results,
+                "min_score": min_score,
+            }
+
+            assistant_msg = Msg(
+                name=agent_name,
+                role="assistant",
+                content=[
+                    TextBlock(
+                        type="text",
+                        text="Searching memory for relevant context...",
+                    ),
+                    ToolUseBlock(
+                        type="tool_use",
+                        id=_id,
+                        name="memory_search",
+                        input=tool_use_input,
+                        raw_input=json.dumps(
+                            tool_use_input,
+                            ensure_ascii=False,
+                        ),
+                    ),
+                ],
+            )
+
+            tool_result_msg = Msg(
+                name=agent_name,
+                role="system",
+                content=[
+                    ToolResultBlock(
+                        type="tool_result",
+                        id=_id,
+                        name="memory_search",
+                        output=[TextBlock(type="text", text=text_content)],
+                    ),
+                ],
+            )
+
+            return {"msg": msgs + [assistant_msg, tool_result_msg]}
+
+        except Exception as e:
+            logger.exception(f"memory_search failed: {e}")
+            return None
+
+    async def auto_memory_search(
+        self,
+        messages: list[Msg] | Msg,
+        agent_name: str = "",
+        **kwargs,
+    ) -> dict | None:
+        """Auto-search memory if auto_memory_search_config.enabled is True."""
+        agent_config = load_agent_config(self.agent_id)
+        rlmc = agent_config.running.reme_light_memory_config
+        ms = rlmc.auto_memory_search_config
+
+        if not ms.enabled:
+            return None
+
+        return await self.retrieve(messages, agent_name=agent_name)
+
+    async def summarize_when_compact(
+        self,
+        messages: list[Msg],
+        **kwargs,
+    ) -> None:
+        """Schedule summarize task if summarize_when_compact is enabled."""
+        if not messages:
+            return
+
+        agent_config = load_agent_config(self.agent_id)
+        rlmc = agent_config.running.reme_light_memory_config
+
+        if rlmc.summarize_when_compact:
+            self.add_summarize_task(messages=messages)
+
+    async def auto_memory(
+        self,
+        all_messages: list[Msg],
+        **kwargs,
+    ) -> None:
+        """Auto-extract memory every N user queries."""
+        agent_config = load_agent_config(self.agent_id)
+        rlmc = agent_config.running.reme_light_memory_config
+        auto_memory_interval = rlmc.auto_memory_interval
+
+        if auto_memory_interval is None or auto_memory_interval <= 0:
+            return
+
+        user_message_count = sum(
+            1 for msg in all_messages if msg.role == "user"
+        )
+
+        if (
+            user_message_count >= auto_memory_interval
+            and user_message_count % auto_memory_interval == 0
+        ):
+            # Find the start of the recent interval window
+            user_count = 0
+            start_idx = 0
+            for i, msg in enumerate(all_messages):
+                if msg.role == "user":
+                    user_count += 1
+                    if (
+                        user_count
+                        == user_message_count - auto_memory_interval + 1
+                    ):
+                        start_idx = i
+                        break
+            recent_messages = all_messages[start_idx:]
+            if recent_messages:
+                self.add_summarize_task(messages=recent_messages)
+
+    async def dream(self, **kwargs) -> None:
+        """Run one dream-based memory optimization pass."""
+        logger.info("running dream-based memory optimization")
+
+        agent_config = load_agent_config(self.agent_id)
+        light_ctx = agent_config.running.light_context_config
+        chat_model, formatter = create_model_and_formatter(self.agent_id)
+
+        set_current_workspace_dir(Path(self.working_dir))
+        pruning_cfg = light_ctx.tool_result_pruning_config
+        recent_max_bytes = pruning_cfg.pruning_recent_msg_max_bytes
+        set_current_recent_max_bytes(recent_max_bytes)
+
+        language = getattr(agent_config, "language", "zh")
+        current_date = datetime.now().strftime("%Y-%m-%d")
+
+        prompts = {"zh": DREAM_OPTIMIZATION_ZH, "en": DREAM_OPTIMIZATION_EN}
+        template = prompts.get(language, DREAM_OPTIMIZATION_EN)
+        query_text = template.format(current_date=current_date)
+
+        if not query_text.strip():
+            logger.debug("dream optimization skipped: empty query")
+            return
+
+        backup_path = Path(self.working_dir).absolute() / "backup"
+        backup_path.mkdir(parents=True, exist_ok=True)
+
+        memory_file = Path(self.working_dir) / "MEMORY.md"
+        if memory_file.exists():
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_filename = f"memory_backup_{timestamp}.md"
+            backup_file = backup_path / backup_filename
+            try:
+                shutil.copyfile(memory_file, backup_file)
+                logger.info(f"Created MEMORY.md backup: {backup_file}")
+            except Exception as e:
+                logger.error(f"Failed to create MEMORY.md backup: {e}")
+        else:
+            logger.debug("No existing MEMORY.md file to backup")
+
+        dream_agent = ReActAgent(
+            name="DreamOptimizer",
+            model=chat_model,
+            sys_prompt="You are a Dream Memory Organizer specialized"
+            " in optimizing long-term memory files.",
+            toolkit=self.summary_toolkit,
+            formatter=formatter,
+        )
+        dream_agent.set_console_output_enabled(False)
+
+        user_msg = Msg(
+            name="dream",
+            role="user",
+            content=[TextBlock(type="text", text=query_text)],
+        )
+
+        try:
+            response = await dream_agent.reply(user_msg)
+            logger.info(f"Dream agent response: {response.get_text_content()}")
+        except Exception as e:
+            logger.exception(f"dream-based memory optimization failed: {e}")
+            raise

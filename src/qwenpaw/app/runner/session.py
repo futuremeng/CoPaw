@@ -389,6 +389,7 @@ class SafeJSONSession(SessionBase):
         path = key.split(".") if isinstance(key, str) else list(key)
         if not path:
             raise ConfigurationException(
+                config_key="session.key",
                 message="key path is empty",
             )
 
