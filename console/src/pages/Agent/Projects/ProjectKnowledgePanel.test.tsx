@@ -130,7 +130,7 @@ function buildKnowledgeState(projectId: string): ProjectKnowledgeState {
       activeMode: "agentic",
       availableModes: [],
       fallbackChain: ["agentic", "nlp"],
-      reason: "高阶输出尚未就绪，当前保持 L2/L3 输出视角并等待深加工产物生成。",
+      reason: "高阶输出尚未就绪，当前保持结构化与增强输出视角并等待深加工产物生成。",
     },
     processingScheduler: {
       strategy: "parallel",
@@ -281,7 +281,7 @@ const testGraphComponents = {
 describe("ProjectKnowledgePanel interactions", () => {
   const projectId = "project-abc";
 
-  it("supports source switching and shows L1/L2/L3 statuses in Explore", async () => {
+  it("supports source switching and shows source, structured, and enhanced statuses in Explore", async () => {
     const user = userEvent.setup();
     const knowledgeState = buildKnowledgeState(projectId);
     const sourceA: KnowledgeSourceItem = {
@@ -339,9 +339,9 @@ describe("ProjectKnowledgePanel interactions", () => {
     );
 
     expect(screen.getByText("Data Source")).not.toBeNull();
-    expect(screen.getByText("L1")).not.toBeNull();
-    expect(screen.getByText("L2")).not.toBeNull();
-    expect(screen.getByText("L3")).not.toBeNull();
+    expect(screen.getByText("Sources")).not.toBeNull();
+    expect(screen.getByText("Structured")).not.toBeNull();
+    expect(screen.getByText("Enhanced")).not.toBeNull();
 
     await user.click(screen.getByText("Workspace Source"));
     await user.click(await screen.findByText("Docs Source"));
@@ -349,7 +349,7 @@ describe("ProjectKnowledgePanel interactions", () => {
     expect(knowledgeState.setSelectedSourceId).toHaveBeenCalledWith("project-project-abc-docs");
   });
 
-  it("renders latest workflow snapshot across L1-L3 in Explore", () => {
+  it("renders latest workflow snapshot across sources and processing in Explore", () => {
     const knowledgeState = buildKnowledgeState(projectId);
     knowledgeState.sourceScanStats = {
       project_id: projectId,

@@ -524,7 +524,7 @@ export default function ProjectKnowledgeOutputsPanel(
       <div className={styles.projectKnowledgePanelBody}>
         {!canShowGraphRecords ? (
           <div className={styles.projectKnowledgeEmpty}>
-            <Empty description={t("projects.knowledge.outputs.highOrderEmpty", "L2/L3 输出尚未就绪，暂时无法展示实体关系结果。")} />
+            <Empty description={t("projects.knowledge.outputs.highOrderEmpty", "结构化或增强结果尚未就绪，暂时无法展示实体关系结果。")} />
           </div>
         ) : props.knowledgeState.graphLoading && !props.knowledgeState.graphResult ? (
           <div className={styles.projectKnowledgeEmpty}><Empty description={t("common.loading", "Loading")} /></div>

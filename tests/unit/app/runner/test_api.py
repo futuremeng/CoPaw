@@ -1,13 +1,22 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import json
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from agentscope_runtime.engine.schemas.agent_schemas import Message
 
 from copaw.app.runner.api import (
+    _load_chat_history_preview_from_memory_state,
     _compact_chat_history_messages,
     _paginate_chat_history_messages,
     _truncate_chat_history_messages,
 )
+from qwenpaw.app.runner import api as runner_api_module
 
 
 def test_truncate_chat_history_messages_only_for_large_plugin_output() -> None:
@@ -161,3 +170,121 @@ def test_paginate_chat_history_messages_offset_overflow_returns_empty_page() -> 
     assert page == []
     assert total == 1
     assert has_more is False
+
+
+def test_load_chat_history_preview_from_memory_state_uses_latest_visible_message() -> None:
+    page, total, has_more = _load_chat_history_preview_from_memory_state(
+        {
+            "content": [
+                {
+                    "id": "m-1",
+                    "role": "user",
+                    "type": "message",
+                    "content": [{"type": "text", "text": "hello"}],
+                },
+                {
+                    "id": "t-1",
+                    "role": "assistant",
+                    "type": "plugin_call",
+                    "content": [
+                        {
+                            "type": "data",
+                            "data": {"call_id": "c-1", "name": "read_file", "arguments": "{}"},
+                        },
+                    ],
+                },
+                {
+                    "id": "m-2",
+                    "role": "assistant",
+                    "type": "message",
+                    "content": [{"type": "text", "text": "latest"}],
+                },
+            ],
+        },
+    )
+
+    assert total == 2
+    assert has_more is True
+    assert len(page) == 1
+    assert page[0].model_dump()["id"] == "m-2"
+
+
+def test_list_chats_reads_repo_without_loading_workspace(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workspace_dir = tmp_path / "workspace"
+    workspace_dir.mkdir()
+    chats_path = workspace_dir / "chats.json"
+    chats_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "chats": [
+                    {
+                        "id": "chat-1",
+                        "name": "Chat One",
+                        "session_id": "console:user-1",
+                        "user_id": "user-1",
+                        "channel": "console",
+                        "created_at": "2025-01-01T00:00:00Z",
+                        "updated_at": "2025-01-01T00:00:00Z",
+                        "meta": {},
+                        "status": "idle",
+                        "pinned": False,
+                    }
+                ],
+            },
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        runner_api_module,
+        "resolve_agent_id_for_request",
+        lambda request: "default",
+    )
+    monkeypatch.setattr(
+        runner_api_module,
+        "get_loaded_agent_for_request",
+        lambda request: None,
+    )
+    monkeypatch.setattr(
+        runner_api_module,
+        "load_config",
+        lambda: SimpleNamespace(
+            agents=SimpleNamespace(
+                profiles={
+                    "default": SimpleNamespace(
+                        workspace_dir=str(workspace_dir),
+                    ),
+                },
+            ),
+        ),
+    )
+
+    app = FastAPI()
+    app.include_router(runner_api_module.router)
+    manager = MagicMock()
+    manager.get_agent.side_effect = AssertionError("workspace should not start")
+    app.state.multi_agent_manager = manager
+
+    client = TestClient(app)
+    response = client.get("/chats")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "id": "chat-1",
+            "name": "Chat One",
+            "session_id": "console:user-1",
+            "user_id": "user-1",
+            "channel": "console",
+            "created_at": "2025-01-01T00:00:00Z",
+            "updated_at": "2025-01-01T00:00:00Z",
+            "meta": {},
+            "status": "idle",
+            "pinned": False,
+        }
+    ]
+    manager.get_agent.assert_not_called()

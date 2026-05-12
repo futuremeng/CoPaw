@@ -66,8 +66,8 @@ export function buildProjectKnowledgeProcessingRecentHistorySections(
   if (fileAnalysisItems.length) {
     sections.push({
       key: "file_analysis",
-      title: t("projects.knowledge.processing.recentL1Runs", "最近 L1 运行"),
-      hint: t("projects.knowledge.processing.recentL1RunsHint", "来自 file_analysis 项目统计文件"),
+      title: t("projects.knowledge.processing.recentL1Runs", "最近基础分析"),
+      hint: t("projects.knowledge.processing.recentL1RunsHint", "来自文件分析项目统计"),
       items: fileAnalysisItems,
     });
   }
@@ -79,8 +79,8 @@ export function buildProjectKnowledgeProcessingRecentHistorySections(
   if (domainGraphBuildItems.length) {
     sections.push({
       key: "domain_graph_build",
-      title: t("projects.knowledge.processing.recentDomainGraphRuns", "最近 L2 图构建"),
-      hint: t("projects.knowledge.processing.recentDomainGraphRunsHint", "来自 domain_graph_build 项目统计文件"),
+      title: t("projects.knowledge.processing.recentDomainGraphRuns", "最近结构化构建"),
+      hint: t("projects.knowledge.processing.recentDomainGraphRunsHint", "来自结构化构建项目统计"),
       items: domainGraphBuildItems,
     });
   }
@@ -92,8 +92,8 @@ export function buildProjectKnowledgeProcessingRecentHistorySections(
   if (qualityReviewItems.length) {
     sections.push({
       key: "quality_review",
-      title: t("projects.knowledge.processing.recentQualityReviewRuns", "最近 L3 质量审校"),
-      hint: t("projects.knowledge.processing.recentQualityReviewRunsHint", "来自 quality_review 项目统计文件"),
+      title: t("projects.knowledge.processing.recentQualityReviewRuns", "最近增强审校"),
+      hint: t("projects.knowledge.processing.recentQualityReviewRunsHint", "来自审校增强项目统计"),
       items: qualityReviewItems,
     });
   }
@@ -142,8 +142,8 @@ export function buildProjectKnowledgeSourcesRecentHistorySections(
   if (fileAnalysisItems.length) {
     sections.push({
       key: "file_analysis",
-      title: t("projects.knowledge.sourcesRecentL1Runs", "最近 L1 运行"),
-      hint: t("projects.knowledge.sourcesRecentL1RunsHint", "最近的 file_analysis 项目统计"),
+      title: t("projects.knowledge.sourcesRecentAnalysisRuns", "最近分析运行"),
+      hint: t("projects.knowledge.sourcesRecentAnalysisRunsHint", "最近的文件分析项目统计"),
       items: fileAnalysisItems,
     });
   }

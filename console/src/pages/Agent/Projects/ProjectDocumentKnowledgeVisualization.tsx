@@ -711,7 +711,7 @@ export default function ProjectDocumentKnowledgeVisualization(
       <Card
         size="small"
         className={styles.documentKnowledgeVizCard}
-        title={t("projects.workbench.knowledgeSentenceChars", "L1 逐句字数分布")}
+        title={t("projects.workbench.knowledgeSentenceChars", "逐句字数分布")}
       >
         {chartData.sentenceWordData.length > 0 ? (
           <div className={styles.documentKnowledgeVizChart}>

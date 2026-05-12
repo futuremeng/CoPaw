@@ -86,8 +86,8 @@ describe("projectKnowledgeRecentHistoryModel", () => {
       },
       {
         key: "file_analysis",
-        title: "最近 L1 运行",
-        hint: "来自 file_analysis 项目统计文件",
+        title: "最近基础分析",
+        hint: "来自文件分析项目统计",
         items: [
           {
             key: expect.any(String),
@@ -98,8 +98,8 @@ describe("projectKnowledgeRecentHistoryModel", () => {
       },
       {
         key: "domain_graph_build",
-        title: "最近 L2 图构建",
-        hint: "来自 domain_graph_build 项目统计文件",
+        title: "最近结构化构建",
+        hint: "来自结构化构建项目统计",
         items: [
           {
             key: expect.any(String),
@@ -110,8 +110,8 @@ describe("projectKnowledgeRecentHistoryModel", () => {
       },
       {
         key: "quality_review",
-        title: "最近 L3 质量审校",
-        hint: "来自 quality_review 项目统计文件",
+        title: "最近增强审校",
+        hint: "来自审校增强项目统计",
         items: [
           {
             key: expect.any(String),
@@ -174,8 +174,8 @@ describe("projectKnowledgeRecentHistoryModel", () => {
       },
       {
         key: "file_analysis",
-        title: "最近 L1 运行",
-        hint: "最近的 file_analysis 项目统计",
+        title: "最近分析运行",
+        hint: "最近的文件分析项目统计",
         items: [
           {
             key: expect.any(String),

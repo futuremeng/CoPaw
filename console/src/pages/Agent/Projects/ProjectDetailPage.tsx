@@ -219,13 +219,13 @@ function formatQuantizationStageLabel(
     return "";
   }
   if (normalized === "l1") {
-    return translate("projects.knowledge.processing.quantStageL1", "L1");
+    return translate("projects.knowledge.processing.quantStageL1", "Sources");
   }
   if (normalized === "l2") {
-    return translate("projects.knowledge.processing.quantStageL2", "L2");
+    return translate("projects.knowledge.processing.quantStageL2", "Structured");
   }
   if (normalized === "l3") {
-    return translate("projects.knowledge.processing.quantStageL3", "L3");
+    return translate("projects.knowledge.processing.quantStageL3", "Enhanced");
   }
   return normalized.toUpperCase();
 }

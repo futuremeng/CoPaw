@@ -26,7 +26,8 @@ def save_state(manager: Any, state: dict[str, Any]) -> None:
 
 def get_state(manager: Any, project_id: str) -> dict[str, Any]:
 	with manager._lock:
-		return manager._load_state(project_id)
+		state = manager._load_state(project_id, hydrate=False)
+	return manager._hydrate_processing_view(dict(state))
 
 
 __all__ = ["get_state", "load_state", "save_state"]

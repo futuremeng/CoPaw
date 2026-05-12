@@ -520,14 +520,15 @@ class KnowledgeManager:
     ) -> list[dict[str, Any]]:
         """Return configured sources with index metadata when available."""
         results: list[dict[str, Any]] = []
+        semantic_state = self.get_semantic_engine_state(config) if include_semantic else None
         for source in config.sources:
             payload = source.model_dump(mode="json")
             if include_semantic:
-                processed = self._process_source_knowledge(source, config)
+                processed = self._build_source_semantic_preview(source, config)
                 payload["subject"] = processed.get("subject") or source.name
                 payload["summary"] = processed.get("summary") or source.summary
                 payload["keywords"] = processed.get("keywords") or []
-                payload["semantic_status"] = self.get_semantic_engine_state(config)
+                payload["semantic_status"] = semantic_state
             else:
                 payload["subject"] = source.name
                 payload["summary"] = source.summary
@@ -535,6 +536,50 @@ class KnowledgeManager:
             payload["status"] = self.get_source_status(source.id, source, config)
             results.append(payload)
         return results
+
+    def _build_source_semantic_preview(
+        self,
+        source: KnowledgeSourceSpec,
+        config: KnowledgeConfig | None = None,
+        top_n: int = _KEYWORD_DEFAULT_TOP_N,
+    ) -> dict[str, Any]:
+        """Build a cheap semantic preview for source listings.
+
+        Listing endpoints should not reopen indexed payloads or source files just
+        to render subject/summary/keywords. Use configured source metadata only.
+        """
+        candidates: list[str] = []
+        summary_text = str(source.summary or "").strip()
+        content_text = str(source.content or "").strip()
+        name_text = str(source.name or "").strip()
+        location_name = ""
+        location_text = str(source.location or "").strip()
+        if location_text:
+            location_name = Path(location_text).name.strip()
+
+        if summary_text:
+            candidates.append(summary_text)
+        if content_text:
+            candidates.append(content_text)
+        if name_text:
+            candidates.append(name_text)
+        if location_name and location_name != name_text:
+            candidates.append(location_name)
+
+        merged = self._normalize_text("\n".join(part for part in candidates if part))
+        if not merged:
+            return {
+                "subject": name_text,
+                "summary": summary_text,
+                "keywords": [],
+            }
+
+        processed = self._process_knowledge_text(merged, top_n=top_n, config=config)
+        if not processed.get("subject") and name_text:
+            processed["subject"] = name_text
+        if not processed.get("summary") and summary_text:
+            processed["summary"] = summary_text
+        return processed
 
     def _source_dir(self, source_id: str) -> Path:
         # 旧版 source 命名空间目录（仅用于兼容读取与遗留清理）

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -308,3 +309,36 @@ def test_post_nlp_strategy_dry_run_modern_text(monkeypatch):
     assert decision["detected_style"] == "modern"
     assert decision["selected_model"] == "model-default"
     assert decision["detection_score"] < 0.5
+
+
+def test_get_running_config_does_not_force_workspace_start(monkeypatch):
+    app = FastAPI()
+    app.include_router(agent_router_module.router)
+
+    running = SimpleNamespace(max_iters=7, knowledge_enabled=True)
+    monkeypatch.setattr(
+        agent_router_module,
+        "resolve_agent_id_for_request",
+        lambda request: "default",
+    )
+    monkeypatch.setattr(
+        agent_router_module,
+        "get_loaded_agent_for_request",
+        lambda request, agent_id=None: None,
+    )
+    monkeypatch.setattr(
+        agent_router_module,
+        "load_agent_config",
+        lambda agent_id: SimpleNamespace(running=running),
+    )
+
+    manager = MagicMock()
+    manager.get_agent.side_effect = AssertionError("workspace should not start")
+    app.state.multi_agent_manager = manager
+
+    client = TestClient(app)
+    response = client.get("/agent/running-config")
+
+    assert response.status_code == 200
+    assert response.json()["max_iters"] == 7
+    manager.get_agent.assert_not_called()

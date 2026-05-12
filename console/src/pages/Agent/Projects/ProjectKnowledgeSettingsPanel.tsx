@@ -96,7 +96,6 @@ export default function ProjectKnowledgeSettingsPanel(
     try {
       const response = await api.listKnowledgeSources({
         projectId,
-        includeSemantic: true,
       });
       const matched = response.sources.find((source) => source.id === projectSourceId) || null;
       setProjectSource(matched);
@@ -130,19 +129,7 @@ export default function ProjectKnowledgeSettingsPanel(
   }, [projectAutoKnowledgeSink]);
 
   useEffect(() => {
-    let cancelled = false;
-    void api.getProjectKnowledgeSyncStatus({ projectId })
-      .then((state) => {
-        if (!cancelled) {
-          setSyncState(state);
-        }
-      })
-      .catch(() => {
-        // best-effort initial status load
-      });
-    return () => {
-      cancelled = true;
-    };
+    setSyncState(null);
   }, [projectId]);
 
   useEffect(() => {

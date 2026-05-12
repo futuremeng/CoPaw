@@ -55,39 +55,7 @@ async def get_agent_for_request(
     """
     from fastapi import HTTPException
 
-    # Determine which agent to use
-    target_agent_id = agent_id
-
-    # Check request.state.agent_id (set by agent-scoped router)
-    if not target_agent_id and hasattr(request.state, "agent_id"):
-        target_agent_id = request.state.agent_id
-
-    # Check X-Agent-Id header
-    if not target_agent_id:
-        target_agent_id = request.headers.get("X-Agent-Id")
-
-    # Load config once for fallback and validation
-    config = None
-    if not target_agent_id:
-        # Fallback to active agent from config
-        config = load_config()
-        target_agent_id = config.agents.active_agent or "default"
-
-    # Check if agent exists and is enabled
-    if config is None:
-        config = load_config()
-    if target_agent_id not in config.agents.profiles:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Agent '{target_agent_id}' not found",
-        )
-
-    agent_ref = config.agents.profiles[target_agent_id]
-    if not getattr(agent_ref, "enabled", True):
-        raise HTTPException(
-            status_code=403,
-            detail=f"Agent '{target_agent_id}' is disabled",
-        )
+    target_agent_id, _ = _resolve_request_agent(request, agent_id)
 
     # Get MultiAgentManager
     if not hasattr(request.app.state, "multi_agent_manager"):
@@ -116,6 +84,64 @@ async def get_agent_for_request(
             status_code=500,
             detail=f"Failed to get agent: {str(e)}",
         ) from e
+
+
+def _resolve_request_agent(
+    request: Request,
+    agent_id: Optional[str] = None,
+) -> tuple[str, object]:
+    """Resolve and validate the target agent for the current request."""
+    from fastapi import HTTPException
+
+    target_agent_id = agent_id
+
+    if not target_agent_id and hasattr(request.state, "agent_id"):
+        target_agent_id = request.state.agent_id
+
+    if not target_agent_id:
+        target_agent_id = request.headers.get("X-Agent-Id")
+
+    config = None
+    if not target_agent_id:
+        config = load_config()
+        target_agent_id = config.agents.active_agent or "default"
+
+    if config is None:
+        config = load_config()
+
+    if target_agent_id not in config.agents.profiles:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Agent '{target_agent_id}' not found",
+        )
+
+    return target_agent_id, config
+
+
+def resolve_agent_id_for_request(
+    request: Request,
+    agent_id: Optional[str] = None,
+) -> str:
+    """Resolve the target agent ID without forcing workspace startup."""
+    target_agent_id, _ = _resolve_request_agent(request, agent_id)
+    return target_agent_id
+
+
+def get_loaded_agent_for_request(
+    request: Request,
+    agent_id: Optional[str] = None,
+) -> Optional["Workspace"]:
+    """Return an already loaded workspace if present, otherwise None."""
+    target_agent_id, _ = _resolve_request_agent(request, agent_id)
+
+    manager = getattr(request.app.state, "multi_agent_manager", None)
+    if manager is None:
+        return None
+
+    if not manager.is_agent_loaded(target_agent_id):
+        return None
+
+    return manager.get_loaded_agent(target_agent_id)
 
 
 def get_active_agent_id() -> str:

@@ -127,12 +127,12 @@ export default function ProjectKnowledgeSignalsPanel(
           ) : null}
           {latestSummaryModel.l1Parts.length ? (
             <Typography.Text type="secondary">
-              {t("projects.knowledge.latestL1Summary", "Latest L1")}: {latestSummaryModel.l1Parts.join(" · ")}
+              {t("projects.knowledge.latestL1Summary", "Latest Sources")}: {latestSummaryModel.l1Parts.join(" · ")}
             </Typography.Text>
           ) : null}
           {latestSummaryModel.l23Parts.length ? (
             <Typography.Text type="secondary">
-              {t("projects.knowledge.latestL23Summary", "Latest L2/L3")}: {latestSummaryModel.l23Parts.join(" · ")}
+              {t("projects.knowledge.latestL23Summary", "Latest Processing")}: {latestSummaryModel.l23Parts.join(" · ")}
             </Typography.Text>
           ) : null}
           {showRealtimeConnectionNotice ? (

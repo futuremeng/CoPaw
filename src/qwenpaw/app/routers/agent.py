@@ -25,7 +25,11 @@ from ...agents.utils import (
     copy_md_files,
 )
 from ..builtin_agents import get_builtin_agent_spec
-from ..agent_context import get_agent_for_request
+from ..agent_context import (
+    get_agent_for_request,
+    get_loaded_agent_for_request,
+    resolve_agent_id_for_request,
+)
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -920,8 +924,11 @@ async def get_agents_running_config(
     request: Request,
 ) -> AgentsRunningConfig:
     """Get agent running configuration."""
-    workspace = await get_agent_for_request(request)
-    return workspace.config.running
+    agent_id = resolve_agent_id_for_request(request)
+    workspace = get_loaded_agent_for_request(request, agent_id=agent_id)
+    if workspace is not None:
+        return workspace.config.running
+    return load_agent_config(agent_id).running
 
 
 @router.put(

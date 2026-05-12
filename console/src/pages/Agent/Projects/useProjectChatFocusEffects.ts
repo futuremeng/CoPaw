@@ -47,17 +47,7 @@ function pickLeafChatCandidates(chats: ChatSpec[]): ChatSpec[] {
 }
 
 async function pickChatWithHistory(chats: ChatSpec[]): Promise<string> {
-  for (const chat of chats.slice(0, 10)) {
-    try {
-      const history = await chatApi.getChat(chat.id, { limit: 1 });
-      if ((history.messages || []).length > 0) {
-        return chat.id;
-      }
-    } catch {
-      // Ignore unreadable chats and continue scanning recent candidates.
-    }
-  }
-
+  // Prefer the most recent leaf candidate and avoid N extra history probes on page load.
   return chats[0]?.id || "";
 }
 

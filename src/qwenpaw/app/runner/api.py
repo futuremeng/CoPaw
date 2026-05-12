@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from pathlib import Path
 from typing import Any, Optional
 from uuid import uuid4
 
@@ -22,7 +23,14 @@ from .models import (
     ChatTailUserDeleteRequest,
     ChatTailUserDeleteResponse,
 )
+from .repo.json_repo import JsonChatRepository
 from .utils import agentscope_msg_to_message
+from ..agent_context import (
+    get_agent_for_request,
+    get_loaded_agent_for_request,
+    resolve_agent_id_for_request,
+)
+from ...config.utils import load_config
 
 
 router = APIRouter(prefix="/chats", tags=["chats"])
@@ -146,6 +154,32 @@ def _extract_text_from_content(content: Any) -> str:
     return ""
 
 
+def _load_chat_history_preview_from_memory_state(
+    memory_state: Any,
+) -> tuple[list[Message], int, bool]:
+    """Build a cheap latest-message preview directly from persisted memory state."""
+    normalized_memory = normalize_in_memory_memory_state(memory_state)
+    content = normalized_memory.get("content", [])
+    if not isinstance(content, list) or not content:
+        return [], 0, False
+
+    total = 0
+    latest_visible_message_dict: dict[str, Any] | None = None
+    for item in content:
+        message_dict = _memory_item_to_message_dict(item)
+        if message_dict is None or _is_tool_trace_message_dict(message_dict):
+            continue
+        total += 1
+        latest_visible_message_dict = message_dict
+
+    if latest_visible_message_dict is None:
+        return [], 0, False
+
+    preview_message = Message.model_validate(latest_visible_message_dict)
+    preview_messages = _truncate_chat_history_messages([preview_message])
+    return preview_messages, total, total > 1
+
+
 def _is_user_memory_message(message_dict: dict[str, Any]) -> bool:
     return str(message_dict.get("role") or "").strip().lower() == "user"
 
@@ -177,8 +211,6 @@ async def _load_visible_messages_for_chat(
 
 async def get_workspace(request: Request):
     """Get the workspace for the active agent."""
-    from ..agent_context import get_agent_for_request
-
     return await get_agent_for_request(request)
 
 
@@ -220,25 +252,34 @@ async def get_session(
 
 @router.get("", response_model=list[ChatSpec])
 async def list_chats(
+    request: Request,
     user_id: Optional[str] = Query(None, description="Filter by user ID"),
     channel: Optional[str] = Query(None, description="Filter by channel"),
-    mgr: ChatManager = Depends(get_chat_manager),
-    workspace=Depends(get_workspace),
 ):
     """List all chats with optional filters.
 
     Args:
         user_id: Optional user ID to filter chats
         channel: Optional channel name to filter chats
-        mgr: Chat manager dependency
     """
-    chats = await mgr.list_chats(user_id=user_id, channel=channel)
-    tracker = workspace.task_tracker
-    result = []
-    for spec in chats:
-        status = await tracker.get_status(spec.id)
-        result.append(spec.model_copy(update={"status": status}))
-    return result
+    workspace = get_loaded_agent_for_request(request)
+    if workspace is not None and workspace.chat_manager is not None:
+        chats = await workspace.chat_manager.list_chats(
+            user_id=user_id,
+            channel=channel,
+        )
+        tracker = workspace.task_tracker
+        result = []
+        for spec in chats:
+            status = await tracker.get_status(spec.id)
+            result.append(spec.model_copy(update={"status": status}))
+        return result
+
+    agent_id = resolve_agent_id_for_request(request)
+    config = load_config()
+    workspace_dir = Path(config.agents.profiles[agent_id].workspace_dir).expanduser()
+    chat_repo = JsonChatRepository(workspace_dir / "chats.json")
+    return await chat_repo.filter_chats(user_id=user_id, channel=channel)
 
 
 @router.post("", response_model=ChatSpec)
@@ -335,6 +376,18 @@ async def get_chat(
     if not state:
         return ChatHistory(messages=[], status=status)
     memories = state.get("agent", {}).get("memory", {})
+
+    if offset == 0 and limit == 1:
+        page, total, has_more = _load_chat_history_preview_from_memory_state(memories)
+        return ChatHistory(
+            messages=page,
+            status=status,
+            total=total,
+            offset=offset,
+            limit=limit,
+            has_more=has_more,
+        )
+
     memory = restore_in_memory_memory(memories)
 
     memories = await memory.get_memory(prepend_summary=False)

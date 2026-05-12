@@ -36,7 +36,10 @@ from copaw.knowledge.project_sync_manager import (
 )
 from ...knowledge.module_skills import sync_knowledge_module_skills
 from ..knowledge_workflow_steps import KNOWLEDGE_WORKFLOW_STEP_IDS
-from ..agent_context import get_agent_for_request
+from ..agent_context import (
+    get_loaded_agent_for_request,
+    resolve_agent_id_for_request,
+)
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
@@ -567,10 +570,16 @@ async def _resolve_knowledge_request_context(request: Request | None):
 
     if request is not None:
         try:
-            workspace = await get_agent_for_request(request)
-            running_config = workspace.config.running
-            workspace_dir = workspace.workspace_dir
-            agent_id = workspace.agent_id
+            agent_id = resolve_agent_id_for_request(request)
+            workspace = get_loaded_agent_for_request(request, agent_id=agent_id)
+            if workspace is not None:
+                running_config = workspace.config.running
+                workspace_dir = workspace.workspace_dir
+            else:
+                agent_ref = config.agents.profiles.get(agent_id)
+                if agent_ref is not None:
+                    workspace_dir = Path(agent_ref.workspace_dir).expanduser()
+                running_config = load_agent_config(agent_id).running
         except HTTPException:
             # Backward compatibility for tests/legacy call sites without
             # initialized MultiAgentManager.
@@ -1441,7 +1450,7 @@ async def start_memify_job(
 @router.get("/project-sync/status")
 async def get_project_sync_status(request: Request):
     """Get project-scoped automatic knowledge synchronization status."""
-    config, knowledge_config, running_config, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    config, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
     project_id = _resolve_project_id(request)
     if not project_id:
         raise HTTPException(status_code=400, detail="PROJECT_ID_REQUIRED")
@@ -1449,19 +1458,8 @@ async def get_project_sync_status(request: Request):
         workspace_dir,
         project_id=project_id,
     )
-    coordinator = _project_sync_coordinator_for_workspace(
-        workspace_dir,
-        project_id=project_id,
-    )
     project_workspace_dir = (Path(workspace_dir) / "projects" / project_id).resolve()
     state = await asyncio.to_thread(manager.get_state, project_id)
-    status_text = str(state.get("status") or "").strip().lower()
-    is_active = status_text in {"pending", "queued", "running"}
-    has_resumable_work = (
-        bool(state.get("dirty"))
-        or bool(state.get("dirty_after_run"))
-        or status_text in {"failed", "cancelled"}
-    )
     if knowledge_config.enabled and bool(getattr(knowledge_config, "memify_enabled", False)):
         ensure_project_source_registered(
             config.knowledge,
@@ -1470,31 +1468,6 @@ async def get_project_sync_status(request: Request):
             project_workspace_dir=str(project_workspace_dir),
             persist=lambda: save_config(config),
         )
-        if (not is_active) and has_resumable_work:
-            source = build_project_source_spec(
-                project_id=project_id,
-                project_name=project_id,
-                project_workspace_dir=str(project_workspace_dir),
-            )
-            event = await asyncio.to_thread(
-                coordinator.dispatch,
-                ProjectSyncCommand.resume(
-                    project_id=project_id,
-                    config=knowledge_config,
-                    running_config=running_config,
-                    source=source,
-                    idempotency_key=f"route-status-resume:{project_id}",
-                ),
-            )
-            _record_project_sync_runtime_event(
-                workspace_dir=workspace_dir,
-                project_id=project_id,
-                operation_id=event.operation_id,
-                idempotency_key=event.idempotency_key,
-                deduplicated=event.deduplicated,
-                action=event.action,
-            )
-            state = await asyncio.to_thread(manager.get_state, project_id)
     return _project_sync_state_with_runtime_meta(
         workspace_dir=workspace_dir,
         project_id=project_id,

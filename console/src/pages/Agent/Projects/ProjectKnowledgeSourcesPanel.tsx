@@ -1,4 +1,5 @@
-import { Typography } from "antd";
+import { InfoCircleOutlined } from "@ant-design/icons";
+import { Tooltip, Typography } from "antd";
 import { useTranslation } from "react-i18next";
 import styles from "./index.module.less";
 import { buildProjectKnowledgeSourcesRecentHistorySectionsFromState } from "./projectKnowledgeRecentHistoryModel";
@@ -17,15 +18,19 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
     <div className={styles.projectKnowledgeWorkbench}>
       <div className={styles.projectKnowledgeTabHeader}>
         <div>
-          <Typography.Title level={5} className={styles.projectKnowledgeSectionTitle}>
-            {t("projects.knowledgeDock.tabSources", "Sources")}
-          </Typography.Title>
-          <Typography.Text type="secondary">
-            {t(
-              "projects.knowledge.sourcesRoleHint",
-              "Sources（L1 基线，已对齐 interlinear 工件）—— L1 状态与统计字段全部基于 interlinear/轻量化工件，包含文档数、切片数、句子数、轻量词数、字数。indexed 字段仅代表 interlinear 工件存在。",
-            )}
-          </Typography.Text>
+          <div className={styles.projectKnowledgeSectionTitleRow}>
+            <Typography.Title level={5} className={styles.projectKnowledgeSectionTitle}>
+              {t("projects.knowledgeDock.tabSources", "Sources")}
+            </Typography.Title>
+            <Tooltip
+              title={t(
+                "projects.knowledge.sourcesRoleHint",
+                "Shows the latest file inventory and text statistics derived from indexed project artifacts.",
+              )}
+            >
+              <InfoCircleOutlined className={styles.projectKnowledgeHintIcon} />
+            </Tooltip>
+          </div>
         </div>
       </div>
 

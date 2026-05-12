@@ -84,6 +84,7 @@ function ProjectChatPanel({
   const [stableSessionId, setStableSessionId] = useState(activeSessionId);
   const [chatMountReady, setChatMountReady] = useState(!activeSessionId);
   const [chatRuntimeEnabled, setChatRuntimeEnabled] = useState(!isVsCodeEmbedded);
+  const [chatViewActivated, setChatViewActivated] = useState(!activeSessionId);
   const sessionSwitchDebounceMs = isVsCodeEmbedded ? 320 : 140;
   const mountDelayMs = isVsCodeEmbedded ? 240 : 80;
 
@@ -92,6 +93,14 @@ function ProjectChatPanel({
       setChatRuntimeEnabled(true);
     }
   }, [isVsCodeEmbedded]);
+
+  useEffect(() => {
+    if (!activeSessionId) {
+      setChatViewActivated(true);
+      return;
+    }
+    setChatViewActivated(false);
+  }, [activeSessionId]);
 
   useEffect(() => {
     if (!activeSessionId) {
@@ -120,7 +129,7 @@ function ProjectChatPanel({
     };
   }, [activeSessionId, mountDelayMs, sessionSwitchDebounceMs, stableSessionId]);
 
-  const shouldRenderActiveChat = chatRuntimeEnabled && chatMountReady && stableSessionId === activeSessionId;
+  const shouldRenderActiveChat = chatRuntimeEnabled && chatViewActivated && chatMountReady && stableSessionId === activeSessionId;
 
   const handleAutoAttachHandled = useCallback((payload: AutoAttachHandledPayload) => {
     if (!payload.ok) {
@@ -130,6 +139,51 @@ function ProjectChatPanel({
     }
     onAutoAttachHandled(payload);
   }, [onAutoAttachHandled, t]);
+
+  const handleActivateChatView = useCallback(() => {
+    setChatViewActivated(true);
+  }, []);
+
+  const handleStartWorkspaceChat = useCallback(() => {
+    setChatViewActivated(true);
+    onStartWorkspaceChat();
+  }, [onStartWorkspaceChat]);
+
+  const handleStartDesignChat = useCallback(() => {
+    setChatViewActivated(true);
+    onStartDesignChat();
+  }, [onStartDesignChat]);
+
+  const handleStartRunChat = useCallback(() => {
+    setChatViewActivated(true);
+    onStartRunChat();
+  }, [onStartRunChat]);
+
+  const handleSelectWorkspaceHistoryChat = useCallback((chatId: string) => {
+    setChatViewActivated(true);
+    onSelectWorkspaceHistoryChat(chatId);
+  }, [onSelectWorkspaceHistoryChat]);
+
+  const handleSelectDesignHistoryChat = useCallback((chatId: string) => {
+    setChatViewActivated(true);
+    onSelectDesignHistoryChat(chatId);
+  }, [onSelectDesignHistoryChat]);
+
+  const handleSelectRunHistoryChat = useCallback((chatId: string) => {
+    setChatViewActivated(true);
+    onSelectRunHistoryChat(chatId);
+  }, [onSelectRunHistoryChat]);
+
+  const renderChatLoadGate = (description: string) => (
+    <div className={styles.chatEmptyAction}>
+      <div className={styles.chatEmptyActions}>
+        <Text type="secondary">{description}</Text>
+        <Button onClick={handleActivateChatView}>
+          {t("projects.chat.loadConversation", "加载对话")}
+        </Button>
+      </div>
+    </div>
+  );
 
   return (
     <Card
@@ -189,8 +243,8 @@ function ProjectChatPanel({
                         sessionId={stableSessionId}
                         autoAttachRequest={autoAttachRequest}
                         onAutoAttachHandled={handleAutoAttachHandled}
-                        onNewChat={onStartRunChat}
-                        onSelectHistoryChat={onSelectRunHistoryChat}
+                        onNewChat={handleStartRunChat}
+                        onSelectHistoryChat={handleSelectRunHistoryChat}
                         historyMenuActionLabel={t("projects.chat.manualRecover", "手动恢复对话关联")}
                         onHistoryMenuAction={onOpenManualRecoverDialog}
                         onAssistantTurnCompleted={onAssistantTurnCompleted}
@@ -217,11 +271,17 @@ function ProjectChatPanel({
                           ),
                         ]}
                       />
-                    ) : (
+                    ) : chatViewActivated ? (
                       <div className={styles.centerState}>
                         <Spin />
                       </div>
-                    )}
+                    ) : renderChatLoadGate(
+                      t(
+                        "projects.chat.loadRunConversationHint",
+                        "当前运行对话较大，默认不在首屏自动加载。需要时再打开。",
+                      ),
+                    )
+                    }
                   </div>
                 );
               }
@@ -232,7 +292,7 @@ function ProjectChatPanel({
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
                     description={t("projects.chat.noSession", "No chat session for this run yet")}
                   >
-                    <Button type="primary" onClick={onStartRunChat}>
+                    <Button type="primary" onClick={handleStartRunChat}>
                       {t("projects.chat.start", "Start chat")}
                     </Button>
                   </Empty>
@@ -263,8 +323,8 @@ function ProjectChatPanel({
                         sessionId={stableSessionId}
                         autoAttachRequest={autoAttachRequest}
                         onAutoAttachHandled={handleAutoAttachHandled}
-                        onNewChat={onStartDesignChat}
-                        onSelectHistoryChat={onSelectDesignHistoryChat}
+                        onNewChat={handleStartDesignChat}
+                        onSelectHistoryChat={handleSelectDesignHistoryChat}
                         historyMenuActionLabel={t("projects.chat.manualRecover", "手动恢复对话关联")}
                         onHistoryMenuAction={onOpenManualRecoverDialog}
                         onAssistantTurnCompleted={onAssistantTurnCompleted}
@@ -291,11 +351,17 @@ function ProjectChatPanel({
                           ),
                         ]}
                       />
-                    ) : (
+                    ) : chatViewActivated ? (
                       <div className={styles.centerState}>
                         <Spin />
                       </div>
-                    )}
+                    ) : renderChatLoadGate(
+                      t(
+                        "projects.chat.loadDesignConversationHint",
+                        "设计对话历史将在你打开时再读取，以避免拖慢项目页首屏。",
+                      ),
+                    )
+                    }
                   </div>
                 );
               }
@@ -309,7 +375,7 @@ function ProjectChatPanel({
                         "No design chat session yet.",
                       )}
                     >
-                      <Button type="primary" onClick={onStartDesignChat}>
+                      <Button type="primary" onClick={handleStartDesignChat}>
                         {t("projects.chat.start", "Start chat")}
                       </Button>
                     </Empty>
@@ -339,8 +405,8 @@ function ProjectChatPanel({
                       sessionId={stableSessionId}
                       autoAttachRequest={autoAttachRequest}
                       onAutoAttachHandled={handleAutoAttachHandled}
-                      onNewChat={onStartWorkspaceChat}
-                      onSelectHistoryChat={onSelectWorkspaceHistoryChat}
+                      onNewChat={handleStartWorkspaceChat}
+                      onSelectHistoryChat={handleSelectWorkspaceHistoryChat}
                       historyMenuActionLabel={t("projects.chat.manualRecover", "手动恢复对话关联")}
                       onHistoryMenuAction={onOpenManualRecoverDialog}
                       onAssistantTurnCompleted={onAssistantTurnCompleted}
@@ -380,11 +446,17 @@ function ProjectChatPanel({
                         ),
                       ]}
                     />
-                  ) : (
+                  ) : chatViewActivated ? (
                     <div className={styles.centerState}>
                       <Spin />
                     </div>
-                  )}
+                  ) : renderChatLoadGate(
+                    t(
+                      "projects.chat.loadWorkspaceConversationHint",
+                      "项目协作对话会在你手动打开时再加载，避免首屏长时间等待。",
+                    ),
+                  )
+                  }
                 </div>
               );
             }
@@ -398,7 +470,7 @@ function ProjectChatPanel({
                       "No project collaboration session yet.",
                   )}
                   >
-                    <Button type="primary" onClick={onStartWorkspaceChat}>
+                    <Button type="primary" onClick={handleStartWorkspaceChat}>
                       {t("projects.chat.start", "Start chat")}
                     </Button>
                   </Empty>

@@ -595,10 +595,10 @@ describe("project knowledge supporting panels", () => {
     expect(screen.getByText("projects.knowledge.signalsTitle")).not.toBeNull();
     expect(screen.getByText(/Metrics Source/)).not.toBeNull();
     expect(screen.getByText(/Backend merged sync metrics/)).not.toBeNull();
-    expect(screen.getByText(/Latest L1:/)).not.toBeNull();
+    expect(screen.getByText(/Latest Sources:/)).not.toBeNull();
     expect(screen.getByText(/5 files \/ 2 changed/)).not.toBeNull();
     expect(screen.getByText(/3 docs \/ 7 chunks \/ 11 sentences/)).not.toBeNull();
-    expect(screen.getByText(/Latest L2\/L3:/)).not.toBeNull();
+    expect(screen.getByText(/Latest Processing:/)).not.toBeNull();
     expect(screen.getByText(/3 docs \/ 9 nodes \/ 12 relations/)).not.toBeNull();
     expect(screen.getByText(/0.91 -> 0.95 \/ delta 0.04 \/ 1 rounds/)).not.toBeNull();
     expect(screen.getAllByText("projects.knowledge.signalRelations").length).toBeGreaterThan(0);
@@ -612,7 +612,7 @@ describe("project knowledge supporting panels", () => {
     expect(screen.getByText(/Key: manual-op-key-1/)).not.toBeNull();
     expect(screen.getByText(/Deduplicated: Yes/)).not.toBeNull();
     expect(screen.getByText(/Action: start_sync/)).not.toBeNull();
-    expect(screen.getByText(/Stage: L3/)).not.toBeNull();
+    expect(screen.getByText(/Stage:/)).not.toBeNull();
     expect((document.body.textContent || "").match(/Sync Trace[\s\S]*Updated\s*:/)).not.toBeNull();
 
     const signalLabels = Array.from(
@@ -656,6 +656,11 @@ describe("project knowledge supporting panels", () => {
   });
 
   it("renders source inventory", () => {
+    render(<ProjectKnowledgeSourcesPanel knowledgeState={buildKnowledgeState()} />);
+
+    expect(screen.queryByText(/L1 基线/)).toBeNull();
+    expect(screen.getByRole("img", { hidden: true })).not.toBeNull();
+
     const { container } = render(<ProjectKnowledgeSourcesPanel knowledgeState={buildKnowledgeState()} />);
 
     const signalLabels = Array.from(
@@ -672,7 +677,7 @@ describe("project knowledge supporting panels", () => {
     ]);
   });
 
-  it("renders recent L1 runs in sources panel when project stats history is available", () => {
+  it("renders recent analysis runs in sources panel when project stats history is available", () => {
     const knowledgeState = buildKnowledgeState();
     knowledgeState.sourceScanStats = {
       project_id: "project-abc",
@@ -742,8 +747,8 @@ describe("project knowledge supporting panels", () => {
     expect(screen.getByText("最近扫描")).not.toBeNull();
     expect(screen.getByText("最近的 source_scan 项目统计")).not.toBeNull();
     expect(screen.getByText("5 files / 2 changed / 1 sources")).not.toBeNull();
-    expect(screen.getByText("最近 L1 运行")).not.toBeNull();
-    expect(screen.getByText("最近的 file_analysis 项目统计")).not.toBeNull();
+    expect(screen.getByText("最近分析运行")).not.toBeNull();
+    expect(screen.getByText("最近的文件分析项目统计")).not.toBeNull();
     expect(screen.getByText("3 docs / 7 chunks / 11 sentences")).not.toBeNull();
   });
 
@@ -857,21 +862,21 @@ describe("project knowledge supporting panels", () => {
 
     expect(screen.getByText("Processing")).not.toBeNull();
     expect(screen.queryByText("极速模式")).toBeNull();
-    expect(screen.getByText("NER 实体数")).not.toBeNull();
-    expect(screen.getByText("L3 关系数")).not.toBeNull();
-    expectSignalValue("NER 实体数", "9");
-    expectSignalValue("Syntax 句法关系数", "13");
+    expect(screen.getByText("结构化实体数")).not.toBeNull();
+    expect(screen.getByText("增强后关系数")).not.toBeNull();
+    expectSignalValue("结构化实体数", "9");
+    expectSignalValue("结构化关系数", "13");
     expect(screen.getByText("最近扫描")).not.toBeNull();
     expect(screen.getByText("5 files / 2 changed / 1 sources")).not.toBeNull();
-    expect(screen.getByText("最近 L1 运行")).not.toBeNull();
+    expect(screen.getByText("最近基础分析")).not.toBeNull();
     expect(screen.getByText("3 docs / 7 chunks / 11 sentences")).not.toBeNull();
-    expect(screen.getByText("最近 L2 图构建")).not.toBeNull();
+    expect(screen.getByText("最近结构化构建")).not.toBeNull();
     expect(screen.getByText("3 docs / 9 nodes / 12 relations")).not.toBeNull();
-    expect(screen.getByText("最近 L3 质量审校")).not.toBeNull();
+    expect(screen.getByText("最近增强审校")).not.toBeNull();
     expect(screen.getByText("0.91 -> 0.95 / delta 0.04 / 1 rounds")).not.toBeNull();
     expect(screen.getByText("知识计量六层")).not.toBeNull();
-    expect(screen.getByText("L2 精确量化")).not.toBeNull();
-    expect(screen.getByText("L3 审计增强")).not.toBeNull();
+    expect(screen.getByText("结构化处理")).not.toBeNull();
+    expect(screen.getByText("增强审校")).not.toBeNull();
     expect(screen.getByText("数据层与预处理层")).not.toBeNull();
     expect(screen.getByText("语义层次")).not.toBeNull();
     expect(screen.getByText("语用与推理层次")).not.toBeNull();
@@ -1102,13 +1107,13 @@ describe("project knowledge supporting panels", () => {
       expect(screen.getByText("最近扫描")).not.toBeNull();
       expect(screen.getByText("来自 source_scan 项目统计文件")).not.toBeNull();
       expect(screen.getByText("5 files / 2 changed / 1 sources")).not.toBeNull();
-    expect(screen.getByText("最近 L1 运行")).not.toBeNull();
-    expect(screen.getByText("来自 file_analysis 项目统计文件")).not.toBeNull();
+    expect(screen.getByText("最近基础分析")).not.toBeNull();
+    expect(screen.getByText("来自文件分析项目统计")).not.toBeNull();
     expect(screen.getByText("3 docs / 7 chunks / 11 sentences")).not.toBeNull();
     expect(screen.getByText("2 docs / 5 chunks / 8 sentences")).not.toBeNull();
-      expect(screen.getByText("最近 L2 图构建")).not.toBeNull();
+      expect(screen.getByText("最近结构化构建")).not.toBeNull();
       expect(screen.getByText("3 docs / 9 nodes / 12 relations")).not.toBeNull();
-      expect(screen.getByText("最近 L3 质量审校")).not.toBeNull();
+      expect(screen.getByText("最近增强审校")).not.toBeNull();
       expect(screen.getByText("0.91 -> 0.95 / delta 0.04 / 1 rounds")).not.toBeNull();
   });
 
@@ -1231,6 +1236,37 @@ describe("project knowledge supporting panels", () => {
     );
 
     expect(screen.getByText("No result")).not.toBeNull();
+  });
+
+  it("shows a user-facing empty state when only base outputs are available", () => {
+    const knowledgeState = buildKnowledgeState();
+    knowledgeState.outputModes = [
+      buildModeState({
+        mode: "fast",
+        status: "ready",
+        available: true,
+        summary: "Base outputs are ready.",
+        lastUpdatedAt: "2026-04-11T23:30:00+00:00",
+        documentCount: 3,
+        chunkCount: 7,
+      }),
+    ];
+    knowledgeState.outputResolution = {
+      activeMode: "fast",
+      availableModes: ["fast"],
+      fallbackChain: ["fast"],
+      reason: "Only base outputs are available.",
+    };
+
+    render(
+      <ProjectKnowledgeOutputsPanel
+        knowledgeState={knowledgeState}
+        onRunSuggestedQuery={vi.fn()}
+        onSelectArtifactPath={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("结构化或增强结果尚未就绪，暂时无法展示实体关系结果。")).not.toBeNull();
   });
 
   it("renders ner panel with aggregated entities", () => {

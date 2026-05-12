@@ -450,6 +450,10 @@ class MultiAgentManager:
         """
         return agent_id in self.agents
 
+    def get_loaded_agent(self, agent_id: str) -> Workspace | None:
+        """Return a loaded workspace without triggering lazy startup."""
+        return self.agents.get(agent_id)
+
     async def preload_agent(self, agent_id: str) -> bool:
         """Preload an agent instance during startup.
 

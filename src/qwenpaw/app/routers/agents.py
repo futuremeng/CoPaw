@@ -1399,6 +1399,23 @@ def _resolve_project_dir(workspace_dir: Path, project_id: str) -> Path:
     )
 
 
+def _resolve_agent_workspace_dir(agent_id: str) -> Path:
+    """Resolve agent workspace directory without starting the runtime."""
+    config = load_config()
+    agent_ref = config.agents.profiles.get(agent_id)
+    if agent_ref is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Agent '{agent_id}' not found",
+        )
+    if not getattr(agent_ref, "enabled", True):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Agent '{agent_id}' is disabled",
+        )
+    return Path(agent_ref.workspace_dir).expanduser()
+
+
 def _read_project_frontmatter_with_body(
     metadata_file: Path,
 ) -> tuple[dict[str, Any], str]:
@@ -4364,17 +4381,13 @@ async def list_agent_project_files(
     projectId: str = PathParam(...),
 ) -> list[ProjectFileInfo]:
     """List files under a project."""
-    manager = _get_multi_agent_manager(request)
-
-    try:
-        workspace = await manager.get_agent(agentId)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    _ = request
+    workspace_dir = _resolve_agent_workspace_dir(agentId)
 
     try:
         return await asyncio.to_thread(
             _list_project_files_for_workspace,
-            Path(workspace.workspace_dir),
+            workspace_dir,
             projectId,
         )
     except HTTPException:
@@ -4396,17 +4409,13 @@ async def list_agent_project_file_tree(
     dirPath: str = Query(default="", alias="dir_path"),
 ) -> list[ProjectFileTreeNode]:
     """List one directory level under a project for lazy file tree loading."""
-    manager = _get_multi_agent_manager(request)
-
-    try:
-        workspace = await manager.get_agent(agentId)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    _ = request
+    workspace_dir = _resolve_agent_workspace_dir(agentId)
 
     try:
         return await asyncio.to_thread(
             _list_project_file_tree_nodes_for_workspace,
-            Path(workspace.workspace_dir),
+            workspace_dir,
             projectId,
             dirPath,
         )
@@ -4428,17 +4437,13 @@ async def get_agent_project_file_summary(
     projectId: str = PathParam(...),
 ) -> ProjectFileSummary:
     """Get lightweight aggregated project file counts for a project."""
-    manager = _get_multi_agent_manager(request)
-
-    try:
-        workspace = await manager.get_agent(agentId)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    _ = request
+    workspace_dir = _resolve_agent_workspace_dir(agentId)
 
     try:
         return await asyncio.to_thread(
             _build_project_file_summary_for_workspace,
-            Path(workspace.workspace_dir),
+            workspace_dir,
             projectId,
         )
     except HTTPException:
@@ -4460,17 +4465,13 @@ async def get_agent_project_files_metadata(
     projectId: str = PathParam(...),
 ) -> list[ProjectFileInfo]:
     """Fetch project file metadata for selected relative paths."""
-    manager = _get_multi_agent_manager(request)
-
-    try:
-        workspace = await manager.get_agent(agentId)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    _ = request
+    workspace_dir = _resolve_agent_workspace_dir(agentId)
 
     try:
         return await asyncio.to_thread(
             _get_project_files_metadata_for_workspace,
-            Path(workspace.workspace_dir),
+            workspace_dir,
             projectId,
             payload.paths,
         )
@@ -4682,15 +4683,11 @@ async def acquire_project_knowledge_watch_lease(
     agentId: str = PathParam(...),
     projectId: str = PathParam(...),
 ) -> AcquireProjectKnowledgeWatchLeaseResponse:
-    manager = _get_multi_agent_manager(request)
+    _ = request
+    workspace_dir = _resolve_agent_workspace_dir(agentId)
 
     try:
-        workspace = await manager.get_agent(agentId)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-
-    try:
-        project_dir = _resolve_project_dir(Path(workspace.workspace_dir), projectId)
+        project_dir = _resolve_project_dir(workspace_dir, projectId)
         return AcquireProjectKnowledgeWatchLeaseResponse.model_validate(
             acquire_project_watch_lease(project_dir)
         )
@@ -4712,15 +4709,11 @@ async def release_project_knowledge_watch_lease(
     projectId: str = PathParam(...),
     leaseId: str = PathParam(...),
 ) -> ReleaseProjectKnowledgeWatchLeaseResponse:
-    manager = _get_multi_agent_manager(request)
+    _ = request
+    workspace_dir = _resolve_agent_workspace_dir(agentId)
 
     try:
-        workspace = await manager.get_agent(agentId)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-
-    try:
-        project_dir = _resolve_project_dir(Path(workspace.workspace_dir), projectId)
+        project_dir = _resolve_project_dir(workspace_dir, projectId)
         return ReleaseProjectKnowledgeWatchLeaseResponse.model_validate(
             release_project_watch_lease(project_dir, leaseId)
         )
@@ -4912,17 +4905,13 @@ async def read_agent_project_file(
     filePath: str = PathParam(...),
 ) -> ProjectFileContent:
     """Read text content from a project file."""
-    manager = _get_multi_agent_manager(request)
-
-    try:
-        workspace = await manager.get_agent(agentId)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    _ = request
+    workspace_dir = _resolve_agent_workspace_dir(agentId)
 
     try:
         content = await asyncio.to_thread(
             _read_project_text_file_for_workspace,
-            Path(workspace.workspace_dir),
+            workspace_dir,
             projectId,
             filePath,
         )

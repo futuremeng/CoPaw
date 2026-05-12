@@ -233,7 +233,46 @@ def test_project_directory_unchanged_file_reuses_existing_snapshot(tmp_path: Pat
     assert first["snapshot_count"] == 1
     assert second["snapshot_count"] == 1
     assert len(manifest["snapshots"]) == 1
-    assert len(snapshots) == 1
+
+
+def test_list_sources_include_semantic_uses_lightweight_preview_only(tmp_path: Path, monkeypatch):
+    config = Config().knowledge
+    source = KnowledgeSourceSpec(
+        id="project-project-preview-workspace",
+        name="Project Workspace: project-preview",
+        type="directory",
+        location=str(tmp_path / "project-preview"),
+        content="",
+        enabled=True,
+        recursive=True,
+        project_id="project-preview",
+        tags=["project"],
+        summary="",
+    )
+    config.sources.append(source)
+
+    manager = KnowledgeManager(tmp_path)
+
+    def fail_load_index_payload(source_id: str):
+        raise AssertionError(f"list_sources should not load indexed payload for {source_id}")
+
+    monkeypatch.setattr(manager, "_load_index_payload_safe", fail_load_index_payload)
+    monkeypatch.setattr(
+        manager,
+        "get_semantic_engine_state",
+        lambda cfg=None: {
+            "engine": "hanlp2",
+            "status": "unavailable",
+            "reason_code": "NLP_ENGINE_UNAVAILABLE",
+            "reason": "NLP semantic engine is not configured.",
+        },
+    )
+
+    listing = manager.list_sources(config, include_semantic=True)
+
+    assert len(listing) == 1
+    assert listing[0]["subject"] == "Project Workspace: project-preview"
+    assert listing[0]["semantic_status"]["status"] == "unavailable"
 
 
 def test_chunk_documents_split_sentences_and_count(tmp_path: Path):

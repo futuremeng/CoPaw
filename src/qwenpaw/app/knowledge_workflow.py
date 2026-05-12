@@ -9,6 +9,7 @@ from typing import Any, Callable
 
 from fastapi import HTTPException
 
+from copaw.config.config import KnowledgeConfig
 from copaw.knowledge.graph_ops import GraphOpsManager
 from copaw.knowledge.manager import KnowledgeManager
 from copaw.knowledge.project_sync_manager import DEFAULT_PROJECT_SYNC_QUALITY_LOOP_ROUNDS
@@ -114,14 +115,22 @@ def _project_metadata_candidates(project_dir: Path) -> list[str]:
     return paths
 
 
-def _collect_project_data_files(project_dir: Path) -> list[str]:
-    data_dir = project_dir / "data"
-    if not data_dir.exists() or not data_dir.is_dir():
+def _collect_project_source_files(
+    project_dir: Path,
+    *,
+    source_location: str | Path | None,
+    recursive: bool = True,
+) -> list[str]:
+    source_dir = Path(source_location or project_dir).expanduser().resolve()
+    if not source_dir.exists() or not source_dir.is_dir():
         return []
+    filter_config = KnowledgeConfig()
+    pattern = "**/*" if recursive else "*"
     return [
         _relative_to_project(project_dir, path)
-        for path in sorted(data_dir.rglob("*"), key=lambda item: item.as_posix().lower())
+        for path in sorted(source_dir.glob(pattern), key=lambda item: item.as_posix().lower())
         if path.is_file()
+        if KnowledgeManager._is_allowed_path(path.relative_to(source_dir).as_posix(), filter_config)
     ]
 
 
@@ -802,7 +811,11 @@ class KnowledgeWorkflowOrchestrator:
         source,
         changed_paths: list[str],
     ) -> dict[str, Any]:
-        data_files = _collect_project_data_files(self.project_dir)
+        data_files = _collect_project_source_files(
+            self.project_dir,
+            source_location=source.location,
+            recursive=bool(getattr(source, "recursive", True)),
+        )
         evidence = _project_metadata_candidates(self.project_dir)
         if changed_paths:
             evidence.extend(changed_paths[:5])

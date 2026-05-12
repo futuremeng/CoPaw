@@ -1517,30 +1517,35 @@ export function useProjectKnowledgeState(
     if (semanticBySourceId[normalizedSourceId] || semanticLoadingBySourceId[normalizedSourceId]) {
       return;
     }
+    const matchedSource = projectSources.find((source) => source.id === normalizedSourceId);
+    if (matchedSource) {
+      setSemanticBySourceId((prev) => ({
+        ...prev,
+        [normalizedSourceId]: {
+          subject: matchedSource.subject || matchedSource.name,
+          summary: matchedSource.summary,
+          keywords: matchedSource.keywords || [],
+          semanticStatus: matchedSource.semantic_status,
+        },
+      }));
+      return;
+    }
     setSemanticLoadingBySourceId((prev) => ({ ...prev, [normalizedSourceId]: true }));
     try {
-      const response = await api.listKnowledgeSources({
-        projectId: params.projectId,
-        includeSemantic: true,
-      });
-      const match = (response.sources || []).find((source) => source.id === normalizedSourceId);
-      if (match) {
-        setSemanticBySourceId((prev) => ({
-          ...prev,
-          [normalizedSourceId]: {
-            subject: match.subject,
-            summary: match.summary,
-            keywords: match.keywords,
-            semanticStatus: match.semantic_status,
-          },
-        }));
-      }
+      setSemanticBySourceId((prev) => ({
+        ...prev,
+        [normalizedSourceId]: {
+          subject: normalizedSourceId,
+          summary: "",
+          keywords: [],
+        },
+      }));
     } catch {
       // best-effort semantic fetch
     } finally {
       setSemanticLoadingBySourceId((prev) => ({ ...prev, [normalizedSourceId]: false }));
     }
-  }, [params.projectId, semanticBySourceId, semanticLoadingBySourceId]);
+  }, [params.projectId, projectSources, semanticBySourceId, semanticLoadingBySourceId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1839,45 +1844,14 @@ export function useProjectKnowledgeState(
   useEffect(() => {
     if (!params.projectId) {
       setSyncState(null);
-      return;
     }
-    let cancelled = false;
-    void api.getProjectKnowledgeSyncStatus({ projectId: params.projectId })
-      .then((state) => {
-        if (!cancelled) {
-          setSyncState(state);
-        }
-      })
-      .catch(() => {
-        // best-effort status preload
-      });
-    return () => {
-      cancelled = true;
-    };
   }, [params.projectId]);
 
   useEffect(() => {
     if (!params.projectId) {
       setActiveKnowledgeTasks([]);
       setActiveKnowledgeTask(null);
-      return;
     }
-    let cancelled = false;
-    void api.getKnowledgeTasksSnapshot({ projectId: params.projectId })
-      .then((snapshot) => {
-        if (!cancelled) {
-          const tasks = Array.isArray(snapshot.tasks) ? snapshot.tasks : [];
-          const activeTasks = getActiveKnowledgeTasks(tasks);
-          setActiveKnowledgeTasks(activeTasks);
-          setActiveKnowledgeTask(pickActiveKnowledgeTask(tasks));
-        }
-      })
-      .catch(() => {
-        // best-effort task preload
-      });
-    return () => {
-      cancelled = true;
-    };
   }, [params.projectId]);
 
   useEffect(() => {

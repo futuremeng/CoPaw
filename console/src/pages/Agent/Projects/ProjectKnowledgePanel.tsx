@@ -219,17 +219,17 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
     return [
       {
         key: "l1",
-        label: t("projects.knowledge.layerL1", "L1"),
+        label: t("projects.knowledge.layerL1", "Sources"),
         ...l1,
       },
       {
         key: "l2",
-        label: t("projects.knowledge.layerL2", "L2"),
+        label: t("projects.knowledge.layerL2", "Structured"),
         ...l2,
       },
       {
         key: "l3",
-        label: t("projects.knowledge.layerL3", "L3"),
+        label: t("projects.knowledge.layerL3", "Enhanced"),
         ...l3,
       },
     ];

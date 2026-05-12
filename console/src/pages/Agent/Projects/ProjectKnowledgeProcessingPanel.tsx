@@ -214,8 +214,8 @@ function buildKnowledgeLayerRows(
     summary: l3Ready
       ? t(summaryKey, summaryFallback)
       : l3Running
-        ? t("projects.knowledge.processing.l3AuditRunning", "多智能体审计运行中")
-        : t("projects.knowledge.processing.l3AuditPending", "等待多智能体增强产物"),
+        ? t("projects.knowledge.processing.l3AuditRunning", "增强审校运行中")
+        : t("projects.knowledge.processing.l3AuditPending", "等待增强审校产物"),
     reason,
     metrics,
   });
@@ -230,7 +230,7 @@ function buildKnowledgeLayerRows(
       ),
       l2: {
         status: mapModeToLayerStatus(l2Mode, l2TokenCount > 0),
-        summary: t("projects.knowledge.processing.layerDataPreprocessL2", "inlinear 分词已纳入 L2 精确计量"),
+        summary: t("projects.knowledge.processing.layerDataPreprocessL2", "已完成分词标准化，可支撑后续分析"),
         metrics: [
           {
             label: t("projects.knowledge.documents", "文档数"),
@@ -272,7 +272,7 @@ function buildKnowledgeLayerRows(
       ),
       l2: {
         status: mapModeToLayerStatus(l2Mode, l2PosCount > 0),
-        summary: t("projects.knowledge.processing.layerLexicalL2", "分词与词性已进入 L2 精确统计"),
+        summary: t("projects.knowledge.processing.layerLexicalL2", "已形成分词与词性统计"),
         metrics: [
           {
             label: t("projects.knowledge.processing.syntaxPosCount", "词性标注数"),
@@ -340,7 +340,7 @@ function buildKnowledgeLayerRows(
       ),
       l2: {
         status: mapModeToLayerStatus(l2Mode, l2SyntaxRelations > 0),
-        summary: t("projects.knowledge.processing.layerSyntaxL2", "句法结构化指标已进入 L2"),
+        summary: t("projects.knowledge.processing.layerSyntaxL2", "已形成句法结构统计"),
         metrics: [
           {
             label: t("projects.knowledge.processing.syntaxSentences", "句子数"),
@@ -378,7 +378,7 @@ function buildKnowledgeLayerRows(
       ),
       l2: {
         status: mapModeToLayerStatus(l2Mode, l2NerEntities > 0 || l2NerReadyChunks > 0),
-        summary: t("projects.knowledge.processing.layerSemanticL2", "NER 语义抽取作为 L2 核心计量"),
+        summary: t("projects.knowledge.processing.layerSemanticL2", "实体与语义关系已进入结构化统计"),
         metrics: [
           {
             label: t("projects.knowledge.processing.nerEntities", "识别实体数"),
@@ -416,11 +416,11 @@ function buildKnowledgeLayerRows(
       ),
       l2: {
         status: "pending",
-        summary: t("projects.knowledge.processing.layerPragmaticL2", "该层由 L3 负责，L2 仅保留占位说明"),
+        summary: t("projects.knowledge.processing.layerPragmaticL2", "该层由增强审校负责，结构化处理仅保留占位说明"),
         metrics: [
           {
             label: t("projects.knowledge.processing.layerOwner", "负责层"),
-            value: "L3",
+            value: t("projects.knowledge.layerL3", "Enhanced"),
           },
         ],
       },
@@ -429,8 +429,8 @@ function buildKnowledgeLayerRows(
         summary: l3Ready
           ? t("projects.knowledge.processing.layerPragmaticL3", "多智能体推理增强已产出可消费结果")
           : l3Running
-            ? t("projects.knowledge.processing.l3ReasoningRunning", "多智能体推理增强运行中")
-            : t("projects.knowledge.processing.l3ReasoningPending", "等待多智能体推理增强结果"),
+            ? t("projects.knowledge.processing.l3ReasoningRunning", "增强推理运行中")
+            : t("projects.knowledge.processing.l3ReasoningPending", "等待增强推理结果"),
         metrics: [
           {
             label: t("projects.knowledge.processing.qualityScore", "质量分"),
@@ -447,7 +447,7 @@ function buildKnowledgeLayerRows(
             evidencePath: resolveEvidencePathByKey(l3EvidencePaths, "audit_round"),
           },
           {
-            label: t("projects.knowledge.processing.enhancementDelta", "相对 L2 增量"),
+            label: t("projects.knowledge.processing.enhancementDelta", "相对结构化结果增量"),
             value: hasL3Outputs
               ? t("projects.knowledge.processing.deltaSummary", "+{{entities}} 实体 / +{{relations}} 关系", {
                 entities: entityDelta,
@@ -587,7 +587,7 @@ export default function ProjectKnowledgeProcessingPanel(
             <Typography.Text type="secondary">
               {t(
                 "projects.knowledge.processingRoleHint",
-                "Processing 仅展示 L2 精确计量与 L3 多智能体审计增强，不再承载 L1 展示。",
+                "Processing 只展示结构化处理与增强审校，不再重复展示 Sources 基础统计。",
               )}
             </Typography.Text>
             {hasStaleProcessing ? (
@@ -613,15 +613,15 @@ export default function ProjectKnowledgeProcessingPanel(
         <div className={styles.projectKnowledgeProcessingStickySummary}>
           <div className={styles.projectKnowledgeSignalGrid}>
             <div className={styles.projectKnowledgeSignalCard}>
-              <Typography.Text type="secondary">{t("projects.knowledge.processing.l2Entities", "NER 实体数")}</Typography.Text>
+              <Typography.Text type="secondary">{t("projects.knowledge.processing.l2Entities", "结构化实体数")}</Typography.Text>
               <Typography.Text strong>{formatEntityValue(l2Mode, t)}</Typography.Text>
             </div>
             <div className={styles.projectKnowledgeSignalCard}>
-              <Typography.Text type="secondary">{t("projects.knowledge.processing.l2Relations", "Syntax 句法关系数")}</Typography.Text>
+              <Typography.Text type="secondary">{t("projects.knowledge.processing.l2Relations", "结构化关系数")}</Typography.Text>
               <Typography.Text strong>{displayRelationCount(l2Mode)}</Typography.Text>
             </div>
             <div className={styles.projectKnowledgeSignalCard}>
-              <Typography.Text type="secondary">{t("projects.knowledge.processing.l3Entities", "L3 实体数")}</Typography.Text>
+              <Typography.Text type="secondary">{t("projects.knowledge.processing.l3Entities", "增强后实体数")}</Typography.Text>
               <Typography.Text strong>
                 {l3Mode && !modeHasIndependentOutputs(l3Mode)
                   ? t("projects.knowledge.processing.outputPending", "未产出")
@@ -629,7 +629,7 @@ export default function ProjectKnowledgeProcessingPanel(
               </Typography.Text>
             </div>
             <div className={styles.projectKnowledgeSignalCard}>
-              <Typography.Text type="secondary">{t("projects.knowledge.processing.l3Relations", "L3 关系数")}</Typography.Text>
+              <Typography.Text type="secondary">{t("projects.knowledge.processing.l3Relations", "增强后关系数")}</Typography.Text>
               <Typography.Text strong>
                 {l3Mode && !modeHasIndependentOutputs(l3Mode)
                   ? t("projects.knowledge.processing.outputPending", "未产出")
@@ -669,10 +669,10 @@ export default function ProjectKnowledgeProcessingPanel(
               {t("projects.knowledge.processing.layerDimension", "知识计量六层")}
             </Typography.Text>
             <Typography.Text strong>
-              {t("projects.knowledge.processing.layerL2Column", "L2 精确量化")}
+              {t("projects.knowledge.processing.layerL2Column", "结构化处理")}
             </Typography.Text>
             <Typography.Text strong>
-              {t("projects.knowledge.processing.layerL3Column", "L3 审计增强")}
+              {t("projects.knowledge.processing.layerL3Column", "增强审校")}
             </Typography.Text>
           </div>
           {layerRows.map((row) => (

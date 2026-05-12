@@ -377,6 +377,31 @@ def test_execute_source_scan_writes_project_step_stats(tmp_path: Path):
     assert payload["changed_paths"] == ["data/sample.md"]
 
 
+def test_execute_source_scan_counts_project_root_files_and_skips_builtin_hidden_dirs(tmp_path: Path):
+    project_id = "project-root-source-scan"
+    project_dir = tmp_path / "projects" / project_id
+    project_dir.mkdir(parents=True, exist_ok=True)
+    _write_project_metadata(project_dir, project_id)
+    (project_dir / "sample.md").write_text("# Sample\n", encoding="utf-8")
+    (project_dir / ".data").mkdir(parents=True, exist_ok=True)
+    (project_dir / ".data" / "README.md").write_text("builtin\n", encoding="utf-8")
+
+    orchestrator = KnowledgeWorkflowOrchestrator(
+        workspace_dir=tmp_path,
+        project_id=project_id,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+    source = _build_source(project_dir, project_id)
+
+    result = orchestrator._execute_source_scan(
+        source=source,
+        changed_paths=["sample.md"],
+    )
+
+    assert result["metrics"]["data_file_count"] == 1
+    assert result["result"]["data_files"] == ["sample.md"]
+
+
 def test_execute_domain_graph_build_writes_project_step_stats(tmp_path: Path, monkeypatch):
     project_id = "project-domain-graph"
     project_dir = tmp_path / "projects" / project_id
