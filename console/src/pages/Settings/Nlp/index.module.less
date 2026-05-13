@@ -119,6 +119,47 @@
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.08);
 }
 
+.docsCard {
+  border-style: dashed;
+}
+
+.docsTitle {
+  margin: 0 0 6px;
+}
+
+.docsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.docsPane {
+  border: 1px solid #f0e7d9;
+  border-radius: 10px;
+  background: #fffaf2;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.docsSubTitle {
+  font-size: 14px;
+}
+
+.codeBlock {
+  margin: 0;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #eadac5;
+  background: #fffdf8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .sideGroupCollapse {
   width: 100%;
 }
@@ -517,6 +558,10 @@
 }
 
 @media (max-width: 980px) {
+  .docsGrid {
+    grid-template-columns: 1fr;
+  }
+
   .maintenanceAlertHeader {
     align-items: flex-start;
     flex-direction: column;
@@ -599,6 +644,16 @@
 }
 
 :global(.dark-mode) {
+  .docsPane {
+    border-color: rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .codeBlock {
+    border-color: rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.05);
+  }
+
   .alertRow {
     border-color: rgba(255, 255, 255, 0.1);
     background: rgba(255, 255, 255, 0.04);
