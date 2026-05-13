@@ -115,7 +115,7 @@ _TASK_MATRIX_KEY_MAP = {
     "lzh_dep": "lzh_dep",
 }
 _TASK_MODEL_DEFAULTS = {
-    "ner_msra": "MSRA_NER_BERT_BASE_ZH",
+    "ner_msra": "MSRA_NER_ELECTRA_SMALL_ZH",
     "dep": "CTB9_DEP_ELECTRA_SMALL",
     "sdp": "SEMEVAL16_ALL_ELECTRA_SMALL_ZH",
     "con": "CTB9_CON_FULL_TAG_ELECTRA_SMALL",
@@ -155,7 +155,7 @@ _TASK_TIMEOUT_MIN_FOR_BERT = {
     "ner_msra": 60.0,
 }
 _ROUTE_TIMEOUT_GRACE_SEC = 0.25
-_ROUTE_TIMEOUT_MAX_SEC = 20.0
+_ROUTE_TIMEOUT_MAX_SEC = 90.0
 _BATCH_MAX_TEXTS = 5
 _NER_NOISE_TOKENS = {
     "在",
@@ -971,10 +971,37 @@ async def _run_hanlp_task_impl(
         raw_result = result
         normalized_result = list(result) if isinstance(result, list) else []
     elif normalized_task_key == "ner":
-        result, state = await _await_runtime_call(
-            lambda: runtime.run_ner(request_text, effective_config),
-            timeout_sec=route_timeout_sec,
-        )
+        if tokenized_tokens:
+            result, state = await _await_runtime_call(
+                lambda: runtime.run_task_tokenized(
+                    "ner_msra",
+                    tokenized_tokens,
+                    effective_config,
+                ),
+                timeout_sec=route_timeout_sec,
+            )
+        else:
+            result, state = await _await_runtime_call(
+                lambda: runtime.run_ner(request_text, effective_config),
+                timeout_sec=route_timeout_sec,
+            )
+            if request_text and (not isinstance(result, list) or len(result) == 0):
+                tokenized, tokenized_state = await _await_runtime_call(
+                    lambda: runtime.tokenize(request_text, effective_config),
+                    timeout_sec=route_timeout_sec,
+                )
+                fallback_tokens = [str(token or "").strip() for token in (tokenized if isinstance(tokenized, list) else []) if str(token or "").strip()]
+                if fallback_tokens:
+                    result, state = await _await_runtime_call(
+                        lambda: runtime.run_task_tokenized(
+                            "ner_msra",
+                            fallback_tokens,
+                            effective_config,
+                        ),
+                        timeout_sec=route_timeout_sec,
+                    )
+                else:
+                    state = tokenized_state
         raw_result = result
         normalized_result = _normalize_ner_result(result, request_text)
     elif normalized_task_key == "dep":
@@ -1204,9 +1231,10 @@ async def _run_hanlp_task_batch_impl(
             lambda: runtime.tokenize_batch(texts, effective_config),
             timeout_sec=route_timeout_sec,
         )
-    elif normalized_task_key == "srl" and tokens_batch is not None:
+    elif normalized_task_key in {"srl", "ner"} and tokens_batch is not None:
+        tokenized_task_key = "ner_msra" if normalized_task_key == "ner" else normalized_task_key
         raw_items, state = await _await_runtime_call(
-            lambda: runtime.run_task_tokenized_batch(normalized_task_key, tokens_batch, effective_config),
+            lambda: runtime.run_task_tokenized_batch(tokenized_task_key, tokens_batch, effective_config),
             timeout_sec=route_timeout_sec,
         )
     else:

@@ -224,8 +224,8 @@ def choose_ner_model(module, preferred_model_id):
     if preferred:
         candidates.append(preferred)
     candidates.extend([
-        "MSRA_NER_BERT_BASE_ZH",
         "MSRA_NER_ELECTRA_SMALL_ZH",
+		"MSRA_NER_BERT_BASE_ZH",
         "MSRA_NER_ALBERT_BASE_ZH",
     ])
     for model_id in candidates:
@@ -409,8 +409,8 @@ def main():
 				model = get_cached_model(hanlp, task_model_id)
 			except Exception:
 				model = None
+		token_input = [str(token or "").strip() for token in tokens if str(token or "").strip()] if isinstance(tokens, list) else []
 		if normalized_task_name == "srl" and isinstance(tokens, list):
-			token_input = [str(token or "").strip() for token in tokens if str(token or "").strip()]
 			if model is None:
 				model = choose_srl_model(hanlp, spec.get("model_id"))
 			if callable(model) and token_input:
@@ -418,25 +418,28 @@ def main():
 					task_result = model(token_input)
 				except Exception:
 					task_result = None
-        if callable(parse):
+
+		if task_result is None and normalized_task_name == "ner_msra":
+			if model is None:
+				model = choose_ner_model(hanlp, spec.get("model_id"))
+			if not token_input and callable(tokenizer):
+				try:
+					token_input = run_tokenize_with_fallback(hanlp, tokenizer, text)
+				except Exception:
+					token_input = []
+			if callable(model) and token_input:
+				try:
+					task_result = model(token_input)
+				except Exception:
+					task_result = None
+
+		if task_result is None and callable(parse) and normalized_task_name != "ner_msra":
             try:
                 task_result = extract_parse_result(parse(text, tasks=[task_name]), task_name)
             except Exception:
                 task_result = None
 
-		if task_result is None and normalized_task_name == "ner_msra":
-			if model is None:
-				model = choose_ner_model(hanlp, spec.get("model_id"))
-            if callable(model):
-                try:
-                    task_result = model(text)
-                except IndexError:
-                    if callable(tokenizer):
-                        task_result = model(flatten_tokens(tokenizer(text)))
-                except Exception:
-                    task_result = None
-
-		if task_result is None and callable(model):
+		if task_result is None and callable(model) and normalized_task_name != "ner_msra":
 			try:
 				task_result = model(text)
 			except IndexError:
@@ -502,13 +505,25 @@ def main():
 				except Exception:
 					task_result = None
 
-			if callable(parse):
+			if task_result is None and normalized_task_name == "ner_msra" and callable(model):
+				if not current_tokens and callable(tokenizer):
+					try:
+						current_tokens = run_tokenize_with_fallback(hanlp, tokenizer, normalized_text)
+					except Exception:
+						current_tokens = []
+				if current_tokens:
+					try:
+						task_result = model(current_tokens)
+					except Exception:
+						task_result = None
+
+			if task_result is None and callable(parse) and normalized_task_name != "ner_msra":
 				try:
 					task_result = extract_parse_result(parse(normalized_text, tasks=[task_name]), task_name)
 				except Exception:
 					task_result = None
 
-			if task_result is None and callable(model):
+			if task_result is None and callable(model) and normalized_task_name != "ner_msra":
 				try:
 					task_result = model(normalized_text)
 				except IndexError:

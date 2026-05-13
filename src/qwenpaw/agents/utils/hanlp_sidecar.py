@@ -40,7 +40,7 @@ _PRELOAD_STATE: dict[str, object] = {
 }
 _SUPPORTED_HANLP_PYTHON_VERSIONS = ("3.10", "3.9", "3.8", "3.7", "3.6")
 _DEFAULT_TASK_MODEL_IDS = {
-    "ner_msra": "MSRA_NER_BERT_BASE_ZH",
+    "ner_msra": "MSRA_NER_ELECTRA_SMALL_ZH",
 }
 _CRITICAL_PRELOAD_TASKS = ("ner_msra",)
 _PRELOAD_SAMPLE_TEXTS = {

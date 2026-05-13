@@ -20,7 +20,7 @@ router = APIRouter(prefix="/sidecar", tags=["sidecar"])
 
 _CLASSICAL_SINGLE_MODEL_ID = "KYOTO_EVAHAN_TOK_LEM_POS_UDEP_LZH"
 _TASK_MODEL_DEFAULTS = {
-    "ner_msra": "MSRA_NER_BERT_BASE_ZH",
+    "ner_msra": "MSRA_NER_ELECTRA_SMALL_ZH",
     "dep": "CTB9_DEP_ELECTRA_SMALL",
     "sdp": "SEMEVAL16_ALL_ELECTRA_SMALL_ZH",
     "con": "CTB9_CON_FULL_TAG_ELECTRA_SMALL",

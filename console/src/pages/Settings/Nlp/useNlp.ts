@@ -413,7 +413,7 @@ export function useNlp() {
     setRunningDemoTask(normalizedTaskKey);
     try {
       let result;
-      if (normalizedTaskKey === "srl") {
+      if (normalizedTaskKey === "srl" || normalizedTaskKey === "ner") {
         const tokenizeResult = await api.runNlpTaskDemo("tokenize", {
           text: normalizedText,
         });
@@ -421,7 +421,7 @@ export function useNlp() {
           ? tokenizeResult.result.map((item) => String(item || "").trim()).filter(Boolean)
           : [];
         if (tokens.length === 0) {
-          message.warning("srl demo: tokenize returned empty tokens");
+          message.warning(`${normalizedTaskKey} demo: tokenize returned empty tokens`);
           return null;
         }
         result = await api.runNlpTaskDemo(normalizedTaskKey, {

@@ -2128,6 +2128,7 @@ def _default_hanlp_tasks() -> Dict[str, KnowledgeHanLPTaskConfig]:
         "ner_msra": KnowledgeHanLPTaskConfig(
             enabled=True,
             task_name="ner/msra",
+            model_id="MSRA_NER_ELECTRA_SMALL_ZH",
             artifact_key="ner_msra",
             eval_role="primary",
         ),

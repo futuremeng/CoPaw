@@ -1256,10 +1256,12 @@ function NlpPage() {
         return taskCandidates.includes(itemTaskKey) || taskCandidates.includes(itemTaskName);
       }) ||
       (taskKey.startsWith("lzh_") || taskKey === "tokenize" ? localItems.find((item) => item.scope === "default") : undefined);
-    const missing =
-      (taskStatus !== "ready" &&
-        /(MODEL|DOWNLOAD|MISSING|INSTALL_REQUIRED|NOT_CONFIGURED|UNAVAILABLE)/.test(reasonHint)) ||
-      Boolean(localItem && localItem.local_available === false);
+    const localModelAvailable = localItem?.local_available === true;
+    const missingFromStatusHint =
+      taskStatus !== "ready" && /(MODEL|DOWNLOAD|MISSING|INSTALL_REQUIRED|NOT_CONFIGURED|NOT_FOUND)/.test(reasonHint);
+    const missingFromLocalState = localItem?.local_available === false;
+    // Prefer explicit local model state when available to avoid false "download" prompts.
+    const missing = missingFromLocalState || (missingFromStatusHint && !localModelAvailable);
     return {
       modelText: String(localItem?.model_id || modelId || t("nlpConfig.notConfigured")).trim() || t("nlpConfig.notConfigured"),
       fileText: cachePath || t("nlpConfig.notConfigured"),

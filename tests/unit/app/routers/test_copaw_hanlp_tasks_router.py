@@ -12,6 +12,8 @@ from fastapi.testclient import TestClient
 class _FakeRuntime:
     last_ner_model_id: str | None = None
     last_dep_model_id: str | None = None
+    last_tokenized_task_key: str | None = None
+    last_tokenized_tokens: list[str] | None = None
 
     def run_ner(self, text: str, config):
         _FakeRuntime.last_ner_model_id = getattr(getattr(config, "nlp", None), "model_id", None)
@@ -105,6 +107,8 @@ class _FakeRuntime:
 
     def run_task_tokenized(self, task_key: str, tokens: list[str], config):
         _ = config
+        _FakeRuntime.last_tokenized_task_key = task_key
+        _FakeRuntime.last_tokenized_tokens = list(tokens)
         if task_key == "srl":
             pred_index = 1 if len(tokens) > 1 else 0
             return [
@@ -113,6 +117,12 @@ class _FakeRuntime:
                     ["".join(tokens), "ARG1", 0, len(tokens)],
                 ]
             ], {
+                "status": "ready",
+                "reason_code": "HANLP2_TASK_READY",
+                "reason": "HanLP task is ready.",
+            }
+        if task_key == "ner_msra":
+            return [["".join(tokens), "ORGANIZATION", 0, len(tokens)]], {
                 "status": "ready",
                 "reason_code": "HANLP2_TASK_READY",
                 "reason": "HanLP task is ready.",
@@ -407,7 +417,7 @@ def test_copaw_hanlp_ner_run_endpoint(monkeypatch):
     assert payload["request_id"] == "req-ner-1"
     assert payload["status"] == "ready"
     assert payload["reason_code"] == "HANLP2_TASK_READY"
-    assert payload["resolved_model"] == "MSRA_NER_BERT_BASE_ZH"
+    assert payload["resolved_model"] == "MSRA_NER_ELECTRA_SMALL_ZH"
     assert payload["strategy_mode"] == "auto"
     assert payload["detected_style"] == "modern"
     assert payload["fallback_used"] is False
@@ -535,7 +545,7 @@ def test_copaw_hanlp_ner_prefers_task_matrix_model_over_strategy_default(monkeyp
     assert payload["status"] == "ready"
     assert payload["resolved_model"] == "MSRA_NER_BERT_BASE_ZH"
     assert "strategy.default_model_id" in payload["matched_rules"]
-    assert _TaskMatrixProbeRuntime.last_ner_matrix_model_id == "MSRA_NER_BERT_BASE_ZH"
+    assert _TaskMatrixProbeRuntime.last_ner_matrix_model_id == "MSRA_NER_ELECTRA_SMALL_ZH"
 
 
 def test_copaw_hanlp_ner_injects_runtime_default_model_when_matrix_empty(monkeypatch):
@@ -573,8 +583,8 @@ def test_copaw_hanlp_ner_injects_runtime_default_model_when_matrix_empty(monkeyp
     assert response.status_code == 200
     payload = response.json()
     assert payload["status"] == "ready"
-    assert payload["resolved_model"] == "MSRA_NER_BERT_BASE_ZH"
-    assert _TaskMatrixProbeRuntime.last_ner_matrix_model_id == "MSRA_NER_BERT_BASE_ZH"
+    assert payload["resolved_model"] == "MSRA_NER_ELECTRA_SMALL_ZH"
+    assert _TaskMatrixProbeRuntime.last_ner_matrix_model_id == "MSRA_NER_ELECTRA_SMALL_ZH"
 
 
 def test_copaw_hanlp_dep_injects_runtime_default_model_when_matrix_empty(monkeypatch):
@@ -652,6 +662,30 @@ def test_copaw_hanlp_ner_runtime_timeout_is_raised_for_bert_when_too_low(monkeyp
 
     module._ensure_runtime_task_model_defaults("ner", cfg)
     assert float(cfg.nlp.task_matrix.tasks["ner_msra"].timeout_sec) >= 60.0
+
+
+def test_copaw_hanlp_ner_route_timeout_budget_matches_ner_model(monkeypatch):
+    from copaw.app.routers import knowledge_hanlp_tasks as module
+
+    cfg = SimpleNamespace(
+        nlp=SimpleNamespace(
+            task_matrix=SimpleNamespace(
+                tasks={
+                    "ner_msra": SimpleNamespace(
+                        model_id="MSRA_NER_BERT_BASE_ZH",
+                        timeout_sec=30,
+                    ),
+                },
+            ),
+            tokenize_timeout_sec=15,
+        ),
+    )
+
+    module._ensure_runtime_task_model_defaults("ner", cfg)
+    timeout_sec = module._route_timeout_sec("ner", cfg)
+
+    assert timeout_sec >= 60.0
+    assert timeout_sec <= 90.0
 
 
 def test_copaw_hanlp_ner_merges_adjacent_fragments_and_repairs_span(monkeypatch):
@@ -930,6 +964,31 @@ def test_copaw_hanlp_srl_run_with_tokens_endpoint(monkeypatch):
     assert payload["status"] == "ready"
     assert payload["result"][0]["role"] == "PRED"
     assert payload["result"][0]["text"] == "支持"
+
+
+def test_copaw_hanlp_ner_run_with_tokens_endpoint(monkeypatch):
+    _install_runtime_mocks(monkeypatch)
+    _FakeRuntime.last_tokenized_task_key = None
+    _FakeRuntime.last_tokenized_tokens = None
+
+    from copaw.app._app import app
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/knowledge/tasks/ner/run",
+            json={
+                "tokens": ["微软", "发布", "新模型"],
+                "request_id": "req-ner-tokenized-1",
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["task_key"] == "ner"
+    assert payload["status"] == "ready"
+    assert isinstance(payload["result"], list)
+    assert _FakeRuntime.last_tokenized_task_key == "ner_msra"
+    assert _FakeRuntime.last_tokenized_tokens == ["微软", "发布", "新模型"]
 
 
 def test_copaw_hanlp_srl_run_with_tokens_batch_endpoint(monkeypatch):
