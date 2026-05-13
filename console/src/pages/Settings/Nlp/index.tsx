@@ -179,6 +179,19 @@ function resolveTagColor(status: string): string {
   return "warning";
 }
 
+function localizeStatusReason(reason: string): string {
+  const text = String(reason || "").trim();
+  if (!text) {
+    return text;
+  }
+  const exactMap: Record<string, string> = {
+    "HanLP task is configured. Run task demo to verify model availability.": "任务已配置，可点击“开始分析”验证效果。",
+    "HanLP task is ready.": "任务已就绪，可直接开始分析。",
+    "HanLP task is disabled in the task matrix.": "该任务当前未启用。",
+  };
+  return exactMap[text] || text;
+}
+
 function prettyJson(value: unknown): string {
   try {
     return JSON.stringify(value, null, 2);
@@ -335,7 +348,10 @@ function buildPosAnnotations(
   return items;
 }
 
-function renderTokenRail(tokens: string[], activeTokenIndex?: number | null) {
+function renderTokenRail(
+  tokens: string[],
+  activeTokenIndex?: number | null,
+) {
   if (tokens.length === 0) {
     return null;
   }
@@ -574,7 +590,7 @@ function renderRecordRows(
   },
 ) {
   if (rows.length === 0) {
-    return <Typography.Text type="secondary">No rows returned.</Typography.Text>;
+    return <Typography.Text type="secondary">暂无可展示结果。</Typography.Text>;
   }
 
   const firstRowKeys = Object.keys(rows[0] || {});
@@ -646,26 +662,10 @@ function renderResultByTask(
   const highlightedRowIndex = hoveredRowIndex ?? activeRowIndex;
   if (taskKey === "tokenize" || taskKey === "lzh_tok_fine" || taskKey === "lzh_tok_coarse") {
     const tokens = resolveTokenResultList(taskKey, result);
-    return (
-      <>
-        <div className={styles.demoTokenWrap}>
-          {tokens.length === 0 ? (
-            <Typography.Text type="secondary">No tokens returned.</Typography.Text>
-          ) : (
-            tokens.map((token, index) => (
-              <Tag
-                key={`${String(token)}-${index}`}
-                className={`${styles.demoChip} ${highlightedRowIndex === index ? styles.demoChipActive : ""}`}
-                onClick={() => onSelectRow(activeRowIndex === index ? null : index)}
-              >
-                {String(token)}
-              </Tag>
-            ))
-          )}
-        </div>
-        {renderTokenRail(tokens.map((token) => String(token)), highlightedRowIndex)}
-      </>
-    );
+    if (tokens.length === 0) {
+      return <Typography.Text type="secondary">未返回分词结果。</Typography.Text>;
+    }
+    return renderTokenRail(tokens.map((token) => String(token)), highlightedRowIndex);
   }
 
   if (taskKey === "ner" && Array.isArray(result)) {
@@ -871,8 +871,8 @@ function renderResultByTask(
           <div className={styles.demoClusterWrap}>
             {result.map((cluster, clusterIndex) => (
               <div key={`cluster-${clusterIndex}`} className={styles.demoClusterCard}>
-                <Typography.Text strong>Cluster {clusterIndex + 1}</Typography.Text>
-                <div className={styles.demoTokenWrap}>
+                <Typography.Text strong>簇 {clusterIndex + 1}</Typography.Text>
+                <div className={styles.demoTokenRail}>
                   {(cluster as unknown[]).map((mention, mentionIndex) => (
                     <Tag key={`cluster-${clusterIndex}-${mentionIndex}`} className={styles.demoChip}>
                       {String(mention)}
@@ -1589,7 +1589,7 @@ function NlpPage() {
                             </Typography.Text>
                             {methodReason ? (
                               <Typography.Text type="secondary" className={styles.demoMethodReason}>
-                                {methodReason}
+                                {localizeStatusReason(methodReason)}
                               </Typography.Text>
                             ) : null}
                             {modelInfo.missing ? (
@@ -1619,7 +1619,7 @@ function NlpPage() {
                         {activeDemoMethodName}
                       </Typography.Title>
                       <Typography.Paragraph type="secondary" className={styles.cardDescription}>
-                        {activeDemoStatus.reason}
+                        {localizeStatusReason(activeDemoStatus.reason)}
                       </Typography.Paragraph>
                       <Space wrap size={8} className={styles.demoExamples}>
                         {activeDemoMethod.examples.map((sample, index) => (
@@ -1661,33 +1661,12 @@ function NlpPage() {
                       <Typography.Title level={5} className={styles.cardTitle}>
                         {t("nlpConfig.demo.resultPanel")}
                       </Typography.Title>
-                      <Typography.Text type="secondary">
-                        {t("nlpConfig.demo.interactionHint")}
-                      </Typography.Text>
                       {!activeDemoResult ? (
                         <Typography.Paragraph type="secondary" className={styles.cardDescription}>
                           {t("nlpConfig.demo.clickRunTestHint")}
                         </Typography.Paragraph>
                       ) : (
                         <>
-                          <div className={styles.demoMetaGrid}>
-                            <div className={styles.demoMetaItem}><span>任务状态</span><Tag color={resolveTagColor(activeDemoResult.status)}>{activeDemoResult.reason_code}</Tag></div>
-                            <div className={styles.demoMetaItem}><span>当前任务</span><span>{activeDemoResult.task_key}</span></div>
-                            <div className={styles.demoMetaItem}><span>使用模型</span><span>{activeDemoResult.resolved_model || t("nlpConfig.demo.empty")}</span></div>
-                            <div className={styles.demoMetaItem}><span>文本风格</span><span>{activeDemoResult.detected_style}</span></div>
-                            <div className={styles.demoMetaItem}><span>识别分值</span><span>{activeDemoResult.detection_score}</span></div>
-                            <div className={styles.demoMetaItem}><span>总耗时</span><span>{activeDemoResult.duration_ms} ms</span></div>
-                            <div className={styles.demoMetaItem}><span>预热状态</span><span>{activeDemoResult.preload_status || "未预热"}</span></div>
-                          </div>
-                          {activeDemoMethod.backendTaskKey === "ner" ? (
-                            <Space size={8} wrap>
-                              <Typography.Text type="secondary">{t("nlpConfig.demo.entityOnlyView")}</Typography.Text>
-                              <Switch
-                                checked={nerEntityOnlyView}
-                                onChange={(checked) => setNerEntityOnlyView(checked)}
-                              />
-                            </Space>
-                          ) : null}
                           <div
                             className={styles.demoInteractiveArea}
                             tabIndex={0}
@@ -1704,14 +1683,20 @@ function NlpPage() {
                               setHoveredDemoRowIndex,
                             )}
                           </div>
+                          {activeDemoMethod.backendTaskKey === "ner" ? (
+                            <Space size={8} wrap>
+                              <Typography.Text type="secondary">{t("nlpConfig.demo.entityOnlyView")}</Typography.Text>
+                              <Switch
+                                checked={nerEntityOnlyView}
+                                onChange={(checked) => setNerEntityOnlyView(checked)}
+                              />
+                            </Space>
+                          ) : null}
                           {activeResultTokens.length > 0 ? (
                             <Typography.Text type="secondary">
                               {t("nlpConfig.demo.currentTokenCount", { count: activeResultTokens.length })}
                             </Typography.Text>
                           ) : null}
-                          <Typography.Paragraph className={styles.operationOutput}>
-                            {t("nlpConfig.demo.rules")}: {(activeDemoResult.matched_rules || []).join(", ") || t("nlpConfig.demo.none")}
-                          </Typography.Paragraph>
                           <Collapse
                             ghost
                             items={[
@@ -1720,6 +1705,18 @@ function NlpPage() {
                                 label: t("nlpConfig.demo.advancedInfo"),
                                 children: (
                                   <>
+                                    <div className={styles.demoMetaGrid}>
+                                      <div className={styles.demoMetaItem}><span>任务状态</span><Tag color={resolveTagColor(activeDemoResult.status)}>{activeDemoResult.reason_code}</Tag></div>
+                                      <div className={styles.demoMetaItem}><span>当前任务</span><span>{activeDemoResult.task_key}</span></div>
+                                      <div className={styles.demoMetaItem}><span>使用模型</span><span>{activeDemoResult.resolved_model || t("nlpConfig.demo.empty")}</span></div>
+                                      <div className={styles.demoMetaItem}><span>文本风格</span><span>{activeDemoResult.detected_style}</span></div>
+                                      <div className={styles.demoMetaItem}><span>识别分值</span><span>{activeDemoResult.detection_score}</span></div>
+                                      <div className={styles.demoMetaItem}><span>总耗时</span><span>{activeDemoResult.duration_ms} ms</span></div>
+                                      <div className={styles.demoMetaItem}><span>预热状态</span><span>{activeDemoResult.preload_status || "未预热"}</span></div>
+                                    </div>
+                                    <Typography.Paragraph className={styles.operationOutput}>
+                                      {t("nlpConfig.demo.rules")}: {(activeDemoResult.matched_rules || []).join(", ") || t("nlpConfig.demo.none")}
+                                    </Typography.Paragraph>
                                     <div className={styles.demoMetaGrid}>
                                       <div className={styles.demoMetaItem}><span>{t("nlpConfig.demo.taskModel")}</span><span>{activeDemoResult.effective_task_model_id || t("nlpConfig.demo.inherit")}</span></div>
                                       <div className={styles.demoMetaItem}><span>{t("nlpConfig.telemetry.sidecarTotal")}</span><span>{activeDemoResult.sidecar_elapsed_ms ?? 0} ms</span></div>
@@ -1823,7 +1820,7 @@ function NlpPage() {
                             </Typography.Text>
                             {methodReason ? (
                               <Typography.Text type="secondary" className={styles.demoMethodReason}>
-                                {methodReason}
+                                {localizeStatusReason(methodReason)}
                               </Typography.Text>
                             ) : null}
                             {modelInfo.missing ? (
@@ -1853,7 +1850,7 @@ function NlpPage() {
                         {activeClassicalDemoMethod?.title || t("nlpConfig.demo.classicalTask")}
                       </Typography.Title>
                       <Typography.Paragraph type="secondary" className={styles.cardDescription}>
-                        {activeClassicalDemoStatus.reason}
+                        {localizeStatusReason(activeClassicalDemoStatus.reason)}
                       </Typography.Paragraph>
                       <Space wrap size={8} className={styles.demoExamples}>
                         {(activeClassicalDemoMethod?.examples || []).map((sample, index) => (
@@ -1897,25 +1894,12 @@ function NlpPage() {
                       <Typography.Title level={5} className={styles.cardTitle}>
                         {t("nlpConfig.demo.resultPanel")}
                       </Typography.Title>
-                      <Typography.Text type="secondary">
-                        {t("nlpConfig.demo.interactionHint")}
-                      </Typography.Text>
                       {!activeClassicalDemoResult ? (
                         <Typography.Paragraph type="secondary" className={styles.cardDescription}>
                           {t("nlpConfig.demo.clickRunClassicalHint")}
                         </Typography.Paragraph>
                       ) : (
                         <>
-                          <div className={styles.demoMetaGrid}>
-                            <div className={styles.demoMetaItem}><span>任务状态</span><Tag color={resolveTagColor(activeClassicalDemoResult.status)}>{activeClassicalDemoResult.reason_code}</Tag></div>
-                            <div className={styles.demoMetaItem}><span>当前任务</span><span>{activeClassicalDemoResult.task_key}</span></div>
-                            <div className={styles.demoMetaItem}><span>使用模型</span><span>{activeClassicalDemoResult.resolved_model || t("nlpConfig.demo.empty")}</span></div>
-                            <div className={styles.demoMetaItem}><span>{t("nlpConfig.telemetry.mode")}</span><span>{t("nlpConfig.telemetry.classicalSingleModel")}</span></div>
-                            <div className={styles.demoMetaItem}><span>文本风格</span><span>{activeClassicalDemoResult.detected_style}</span></div>
-                            <div className={styles.demoMetaItem}><span>识别分值</span><span>{activeClassicalDemoResult.detection_score}</span></div>
-                            <div className={styles.demoMetaItem}><span>总耗时</span><span>{activeClassicalDemoResult.duration_ms} ms</span></div>
-                            <div className={styles.demoMetaItem}><span>预热状态</span><span>{activeClassicalDemoResult.preload_status || "未预热"}</span></div>
-                          </div>
                           <div
                             className={styles.demoInteractiveArea}
                             tabIndex={0}
@@ -1937,9 +1921,6 @@ function NlpPage() {
                               {t("nlpConfig.demo.currentTokenCount", { count: activeClassicalResultTokens.length })}
                             </Typography.Text>
                           ) : null}
-                          <Typography.Paragraph className={styles.operationOutput}>
-                            {t("nlpConfig.demo.rules")}: {(activeClassicalDemoResult.matched_rules || []).join(", ") || t("nlpConfig.demo.none")}
-                          </Typography.Paragraph>
                           <Collapse
                             ghost
                             items={[
@@ -1948,6 +1929,19 @@ function NlpPage() {
                                 label: t("nlpConfig.demo.advancedInfo"),
                                 children: (
                                   <>
+                                    <div className={styles.demoMetaGrid}>
+                                      <div className={styles.demoMetaItem}><span>任务状态</span><Tag color={resolveTagColor(activeClassicalDemoResult.status)}>{activeClassicalDemoResult.reason_code}</Tag></div>
+                                      <div className={styles.demoMetaItem}><span>当前任务</span><span>{activeClassicalDemoResult.task_key}</span></div>
+                                      <div className={styles.demoMetaItem}><span>使用模型</span><span>{activeClassicalDemoResult.resolved_model || t("nlpConfig.demo.empty")}</span></div>
+                                      <div className={styles.demoMetaItem}><span>{t("nlpConfig.telemetry.mode")}</span><span>{t("nlpConfig.telemetry.classicalSingleModel")}</span></div>
+                                      <div className={styles.demoMetaItem}><span>文本风格</span><span>{activeClassicalDemoResult.detected_style}</span></div>
+                                      <div className={styles.demoMetaItem}><span>识别分值</span><span>{activeClassicalDemoResult.detection_score}</span></div>
+                                      <div className={styles.demoMetaItem}><span>总耗时</span><span>{activeClassicalDemoResult.duration_ms} ms</span></div>
+                                      <div className={styles.demoMetaItem}><span>预热状态</span><span>{activeClassicalDemoResult.preload_status || "未预热"}</span></div>
+                                    </div>
+                                    <Typography.Paragraph className={styles.operationOutput}>
+                                      {t("nlpConfig.demo.rules")}: {(activeClassicalDemoResult.matched_rules || []).join(", ") || t("nlpConfig.demo.none")}
+                                    </Typography.Paragraph>
                                     <div className={styles.demoMetaGrid}>
                                       <div className={styles.demoMetaItem}><span>{t("nlpConfig.telemetry.sidecarTotal")}</span><span>{activeClassicalDemoResult.sidecar_elapsed_ms ?? 0} ms</span></div>
                                       <div className={styles.demoMetaItem}><span>{t("nlpConfig.telemetry.traceTotal")}</span><span>{activeClassicalDemoResult.sidecar_trace_elapsed_ms ?? 0} ms</span></div>
