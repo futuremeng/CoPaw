@@ -148,6 +148,7 @@ BUILTIN_QA_AGENT_NAME = "QA Agent"
 BUILTIN_QA_AGENT_SKILL_NAMES: tuple[str, ...] = (
     "guidance",
     "QA_source_index",
+    "nlp",
 )
 
 # CoPaw-era builtin QA; may remain in config.json — disabled when the current

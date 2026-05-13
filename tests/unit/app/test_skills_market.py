@@ -4,15 +4,27 @@
 from pathlib import Path
 
 import pytest
+from fastapi import FastAPI
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
+import qwenpaw.app.routers.skills as skills_router_module
 
-from copaw.app.routers.skills import (
+from qwenpaw.app.routers.skills import (
     SkillsMarketPayload,
     _extract_market_items,
     _generate_market_index_from_directory,
     _payload_to_market_config,
+    router,
 )
-from copaw.config.config import SkillMarketSpec
+from qwenpaw.config.config import SkillMarketSpec
+from qwenpaw.exceptions import SkillsError
+
+
+@pytest.fixture
+def skills_api_client() -> TestClient:
+    app = FastAPI()
+    app.include_router(router)
+    return TestClient(app)
 
 
 def test_payload_to_market_config_normalizes_owner_repo_url() -> None:
@@ -133,3 +145,28 @@ def test_extract_market_items_builds_install_url_with_branch_and_path() -> None:
         == "https://github.com/example/skills/tree/dev/skills/python-dev"
     )
     assert items[0].description == "Python 开发技能"
+
+
+def test_import_pool_builtins_returns_400_on_skills_error(
+    skills_api_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _raise_skills_error(*_args, **_kwargs):
+        raise SkillsError("Unknown builtin skill(s): nlp")
+
+    monkeypatch.setattr(
+        skills_router_module,
+        "import_builtin_skills",
+        _raise_skills_error,
+    )
+
+    response = skills_api_client.post(
+        "/skills/pool/import-builtin",
+        json={
+            "imports": [{"skill_name": "nlp", "language": "zh"}],
+            "overwrite_conflicts": False,
+        },
+    )
+
+    assert response.status_code == 400
+    assert "Unknown builtin skill" in response.json()["detail"]

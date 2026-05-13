@@ -1813,10 +1813,13 @@ async def import_pool_builtins(
         if body.imports
         else [{"skill_name": skill_name} for skill_name in body.skill_names]
     )
-    result = import_builtin_skills(
-        imports,
-        overwrite_conflicts=body.overwrite_conflicts,
-    )
+    try:
+        result = import_builtin_skills(
+            imports,
+            overwrite_conflicts=body.overwrite_conflicts,
+        )
+    except (ValueError, AppBaseException) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if result.get("conflicts") and not body.overwrite_conflicts:
         raise HTTPException(status_code=409, detail=result)
     return result

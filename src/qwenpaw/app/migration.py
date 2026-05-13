@@ -862,6 +862,19 @@ def _do_ensure_builtin_agents(spec_ids: list[str] | None = None) -> None:
                 changed = True
             if changed:
                 save_config(config)
+
+            try:
+                _initialize_agent_workspace(
+                    workspace,
+                    skill_names=list(spec.skill_names),
+                    builtin_template_key=spec.template_key,
+                )
+            except Exception:
+                logger.warning(
+                    "Failed to sync builtin workspace defaults for %s",
+                    spec.id,
+                    exc_info=True,
+                )
             continue
 
         workspace.mkdir(parents=True, exist_ok=True)
