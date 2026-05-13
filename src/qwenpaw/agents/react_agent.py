@@ -28,7 +28,7 @@ from .prompt import (
     build_system_prompt_from_working_dir,
     get_active_model_supports_multimodal,
 )
-from .skills_manager import (
+from .skill_system import (
     apply_skill_config_env_overrides,
     ensure_skills_initialized,
     get_working_skills_dir,
@@ -1467,6 +1467,9 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
         set_current_focus_dir(self._focus_dir)
         set_current_recent_max_bytes(
             self._agent_config.running.tool_result_compact.recent_max_bytes,
+        )
+        set_current_shell_command_executable(
+            self._agent_config.running.shell_command_executable or None,
         )
 
         # Process file and media blocks in messages

@@ -68,7 +68,8 @@
     "debug": "Отладка",
     "plugins": "Плагины",
     "acp": "ACP",
-    "backups": "Резервные копии"
+    "backups": "Резервные копии",
+    "pluginManager": "Менеджер плагинов"
   },
   "debug": {
     "title": "Отладка",
@@ -759,7 +760,34 @@
     "noTools": "На этом MCP сервере нет доступных инструментов",
     "toolsLoadError": "Не удалось загрузить инструменты с MCP сервера",
     "toolsConnecting": "MCP сервер подключается, попробуйте через некоторое время",
-    "toolSchema": "Схема ввода"
+    "toolSchema": "Схема ввода",
+    "oauth": {
+      "enableOAuth": "Использовать OAuth авторизацию",
+      "manage": "OAuth",
+      "authorized": "Авторизован",
+      "notAuthorized": "Не авторизован",
+      "expired": "Токен истёк",
+      "failed": "Ошибка авторизации",
+      "waiting": "Ожидание авторизации...",
+      "authorize": "Авторизовать",
+      "reauthorize": "Переавторизовать",
+      "revoke": "Отозвать",
+      "startFailed": "Не удалось запустить OAuth",
+      "authFailed": "OAuth авторизация не удалась",
+      "popupBlocked": "Всплывающее окно заблокировано браузером. Разрешите всплывающие окна и повторите попытку.",
+      "windowClosed": "Окно авторизации закрыто. Повторите попытку.",
+      "noUrl": "Сначала введите URL сервера",
+      "noClientKey": "Сначала создайте клиент",
+      "showAdvanced": "Дополнительные параметры",
+      "hideAdvanced": "Скрыть параметры",
+      "clientId": "Client ID (необязательно)",
+      "clientIdPlaceholder": "Оставьте пустым для динамической регистрации",
+      "scope": "Scope (необязательно)",
+      "scopePlaceholder": "openid profile email",
+      "authEndpoint": "Authorization Endpoint (переопределить)",
+      "tokenEndpoint": "Token Endpoint (переопределить)",
+      "endpointHint": "Оставьте пустым для автообнаружения. Заполните для ручного указания."
+    }
   },
   "heartbeat": {
     "title": "Пульс",
@@ -1123,7 +1151,11 @@
   "modelSelector": {
     "selectModel": "Выбрать модель",
     "noConfiguredModels": "Нет настроенных моделей",
-    "switchFailed": "Не удалось переключить модель"
+    "switchFailed": "Не удалось переключить модель",
+    "searchModels": "Поиск моделей...",
+    "noModelsFound": "Подходящие модели не найдены",
+    "free": "Бесплатно",
+    "vision": "Видение"
   },
   "models": {
     "llmConfiguration": "Конфигурация LLM",
@@ -1465,6 +1497,9 @@
     "shellCommandTimeoutPlaceholder": "Введите тайм-аут",
     "shellCommandTimeoutRequired": "Тайм-аут shell-команды обязателен",
     "shellCommandTimeoutMin": "Тайм-аут shell-команды должен быть не менее 1 секунды",
+    "shellCommandExecutable": "Исполняемый файл shell",
+    "shellCommandExecutableTooltip": "Путь к shell, используемому execute_shell_command. Linux/macOS: например, /bin/bash, /bin/zsh. Windows: поддерживаются powershell.exe, pwsh.exe или POSIX-совместимые shell (например, Git Bash). Если пусто, используется переменная окружения $SHELL, затем платформенный shell по умолчанию (/bin/sh для Unix, cmd.exe для Windows).",
+    "shellCommandExecutablePlaceholder": "напр. /bin/bash или powershell.exe (пусто = автоопределение)",
     "planMode": "Режим планирования",
     "planModeTooltip": "Включите для использования /plan <описание> для структурированного планирования задач. При включении регистрируются инструменты планирования и отображается панель плана.",
     "maxInputLength": "Макс. длина входа",

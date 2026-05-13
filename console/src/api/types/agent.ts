@@ -102,6 +102,28 @@ export interface AutoTitleConfig {
   timeout_seconds: number;
 }
 
+export interface ADBPGMemoryConfig {
+  host: string;
+  port: number;
+  user: string;
+  password: string;
+  dbname: string;
+  llm_model: string;
+  llm_api_key: string;
+  llm_base_url: string;
+  embedding_model: string;
+  embedding_api_key: string;
+  embedding_base_url: string;
+  embedding_dims: number;
+  api_mode: string;
+  rest_api_key: string;
+  rest_base_url: string;
+  memory_isolation: boolean;
+  search_timeout: number;
+  pool_minconn: number;
+  pool_maxconn: number;
+}
+
 export interface AgentsRunningConfig {
   max_iters: number;
   auto_continue_on_text_only?: boolean;

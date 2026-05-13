@@ -18,6 +18,15 @@ router = APIRouter(prefix="/mcp", tags=["mcp"])
 logger = logging.getLogger(__name__)
 
 
+class MCPClientOAuthStatus(BaseModel):
+    """Summarised OAuth status returned in client info."""
+
+    authorized: bool = False
+    expires_at: float = 0.0
+    scope: str = ""
+    client_id: str = ""
+
+
 class MCPClientInfo(BaseModel):
     """MCP client information for API responses."""
 
@@ -56,6 +65,10 @@ class MCPClientInfo(BaseModel):
     cwd: str = Field(
         default="",
         description="Working directory for stdio MCP command",
+    )
+    oauth_status: Optional[MCPClientOAuthStatus] = Field(
+        default=None,
+        description="OAuth token status (None if OAuth not configured)",
     )
 
 
@@ -252,6 +265,7 @@ def _build_client_info(
         args=client.args,
         env=masked_env,
         cwd=client.cwd,
+        oauth_status=_build_oauth_status(client),
     )
 
 

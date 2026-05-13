@@ -47,6 +47,9 @@ const ProjectDetailPage = lazyImportWithRetry(
 const PipelinesPage = lazyImportWithRetry("../../pages/Agent/Pipelines");
 const DebugPage = lazyImportWithRetry("../../pages/Settings/Debug");
 const BackupsPage = lazyImportWithRetry("../../pages/Settings/Backups");
+const PluginManagerPage = lazyImportWithRetry(
+  "../../pages/Settings/PluginManager",
+);
 
 const { Content } = Layout;
 
@@ -76,6 +79,7 @@ const pathToKey: Record<string, string> = {
   "/nlp": "nlp",
   "/debug": "debug",
   "/backups": "backups",
+  "/plugin-manager": "plugin-manager",
 };
 
 export default function MainLayout() {
@@ -148,6 +152,10 @@ export default function MainLayout() {
                   <Route path="/nlp" element={<NlpPage />} />
                   <Route path="/debug" element={<DebugPage />} />
                   <Route path="/backups" element={<BackupsPage />} />
+                  <Route
+                    path="/plugin-manager"
+                    element={<PluginManagerPage />}
+                  />
 
                   {/* Plugin routes — dynamically injected at runtime */}
                   {pluginRoutes.map((route) => (

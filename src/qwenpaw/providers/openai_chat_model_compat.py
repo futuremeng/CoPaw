@@ -400,7 +400,7 @@ class OpenAIChatModelCompat(OpenAIChatModel):
             _sanitize_tool_schemas(schemas),
         )
 
-    # pylint: disable=too-many-branches
+    # pylint: disable=too-many-branches, too-many-statements
     async def _parse_openai_stream_response(
         self,
         start_datetime: datetime,

@@ -94,10 +94,10 @@
   font-weight: 500;
   color: rgba(20, 20, 19, 0.88);
   line-height: 24px;
-  max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
 }
 
 .typeBadge {
@@ -137,7 +137,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
   padding-top: 12px;
   margin-top: auto;
   border-top: 1px solid #f0f0f0;
@@ -145,9 +145,10 @@
 
 .toggleButton {
   flex: 1;
-  padding: 8px 16px;
+  min-width: 0;
+  padding: 6px 10px;
   border-radius: 7px;
-  font-size: 13px;
+  font-size: 12px;
   color: #666;
   background: transparent;
   border: 1px solid #d9d9d9;
@@ -162,9 +163,10 @@
 
 .deleteButton {
   flex: 1;
-  padding: 8px 16px;
+  min-width: 0;
+  padding: 6px 10px;
   border-radius: 7px;
-  font-size: 13px;
+  font-size: 12px;
   color: #ff4d4f;
   background: transparent;
   border: 1px solid #d9d9d9;
@@ -229,7 +231,7 @@
 
 .mcpGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
   gap: 16px;
   padding: 16px;
 }
@@ -280,9 +282,10 @@
 
 .toolsButton {
   flex: 1;
-  padding: 8px 16px;
+  min-width: 0;
+  padding: 6px 10px;
   border-radius: 7px;
-  font-size: 13px;
+  font-size: 12px;
   color: #1677ff;
   background: transparent;
   border: 1px solid #d9d9d9;

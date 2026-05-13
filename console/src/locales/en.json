@@ -70,7 +70,8 @@
     "nlp": "NLP",
     "debug": "Debug",
     "plugins": "Plugins",
-    "backups": "Backups"
+    "backups": "Backups",
+    "pluginManager": "Plugin Manager"
   },
   "debug": {
     "title": "Debug",
@@ -1117,7 +1118,56 @@
     "noTools": "No tools available from this MCP server",
     "toolsLoadError": "Failed to load tools from MCP server",
     "toolsConnecting": "MCP server is still connecting, please try again in a moment",
-    "toolSchema": "Input Schema"
+    "toolSchema": "Input Schema",
+    "tab": {
+      "json": "JSON Import",
+      "form": "Form Mode"
+    },
+    "form": {
+      "key": "Client Key",
+      "keyPlaceholder": "my-mcp-server",
+      "keyRequired": "Client key is required",
+      "name": "Display Name",
+      "namePlaceholder": "My MCP Server",
+      "nameRequired": "Display name is required",
+      "transport": "Transport",
+      "url": "Server URL",
+      "urlRequired": "URL is required for remote MCP servers",
+      "command": "Command",
+      "commandRequired": "Command is required for stdio transport",
+      "args": "Arguments (space or newline separated)",
+      "description": "Description",
+      "descriptionPlaceholder": "Optional description",
+      "env": "Environment Variables",
+      "envPlaceholder": "KEY=VALUE (one per line)"
+    },
+    "oauth": {
+      "enableOAuth": "Use OAuth Authorization",
+      "manage": "OAuth",
+      "authorized": "Authorized",
+      "notAuthorized": "Not Authorized",
+      "expired": "Token Expired",
+      "failed": "Authorization Failed",
+      "waiting": "Waiting for authorization...",
+      "authorize": "Authorize",
+      "reauthorize": "Re-authorize",
+      "revoke": "Revoke",
+      "startFailed": "Failed to start OAuth flow",
+      "authFailed": "OAuth authorization failed",
+      "popupBlocked": "Popup was blocked by the browser. Please allow popups and try again.",
+      "windowClosed": "Authorization window was closed. Please try again.",
+      "noUrl": "Please enter a server URL first",
+      "noClientKey": "Please create the client first",
+      "showAdvanced": "Advanced options",
+      "hideAdvanced": "Hide advanced options",
+      "clientId": "Client ID (optional)",
+      "clientIdPlaceholder": "Leave empty to use Dynamic Client Registration",
+      "scope": "Scope (optional)",
+      "scopePlaceholder": "openid profile email",
+      "authEndpoint": "Authorization Endpoint (override)",
+      "tokenEndpoint": "Token Endpoint (override)",
+      "endpointHint": "Leave empty to auto-discover from the MCP server. Fill in to skip discovery."
+    }
   },
   "heartbeat": {
     "title": "Heartbeat",
@@ -1422,7 +1472,11 @@
   "modelSelector": {
     "selectModel": "Select model",
     "noConfiguredModels": "No configured models",
-    "switchFailed": "Failed to switch model"
+    "switchFailed": "Failed to switch model",
+    "searchModels": "Search models...",
+    "noModelsFound": "No matching models found",
+    "free": "Free",
+    "vision": "Vision"
   },
   "tokenUsage": {
     "title": "Token Usage",
@@ -1844,6 +1898,9 @@
     "shellCommandTimeoutPlaceholder": "Enter timeout",
     "shellCommandTimeoutRequired": "Shell command timeout is required",
     "shellCommandTimeoutMin": "Shell command timeout must be at least 1 second",
+    "shellCommandExecutable": "Shell Executable",
+    "shellCommandExecutableTooltip": "Path to the shell used by execute_shell_command. Linux/macOS: e.g. /bin/bash, /bin/zsh. Windows: supports powershell.exe, pwsh.exe, or POSIX-like shells such as Git Bash. When empty, falls back to the $SHELL environment variable, then to the platform default (/bin/sh on Unix, cmd.exe on Windows).",
+    "shellCommandExecutablePlaceholder": "e.g. /bin/bash or powershell.exe (empty = auto-detect)",
     "planMode": "Plan Mode",
     "planModeTooltip": "Enable plan mode to use /plan <description> for structured task planning. When enabled, plan tools are registered and the plan panel becomes available.",
     "maxInputLength": "Max Input Length",
