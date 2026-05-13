@@ -48,69 +48,72 @@ type NlpDemoMeta = {
   sidecar_trace_stage_ms?: Record<string, number>;
 };
 
+const UNIFIED_DEMO_SAMPLE = "北京九录科技有限公司成立于2022年9月，由孟繁永创立，是一家专注于数字出版基础技术研发的创新型企业。公司发起并维护多个开源项目，成功构建了轻量型知识服务生产和发布平台，并开发了面向知识生产和加工的垂直智能体 Copaw，致力于以智能化技术推动知识服务领域的全流程数字化转型。";
+const CLASSICAL_DEMO_SAMPLE = "赫赫九录，肇基京华。\n孟氏创立，岁在孟秋。\n专攻数术，出版维纲。\n开源布道，众志共襄。\n轻量之台，知识是扬。\n依彼神基，巧制 Copaw。\n智能为辅，编修有方。\n赋能全域，流泽孔长。";
+
 const DEMO_METHODS: DemoMethod[] = [
   {
     key: "tokenize",
     backendTaskKey: "tokenize",
     title: "智能分词",
     placeholder: "输入一句中文，例如：微软发布新模型。",
-    examples: ["微软发布新模型。", "吾之道也。"],
+    examples: [UNIFIED_DEMO_SAMPLE],
   },
   {
     key: "nerMsra",
     backendTaskKey: "ner",
     title: "实体识别",
     placeholder: "输入一句中文，识别人名、地名、机构名。",
-    examples: ["微软在北京发布Copaw。", "阿里巴巴位于杭州。"],
+    examples: [UNIFIED_DEMO_SAMPLE],
   },
   {
     key: "pos_ctb",
     backendTaskKey: "pos_ctb",
     title: "词性分析（CTB）",
     placeholder: "输入一句中文，查看每个词的词性。",
-    examples: ["微软发布新模型。", "我们在北京举行会议。"],
+    examples: [UNIFIED_DEMO_SAMPLE],
   },
   {
     key: "pos_pku",
     backendTaskKey: "pos_pku",
     title: "词性分析（PKU）",
     placeholder: "输入一句中文，查看每个词的词性。",
-    examples: ["微软发布新模型。", "我们在北京举行会议。"],
+    examples: [UNIFIED_DEMO_SAMPLE],
   },
   {
     key: "pos_863",
     backendTaskKey: "pos_863",
     title: "词性分析（863）",
     placeholder: "输入一句中文，查看每个词的词性。",
-    examples: ["微软发布新模型。", "我们在北京举行会议。"],
+    examples: [UNIFIED_DEMO_SAMPLE],
   },
   {
     key: "dep",
     backendTaskKey: "dep",
     title: "句法依存",
     placeholder: "输入一句中文，查看词语之间的句法关系。",
-    examples: ["微软发布新模型。", "我们在北京举行会议。", "吾之道也。"],
+    examples: [UNIFIED_DEMO_SAMPLE],
   },
   {
     key: "sdp",
     backendTaskKey: "sdp",
     title: "语义依存",
     placeholder: "输入一句中文，查看语义层面的关系。",
-    examples: ["微软发布新模型。", "我们在北京举行会议。", "吾之道也。"],
+    examples: [UNIFIED_DEMO_SAMPLE],
   },
   {
     key: "srl",
     backendTaskKey: "srl",
     title: "语义角色",
     placeholder: "输入一句中文，查看谓词和角色关系。",
-    examples: ["微软发布新模型。", "我们在北京举行会议。", "吾之道也。"],
+    examples: [UNIFIED_DEMO_SAMPLE],
   },
   {
     key: "con",
     backendTaskKey: "con",
     title: "短语结构",
     placeholder: "输入一句中文，查看短语层级结构。",
-    examples: ["微软发布新模型。", "我们在北京举行会议。", "吾之道也。"],
+    examples: [UNIFIED_DEMO_SAMPLE],
   },
 ];
 
@@ -120,49 +123,49 @@ const CLASSICAL_DEMO_METHODS: DemoMethod[] = [
     backendTaskKey: "lzh_tok_fine",
     title: "古汉语分词（细分）",
     placeholder: "输入古汉语文本，例如：晋太元中，武陵人捕鱼为业。",
-    examples: ["晋太元中，武陵人捕鱼为业。", "司馬牛問君子", "吾之道也。"],
+    examples: [CLASSICAL_DEMO_SAMPLE],
   },
   {
     key: "lzh_tok_coarse",
     backendTaskKey: "lzh_tok_coarse",
     title: "古汉语分词（粗分）",
     placeholder: "输入古汉语文本进行粗分词，例如：司馬牛問君子。",
-    examples: ["司馬牛問君子", "晋太元中，武陵人捕鱼为业。", "吾之道也。"],
+    examples: [CLASSICAL_DEMO_SAMPLE],
   },
   {
     key: "lzh_lem",
     backendTaskKey: "lzh_lem",
     title: "古汉语词形还原（LEM）",
     placeholder: "输入古汉语文本进行词形还原，例如：晋太元中，武陵人捕鱼为业。",
-    examples: ["晋太元中，武陵人捕鱼为业。", "司馬牛問君子", "吾之道也。"],
+    examples: [CLASSICAL_DEMO_SAMPLE],
   },
   {
     key: "lzh_pos_upos",
     backendTaskKey: "lzh_pos_upos",
     title: "古汉语词性（UPOS）",
     placeholder: "输入古汉语文本进行 UPOS 词性标注。",
-    examples: ["晋太元中，武陵人捕鱼为业。", "司馬牛問君子", "吾之道也。"],
+    examples: [CLASSICAL_DEMO_SAMPLE],
   },
   {
     key: "lzh_pos_xpos",
     backendTaskKey: "lzh_pos_xpos",
     title: "古汉语词性（XPOS）",
     placeholder: "输入古汉语文本进行 XPOS 词性标注。",
-    examples: ["晋太元中，武陵人捕鱼为业。", "司馬牛問君子", "吾之道也。"],
+    examples: [CLASSICAL_DEMO_SAMPLE],
   },
   {
     key: "lzh_pos_pku",
     backendTaskKey: "lzh_pos_pku",
     title: "古汉语词性（PKU）",
     placeholder: "输入古汉语文本进行 PKU 词性标注。",
-    examples: ["晋太元中，武陵人捕鱼为业。", "司馬牛問君子", "吾之道也。"],
+    examples: [CLASSICAL_DEMO_SAMPLE],
   },
   {
     key: "lzh_dep",
     backendTaskKey: "lzh_dep",
     title: "古汉语依存句法",
     placeholder: "输入古汉语文本进行依存分析，例如：司馬牛問君子。",
-    examples: ["司馬牛問君子", "晋太元中，武陵人捕鱼为业。", "吾之道也。"],
+    examples: [CLASSICAL_DEMO_SAMPLE],
   },
 ];
 
@@ -351,9 +354,30 @@ function renderTokenRail(tokens: string[], activeTokenIndex?: number | null) {
   );
 }
 
-function getTokenListFromResult(taskKey: string, result: unknown): string[] {
-  if ((taskKey === "tokenize" || taskKey === "lzh_tok_fine" || taskKey === "lzh_tok_coarse") && Array.isArray(result)) {
+function resolveTokenResultList(taskKey: string, result: unknown): string[] {
+  if (Array.isArray(result)) {
     return result.map((item) => String(item || "")).filter(Boolean);
+  }
+  const record = asRecord(result);
+  if (!record) {
+    return [];
+  }
+  const keyCandidates =
+    taskKey === "lzh_tok_coarse"
+      ? ["tok/coarse", "tok/fine", "tok", "tokens", "result"]
+      : ["tok/fine", "tok/coarse", "tok", "tokens", "result"];
+  for (const key of keyCandidates) {
+    const value = record[key];
+    if (Array.isArray(value)) {
+      return value.map((item) => String(item || "")).filter(Boolean);
+    }
+  }
+  return [];
+}
+
+function getTokenListFromResult(taskKey: string, result: unknown): string[] {
+  if (taskKey === "tokenize" || taskKey === "lzh_tok_fine" || taskKey === "lzh_tok_coarse") {
+    return resolveTokenResultList(taskKey, result);
   }
   if ((taskKey === "dep" || taskKey === "sdp" || taskKey === "lzh_dep") && Array.isArray(result)) {
     return result
@@ -388,11 +412,11 @@ function getTokenListFromResult(taskKey: string, result: unknown): string[] {
 }
 
 function getSelectableCount(taskKey: string, result: unknown): number {
+  if (taskKey === "tokenize" || taskKey === "lzh_tok_fine" || taskKey === "lzh_tok_coarse") {
+    return resolveTokenResultList(taskKey, result).length;
+  }
   if (!Array.isArray(result)) {
     return 0;
-  }
-  if (taskKey === "tokenize" || taskKey === "lzh_tok_fine" || taskKey === "lzh_tok_coarse") {
-    return result.length;
   }
   if (taskKey === "ner" || taskKey === "dep" || taskKey === "sdp" || taskKey === "srl" || taskKey === "lzh_dep") {
     return result.length;
@@ -621,7 +645,7 @@ function renderResultByTask(
 ) {
   const highlightedRowIndex = hoveredRowIndex ?? activeRowIndex;
   if (taskKey === "tokenize" || taskKey === "lzh_tok_fine" || taskKey === "lzh_tok_coarse") {
-    const tokens = Array.isArray(result) ? result : [];
+    const tokens = resolveTokenResultList(taskKey, result);
     return (
       <>
         <div className={styles.demoTokenWrap}>
@@ -1165,13 +1189,35 @@ function NlpPage() {
     reason: "暂无状态信息",
   };
   const activeDemoResult = (demoResults[activeDemoMethod.backendTaskKey] || null) as NlpDemoMeta | null;
+  const resolveDisplayResult = (taskKey: string, result: NlpDemoMeta | null): unknown => {
+    if (!result) {
+      return undefined;
+    }
+    const primary = result.result;
+    const fallback = result.raw_result;
+    if (taskKey === "tokenize" || taskKey === "lzh_tok_fine" || taskKey === "lzh_tok_coarse") {
+      const primaryTokens = getTokenListFromResult(taskKey, primary);
+      if (primaryTokens.length > 0) {
+        return primary;
+      }
+      const fallbackTokens = getTokenListFromResult(taskKey, fallback);
+      if (fallbackTokens.length > 0) {
+        return fallback;
+      }
+    }
+    if ((primary === undefined || primary === null) && fallback !== undefined) {
+      return fallback;
+    }
+    return primary;
+  };
+  const activeDemoDisplayResult = resolveDisplayResult(activeDemoMethod.backendTaskKey, activeDemoResult);
   const activeSelectableCount = getSelectableCount(
     activeDemoMethod.backendTaskKey,
-    activeDemoResult?.result,
+    activeDemoDisplayResult,
   );
   const activeResultTokens = getTokenListFromResult(
     activeDemoMethod.backendTaskKey,
-    activeDemoResult?.result,
+    activeDemoDisplayResult,
   );
 
   const activeClassicalDemoMethod =
@@ -1184,13 +1230,17 @@ function NlpPage() {
   };
   const activeClassicalDemoResult =
     (demoResults[activeClassicalDemoMethod?.backendTaskKey || ""] || null) as NlpDemoMeta | null;
+  const activeClassicalDisplayResult = resolveDisplayResult(
+    activeClassicalDemoMethod?.backendTaskKey || "",
+    activeClassicalDemoResult,
+  );
   const activeClassicalSelectableCount = getSelectableCount(
     activeClassicalDemoMethod?.backendTaskKey || "",
-    activeClassicalDemoResult?.result,
+    activeClassicalDisplayResult,
   );
   const activeClassicalResultTokens = getTokenListFromResult(
     activeClassicalDemoMethod?.backendTaskKey || "",
-    activeClassicalDemoResult?.result,
+    activeClassicalDisplayResult,
   );
 
   const methodDetailByTaskKey: Record<string, { key: string; taskKey?: string; status: MethodStatus } | undefined> = {
@@ -1645,7 +1695,7 @@ function NlpPage() {
                           >
                             {renderResultByTask(
                               activeDemoMethod.backendTaskKey,
-                              activeDemoResult.result,
+                              activeDemoDisplayResult,
                               activeDemoInput,
                               nerEntityOnlyView,
                               activeDemoRowIndex,
@@ -1873,7 +1923,7 @@ function NlpPage() {
                           >
                             {renderResultByTask(
                               activeClassicalDemoMethod?.backendTaskKey || "tokenize",
-                              activeClassicalDemoResult.result,
+                              activeClassicalDisplayResult,
                               activeClassicalDemoInput,
                               false,
                               activeClassicalDemoRowIndex,
