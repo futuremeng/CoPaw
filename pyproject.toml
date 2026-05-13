@@ -67,6 +67,7 @@ include-package-data = true
     "security/tool_guard/rules/**",
     "security/skill_scanner/rules/**",
     "security/skill_scanner/data/**",
+    "website/public/docs/*.md",
 ]
 
 [build-system]

@@ -4,15 +4,17 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Union
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, Literal, Optional, Union
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from agentscope_runtime.engine.schemas.exception import ConfigurationException
 
-from ...config import get_heartbeat_config
+from ...config import get_heartbeat_config, get_dream_cron
+from ..inbox_store import append_event as append_inbox_event
 
 from ..console_push_store import append as push_store_append
 from .executor import CronExecutor
@@ -22,36 +24,14 @@ from .heartbeat import (
     parse_heartbeat_every,
     run_heartbeat_once,
 )
-from .models import CronJobSpec, CronJobState
+from .models import CronExecutionRecord, CronJobSpec, CronJobState
 from .repo.base import BaseJobRepository
 
 HEARTBEAT_JOB_ID = "_heartbeat"
+DREAM_JOB_ID = "_dream"
+CRON_HISTORY_LIMIT = 50
 
 logger = logging.getLogger(__name__)
-
-
-def validate_cron_trigger(cron: str, timezone: str = "UTC") -> None:
-    """Validate that *cron* + *timezone* can build a valid APScheduler CronTrigger.
-
-    Raises:
-        ValueError: if the expression is structurally or semantically invalid.
-    """
-    parts = [p for p in cron.split() if p]
-    if len(parts) != 5:
-        raise ValueError(
-            f"cron must have 5 fields (minute hour day month weekday),"
-            f" got {len(parts)}: {cron!r}",
-        )
-    minute, hour, day, month, day_of_week = parts
-    # Let APScheduler be the authoritative validator; discard the object.
-    CronTrigger(
-        minute=minute,
-        hour=hour,
-        day=day,
-        month=month,
-        day_of_week=day_of_week,
-        timezone=timezone,
-    )
 
 
 @dataclass
@@ -81,6 +61,7 @@ class CronManager:
 
         self._lock = asyncio.Lock()
         self._states: Dict[str, CronJobState] = {}
+        self._history: Dict[str, list[CronExecutionRecord]] = {}
         self._rt: Dict[str, _Runtime] = {}
         self._started = False
 
@@ -89,6 +70,10 @@ class CronManager:
             if self._started:
                 return
             jobs_file = await self._repo.load()
+            valid_job_ids = {
+                job.id for job in jobs_file.jobs if job.id is not None
+            }
+            await self._repo.prune_orphan_history(valid_job_ids)
 
             self._scheduler.start()
             for job in jobs_file.jobs:
@@ -97,10 +82,13 @@ class CronManager:
                 except Exception as e:  # pylint: disable=broad-except
                     logger.warning(
                         "Skipping invalid cron job during startup: "
-                        "job_id=%s name=%s cron=%s error=%s",
+                        "job_id=%s name=%s schedule_type=%s cron=%s "
+                        "run_at=%s error=%s",
                         job.id,
                         job.name,
+                        job.schedule.type,
                         job.schedule.cron,
+                        job.schedule.run_at,
                         repr(e),
                     )
                     if job.enabled:
@@ -114,11 +102,6 @@ class CronManager:
                             job.id,
                             job.name,
                         )
-                    st = self._states.get(job.id, CronJobState())
-                    st.last_status = "error"
-                    st.last_error = f"invalid schedule: {e}"
-                    self._states[job.id] = st
-                    self._rt.pop(job.id, None)
 
             # Heartbeat: scheduled job when enabled in config
             hb = get_heartbeat_config(self._agent_id)
@@ -135,6 +118,30 @@ class CronManager:
                     self._agent_id,
                     hb.every,
                 )
+
+            # Dream-based memory optimization: cron job from config
+            dream_cron = get_dream_cron(self._agent_id)
+            if dream_cron:
+                try:
+                    trigger = CronTrigger.from_crontab(
+                        dream_cron,
+                        timezone=self._scheduler.timezone,
+                    )
+                    self._scheduler.add_job(
+                        self._dream_callback,
+                        trigger=trigger,
+                        id=DREAM_JOB_ID,
+                        replace_existing=True,
+                    )
+                    logger.info(
+                        f"Dream-based memory optimization job scheduled for "
+                        f"agent {self._agent_id}: cron={dream_cron}",
+                    )
+                except Exception as e:  # pylint: disable=broad-except
+                    logger.error(
+                        f"Failed to schedule dream-based memory optimization"
+                        f"for  agent {self._agent_id}: error={repr(e)}",
+                    )
 
             self._started = True
 
@@ -156,11 +163,14 @@ class CronManager:
     def get_state(self, job_id: str) -> CronJobState:
         return self._states.get(job_id, CronJobState())
 
+    async def get_history(self, job_id: str) -> list[CronExecutionRecord]:
+        if job_id not in self._history:
+            self._history[job_id] = await self._repo.get_history(job_id)
+        return self._history[job_id]
+
     # ----- write/control -----
 
     async def create_or_replace_job(self, spec: CronJobSpec) -> None:
-        # Validate before touching storage so invalid cron is never persisted.
-        validate_cron_trigger(spec.schedule.cron, spec.schedule.timezone)
         async with self._lock:
             await self._repo.upsert_job(spec)
             if self._started:
@@ -171,6 +181,8 @@ class CronManager:
             if self._started and self._scheduler.get_job(job_id):
                 self._scheduler.remove_job(job_id)
             self._states.pop(job_id, None)
+            self._history.pop(job_id, None)
+            await self._repo.delete_history(job_id)
             self._rt.pop(job_id, None)
             return await self._repo.delete_job(job_id)
 
@@ -218,6 +230,61 @@ class CronManager:
             else:
                 logger.info("heartbeat disabled, job removed")
 
+    async def reschedule_dream(self) -> None:
+        """Reschedule the dream-based memory optimization job based on
+        configuration.
+
+        Note: CronManager should always be started during workspace
+        initialization, so this method assumes self._started is True.
+        """
+        async with self._lock:
+            if not self._started:
+                logger.warning(
+                    f"CronManager not started for agent {self._agent_id}, "
+                    "cannot reschedule dream-based memory optimization."
+                    "This should not happen.",
+                )
+                return
+
+            # Check if dream-based memory optimization is enabled in config
+            dream_cron = get_dream_cron(self._agent_id)
+
+            # Remove existing job if any
+            if self._scheduler.get_job(DREAM_JOB_ID):
+                self._scheduler.remove_job(DREAM_JOB_ID)
+                logger.info(
+                    "Dream-based memory optimization job removed for "
+                    f"agent {self._agent_id}",
+                )
+
+            # Add new job if cron expression is valid
+            if dream_cron:
+                try:
+                    trigger = CronTrigger.from_crontab(
+                        dream_cron,
+                        timezone=self._scheduler.timezone,
+                    )
+                    self._scheduler.add_job(
+                        self._dream_callback,
+                        trigger=trigger,
+                        id=DREAM_JOB_ID,
+                        replace_existing=True,
+                    )
+                    logger.info(
+                        "Dream-based memory optimization job rescheduled"
+                        f"for agent {self._agent_id}: cron={dream_cron}",
+                    )
+                except Exception as e:  # pylint: disable=broad-except
+                    logger.error(
+                        "Failed to reschedule dream-based memory  "
+                        f"optimization for agent {self._agent_id}: "
+                        f"error={repr(e)}",
+                    )
+            else:
+                logger.info(
+                    "dream-based memory optimization disabled, job removed",
+                )
+
     async def run_job(self, job_id: str) -> None:
         """Trigger a job to run in the background (fire-and-forget).
 
@@ -238,7 +305,10 @@ class CronManager:
             (job.dispatch.target.session_id or "")[:40],
         )
         task = asyncio.create_task(
-            self._execute_once(job, propagate_exceptions=True),
+            self._execute_once(
+                job,
+                trigger="manual",
+            ),
             name=f"cron-run-{job_id}",
         )
         task.add_done_callback(lambda t: self._task_done_cb(t, job))
@@ -271,8 +341,9 @@ class CronManager:
     # ----- internal -----
 
     async def _register_or_update(self, spec: CronJobSpec) -> None:
-        # Validate and build trigger first. If cron is invalid, fail fast
+        # Validate and build trigger first. If schedule is invalid, fail fast
         # without mutating scheduler/runtime state.
+        assert spec.id is not None, "Job must have an id"
         trigger = self._build_trigger(spec)
 
         # per-job concurrency semaphore
@@ -302,8 +373,40 @@ class CronManager:
         st.next_run_at = aps_job.next_run_time if aps_job else None
         self._states[spec.id] = st
 
-    def _build_trigger(self, spec: CronJobSpec) -> CronTrigger:
+    def _build_trigger(
+        self,
+        spec: CronJobSpec,
+    ) -> Union[CronTrigger, DateTrigger, IntervalTrigger]:
+        if spec.schedule.type == "once":
+            assert spec.schedule.run_at is not None
+            if spec.schedule.repeat_every_days:
+                end_date: datetime | None = None
+                if (
+                    spec.schedule.repeat_end_type == "until"
+                    and spec.schedule.repeat_until is not None
+                ):
+                    end_date = spec.schedule.repeat_until
+                elif (
+                    spec.schedule.repeat_end_type == "count"
+                    and spec.schedule.repeat_count is not None
+                ):
+                    end_date = spec.schedule.run_at + timedelta(
+                        days=spec.schedule.repeat_every_days
+                        * (spec.schedule.repeat_count - 1),
+                    )
+                return IntervalTrigger(
+                    days=spec.schedule.repeat_every_days,
+                    start_date=spec.schedule.run_at,
+                    end_date=end_date,
+                    timezone=spec.schedule.timezone,
+                )
+            return DateTrigger(
+                run_date=spec.schedule.run_at,
+                timezone=spec.schedule.timezone,
+            )
+
         # enforce 5 fields (no seconds)
+        assert spec.schedule.cron is not None
         parts = [p for p in spec.schedule.cron.split() if p]
         if len(parts) != 5:
             raise ConfigurationException(
@@ -350,10 +453,10 @@ class CronManager:
         if not job:
             return
 
-        # Scheduled jobs should record failure in runtime state/logs
-        # without bubbling to APScheduler as an executor-level exception.
-        await self._execute_once(job, propagate_exceptions=False)
-
+        await self._execute_once(
+            job,
+            trigger="scheduled",
+        )
         # refresh next_run
         aps_job = self._scheduler.get_job(job_id)
         st = self._states.get(job_id, CronJobState())
@@ -380,12 +483,26 @@ class CronManager:
         except Exception:  # pylint: disable=broad-except
             logger.exception("heartbeat run failed")
 
+    async def _dream_callback(self) -> None:
+        """Run one dream-based memory optimization task."""
+        try:
+            # Run dream task
+            await self._runner.memory_manager.dream()
+            logger.debug("Dream task executed successfully")
+        except asyncio.CancelledError:
+            logger.info("Dream task was cancelled")
+            raise
+        except Exception as e:  # pylint: disable=broad-except
+            logger.error(f"Failed to execute dream task: {e}", exc_info=True)
+
+    # pylint: disable-next=too-many-branches,too-many-statements
     async def _execute_once(
         self,
         job: CronJobSpec,
         *,
-        propagate_exceptions: bool = False,
+        trigger: Literal["scheduled", "manual"] = "scheduled",
     ) -> None:
+        assert job.id is not None, "Job must have an id"
         rt = self._rt.get(job.id)
         if not rt:
             rt = _Runtime(sem=asyncio.Semaphore(job.runtime.max_concurrency))
@@ -395,11 +512,26 @@ class CronManager:
             st = self._states.get(job.id, CronJobState())
             st.last_status = "running"
             self._states[job.id] = st
+            execution_result: dict[str, Any] = {}
+            execution_succeeded = False
+            delivery_failed = False
 
             try:
-                await self._executor.execute(job)
-                st.last_status = "success"
-                st.last_error = None
+                execution_result = await self._executor.execute(job)
+                execution_succeeded = True
+                delivery_failed = (
+                    execution_result.get("delivery_status") == "failed"
+                )
+                if delivery_failed:
+                    st.last_status = "error"
+                    delivery_error = (
+                        execution_result.get("delivery_error")
+                        or "delivery failed"
+                    )
+                    st.last_error = f"delivery failed: {delivery_error}"
+                else:
+                    st.last_status = "success"
+                    st.last_error = None
                 logger.info(
                     "cron _execute_once: job_id=%s status=success",
                     job.id,
@@ -420,8 +552,79 @@ class CronManager:
                     job.id,
                     repr(e),
                 )
-                if propagate_exceptions:
-                    raise
+                raise
             finally:
                 st.last_run_at = datetime.now(timezone.utc)
                 self._states[job.id] = st
+                record = CronExecutionRecord(
+                    run_at=st.last_run_at,
+                    status=st.last_status or "error",
+                    error=st.last_error,
+                    trigger=trigger,
+                )
+                records = await self._repo.append_history(
+                    job.id,
+                    record,
+                    limit=CRON_HISTORY_LIMIT,
+                )
+                self._history[job.id] = records
+                if execution_succeeded:
+                    if delivery_failed:
+                        try:
+                            await append_inbox_event(
+                                agent_id=self._agent_id,
+                                source_type="cron",
+                                source_id=job.id,
+                                event_type="cron_delivery_failed_fallback",
+                                status="error",
+                                severity="error",
+                                title=f"Cron result not delivered: {job.name}",
+                                body=(
+                                    "Task executed successfully, "
+                                    "but channel delivery failed."
+                                ),
+                                payload={
+                                    "job_id": job.id,
+                                    "job_name": job.name,
+                                    "task_type": job.task_type,
+                                    "trigger": trigger,
+                                    "run_id": execution_result.get("run_id"),
+                                    "delivery_error": execution_result.get(
+                                        "delivery_error",
+                                    ),
+                                },
+                            )
+                        except Exception:  # pylint: disable=broad-except
+                            logger.exception(
+                                "failed to append cron fallback event",
+                            )
+                    elif job.save_result_to_inbox:
+                        if job.task_type == "text":
+                            body = (job.text or "").strip()
+                        else:
+                            body = "Agent cron task finished successfully."
+                        try:
+                            await append_inbox_event(
+                                agent_id=self._agent_id,
+                                source_type="cron",
+                                source_id=job.id,
+                                event_type="cron_result",
+                                status="success",
+                                severity="info",
+                                title=f"Cron result: {job.name}",
+                                body=body,
+                                payload={
+                                    "job_id": job.id,
+                                    "job_name": job.name,
+                                    "task_type": job.task_type,
+                                    "trigger": trigger,
+                                    "run_id": execution_result.get("run_id"),
+                                    "save_result_to_inbox": (
+                                        job.save_result_to_inbox
+                                    ),
+                                },
+                            )
+                        except Exception:  # pylint: disable=broad-except
+                            logger.exception(
+                                "failed to append cron result inbox event",
+                            )
