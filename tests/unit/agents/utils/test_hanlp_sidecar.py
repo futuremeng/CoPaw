@@ -197,6 +197,7 @@ def test_auto_install_hanlp_sidecar_uses_python_fallback(monkeypatch, tmp_path):
     monkeypatch.setattr(hanlp_sidecar_module, "WORKING_DIR", tmp_path)
     monkeypatch.setattr(hanlp_sidecar_module, "load_config", lambda: config)
     monkeypatch.setattr(hanlp_sidecar_module, "save_config", lambda _config: None)
+    monkeypatch.setattr(hanlp_sidecar_module, "_is_python_310", lambda _python_executable: False)
     monkeypatch.setattr(hanlp_sidecar_module, "_build_status", status_sequence)
     monkeypatch.setattr(
         hanlp_sidecar_module,
@@ -215,7 +216,7 @@ def test_auto_install_hanlp_sidecar_uses_python_fallback(monkeypatch, tmp_path):
 
     def fake_run_command(command):
         command_text = " ".join(command)
-        if command[-2:] == ["install", "hanlp"]:
+        if command[-2:] == ["install", "hanlp[full]"]:
             return {
                 "command": command_text,
                 "ok": True,
@@ -252,7 +253,7 @@ def test_auto_install_hanlp_sidecar_uses_python_fallback(monkeypatch, tmp_path):
             "name": "install-hanlp",
             "attempted": True,
             "installer": "pip",
-            "command": f"{python_path} -m pip install hanlp",
+            "command": f"{python_path} -m pip install hanlp[full]",
             "ok": True,
             "output": "installed",
             "returncode": 0,
@@ -271,6 +272,7 @@ def test_auto_install_hanlp_sidecar_reports_missing_bootstrap_prereqs(monkeypatc
     }
 
     monkeypatch.setattr(hanlp_sidecar_module, "load_config", lambda: config)
+    monkeypatch.setattr(hanlp_sidecar_module, "_is_python_310", lambda _python_executable: False)
     monkeypatch.setattr(hanlp_sidecar_module, "_build_status", lambda _config: status)
     monkeypatch.setattr(hanlp_sidecar_module, "_ensure_uv_available", lambda operations: "")
     monkeypatch.setattr(hanlp_sidecar_module, "_find_supported_python_executable", lambda: "")
@@ -279,8 +281,8 @@ def test_auto_install_hanlp_sidecar_reports_missing_bootstrap_prereqs(monkeypatc
 
     assert result["success"] is False
     assert result["manual_steps"] == [
-        "Automatic HanLP bootstrap could not find or install uv, and no compatible Python 3.6-3.9 interpreter was found.",
-        "Install uv or provide a Python 3.9 executable, then retry HanLP sidecar setup.",
+        "Automatic HanLP bootstrap could not find or install uv, and no compatible Python 3.6-3.10 interpreter was found.",
+        "Install uv or provide a Python 3.10 executable, then retry HanLP sidecar setup.",
     ]
     assert result["operations"] == []
 
@@ -304,6 +306,7 @@ def test_auto_install_hanlp_sidecar_uses_uv_managed_environment(monkeypatch, tmp
     monkeypatch.setattr(hanlp_sidecar_module, "WORKING_DIR", tmp_path)
     monkeypatch.setattr(hanlp_sidecar_module, "load_config", lambda: config)
     monkeypatch.setattr(hanlp_sidecar_module, "save_config", lambda _config: None)
+    monkeypatch.setattr(hanlp_sidecar_module, "_is_python_310", lambda _python_executable: False)
     monkeypatch.setattr(hanlp_sidecar_module, "_build_status", status_sequence)
     monkeypatch.setattr(
         hanlp_sidecar_module,
@@ -367,3 +370,92 @@ def test_auto_install_hanlp_sidecar_uses_uv_managed_environment(monkeypatch, tmp
         "uv",
     ]
     assert config.knowledge.hanlp.python_executable == str(python_path)
+
+
+def test_run_hanlp_preload_tracks_stable_order_and_progress(monkeypatch):
+    config = SimpleNamespace(
+        knowledge=SimpleNamespace(
+            hanlp=SimpleNamespace(
+                model_id="FINE_ELECTRA_SMALL_ZH",
+                task_matrix=SimpleNamespace(
+                    tasks={
+                        "zeta": SimpleNamespace(
+                            enabled=True,
+                            task_name="zeta",
+                            artifact_key="zeta",
+                            eval_role="primary",
+                            model_id="",
+                        ),
+                        "coref": SimpleNamespace(
+                            enabled=True,
+                            task_name="coref",
+                            artifact_key="coref",
+                            eval_role="primary",
+                            model_id="",
+                        ),
+                        "alpha": SimpleNamespace(
+                            enabled=True,
+                            task_name="alpha",
+                            artifact_key="alpha",
+                            eval_role="primary",
+                            model_id="",
+                        ),
+                        "beta": SimpleNamespace(
+                            enabled=False,
+                            task_name="beta",
+                            artifact_key="beta",
+                            eval_role="primary",
+                            model_id="",
+                        ),
+                    },
+                ),
+            ),
+        ),
+    )
+    run_sequence: list[str] = []
+    progress_snapshots: list[dict] = []
+
+    class _Runtime:
+        def ensure_model(self, _knowledge):
+            return {
+                "status": "ready",
+                "reason_code": "HANLP2_MODEL_READY",
+                "reason": "HanLP2 tokenizer model is ready.",
+            }
+
+        def run_task(self, task_key, _sample_text, _knowledge):
+            run_sequence.append(task_key)
+            progress_snapshots.append(hanlp_sidecar_module._copy_preload_state())
+            if task_key == "alpha":
+                return {}, {
+                    "status": "ready",
+                    "reason_code": "HANLP2_TASK_READY",
+                    "reason": "ready",
+                }
+            return {}, {
+                "status": "unavailable",
+                "reason_code": "HANLP2_TASK_LOAD_FAILED",
+                "reason": "failed",
+            }
+
+    monkeypatch.setattr(hanlp_sidecar_module, "load_config", lambda: config)
+    monkeypatch.setattr(hanlp_sidecar_module, "_runtime", lambda: _Runtime())
+    monkeypatch.setattr(hanlp_sidecar_module, "_preload_settings", lambda _config: (True, "all_enabled_tasks"))
+
+    hanlp_sidecar_module._run_hanlp_preload(force=True)
+
+    assert run_sequence == ["alpha", "zeta"]
+    assert [snapshot["current_task_key"] for snapshot in progress_snapshots] == ["alpha", "zeta"]
+    assert [snapshot["current_task_index"] for snapshot in progress_snapshots] == [1, 2]
+    assert [snapshot["completed_tasks"] for snapshot in progress_snapshots] == [0, 1]
+    assert [snapshot["failed_tasks"] for snapshot in progress_snapshots] == [0, 0]
+
+    status = hanlp_sidecar_module.get_hanlp_preload_status(config)
+    assert status["status"] == "failed"
+    assert status["current_task_key"] is None
+    assert status["current_task_index"] == 2
+    assert status["total_tasks"] == 2
+    assert status["completed_tasks"] == 1
+    assert status["failed_tasks"] == 1
+    assert [entry["task_key"] for entry in status["preloaded_models"]] == ["tokenize", "alpha", "zeta"]
+    assert list(status["task_results"].keys()) == ["alpha", "zeta"]

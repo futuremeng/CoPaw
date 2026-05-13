@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from collections import deque
 from pathlib import Path
 from unittest.mock import patch
@@ -98,6 +99,42 @@ class _BrokenPopen:
         _ = timeout
         self._alive = False
         return 1
+
+    def kill(self) -> None:
+        self._alive = False
+
+
+class _SlowStdout:
+    def __init__(self, buffer: deque[str], *, delay_sec: float) -> None:
+        self._buffer = buffer
+        self._delay_sec = delay_sec
+
+    def readline(self) -> str:
+        time.sleep(self._delay_sec)
+        if self._buffer:
+            return self._buffer.popleft()
+        return ""
+
+
+class _SlowPopen:
+    def __init__(self, mode_payloads: dict[str, dict[str, object]], *, delay_sec: float = 0.05, pid: int = 43333) -> None:
+        self.pid = pid
+        self._alive = True
+        self._buffer: deque[str] = deque()
+        self.stdin = _FakeStdin(self._buffer, mode_payloads)
+        self.stdout = _SlowStdout(self._buffer, delay_sec=delay_sec)
+        self.stderr = _FakeStdout(deque())
+
+    def poll(self):
+        return None if self._alive else 0
+
+    def terminate(self) -> None:
+        self._alive = False
+
+    def wait(self, timeout: float | None = None) -> int:
+        _ = timeout
+        self._alive = False
+        return 0
 
     def kill(self) -> None:
         self._alive = False
@@ -519,6 +556,87 @@ def test_task_status_uses_task_specific_timeout_and_disables_timeout_retry() -> 
     assert captured["task_key"] == "ner_msra"
     assert captured["timeout"] == 7.0
     assert captured["retry_on_timeout"] is False
+
+
+def test_run_task_returns_degraded_when_worker_response_times_out() -> None:
+    runtime = NLPRuntime()
+    runtime._timeout_breaker_threshold = 2
+    config = Config().knowledge
+    config.hanlp.enabled = True
+    config.hanlp.python_executable = "/bin/python3"
+    config.hanlp.task_matrix.tasks["ner_msra"].timeout_sec = 0.01
+
+    mode_payloads = {
+        "run_task": {
+            "engine": "hanlp2",
+            "status": "ready",
+            "reason_code": "HANLP2_TASK_READY",
+            "reason": "HanLP task is ready.",
+            "task_result": [{"text": "微软", "label": "ORG"}],
+        },
+    }
+
+    runtime.probe = lambda _config: {  # type: ignore[method-assign]
+        "engine": "hanlp2",
+        "status": "ready",
+        "reason_code": "HANLP2_READY",
+        "reason": "ready",
+    }
+    runtime._ensure_sidecar = lambda payload: Path("/bin/python3")  # type: ignore[assignment]
+
+    with patch("subprocess.Popen", return_value=_SlowPopen(mode_payloads, delay_sec=0.05)):
+        result, state = runtime.run_task("ner_msra", "微软发布新模型", config)
+
+    assert result == []
+    assert state["status"] == "degraded"
+    assert state["reason_code"] == "HANLP2_WORKER_TIMEOUT"
+    assert state["consecutive_timeouts"] == 1
+
+
+def test_run_task_short_circuits_after_timeout_breaker_opens() -> None:
+    runtime = NLPRuntime()
+    runtime._timeout_breaker_threshold = 1
+    runtime._timeout_breaker_cooldown_sec = 60.0
+    config = Config().knowledge
+    config.hanlp.enabled = True
+    config.hanlp.python_executable = "/bin/python3"
+    config.hanlp.task_matrix.tasks["ner_msra"].timeout_sec = 0.01
+
+    mode_payloads = {
+        "run_task": {
+            "engine": "hanlp2",
+            "status": "ready",
+            "reason_code": "HANLP2_TASK_READY",
+            "reason": "HanLP task is ready.",
+            "task_result": [{"text": "微软", "label": "ORG"}],
+        },
+    }
+    popen_calls = {"count": 0}
+
+    def _fake_popen(*args, **kwargs):
+        _ = args, kwargs
+        popen_calls["count"] += 1
+        return _SlowPopen(mode_payloads, delay_sec=0.05)
+
+    runtime.probe = lambda _config: {  # type: ignore[method-assign]
+        "engine": "hanlp2",
+        "status": "ready",
+        "reason_code": "HANLP2_READY",
+        "reason": "ready",
+    }
+    runtime._ensure_sidecar = lambda payload: Path("/bin/python3")  # type: ignore[assignment]
+
+    with patch("subprocess.Popen", side_effect=_fake_popen):
+        first_result, first_state = runtime.run_task("ner_msra", "微软发布新模型", config)
+        second_result, second_state = runtime.run_task("ner_msra", "微软发布新模型", config)
+
+    assert first_result == []
+    assert first_state["reason_code"] == "HANLP2_WORKER_TIMEOUT"
+    assert second_result == []
+    assert second_state["status"] == "busy"
+    assert second_state["reason_code"] == "HANLP2_CIRCUIT_OPEN"
+    assert second_state["circuit_open"] is True
+    assert popen_calls["count"] == 1
 
 
 def test_run_ner_returns_structured_result_from_sidecar() -> None:

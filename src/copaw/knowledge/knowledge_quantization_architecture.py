@@ -413,7 +413,7 @@ class QuantizationArchitectureManager:
 		normalized_source = _safe_name(source_id)
 		resolved_snapshot = self._resolve_snapshot_id(normalized_stage, normalized_source, snapshot_id)
 
-		if normalized_stage != "l1":
+		if normalized_stage == "l3":
 			previous_stage = QUANTIZATION_STAGES[QUANTIZATION_STAGES.index(normalized_stage) - 1]
 			prev_snapshot = self._resolve_snapshot_id(previous_stage, normalized_source, snapshot_id)
 			previous_result = self.get_stage_result(

@@ -47,6 +47,13 @@ def _build_source(project_dir: Path, project_id: str) -> KnowledgeSourceSpec:
     )
 
 
+def _stub_semantic_materialization(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "copaw.knowledge.manager.KnowledgeManager.materialize_semantic_artifacts_for_source",
+        lambda self, *args, **kwargs: None,
+    )
+
+
 def test_knowledge_workflow_orchestrator_persists_pipeline_run(
     tmp_path: Path,
     monkeypatch,
@@ -97,6 +104,7 @@ def test_knowledge_workflow_orchestrator_persists_pipeline_run(
             "rounds": [],
         },
     )
+    _stub_semantic_materialization(monkeypatch)
 
     orchestrator = KnowledgeWorkflowOrchestrator(
         workspace_dir=tmp_path,
@@ -210,9 +218,9 @@ def test_project_sync_manager_records_workflow_run_metadata(
     assert state["mode_outputs"]["fast"]["source"] == "indexed-preview"
     assert state["mode_outputs"]["nlp"]["source"] == "graph-artifacts"
     assert state["mode_outputs"]["agentic"]["source"] == "workflow-artifacts"
-    assert state["mode_metrics"]["fast"]["document_count"] == 1
+    assert state["mode_metrics"]["fast"]["document_count"] == 0
     assert state["mode_metrics"]["nlp"]["entity_count"] == 0
-    assert state["mode_metrics"]["agentic"]["artifact_count"] == 0
+    assert state["mode_metrics"]["agentic"].get("artifact_count", 0) == 0
     assert state["global_metrics"]["document_count"] == 0
     assert state["global_metrics"]["chunk_count"] == 0
 
@@ -263,6 +271,115 @@ def test_knowledge_workflow_orchestrator_fast_mode_stops_before_memify(
     assert called["memify"] is False
 
 
+def test_knowledge_workflow_quantization_stage_l2_runs_nlp_slice(
+    tmp_path: Path,
+    monkeypatch,
+):
+    project_id = "project-quant-l2"
+    project_dir = tmp_path / "projects" / project_id
+    data_dir = project_dir / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    _write_project_metadata(project_dir, project_id)
+    (data_dir / "sample.md").write_text("# Sample\n\nKnowledge workflow content.", encoding="utf-8")
+
+    called = {"memify": False, "quality": False}
+
+    def fake_execute_memify_once(self, **kwargs):
+        called["memify"] = True
+        self.local_graph_path.parent.mkdir(parents=True, exist_ok=True)
+        self.local_graph_path.write_text('{"nodes": [], "edges": []}', encoding="utf-8")
+        self.enriched_graph_path.write_text('{"nodes": [], "edges": []}', encoding="utf-8")
+        self.enrichment_quality_report_path.write_text('{"quality_score": 0.95}', encoding="utf-8")
+        return {
+            "status": "succeeded",
+            "relation_count": 3,
+            "node_count": 2,
+            "document_count": 1,
+        }
+
+    monkeypatch.setattr(
+        "copaw.knowledge.graph_ops.GraphOpsManager.execute_memify_once",
+        fake_execute_memify_once,
+    )
+    monkeypatch.setattr(
+        "copaw.knowledge.graph_ops.GraphOpsManager.maybe_start_quality_self_drive",
+        lambda self, **kwargs: called.__setitem__("quality", True),
+    )
+    _stub_semantic_materialization(monkeypatch)
+
+    orchestrator = KnowledgeWorkflowOrchestrator(
+        workspace_dir=tmp_path,
+        project_id=project_id,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+    source = _build_source(project_dir, project_id)
+    config = KnowledgeConfig(enabled=True, memify_enabled=True)
+    running_config = SimpleNamespace(knowledge_chunk_size=500)
+
+    result = orchestrator.run(
+        config=config,
+        running_config=running_config,
+        source=source,
+        trigger="manual-panel",
+        changed_paths=["data/sample.md"],
+        processing_mode="fast",
+        quantization_stage="l2",
+    )
+
+    assert result["processing_mode"] == "nlp"
+    assert result["quantization_stage"] == "l2"
+    assert result["memify"]["status"] == "succeeded"
+    assert called["memify"] is True
+    assert called["quality"] is False
+
+
+def test_knowledge_workflow_quantization_stage_l1_stays_fast_slice(
+    tmp_path: Path,
+    monkeypatch,
+):
+    project_id = "project-quant-l1"
+    project_dir = tmp_path / "projects" / project_id
+    data_dir = project_dir / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    _write_project_metadata(project_dir, project_id)
+    (data_dir / "sample.md").write_text("# Sample\n\nKnowledge workflow content.", encoding="utf-8")
+
+    called = {"memify": False}
+
+    def fake_execute_memify_once(self, **kwargs):
+        called["memify"] = True
+        return {"status": "succeeded"}
+
+    monkeypatch.setattr(
+        "copaw.knowledge.graph_ops.GraphOpsManager.execute_memify_once",
+        fake_execute_memify_once,
+    )
+
+    orchestrator = KnowledgeWorkflowOrchestrator(
+        workspace_dir=tmp_path,
+        project_id=project_id,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+    source = _build_source(project_dir, project_id)
+    config = KnowledgeConfig(enabled=True, memify_enabled=True)
+    running_config = SimpleNamespace(knowledge_chunk_size=500)
+
+    result = orchestrator.run(
+        config=config,
+        running_config=running_config,
+        source=source,
+        trigger="manual-panel",
+        changed_paths=["data/sample.md"],
+        processing_mode="agentic",
+        quantization_stage="l1",
+    )
+
+    assert result["processing_mode"] == "fast"
+    assert result["quantization_stage"] == "l1"
+    assert result["memify"] == {}
+    assert called["memify"] is False
+
+
 def test_knowledge_workflow_status_callback_emits_lane_ready_transitions(
     tmp_path: Path,
     monkeypatch,
@@ -310,6 +427,7 @@ def test_knowledge_workflow_status_callback_emits_lane_ready_transitions(
             "rounds": [],
         },
     )
+    _stub_semantic_materialization(monkeypatch)
 
     orchestrator = KnowledgeWorkflowOrchestrator(
         workspace_dir=tmp_path,

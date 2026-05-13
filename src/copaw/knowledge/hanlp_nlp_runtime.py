@@ -6,9 +6,11 @@ import os
 import re
 import sys
 import threading
+import select
 import subprocess
 import atexit
 import contextlib
+import time
 from pathlib import Path
 from typing import Any
 
@@ -188,6 +190,22 @@ def choose_ner_model(module, preferred_model_id):
     return None
 
 
+_MODEL_CACHE = {}
+
+
+def get_cached_model(module, model_id):
+	model_id = str(model_id or "").strip()
+	if not model_id:
+		return None
+	model = _MODEL_CACHE.get(model_id)
+	if model is not None:
+		return model
+	model = load_model(module, model_id)
+	if model is not None:
+		_MODEL_CACHE[model_id] = model
+	return model
+
+
 def extract_parse_result(result, task_name):
     if isinstance(result, dict):
         for key in (task_name, normalize_task_key(task_name), "ner/msra", "ner_msra", "dep", "sdp", "con", "pos"):
@@ -252,13 +270,10 @@ def main():
 
     if mode == "tokenize":
         text = str(payload.get("text") or "")
-        tokenizer = getattr(hanlp, "tokenize", None)
-        if not callable(tokenizer):
-            model_id = str(payload.get("model_id") or "FINE_ELECTRA_SMALL_ZH").strip()
-            try:
-                tokenizer = load_model(hanlp, model_id)
-            except Exception:
-                tokenizer = None
+		model_id = str(payload.get("model_id") or "FINE_ELECTRA_SMALL_ZH").strip()
+		tokenizer = get_cached_model(hanlp, model_id)
+		if not callable(tokenizer):
+			tokenizer = getattr(hanlp, "tokenize", None)
         if not callable(tokenizer):
             emit(unavailable_payload("HANLP2_TOKENIZE_UNAVAILABLE", "HanLP2 tokenizer is unavailable."))
             return
@@ -269,6 +284,36 @@ def main():
             return
         emit(ready_payload("HANLP2_READY", "HanLP2 semantic engine is ready.", tokens=tokens))
         return
+
+	if mode == "tokenize_batch":
+		texts = payload.get("texts") or []
+		model_id = str(payload.get("model_id") or "FINE_ELECTRA_SMALL_ZH").strip()
+		tokenizer = get_cached_model(hanlp, model_id)
+		if not callable(tokenizer):
+			tokenizer = getattr(hanlp, "tokenize", None)
+		if not callable(tokenizer):
+			emit(unavailable_payload("HANLP2_TOKENIZE_UNAVAILABLE", "HanLP2 tokenizer is unavailable.", tokens=[]))
+			return
+
+		token_batches = []
+		failed_count = 0
+		for text in texts:
+			try:
+				token_batches.append(flatten_tokens(tokenizer(str(text or ""))))
+			except Exception:
+				token_batches.append([])
+				failed_count += 1
+
+		if failed_count:
+			response = ready_payload("HANLP2_BATCH_PARTIAL_DEGRADED", "HanLP batch tokenization partially degraded.", tokens=token_batches)
+			response["status"] = "degraded"
+			response["reason_code"] = "HANLP2_BATCH_PARTIAL_DEGRADED"
+			response["reason"] = f"HanLP batch tokenization partially degraded ({failed_count}/{len(token_batches)} failed)."
+			emit(response)
+			return
+
+		emit(ready_payload("HANLP2_BATCH_READY", "HanLP batch tokenization finished successfully.", tokens=token_batches))
+		return
 
     if mode in {"task_status", "run_task"}:
         task_key = str(payload.get("task_key") or "").strip()
@@ -313,6 +358,74 @@ def main():
             return
         emit(ready_payload("HANLP2_TASK_READY", "HanLP task is ready.", task_result=task_result))
         return
+
+	if mode == "run_task_batch":
+		task_key = str(payload.get("task_key") or "").strip()
+		texts = payload.get("texts") or []
+		spec = lookup_task_spec(payload, task_key) or {"task_name": task_key, "model_id": ""}
+		task_name = str(spec.get("task_name") or task_key).strip()
+		if is_coref_task_name(task_name):
+			emit({
+				"engine": "hanlp2",
+				"status": "error",
+				"reason_code": "HANLP2_COREF_NOT_OPEN_SOURCE",
+				"reason": "HanLP coreference_resolution is not open-source and is disabled in CoPaw runtime.",
+				"task_results": [None for _ in texts],
+			})
+			return
+		if not texts:
+			emit(unavailable_payload("HANLP2_TASK_UNAVAILABLE", "HanLP batch task requires at least one text.", task_results=[]))
+			return
+		if task_name == "task_status":
+			emit(ready_payload("HANLP2_BATCH_READY", "HanLP batch task is ready.", task_results=[None for _ in texts]))
+			return
+
+		task_results = []
+		failed_count = 0
+		parse = getattr(hanlp, "parse", None)
+		model = None
+		tokenizer = getattr(hanlp, "tokenize", None)
+		task_model_id = str(spec.get("model_id") or "").strip()
+		if task_model_id:
+			model = get_cached_model(hanlp, task_model_id)
+		if normalize_task_key(task_name) == "ner_msra" and model is None:
+			model = choose_ner_model(hanlp, spec.get("model_id"))
+
+		for text in texts:
+			task_result = None
+			normalized_text = str(text or "")
+			if callable(parse):
+				try:
+					task_result = extract_parse_result(parse(normalized_text, tasks=[task_name]), task_name)
+				except Exception:
+					task_result = None
+
+			if task_result is None and callable(model):
+				try:
+					task_result = model(normalized_text)
+				except IndexError:
+					if callable(tokenizer):
+						task_result = model(flatten_tokens(tokenizer(normalized_text)))
+				except Exception:
+					task_result = None
+
+			if task_result is None:
+				failed_count += 1
+			task_results.append(task_result)
+
+		if failed_count:
+			response = ready_payload(
+				"HANLP2_BATCH_PARTIAL_DEGRADED",
+				f"HanLP batch task partially degraded ({failed_count}/{len(task_results)} failed).",
+				task_results=task_results,
+			)
+			response["status"] = "degraded"
+			response["reason_code"] = "HANLP2_BATCH_PARTIAL_DEGRADED"
+			emit(response)
+			return
+
+		emit(ready_payload("HANLP2_BATCH_READY", "HanLP batch task finished successfully.", task_results=task_results))
+		return
 
     emit(unavailable_payload("HANLP2_WORKER_PROTOCOL_ERROR", f"Unexpected mode: {mode}"))
 
@@ -378,7 +491,8 @@ def _worker_dispatch(mode: str, payload: dict[str, Any]) -> dict[str, Any]:
 
 _WORKER_CODE = f"""
 import json
-import subprocess
+import io
+import contextlib
 import sys
 
 _BRIDGE_CODE = {json.dumps(_BRIDGE_CODE)}
@@ -395,6 +509,10 @@ def unavailable_payload(reason_code, reason, **extra):
 	return payload
 
 
+bridge_namespace = {{"__name__": "__hanlp_bridge__"}}
+exec(_BRIDGE_CODE, bridge_namespace)
+
+
 for line in sys.stdin:
 	raw = str(line or "").strip()
 	if not raw:
@@ -403,26 +521,41 @@ for line in sys.stdin:
 	mode = str(request.get("mode") or "probe")
 	payload = request.get("payload") or {{}}
 	bridge_input = json.dumps(payload, ensure_ascii=False)
-	completed = subprocess.run(
-		[sys.executable, "-c", _BRIDGE_CODE, mode],
-		input=bridge_input,
-		capture_output=True,
-		text=True,
-		check=False,
-	)
-	if completed.returncode != 0:
+	stdin = io.StringIO(bridge_input)
+	stdout = io.StringIO()
+	stderr = io.StringIO()
+	old_stdin = sys.stdin
+	old_stdout = sys.stdout
+	old_stderr = sys.stderr
+	sys.stdin = stdin
+	sys.stdout = stdout
+	sys.stderr = stderr
+	try:
+		bridge_namespace["main"]()
+	except Exception:
 		response = unavailable_payload(
 			"HANLP2_BRIDGE_CRASHED",
-			(completed.stderr or "HanLP bridge exited unexpectedly.").strip() or "HanLP bridge exited unexpectedly.",
+			"HanLP bridge exited unexpectedly.",
 		)
 	else:
-		try:
-			response = json.loads(completed.stdout or "{{}}")
-		except Exception:
+		raw_response = stdout.getvalue().strip()
+		if not raw_response:
 			response = unavailable_payload(
 				"HANLP2_WORKER_PROTOCOL_ERROR",
 				"HanLP worker returned invalid JSON.",
 			)
+		else:
+			try:
+				response = json.loads(raw_response)
+			except Exception:
+				response = unavailable_payload(
+					"HANLP2_WORKER_PROTOCOL_ERROR",
+					"HanLP worker returned invalid JSON.",
+				)
+	finally:
+		sys.stdin = old_stdin
+		sys.stdout = old_stdout
+		sys.stderr = old_stderr
 	sys.stdout.write(json.dumps(response, ensure_ascii=False) + "\\n")
 	sys.stdout.flush()
 """
@@ -439,7 +572,111 @@ class NLPRuntime:
 		self._probe_cache_key = ""
 		self._probe_cache_state: dict[str, Any] | None = None
 		self._worker_started_once = False
+		self._bridge_breakers: dict[str, dict[str, float | int]] = {}
+		self._timeout_breaker_threshold = 2
+		self._timeout_breaker_cooldown_sec = 30.0
 		atexit.register(self.close)
+
+	def _breaker_key(self, mode: str, payload: dict[str, Any]) -> str:
+		task_key = str(payload.get("task_key") or "").strip()
+		if task_key:
+			return f"task:{task_key}"
+		return f"mode:{str(mode or '').strip() or 'unknown'}"
+
+	def _open_breaker_state_locked(self, breaker_key: str) -> dict[str, Any] | None:
+		state = self._bridge_breakers.get(breaker_key) or {}
+		open_until = float(state.get("open_until") or 0.0)
+		now = time.monotonic()
+		if open_until <= now:
+			return None
+		retry_after_sec = max(0.0, open_until - now)
+		return _default_runtime_state(
+			status="busy",
+			reason_code="HANLP2_CIRCUIT_OPEN",
+			reason="HanLP worker is temporarily throttled after repeated timeouts.",
+			breaker_key=breaker_key,
+			circuit_open=True,
+			retry_after_sec=retry_after_sec,
+			consecutive_timeouts=int(state.get("consecutive_timeouts") or 0),
+		)
+
+	def _record_bridge_success_locked(self, breaker_key: str) -> None:
+		state = self._bridge_breakers.get(breaker_key)
+		if state is None:
+			return
+		state["consecutive_timeouts"] = 0
+		state["open_until"] = 0.0
+
+	def _record_bridge_timeout_locked(self, breaker_key: str, timeout: float) -> dict[str, Any]:
+		state = self._bridge_breakers.setdefault(breaker_key, {})
+		consecutive_timeouts = int(state.get("consecutive_timeouts") or 0) + 1
+		state["consecutive_timeouts"] = consecutive_timeouts
+		state["last_timeout_sec"] = float(timeout)
+		state["last_failure_at"] = time.monotonic()
+		if consecutive_timeouts >= max(1, int(self._timeout_breaker_threshold)):
+			state["open_until"] = time.monotonic() + max(0.1, float(self._timeout_breaker_cooldown_sec))
+		else:
+			state["open_until"] = 0.0
+		return {
+			"consecutive_timeouts": consecutive_timeouts,
+			"open_until": float(state.get("open_until") or 0.0),
+		}
+
+	@staticmethod
+	def _read_worker_response(process: subprocess.Popen[str], timeout: float) -> str | None:
+		stdout = process.stdout
+		assert stdout is not None
+		fd: int | None = None
+		with contextlib.suppress(Exception):
+			fd = stdout.fileno()
+
+		# Prefer fd polling to avoid lingering reader threads on timeout.
+		if fd is not None:
+			deadline = time.monotonic() + max(0.01, float(timeout))
+			buffer = bytearray()
+			previous_blocking: bool | None = None
+			with contextlib.suppress(Exception):
+				previous_blocking = os.get_blocking(fd)
+				os.set_blocking(fd, False)
+			try:
+				while True:
+					remaining = deadline - time.monotonic()
+					if remaining <= 0:
+						return None
+					readable, _, _ = select.select([fd], [], [], remaining)
+					if not readable:
+						continue
+					try:
+						chunk = os.read(fd, 4096)
+					except BlockingIOError:
+						continue
+					if not chunk:
+						return ""
+					buffer.extend(chunk)
+					newline = buffer.find(b"\n")
+					if newline >= 0:
+						return bytes(buffer[: newline + 1]).decode("utf-8", errors="replace")
+			finally:
+				if previous_blocking is not None:
+					with contextlib.suppress(Exception):
+						os.set_blocking(fd, previous_blocking)
+
+		result: dict[str, Any] = {}
+
+		def _readline() -> None:
+			try:
+				result["text"] = stdout.readline()
+			except Exception as error:  # pragma: no cover - defensive capture
+				result["error"] = error
+
+		reader = threading.Thread(target=_readline, daemon=True)
+		reader.start()
+		reader.join(max(0.01, float(timeout)))
+		if reader.is_alive():
+			return None
+		if "error" in result:
+			raise result["error"]
+		return str(result.get("text") or "")
 
 	def close(self) -> None:
 		with self._lock:
@@ -556,7 +793,7 @@ class NLPRuntime:
 			if process.poll() is None:
 				process.kill()
 
-	def _worker_request(self, executable: Path, *, mode: str, payload: dict[str, Any]) -> dict[str, Any]:
+	def _worker_request(self, executable: Path, *, mode: str, payload: dict[str, Any], timeout: float) -> dict[str, Any]:
 		cache_key = self._worker_cache_key_for_payload(payload)
 		with self._lock:
 			worker_restarted = False
@@ -590,16 +827,25 @@ class NLPRuntime:
 				process.stdin.write(request)
 				process.stdin.flush()
 
-			assert process.stdout is not None
-			response_text = process.stdout.readline().strip()
-			if not response_text:
+			response_text = self._read_worker_response(process, timeout)
+			if response_text is None:
+				self._stop_worker_locked()
 				response = _default_runtime_state(
-					status="unavailable",
-					reason_code="HANLP2_WORKER_PROTOCOL_ERROR",
-					reason="HanLP worker returned an empty response.",
+					status="degraded",
+					reason_code="HANLP2_WORKER_TIMEOUT",
+					reason=f"HanLP worker did not respond within {float(timeout):.3f}s.",
+					timeout_sec=float(timeout),
 				)
 			else:
-				response = json.loads(response_text)
+				response_text = response_text.strip()
+				if not response_text:
+					response = _default_runtime_state(
+						status="unavailable",
+						reason_code="HANLP2_WORKER_PROTOCOL_ERROR",
+						reason="HanLP worker returned an empty response.",
+					)
+				else:
+					response = json.loads(response_text)
 			response["worker_pid"] = int(getattr(process, "pid", 0) or 0)
 			response["cold_start"] = cold_start
 			response["worker_restarted"] = worker_restarted
@@ -614,9 +860,23 @@ class NLPRuntime:
 		timeout: float,
 		retry_on_timeout: bool = True,
 	) -> dict[str, Any]:
-		_ = timeout
 		_ = retry_on_timeout
-		return self._worker_request(executable, mode=mode, payload=payload)
+		breaker_key = self._breaker_key(mode, payload)
+		with self._lock:
+			open_state = self._open_breaker_state_locked(breaker_key)
+		if open_state is not None:
+			return open_state
+		response = self._worker_request(executable, mode=mode, payload=payload, timeout=timeout)
+		with self._lock:
+			if response.get("reason_code") == "HANLP2_WORKER_TIMEOUT":
+				breaker_state = self._record_bridge_timeout_locked(breaker_key, timeout)
+				response["consecutive_timeouts"] = breaker_state["consecutive_timeouts"]
+				if float(breaker_state.get("open_until") or 0.0) > time.monotonic():
+					response["circuit_open"] = True
+					response["retry_after_sec"] = max(0.0, float(breaker_state["open_until"]) - time.monotonic())
+			else:
+				self._record_bridge_success_locked(breaker_key)
+		return response
 
 	def probe(self, config: KnowledgeConfig | None = None) -> dict[str, Any]:
 		payload = self._config_payload(config)
@@ -714,8 +974,35 @@ class NLPRuntime:
 			payload=payload,
 			timeout=float(payload.get("tokenize_timeout_sec") or 15.0),
 		)
-		tokens = state.get("tokens") if isinstance(state.get("tokens"), list) else []
+		raw_tokens = state.get("tokens")
+		tokens: list[Any] = raw_tokens if isinstance(raw_tokens, list) else []
 		return [str(token) for token in tokens], state
+
+	def tokenize_batch(self, texts: list[str], config: KnowledgeConfig | None = None) -> tuple[list[list[str]], dict[str, Any]]:
+		probe_state = self.probe(config)
+		if probe_state.get("status") != "ready":
+			return [], probe_state
+		payload = self._config_payload(config)
+		payload["texts"] = list(texts)
+		try:
+			executable = self._ensure_sidecar(payload)
+		except (ValueError, FileNotFoundError) as error:
+			return [], self._sidecar_unavailable_state(error)
+		state = self._run_bridge(
+			executable,
+			mode="tokenize_batch",
+			payload=payload,
+			timeout=float(payload.get("tokenize_timeout_sec") or 15.0),
+		)
+		raw_tokens = state.get("tokens")
+		tokens: list[Any] = raw_tokens if isinstance(raw_tokens, list) else []
+		result: list[list[str]] = []
+		for batch in tokens:
+			if isinstance(batch, list):
+				result.append([str(token) for token in batch])
+			else:
+				result.append([])
+		return result, state
 
 	def task_status(self, task_key: str, config: KnowledgeConfig | None = None) -> dict[str, Any]:
 		probe_state = self.probe(config)
@@ -773,7 +1060,36 @@ class NLPRuntime:
 			timeout=timeout,
 			retry_on_timeout=False,
 		)
-		return state.get("task_result"), state
+		return state.get("task_result", []), state
+
+	def run_task_batch(
+		self,
+		task_key: str,
+		texts: list[str],
+		config: KnowledgeConfig | None = None,
+	) -> tuple[list[Any], dict[str, Any]]:
+		probe_state = self.probe(config)
+		if probe_state.get("status") != "ready":
+			return [], probe_state
+		payload = self._config_payload(config)
+		payload["task_key"] = task_key
+		payload["texts"] = list(texts)
+		task_cfg = ((payload.get("task_matrix") or {}).get("tasks") or {}).get(task_key) or {}
+		timeout = float(task_cfg.get("timeout_sec") or payload.get("tokenize_timeout_sec") or 15.0)
+		try:
+			executable = self._ensure_sidecar(payload)
+		except (ValueError, FileNotFoundError) as error:
+			return [], self._sidecar_unavailable_state(error)
+		state = self._run_bridge(
+			executable,
+			mode="run_task_batch",
+			payload=payload,
+			timeout=timeout,
+			retry_on_timeout=False,
+		)
+		raw_results = state.get("task_results", [])
+		results: list[Any] = raw_results if isinstance(raw_results, list) else []
+		return results, state
 
 
 __all__ = ["NLPRuntime", "_BRIDGE_CODE"]

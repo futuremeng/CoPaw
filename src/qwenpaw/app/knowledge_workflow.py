@@ -231,6 +231,12 @@ class KnowledgeWorkflowOrchestrator:
         quant_stage = (quantization_stage or "").strip().lower() if quantization_stage else None
         if normalized_mode not in KNOWLEDGE_PROCESSING_MODES:
             raise ValueError(f"Unsupported knowledge processing mode: {normalized_mode}")
+        if quant_stage == "l1":
+            normalized_mode = "fast"
+        elif quant_stage == "l2":
+            normalized_mode = "nlp"
+        elif quant_stage == "l3":
+            normalized_mode = "agentic"
         normalized_changed_paths = [
             str(item or "").strip().replace("\\", "/")
             for item in (changed_paths or [])
@@ -260,43 +266,6 @@ class KnowledgeWorkflowOrchestrator:
 
         index_path = self.knowledge_manager._source_index_path(source.id)
         quality_report_path = self.graph_ops.enrichment_quality_report_path
-
-        # 仅调度指定阶段
-        if quant_stage in {"l1", "l2", "l3"}:
-            # 这里只做最简分支，实际可根据需要细化
-            from copaw.knowledge.knowledge_quantization_architecture import (
-                QuantizationArchitectureManager,
-            )
-            quant_manager = QuantizationArchitectureManager(self.workspace_dir, self.knowledge_dirname)
-            # 依赖调度由 QuantizationArchitectureManager 内部保证
-            result = quant_manager.schedule_stage_run(
-                stage=quant_stage,
-                source_id=source.id,
-                snapshot_id="latest",
-            )
-            run.status = "succeeded"
-            run.updated_at = _pipeline_now_iso()
-            self._append_run_event(
-                run,
-                event="workflow.completed",
-                actor="knowledge-workflow",
-                status="succeeded",
-                message=f"Quantization stage {quant_stage} scheduled and completed.",
-            )
-            self._persist(run)
-            return {
-                "run_id": run.id,
-                "run_status": run.status,
-                "processing_mode": normalized_mode,
-                "quantization_stage": quant_stage,
-                "template_id": self.template.id,
-                "processing_fingerprint": self.knowledge_manager.compute_processing_fingerprint(
-                    config,
-                    running_config,
-                ),
-                "quantization_result": result,
-                "artifacts": run.artifacts[:],
-            }
 
         index_path = self.knowledge_manager._source_index_path(source.id)
         quality_report_path = self.graph_ops.enrichment_quality_report_path
@@ -435,6 +404,7 @@ class KnowledgeWorkflowOrchestrator:
                 config=config,
                 running_config=running_config,
                 processing_mode=normalized_mode,
+                quantization_stage=quant_stage,
                 index_result=index_result,
                 memify_result=memify_result,
                 quality_loop_result=quality_loop_result,
@@ -557,6 +527,7 @@ class KnowledgeWorkflowOrchestrator:
                 config=config,
                 running_config=running_config,
                 processing_mode=normalized_mode,
+                quantization_stage=quant_stage,
                 index_result=index_result,
                 memify_result=memify_result,
                 quality_loop_result=quality_loop_result,
@@ -637,6 +608,7 @@ class KnowledgeWorkflowOrchestrator:
             config=config,
             running_config=running_config,
             processing_mode=normalized_mode,
+            quantization_stage=quant_stage,
             index_result=index_result,
             memify_result=memify_result,
             quality_loop_result=quality_loop_result,
@@ -649,6 +621,7 @@ class KnowledgeWorkflowOrchestrator:
         config,
         running_config: Any | None,
         processing_mode: str,
+        quantization_stage: str | None,
         index_result: dict[str, Any] | None,
         memify_result: dict[str, Any] | None,
         quality_loop_result: dict[str, Any] | None,
@@ -672,6 +645,7 @@ class KnowledgeWorkflowOrchestrator:
             "run_id": run.id,
             "run_status": run.status,
             "processing_mode": processing_mode,
+            "quantization_stage": quantization_stage,
             "template_id": self.template.id,
             "processing_fingerprint": processing_fingerprint,
             "latest_job_id": str(

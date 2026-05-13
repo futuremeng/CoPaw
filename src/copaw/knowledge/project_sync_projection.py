@@ -32,6 +32,22 @@ def _as_dict(value: Any) -> dict[str, Any]:
 	return value if isinstance(value, dict) else {}
 
 
+def _task_states(semantic_engine: dict[str, Any]) -> dict[str, Any]:
+	return _as_dict(semantic_engine.get("task_states"))
+
+
+def _task_state_ready(semantic_engine: dict[str, Any], task_key: str) -> bool:
+	state = _as_dict(_task_states(semantic_engine).get(task_key))
+	return str(state.get("status") or "").strip().lower() in {"ready", "running"}
+
+
+def _semantic_unavailable_blocks_nlp(semantic_engine: dict[str, Any]) -> bool:
+	semantic_status = str(semantic_engine.get("status") or "idle").strip().lower()
+	if semantic_status not in {"error", "unavailable"}:
+		return False
+	return not _task_state_ready(semantic_engine, "tokenize")
+
+
 def _merge_file_analysis_l1_metrics(
 	source_status: dict[str, Any],
 	file_analysis_stats: dict[str, Any],
@@ -90,6 +106,15 @@ def merge_stage_message_with_semantic_summary(
 def build_semantic_engine_state(manager: Any, state: dict[str, Any]) -> dict[str, Any]:
 	current = state.get("semantic_engine") if isinstance(state.get("semantic_engine"), dict) else {}
 	latest_source_id = str(state.get("latest_source_id") or "").strip()
+	if isinstance(current, dict) and current:
+		payload = dict(current)
+		payload.setdefault("engine", "hanlp2")
+		payload.setdefault("status", "idle")
+		payload.setdefault("reason_code", "SOURCE_NOT_READY")
+		payload.setdefault("reason", "Project source has not been prepared for semantic extraction yet.")
+		payload.setdefault("updated_at", state.get("updated_at"))
+		payload["summary"] = build_semantic_engine_summary(manager, payload)
+		return payload
 	if not latest_source_id:
 		payload = dict(manager._default_state(str(state.get("project_id") or "")).get("semantic_engine") or {})
 		payload.update({key: value for key, value in _as_dict(current).items() if value not in {None, ""}})
@@ -98,9 +123,7 @@ def build_semantic_engine_state(manager: Any, state: dict[str, Any]) -> dict[str
 	getter = getattr(manager._knowledge_manager, "get_semantic_engine_state", None)
 	if callable(getter):
 		try:
-			payload = getter(latest_source_id)
-		except TypeError:
-			payload = getter(source_id=latest_source_id)
+			payload = getter()
 		except Exception:
 			payload = current
 	else:
@@ -115,6 +138,8 @@ def build_semantic_engine_state(manager: Any, state: dict[str, Any]) -> dict[str
 	payload.setdefault("reason_code", "SOURCE_NOT_READY")
 	payload.setdefault("reason", "Project source has not been prepared for semantic extraction yet.")
 	payload.setdefault("updated_at", state.get("updated_at"))
+	if isinstance(current, dict) and isinstance(current.get("task_states"), dict) and not isinstance(payload.get("task_states"), dict):
+		payload["task_states"] = dict(current.get("task_states") or {})
 	payload["summary"] = build_semantic_engine_summary(manager, payload)
 	return payload
 
@@ -396,7 +421,7 @@ def build_processing_modes(
 			"stage": "Waiting for review stage",
 		})
 
-	if semantic_status in {"error", "unavailable"}:
+	if _semantic_unavailable_blocks_nlp(semantic_engine):
 		nlp_mode.update({
 			"status": "blocked",
 			"available": False,
@@ -420,7 +445,7 @@ def build_processing_modes(
 def build_output_resolution(processing_modes: list[dict[str, Any]], semantic_engine: dict[str, Any]) -> dict[str, Any]:
 	mode_map = {str(item.get("mode") or ""): item for item in processing_modes if isinstance(item, dict)}
 	semantic_status = str(semantic_engine.get("status") or "idle").strip().lower()
-	if semantic_status in {"error", "unavailable"}:
+	if semantic_status in {"error", "unavailable"} and _semantic_unavailable_blocks_nlp(semantic_engine):
 		return {
 			"active_mode": None,
 			"available_modes": [],

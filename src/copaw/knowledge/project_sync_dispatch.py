@@ -4,9 +4,49 @@ from __future__ import annotations
 
 import threading
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any
 
-from ..config.config import KnowledgeConfig, KnowledgeSourceSpec
+from ..config import load_config
+from ..config.config import KnowledgeConfig, KnowledgeSourceSpec, load_agent_config
+
+
+def _effective_knowledge_config(knowledge_config: KnowledgeConfig, running_config: Any) -> KnowledgeConfig:
+	effective = knowledge_config.model_copy(deep=True)
+	effective.enabled = bool(getattr(running_config, "knowledge_enabled", effective.enabled))
+	effective.automation.knowledge_auto_collect_chat_files = bool(
+		getattr(running_config, "knowledge_auto_collect_chat_files", effective.automation.knowledge_auto_collect_chat_files)
+	)
+	effective.automation.knowledge_auto_collect_chat_urls = bool(
+		getattr(running_config, "knowledge_auto_collect_chat_urls", effective.automation.knowledge_auto_collect_chat_urls)
+	)
+	effective.automation.knowledge_auto_collect_long_text = bool(
+		getattr(running_config, "knowledge_auto_collect_long_text", effective.automation.knowledge_auto_collect_long_text)
+	)
+	effective.automation.knowledge_long_text_min_chars = int(
+		getattr(running_config, "knowledge_long_text_min_chars", effective.automation.knowledge_long_text_min_chars)
+	)
+	effective.index.chunk_size = int(getattr(running_config, "knowledge_chunk_size", effective.index.chunk_size))
+	return effective
+
+
+def _resolve_scheduled_sync_config(manager: Any) -> tuple[KnowledgeConfig, Any]:
+	root_config = load_config()
+	running_config = root_config.agents.running
+	workspace_dir = Path(manager.working_dir).resolve()
+	for agent_id, profile in (root_config.agents.profiles or {}).items():
+		profile_workspace = Path(str(getattr(profile, "workspace_dir", "") or "")).expanduser()
+		try:
+			if profile_workspace.resolve() != workspace_dir:
+				continue
+		except Exception:
+			continue
+		try:
+			running_config = load_agent_config(agent_id).running
+		except Exception:
+			running_config = root_config.agents.running
+		break
+	return _effective_knowledge_config(root_config.knowledge, running_config), running_config
 
 
 def schedule_dispatch(manager: Any, run_at: datetime, *, project_id: str) -> None:
@@ -27,6 +67,7 @@ def dispatch_scheduled_sync(manager: Any, *, project_id: str) -> None:
 
 	state = manager._load_state(project_id, hydrate=False)
 	project_dir = manager.working_dir / "projects" / project_id
+	config, running_config = _resolve_scheduled_sync_config(manager)
 	source = build_project_source_spec(
 		project_id=project_id,
 		project_name=project_id,
@@ -34,8 +75,8 @@ def dispatch_scheduled_sync(manager: Any, *, project_id: str) -> None:
 	)
 	manager._start_worker(
 		project_id=project_id,
-		config=KnowledgeConfig(),
-		running_config=None,
+		config=config,
+		running_config=running_config,
 		source=source,
 		processing_mode=str(state.get("latest_requested_mode") or "agentic"),
 		quantization_stage=str(state.get("quantization_stage") or "").strip() or None,
@@ -83,6 +124,7 @@ def queue_or_start_locked(
 		"last_trigger": trigger,
 		"latest_requested_mode": processing_mode,
 		"quantization_stage": quantization_stage,
+		"semantic_engine": manager._capture_semantic_engine_state(config),
 		"scheduled_for": scheduled_for.isoformat() if scheduled_for is not None else None,
 		"stage_message": manager._merge_stage_message_with_semantic_summary(
 			"Project sync queued" if scheduled_for is not None else "Project sync pending",

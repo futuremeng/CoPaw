@@ -3,9 +3,12 @@
 import json
 import sys
 import types
+from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 from copaw.config.config import Config, KnowledgeSourceSpec
+from copaw.knowledge import project_sync_dispatch
 from copaw.knowledge.project_sync_manager import ProjectKnowledgeSyncManager
 
 
@@ -173,6 +176,198 @@ def test_build_nlp_progress_contains_phrase_placeholder_stage(tmp_path: Path):
     assert isinstance(phrase_stage, dict)
     assert phrase_stage.get("status") == "unavailable"
     assert phrase_stage.get("reason_code") == "PHRASE_LAYER_NOT_IMPLEMENTED"
+
+
+def test_project_sync_start_captures_task_aware_semantic_engine_state(tmp_path: Path, monkeypatch):
+    project_id = "project-semantic-state"
+    project_dir = tmp_path / "projects" / project_id
+    project_dir.mkdir(parents=True, exist_ok=True)
+    manager = ProjectKnowledgeSyncManager(
+        tmp_path,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+    config = Config().knowledge
+    source = KnowledgeSourceSpec(
+        id=f"project-{project_id}-workspace",
+        name=f"Project Workspace: {project_id}",
+        type="directory",
+        location=str(project_dir),
+        content="",
+        enabled=True,
+        recursive=True,
+        project_id=project_id,
+        tags=["project"],
+        summary="test source",
+    )
+
+    monkeypatch.setattr(
+        manager._knowledge_manager,
+        "get_semantic_engine_state",
+        lambda _config=None: {
+            "engine": "hanlp2",
+            "status": "unavailable",
+            "reason_code": "HANLP2_TASK_UNAVAILABLE",
+            "reason": "NER model is unavailable.",
+        },
+    )
+    monkeypatch.setattr(
+        manager._knowledge_manager,
+        "get_semantic_task_state",
+        lambda task_key, _config=None: {
+            "engine": "hanlp2",
+            "task_key": task_key,
+            "status": "ready" if task_key == "tokenize" else "unavailable",
+            "reason_code": "HANLP2_TASK_READY" if task_key == "tokenize" else "HANLP2_TASK_UNAVAILABLE",
+            "reason": "tokenize ready" if task_key == "tokenize" else "NER model is unavailable.",
+        },
+    )
+
+    scheduled: list[datetime] = []
+    monkeypatch.setattr(manager, "_schedule_dispatch", lambda run_at, **_: scheduled.append(run_at))
+    monkeypatch.setattr(manager, "_start_worker", lambda **_: None)
+
+    manager.start_sync(
+        project_id=project_id,
+        config=config,
+        running_config=None,
+        source=source,
+        trigger="project_watcher_change",
+        changed_paths=["original/a.md"],
+        auto_enabled=True,
+        force=False,
+        debounce_seconds=5,
+        cooldown_seconds=0,
+    )
+
+    state = manager.get_state(project_id)
+    semantic_engine = state.get("semantic_engine") or {}
+    assert semantic_engine.get("status") == "unavailable"
+    assert semantic_engine.get("task_states", {}).get("tokenize", {}).get("status") == "ready"
+    assert scheduled
+
+
+def test_build_processing_modes_keeps_nlp_queued_when_tokenize_task_is_ready(tmp_path: Path):
+    manager = ProjectKnowledgeSyncManager(tmp_path, knowledge_dirname="knowledge")
+
+    semantic_engine = {
+        "engine": "hanlp2",
+        "status": "unavailable",
+        "reason_code": "HANLP2_TASK_UNAVAILABLE",
+        "reason": "NER model is unavailable.",
+        "summary": "Semantic engine unavailable: NER model is unavailable.",
+        "task_states": {
+            "tokenize": {
+                "engine": "hanlp2",
+                "task_key": "tokenize",
+                "status": "ready",
+                "reason_code": "HANLP2_TASK_READY",
+                "reason": "Tokenize task ready.",
+            }
+        },
+    }
+
+    processing_modes = manager._build_processing_modes(  # type: ignore[attr-defined]
+        {"progress": 0, "last_result": {}},
+        {"document_count": 1, "chunk_count": 1},
+        semantic_engine,
+        {
+            "tokenize_ready_chunk_count": 0,
+            "ner_ready_chunk_count": 0,
+            "syntax_ready_chunk_count": 0,
+            "ner_entity_count": 0,
+            "syntax_relation_count": 0,
+        },
+    )
+    nlp_mode = next(item for item in processing_modes if item.get("mode") == "nlp")
+    agentic_mode = next(item for item in processing_modes if item.get("mode") == "agentic")
+    resolution = manager._build_output_resolution(processing_modes, semantic_engine)  # type: ignore[attr-defined]
+
+    assert nlp_mode["status"] == "queued"
+    assert agentic_mode["status"] == "queued"
+    assert resolution["reason_code"] == "HIGH_ORDER_PENDING"
+
+
+def test_build_semantic_engine_state_prefers_current_snapshot(tmp_path: Path, monkeypatch):
+    manager = ProjectKnowledgeSyncManager(tmp_path, knowledge_dirname="knowledge")
+
+    monkeypatch.setattr(
+        manager._knowledge_manager,
+        "get_semantic_engine_state",
+        lambda *_args, **_kwargs: {
+            "engine": "hanlp2",
+            "status": "unavailable",
+            "reason_code": "NLP_ENGINE_UNAVAILABLE",
+            "reason": "NLP semantic engine is not configured.",
+        },
+    )
+
+    payload = manager._build_semantic_engine_state(
+        {
+            "project_id": "project-current-semantic",
+            "latest_source_id": "project-source-1",
+            "updated_at": "2026-05-12T10:00:00Z",
+            "semantic_engine": {
+                "engine": "hanlp2",
+                "status": "ready",
+                "reason_code": "HANLP2_TASK_READY",
+                "reason": "HanLP task is ready.",
+                "task_states": {
+                    "tokenize": {
+                        "engine": "hanlp2",
+                        "status": "ready",
+                        "reason_code": "HANLP2_TASK_READY",
+                        "reason": "HanLP task is ready.",
+                    }
+                },
+            },
+        }
+    )
+
+    assert payload["status"] == "ready"
+    assert payload["task_states"]["tokenize"]["status"] == "ready"
+
+
+def test_dispatch_scheduled_sync_uses_workspace_agent_config(tmp_path: Path, monkeypatch):
+    project_id = "project-scheduled-config"
+    project_dir = tmp_path / "projects" / project_id
+    project_dir.mkdir(parents=True, exist_ok=True)
+    manager = ProjectKnowledgeSyncManager(
+        tmp_path,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+
+    state = manager.get_state(project_id)
+    state.update({
+        "latest_requested_mode": "nlp",
+        "quantization_stage": "l2",
+    })
+    manager._save_state(state)
+
+    started: list[dict[str, object]] = []
+    monkeypatch.setattr(manager, "_start_worker", lambda **kwargs: started.append(kwargs))
+
+    root_config = Config()
+    root_config.knowledge.hanlp.enabled = False
+    root_config.knowledge.hanlp.python_executable = ""
+    root_config.agents.profiles = {
+        "default": SimpleNamespace(workspace_dir=str(tmp_path)),
+    }
+    agent_running = SimpleNamespace(
+        knowledge_enabled=True,
+        knowledge_chunk_size=1200,
+    )
+    agent_config = SimpleNamespace(running=agent_running)
+
+    monkeypatch.setattr(project_sync_dispatch, "load_config", lambda: root_config)
+    monkeypatch.setattr(project_sync_dispatch, "load_agent_config", lambda _agent_id: agent_config)
+
+    project_sync_dispatch.dispatch_scheduled_sync(manager, project_id=project_id)
+
+    assert started
+    scheduled_config = started[0]["config"]
+    assert getattr(scheduled_config.hanlp, "enabled", None) is False
+    assert getattr(scheduled_config, "index").chunk_size == 1200
+    assert started[0]["running_config"] is agent_running
 
 
 def test_hydrate_processing_view_uses_project_file_analysis_stats(tmp_path: Path):

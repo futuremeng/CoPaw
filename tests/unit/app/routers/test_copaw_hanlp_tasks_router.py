@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import time
 from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
@@ -43,6 +45,32 @@ class _FakeRuntime:
             "reason": "HanLP task is ready.",
         }
 
+    def tokenize_batch(self, texts: list[str], config):
+        _ = config
+        return [[token for token in text.split(" ") if token] for text in texts], {
+            "status": "ready",
+            "reason_code": "HANLP2_BATCH_READY",
+            "reason": "HanLP batch tokenization finished successfully.",
+            "duration_ms": 1,
+            "sidecar_elapsed_ms": 1,
+            "sidecar_trace_elapsed_ms": 0,
+            "sidecar_trace_stage_ms": {},
+            "preload_status": "idle",
+        }
+
+    def run_task_batch(self, task_key: str, texts: list[str], config):
+        _ = config
+        return [{"task": task_key, "text": text} for text in texts], {
+            "status": "ready",
+            "reason_code": "HANLP2_BATCH_READY",
+            "reason": "HanLP batch task finished successfully.",
+            "duration_ms": 1,
+            "sidecar_elapsed_ms": 1,
+            "sidecar_trace_elapsed_ms": 0,
+            "sidecar_trace_stage_ms": {},
+            "preload_status": "idle",
+        }
+
 
 class _UnavailableRuntime:
     def run_ner(self, text: str, config):
@@ -77,6 +105,22 @@ class _UnavailableRuntime:
             "reason": "HanLP model load failed.",
         }
 
+    def tokenize_batch(self, texts: list[str], config):
+        _ = (texts, config)
+        return [[] for _ in texts], {
+            "status": "unavailable",
+            "reason_code": "HANLP2_MODEL_LOAD_FAILED",
+            "reason": "HanLP model load failed.",
+        }
+
+    def run_task_batch(self, task_key: str, texts: list[str], config):
+        _ = (task_key, texts, config)
+        return [None for _ in texts], {
+            "status": "unavailable",
+            "reason_code": "HANLP2_MODEL_LOAD_FAILED",
+            "reason": "HanLP model load failed.",
+        }
+
 
 class _NestedListNerRuntime(_FakeRuntime):
     def run_ner(self, text: str, config):
@@ -105,6 +149,17 @@ class _FragmentedNerRuntime(_FakeRuntime):
         _ = config
         # Simulate sidecar returning fragmented entities with reset local spans.
         return [["北", "LOCATION", 0, 1], ["京", "LOCATION", 0, 1]], {
+            "status": "ready",
+            "reason_code": "HANLP2_TASK_READY",
+            "reason": "HanLP task is ready.",
+        }
+
+
+class _SlowTokenizeRuntime(_FakeRuntime):
+    def tokenize(self, text: str, config):  # type: ignore[override]
+        _ = (text, config)
+        time.sleep(0.4)
+        return ["微软", "发布", "新模型"], {
             "status": "ready",
             "reason_code": "HANLP2_TASK_READY",
             "reason": "HanLP task is ready.",
@@ -210,6 +265,23 @@ def _install_fragmented_ner_runtime_mocks(monkeypatch):
     )
     monkeypatch.setattr(module, "load_config", lambda: fake_cfg)
     monkeypatch.setattr(module, "NLPRuntime", lambda: _FragmentedNerRuntime())
+
+
+def _install_slow_tokenize_runtime_mocks(monkeypatch):
+    from copaw.app.routers import knowledge_hanlp_tasks as module
+
+    fake_cfg = SimpleNamespace(
+        knowledge=SimpleNamespace(
+            nlp=SimpleNamespace(
+                model_id="FINE_ELECTRA_SMALL_ZH",
+                tokenize_timeout_sec=0.01,
+                task_matrix=SimpleNamespace(tasks={}),
+            ),
+        ),
+    )
+    monkeypatch.setattr(module, "load_config", lambda: fake_cfg)
+    monkeypatch.setattr(module, "NLPRuntime", lambda: _SlowTokenizeRuntime())
+    monkeypatch.setattr(module, "_route_timeout_sec", lambda task_key, effective_config: 0.01)
 
 
 def test_copaw_hanlp_ner_run_endpoint(monkeypatch):
@@ -509,6 +581,136 @@ def test_copaw_hanlp_tokenize_run_slash_endpoint(monkeypatch):
     assert payload["task_key"] == "tokenize"
     assert payload["status"] == "ready"
     assert payload["result"] == ["微软", "发布", "新模型"]
+
+
+def test_copaw_hanlp_tokenize_batch_of_five_sentences(monkeypatch):
+    _install_runtime_mocks(monkeypatch)
+
+    from copaw.app._app import app
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/knowledge/tasks/tokenize/run",
+            json={
+                "texts": [
+                    "微软 发布 新模型",
+                    "阿里 发布 新平台",
+                    "百度 升级 检索",
+                    "腾讯 发布 引擎",
+                    "字节 上线 服务",
+                ],
+                "request_id": "req-tokenize-batch-5",
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["task_key"] == "tokenize"
+    assert payload["status"] == "ready"
+    assert payload["reason_code"] == "HANLP2_BATCH_READY"
+    assert isinstance(payload["result"], list)
+    assert len(payload["result"]) == 5
+    assert payload["result"][0]["status"] == "ready"
+    assert payload["result"][0]["result"] == ["微软", "发布", "新模型"]
+
+
+def test_copaw_hanlp_batch_rejects_more_than_five_sentences(monkeypatch):
+    _install_runtime_mocks(monkeypatch)
+
+    from copaw.app._app import app
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/knowledge/tasks/tokenize/run",
+            json={
+                "texts": [
+                    "句子一",
+                    "句子二",
+                    "句子三",
+                    "句子四",
+                    "句子五",
+                    "句子六",
+                ],
+                "request_id": "req-tokenize-batch-6",
+            },
+        )
+
+    assert response.status_code == 422 or response.status_code == 400
+    if response.status_code == 400:
+        assert response.json().get("detail") == "HANLP_BATCH_TOO_LARGE"
+
+
+def test_copaw_hanlp_tokenize_run_slash_endpoint_degrades_on_route_timeout(monkeypatch):
+    _install_slow_tokenize_runtime_mocks(monkeypatch)
+
+    from copaw.app._app import app
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/knowledge/tasks/tokenize/run",
+            json={"text": "微软 发布 新模型", "request_id": "req-tokenize-timeout"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["task_key"] == "tokenize"
+    assert payload["status"] == "degraded"
+    assert payload["reason_code"] == "HANLP2_ROUTE_TIMEOUT"
+    assert payload["result"] is None
+    assert payload["fallback_used"] is True
+    assert payload["duration_ms"] < 350
+
+
+def test_route_timeout_sec_is_capped_for_interactive_requests():
+    from copaw.app.routers import knowledge_hanlp_tasks as module
+
+    effective_config = SimpleNamespace(
+        nlp=SimpleNamespace(
+            tokenize_timeout_sec=15.0,
+            task_matrix=SimpleNamespace(
+                tasks={
+                    "tok": SimpleNamespace(timeout_sec=30.0),
+                }
+            ),
+        )
+    )
+
+    timeout_sec = module._route_timeout_sec("tokenize", effective_config)
+
+    assert timeout_sec == module._ROUTE_TIMEOUT_MAX_SEC
+
+
+def test_copaw_hanlp_tokenize_run_degrades_when_route_setup_exceeds_deadline(monkeypatch):
+    from copaw.app.routers import knowledge_hanlp_tasks as module
+
+    async def _slow_resolve(_request):
+        await asyncio.sleep(0.05)
+        return SimpleNamespace(
+            nlp=SimpleNamespace(
+                model_id="FINE_ELECTRA_SMALL_ZH",
+                tokenize_timeout_sec=30.0,
+                task_matrix=SimpleNamespace(tasks={}),
+            )
+        )
+
+    monkeypatch.setattr(module, "_resolve_knowledge_config", _slow_resolve)
+    monkeypatch.setattr(module, "_route_deadline_sec", lambda: 0.01)
+
+    from copaw.app._app import app
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/knowledge/tasks/tokenize/run",
+            json={"text": "微软 发布 新模型", "request_id": "req-tokenize-setup-timeout"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["task_key"] == "tokenize"
+    assert payload["status"] == "degraded"
+    assert payload["reason_code"] == "HANLP2_ROUTE_TIMEOUT"
+    assert payload["result"] is None
+    assert payload["fallback_used"] is True
 
 
 def test_copaw_hanlp_colon_run_endpoint_is_not_supported(monkeypatch):

@@ -36,6 +36,7 @@ def resume_sync_if_needed(
 			"changed_paths": changed_paths,
 			"changed_count": len(changed_paths),
 			"latest_source_id": source.id,
+			"semantic_engine": manager._capture_semantic_engine_state(config),
 			"updated_at": manager._now_iso(),
 		})
 		manager._save_state(state)
@@ -88,6 +89,7 @@ def run_sync_loop(
 			"last_error": "",
 			"latest_source_id": source.id,
 			"latest_requested_mode": processing_mode,
+			"semantic_engine": manager._capture_semantic_engine_state(config),
 			"updated_at": manager._now_iso(),
 		})
 		manager._save_state(state)

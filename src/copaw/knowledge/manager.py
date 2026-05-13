@@ -366,6 +366,61 @@ class KnowledgeManager:
             "reason": str(reason or "NLP semantic engine is not configured."),
         }
 
+    def _normalize_semantic_runtime_state(
+        self,
+        state: Any,
+        *,
+        fallback_reason_code: str = "NLP_ENGINE_UNAVAILABLE",
+        fallback_reason: str = "NLP semantic engine is not configured.",
+        task_key: str | None = None,
+    ) -> dict[str, Any]:
+        payload = dict(state) if isinstance(state, dict) else {}
+        normalized: dict[str, Any] = {
+            "engine": str(payload.get("engine") or "hanlp2"),
+            "status": str(payload.get("status") or "unavailable"),
+            "reason_code": str(payload.get("reason_code") or fallback_reason_code),
+            "reason": str(payload.get("reason") or fallback_reason),
+        }
+        normalized_task_key = str(task_key or "").strip()
+        if normalized_task_key:
+            normalized["task_key"] = normalized_task_key
+        return normalized
+
+    def get_semantic_task_state(
+        self,
+        task_key: str,
+        config: KnowledgeConfig | None = None,
+    ) -> dict[str, Any]:
+        normalized_task_key = str(task_key or "").strip().lower() or "tokenize"
+        if config is None:
+            return self._normalize_semantic_runtime_state(
+                self._semantic_engine_state(
+                    status="unavailable",
+                    reason_code="NLP_ENGINE_UNAVAILABLE",
+                    reason="NLP semantic engine is not configured.",
+                ),
+                task_key=normalized_task_key,
+            )
+
+        try:
+            if normalized_task_key in {"ner", "ner_msra"}:
+                task_state = self._semantic_runtime.ner_status(config)
+                normalized_task_key = "ner_msra"
+            else:
+                task_state = self._semantic_runtime.task_status(normalized_task_key, config)
+            return self._normalize_semantic_runtime_state(task_state, task_key=normalized_task_key)
+        except Exception:
+            pass
+
+        return self._normalize_semantic_runtime_state(
+            self._semantic_engine_state(
+                status="unavailable",
+                reason_code="NLP_ENGINE_UNAVAILABLE",
+                reason="NLP semantic engine is not configured.",
+            ),
+            task_key=normalized_task_key,
+        )
+
     def get_semantic_engine_state(self, config: KnowledgeConfig | None = None) -> dict:
         """Return the current semantic engine state for project-sync gating."""
         if config is None:
@@ -376,7 +431,7 @@ class KnowledgeManager:
             )
 
         try:
-            task_state = self._semantic_runtime.ner_status(config)
+            task_state = self.get_semantic_task_state("ner_msra", config)
             if isinstance(task_state, dict) and task_state:
                 return {
                     "engine": str(task_state.get("engine") or "hanlp2"),

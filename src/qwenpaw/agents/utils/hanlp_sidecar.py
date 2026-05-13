@@ -426,18 +426,19 @@ def _effective_task_model_id(config, task_key: str, task_cfg) -> str:
 
 
 def _preload_task_keys(config, scope: str) -> list[str]:
+    task_specs = _task_specs(config)
     if scope == "critical":
-        return [task_key for task_key in _CRITICAL_PRELOAD_TASKS if task_key in _task_specs(config)]
+        return [task_key for task_key in _CRITICAL_PRELOAD_TASKS if task_key in task_specs]
 
     task_keys: list[str] = []
-    for task_key, task_cfg in _task_specs(config).items():
+    for task_key, task_cfg in task_specs.items():
         if not bool(getattr(task_cfg, "enabled", True)):
             continue
         normalized = str(task_key or "").strip().replace("/", "_").replace("-", "_")
         if normalized in {"cor", "coref", "coreference", "coreference_resolution"}:
             continue
         task_keys.append(task_key)
-    return task_keys
+    return sorted(task_keys, key=lambda task_key: str(task_key))
 
 
 def _copy_preload_state() -> dict:
@@ -494,6 +495,13 @@ def _run_hanlp_preload(force: bool = False) -> None:
         )
         return
 
+    task_keys = _preload_task_keys(config, scope)
+    total_tasks = len(task_keys)
+    completed_tasks = 0
+    failed_tasks = 0
+    model_result: dict[str, str] = {}
+    preloaded_models: list[dict[str, str]] = []
+    task_results: dict[str, dict[str, str]] = {}
     _set_preload_state(
         enabled=enabled,
         scope=scope,
@@ -501,17 +509,26 @@ def _run_hanlp_preload(force: bool = False) -> None:
         reason="Preloading HanLP models in background.",
         started_at=time.time(),
         finished_at=None,
-        model_result={},
-        preloaded_models=[],
-        task_results={},
+        current_task_key=None,
+        current_task_index=0,
+        total_tasks=total_tasks,
+        completed_tasks=completed_tasks,
+        failed_tasks=failed_tasks,
+        model_result=model_result,
+        preloaded_models=preloaded_models,
+        task_results=task_results,
     )
 
     runtime = _runtime()
     model_state = runtime.ensure_model(config.knowledge)
     model_ready = model_state.get("status") == "ready"
     nlp_cfg = _nlp_config(config)
-    preloaded_models: list[dict[str, str]] = []
-    task_results: dict[str, dict[str, str]] = {}
+    model_result = {
+        "status": str(model_state.get("status") or "unavailable"),
+        "reason_code": str(model_state.get("reason_code") or "HANLP2_MODEL_LOAD_FAILED"),
+        "reason": str(model_state.get("reason") or "HanLP model preload failed."),
+        "model_id": str(getattr(nlp_cfg, "model_id", "") or "").strip() if nlp_cfg is not None else "",
+    }
     default_model_id = str(getattr(nlp_cfg, "model_id", "") or "").strip() if nlp_cfg is not None else ""
     if default_model_id:
         preloaded_models.append(
@@ -522,13 +539,50 @@ def _run_hanlp_preload(force: bool = False) -> None:
             }
         )
 
-    for task_key in _preload_task_keys(config, scope):
+    _set_preload_state(
+        enabled=enabled,
+        scope=scope,
+        status="warming",
+        reason="Preloading HanLP models in background.",
+        started_at=_copy_preload_state().get("started_at"),
+        finished_at=None,
+        current_task_key=None,
+        current_task_index=0,
+        total_tasks=total_tasks,
+        completed_tasks=completed_tasks,
+        failed_tasks=failed_tasks,
+        model_result=model_result,
+        preloaded_models=preloaded_models,
+        task_results=task_results,
+    )
+
+    for task_index, task_key in enumerate(task_keys, start=1):
         task_cfg = _task_specs(config).get(task_key)
         task_model_id = _effective_task_model_id(config, task_key, task_cfg)
         sample_text = _PRELOAD_SAMPLE_TEXTS.get(task_key, "微软发布新模型。")
+        _set_preload_state(
+            enabled=enabled,
+            scope=scope,
+            status="warming",
+            reason="Preloading HanLP models in background.",
+            started_at=_copy_preload_state().get("started_at"),
+            finished_at=None,
+            current_task_key=task_key,
+            current_task_index=task_index,
+            total_tasks=total_tasks,
+            completed_tasks=completed_tasks,
+            failed_tasks=failed_tasks,
+            model_result=model_result,
+            preloaded_models=preloaded_models,
+            task_results=task_results,
+        )
         _result, task_state = runtime.run_task(task_key, sample_text, config.knowledge)
         task_status = str(task_state.get("status") or "unavailable")
         model_ready = model_ready and task_status == "ready"
+        if task_status == "ready":
+            completed_tasks += 1
+        else:
+            failed_tasks += 1
         task_results[task_key] = {
             "status": task_status,
             "reason_code": str(task_state.get("reason_code") or "HANLP2_TASK_LOAD_FAILED"),
@@ -542,6 +596,22 @@ def _run_hanlp_preload(force: bool = False) -> None:
                 "status": task_status,
             }
         )
+        _set_preload_state(
+            enabled=enabled,
+            scope=scope,
+            status="warming",
+            reason="Preloading HanLP models in background.",
+            started_at=_copy_preload_state().get("started_at"),
+            finished_at=None,
+            current_task_key=task_key,
+            current_task_index=task_index,
+            total_tasks=total_tasks,
+            completed_tasks=completed_tasks,
+            failed_tasks=failed_tasks,
+            model_result=model_result,
+            preloaded_models=preloaded_models,
+            task_results=task_results,
+        )
 
     _set_preload_state(
         enabled=enabled,
@@ -549,12 +619,12 @@ def _run_hanlp_preload(force: bool = False) -> None:
         status="ready" if model_ready else "failed",
         reason="HanLP preload completed." if model_ready else "HanLP preload completed with failures.",
         finished_at=time.time(),
-        model_result={
-            "status": str(model_state.get("status") or "unavailable"),
-            "reason_code": str(model_state.get("reason_code") or "HANLP2_MODEL_LOAD_FAILED"),
-            "reason": str(model_state.get("reason") or "HanLP model preload failed."),
-            "model_id": default_model_id,
-        },
+        current_task_key=None,
+        current_task_index=total_tasks,
+        total_tasks=total_tasks,
+        completed_tasks=completed_tasks,
+        failed_tasks=failed_tasks,
+        model_result={**model_result, "model_id": default_model_id},
         preloaded_models=preloaded_models,
         task_results=task_results,
     )

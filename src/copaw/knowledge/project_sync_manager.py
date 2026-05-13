@@ -439,6 +439,32 @@ class ProjectKnowledgeSyncManager:
 	def _build_semantic_engine_state(self, state: dict[str, Any]) -> dict[str, Any]:
 		return sync_projection.build_semantic_engine_state(self, state)
 
+	def _capture_semantic_engine_state(self, config: KnowledgeConfig | None) -> dict[str, Any]:
+		getter = getattr(self._knowledge_manager, "get_semantic_engine_state", None)
+		if callable(getter):
+			payload = getter(config)
+		else:
+			payload = dict(self._default_state("").get("semantic_engine") or {})
+		if not isinstance(payload, dict) or not payload:
+			payload = dict(self._default_state("").get("semantic_engine") or {})
+		payload = dict(payload)
+		task_getter = getattr(self._knowledge_manager, "get_semantic_task_state", None)
+		task_states: dict[str, Any] = {}
+		if callable(task_getter):
+			for task_key in ("tokenize", "ner_msra"):
+				try:
+					task_state = task_getter(task_key, config)
+				except Exception:
+					continue
+				if isinstance(task_state, dict) and task_state:
+					task_states[task_key] = dict(task_state)
+		if task_states:
+			payload["task_states"] = task_states
+		payload.setdefault("engine", "hanlp2")
+		payload.setdefault("updated_at", self._now_iso())
+		payload["summary"] = self._build_semantic_engine_summary(payload)
+		return payload
+
 	def _relative_workspace_path(self, value: Any) -> str:
 		return sync_projection.relative_workspace_path(self, value)
 
