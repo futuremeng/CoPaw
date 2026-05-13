@@ -99,6 +99,13 @@ const DEMO_METHODS: DemoMethod[] = [
     examples: ["微软发布新模型。", "我们在北京举行会议。", "吾之道也。"],
   },
   {
+    key: "srl",
+    backendTaskKey: "srl",
+    title: "Semantic Role Labeling",
+    placeholder: "输入语义角色标注文本，例如：微软发布新模型。",
+    examples: ["微软发布新模型。", "我们在北京举行会议。", "吾之道也。"],
+  },
+  {
     key: "con",
     backendTaskKey: "con",
     title: "Constituency Parsing",
@@ -355,6 +362,13 @@ function getTokenListFromResult(taskKey: string, result: unknown): string[] {
       .map((row) => String(row.token || row.text || row.word || ""))
       .filter(Boolean);
   }
+  if (taskKey === "srl" && Array.isArray(result)) {
+    return result
+      .map((item) => asRecord(item))
+      .filter((item): item is Record<string, unknown> => Boolean(item))
+      .map((row) => String(row.text || ""))
+      .filter(Boolean);
+  }
   if (
     (taskKey === "pos_ctb" ||
       taskKey === "pos_pku" ||
@@ -380,7 +394,7 @@ function getSelectableCount(taskKey: string, result: unknown): number {
   if (taskKey === "tokenize" || taskKey === "lzh_tok_fine" || taskKey === "lzh_tok_coarse") {
     return result.length;
   }
-  if (taskKey === "ner" || taskKey === "dep" || taskKey === "sdp" || taskKey === "lzh_dep") {
+  if (taskKey === "ner" || taskKey === "dep" || taskKey === "sdp" || taskKey === "srl" || taskKey === "lzh_dep") {
     return result.length;
   }
   if (
@@ -778,6 +792,25 @@ function renderResultByTask(
     }
   }
 
+  if (taskKey === "srl" && Array.isArray(result)) {
+    const rows = result
+      .map((item) => asRecord(item))
+      .filter((item): item is Record<string, unknown> => Boolean(item));
+    const tokens = rows.map((row) => String(row.text || "")).filter(Boolean);
+    return (
+      <>
+        {renderRecordRows(rows, ["predicate_group", "role", "text", "start", "end"], {
+          interactive: true,
+          selectedRowIndex: activeRowIndex,
+          hoveredRowIndex,
+          onSelectRow,
+          onHoverRow,
+        })}
+        {renderTokenRail(tokens, highlightedRowIndex)}
+      </>
+    );
+  }
+
   if (taskKey === "con") {
     if (typeof result === "string") {
       return (
@@ -1008,6 +1041,15 @@ function NlpPage() {
       },
     },
     {
+      key: "srl",
+      taskKey: "srl",
+      status: {
+        status: taskStates.srl?.status || "unavailable",
+        reasonCode: taskStates.srl?.reason_code || "HANLP2_TASK_NOT_CONFIGURED",
+        reason: taskStates.srl?.reason || t("nlpConfig.methods.defaultUnavailableReason"),
+      },
+    },
+    {
       key: "con",
       taskKey: "con",
       status: {
@@ -1059,6 +1101,11 @@ function NlpPage() {
       reason: "No status available",
     },
     sdp: methods.find((item) => item.key === "sdp")?.status || {
+      status: "unavailable",
+      reasonCode: "UNKNOWN",
+      reason: "No status available",
+    },
+    srl: methods.find((item) => item.key === "srl")?.status || {
       status: "unavailable",
       reasonCode: "UNKNOWN",
       reason: "No status available",
@@ -1154,9 +1201,14 @@ function NlpPage() {
     pos_863: methods.find((item) => item.key === "pos_863"),
     dep: methods.find((item) => item.key === "dep"),
     sdp: methods.find((item) => item.key === "sdp"),
+    srl: methods.find((item) => item.key === "srl"),
     con: methods.find((item) => item.key === "con"),
     cor: methods.find((item) => item.key === "cor"),
   };
+  const activeDemoMethodDetail = methodDetailByTaskKey[activeDemoMethod.backendTaskKey];
+  const activeDemoMethodName = activeDemoMethodDetail
+    ? t(`nlpConfig.methods.${activeDemoMethodDetail.key}.name`)
+    : activeDemoMethod.title;
 
   const resolveMethodTaskCandidates = (taskKey: string): string[] => {
     const mapping: Record<string, string[]> = {
@@ -1167,6 +1219,7 @@ function NlpPage() {
       pos_863: ["pos_863", "pos"],
       dep: ["dep"],
       sdp: ["sdp"],
+      srl: ["srl"],
       con: ["con"],
       lzh_tok_fine: ["lzh_tok_fine", "tok/fine", "lzh_tok"],
       lzh_tok_coarse: ["lzh_tok_coarse", "tok/coarse", "lzh_tok"],
@@ -1220,7 +1273,13 @@ function NlpPage() {
     hanlpProviderActive &&
     Boolean(localModelsStatus?.require_local_models) &&
     missingLocalModelItems.length > 0;
-  const runDemoDisabled = hasMissingLocalModels || !hanlpProviderActive || !sidecarReady;
+  const activeDemoReady = String(activeDemoStatus.status || "").toLowerCase() === "ready";
+  const activeClassicalDemoReady = String(activeClassicalDemoStatus.status || "").toLowerCase() === "ready";
+  const hasRunningDemo = Boolean(runningDemoTask);
+  const runDemoDisabled =
+    hasMissingLocalModels || !hanlpProviderActive || !sidecarReady || !activeDemoReady || hasRunningDemo;
+  const runClassicalDemoDisabled =
+    hasMissingLocalModels || !hanlpProviderActive || !sidecarReady || !activeClassicalDemoReady || hasRunningDemo;
 
   useEffect(() => {
     setActiveDemoRowIndex(null);
@@ -1504,7 +1563,7 @@ function NlpPage() {
                   <div className={styles.demoPanel}>
                     <div className={styles.demoInputPanel}>
                       <Typography.Title level={5} className={styles.cardTitle}>
-                        {activeDemoMethod.title}
+                        {activeDemoMethodName}
                       </Typography.Title>
                       <Typography.Paragraph type="secondary" className={styles.cardDescription}>
                         {activeDemoStatus.reason}
@@ -1757,7 +1816,7 @@ function NlpPage() {
                       <Button
                         type="primary"
                         loading={runningDemoTask === activeClassicalDemoMethod?.backendTaskKey}
-                        disabled={runDemoDisabled}
+                        disabled={runClassicalDemoDisabled}
                         onClick={() =>
                           runMethodDemo(activeClassicalDemoMethod?.backendTaskKey || "tokenize", activeClassicalDemoInput)
                         }

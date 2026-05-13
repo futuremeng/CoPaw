@@ -116,6 +116,9 @@ _TASK_MATRIX_KEY_MAP = {
 }
 _TASK_MODEL_DEFAULTS = {
     "ner_msra": "MSRA_NER_BERT_BASE_ZH",
+    "dep": "CTB9_DEP_ELECTRA_SMALL",
+    "sdp": "SEMEVAL16_ALL_ELECTRA_SMALL_ZH",
+    "con": "CTB9_CON_FULL_TAG_ELECTRA_SMALL",
     "srl": "CPB3_SRL_ELECTRA_SMALL",
     "pos_ctb": "CTB9_POS_ELECTRA_SMALL",
     "pos_pku": "PKU_POS_ELECTRA_SMALL",
@@ -152,7 +155,7 @@ _TASK_TIMEOUT_MIN_FOR_BERT = {
     "ner_msra": 60.0,
 }
 _ROUTE_TIMEOUT_GRACE_SEC = 0.25
-_ROUTE_TIMEOUT_MAX_SEC = 8.0
+_ROUTE_TIMEOUT_MAX_SEC = 20.0
 _BATCH_MAX_TEXTS = 5
 _NER_NOISE_TOKENS = {
     "在",
@@ -450,6 +453,21 @@ def _normalize_srl_result(raw: Any) -> list[dict[str, Any]]:
                 }
             )
     return normalized
+
+
+def _is_effectively_empty_srl_result(raw: Any) -> bool:
+    if raw is None:
+        return True
+    if isinstance(raw, dict):
+        raw = raw.get("srl")
+    if not isinstance(raw, list):
+        return True
+    if not raw:
+        return True
+    for pas in raw:
+        if isinstance(pas, (list, tuple)) and len(pas) > 0:
+            return False
+    return True
 
 
 def _normalize_pos_result(raw: Any) -> list[dict[str, Any]]:
@@ -1007,6 +1025,23 @@ async def _run_hanlp_task_impl(
                 ),
                 timeout_sec=route_timeout_sec,
             )
+            if _is_effectively_empty_srl_result(result) and request_text:
+                tokenized, tokenized_state = await _await_runtime_call(
+                    lambda: runtime.tokenize(request_text, effective_config),
+                    timeout_sec=route_timeout_sec,
+                )
+                fallback_tokens = [str(token or "").strip() for token in (tokenized if isinstance(tokenized, list) else []) if str(token or "").strip()]
+                if fallback_tokens:
+                    result, state = await _await_runtime_call(
+                        lambda: runtime.run_task_tokenized(
+                            normalized_task_key,
+                            fallback_tokens,
+                            effective_config,
+                        ),
+                        timeout_sec=route_timeout_sec,
+                    )
+                else:
+                    state = tokenized_state
         raw_result = result
         normalized_result = _normalize_srl_result(result)
     elif normalized_task_key in {"pos_ctb", "pos_pku", "pos_863"}:

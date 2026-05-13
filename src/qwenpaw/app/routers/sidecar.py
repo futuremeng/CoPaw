@@ -19,6 +19,16 @@ from .agent import (
 router = APIRouter(prefix="/sidecar", tags=["sidecar"])
 
 _CLASSICAL_SINGLE_MODEL_ID = "KYOTO_EVAHAN_TOK_LEM_POS_UDEP_LZH"
+_TASK_MODEL_DEFAULTS = {
+    "ner_msra": "MSRA_NER_BERT_BASE_ZH",
+    "dep": "CTB9_DEP_ELECTRA_SMALL",
+    "sdp": "SEMEVAL16_ALL_ELECTRA_SMALL_ZH",
+    "con": "CTB9_CON_FULL_TAG_ELECTRA_SMALL",
+    "srl": "CPB3_SRL_ELECTRA_SMALL",
+    "pos_ctb": "CTB9_POS_ELECTRA_SMALL",
+    "pos_pku": "PKU_POS_ELECTRA_SMALL",
+    "pos_863": "C863_POS_ELECTRA_SMALL",
+}
 
 
 def _extract_model_cache_keys(model_id: str) -> list[str]:
@@ -71,7 +81,7 @@ def _host_has_local_model_artifact(model_id: str, hanlp_home: str = "") -> bool:
                 keys.append(key)
     if not keys:
         return False
-    subdirs = ("", "tok", "mtl", "ner", "dep", "pos", "sdp", "con", "classification", "transformers")
+    subdirs = ("", "tok", "mtl", "ner", "dep", "pos", "sdp", "srl", "con", "classification", "transformers")
     for home in _model_cache_homes(hanlp_home):
         for subdir in subdirs:
             base = os.path.join(home, subdir) if subdir else home
@@ -90,6 +100,83 @@ def _classical_local_item(config) -> dict[str, Any]:
         "task_name": "tok/fine",
         "model_id": _CLASSICAL_SINGLE_MODEL_ID,
         "local_available": bool(_host_has_local_model_artifact(_CLASSICAL_SINGLE_MODEL_ID, model_home)),
+    }
+
+
+def _require_local_models() -> bool:
+    value = str(os.environ.get("COPAW_HANLP_REQUIRE_LOCAL_MODELS", "1") or "1").strip().lower()
+    return value not in {"0", "false", "no", "off"}
+
+
+def _effective_task_model_id(task_key: str, task_cfg, default_model_id: str) -> str:
+    configured = str(getattr(task_cfg, "model_id", "") or "").strip() if task_cfg is not None else ""
+    if configured:
+        return configured
+    fallback = str(_TASK_MODEL_DEFAULTS.get(str(task_key or "").strip(), "") or "").strip()
+    if fallback:
+        return fallback
+    return default_model_id
+
+
+def _build_local_models_payload(config) -> dict[str, Any]:
+    nlp_cfg = config.knowledge.nlp
+    model_home = str(getattr(nlp_cfg, "model_home", "") or "")
+    default_model_id = str(getattr(nlp_cfg, "model_id", "") or "").strip()
+    task_matrix = getattr(nlp_cfg, "task_matrix", None)
+    tasks = getattr(task_matrix, "tasks", {}) if task_matrix is not None else {}
+
+    items: list[dict[str, Any]] = []
+    if default_model_id:
+        items.append(
+            {
+                "scope": "default",
+                "task_key": "tokenize",
+                "task_name": "tokenize",
+                "model_id": default_model_id,
+                "local_available": bool(_host_has_local_model_artifact(default_model_id, model_home)),
+            }
+        )
+
+    if isinstance(tasks, dict):
+        for task_key, task_cfg in tasks.items():
+            if not bool(getattr(task_cfg, "enabled", True)):
+                continue
+            model_id = _effective_task_model_id(str(task_key), task_cfg, default_model_id)
+            if not model_id:
+                continue
+            task_name = str(getattr(task_cfg, "task_name", task_key) or task_key).strip()
+            items.append(
+                {
+                    "scope": "task",
+                    "task_key": str(task_key),
+                    "task_name": task_name,
+                    "model_id": model_id,
+                    "local_available": bool(_host_has_local_model_artifact(model_id, model_home)),
+                }
+            )
+
+    # Ensure classical single-model availability is always represented.
+    classical_item = _classical_local_item(config)
+    if not any(
+        str(item.get("task_key") or "").strip() == str(classical_item.get("task_key") or "").strip()
+        for item in items
+    ):
+        items.append(classical_item)
+
+    all_local = all(bool(item.get("local_available")) for item in items) if items else True
+    return {
+        "engine": "hanlp2",
+        "status": "ready" if all_local else "unavailable",
+        "reason_code": "HANLP2_LOCAL_MODELS_READY" if all_local else "HANLP2_MODEL_NOT_LOCAL",
+        "reason": (
+            "All required HanLP models are present in local cache."
+            if all_local
+            else "Some HanLP models are missing from local cache."
+        ),
+        "require_local_models": _require_local_models(),
+        "hanlp_home": model_home,
+        "model_cache_path": model_home,
+        "items": items,
     }
 
 
@@ -209,9 +296,7 @@ async def get_sidecar_nlp_local_models() -> dict:
     nlp_cfg = config.knowledge.nlp
     provider = str(getattr(nlp_cfg, "provider", "hanlp") or "hanlp").strip().lower()
 
-    runtime = NLPRuntime()
-    payload = await asyncio.to_thread(runtime.local_models_status, config.knowledge)
-    payload = _augment_local_models_payload(payload, config)
+    payload = _build_local_models_payload(config)
     payload["provider"] = provider
     payload["model_cache_path"] = str(getattr(nlp_cfg, "model_home", "") or "")
     return payload
@@ -232,8 +317,7 @@ async def download_missing_local_models() -> dict:
     provider = str(getattr(nlp_cfg, "provider", "hanlp") or "hanlp").strip().lower()
 
     runtime = NLPRuntime()
-    before = await asyncio.to_thread(runtime.local_models_status, config.knowledge)
-    before = _augment_local_models_payload(before, config)
+    before = _build_local_models_payload(config)
     before_items = list(before.get("items") or [])
     missing_items = [item for item in before_items if not bool(item.get("local_available", False))]
 
@@ -247,7 +331,7 @@ async def download_missing_local_models() -> dict:
     for model_id in model_ids:
         local_config = config.knowledge.model_copy(deep=True)
         local_config.nlp.model_id = model_id
-        result = await asyncio.to_thread(runtime.ensure_model, local_config, allow_download=True)
+        result = await asyncio.to_thread(runtime.ensure_model, local_config)
         attempts.append(
             {
                 "model_id": model_id,
@@ -257,8 +341,7 @@ async def download_missing_local_models() -> dict:
             }
         )
 
-    after = await asyncio.to_thread(runtime.local_models_status, config.knowledge)
-    after = _augment_local_models_payload(after, config)
+    after = _build_local_models_payload(config)
     remaining = [item for item in list(after.get("items") or []) if not bool(item.get("local_available", False))]
 
     return {

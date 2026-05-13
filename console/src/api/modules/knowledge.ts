@@ -188,7 +188,16 @@ export const knowledgeApi = {
       withProjectId("/knowledge/tasks/snapshot", options?.projectId),
     ),
 
-  runNlpTaskDemo: (taskKey: string, payload: { text: string; request_id?: string }) =>
+  runNlpTaskDemo: (
+    taskKey: string,
+    payload: {
+      text?: string;
+      tokens?: string[];
+      texts?: string[];
+      tokens_batch?: string[][];
+      request_id?: string;
+    },
+  ) =>
     request<{
       task_key: string;
       request_id: string;

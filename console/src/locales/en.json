@@ -229,6 +229,10 @@
         "name": "sdp",
         "description": "Semantic dependency parsing task."
       },
+      "srl": {
+        "name": "srl",
+        "description": "Semantic role labeling task."
+      },
       "con": {
         "name": "con",
         "description": "Constituency parsing task."

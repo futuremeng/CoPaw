@@ -155,12 +155,60 @@ def lookup_task_spec(payload, task_key):
 def flatten_tokens(value):
     if isinstance(value, str):
         return [value]
+    if isinstance(value, dict):
+        for key in ("tokens", "token", "tok", "tok/fine", "tok/coarse", "words"):
+            if key in value:
+                return flatten_tokens(value.get(key))
+        return []
     if isinstance(value, (list, tuple)):
         items = []
         for child in value:
             items.extend(flatten_tokens(child))
         return items
+	if hasattr(value, "__iter__"):
+		items = []
+		try:
+			for child in value:
+				items.extend(flatten_tokens(child))
+		except Exception:
+			return []
+		return items
     return []
+
+
+def run_tokenize_with_fallback(module, tokenizer, text):
+	text = str(text or "")
+	if not text:
+		return []
+	tokens = []
+	if callable(tokenizer):
+		try:
+			tokens = flatten_tokens(tokenizer(text))
+		except Exception:
+			tokens = []
+	if tokens:
+		return tokens
+	fallback_tokenizer = getattr(module, "tokenize", None)
+	if callable(fallback_tokenizer):
+		try:
+			tokens = flatten_tokens(fallback_tokenizer(text))
+		except Exception:
+			tokens = []
+	if tokens:
+		return tokens
+	parse = getattr(module, "parse", None)
+	if callable(parse):
+		for task_name in ("tok", "tok/fine", "tokenize"):
+			try:
+				parsed = parse(text, tasks=[task_name])
+			except Exception:
+				continue
+			tokens = flatten_tokens(extract_parse_result(parsed, task_name))
+			if tokens:
+				return tokens
+	# Keep UI/demo flows functional even when HanLP tokenizer returns empty.
+	# This is a last-resort fallback and should be rare.
+	return [ch for ch in text if str(ch).strip()]
 
 
 def load_model(module, model_id):
@@ -294,7 +342,7 @@ def main():
             emit(unavailable_payload("HANLP2_TOKENIZE_UNAVAILABLE", "HanLP2 tokenizer is unavailable."))
             return
         try:
-            tokens = flatten_tokens(tokenizer(text))
+			tokens = run_tokenize_with_fallback(hanlp, tokenizer, text)
         except Exception as exc:
             emit(unavailable_payload("HANLP2_TOKENIZE_FAILED", f"HanLP2 semantic tokenization failed via tok: {type(exc).__name__}."))
             return
@@ -315,7 +363,7 @@ def main():
 		failed_count = 0
 		for text in texts:
 			try:
-				token_batches.append(flatten_tokens(tokenizer(str(text or ""))))
+				token_batches.append(run_tokenize_with_fallback(hanlp, tokenizer, str(text or "")))
 			except Exception:
 				token_batches.append([])
 				failed_count += 1
@@ -351,11 +399,20 @@ def main():
             emit(ready_payload("HANLP2_TASK_READY", "HanLP task is ready."))
             return
 
-        task_result = None
-        parse = getattr(hanlp, "parse", None)
+		task_result = None
+		parse = getattr(hanlp, "parse", None)
+		tokenizer = getattr(hanlp, "tokenize", None)
+		model = None
+		task_model_id = str(spec.get("model_id") or "").strip()
+		if task_model_id:
+			try:
+				model = get_cached_model(hanlp, task_model_id)
+			except Exception:
+				model = None
 		if normalized_task_name == "srl" and isinstance(tokens, list):
 			token_input = [str(token or "").strip() for token in tokens if str(token or "").strip()]
-			model = choose_srl_model(hanlp, spec.get("model_id"))
+			if model is None:
+				model = choose_srl_model(hanlp, spec.get("model_id"))
 			if callable(model) and token_input:
 				try:
 					task_result = model(token_input)
@@ -368,16 +425,25 @@ def main():
                 task_result = None
 
 		if task_result is None and normalized_task_name == "ner_msra":
-            model = choose_ner_model(hanlp, spec.get("model_id"))
+			if model is None:
+				model = choose_ner_model(hanlp, spec.get("model_id"))
             if callable(model):
                 try:
                     task_result = model(text)
                 except IndexError:
-                    tokenizer = getattr(hanlp, "tokenize", None)
                     if callable(tokenizer):
                         task_result = model(flatten_tokens(tokenizer(text)))
                 except Exception:
                     task_result = None
+
+		if task_result is None and callable(model):
+			try:
+				task_result = model(text)
+			except IndexError:
+				if callable(tokenizer):
+					task_result = model(flatten_tokens(tokenizer(text)))
+			except Exception:
+				task_result = None
 
         if task_result is None:
             emit(unavailable_payload("HANLP2_TASK_UNAVAILABLE", "HanLP task is unavailable.", task_result=None))
@@ -569,9 +635,11 @@ for line in sys.stdin:
 	old_stdin = sys.stdin
 	old_stdout = sys.stdout
 	old_stderr = sys.stderr
+	old_argv = list(sys.argv)
 	sys.stdin = stdin
 	sys.stdout = stdout
 	sys.stderr = stderr
+	sys.argv = [old_argv[0] if old_argv else "hanlp_bridge", mode]
 	try:
 		bridge_namespace["main"]()
 	except Exception:
@@ -598,6 +666,7 @@ for line in sys.stdin:
 		sys.stdin = old_stdin
 		sys.stdout = old_stdout
 		sys.stderr = old_stderr
+		sys.argv = old_argv
 	sys.stdout.write(json.dumps(response, ensure_ascii=False) + "\\n")
 	sys.stdout.flush()
 """

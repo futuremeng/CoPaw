@@ -2134,18 +2134,21 @@ def _default_hanlp_tasks() -> Dict[str, KnowledgeHanLPTaskConfig]:
         "dep": KnowledgeHanLPTaskConfig(
             enabled=True,
             task_name="dep",
+            model_id="CTB9_DEP_ELECTRA_SMALL",
             artifact_key="dep",
             eval_role="primary",
         ),
         "sdp": KnowledgeHanLPTaskConfig(
             enabled=True,
             task_name="sdp",
+            model_id="SEMEVAL16_ALL_ELECTRA_SMALL_ZH",
             artifact_key="sdp",
             eval_role="primary",
         ),
         "con": KnowledgeHanLPTaskConfig(
             enabled=True,
             task_name="con",
+            model_id="CTB9_CON_FULL_TAG_ELECTRA_SMALL",
             artifact_key="con",
             eval_role="auxiliary",
         ),

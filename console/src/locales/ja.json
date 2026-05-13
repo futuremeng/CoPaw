@@ -2022,6 +2022,10 @@
         "name": "sdp",
         "description": "意味依存解析タスクです。"
       },
+      "srl": {
+        "name": "srl",
+        "description": "意味役割付与タスクです。"
+      },
       "con": {
         "name": "con",
         "description": "構文木（句構造）解析タスクです。"

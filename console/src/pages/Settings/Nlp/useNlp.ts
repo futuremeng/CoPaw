@@ -401,6 +401,10 @@ export function useNlp() {
   const runMethodDemo = async (taskKey: string, text: string) => {
     const normalizedTaskKey = String(taskKey || "").trim();
     const normalizedText = String(text || "").trim();
+    if (runningDemoTask) {
+      message.warning(`A demo task (${runningDemoTask}) is still running`);
+      return null;
+    }
     if (!normalizedTaskKey || !normalizedText) {
       message.warning("Please select a method and provide test text");
       return null;
@@ -408,9 +412,26 @@ export function useNlp() {
 
     setRunningDemoTask(normalizedTaskKey);
     try {
-      const result = await api.runNlpTaskDemo(normalizedTaskKey, {
-        text: normalizedText,
-      });
+      let result;
+      if (normalizedTaskKey === "srl") {
+        const tokenizeResult = await api.runNlpTaskDemo("tokenize", {
+          text: normalizedText,
+        });
+        const tokens = Array.isArray(tokenizeResult.result)
+          ? tokenizeResult.result.map((item) => String(item || "").trim()).filter(Boolean)
+          : [];
+        if (tokens.length === 0) {
+          message.warning("srl demo: tokenize returned empty tokens");
+          return null;
+        }
+        result = await api.runNlpTaskDemo(normalizedTaskKey, {
+          tokens,
+        });
+      } else {
+        result = await api.runNlpTaskDemo(normalizedTaskKey, {
+          text: normalizedText,
+        });
+      }
       setDemoResults((prev) => ({ ...prev, [normalizedTaskKey]: result }));
       if (result.status === "ready") {
         message.success(`${normalizedTaskKey} demo finished`);

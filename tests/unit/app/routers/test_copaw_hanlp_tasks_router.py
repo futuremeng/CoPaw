@@ -577,6 +577,45 @@ def test_copaw_hanlp_ner_injects_runtime_default_model_when_matrix_empty(monkeyp
     assert _TaskMatrixProbeRuntime.last_ner_matrix_model_id == "MSRA_NER_BERT_BASE_ZH"
 
 
+def test_copaw_hanlp_dep_injects_runtime_default_model_when_matrix_empty(monkeypatch):
+    from copaw.app.routers import knowledge_hanlp_tasks as module
+
+    cfg = SimpleNamespace(
+        knowledge=SimpleNamespace(
+            nlp=SimpleNamespace(
+                model_id="FINE_ELECTRA_SMALL_ZH",
+                strategy=SimpleNamespace(
+                    mode="auto",
+                    default_model_id="FINE_ELECTRA_SMALL_ZH",
+                    task_overrides={},
+                    auto_classical_chinese=SimpleNamespace(enabled=False, threshold=0.2, model_id=""),
+                ),
+                task_matrix=SimpleNamespace(
+                    tasks={
+                        "dep": SimpleNamespace(model_id=""),
+                    },
+                ),
+            ),
+        ),
+    )
+    monkeypatch.setattr(module, "load_config", lambda: cfg)
+    monkeypatch.setattr(module, "NLPRuntime", lambda: _FakeRuntime())
+
+    from copaw.app._app import app
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/knowledge/tasks/dep/run",
+            json={"text": "微软在北京发布Copaw", "request_id": "req-dep-matrix-default"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "ready"
+    assert payload["resolved_model"] == "CTB9_DEP_ELECTRA_SMALL"
+    assert payload["effective_task_model_id"] == "CTB9_DEP_ELECTRA_SMALL"
+
+
 def test_copaw_hanlp_ner_filters_noisy_and_overlapping_entities(monkeypatch):
     from copaw.app.routers import knowledge_hanlp_tasks as module
 

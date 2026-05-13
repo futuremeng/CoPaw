@@ -1260,11 +1260,20 @@ async def run_knowledge_nlp_task(
     body: dict = Body(...),
 ):
     """Run NLP task demo (compat endpoint for settings /nlp page)."""
-    text = str((body or {}).get("text") or "").strip()
-    if not text:
-        raise HTTPException(status_code=422, detail="text is required")
+    payload = body or {}
+    text = str(payload.get("text") or "").strip()
+    texts_raw = payload.get("texts")
+    tokens_raw = payload.get("tokens")
+    tokens_batch_raw = payload.get("tokens_batch")
 
-    request_id_raw = (body or {}).get("request_id")
+    has_text = bool(text)
+    has_texts = isinstance(texts_raw, list) and len(texts_raw) > 0
+    has_tokens = isinstance(tokens_raw, list) and len(tokens_raw) > 0
+    has_tokens_batch = isinstance(tokens_batch_raw, list) and len(tokens_batch_raw) > 0
+    if not (has_text or has_texts or has_tokens or has_tokens_batch):
+        raise HTTPException(status_code=422, detail="text, texts, tokens or tokens_batch is required")
+
+    request_id_raw = payload.get("request_id")
     request_id = str(request_id_raw).strip() if request_id_raw is not None else None
 
     try:
@@ -1280,7 +1289,13 @@ async def run_knowledge_nlp_task(
 
     return await _run_hanlp_task(
         task_key,
-        HanLPTaskRunRequest(text=text, request_id=request_id),
+        HanLPTaskRunRequest(
+            text=text if has_text else None,
+            texts=texts_raw if has_texts else None,
+            tokens=tokens_raw if has_tokens else None,
+            tokens_batch=tokens_batch_raw if has_tokens_batch else None,
+            request_id=request_id,
+        ),
         request,
     )
 
