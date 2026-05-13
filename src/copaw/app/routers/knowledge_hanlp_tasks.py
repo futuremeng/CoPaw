@@ -27,6 +27,15 @@ class HanLPTaskRunRequest(BaseModel):
         max_length=5,
         description="Optional batch input texts. Maximum 5 entries per request.",
     )
+    tokens: list[str] | None = Field(
+        default=None,
+        description="Optional tokenized sentence input for tasks that support token-level execution.",
+    )
+    tokens_batch: list[list[str]] | None = Field(
+        default=None,
+        max_length=5,
+        description="Optional batch tokenized inputs. Maximum 5 entries per request.",
+    )
     request_id: str | None = Field(default=None, description="Optional caller request id.")
 
 
@@ -72,7 +81,7 @@ _MODERN_HINT_TOKENS = (
     "所以",
     "以及",
 )
-_SUPPORTED_TASK_KEYS = {"tokenize", "ner", "dep", "sdp", "con", "cor", "pos_ctb", "pos_pku", "pos_863"}
+_SUPPORTED_TASK_KEYS = {"tokenize", "ner", "dep", "sdp", "con", "srl", "cor", "pos_ctb", "pos_pku", "pos_863"}
 _SUPPORTED_CLASSICAL_TASK_KEYS = {
     "lzh_tok_fine",
     "lzh_tok_coarse",
@@ -92,6 +101,7 @@ _TASK_MATRIX_KEY_MAP = {
     "dep": "dep",
     "sdp": "sdp",
     "con": "con",
+    "srl": "srl",
     "cor": "coref",
     "pos_ctb": "pos_ctb",
     "pos_pku": "pos_pku",
@@ -106,6 +116,7 @@ _TASK_MATRIX_KEY_MAP = {
 }
 _TASK_MODEL_DEFAULTS = {
     "ner_msra": "MSRA_NER_BERT_BASE_ZH",
+    "srl": "CPB3_SRL_ELECTRA_SMALL",
     "pos_ctb": "CTB9_POS_ELECTRA_SMALL",
     "pos_pku": "PKU_POS_ELECTRA_SMALL",
     "pos_863": "C863_POS_ELECTRA_SMALL",
@@ -115,6 +126,7 @@ _TASK_TIMEOUT_DEFAULTS = {
     "dep": 60.0,
     "sdp": 60.0,
     "con": 60.0,
+    "srl": 60.0,
     "pos_ctb": 60.0,
     "pos_pku": 60.0,
     "pos_863": 60.0,
@@ -177,17 +189,19 @@ def _entity_quality_score(item: dict[str, Any]) -> int:
     if length >= 2:
         score += 2
     else:
-        score -= 2
+        score -= 1
     if length <= 8:
         score += 1
     else:
         score -= 1
-    if any(token in mention for token in _NER_NOISE_TOKENS):
+    if mention in _NER_NOISE_TOKENS:
+        score -= 4
+    elif any(token in mention for token in _NER_NOISE_TOKENS):
         score -= 3
     if re.search(r"[，。！？、；：\s]", mention):
         score -= 2
     if label == "PERSON" and length <= 1:
-        score -= 3
+        score += 0
     return score
 
 
@@ -403,6 +417,41 @@ def _normalize_con_result(raw: Any) -> list[dict[str, Any]] | dict[str, Any] | s
     return {}
 
 
+def _normalize_srl_result(raw: Any) -> list[dict[str, Any]]:
+    if isinstance(raw, dict):
+        extracted = raw.get("srl")
+        if isinstance(extracted, list):
+            raw = extracted
+    if not isinstance(raw, list):
+        return []
+    normalized: list[dict[str, Any]] = []
+    for predicate_group, pas in enumerate(raw, start=1):
+        if not isinstance(pas, (list, tuple)):
+            continue
+        for item in pas:
+            if not isinstance(item, (list, tuple)) or len(item) < 4:
+                continue
+            text = str(item[0] or "").strip()
+            role = str(item[1] or "").strip()
+            try:
+                start = int(item[2])
+                end = int(item[3])
+            except (TypeError, ValueError):
+                continue
+            if not text and not role:
+                continue
+            normalized.append(
+                {
+                    "predicate_group": predicate_group,
+                    "text": text,
+                    "role": role,
+                    "start": start,
+                    "end": end,
+                }
+            )
+    return normalized
+
+
 def _normalize_pos_result(raw: Any) -> list[dict[str, Any]]:
     if not isinstance(raw, list):
         return []
@@ -480,6 +529,34 @@ def _request_texts(request: HanLPTaskRunRequest) -> list[str]:
     if not text:
         raise HTTPException(status_code=400, detail="HANLP_TEXT_REQUIRED")
     return [text]
+
+
+def _normalized_tokens(tokens: Any) -> list[str]:
+    if not isinstance(tokens, list):
+        return []
+    normalized: list[str] = []
+    for token in tokens:
+        value = str(token or "").strip()
+        if value:
+            normalized.append(value)
+    return normalized
+
+
+def _request_token_batches(request: HanLPTaskRunRequest) -> list[list[str]]:
+    batches: list[list[str]] = []
+    if isinstance(request.tokens_batch, list):
+        for item in request.tokens_batch:
+            normalized = _normalized_tokens(item)
+            if normalized:
+                batches.append(normalized)
+    if len(batches) > _BATCH_MAX_TEXTS:
+        raise HTTPException(status_code=400, detail="HANLP_BATCH_TOO_LARGE")
+    if batches:
+        return batches
+    single = _normalized_tokens(request.tokens)
+    if single:
+        return [single]
+    return []
 
 
 def _safe_positive_float(value: Any) -> float | None:
@@ -839,8 +916,11 @@ async def _run_hanlp_task_impl(
     request_id: str,
     started: float,
     knowledge_config: KnowledgeConfig | None = None,
+    tokenized_tokens: list[str] | None = None,
 ) -> HanLPTaskRunResponse:
-    request_text = str(request.text or "")
+    request_text = str(request.text or "").strip()
+    if not request_text and tokenized_tokens:
+        request_text = "".join(tokenized_tokens)
     if knowledge_config is None:
         knowledge_config = await _resolve_knowledge_config(http_request)
     decision = _resolve_model_decision(normalized_task_key, request_text, knowledge_config)
@@ -908,6 +988,27 @@ async def _run_hanlp_task_impl(
         )
         raw_result = result
         normalized_result = _normalize_con_result(result)
+    elif normalized_task_key == "srl":
+        if tokenized_tokens:
+            result, state = await _await_runtime_call(
+                lambda: runtime.run_task_tokenized(
+                    normalized_task_key,
+                    tokenized_tokens,
+                    effective_config,
+                ),
+                timeout_sec=route_timeout_sec,
+            )
+        else:
+            result, state = await _await_runtime_call(
+                lambda: runtime.run_task(
+                    normalized_task_key,
+                    request_text,
+                    effective_config,
+                ),
+                timeout_sec=route_timeout_sec,
+            )
+        raw_result = result
+        normalized_result = _normalize_srl_result(result)
     elif normalized_task_key in {"pos_ctb", "pos_pku", "pos_863"}:
         result, state = await _await_runtime_call(
             lambda: runtime.run_task(
@@ -1044,11 +1145,15 @@ async def _run_hanlp_task_batch_impl(
     request_id: str,
     started: float,
     texts: list[str],
+    tokens_batch: list[list[str]] | None = None,
 ) -> HanLPTaskRunResponse:
     knowledge_config = await _resolve_knowledge_config(http_request)
     runtime = _shared_runtime()
     route_timeout_sec = _route_timeout_sec(normalized_task_key, knowledge_config)
-    decision = _resolve_model_decision(normalized_task_key, texts[0], knowledge_config)
+    decision_seed_text = texts[0] if texts else ""
+    if not decision_seed_text and tokens_batch:
+        decision_seed_text = "".join(tokens_batch[0])
+    decision = _resolve_model_decision(normalized_task_key, decision_seed_text, knowledge_config)
     effective_config = _clone_effective_config(knowledge_config)
     _prepare_classical_task_config(normalized_task_key, effective_config)
     _ensure_runtime_task_model_defaults(normalized_task_key, effective_config)
@@ -1062,6 +1167,11 @@ async def _run_hanlp_task_batch_impl(
     if normalized_task_key == "tokenize":
         raw_items, state = await _await_runtime_call(
             lambda: runtime.tokenize_batch(texts, effective_config),
+            timeout_sec=route_timeout_sec,
+        )
+    elif normalized_task_key == "srl" and tokens_batch is not None:
+        raw_items, state = await _await_runtime_call(
+            lambda: runtime.run_task_tokenized_batch(normalized_task_key, tokens_batch, effective_config),
             timeout_sec=route_timeout_sec,
         )
     else:
@@ -1086,6 +1196,8 @@ async def _run_hanlp_task_batch_impl(
             normalized_result = _normalize_sdp_result(raw_item)
         elif normalized_task_key == "con":
             normalized_result = _normalize_con_result(raw_item)
+        elif normalized_task_key == "srl":
+            normalized_result = _normalize_srl_result(raw_item)
         elif normalized_task_key in {"pos_ctb", "pos_pku", "pos_863"}:
             normalized_result = _normalize_pos_result(raw_item)
         elif normalized_task_key in _SUPPORTED_CLASSICAL_TASK_KEYS:
@@ -1157,6 +1269,45 @@ async def _run_hanlp_task(task_key: str, request: HanLPTaskRunRequest, http_requ
     request_id = _effective_request_id(request.request_id)
     started = time.perf_counter()
     route_deadline_sec = _route_deadline_sec()
+    token_batches = _request_token_batches(request)
+    if token_batches:
+        try:
+            if len(token_batches) == 1:
+                return await asyncio.wait_for(
+                    _run_hanlp_task_impl(
+                        normalized_task_key,
+                        HanLPTaskRunRequest(
+                            text="".join(token_batches[0]),
+                            request_id=request_id,
+                        ),
+                        http_request,
+                        request_id,
+                        started,
+                        tokenized_tokens=token_batches[0],
+                    ),
+                    timeout=route_deadline_sec,
+                )
+            return await asyncio.wait_for(
+                _run_hanlp_task_batch_impl(
+                    normalized_task_key=normalized_task_key,
+                    request=request,
+                    http_request=http_request,
+                    request_id=request_id,
+                    started=started,
+                    texts=["".join(batch) for batch in token_batches],
+                    tokens_batch=token_batches,
+                ),
+                timeout=route_deadline_sec,
+            )
+        except asyncio.TimeoutError:
+            return _route_timeout_response(
+                task_key=normalized_task_key,
+                request_id=request_id,
+                started=started,
+                timeout_sec=route_deadline_sec,
+                reason=f"HanLP route exceeded interactive deadline ({route_deadline_sec:.3f}s).",
+            )
+
     texts = _request_texts(request)
     try:
         if len(texts) == 1:

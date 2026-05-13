@@ -190,6 +190,22 @@ def choose_ner_model(module, preferred_model_id):
     return None
 
 
+def choose_srl_model(module, preferred_model_id):
+	candidates = []
+	preferred = str(preferred_model_id or "").strip()
+	if preferred:
+		candidates.append(preferred)
+	candidates.append("CPB3_SRL_ELECTRA_SMALL")
+	for model_id in candidates:
+		try:
+			model = get_cached_model(module, model_id)
+		except Exception:
+			continue
+		if model is not None:
+			return model
+	return None
+
+
 _MODEL_CACHE = {}
 
 
@@ -320,6 +336,8 @@ def main():
         spec = lookup_task_spec(payload, task_key) or {"task_name": task_key, "model_id": ""}
         task_name = str(spec.get("task_name") or task_key).strip()
         text = str(payload.get("text") or "")
+		tokens = payload.get("tokens")
+		normalized_task_name = normalize_task_key(task_name)
 		if is_coref_task_name(task_name):
 			emit({
 				"engine": "hanlp2",
@@ -335,13 +353,21 @@ def main():
 
         task_result = None
         parse = getattr(hanlp, "parse", None)
+		if normalized_task_name == "srl" and isinstance(tokens, list):
+			token_input = [str(token or "").strip() for token in tokens if str(token or "").strip()]
+			model = choose_srl_model(hanlp, spec.get("model_id"))
+			if callable(model) and token_input:
+				try:
+					task_result = model(token_input)
+				except Exception:
+					task_result = None
         if callable(parse):
             try:
                 task_result = extract_parse_result(parse(text, tasks=[task_name]), task_name)
             except Exception:
                 task_result = None
 
-        if task_result is None and normalize_task_key(task_name) == "ner_msra":
+		if task_result is None and normalized_task_name == "ner_msra":
             model = choose_ner_model(hanlp, spec.get("model_id"))
             if callable(model):
                 try:
@@ -362,8 +388,12 @@ def main():
 	if mode == "run_task_batch":
 		task_key = str(payload.get("task_key") or "").strip()
 		texts = payload.get("texts") or []
+		tokens_batch = payload.get("tokens_batch") or []
 		spec = lookup_task_spec(payload, task_key) or {"task_name": task_key, "model_id": ""}
 		task_name = str(spec.get("task_name") or task_key).strip()
+		normalized_task_name = normalize_task_key(task_name)
+		if (not texts) and isinstance(tokens_batch, list):
+			texts = ["" for _ in tokens_batch]
 		if is_coref_task_name(task_name):
 			emit({
 				"engine": "hanlp2",
@@ -388,12 +418,24 @@ def main():
 		task_model_id = str(spec.get("model_id") or "").strip()
 		if task_model_id:
 			model = get_cached_model(hanlp, task_model_id)
-		if normalize_task_key(task_name) == "ner_msra" and model is None:
+		if normalized_task_name == "ner_msra" and model is None:
 			model = choose_ner_model(hanlp, spec.get("model_id"))
+		if normalized_task_name == "srl" and model is None:
+			model = choose_srl_model(hanlp, spec.get("model_id"))
 
-		for text in texts:
+		for index, text in enumerate(texts):
 			task_result = None
 			normalized_text = str(text or "")
+			current_tokens = None
+			if isinstance(tokens_batch, list) and index < len(tokens_batch) and isinstance(tokens_batch[index], list):
+				current_tokens = [str(token or "").strip() for token in tokens_batch[index] if str(token or "").strip()]
+
+			if normalized_task_name == "srl" and callable(model) and current_tokens:
+				try:
+					task_result = model(current_tokens)
+				except Exception:
+					task_result = None
+
 			if callable(parse):
 				try:
 					task_result = extract_parse_result(parse(normalized_text, tasks=[task_name]), task_name)
@@ -1074,6 +1116,63 @@ class NLPRuntime:
 		payload = self._config_payload(config)
 		payload["task_key"] = task_key
 		payload["texts"] = list(texts)
+		task_cfg = ((payload.get("task_matrix") or {}).get("tasks") or {}).get(task_key) or {}
+		timeout = float(task_cfg.get("timeout_sec") or payload.get("tokenize_timeout_sec") or 15.0)
+		try:
+			executable = self._ensure_sidecar(payload)
+		except (ValueError, FileNotFoundError) as error:
+			return [], self._sidecar_unavailable_state(error)
+		state = self._run_bridge(
+			executable,
+			mode="run_task_batch",
+			payload=payload,
+			timeout=timeout,
+			retry_on_timeout=False,
+		)
+		raw_results = state.get("task_results", [])
+		results: list[Any] = raw_results if isinstance(raw_results, list) else []
+		return results, state
+
+	def run_task_tokenized(
+		self,
+		task_key: str,
+		tokens: list[str],
+		config: KnowledgeConfig | None = None,
+	) -> tuple[Any, dict[str, Any]]:
+		probe_state = self.probe(config)
+		if probe_state.get("status") != "ready":
+			return [], probe_state
+		payload = self._config_payload(config)
+		payload["task_key"] = task_key
+		payload["tokens"] = list(tokens)
+		task_cfg = ((payload.get("task_matrix") or {}).get("tasks") or {}).get(task_key) or {}
+		timeout = float(task_cfg.get("timeout_sec") or payload.get("tokenize_timeout_sec") or 15.0)
+		try:
+			executable = self._ensure_sidecar(payload)
+		except (ValueError, FileNotFoundError) as error:
+			return [], self._sidecar_unavailable_state(error)
+		state = self._run_bridge(
+			executable,
+			mode="run_task",
+			payload=payload,
+			timeout=timeout,
+			retry_on_timeout=False,
+		)
+		return state.get("task_result", []), state
+
+	def run_task_tokenized_batch(
+		self,
+		task_key: str,
+		tokens_batch: list[list[str]],
+		config: KnowledgeConfig | None = None,
+	) -> tuple[list[Any], dict[str, Any]]:
+		probe_state = self.probe(config)
+		if probe_state.get("status") != "ready":
+			return [], probe_state
+		payload = self._config_payload(config)
+		payload["task_key"] = task_key
+		payload["tokens_batch"] = [list(tokens) for tokens in tokens_batch]
+		payload["texts"] = ["" for _ in tokens_batch]
 		task_cfg = ((payload.get("task_matrix") or {}).get("tasks") or {}).get(task_key) or {}
 		timeout = float(task_cfg.get("timeout_sec") or payload.get("tokenize_timeout_sec") or 15.0)
 		try:

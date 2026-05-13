@@ -39,6 +39,18 @@ class _FakeRuntime:
 
     def run_task(self, task_key: str, text: str, config):
         _ = config
+        if task_key == "srl":
+            return [
+                [
+                    ["微软", "ARG0", 0, 1],
+                    ["发布", "PRED", 1, 2],
+                    ["新模型", "ARG1", 2, 3],
+                ]
+            ], {
+                "status": "ready",
+                "reason_code": "HANLP2_TASK_READY",
+                "reason": "HanLP task is ready.",
+            }
         return {"task": task_key, "text": text}, {
             "status": "ready",
             "reason_code": "HANLP2_TASK_READY",
@@ -60,7 +72,85 @@ class _FakeRuntime:
 
     def run_task_batch(self, task_key: str, texts: list[str], config):
         _ = config
+        if task_key == "srl":
+            return [
+                [
+                    [
+                        ["微软", "ARG0", 0, 1],
+                        ["发布", "PRED", 1, 2],
+                        ["新模型", "ARG1", 2, 3],
+                    ]
+                ]
+                for _ in texts
+            ], {
+                "status": "ready",
+                "reason_code": "HANLP2_BATCH_READY",
+                "reason": "HanLP batch task finished successfully.",
+                "duration_ms": 1,
+                "sidecar_elapsed_ms": 1,
+                "sidecar_trace_elapsed_ms": 0,
+                "sidecar_trace_stage_ms": {},
+                "preload_status": "idle",
+            }
         return [{"task": task_key, "text": text} for text in texts], {
+            "status": "ready",
+            "reason_code": "HANLP2_BATCH_READY",
+            "reason": "HanLP batch task finished successfully.",
+            "duration_ms": 1,
+            "sidecar_elapsed_ms": 1,
+            "sidecar_trace_elapsed_ms": 0,
+            "sidecar_trace_stage_ms": {},
+            "preload_status": "idle",
+        }
+
+    def run_task_tokenized(self, task_key: str, tokens: list[str], config):
+        _ = config
+        if task_key == "srl":
+            pred_index = 1 if len(tokens) > 1 else 0
+            return [
+                [
+                    [tokens[pred_index], "PRED", pred_index, pred_index + 1],
+                    ["".join(tokens), "ARG1", 0, len(tokens)],
+                ]
+            ], {
+                "status": "ready",
+                "reason_code": "HANLP2_TASK_READY",
+                "reason": "HanLP task is ready.",
+            }
+        return {"task": task_key, "tokens": tokens}, {
+            "status": "ready",
+            "reason_code": "HANLP2_TASK_READY",
+            "reason": "HanLP task is ready.",
+        }
+
+    def run_task_tokenized_batch(self, task_key: str, tokens_batch: list[list[str]], config):
+        _ = config
+        if task_key == "srl":
+            results = []
+            for tokens in tokens_batch:
+                if not tokens:
+                    results.append([])
+                    continue
+                pred_index = 1 if len(tokens) > 1 else 0
+                results.append(
+                    [
+                        [
+                            [tokens[pred_index], "PRED", pred_index, pred_index + 1],
+                            ["".join(tokens), "ARG1", 0, len(tokens)],
+                        ]
+                    ]
+                )
+            return results, {
+                "status": "ready",
+                "reason_code": "HANLP2_BATCH_READY",
+                "reason": "HanLP batch task finished successfully.",
+                "duration_ms": 1,
+                "sidecar_elapsed_ms": 1,
+                "sidecar_trace_elapsed_ms": 0,
+                "sidecar_trace_stage_ms": {},
+                "preload_status": "idle",
+            }
+        return [{"task": task_key, "tokens": tokens} for tokens in tokens_batch], {
             "status": "ready",
             "reason_code": "HANLP2_BATCH_READY",
             "reason": "HanLP batch task finished successfully.",
@@ -116,6 +206,22 @@ class _UnavailableRuntime:
     def run_task_batch(self, task_key: str, texts: list[str], config):
         _ = (task_key, texts, config)
         return [None for _ in texts], {
+            "status": "unavailable",
+            "reason_code": "HANLP2_MODEL_LOAD_FAILED",
+            "reason": "HanLP model load failed.",
+        }
+
+    def run_task_tokenized(self, task_key: str, tokens: list[str], config):
+        _ = (task_key, tokens, config)
+        return None, {
+            "status": "unavailable",
+            "reason_code": "HANLP2_MODEL_LOAD_FAILED",
+            "reason": "HanLP model load failed.",
+        }
+
+    def run_task_tokenized_batch(self, task_key: str, tokens_batch: list[list[str]], config):
+        _ = (task_key, tokens_batch, config)
+        return [None for _ in tokens_batch], {
             "status": "unavailable",
             "reason_code": "HANLP2_MODEL_LOAD_FAILED",
             "reason": "HanLP model load failed.",
@@ -743,6 +849,75 @@ def test_copaw_hanlp_sdp_run_endpoint(monkeypatch):
     assert payload["task_key"] == "sdp"
     assert payload["status"] == "ready"
     assert payload["result"]["task"] == "sdp"
+
+
+def test_copaw_hanlp_srl_run_endpoint(monkeypatch):
+    _install_runtime_mocks(monkeypatch)
+
+    from copaw.app._app import app
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/knowledge/tasks/srl/run",
+            json={"text": "微软发布新模型", "request_id": "req-srl-1"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["task_key"] == "srl"
+    assert payload["status"] == "ready"
+    assert isinstance(payload["result"], list)
+    assert payload["result"][1]["role"] == "PRED"
+    assert payload["result"][1]["text"] == "发布"
+
+
+def test_copaw_hanlp_srl_run_with_tokens_endpoint(monkeypatch):
+    _install_runtime_mocks(monkeypatch)
+
+    from copaw.app._app import app
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/knowledge/tasks/srl/run",
+            json={
+                "tokens": ["HanLP", "支持", "流程", "复用"],
+                "request_id": "req-srl-tokenized-1",
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["task_key"] == "srl"
+    assert payload["status"] == "ready"
+    assert payload["result"][0]["role"] == "PRED"
+    assert payload["result"][0]["text"] == "支持"
+
+
+def test_copaw_hanlp_srl_run_with_tokens_batch_endpoint(monkeypatch):
+    _install_runtime_mocks(monkeypatch)
+
+    from copaw.app._app import app
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/knowledge/tasks/srl/run",
+            json={
+                "tokens_batch": [
+                    ["HanLP", "支持", "流程", "复用"],
+                    ["语义", "角色", "分析"],
+                ],
+                "request_id": "req-srl-tokenized-batch-1",
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["task_key"] == "srl"
+    assert payload["status"] == "ready"
+    assert isinstance(payload["result"], list)
+    assert len(payload["result"]) == 2
+    assert payload["result"][0]["status"] == "ready"
+    assert payload["result"][0]["result"][0]["role"] == "PRED"
 
 
 def test_copaw_hanlp_unknown_task_rejected(monkeypatch):

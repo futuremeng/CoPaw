@@ -2149,6 +2149,14 @@ def _default_hanlp_tasks() -> Dict[str, KnowledgeHanLPTaskConfig]:
             artifact_key="con",
             eval_role="auxiliary",
         ),
+        "srl": KnowledgeHanLPTaskConfig(
+            enabled=True,
+            task_name="srl",
+            model_id="CPB3_SRL_ELECTRA_SMALL",
+            artifact_key="srl",
+            eval_role="auxiliary",
+            timeout_sec=60.0,
+        ),
         "pos_ctb": KnowledgeHanLPTaskConfig(
             enabled=True,
             task_name="pos",
