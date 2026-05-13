@@ -362,9 +362,9 @@ export function resolveProjectKnowledgeL1StepStats(
   };
   PROJECT_KNOWLEDGE_L1_STEP_STATS_DESCRIPTORS.forEach((descriptor, index) => {
     const result = results[index];
-    nextState[descriptor.stateKey] = result?.status === "fulfilled"
-      ? result.value as ProjectKnowledgeL1StepStatsState[typeof descriptor.stateKey]
-      : null;
+    nextState[descriptor.stateKey] = (result?.status === "fulfilled"
+      ? result.value
+      : null) as any;
   });
   return nextState;
 }

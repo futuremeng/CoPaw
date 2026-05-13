@@ -20,6 +20,7 @@ import {
 import { ShieldCheck, ShieldAlert, ShieldX, KeyRound } from "lucide-react";
 import api from "../../../../api";
 import { parseUpdateClientJson } from "../clientConfig";
+import { MCPOAuthSection } from "./MCPOAuthSection";
 import styles from "../index.module.less";
 
 interface MCPClientUpdate {
@@ -42,6 +43,7 @@ interface MCPClientCardProps {
   onUpdate: (key: string, updates: MCPClientUpdate) => Promise<boolean>;
   isRefreshing: boolean;
   isQueued: boolean;
+  onRefresh?: () => void;
 }
 
 export const MCPClientCard = React.memo(function MCPClientCard({
@@ -51,6 +53,7 @@ export const MCPClientCard = React.memo(function MCPClientCard({
   onUpdate,
   isRefreshing,
   isQueued,
+  onRefresh,
 }: MCPClientCardProps) {
   const { t } = useTranslation();
   const { isDark } = useTheme();
@@ -64,6 +67,11 @@ export const MCPClientCard = React.memo(function MCPClientCard({
   const [editedJson, setEditedJson] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [oauthModalOpen, setOauthModalOpen] = useState(false);
+  const [oauthClientId, setOauthClientId] = useState("");
+  const [oauthScope, setOauthScope] = useState("");
+  const [oauthAuthEndpoint, setOauthAuthEndpoint] = useState("");
+  const [oauthTokenEndpoint, setOauthTokenEndpoint] = useState("");
 
   // Determine if MCP client is remote or local based on command
   const isRemote =

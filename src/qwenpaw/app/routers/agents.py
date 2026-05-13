@@ -37,7 +37,7 @@ from agentscope_runtime.engine.schemas.exception import (
 )
 
 from ...agents.utils.file_handling import read_text_file_with_encoding_fallback
-from ...agents.skills_hub import install_skill_from_hub
+from ...agents.skill_system.hub import install_skill_from_hub
 from ...agents.skills_manager import SkillConflictError
 from ..utils import schedule_agent_reload
 from ...config.config import (
@@ -1264,8 +1264,10 @@ def _load_project_template_text(
 
     try:
         template_resource = importlib.resources.files("copaw").joinpath(
-            "app", "project_templates", *relative_path.split("/")
-        )
+            "app"
+        ).joinpath("project_templates")
+        for part in relative_path.split("/"):
+            template_resource = template_resource.joinpath(part)
         if template_resource.is_file():
             content = template_resource.read_text(encoding="utf-8")
     except Exception:
@@ -3220,7 +3222,6 @@ def _activate_import_bundle(
                     workspace_dir=workspace_dir,
                     bundle_url=url,
                     enable=True,
-                    overwrite=overwrite,
                 )
                 summary["skills_installed"].append(result.name)
             except SkillConflictError as exc:
@@ -3937,7 +3938,7 @@ async def import_square_agent(
             heartbeat=HeartbeatConfig(),
             tools=ToolsConfig(),
         )
-        _initialize_agent_workspace(workspace_dir, agent_cfg)
+        _initialize_agent_workspace(workspace_dir)
         config.agents.profiles[local_agent_id] = AgentProfileRef(
             id=local_agent_id,
             workspace_dir=str(workspace_dir),

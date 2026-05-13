@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Button, Empty, Modal, Input, message } from "@agentscope-ai/design";
+import { type MouseEvent, useCallback, useState } from "react";
+import { Button, Empty, Modal, Input, Select, Tabs, message } from "@agentscope-ai/design";
 import { PlusOutlined } from "@ant-design/icons";
 import type { MCPClientInfo } from "../../../api/types";
 import { MCPClientCard } from "./components";
@@ -8,6 +8,20 @@ import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
 import { parseCreateClientsJson } from "./clientConfig";
 import styles from "./index.module.less";
+
+type MCPTransport = "streamable_http" | "sse" | "stdio";
+
+const defaultForm = {
+  key: "",
+  name: "",
+  description: "",
+  transport: "streamable_http" as MCPTransport,
+  url: "",
+  command: "",
+  args: "",
+  env: "",
+  cwd: "",
+};
 
 function MCPPage() {
   const { t } = useTranslation();
@@ -21,10 +35,10 @@ function MCPPage() {
     deleteClient,
     createClient,
     updateClient,
-    refreshClients,
   } = useMCP();
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [activeTab, setActiveTab] = useState<"json" | "form">("json");
   const probingCount = queuedRefreshKeys.length + refreshingKeys.length;
   const hasEnabledClients = clients.some((client) => client.enabled);
   const [newClientJson, setNewClientJson] = useState(`{
@@ -67,13 +81,13 @@ function MCPPage() {
 
   const handleToggleEnabled = async (
     client: MCPClientInfo,
-    e?: React.MouseEvent,
+    e?: MouseEvent,
   ) => {
     e?.stopPropagation();
     await toggleEnabled(client);
   };
 
-  const handleDelete = async (client: MCPClientInfo, e?: React.MouseEvent) => {
+  const handleDelete = async (client: MCPClientInfo, e?: MouseEvent) => {
     e?.stopPropagation();
     await deleteClient(client);
   };
@@ -102,10 +116,6 @@ function MCPPage() {
         setCreateModalOpen(false);
         resetModal();
       }
-    }
-  }
-}`);
-      }
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Invalid JSON format";
@@ -115,16 +125,15 @@ function MCPPage() {
     }
   };
 
-  // ---------- Form create ----------
   const handleCreateFromForm = async () => {
     const key = form.key.trim();
     const name = form.name.trim();
     if (!key) {
-      alert(t("mcp.form.keyRequired"));
+      message.error(t("mcp.form.keyRequired"));
       return;
     }
     if (!name) {
-      alert(t("mcp.form.nameRequired"));
+      message.error(t("mcp.form.nameRequired"));
       return;
     }
 
@@ -132,21 +141,19 @@ function MCPPage() {
       form.transport === "streamable_http" || form.transport === "sse";
 
     if (isHttp && !form.url.trim()) {
-      alert(t("mcp.form.urlRequired"));
+      message.error(t("mcp.form.urlRequired"));
       return;
     }
     if (form.transport === "stdio" && !form.command.trim()) {
-      alert(t("mcp.form.commandRequired"));
+      message.error(t("mcp.form.commandRequired"));
       return;
     }
 
-    // Parse args: split on newlines, commas, or spaces
     const args = form.args
       .split(/[\n, ]+/)
       .map((s) => s.trim())
       .filter(Boolean);
 
-    // Parse env (KEY=VALUE lines)
     const env: Record<string, string> = {};
     form.env
       .split("\n")
@@ -159,21 +166,24 @@ function MCPPage() {
         }
       });
 
-    const clientData = {
-      name,
-      description: form.description,
-      transport: form.transport,
-      url: isHttp ? form.url.trim() : "",
-      command: form.transport === "stdio" ? form.command.trim() : "",
-      args,
-      env,
-      cwd: form.cwd.trim(),
-    };
-
-    const success = await createClient(key, clientData);
-    if (success) {
-      setCreateModalOpen(false);
-      resetModal();
+    setIsCreating(true);
+    try {
+      const success = await createClient(key, {
+        name,
+        description: form.description,
+        transport: form.transport,
+        url: isHttp ? form.url.trim() : "",
+        command: form.transport === "stdio" ? form.command.trim() : "",
+        args,
+        env,
+        cwd: form.cwd.trim(),
+      });
+      if (success) {
+        setCreateModalOpen(false);
+        resetModal();
+      }
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -251,7 +261,11 @@ function MCPPage() {
             </Button>
             <Button
               type="primary"
-              onClick={handleCreateClient}
+              onClick={() => {
+                void (activeTab === "form"
+                  ? handleCreateFromForm()
+                  : handleCreateClient());
+              }}
               loading={isCreating}
               disabled={isCreating}
             >
@@ -420,22 +434,22 @@ function MCPPage() {
   );
 }
 
-const rowStyle: React.CSSProperties = {
+const rowStyle = {
   display: "flex",
   gap: 12,
-};
+} as const;
 
-const fieldStyle: React.CSSProperties = {
+const fieldStyle = {
   flex: 1,
   display: "flex",
   flexDirection: "column",
   gap: 4,
-};
+} as const;
 
-const labelStyle: React.CSSProperties = {
+const labelStyle = {
   fontSize: 12,
   color: "#555",
   fontWeight: 500,
-};
+} as const;
 
 export default MCPPage;

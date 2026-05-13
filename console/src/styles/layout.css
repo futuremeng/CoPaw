@@ -725,10 +725,10 @@ html.dark-mode .ant-tooltip-arrow::before {
 /* Disabled chat input overlay in dark mode */
 html.dark-mode
   [class*="chatDisabledOverlay"]
-  :global([class*="chat-anywhere-input"]),
-html.dark-mode [class*="chatDisabledOverlay"] :global([class*="chat-input"]),
-html.dark-mode [class*="chatDisabledOverlay"] :global(textarea),
-html.dark-mode [class*="chatDisabledOverlay"] :global(input[type="text"]) {
+  [class*="chat-anywhere-input"],
+html.dark-mode [class*="chatDisabledOverlay"] [class*="chat-input"],
+html.dark-mode [class*="chatDisabledOverlay"] textarea,
+html.dark-mode [class*="chatDisabledOverlay"] input[type="text"] {
   background-color: #2a2a2a !important;
 }
 

@@ -109,7 +109,6 @@ function buildKnowledgeState(): ProjectKnowledgeState {
         indexed: true,
         indexed_at: "2026-04-11T23:30:00+00:00",
         document_count: 3,
-        snapshot_count: 3,
         chunk_count: 7,
         documents: [
           {
@@ -794,7 +793,7 @@ describe("project knowledge supporting panels", () => {
           },
         },
       ],
-    } as typeof knowledgeState.sourceScanStats;
+    } as any;
     knowledgeState.fileAnalysisStats = {
       latest: null,
       history: [
@@ -810,7 +809,7 @@ describe("project knowledge supporting panels", () => {
           },
         },
       ],
-    } as typeof knowledgeState.fileAnalysisStats;
+    } as any;
     knowledgeState.projectStepStats = {
       domain_graph_build: {
         latest: null,
@@ -845,7 +844,7 @@ describe("project knowledge supporting panels", () => {
           },
         ],
       },
-    } as typeof knowledgeState.projectStepStats;
+    } as any;
 
     render(<ProjectKnowledgeProcessingPanel knowledgeState={knowledgeState} />);
 

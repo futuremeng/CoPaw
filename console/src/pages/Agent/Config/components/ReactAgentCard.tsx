@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Form, InputNumber, Select, Card, Alert, Switch } from "@agentscope-ai/design";
+import { Form, Input, InputNumber, Select, Card, Alert, Switch } from "@agentscope-ai/design";
 import { useTranslation } from "react-i18next";
 import { useTimezoneOptions } from "../../../../hooks/useTimezoneOptions";
 import { planApi } from "../../../../api/modules/plan";

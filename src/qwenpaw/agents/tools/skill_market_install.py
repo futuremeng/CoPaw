@@ -9,7 +9,7 @@ from pathlib import Path
 from agentscope.message import TextBlock
 from agentscope.tool import ToolResponse
 
-from ...agents.skills_hub import install_skill_from_hub
+from ...agents.skill_system.hub import install_skill_from_hub
 from ...agents.skills_manager import reconcile_workspace_manifest
 from ...app.routers.skills import _aggregate_marketplace, _load_current_market_config
 from ...config.context import get_current_workspace_dir
@@ -172,12 +172,10 @@ async def skill_market_install(
             )
 
         workspace_dir = Path(get_current_workspace_dir() or WORKING_DIR)
-        effective_overwrite = bool(overwrite or cfg.install.overwrite_default)
         result = install_skill_from_hub(
             workspace_dir=workspace_dir,
             bundle_url=selected.install_url,
             enable=enable,
-            overwrite=effective_overwrite,
         )
 
         reconcile_workspace_manifest(workspace_dir)

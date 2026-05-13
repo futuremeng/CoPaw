@@ -14,6 +14,7 @@ import {
   Spin,
   Tabs,
   Typography,
+  message,
 } from "antd";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -600,7 +601,7 @@ export default function ProjectDetailPage() {
   const [knowledgeDockTab, setKnowledgeDockTab] = useState<KnowledgeDockTabKey>("explore");
   const effectiveKnowledgeDockTab = knowledgeDockTab === "ner" ? "processing" : knowledgeDockTab;
   const [knowledgeProcessingFocusMode, setKnowledgeProcessingFocusMode] = useState<ProjectKnowledgeProcessingMode | "">("");
-  const [knowledgeProcessingFocusStage, setKnowledgeProcessingFocusStage] = useState<"ner" | "syntax" | "cor" | "">("");
+  const [knowledgeProcessingFocusStage, setKnowledgeProcessingFocusStage] = useState<"tokenize" | "ner" | "syntax" | "cor" | "">("");
   const [knowledgeProcessingFocusToken, setKnowledgeProcessingFocusToken] = useState(0);
   const [projectKnowledgeIncludeGlobal, setProjectKnowledgeIncludeGlobal] = useState(true);
   const [knowledgeHeaderSignals, setKnowledgeHeaderSignals] =
@@ -3083,7 +3084,7 @@ export default function ProjectDetailPage() {
 
   const handleKnowledgeOpenProcessing = useCallback((
     mode?: ProjectKnowledgeProcessingMode,
-    stage?: "ner" | "syntax" | "cor",
+    stage?: "tokenize" | "ner" | "syntax" | "cor",
   ) => {
     setKnowledgeDockTab("processing");
     setKnowledgeProcessingFocusMode(mode || "nlp");

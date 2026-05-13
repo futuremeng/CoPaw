@@ -41,6 +41,7 @@ import {
   SparkSaveLine,
 } from "@agentscope-ai/icons";
 import { Activity, BookOpen, Briefcase } from "lucide-react";
+import { Package } from "lucide-react";
 import { clearAuthToken } from "../api/config";
 import { authApi } from "../api/modules/auth";
 import { usePlugins } from "../plugins/PluginContext";

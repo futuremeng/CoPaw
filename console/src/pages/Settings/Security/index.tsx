@@ -73,6 +73,7 @@ function SecurityPage() {
     error,
     fetchAll,
     toggleRule,
+    toggleAutoDeny,
     deleteCustomRule,
     addCustomRule,
     updateCustomRule,
@@ -99,6 +100,7 @@ function SecurityPage() {
         denied_tools: values.denied_tools ?? [],
         custom_rules: customRules,
         disabled_rules: Array.from(saveBody.disabled_rules),
+        auto_denied_rules: Array.from(saveBody.auto_denied_rules),
         shell_evasion_checks: saveBody.shell_evasion_checks,
       };
       await api.updateToolGuard(body);
@@ -322,6 +324,7 @@ function SecurityPage() {
                         rules={mergedRules}
                         enabled={enabled}
                         onToggleRule={toggleRule}
+                        onToggleAutoDeny={toggleAutoDeny}
                         onPreviewRule={setPreviewRule}
                         onEditRule={openEditRule}
                         onDeleteRule={deleteCustomRule}

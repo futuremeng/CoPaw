@@ -93,6 +93,10 @@ describe("pipelineModelBudget", () => {
           max_batch_size: 0,
         },
         memory_manager_backend: "remelight",
+        auto_title_config: {
+          enabled: false,
+          timeout_seconds: 0,
+        },
       },
     });
 
@@ -183,6 +187,10 @@ describe("pipelineModelBudget", () => {
           max_batch_size: 0,
         },
         memory_manager_backend: "remelight",
+        auto_title_config: {
+          enabled: false,
+          timeout_seconds: 0,
+        },
       },
     });
 

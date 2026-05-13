@@ -3,11 +3,7 @@ import type {
   ProjectKnowledgeStepStatsRecord,
 } from "../../../api/types";
 
-export type TranslateFn = (
-  key: string,
-  maybeFallbackOrOptions?: string | Record<string, unknown>,
-  maybeOptions?: Record<string, unknown>,
-) => string;
+export type TranslateFn = (...args: any[]) => any;
 
 export type ProjectKnowledgeStatsLike = ProjectKnowledgeStepStatsRecord | Record<string, never> | null | undefined;
 export type ProjectKnowledgeStatsHistoryLike = ProjectKnowledgeStepStatsRecord[] | null | undefined;
