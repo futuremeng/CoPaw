@@ -8,7 +8,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, AsyncGenerator, Coroutine
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Coroutine, cast
 
 import frontmatter as fm
 from agentscope.message import Msg, TextBlock
@@ -33,7 +33,7 @@ from .mission_dispatch import (
 from .session import SafeJSONSession
 from .utils import build_env_context
 from ..channels.schema import DEFAULT_CHANNEL
-from ...agents.react_agent import QwenPawAgent
+from ...agents.react_agent import CoPawAgent
 from ...exceptions import convert_model_exception
 from ...agents.utils.file_handling import (
     read_text_file_with_encoding_fallback,
@@ -93,8 +93,12 @@ async def _stream_printing_messages_interruptible(
                 and printing_msg == _PRINT_END_SIGNAL
             ):
                 break
-            msg, last, _ = printing_msg
-            yield msg, last
+            if not isinstance(printing_msg, tuple) or len(printing_msg) < 2:
+                continue
+            msg = printing_msg[0]
+            last = printing_msg[1]
+            if isinstance(msg, Msg) and isinstance(last, bool):
+                yield msg, last
 
         exception = task.exception()
         if exception is not None:
@@ -301,10 +305,10 @@ class AgentRunner(Runner):
         elif isinstance(content, str):
             last.content = new_text
 
-    async def query_handler(
+    async def query_handler(  # pyright: ignore[reportIncompatibleMethodOverride]
         self,
         msgs,
-        request: AgentRequest = None,
+        request: AgentRequest | None = None,
         **kwargs,
     ):
         """
@@ -315,7 +319,7 @@ class AgentRunner(Runner):
             f"msgs={msgs}, request={request}",
         )
         query = _get_last_user_text(msgs)
-        session_id = getattr(request, "session_id", "") or ""
+        session_id = str(getattr(request, "session_id", "") or "")
 
         # Check if query is a command (including /approval)
         logger.debug(f"Query: {query!r}, is_command: {_is_command(query)}")
@@ -345,10 +349,19 @@ class AgentRunner(Runner):
         agent = None
         chat = None
         session_state_loaded = False
+        user_id = ""
+        channel = DEFAULT_CHANNEL
+        base_request_context: dict[str, Any] = {
+            "session_id": session_id,
+            "user_id": user_id,
+            "channel": channel,
+            "agent_id": self.agent_id,
+            "root_agent_id": self.agent_id,
+        }
         try:
-            session_id = request.session_id
-            user_id = request.user_id
-            channel = getattr(request, "channel", DEFAULT_CHANNEL)
+            session_id = str(getattr(request, "session_id", "") or "")
+            user_id = str(getattr(request, "user_id", "") or "")
+            channel = str(getattr(request, "channel", DEFAULT_CHANNEL) or DEFAULT_CHANNEL)
 
             logger.info(
                 "Handle agent query:\n%s",
@@ -374,13 +387,8 @@ class AgentRunner(Runner):
             # Load agent-specific configuration
             agent_config = load_agent_config(self.agent_id)
 
-            _configured_shell = (
-                agent_config.running.shell_command_executable or None
-            )
-            _default_shell = (
-                _configured_shell
-                or os.environ.get("SHELL")
-                or ("cmd.exe" if sys.platform == "win32" else "/bin/sh")
+            _default_shell = os.environ.get("SHELL") or (
+                "cmd.exe" if sys.platform == "win32" else "/bin/sh"
             )
             env_context = build_env_context(
                 session_id=session_id,
@@ -583,16 +591,14 @@ class AgentRunner(Runner):
                     )
                     plan_notebook = None
 
-            agent = QwenPawAgent(
+            agent = CoPawAgent(
                 agent_config=agent_config,
                 env_context=env_context,
                 mcp_clients=mcp_clients,
                 memory_manager=self.memory_manager,
-                context_manager=self.context_manager,
                 request_context=base_request_context,
                 workspace_dir=self.workspace_dir,
                 task_tracker=self._task_tracker,
-                plan_notebook=plan_notebook,
             )
             await agent.register_mcp_clients()
             agent.set_console_output_enabled(enabled=False)
@@ -653,7 +659,6 @@ class AgentRunner(Runner):
                     _states = await self.session.get_session_state_dict(
                         session_id=session_id,
                         user_id=user_id,
-                        channel=channel,
                         allow_not_exist=True,
                     )
                     _agent_st = _states.get("agent", {})
@@ -667,7 +672,6 @@ class AgentRunner(Runner):
                             key="agent.plan_notebook",
                             value=plan_notebook.state_dict(),
                             user_id=user_id,
-                            channel=channel,
                             create_if_not_exist=False,
                         )
                 except Exception:
@@ -680,7 +684,6 @@ class AgentRunner(Runner):
                 await self.session.load_session_state(
                     session_id=session_id,
                     user_id=user_id,
-                    channel=channel,
                     agent=agent,
                 )
             except KeyError as e:
@@ -739,10 +742,10 @@ class AgentRunner(Runner):
             logger.info(f"query_handler: {session_id} cancelled!")
 
             # Cancel all pending approvals for this root session
-            root_session_id = base_request_context.get(
+            root_session_id = str(base_request_context.get(
                 "root_session_id",
                 session_id,
-            )
+            ) or session_id)
             from ..approvals.service import get_approval_service
 
             approval_svc = get_approval_service()
@@ -784,10 +787,6 @@ class AgentRunner(Runner):
             logger.exception(f"Error in query handler: {converted}{path_hint}")
             if debug_dump_path:
                 setattr(converted, "debug_dump_path", debug_dump_path)
-                if hasattr(converted, "add_note"):
-                    converted.add_note(
-                        f"(Details:  {debug_dump_path})",
-                    )
                 suffix = f"\n(Details:  {debug_dump_path})"
                 if hasattr(converted, "message") and isinstance(
                     converted.message,
@@ -804,7 +803,6 @@ class AgentRunner(Runner):
                 await self.session.save_session_state(
                     session_id=session_id,
                     user_id=user_id,
-                    channel=channel,
                     agent=agent,
                 )
 
