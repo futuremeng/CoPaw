@@ -1,5 +1,5 @@
 import { Button } from "@agentscope-ai/design";
-import { Alert, Card, Input, Space, Switch, Tag, Typography } from "antd";
+import { Alert, Card, Collapse, Input, Space, Switch, Tag, Typography } from "antd";
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEventHandler } from "react";
 import { useTranslation } from "react-i18next";
@@ -52,64 +52,64 @@ const DEMO_METHODS: DemoMethod[] = [
   {
     key: "tokenize",
     backendTaskKey: "tokenize",
-    title: "Tokenize",
-    placeholder: "输入一段中文文本，例如：微软发布新模型。",
+    title: "智能分词",
+    placeholder: "输入一句中文，例如：微软发布新模型。",
     examples: ["微软发布新模型。", "吾之道也。"],
   },
   {
     key: "nerMsra",
     backendTaskKey: "ner",
-    title: "NER (MSRA)",
-    placeholder: "输入命名实体识别文本，例如：微软在北京发布Copaw。",
+    title: "实体识别",
+    placeholder: "输入一句中文，识别人名、地名、机构名。",
     examples: ["微软在北京发布Copaw。", "阿里巴巴位于杭州。"],
   },
   {
     key: "pos_ctb",
     backendTaskKey: "pos_ctb",
-    title: "POS Tagging (CTB9)",
-    placeholder: "输入词性标注文本，例如：微软发布新模型。",
+    title: "词性分析（CTB）",
+    placeholder: "输入一句中文，查看每个词的词性。",
     examples: ["微软发布新模型。", "我们在北京举行会议。"],
   },
   {
     key: "pos_pku",
     backendTaskKey: "pos_pku",
-    title: "POS Tagging (PKU)",
-    placeholder: "输入词性标注文本，例如：微软发布新模型。",
+    title: "词性分析（PKU）",
+    placeholder: "输入一句中文，查看每个词的词性。",
     examples: ["微软发布新模型。", "我们在北京举行会议。"],
   },
   {
     key: "pos_863",
     backendTaskKey: "pos_863",
-    title: "POS Tagging (863)",
-    placeholder: "输入词性标注文本，例如：微软发布新模型。",
+    title: "词性分析（863）",
+    placeholder: "输入一句中文，查看每个词的词性。",
     examples: ["微软发布新模型。", "我们在北京举行会议。"],
   },
   {
     key: "dep",
     backendTaskKey: "dep",
-    title: "Dependency Parsing",
-    placeholder: "输入依存句法分析文本，例如：微软发布新模型。",
+    title: "句法依存",
+    placeholder: "输入一句中文，查看词语之间的句法关系。",
     examples: ["微软发布新模型。", "我们在北京举行会议。", "吾之道也。"],
   },
   {
     key: "sdp",
     backendTaskKey: "sdp",
-    title: "Semantic Dependency Parsing",
-    placeholder: "输入语义依存分析文本，例如：微软发布新模型。",
+    title: "语义依存",
+    placeholder: "输入一句中文，查看语义层面的关系。",
     examples: ["微软发布新模型。", "我们在北京举行会议。", "吾之道也。"],
   },
   {
     key: "srl",
     backendTaskKey: "srl",
-    title: "Semantic Role Labeling",
-    placeholder: "输入语义角色标注文本，例如：微软发布新模型。",
+    title: "语义角色",
+    placeholder: "输入一句中文，查看谓词和角色关系。",
     examples: ["微软发布新模型。", "我们在北京举行会议。", "吾之道也。"],
   },
   {
     key: "con",
     backendTaskKey: "con",
-    title: "Constituency Parsing",
-    placeholder: "输入短语结构分析文本，例如：微软发布新模型。",
+    title: "短语结构",
+    placeholder: "输入一句中文，查看短语层级结构。",
     examples: ["微软发布新模型。", "我们在北京举行会议。", "吾之道也。"],
   },
 ];
@@ -1073,87 +1073,87 @@ function NlpPage() {
     tokenize: methods.find((item) => item.key === "tokenize")?.status || {
       status: "unavailable",
       reasonCode: "UNKNOWN",
-      reason: "No status available",
+      reason: "暂无状态信息",
     },
     ner: methods.find((item) => item.key === "nerMsra")?.status || {
       status: "unavailable",
       reasonCode: "UNKNOWN",
-      reason: "No status available",
+      reason: "暂无状态信息",
     },
     pos_ctb: methods.find((item) => item.key === "pos_ctb")?.status || {
       status: "unavailable",
       reasonCode: "UNKNOWN",
-      reason: "No status available",
+      reason: "暂无状态信息",
     },
     pos_pku: methods.find((item) => item.key === "pos_pku")?.status || {
       status: "unavailable",
       reasonCode: "UNKNOWN",
-      reason: "No status available",
+      reason: "暂无状态信息",
     },
     pos_863: methods.find((item) => item.key === "pos_863")?.status || {
       status: "unavailable",
       reasonCode: "UNKNOWN",
-      reason: "No status available",
+      reason: "暂无状态信息",
     },
     dep: methods.find((item) => item.key === "dep")?.status || {
       status: "unavailable",
       reasonCode: "UNKNOWN",
-      reason: "No status available",
+      reason: "暂无状态信息",
     },
     sdp: methods.find((item) => item.key === "sdp")?.status || {
       status: "unavailable",
       reasonCode: "UNKNOWN",
-      reason: "No status available",
+      reason: "暂无状态信息",
     },
     srl: methods.find((item) => item.key === "srl")?.status || {
       status: "unavailable",
       reasonCode: "UNKNOWN",
-      reason: "No status available",
+      reason: "暂无状态信息",
     },
     con: methods.find((item) => item.key === "con")?.status || {
       status: "unavailable",
       reasonCode: "UNKNOWN",
-      reason: "No status available",
+      reason: "暂无状态信息",
     },
     cor: methods.find((item) => item.key === "cor")?.status || {
       status: "unavailable",
       reasonCode: "UNKNOWN",
-      reason: "No status available",
+      reason: "暂无状态信息",
     },
     lzh_tok_fine: methods.find((item) => item.key === "tokenize")?.status || {
       status: "unavailable",
       reasonCode: "UNKNOWN",
-      reason: "No status available",
+      reason: "暂无状态信息",
     },
     lzh_tok_coarse: methods.find((item) => item.key === "tokenize")?.status || {
       status: "unavailable",
       reasonCode: "UNKNOWN",
-      reason: "No status available",
+      reason: "暂无状态信息",
     },
     lzh_lem: methods.find((item) => item.key === "tokenize")?.status || {
       status: "unavailable",
       reasonCode: "UNKNOWN",
-      reason: "No status available",
+      reason: "暂无状态信息",
     },
     lzh_pos_upos: methods.find((item) => item.key === "pos_pku")?.status || {
       status: "unavailable",
       reasonCode: "UNKNOWN",
-      reason: "No status available",
+      reason: "暂无状态信息",
     },
     lzh_pos_xpos: methods.find((item) => item.key === "pos_pku")?.status || {
       status: "unavailable",
       reasonCode: "UNKNOWN",
-      reason: "No status available",
+      reason: "暂无状态信息",
     },
     lzh_pos_pku: methods.find((item) => item.key === "pos_pku")?.status || {
       status: "unavailable",
       reasonCode: "UNKNOWN",
-      reason: "No status available",
+      reason: "暂无状态信息",
     },
     lzh_dep: methods.find((item) => item.key === "dep")?.status || {
       status: "unavailable",
       reasonCode: "UNKNOWN",
-      reason: "No status available",
+      reason: "暂无状态信息",
     },
   };
 
@@ -1162,7 +1162,7 @@ function NlpPage() {
   const activeDemoStatus = methodStatusByTask[activeDemoMethod.backendTaskKey] || {
     status: "unavailable",
     reasonCode: "UNKNOWN",
-    reason: "No status available",
+    reason: "暂无状态信息",
   };
   const activeDemoResult = (demoResults[activeDemoMethod.backendTaskKey] || null) as NlpDemoMeta | null;
   const activeSelectableCount = getSelectableCount(
@@ -1180,7 +1180,7 @@ function NlpPage() {
   const activeClassicalDemoStatus = methodStatusByTask[activeClassicalDemoMethod?.backendTaskKey || ""] || {
     status: "unavailable",
     reasonCode: "UNKNOWN",
-    reason: "No status available",
+    reason: "暂无状态信息",
   };
   const activeClassicalDemoResult =
     (demoResults[activeClassicalDemoMethod?.backendTaskKey || ""] || null) as NlpDemoMeta | null;
@@ -1351,16 +1351,21 @@ function NlpPage() {
   };
 
   const sidecarActionLabel = installing
-    ? t("nlpConfig.maintenance.deploying")
+    ? "部署中"
     : sidecarReady
-      ? t("nlpConfig.maintenance.ready")
+      ? "已就绪"
       : loading
-        ? t("nlpConfig.maintenance.loading")
-        : t("nlpConfig.maintenance.deployNow");
+        ? "加载中"
+        : "部署";
 
   const sidecarActionBusy = installing || (!sidecarReady && loading);
   const runtimeAlertType: "success" | "warning" =
     hanlpProviderActive && sidecarReady && modelReady ? "success" : "warning";
+  const compactRuntimeMeta = [
+    `提供方 ${provider || "hanlp"}${hanlpProviderActive ? "(启用)" : "(未启用)"}`,
+    `路径 ${status?.sidecar.python_executable || t("nlpConfig.notConfigured")}`,
+    `Python ${pythonVersion || t("nlpConfig.notConfigured")}`,
+  ].join(" · ");
 
 
 
@@ -1379,17 +1384,25 @@ function NlpPage() {
             <Alert
               type={runtimeAlertType}
               showIcon
-              message={t("nlpConfig.infoTitle")}
+              message={
+                <div className={styles.maintenanceAlertHeader}>
+                  <Typography.Text strong>{t("nlpConfig.infoTitle")}</Typography.Text>
+                  <Button
+                    size="small"
+                    className={`${styles.maintenanceInstallButton} ${sidecarReady ? styles.maintenanceInstallButtonReady : ""}`}
+                    type="primary"
+                    onClick={handleInstall}
+                    loading={sidecarActionBusy}
+                    disabled={sidecarReady || !hanlpProviderActive || sidecarActionBusy}
+                  >
+                    {sidecarActionLabel}
+                  </Button>
+                </div>
+              }
               description={
                 <div className={styles.maintenanceInfoBlock}>
-                  <Typography.Text className={styles.maintenancePrimaryText}>
-                    {t("nlpConfig.infoDescription")}
-                  </Typography.Text>
-
-                  <Typography.Text className={styles.maintenanceSecondaryText}>
-                    {`${t("nlpConfig.providerMessage", { provider: provider || "hanlp" })} · ${hanlpProviderActive
-                      ? t("nlpConfig.providerActive")
-                      : t("nlpConfig.providerInactive")} · ${t("nlpConfig.pythonPath")} ${status?.sidecar.python_executable || t("nlpConfig.notConfigured")} · Python ${pythonVersion || t("nlpConfig.notConfigured")}`}
+                  <Typography.Text className={styles.maintenanceSecondaryTextSingleLine}>
+                    {`HanLP sidecar 负责项目 NLP。${compactRuntimeMeta}`}
                   </Typography.Text>
                 </div>
               }
@@ -1471,17 +1484,6 @@ function NlpPage() {
               />
             ) : null}
           </div>
-          <div className={styles.alertActionBlock}>
-            <Button
-              className={`${styles.maintenanceInstallButton} ${sidecarReady ? styles.maintenanceInstallButtonReady : ""}`}
-              type="primary"
-              onClick={handleInstall}
-              loading={sidecarActionBusy}
-              disabled={sidecarReady || !hanlpProviderActive || sidecarActionBusy}
-            >
-              {sidecarActionLabel}
-            </Button>
-          </div>
         </div>
 
         <div className={styles.workspaceLayout}>
@@ -1489,10 +1491,10 @@ function NlpPage() {
             <div id="nlp-section-demo" className={styles.sectionAnchorOffset}>
               <Card className={`${styles.card} ${styles.primaryCard}`}>
                 <Typography.Title level={5} className={styles.cardTitle}>
-                  通用NLP方法与DEMO
+                  现代文本分析
                 </Typography.Title>
                 <Typography.Paragraph type="secondary" className={styles.cardDescription}>
-                  首屏工作区：选择任务、填入示例、运行并查看结构化结果与映射高亮。
+                  选择一个能力，输入一句话，点击运行后即可查看分析结果。
                 </Typography.Paragraph>
                 <div className={styles.demoWorkbench}>
                   <div className={styles.demoMethodList}>
@@ -1525,7 +1527,11 @@ function NlpPage() {
                                 color={resolveTagColor(methodStatus?.status || "unavailable")}
                                 title={modelInfo.modelText}
                               >
-                                {modelInfo.modelText}
+                                {modelInfo.missing
+                                  ? "待下载"
+                                  : methodStatus?.status === "ready"
+                                    ? "可用"
+                                    : "暂不可用"}
                               </Tag>
                             </div>
                             <Typography.Text type="secondary" className={styles.demoMethodDescription}>
@@ -1534,11 +1540,6 @@ function NlpPage() {
                             {methodReason ? (
                               <Typography.Text type="secondary" className={styles.demoMethodReason}>
                                 {methodReason}
-                              </Typography.Text>
-                            ) : null}
-                            {methodDetail?.taskKey ? (
-                              <Typography.Text type="secondary" className={styles.demoMethodTaskKey}>
-                                {`${t("nlpConfig.taskKey")} ${methodDetail.taskKey}`}
                               </Typography.Text>
                             ) : null}
                             {modelInfo.missing ? (
@@ -1554,7 +1555,7 @@ function NlpPage() {
                                   void handleDownloadModel();
                                 }}
                               >
-                                下载
+                                下载模型
                               </Button>
                             ) : null}
                           </div>
@@ -1620,34 +1621,14 @@ function NlpPage() {
                       ) : (
                         <>
                           <div className={styles.demoMetaGrid}>
-                            <div className={styles.demoMetaItem}><span>status</span><Tag color={resolveTagColor(activeDemoResult.status)}>{activeDemoResult.reason_code}</Tag></div>
-                            <div className={styles.demoMetaItem}><span>task</span><span>{activeDemoResult.task_key}</span></div>
-                            <div className={styles.demoMetaItem}><span>model</span><span>{activeDemoResult.resolved_model || t("nlpConfig.demo.empty")}</span></div>
-                            <div className={styles.demoMetaItem}><span>task model</span><span>{activeDemoResult.effective_task_model_id || t("nlpConfig.demo.inherit")}</span></div>
-                            <div className={styles.demoMetaItem}><span>style</span><span>{activeDemoResult.detected_style}</span></div>
-                            <div className={styles.demoMetaItem}><span>score</span><span>{activeDemoResult.detection_score}</span></div>
-                            <div className={styles.demoMetaItem}><span>duration</span><span>{activeDemoResult.duration_ms} ms</span></div>
-                            <div className={styles.demoMetaItem}><span>{t("nlpConfig.telemetry.sidecarTotal")}</span><span>{activeDemoResult.sidecar_elapsed_ms ?? 0} ms</span></div>
-                            <div className={styles.demoMetaItem}><span>{t("nlpConfig.telemetry.traceTotal")}</span><span>{activeDemoResult.sidecar_trace_elapsed_ms ?? 0} ms</span></div>
-                            <div className={styles.demoMetaItem}><span>{t("nlpConfig.telemetry.executionPath")}</span><span>{activeDemoResult.sidecar_execution_path || t("nlpConfig.telemetry.unknown")}</span></div>
-                            <div className={styles.demoMetaItem}><span>preload</span><span>{activeDemoResult.preload_status || "idle"}</span></div>
+                            <div className={styles.demoMetaItem}><span>任务状态</span><Tag color={resolveTagColor(activeDemoResult.status)}>{activeDemoResult.reason_code}</Tag></div>
+                            <div className={styles.demoMetaItem}><span>当前任务</span><span>{activeDemoResult.task_key}</span></div>
+                            <div className={styles.demoMetaItem}><span>使用模型</span><span>{activeDemoResult.resolved_model || t("nlpConfig.demo.empty")}</span></div>
+                            <div className={styles.demoMetaItem}><span>文本风格</span><span>{activeDemoResult.detected_style}</span></div>
+                            <div className={styles.demoMetaItem}><span>识别分值</span><span>{activeDemoResult.detection_score}</span></div>
+                            <div className={styles.demoMetaItem}><span>总耗时</span><span>{activeDemoResult.duration_ms} ms</span></div>
+                            <div className={styles.demoMetaItem}><span>预热状态</span><span>{activeDemoResult.preload_status || "未预热"}</span></div>
                           </div>
-                          {activeDemoResult.sidecar_execution_detail ? (
-                            <Typography.Paragraph className={styles.operationOutput}>
-                              {t("nlpConfig.telemetry.executionDetail")}: {activeDemoResult.sidecar_execution_detail}
-                            </Typography.Paragraph>
-                          ) : null}
-                          {activeDemoResult.sidecar_trace_stage_ms && Object.keys(activeDemoResult.sidecar_trace_stage_ms).length > 0 ? (
-                            <Typography.Paragraph className={styles.operationOutput}>
-                              {t("nlpConfig.telemetry.stageMs")}: {prettyJson(activeDemoResult.sidecar_trace_stage_ms)}
-                            </Typography.Paragraph>
-                          ) : null}
-                          <Typography.Paragraph className={styles.operationOutput}>
-                            {t("nlpConfig.demo.cachePath")}: {activeDemoResult.model_cache_path || status?.sidecar.model_cache_path || status?.sidecar.model_home || status?.sidecar.hanlp_home || t("nlpConfig.notConfigured")}
-                          </Typography.Paragraph>
-                          <Typography.Paragraph className={styles.operationOutput}>
-                            {activeDemoResult.reason}
-                          </Typography.Paragraph>
                           {activeDemoMethod.backendTaskKey === "ner" ? (
                             <Space size={8} wrap>
                               <Typography.Text type="secondary">{t("nlpConfig.demo.entityOnlyView")}</Typography.Text>
@@ -1681,26 +1662,61 @@ function NlpPage() {
                           <Typography.Paragraph className={styles.operationOutput}>
                             {t("nlpConfig.demo.rules")}: {(activeDemoResult.matched_rules || []).join(", ") || t("nlpConfig.demo.none")}
                           </Typography.Paragraph>
-                          {activeDemoResult.pretty_print ? (
-                            <>
-                              <Typography.Title level={5} className={styles.cardTitle}>
-                                {t("nlpConfig.demo.prettyPrint")}
-                              </Typography.Title>
-                              <Typography.Paragraph className={styles.operationOutput}>
-                                {activeDemoResult.pretty_print}
-                              </Typography.Paragraph>
-                            </>
-                          ) : null}
-                          <Typography.Title level={5} className={styles.cardTitle}>
-                            {t("nlpConfig.demo.rawOutput")}
-                          </Typography.Title>
-                          <Typography.Paragraph className={styles.operationOutput}>
-                            {prettyJson(
-                              activeDemoResult.raw_result !== undefined
-                                ? activeDemoResult.raw_result
-                                : activeDemoResult.result,
-                            )}
-                          </Typography.Paragraph>
+                          <Collapse
+                            ghost
+                            items={[
+                              {
+                                key: "modern-advanced",
+                                label: t("nlpConfig.demo.advancedInfo"),
+                                children: (
+                                  <>
+                                    <div className={styles.demoMetaGrid}>
+                                      <div className={styles.demoMetaItem}><span>{t("nlpConfig.demo.taskModel")}</span><span>{activeDemoResult.effective_task_model_id || t("nlpConfig.demo.inherit")}</span></div>
+                                      <div className={styles.demoMetaItem}><span>{t("nlpConfig.telemetry.sidecarTotal")}</span><span>{activeDemoResult.sidecar_elapsed_ms ?? 0} ms</span></div>
+                                      <div className={styles.demoMetaItem}><span>{t("nlpConfig.telemetry.traceTotal")}</span><span>{activeDemoResult.sidecar_trace_elapsed_ms ?? 0} ms</span></div>
+                                      <div className={styles.demoMetaItem}><span>{t("nlpConfig.telemetry.executionPath")}</span><span>{activeDemoResult.sidecar_execution_path || t("nlpConfig.telemetry.unknown")}</span></div>
+                                    </div>
+                                    {activeDemoResult.sidecar_execution_detail ? (
+                                      <Typography.Paragraph className={styles.operationOutput}>
+                                        {t("nlpConfig.telemetry.executionDetail")}: {activeDemoResult.sidecar_execution_detail}
+                                      </Typography.Paragraph>
+                                    ) : null}
+                                    {activeDemoResult.sidecar_trace_stage_ms && Object.keys(activeDemoResult.sidecar_trace_stage_ms).length > 0 ? (
+                                      <Typography.Paragraph className={styles.operationOutput}>
+                                        {t("nlpConfig.telemetry.stageMs")}: {prettyJson(activeDemoResult.sidecar_trace_stage_ms)}
+                                      </Typography.Paragraph>
+                                    ) : null}
+                                    <Typography.Paragraph className={styles.operationOutput}>
+                                      {t("nlpConfig.demo.cachePath")}: {activeDemoResult.model_cache_path || status?.sidecar.model_cache_path || status?.sidecar.model_home || status?.sidecar.hanlp_home || t("nlpConfig.notConfigured")}
+                                    </Typography.Paragraph>
+                                    <Typography.Paragraph className={styles.operationOutput}>
+                                      {activeDemoResult.reason}
+                                    </Typography.Paragraph>
+                                    {activeDemoResult.pretty_print ? (
+                                      <>
+                                        <Typography.Title level={5} className={styles.cardTitle}>
+                                          {t("nlpConfig.demo.prettyPrint")}
+                                        </Typography.Title>
+                                        <Typography.Paragraph className={styles.operationOutput}>
+                                          {activeDemoResult.pretty_print}
+                                        </Typography.Paragraph>
+                                      </>
+                                    ) : null}
+                                    <Typography.Title level={5} className={styles.cardTitle}>
+                                      {t("nlpConfig.demo.rawOutput")}
+                                    </Typography.Title>
+                                    <Typography.Paragraph className={styles.operationOutput}>
+                                      {prettyJson(
+                                        activeDemoResult.raw_result !== undefined
+                                          ? activeDemoResult.raw_result
+                                          : activeDemoResult.result,
+                                      )}
+                                    </Typography.Paragraph>
+                                  </>
+                                ),
+                              },
+                            ]}
+                          />
                         </>
                       )}
                     </div>
@@ -1712,13 +1728,13 @@ function NlpPage() {
             <div id="nlp-section-classical-demo" className={styles.sectionAnchorOffset}>
               <Card className={`${styles.card} ${styles.primaryCard}`}>
                 <Typography.Title level={5} className={styles.cardTitle}>
-                  古汉语NLP与DEMO
+                  古文分析
                 </Typography.Title>
                 <Typography.Paragraph type="secondary" className={styles.cardDescription}>
-                  采用 HanLP 单一多任务模型（KYOTO_EVAHAN_TOK_LEM_POS_UDEP_LZH）统一支持古汉语分词、词性与依存分析。
+                  适用于文言文场景，支持分词、词性与依存分析。
                 </Typography.Paragraph>
                 <Typography.Paragraph type="secondary" className={styles.cardDescription}>
-                  与通用区不同：本区默认按单模型路线进行测试，不区分任务级模型切换。若需粗分效果，可结合 skip tok/fine 的服务端能力。
+                  这里使用统一模型，体验更稳定、更易上手。
                 </Typography.Paragraph>
                 <div className={styles.demoWorkbench}>
                   <div className={styles.demoMethodList}>
@@ -1745,7 +1761,11 @@ function NlpPage() {
                                 color={resolveTagColor(methodStatus?.status || "unavailable")}
                                 title={modelInfo.modelText}
                               >
-                                {modelInfo.modelText}
+                                {modelInfo.missing
+                                  ? "待下载"
+                                  : methodStatus?.status === "ready"
+                                    ? "可用"
+                                    : "暂不可用"}
                               </Tag>
                             </div>
                             <Typography.Text type="secondary" className={styles.demoMethodDescription}>
@@ -1756,9 +1776,6 @@ function NlpPage() {
                                 {methodReason}
                               </Typography.Text>
                             ) : null}
-                            <Typography.Text type="secondary" className={styles.demoMethodTaskKey}>
-                              {`${t("nlpConfig.taskKey")} ${method.backendTaskKey}`}
-                            </Typography.Text>
                             {modelInfo.missing ? (
                               <Button
                                 size="small"
@@ -1772,7 +1789,7 @@ function NlpPage() {
                                   void handleDownloadModel();
                                 }}
                               >
-                                下载
+                                下载模型
                               </Button>
                             ) : null}
                           </div>
@@ -1840,34 +1857,15 @@ function NlpPage() {
                       ) : (
                         <>
                           <div className={styles.demoMetaGrid}>
-                            <div className={styles.demoMetaItem}><span>status</span><Tag color={resolveTagColor(activeClassicalDemoResult.status)}>{activeClassicalDemoResult.reason_code}</Tag></div>
-                            <div className={styles.demoMetaItem}><span>task</span><span>{activeClassicalDemoResult.task_key}</span></div>
-                            <div className={styles.demoMetaItem}><span>model</span><span>{activeClassicalDemoResult.resolved_model || t("nlpConfig.demo.empty")}</span></div>
+                            <div className={styles.demoMetaItem}><span>任务状态</span><Tag color={resolveTagColor(activeClassicalDemoResult.status)}>{activeClassicalDemoResult.reason_code}</Tag></div>
+                            <div className={styles.demoMetaItem}><span>当前任务</span><span>{activeClassicalDemoResult.task_key}</span></div>
+                            <div className={styles.demoMetaItem}><span>使用模型</span><span>{activeClassicalDemoResult.resolved_model || t("nlpConfig.demo.empty")}</span></div>
                             <div className={styles.demoMetaItem}><span>{t("nlpConfig.telemetry.mode")}</span><span>{t("nlpConfig.telemetry.classicalSingleModel")}</span></div>
-                            <div className={styles.demoMetaItem}><span>style</span><span>{activeClassicalDemoResult.detected_style}</span></div>
-                            <div className={styles.demoMetaItem}><span>score</span><span>{activeClassicalDemoResult.detection_score}</span></div>
-                            <div className={styles.demoMetaItem}><span>duration</span><span>{activeClassicalDemoResult.duration_ms} ms</span></div>
-                            <div className={styles.demoMetaItem}><span>{t("nlpConfig.telemetry.sidecarTotal")}</span><span>{activeClassicalDemoResult.sidecar_elapsed_ms ?? 0} ms</span></div>
-                            <div className={styles.demoMetaItem}><span>{t("nlpConfig.telemetry.traceTotal")}</span><span>{activeClassicalDemoResult.sidecar_trace_elapsed_ms ?? 0} ms</span></div>
-                            <div className={styles.demoMetaItem}><span>{t("nlpConfig.telemetry.executionPath")}</span><span>{activeClassicalDemoResult.sidecar_execution_path || t("nlpConfig.telemetry.unknown")}</span></div>
-                            <div className={styles.demoMetaItem}><span>preload</span><span>{activeClassicalDemoResult.preload_status || "idle"}</span></div>
+                            <div className={styles.demoMetaItem}><span>文本风格</span><span>{activeClassicalDemoResult.detected_style}</span></div>
+                            <div className={styles.demoMetaItem}><span>识别分值</span><span>{activeClassicalDemoResult.detection_score}</span></div>
+                            <div className={styles.demoMetaItem}><span>总耗时</span><span>{activeClassicalDemoResult.duration_ms} ms</span></div>
+                            <div className={styles.demoMetaItem}><span>预热状态</span><span>{activeClassicalDemoResult.preload_status || "未预热"}</span></div>
                           </div>
-                          {activeClassicalDemoResult.sidecar_execution_detail ? (
-                            <Typography.Paragraph className={styles.operationOutput}>
-                              {t("nlpConfig.telemetry.executionDetail")}: {activeClassicalDemoResult.sidecar_execution_detail}
-                            </Typography.Paragraph>
-                          ) : null}
-                          {activeClassicalDemoResult.sidecar_trace_stage_ms && Object.keys(activeClassicalDemoResult.sidecar_trace_stage_ms).length > 0 ? (
-                            <Typography.Paragraph className={styles.operationOutput}>
-                              {t("nlpConfig.telemetry.stageMs")}: {prettyJson(activeClassicalDemoResult.sidecar_trace_stage_ms)}
-                            </Typography.Paragraph>
-                          ) : null}
-                          <Typography.Paragraph className={styles.operationOutput}>
-                            {t("nlpConfig.demo.cachePath")}: {activeClassicalDemoResult.model_cache_path || status?.sidecar.model_cache_path || status?.sidecar.model_home || status?.sidecar.hanlp_home || t("nlpConfig.notConfigured")}
-                          </Typography.Paragraph>
-                          <Typography.Paragraph className={styles.operationOutput}>
-                            {activeClassicalDemoResult.reason}
-                          </Typography.Paragraph>
                           <div
                             className={styles.demoInteractiveArea}
                             tabIndex={0}
@@ -1892,26 +1890,61 @@ function NlpPage() {
                           <Typography.Paragraph className={styles.operationOutput}>
                             {t("nlpConfig.demo.rules")}: {(activeClassicalDemoResult.matched_rules || []).join(", ") || t("nlpConfig.demo.none")}
                           </Typography.Paragraph>
-                          {activeClassicalDemoResult.pretty_print ? (
-                            <>
-                              <Typography.Title level={5} className={styles.cardTitle}>
-                                {t("nlpConfig.demo.prettyPrint")}
-                              </Typography.Title>
-                              <Typography.Paragraph className={styles.operationOutput}>
-                                {activeClassicalDemoResult.pretty_print}
-                              </Typography.Paragraph>
-                            </>
-                          ) : null}
-                          <Typography.Title level={5} className={styles.cardTitle}>
-                            {t("nlpConfig.demo.rawOutput")}
-                          </Typography.Title>
-                          <Typography.Paragraph className={styles.operationOutput}>
-                            {prettyJson(
-                              activeClassicalDemoResult.raw_result !== undefined
-                                ? activeClassicalDemoResult.raw_result
-                                : activeClassicalDemoResult.result,
-                            )}
-                          </Typography.Paragraph>
+                          <Collapse
+                            ghost
+                            items={[
+                              {
+                                key: "classical-advanced",
+                                label: t("nlpConfig.demo.advancedInfo"),
+                                children: (
+                                  <>
+                                    <div className={styles.demoMetaGrid}>
+                                      <div className={styles.demoMetaItem}><span>{t("nlpConfig.telemetry.sidecarTotal")}</span><span>{activeClassicalDemoResult.sidecar_elapsed_ms ?? 0} ms</span></div>
+                                      <div className={styles.demoMetaItem}><span>{t("nlpConfig.telemetry.traceTotal")}</span><span>{activeClassicalDemoResult.sidecar_trace_elapsed_ms ?? 0} ms</span></div>
+                                      <div className={styles.demoMetaItem}><span>{t("nlpConfig.telemetry.executionPath")}</span><span>{activeClassicalDemoResult.sidecar_execution_path || t("nlpConfig.telemetry.unknown")}</span></div>
+                                      <div className={styles.demoMetaItem}><span>{t("nlpConfig.demo.taskModel")}</span><span>{activeClassicalDemoResult.effective_task_model_id || t("nlpConfig.demo.inherit")}</span></div>
+                                    </div>
+                                    {activeClassicalDemoResult.sidecar_execution_detail ? (
+                                      <Typography.Paragraph className={styles.operationOutput}>
+                                        {t("nlpConfig.telemetry.executionDetail")}: {activeClassicalDemoResult.sidecar_execution_detail}
+                                      </Typography.Paragraph>
+                                    ) : null}
+                                    {activeClassicalDemoResult.sidecar_trace_stage_ms && Object.keys(activeClassicalDemoResult.sidecar_trace_stage_ms).length > 0 ? (
+                                      <Typography.Paragraph className={styles.operationOutput}>
+                                        {t("nlpConfig.telemetry.stageMs")}: {prettyJson(activeClassicalDemoResult.sidecar_trace_stage_ms)}
+                                      </Typography.Paragraph>
+                                    ) : null}
+                                    <Typography.Paragraph className={styles.operationOutput}>
+                                      {t("nlpConfig.demo.cachePath")}: {activeClassicalDemoResult.model_cache_path || status?.sidecar.model_cache_path || status?.sidecar.model_home || status?.sidecar.hanlp_home || t("nlpConfig.notConfigured")}
+                                    </Typography.Paragraph>
+                                    <Typography.Paragraph className={styles.operationOutput}>
+                                      {activeClassicalDemoResult.reason}
+                                    </Typography.Paragraph>
+                                    {activeClassicalDemoResult.pretty_print ? (
+                                      <>
+                                        <Typography.Title level={5} className={styles.cardTitle}>
+                                          {t("nlpConfig.demo.prettyPrint")}
+                                        </Typography.Title>
+                                        <Typography.Paragraph className={styles.operationOutput}>
+                                          {activeClassicalDemoResult.pretty_print}
+                                        </Typography.Paragraph>
+                                      </>
+                                    ) : null}
+                                    <Typography.Title level={5} className={styles.cardTitle}>
+                                      {t("nlpConfig.demo.rawOutput")}
+                                    </Typography.Title>
+                                    <Typography.Paragraph className={styles.operationOutput}>
+                                      {prettyJson(
+                                        activeClassicalDemoResult.raw_result !== undefined
+                                          ? activeClassicalDemoResult.raw_result
+                                          : activeClassicalDemoResult.result,
+                                      )}
+                                    </Typography.Paragraph>
+                                  </>
+                                ),
+                              },
+                            ]}
+                          />
                         </>
                       )}
                     </div>
