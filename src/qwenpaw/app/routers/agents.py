@@ -5051,12 +5051,21 @@ def _install_initial_skills(
             )
             if result.get("success"):
                 continue
-            logger.warning(
-                "Failed to install initial skill %s for %s: %s",
-                skill_name,
-                workspace_dir,
-                result.get("reason", "unknown"),
-            )
+            reason = str(result.get("reason", "unknown"))
+            if reason in {"builtin_upgrade", "conflict"}:
+                logger.info(
+                    "Initial skill %s already satisfied for %s: %s",
+                    skill_name,
+                    workspace_dir,
+                    reason,
+                )
+            else:
+                logger.warning(
+                    "Failed to install initial skill %s for %s: %s",
+                    skill_name,
+                    workspace_dir,
+                    reason,
+                )
         except Exception as e:
             logger.warning(
                 "Failed to install initial skill %s for %s: %s",

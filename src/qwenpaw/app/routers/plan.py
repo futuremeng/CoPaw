@@ -113,6 +113,8 @@ async def get_current_plan(
 async def get_plan_config(request: Request) -> PlanConfigResponse:
     workspace = await _get_workspace(request)
     plan_cfg = workspace.config.plan
+    if plan_cfg is None:
+        return PlanConfigResponse(enabled=False)
     return PlanConfigResponse(enabled=plan_cfg.enabled)
 
 

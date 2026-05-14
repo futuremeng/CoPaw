@@ -11,13 +11,9 @@ import { IconButton } from "@agentscope-ai/design";
 import { SparkOperateRightLine } from "@agentscope-ai/icons";
 import {
   type IAgentScopeRuntimeWebUISession,
+  useChatAnywhereSessionsState,
 } from "@agentscope-ai/chat";
-import { useContextSelector } from "use-context-selector";
-import {
-  ChatAnywhereSessionsContext,
-  useChatAnywhereSessions,
-} from "@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/Context/ChatAnywhereSessionsContext.js";
-import type { IAgentScopeRuntimeWebUISessionsContext } from "@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/types/ISessions";
+import { useChatAnywhereSessions } from "@agentscope-ai/chat";
 import { useTranslation } from "react-i18next";
 import type { ChatStatus } from "../../../../api/types/chat";
 import { chatApi } from "../../../../api/modules/chat";
@@ -134,22 +130,8 @@ const getBackendId = (session: ExtendedChatSession): string | null => {
 
 const ChatSessionDrawer: React.FC<ChatSessionDrawerProps> = (props) => {
   const { t } = useTranslation();
-  const sessions = useContextSelector(
-    ChatAnywhereSessionsContext,
-    (v: IAgentScopeRuntimeWebUISessionsContext) => v.sessions,
-  );
-  const currentSessionId = useContextSelector(
-    ChatAnywhereSessionsContext,
-    (v: IAgentScopeRuntimeWebUISessionsContext) => v.currentSessionId,
-  );
-  const setCurrentSessionId = useContextSelector(
-    ChatAnywhereSessionsContext,
-    (v: IAgentScopeRuntimeWebUISessionsContext) => v.setCurrentSessionId,
-  );
-  const setSessions = useContextSelector(
-    ChatAnywhereSessionsContext,
-    (v: IAgentScopeRuntimeWebUISessionsContext) => v.setSessions,
-  );
+  const { sessions, currentSessionId, setCurrentSessionId, setSessions } =
+    useChatAnywhereSessionsState();
 
   const { createSession } = useChatAnywhereSessions();
 

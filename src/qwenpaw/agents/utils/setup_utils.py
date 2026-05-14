@@ -287,7 +287,7 @@ def copy_builtin_agent_md_files(
     """Seed or refresh builtin agent markdown templates.
 
     Copies MEMORY.md / HEARTBEAT.md from the common language pack and persona
-    files from agents/md_files/builtin_agents/<template_key>/<language>/.
+    files from agents/md_files/<template_key>/<language>/.
     """
     workspace_dir = Path(workspace_dir).expanduser()
     workspace_dir.mkdir(parents=True, exist_ok=True)
@@ -300,10 +300,10 @@ def copy_builtin_agent_md_files(
         only_if_missing,
     )
 
-    template_root = agents_root / "md_files" / "builtin_agents" / template_key
+    template_root = agents_root / "md_files" / template_key
     if not template_root.exists():
         logger.warning(
-            "Builtin agent template root not found: %s",
+            "Workspace template directory not found: %s",
             template_root,
         )
         return copied_files

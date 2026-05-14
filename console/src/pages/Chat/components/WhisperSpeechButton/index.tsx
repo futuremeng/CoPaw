@@ -1,14 +1,13 @@
 import React, {
   useCallback,
+  useImperativeHandle,
   useRef,
   useState,
-  forwardRef,
-  useImperativeHandle,
 } from "react";
+import { LoadingOutlined } from "@ant-design/icons";
 import { IconButton } from "@agentscope-ai/design";
 import { SparkMicLine } from "@agentscope-ai/icons";
 import { Tooltip, message } from "antd";
-import { LoadingOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
 import { agentApi, TranscriptionError } from "@/api/modules/agent";
 
@@ -24,6 +23,7 @@ export interface WhisperSpeechButtonRef {
 interface WhisperSpeechButtonProps {
   disabled?: boolean;
   onTranscription: (text: string) => void;
+  buttonRef?: React.Ref<WhisperSpeechButtonRef>;
 }
 
 // Original recording icon animation from @agentscope-ai/chat
@@ -87,10 +87,11 @@ const RecordingIcon: React.FC<{ className?: string }> = ({ className }) => (
   </svg>
 );
 
-const WhisperSpeechButton = forwardRef<
-  WhisperSpeechButtonRef,
-  WhisperSpeechButtonProps
->(({ disabled, onTranscription }, ref) => {
+function WhisperSpeechButton({
+  disabled,
+  onTranscription,
+  buttonRef,
+}: WhisperSpeechButtonProps) {
   const { t } = useTranslation();
   const [recording, setRecording] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -131,7 +132,6 @@ const WhisperSpeechButton = forwardRef<
         }
         const blob = new Blob(chunksRef.current, { type: mimeType });
 
-        // File size validation
         const sizeMb = blob.size / 1024 / 1024;
         if (sizeMb > MAX_AUDIO_SIZE_MB) {
           message.error(
@@ -180,7 +180,6 @@ const WhisperSpeechButton = forwardRef<
       internalRecordingRef.current = true;
       setRecording(true);
 
-      // Auto-stop after max duration
       recordingTimerRef.current = setTimeout(() => {
         if (internalRecordingRef.current) {
           message.warning(
@@ -206,9 +205,8 @@ const WhisperSpeechButton = forwardRef<
     }
   }, [loading, startRecording, stopRecording]);
 
-  // Expose methods via ref
   useImperativeHandle(
-    ref,
+    buttonRef,
     () => ({
       toggleRecording,
       isRecording: () => internalRecordingRef.current,
@@ -249,8 +247,6 @@ const WhisperSpeechButton = forwardRef<
       />
     </Tooltip>
   );
-});
-
-WhisperSpeechButton.displayName = "WhisperSpeechButton";
+}
 
 export default WhisperSpeechButton;

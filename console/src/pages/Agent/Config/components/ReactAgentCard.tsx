@@ -42,7 +42,7 @@ export function ReactAgentCard({
   useEffect(() => {
     let cancelled = false;
     planApi
-      .getPlanConfig()
+      .getPlanConfig(selectedAgent)
       .then((cfg) => {
         if (!cancelled) setPlanEnabled(cfg.enabled);
       })
@@ -58,7 +58,9 @@ export function ReactAgentCard({
       const previous = planEnabled;
       setPlanEnabled(checked);
       try {
-        const result = await planApi.updatePlanConfig({ enabled: checked });
+        const result = await planApi.updatePlanConfig(selectedAgent, {
+          enabled: checked,
+        });
         setPlanEnabled(result.enabled);
       } catch {
         setPlanEnabled(previous);

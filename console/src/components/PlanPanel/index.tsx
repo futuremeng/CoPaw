@@ -9,6 +9,7 @@ import {
   subscribePlanUpdates,
   type PlanStateResponse,
 } from "../../api/modules/plan";
+import { useAgentStore } from "../../stores/agentStore";
 import styles from "./index.module.less";
 
 interface PlanPanelProps {
@@ -43,6 +44,7 @@ function getBackendSessionId(): string {
 const PlanPanel: React.FC<PlanPanelProps> = ({ open, onClose }) => {
   const { t } = useTranslation();
   const { currentSessionId } = useChatAnywhereSessionsState();
+  const { selectedAgent } = useAgentStore();
   const [plan, setPlan] = useState<PlanStateResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const unsubRef = useRef<(() => void) | null>(null);
@@ -53,9 +55,10 @@ const PlanPanel: React.FC<PlanPanelProps> = ({ open, onClose }) => {
 
   const fetchPlan = useCallback(async () => {
     const sid = getBackendSessionId();
+    if (!selectedAgent) return;
     setLoading(true);
     try {
-      const data = await planApi.getCurrentPlan(sid || undefined);
+      const data = await planApi.getCurrentPlan(selectedAgent, sid || undefined);
       // If SSE already provided a non-null plan but the poll returned null,
       // trust SSE — the cache may not have been populated for this session_id
       // yet, or a race condition caused a stale response.
@@ -66,7 +69,7 @@ const PlanPanel: React.FC<PlanPanelProps> = ({ open, onClose }) => {
     } finally {
       setLoading(false);
     }
-  }, [currentSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentSessionId, selectedAgent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch plan when panel opens or backend session changes
   useEffect(() => {
@@ -91,19 +94,24 @@ const PlanPanel: React.FC<PlanPanelProps> = ({ open, onClose }) => {
       return;
     }
 
-    const unsub = subscribePlanUpdates((updatedPlan, eventSessionId) => {
+    if (!selectedAgent) return;
+
+    const unsub = subscribePlanUpdates(
+      selectedAgent,
+      (updatedPlan, eventSessionId) => {
       const mySid = getBackendSessionId();
       if (eventSessionId && mySid && eventSessionId !== mySid) return;
       ssePlanRef.current = updatedPlan;
       setPlan(updatedPlan);
-    });
+      },
+    );
     unsubRef.current = unsub;
 
     return () => {
       unsub();
       unsubRef.current = null;
     };
-  }, [open]);
+  }, [open, selectedAgent]);
 
   // Polling fallback every 5s when open
   useEffect(() => {

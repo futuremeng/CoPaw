@@ -28,18 +28,26 @@ export interface PlanConfigResponse {
   enabled: boolean;
 }
 
+function getAgentScopedPlanPath(agentId: string, suffix: string): string {
+  return `/agents/${encodeURIComponent(agentId)}/plan${suffix}`;
+}
+
 export const planApi = {
-  getCurrentPlan: (sessionId?: string) =>
+  getCurrentPlan: (agentId: string, sessionId?: string) =>
     request<PlanStateResponse | null>(
       sessionId
-        ? `/plan/current?session_id=${encodeURIComponent(sessionId)}`
-        : "/plan/current",
+        ? `${getAgentScopedPlanPath(
+            agentId,
+            "/current",
+          )}?session_id=${encodeURIComponent(sessionId)}`
+        : getAgentScopedPlanPath(agentId, "/current"),
     ),
 
-  getPlanConfig: () => request<PlanConfigResponse>("/plan/config"),
+  getPlanConfig: (agentId: string) =>
+    request<PlanConfigResponse>(getAgentScopedPlanPath(agentId, "/config")),
 
-  updatePlanConfig: (body: PlanConfigResponse) =>
-    request<PlanConfigResponse>("/plan/config", {
+  updatePlanConfig: (agentId: string, body: PlanConfigResponse) =>
+    request<PlanConfigResponse>(getAgentScopedPlanPath(agentId, "/config"), {
       method: "PUT",
       body: JSON.stringify(body),
     }),
@@ -50,6 +58,7 @@ export const planApi = {
  * Returns an unsubscribe function.
  */
 export function subscribePlanUpdates(
+  agentId: string,
   onUpdate: (
     plan: PlanStateResponse | null,
     sessionId: string | undefined,
@@ -62,7 +71,7 @@ export function subscribePlanUpdates(
   async function connect() {
     while (!aborted) {
       try {
-        const url = getApiUrl("/plan/stream");
+        const url = getApiUrl(getAgentScopedPlanPath(agentId, "/stream"));
         const response = await fetch(url, {
           headers: buildAuthHeaders(),
           signal: controller.signal,

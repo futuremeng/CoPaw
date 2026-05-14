@@ -49,7 +49,7 @@ interface ApprovalMessageData {
 
 import WhisperSpeechButton, {
   WhisperSpeechButtonRef,
-} from "./components/WhisperSpeechButton";
+} from "./components/WhisperSpeechButton/index";
 
 import {
   toDisplayUrl,
@@ -135,6 +135,10 @@ function renderSuggestionLabel(command: string, description: string) {
   );
 }
 
+function isComposingKeyboardEvent(e: KeyboardEvent): boolean {
+  return !!e.isComposing;
+}
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -173,7 +177,7 @@ function useIMEComposition(isChatActive: () => boolean) {
       if (target?.tagName === "TEXTAREA" && e.key === "Enter" && !e.shiftKey) {
         // e.isComposing is the standard flag; isComposingRef covers the
         // post-compositionend grace period needed by Safari.
-        if (isComposingRef.current || (e as any).isComposing) {
+        if (isComposingRef.current || isComposingKeyboardEvent(e)) {
           e.stopPropagation();
           e.stopImmediatePropagation();
           e.preventDefault();
@@ -345,7 +349,8 @@ function useMessageHistoryNavigation(
     text: string;
   }
 
-  const findMessageInDirection = (
+  const findMessageInDirection = useCallback(
+    (
     messages: string[],
     startIndex: number,
     direction: 1 | -1,
@@ -368,7 +373,9 @@ function useMessageHistoryNavigation(
     }
 
     return null;
-  };
+  },
+    [],
+  );
 
   const isSuggestionPopupOpen = (textarea: HTMLTextAreaElement): boolean =>
     textarea.value.startsWith("/");
@@ -384,7 +391,7 @@ function useMessageHistoryNavigation(
         target?.closest('[class*="sender"]') !== null;
 
       if (!isChatSender) return;
-      if (isComposingRef.current || (e as any).isComposing) return;
+      if (isComposingRef.current || isComposingKeyboardEvent(e)) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       const textarea = target as HTMLTextAreaElement;
@@ -460,7 +467,12 @@ function useMessageHistoryNavigation(
       document.removeEventListener("keydown", handleKeyDown, true);
       document.removeEventListener("focusin", handleFocus, true);
     };
-  }, [isChatActive, isComposingRef, getUserMessagesWithText]);
+  }, [
+    isChatActive,
+    isComposingRef,
+    getUserMessagesWithText,
+    findMessageInDirection,
+  ]);
 }
 
 function RuntimeLoadingBridge({
@@ -521,7 +533,7 @@ export default function ChatPage() {
   useEffect(() => {
     let cancelled = false;
     planApi
-      .getPlanConfig()
+      .getPlanConfig(selectedAgent)
       .then((cfg) => {
         if (!cancelled) setPlanEnabled(cfg.enabled);
       })
@@ -866,7 +878,7 @@ export default function ChatPage() {
         message.error(t("common.copyFailed"));
       }
     },
-    [t],
+    [t, message],
   );
 
   const customFetch = useCallback(
@@ -901,7 +913,7 @@ export default function ChatPage() {
       const session: SessionInfo = input[input.length - 1]?.session || {};
       const lastInput = input.slice(-1);
       const lastMsg = lastInput[0];
-      const rewrittenInput =
+      const rewrittenInput: Array<Record<string, unknown>> =
         lastMsg?.content && Array.isArray(lastMsg.content)
           ? [
               {
@@ -926,7 +938,7 @@ export default function ChatPage() {
         requestBody.session_id;
       if (backendChatId) {
         const userText = rewrittenInput
-          .filter((m: any) => m.role === "user")
+          .filter((m) => m["role"] === "user")
           .map(extractUserMessageText)
           .join("\n")
           .trim();
@@ -988,7 +1000,7 @@ export default function ChatPage() {
         onError?.(e instanceof Error ? e : new Error(String(e)));
       }
     },
-    [multimodalCaps, t],
+    [multimodalCaps, t, message],
   );
 
   const options = useMemo(() => {
@@ -1028,6 +1040,9 @@ export default function ChatPage() {
       return true;
     };
 
+    const senderConfig = (i18nConfig as { sender?: Record<string, unknown> })
+      .sender;
+
     return {
       ...i18nConfig,
       theme: {
@@ -1053,18 +1068,18 @@ export default function ChatPage() {
         avatar: "/qwenpaw.png",
       },
       sender: {
-        ...(i18nConfig as any)?.sender,
+        ...(senderConfig ?? {}),
         beforeSubmit: handleBeforeSubmit,
         allowSpeech: !whisperEnabled,
         prefix: whisperEnabled ? (
           <WhisperSpeechButton
-            ref={whisperSpeechRef}
+            buttonRef={whisperSpeechRef}
             onTranscription={handleWhisperTranscription}
           />
         ) : undefined,
         attachments: {
           multiple: true,
-          trigger: function (props: any) {
+          trigger: function (props?: { disabled?: boolean }) {
             const tooltipKey = multimodalCaps.supportsMultimodal
               ? multimodalCaps.supportsImage && !multimodalCaps.supportsVideo
                 ? "chat.attachments.tooltipImageOnly"
@@ -1105,7 +1120,7 @@ export default function ChatPage() {
               scheduleHistoryClear();
             }
           }
-          return payload as any;
+          return payload;
         },
         replaceMediaURL: (url: string) => {
           return toDisplayUrl(url);
@@ -1166,6 +1181,9 @@ export default function ChatPage() {
     toolRenderConfig,
     scheduleHistoryClear,
     planEnabled,
+    handleWhisperTranscription,
+    isComposingRef,
+    whisperEnabled,
   ]);
 
   return (
