@@ -127,9 +127,9 @@ See: https://docs.trychroma.com/docs/overview/troubleshooting#sqlite
         fts_enabled = EnvVarLoader.get_bool("FTS_ENABLED", True)
 
         agent_config = load_agent_config(self.agent_id)
-        rebuild_on_start = (
-            agent_config.running.memory_summary.rebuild_memory_index_on_start
-        )
+        reme_cfg = agent_config.running.reme_light_memory_config
+        rebuild_on_start = reme_cfg.rebuild_memory_index_on_start
+        recursive_file_watcher = reme_cfg.recursive_file_watcher
 
         reme_kwargs = {
             "working_dir": working_dir,
@@ -145,6 +145,7 @@ See: https://docs.trychroma.com/docs/overview/troubleshooting#sqlite
         if "default_file_watcher_config" in reme_signature.parameters:
             reme_kwargs["default_file_watcher_config"] = {
                 "rebuild_index_on_start": rebuild_on_start,
+                "recursive": recursive_file_watcher,
             }
         elif rebuild_on_start:
             logger.warning(
@@ -238,7 +239,9 @@ See: https://docs.trychroma.com/docs/overview/troubleshooting#sqlite
         """Return embedding config with priority:
         config > env var > default."""
         self._warn_if_version_mismatch()
-        cfg = load_agent_config(self.agent_id).running.embedding_config
+        cfg = load_agent_config(
+            self.agent_id,
+        ).running.reme_light_memory_config.embedding_model_config
         return {
             "backend": cfg.backend,
             "api_key": cfg.api_key
