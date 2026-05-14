@@ -65,7 +65,109 @@
     "debug": "调试",
     "plugins": "插件",
     "backups": "备份",
+    "projects": "项目",
+    "pipelines": "流水线",
+    "knowledge": "知识库",
+    "nlp": "NLP",
     "pluginManager": "插件管理"
+  },
+  "nlpConfig": {
+    "title": "NLP 配置",
+    "infoTitle": "NLP 运行状态",
+    "fullInstallTitle": "需要完整安装 HanLP 运行时",
+    "fullInstallDescription": "当前环境仅包含轻量运行时，完成完整安装后可启用全部 NLP 能力。",
+    "loadFailed": "加载 NLP 状态失败",
+    "installSuccess": "NLP 运行时安装成功",
+    "installPartial": "NLP 运行时安装部分完成，部分能力可能仍不可用",
+    "installFailed": "NLP 运行时安装失败",
+    "downloadSuccess": "模型下载完成",
+    "downloadPartial": "模型下载部分完成",
+    "downloadFailed": "模型下载失败",
+    "notConfigured": "未配置",
+    "maintenance": {
+      "localModelPrecheckFailed": "本地模型预检查失败",
+      "localModelPrecheckDesc": "检测到部分本地模型缺失，下载后可恢复相关能力。",
+      "moreModels": "还有 {{count}} 个模型",
+      "downloadMissingModels": "下载缺失模型",
+      "lastDownloadResult": "最近一次下载结果"
+    },
+    "methods": {
+      "defaultUnavailableReason": "当前任务不可用",
+      "tokenize": {
+        "name": "分词",
+        "description": "将文本切分为词语并展示切分结果。",
+        "readyReason": "分词能力已就绪",
+        "unavailableReason": "分词能力不可用"
+      },
+      "nerMsra": {
+        "name": "命名实体识别",
+        "description": "识别人名、地名、机构名等实体信息。"
+      },
+      "pos_ctb": {
+        "name": "词性标注（CTB）",
+        "description": "按 CTB 词性体系输出词性结果。"
+      },
+      "pos_pku": {
+        "name": "词性标注（PKU）",
+        "description": "按 PKU 词性体系输出词性结果。"
+      },
+      "pos_863": {
+        "name": "词性标注（863）",
+        "description": "按 863 词性体系输出词性结果。"
+      },
+      "dep": {
+        "name": "依存句法",
+        "description": "分析词语之间的依存关系结构。"
+      },
+      "sdp": {
+        "name": "语义依存",
+        "description": "分析更深层的语义依存关系。"
+      },
+      "srl": {
+        "name": "语义角色标注",
+        "description": "识别谓词及其语义角色。"
+      },
+      "con": {
+        "name": "短语结构分析",
+        "description": "生成句子的短语结构树。"
+      },
+      "cor": {
+        "name": "指代消解",
+        "description": "识别文本中指向同一实体的表达。",
+        "unavailableReason": "指代消解模型不可用"
+      }
+    },
+    "demo": {
+      "example": "示例 {{index}}",
+      "runTest": "运行测试",
+      "runClassicalTest": "运行古文测试",
+      "resultPanel": "结果面板",
+      "clickRunTestHint": "点击“运行测试”以查看分析结果。",
+      "clickRunClassicalHint": "点击“运行古文测试”以查看分析结果。",
+      "entityOnlyView": "仅显示实体",
+      "currentTokenCount": "当前词元数量：{{count}}",
+      "advancedInfo": "高级信息",
+      "rules": "匹配规则",
+      "none": "无",
+      "taskModel": "任务模型",
+      "inherit": "继承全局配置",
+      "cachePath": "模型缓存路径",
+      "prettyPrint": "格式化输出",
+      "rawOutput": "原始输出",
+      "empty": "空",
+      "classicalTask": "古文任务",
+      "classicalInputPlaceholder": "输入一段文言文进行分析"
+    },
+    "telemetry": {
+      "mode": "执行模式",
+      "classicalSingleModel": "古文单模型流程",
+      "sidecarTotal": "Sidecar 总耗时",
+      "traceTotal": "Trace 总耗时",
+      "executionPath": "执行路径",
+      "executionDetail": "执行详情",
+      "stageMs": "分阶段耗时（毫秒）",
+      "unknown": "未知"
+    }
   },
   "debug": {
     "title": "调试",
@@ -1367,6 +1469,25 @@
     "llmBackoffCapMin": "退避最大延迟必须大于等于 0.5 秒",
     "llmBackoffCapGteBase": "退避最大延迟必须大于等于基础延迟",
     "llmRateLimiterTitle": "LLM 并发限流",
+    "knowledgeMaintenanceTitle": "知识维护",
+    "knowledgeEnabled": "启用知识维护",
+    "knowledgeEnabledTooltip": "启用后可自动收集聊天中的文件、链接与长文本，并按规则进行知识切片。",
+    "autoCollectChatFiles": "自动收集聊天文件",
+    "autoCollectChatFilesTooltip": "聊天中出现可解析文件时，自动纳入知识维护流程。",
+    "autoCollectChatUrls": "自动收集聊天链接",
+    "autoCollectChatUrlsTooltip": "聊天中出现 URL 时，自动抓取并纳入知识维护流程。",
+    "autoCollectLongText": "自动收集长文本",
+    "autoCollectLongTextTooltip": "当消息文本超过阈值时，自动作为知识素材处理。",
+    "longTextMinChars": "长文本最小字符数",
+    "longTextMinCharsTooltip": "仅当文本长度达到该阈值时，才会触发长文本自动收集。",
+    "longTextMinCharsRequired": "长文本最小字符数为必填项",
+    "longTextMinCharsMin": "长文本最小字符数必须大于等于 200",
+    "longTextMinCharsPlaceholder": "请输入最小字符数",
+    "knowledgeChunkSize": "知识切片大小",
+    "knowledgeChunkSizeTooltip": "知识入库时每个切片的目标字符长度。",
+    "knowledgeChunkSizeRequired": "知识切片大小为必填项",
+    "knowledgeChunkSizeMin": "知识切片大小必须大于等于 200",
+    "knowledgeChunkSizePlaceholder": "请输入切片大小",
     "llmMaxConcurrent": "最大并发请求数",
     "llmMaxConcurrentTooltip": "允许同时发出的 LLM 请求上限，所有 Agent 共享。仅首次初始化时生效，修改后需重启服务。",
     "llmMaxConcurrentPlaceholder": "请输入最大并发数",

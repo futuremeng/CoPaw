@@ -62,6 +62,10 @@
     "plugins": "プラグイン",
     "acp": "ACP",
     "backups": "バックアップ",
+    "projects": "プロジェクト",
+    "pipelines": "パイプライン",
+    "knowledge": "ナレッジ",
+    "nlp": "NLP",
     "pluginManager": "プラグインマネージャー"
   },
   "debug": {

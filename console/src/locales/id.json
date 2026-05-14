@@ -63,7 +63,11 @@
     "voiceTranscription": "Transkripsi Suara",
     "debug": "Debug",
     "plugins": "Plugin",
-    "backups": "Cadangan"
+    "backups": "Cadangan",
+    "projects": "Proyek",
+    "pipelines": "Pipeline",
+    "knowledge": "Pengetahuan",
+    "nlp": "NLP"
   },
   "header": {
     "changelog": "Changelog",

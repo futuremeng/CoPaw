@@ -62,6 +62,10 @@
     "plugins": "Плагины",
     "acp": "ACP",
     "backups": "Резервные копии",
+    "projects": "Проекты",
+    "pipelines": "Пайплайны",
+    "knowledge": "База знаний",
+    "nlp": "NLP",
     "pluginManager": "Менеджер плагинов"
   },
   "debug": {

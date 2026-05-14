@@ -64,6 +64,10 @@
     "debug": "Depuracao",
     "plugins": "Plugins",
     "backups": "Backups",
+    "projects": "Projetos",
+    "pipelines": "Pipelines",
+    "knowledge": "Conhecimento",
+    "nlp": "NLP",
     "pluginManager": "Gerenciador de Plugins"
   },
   "debug": {

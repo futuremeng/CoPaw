@@ -65,7 +65,109 @@
     "debug": "Debug",
     "plugins": "Plugins",
     "backups": "Backups",
+    "projects": "Projects",
+    "pipelines": "Pipelines",
+    "knowledge": "Knowledge",
+    "nlp": "NLP",
     "pluginManager": "Plugin Manager"
+  },
+  "nlpConfig": {
+    "title": "NLP Configuration",
+    "infoTitle": "NLP Runtime Status",
+    "fullInstallTitle": "Full HanLP installation is required",
+    "fullInstallDescription": "The current environment only has a lightweight runtime. Complete installation to enable all NLP tasks.",
+    "loadFailed": "Failed to load NLP status",
+    "installSuccess": "NLP runtime installed",
+    "installPartial": "NLP runtime installed partially; some tasks may remain unavailable",
+    "installFailed": "Failed to install NLP runtime",
+    "downloadSuccess": "Model download completed",
+    "downloadPartial": "Model download partially completed",
+    "downloadFailed": "Failed to download model",
+    "notConfigured": "Not configured",
+    "maintenance": {
+      "localModelPrecheckFailed": "Local model precheck failed",
+      "localModelPrecheckDesc": "Some required local models are missing. Download them to make related tasks available.",
+      "moreModels": "... and {{count}} more",
+      "downloadMissingModels": "Download missing models",
+      "lastDownloadResult": "Last model download result"
+    },
+    "methods": {
+      "defaultUnavailableReason": "Task is currently unavailable",
+      "tokenize": {
+        "name": "Tokenization",
+        "description": "Split text into tokens and show segmentation details.",
+        "readyReason": "Tokenizer is ready",
+        "unavailableReason": "Tokenizer is unavailable"
+      },
+      "nerMsra": {
+        "name": "Named Entity Recognition",
+        "description": "Extract person, location, organization and other entities from text."
+      },
+      "pos_ctb": {
+        "name": "POS Tagging (CTB)",
+        "description": "Assign CTB part-of-speech tags to each token."
+      },
+      "pos_pku": {
+        "name": "POS Tagging (PKU)",
+        "description": "Assign PKU part-of-speech tags to each token."
+      },
+      "pos_863": {
+        "name": "POS Tagging (863)",
+        "description": "Assign 863 tagset part-of-speech labels."
+      },
+      "dep": {
+        "name": "Dependency Parsing",
+        "description": "Analyze grammatical dependency relations between tokens."
+      },
+      "sdp": {
+        "name": "Semantic Dependency Parsing",
+        "description": "Analyze semantic dependency structure for deeper relations."
+      },
+      "srl": {
+        "name": "Semantic Role Labeling",
+        "description": "Identify predicates and semantic roles in a sentence."
+      },
+      "con": {
+        "name": "Constituency Parsing",
+        "description": "Generate phrase-structure parse trees for sentences."
+      },
+      "cor": {
+        "name": "Coreference Resolution",
+        "description": "Resolve references to the same entity across text.",
+        "unavailableReason": "Coreference model is unavailable"
+      }
+    },
+    "demo": {
+      "example": "Example {{index}}",
+      "runTest": "Run test",
+      "runClassicalTest": "Run classical test",
+      "resultPanel": "Result",
+      "clickRunTestHint": "Click \"Run test\" to generate analysis output.",
+      "clickRunClassicalHint": "Click \"Run classical test\" to generate analysis output.",
+      "entityOnlyView": "Entity-only view",
+      "currentTokenCount": "Current token count: {{count}}",
+      "advancedInfo": "Advanced info",
+      "rules": "Matched rules",
+      "none": "None",
+      "taskModel": "Task model",
+      "inherit": "Inherit global setting",
+      "cachePath": "Model cache path",
+      "prettyPrint": "Pretty print",
+      "rawOutput": "Raw output",
+      "empty": "Empty",
+      "classicalTask": "Classical Chinese task",
+      "classicalInputPlaceholder": "Enter a Classical Chinese sentence for analysis"
+    },
+    "telemetry": {
+      "mode": "Execution mode",
+      "classicalSingleModel": "Classical single-model pipeline",
+      "sidecarTotal": "Sidecar total",
+      "traceTotal": "Trace total",
+      "executionPath": "Execution path",
+      "executionDetail": "Execution detail",
+      "stageMs": "Stage latency (ms)",
+      "unknown": "Unknown"
+    }
   },
   "debug": {
     "title": "Debug",
@@ -1504,6 +1606,25 @@
     "llmBackoffCapMin": "Backoff max delay must be at least 0.5 seconds",
     "llmBackoffCapGteBase": "Backoff max delay must be greater than or equal to the base delay",
     "llmRateLimiterTitle": "LLM Rate Limiter",
+    "knowledgeMaintenanceTitle": "Knowledge Maintenance",
+    "knowledgeEnabled": "Enable Knowledge Maintenance",
+    "knowledgeEnabledTooltip": "When enabled, chat files, URLs, and long texts can be auto-collected and chunked into maintainable knowledge entries.",
+    "autoCollectChatFiles": "Auto-collect Chat Files",
+    "autoCollectChatFilesTooltip": "Automatically ingest parseable files shared in chat into the knowledge maintenance flow.",
+    "autoCollectChatUrls": "Auto-collect Chat URLs",
+    "autoCollectChatUrlsTooltip": "Automatically fetch and ingest URLs shared in chat into the knowledge maintenance flow.",
+    "autoCollectLongText": "Auto-collect Long Text",
+    "autoCollectLongTextTooltip": "Automatically treat long chat text as knowledge input when it exceeds the threshold.",
+    "longTextMinChars": "Long Text Min Characters",
+    "longTextMinCharsTooltip": "Long-text auto collection only triggers when message length reaches this threshold.",
+    "longTextMinCharsRequired": "Long text min characters is required",
+    "longTextMinCharsMin": "Long text min characters must be at least 200",
+    "longTextMinCharsPlaceholder": "Enter min characters",
+    "knowledgeChunkSize": "Knowledge Chunk Size",
+    "knowledgeChunkSizeTooltip": "Target character length per chunk when preparing knowledge entries.",
+    "knowledgeChunkSizeRequired": "Knowledge chunk size is required",
+    "knowledgeChunkSizeMin": "Knowledge chunk size must be at least 200",
+    "knowledgeChunkSizePlaceholder": "Enter chunk size",
     "llmMaxConcurrent": "Max Concurrent Calls",
     "llmMaxConcurrentTooltip": "Maximum number of LLM calls allowed in-flight at the same time. Shared across all agents; only the first initialization takes effect until restart.",
     "llmMaxConcurrentPlaceholder": "Enter max concurrent calls",
