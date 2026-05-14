@@ -66,7 +66,7 @@ def copy_md_files(
     """Copy md files from agents/md_files to working directory.
 
     Args:
-        language: Language code (e.g. 'en', 'zh')
+        language: Supported agent language code.
         skip_existing: If True, skip files that already exist in working dir.
         workspace_dir: Target workspace directory. If None, uses WORKING_DIR.
 
