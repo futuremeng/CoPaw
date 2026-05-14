@@ -218,8 +218,11 @@ export default function ProjectKnowledgeOutputsPanel(
     () => buildProjectKnowledgeLatestSummaryModelFromState(t, props.knowledgeState, selectedMode),
     [
       props.knowledgeState.fileAnalysisStats?.latest,
-      props.knowledgeState.projectStepStats.domain_graph_build?.latest,
-      props.knowledgeState.projectStepStats.quality_review?.latest,
+      props.knowledgeState.projectStepStats.build_interlinear?.latest,
+      props.knowledgeState.projectStepStats.tokenize?.latest,
+      props.knowledgeState.projectStepStats.pos_tagging?.latest,
+      props.knowledgeState.projectStepStats.syntax_parse?.latest,
+      props.knowledgeState.projectStepStats.semantic_role_labeling?.latest,
       props.knowledgeState.sourceScanStats?.latest,
       selectedMode,
       t,

@@ -12,8 +12,11 @@ export interface ProjectKnowledgeSummaryStateLike {
   sourceScanStats?: { latest?: ProjectKnowledgeStatsLike; history?: ProjectKnowledgeStatsHistoryLike } | null;
   fileAnalysisStats?: { latest?: ProjectKnowledgeStatsLike; history?: ProjectKnowledgeStatsHistoryLike } | null;
   projectStepStats?: {
-    domain_graph_build?: { latest?: ProjectKnowledgeStatsLike; history?: ProjectKnowledgeStatsHistoryLike } | null;
-    quality_review?: { latest?: ProjectKnowledgeStatsLike; history?: ProjectKnowledgeStatsHistoryLike } | null;
+    build_interlinear?: { latest?: ProjectKnowledgeStatsLike; history?: ProjectKnowledgeStatsHistoryLike } | null;
+    tokenize?: { latest?: ProjectKnowledgeStatsLike; history?: ProjectKnowledgeStatsHistoryLike } | null;
+    pos_tagging?: { latest?: ProjectKnowledgeStatsLike; history?: ProjectKnowledgeStatsHistoryLike } | null;
+    syntax_parse?: { latest?: ProjectKnowledgeStatsLike; history?: ProjectKnowledgeStatsHistoryLike } | null;
+    semantic_role_labeling?: { latest?: ProjectKnowledgeStatsLike; history?: ProjectKnowledgeStatsHistoryLike } | null;
   } | null;
   outputResolution?: {
     activeMode?: ProjectKnowledgeProcessingMode;
@@ -27,7 +30,7 @@ export interface ProjectKnowledgeRecentHistoryItem {
 }
 
 export interface ProjectKnowledgeRecentHistorySection {
-  key: "source_scan" | "file_analysis" | "domain_graph_build" | "quality_review";
+  key: "snapshot_raw" | "build_chunks" | "build_interlinear" | "tokenize" | "pos_tagging" | "syntax_parse" | "semantic_role_labeling";
   title: string;
   hint: string;
   items: ProjectKnowledgeRecentHistoryItem[];

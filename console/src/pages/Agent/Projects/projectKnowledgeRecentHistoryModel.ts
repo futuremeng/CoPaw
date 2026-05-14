@@ -28,73 +28,130 @@ function buildRecentHistoryItems(
 export function buildProjectKnowledgeProcessingRecentHistorySections(
   t: TranslateFn,
   params: {
-    sourceScanHistory?: ProjectKnowledgeStatsHistoryLike;
-    fileAnalysisHistory?: ProjectKnowledgeStatsHistoryLike;
-    domainGraphBuildHistory?: ProjectKnowledgeStatsHistoryLike;
-    qualityReviewHistory?: ProjectKnowledgeStatsHistoryLike;
+    snapshotRawHistory?: ProjectKnowledgeStatsHistoryLike;
+    buildChunksHistory?: ProjectKnowledgeStatsHistoryLike;
+    buildInterlinearHistory?: ProjectKnowledgeStatsHistoryLike;
+    tokenizeHistory?: ProjectKnowledgeStatsHistoryLike;
+    posTaggingHistory?: ProjectKnowledgeStatsHistoryLike;
+    syntaxParseHistory?: ProjectKnowledgeStatsHistoryLike;
+    semanticRoleLabelingHistory?: ProjectKnowledgeStatsHistoryLike;
   },
 ): ProjectKnowledgeRecentHistorySection[] {
   const sections: ProjectKnowledgeRecentHistorySection[] = [];
 
-  const sourceScanItems = buildRecentHistoryItems(
-    params.sourceScanHistory,
+  const snapshotRawItems = buildRecentHistoryItems(
+    params.snapshotRawHistory,
     (item) => summarizeProjectKnowledgeSourceScanStats(
       t,
       item,
-      "projects.knowledge.processing.recentSourceScanSummary",
+      "projects.knowledge.processing.recentSnapshotRawSummary",
       "{{files}} files / {{changed}} changed / {{sources}} sources",
     ),
   );
-  if (sourceScanItems.length) {
+  if (snapshotRawItems.length) {
     sections.push({
-      key: "source_scan",
-      title: t("projects.knowledge.processing.recentSourceScans", "最近扫描"),
-      hint: t("projects.knowledge.processing.recentSourceScansHint", "来自 source_scan 项目统计文件"),
-      items: sourceScanItems,
+      key: "snapshot_raw",
+      title: t("projects.knowledge.processing.recentSnapshotRawRuns", "最近原始快照"),
+      hint: t("projects.knowledge.processing.recentSnapshotRawRunsHint", "来自 snapshot_raw 项目统计文件"),
+      items: snapshotRawItems,
     });
   }
 
-  const fileAnalysisItems = buildRecentHistoryItems(
-    params.fileAnalysisHistory,
+  const buildChunksItems = buildRecentHistoryItems(
+    params.buildChunksHistory,
     (item) => summarizeProjectKnowledgeFileAnalysisStats(
       t,
       item,
-      "projects.knowledge.processing.recentL1RunSummary",
+      "projects.knowledge.processing.recentBuildChunksSummary",
       "{{documents}} docs / {{chunks}} chunks / {{sentences}} sentences",
     ),
   );
-  if (fileAnalysisItems.length) {
+  if (buildChunksItems.length) {
     sections.push({
-      key: "file_analysis",
-      title: t("projects.knowledge.processing.recentL1Runs", "最近基础分析"),
-      hint: t("projects.knowledge.processing.recentL1RunsHint", "来自文件分析项目统计"),
-      items: fileAnalysisItems,
+      key: "build_chunks",
+      title: t("projects.knowledge.processing.recentBuildChunksRuns", "最近切块构建"),
+      hint: t("projects.knowledge.processing.recentBuildChunksRunsHint", "来自 build_chunks 项目统计"),
+      items: buildChunksItems,
     });
   }
 
-  const domainGraphBuildItems = buildRecentHistoryItems(
-    params.domainGraphBuildHistory,
+  const buildInterlinearItems = buildRecentHistoryItems(
+    params.buildInterlinearHistory,
+    (item) => summarizeProjectKnowledgeFileAnalysisStats(
+      t,
+      item,
+      "projects.knowledge.processing.recentBuildInterlinearSummary",
+      "{{documents}} docs / {{chunks}} chunks / {{sentences}} sentences",
+    ),
+  );
+  if (buildInterlinearItems.length) {
+    sections.push({
+      key: "build_interlinear",
+      title: t("projects.knowledge.processing.recentBuildInterlinearRuns", "最近 interlinear 构建"),
+      hint: t("projects.knowledge.processing.recentBuildInterlinearRunsHint", "来自 build_interlinear 项目统计"),
+      items: buildInterlinearItems,
+    });
+  }
+
+  const tokenizeItems = buildRecentHistoryItems(
+    params.tokenizeHistory,
+    (item) => summarizeProjectKnowledgeFileAnalysisStats(
+      t,
+      item,
+      "projects.knowledge.processing.recentTokenizeSummary",
+      "{{documents}} docs / {{chunks}} chunks / {{sentences}} sentences",
+    ),
+  );
+  if (tokenizeItems.length) {
+    sections.push({
+      key: "tokenize",
+      title: t("projects.knowledge.processing.recentTokenizeRuns", "最近分词运行"),
+      hint: t("projects.knowledge.processing.recentTokenizeRunsHint", "来自 tokenize 项目统计"),
+      items: tokenizeItems,
+    });
+  }
+
+  const posTaggingItems = buildRecentHistoryItems(
+    params.posTaggingHistory,
+    (item) => summarizeProjectKnowledgeFileAnalysisStats(
+      t,
+      item,
+      "projects.knowledge.processing.recentPosTaggingSummary",
+      "{{documents}} docs / {{chunks}} chunks / {{sentences}} sentences",
+    ),
+  );
+  if (posTaggingItems.length) {
+    sections.push({
+      key: "pos_tagging",
+      title: t("projects.knowledge.processing.recentPosTaggingRuns", "最近词性标注"),
+      hint: t("projects.knowledge.processing.recentPosTaggingRunsHint", "来自 pos_tagging 项目统计"),
+      items: posTaggingItems,
+    });
+  }
+
+  const syntaxParseItems = buildRecentHistoryItems(
+    params.syntaxParseHistory,
     (item) => summarizeProjectKnowledgeDomainGraphBuildStats(t, item),
   );
-  if (domainGraphBuildItems.length) {
+  if (syntaxParseItems.length) {
     sections.push({
-      key: "domain_graph_build",
-      title: t("projects.knowledge.processing.recentDomainGraphRuns", "最近结构化构建"),
-      hint: t("projects.knowledge.processing.recentDomainGraphRunsHint", "来自结构化构建项目统计"),
-      items: domainGraphBuildItems,
+      key: "syntax_parse",
+      title: t("projects.knowledge.processing.recentSyntaxParseRuns", "最近句法解析"),
+      hint: t("projects.knowledge.processing.recentSyntaxParseRunsHint", "来自 syntax_parse 项目统计"),
+      items: syntaxParseItems,
     });
   }
 
-  const qualityReviewItems = buildRecentHistoryItems(
-    params.qualityReviewHistory,
+  const semanticRoleLabelingItems = buildRecentHistoryItems(
+    params.semanticRoleLabelingHistory,
     (item) => summarizeProjectKnowledgeQualityReviewStats(t, item),
   );
-  if (qualityReviewItems.length) {
+  if (semanticRoleLabelingItems.length) {
     sections.push({
-      key: "quality_review",
-      title: t("projects.knowledge.processing.recentQualityReviewRuns", "最近增强审校"),
-      hint: t("projects.knowledge.processing.recentQualityReviewRunsHint", "来自审校增强项目统计"),
-      items: qualityReviewItems,
+      key: "semantic_role_labeling",
+      title: t("projects.knowledge.processing.recentSemanticRoleLabelingRuns", "最近 SRL 运行"),
+      hint: t("projects.knowledge.processing.recentSemanticRoleLabelingRunsHint", "来自 semantic_role_labeling 项目统计"),
+      items: semanticRoleLabelingItems,
     });
   }
 
@@ -106,10 +163,13 @@ export function buildProjectKnowledgeProcessingRecentHistorySectionsFromState(
   state: ProjectKnowledgeSummaryStateLike,
 ): ProjectKnowledgeRecentHistorySection[] {
   return buildProjectKnowledgeProcessingRecentHistorySections(t, {
-    sourceScanHistory: state.sourceScanStats?.history,
-    fileAnalysisHistory: state.fileAnalysisStats?.history,
-    domainGraphBuildHistory: state.projectStepStats?.domain_graph_build?.history,
-    qualityReviewHistory: state.projectStepStats?.quality_review?.history,
+    snapshotRawHistory: state.sourceScanStats?.history,
+    buildChunksHistory: state.fileAnalysisStats?.history,
+    buildInterlinearHistory: state.projectStepStats?.build_interlinear?.history,
+    tokenizeHistory: state.projectStepStats?.tokenize?.history,
+    posTaggingHistory: state.projectStepStats?.pos_tagging?.history,
+    syntaxParseHistory: state.projectStepStats?.syntax_parse?.history,
+    semanticRoleLabelingHistory: state.projectStepStats?.semantic_role_labeling?.history,
   });
 }
 
@@ -128,9 +188,9 @@ export function buildProjectKnowledgeSourcesRecentHistorySections(
   );
   if (sourceScanItems.length) {
     sections.push({
-      key: "source_scan",
-      title: t("projects.knowledge.sourcesRecentScans", "最近扫描"),
-      hint: t("projects.knowledge.sourcesRecentScansHint", "最近的 source_scan 项目统计"),
+      key: "snapshot_raw",
+      title: t("projects.knowledge.sourcesRecentSnapshots", "最近原始快照"),
+      hint: t("projects.knowledge.sourcesRecentSnapshotsHint", "最近的 snapshot_raw 项目统计"),
       items: sourceScanItems,
     });
   }
@@ -141,9 +201,9 @@ export function buildProjectKnowledgeSourcesRecentHistorySections(
   );
   if (fileAnalysisItems.length) {
     sections.push({
-      key: "file_analysis",
-      title: t("projects.knowledge.sourcesRecentAnalysisRuns", "最近分析运行"),
-      hint: t("projects.knowledge.sourcesRecentAnalysisRunsHint", "最近的文件分析项目统计"),
+      key: "build_chunks",
+      title: t("projects.knowledge.sourcesRecentChunkRuns", "最近切块运行"),
+      hint: t("projects.knowledge.sourcesRecentChunkRunsHint", "最近的 build_chunks 项目统计"),
       items: fileAnalysisItems,
     });
   }

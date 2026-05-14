@@ -334,20 +334,23 @@ const EMPTY_PROJECT_KNOWLEDGE_L1_STEP_STATS: ProjectKnowledgeL1StepStatsState = 
 };
 
 const PROJECT_KNOWLEDGE_STEP_STATS_IDS = [
-  "source_scan",
-  "file_analysis",
-  "domain_graph_build",
-  "quality_review",
+  "snapshot_raw",
+  "build_chunks",
+  "build_interlinear",
+  "tokenize",
+  "pos_tagging",
+  "syntax_parse",
+  "semantic_role_labeling",
 ] as const satisfies ReadonlyArray<ProjectKnowledgeStepStatsStepId>;
 
 const PROJECT_KNOWLEDGE_L1_STEP_STATS_DESCRIPTORS = [
   {
     stateKey: "fileAnalysis",
-    stepId: "file_analysis",
+    stepId: "build_chunks",
   },
   {
     stateKey: "sourceScan",
-    stepId: "source_scan",
+    stepId: "snapshot_raw",
   },
 ] as const satisfies ReadonlyArray<{
   stateKey: ProjectKnowledgeL1StepStatsKey;

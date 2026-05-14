@@ -50,6 +50,8 @@ const { Title, Text } = Typography;
 type TemplateItem = ProjectPipelineTemplateInfo & {
   projectId: string;
   projectName: string;
+  sourceScope?: PipelineSourceKind;
+  projectCreatedTime?: string;
 };
 
 type RunItem = ProjectPipelineRunSummary & {
@@ -82,8 +84,9 @@ type PipelineGroup = {
   name: string;
   description: string;
   versions: ProjectPipelineTemplateInfo[];
-  projects: { id: string; name: string }[];
+  projects: { id: string; name: string; createdTime?: string }[];
   source: PipelineSourceKind;
+  groupProjectId?: string;
 };
 
 type StepDiffItem = {
@@ -161,6 +164,59 @@ declare global {
 const INDEPENDENT_PIPELINE_SCOPE_ID = "__independent__";
 const BUILTIN_PIPELINE_SCOPE_ID = "__builtin__";
 const PIPELINE_DRAFT_STORAGE_PREFIX = "copaw:pipelines:drafts:";
+const BUILTIN_KNOWLEDGE_PIPELINE_TEMPLATE_ID = "builtin-knowledge-processing-v1";
+const LEGACY_PROJECT_KNOWLEDGE_STEP_IDS = new Set([
+  "file_analysis",
+  "source_scan",
+  "ner",
+  "cor",
+  "syntax",
+  "quality_review",
+]);
+const CANONICAL_PROJECT_KNOWLEDGE_STEPS: ProjectPipelineTemplateStep[] = [
+  {
+    id: "snapshot_raw",
+    name: "Raw Snapshot",
+    kind: "ingest",
+    description: "Create a versioned snapshot of each source file into .knowledge/raw, recording file hash, mtime, and byte size.",
+  },
+  {
+    id: "build_chunks",
+    name: "Build Chunks",
+    kind: "transform",
+    description: "Split raw snapshots into semantic chunks (paragraphs / sections) and write chunk payloads to .knowledge/chunks.",
+  },
+  {
+    id: "build_interlinear",
+    name: "Build Interlinear",
+    kind: "transform",
+    description: "Normalise each raw snapshot into sentence-per-line interlinear text files (.knowledge/interlinear) for downstream NLP stages.",
+  },
+  {
+    id: "tokenize",
+    name: "Tokenize",
+    kind: "transform",
+    description: "Run word segmentation on interlinear files and write token sequences to .knowledge/tokenize.",
+  },
+  {
+    id: "pos_tagging",
+    name: "POS Tagging",
+    kind: "transform",
+    description: "Assign part-of-speech tags to each token using tokenize output; write POS sequences to .knowledge/pos.",
+  },
+  {
+    id: "syntax_parse",
+    name: "Syntax Parse",
+    kind: "transform",
+    description: "Build dependency parse trees from tokenize output and write syntax artifacts to .knowledge/syntax.",
+  },
+  {
+    id: "semantic_role_labeling",
+    name: "Semantic Role Labeling",
+    kind: "transform",
+    description: "Identify predicates and annotate semantic role arguments from tokenize output; write SRL artifacts to .knowledge/srl.",
+  },
+];
 
 const CREATE_PLAN_CONFIRM_PATTERN =
   /^(确认|确认创建|确认执行|开始创建|开始执行|开始吧|同意|可以|没问题|好|ok|okay|yes|confirm|approved|looks good|go ahead|proceed)\b/i;
@@ -318,21 +374,86 @@ function clearPipelineDraftState(agentId: string): void {
 }
 
 function getTemplateSourceKind(item: TemplateItem): PipelineSourceKind {
+  if (item.sourceScope) {
+    return item.sourceScope;
+  }
   if (item.projectId === INDEPENDENT_PIPELINE_SCOPE_ID) return "independent";
+  if (item.projectId === BUILTIN_PIPELINE_SCOPE_ID) return "builtin";
+  if (item.projectId) return "project";
   const normalizedTags = (item.tags || [])
     .map((tag) => String(tag || "").trim().toLowerCase())
     .filter(Boolean);
   const declaredBuiltin = normalizedTags.includes("builtin") || Boolean(item.system_owned && item.builtin_kind);
   const publishedFromProject = Boolean(String(item.source_project_id || "").trim());
   if (declaredBuiltin && !publishedFromProject) return "builtin";
-  if (item.projectId === BUILTIN_PIPELINE_SCOPE_ID) return "builtin";
   return "project";
+}
+
+function shouldDisplayCanonicalProjectKnowledgeSteps(
+  templateId: string,
+  steps: ProjectPipelineTemplateStep[],
+): boolean {
+  if (templateId !== BUILTIN_KNOWLEDGE_PIPELINE_TEMPLATE_ID || steps.length === 0) {
+    return false;
+  }
+
+  const stepIds = steps.map((step) => String(step.id || "").trim().toLowerCase());
+  const hasLegacyOnlyStep = stepIds.some((id) => LEGACY_PROJECT_KNOWLEDGE_STEP_IDS.has(id));
+  const alreadyCanonical = stepIds.includes("snapshot_raw") && stepIds.includes("semantic_role_labeling");
+  return hasLegacyOnlyStep && !alreadyCanonical;
+}
+
+function resolveDisplaySteps(
+  templateId: string,
+  steps: ProjectPipelineTemplateStep[],
+): ProjectPipelineTemplateStep[] {
+  if (!shouldDisplayCanonicalProjectKnowledgeSteps(templateId, steps)) {
+    return steps;
+  }
+  return CANONICAL_PROJECT_KNOWLEDGE_STEPS;
+}
+
+function pickTemplatePathField(template: TemplateItem | null): string {
+  if (!template) return "";
+  const raw = template as unknown as Record<string, unknown>;
+  const keys = ["md_relative_path", "md_path", "template_path", "template_file", "file_path", "path"];
+  for (const key of keys) {
+    const value = raw[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return "";
+}
+
+function isProjectDerivedBuiltinKnowledgeTemplate(item: {
+  id: string;
+  projectId: string;
+  system_owned?: boolean;
+  builtin_kind?: string;
+}): boolean {
+  return (
+    item.id === BUILTIN_KNOWLEDGE_PIPELINE_TEMPLATE_ID
+    && item.projectId !== INDEPENDENT_PIPELINE_SCOPE_ID
+    && item.projectId !== BUILTIN_PIPELINE_SCOPE_ID
+    && Boolean(item.system_owned)
+    && item.builtin_kind === "knowledge-processing"
+  );
 }
 
 function buildPipelineGroupKey(
   templateId: string,
   source: PipelineSourceKind,
+  projectId?: string,
 ): string {
+  const normalizedProjectId = String(projectId || "").trim();
+  if (
+    source === "project"
+    && templateId === BUILTIN_KNOWLEDGE_PIPELINE_TEMPLATE_ID
+    && normalizedProjectId
+  ) {
+    return `${templateId}::${source}::${normalizedProjectId}`;
+  }
   return `${templateId}::${source}`;
 }
 
@@ -368,6 +489,8 @@ async function loadPipelineManagementData(
       ...tpl,
       projectId: INDEPENDENT_PIPELINE_SCOPE_ID,
       projectName: independentScopeLabel,
+      sourceScope: "independent" as const,
+      projectCreatedTime: "",
     })),
     ...platformTemplates.map((tpl) => {
       const normalizedTags = (tpl.tags || [])
@@ -380,6 +503,8 @@ async function loadPipelineManagementData(
           ...tpl,
           projectId: BUILTIN_PIPELINE_SCOPE_ID,
           projectName: builtinScopeLabel,
+          sourceScope: "builtin" as const,
+          projectCreatedTime: "",
         };
       }
 
@@ -389,6 +514,8 @@ async function loadPipelineManagementData(
         ...tpl,
         projectId: sourceProjectId || "__project_general__",
         projectName: resolvedProject?.name || projectScopeLabel,
+        sourceScope: "project" as const,
+        projectCreatedTime: resolvedProject?.created_time || "",
       };
     }),
     ...perProject.flatMap((item) =>
@@ -396,6 +523,8 @@ async function loadPipelineManagementData(
         ...tpl,
         projectId: item.project.id,
         projectName: item.project.name,
+        sourceScope: "project" as const,
+        projectCreatedTime: item.project.created_time || "",
       })),
     ),
   ];
@@ -440,6 +569,19 @@ function buildRunIdentity(run: RunItem): string {
 function runTimeValue(run: RunItem): number {
   const value = Date.parse(run.updated_at || run.created_at || "");
   return Number.isFinite(value) ? value : 0;
+}
+
+function templateMtimeValue(value: unknown): number {
+  const raw = Number(value || 0);
+  if (!Number.isFinite(raw) || raw <= 0) return 0;
+  // Some backends return seconds, others milliseconds.
+  return raw < 1_000_000_000_000 ? raw * 1000 : raw;
+}
+
+function isoTimeValue(value: unknown): number {
+  if (typeof value !== "string" || !value.trim()) return 0;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function normalizeVersion(version: string): string {
@@ -926,15 +1068,15 @@ export default function PipelinesPage() {
           (item) => item.projectId === INDEPENDENT_PIPELINE_SCOPE_ID,
         );
         const mergedTemplates = [...persistedTemplates, ...data.templates.filter((item) => {
-          const key = buildPipelineGroupKey(item.id, getTemplateSourceKind(item));
+          const key = buildPipelineGroupKey(item.id, getTemplateSourceKind(item), item.projectId);
           return !persistedTemplates.some(
-            (draftItem) => buildPipelineGroupKey(draftItem.id, getTemplateSourceKind(draftItem)) === key,
+            (draftItem) => buildPipelineGroupKey(draftItem.id, getTemplateSourceKind(draftItem), draftItem.projectId) === key,
           );
         })];
 
         const restoredDraftKeys = (persisted?.draftPipelineKeys || []).filter((key) =>
           mergedTemplates.some(
-            (item) => buildPipelineGroupKey(item.id, getTemplateSourceKind(item)) === key,
+            (item) => buildPipelineGroupKey(item.id, getTemplateSourceKind(item), item.projectId) === key,
           ),
         );
 
@@ -1010,6 +1152,8 @@ export default function PipelinesPage() {
             ...tpl,
             projectId: INDEPENDENT_PIPELINE_SCOPE_ID,
             projectName: independentScopeLabel,
+            sourceScope: "independent" as const,
+            projectCreatedTime: "",
           })),
           ...platformTemplates.map((tpl) => {
             const normalizedTags = (tpl.tags || [])
@@ -1022,6 +1166,8 @@ export default function PipelinesPage() {
                 ...tpl,
                 projectId: BUILTIN_PIPELINE_SCOPE_ID,
                 projectName: builtinScopeLabel,
+                sourceScope: "builtin" as const,
+                projectCreatedTime: "",
               };
             }
 
@@ -1031,6 +1177,8 @@ export default function PipelinesPage() {
               ...tpl,
               projectId: sourceProjectId || "__project_general__",
               projectName: resolvedProject?.name || projectScopeLabel,
+              sourceScope: "project" as const,
+              projectCreatedTime: resolvedProject?.created_time || "",
             };
           }),
         ]);
@@ -1064,7 +1212,7 @@ export default function PipelinesPage() {
 
     const map = new Map<string, TemplateItem[]>();
     filteredTemplates.forEach((item) => {
-      const groupKey = buildPipelineGroupKey(item.id, getTemplateSourceKind(item));
+      const groupKey = buildPipelineGroupKey(item.id, getTemplateSourceKind(item), item.projectId);
       if (!map.has(groupKey)) {
         map.set(groupKey, []);
       }
@@ -1074,7 +1222,7 @@ export default function PipelinesPage() {
     return Array.from(map.entries())
       .map(([groupKey, items]) => {
         const versionsByKey = new Map<string, ProjectPipelineTemplateInfo>();
-        const projectMap = new Map<string, { id: string; name: string }>();
+        const projectMap = new Map<string, { id: string; name: string; createdTime?: string }>();
 
         items.forEach((item) => {
           const versionKey = normalizeVersion(item.version);
@@ -1103,6 +1251,7 @@ export default function PipelinesPage() {
             projectMap.set(item.projectId, {
               id: item.projectId,
               name: item.projectName,
+              createdTime: item.projectCreatedTime,
             });
           }
         });
@@ -1112,6 +1261,9 @@ export default function PipelinesPage() {
         );
 
         const source: PipelineGroup["source"] = getTemplateSourceKind(items[0]);
+        const groupProjectId = projectMap.size === 1
+          ? Array.from(projectMap.values())[0].id
+          : undefined;
 
         return {
           key: groupKey,
@@ -1121,9 +1273,29 @@ export default function PipelinesPage() {
           versions,
           projects: Array.from(projectMap.values()),
           source,
+          groupProjectId,
         };
       })
       .sort((a, b) => {
+        const aLatestMtime = Math.max(...a.versions.map((item) => templateMtimeValue(item.md_mtime)));
+        const bLatestMtime = Math.max(...b.versions.map((item) => templateMtimeValue(item.md_mtime)));
+        const aHasTime = aLatestMtime > 0;
+        const bHasTime = bLatestMtime > 0;
+
+        if (aHasTime !== bHasTime) {
+          return aHasTime ? -1 : 1;
+        }
+
+        if (aLatestMtime !== bLatestMtime) {
+          return bLatestMtime - aLatestMtime;
+        }
+
+        const aProjectCreatedLatest = Math.max(...a.projects.map((item) => isoTimeValue(item.createdTime)));
+        const bProjectCreatedLatest = Math.max(...b.projects.map((item) => isoTimeValue(item.createdTime)));
+        if (aProjectCreatedLatest !== bProjectCreatedLatest) {
+          return bProjectCreatedLatest - aProjectCreatedLatest;
+        }
+
         const nameCmp = a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
         if (nameCmp !== 0) return nameCmp;
         return a.source.localeCompare(b.source);
@@ -1167,6 +1339,7 @@ export default function PipelinesPage() {
 
     return (
       selectedPipeline.source === "project"
+      && selectedPipeline.id === BUILTIN_KNOWLEDGE_PIPELINE_TEMPLATE_ID
       && Boolean(selectedVersion.system_owned)
       && selectedVersion.builtin_kind === "knowledge-processing"
     );
@@ -1373,6 +1546,7 @@ export default function PipelinesPage() {
     const projectBuiltinPipelineKey = buildPipelineGroupKey(
       selectedPipeline.id,
       "project",
+      selectedBuiltinProjectId,
     );
     const candidates = (runsByPipelineKey[projectBuiltinPipelineKey] || [])
       .filter(
@@ -1533,6 +1707,11 @@ export default function PipelinesPage() {
     );
   }, [selectedCurrentVersion, selectedPipeline]);
 
+  const currentTemplateDisplaySteps = useMemo(() => {
+    if (!currentTemplate) return [];
+    return resolveDisplaySteps(currentTemplate.id, currentTemplate.steps || []);
+  }, [currentTemplate]);
+
   const compareTemplate = useMemo(() => {
     if (!selectedPipeline || !selectedCompareVersion) return null;
     return (
@@ -1549,10 +1728,38 @@ export default function PipelinesPage() {
         (item) =>
           item.id === selectedPipeline.id &&
           getTemplateSourceKind(item) === selectedPipeline.source &&
+          (!selectedPipeline.groupProjectId || item.projectId === selectedPipeline.groupProjectId) &&
           normalizeVersion(item.version) === selectedCurrentVersion,
       ) || null
     );
   }, [selectedCurrentVersion, selectedPipeline, templates]);
+
+  const selectedPipelineFilePath = useMemo(() => {
+    const explicitPath = pickTemplatePathField(selectedTemplateItem);
+    if (explicitPath) {
+      return explicitPath;
+    }
+
+    if (!selectedPipeline) {
+      return "";
+    }
+
+    if (selectedPipeline.source === "builtin") {
+      return `src/qwenpaw/app/pipelines/${selectedPipeline.id}.json`;
+    }
+
+    if (selectedPipeline.source === "project") {
+      const projectId = String(
+        selectedPipeline.groupProjectId
+        || selectedBuiltinProjectId
+        || selectedPipeline.projects[0]?.id
+        || "",
+      ).trim() || "<project-id>";
+      return `projects/${projectId}/.pipelines/templates/${selectedPipeline.id}.json`;
+    }
+
+    return `${buildPipelineWorkspaceRelativePath(selectedPipeline.id)}/pipeline.md`;
+  }, [selectedBuiltinProjectId, selectedPipeline, selectedTemplateItem]);
 
   const selectedIsDraft = useMemo(() => {
     if (!selectedPipeline) return false;
@@ -1905,7 +2112,7 @@ export default function PipelinesPage() {
     if (!selectedAgent) return;
 
     const draftTemplates = templates.filter((item) =>
-      draftPipelineKeys.includes(buildPipelineGroupKey(item.id, getTemplateSourceKind(item))),
+      draftPipelineKeys.includes(buildPipelineGroupKey(item.id, getTemplateSourceKind(item), item.projectId)),
     );
 
     if (draftTemplates.length === 0) {
@@ -2325,7 +2532,7 @@ export default function PipelinesPage() {
       const savedDraftKey = buildPipelineGroupKey(savedDraftId, "independent");
       const preservedDraftTemplates = templates.filter(
         (item) => {
-          const key = buildPipelineGroupKey(item.id, getTemplateSourceKind(item));
+          const key = buildPipelineGroupKey(item.id, getTemplateSourceKind(item), item.projectId);
           return draftPipelineKeys.includes(key) && key !== savedDraftKey;
         },
       );
@@ -3580,9 +3787,13 @@ export default function PipelinesPage() {
                     const selected = item.key === selectedPipelineKey;
                     const isProjectBuiltinKnowledge =
                       item.source === "project"
-                      && item.versions.some(
-                        (version) => Boolean(version.system_owned) && version.builtin_kind === "knowledge-processing",
-                      );
+                      && item.versions.some((version) => isProjectDerivedBuiltinKnowledgeTemplate({
+                        id: item.id,
+                        projectId: item.groupProjectId || item.projects[0]?.id || "",
+                        system_owned: version.system_owned,
+                        builtin_kind: version.builtin_kind ?? undefined,
+                      }));
+                    const derivedProjectId = item.groupProjectId || item.projects[0]?.id || "-";
                     return (
                       <button
                         key={item.key}
@@ -3596,7 +3807,7 @@ export default function PipelinesPage() {
                           {isProjectBuiltinKnowledge ? (
                             <>
                               <Tag color="purple">{t("pipelines.builtin", "Built-in")}</Tag>
-                              <Tag color="gold">{t("pipelines.project")}</Tag>
+                              <Tag color="blue">{`Project:${derivedProjectId}`}</Tag>
                             </>
                           ) : (
                             <Tag color={item.source === "independent" ? "cyan" : item.source === "project" ? "gold" : "purple"}>
@@ -3624,6 +3835,11 @@ export default function PipelinesPage() {
                             count: item.projects.length,
                           })}
                         </Text>
+                        {isProjectBuiltinKnowledge ? (
+                          <Text type="secondary" className={styles.helperText}>
+                            {`Derived from project: ${derivedProjectId}`}
+                          </Text>
+                        ) : null}
                       </button>
                     );
                   })}
@@ -3758,6 +3974,16 @@ export default function PipelinesPage() {
                 </div>
               }
             >
+              {selectedPipeline ? (
+                <div className={styles.list} style={{ marginBottom: 12 }}>
+                  <div className={styles.listItemStatic}>
+                    <div className={styles.listItemHeader}>
+                      <Text strong>{t("pipelines.templatePath", "Template Path")}</Text>
+                    </div>
+                    <Text type="secondary">{selectedPipelineFilePath || "-"}</Text>
+                  </div>
+                </div>
+              ) : null}
               {selectedIsBuiltinProjectKnowledgePipeline ? (
                 <div className={styles.list} style={{ marginBottom: 12 }}>
                   <div className={styles.listItemStatic}>
@@ -3791,6 +4017,14 @@ export default function PipelinesPage() {
                         <Text strong>{stage.label}</Text>
                         <Tag color={statusTagColor(stage.status)}>{stage.status}</Tag>
                       </div>
+                      {stage.legacyMapped ? (
+                        <Text type="secondary" className={styles.helperText}>
+                          {t(
+                            "pipelines.builtinLegacyMapping",
+                            "Mapped from legacy NLP sub-stages",
+                          )}
+                        </Text>
+                      ) : null}
                       <Text type="secondary" className={styles.helperText}>
                         {t("pipelines.progress", "Progress")}: {stage.progress == null ? "-" : `${stage.progress}%`}
                       </Text>
@@ -3842,7 +4076,7 @@ export default function PipelinesPage() {
                     "Select a pipeline to view nodes.",
                   )}
                 />
-              ) : currentTemplate.steps.length === 0 ? (
+              ) : currentTemplateDisplaySteps.length === 0 ? (
                 <Empty
                   description={t(
                     "pipelines.emptyNodes",
@@ -3851,7 +4085,7 @@ export default function PipelinesPage() {
                 />
               ) : (
                 <div className={styles.list}>
-                  {currentTemplate.steps.map((step) => (
+                  {currentTemplateDisplaySteps.map((step) => (
                     <div key={step.id} className={styles.listItemStatic}>
                       <div className={styles.listItemHeader}>
                         <Text strong>{step.name}</Text>
@@ -4385,7 +4619,7 @@ export default function PipelinesPage() {
                           onClick={() => {
                             setSourceFilter("project");
                             setSelectedPipelineKey(
-                              buildPipelineGroupKey(run.template_id, "project"),
+                              buildPipelineGroupKey(run.template_id, "project", run.projectId),
                             );
                             setSelectedCompareVersion("");
                           }}

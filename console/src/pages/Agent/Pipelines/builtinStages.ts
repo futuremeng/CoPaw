@@ -6,18 +6,8 @@ export type BuiltinRuntimeStage = {
   status: string;
   summary: string;
   progress?: number | null;
+  legacyMapped?: boolean;
 };
-
-function normalizeBuiltinStageStatus(status: string | undefined): string {
-  const normalized = String(status || "").trim().toLowerCase();
-  if (["ready", "running", "pending", "failed", "blocked", "idle"].includes(normalized)) {
-    return normalized;
-  }
-  if (normalized === "unavailable") {
-    return "blocked";
-  }
-  return "idle";
-}
 
 export function deriveBuiltinProjectKnowledgeStages(
   syncState: ProjectKnowledgeSyncState | null,
@@ -28,17 +18,60 @@ export function deriveBuiltinProjectKnowledgeStages(
     syncState?.last_result && typeof syncState.last_result === "object" && (syncState.last_result as Record<string, unknown>).index,
   );
 
-  const fileAnalysisStatus = stageToken.includes("file_analysis")
-    ? (workflowStatus === "failed" ? "failed" : "running")
-    : (hasIndexedResult || ["graphifying", "succeeded", "failed"].includes(workflowStatus) ? "ready" : "idle");
-  const sourceScanStatus = stageToken.includes("source_scan")
-    ? (workflowStatus === "failed" ? "failed" : "running")
-    : (hasIndexedResult || ["graphifying", "succeeded", "failed"].includes(workflowStatus) ? "ready" : "idle");
-
   const nlpStages = syncState?.nlp_progress?.stages;
   const nlpTotalChunks = Number(syncState?.nlp_progress?.total_chunks || 0);
+  const hasLegacyNlpStages = Boolean(
+    nlpStages?.tokenize || nlpStages?.ner || nlpStages?.cor || nlpStages?.syntax || nlpStages?.phrase,
+  );
+  const workflowProgress = Number(syncState?.progress || 0);
+  const stageMessage = String(syncState?.stage_message || "").trim();
 
-  const buildNlpSummary = (doneChunks?: number, readyChunks?: number): string => {
+  const stageIncludesAny = (...tokens: string[]): boolean => tokens.some((token) => stageToken.includes(token));
+  const runningOrPending = (status: string): boolean => ["running", "pending", "indexing", "graphifying", "queued"].includes(status);
+  const isDoneStatus = (status: string): boolean => ["succeeded", "failed"].includes(status);
+
+  const tokenizeDone = Number(nlpStages?.tokenize?.done_chunks || 0);
+  const nerReady = Number(nlpStages?.ner?.ready_chunks || 0);
+  const corReady = Number(nlpStages?.cor?.ready_chunks || 0);
+  const syntaxReady = Number(nlpStages?.syntax?.ready_chunks || 0);
+
+  const legacyNlpPeak = Math.max(tokenizeDone, nerReady, corReady, syntaxReady);
+
+  const canonicalStages: Array<{ key: string; aliases: string[] }> = [
+    { key: "snapshot_raw", aliases: ["snapshot_raw"] },
+    { key: "build_chunks", aliases: ["build_chunks", "index"] },
+    { key: "build_interlinear", aliases: ["build_interlinear"] },
+    { key: "tokenize", aliases: ["tokenize"] },
+    { key: "pos_tagging", aliases: ["pos_tagging", "pos", "ner", "cor"] },
+    { key: "syntax_parse", aliases: ["syntax_parse", "syntax", "phrase", "graphify"] },
+    { key: "semantic_role_labeling", aliases: ["semantic_role_labeling", "srl"] },
+  ];
+
+  const activeIndex = canonicalStages.findIndex((stage) => stage.aliases.some((token) => stageIncludesAny(token)));
+
+  const computeStageStatus = (index: number): string => {
+    const isActive = activeIndex === index;
+    const passed = activeIndex > index;
+
+    if (isActive) {
+      return workflowStatus === "failed" ? "failed" : "running";
+    }
+    if (passed) {
+      return "ready";
+    }
+    if (isDoneStatus(workflowStatus)) {
+      return "ready";
+    }
+    if (index <= 2 && hasIndexedResult) {
+      return "ready";
+    }
+    if (hasLegacyNlpStages && index >= 3 && index <= 5) {
+      return "ready";
+    }
+    return runningOrPending(workflowStatus) ? "pending" : "idle";
+  };
+
+  const buildChunkSummary = (doneChunks?: number, readyChunks?: number): string => {
     const done = Number(doneChunks || 0);
     const ready = Number(readyChunks || 0);
     if (nlpTotalChunks > 0) {
@@ -50,61 +83,39 @@ export function deriveBuiltinProjectKnowledgeStages(
     return "-";
   };
 
-  const tokenizeStatus = normalizeBuiltinStageStatus(nlpStages?.tokenize?.status);
-  const nerStatus = normalizeBuiltinStageStatus(nlpStages?.ner?.status);
-  const corStatus = normalizeBuiltinStageStatus(nlpStages?.cor?.status);
-  const syntaxStatus = normalizeBuiltinStageStatus(nlpStages?.syntax?.status);
-
-  const tokenizeDone = Number(nlpStages?.tokenize?.done_chunks || 0);
-  const nerReady = Number(nlpStages?.ner?.ready_chunks || 0);
-  const corReady = Number(nlpStages?.cor?.ready_chunks || 0);
-  const syntaxReady = Number(nlpStages?.syntax?.ready_chunks || 0);
-
   const toProgress = (value: number): number | null => {
     if (nlpTotalChunks <= 0) return null;
     return Math.max(0, Math.min(100, Math.round((value / nlpTotalChunks) * 100)));
   };
 
-  return [
-    {
-      key: "file_analysis",
-      label: "file_analysis",
-      status: fileAnalysisStatus,
-      summary: stageToken.includes("file_analysis") ? "running" : (hasIndexedResult ? "ready" : "pending"),
-    },
-    {
-      key: "source_scan",
-      label: "source_scan",
-      status: sourceScanStatus,
-      summary: stageToken.includes("source_scan") ? "running" : (hasIndexedResult ? "ready" : "pending"),
-    },
-    {
-      key: "tokenize",
-      label: "tokenize",
-      status: tokenizeStatus,
-      summary: buildNlpSummary(tokenizeDone, tokenizeDone),
-      progress: toProgress(tokenizeDone),
-    },
-    {
-      key: "ner",
-      label: "ner",
-      status: nerStatus,
-      summary: buildNlpSummary(undefined, nerReady),
-      progress: toProgress(nerReady),
-    },
-    {
-      key: "cor",
-      label: "cor",
-      status: corStatus,
-      summary: buildNlpSummary(undefined, corReady),
-      progress: toProgress(corReady),
-    },
-    {
-      key: "syntax",
-      label: "syntax",
-      status: syntaxStatus,
-      summary: buildNlpSummary(undefined, syntaxReady),
-      progress: toProgress(syntaxReady),
-    },
-  ];
+  const legacyChunkByStep: Record<string, number> = {
+    tokenize: tokenizeDone,
+    pos_tagging: Math.max(nerReady, corReady),
+    syntax_parse: syntaxReady,
+  };
+
+  return canonicalStages.map((stage, index): BuiltinRuntimeStage => {
+    const status = computeStageStatus(index);
+    const isActive = activeIndex === index;
+    const legacyChunkCount = legacyChunkByStep[stage.key] ?? legacyNlpPeak;
+    const progress = isActive
+      ? Math.max(0, Math.min(100, Math.round(workflowProgress)))
+      : (stage.key in legacyChunkByStep ? toProgress(legacyChunkCount) : null);
+
+    let summary = status === "ready" ? "ready" : status;
+    if (isActive && stageMessage) {
+      summary = stageMessage;
+    } else if (stage.key in legacyChunkByStep && hasLegacyNlpStages) {
+      summary = buildChunkSummary(legacyChunkCount, legacyChunkCount);
+    }
+
+    return {
+      key: stage.key,
+      label: stage.key,
+      status,
+      summary,
+      progress,
+      legacyMapped: hasLegacyNlpStages && index >= 3 && index <= 5,
+    };
+  });
 }

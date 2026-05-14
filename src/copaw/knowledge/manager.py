@@ -4119,7 +4119,7 @@ class KnowledgeManager:
         ]
         payload = {
             "artifact": "tokenize_file_totals",
-            "format_version": _TOKENIZE_LINE_STATS_FORMAT_VERSION,
+            "format_version": str(globals().get("_TOKENIZE_LINE_STATS_FORMAT_VERSION") or "0.1"),
             "source_id": source_id,
             "file_count": len(entries),
             "token_count_total": sum(int(item.get("token_count") or 0) for item in entries),

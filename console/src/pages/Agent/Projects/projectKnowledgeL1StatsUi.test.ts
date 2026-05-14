@@ -23,11 +23,11 @@ const t = (
 };
 
 describe("projectKnowledgeL1StatsUi", () => {
-  it("formats source_scan and file_analysis summaries", () => {
-    const sourceScan = {
+  it("formats canonical 7-step summaries", () => {
+    const snapshotRaw = {
       project_id: "project-abc",
       source_id: "project-project-abc-workspace",
-      step_id: "source_scan",
+      step_id: "snapshot_raw",
       updated_at: "2026-05-12T10:21:00Z",
       metrics: {
         data_file_count: 5,
@@ -35,10 +35,10 @@ describe("projectKnowledgeL1StatsUi", () => {
         source_count: 1,
       },
     };
-    const fileAnalysis = {
+    const buildChunks = {
       project_id: "project-abc",
       source_id: "project-project-abc-workspace",
-      step_id: "file_analysis",
+      step_id: "build_chunks",
       updated_at: "2026-05-12T10:31:00Z",
       metrics: {
         document_count: 3,
@@ -46,22 +46,55 @@ describe("projectKnowledgeL1StatsUi", () => {
         sentence_count: 11,
       },
     };
-    const domainGraphBuild = {
+    const buildInterlinear = {
       project_id: "project-abc",
       source_id: "project-project-abc-workspace",
-      step_id: "domain_graph_build",
+      step_id: "build_interlinear",
+      updated_at: "2026-05-12T10:36:00Z",
+      metrics: {
+        document_count: 3,
+        chunk_count: 7,
+        sentence_count: 11,
+      },
+    };
+    const tokenize = {
+      project_id: "project-abc",
+      source_id: "project-project-abc-workspace",
+      step_id: "tokenize",
       updated_at: "2026-05-12T10:41:00Z",
+      metrics: {
+        document_count: 3,
+        chunk_count: 7,
+        sentence_count: 11,
+      },
+    };
+    const posTagging = {
+      project_id: "project-abc",
+      source_id: "project-project-abc-workspace",
+      step_id: "pos_tagging",
+      updated_at: "2026-05-12T10:46:00Z",
+      metrics: {
+        document_count: 3,
+        chunk_count: 7,
+        sentence_count: 11,
+      },
+    };
+    const syntaxParse = {
+      project_id: "project-abc",
+      source_id: "project-project-abc-workspace",
+      step_id: "syntax_parse",
+      updated_at: "2026-05-12T10:51:00Z",
       metrics: {
         document_count: 3,
         node_count: 9,
         relation_count: 12,
       },
     };
-    const qualityReview = {
+    const semanticRoleLabeling = {
       project_id: "project-abc",
       source_id: "project-project-abc-workspace",
-      step_id: "quality_review",
-      updated_at: "2026-05-12T10:51:00Z",
+      step_id: "semantic_role_labeling",
+      updated_at: "2026-05-12T10:56:00Z",
       metrics: {
         quality_score_before: 0.91,
         quality_score_after: 0.95,
@@ -70,43 +103,46 @@ describe("projectKnowledgeL1StatsUi", () => {
       },
     };
 
-    expect(formatProjectKnowledgeStatsRecordTimestamp(sourceScan)).toMatch(/05\/12/);
-    expect(summarizeProjectKnowledgeSourceScanStats(t, sourceScan)).toBe("5 files / 2 changed / 1 sources");
-    expect(summarizeProjectKnowledgeFileAnalysisStats(t, fileAnalysis)).toBe("3 docs / 7 chunks / 11 sentences");
-    expect(summarizeProjectKnowledgeDomainGraphBuildStats(t, domainGraphBuild)).toBe("3 docs / 9 nodes / 12 relations");
-    expect(summarizeProjectKnowledgeQualityReviewStats(t, qualityReview)).toBe("0.91 -> 0.95 / delta 0.04 / 1 rounds");
-    expect(buildProjectKnowledgeLatestL1SummaryParts(t, { sourceScan, fileAnalysis })).toEqual([
+    expect(formatProjectKnowledgeStatsRecordTimestamp(snapshotRaw)).toMatch(/05\/12/);
+    expect(summarizeProjectKnowledgeSourceScanStats(t, snapshotRaw)).toBe("5 files / 2 changed / 1 sources");
+    expect(summarizeProjectKnowledgeFileAnalysisStats(t, buildChunks)).toBe("3 docs / 7 chunks / 11 sentences");
+    expect(summarizeProjectKnowledgeDomainGraphBuildStats(t, syntaxParse)).toBe("3 docs / 9 nodes / 12 relations");
+    expect(summarizeProjectKnowledgeQualityReviewStats(t, semanticRoleLabeling)).toBe("0.91 -> 0.95 / delta 0.04 / 1 rounds");
+    expect(buildProjectKnowledgeLatestL1SummaryParts(t, { snapshotRaw, buildChunks })).toEqual([
       expect.stringContaining("scan"),
       expect.stringContaining("analysis"),
     ]);
-    expect(buildProjectKnowledgeLatestL23SummaryParts(t, { domainGraphBuild, qualityReview })).toEqual([
-      expect.stringContaining("graph"),
-      expect.stringContaining("review"),
+    expect(buildProjectKnowledgeLatestL23SummaryParts(t, { buildInterlinear, tokenize, posTagging, syntaxParse, semanticRoleLabeling })).toEqual([
+      expect.stringContaining("interlinear"),
+      expect.stringContaining("tokenize"),
+      expect.stringContaining("pos"),
+      expect.stringContaining("syntax"),
+      expect.stringContaining("srl"),
     ]);
     expect(buildProjectKnowledgeLatestOutputSummaryParts(t, {
       selectedMode: "nlp",
-      domainGraphBuild,
-      qualityReview,
+      syntaxParse,
+      semanticRoleLabeling,
     })).toEqual([
-      expect.stringContaining("graph provenance"),
+      expect.stringContaining("syntax provenance"),
     ]);
     expect(buildProjectKnowledgeLatestOutputSummaryParts(t, {
       selectedMode: "agentic",
-      domainGraphBuild,
-      qualityReview,
+      syntaxParse,
+      semanticRoleLabeling,
     })).toEqual([
-      expect.stringContaining("graph provenance"),
-      expect.stringContaining("review outcome"),
+      expect.stringContaining("syntax provenance"),
+      expect.stringContaining("srl outcome"),
     ]);
   });
 
   it("skips empty latest records", () => {
-    expect(buildProjectKnowledgeLatestL1SummaryParts(t, { sourceScan: {}, fileAnalysis: null })).toEqual([]);
-    expect(buildProjectKnowledgeLatestL23SummaryParts(t, { domainGraphBuild: {}, qualityReview: null })).toEqual([]);
+    expect(buildProjectKnowledgeLatestL1SummaryParts(t, { snapshotRaw: {}, buildChunks: null })).toEqual([]);
+    expect(buildProjectKnowledgeLatestL23SummaryParts(t, { buildInterlinear: {}, tokenize: null, posTagging: null, syntaxParse: null, semanticRoleLabeling: null })).toEqual([]);
     expect(buildProjectKnowledgeLatestOutputSummaryParts(t, {
       selectedMode: "fast",
-      domainGraphBuild: {},
-      qualityReview: null,
+      syntaxParse: {},
+      semanticRoleLabeling: null,
     })).toEqual([]);
   });
 });

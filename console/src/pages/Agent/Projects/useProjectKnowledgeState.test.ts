@@ -240,7 +240,7 @@ describe("resolveProjectKnowledgeL1StepStats", () => {
         status: "fulfilled",
         value: {
           project_id: "project-1",
-          step_id: "file_analysis",
+          step_id: "build_chunks",
           latest: {},
           history: [],
         },
@@ -249,15 +249,15 @@ describe("resolveProjectKnowledgeL1StepStats", () => {
         status: "fulfilled",
         value: {
           project_id: "project-1",
-          step_id: "source_scan",
+          step_id: "snapshot_raw",
           latest: {},
           history: [],
         },
       },
     ]);
 
-    expect(resolved.fileAnalysis?.step_id).toBe("file_analysis");
-    expect(resolved.sourceScan?.step_id).toBe("source_scan");
+    expect(resolved.fileAnalysis?.step_id).toBe("build_chunks");
+    expect(resolved.sourceScan?.step_id).toBe("snapshot_raw");
   });
 
   it("falls back to null for rejected step stats results", () => {
@@ -270,7 +270,7 @@ describe("resolveProjectKnowledgeL1StepStats", () => {
         status: "fulfilled",
         value: {
           project_id: "project-1",
-          step_id: "source_scan",
+          step_id: "snapshot_raw",
           latest: {},
           history: [],
         },
@@ -278,7 +278,7 @@ describe("resolveProjectKnowledgeL1StepStats", () => {
     ]);
 
     expect(resolved.fileAnalysis).toBeNull();
-    expect(resolved.sourceScan?.step_id).toBe("source_scan");
+    expect(resolved.sourceScan?.step_id).toBe("snapshot_raw");
   });
 });
 
@@ -289,7 +289,7 @@ describe("resolveProjectKnowledgeStepStats", () => {
         status: "fulfilled",
         value: {
           project_id: "project-1",
-          step_id: "source_scan",
+          step_id: "snapshot_raw",
           latest: {},
           history: [],
         },
@@ -298,7 +298,7 @@ describe("resolveProjectKnowledgeStepStats", () => {
         status: "fulfilled",
         value: {
           project_id: "project-1",
-          step_id: "file_analysis",
+          step_id: "build_chunks",
           latest: {},
           history: [],
         },
@@ -307,7 +307,7 @@ describe("resolveProjectKnowledgeStepStats", () => {
         status: "fulfilled",
         value: {
           project_id: "project-1",
-          step_id: "domain_graph_build",
+          step_id: "build_interlinear",
           latest: {},
           history: [],
         },
@@ -316,16 +316,46 @@ describe("resolveProjectKnowledgeStepStats", () => {
         status: "fulfilled",
         value: {
           project_id: "project-1",
-          step_id: "quality_review",
+          step_id: "tokenize",
+          latest: {},
+          history: [],
+        },
+      },
+      {
+        status: "fulfilled",
+        value: {
+          project_id: "project-1",
+          step_id: "pos_tagging",
+          latest: {},
+          history: [],
+        },
+      },
+      {
+        status: "fulfilled",
+        value: {
+          project_id: "project-1",
+          step_id: "syntax_parse",
+          latest: {},
+          history: [],
+        },
+      },
+      {
+        status: "fulfilled",
+        value: {
+          project_id: "project-1",
+          step_id: "semantic_role_labeling",
           latest: {},
           history: [],
         },
       },
     ]);
 
-    expect(resolved.source_scan?.step_id).toBe("source_scan");
-    expect(resolved.file_analysis?.step_id).toBe("file_analysis");
-    expect(resolved.domain_graph_build?.step_id).toBe("domain_graph_build");
-    expect(resolved.quality_review?.step_id).toBe("quality_review");
+    expect(resolved.snapshot_raw?.step_id).toBe("snapshot_raw");
+    expect(resolved.build_chunks?.step_id).toBe("build_chunks");
+    expect(resolved.build_interlinear?.step_id).toBe("build_interlinear");
+    expect(resolved.tokenize?.step_id).toBe("tokenize");
+    expect(resolved.pos_tagging?.step_id).toBe("pos_tagging");
+    expect(resolved.syntax_parse?.step_id).toBe("syntax_parse");
+    expect(resolved.semantic_role_labeling?.step_id).toBe("semantic_role_labeling");
   });
 });

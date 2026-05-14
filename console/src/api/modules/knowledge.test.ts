@@ -11,15 +11,15 @@ describe("knowledgeApi.getProjectStepStats", () => {
   it("requests the generic project step stats endpoint with project_id and limit", async () => {
     vi.mocked(request).mockResolvedValue({
       project_id: "project-a",
-      step_id: "file_analysis",
+      step_id: "build_chunks",
       latest: {},
       history: [],
     });
 
-    await knowledgeApi.getProjectStepStats("file_analysis", "project-a", { limit: 3 });
+    await knowledgeApi.getProjectStepStats("build_chunks", "project-a", { limit: 3 });
 
     expect(request).toHaveBeenCalledWith(
-      "/knowledge/project-stats/file_analysis?limit=3&project_id=project-a",
+      "/knowledge/project-stats/build_chunks?limit=3&project_id=project-a",
     );
   });
 });
@@ -27,10 +27,10 @@ describe("knowledgeApi.getProjectStepStats", () => {
 describe("knowledgeApi.getProjectFileAnalysisStats", () => {
   afterEach(() => vi.clearAllMocks());
 
-  it("requests the file_analysis stats endpoint with project_id and limit", async () => {
+  it("requests the build_chunks stats endpoint with project_id and limit", async () => {
     vi.mocked(request).mockResolvedValue({
       project_id: "project-a",
-      step_id: "file_analysis",
+      step_id: "build_chunks",
       latest: {},
       history: [],
     });
@@ -38,14 +38,14 @@ describe("knowledgeApi.getProjectFileAnalysisStats", () => {
     await knowledgeApi.getProjectFileAnalysisStats("project-a", { limit: 15 });
 
     expect(request).toHaveBeenCalledWith(
-      "/knowledge/project-stats/file_analysis?limit=15&project_id=project-a",
+      "/knowledge/project-stats/build_chunks?limit=15&project_id=project-a",
     );
   });
 
-  it("requests the file_analysis stats endpoint without limit when omitted", async () => {
+  it("requests the build_chunks stats endpoint without limit when omitted", async () => {
     vi.mocked(request).mockResolvedValue({
       project_id: "project-a",
-      step_id: "file_analysis",
+      step_id: "build_chunks",
       latest: {},
       history: [],
     });
@@ -53,7 +53,7 @@ describe("knowledgeApi.getProjectFileAnalysisStats", () => {
     await knowledgeApi.getProjectFileAnalysisStats("project-a");
 
     expect(request).toHaveBeenCalledWith(
-      "/knowledge/project-stats/file_analysis?project_id=project-a",
+      "/knowledge/project-stats/build_chunks?project_id=project-a",
     );
   });
 });
@@ -61,10 +61,10 @@ describe("knowledgeApi.getProjectFileAnalysisStats", () => {
 describe("knowledgeApi.getProjectSourceScanStats", () => {
   afterEach(() => vi.clearAllMocks());
 
-  it("requests the source_scan stats endpoint with project_id and limit", async () => {
+  it("requests the snapshot_raw stats endpoint with project_id and limit", async () => {
     vi.mocked(request).mockResolvedValue({
       project_id: "project-a",
-      step_id: "source_scan",
+      step_id: "snapshot_raw",
       latest: {},
       history: [],
     });
@@ -72,7 +72,7 @@ describe("knowledgeApi.getProjectSourceScanStats", () => {
     await knowledgeApi.getProjectSourceScanStats("project-a", { limit: 10 });
 
     expect(request).toHaveBeenCalledWith(
-      "/knowledge/project-stats/source_scan?limit=10&project_id=project-a",
+      "/knowledge/project-stats/snapshot_raw?limit=10&project_id=project-a",
     );
   });
 });

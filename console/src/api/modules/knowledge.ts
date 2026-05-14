@@ -77,10 +77,10 @@ export const knowledgeApi = {
     ),
 
   getProjectFileAnalysisStats: (projectId: string, options?: { limit?: number }) =>
-    knowledgeApi.getProjectStepStats("file_analysis", projectId, options) as Promise<ProjectKnowledgeFileAnalysisStatsResponse>,
+    knowledgeApi.getProjectStepStats("build_chunks", projectId, options) as Promise<ProjectKnowledgeFileAnalysisStatsResponse>,
 
   getProjectSourceScanStats: (projectId: string, options?: { limit?: number }) =>
-    knowledgeApi.getProjectStepStats("source_scan", projectId, options) as Promise<ProjectKnowledgeSourceScanStatsResponse>,
+    knowledgeApi.getProjectStepStats("snapshot_raw", projectId, options) as Promise<ProjectKnowledgeSourceScanStatsResponse>,
 
   upsertKnowledgeSource: (
     payload: KnowledgeSourceSpec,

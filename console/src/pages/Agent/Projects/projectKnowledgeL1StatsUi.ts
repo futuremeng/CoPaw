@@ -117,36 +117,36 @@ export function summarizeProjectKnowledgeQualityReviewStats(
 export function buildProjectKnowledgeLatestL1SummaryParts(
   t: TranslateFn,
   params: {
-    sourceScan?: ProjectKnowledgeStatsLike;
-    fileAnalysis?: ProjectKnowledgeStatsLike;
+    snapshotRaw?: ProjectKnowledgeStatsLike;
+    buildChunks?: ProjectKnowledgeStatsLike;
   },
 ): string[] {
   const parts: string[] = [];
-  if (hasProjectKnowledgeStats(params.sourceScan)) {
+  if (hasProjectKnowledgeStats(params.snapshotRaw)) {
     parts.push(t(
-      "projects.knowledge.latestSourceScanSummary",
+      "projects.knowledge.latestSnapshotRawSummary",
       "scan {{time}} · {{summary}}",
       {
-        time: formatProjectKnowledgeStatsRecordTimestamp(params.sourceScan),
+        time: formatProjectKnowledgeStatsRecordTimestamp(params.snapshotRaw),
         summary: summarizeProjectKnowledgeSourceScanStats(
           t,
-          params.sourceScan,
-          "projects.knowledge.latestSourceScanMetrics",
+          params.snapshotRaw,
+          "projects.knowledge.latestSnapshotRawMetrics",
           "{{files}} files / {{changed}} changed",
         ),
       },
     ));
   }
-  if (hasProjectKnowledgeStats(params.fileAnalysis)) {
+  if (hasProjectKnowledgeStats(params.buildChunks)) {
     parts.push(t(
-      "projects.knowledge.latestFileAnalysisSummary",
+      "projects.knowledge.latestBuildChunksSummary",
       "analysis {{time}} · {{summary}}",
       {
-        time: formatProjectKnowledgeStatsRecordTimestamp(params.fileAnalysis),
+        time: formatProjectKnowledgeStatsRecordTimestamp(params.buildChunks),
         summary: summarizeProjectKnowledgeFileAnalysisStats(
           t,
-          params.fileAnalysis,
-          "projects.knowledge.latestFileAnalysisMetrics",
+          params.buildChunks,
+          "projects.knowledge.latestBuildChunksMetrics",
           "{{documents}} docs / {{chunks}} chunks / {{sentences}} sentences",
         ),
       },
@@ -158,36 +158,84 @@ export function buildProjectKnowledgeLatestL1SummaryParts(
 export function buildProjectKnowledgeLatestL23SummaryParts(
   t: TranslateFn,
   params: {
-    domainGraphBuild?: ProjectKnowledgeStatsLike;
-    qualityReview?: ProjectKnowledgeStatsLike;
+    buildInterlinear?: ProjectKnowledgeStatsLike;
+    tokenize?: ProjectKnowledgeStatsLike;
+    posTagging?: ProjectKnowledgeStatsLike;
+    syntaxParse?: ProjectKnowledgeStatsLike;
+    semanticRoleLabeling?: ProjectKnowledgeStatsLike;
   },
 ): string[] {
   const parts: string[] = [];
-  if (hasProjectKnowledgeStats(params.domainGraphBuild)) {
+  if (hasProjectKnowledgeStats(params.buildInterlinear)) {
     parts.push(t(
-      "projects.knowledge.latestDomainGraphBuildSummary",
-      "graph {{time}} · {{summary}}",
+      "projects.knowledge.latestBuildInterlinearSummary",
+      "interlinear {{time}} · {{summary}}",
       {
-        time: formatProjectKnowledgeStatsRecordTimestamp(params.domainGraphBuild),
+        time: formatProjectKnowledgeStatsRecordTimestamp(params.buildInterlinear),
+        summary: summarizeProjectKnowledgeFileAnalysisStats(
+          t,
+          params.buildInterlinear,
+          "projects.knowledge.latestBuildInterlinearMetrics",
+          "{{documents}} docs / {{chunks}} chunks / {{sentences}} sentences",
+        ),
+      },
+    ));
+  }
+  if (hasProjectKnowledgeStats(params.tokenize)) {
+    parts.push(t(
+      "projects.knowledge.latestTokenizeSummary",
+      "tokenize {{time}} · {{summary}}",
+      {
+        time: formatProjectKnowledgeStatsRecordTimestamp(params.tokenize),
+        summary: summarizeProjectKnowledgeFileAnalysisStats(
+          t,
+          params.tokenize,
+          "projects.knowledge.latestTokenizeMetrics",
+          "{{documents}} docs / {{chunks}} chunks / {{sentences}} sentences",
+        ),
+      },
+    ));
+  }
+  if (hasProjectKnowledgeStats(params.posTagging)) {
+    parts.push(t(
+      "projects.knowledge.latestPosTaggingSummary",
+      "pos {{time}} · {{summary}}",
+      {
+        time: formatProjectKnowledgeStatsRecordTimestamp(params.posTagging),
+        summary: summarizeProjectKnowledgeFileAnalysisStats(
+          t,
+          params.posTagging,
+          "projects.knowledge.latestPosTaggingMetrics",
+          "{{documents}} docs / {{chunks}} chunks / {{sentences}} sentences",
+        ),
+      },
+    ));
+  }
+  if (hasProjectKnowledgeStats(params.syntaxParse)) {
+    parts.push(t(
+      "projects.knowledge.latestSyntaxParseSummary",
+      "syntax {{time}} · {{summary}}",
+      {
+        time: formatProjectKnowledgeStatsRecordTimestamp(params.syntaxParse),
         summary: summarizeProjectKnowledgeDomainGraphBuildStats(
           t,
-          params.domainGraphBuild,
-          "projects.knowledge.latestDomainGraphBuildMetrics",
+          params.syntaxParse,
+          "projects.knowledge.latestSyntaxParseMetrics",
           "{{documents}} docs / {{nodes}} nodes / {{relations}} relations",
         ),
       },
     ));
   }
-  if (hasProjectKnowledgeStats(params.qualityReview)) {
+  if (hasProjectKnowledgeStats(params.semanticRoleLabeling)) {
     parts.push(t(
-      "projects.knowledge.latestQualityReviewSummary",
-      "review {{time}} · {{summary}}",
+      "projects.knowledge.latestSemanticRoleLabelingSummary",
+      "srl {{time}} · {{summary}}",
       {
-        time: formatProjectKnowledgeStatsRecordTimestamp(params.qualityReview),
+        time: formatProjectKnowledgeStatsRecordTimestamp(params.semanticRoleLabeling),
         summary: summarizeProjectKnowledgeQualityReviewStats(
           t,
-          params.qualityReview,
-          "projects.knowledge.latestQualityReviewMetrics",
+          params.semanticRoleLabeling,
+          "projects.knowledge.latestSemanticRoleLabelingMetrics",
           "{{before}} -> {{after}} / delta {{delta}} / {{rounds}} rounds",
         ),
       },
@@ -200,36 +248,36 @@ export function buildProjectKnowledgeLatestOutputSummaryParts(
   t: TranslateFn,
   params: {
     selectedMode: ProjectKnowledgeProcessingMode;
-    domainGraphBuild?: ProjectKnowledgeStatsLike;
-    qualityReview?: ProjectKnowledgeStatsLike;
+    syntaxParse?: ProjectKnowledgeStatsLike;
+    semanticRoleLabeling?: ProjectKnowledgeStatsLike;
   },
 ): string[] {
   const parts: string[] = [];
-  if ((params.selectedMode === "nlp" || params.selectedMode === "agentic") && hasProjectKnowledgeStats(params.domainGraphBuild)) {
+  if ((params.selectedMode === "nlp" || params.selectedMode === "agentic") && hasProjectKnowledgeStats(params.syntaxParse)) {
     parts.push(t(
-      "projects.knowledge.outputs.latestGraphProvenance",
-      "graph provenance {{time}} · {{summary}}",
+      "projects.knowledge.outputs.latestSyntaxProvenance",
+      "syntax provenance {{time}} · {{summary}}",
       {
-        time: formatProjectKnowledgeStatsRecordTimestamp(params.domainGraphBuild),
+        time: formatProjectKnowledgeStatsRecordTimestamp(params.syntaxParse),
         summary: summarizeProjectKnowledgeDomainGraphBuildStats(
           t,
-          params.domainGraphBuild,
-          "projects.knowledge.outputs.latestGraphProvenanceMetrics",
+          params.syntaxParse,
+          "projects.knowledge.outputs.latestSyntaxProvenanceMetrics",
           "{{documents}} docs / {{nodes}} nodes / {{relations}} relations",
         ),
       },
     ));
   }
-  if (params.selectedMode === "agentic" && hasProjectKnowledgeStats(params.qualityReview)) {
+  if (params.selectedMode === "agentic" && hasProjectKnowledgeStats(params.semanticRoleLabeling)) {
     parts.push(t(
-      "projects.knowledge.outputs.latestReviewOutcome",
-      "review outcome {{time}} · {{summary}}",
+      "projects.knowledge.outputs.latestSemanticRoleLabelingOutcome",
+      "srl outcome {{time}} · {{summary}}",
       {
-        time: formatProjectKnowledgeStatsRecordTimestamp(params.qualityReview),
+        time: formatProjectKnowledgeStatsRecordTimestamp(params.semanticRoleLabeling),
         summary: summarizeProjectKnowledgeQualityReviewStats(
           t,
-          params.qualityReview,
-          "projects.knowledge.outputs.latestReviewOutcomeMetrics",
+          params.semanticRoleLabeling,
+          "projects.knowledge.outputs.latestSemanticRoleLabelingOutcomeMetrics",
           "{{before}} -> {{after}} / delta {{delta}} / {{rounds}} rounds",
         ),
       },

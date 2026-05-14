@@ -70,6 +70,7 @@ from copaw.knowledge.project_sync_manager import (
     build_project_source_spec,
     ensure_project_source_registered,
 )
+from ..knowledge_workflow_steps import _load_builtin_pipeline_doc
 from ..project_monitoring_state import (
     PROJECT_FILE_MONITORING_ACTIVE,
     PROJECT_FILE_MONITORING_IDLE,
@@ -1378,6 +1379,43 @@ def _scaffold_project_governance_files(
         )
 
 
+def _copy_builtin_pipeline_template_to_project(project_dir: Path) -> None:
+    """Copy the authoritative builtin knowledge-processing pipeline JSON to
+    the project's .pipelines/templates/ directory at project creation time.
+
+    Idempotent: skips the copy when the file already exists with the same
+    version; overwrites silently when the bundled version is newer.
+    """
+    templates_dir = project_dir / ".pipelines" / "templates"
+    templates_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        source_doc = _load_builtin_pipeline_doc()
+    except Exception:
+        return  # silently skip if the source JSON is missing
+
+    template_id = str(source_doc.get("id") or "").strip()
+    if not template_id:
+        return
+
+    target_path = templates_dir / f"{template_id}.json"
+    new_version = str(source_doc.get("version") or "").strip()
+
+    if target_path.exists():
+        try:
+            existing = json.loads(target_path.read_text(encoding="utf-8"))
+            existing_version = str(existing.get("version") or "").strip()
+            if existing_version == new_version:
+                return  # already up to date
+        except Exception:
+            pass  # corrupt or unreadable — overwrite below
+
+    target_path.write_text(
+        json.dumps(source_doc, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
 def _resolve_project_dir(workspace_dir: Path, project_id: str) -> Path:
     projects_dir = workspace_dir / _PROJECTS_DIRNAME
     if not projects_dir.exists() or not projects_dir.is_dir():
@@ -2258,6 +2296,7 @@ def _create_project(
     body_text = (body.description or "").strip() or f"# {project_name}"
     _write_project_frontmatter(metadata_file, metadata, body_text)
     _scaffold_project_governance_files(project_dir, data_subdir)
+    _copy_builtin_pipeline_template_to_project(project_dir)
 
     summary = _load_project_summary(project_dir)
     if summary is None:

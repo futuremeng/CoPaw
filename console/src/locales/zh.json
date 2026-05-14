@@ -2306,6 +2306,7 @@
     "runsOnDemandHint": "运行记录按需加载。点击“加载运行记录”以获取执行历史。",
     "updatedAt": "更新时间",
     "currentStage": "阶段",
+    "builtinLegacyMapping": "由旧版 NLP 子阶段映射",
     "duration": "耗时",
     "errorClass": "错误类别",
     "progress": "进度",

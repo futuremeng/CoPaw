@@ -142,10 +142,13 @@ books-alignment-v1 可以映射为步骤：
 
 ### 12.2 当前步骤模型
 
-1. source_scan：确认项目知识输入边界与变更文件。
-2. file_analysis：生成项目级索引与快速预览产物。
-3. domain_graph_build：生成图谱与结构化知识产物。
-4. quality_review：执行质量复核与闭环补强。
+1. snapshot_raw：确认项目知识输入边界并生成 raw 快照。
+2. build_chunks：基于快照构建 chunk 清单。
+3. build_interlinear：构建 interlinear 句级对齐产物。
+4. tokenize：执行分词并产出 NLP 入口工件。
+5. pos_tagging：产出词性标注（沿用 tokenize 阶段原子产物）。
+6. syntax_parse：产出句法依存信息（沿用 tokenize 阶段原子产物）。
+7. semantic_role_labeling：保留步骤位，当前为占位实现（SRL_NOT_IMPLEMENTED）。
 
 ### 12.3 三模式并行与消费策略
 

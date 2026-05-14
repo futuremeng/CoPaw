@@ -20,10 +20,10 @@ const t = (
 
 describe("projectKnowledgeRecentHistoryModel", () => {
   it("builds processing recent history sections", () => {
-    const sourceScan = {
+    const snapshotRaw = {
       project_id: "project-abc",
       source_id: "project-project-abc-workspace",
-      step_id: "source_scan",
+      step_id: "snapshot_raw",
       updated_at: "2026-05-12T10:21:00Z",
       metrics: {
         data_file_count: 5,
@@ -31,10 +31,10 @@ describe("projectKnowledgeRecentHistoryModel", () => {
         source_count: 1,
       },
     };
-    const fileAnalysis = {
+    const buildChunks = {
       project_id: "project-abc",
       source_id: "project-project-abc-workspace",
-      step_id: "file_analysis",
+      step_id: "build_chunks",
       updated_at: "2026-05-12T10:31:00Z",
       metrics: {
         document_count: 3,
@@ -42,22 +42,55 @@ describe("projectKnowledgeRecentHistoryModel", () => {
         sentence_count: 11,
       },
     };
-    const domainGraphBuild = {
+    const buildInterlinear = {
       project_id: "project-abc",
       source_id: "project-project-abc-workspace",
-      step_id: "domain_graph_build",
+      step_id: "build_interlinear",
+      updated_at: "2026-05-12T10:36:00Z",
+      metrics: {
+        document_count: 3,
+        chunk_count: 7,
+        sentence_count: 11,
+      },
+    };
+    const tokenize = {
+      project_id: "project-abc",
+      source_id: "project-project-abc-workspace",
+      step_id: "tokenize",
       updated_at: "2026-05-12T10:41:00Z",
+      metrics: {
+        document_count: 3,
+        chunk_count: 7,
+        sentence_count: 11,
+      },
+    };
+    const posTagging = {
+      project_id: "project-abc",
+      source_id: "project-project-abc-workspace",
+      step_id: "pos_tagging",
+      updated_at: "2026-05-12T10:46:00Z",
+      metrics: {
+        document_count: 3,
+        chunk_count: 7,
+        sentence_count: 11,
+      },
+    };
+    const syntaxParse = {
+      project_id: "project-abc",
+      source_id: "project-project-abc-workspace",
+      step_id: "syntax_parse",
+      updated_at: "2026-05-12T10:51:00Z",
       metrics: {
         document_count: 3,
         node_count: 9,
         relation_count: 12,
       },
     };
-    const qualityReview = {
+    const semanticRoleLabeling = {
       project_id: "project-abc",
       source_id: "project-project-abc-workspace",
-      step_id: "quality_review",
-      updated_at: "2026-05-12T10:51:00Z",
+      step_id: "semantic_role_labeling",
+      updated_at: "2026-05-12T10:56:00Z",
       metrics: {
         quality_score_before: 0.91,
         quality_score_after: 0.95,
@@ -67,15 +100,18 @@ describe("projectKnowledgeRecentHistoryModel", () => {
     };
 
     expect(buildProjectKnowledgeProcessingRecentHistorySections(t, {
-      sourceScanHistory: [sourceScan],
-      fileAnalysisHistory: [fileAnalysis],
-      domainGraphBuildHistory: [domainGraphBuild],
-      qualityReviewHistory: [qualityReview],
+      snapshotRawHistory: [snapshotRaw],
+      buildChunksHistory: [buildChunks],
+      buildInterlinearHistory: [buildInterlinear],
+      tokenizeHistory: [tokenize],
+      posTaggingHistory: [posTagging],
+      syntaxParseHistory: [syntaxParse],
+      semanticRoleLabelingHistory: [semanticRoleLabeling],
     })).toEqual([
       {
-        key: "source_scan",
-        title: "最近扫描",
-        hint: "来自 source_scan 项目统计文件",
+        key: "snapshot_raw",
+        title: "最近原始快照",
+        hint: "来自 snapshot_raw 项目统计文件",
         items: [
           {
             key: expect.any(String),
@@ -85,9 +121,9 @@ describe("projectKnowledgeRecentHistoryModel", () => {
         ],
       },
       {
-        key: "file_analysis",
-        title: "最近基础分析",
-        hint: "来自文件分析项目统计",
+        key: "build_chunks",
+        title: "最近切块构建",
+        hint: "来自 build_chunks 项目统计",
         items: [
           {
             key: expect.any(String),
@@ -97,9 +133,45 @@ describe("projectKnowledgeRecentHistoryModel", () => {
         ],
       },
       {
-        key: "domain_graph_build",
-        title: "最近结构化构建",
-        hint: "来自结构化构建项目统计",
+        key: "build_interlinear",
+        title: "最近 interlinear 构建",
+        hint: "来自 build_interlinear 项目统计",
+        items: [
+          {
+            key: expect.any(String),
+            timestamp: expect.stringContaining("05/12"),
+            summary: "3 docs / 7 chunks / 11 sentences",
+          },
+        ],
+      },
+      {
+        key: "tokenize",
+        title: "最近分词运行",
+        hint: "来自 tokenize 项目统计",
+        items: [
+          {
+            key: expect.any(String),
+            timestamp: expect.stringContaining("05/12"),
+            summary: "3 docs / 7 chunks / 11 sentences",
+          },
+        ],
+      },
+      {
+        key: "pos_tagging",
+        title: "最近词性标注",
+        hint: "来自 pos_tagging 项目统计",
+        items: [
+          {
+            key: expect.any(String),
+            timestamp: expect.stringContaining("05/12"),
+            summary: "3 docs / 7 chunks / 11 sentences",
+          },
+        ],
+      },
+      {
+        key: "syntax_parse",
+        title: "最近句法解析",
+        hint: "来自 syntax_parse 项目统计",
         items: [
           {
             key: expect.any(String),
@@ -109,9 +181,9 @@ describe("projectKnowledgeRecentHistoryModel", () => {
         ],
       },
       {
-        key: "quality_review",
-        title: "最近增强审校",
-        hint: "来自审校增强项目统计",
+        key: "semantic_role_labeling",
+        title: "最近 SRL 运行",
+        hint: "来自 semantic_role_labeling 项目统计",
         items: [
           {
             key: expect.any(String),
@@ -123,20 +195,23 @@ describe("projectKnowledgeRecentHistoryModel", () => {
     ]);
 
     expect(buildProjectKnowledgeProcessingRecentHistorySectionsFromState(t, {
-      sourceScanStats: { history: [sourceScan] },
-      fileAnalysisStats: { history: [fileAnalysis] },
+      sourceScanStats: { history: [snapshotRaw] },
+      fileAnalysisStats: { history: [buildChunks] },
       projectStepStats: {
-        domain_graph_build: { history: [domainGraphBuild] },
-        quality_review: { history: [qualityReview] },
+        build_interlinear: { history: [buildInterlinear] },
+        tokenize: { history: [tokenize] },
+        pos_tagging: { history: [posTagging] },
+        syntax_parse: { history: [syntaxParse] },
+        semantic_role_labeling: { history: [semanticRoleLabeling] },
       },
-    })).toHaveLength(4);
+    })).toHaveLength(7);
   });
 
   it("builds sources recent history sections", () => {
-    const sourceScan = {
+    const snapshotRaw = {
       project_id: "project-abc",
       source_id: "project-project-abc-workspace",
-      step_id: "source_scan",
+      step_id: "snapshot_raw",
       updated_at: "2026-05-12T10:21:00Z",
       metrics: {
         data_file_count: 5,
@@ -144,10 +219,10 @@ describe("projectKnowledgeRecentHistoryModel", () => {
         source_count: 1,
       },
     };
-    const fileAnalysis = {
+    const buildChunks = {
       project_id: "project-abc",
       source_id: "project-project-abc-workspace",
-      step_id: "file_analysis",
+      step_id: "build_chunks",
       updated_at: "2026-05-12T10:31:00Z",
       metrics: {
         document_count: 3,
@@ -157,13 +232,13 @@ describe("projectKnowledgeRecentHistoryModel", () => {
     };
 
     expect(buildProjectKnowledgeSourcesRecentHistorySections(t, {
-      sourceScanHistory: [sourceScan],
-      fileAnalysisHistory: [fileAnalysis],
+      sourceScanHistory: [snapshotRaw],
+      fileAnalysisHistory: [buildChunks],
     })).toEqual([
       {
-        key: "source_scan",
-        title: "最近扫描",
-        hint: "最近的 source_scan 项目统计",
+        key: "snapshot_raw",
+        title: "最近原始快照",
+        hint: "最近的 snapshot_raw 项目统计",
         items: [
           {
             key: expect.any(String),
@@ -173,9 +248,9 @@ describe("projectKnowledgeRecentHistoryModel", () => {
         ],
       },
       {
-        key: "file_analysis",
-        title: "最近分析运行",
-        hint: "最近的文件分析项目统计",
+        key: "build_chunks",
+        title: "最近切块运行",
+        hint: "最近的 build_chunks 项目统计",
         items: [
           {
             key: expect.any(String),
@@ -187,8 +262,8 @@ describe("projectKnowledgeRecentHistoryModel", () => {
     ]);
 
     expect(buildProjectKnowledgeSourcesRecentHistorySectionsFromState(t, {
-      sourceScanStats: { history: [sourceScan] },
-      fileAnalysisStats: { history: [fileAnalysis] },
+      sourceScanStats: { history: [snapshotRaw] },
+      fileAnalysisStats: { history: [buildChunks] },
     })).toHaveLength(2);
   });
 });

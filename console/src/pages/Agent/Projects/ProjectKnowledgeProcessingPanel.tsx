@@ -530,8 +530,11 @@ export default function ProjectKnowledgeProcessingPanel(
     () => buildProjectKnowledgeProcessingRecentHistorySectionsFromState(t, props.knowledgeState),
     [
       props.knowledgeState.fileAnalysisStats?.history,
-      props.knowledgeState.projectStepStats.domain_graph_build?.history,
-      props.knowledgeState.projectStepStats.quality_review?.history,
+      props.knowledgeState.projectStepStats.build_interlinear?.history,
+      props.knowledgeState.projectStepStats.tokenize?.history,
+      props.knowledgeState.projectStepStats.pos_tagging?.history,
+      props.knowledgeState.projectStepStats.syntax_parse?.history,
+      props.knowledgeState.projectStepStats.semantic_role_labeling?.history,
       props.knowledgeState.sourceScanStats?.history,
       t,
     ],

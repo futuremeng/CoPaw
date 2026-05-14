@@ -18,10 +18,10 @@ const t = (
 
 describe("projectKnowledgeLatestSummaryModel", () => {
   it("builds latest summary parts from direct step inputs", () => {
-    const sourceScan = {
+    const snapshotRaw = {
       project_id: "project-abc",
       source_id: "project-project-abc-workspace",
-      step_id: "source_scan",
+      step_id: "snapshot_raw",
       updated_at: "2026-05-12T10:21:00Z",
       metrics: {
         data_file_count: 5,
@@ -29,10 +29,10 @@ describe("projectKnowledgeLatestSummaryModel", () => {
         source_count: 1,
       },
     };
-    const fileAnalysis = {
+    const buildChunks = {
       project_id: "project-abc",
       source_id: "project-project-abc-workspace",
-      step_id: "file_analysis",
+      step_id: "build_chunks",
       updated_at: "2026-05-12T10:31:00Z",
       metrics: {
         document_count: 3,
@@ -40,22 +40,55 @@ describe("projectKnowledgeLatestSummaryModel", () => {
         sentence_count: 11,
       },
     };
-    const domainGraphBuild = {
+    const buildInterlinear = {
       project_id: "project-abc",
       source_id: "project-project-abc-workspace",
-      step_id: "domain_graph_build",
+      step_id: "build_interlinear",
+      updated_at: "2026-05-12T10:36:00Z",
+      metrics: {
+        document_count: 3,
+        chunk_count: 7,
+        sentence_count: 11,
+      },
+    };
+    const tokenize = {
+      project_id: "project-abc",
+      source_id: "project-project-abc-workspace",
+      step_id: "tokenize",
       updated_at: "2026-05-12T10:41:00Z",
+      metrics: {
+        document_count: 3,
+        chunk_count: 7,
+        sentence_count: 11,
+      },
+    };
+    const posTagging = {
+      project_id: "project-abc",
+      source_id: "project-project-abc-workspace",
+      step_id: "pos_tagging",
+      updated_at: "2026-05-12T10:46:00Z",
+      metrics: {
+        document_count: 3,
+        chunk_count: 7,
+        sentence_count: 11,
+      },
+    };
+    const syntaxParse = {
+      project_id: "project-abc",
+      source_id: "project-project-abc-workspace",
+      step_id: "syntax_parse",
+      updated_at: "2026-05-12T10:51:00Z",
       metrics: {
         document_count: 3,
         node_count: 9,
         relation_count: 12,
       },
     };
-    const qualityReview = {
+    const semanticRoleLabeling = {
       project_id: "project-abc",
       source_id: "project-project-abc-workspace",
-      step_id: "quality_review",
-      updated_at: "2026-05-12T10:51:00Z",
+      step_id: "semantic_role_labeling",
+      updated_at: "2026-05-12T10:56:00Z",
       metrics: {
         quality_score_before: 0.91,
         quality_score_after: 0.95,
@@ -66,37 +99,46 @@ describe("projectKnowledgeLatestSummaryModel", () => {
 
     expect(buildProjectKnowledgeLatestSummaryModel(t, {
       selectedOutputMode: "agentic",
-      sourceScan,
-      fileAnalysis,
-      domainGraphBuild,
-      qualityReview,
+      snapshotRaw,
+      buildChunks,
+      buildInterlinear,
+      tokenize,
+      posTagging,
+      syntaxParse,
+      semanticRoleLabeling,
     })).toEqual({
       l1Parts: [
         expect.stringContaining("scan"),
         expect.stringContaining("analysis"),
       ],
       l23Parts: [
-        expect.stringContaining("graph"),
-        expect.stringContaining("review"),
+        expect.stringContaining("interlinear"),
+        expect.stringContaining("tokenize"),
+        expect.stringContaining("pos"),
+        expect.stringContaining("syntax"),
+        expect.stringContaining("srl"),
       ],
       workflowParts: [
         expect.stringContaining("scan"),
         expect.stringContaining("analysis"),
-        expect.stringContaining("graph"),
-        expect.stringContaining("review"),
+        expect.stringContaining("interlinear"),
+        expect.stringContaining("tokenize"),
+        expect.stringContaining("pos"),
+        expect.stringContaining("syntax"),
+        expect.stringContaining("srl"),
       ],
       outputParts: [
-        expect.stringContaining("graph provenance"),
-        expect.stringContaining("review outcome"),
+        expect.stringContaining("syntax provenance"),
+        expect.stringContaining("srl outcome"),
       ],
     });
   });
 
   it("builds latest summary parts from knowledge state-like input", () => {
-    const sourceScan = {
+    const snapshotRaw = {
       project_id: "project-abc",
       source_id: "project-project-abc-workspace",
-      step_id: "source_scan",
+      step_id: "snapshot_raw",
       updated_at: "2026-05-12T10:21:00Z",
       metrics: {
         data_file_count: 5,
@@ -104,10 +146,10 @@ describe("projectKnowledgeLatestSummaryModel", () => {
         source_count: 1,
       },
     };
-    const fileAnalysis = {
+    const buildChunks = {
       project_id: "project-abc",
       source_id: "project-project-abc-workspace",
-      step_id: "file_analysis",
+      step_id: "build_chunks",
       updated_at: "2026-05-12T10:31:00Z",
       metrics: {
         document_count: 3,
@@ -115,22 +157,55 @@ describe("projectKnowledgeLatestSummaryModel", () => {
         sentence_count: 11,
       },
     };
-    const domainGraphBuild = {
+    const buildInterlinear = {
       project_id: "project-abc",
       source_id: "project-project-abc-workspace",
-      step_id: "domain_graph_build",
+      step_id: "build_interlinear",
+      updated_at: "2026-05-12T10:36:00Z",
+      metrics: {
+        document_count: 3,
+        chunk_count: 7,
+        sentence_count: 11,
+      },
+    };
+    const tokenize = {
+      project_id: "project-abc",
+      source_id: "project-project-abc-workspace",
+      step_id: "tokenize",
       updated_at: "2026-05-12T10:41:00Z",
+      metrics: {
+        document_count: 3,
+        chunk_count: 7,
+        sentence_count: 11,
+      },
+    };
+    const posTagging = {
+      project_id: "project-abc",
+      source_id: "project-project-abc-workspace",
+      step_id: "pos_tagging",
+      updated_at: "2026-05-12T10:46:00Z",
+      metrics: {
+        document_count: 3,
+        chunk_count: 7,
+        sentence_count: 11,
+      },
+    };
+    const syntaxParse = {
+      project_id: "project-abc",
+      source_id: "project-project-abc-workspace",
+      step_id: "syntax_parse",
+      updated_at: "2026-05-12T10:51:00Z",
       metrics: {
         document_count: 3,
         node_count: 9,
         relation_count: 12,
       },
     };
-    const qualityReview = {
+    const semanticRoleLabeling = {
       project_id: "project-abc",
       source_id: "project-project-abc-workspace",
-      step_id: "quality_review",
-      updated_at: "2026-05-12T10:51:00Z",
+      step_id: "semantic_role_labeling",
+      updated_at: "2026-05-12T10:56:00Z",
       metrics: {
         quality_score_before: 0.91,
         quality_score_after: 0.95,
@@ -140,11 +215,14 @@ describe("projectKnowledgeLatestSummaryModel", () => {
     };
 
     expect(buildProjectKnowledgeLatestSummaryModelFromState(t, {
-      sourceScanStats: { latest: sourceScan },
-      fileAnalysisStats: { latest: fileAnalysis },
+      sourceScanStats: { latest: snapshotRaw },
+      fileAnalysisStats: { latest: buildChunks },
       projectStepStats: {
-        domain_graph_build: { latest: domainGraphBuild },
-        quality_review: { latest: qualityReview },
+        build_interlinear: { latest: buildInterlinear },
+        tokenize: { latest: tokenize },
+        pos_tagging: { latest: posTagging },
+        syntax_parse: { latest: syntaxParse },
+        semantic_role_labeling: { latest: semanticRoleLabeling },
       },
       outputResolution: { activeMode: "agentic" },
     })).toEqual({
@@ -153,18 +231,24 @@ describe("projectKnowledgeLatestSummaryModel", () => {
         expect.stringContaining("analysis"),
       ],
       l23Parts: [
-        expect.stringContaining("graph"),
-        expect.stringContaining("review"),
+        expect.stringContaining("interlinear"),
+        expect.stringContaining("tokenize"),
+        expect.stringContaining("pos"),
+        expect.stringContaining("syntax"),
+        expect.stringContaining("srl"),
       ],
       workflowParts: [
         expect.stringContaining("scan"),
         expect.stringContaining("analysis"),
-        expect.stringContaining("graph"),
-        expect.stringContaining("review"),
+        expect.stringContaining("interlinear"),
+        expect.stringContaining("tokenize"),
+        expect.stringContaining("pos"),
+        expect.stringContaining("syntax"),
+        expect.stringContaining("srl"),
       ],
       outputParts: [
-        expect.stringContaining("graph provenance"),
-        expect.stringContaining("review outcome"),
+        expect.stringContaining("syntax provenance"),
+        expect.stringContaining("srl outcome"),
       ],
     });
   });
@@ -172,10 +256,13 @@ describe("projectKnowledgeLatestSummaryModel", () => {
   it("skips empty latest records", () => {
     expect(buildProjectKnowledgeLatestSummaryModel(t, {
       selectedOutputMode: "fast",
-      sourceScan: {},
-      fileAnalysis: null,
-      domainGraphBuild: {},
-      qualityReview: null,
+      snapshotRaw: {},
+      buildChunks: null,
+      buildInterlinear: null,
+      tokenize: null,
+      posTagging: null,
+      syntaxParse: null,
+      semanticRoleLabeling: null,
     })).toEqual({
       l1Parts: [],
       l23Parts: [],
@@ -186,8 +273,11 @@ describe("projectKnowledgeLatestSummaryModel", () => {
       sourceScanStats: { latest: {} },
       fileAnalysisStats: null,
       projectStepStats: {
-        domain_graph_build: { latest: {} },
-        quality_review: null,
+        build_interlinear: { latest: {} },
+        tokenize: { latest: null },
+        pos_tagging: { latest: null },
+        syntax_parse: { latest: null },
+        semantic_role_labeling: null,
       },
       outputResolution: { activeMode: "fast" },
     })).toEqual({

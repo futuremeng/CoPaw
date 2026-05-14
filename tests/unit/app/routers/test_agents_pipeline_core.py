@@ -7,16 +7,20 @@ import pytest
 from fastapi import HTTPException
 
 from qwenpaw.app.routers.agents_pipeline_core import (
+    CreatePipelineRunRequest,
     PipelineRunDetail,
     PipelineRunStep,
     PipelineTemplateInfo,
     PipelineTemplateStep,
+    _create_project_pipeline_run,
     _append_collab_event,
     _execute_project_pipeline_run,
     _get_pipeline_draft,
+    _import_platform_template_to_project,
     _list_platform_flow_templates,
     _pipeline_flow_memory_path,
     _pipeline_md_path,
+    _parse_pipeline_template_doc,
     _save_agent_pipeline_template_with_md,
     _transition_run_status,
     _transition_step_status,
@@ -158,8 +162,57 @@ def test_list_platform_flow_templates_includes_builtin_project_knowledge_templat
     templates = _list_platform_flow_templates(tmp_path)
 
     ids = {item.id for item in templates}
-    assert "builtin-project-knowledge-pipeline-v1" in ids
+    assert "builtin-knowledge-processing-v1" in ids
     assert "agent-knowledge-aggregation-v1" in ids
+
+    project_knowledge = next(
+        item for item in templates if item.id == "builtin-knowledge-processing-v1"
+    )
+    assert [step.id for step in project_knowledge.steps] == [
+        "snapshot_raw",
+        "build_chunks",
+        "build_interlinear",
+        "tokenize",
+        "pos_tagging",
+        "syntax_parse",
+        "semantic_role_labeling",
+    ]
+
+
+def test_parse_builtin_project_template_enforces_canonical_steps_even_if_local_doc_drifts():
+    drifted_doc = {
+        "id": "builtin-knowledge-processing-v1",
+        "name": "Project Knowledge Pipeline",
+        "version": "2.0.0",
+        "description": "drifted",
+        "steps": [
+            {"id": "snapshot_raw", "name": "Raw Snapshot", "kind": "ingest"},
+            {"id": "build_chunks", "name": "Build Chunks", "kind": "transform"},
+            # Legacy nodes should be dropped by canonical enforcement.
+            {"id": "source_scan", "name": "Source Scan", "kind": "analysis"},
+            {"id": "file_analysis", "name": "File Analysis", "kind": "analysis"},
+            {"id": "domain_graph_build", "name": "Domain Graph Build", "kind": "analysis"},
+            {"id": "quality_review", "name": "Quality Review", "kind": "review"},
+        ],
+    }
+
+    parsed = _parse_pipeline_template_doc(drifted_doc, fallback_id="builtin-knowledge-processing-v1")
+
+    assert parsed is not None
+    assert [step.id for step in parsed.steps] == [
+        "snapshot_raw",
+        "build_chunks",
+        "build_interlinear",
+        "tokenize",
+        "pos_tagging",
+        "syntax_parse",
+        "semantic_role_labeling",
+    ]
+    parsed_step_ids = {step.id for step in parsed.steps}
+    assert "source_scan" not in parsed_step_ids
+    assert "file_analysis" not in parsed_step_ids
+    assert "domain_graph_build" not in parsed_step_ids
+    assert "quality_review" not in parsed_step_ids
 
 
 def test_append_collab_event_uses_canonical_event_and_observability_fields():
@@ -258,6 +311,85 @@ def test_execute_project_pipeline_run_emits_standardized_events(tmp_path: Path):
     assert observability.step_running == 0
     assert observability.duration_sec >= 0
     assert observability.stage
+
+
+def test_create_project_knowledge_pipeline_run_triggers_sync_helper(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    project_id = "project-knowledge"
+    project_dir = tmp_path / "projects" / project_id
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    # Seed minimal knowledge artifacts so 7 canonical steps can collect outputs.
+    for _step in ("snapshot_raw", "build_chunks", "build_interlinear", "tokenize",
+                   "pos_tagging", "syntax_parse", "semantic_role_labeling"):
+        _sdir = project_dir / ".knowledge" / "stats" / _step
+        _sdir.mkdir(parents=True, exist_ok=True)
+        (_sdir / "latest.json").write_text("{}\n", encoding="utf-8")
+    (project_dir / ".knowledge" / "sources" / "project-source").mkdir(parents=True, exist_ok=True)
+    (project_dir / ".knowledge" / "sources" / "project-source" / "index.json").write_text("{}\n", encoding="utf-8")
+    (project_dir / ".knowledge" / "graphify-out").mkdir(parents=True, exist_ok=True)
+    (project_dir / ".knowledge" / "graphify-out" / "graph.json").write_text("{}\n", encoding="utf-8")
+    (project_dir / ".knowledge" / "graphify-out" / "graph.enriched.json").write_text("{}\n", encoding="utf-8")
+    (project_dir / ".knowledge" / "graphify-out" / "enrichment-quality-report.json").write_text("{}\n", encoding="utf-8")
+
+    platform_templates = _list_platform_flow_templates(tmp_path)
+    project_knowledge_template = next(
+        item for item in platform_templates if item.id == "builtin-knowledge-processing-v1"
+    )
+    _import_platform_template_to_project(
+        project_id,
+        project_dir,
+        project_knowledge_template,
+        target_template_id="builtin-knowledge-processing-v1",
+    )
+
+    called: dict[str, object] = {}
+
+    def _fake_sync_helper(*, project_id: str, project_dir: Path, parameters: dict[str, object]):
+        called["project_id"] = project_id
+        called["project_dir"] = project_dir
+        called["parameters"] = dict(parameters)
+        return {
+            "status": "succeeded",
+            "current_stage": "quality_review",
+            "progress": 100,
+            "updated_at": "2026-01-01T00:00:00Z",
+            "last_error": "",
+        }
+
+    monkeypatch.setattr(
+        "qwenpaw.app.routers.agents_pipeline_core._run_builtin_project_knowledge_sync",
+        _fake_sync_helper,
+    )
+
+    run = _create_project_pipeline_run(
+        project_id,
+        project_dir,
+        CreatePipelineRunRequest(
+            template_id="builtin-knowledge-processing-v1",
+            parameters={"processing_mode": "agentic"},
+        ),
+    )
+
+    assert called["project_id"] == project_id
+    assert called["project_dir"] == project_dir
+    assert called["parameters"] == {"processing_mode": "agentic"}
+    assert run.status == "succeeded"
+    assert run.parameters.get("knowledge_sync_snapshot") == {
+        "status": "succeeded",
+        "current_stage": "quality_review",
+        "progress": 100,
+        "updated_at": "2026-01-01T00:00:00Z",
+        "last_error": None,
+    }
+    assert [step.id for step in run.steps] == [
+        "snapshot_raw",
+        "build_chunks",
+        "build_interlinear",
+        "tokenize",
+        "pos_tagging",
+        "syntax_parse",
+        "semantic_role_labeling",
+    ]
 
 
 def test_status_transition_guards_reject_invalid_transitions():

@@ -2298,6 +2298,7 @@
     "runsOnDemandHint": "Runs are loaded on demand. Click Load Runs to fetch execution records.",
     "updatedAt": "Updated",
     "currentStage": "Stage",
+    "builtinLegacyMapping": "Mapped from legacy NLP sub-stages",
     "duration": "Duration",
     "errorClass": "Error class",
     "progress": "Progress",

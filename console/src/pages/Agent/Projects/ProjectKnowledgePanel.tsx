@@ -268,8 +268,11 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
   const latestSummaryModel = useMemo(() => buildProjectKnowledgeLatestSummaryModelFromState(t, knowledgeState), [
     knowledgeState.fileAnalysisStats?.latest,
     knowledgeState.outputResolution.activeMode,
-    knowledgeState.projectStepStats.domain_graph_build?.latest,
-    knowledgeState.projectStepStats.quality_review?.latest,
+    knowledgeState.projectStepStats.build_interlinear?.latest,
+    knowledgeState.projectStepStats.tokenize?.latest,
+    knowledgeState.projectStepStats.pos_tagging?.latest,
+    knowledgeState.projectStepStats.syntax_parse?.latest,
+    knowledgeState.projectStepStats.semantic_role_labeling?.latest,
     knowledgeState.sourceScanStats?.latest,
     t,
   ]);

@@ -16,8 +16,14 @@ from typing import Any, cast
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
+from ...config import load_config, save_config
 from ...config.config import generate_short_agent_id
 from ..project_realtime_events import record_project_realtime_paths
+from copaw.knowledge.project_sync_manager import (
+    ProjectKnowledgeSyncManager,
+    ensure_project_source_registered,
+)
+from ..knowledge_workflow_steps import _load_builtin_pipeline_doc
 
 logger = logging.getLogger(__name__)
 
@@ -34,8 +40,9 @@ _PIPELINE_MEMORY_FILENAME = "pipeline-workspaces.md"
 _PIPELINE_FLOW_MEMORY_FILENAME = "flow-memory.md"
 _TEMPLATE_ID_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 _SEMVER_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
+# Both IDs now point to the single authoritative JSON pipeline definition.
 _KNOWLEDGE_WORKFLOW_TEMPLATE_ID = "builtin-knowledge-processing-v1"
-_PROJECT_KNOWLEDGE_PLATFORM_TEMPLATE_ID = "builtin-project-knowledge-pipeline-v1"
+_PROJECT_KNOWLEDGE_PLATFORM_TEMPLATE_ID = "builtin-knowledge-processing-v1"
 _AGENT_KNOWLEDGE_AGGREGATION_TEMPLATE_ID = "agent-knowledge-aggregation-v1"
 
 
@@ -474,6 +481,26 @@ def _parse_pipeline_template_doc(raw: dict[str, Any], fallback_id: str) -> Pipel
     if not template_id or not name:
         return None
 
+    # Enforce canonical 7-step schema for the builtin project knowledge template,
+    # even if a project-local copy has drifted or still carries legacy nodes.
+    if template_id == _PROJECT_KNOWLEDGE_PLATFORM_TEMPLATE_ID:
+        try:
+            canonical_doc = _default_project_knowledge_platform_template_doc()
+            raw = {
+                **raw,
+                "name": str(canonical_doc.get("name") or name),
+                "version": str(canonical_doc.get("version") or raw.get("version") or "").strip(),
+                "description": str(canonical_doc.get("description") or raw.get("description") or "").strip(),
+                "steps": canonical_doc.get("steps") or [],
+                "builtin_kind": str(canonical_doc.get("builtin_kind") or raw.get("builtin_kind") or "").strip() or None,
+                "entrypoint": str(canonical_doc.get("entrypoint") or raw.get("entrypoint") or "").strip() or None,
+                "system_owned": True,
+            }
+            name = str(raw.get("name") or template_id).strip()
+        except Exception:
+            # Keep backward-compatible behavior when canonical doc cannot be loaded.
+            pass
+
     steps: list[PipelineTemplateStep] = []
     for node in raw.get("steps") or []:
         if not isinstance(node, dict):
@@ -647,72 +674,20 @@ def _agent_platform_templates_dir(workspace_dir: Path) -> Path:
 
 
 def _default_project_knowledge_platform_template_doc() -> dict[str, Any]:
-    return {
-        "id": _PROJECT_KNOWLEDGE_PLATFORM_TEMPLATE_ID,
-        "name": "Project Knowledge Pipeline",
-        "version": "1.0.0",
-        "description": "Built-in pipeline for project knowledge indexing, NLP enrichment, and agentic quality review.",
-        "builtin_kind": "project-knowledge-governance",
-        "system_owned": True,
-        "entrypoint": "pipelines_builtin_project_knowledge",
-        "steps": [
-            {
-                "id": "file_analysis",
-                "name": "File Analysis",
-                "kind": "prepare",
-                "description": "Analyze project files and establish source snapshot baseline.",
-                "prompt": "Analyze project files and output baseline snapshot metadata for downstream NLP stages.",
-            },
-            {
-                "id": "source_scan",
-                "name": "Source Scan",
-                "kind": "prepare",
-                "description": "Scan eligible source files and collect indexing candidates.",
-                "prompt": "Scan eligible source files and emit deterministic candidate list for indexing.",
-            },
-            {
-                "id": "tokenize",
-                "name": "Tokenization",
-                "kind": "nlp",
-                "description": "Segment text into NLP-ready tokens and sentence units.",
-                "prompt": "Tokenize project text into sentence/token units and persist chunk-level token stats.",
-                "depends_on": ["source_scan"],
-            },
-            {
-                "id": "ner",
-                "name": "Named Entity Recognition",
-                "kind": "nlp",
-                "description": "Extract entity mentions and canonical candidates.",
-                "prompt": "Run NER on tokenized chunks and emit canonical entity candidates with confidence.",
-                "depends_on": ["tokenize"],
-            },
-            {
-                "id": "cor",
-                "name": "Coreference Resolution",
-                "kind": "nlp",
-                "description": "Merge coreferential mentions for relation construction.",
-                "prompt": "Resolve coreferences and merge mentions into canonical entity clusters.",
-                "depends_on": ["ner"],
-            },
-            {
-                "id": "syntax",
-                "name": "Syntactic Relations",
-                "kind": "nlp",
-                "description": "Build syntax-aware relation candidates and edge evidence.",
-                "prompt": "Extract syntax-aware relation candidates and attach sentence-level evidence.",
-                "depends_on": ["tokenize"],
-            },
-            {
-                "id": "quality_review",
-                "name": "Quality Review",
-                "kind": "review",
-                "description": "Run agentic quality checks and produce remediation guidance.",
-                "prompt": "Assess knowledge quality metrics and emit prioritized remediation guidance.",
-                "depends_on": ["cor", "syntax"],
-            },
-        ],
-        "tags": ["builtin", "project", "knowledge"],
-    }
+    """Return the authoritative project knowledge pipeline definition.
+
+    Reads from the bundled JSON file so the platform template is always in
+    sync with the project-level copy and the workflow step definitions.
+    Raises RuntimeError if the source file is missing.
+    """
+    doc = _load_builtin_pipeline_doc()
+    # Ensure entrypoint is set for the platform panel (may differ from
+    # the project-level copy).
+    doc.setdefault("entrypoint", "pipelines_builtin_project_knowledge")
+    doc.setdefault("builtin_kind", "project-knowledge-governance")
+    doc.setdefault("system_owned", True)
+    doc.setdefault("tags", ["builtin", "project", "knowledge"])
+    return doc
 
 
 def _default_agent_knowledge_aggregation_template_doc() -> dict[str, Any]:
@@ -2667,6 +2642,68 @@ def _sample_project_artifacts(project_dir: Path, limit: int = 20) -> list[str]:
     return artifacts
 
 
+def _normalize_processing_mode(raw_mode: Any) -> str:
+    mode = str(raw_mode or "agentic").strip().lower() or "agentic"
+    if mode not in {"fast", "nlp", "agentic"}:
+        raise ValueError("PROCESSING_MODE_INVALID")
+    return mode
+
+
+def _normalize_quantization_stage(raw_stage: Any) -> str | None:
+    text = str(raw_stage or "").strip().lower()
+    if not text:
+        return None
+    if text not in {"l1", "l2", "l3"}:
+        raise ValueError("QUANTIZATION_STAGE_INVALID")
+    return text
+
+
+def _run_builtin_project_knowledge_sync(
+    *,
+    project_id: str,
+    project_dir: Path,
+    parameters: dict[str, Any],
+) -> dict[str, Any]:
+    config = load_config()
+    knowledge_config = config.knowledge
+    running_config = config.agents.running
+
+    processing_mode = _normalize_processing_mode(parameters.get("processing_mode"))
+    quantization_stage = _normalize_quantization_stage(parameters.get("quantization_stage"))
+
+    if processing_mode in {"nlp", "agentic"} and not bool(getattr(knowledge_config, "memify_enabled", False)):
+        raise ValueError("MEMIFY_DISABLED")
+
+    workspace_dir = project_dir.parent.parent.resolve()
+    source, _ = ensure_project_source_registered(
+        config.knowledge,
+        project_id=project_id,
+        project_name=project_id,
+        project_workspace_dir=str(project_dir),
+        persist=lambda: save_config(config),
+    )
+
+    manager = ProjectKnowledgeSyncManager(
+        workspace_dir,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+    manager._run_sync_loop(
+        project_id=project_id,
+        config=knowledge_config,
+        running_config=running_config,
+        source=source,
+        processing_mode=processing_mode,
+        quantization_stage=quantization_stage,
+    )
+
+    state = manager.get_state(project_id)
+    status = str((state or {}).get("status") or "").strip().lower()
+    if status == "failed":
+        reason = str((state or {}).get("error") or "PROJECT_KNOWLEDGE_SYNC_FAILED").strip()
+        raise RuntimeError(reason)
+    return state if isinstance(state, dict) else {}
+
+
 def _list_project_data_files(project_dir: Path) -> list[str]:
     data_dir = project_dir / _PROJECT_DATA_DIRNAME
     project_root = project_dir.resolve()
@@ -2675,6 +2712,20 @@ def _list_project_data_files(project_dir: Path) -> list[str]:
 
     files: list[str] = []
     for path in sorted(data_dir.rglob("*"), key=lambda item: item.as_posix().lower()):
+        if not path.is_file():
+            continue
+        files.append(path.resolve().relative_to(project_root).as_posix())
+    return files
+
+
+def _list_project_knowledge_files(project_dir: Path) -> list[str]:
+    knowledge_dir = project_dir / ".knowledge"
+    project_root = project_dir.resolve()
+    if not knowledge_dir.exists() or not knowledge_dir.is_dir():
+        return []
+
+    files: list[str] = []
+    for path in sorted(knowledge_dir.rglob("*"), key=lambda item: item.as_posix().lower()):
         if not path.is_file():
             continue
         files.append(path.resolve().relative_to(project_root).as_posix())
@@ -2692,7 +2743,105 @@ def _match_project_artifacts(paths: list[str], *patterns: str) -> list[str]:
     return matched
 
 
-def _compute_step_outputs(step_id: str, data_files: list[str]) -> tuple[list[str], dict[str, Any]]:
+def _compute_project_knowledge_step_outputs(
+    step_id: str,
+    knowledge_files: list[str],
+) -> tuple[list[str], dict[str, Any]]:
+    if step_id == "snapshot_raw":
+        outputs = _match_project_artifacts(
+            knowledge_files,
+            ".knowledge/stats/snapshot_raw/latest.json",
+            ".knowledge/stats/snapshot_raw/history.jsonl",
+        )
+        return outputs, {
+            "snapshot_raw_outputs": len(outputs),
+        }
+
+    if step_id == "build_chunks":
+        outputs = _match_project_artifacts(
+            knowledge_files,
+            ".knowledge/sources/*/index.json",
+            ".knowledge/stats/build_chunks/latest.json",
+            ".knowledge/stats/build_chunks/history.jsonl",
+        )
+        return outputs, {
+            "index_outputs": len(outputs),
+            "index_count": len(_match_project_artifacts(knowledge_files, ".knowledge/sources/*/index.json")),
+        }
+
+    if step_id == "build_interlinear":
+        outputs = _match_project_artifacts(
+            knowledge_files,
+            ".knowledge/sources/*/interlinear-manifest.json",
+            ".knowledge/interlinear/*",
+        )
+        return outputs, {
+            "interlinear_outputs": len(outputs),
+            "has_interlinear_manifest": int(_has_artifact_match(outputs, ".knowledge/sources/*/interlinear-manifest.json")),
+        }
+
+    if step_id == "tokenize":
+        outputs = _match_project_artifacts(
+            knowledge_files,
+            ".knowledge/sources/*/tokenize-manifest.json",
+            ".knowledge/stats/tokenize/latest.json",
+            ".knowledge/stats/tokenize/history.jsonl",
+        )
+        return outputs, {
+            "tokenize_outputs": len(outputs),
+            "has_tokenize_manifest": int(_has_artifact_match(outputs, ".knowledge/sources/*/tokenize-manifest.json")),
+        }
+
+    if step_id == "pos_tagging":
+        outputs = _match_project_artifacts(
+            knowledge_files,
+            ".knowledge/sources/*/ner-manifest.json",
+            ".knowledge/sources/*/cor-manifest.json",
+        )
+        return outputs, {
+            "pos_tagging_outputs": len(outputs),
+            "has_ner_manifest": int(_has_artifact_match(outputs, ".knowledge/sources/*/ner-manifest.json")),
+        }
+
+    if step_id == "syntax_parse":
+        outputs = _match_project_artifacts(
+            knowledge_files,
+            ".knowledge/sources/*/syntax-manifest.json",
+            ".knowledge/graphify-out/graph.json",
+            ".knowledge/graphify-out/graph.enriched.json",
+        )
+        return outputs, {
+            "syntax_outputs": len(outputs),
+            "has_graph": int(_has_artifact_match(outputs, ".knowledge/graphify-out/graph.json")),
+            "has_enriched_graph": int(_has_artifact_match(outputs, ".knowledge/graphify-out/graph.enriched.json")),
+        }
+
+    if step_id == "semantic_role_labeling":
+        outputs = _match_project_artifacts(
+            knowledge_files,
+            ".knowledge/graphify-out/enrichment-quality-report.json",
+            ".knowledge/stats/semantic_role_labeling/latest.json",
+            ".knowledge/stats/semantic_role_labeling/history.jsonl",
+        )
+        return outputs, {
+            "semantic_role_labeling_outputs": len(outputs),
+            "has_quality_report": int(
+                _has_artifact_match(outputs, ".knowledge/graphify-out/enrichment-quality-report.json")
+            ),
+        }
+
+    return [], {}
+
+
+def _compute_step_outputs(
+    template_id: str,
+    step_id: str,
+    data_files: list[str],
+    knowledge_files: list[str],
+) -> tuple[list[str], dict[str, Any]]:
+    if template_id == _PROJECT_KNOWLEDGE_PLATFORM_TEMPLATE_ID:
+        return _compute_project_knowledge_step_outputs(step_id, knowledge_files)
+
     markdown_inputs = _match_project_artifacts(
         data_files,
         f"{_PROJECT_DATA_DIRNAME}/*.md",
@@ -2802,7 +2951,7 @@ def _enrich_run_with_guidance(
     template: PipelineTemplateInfo,
 ) -> None:
     """Compute convergence and next actions from run state and produced artifacts."""
-    if template.id == _KNOWLEDGE_WORKFLOW_TEMPLATE_ID:
+    if template.id in {_KNOWLEDGE_WORKFLOW_TEMPLATE_ID, _PROJECT_KNOWLEDGE_PLATFORM_TEMPLATE_ID}:
         _enrich_knowledge_run_with_guidance(run, template)
         return
 
@@ -3111,7 +3260,7 @@ def _enrich_knowledge_run_with_guidance(
                 description="The project-scoped knowledge index was not produced. Verify source registration and file analysis outputs.",
                 severity="high",
                 status="pending",
-                target_step_id="file_analysis",
+                target_step_id="build_chunks",
                 suggested_prompt="Check why the knowledge index was not produced and propose the minimal fix.",
             )
         )
@@ -3123,20 +3272,20 @@ def _enrich_knowledge_run_with_guidance(
                 description="The knowledge index exists, but graph artifacts are missing. Re-run the graph build stage and inspect memify output.",
                 severity="medium",
                 status="pending",
-                target_step_id="domain_graph_build",
+                target_step_id="syntax_parse",
                 suggested_prompt="Rebuild the project knowledge graph and explain any missing graph output.",
             )
         )
     if has_graph and not has_quality_report:
         next_actions.append(
             PipelineRunNextAction(
-                id="complete_quality_review",
-                title="Complete knowledge quality review",
-                description="Graph artifacts exist, but the quality review output is missing. Re-run the review loop and inspect the quality report.",
+                id="complete_semantic_role_labeling",
+                title="Complete semantic role labeling",
+                description="Syntax artifacts exist, but semantic role labeling output is missing. Re-run the SRL stage and inspect output quality.",
                 severity="medium",
                 status="pending",
-                target_step_id="quality_review",
-                suggested_prompt="Complete the graph quality review and summarize remaining risks.",
+                target_step_id="semantic_role_labeling",
+                suggested_prompt="Complete semantic role labeling and summarize remaining risks.",
             )
         )
     if run_status == "succeeded" and has_quality_report:
@@ -3162,12 +3311,20 @@ def _enrich_knowledge_run_with_guidance(
     run.next_actions = next_actions[:12]
 
 
-def _apply_real_step_results(project_dir: Path, step: PipelineRunStep) -> list[str]:
+def _apply_real_step_results(
+    project_dir: Path,
+    template_id: str,
+    step: PipelineRunStep,
+) -> list[str]:
     data_files = _list_project_data_files(project_dir)
-    outputs, metrics = _compute_step_outputs(step.id, data_files)
+    knowledge_files = _list_project_knowledge_files(project_dir)
+    outputs, metrics = _compute_step_outputs(template_id, step.id, data_files, knowledge_files)
 
     warning_count = 0
-    if not data_files:
+    if template_id == _PROJECT_KNOWLEDGE_PLATFORM_TEMPLATE_ID:
+        if not knowledge_files:
+            raise ValueError("Project knowledge directory is missing or contains no files")
+    elif not data_files:
         raise ValueError("Project data directory is missing or contains no files")
     if not outputs:
         warning_count = 1
@@ -3177,7 +3334,7 @@ def _apply_real_step_results(project_dir: Path, step: PipelineRunStep) -> list[s
         **metrics,
         "warning_count": warning_count,
     }
-    step.evidence = outputs[:20] or ["PROJECT.md"]
+    step.evidence = outputs[:20] or ([".knowledge"] if template_id == _PROJECT_KNOWLEDGE_PLATFORM_TEMPLATE_ID else ["PROJECT.md"])
     return outputs
 
 
@@ -3490,7 +3647,7 @@ def _execute_project_pipeline_run(
 
         try:
             step_started_dt = _parse_pipeline_iso(started_at) or datetime.now(timezone.utc)
-            step_outputs = _apply_real_step_results(project_dir, step)
+            step_outputs = _apply_real_step_results(project_dir, template.id, step)
             ended_at = _pipeline_now_iso()
             step_ended_dt = _parse_pipeline_iso(ended_at) or datetime.now(timezone.utc)
             duration_sec = max((step_ended_dt - step_started_dt).total_seconds(), 0.0)
@@ -3875,6 +4032,36 @@ def _create_project_pipeline_run(
 ) -> PipelineRunDetail:
     template = _resolve_pipeline_template(project_dir, body.template_id)
     template_doc = _load_project_template_doc(project_dir, template.id)
+    run_parameters = dict(body.parameters or {})
+    knowledge_sync_snapshot: dict[str, Any] = {}
+
+    if template.id == _PROJECT_KNOWLEDGE_PLATFORM_TEMPLATE_ID:
+        try:
+            sync_state = _run_builtin_project_knowledge_sync(
+                project_id=project_id,
+                project_dir=project_dir,
+                parameters=run_parameters,
+            )
+            if isinstance(sync_state, dict):
+                knowledge_sync_snapshot = {
+                    "status": str(sync_state.get("status") or "").strip(),
+                    "current_stage": str(
+                        sync_state.get("current_stage") or sync_state.get("stage") or ""
+                    ).strip(),
+                    "progress": int(sync_state.get("progress") or 0),
+                    "updated_at": str(sync_state.get("updated_at") or "").strip() or None,
+                    "last_error": str(sync_state.get("last_error") or "").strip() or None,
+                }
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    if knowledge_sync_snapshot:
+        run_parameters["knowledge_sync_snapshot"] = knowledge_sync_snapshot
+
     now = _pipeline_now_iso()
     run_id = f"run-{generate_short_agent_id()}"
 
@@ -3911,7 +4098,7 @@ def _create_project_pipeline_run(
         status="running",
         created_at=now,
         updated_at=now,
-        parameters=body.parameters,
+        parameters=run_parameters,
         steps=steps,
         artifacts=artifacts,
         flow_version=(template.version or "0.1.0"),

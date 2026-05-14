@@ -129,8 +129,18 @@ def test_knowledge_workflow_orchestrator_persists_pipeline_run(
     run = _load_project_pipeline_run(project_dir, result["run_id"])
     assert run.status == "succeeded"
     assert run.template_id == KNOWLEDGE_WORKFLOW_TEMPLATE_ID
-    assert any(step.id == "quality_review" and step.status == "succeeded" for step in run.steps)
-    assert any(path.endswith("graphify-out/graph.json") for path in run.artifacts)
+    # The 7-step NLP pipeline: all steps must have completed.
+    run_step_ids = [step.id for step in run.steps]
+    assert run_step_ids == [
+        "snapshot_raw",
+        "build_chunks",
+        "build_interlinear",
+        "tokenize",
+        "pos_tagging",
+        "syntax_parse",
+        "semantic_role_labeling",
+    ]
+    assert all(step.status == "succeeded" for step in run.steps)
     assert any(path.endswith("graphify-out/graph.enriched.json") for path in run.artifacts)
     assert (project_dir / ".knowledge" / "content.md").exists()
     assert (project_dir / ".knowledge" / "chunk-manifest.json").exists()
@@ -328,8 +338,9 @@ def test_knowledge_workflow_quantization_stage_l2_runs_nlp_slice(
 
     assert result["processing_mode"] == "nlp"
     assert result["quantization_stage"] == "l2"
-    assert result["memify"]["status"] == "succeeded"
-    assert called["memify"] is True
+    # nlp mode does NOT run graph ops; memify is agentic-only in the 7-step design.
+    assert result["memify"] == {}
+    assert called["memify"] is False
     assert called["quality"] is False
 
 
@@ -476,20 +487,26 @@ def test_execute_source_scan_writes_project_step_stats(tmp_path: Path):
         knowledge_dirname=f"projects/{project_id}/.knowledge",
     )
     source = _build_source(project_dir, project_id)
+    config = KnowledgeConfig(enabled=True, memify_enabled=True)
+    running_config = SimpleNamespace(knowledge_chunk_size=500)
+    index_path = project_dir / ".knowledge" / "content.md"
 
-    result = orchestrator._execute_source_scan(
+    result = orchestrator._execute_snapshot_raw(
         source=source,
+        config=config,
+        running_config=running_config,
         changed_paths=["data/sample.md"],
+        index_path=index_path,
     )
 
     assert result["metrics"]["data_file_count"] == 1
-    latest_path = project_dir / ".knowledge" / "stats" / "source_scan" / "latest.json"
-    history_path = project_dir / ".knowledge" / "stats" / "source_scan" / "history.jsonl"
+    latest_path = project_dir / ".knowledge" / "stats" / "snapshot_raw" / "latest.json"
+    history_path = project_dir / ".knowledge" / "stats" / "snapshot_raw" / "history.jsonl"
     assert latest_path.exists()
     assert history_path.exists()
     payload = json.loads(latest_path.read_text(encoding="utf-8"))
     assert payload["project_id"] == project_id
-    assert payload["step_id"] == "source_scan"
+    assert payload["step_id"] == "snapshot_raw"
     assert payload["metrics"]["changed_path_count"] == 1
     assert payload["metrics"]["data_file_count"] == 1
     assert payload["changed_paths"] == ["data/sample.md"]
@@ -511,16 +528,26 @@ def test_execute_source_scan_counts_project_root_files_and_skips_builtin_hidden_
     )
     source = _build_source(project_dir, project_id)
 
-    result = orchestrator._execute_source_scan(
+    config = KnowledgeConfig(enabled=True, memify_enabled=True)
+    running_config = SimpleNamespace(knowledge_chunk_size=500)
+    index_path = project_dir / ".knowledge" / "content.md"
+
+    result = orchestrator._execute_snapshot_raw(
         source=source,
+        config=config,
+        running_config=running_config,
         changed_paths=["sample.md"],
+        index_path=index_path,
     )
 
     assert result["metrics"]["data_file_count"] == 1
-    assert result["result"]["data_files"] == ["sample.md"]
+    latest_path = project_dir / ".knowledge" / "stats" / "snapshot_raw" / "latest.json"
+    payload = json.loads(latest_path.read_text(encoding="utf-8"))
+    assert payload["data_files"] == ["sample.md"]
 
 
-def test_execute_domain_graph_build_writes_project_step_stats(tmp_path: Path, monkeypatch):
+def test_run_memify_creates_graph_files(tmp_path: Path, monkeypatch):
+    """Replaces test_execute_domain_graph_build_writes_project_step_stats for 7-step design."""
     project_id = "project-domain-graph"
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
@@ -533,12 +560,6 @@ def test_execute_domain_graph_build_writes_project_step_stats(tmp_path: Path, mo
     )
     source = _build_source(project_dir, project_id)
     quality_report_path = orchestrator.graph_ops.enrichment_quality_report_path
-
-    monkeypatch.setattr(
-        orchestrator.knowledge_manager,
-        "materialize_semantic_artifacts_for_source",
-        lambda *args, **kwargs: None,
-    )
 
     def fake_execute_memify_once(**kwargs):
         orchestrator.graph_ops.local_graph_path.parent.mkdir(parents=True, exist_ok=True)
@@ -554,22 +575,20 @@ def test_execute_domain_graph_build_writes_project_step_stats(tmp_path: Path, mo
 
     monkeypatch.setattr(orchestrator.graph_ops, "execute_memify_once", fake_execute_memify_once)
 
-    result = orchestrator._execute_domain_graph_build(
+    result = orchestrator._run_memify(
         config=KnowledgeConfig(enabled=True, memify_enabled=True),
         source=source,
-        progress_callback=None,
         quality_report_path=quality_report_path,
     )
 
-    assert result["metrics"]["relation_count"] == 3
-    latest_path = project_dir / ".knowledge" / "stats" / "domain_graph_build" / "latest.json"
-    payload = json.loads(latest_path.read_text(encoding="utf-8"))
-    assert payload["step_id"] == "domain_graph_build"
-    assert payload["metrics"]["relation_count"] == 3
-    assert payload["status"] == "succeeded"
+    assert result["status"] == "succeeded"
+    assert result["relation_count"] == 3
+    assert orchestrator.graph_ops.local_graph_path.exists()
+    assert orchestrator.graph_ops.enriched_graph_path.exists()
 
 
-def test_execute_quality_review_writes_project_step_stats(tmp_path: Path, monkeypatch):
+def test_run_quality_loop_returns_result(tmp_path: Path, monkeypatch):
+    """Replaces test_execute_quality_review_writes_project_step_stats for 7-step design."""
     project_id = "project-quality-review"
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
@@ -598,16 +617,13 @@ def test_execute_quality_review_writes_project_step_stats(tmp_path: Path, monkey
         },
     )
 
-    result = orchestrator._execute_quality_review(
+    result = orchestrator._run_quality_loop(
         config=KnowledgeConfig(enabled=True, memify_enabled=True),
         source=source,
         memify_result={"status": "succeeded"},
         quality_report_path=quality_report_path,
     )
 
-    assert result["metrics"]["quality_score_after"] == 0.95
-    latest_path = project_dir / ".knowledge" / "stats" / "quality_review" / "latest.json"
-    payload = json.loads(latest_path.read_text(encoding="utf-8"))
-    assert payload["step_id"] == "quality_review"
-    assert payload["metrics"]["quality_score_after"] == 0.95
-    assert payload["status"] == "succeeded"
+    assert result["accepted"] is False
+    assert result["score_before"] == 0.95
+    assert result["score_after"] == 0.95

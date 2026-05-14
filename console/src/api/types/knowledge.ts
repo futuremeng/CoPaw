@@ -47,10 +47,13 @@ export interface ProjectKnowledgeStepStatsMetrics {
 }
 
 export type ProjectKnowledgeStepStatsStepId =
-  | "file_analysis"
-  | "source_scan"
-  | "domain_graph_build"
-  | "quality_review";
+  | "snapshot_raw"
+  | "build_chunks"
+  | "build_interlinear"
+  | "tokenize"
+  | "pos_tagging"
+  | "syntax_parse"
+  | "semantic_role_labeling";
 
 export interface ProjectKnowledgeStepStatsResponse<
   TStepId extends ProjectKnowledgeStepStatsStepId = ProjectKnowledgeStepStatsStepId,
@@ -61,13 +64,13 @@ export interface ProjectKnowledgeStepStatsResponse<
   history: ProjectKnowledgeStepStatsRecord[];
 }
 
-export type ProjectKnowledgeFileAnalysisStatsResponse = ProjectKnowledgeStepStatsResponse<"file_analysis">;
+export type ProjectKnowledgeFileAnalysisStatsResponse = ProjectKnowledgeStepStatsResponse<"build_chunks">;
 
-export type ProjectKnowledgeSourceScanStatsResponse = ProjectKnowledgeStepStatsResponse<"source_scan">;
+export type ProjectKnowledgeSourceScanStatsResponse = ProjectKnowledgeStepStatsResponse<"snapshot_raw">;
 
-export type ProjectKnowledgeDomainGraphBuildStatsResponse = ProjectKnowledgeStepStatsResponse<"domain_graph_build">;
+export type ProjectKnowledgeDomainGraphBuildStatsResponse = ProjectKnowledgeStepStatsResponse<"syntax_parse">;
 
-export type ProjectKnowledgeQualityReviewStatsResponse = ProjectKnowledgeStepStatsResponse<"quality_review">;
+export type ProjectKnowledgeQualityReviewStatsResponse = ProjectKnowledgeStepStatsResponse<"semantic_role_labeling">;
 
 export interface KnowledgeIndexConfig {
   engine: string;

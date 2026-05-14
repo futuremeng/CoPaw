@@ -3,22 +3,23 @@ import { describe, expect, it } from "vitest";
 import { deriveBuiltinProjectKnowledgeStages } from "./builtinStages.ts";
 
 describe("deriveBuiltinProjectKnowledgeStages", () => {
-  it("returns six detailed stages with idle defaults", () => {
+  it("returns canonical seven stages with idle/pending defaults", () => {
     const stages = deriveBuiltinProjectKnowledgeStages(null);
 
-    expect(stages).toHaveLength(6);
+    expect(stages).toHaveLength(7);
     expect(stages.map((item) => item.key)).toEqual([
-      "file_analysis",
-      "source_scan",
+      "snapshot_raw",
+      "build_chunks",
+      "build_interlinear",
       "tokenize",
-      "ner",
-      "cor",
-      "syntax",
+      "pos_tagging",
+      "syntax_parse",
+      "semantic_role_labeling",
     ]);
     expect(stages.every((item) => item.status === "idle" || item.status === "pending")).toBe(true);
   });
 
-  it("maps nlp stage status and progress from sync payload", () => {
+  it("maps legacy nlp runtime into canonical tokenize/pos/syntax stages", () => {
     const stages = deriveBuiltinProjectKnowledgeStages({
       project_id: "project-a",
       status: "graphifying",
@@ -72,15 +73,27 @@ describe("deriveBuiltinProjectKnowledgeStages", () => {
       },
     });
 
+    const snapshotRaw = stages.find((item) => item.key === "snapshot_raw");
+    const buildChunks = stages.find((item) => item.key === "build_chunks");
+    const buildInterlinear = stages.find((item) => item.key === "build_interlinear");
     const tokenize = stages.find((item) => item.key === "tokenize");
-    const ner = stages.find((item) => item.key === "ner");
-    const syntax = stages.find((item) => item.key === "syntax");
+    const posTagging = stages.find((item) => item.key === "pos_tagging");
+    const syntaxParse = stages.find((item) => item.key === "syntax_parse");
+    const srl = stages.find((item) => item.key === "semantic_role_labeling");
 
+    expect(snapshotRaw?.status).toBe("ready");
+    expect(buildChunks?.status).toBe("ready");
+    expect(buildInterlinear?.status).toBe("ready");
     expect(tokenize?.status).toBe("ready");
-    expect(tokenize?.progress).toBe(100);
-    expect(ner?.status).toBe("running");
-    expect(ner?.progress).toBe(40);
-    expect(syntax?.status).toBe("running");
-    expect(syntax?.summary).toBe("3/10");
+    expect(tokenize?.summary).toBe("10/10");
+    expect(tokenize?.legacyMapped).toBe(true);
+    expect(posTagging?.status).toBe("ready");
+    expect(posTagging?.summary).toBe("4/10");
+    expect(posTagging?.legacyMapped).toBe(true);
+    expect(syntaxParse?.status).toBe("running");
+    expect(syntaxParse?.progress).toBe(40);
+    expect(syntaxParse?.summary).toBe("3/10");
+    expect(syntaxParse?.legacyMapped).toBe(true);
+    expect(srl?.status).toBe("pending");
   });
 });

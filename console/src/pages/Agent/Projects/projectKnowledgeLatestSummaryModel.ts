@@ -21,19 +21,25 @@ export function buildProjectKnowledgeLatestSummaryModel(
   t: TranslateFn,
   params: {
     selectedOutputMode?: ProjectKnowledgeProcessingMode;
-    sourceScan?: ProjectKnowledgeStatsLike;
-    fileAnalysis?: ProjectKnowledgeStatsLike;
-    domainGraphBuild?: ProjectKnowledgeStatsLike;
-    qualityReview?: ProjectKnowledgeStatsLike;
+    snapshotRaw?: ProjectKnowledgeStatsLike;
+    buildChunks?: ProjectKnowledgeStatsLike;
+    buildInterlinear?: ProjectKnowledgeStatsLike;
+    tokenize?: ProjectKnowledgeStatsLike;
+    posTagging?: ProjectKnowledgeStatsLike;
+    syntaxParse?: ProjectKnowledgeStatsLike;
+    semanticRoleLabeling?: ProjectKnowledgeStatsLike;
   },
 ): ProjectKnowledgeLatestSummaryModel {
   const l1Parts = buildProjectKnowledgeLatestL1SummaryParts(t, {
-    sourceScan: params.sourceScan,
-    fileAnalysis: params.fileAnalysis,
+    snapshotRaw: params.snapshotRaw,
+    buildChunks: params.buildChunks,
   });
   const l23Parts = buildProjectKnowledgeLatestL23SummaryParts(t, {
-    domainGraphBuild: params.domainGraphBuild,
-    qualityReview: params.qualityReview,
+    buildInterlinear: params.buildInterlinear,
+    tokenize: params.tokenize,
+    posTagging: params.posTagging,
+    syntaxParse: params.syntaxParse,
+    semanticRoleLabeling: params.semanticRoleLabeling,
   });
   return {
     l1Parts,
@@ -41,8 +47,8 @@ export function buildProjectKnowledgeLatestSummaryModel(
     workflowParts: [...l1Parts, ...l23Parts],
     outputParts: buildProjectKnowledgeLatestOutputSummaryParts(t, {
       selectedMode: params.selectedOutputMode || "fast",
-      domainGraphBuild: params.domainGraphBuild,
-      qualityReview: params.qualityReview,
+      syntaxParse: params.syntaxParse,
+      semanticRoleLabeling: params.semanticRoleLabeling,
     }),
   };
 }
@@ -54,9 +60,12 @@ export function buildProjectKnowledgeLatestSummaryModelFromState(
 ): ProjectKnowledgeLatestSummaryModel {
   return buildProjectKnowledgeLatestSummaryModel(t, {
     selectedOutputMode: selectedOutputMode || state.outputResolution?.activeMode,
-    sourceScan: state.sourceScanStats?.latest,
-    fileAnalysis: state.fileAnalysisStats?.latest,
-    domainGraphBuild: state.projectStepStats?.domain_graph_build?.latest,
-    qualityReview: state.projectStepStats?.quality_review?.latest,
+    snapshotRaw: state.sourceScanStats?.latest,
+    buildChunks: state.fileAnalysisStats?.latest,
+    buildInterlinear: state.projectStepStats?.build_interlinear?.latest,
+    tokenize: state.projectStepStats?.tokenize?.latest,
+    posTagging: state.projectStepStats?.pos_tagging?.latest,
+    syntaxParse: state.projectStepStats?.syntax_parse?.latest,
+    semanticRoleLabeling: state.projectStepStats?.semantic_role_labeling?.latest,
   });
 }
