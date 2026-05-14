@@ -362,9 +362,12 @@ export function resolveProjectKnowledgeL1StepStats(
   };
   PROJECT_KNOWLEDGE_L1_STEP_STATS_DESCRIPTORS.forEach((descriptor, index) => {
     const result = results[index];
-    nextState[descriptor.stateKey] = (result?.status === "fulfilled"
-      ? result.value
-      : null) as any;
+    const value = result?.status === "fulfilled" ? result.value : null;
+    if (descriptor.stateKey === "fileAnalysis") {
+      nextState.fileAnalysis = value as ProjectKnowledgeFileAnalysisStatsResponse | null;
+      return;
+    }
+    nextState.sourceScan = value as ProjectKnowledgeSourceScanStatsResponse | null;
   });
   return nextState;
 }
