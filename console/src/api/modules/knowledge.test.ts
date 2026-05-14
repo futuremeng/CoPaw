@@ -76,3 +76,32 @@ describe("knowledgeApi.getProjectSourceScanStats", () => {
     );
   });
 });
+
+describe("knowledgeApi.graphQuery", () => {
+  afterEach(() => vi.clearAllMocks());
+
+  it("serializes scope filter params for graph query", async () => {
+    vi.mocked(request).mockResolvedValue({
+      records: [],
+      summary: "",
+      provenance: {},
+      warnings: [],
+    });
+
+    await knowledgeApi.graphQuery({
+      query: "demo",
+      mode: "template",
+      topK: 20,
+      timeoutSec: 30,
+      scopeType: "project",
+      scopeId: "project-123",
+      projectScope: ["project-123"],
+      includeGlobal: false,
+      projectId: "project-123",
+    });
+
+    expect(request).toHaveBeenCalledWith(
+      "/knowledge/graph-query?q=demo&mode=template&top_k=20&timeout_sec=30&scope_type=project&scope_id=project-123&project_scope=project-123&include_global=false&project_id=project-123",
+    );
+  });
+});

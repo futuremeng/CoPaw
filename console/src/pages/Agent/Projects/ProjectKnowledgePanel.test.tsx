@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import ProjectKnowledgePanel from "./ProjectKnowledgePanel";
+import { parseScopeFilterProvenance } from "../Knowledge/graphScopeFilter";
 import {
   formatGraphEntityTypeLabel,
   formatGraphRelationTypeLabel,
@@ -30,20 +31,24 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-vi.mock("../Knowledge/graphQuery", () => ({
-  limitGraphVisualizationRecords: (records: unknown[], topK?: number) => {
-    if (!Array.isArray(records)) {
-      return [];
-    }
-    if (!Number.isFinite(topK)) {
-      return records;
-    }
-    return records.slice(0, Math.max(1, Math.floor(Number(topK))));
-  },
-  recordsToVisualizationData: (records: unknown[], options?: unknown) => (
-    mockRecordsToVisualizationData(records, options)
-  ),
-}));
+vi.mock("../Knowledge/graphQuery", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../Knowledge/graphQuery")>();
+  return {
+    ...actual,
+    limitGraphVisualizationRecords: (records: unknown[], topK?: number) => {
+      if (!Array.isArray(records)) {
+        return [];
+      }
+      if (!Number.isFinite(topK)) {
+        return records;
+      }
+      return records.slice(0, Math.max(1, Math.floor(Number(topK))));
+    },
+    recordsToVisualizationData: (records: unknown[], options?: unknown) => (
+      mockRecordsToVisualizationData(records, options)
+    ),
+  };
+});
 
 function buildKnowledgeState(projectId: string): ProjectKnowledgeState {
   return {
@@ -276,6 +281,25 @@ const testGraphComponents = {
       graph-visualization
     </button>
   ),
+};
+
+const testGraphComponentsWithScopeResults = {
+  GraphQueryResults: (props: { provenance?: Record<string, unknown> }) => {
+    const parsed = parseScopeFilterProvenance(props.provenance || {});
+    const scopeLabel = parsed.scopeType === "agent"
+      ? "Agent"
+      : parsed.scopeType === "project"
+        ? "Project"
+        : "Combined";
+    return (
+      <div data-testid="graph-query-results-scope">
+        <span>Scope Filter</span>
+        <span>{scopeLabel}</span>
+        {parsed.scopeId ? <span>{parsed.scopeId}</span> : null}
+      </div>
+    );
+  },
+  GraphVisualization: testGraphComponents.GraphVisualization,
 };
 
 describe("ProjectKnowledgePanel interactions", () => {
@@ -633,5 +657,45 @@ describe("ProjectKnowledgePanel interactions", () => {
       );
     });
     expect(onRequestedQueryHandled).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows project scope filter provenance in query results", async () => {
+    const knowledgeState = buildKnowledgeState(projectId);
+    knowledgeState.graphResult = {
+      records: [
+        {
+          subject: "Agent",
+          subject_type: "entity",
+          predicate: "uses",
+          object: "Workflow",
+          object_type: "entity",
+          score: 0.9,
+          source_id: "project-project-abc-workspace",
+          source_type: "directory",
+          document_path: "original/guide.md",
+          document_title: "guide.md",
+        },
+      ],
+      summary: "1 record",
+      warnings: [],
+      provenance: {
+        scope_filter_applied: true,
+        scope_type: "project",
+        scope_id: projectId,
+      },
+    };
+
+    render(
+      <ProjectKnowledgePanel
+        projectId={projectId}
+        projectName="Project ABC"
+        knowledgeState={knowledgeState}
+        graphComponents={testGraphComponentsWithScopeResults}
+      />,
+    );
+
+    expect(await screen.findByText("Scope Filter")).not.toBeNull();
+    expect(screen.getByText(/^Project$/)).not.toBeNull();
+    expect(screen.getByText(projectId)).not.toBeNull();
   });
 });

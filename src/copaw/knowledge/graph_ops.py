@@ -1061,6 +1061,8 @@ Agent gate review is mandatory before automatic continuation.
         query_text: str,
         project_scope: list[str] | None,
         include_global: bool,
+        scope_type: str | None,
+        scope_id: str | None,
         top_k: int,
         query_mode: str,
         warnings: list[str],
@@ -1071,6 +1073,8 @@ Agent gate review is mandatory before automatic continuation.
             limit=max(1, top_k),
             project_scope=project_scope,
             include_global=include_global,
+            scope_type=scope_type,
+            scope_id=scope_id,
         )
         records: list[dict[str, Any]] = []
         for hit in search_result.get("hits") or []:
@@ -1085,15 +1089,22 @@ Agent gate review is mandatory before automatic continuation.
                     "source_type": hit.get("source_type"),
                     "document_path": hit.get("document_path"),
                     "document_title": hit.get("document_title"),
+                    "evidence_ref": hit.get("evidence_id"),
+                    "scope_type": hit.get("scope_type"),
+                    "scope_id": hit.get("scope_id"),
+                    "scope_priority": hit.get("scope_priority"),
                 }
             )
         if not records:
             warnings.append("NO_PREVIEW_RECORDS")
         return GraphOpsResult(
-            records=records,
+            records=self._enrich_graph_records(records, config=config),
             summary=f"Returned {len(records)} preview matches.",
             provenance={
                 "engine": "fast_preview",
+                "scope_filter_applied": bool(scope_type or scope_id),
+                "scope_type": str(scope_type or "").strip().lower() or None,
+                "scope_id": str(scope_id or "").strip() or None,
                 "project_scope": project_scope or [],
                 "include_global": include_global,
                 "query_mode": query_mode,
@@ -1133,6 +1144,8 @@ Agent gate review is mandatory before automatic continuation.
         dataset_scope: list[str] | None,
         project_scope: list[str] | None,
         include_global: bool,
+        scope_type: str | None = None,
+        scope_id: str | None = None,
         top_k: int,
         timeout_sec: int,
         preferred_output_mode: str | None = None,
@@ -1191,12 +1204,21 @@ Agent gate review is mandatory before automatic continuation.
                     project_scope=project_scope,
                     include_global=include_global,
                 )
+                records = self._filter_records_by_scope(
+                    records=records,
+                    config=config,
+                    scope_type=scope_type,
+                    scope_id=scope_id,
+                )
                 if not records:
                     warnings.append("NO_GRAPH_RECORDS")
                 return GraphOpsResult(
-                    records=records,
+                    records=self._enrich_graph_records(records, config=config),
                     summary=f"Returned {len(records)} graph-like records via Graphify.",
                     provenance={
+                        "scope_filter_applied": bool(scope_type or scope_id),
+                        "scope_type": str(scope_type or "").strip().lower() or None,
+                        "scope_id": str(scope_id or "").strip() or None,
                         "engine": engine,
                         "layer": graph_layer,
                         "graph_path": graph_path_for_query,
@@ -1237,6 +1259,8 @@ Agent gate review is mandatory before automatic continuation.
                 query_text=effective_query_text,
                 project_scope=project_scope,
                 include_global=include_global,
+                scope_type=scope_type,
+                scope_id=scope_id,
                 top_k=top_k,
                 query_mode=query_mode,
                 warnings=warnings,
@@ -1258,11 +1282,20 @@ Agent gate review is mandatory before automatic continuation.
                     project_scope=project_scope,
                     include_global=include_global,
                 )
+                local_graph_records = self._filter_records_by_scope(
+                    records=local_graph_records,
+                    config=config,
+                    scope_type=scope_type,
+                    scope_id=scope_id,
+                )
                 if local_graph_records:
                     return GraphOpsResult(
-                        records=local_graph_records,
+                        records=self._enrich_graph_records(local_graph_records, config=config),
                         summary=f"Returned {len(local_graph_records)} graph relations via local graph.",
                         provenance={
+                            "scope_filter_applied": bool(scope_type or scope_id),
+                            "scope_type": str(scope_type or "").strip().lower() or None,
+                            "scope_id": str(scope_id or "").strip() or None,
                             "engine": "local_graph",
                             "layer": graph_layer,
                             "graph_path": str(graph_path),
@@ -1282,15 +1315,83 @@ Agent gate review is mandatory before automatic continuation.
             query_text=effective_query_text,
             project_scope=project_scope,
             include_global=include_global,
+            scope_type=scope_type,
+            scope_id=scope_id,
             top_k=top_k,
             query_mode=query_mode,
             warnings=warnings,
         )
+        preview_result.provenance["scope_filter_applied"] = bool(scope_type or scope_id)
+        preview_result.provenance["scope_type"] = str(scope_type or "").strip().lower() or None
+        preview_result.provenance["scope_id"] = str(scope_id or "").strip() or None
         preview_result.provenance["dataset_scope"] = dataset_scope or []
         if normalized_mode == "agentic":
             return self._augment_agentic_result(result=preview_result)
         preview_result.provenance["semantic_profile"] = "nlp_fallback"
         return preview_result
+
+    @staticmethod
+    def _resolve_source_scope(source: Any) -> tuple[str, str]:
+        project_id = str(getattr(source, "project_id", "") or "").strip()
+        if project_id:
+            return ("project", project_id)
+
+        tags = {
+            str(tag).strip()
+            for tag in (getattr(source, "tags", []) or [])
+            if str(tag).strip()
+        }
+        for tag in tags:
+            if not tag.startswith("scope:agent"):
+                continue
+            _, _, suffix = tag.partition(":agent")
+            scope_id = suffix.lstrip(":").strip()
+            return ("agent", scope_id)
+        return ("agent", "")
+
+    @staticmethod
+    def _build_relation_id(record: dict[str, Any]) -> str:
+        seed = "|".join(
+            [
+                str(record.get("source_id") or ""),
+                str(record.get("document_path") or ""),
+                str(record.get("subject") or ""),
+                str(record.get("predicate") or ""),
+                str(record.get("object") or ""),
+            ]
+        )
+        return str(uuid.uuid5(uuid.NAMESPACE_URL, seed))
+
+    def _enrich_graph_records(
+        self,
+        records: list[dict[str, Any]],
+        *,
+        config: KnowledgeConfig,
+    ) -> list[dict[str, Any]]:
+        source_scope_map: dict[str, tuple[str, str]] = {}
+        for source in config.sources:
+            source_scope_map[source.id] = self._resolve_source_scope(source)
+
+        enriched: list[dict[str, Any]] = []
+        for record in records:
+            item = dict(record)
+            item.setdefault("relation_id", self._build_relation_id(item))
+            if not item.get("evidence_ref"):
+                item["evidence_ref"] = str(item.get("relation_id") or "")
+
+            source_id = str(item.get("source_id") or "").strip()
+            inferred_scope_type = "agent"
+            inferred_scope_id = ""
+            if source_id in source_scope_map:
+                inferred_scope_type, inferred_scope_id = source_scope_map[source_id]
+
+            item.setdefault("scope_type", inferred_scope_type)
+            item.setdefault("scope_id", inferred_scope_id)
+            if "scope_priority" not in item or item.get("scope_priority") is None:
+                item["scope_priority"] = 100 if item.get("scope_type") == "agent" else 50
+
+            enriched.append(item)
+        return enriched
 
     @staticmethod
     def _filter_records_by_project_scope(
@@ -1323,6 +1424,37 @@ Agent gate review is mandatory before automatic continuation.
             is_global = not source_project_id
             if in_scope or (include_global and is_global):
                 filtered.append(record)
+        return filtered
+
+    @classmethod
+    def _filter_records_by_scope(
+        cls,
+        *,
+        records: list[dict[str, Any]],
+        config: KnowledgeConfig,
+        scope_type: str | None,
+        scope_id: str | None,
+    ) -> list[dict[str, Any]]:
+        normalized_scope_type = str(scope_type or "").strip().lower()
+        normalized_scope_id = str(scope_id or "").strip()
+        if not normalized_scope_type and not normalized_scope_id:
+            return records
+
+        source_scope_map: dict[str, tuple[str, str]] = {}
+        for source in config.sources:
+            source_scope_map[source.id] = cls._resolve_source_scope(source)
+
+        filtered: list[dict[str, Any]] = []
+        for record in records:
+            source_id = str(record.get("source_id") or "").strip()
+            if not source_id:
+                continue
+            record_scope_type, record_scope_id = source_scope_map.get(source_id, ("agent", ""))
+            if normalized_scope_type and record_scope_type != normalized_scope_type:
+                continue
+            if normalized_scope_id and record_scope_id != normalized_scope_id:
+                continue
+            filtered.append(record)
         return filtered
 
     def run_memify(

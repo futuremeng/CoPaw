@@ -82,6 +82,11 @@ export interface GraphQueryRecordViewModel {
   score: number;
   sourceId: string;
   sourceType: string;
+  relationId: string;
+  evidenceRef: string;
+  scopeType: string;
+  scopeId: string;
+  scopePriority: number;
   documentPath: string;
   documentTitle: string;
 }
@@ -121,6 +126,11 @@ export function buildGraphQueryRecordViewModels(
     score: record.score,
     sourceId: record.source_id,
     sourceType: record.source_type,
+    relationId: String(record.relation_id || ""),
+    evidenceRef: String(record.evidence_ref || ""),
+    scopeType: String(record.scope_type || ""),
+    scopeId: String(record.scope_id || ""),
+    scopePriority: Number(record.scope_priority || 0),
     documentPath: record.document_path,
     documentTitle: record.document_title,
   }));
@@ -181,7 +191,9 @@ export function filterGraphQueryRecords(
       r.subject.toLowerCase().includes(query) ||
       r.object.toLowerCase().includes(query) ||
       r.documentTitle.toLowerCase().includes(query) ||
-      r.sourceId.toLowerCase().includes(query),
+      r.sourceId.toLowerCase().includes(query) ||
+      r.scopeType.toLowerCase().includes(query) ||
+      r.scopeId.toLowerCase().includes(query),
   );
 }
 

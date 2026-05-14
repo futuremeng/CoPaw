@@ -1000,12 +1000,18 @@ async def search_knowledge(
     source_types: Optional[str] = Query(default=None),
     project_scope: Optional[str] = Query(default=None),
     include_global: bool = Query(default=True),
+    scope_type: Optional[str] = Query(default=None),
+    scope_id: Optional[str] = Query(default=None),
 ):
     config, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
     _ensure_knowledge_enabled_flag(knowledge_config.enabled)
     ids = [item for item in (source_ids or "").split(",") if item]
     types = [item for item in (source_types or "").split(",") if item]
     projects = [item.strip() for item in (project_scope or "").split(",") if item.strip()]
+    normalized_scope_type = (scope_type or "").strip().lower()
+    if normalized_scope_type and normalized_scope_type not in {"agent", "project"}:
+        raise HTTPException(status_code=400, detail="INVALID_SCOPE_TYPE")
+    normalized_scope_id = (scope_id or "").strip()
     manager = _manager_for_workspace(
         workspace_dir,
         project_id=_resolve_project_id(request),
@@ -1019,6 +1025,8 @@ async def search_knowledge(
         source_types=types or None,
         project_scope=projects or None,
         include_global=include_global,
+        scope_type=normalized_scope_type or None,
+        scope_id=normalized_scope_id or None,
     )
 
 
@@ -1173,6 +1181,8 @@ async def query_knowledge_graph(
     dataset_scope: Optional[str] = Query(default=None),
     project_scope: Optional[str] = Query(default=None),
     include_global: bool = Query(default=True),
+    scope_type: Optional[str] = Query(default=None),
+    scope_id: Optional[str] = Query(default=None),
     top_k: int = Query(default=10, ge=1),
     timeout_sec: int = Query(default=20, ge=1, le=120),
 ):
@@ -1196,6 +1206,11 @@ async def query_knowledge_graph(
     if query_mode == "cypher" and not bool(getattr(knowledge_config, "allow_cypher_query", False)):
         raise HTTPException(status_code=400, detail="GRAPH_CYPHER_DISABLED")
 
+    normalized_scope_type = (scope_type or "").strip().lower()
+    if normalized_scope_type and normalized_scope_type not in {"agent", "project"}:
+        raise HTTPException(status_code=400, detail="INVALID_SCOPE_TYPE")
+    normalized_scope_id = (scope_id or "").strip()
+
     scope_items = [item for item in (dataset_scope or "").split(",") if item.strip()]
     project_scope_items = [
         item.strip() for item in (project_scope or "").split(",") if item.strip()
@@ -1213,6 +1228,8 @@ async def query_knowledge_graph(
             dataset_scope=scope_items or None,
             project_scope=project_scope_items or None,
             include_global=include_global,
+            scope_type=normalized_scope_type or None,
+            scope_id=normalized_scope_id or None,
             top_k=top_k,
             timeout_sec=timeout_sec,
             preferred_output_mode=requested_output_mode or None,

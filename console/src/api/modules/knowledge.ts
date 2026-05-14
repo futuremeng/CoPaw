@@ -246,6 +246,8 @@ export const knowledgeApi = {
     limit?: number;
     sourceIds?: string[];
     sourceTypes?: string[];
+    scopeType?: "agent" | "project";
+    scopeId?: string;
     projectScope?: string[];
     includeGlobal?: boolean;
     projectId?: string;
@@ -259,6 +261,12 @@ export const knowledgeApi = {
     }
     if (params.sourceTypes?.length) {
       searchParams.set("source_types", params.sourceTypes.join(","));
+    }
+    if (params.scopeType) {
+      searchParams.set("scope_type", params.scopeType);
+    }
+    if (params.scopeId) {
+      searchParams.set("scope_id", params.scopeId);
     }
     if (params.projectScope?.length) {
       searchParams.set("project_scope", params.projectScope.join(","));
@@ -276,6 +284,8 @@ export const knowledgeApi = {
     mode?: "template" | "cypher";
     outputMode?: "fast" | "nlp" | "agentic";
     datasetScope?: string[];
+    scopeType?: "agent" | "project";
+    scopeId?: string;
     topK?: number;
     timeoutSec?: number;
     projectScope?: string[];
@@ -293,6 +303,12 @@ export const knowledgeApi = {
     }
     if (params.datasetScope?.length) {
       searchParams.set("dataset_scope", params.datasetScope.join(","));
+    }
+    if (params.scopeType) {
+      searchParams.set("scope_type", params.scopeType);
+    }
+    if (params.scopeId) {
+      searchParams.set("scope_id", params.scopeId);
     }
     if (params.projectScope?.length) {
       searchParams.set("project_scope", params.projectScope.join(","));

@@ -662,6 +662,52 @@ def test_search_knowledge_offloads_search_to_thread(
     assert calls[0][0].__name__ == "search"
 
 
+def test_search_knowledge_passes_scope_filters(
+    knowledge_api_client: TestClient,
+    monkeypatch,
+):
+    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload["enabled"] = True
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    captured: dict[str, object] = {}
+
+    class _FakeManager:
+        def search(self, **kwargs):
+            captured.update(kwargs)
+            return {"query": kwargs["query"], "hits": []}
+
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "_manager_for_workspace",
+        lambda *_args, **_kwargs: _FakeManager(),
+    )
+
+    response = knowledge_api_client.get(
+        "/knowledge/search?q=threaded-search&scope_type=project&scope_id=project-demo",
+    )
+
+    assert response.status_code == 200
+    assert captured.get("scope_type") == "project"
+    assert captured.get("scope_id") == "project-demo"
+
+
+def test_search_knowledge_rejects_invalid_scope_type(
+    knowledge_api_client: TestClient,
+):
+    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload["enabled"] = True
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    response = knowledge_api_client.get(
+        "/knowledge/search?q=threaded-search&scope_type=workspace",
+    )
+    assert response.status_code == 400
+    assert response.json().get("detail") == "INVALID_SCOPE_TYPE"
+
+
 def test_project_sync_run_does_not_expose_project_source_to_global_search(
     knowledge_api_client: TestClient,
     tmp_path: Path,
@@ -873,6 +919,55 @@ def test_graph_query_forwards_output_mode(
     assert response.status_code == 200
     assert captured["preferred_output_mode"] == "agentic"
     assert response.json()["provenance"]["resolved_output_mode"] == "agentic"
+
+
+def test_graph_query_passes_scope_filters(
+    knowledge_api_client: TestClient,
+    monkeypatch,
+):
+    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload["enabled"] = True
+    config_payload["graph_query_enabled"] = True
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    captured: dict[str, object] = {}
+
+    class _FakeGraphOps:
+        def graph_query(self, **kwargs):
+            captured.update(kwargs)
+            return SimpleNamespace(
+                records=[{"query": kwargs["query_text"]}],
+                summary={"mode": kwargs["query_mode"]},
+                provenance={"scope_type": kwargs.get("scope_type"), "scope_id": kwargs.get("scope_id")},
+                warnings=[],
+            )
+
+    monkeypatch.setattr(knowledge_router_module, "_graph_ops_for_workspace", lambda *_args, **_kwargs: _FakeGraphOps())
+
+    response = knowledge_api_client.get(
+        "/knowledge/graph-query?q=threaded-graph&scope_type=project&scope_id=project-demo",
+    )
+
+    assert response.status_code == 200
+    assert captured.get("scope_type") == "project"
+    assert captured.get("scope_id") == "project-demo"
+
+
+def test_graph_query_rejects_invalid_scope_type(
+    knowledge_api_client: TestClient,
+):
+    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload["enabled"] = True
+    config_payload["graph_query_enabled"] = True
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    response = knowledge_api_client.get(
+        "/knowledge/graph-query?q=threaded-graph&scope_type=workspace",
+    )
+    assert response.status_code == 400
+    assert response.json().get("detail") == "INVALID_SCOPE_TYPE"
 
 
 def test_graph_query_fast_preview_bypasses_graph_enabled_flag(

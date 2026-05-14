@@ -1110,6 +1110,8 @@ class KnowledgeManager:
         source_types: list[str] | None = None,
         project_scope: list[str] | None = None,
         include_global: bool = True,
+        scope_type: str | None = None,
+        scope_id: str | None = None,
     ) -> dict[str, Any]:
         """Search indexed interlinear artifacts with a lightweight lexical scorer."""
         source_map = {source.id: source for source in config.sources}
@@ -1128,6 +1130,11 @@ class KnowledgeManager:
                 continue
             if source_types and source.type not in source_types:
                 continue
+            source_scope_type, source_scope_id = self._resolve_source_scope(source)
+            if scope_type and source_scope_type != scope_type:
+                continue
+            if scope_id and source_scope_id != scope_id:
+                continue
             if project_scope_set:
                 source_project_id = (getattr(source, "project_id", "") or "").strip()
                 in_project_scope = source_project_id in project_scope_set
@@ -1140,6 +1147,7 @@ class KnowledgeManager:
                 interlinear_path = artifact.get("path")
                 if not interlinear_path:
                     continue
+                line_no = int(artifact.get("line_no") or 0)
                 try:
                     text = (self.root_dir / interlinear_path).read_text(encoding="utf-8")
                 except Exception:
@@ -1147,6 +1155,12 @@ class KnowledgeManager:
                 score = self._score_chunk(text, terms)
                 if score <= 0:
                     continue
+                evidence_id = self._build_search_evidence_id(
+                    source_id=source.id,
+                    document_path=str(artifact.get("document_path") or ""),
+                    chunk_path=str(interlinear_path),
+                    line_no=line_no,
+                )
                 hits.append(
                     {
                         "source_id": source.id,
@@ -1154,6 +1168,13 @@ class KnowledgeManager:
                         "source_type": source.type,
                         "document_path": artifact.get("document_path"),
                         "document_title": artifact.get("title"),
+                        "chunk_id": f"{source.id}:{line_no}" if line_no > 0 else source.id,
+                        "chunk_path": str(interlinear_path),
+                        "line_no": line_no,
+                        "evidence_id": evidence_id,
+                        "scope_type": source_scope_type,
+                        "scope_id": source_scope_id,
+                        "scope_priority": 100 if source_scope_type == "agent" else 50,
                         "score": score,
                         "snippet": self._build_snippet(text, terms),
                     },
@@ -1161,6 +1182,40 @@ class KnowledgeManager:
 
         hits.sort(key=lambda item: item["score"], reverse=True)
         return {"query": query, "hits": hits[:limit]}
+
+    @staticmethod
+    def _resolve_source_scope(source: KnowledgeSourceSpec) -> tuple[str, str]:
+        """Infer source scope metadata for backward-compatible hit annotations."""
+        project_id = str(getattr(source, "project_id", "") or "").strip()
+        if project_id:
+            return ("project", project_id)
+
+        tags = {
+            str(tag).strip()
+            for tag in (getattr(source, "tags", []) or [])
+            if str(tag).strip()
+        }
+        for tag in tags:
+            if not tag.startswith("scope:agent"):
+                continue
+            _, _, suffix = tag.partition(":agent")
+            scope_id = suffix.lstrip(":").strip()
+            return ("agent", scope_id)
+
+        return ("agent", "")
+
+    @staticmethod
+    def _build_search_evidence_id(
+        *,
+        source_id: str,
+        document_path: str,
+        chunk_path: str,
+        line_no: int,
+    ) -> str:
+        """Build a deterministic identifier for a search hit evidence record."""
+        payload = f"{source_id}|{document_path}|{chunk_path}|{line_no}"
+        digest = hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
+        return f"ev-{digest}"
 
     def _source_content_md_path(self, source_id: str) -> Path:
         return self._source_storage_path(source_id, "content.md")

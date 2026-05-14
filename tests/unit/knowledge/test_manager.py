@@ -336,7 +336,95 @@ def test_search_reads_chunk_text_from_chunk_file_when_index_has_no_text(tmp_path
     assert result["query"] == "gamma"
     assert isinstance(result["hits"], list)
     if result["hits"]:
-        assert result["hits"][0]["source_id"] == source.id
+        hit = result["hits"][0]
+        assert hit["source_id"] == source.id
+        assert hit.get("chunk_path")
+        assert hit.get("evidence_id", "").startswith("ev-")
+        assert hit.get("scope_type") in {"agent", "project"}
+
+
+def test_search_supports_scope_filters(tmp_path: Path):
+    config = Config().knowledge
+    config.index.chunk_size = 10_000
+
+    agent_source = KnowledgeSourceSpec(
+        id="agent-source",
+        name="Agent Source",
+        type="text",
+        content="Gamma knowledge in agent scope.",
+        enabled=True,
+        recursive=False,
+        tags=["scope:agent:demo-agent"],
+        summary="",
+    )
+    project_source = KnowledgeSourceSpec(
+        id="project-source",
+        name="Project Source",
+        type="text",
+        content="Gamma knowledge in project scope.",
+        enabled=True,
+        recursive=False,
+        project_id="project-demo",
+        tags=["project", "scope:project"],
+        summary="",
+    )
+    config.sources = [agent_source, project_source]
+
+    manager = KnowledgeManager(tmp_path)
+
+    agent_interlinear_path = manager.root_dir / "interlinear" / "agent.txt"
+    agent_interlinear_path.parent.mkdir(parents=True, exist_ok=True)
+    agent_interlinear_path.write_text("gamma agent scoped content", encoding="utf-8")
+
+    project_interlinear_path = manager.root_dir / "interlinear" / "project.txt"
+    project_interlinear_path.parent.mkdir(parents=True, exist_ok=True)
+    project_interlinear_path.write_text("gamma project scoped content", encoding="utf-8")
+
+    def fake_manifest(source_id: str) -> dict[str, object]:
+        if source_id == "agent-source":
+            return {
+                "artifacts": [
+                    {
+                        "path": "interlinear/agent.txt",
+                        "document_path": "agent.md",
+                        "title": "Agent",
+                        "line_no": 1,
+                    }
+                ]
+            }
+        if source_id == "project-source":
+            return {
+                "artifacts": [
+                    {
+                        "path": "interlinear/project.txt",
+                        "document_path": "project.md",
+                        "title": "Project",
+                        "line_no": 1,
+                    }
+                ]
+            }
+        return {"artifacts": []}
+
+    manager._load_source_interlinear_manifest = fake_manifest  # type: ignore[method-assign]
+
+    project_result = manager.search(
+        "gamma",
+        config,
+        limit=10,
+        scope_type="project",
+        scope_id="project-demo",
+    )
+    assert project_result["hits"]
+    assert all(item["source_id"] == "project-source" for item in project_result["hits"])
+
+    agent_result = manager.search(
+        "gamma",
+        config,
+        limit=10,
+        scope_type="agent",
+    )
+    assert agent_result["hits"]
+    assert all(item["source_id"] == "agent-source" for item in agent_result["hits"])
 
 
 def test_process_source_candidates_reads_snapshot_text_without_chunk_text(tmp_path: Path):

@@ -68,6 +68,7 @@ const SOURCE_TYPE_OPTIONS: Array<{
 ];
 
 type SourceOriginFilter = "all" | "manual" | "auto";
+type KnowledgeSearchScopeFilter = "combined" | "agent" | "project";
 
 function safeGraphNodeId(raw: string): string {
   const normalized = String(raw || "").trim();
@@ -150,6 +151,8 @@ function KnowledgePage() {
   const [sources, setSources] = useState<KnowledgeSourceItem[]>([]);
   const [hits, setHits] = useState<KnowledgeSearchHit[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchScopeFilter, setSearchScopeFilter] =
+    useState<KnowledgeSearchScopeFilter>("combined");
   const [searchTypeFilter, setSearchTypeFilter] = useState<
     KnowledgeSourceType | "all"
   >("all");
@@ -160,6 +163,9 @@ function KnowledgePage() {
     KnowledgeSourceType | "all"
   >("all");
   const [graphQueryText, setGraphQueryText] = useState("");
+  const [graphQueryScopeFilter, setGraphQueryScopeFilter] =
+    useState<KnowledgeSearchScopeFilter>("combined");
+  const [graphQueryScopeId, setGraphQueryScopeId] = useState("");
   const [graphQueryMode, setGraphQueryMode] = useState<"template" | "cypher">(
     "template",
   );
@@ -833,6 +839,7 @@ function KnowledgePage() {
       const result = await api.searchKnowledge({
         query,
         limit: 10,
+        scopeType: searchScopeFilter === "combined" ? undefined : searchScopeFilter,
         sourceTypes:
           searchTypeFilter === "all" ? undefined : [searchTypeFilter],
       });
@@ -847,6 +854,7 @@ function KnowledgePage() {
 
   const handleResetSearch = useCallback(() => {
     setSearchQuery("");
+    setSearchScopeFilter("combined");
     setSearchTypeFilter("all");
     setHits([]);
   }, []);
@@ -870,6 +878,11 @@ function KnowledgePage() {
       const result = await api.graphQuery({
         query,
         mode: graphQueryMode,
+        scopeType: graphQueryScopeFilter === "combined" ? undefined : graphQueryScopeFilter,
+        scopeId:
+          graphQueryScopeFilter === "combined"
+            ? undefined
+            : (graphQueryScopeId || "").trim() || undefined,
         topK: graphQueryTopK,
         timeoutSec: graphQueryTimeoutSec,
         datasetScope: datasetScope.length ? datasetScope : undefined,
@@ -891,6 +904,8 @@ function KnowledgePage() {
     }
   }, [
     graphQueryText,
+    graphQueryScopeFilter,
+    graphQueryScopeId,
     graphQueryMode,
     graphQueryTopK,
     graphQueryTimeoutSec,
@@ -903,6 +918,8 @@ function KnowledgePage() {
     setGraphQueryText("");
     setGraphQueryResults(null);
     setGraphQueryError(null);
+    setGraphQueryScopeFilter("combined");
+    setGraphQueryScopeId("");
     setGraphQueryDatasetScopeText("");
     setGraphQueryClickedNode(null);
     setGraphQueryNodeDrawerOpen(false);
@@ -1440,6 +1457,18 @@ function KnowledgePage() {
           <div className={styles.searchControls}>
             <Space.Compact className={styles.searchCompact}>
               <Select
+                value={searchScopeFilter}
+                onChange={(value) =>
+                  setSearchScopeFilter(value as KnowledgeSearchScopeFilter)
+                }
+                options={[
+                  { label: "Combined", value: "combined" },
+                  { label: "Agent", value: "agent" },
+                  { label: "Project", value: "project" },
+                ]}
+                className={styles.searchTypeSelect}
+              />
+              <Select
                 value={searchTypeFilter}
                 onChange={(value) =>
                   setSearchTypeFilter(value as KnowledgeSourceType | "all")
@@ -1496,6 +1525,11 @@ function KnowledgePage() {
                         <Space>
                           <Tag color="blue">{hit.source_name}</Tag>
                           <Tag>{hit.source_type}</Tag>
+                          {hit.scope_type ? (
+                            <Tag color={hit.scope_type === "project" ? "geekblue" : "green"}>
+                              {hit.scope_type}
+                            </Tag>
+                          ) : null}
                         </Space>
                         <Tag color="geekblue">
                           {t("knowledge.scoreLabel", {
@@ -1823,6 +1857,35 @@ function KnowledgePage() {
           </div>
           <div className={styles.searchParams}>
             <Space size="small" wrap>
+              <div className={styles.paramControl}>
+                <Typography.Text type="secondary" className={styles.paramLabel}>
+                  Scope:
+                </Typography.Text>
+                <Select
+                  value={graphQueryScopeFilter}
+                  onChange={(value) =>
+                    setGraphQueryScopeFilter(value as KnowledgeSearchScopeFilter)
+                  }
+                  options={[
+                    { label: "Combined", value: "combined" },
+                    { label: "Agent", value: "agent" },
+                    { label: "Project", value: "project" },
+                  ]}
+                  style={{ width: 140 }}
+                />
+              </div>
+              <div className={styles.paramControl}>
+                <Typography.Text type="secondary" className={styles.paramLabel}>
+                  Scope ID:
+                </Typography.Text>
+                <Input
+                  value={graphQueryScopeId}
+                  disabled={graphQueryScopeFilter === "combined"}
+                  onChange={(event) => setGraphQueryScopeId(event.target.value)}
+                  placeholder="optional"
+                  style={{ width: 180 }}
+                />
+              </div>
               <div className={styles.paramControl}>
                 <Typography.Text type="secondary" className={styles.paramLabel}>
                   {t("knowledge.graphQuery.topK")}:

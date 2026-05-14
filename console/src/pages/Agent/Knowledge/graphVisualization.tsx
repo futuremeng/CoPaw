@@ -46,6 +46,7 @@ import {
   parseEdgeStrength,
   summarizeGraphEntities,
 } from "./graphVisualizationData";
+import { parseScopeFilterProvenance } from "./graphScopeFilter.ts";
 import { useTheme } from "../../../contexts/ThemeContext";
 import styles from "./index.module.less";
 
@@ -497,6 +498,10 @@ function snapTopKBySegment(value: number): number {
 
 export function GraphQueryResults(props: GraphQueryResultsProps) {
   const { t } = useTranslation();
+    const scopeFilterState = useMemo(
+      () => parseScopeFilterProvenance(props.provenance),
+      [props.provenance],
+    );
   const [filterText, setFilterText] = useState("");
   const [sortBy, setSortBy] = useState<"score" | "subject" | "title">("score");
   const [sortOrder, setSortOrder] = useState<"descend" | "ascend">("descend");
@@ -572,12 +577,25 @@ export function GraphQueryResults(props: GraphQueryResultsProps) {
       title: t("knowledge.graphQuery.source"),
       dataIndex: "sourceId",
       key: "sourceId",
-      width: "15%",
+      width: "20%",
       ellipsis: { showTitle: false },
-      render: (text: string) => (
-        <Tooltip title={text}>
-          <span>{text}</span>
-        </Tooltip>
+      render: (_text: string, record: GraphQueryRecordViewModel) => (
+        <Space direction="vertical" size={4} style={{ width: "100%" }}>
+          <Tooltip title={record.sourceId}>
+            <span>{record.sourceId}</span>
+          </Tooltip>
+          <Space size={4} wrap>
+            {record.scopeType ? (
+              <Tag color={record.scopeType === "project" ? "geekblue" : "green"}>
+                {record.scopeType}
+              </Tag>
+            ) : null}
+            {record.scopeId ? <Tag>{record.scopeId}</Tag> : null}
+            {record.scopePriority > 0 ? (
+              <Tag color="default">P{record.scopePriority}</Tag>
+            ) : null}
+          </Space>
+        </Space>
       ),
     },
     {
@@ -636,6 +654,17 @@ export function GraphQueryResults(props: GraphQueryResultsProps) {
             ))}
           </div>
         ) : null}
+        <Space wrap size={6}>
+          <strong>{t("knowledge.graphQuery.scopeFilter", "Scope Filter")}:</strong>
+          <Tag color={scopeFilterState.applied ? "processing" : "default"}>
+            {scopeFilterState.scopeType === "agent"
+              ? t("knowledge.graphQuery.scopeAgent", "Agent")
+              : scopeFilterState.scopeType === "project"
+                ? t("knowledge.graphQuery.scopeProject", "Project")
+                : t("knowledge.graphQuery.scopeCombined", "Combined")}
+          </Tag>
+          {scopeFilterState.scopeId ? <Tag>{scopeFilterState.scopeId}</Tag> : null}
+        </Space>
 
       </Space>
 

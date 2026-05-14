@@ -473,6 +473,13 @@ export interface KnowledgeSearchHit {
   source_type: KnowledgeSourceType;
   document_path: string;
   document_title: string;
+  chunk_id?: string;
+  chunk_path?: string;
+  line_no?: number;
+  evidence_id?: string;
+  scope_type?: "project" | "agent";
+  scope_id?: string;
+  scope_priority?: number;
   score: number;
   snippet: string;
 }
@@ -610,6 +617,12 @@ export interface GraphQueryRecord {
   predicate: string;
   object: string;
   object_type?: string;
+  relation_id?: string;
+  snapshot_id?: string;
+  evidence_ref?: string;
+  scope_type?: "project" | "agent";
+  scope_id?: string;
+  scope_priority?: number;
   score: number;
   source_id: string;
   source_type: string;

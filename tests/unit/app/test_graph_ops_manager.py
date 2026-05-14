@@ -798,6 +798,88 @@ def test_graph_query_respects_preferred_output_mode_for_local_engine(tmp_path):
     assert fast_result.provenance.get("engine") == "fast_preview"
     assert fast_result.provenance.get("semantic_profile") == "fast_preview"
     assert fast_result.records[0].get("predicate") == "preview_match"
+    assert str(fast_result.records[0].get("relation_id") or "")
+    assert str(fast_result.records[0].get("evidence_ref") or "")
+
+
+def test_graph_query_fast_preview_includes_relation_and_evidence_metadata(tmp_path, monkeypatch):
+    knowledge_config = Config().knowledge
+    knowledge_config.enabled = True
+    knowledge_config.engine = "local_lexical"
+
+    source = KnowledgeSourceSpec(
+        id="preview-metadata-source",
+        name="Preview Metadata Source",
+        type="text",
+        location="",
+        content="Knowledge preview metadata sentence.",
+        enabled=True,
+        recursive=False,
+        tags=["scope:agent:demo-agent"],
+        summary="",
+    )
+    knowledge_config.sources.append(source)
+
+    monkeypatch.setattr(
+        KnowledgeManager,
+        "search",
+        lambda self, **_kwargs: {
+            "query": "preview metadata",
+            "hits": [
+                {
+                    "source_id": source.id,
+                    "source_name": source.name,
+                    "source_type": source.type,
+                    "document_path": "docs/preview.md",
+                    "document_title": "Preview",
+                    "score": 2.0,
+                    "snippet": "preview metadata",
+                    "evidence_id": "ev-test",
+                    "scope_type": "agent",
+                    "scope_id": "demo-agent",
+                    "scope_priority": 100,
+                }
+            ],
+        },
+    )
+
+    graph_ops = GraphOpsManager(tmp_path)
+    fast_result = graph_ops.graph_query(
+        config=knowledge_config,
+        query_mode="template",
+        query_text="preview metadata",
+        dataset_scope=[source.id],
+        project_scope=None,
+        include_global=True,
+        top_k=5,
+        timeout_sec=30,
+        preferred_output_mode="fast",
+    )
+
+    assert fast_result.records
+    first = fast_result.records[0]
+    assert first.get("predicate") == "preview_match"
+    assert str(first.get("relation_id") or "")
+    assert str(first.get("evidence_ref") or "")
+    assert first.get("scope_type") in {"agent", "project"}
+    assert fast_result.provenance.get("scope_filter_applied") is False
+
+    filtered_result = graph_ops.graph_query(
+        config=knowledge_config,
+        query_mode="template",
+        query_text="preview metadata",
+        dataset_scope=[source.id],
+        project_scope=None,
+        include_global=True,
+        scope_type="agent",
+        scope_id="demo-agent",
+        top_k=5,
+        timeout_sec=30,
+        preferred_output_mode="fast",
+    )
+    assert filtered_result.provenance.get("scope_filter_applied") is True
+    assert filtered_result.provenance.get("scope_type") == "agent"
+    assert filtered_result.provenance.get("scope_id") == "demo-agent"
 
 
 def test_graphify_query_prefers_enriched_graph_when_enabled(tmp_path):
