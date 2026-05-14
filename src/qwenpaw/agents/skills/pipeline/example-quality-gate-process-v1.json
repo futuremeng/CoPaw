@@ -8,25 +8,29 @@
       "id": "collect-input",
       "name": "Collect Input",
       "kind": "ingest",
-      "description": "Discover and load source files and supporting reference data."
+      "description": "Discover and load source files and supporting reference data.",
+      "prompt": "Collect source inputs and produce normalized input manifest with provenance."
     },
     {
       "id": "normalize-structure",
       "name": "Normalize Structure",
       "kind": "transform",
-      "description": "Apply heading, formatting, and structural normalization."
+      "description": "Apply heading, formatting, and structural normalization.",
+      "prompt": "Normalize structure and emit transform summary with changed sections."
     },
     {
       "id": "check-quality",
       "name": "Quality Gate",
       "kind": "validation",
-      "description": "Evaluate coverage, consistency, and compliance metrics against thresholds."
+      "description": "Evaluate coverage, consistency, and compliance metrics against thresholds.",
+      "prompt": "Evaluate quality thresholds and output pass/fail gate decision with violations."
     },
     {
       "id": "package-artifacts",
       "name": "Package Artifacts",
       "kind": "publish",
-      "description": "Emit manifests, reports, and final deliverables for downstream review."
+      "description": "Emit manifests, reports, and final deliverables for downstream review.",
+      "prompt": "Publish final artifact package and delivery manifest for downstream review."
     }
   ]
 }

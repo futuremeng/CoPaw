@@ -217,6 +217,13 @@ export interface ProjectPipelineTemplateInfo {
   version: string;
   description: string;
   steps: ProjectPipelineTemplateStep[];
+  tags?: string[];
+  system_owned?: boolean;
+  builtin_kind?: string | null;
+  entrypoint?: string | null;
+  source_project_id?: string | null;
+  source_project_template_id?: string | null;
+  source_project_template_version?: string | null;
   revision?: number;
   content_hash?: string;
   md_mtime?: number;
@@ -230,12 +237,15 @@ export interface PlatformFlowTemplateInfo {
   version: string;
   description: string;
   steps: ProjectPipelineTemplateStep[];
+  tags?: string[];
+  system_owned?: boolean;
+  builtin_kind?: string | null;
+  entrypoint?: string | null;
   revision?: number;
   content_hash?: string;
   md_mtime?: number;
   validation_errors?: PipelineValidationError[];
   compilation_status?: string;
-  tags: string[];
   source_project_id?: string | null;
   source_project_template_id?: string | null;
   source_project_template_version?: string | null;
@@ -353,6 +363,17 @@ export interface ProjectPipelineConvergence {
   highlights: string[];
 }
 
+export interface ProjectPipelineObservability {
+  stage: string;
+  duration_sec: number;
+  step_total: number;
+  step_succeeded: number;
+  step_failed: number;
+  step_running: number;
+  artifact_count: number;
+  error_class: string;
+}
+
 export interface ProjectPipelineRunDetail extends ProjectPipelineRunSummary {
   project_id: string;
   parameters: Record<string, unknown>;
@@ -364,6 +385,7 @@ export interface ProjectPipelineRunDetail extends ProjectPipelineRunSummary {
   source_platform_template_version?: string | null;
   collaboration_events: ProjectPipelineCollaborationEvent[];
   convergence: ProjectPipelineConvergence;
+  observability: ProjectPipelineObservability;
   next_actions: ProjectPipelineNextAction[];
 }
 

@@ -6,6 +6,7 @@ import { agentsApi } from "../../../api/modules/agents";
 import { providerApi } from "../../../api/modules/provider";
 import { agentApi } from "../../../api/modules/agent";
 import { chatApi } from "../../../api/modules/chat";
+import { knowledgeApi } from "../../../api/modules/knowledge";
 import AnywhereChat from "../../../components/AnywhereChat";
 import sessionApi from "../../Chat/sessionApi";
 import {
@@ -30,6 +31,7 @@ import { trackNavigation } from "../../../utils/navigationTelemetry";
 import type {
   AgentProjectSummary,
   AgentSummary,
+  ProjectPipelineRunDetail,
   PipelineValidationError,
   ProjectPipelineTemplateStep,
   ProjectPipelineRunSummary,
@@ -38,7 +40,9 @@ import type {
 import type { ActiveModelsInfo, ProviderInfo } from "../../../api/types/provider";
 import type { AgentsRunningConfig } from "../../../api/types/agent";
 import type { ChatSpec } from "../../../api/types/chat";
+import type { ProjectKnowledgeProcessingMode, ProjectKnowledgeSyncState } from "../../../api/types/knowledge";
 import { useAgentStore } from "../../../stores/agentStore";
+import { deriveBuiltinProjectKnowledgeStages } from "./builtinStages.ts";
 import styles from "./index.module.less";
 
 const { Title, Text } = Typography;
@@ -55,7 +59,6 @@ type RunItem = ProjectPipelineRunSummary & {
 
 type PipelineManagementData = {
   templates: TemplateItem[];
-  runs: RunItem[];
 };
 
 type PersistedPipelineDraftState = {
@@ -65,11 +68,13 @@ type PersistedPipelineDraftState = {
   selectedPipelineKey: string;
   selectedCurrentVersion: string;
   selectedCompareVersion: string;
-  sourceFilter: "all" | "independent" | "project";
+  sourceFilter: "all" | "independent" | "project" | "builtin";
   draftNewVersionSteps: ProjectPipelineTemplateStep[];
   draftParseStatus: "idle" | "ready" | "error";
   draftParseError: string;
 };
+
+type PipelineSourceKind = "independent" | "project" | "builtin";
 
 type PipelineGroup = {
   key: string;
@@ -78,7 +83,7 @@ type PipelineGroup = {
   description: string;
   versions: ProjectPipelineTemplateInfo[];
   projects: { id: string; name: string }[];
-  source: "independent" | "project";
+  source: PipelineSourceKind;
 };
 
 type StepDiffItem = {
@@ -96,7 +101,7 @@ type EditChatTarget = {
   isEmptyNodes: boolean;
   description?: string;
   steps?: ProjectPipelineTemplateStep[];
-  source?: "independent" | "project";
+  source?: PipelineSourceKind;
 };
 
 type PipelineSaveConflictInfo = {
@@ -110,7 +115,7 @@ type PipelineChatBindingMeta = {
   focus_binding_key: string;
   focus_id: string;
   focus_path: string;
-  focus_scope: "independent" | "project";
+  focus_scope: PipelineSourceKind;
   focus_flow_memory_path?: string;
   // Legacy compatibility fields
   binding_type: "pipeline_edit";
@@ -118,7 +123,7 @@ type PipelineChatBindingMeta = {
   pipeline_id: string;
   pipeline_name: string;
   pipeline_version: string;
-  pipeline_scope: "independent" | "project";
+  pipeline_scope: PipelineSourceKind;
   agent_id: string;
   flow_memory_path?: string;
 };
@@ -154,6 +159,7 @@ declare global {
 }
 
 const INDEPENDENT_PIPELINE_SCOPE_ID = "__independent__";
+const BUILTIN_PIPELINE_SCOPE_ID = "__builtin__";
 const PIPELINE_DRAFT_STORAGE_PREFIX = "copaw:pipelines:drafts:";
 
 const CREATE_PLAN_CONFIRM_PATTERN =
@@ -311,13 +317,21 @@ function clearPipelineDraftState(agentId: string): void {
   }
 }
 
-function getTemplateSourceKind(item: TemplateItem): "independent" | "project" {
-  return item.projectId === INDEPENDENT_PIPELINE_SCOPE_ID ? "independent" : "project";
+function getTemplateSourceKind(item: TemplateItem): PipelineSourceKind {
+  if (item.projectId === INDEPENDENT_PIPELINE_SCOPE_ID) return "independent";
+  const normalizedTags = (item.tags || [])
+    .map((tag) => String(tag || "").trim().toLowerCase())
+    .filter(Boolean);
+  const declaredBuiltin = normalizedTags.includes("builtin") || Boolean(item.system_owned && item.builtin_kind);
+  const publishedFromProject = Boolean(String(item.source_project_id || "").trim());
+  if (declaredBuiltin && !publishedFromProject) return "builtin";
+  if (item.projectId === BUILTIN_PIPELINE_SCOPE_ID) return "builtin";
+  return "project";
 }
 
 function buildPipelineGroupKey(
   templateId: string,
-  source: "independent" | "project",
+  source: PipelineSourceKind,
 ): string {
   return `${templateId}::${source}`;
 }
@@ -326,26 +340,27 @@ async function loadPipelineManagementData(
   agentId: string,
   projectList: AgentProjectSummary[],
   independentScopeLabel: string,
+  builtinScopeLabel: string,
+  projectScopeLabel: string,
 ): Promise<PipelineManagementData> {
-  const [perProject, agentTemplates] = await Promise.all([
+  const [perProject, agentTemplates, platformTemplates] = await Promise.all([
     Promise.all(
       projectList.map(async (project) => {
-        const [templatesResult, runsResult] = await Promise.allSettled([
+        const templatesResult = await Promise.allSettled([
           agentsApi.listProjectPipelineTemplates(agentId, project.id),
-          agentsApi.listProjectPipelineRuns(agentId, project.id),
         ]);
 
         return {
           project,
           templates:
-            templatesResult.status === "fulfilled"
-              ? templatesResult.value
+            templatesResult[0].status === "fulfilled"
+              ? templatesResult[0].value
               : [],
-          runs: runsResult.status === "fulfilled" ? runsResult.value : [],
         };
       }),
     ),
     agentsApi.listAgentPipelineTemplates(agentId).catch(() => []),
+    agentsApi.listPlatformFlowTemplates(agentId).catch(() => []),
   ]);
 
   const templates: TemplateItem[] = [
@@ -354,6 +369,28 @@ async function loadPipelineManagementData(
       projectId: INDEPENDENT_PIPELINE_SCOPE_ID,
       projectName: independentScopeLabel,
     })),
+    ...platformTemplates.map((tpl) => {
+      const normalizedTags = (tpl.tags || [])
+        .map((tag) => String(tag || "").trim().toLowerCase())
+        .filter(Boolean);
+      const declaredBuiltin = normalizedTags.includes("builtin") || Boolean(tpl.system_owned && tpl.builtin_kind);
+      const publishedFromProject = Boolean(String(tpl.source_project_id || "").trim());
+      if (declaredBuiltin && !publishedFromProject) {
+        return {
+          ...tpl,
+          projectId: BUILTIN_PIPELINE_SCOPE_ID,
+          projectName: builtinScopeLabel,
+        };
+      }
+
+      const sourceProjectId = String(tpl.source_project_id || "").trim();
+      const resolvedProject = projectList.find((project) => project.id === sourceProjectId);
+      return {
+        ...tpl,
+        projectId: sourceProjectId || "__project_general__",
+        projectName: resolvedProject?.name || projectScopeLabel,
+      };
+    }),
     ...perProject.flatMap((item) =>
       item.templates.map((tpl) => ({
         ...tpl,
@@ -363,27 +400,7 @@ async function loadPipelineManagementData(
     ),
   ];
 
-  const dedupedRuns = new Map<string, RunItem>();
-  perProject.forEach((item) => {
-    item.runs.forEach((run) => {
-      const normalizedRun: RunItem = {
-        ...run,
-        projectId: item.project.id,
-        projectName: item.project.name,
-      };
-      const key = buildRunIdentity(normalizedRun);
-      const existing = dedupedRuns.get(key);
-      if (!existing || runTimeValue(normalizedRun) >= runTimeValue(existing)) {
-        dedupedRuns.set(key, normalizedRun);
-      }
-    });
-  });
-
-  const runs: RunItem[] = Array.from(dedupedRuns.values()).sort(
-    (a, b) => runTimeValue(b) - runTimeValue(a),
-  );
-
-  return { templates, runs };
+  return { templates };
 }
 
 function statusTagColor(status: string): string {
@@ -442,7 +459,7 @@ function buildPipelineChatBindingMeta(params: {
   pipelineId: string;
   pipelineName: string;
   version: string;
-  scope: "independent" | "project";
+  scope: PipelineSourceKind;
   agentId?: string;
   flowMemoryPath?: string;
 }): PipelineChatBindingMeta {
@@ -750,14 +767,18 @@ function buildStepDiff(
 export default function PipelinesPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { selectedAgent, agents, setAgents } = useAgentStore();
+  const { selectedAgent, agents, setAgents, setSelectedAgent } = useAgentStore();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
-  const [runs, setRuns] = useState<RunItem[]>([]);
+  const [runsByPipelineKey, setRunsByPipelineKey] = useState<Record<string, RunItem[]>>({});
+  const [runsLoadedKeys, setRunsLoadedKeys] = useState<Record<string, boolean>>({});
+  const [runsLoadingKeys, setRunsLoadingKeys] = useState<Record<string, boolean>>({});
+  const [runsErrorByKey, setRunsErrorByKey] = useState<Record<string, string>>({});
+  const [runDetailsByKey, setRunDetailsByKey] = useState<Record<string, ProjectPipelineRunDetail>>({});
   const [selectedPipelineKey, setSelectedPipelineKey] = useState("");
-  const [sourceFilter, setSourceFilter] = useState<"all" | "independent" | "project">("all");
+  const [sourceFilter, setSourceFilter] = useState<"all" | "independent" | "project" | "builtin">("all");
   const [selectedCurrentVersion, setSelectedCurrentVersion] = useState("");
   const [selectedCompareVersion, setSelectedCompareVersion] = useState("");
   const [editMode, setEditMode] = useState(false);
@@ -800,6 +821,13 @@ export default function PipelinesPage() {
   const [providerList, setProviderList] = useState<ProviderInfo[]>([]);
   const [activeModels, setActiveModels] = useState<ActiveModelsInfo | null>(null);
   const [runningConfig, setRunningConfig] = useState<AgentsRunningConfig | null>(null);
+  const [selectedBuiltinProjectId, setSelectedBuiltinProjectId] = useState("");
+  const [builtinProcessingMode, setBuiltinProcessingMode] = useState<ProjectKnowledgeProcessingMode>("agentic");
+  const [builtinSyncState, setBuiltinSyncState] = useState<ProjectKnowledgeSyncState | null>(null);
+  const [builtinSyncLoading, setBuiltinSyncLoading] = useState(false);
+  const [builtinRunLoading, setBuiltinRunLoading] = useState(false);
+  const [projectBuiltinRunDetail, setProjectBuiltinRunDetail] = useState<ProjectPipelineRunDetail | null>(null);
+  const [projectBuiltinRunDetailLoading, setProjectBuiltinRunDetailLoading] = useState(false);
 
   const pipelineExecutionBudget = useMemo(
     () =>
@@ -822,6 +850,8 @@ export default function PipelinesPage() {
   );
 
   const independentScopeLabel = t("pipelines.independentScope");
+  const builtinScopeLabel = t("pipelines.builtin", "Built-in");
+  const projectScopeLabel = t("pipelines.project", "Project");
 
   useEffect(() => {
     let mounted = true;
@@ -863,30 +893,35 @@ export default function PipelinesPage() {
     let mounted = true;
 
     const load = async () => {
-      if (!selectedAgent) return;
-
       setLoading(true);
       setError("");
 
       try {
-        let availableAgents = agents;
-        if (availableAgents.length === 0) {
-          const listResp = await agentsApi.listAgents();
-          availableAgents = listResp.agents;
-          if (mounted) setAgents(listResp.agents);
+        const availableAgentsResponse = agents.length > 0 ? agents : await agentsApi.listAgents();
+        const availableAgents = Array.isArray(availableAgentsResponse)
+          ? availableAgentsResponse
+          : availableAgentsResponse.agents;
+        if (!mounted) return;
+        setAgents(availableAgents);
+
+        const effectiveAgentId = selectedAgent || availableAgents[0]?.id || "default";
+        if (!selectedAgent) {
+          setSelectedAgent(effectiveAgentId);
         }
 
-        const agent = getCurrentAgent(availableAgents, selectedAgent);
+        const agent = getCurrentAgent(availableAgents, effectiveAgentId);
         const projectList = agent?.projects ?? [];
         const data = await loadPipelineManagementData(
-          selectedAgent,
+          effectiveAgentId,
           projectList,
           independentScopeLabel,
+          builtinScopeLabel,
+          projectScopeLabel,
         );
 
         if (!mounted) return;
 
-        const persisted = readPipelineDraftState(selectedAgent);
+        const persisted = readPipelineDraftState(effectiveAgentId);
         const persistedTemplates = (persisted?.templates || []).filter(
           (item) => item.projectId === INDEPENDENT_PIPELINE_SCOPE_ID,
         );
@@ -904,7 +939,11 @@ export default function PipelinesPage() {
         );
 
         setTemplates(mergedTemplates);
-        setRuns(data.runs);
+        setRunsByPipelineKey({});
+        setRunsLoadedKeys({});
+        setRunsLoadingKeys({});
+        setRunsErrorByKey({});
+        setRunDetailsByKey({});
         setDraftPipelineKeys(restoredDraftKeys);
 
         if (persisted && restoredDraftKeys.length > 0) {
@@ -921,12 +960,12 @@ export default function PipelinesPage() {
           setDraftNewVersionSteps(persisted.draftNewVersionSteps || []);
           setDraftParseStatus(persisted.draftParseStatus || "idle");
           setDraftParseError(persisted.draftParseError || "");
-            message.info(
-              t(
-                "pipelines.localDraftRestored",
-                "已恢复本地未保存草稿。",
-              ),
-            );
+          message.info(
+            t(
+              "pipelines.localDraftRestored",
+              "已恢复本地未保存草稿。",
+            ),
+          );
         }
       } catch (err) {
         console.error("failed to load pipeline management data", err);
@@ -943,12 +982,70 @@ export default function PipelinesPage() {
       }
     };
 
-    load();
+    void load();
 
     return () => {
       mounted = false;
     };
-  }, [agents, independentScopeLabel, selectedAgent, setAgents, t]);
+  }, [agents, builtinScopeLabel, independentScopeLabel, projectScopeLabel, selectedAgent, setAgents, setSelectedAgent, t]);
+
+  useEffect(() => {
+    if (loading || templates.length > 0) {
+      return;
+    }
+
+    const fallbackAgentId = selectedAgent || agents[0]?.id || "default";
+    if (!fallbackAgentId) {
+      return;
+    }
+
+    const loadFallbackTemplates = async () => {
+      try {
+        const [agentTemplates, platformTemplates] = await Promise.all([
+          agentsApi.listAgentPipelineTemplates(fallbackAgentId).catch(() => []),
+          agentsApi.listPlatformFlowTemplates(fallbackAgentId).catch(() => []),
+        ]);
+        setTemplates([
+          ...agentTemplates.map((tpl) => ({
+            ...tpl,
+            projectId: INDEPENDENT_PIPELINE_SCOPE_ID,
+            projectName: independentScopeLabel,
+          })),
+          ...platformTemplates.map((tpl) => {
+            const normalizedTags = (tpl.tags || [])
+              .map((tag) => String(tag || "").trim().toLowerCase())
+              .filter(Boolean);
+            const declaredBuiltin = normalizedTags.includes("builtin") || Boolean(tpl.system_owned && tpl.builtin_kind);
+            const publishedFromProject = Boolean(String(tpl.source_project_id || "").trim());
+            if (declaredBuiltin && !publishedFromProject) {
+              return {
+                ...tpl,
+                projectId: BUILTIN_PIPELINE_SCOPE_ID,
+                projectName: builtinScopeLabel,
+              };
+            }
+
+            const sourceProjectId = String(tpl.source_project_id || "").trim();
+            const resolvedProject = projects.find((project) => project.id === sourceProjectId);
+            return {
+              ...tpl,
+              projectId: sourceProjectId || "__project_general__",
+              projectName: resolvedProject?.name || projectScopeLabel,
+            };
+          }),
+        ]);
+        setRunsByPipelineKey({});
+        setRunsLoadedKeys({});
+        setRunsLoadingKeys({});
+        setRunsErrorByKey({});
+        setRunDetailsByKey({});
+      } catch (err) {
+        console.warn("failed to load fallback pipeline templates", err);
+      }
+    };
+
+    void loadFallbackTemplates();
+  }, [agents, builtinScopeLabel, independentScopeLabel, loading, projectScopeLabel, projects, selectedAgent, templates.length]);
 
   useEffect(() => {
     designChatSessionIdRef.current = designChatSessionId;
@@ -956,9 +1053,12 @@ export default function PipelinesPage() {
 
   const pipelineGroups = useMemo<PipelineGroup[]>(() => {
     const filteredTemplates = templates.filter((item) => {
-      const isIndependent = item.projectId === INDEPENDENT_PIPELINE_SCOPE_ID;
-      if (sourceFilter === "independent") return isIndependent;
-      if (sourceFilter === "project") return !isIndependent;
+      const sourceKind = getTemplateSourceKind(item);
+      if (sourceFilter === "independent") return sourceKind === "independent";
+      if (sourceFilter === "project") return sourceKind === "project";
+      if (sourceFilter === "builtin") {
+        return sourceKind === "builtin";
+      }
       return true;
     });
 
@@ -985,6 +1085,18 @@ export default function PipelinesPage() {
               version: item.version,
               description: item.description,
               steps: item.steps,
+              tags: item.tags,
+              system_owned: item.system_owned,
+              builtin_kind: item.builtin_kind,
+              entrypoint: item.entrypoint,
+              source_project_id: item.source_project_id,
+              source_project_template_id: item.source_project_template_id,
+              source_project_template_version: item.source_project_template_version,
+              revision: item.revision,
+              content_hash: item.content_hash,
+              md_mtime: item.md_mtime,
+              validation_errors: item.validation_errors,
+              compilation_status: item.compilation_status,
             });
           }
           if (!projectMap.has(item.projectId)) {
@@ -1023,6 +1135,395 @@ export default function PipelinesPage() {
     [pipelineGroups, selectedPipelineKey],
   );
 
+  const selectedIsBuiltinProjectKnowledgePipeline = useMemo(() => {
+    if (!selectedPipeline) return false;
+    const selectedVersion = selectedPipeline.versions.find(
+      (version) => normalizeVersion(version.version) === selectedCurrentVersion,
+    ) || selectedPipeline.versions[0];
+    if (!selectedVersion) return false;
+
+    const normalizedTags = (selectedVersion.tags || [])
+      .map((tag) => String(tag || "").trim().toLowerCase())
+      .filter(Boolean);
+    return (
+      selectedPipeline.source === "builtin"
+      && (
+        selectedVersion.builtin_kind === "project-knowledge-governance"
+        || (
+          normalizedTags.includes("builtin")
+          && normalizedTags.includes("project")
+          && normalizedTags.includes("knowledge")
+        )
+      )
+    );
+  }, [selectedCurrentVersion, selectedPipeline]);
+
+  const selectedIsProjectBuiltinKnowledgeWorkflowPipeline = useMemo(() => {
+    if (!selectedPipeline) return false;
+    const selectedVersion = selectedPipeline.versions.find(
+      (version) => normalizeVersion(version.version) === selectedCurrentVersion,
+    ) || selectedPipeline.versions[0];
+    if (!selectedVersion) return false;
+
+    return (
+      selectedPipeline.source === "project"
+      && Boolean(selectedVersion.system_owned)
+      && selectedVersion.builtin_kind === "knowledge-processing"
+    );
+  }, [selectedCurrentVersion, selectedPipeline]);
+
+  useEffect(() => {
+    if (selectedBuiltinProjectId) return;
+    const firstProjectId = projects[0]?.id || "";
+    if (firstProjectId) {
+      setSelectedBuiltinProjectId(firstProjectId);
+    }
+  }, [projects, selectedBuiltinProjectId]);
+
+  useEffect(() => {
+    if (!selectedIsProjectBuiltinKnowledgeWorkflowPipeline) return;
+    const allowedProjects = selectedPipeline?.projects || [];
+    if (allowedProjects.length === 0) {
+      if (selectedBuiltinProjectId) {
+        setSelectedBuiltinProjectId("");
+      }
+      return;
+    }
+    if (!allowedProjects.some((item) => item.id === selectedBuiltinProjectId)) {
+      setSelectedBuiltinProjectId(allowedProjects[0].id);
+    }
+  }, [selectedBuiltinProjectId, selectedIsProjectBuiltinKnowledgeWorkflowPipeline, selectedPipeline]);
+
+  const loadRunsForPipeline = useCallback(async (
+    pipeline: PipelineGroup,
+    options?: { force?: boolean },
+  ) => {
+    if (!selectedAgent) {
+      return;
+    }
+
+    const force = Boolean(options?.force);
+    const key = pipeline.key;
+    if (!force && (runsLoadedKeys[key] || runsLoadingKeys[key])) {
+      return;
+    }
+
+    if (pipeline.source !== "project") {
+      setRunsByPipelineKey((prev) => ({ ...prev, [key]: [] }));
+      setRunsLoadedKeys((prev) => ({ ...prev, [key]: true }));
+      setRunsLoadingKeys((prev) => ({ ...prev, [key]: false }));
+      setRunsErrorByKey((prev) => ({ ...prev, [key]: "" }));
+      return;
+    }
+
+    setRunsLoadingKeys((prev) => ({ ...prev, [key]: true }));
+    setRunsErrorByKey((prev) => ({ ...prev, [key]: "" }));
+
+    try {
+      const projectMap = new Map(pipeline.projects.map((item) => [item.id, item.name]));
+      const results = await Promise.allSettled(
+        pipeline.projects.map((project) =>
+          agentsApi.listProjectPipelineRuns(selectedAgent, project.id)
+            .then((projectRuns) => ({
+              projectId: project.id,
+              projectName: project.name,
+              runs: projectRuns,
+            })),
+        ),
+      );
+
+      const dedupedRuns = new Map<string, RunItem>();
+      results.forEach((result) => {
+        if (result.status !== "fulfilled") {
+          return;
+        }
+        result.value.runs
+          .filter((run) => run.template_id === pipeline.id)
+          .forEach((run) => {
+            const normalizedRun: RunItem = {
+              ...run,
+              projectId: result.value.projectId,
+              projectName: result.value.projectName || projectMap.get(result.value.projectId) || result.value.projectId,
+            };
+            const runKey = buildRunIdentity(normalizedRun);
+            const existing = dedupedRuns.get(runKey);
+            if (!existing || runTimeValue(normalizedRun) >= runTimeValue(existing)) {
+              dedupedRuns.set(runKey, normalizedRun);
+            }
+          });
+      });
+
+      const nextRuns = Array.from(dedupedRuns.values()).sort((a, b) => runTimeValue(b) - runTimeValue(a));
+      setRunsByPipelineKey((prev) => ({ ...prev, [key]: nextRuns }));
+      setRunsLoadedKeys((prev) => ({ ...prev, [key]: true }));
+    } catch (err) {
+      console.warn("failed to load project pipeline runs", err);
+      setRunsErrorByKey((prev) => ({
+        ...prev,
+        [key]: t("pipelines.loadRunsFailed", "Failed to load pipeline runs."),
+      }));
+    } finally {
+      setRunsLoadingKeys((prev) => ({ ...prev, [key]: false }));
+    }
+  }, [runsLoadedKeys, runsLoadingKeys, selectedAgent, t]);
+
+  const refreshBuiltinSyncState = useCallback(async () => {
+    if (!selectedIsBuiltinProjectKnowledgePipeline || !selectedBuiltinProjectId) {
+      setBuiltinSyncState(null);
+      return;
+    }
+    setBuiltinSyncLoading(true);
+    try {
+      const state = await knowledgeApi.getProjectKnowledgeSyncStatus({
+        projectId: selectedBuiltinProjectId,
+      });
+      setBuiltinSyncState(state);
+    } catch (err) {
+      console.warn("failed to load builtin project knowledge pipeline state", err);
+      setBuiltinSyncState(null);
+    } finally {
+      setBuiltinSyncLoading(false);
+    }
+  }, [selectedBuiltinProjectId, selectedIsBuiltinProjectKnowledgePipeline]);
+
+  useEffect(() => {
+    if (!selectedIsBuiltinProjectKnowledgePipeline || !selectedBuiltinProjectId) {
+      setBuiltinSyncState(null);
+      return;
+    }
+    void refreshBuiltinSyncState();
+    const timer = window.setInterval(() => {
+      void refreshBuiltinSyncState();
+    }, 3000);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [refreshBuiltinSyncState, selectedBuiltinProjectId, selectedIsBuiltinProjectKnowledgePipeline]);
+
+  const handleRunBuiltinProjectKnowledgePipeline = useCallback(async () => {
+    if (!selectedBuiltinProjectId || builtinRunLoading) {
+      return;
+    }
+    setBuiltinRunLoading(true);
+    try {
+      await knowledgeApi.runProjectKnowledgeSync({
+        projectId: selectedBuiltinProjectId,
+        trigger: "pipelines_builtin",
+        force: true,
+        processingMode: builtinProcessingMode,
+      });
+      message.success(
+        t("pipelines.builtinRunStarted", "Built-in project knowledge pipeline started."),
+      );
+      await refreshBuiltinSyncState();
+    } catch (err) {
+      console.error("failed to run built-in project knowledge pipeline", err);
+      message.error(
+        t("pipelines.builtinRunFailed", "Failed to start built-in project knowledge pipeline."),
+      );
+    } finally {
+      setBuiltinRunLoading(false);
+    }
+  }, [
+    builtinProcessingMode,
+    builtinRunLoading,
+    refreshBuiltinSyncState,
+    selectedBuiltinProjectId,
+    t,
+  ]);
+
+  const handleRetryBuiltinProjectKnowledgePipeline = useCallback(async () => {
+    if (!selectedBuiltinProjectId || builtinRunLoading) {
+      return;
+    }
+    setBuiltinRunLoading(true);
+    try {
+      await knowledgeApi.runProjectKnowledgeSync({
+        projectId: selectedBuiltinProjectId,
+        trigger: "pipelines_builtin_retry",
+        force: true,
+        processingMode: builtinProcessingMode,
+        quantizationStage: builtinSyncState?.quantization_stage,
+      });
+      message.success(
+        t("pipelines.builtinRetryStarted", "Built-in project knowledge pipeline retry started."),
+      );
+      await refreshBuiltinSyncState();
+    } catch (err) {
+      console.error("failed to retry built-in project knowledge pipeline", err);
+      message.error(
+        t("pipelines.builtinRetryFailed", "Failed to retry built-in project knowledge pipeline."),
+      );
+    } finally {
+      setBuiltinRunLoading(false);
+    }
+  }, [
+    builtinProcessingMode,
+    builtinRunLoading,
+    builtinSyncState?.quantization_stage,
+    refreshBuiltinSyncState,
+    selectedBuiltinProjectId,
+    t,
+  ]);
+
+  const projectBuiltinLatestRun = useMemo(() => {
+    if (!selectedIsProjectBuiltinKnowledgeWorkflowPipeline || !selectedBuiltinProjectId || !selectedPipeline) {
+      return null;
+    }
+    const projectBuiltinPipelineKey = buildPipelineGroupKey(
+      selectedPipeline.id,
+      "project",
+    );
+    const candidates = (runsByPipelineKey[projectBuiltinPipelineKey] || [])
+      .filter(
+        (item) => item.projectId === selectedBuiltinProjectId && item.template_id === selectedPipeline.id,
+      )
+      .sort((a, b) => runTimeValue(b) - runTimeValue(a));
+    return candidates[0] || null;
+  }, [runsByPipelineKey, selectedBuiltinProjectId, selectedIsProjectBuiltinKnowledgeWorkflowPipeline, selectedPipeline]);
+
+  useEffect(() => {
+    if (!selectedIsProjectBuiltinKnowledgeWorkflowPipeline || !selectedAgent || !selectedBuiltinProjectId || !projectBuiltinLatestRun) {
+      setProjectBuiltinRunDetail(null);
+      return;
+    }
+
+    let cancelled = false;
+    setProjectBuiltinRunDetailLoading(true);
+    agentsApi
+      .getProjectPipelineRun(selectedAgent, selectedBuiltinProjectId, projectBuiltinLatestRun.id)
+      .then((detail) => {
+        if (!cancelled) {
+          setProjectBuiltinRunDetail(detail);
+        }
+      })
+      .catch((err) => {
+        console.warn("failed to load project builtin pipeline run detail", err);
+        if (!cancelled) {
+          setProjectBuiltinRunDetail(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setProjectBuiltinRunDetailLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectBuiltinLatestRun, selectedAgent, selectedBuiltinProjectId, selectedIsProjectBuiltinKnowledgeWorkflowPipeline]);
+
+  const projectBuiltinRunProgress = useMemo(() => {
+    if (!projectBuiltinRunDetail || projectBuiltinRunDetail.steps.length === 0) {
+      return null;
+    }
+    const doneCount = projectBuiltinRunDetail.steps.filter((step) =>
+      ["succeeded", "completed", "skipped"].includes(String(step.status || "").toLowerCase()),
+    ).length;
+    return Math.round((doneCount / projectBuiltinRunDetail.steps.length) * 100);
+  }, [projectBuiltinRunDetail]);
+
+  const projectBuiltinCurrentStage = useMemo(() => {
+    if (!projectBuiltinRunDetail || projectBuiltinRunDetail.steps.length === 0) {
+      return "-";
+    }
+    const runningStep = projectBuiltinRunDetail.steps.find(
+      (step) => String(step.status || "").toLowerCase() === "running",
+    );
+    if (runningStep) {
+      return runningStep.name || runningStep.id;
+    }
+    const failedStep = projectBuiltinRunDetail.steps.find(
+      (step) => String(step.status || "").toLowerCase() === "failed",
+    );
+    if (failedStep) {
+      return failedStep.name || failedStep.id;
+    }
+    const lastDoneStep = [...projectBuiltinRunDetail.steps]
+      .reverse()
+      .find((step) => ["succeeded", "completed", "skipped"].includes(String(step.status || "").toLowerCase()));
+    return lastDoneStep?.name || lastDoneStep?.id || "-";
+  }, [projectBuiltinRunDetail]);
+
+  const projectBuiltinLastError = useMemo(() => {
+    if (!projectBuiltinRunDetail) return "";
+    const failedStep = projectBuiltinRunDetail.steps.find(
+      (step) => String(step.status || "").toLowerCase() === "failed",
+    );
+    if (!failedStep) return "";
+    const metrics = failedStep.metrics as Record<string, unknown>;
+    const metricError = typeof metrics?.error === "string"
+      ? metrics.error
+      : typeof metrics?.message === "string"
+        ? metrics.message
+        : "";
+    if (metricError) {
+      return metricError;
+    }
+    if (Array.isArray(failedStep.evidence) && failedStep.evidence.length > 0) {
+      return failedStep.evidence[0];
+    }
+    return failedStep.name || failedStep.id;
+  }, [projectBuiltinRunDetail]);
+
+  const handleRunProjectBuiltinKnowledgeWorkflowPipeline = useCallback(async () => {
+    if (!selectedAgent || !selectedBuiltinProjectId || builtinRunLoading || !selectedPipeline) {
+      return;
+    }
+    setBuiltinRunLoading(true);
+    try {
+      await agentsApi.createProjectPipelineRun(selectedAgent, selectedBuiltinProjectId, {
+        template_id: selectedPipeline.id,
+      });
+      message.success(
+        t("pipelines.projectBuiltinRunStarted", "Built-in project workflow run started."),
+      );
+      await loadRunsForPipeline(selectedPipeline, { force: true });
+    } catch (err) {
+      console.error("failed to run project builtin knowledge workflow", err);
+      message.error(
+        t("pipelines.projectBuiltinRunFailed", "Failed to start built-in project workflow run."),
+      );
+    } finally {
+      setBuiltinRunLoading(false);
+    }
+  }, [builtinRunLoading, loadRunsForPipeline, selectedAgent, selectedBuiltinProjectId, selectedPipeline, t]);
+
+  const handleRetryProjectBuiltinKnowledgeWorkflowPipeline = useCallback(async () => {
+    if (!selectedAgent || !selectedBuiltinProjectId || !projectBuiltinLatestRun || builtinRunLoading || !selectedPipeline) {
+      return;
+    }
+    setBuiltinRunLoading(true);
+    try {
+      await agentsApi.retryProjectPipelineRun(
+        selectedAgent,
+        selectedBuiltinProjectId,
+        projectBuiltinLatestRun.id,
+        { note: "retry from pipelines" },
+      );
+      message.success(
+        t("pipelines.projectBuiltinRetryStarted", "Built-in project workflow retry started."),
+      );
+      await loadRunsForPipeline(selectedPipeline, { force: true });
+    } catch (err) {
+      console.error("failed to retry project builtin knowledge workflow", err);
+      message.error(
+        t("pipelines.projectBuiltinRetryFailed", "Failed to retry built-in project workflow run."),
+      );
+    } finally {
+      setBuiltinRunLoading(false);
+    }
+  }, [
+    builtinRunLoading,
+    loadRunsForPipeline,
+    projectBuiltinLatestRun,
+    selectedAgent,
+    selectedBuiltinProjectId,
+    selectedPipeline,
+    t,
+  ]);
+
   const currentTemplate = useMemo(() => {
     if (!selectedPipeline) return null;
     return (
@@ -1057,6 +1558,19 @@ export default function PipelinesPage() {
     if (!selectedPipeline) return false;
     return draftPipelineKeys.includes(selectedPipeline.key);
   }, [draftPipelineKeys, selectedPipeline]);
+
+  const selectedPipelineEditable = useMemo(() => {
+    if (!selectedPipeline || !currentTemplate) return false;
+    return (
+      selectedPipeline.source !== "builtin"
+      && !currentTemplate.system_owned
+    );
+  }, [currentTemplate, selectedPipeline]);
+
+  const builtinRuntimeStages = useMemo(
+    () => deriveBuiltinProjectKnowledgeStages(builtinSyncState),
+    [builtinSyncState],
+  );
 
   const hasUnsavedDrafts = draftPipelineKeys.length > 0;
 
@@ -1146,9 +1660,15 @@ export default function PipelinesPage() {
         selectedAgent,
         projects,
         independentScopeLabel,
+        builtinScopeLabel,
+        projectScopeLabel,
       );
       setTemplates(data.templates);
-      setRuns(data.runs);
+      setRunsByPipelineKey({});
+      setRunsLoadedKeys({});
+      setRunsLoadingKeys({});
+      setRunsErrorByKey({});
+      setRunDetailsByKey({});
       const remoteDraft = await agentsApi.getPipelineDraft(selectedAgent, selectedTemplateItem.id);
       if (remoteDraft.steps && remoteDraft.steps.length > 0) {
         setDraftNewVersionSteps(remoteDraft.steps);
@@ -1178,8 +1698,10 @@ export default function PipelinesPage() {
       message.error(t("pipelines.conflictRefreshFailed"));
     }
   }, [
+    builtinScopeLabel,
     conflictLocalDraftBackup,
     independentScopeLabel,
+    projectScopeLabel,
     projects,
     selectedAgent,
     selectedTemplateItem,
@@ -1271,6 +1793,13 @@ export default function PipelinesPage() {
     });
   };
 
+  const requestLoadSelectedPipelineRuns = useCallback((force = false) => {
+    if (!selectedPipeline) {
+      return;
+    }
+    void loadRunsForPipeline(selectedPipeline, { force });
+  }, [loadRunsForPipeline, selectedPipeline]);
+
   const newVersionDiffItems = useMemo(
     () =>
       compareTemplate && currentTemplate
@@ -1299,19 +1828,78 @@ export default function PipelinesPage() {
     [draftDiffDetailKeys, expandedDraftDiffKeys],
   );
 
+  const allLoadedRuns = useMemo(
+    () => Object.values(runsByPipelineKey).flat(),
+    [runsByPipelineKey],
+  );
+
+  const hasAnyRunsLoaded = useMemo(
+    () => Object.values(runsLoadedKeys).some(Boolean),
+    [runsLoadedKeys],
+  );
+
   const runningCount = useMemo(
-    () => runs.filter((run) => run.status === "running").length,
-    [runs],
+    () => allLoadedRuns.filter((run) => run.status === "running").length,
+    [allLoadedRuns],
+  );
+
+  const selectedRunsLoaded = useMemo(
+    () => (selectedPipeline ? Boolean(runsLoadedKeys[selectedPipeline.key]) : false),
+    [runsLoadedKeys, selectedPipeline],
+  );
+
+  const selectedRunsLoading = useMemo(
+    () => (selectedPipeline ? Boolean(runsLoadingKeys[selectedPipeline.key]) : false),
+    [runsLoadingKeys, selectedPipeline],
+  );
+
+  const selectedRunsError = useMemo(
+    () => (selectedPipeline ? (runsErrorByKey[selectedPipeline.key] || "") : ""),
+    [runsErrorByKey, selectedPipeline],
   );
 
   const visibleRuns = useMemo(() => {
-    const base = selectedPipeline
-      ? selectedPipeline.source === "project"
-        ? runs.filter((run) => run.template_id === selectedPipeline.id)
-        : []
-      : runs;
-    return base.slice(0, 30);
-  }, [runs, selectedPipeline]);
+    if (!selectedPipeline || selectedPipeline.source !== "project") {
+      return [];
+    }
+    return (runsByPipelineKey[selectedPipeline.key] || []).slice(0, 30);
+  }, [runsByPipelineKey, selectedPipeline]);
+
+  useEffect(() => {
+    if (!selectedAgent || !selectedPipeline || selectedPipeline.source !== "project" || !selectedRunsLoaded) {
+      return;
+    }
+
+    const targets = visibleRuns
+      .slice(0, 10)
+      .filter((run) => !runDetailsByKey[buildRunIdentity(run)]);
+    if (targets.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+    void Promise.allSettled(
+      targets.map((run) =>
+        agentsApi
+          .getProjectPipelineRun(selectedAgent, run.projectId, run.id)
+          .then((detail) => ({ run, detail })),
+      ),
+    ).then((results) => {
+      if (cancelled) return;
+      const patch: Record<string, ProjectPipelineRunDetail> = {};
+      results.forEach((result) => {
+        if (result.status !== "fulfilled") return;
+        patch[buildRunIdentity(result.value.run)] = result.value.detail;
+      });
+      if (Object.keys(patch).length > 0) {
+        setRunDetailsByKey((prev) => ({ ...prev, ...patch }));
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [runDetailsByKey, selectedAgent, selectedPipeline, selectedRunsLoaded, visibleRuns]);
 
   useEffect(() => {
     if (!selectedAgent) return;
@@ -1447,6 +2035,7 @@ export default function PipelinesPage() {
       const targetPipelineName = target?.pipelineName || selectedPipeline?.name || selectedPipeline?.id || "unknown";
       const targetVersion = normalizeVersion(target?.version || currentTemplate?.version || "latest");
       const targetScope = target?.source || selectedPipeline?.source || "independent";
+      const designScope = targetScope === "builtin" ? "project" : targetScope;
       const targetDescription = target?.description || currentTemplate?.description || "";
       const targetSteps = (target?.steps && target.steps.length > 0)
         ? target.steps
@@ -1509,7 +2098,7 @@ export default function PipelinesPage() {
       const editPlaceholder = buildPipelineDesignEditContextPrompt({
         agentId: selectedAgent,
         source,
-        scope: targetScope,
+        scope: designScope,
         pipelineId: normalizedTarget.pipelineId,
         pipelineName: targetPipelineName,
         version: targetVersion,
@@ -1568,7 +2157,9 @@ export default function PipelinesPage() {
         pipelineId: normalizedTarget.pipelineId,
         pipelineName: normalizedTarget.pipelineName,
         version: normalizedTarget.version,
-        scope: normalizedTarget.source || "independent",
+        scope: normalizedTarget.source === "builtin"
+          ? "project"
+          : (normalizedTarget.source || "independent"),
         agentId: selectedAgent,
         flowMemoryPath:
           flowMemoryRelativePath ||
@@ -1740,8 +2331,8 @@ export default function PipelinesPage() {
       );
       const preservedDraftKeys = draftPipelineKeys.filter((key) => key !== savedDraftKey);
 
-      let hasStreamFailure = false;
-      let streamFailureStatusCode = 0;
+      const hasStreamFailure = false;
+      const streamFailureStatusCode = 0;
       let streamFailureDetail = "";
       let streamFailureDetailRaw: unknown = null;
       let streamReachedDone = false;
@@ -1782,17 +2373,8 @@ export default function PipelinesPage() {
               ...prev.slice(-7),
               { event: event.event, ts: Date.now(), detail: detailText },
             ]);
-
             if (event.event === "saved") {
-              message.loading({
-                key: saveToastKey,
-                content: t("pipelines.saveDraftSaved"),
-                duration: 0,
-              });
-            } else if (event.event === "validation_failed" || event.event === "save_failed") {
               const payload = event.payload || {};
-              hasStreamFailure = true;
-              streamFailureStatusCode = Number(payload.status_code || 0) || 500;
               streamFailureDetail =
                 typeof payload.detail === "string"
                   ? payload.detail
@@ -1861,10 +2443,16 @@ export default function PipelinesPage() {
         selectedAgent,
         projects,
         independentScopeLabel,
+        builtinScopeLabel,
+        projectScopeLabel,
       );
 
       setTemplates([...preservedDraftTemplates, ...data.templates]);
-      setRuns(data.runs);
+      setRunsByPipelineKey({});
+      setRunsLoadedKeys({});
+      setRunsLoadingKeys({});
+      setRunsErrorByKey({});
+      setRunDetailsByKey({});
       setDraftPipelineKeys(preservedDraftKeys);
       setSourceFilter("independent");
       setSelectedPipelineKey(buildPipelineGroupKey(safeTemplateId, "independent"));
@@ -2900,6 +3488,7 @@ export default function PipelinesPage() {
               { value: "all", label: t("pipelines.sourceFilterAll") },
               { value: "independent", label: t("pipelines.sourceFilterIndependent") },
               { value: "project", label: t("pipelines.sourceFilterProject") },
+              { value: "builtin", label: t("pipelines.builtin", "Built-in") },
             ]}
           />
           <Button
@@ -2938,13 +3527,13 @@ export default function PipelinesPage() {
           <Text className={styles.metricLabel}>
             {t("pipelines.totalRuns")}
           </Text>
-          <div className={styles.metricValue}>{runs.length}</div>
+          <div className={styles.metricValue}>{hasAnyRunsLoaded ? allLoadedRuns.length : "-"}</div>
         </Card>
         <Card size="small" className={styles.metricCard}>
           <Text className={styles.metricLabel}>
             {t("pipelines.runningRuns")}
           </Text>
-          <div className={styles.metricValue}>{runningCount}</div>
+          <div className={styles.metricValue}>{hasAnyRunsLoaded ? runningCount : "-"}</div>
         </Card>
       </div>
 
@@ -2989,6 +3578,11 @@ export default function PipelinesPage() {
                 <div className={styles.list}>
                   {pipelineGroups.map((item) => {
                     const selected = item.key === selectedPipelineKey;
+                    const isProjectBuiltinKnowledge =
+                      item.source === "project"
+                      && item.versions.some(
+                        (version) => Boolean(version.system_owned) && version.builtin_kind === "knowledge-processing",
+                      );
                     return (
                       <button
                         key={item.key}
@@ -2999,11 +3593,20 @@ export default function PipelinesPage() {
                         <div className={styles.listItemHeader}>
                           <Text strong>{item.name}</Text>
                           <Tag>{item.versions.length}</Tag>
-                          <Tag color={item.source === "independent" ? "cyan" : "gold"}>
-                            {item.source === "independent"
-                              ? t("pipelines.sourceIndependent")
-                              : t("pipelines.sourceProject")}
-                          </Tag>
+                          {isProjectBuiltinKnowledge ? (
+                            <>
+                              <Tag color="purple">{t("pipelines.builtin", "Built-in")}</Tag>
+                              <Tag color="gold">{t("pipelines.project")}</Tag>
+                            </>
+                          ) : (
+                            <Tag color={item.source === "independent" ? "cyan" : item.source === "project" ? "gold" : "purple"}>
+                              {item.source === "independent"
+                                ? t("pipelines.independent")
+                                : item.source === "project"
+                                  ? t("pipelines.project")
+                                  : t("pipelines.builtin", "Built-in")}
+                            </Tag>
+                          )}
                           {draftPipelineKeys.includes(item.key) ? (
                             <Tag color="warning">
                               {t("pipelines.draftBadge")}
@@ -3033,6 +3636,78 @@ export default function PipelinesPage() {
               className={styles.columnCard}
               extra={
                 <div className={styles.nodesActions}>
+                  {selectedIsBuiltinProjectKnowledgePipeline ? (
+                    <>
+                      <Select
+                        size="small"
+                        className={styles.versionSelect}
+                        value={selectedBuiltinProjectId || undefined}
+                        placeholder={t("pipelines.projectLabel", { name: "" })}
+                        options={projects.map((project) => ({
+                          label: project.name,
+                          value: project.id,
+                        }))}
+                        onChange={(value) => setSelectedBuiltinProjectId(value)}
+                      />
+                      <Select
+                        size="small"
+                        className={styles.versionSelect}
+                        value={builtinProcessingMode}
+                        options={[
+                          { label: "Fast", value: "fast" },
+                          { label: "NLP", value: "nlp" },
+                          { label: "Agentic", value: "agentic" },
+                        ]}
+                        onChange={(value) => setBuiltinProcessingMode(value as ProjectKnowledgeProcessingMode)}
+                      />
+                      <Button
+                        size="small"
+                        loading={builtinRunLoading}
+                        disabled={builtinRunLoading || !selectedBuiltinProjectId}
+                        onClick={() => void handleRunBuiltinProjectKnowledgePipeline()}
+                      >
+                        {t("pipelines.run", "Run")}
+                      </Button>
+                      <Button
+                        size="small"
+                        loading={builtinRunLoading}
+                        disabled={builtinRunLoading || !selectedBuiltinProjectId}
+                        onClick={() => void handleRetryBuiltinProjectKnowledgePipeline()}
+                      >
+                        {t("pipelines.retry", "Retry")}
+                      </Button>
+                    </>
+                  ) : selectedIsProjectBuiltinKnowledgeWorkflowPipeline ? (
+                    <>
+                      <Select
+                        size="small"
+                        className={styles.versionSelect}
+                        value={selectedBuiltinProjectId || undefined}
+                        placeholder={t("pipelines.projectLabel", { name: "" })}
+                        options={(selectedPipeline?.projects || []).map((project) => ({
+                          label: project.name,
+                          value: project.id,
+                        }))}
+                        onChange={(value) => setSelectedBuiltinProjectId(value)}
+                      />
+                      <Button
+                        size="small"
+                        loading={builtinRunLoading}
+                        disabled={builtinRunLoading || !selectedBuiltinProjectId || !selectedAgent}
+                        onClick={() => void handleRunProjectBuiltinKnowledgeWorkflowPipeline()}
+                      >
+                        {t("pipelines.run", "Run")}
+                      </Button>
+                      <Button
+                        size="small"
+                        loading={builtinRunLoading}
+                        disabled={builtinRunLoading || !selectedBuiltinProjectId || !projectBuiltinLatestRun || !selectedAgent}
+                        onClick={() => void handleRetryProjectBuiltinKnowledgeWorkflowPipeline()}
+                      >
+                        {t("pipelines.retry", "Retry")}
+                      </Button>
+                    </>
+                  ) : null}
                   <Select
                     size="small"
                     className={styles.versionSelect}
@@ -3074,7 +3749,7 @@ export default function PipelinesPage() {
                       size="small"
                       type="primary"
                       loading={designChatStarting}
-                      disabled={!currentTemplate || designChatStarting}
+                      disabled={!currentTemplate || designChatStarting || !selectedPipelineEditable}
                       onClick={() => void handleEnterEditMode()}
                     >
                       {t("pipelines.enterEdit")}
@@ -3083,6 +3758,83 @@ export default function PipelinesPage() {
                 </div>
               }
             >
+              {selectedIsBuiltinProjectKnowledgePipeline ? (
+                <div className={styles.list} style={{ marginBottom: 12 }}>
+                  <div className={styles.listItemStatic}>
+                    <div className={styles.listItemHeader}>
+                      <Text strong>{t("pipelines.builtinRuntime", "Runtime Status")}</Text>
+                      <Tag color={statusTagColor(String(builtinSyncState?.status || "idle"))}>
+                        {String(builtinSyncState?.status || "idle")}
+                      </Tag>
+                      {builtinSyncLoading ? <Tag>{t("common.loading", "Loading")}</Tag> : null}
+                    </div>
+                    <Text type="secondary">
+                      {t("pipelines.projectLabel", {
+                        name: projects.find((item) => item.id === selectedBuiltinProjectId)?.name || selectedBuiltinProjectId || "-",
+                      })}
+                    </Text>
+                    <Text type="secondary" className={styles.helperText}>
+                      {t("pipelines.currentStage", "Stage")}: {String(builtinSyncState?.current_stage || builtinSyncState?.stage || "idle")}
+                    </Text>
+                    <Text type="secondary" className={styles.helperText}>
+                      {t("pipelines.progress", "Progress")}: {Number(builtinSyncState?.progress || 0)}%
+                    </Text>
+                    {builtinSyncState?.last_error ? (
+                      <Text type="danger" className={styles.helperText}>
+                        {t("pipelines.lastError", "Last error")}: {builtinSyncState.last_error}
+                      </Text>
+                    ) : null}
+                  </div>
+                  {builtinRuntimeStages.map((stage) => (
+                    <div key={stage.key} className={styles.listItemStatic}>
+                      <div className={styles.listItemHeader}>
+                        <Text strong>{stage.label}</Text>
+                        <Tag color={statusTagColor(stage.status)}>{stage.status}</Tag>
+                      </div>
+                      <Text type="secondary" className={styles.helperText}>
+                        {t("pipelines.progress", "Progress")}: {stage.progress == null ? "-" : `${stage.progress}%`}
+                      </Text>
+                      <Text type="secondary" className={styles.helperText}>
+                        {t("pipelines.summary", "Summary")}: {stage.summary || "-"}
+                      </Text>
+                    </div>
+                  ))}
+                </div>
+              ) : selectedIsProjectBuiltinKnowledgeWorkflowPipeline ? (
+                <div className={styles.list} style={{ marginBottom: 12 }}>
+                  <div className={styles.listItemStatic}>
+                    <div className={styles.listItemHeader}>
+                      <Text strong>{t("pipelines.latestRun", "Latest Run")}</Text>
+                      <Tag color={statusTagColor(String(projectBuiltinLatestRun?.status || "idle"))}>
+                        {String(projectBuiltinLatestRun?.status || "idle")}
+                      </Tag>
+                      {projectBuiltinRunDetailLoading ? <Tag>{t("common.loading", "Loading")}</Tag> : null}
+                    </div>
+                    <Text type="secondary">
+                      {t("pipelines.projectLabel", {
+                        name:
+                          selectedPipeline?.projects.find((item) => item.id === selectedBuiltinProjectId)?.name
+                          || selectedBuiltinProjectId
+                          || "-",
+                      })}
+                    </Text>
+                    <Text type="secondary" className={styles.helperText}>
+                      {t("pipelines.updatedAt", "Updated")}: {projectBuiltinLatestRun?.updated_at || projectBuiltinLatestRun?.created_at || "-"}
+                    </Text>
+                    <Text type="secondary" className={styles.helperText}>
+                      {t("pipelines.currentStage", "Stage")}: {projectBuiltinCurrentStage}
+                    </Text>
+                    <Text type="secondary" className={styles.helperText}>
+                      {t("pipelines.progress", "Progress")}: {projectBuiltinRunProgress == null ? "-" : `${projectBuiltinRunProgress}%`}
+                    </Text>
+                    {projectBuiltinLastError ? (
+                      <Text type="danger" className={styles.helperText}>
+                        {t("pipelines.lastError", "Last error")}: {projectBuiltinLastError}
+                      </Text>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
               {!currentTemplate ? (
                 <Empty
                   description={t(
@@ -3414,6 +4166,16 @@ export default function PipelinesPage() {
                   <Button size="small" onClick={() => navigate(`/chat/${designChatSessionId}`)}>
                     {t("pipelines.openInFullChat")}
                   </Button>
+                ) : !editMode && selectedPipeline?.source === "project" ? (
+                  <Button
+                    size="small"
+                    loading={selectedRunsLoading}
+                    onClick={() => requestLoadSelectedPipelineRuns(selectedRunsLoaded)}
+                  >
+                    {selectedRunsLoaded
+                      ? t("common.refresh")
+                      : t("pipelines.loadRuns", "Load Runs")}
+                  </Button>
                 ) : undefined
               }
               styles={editMode ? { body: { padding: 0, height: "calc(100% - 56px)", overflow: "hidden" } } : undefined}
@@ -3551,6 +4313,26 @@ export default function PipelinesPage() {
                     )}
                   />
                 )
+              ) : selectedPipeline?.source !== "project" ? (
+                <Empty
+                  description={t(
+                    "pipelines.runsProjectOnly",
+                    "Runs are available for project pipelines only.",
+                  )}
+                />
+              ) : !selectedRunsLoaded ? (
+                <Empty
+                  description={t(
+                    "pipelines.runsOnDemandHint",
+                    "Runs are loaded on demand. Click Load Runs to fetch execution records.",
+                  )}
+                />
+              ) : selectedRunsLoading && visibleRuns.length === 0 ? (
+                <div className={styles.loadingWrap}>
+                  <Spin size="large" />
+                </div>
+              ) : selectedRunsError && visibleRuns.length === 0 ? (
+                <Empty description={selectedRunsError} />
               ) : visibleRuns.length === 0 ? (
                 <Empty
                   description={t(
@@ -3560,8 +4342,16 @@ export default function PipelinesPage() {
                 />
               ) : (
                 <div className={styles.list}>
-                  {visibleRuns.map((run) => (
-                    <div key={buildRunIdentity(run)} className={styles.listItemStatic}>
+                  {visibleRuns.map((run) => {
+                    const runKey = buildRunIdentity(run);
+                    const detail = runDetailsByKey[runKey];
+                    const observability = detail?.observability;
+                    const durationValue =
+                      typeof observability?.duration_sec === "number"
+                        ? `${observability.duration_sec.toFixed(2)}s`
+                        : "-";
+                    return (
+                    <div key={runKey} className={styles.listItemStatic}>
                       <div className={styles.listItemHeader}>
                         <Text strong>{run.template_id}</Text>
                         <Tag color={statusTagColor(run.status)}>{run.status}</Tag>
@@ -3574,6 +4364,19 @@ export default function PipelinesPage() {
                       <Text type="secondary" className={styles.helperText}>
                         {run.updated_at || run.created_at}
                       </Text>
+                      {observability ? (
+                        <>
+                          <Text type="secondary" className={styles.helperText}>
+                            {t("pipelines.currentStage", "Stage")}: {observability.stage || "-"}
+                          </Text>
+                          <Text type="secondary" className={styles.helperText}>
+                            {t("pipelines.duration", "Duration")}: {durationValue}
+                          </Text>
+                          <Text type="secondary" className={styles.helperText}>
+                            {t("pipelines.errorClass", "Error class")}: {observability.error_class || "-"}
+                          </Text>
+                        </>
+                      ) : null}
                       <div className={styles.runActions}>
                         <Button
                           size="small"
@@ -3599,7 +4402,8 @@ export default function PipelinesPage() {
                         </Button>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </Card>

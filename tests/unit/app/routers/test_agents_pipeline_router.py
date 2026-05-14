@@ -6,9 +6,9 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from copaw.app.routers import agents_pipeline as pipeline_router_module
-from copaw.app.routers.agents import _write_project_frontmatter
-from copaw.app.routers.agents_pipeline_core import (
+from qwenpaw.app.routers import agents_pipeline as pipeline_router_module
+from qwenpaw.app.routers.agents import _write_project_frontmatter
+from qwenpaw.app.routers.agents_pipeline_core import (
     PipelineRunDetail,
     PipelineRunSummary,
     PipelineTemplateInfo,

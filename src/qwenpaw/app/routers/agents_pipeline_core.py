@@ -32,7 +32,11 @@ _AGENT_PIPELINE_WORKSPACES_DIRNAME = "workspaces"
 _PIPELINE_MD_FILENAME = "pipeline.md"
 _PIPELINE_MEMORY_FILENAME = "pipeline-workspaces.md"
 _PIPELINE_FLOW_MEMORY_FILENAME = "flow-memory.md"
+_TEMPLATE_ID_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
+_SEMVER_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 _KNOWLEDGE_WORKFLOW_TEMPLATE_ID = "builtin-knowledge-processing-v1"
+_PROJECT_KNOWLEDGE_PLATFORM_TEMPLATE_ID = "builtin-project-knowledge-pipeline-v1"
+_AGENT_KNOWLEDGE_AGGREGATION_TEMPLATE_ID = "agent-knowledge-aggregation-v1"
 
 
 class PipelineTemplateStep(BaseModel):
@@ -62,6 +66,10 @@ class PipelineTemplateInfo(BaseModel):
     revision: int = 0
     content_hash: str = ""
     md_mtime: float = 0.0
+    tags: list[str] = Field(default_factory=list)
+    system_owned: bool = False
+    builtin_kind: str | None = None
+    entrypoint: str | None = None
     validation_errors: list["PipelineValidationError"] = Field(default_factory=list)
     compilation_status: str = "ready"
 
@@ -168,6 +176,19 @@ class PipelineRunConvergence(BaseModel):
     highlights: list[str] = Field(default_factory=list)
 
 
+class PipelineRunObservability(BaseModel):
+    """Compact observability snapshot for one run."""
+
+    stage: str = "bootstrapping"
+    duration_sec: float = 0.0
+    step_total: int = 0
+    step_succeeded: int = 0
+    step_failed: int = 0
+    step_running: int = 0
+    artifact_count: int = 0
+    error_class: str = ""
+
+
 class PipelineRunDetail(PipelineRunSummary):
     """Pipeline run detail."""
 
@@ -183,6 +204,7 @@ class PipelineRunDetail(PipelineRunSummary):
         default_factory=list,
     )
     convergence: PipelineRunConvergence = Field(default_factory=PipelineRunConvergence)
+    observability: PipelineRunObservability = Field(default_factory=PipelineRunObservability)
     next_actions: list[PipelineRunNextAction] = Field(default_factory=list)
 
 
@@ -218,7 +240,6 @@ class PipelineDraftInfo(BaseModel):
 class PlatformFlowTemplateInfo(PipelineTemplateInfo):
     """Project-agnostic platform flow template."""
 
-    tags: list[str] = Field(default_factory=list)
     source_project_id: str | None = None
     source_project_template_id: str | None = None
     source_project_template_version: str | None = None
@@ -276,7 +297,7 @@ def _normalize_run_status(status: str) -> str:
     value = (status or "").strip().lower()
     if value == "completed":
         return "succeeded"
-    if value in {"pending", "running", "blocked", "failed", "succeeded", "cancelled"}:
+    if value in {"pending", "running", "retrying", "blocked", "failed", "succeeded", "cancelled"}:
         return value
     return "pending"
 
@@ -288,6 +309,68 @@ def _normalize_step_status(status: str) -> str:
     if value in {"pending", "running", "blocked", "failed", "succeeded", "skipped"}:
         return value
     return "pending"
+
+
+_PIPELINE_EVENT_ALIASES = {
+    "run.started": "run_started",
+    "run.completed": "run_finished",
+    "run.failed": "run_failed",
+    "run.restarted": "run_restarted",
+    "step.started": "step_started",
+    "step.completed": "step_finished",
+    "step.failed": "step_failed",
+    "step.carried_forward": "step_carried_forward",
+}
+
+
+def _canonical_pipeline_event(event: str) -> str:
+    raw = (event or "").strip()
+    if not raw:
+        return "event_unknown"
+    if raw in _PIPELINE_EVENT_ALIASES:
+        return _PIPELINE_EVENT_ALIASES[raw]
+    return raw.replace(".", "_")
+
+
+def _transition_run_status(current: str, next_status: str) -> str:
+    current_status = _normalize_run_status(current)
+    target_status = _normalize_run_status(next_status)
+    allowed: dict[str, set[str]] = {
+        "pending": {"running", "failed", "cancelled"},
+        "running": {"retrying", "failed", "succeeded", "cancelled", "blocked"},
+        "retrying": {"running", "failed", "succeeded", "cancelled"},
+        "blocked": {"running", "failed", "cancelled"},
+        "failed": {"retrying", "cancelled"},
+        "succeeded": set(),
+        "cancelled": set(),
+    }
+    if current_status == target_status:
+        return target_status
+    if target_status not in allowed.get(current_status, set()):
+        raise ValueError(
+            f"Invalid pipeline run status transition: {current_status} -> {target_status}",
+        )
+    return target_status
+
+
+def _transition_step_status(current: str, next_status: str) -> str:
+    current_status = _normalize_step_status(current)
+    target_status = _normalize_step_status(next_status)
+    allowed: dict[str, set[str]] = {
+        "pending": {"running", "skipped", "failed", "blocked"},
+        "running": {"succeeded", "failed", "blocked", "skipped"},
+        "blocked": {"running", "failed", "skipped"},
+        "failed": {"running", "skipped"},
+        "succeeded": set(),
+        "skipped": set(),
+    }
+    if current_status == target_status:
+        return target_status
+    if target_status not in allowed.get(current_status, set()):
+        raise ValueError(
+            f"Invalid pipeline step status transition: {current_status} -> {target_status}",
+        )
+    return target_status
 
 
 def _is_safe_relative_path(rel_path: str) -> bool:
@@ -320,48 +403,56 @@ def _default_pipeline_template_doc() -> dict[str, Any]:
                 "name": "Ingest Books",
                 "kind": "ingest",
                 "description": "Discover and load all source markdown books into the processing corpus.",
+                "prompt": "Collect markdown sources, validate readability, and emit a normalized source manifest.",
             },
             {
                 "id": "normalize",
                 "name": "Normalize Structure",
                 "kind": "transform",
                 "description": "Apply heading and structure normalization across all books.",
+                "prompt": "Normalize heading hierarchy and document structure to a canonical schema.",
             },
             {
                 "id": "extract",
                 "name": "Extract Entities",
                 "kind": "transform",
                 "description": "Extract named entities, terms, and citations from each book.",
+                "prompt": "Extract entities, terms, and citations with stable offsets and confidence metadata.",
             },
             {
                 "id": "align",
                 "name": "Cross-Book Alignment",
                 "kind": "alignment",
                 "description": "Perform sentence/chapter alignment across the entire book corpus.",
+                "prompt": "Align semantically equivalent sections across books and output alignment pairs.",
             },
             {
                 "id": "build_concept_tree",
                 "name": "Build Concept Tree",
                 "kind": "analysis",
                 "description": "Construct a hierarchical concept tree from the aligned and extracted content.",
+                "prompt": "Build a hierarchical concept taxonomy from aligned entities and relations.",
             },
             {
                 "id": "build_relation_matrix",
                 "name": "Build Relation Matrix",
                 "kind": "analysis",
                 "description": "Compute cross-book relation and co-occurrence matrix.",
+                "prompt": "Compute relation/co-occurrence matrix with pairwise evidence and aggregate metrics.",
             },
             {
                 "id": "review_pack",
                 "name": "Review Pack",
                 "kind": "validation",
                 "description": "Generate review package: diffs, conflicts, and quality metrics.",
+                "prompt": "Evaluate quality gates, summarize conflicts, and produce a reviewer-ready validation pack.",
             },
             {
                 "id": "report",
                 "name": "Generate Report",
                 "kind": "publish",
                 "description": "Emit final manifests, reports, and artifacts for downstream use.",
+                "prompt": "Publish final manifest, report, and artifact index for downstream consumers.",
             },
         ],
     }
@@ -421,6 +512,83 @@ def _parse_pipeline_template_doc(raw: dict[str, Any], fallback_id: str) -> Pipel
             ),
         )
 
+    validation_errors: list[PipelineValidationError] = [
+        PipelineValidationError.model_validate(item)
+        for item in (raw.get("validation_errors") or [])
+        if isinstance(item, dict)
+    ]
+    validation_errors.extend(
+        _validate_pipeline_template_meta(
+            template_id=template_id,
+            name=name,
+            version=str(raw.get("version") or "").strip(),
+        )
+    )
+
+    seen_step_ids: set[str] = set()
+    for idx, step in enumerate(steps):
+        step_path = f"steps[{idx}]"
+        if not step.id.strip():
+            validation_errors.append(
+                PipelineValidationError(
+                    error_code="step_id_missing",
+                    message="Step id is required.",
+                    field_path=f"{step_path}.id",
+                    suggestion="Provide a stable step id.",
+                )
+            )
+        elif not _TEMPLATE_ID_RE.match(step.id):
+            validation_errors.append(
+                PipelineValidationError(
+                    error_code="step_id_invalid_format",
+                    message="Step id format is invalid.",
+                    field_path=f"{step_path}.id",
+                    step_id=step.id,
+                    expected="^[a-z][a-z0-9_-]{0,63}$",
+                    actual=step.id,
+                    suggestion="Use lowercase letters, digits, '_' or '-'; start with a letter.",
+                )
+            )
+        if not step.name.strip():
+            validation_errors.append(
+                PipelineValidationError(
+                    error_code="step_name_missing",
+                    message="Step name is required.",
+                    field_path=f"{step_path}.name",
+                    step_id=step.id,
+                    suggestion="Provide a non-empty display name.",
+                )
+            )
+        if not _MD_KIND_RE.match(step.kind.strip()):
+            validation_errors.append(
+                PipelineValidationError(
+                    error_code="step_kind_invalid",
+                    message="Step kind format is invalid.",
+                    field_path=f"{step_path}.kind",
+                    step_id=step.id,
+                    expected="lowercase kebab/snake token",
+                    actual=step.kind,
+                    suggestion="Use lowercase letters, digits, '_' or '-'.",
+                )
+            )
+        if step.id in seen_step_ids:
+            validation_errors.append(
+                PipelineValidationError(
+                    error_code="step_id_duplicate",
+                    message="Duplicate step id found.",
+                    field_path=f"{step_path}.id",
+                    step_id=step.id,
+                    actual=step.id,
+                    suggestion="Use unique step ids in a pipeline.",
+                )
+            )
+        seen_step_ids.add(step.id)
+
+    validation_errors.extend(_validate_pipeline_dependency_graph(steps))
+    compilation_status = str(raw.get("compilation_status") or "ready").strip() or "ready"
+    if validation_errors:
+        compilation_status = "invalid"
+
     return PipelineTemplateInfo(
         id=template_id,
         name=name,
@@ -430,12 +598,16 @@ def _parse_pipeline_template_doc(raw: dict[str, Any], fallback_id: str) -> Pipel
         revision=max(0, int(raw.get("revision") or 0)),
         content_hash=str(raw.get("content_hash") or "").strip(),
         md_mtime=float(raw.get("md_mtime") or 0.0),
-        validation_errors=[
-            PipelineValidationError.model_validate(item)
-            for item in (raw.get("validation_errors") or [])
-            if isinstance(item, dict)
+        tags=[
+            str(item).strip()
+            for item in (raw.get("tags") or [])
+            if str(item).strip()
         ],
-        compilation_status=str(raw.get("compilation_status") or "ready").strip() or "ready",
+        system_owned=bool(raw.get("system_owned") is True),
+        builtin_kind=(str(raw.get("builtin_kind") or "").strip() or None),
+        entrypoint=(str(raw.get("entrypoint") or "").strip() or None),
+        validation_errors=validation_errors,
+        compilation_status=compilation_status,
     )
 
 
@@ -472,6 +644,207 @@ def _agent_platform_templates_dir(workspace_dir: Path) -> Path:
     )
     templates_dir.mkdir(parents=True, exist_ok=True)
     return templates_dir
+
+
+def _default_project_knowledge_platform_template_doc() -> dict[str, Any]:
+    return {
+        "id": _PROJECT_KNOWLEDGE_PLATFORM_TEMPLATE_ID,
+        "name": "Project Knowledge Pipeline",
+        "version": "1.0.0",
+        "description": "Built-in pipeline for project knowledge indexing, NLP enrichment, and agentic quality review.",
+        "builtin_kind": "project-knowledge-governance",
+        "system_owned": True,
+        "entrypoint": "pipelines_builtin_project_knowledge",
+        "steps": [
+            {
+                "id": "file_analysis",
+                "name": "File Analysis",
+                "kind": "prepare",
+                "description": "Analyze project files and establish source snapshot baseline.",
+                "prompt": "Analyze project files and output baseline snapshot metadata for downstream NLP stages.",
+            },
+            {
+                "id": "source_scan",
+                "name": "Source Scan",
+                "kind": "prepare",
+                "description": "Scan eligible source files and collect indexing candidates.",
+                "prompt": "Scan eligible source files and emit deterministic candidate list for indexing.",
+            },
+            {
+                "id": "tokenize",
+                "name": "Tokenization",
+                "kind": "nlp",
+                "description": "Segment text into NLP-ready tokens and sentence units.",
+                "prompt": "Tokenize project text into sentence/token units and persist chunk-level token stats.",
+                "depends_on": ["source_scan"],
+            },
+            {
+                "id": "ner",
+                "name": "Named Entity Recognition",
+                "kind": "nlp",
+                "description": "Extract entity mentions and canonical candidates.",
+                "prompt": "Run NER on tokenized chunks and emit canonical entity candidates with confidence.",
+                "depends_on": ["tokenize"],
+            },
+            {
+                "id": "cor",
+                "name": "Coreference Resolution",
+                "kind": "nlp",
+                "description": "Merge coreferential mentions for relation construction.",
+                "prompt": "Resolve coreferences and merge mentions into canonical entity clusters.",
+                "depends_on": ["ner"],
+            },
+            {
+                "id": "syntax",
+                "name": "Syntactic Relations",
+                "kind": "nlp",
+                "description": "Build syntax-aware relation candidates and edge evidence.",
+                "prompt": "Extract syntax-aware relation candidates and attach sentence-level evidence.",
+                "depends_on": ["tokenize"],
+            },
+            {
+                "id": "quality_review",
+                "name": "Quality Review",
+                "kind": "review",
+                "description": "Run agentic quality checks and produce remediation guidance.",
+                "prompt": "Assess knowledge quality metrics and emit prioritized remediation guidance.",
+                "depends_on": ["cor", "syntax"],
+            },
+        ],
+        "tags": ["builtin", "project", "knowledge"],
+    }
+
+
+def _default_agent_knowledge_aggregation_template_doc() -> dict[str, Any]:
+    return {
+        "id": _AGENT_KNOWLEDGE_AGGREGATION_TEMPLATE_ID,
+        "name": "Agent Knowledge Aggregation Pipeline",
+        "version": "0.1.0",
+        "description": (
+            "Draft agent-level pipeline for cross-project knowledge aggregation, "
+            "conflict arbitration, and publish-ready knowledge snapshots."
+        ),
+        "builtin_kind": "agent-knowledge-aggregation",
+        "system_owned": True,
+        "entrypoint": "pipelines_builtin_agent_aggregation",
+        "steps": [
+            {
+                "id": "collect_project_snapshots",
+                "name": "Collect Project Snapshots",
+                "kind": "ingest",
+                "description": (
+                    "Collect eligible project-level knowledge snapshots as input sets for aggregation."
+                ),
+                "prompt": "Collect project snapshot references according to policy and emit snapshot manifest.",
+                "inputs": {
+                    "projects": "list[str]",
+                    "snapshot_policy": "latest_or_pinned",
+                },
+                "outputs": {
+                    "snapshot_refs": "list[str]",
+                    "snapshot_count": "int",
+                },
+                "retry_policy": {"max_attempts": 1},
+            },
+            {
+                "id": "normalize_entities_and_terms",
+                "name": "Normalize Entities and Terms",
+                "kind": "transform",
+                "description": (
+                    "Normalize terms/entities across sources to a canonical namespace before merging."
+                ),
+                "prompt": "Normalize entities and terms to canonical identifiers and output normalization report.",
+                "depends_on": ["collect_project_snapshots"],
+                "inputs": {
+                    "snapshot_refs": "$collect_project_snapshots.snapshot_refs",
+                },
+                "outputs": {
+                    "normalized_records": "list[dict]",
+                    "normalization_report": "str",
+                },
+                "retry_policy": {"max_attempts": 2},
+            },
+            {
+                "id": "resolve_conflicts",
+                "name": "Resolve Cross-Project Conflicts",
+                "kind": "analysis",
+                "description": (
+                    "Apply conflict arbitration rules to competing facts and terminology across projects."
+                ),
+                "prompt": "Resolve cross-project conflicts using arbitration policy and emit resolved graph.",
+                "depends_on": ["normalize_entities_and_terms"],
+                "inputs": {
+                    "records": "$normalize_entities_and_terms.normalized_records",
+                    "arbitration_policy": "priority+confidence",
+                },
+                "outputs": {
+                    "resolved_graph": "dict",
+                    "conflict_summary": "dict",
+                },
+                "retry_policy": {"max_attempts": 1},
+            },
+            {
+                "id": "quality_gate",
+                "name": "Quality Gate",
+                "kind": "review",
+                "description": (
+                    "Run quality checks and emit observability metrics for aggregation readiness."
+                ),
+                "prompt": "Evaluate coverage and consistency thresholds, then emit quality report and metrics.",
+                "depends_on": ["resolve_conflicts"],
+                "inputs": {
+                    "resolved_graph": "$resolve_conflicts.resolved_graph",
+                },
+                "outputs": {
+                    "quality_report": "dict",
+                    "metrics": {
+                        "coverage_ratio": "float",
+                        "conflict_resolution_rate": "float",
+                        "graph_connectivity_score": "float",
+                    },
+                },
+                "retry_policy": {"max_attempts": 0},
+            },
+            {
+                "id": "publish_agent_snapshot",
+                "name": "Publish Agent Snapshot",
+                "kind": "publish",
+                "description": (
+                    "Publish the aggregated agent-level knowledge snapshot and associated provenance artifacts."
+                ),
+                "prompt": "Publish agent-level snapshot artifacts and lineage manifest for downstream consumption.",
+                "depends_on": ["quality_gate"],
+                "inputs": {
+                    "quality_report": "$quality_gate.quality_report",
+                    "resolved_graph": "$resolve_conflicts.resolved_graph",
+                },
+                "outputs": {
+                    "agent_snapshot_path": "str",
+                    "lineage_manifest_path": "str",
+                },
+                "retry_policy": {"max_attempts": 1},
+            },
+        ],
+        "tags": ["builtin", "agent", "knowledge", "aggregation", "draft"],
+    }
+
+
+def _ensure_default_platform_templates(templates_dir: Path) -> None:
+    builtin_templates = [
+        _default_project_knowledge_platform_template_doc(),
+        _default_agent_knowledge_aggregation_template_doc(),
+    ]
+    for doc in builtin_templates:
+        template_id = str(doc.get("id") or "").strip()
+        if not template_id:
+            continue
+        target = templates_dir / f"{template_id}.json"
+        if target.exists():
+            continue
+        target.write_text(
+            json.dumps(doc, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
 
 
 def _platform_template_history_path(
@@ -776,6 +1149,53 @@ def _parse_md_frontmatter(content: str) -> tuple[dict[str, str], str]:
 _MD_KIND_RE = re.compile(r"^[a-z][a-z0-9_-]{1,63}$")
 
 
+def _validate_pipeline_template_meta(
+    *,
+    template_id: str,
+    name: str,
+    version: str,
+) -> list[PipelineValidationError]:
+    errors: list[PipelineValidationError] = []
+
+    if not _TEMPLATE_ID_RE.match((template_id or "").strip()):
+        errors.append(
+            PipelineValidationError(
+                error_code="pipeline_id_invalid_format",
+                message="Pipeline id format is invalid.",
+                field_path="id",
+                expected="^[a-z][a-z0-9_-]{0,63}$",
+                actual=template_id,
+                suggestion="Use lowercase letters, digits, '_' or '-'; start with a letter.",
+            )
+        )
+
+    if not (name or "").strip():
+        errors.append(
+            PipelineValidationError(
+                error_code="pipeline_name_missing",
+                message="Pipeline name is required.",
+                field_path="name",
+                expected="non-empty string",
+                actual=name,
+                suggestion="Provide a concise, human-readable pipeline name.",
+            )
+        )
+
+    if not _SEMVER_RE.match((version or "").strip()):
+        errors.append(
+            PipelineValidationError(
+                error_code="pipeline_version_invalid",
+                message="Pipeline version must follow semantic versioning.",
+                field_path="version",
+                expected="x.y.z (e.g. 0.1.0)",
+                actual=version,
+                suggestion="Use semantic version format like 0.1.0 or 1.2.3.",
+            )
+        )
+
+    return errors
+
+
 def _parse_pipeline_md_strict(
     template_id: str,
     content: str,
@@ -802,6 +1222,13 @@ def _parse_pipeline_md_strict(
 
     name = (frontmatter.get("name") or fallback_name or template_id).strip() or template_id
     version = (frontmatter.get("version") or fallback_version or "0.1.0").strip() or "0.1.0"
+    errors.extend(
+        _validate_pipeline_template_meta(
+            template_id=template_id,
+            name=name,
+            version=version,
+        )
+    )
 
     # Description is parsed from body content after first level-1 title and before first step heading.
     description_lines: list[str] = []
@@ -1120,27 +1547,29 @@ def _parse_platform_template_doc(
     parsed = _parse_pipeline_template_doc(raw, fallback_id)
     if parsed is None:
         return None
-    return PlatformFlowTemplateInfo(
+    merged = {
         **parsed.model_dump(),
-        tags=[
+        "tags": [
             str(item).strip()
             for item in (raw.get("tags") or [])
             if str(item).strip()
         ],
-        source_project_id=(str(raw.get("source_project_id") or "").strip() or None),
-        source_project_template_id=(
+        "source_project_id": (str(raw.get("source_project_id") or "").strip() or None),
+        "source_project_template_id": (
             str(raw.get("source_project_template_id") or "").strip() or None
         ),
-        source_project_template_version=(
+        "source_project_template_version": (
             str(raw.get("source_project_template_version") or "").strip() or None
         ),
-    )
+    }
+    return PlatformFlowTemplateInfo(**merged)
 
 
 def _list_platform_flow_templates(
     workspace_dir: Path,
 ) -> list[PlatformFlowTemplateInfo]:
     templates_dir = _agent_platform_templates_dir(workspace_dir)
+    _ensure_default_platform_templates(templates_dir)
     templates: list[PlatformFlowTemplateInfo] = []
     for path in sorted(
         templates_dir.glob("*.json"),
@@ -1164,7 +1593,7 @@ def _list_platform_flow_templates(
 
 def _bump_semver(version: str, mode: str) -> str:
     raw = (version or "0.1.0").strip()
-    m = re.match(r"^(\d+)\.(\d+)\.(\d+)$", raw)
+    m = _SEMVER_RE.match(raw)
     if m is None:
         return "0.1.0"
     major, minor, patch = int(m.group(1)), int(m.group(2)), int(m.group(3))
@@ -1339,6 +1768,10 @@ def _save_agent_pipeline_template(
         version=(template.version or "0.1.0").strip() or "0.1.0",
         description=(template.description or "").strip(),
         steps=template.steps,
+        tags=template.tags,
+        system_owned=template.system_owned,
+        builtin_kind=template.builtin_kind,
+        entrypoint=template.entrypoint,
     )
 
     template_doc = {
@@ -1346,6 +1779,10 @@ def _save_agent_pipeline_template(
         "name": normalized.name,
         "version": normalized.version,
         "description": normalized.description,
+        "tags": normalized.tags,
+        "system_owned": normalized.system_owned,
+        "builtin_kind": normalized.builtin_kind,
+        "entrypoint": normalized.entrypoint,
         "steps": [
             {
                 "id": step.id,
@@ -1399,6 +1836,10 @@ def _save_agent_pipeline_template_with_md(
         version=(template.version or "0.1.0").strip() or "0.1.0",
         description=(template.description or "").strip(),
         steps=template.steps,
+        tags=template.tags,
+        system_owned=template.system_owned,
+        builtin_kind=template.builtin_kind,
+        entrypoint=template.entrypoint,
         revision=current.revision if current else 0,
         content_hash=current.content_hash if current else "",
         md_mtime=current.md_mtime if current else 0.0,
@@ -1434,6 +1875,10 @@ def _save_agent_pipeline_template_with_md(
         "name": parsed_template.name,
         "version": parsed_template.version,
         "description": parsed_template.description,
+        "tags": parsed_template.tags,
+        "system_owned": parsed_template.system_owned,
+        "builtin_kind": parsed_template.builtin_kind,
+        "entrypoint": parsed_template.entrypoint,
         "steps": [
             {
                 "id": step.id,
@@ -2035,17 +2480,27 @@ def _append_collab_event(
     evidence: list[str] | None = None,
     metrics: dict[str, Any] | None = None,
 ) -> None:
+    canonical_event = _canonical_pipeline_event(event)
+    event_metrics = {
+        **(metrics or {}),
+        "event_version": "1.0",
+        "event_sequence": len(run.collaboration_events) + 1,
+        "event_schema": "pipeline_event.v1",
+    }
+    if canonical_event != event:
+        event_metrics["legacy_event"] = event
+
     run.collaboration_events.append(
         PipelineCollaborationEvent(
             ts=_pipeline_now_iso(),
-            event=event,
+            event=canonical_event,
             step_id=step_id,
             role=role,
             actor=actor,
             status=status,
             message=message,
             evidence=evidence or [],
-            metrics=metrics or {},
+            metrics=event_metrics,
         )
     )
 
@@ -2726,8 +3181,73 @@ def _apply_real_step_results(project_dir: Path, step: PipelineRunStep) -> list[s
     return outputs
 
 
+def _build_run_observability(run: PipelineRunDetail) -> PipelineRunObservability:
+    total = len(run.steps)
+    succeeded = sum(
+        1
+        for step in run.steps
+        if _normalize_step_status(step.status) in {"succeeded", "skipped"}
+    )
+    failed = sum(
+        1
+        for step in run.steps
+        if _normalize_step_status(step.status) in {"failed", "blocked"}
+    )
+    running = sum(
+        1
+        for step in run.steps
+        if _normalize_step_status(step.status) in {"running", "pending"}
+    )
+
+    start_times = [_parse_pipeline_iso(step.started_at) for step in run.steps if step.started_at]
+    end_times = [_parse_pipeline_iso(step.ended_at) for step in run.steps if step.ended_at]
+    fallback_start = _parse_pipeline_iso(run.created_at)
+    fallback_end = _parse_pipeline_iso(run.updated_at)
+    first_ts = min([ts for ts in [*start_times, fallback_start] if ts is not None], default=None)
+    last_ts = max([ts for ts in [*end_times, fallback_end, fallback_start] if ts is not None], default=None)
+    duration = 0.0
+    if first_ts is not None and last_ts is not None:
+        duration = max((last_ts - first_ts).total_seconds(), 0.0)
+
+    error_class = ""
+    failed_step = next(
+        (
+            step
+            for step in run.steps
+            if _normalize_step_status(step.status) in {"failed", "blocked"}
+        ),
+        None,
+    )
+    if failed_step:
+        evidence = failed_step.evidence or []
+        if evidence:
+            sample = str(evidence[0])
+            if ":" in sample:
+                error_class = sample.split(":", 2)[1] if sample.startswith("error:") else sample.split(":", 1)[0]
+            else:
+                error_class = sample
+
+    stage = (
+        (run.convergence.stage if run.convergence else "")
+        or _normalize_run_status(run.status)
+        or "bootstrapping"
+    )
+
+    return PipelineRunObservability(
+        stage=stage,
+        duration_sec=round(duration, 3),
+        step_total=total,
+        step_succeeded=succeeded,
+        step_failed=failed,
+        step_running=running,
+        artifact_count=len(run.artifacts or []),
+        error_class=error_class,
+    )
+
+
 def _persist_project_pipeline_run(project_dir: Path, run: PipelineRunDetail, template: PipelineTemplateInfo) -> None:
     _enrich_run_with_guidance(run, template)
+    run.observability = _build_run_observability(run)
     _, _, runs_dir = _project_pipeline_dirs(project_dir)
     run_dir, manifest_path, _ = _run_dir_paths(runs_dir, run.id)
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -2790,6 +3310,7 @@ def _persist_project_pipeline_run(project_dir: Path, run: PipelineRunDetail, tem
             for item in run.collaboration_events
         ],
         "convergence": run.convergence.model_dump(),
+        "observability": run.observability.model_dump(),
         "next_actions": [item.model_dump() for item in run.next_actions],
     }
 
@@ -2933,10 +3454,10 @@ def _execute_project_pipeline_run(
 
         started_at = _pipeline_now_iso()
         step_role = _infer_collab_role(step.kind)
-        step.status = "running"
+        step.status = _transition_step_status(step.status, "running")
         step.started_at = started_at
         step.ended_at = None
-        run.status = "running"
+        run.status = _transition_run_status(run.status, "running")
         run.updated_at = started_at
         _append_collab_event(
             run,
@@ -2945,6 +3466,25 @@ def _execute_project_pipeline_run(
             role=step_role,
             status="running",
             message=f"Step {step.id} started",
+        )
+        completed_steps = sum(
+            1
+            for item in run.steps
+            if _normalize_step_status(item.status) in {"succeeded", "skipped"}
+        )
+        _append_collab_event(
+            run,
+            "step_progress",
+            step_id=step.id,
+            role=step_role,
+            status="running",
+            message=f"Step {step.id} progress update",
+            metrics={
+                "progress_pct": int(round((completed_steps / len(run.steps)) * 100)) if run.steps else 0,
+                "completed_steps": completed_steps,
+                "total_steps": len(run.steps),
+                "phase": "start",
+            },
         )
         _persist_project_pipeline_run(project_dir, run, template)
 
@@ -2955,7 +3495,7 @@ def _execute_project_pipeline_run(
             step_ended_dt = _parse_pipeline_iso(ended_at) or datetime.now(timezone.utc)
             duration_sec = max((step_ended_dt - step_started_dt).total_seconds(), 0.0)
 
-            step.status = "succeeded"
+            step.status = _transition_step_status(step.status, "succeeded")
             step.ended_at = ended_at
             step.metrics = {
                 **step.metrics,
@@ -2979,18 +3519,37 @@ def _execute_project_pipeline_run(
                     "output_count": len(step_outputs),
                 },
             )
+            completed_steps = sum(
+                1
+                for item in run.steps
+                if _normalize_step_status(item.status) in {"succeeded", "skipped"}
+            )
+            _append_collab_event(
+                run,
+                "step_progress",
+                step_id=step.id,
+                role=step_role,
+                status="succeeded",
+                message=f"Step {step.id} progress update",
+                metrics={
+                    "progress_pct": int(round((completed_steps / len(run.steps)) * 100)) if run.steps else 100,
+                    "completed_steps": completed_steps,
+                    "total_steps": len(run.steps),
+                    "phase": "finish",
+                },
+            )
 
             run.updated_at = ended_at
         except Exception as exc:
             ended_at = _pipeline_now_iso()
-            step.status = "failed"
+            step.status = _transition_step_status(step.status, "failed")
             step.ended_at = ended_at
             step.metrics = {
                 **step.metrics,
                 "error_count": 1,
             }
             step.evidence = [*step.evidence[:19], f"error:{type(exc).__name__}: {exc}"]
-            run.status = "failed"
+            run.status = _transition_run_status(run.status, "failed")
             run.updated_at = ended_at
             _append_collab_event(
                 run,
@@ -3002,6 +3561,25 @@ def _execute_project_pipeline_run(
                 evidence=step.evidence[:5],
                 metrics={"error_count": 1},
             )
+            completed_steps = sum(
+                1
+                for item in run.steps
+                if _normalize_step_status(item.status) in {"succeeded", "skipped"}
+            )
+            _append_collab_event(
+                run,
+                "step_progress",
+                step_id=step.id,
+                role=step_role,
+                status="failed",
+                message=f"Step {step.id} progress update",
+                metrics={
+                    "progress_pct": int(round((completed_steps / len(run.steps)) * 100)) if run.steps else 0,
+                    "completed_steps": completed_steps,
+                    "total_steps": len(run.steps),
+                    "phase": "failed",
+                },
+            )
             _append_collab_event(
                 run,
                 "run.failed",
@@ -3011,7 +3589,7 @@ def _execute_project_pipeline_run(
             _persist_project_pipeline_run(project_dir, run, template)
             return run
 
-    run.status = "succeeded"
+    run.status = _transition_run_status(run.status, "succeeded")
     run.updated_at = _pipeline_now_iso()
     _append_collab_event(
         run,
@@ -3161,6 +3739,7 @@ def _load_pipeline_run_from_manifest(project_dir: Path, run_id: str) -> Pipeline
             if isinstance(item, dict)
         ],
         convergence=PipelineRunConvergence.model_validate(raw.get("convergence") or {}),
+        observability=PipelineRunObservability.model_validate(raw.get("observability") or {}),
         next_actions=[
             PipelineRunNextAction.model_validate(item)
             for item in (raw.get("next_actions") or [])
@@ -3210,6 +3789,8 @@ def _load_legacy_pipeline_run(project_dir: Path, run_id: str) -> PipelineRunDeta
         run.artifact_records = []
     if not hasattr(run, "convergence") or run.convergence is None:
         run.convergence = PipelineRunConvergence()
+    if not hasattr(run, "observability") or run.observability is None:
+        run.observability = PipelineRunObservability()
     if not hasattr(run, "next_actions") or run.next_actions is None:
         run.next_actions = []
     try:
@@ -3217,6 +3798,7 @@ def _load_legacy_pipeline_run(project_dir: Path, run_id: str) -> PipelineRunDeta
         _enrich_run_with_guidance(run, template)
     except Exception:
         pass
+    run.observability = _build_run_observability(run)
     return run
 
 

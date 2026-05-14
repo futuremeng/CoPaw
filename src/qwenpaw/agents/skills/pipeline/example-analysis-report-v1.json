@@ -8,37 +8,43 @@
       "id": "collect-data",
       "name": "Collect Data",
       "kind": "ingest",
-      "description": "Gather source materials and supporting datasets."
+      "description": "Gather source materials and supporting datasets.",
+      "prompt": "Collect source materials and output input inventory with metadata quality checks."
     },
     {
       "id": "analyze-metrics",
       "name": "Analyze Metrics",
       "kind": "analysis",
-      "description": "Extract and compute quantitative metrics (counts, ratios, distributions)."
+      "description": "Extract and compute quantitative metrics (counts, ratios, distributions).",
+      "prompt": "Compute quantitative metrics and emit structured metric pack with baselines."
     },
     {
       "id": "analyze-coverage",
       "name": "Analyze Coverage",
       "kind": "analysis",
-      "description": "Assess completeness and scope of content coverage."
+      "description": "Assess completeness and scope of content coverage.",
+      "prompt": "Assess coverage completeness and emit missing-scope findings with severity."
     },
     {
       "id": "analyze-consistency",
       "name": "Analyze Consistency",
       "kind": "analysis",
-      "description": "Identify inconsistencies in terminology, format, and structure."
+      "description": "Identify inconsistencies in terminology, format, and structure.",
+      "prompt": "Detect terminology/format/structure inconsistencies and output conflict summary."
     },
     {
       "id": "validate-thresholds",
       "name": "Validate Against Thresholds",
       "kind": "validation",
-      "description": "Apply quality thresholds and gate criteria; flag violations."
+      "description": "Apply quality thresholds and gate criteria; flag violations.",
+      "prompt": "Apply quality thresholds and emit gate result with actionable violations."
     },
     {
       "id": "generate-report",
       "name": "Generate Report",
       "kind": "publish",
-      "description": "Compile analysis results, metrics, and recommendations into final report."
+      "description": "Compile analysis results, metrics, and recommendations into final report.",
+      "prompt": "Generate publishable report bundle with findings, metrics, and recommendations."
     }
   ]
 }

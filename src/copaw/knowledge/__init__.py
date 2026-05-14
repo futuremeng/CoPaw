@@ -19,6 +19,7 @@ _EXPORTS = {
 	),
 	"RetrievalFacade": ("copaw.knowledge.facades", "RetrievalFacade"),
 	"QuantizationFacade": ("copaw.knowledge.knowledge_quantization_facade", "QuantizationFacade"),
+	"DuckDBKnowledgeCatalog": ("copaw.knowledge.duckdb_catalog", "DuckDBKnowledgeCatalog"),
 	"build_l2_quantization_scorecard": (
 		"copaw.knowledge.knowledge_quantization_assessment",
 		"build_l2_quantization_scorecard",

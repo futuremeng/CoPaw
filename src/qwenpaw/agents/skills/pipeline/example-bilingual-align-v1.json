@@ -8,49 +8,57 @@
       "id": "ingest-source",
       "name": "Ingest Source",
       "kind": "ingest",
-      "description": "Load and stage source language (e.g., English) content."
+      "description": "Load and stage source language (e.g., English) content.",
+      "prompt": "Load source-language content and emit normalized source inventory."
     },
     {
       "id": "ingest-translation",
       "name": "Ingest Translation",
       "kind": "ingest",
-      "description": "Load and stage target language (e.g., Chinese) content."
+      "description": "Load and stage target language (e.g., Chinese) content.",
+      "prompt": "Load translation content and emit normalized translation inventory."
     },
     {
       "id": "normalize-structure",
       "name": "Normalize Structure",
       "kind": "transform",
-      "description": "Standardize formatting, heading levels, and structure across both languages."
+      "description": "Standardize formatting, heading levels, and structure across both languages.",
+      "prompt": "Normalize structure across both corpora and output alignment-ready segments."
     },
     {
       "id": "segment-content",
       "name": "Segment Content",
       "kind": "transform",
-      "description": "Break content into alignable units (sentences, paragraphs, chapters)."
+      "description": "Break content into alignable units (sentences, paragraphs, chapters).",
+      "prompt": "Segment bilingual content into aligned units and emit segment map."
     },
     {
       "id": "run-alignment",
       "name": "Align Sentences",
       "kind": "alignment",
-      "description": "Pair source and translation at sentence/unit level using deterministic algorithms."
+      "description": "Pair source and translation at sentence/unit level using deterministic algorithms.",
+      "prompt": "Perform bilingual alignment and output pair links with confidence scores."
     },
     {
       "id": "check-consistency",
       "name": "Check Consistency",
       "kind": "validation",
-      "description": "Verify terminology consistency, meaning alignment, and named entity correspondence."
+      "description": "Verify terminology consistency, meaning alignment, and named entity correspondence.",
+      "prompt": "Validate terminology and semantic consistency; emit discrepancy report."
     },
     {
       "id": "check-coverage",
       "name": "Verify Coverage",
       "kind": "validation",
-      "description": "Ensure all source units have corresponding translations; flag gaps or excess."
+      "description": "Ensure all source units have corresponding translations; flag gaps or excess.",
+      "prompt": "Validate source/translation coverage and emit gap/excess diagnostics."
     },
     {
       "id": "export-pairs",
       "name": "Export Aligned Pairs",
       "kind": "publish",
-      "description": "Produce bilingual alignment manifest and supplemental metrics."
+      "description": "Produce bilingual alignment manifest and supplemental metrics.",
+      "prompt": "Publish aligned-pairs manifest, quality metrics, and export index artifacts."
     }
   ]
 }

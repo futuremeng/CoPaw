@@ -20,6 +20,9 @@ cd "$REPO_ROOT/console"
 npm run -s build
 cd "$REPO_ROOT"
 
+step "Pipeline template conformance"
+python "$REPO_ROOT/scripts/check_pipeline_template_conformance.py" --root "$REPO_ROOT"
+
 step "Backend checks"
 if [[ "${LOCAL_GATE_STRICT:-0}" == "1" ]]; then
   echo "Running full backend unit tests (strict mode)..."

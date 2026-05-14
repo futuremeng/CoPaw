@@ -8,19 +8,22 @@
       "id": "ingest",
       "name": "Load Data",
       "kind": "ingest",
-      "description": "Load input data from specified source."
+      "description": "Load input data from specified source.",
+      "prompt": "Load source inputs, validate readability, and output normalized input manifest."
     },
     {
       "id": "transform",
       "name": "Process Data",
       "kind": "transform",
-      "description": "Apply transformations to the input data."
+      "description": "Apply transformations to the input data.",
+      "prompt": "Apply configured transformations and emit transformed dataset summary."
     },
     {
       "id": "output",
       "name": "Save Results",
       "kind": "publish",
-      "description": "Serialize and output results to destination."
+      "description": "Serialize and output results to destination.",
+      "prompt": "Publish final artifacts and manifest to configured destination path."
     }
   ]
 }

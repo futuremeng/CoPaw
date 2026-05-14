@@ -82,7 +82,7 @@ bash scripts/local-gate.sh
 ```
 
 - Runs a minimal local quality gate for merge-risk regressions.
-- Includes: sync status check, console build, backend smoke checks, knowledge route check, and i18n missing-key audit.
+- Includes: sync status check, console build, pipeline template conformance scan, backend smoke checks, knowledge route check, and i18n missing-key audit.
 - Exits with non-zero status on first failure.
 - Run full backend unit tests in strict mode:
 
@@ -126,6 +126,19 @@ python scripts/cleanup_project_workspace_knowledge_names.py
 	to canonical root names like `content.md` inside each project `.knowledge/` directory.
 - If the canonical file already exists, the legacy prefixed file is deleted.
 - Pass a custom projects root as the first positional argument when cleaning a different workspace.
+
+## Scan pipeline template conformance
+
+```bash
+python scripts/check_pipeline_template_conformance.py --root .
+python scripts/check_pipeline_template_conformance.py --root . --json
+python scripts/check_pipeline_template_conformance.py --root . --allow-invalid
+```
+
+- Scans project templates (`.pipelines/templates`), agent templates (`pipelines/templates`), platform templates (`pipelines/platform-templates`), and built-in skill examples (`src/qwenpaw/agents/skills/pipeline/example-*.json`).
+- Reuses backend parser and validation rules to surface non-conforming definitions.
+- Default exit code is non-zero when issues exist (CI-friendly).
+- Use `--allow-invalid` for report-only mode.
 
 ## Multibook 24h reproducibility
 
