@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Button, Card, Drawer, Empty, Modal, Select, Spin, Tag, Typography, message } from "antd";
+import { Button, Card, Drawer, Empty, Input, Modal, Select, Spin, Tag, Typography, message } from "antd";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { agentsApi } from "../../../api/modules/agents";
@@ -37,6 +37,7 @@ import type {
   ProjectPipelineTemplateStep,
   ProjectPipelineRunSummary,
   ProjectPipelineTemplateInfo,
+  RpaTemplatePackageDocument,
 } from "../../../api/types/agents";
 import type { ActiveModelsInfo, ProviderInfo } from "../../../api/types/provider";
 import type { AgentsRunningConfig } from "../../../api/types/agent";
@@ -47,6 +48,7 @@ import { deriveBuiltinProjectKnowledgeStages } from "./builtinStages.ts";
 import styles from "./index.module.less";
 
 const { Title, Text } = Typography;
+const { TextArea } = Input;
 
 type TemplateItem = ProjectPipelineTemplateInfo & {
   projectId: string;
@@ -993,6 +995,17 @@ export default function PipelinesPage() {
   const [builtinRunLoading, setBuiltinRunLoading] = useState(false);
   const [projectBuiltinRunDetail, setProjectBuiltinRunDetail] = useState<ProjectPipelineRunDetail | null>(null);
   const [projectBuiltinRunDetailLoading, setProjectBuiltinRunDetailLoading] = useState(false);
+  const [rpaImportModalOpen, setRpaImportModalOpen] = useState(false);
+  const [rpaImportJson, setRpaImportJson] = useState("");
+  const [rpaImportTemplateId, setRpaImportTemplateId] = useState("");
+  const [rpaImporting, setRpaImporting] = useState(false);
+  const [rpaExportModalOpen, setRpaExportModalOpen] = useState(false);
+  const [rpaExportJson, setRpaExportJson] = useState("");
+  const [rpaExporting, setRpaExporting] = useState(false);
+  const [rpaExportFileName, setRpaExportFileName] = useState("rpa-template-package.json");
+  const [rpaExportAuthor, setRpaExportAuthor] = useState("");
+  const [rpaExportTags, setRpaExportTags] = useState("");
+  const [rpaExportNote, setRpaExportNote] = useState("");
 
   const pipelineExecutionBudget = useMemo(
     () =>
@@ -2214,26 +2227,44 @@ export default function PipelinesPage() {
     const checksRateValue = totalChecks > 0
       ? `${Math.round((passedChecks / totalChecks) * 100)}% (${passedChecks}/${totalChecks})`
       : "-";
+    const rpaActionsValue = Number(latestRunDetail.observability?.rpa_actions_executed || 0);
+    const rpaFailuresValue = Number(latestRunDetail.observability?.rpa_stop_condition_failures || 0);
+    const rpaDurationMs = Number(latestRunDetail.observability?.rpa_action_duration_ms_total || 0);
+    const rpaDurationValue = Number.isFinite(rpaDurationMs) && rpaDurationMs > 0
+      ? `${rpaDurationMs.toFixed(1)}ms`
+      : "-";
     return [
       {
-        label: t("pipelines.latestRunStatus", "Status"),
+        label: t("pipelines.latestRunStatus"),
         value: latestRun.status || "-",
       },
       {
-        label: t("pipelines.latestRunScore", "Score"),
+        label: t("pipelines.latestRunScore"),
         value: scoreValue,
       },
       {
-        label: t("pipelines.latestRunDuration", "Duration"),
+        label: t("pipelines.latestRunDuration"),
         value: durationValue,
       },
       {
-        label: t("pipelines.latestRunChecksRate", "Checks"),
+        label: t("pipelines.latestRunChecksRate"),
         value: checksRateValue,
       },
       {
-        label: t("pipelines.latestRunUpdatedAt", "Updated"),
+        label: t("pipelines.latestRunUpdatedAt"),
         value: latestRun.updated_at || latestRun.created_at || "-",
+      },
+      {
+        label: t("pipelines.latestRunRpaActions"),
+        value: rpaActionsValue > 0 ? String(rpaActionsValue) : "-",
+      },
+      {
+        label: t("pipelines.latestRunRpaStopFailures"),
+        value: rpaFailuresValue > 0 ? String(rpaFailuresValue) : "0",
+      },
+      {
+        label: t("pipelines.latestRunRpaDuration"),
+        value: rpaDurationValue,
       },
     ];
   }, [latestRun, latestRunDetail, t]);
@@ -2726,6 +2757,210 @@ export default function PipelinesPage() {
       source: "independent",
     });
   };
+
+  const applyImportedRpaTemplate = useCallback((imported: ProjectPipelineTemplateInfo) => {
+    const importedKey = buildPipelineGroupKey(imported.id, "independent");
+    setTemplates((prev) => {
+      let replaced = false;
+      const next = prev.map((item) => {
+        if (
+          item.id === imported.id
+          && item.projectId === INDEPENDENT_PIPELINE_SCOPE_ID
+          && getTemplateSourceKind(item) === "independent"
+        ) {
+          replaced = true;
+          return {
+            ...item,
+            ...imported,
+            projectId: INDEPENDENT_PIPELINE_SCOPE_ID,
+            projectName: independentScopeLabel,
+            sourceScope: "independent" as const,
+            projectCreatedTime: "",
+          };
+        }
+        return item;
+      });
+
+      if (!replaced) {
+        next.unshift({
+          ...imported,
+          projectId: INDEPENDENT_PIPELINE_SCOPE_ID,
+          projectName: independentScopeLabel,
+          sourceScope: "independent" as const,
+          projectCreatedTime: "",
+        });
+      }
+
+      return next;
+    });
+    setDraftPipelineKeys((prev) => prev.filter((key) => key !== importedKey));
+    setSourceFilter("independent");
+    setSelectedPipelineKey(importedKey);
+    setSelectedCurrentVersion(normalizeVersion(imported.version || "0.1.0"));
+    setSelectedCompareVersion("");
+  }, [independentScopeLabel]);
+
+  const handleImportBuiltinRpaTemplate = useCallback(async () => {
+    if (!selectedAgent) {
+      message.warning(t("pipelines.noAgent"));
+      return;
+    }
+    setRpaImporting(true);
+    try {
+      const pkg = await agentsApi.getBuiltinEbookRpaTemplatePackage(selectedAgent);
+      const imported = await agentsApi.importRpaTemplate(selectedAgent, {
+        package: pkg,
+      });
+      applyImportedRpaTemplate(imported);
+      message.success(
+        t(
+          "pipelines.rpaImportBuiltinSuccess",
+          { name: imported.name || imported.id },
+        ),
+      );
+    } catch (error) {
+      console.error("failed to import builtin rpa template", error);
+      message.error(
+        t("pipelines.rpaImportBuiltinFailed"),
+      );
+    } finally {
+      setRpaImporting(false);
+    }
+  }, [applyImportedRpaTemplate, selectedAgent, t]);
+
+  const handleConfirmImportRpaJson = useCallback(async () => {
+    if (!selectedAgent) {
+      message.warning(t("pipelines.noAgent"));
+      return;
+    }
+
+    const raw = rpaImportJson.trim();
+    if (!raw) {
+      message.warning(
+        t("pipelines.rpaImportJsonEmpty"),
+      );
+      return;
+    }
+
+    let parsed: RpaTemplatePackageDocument;
+    try {
+      parsed = JSON.parse(raw) as RpaTemplatePackageDocument;
+    } catch {
+      message.error(
+        t("pipelines.rpaImportJsonInvalid"),
+      );
+      return;
+    }
+
+    setRpaImporting(true);
+    try {
+      const imported = await agentsApi.importRpaTemplate(selectedAgent, {
+        package: parsed,
+        target_template_id: rpaImportTemplateId.trim() || undefined,
+      });
+      applyImportedRpaTemplate(imported);
+      setRpaImportModalOpen(false);
+      setRpaImportJson("");
+      setRpaImportTemplateId("");
+      message.success(
+        t(
+          "pipelines.rpaImportJsonSuccess",
+          { name: imported.name || imported.id },
+        ),
+      );
+    } catch (error) {
+      console.error("failed to import rpa package json", error);
+      message.error(
+        t("pipelines.rpaImportJsonFailed"),
+      );
+    } finally {
+      setRpaImporting(false);
+    }
+  }, [applyImportedRpaTemplate, rpaImportJson, rpaImportTemplateId, selectedAgent, t]);
+
+  const handleExportSelectedPipelineAsRpaJson = useCallback(async () => {
+    if (!selectedAgent || !selectedTemplateItem || !selectedPipeline) {
+      message.warning(t("pipelines.noAgent"));
+      return;
+    }
+    if (selectedPipeline.source !== "independent") {
+      message.warning(
+        t("pipelines.rpaExportIndependentOnly"),
+      );
+      return;
+    }
+
+    setRpaExporting(true);
+    try {
+      const normalizedTags = rpaExportTags
+        .split(/[，,\n]/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+      const payload = await agentsApi.exportPipelineTemplateAsRpaPackage(
+        selectedAgent,
+        selectedTemplateItem.id,
+        {
+          author: rpaExportAuthor.trim() || undefined,
+          note: rpaExportNote.trim() || undefined,
+          tags: normalizedTags.length > 0 ? normalizedTags : undefined,
+        },
+      );
+      setRpaExportJson(`${JSON.stringify(payload, null, 2)}\n`);
+      const safeTemplateId = String(selectedTemplateItem.id || "rpa-template").trim() || "rpa-template";
+      setRpaExportFileName(`${safeTemplateId}.rpa-template.json`);
+      setRpaExportModalOpen(true);
+      message.success(
+        t("pipelines.rpaExportSuccess"),
+      );
+    } catch (error) {
+      console.error("failed to export rpa package", error);
+      message.error(
+        t("pipelines.rpaExportFailed"),
+      );
+    } finally {
+      setRpaExporting(false);
+    }
+  }, [rpaExportAuthor, rpaExportNote, rpaExportTags, selectedAgent, selectedPipeline, selectedTemplateItem, t]);
+
+  const handleCopyExportedRpaJson = useCallback(async () => {
+    const text = rpaExportJson.trim();
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(rpaExportJson);
+      message.success(
+        t("pipelines.rpaExportCopySuccess"),
+      );
+    } catch {
+      message.warning(
+        t("pipelines.rpaExportCopyFailed"),
+      );
+    }
+  }, [rpaExportJson, t]);
+
+  const handleDownloadExportedRpaJson = useCallback(() => {
+    const payload = rpaExportJson.trim();
+    if (!payload) {
+      return;
+    }
+    try {
+      const blob = new Blob([rpaExportJson], { type: "application/json;charset=utf-8" });
+      const href = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = href;
+      link.download = rpaExportFileName || "rpa-template-package.json";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(href);
+      message.success(
+        t("pipelines.rpaExportDownloadSuccess"),
+      );
+    } catch {
+      message.error(
+        t("pipelines.rpaExportDownloadFailed"),
+      );
+    }
+  }, [rpaExportFileName, rpaExportJson, t]);
 
   const handleSaveDraftPipeline = async () => {
     if (!selectedAgent || !selectedTemplateItem) {
@@ -3933,6 +4168,19 @@ export default function PipelinesPage() {
           >
             {t("pipelines.create")}
           </Button>
+          <Button
+            loading={rpaImporting}
+            disabled={rpaImporting || !selectedAgent}
+            onClick={() => void handleImportBuiltinRpaTemplate()}
+          >
+            {t("pipelines.rpaImportBuiltinAction")}
+          </Button>
+          <Button
+            disabled={rpaImporting || !selectedAgent}
+            onClick={() => setRpaImportModalOpen(true)}
+          >
+            {t("pipelines.rpaImportJsonAction")}
+          </Button>
           <Button type="primary" onClick={() => navigate("/projects")}>
             {t("pipelines.openProjects")}
           </Button>
@@ -4167,6 +4415,19 @@ export default function PipelinesPage() {
                       }
                     }}
                   />
+                  <Button
+                    size="small"
+                    loading={rpaExporting}
+                    disabled={
+                      rpaExporting
+                      || !selectedAgent
+                      || !selectedTemplateItem
+                      || selectedPipeline?.source !== "independent"
+                    }
+                    onClick={() => void handleExportSelectedPipelineAsRpaJson()}
+                  >
+                    {t("pipelines.rpaExportAction")}
+                  </Button>
                   {editMode ? (
                     <>
                       {selectedIsDraft ? (
@@ -4818,7 +5079,7 @@ export default function PipelinesPage() {
                 <div className={styles.list}>
                   <div className={styles.latestRunSummary}>
                     <div className={styles.latestRunSummaryHeader}>
-                      <Text strong>{t("pipelines.latestRunSummary", "Latest Run Summary")}</Text>
+                      <Text strong>{t("pipelines.latestRunSummary")}</Text>
                       <Tag color={statusTagColor(latestRun?.status || "pending")}>
                         {latestRun?.status || "-"}
                       </Tag>
@@ -4843,7 +5104,7 @@ export default function PipelinesPage() {
                       <div className={styles.latestRunSummaryLoading}>
                         <Spin size="small" />
                         <Text type="secondary">
-                          {t("pipelines.latestRunLoading", "Loading latest run summary...")}
+                          {t("pipelines.latestRunLoading")}
                         </Text>
                       </div>
                     )}
@@ -4870,6 +5131,8 @@ export default function PipelinesPage() {
                       typeof observability?.duration_sec === "number"
                         ? `${observability.duration_sec.toFixed(2)}s`
                         : "-";
+                    const rpaActions = Number(observability?.rpa_actions_executed || 0);
+                    const rpaStopFailures = Number(observability?.rpa_stop_condition_failures || 0);
                     const isSelected = selectedRunKey === runKey;
                     return (
                     <div
@@ -4907,6 +5170,12 @@ export default function PipelinesPage() {
                           </Text>
                           <Text type="secondary" className={styles.helperText}>
                             {t("pipelines.errorClass", "Error class")}: {observability.error_class || "-"}
+                          </Text>
+                          <Text type="secondary" className={styles.helperText}>
+                            {t("pipelines.latestRunRpaActions")}: {rpaActions > 0 ? rpaActions : "-"}
+                          </Text>
+                          <Text type="secondary" className={styles.helperText}>
+                            {t("pipelines.latestRunRpaStopFailures")}: {rpaStopFailures}
                           </Text>
                         </>
                       ) : null}
@@ -5023,7 +5292,7 @@ export default function PipelinesPage() {
                           {selectedRunDetail.observability ? (
                             <div className={styles.detailGroup}>
                               <Text strong className={styles.detailGroupTitle}>
-                                {t("pipelines.observability", "Observability")}
+                                {t("pipelines.observability")}
                               </Text>
                               <div className={styles.detailSection}>
                                 <Text strong className={styles.detailLabel}>{t("pipelines.stage")}</Text>
@@ -5040,6 +5309,30 @@ export default function PipelinesPage() {
                               <div className={styles.detailSection}>
                                 <Text strong className={styles.detailLabel}>{t("pipelines.errorClass")}</Text>
                                 <Text type="secondary">{selectedRunDetail.observability.error_class || "-"}</Text>
+                              </div>
+                              <div className={styles.detailSection}>
+                                <Text strong className={styles.detailLabel}>{t("pipelines.latestRunRpaActions")}</Text>
+                                <Text type="secondary">{Number(selectedRunDetail.observability.rpa_actions_executed || 0) || "-"}</Text>
+                              </div>
+                              <div className={styles.detailSection}>
+                                <Text strong className={styles.detailLabel}>{t("pipelines.latestRunRpaStopFailures")}</Text>
+                                <Text type="secondary">{Number(selectedRunDetail.observability.rpa_stop_condition_failures || 0)}</Text>
+                              </div>
+                              <div className={styles.detailSection}>
+                                <Text strong className={styles.detailLabel}>{t("pipelines.latestRunRpaDuration")}</Text>
+                                <Text type="secondary">
+                                  {typeof selectedRunDetail.observability.rpa_action_duration_ms_total === "number"
+                                    ? `${selectedRunDetail.observability.rpa_action_duration_ms_total.toFixed(1)}ms`
+                                    : "-"}
+                                </Text>
+                              </div>
+                              <div className={styles.detailSection}>
+                                <Text strong className={styles.detailLabel}>{t("pipelines.rpaActionBreakdown")}</Text>
+                                <Text type="secondary">
+                                  {Object.entries(selectedRunDetail.observability.rpa_action_count_by_kind || {})
+                                    .map(([kind, count]) => `${kind}:${count}`)
+                                    .join(", ") || "-"}
+                                </Text>
                               </div>
                             </div>
                           ) : null}
@@ -5252,6 +5545,103 @@ export default function PipelinesPage() {
                 </div>
               )}
             </Drawer>
+
+            <Modal
+              title={t("pipelines.rpaImportModalTitle")}
+              open={rpaImportModalOpen}
+              onCancel={() => {
+                if (rpaImporting) return;
+                setRpaImportModalOpen(false);
+              }}
+              onOk={() => void handleConfirmImportRpaJson()}
+              okButtonProps={{ loading: rpaImporting }}
+              okText={t("pipelines.rpaImportModalConfirm")}
+              cancelText={t("common.cancel")}
+              destroyOnClose
+            >
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <Text type="secondary">
+                  {t("pipelines.rpaImportModalHint")}
+                </Text>
+                <Input
+                  value={rpaImportTemplateId}
+                  onChange={(event) => setRpaImportTemplateId(event.target.value)}
+                  placeholder={t("pipelines.rpaImportTargetIdPlaceholder")}
+                />
+                <TextArea
+                  value={rpaImportJson}
+                  onChange={(event) => setRpaImportJson(event.target.value)}
+                  autoSize={{ minRows: 10, maxRows: 18 }}
+                  placeholder={t("pipelines.rpaImportJsonPlaceholder")}
+                />
+              </div>
+            </Modal>
+
+            <Modal
+              title={t("pipelines.rpaExportModalTitle")}
+              open={rpaExportModalOpen}
+              onCancel={() => {
+                if (rpaExporting) return;
+                setRpaExportModalOpen(false);
+              }}
+              footer={[
+                <Button
+                  key="regenerate"
+                  onClick={() => void handleExportSelectedPipelineAsRpaJson()}
+                  loading={rpaExporting}
+                  disabled={!selectedAgent || !selectedTemplateItem}
+                >
+                  {t("pipelines.rpaExportRegenerateAction")}
+                </Button>,
+                <Button
+                  key="download"
+                  onClick={handleDownloadExportedRpaJson}
+                  disabled={!rpaExportJson.trim()}
+                >
+                  {t("pipelines.rpaExportDownloadAction")}
+                </Button>,
+                <Button
+                  key="copy"
+                  onClick={() => void handleCopyExportedRpaJson()}
+                  disabled={!rpaExportJson.trim()}
+                >
+                  {t("pipelines.rpaExportCopyAction")}
+                </Button>,
+                <Button
+                  key="close"
+                  type="primary"
+                  onClick={() => setRpaExportModalOpen(false)}
+                >
+                  {t("common.close", "关闭")}
+                </Button>,
+              ]}
+            >
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <Text type="secondary">
+                  {t("pipelines.rpaExportModalHint")}
+                </Text>
+                <Input
+                  value={rpaExportAuthor}
+                  onChange={(event) => setRpaExportAuthor(event.target.value)}
+                  placeholder={t("pipelines.rpaExportAuthorPlaceholder")}
+                />
+                <Input
+                  value={rpaExportTags}
+                  onChange={(event) => setRpaExportTags(event.target.value)}
+                  placeholder={t("pipelines.rpaExportTagsPlaceholder")}
+                />
+                <Input
+                  value={rpaExportNote}
+                  onChange={(event) => setRpaExportNote(event.target.value)}
+                  placeholder={t("pipelines.rpaExportNotePlaceholder")}
+                />
+                <TextArea
+                  value={rpaExportJson}
+                  readOnly
+                  autoSize={{ minRows: 12, maxRows: 20 }}
+                />
+              </div>
+            </Modal>
           </div>
         )}
       </div>

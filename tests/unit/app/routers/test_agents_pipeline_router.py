@@ -14,6 +14,7 @@ from qwenpaw.app.routers.agents_pipeline_core import (
     PipelineTemplateInfo,
     _pipeline_md_path,
 )
+from qwenpaw.rpa.workflow import build_ebook_screenshot_template, dump_rpa_template_package
 
 
 class _FakeAgentWorkspace:
@@ -251,3 +252,66 @@ def test_get_project_pipeline_run_offloads_to_thread(
     assert response.json()["id"] == "run-1"
     assert calls
     assert calls[0][0] is pipeline_router_module._load_project_pipeline_run_for_workspace
+
+
+def test_get_builtin_ebook_rpa_template_package(
+    pipeline_router_client: TestClient,
+):
+    response = pipeline_router_client.get(
+        "/agents/default/pipelines/rpa/templates/ebook-screenshot/package"
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["kind"] == "rpa"
+    assert payload["template"]["id"] == "ebook-page-screenshot-v1"
+    assert payload["metadata"]["builtin_template"] == "ebook-screenshot"
+
+
+def test_import_rpa_template_as_pipeline_template(
+    pipeline_router_client: TestClient,
+):
+    package = dump_rpa_template_package(build_ebook_screenshot_template())
+
+    response = pipeline_router_client.post(
+        "/agents/default/pipelines/rpa/import",
+        json={
+            "package": package,
+            "target_template_id": "ebook-rpa-imported",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["id"] == "ebook-rpa-imported"
+    assert payload["builtin_kind"] == "rpa"
+    assert payload["steps"][1]["id"] == "capture_pages"
+    assert "__rpa_loop__" in payload["steps"][1]["inputs"]
+
+
+def test_export_pipeline_template_as_rpa_package(
+    pipeline_router_client: TestClient,
+):
+    package = dump_rpa_template_package(build_ebook_screenshot_template())
+    imported = pipeline_router_client.post(
+        "/agents/default/pipelines/rpa/import",
+        json={
+            "package": package,
+            "target_template_id": "ebook-rpa-exportable",
+        },
+    )
+    assert imported.status_code == 200
+
+    exported = pipeline_router_client.get(
+        "/agents/default/pipelines/templates/ebook-rpa-exportable/rpa/package?author=Copilot&note=demo-export&tags=rpa&tags=ebook",
+    )
+    assert exported.status_code == 200
+    payload = exported.json()
+    assert payload["kind"] == "rpa"
+    assert payload["template"]["id"] == "ebook-rpa-exportable"
+    assert payload["template"]["steps"][1]["kind"] == "flow.loop"
+    assert payload["metadata"]["pipeline_template_id"] == "ebook-rpa-exportable"
+    assert isinstance(payload["metadata"].get("exported_at"), str)
+    assert payload["metadata"]["author"] == "Copilot"
+    assert payload["metadata"]["note"] == "demo-export"
+    assert payload["metadata"]["tags"] == ["rpa", "ebook"]

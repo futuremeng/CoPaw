@@ -3,11 +3,14 @@
 import asyncio
 from pathlib import Path
 import json
+from typing import Any
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi import Path as PathParam
 from fastapi import Query
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from . import agents as agents_router_impl
 from .agents_pipeline_core import (
@@ -39,8 +42,40 @@ from .agents_pipeline_core import (
     _add_or_update_step,
     _delete_step,
 )
+from ...rpa import (
+    build_ebook_screenshot_template,
+    dump_rpa_template_package,
+    load_rpa_template_package,
+    rpa_template_from_pipeline_template,
+    rpa_template_to_pipeline_template,
+)
 
 router = APIRouter(prefix="/agents", tags=["agents"])
+
+
+class ImportRpaTemplateRequest(BaseModel):
+    """Request body for importing an RPA package into pipeline templates."""
+
+    source_path: str | None = None
+    package: dict[str, Any] | None = None
+    target_template_id: str | None = None
+
+
+def _resolve_rpa_source_path(workspace_dir: Path, source_path: str) -> Path:
+    raw = Path(source_path).expanduser()
+    candidate = raw if raw.is_absolute() else (workspace_dir / raw)
+    try:
+        resolved = candidate.resolve()
+        workspace_resolved = workspace_dir.resolve()
+        resolved.relative_to(workspace_resolved)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="source_path must resolve under the agent workspace",
+        ) from exc
+    if not resolved.exists() or not resolved.is_file():
+        raise HTTPException(status_code=404, detail=f"RPA package not found: {source_path}")
+    return resolved
 
 
 def _list_project_pipeline_templates_for_workspace(
@@ -121,6 +156,153 @@ async def list_platform_flow_templates(
 
     try:
         return _list_platform_flow_templates(Path(workspace.workspace_dir))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get(
+    "/{agentId}/pipelines/rpa/templates/ebook-screenshot/package",
+    response_model=dict[str, Any],
+    summary="Get builtin ebook RPA template package",
+    description="Return a built-in RPA package for electronic magazine page screenshot workflows",
+)
+async def get_builtin_ebook_rpa_template_package(
+    request: Request,
+    agentId: str = PathParam(...),
+) -> dict[str, Any]:
+    """Return the built-in ebook screenshot package as JSON payload."""
+    manager = agents_router_impl._get_multi_agent_manager(request)
+
+    try:
+        await manager.get_agent(agentId)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    try:
+        template = build_ebook_screenshot_template()
+        return dump_rpa_template_package(
+            template,
+            metadata={
+                "source": "builtin",
+                "builtin_template": "ebook-screenshot",
+            },
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post(
+    "/{agentId}/pipelines/rpa/import",
+    response_model=PipelineTemplateInfo,
+    summary="Import RPA package into pipeline templates",
+    description="Load an RPA package and save it as one agent-level pipeline template",
+)
+async def import_rpa_template(
+    request: Request,
+    body: ImportRpaTemplateRequest,
+    agentId: str = PathParam(...),
+    expectedRevision: int | None = Query(default=None),
+) -> PipelineTemplateInfo:
+    """Load an RPA package and persist it as a pipeline template."""
+    manager = agents_router_impl._get_multi_agent_manager(request)
+
+    try:
+        workspace = await manager.get_agent(agentId)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    if body.package is None and not (body.source_path or "").strip():
+        raise HTTPException(status_code=400, detail="Either package or source_path is required")
+
+    workspace_dir = Path(workspace.workspace_dir)
+    try:
+        package_source: dict[str, Any] | Path
+        if body.package is not None:
+            package_source = body.package
+        else:
+            package_source = _resolve_rpa_source_path(workspace_dir, body.source_path or "")
+
+        package = load_rpa_template_package(package_source)
+        rpa_template = package.template
+        if body.target_template_id:
+            rpa_template = rpa_template.model_copy(update={"id": body.target_template_id})
+
+        pipeline_template = rpa_template_to_pipeline_template(rpa_template)
+        saved = _save_agent_pipeline_template_with_md(
+            workspace_dir,
+            pipeline_template,
+            expected_revision=expectedRevision,
+        )
+        return saved.model_copy(
+            update={
+                "builtin_kind": "rpa",
+                "entrypoint": saved.entrypoint or "rpa-workbench",
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get(
+    "/{agentId}/pipelines/templates/{templateId}/rpa/package",
+    response_model=dict[str, Any],
+    summary="Export pipeline template as RPA package",
+    description="Convert one agent-level pipeline template into an RPA package payload",
+)
+async def export_pipeline_template_as_rpa_package(
+    request: Request,
+    agentId: str = PathParam(...),
+    templateId: str = PathParam(...),
+    author: str | None = Query(default=None),
+    note: str | None = Query(default=None),
+    tags: list[str] = Query(default_factory=list),
+) -> dict[str, Any]:
+    """Convert one agent-level pipeline template into RPA package JSON."""
+    manager = agents_router_impl._get_multi_agent_manager(request)
+
+    try:
+        workspace = await manager.get_agent(agentId)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    workspace_dir = Path(workspace.workspace_dir)
+    try:
+        template = next(
+            (
+                item
+                for item in _list_agent_pipeline_templates(workspace_dir)
+                if item.id == templateId
+            ),
+            None,
+        )
+        if template is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Pipeline template '{templateId}' not found",
+            )
+
+        rpa_template = rpa_template_from_pipeline_template(template)
+        normalized_tags = [str(item).strip() for item in tags if str(item).strip()]
+        metadata: dict[str, Any] = {
+            "source": "agent-template",
+            "pipeline_template_id": templateId,
+            "exported_at": datetime.now(timezone.utc).isoformat(),
+        }
+        if author and author.strip():
+            metadata["author"] = author.strip()
+        if note and note.strip():
+            metadata["note"] = note.strip()
+        if normalized_tags:
+            metadata["tags"] = normalized_tags
+
+        return dump_rpa_template_package(
+            rpa_template,
+            metadata=metadata,
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 

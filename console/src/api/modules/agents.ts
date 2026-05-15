@@ -38,12 +38,14 @@ import type {
   PlatformTemplateVersionRecord,
   ProjectFlowInstanceInfo,
   ImportPlatformTemplateRequest,
+  ImportRpaTemplateRequest,
   PublishProjectTemplateRequest,
   ProjectPipelineTemplateStep,
   ProjectPipelineRunSummary,
   ProjectPipelineRunDetail,
   CreateProjectPipelineRunRequest,
   RetryProjectPipelineRunRequest,
+  RpaTemplatePackageDocument,
   ReorderAgentsResponse,
 } from "../types/agents";
 import type { MdFileInfo, MdFileContent } from "../types/workspace";
@@ -437,6 +439,44 @@ export const agentsApi = {
     request<PlatformFlowTemplateInfo[]>(
       `/agents/${agentId}/pipelines/platform/templates`,
     ),
+
+  getBuiltinEbookRpaTemplatePackage: (agentId: string) =>
+    request<RpaTemplatePackageDocument>(
+      `/agents/${agentId}/pipelines/rpa/templates/ebook-screenshot/package`,
+    ),
+
+  importRpaTemplate: (agentId: string, body: ImportRpaTemplateRequest) =>
+    request<ProjectPipelineTemplateInfo>(
+      `/agents/${agentId}/pipelines/rpa/import`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  exportPipelineTemplateAsRpaPackage: (
+    agentId: string,
+    templateId: string,
+    options?: { author?: string; note?: string; tags?: string[] },
+  ) => {
+    const query = new URLSearchParams();
+    if (options?.author?.trim()) {
+      query.set("author", options.author.trim());
+    }
+    if (options?.note?.trim()) {
+      query.set("note", options.note.trim());
+    }
+    if (Array.isArray(options?.tags)) {
+      options?.tags
+        .map((item) => String(item || "").trim())
+        .filter(Boolean)
+        .forEach((tag) => query.append("tags", tag));
+    }
+    const querySuffix = query.toString() ? `?${query.toString()}` : "";
+    return request<RpaTemplatePackageDocument>(
+      `/agents/${agentId}/pipelines/templates/${encodeURIComponent(templateId)}/rpa/package${querySuffix}`,
+    );
+  },
 
   listPlatformTemplateVersions: (agentId: string, templateId: string) =>
     request<PlatformTemplateVersionRecord[]>(

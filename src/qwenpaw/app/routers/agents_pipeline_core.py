@@ -194,6 +194,11 @@ class PipelineRunObservability(BaseModel):
     step_running: int = 0
     artifact_count: int = 0
     error_class: str = ""
+    rpa_runtime_steps: int = 0
+    rpa_actions_executed: int = 0
+    rpa_stop_condition_failures: int = 0
+    rpa_action_duration_ms_total: float = 0.0
+    rpa_action_count_by_kind: dict[str, int] = Field(default_factory=dict)
 
 
 class PipelineRunDetail(PipelineRunSummary):
@@ -3315,7 +3320,27 @@ def _apply_real_step_results(
     project_dir: Path,
     template_id: str,
     step: PipelineRunStep,
+    run_parameters: dict[str, Any] | None = None,
 ) -> list[str]:
+    step_script = str(step.script or "").strip().lower()
+    if step_script.startswith("rpa:"):
+        from ...rpa.runtime import execute_rpa_script_step
+
+        outputs, runtime_metrics, runtime_evidence = execute_rpa_script_step(
+            project_dir=project_dir,
+            step_id=step.id,
+            script=step.script,
+            inputs=dict(step.inputs or {}),
+            parameters=dict(run_parameters or {}),
+        )
+        step.metrics = {
+            **step.metrics,
+            **runtime_metrics,
+            "warning_count": 0,
+        }
+        step.evidence = runtime_evidence[:20] or outputs[:20] or ["rpa-runtime"]
+        return outputs
+
     data_files = _list_project_data_files(project_dir)
     knowledge_files = _list_project_knowledge_files(project_dir)
     outputs, metrics = _compute_step_outputs(template_id, step.id, data_files, knowledge_files)
@@ -3390,6 +3415,33 @@ def _build_run_observability(run: PipelineRunDetail) -> PipelineRunObservability
         or "bootstrapping"
     )
 
+    rpa_runtime_steps = 0
+    rpa_actions_executed = 0
+    rpa_stop_condition_failures = 0
+    rpa_action_duration_ms_total = 0.0
+    rpa_action_count_by_kind: dict[str, int] = {}
+
+    for step in run.steps:
+        metrics = step.metrics if isinstance(step.metrics, dict) else {}
+        if not bool(metrics.get("rpa_runtime")):
+            continue
+        rpa_runtime_steps += 1
+        rpa_actions_executed += int(metrics.get("rpa_actions_executed") or 0)
+        rpa_stop_condition_failures += int(metrics.get("rpa_stop_condition_failures") or 0)
+        rpa_action_duration_ms_total += float(metrics.get("rpa_action_duration_ms_total") or 0.0)
+
+        per_kind = metrics.get("rpa_action_count_by_kind")
+        if isinstance(per_kind, dict):
+            for key, value in per_kind.items():
+                kind = str(key or "").strip()
+                if not kind:
+                    continue
+                try:
+                    inc = int(value)
+                except Exception:
+                    continue
+                rpa_action_count_by_kind[kind] = rpa_action_count_by_kind.get(kind, 0) + inc
+
     return PipelineRunObservability(
         stage=stage,
         duration_sec=round(duration, 3),
@@ -3399,6 +3451,11 @@ def _build_run_observability(run: PipelineRunDetail) -> PipelineRunObservability
         step_running=running,
         artifact_count=len(run.artifacts or []),
         error_class=error_class,
+        rpa_runtime_steps=rpa_runtime_steps,
+        rpa_actions_executed=rpa_actions_executed,
+        rpa_stop_condition_failures=rpa_stop_condition_failures,
+        rpa_action_duration_ms_total=round(rpa_action_duration_ms_total, 3),
+        rpa_action_count_by_kind=rpa_action_count_by_kind,
     )
 
 
@@ -3647,7 +3704,12 @@ def _execute_project_pipeline_run(
 
         try:
             step_started_dt = _parse_pipeline_iso(started_at) or datetime.now(timezone.utc)
-            step_outputs = _apply_real_step_results(project_dir, template.id, step)
+            step_outputs = _apply_real_step_results(
+                project_dir,
+                template.id,
+                step,
+                run.parameters,
+            )
             ended_at = _pipeline_now_iso()
             step_ended_dt = _parse_pipeline_iso(ended_at) or datetime.now(timezone.utc)
             duration_sec = max((step_ended_dt - step_started_dt).total_seconds(), 0.0)

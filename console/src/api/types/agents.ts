@@ -262,6 +262,20 @@ export interface ImportPlatformTemplateRequest {
   target_template_id?: string;
 }
 
+export interface RpaTemplatePackageDocument {
+  schema_version?: string;
+  kind?: string;
+  template?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface ImportRpaTemplateRequest {
+  source_path?: string;
+  package?: RpaTemplatePackageDocument;
+  target_template_id?: string;
+}
+
 export interface PublishProjectTemplateRequest {
   platform_template_id?: string;
   bump?: "major" | "minor" | "patch";
@@ -372,6 +386,11 @@ export interface ProjectPipelineObservability {
   step_running: number;
   artifact_count: number;
   error_class: string;
+  rpa_runtime_steps?: number;
+  rpa_actions_executed?: number;
+  rpa_stop_condition_failures?: number;
+  rpa_action_duration_ms_total?: number;
+  rpa_action_count_by_kind?: Record<string, number>;
 }
 
 export interface ProjectPipelineRunDetail extends ProjectPipelineRunSummary {

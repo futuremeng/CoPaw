@@ -14,6 +14,7 @@ from qwenpaw.app.routers.agents_pipeline_core import (
     PipelineTemplateStep,
     _create_project_pipeline_run,
     _append_collab_event,
+    _apply_real_step_results,
     _execute_project_pipeline_run,
     _get_pipeline_draft,
     _import_platform_template_to_project,
@@ -398,3 +399,107 @@ def test_status_transition_guards_reject_invalid_transitions():
 
     with pytest.raises(ValueError):
         _transition_step_status("succeeded", "running")
+
+    def test_build_run_observability_aggregates_rpa_metrics():
+        run = PipelineRunDetail(
+            id="run-rpa-obs",
+            project_id="project-rpa",
+            template_id="tpl-rpa",
+            status="succeeded",
+            created_at="2026-01-01T00:00:00Z",
+            updated_at="2026-01-01T00:00:10Z",
+            parameters={},
+            artifacts=["browser/rpa/ebook/page-001.png"],
+            steps=[
+                PipelineRunStep(
+                    id="step-1",
+                    name="Open",
+                    kind="task",
+                    status="succeeded",
+                    metrics={
+                        "rpa_runtime": True,
+                        "rpa_actions_executed": 3,
+                        "rpa_stop_condition_failures": 1,
+                        "rpa_action_duration_ms_total": 120.5,
+                        "rpa_action_count_by_kind": {
+                            "browser.open": 1,
+                            "browser.screenshot": 2,
+                        },
+                    },
+                    evidence=[],
+                ),
+                PipelineRunStep(
+                    id="step-2",
+                    name="Validate",
+                    kind="validation",
+                    status="succeeded",
+                    metrics={},
+                    evidence=[],
+                ),
+            ],
+            flow_version="0.1.0",
+        )
+
+        observability = _build_run_observability(run)
+        assert observability.rpa_runtime_steps == 1
+        assert observability.rpa_actions_executed == 3
+        assert observability.rpa_stop_condition_failures == 1
+        assert observability.rpa_action_duration_ms_total == 120.5
+        assert observability.rpa_action_count_by_kind["browser.open"] == 1
+        assert observability.rpa_action_count_by_kind["browser.screenshot"] == 2
+
+def test_apply_real_step_results_rpa_runtime_branch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    project_dir = tmp_path / "project-rpa"
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    calls: list[tuple[str, dict]] = []
+
+    def _fake_invoke(action: str, **kwargs):
+        calls.append((action, kwargs))
+        if action == "screenshot":
+            path = Path(str(kwargs["path"]))
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("fake", encoding="utf-8")
+        return {"ok": True}
+
+    monkeypatch.setattr("qwenpaw.rpa.runtime.invoke_browser_use", _fake_invoke)
+
+    step = PipelineRunStep(
+        id="capture-pages",
+        name="Capture Pages",
+        kind="task",
+        script="rpa:flow.loop",
+        inputs={
+            "screenshot_dir": "browser/rpa/ebook",
+            "page_prefix": "page",
+            "__rpa_loop__": {
+                "mode": "range",
+                "iterator": "page_index",
+                "start": 1,
+                "end": "{{page_total}}",
+                "actions": [
+                    {
+                        "kind": "browser.screenshot",
+                        "path": "{{screenshot_dir}}/{{page_prefix}}-{{page_index:03d}}.png",
+                    }
+                ],
+            },
+        },
+        status="running",
+        metrics={},
+        evidence=[],
+    )
+
+    outputs = _apply_real_step_results(
+        project_dir=project_dir,
+        template_id="rpa-demo",
+        step=step,
+        run_parameters={"page_total": 2},
+    )
+
+    assert len(outputs) == 2
+    assert outputs[0].endswith("page-001.png")
+    assert step.metrics.get("rpa_runtime") is True
+    assert step.metrics.get("rpa_loop_iterations") == 2
+    assert step.metrics.get("warning_count") == 0
+    assert calls and calls[0][0] == "screenshot"
