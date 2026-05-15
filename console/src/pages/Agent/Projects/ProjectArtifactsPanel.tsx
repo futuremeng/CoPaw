@@ -8,6 +8,7 @@ import type {
 import ProjectDocumentKnowledgeVisualization from "./ProjectDocumentKnowledgeVisualization";
 import type { ProjectKnowledgeState } from "./useProjectKnowledgeState";
 import ProjectMdxReadonlyPreview from "./ProjectMdxReadonlyPreview";
+import { shouldHideKnowledgeVisualization } from "./projectFileSelectionUtils";
 import styles from "./index.module.less";
 
 const { Text } = Typography;
@@ -67,6 +68,34 @@ export default function ProjectArtifactsPanel({
     && !isEmptyFilePreview
     && isMarkdownFilePath(selectedFilePath),
   );
+  const shouldShowKnowledgeVisualization = !shouldHideKnowledgeVisualization(selectedFilePath);
+
+  const previewNode = contentLoading ? (
+    <div className={styles.centerState}>
+      <Spin />
+    </div>
+  ) : selectedFilePath ? (
+    <>
+      {isEmptyFilePreview ? (
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={t("projects.emptyFile", "This file is empty")}
+        />
+      ) : shouldRenderMdxPreview ? (
+        <ProjectMdxReadonlyPreview
+          filePath={selectedFilePath}
+          markdown={fileContent}
+        />
+      ) : (
+        <pre className={styles.previewContent}>{fileContent}</pre>
+      )}
+    </>
+  ) : (
+    <Empty
+      image={Empty.PRESENTED_IMAGE_SIMPLE}
+      description={t("projects.selectFile", "Select a file to preview")}
+    />
+  );
 
   return (
     <div className={`${styles.previewBody} ${styles.previewBodyArtifacts}`}>
@@ -81,59 +110,36 @@ export default function ProjectArtifactsPanel({
         />
       ) : (
         <div className={styles.artifactPanel}>
-          <Splitter className={styles.artifactPreviewSplitter}>
-            <Splitter.Panel defaultSize="68%" min="45%">
-              <div className={styles.previewPane}>
-                {contentLoading ? (
-                  <div className={styles.centerState}>
-                    <Spin />
+          {shouldShowKnowledgeVisualization ? (
+            <Splitter className={styles.artifactPreviewSplitter}>
+              <Splitter.Panel defaultSize="68%" min="45%">
+                <div className={styles.previewPane}>{previewNode}</div>
+              </Splitter.Panel>
+              <Splitter.Panel min="28%">
+                <div className={styles.knowledgePreviewPane}>
+                  <div className={styles.knowledgePreviewHeader}>
+                    <Text strong>
+                      {t(
+                        "projects.workbench.knowledgePreviewTitle",
+                        "Current Document Knowledge Visualization",
+                      )}
+                    </Text>
                   </div>
-                ) : selectedFilePath ? (
-                  <>
-                    {isEmptyFilePreview ? (
-                      <Empty
-                        image={Empty.PRESENTED_IMAGE_SIMPLE}
-                        description={t("projects.emptyFile", "This file is empty")}
-                      />
-                    ) : shouldRenderMdxPreview ? (
-                      <ProjectMdxReadonlyPreview
-                        filePath={selectedFilePath}
-                        markdown={fileContent}
-                      />
-                    ) : (
-                      <pre className={styles.previewContent}>{fileContent}</pre>
-                    )}
-                  </>
-                ) : (
-                  <Empty
-                    image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description={t("projects.selectFile", "Select a file to preview")}
-                  />
-                )}
-              </div>
-            </Splitter.Panel>
-            <Splitter.Panel min="28%">
-              <div className={styles.knowledgePreviewPane}>
-                <div className={styles.knowledgePreviewHeader}>
-                  <Text strong>
-                    {t(
-                      "projects.workbench.knowledgePreviewTitle",
-                      "Current Document Knowledge Visualization",
-                    )}
-                  </Text>
+                  <div className={styles.knowledgePreviewBody}>
+                    <ProjectDocumentKnowledgeVisualization
+                      selectedFilePath={selectedFilePath}
+                      fileContent={fileContent}
+                      charStatsContent={charStatsContent}
+                      nerStructuredContent={nerStructuredContent}
+                      knowledgeState={knowledgeState}
+                    />
+                  </div>
                 </div>
-                <div className={styles.knowledgePreviewBody}>
-                  <ProjectDocumentKnowledgeVisualization
-                    selectedFilePath={selectedFilePath}
-                    fileContent={fileContent}
-                    charStatsContent={charStatsContent}
-                    nerStructuredContent={nerStructuredContent}
-                    knowledgeState={knowledgeState}
-                  />
-                </div>
-              </div>
-            </Splitter.Panel>
-          </Splitter>
+              </Splitter.Panel>
+            </Splitter>
+          ) : (
+            <div className={styles.previewPane}>{previewNode}</div>
+          )}
           {selectedAttachPaths.length > 0 && (
             <div className={styles.attachFloatingBar}>
               <div className={styles.attachCountText}>

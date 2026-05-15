@@ -1,6 +1,10 @@
 import { isBuiltInProjectFile } from "./builtInFiles";
 import type { AgentProjectFileTreeNode } from "../../../api/types/agents";
 
+function normalizeProjectPath(path: string): string {
+  return path.replace(/\\/g, "/").replace(/^\.\//, "");
+}
+
 export function isPreviewablePath(path: string): boolean {
   return Boolean(path);
 }
@@ -52,6 +56,24 @@ export function isIgnoredProjectFile(path: string): boolean {
   const normalized = path.replace(/\\/g, "/");
   const fileName = (normalized.split("/").pop() || "").toLowerCase();
   return [".ds_store", ".gitkeep", "thumbs.db"].includes(fileName);
+}
+
+export function shouldHideKnowledgeVisualization(path: string): boolean {
+  if (!path) {
+    return false;
+  }
+  if (isBuiltInProjectFile(path)) {
+    return true;
+  }
+
+  const normalized = normalizeProjectPath(path);
+  const segments = normalized.split("/").filter(Boolean);
+  if (segments.length === 0) {
+    return false;
+  }
+
+  // Hide root dot files like .env and .gitignore from knowledge visualization.
+  return segments.length === 1 && segments[0].startsWith(".");
 }
 
 function isTextSourcePath(path: string): boolean {

@@ -28,12 +28,12 @@ describe("ProjectArtifactsPanel", () => {
     contentLoading: false,
     artifactRecords: [],
     selectedArtifactRecord: undefined,
-    selectedFilePath: ".memories/baseline.md",
+    selectedFilePath: "docs/baseline.md",
     knownProjectFilesByPath: {
-      ".memories/baseline.md": {
+      "docs/baseline.md": {
         filename: "baseline.md",
-        path: ".memories/baseline.md",
-        relative_path: ".memories/baseline.md",
+        path: "docs/baseline.md",
+        relative_path: "docs/baseline.md",
         size: 0,
         modified_time: "2026-04-24 10:00:00",
         is_directory: false,
@@ -69,8 +69,8 @@ describe("ProjectArtifactsPanel", () => {
       <ProjectArtifactsPanel
         {...baseProps}
         knownProjectFilesByPath={{
-          ".memories/baseline.md": {
-            ...baseProps.knownProjectFilesByPath[".memories/baseline.md"],
+          "docs/baseline.md": {
+            ...baseProps.knownProjectFilesByPath["docs/baseline.md"],
             size: 14,
           },
         }}
@@ -102,5 +102,47 @@ describe("ProjectArtifactsPanel", () => {
 
     expect(screen.queryByTestId("project-mdx-preview")).toBeNull();
     expect(screen.getByText("echo ready")).toBeTruthy();
+  });
+
+  it("hides knowledge visualization for dot-prefixed built-in directory files", () => {
+    render(
+      <ProjectArtifactsPanel
+        {...baseProps}
+        selectedFilePath=".agent/AGENTS.md"
+        knownProjectFilesByPath={{
+          ".agent/AGENTS.md": {
+            filename: "AGENTS.md",
+            path: ".agent/AGENTS.md",
+            size: 120,
+            modified_time: "2026-04-24 10:00:00",
+          },
+        }}
+        fileContent={"# Rules\n"}
+      />,
+    );
+
+    expect(screen.queryByText("Current Document Knowledge Visualization")).toBeNull();
+    expect(screen.queryByTestId("project-knowledge-visualization")).toBeNull();
+  });
+
+  it("hides knowledge visualization for root dot files", () => {
+    render(
+      <ProjectArtifactsPanel
+        {...baseProps}
+        selectedFilePath=".gitignore"
+        knownProjectFilesByPath={{
+          ".gitignore": {
+            filename: ".gitignore",
+            path: ".gitignore",
+            size: 64,
+            modified_time: "2026-04-24 10:00:00",
+          },
+        }}
+        fileContent={"node_modules\n"}
+      />,
+    );
+
+    expect(screen.queryByText("Current Document Knowledge Visualization")).toBeNull();
+    expect(screen.queryByTestId("project-knowledge-visualization")).toBeNull();
   });
 });
