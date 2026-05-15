@@ -22,7 +22,7 @@ from agentscope_runtime.engine.schemas.exception import (
     AppBaseException,
 )
 
-from ..agent_context import resolve_agent_id_for_request
+from ..agent_context import get_agent_for_request, resolve_agent_id_for_request
 from ..utils import schedule_agent_reload
 from ...config.config import load_agent_config, save_agent_config
 from ...providers.provider import ProviderInfo, ModelInfo
