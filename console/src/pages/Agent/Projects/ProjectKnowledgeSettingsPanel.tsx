@@ -133,6 +133,26 @@ export default function ProjectKnowledgeSettingsPanel(
   }, [projectId]);
 
   useEffect(() => {
+    let cancelled = false;
+    const loadInitialSyncState = async () => {
+      try {
+        const state = await api.getProjectKnowledgeSyncStatus({ projectId });
+        if (!cancelled) {
+          setSyncState(state);
+        }
+      } catch {
+        // best-effort initial sync state load
+      }
+    };
+
+    void loadInitialSyncState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  useEffect(() => {
     if (typeof WebSocket === "undefined") {
       return;
     }

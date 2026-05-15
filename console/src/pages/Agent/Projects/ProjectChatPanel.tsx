@@ -95,12 +95,12 @@ function ProjectChatPanel({
   }, [isVsCodeEmbedded]);
 
   useEffect(() => {
-    if (!activeSessionId) {
+    if (!activeSessionId || chatMode === "workspace") {
       setChatViewActivated(true);
       return;
     }
     setChatViewActivated(false);
-  }, [activeSessionId]);
+  }, [activeSessionId, chatMode]);
 
   useEffect(() => {
     if (!activeSessionId) {
@@ -446,15 +446,10 @@ function ProjectChatPanel({
                         ),
                       ]}
                     />
-                  ) : chatViewActivated ? (
+                  ) : (
                     <div className={styles.centerState}>
                       <Spin />
                     </div>
-                  ) : renderChatLoadGate(
-                    t(
-                      "projects.chat.loadWorkspaceConversationHint",
-                      "项目协作对话会在你手动打开时再加载，避免首屏长时间等待。",
-                    ),
                   )
                   }
                 </div>

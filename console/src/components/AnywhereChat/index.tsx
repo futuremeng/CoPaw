@@ -11,17 +11,20 @@ import * as ReactDOM from "react-dom";
 import { createPortal } from "react-dom";
 import { Button, Empty, Modal, Popover, Spin, Tooltip, message } from "antd";
 import { CopyOutlined, DashboardOutlined, DeleteOutlined, FileMarkdownOutlined } from "@ant-design/icons";
-import { SparkAttachmentLine, SparkHistoryLine, SparkNewChatFill } from "@agentscope-ai/icons";
+import { SparkAttachmentLine, SparkHistoryLine, SparkNewChatFill, SparkSearchLine } from "@agentscope-ai/icons";
 import { useTranslation } from "react-i18next";
 import defaultConfig, { getDefaultConfig } from "../../pages/Chat/OptionsPanel/defaultConfig";
 import ModelSelector from "../../pages/Chat/ModelSelector";
 import sessionApi from "../../pages/Chat/sessionApi";
 import { chatApi } from "../../api/modules/chat";
+import { commandsApi } from "../../api/modules/commands";
 import { providerApi } from "../../api/modules/provider";
 import { agentApi } from "../../api/modules/agent";
+import { planApi } from "../../api/modules/plan";
 import { buildAuthHeaders } from "../../api/authHeaders";
 import { getApiUrl } from "../../api/config";
 import { useTheme } from "../../contexts/ThemeContext";
+import { useApprovalContext } from "../../contexts/ApprovalContext";
 import { useAgentStore } from "../../stores/agentStore";
 import AgentScopeRuntimeResponseBuilder from "@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/AgentScopeRuntime/Response/Builder.js";
 import { AgentScopeRuntimeRunStatus } from "@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/AgentScopeRuntime/types.js";
@@ -44,8 +47,10 @@ import { IconButton } from "@agentscope-ai/design";
 import {
   buildModelError,
   copyText,
+  extractTextFromMessage,
   extractCopyableText,
   normalizeContentUrls,
+  setTextareaValue,
   toDisplayUrl,
 } from "../../pages/Chat/utils";
 import {
@@ -53,6 +58,15 @@ import {
   materializeThinkingOnlyFallback,
 } from "../../utils/runtimeResponseFallback";
 import { shouldAutoContinueResponse } from "../../utils/chatAutoContinue";
+import WhisperSpeechButton, {
+  WhisperSpeechButtonRef,
+} from "../../pages/Chat/components/WhisperSpeechButton/index";
+import { ApprovalCard } from "../ApprovalCard/ApprovalCard";
+import PlanPanel from "../PlanPanel";
+import ChatSearchPanel from "./ChatSearchPanel";
+import { resolveApprovalVisibility } from "./approvalVisibility";
+import { shouldStopSearchAnchorRetry } from "./searchAnchorRetry";
+import { shouldTriggerWhisperShortcut } from "./shortcutGuard";
 import {
   getLastVisibleUserState,
   loadMergedRawChatHistory,
@@ -88,11 +102,28 @@ type WelcomeConfigShape = {
   prompts?: WelcomePrompt[];
 };
 
+interface ApprovalMessageData {
+  requestId: string;
+  sessionId: string;
+  rootSessionId?: string;
+  agentId: string;
+  ownerAgentId?: string;
+  toolName: string;
+  severity: string;
+  findingsCount: number;
+  findingsSummary: string;
+  toolParams: Record<string, unknown>;
+  createdAt: number;
+  timeoutSeconds: number;
+}
+
 const RUNTIME_STATUS_RETRY_DELAY_MS = 1500;
 const RUNTIME_STATUS_MAX_RETRIES = 2;
 const AUTO_CONTINUE_MAX_ATTEMPTS = 2;
 const AUTO_CONTINUE_MIN_INCREMENT_CHARS = 32;
 const FLUSH_SYNC_PATCH_FLAG = "__copaw_relaxed_flush_sync_patched__";
+const APPROVAL_VISIBLE_LIMIT = 3;
+const SEARCH_ANCHOR_HIGHLIGHT_MS = 1800;
 
 function applyRelaxedFlushSyncPatch(): void {
   if (typeof window === "undefined") {
@@ -230,6 +261,22 @@ type RuntimeUiMessage = IAgentScopeRuntimeWebUIMessage & {
 };
 
 const CHAT_ATTACHMENT_MAX_MB = 10;
+
+const PlanIcon = () => (
+  <svg
+    width="1em"
+    height="1em"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M9 11l3 3L22 4" />
+    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+  </svg>
+);
 
 const COPAW_FULL_REFERENCES_BLOCK_RE =
   /<!--\s*COPAW_REFERENCES_FULL_BEGIN[\s\S]*?COPAW_REFERENCES_FULL_END\s*-->/gi;
@@ -818,8 +865,14 @@ export default function AnywhereChat({
   const isComposingRef = useRef(false);
   const { t } = useTranslation();
   const { isDark } = useTheme();
+  const { approvals, setApprovals } = useApprovalContext();
   const { selectedAgent } = useAgentStore();
   const [refreshKey, setRefreshKey] = useState(0);
+  const [planEnabled, setPlanEnabled] = useState(false);
+  const [planPanelOpen, setPlanPanelOpen] = useState(false);
+  const [searchPanelOpen, setSearchPanelOpen] = useState(false);
+  const [whisperEnabled, setWhisperEnabled] = useState(false);
+  const [approvalRequests, setApprovalRequests] = useState<Map<string, ApprovalMessageData>>(new Map());
   const [providerList, setProviderList] = useState<ProviderInfo[]>([]);
   const [activeModels, setActiveModels] = useState<ActiveModelsInfo | null>(null);
   const [runningConfig, setRunningConfig] = useState<AgentsRunningConfig | null>(null);
@@ -839,6 +892,12 @@ export default function AnywhereChat({
   const [tailUserActionHost, setTailUserActionHost] = useState<HTMLElement | null>(null);
   const [tailUserActionMessageId, setTailUserActionMessageId] = useState("");
   const chatRef = useRef<IAgentScopeRuntimeWebUIRef>(null);
+  const whisperSpeechRef = useRef<WhisperSpeechButtonRef>(null);
+  const approvalKeyRef = useRef("");
+  const historyIndexRef = useRef<number>(-1);
+  const draftRef = useRef("");
+  const userMessagesCacheRef = useRef<string[]>([]);
+  const cachedMessageCountRef = useRef(0);
   const runtimeStatusRequestInFlight = useRef(false);
   const sessionIdRef = useRef(sessionId);
   const backendSessionIdRef = useRef(sessionId);
@@ -851,6 +910,11 @@ export default function AnywhereChat({
   const autoContinueAttemptsRef = useRef<Record<string, number>>({});
   const autoContinueInFlightRef = useRef<Record<string, boolean>>({});
   const autoContinueTailRef = useRef<Record<string, string>>({});
+  const pendingSearchAnchorRef = useRef<{ query: string; messageId?: string } | null>(null);
+  const highlightedSearchAnchorRef = useRef<HTMLElement | null>(null);
+  const searchAnchorHighlightTimerRef = useRef<number | null>(null);
+  const [closingApprovalIds, setClosingApprovalIds] = useState<string[]>([]);
+  const [showAllApprovals, setShowAllApprovals] = useState(false);
 
   const multimodalCaps = useMemo(() => {
     const providerId = activeModels?.active_llm?.provider_id;
@@ -885,14 +949,14 @@ export default function AnywhereChat({
     };
   }, [activeModels, providerList]);
 
-  useEffect(() => {
-    const isAnywhereChatInput = (eventTarget: EventTarget | null): boolean => {
-      const target = eventTarget as HTMLElement | null;
-      if (!target) return false;
-      if (target.tagName !== "TEXTAREA") return false;
-      return Boolean(target.closest(".copaw-chat-anywhere-layout"));
-    };
+  const isAnywhereChatInput = useCallback((eventTarget: EventTarget | null): boolean => {
+    const target = eventTarget as HTMLElement | null;
+    if (!target) return false;
+    if (target.tagName !== "TEXTAREA") return false;
+    return Boolean(target.closest(".copaw-chat-anywhere-layout"));
+  }, []);
 
+  useEffect(() => {
     const handleCompositionStart = (event: CompositionEvent) => {
       if (!isAnywhereChatInput(event.target)) return;
       isComposingRef.current = true;
@@ -926,7 +990,7 @@ export default function AnywhereChat({
       document.removeEventListener("compositionend", handleCompositionEnd, true);
       document.removeEventListener("keydown", suppressImeEnter, true);
     };
-  }, []);
+  }, [isAnywhereChatInput]);
 
   const getInputRoot = useCallback((): HTMLElement | null => {
     return document.querySelector(`.${hostClassName}`) as HTMLElement | null;
@@ -970,6 +1034,243 @@ export default function AnywhereChat({
       : promptText;
     setDraftInputValue(nextValue);
   }, [getInputTextarea, setDraftInputValue]);
+
+  const focusChatInput = useCallback(() => {
+    window.setTimeout(() => {
+      const textarea = getInputTextarea();
+      textarea?.focus();
+    }, 0);
+  }, [getInputTextarea]);
+
+  const clearSearchAnchorHighlight = useCallback(() => {
+    if (searchAnchorHighlightTimerRef.current !== null) {
+      window.clearTimeout(searchAnchorHighlightTimerRef.current);
+      searchAnchorHighlightTimerRef.current = null;
+    }
+    const current = highlightedSearchAnchorRef.current;
+    if (current) {
+      current.classList.remove(styles.searchAnchorHighlight);
+      highlightedSearchAnchorRef.current = null;
+    }
+  }, []);
+
+  const highlightSearchAnchorNode = useCallback((node: HTMLElement) => {
+    clearSearchAnchorHighlight();
+    node.classList.add(styles.searchAnchorHighlight);
+    highlightedSearchAnchorRef.current = node;
+    searchAnchorHighlightTimerRef.current = window.setTimeout(() => {
+      node.classList.remove(styles.searchAnchorHighlight);
+      if (highlightedSearchAnchorRef.current === node) {
+        highlightedSearchAnchorRef.current = null;
+      }
+      searchAnchorHighlightTimerRef.current = null;
+    }, SEARCH_ANCHOR_HIGHLIGHT_MS);
+  }, [clearSearchAnchorHighlight]);
+
+  const tryScrollToSearchAnchor = useCallback((query: string, messageId?: string): boolean => {
+    const root = getInputRoot();
+    if (!root || !query.trim()) {
+      return false;
+    }
+
+    if (messageId) {
+      const scopedById = root.querySelector<HTMLElement>(`#msg_${CSS.escape(messageId)}`)
+        || root.querySelector<HTMLElement>(`[id*="${messageId}"]`);
+      if (scopedById) {
+        scopedById.scrollIntoView({ block: "center", behavior: "smooth" });
+        highlightSearchAnchorNode(scopedById);
+        return true;
+      }
+    }
+
+    const lowered = query.toLowerCase();
+    const candidates = Array.from(
+      root.querySelectorAll<HTMLElement>(
+        '[data-role="assistant"], [data-role="user"], [class*="bubble"]',
+      ),
+    );
+    const matchedNode = candidates.find((node) =>
+      (node.textContent || "").toLowerCase().includes(lowered),
+    );
+
+    if (!matchedNode) {
+      return false;
+    }
+
+    matchedNode.scrollIntoView({ block: "center", behavior: "smooth" });
+    highlightSearchAnchorNode(matchedNode);
+    return true;
+  }, [getInputRoot, highlightSearchAnchorNode]);
+
+  useEffect(() => {
+    return () => {
+      clearSearchAnchorHighlight();
+    };
+  }, [clearSearchAnchorHighlight]);
+
+  const handleWhisperTranscription = useCallback((text: string) => {
+    const textarea = getInputTextarea();
+    if (!textarea) {
+      return;
+    }
+    const currentValue = textarea.value || "";
+    const nextValue = currentValue ? `${currentValue} ${text}` : text;
+    setTextareaValue(textarea, nextValue);
+    textarea.focus();
+  }, [getInputTextarea]);
+
+  const getUserMessagesWithText = useCallback((): string[] => {
+    if (!chatRef.current?.messages?.getMessages) {
+      return [];
+    }
+
+    const allMessages = chatRef.current.messages.getMessages();
+    if (!Array.isArray(allMessages)) {
+      return [];
+    }
+
+    if (
+      userMessagesCacheRef.current.length > 0
+      && cachedMessageCountRef.current === allMessages.length
+    ) {
+      return userMessagesCacheRef.current;
+    }
+
+    const userMessages = allMessages
+      .filter((msg) => msg.role === "user")
+      .map((msg) => extractTextFromMessage(msg))
+      .filter((text) => text.trim().length > 0);
+
+    userMessagesCacheRef.current = userMessages;
+    cachedMessageCountRef.current = allMessages.length;
+    return userMessages;
+  }, []);
+
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      const isWithinAnywhere = isAnywhereChatInput(event.target)
+        || Boolean((event.target as HTMLElement | null)?.closest(".copaw-chat-anywhere-layout"));
+
+      if (shouldTriggerWhisperShortcut({
+        isWithinAnywhere,
+        whisperEnabled,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey,
+        key: event.key,
+      })) {
+        event.preventDefault();
+        whisperSpeechRef.current?.toggleRecording();
+      }
+    };
+
+    document.addEventListener("keydown", handleShortcut, true);
+    return () => {
+      document.removeEventListener("keydown", handleShortcut, true);
+    };
+  }, [isAnywhereChatInput, whisperEnabled]);
+
+  useEffect(() => {
+    const findMessageInDirection = (
+      messages: string[],
+      startIndex: number,
+      direction: 1 | -1,
+    ): { index: number; text: string } | null => {
+      let lookupIndex = startIndex;
+      let steps = 0;
+      while (lookupIndex >= 0 && lookupIndex < messages.length && steps < 100) {
+        const messageText = messages[messages.length - 1 - lookupIndex];
+        if (messageText) {
+          return { index: lookupIndex, text: messageText };
+        }
+        lookupIndex += direction;
+        steps += 1;
+      }
+      return null;
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "ArrowUp" && event.key !== "ArrowDown") {
+        return;
+      }
+
+      const target = event.target as HTMLTextAreaElement | null;
+      if (!target || target.tagName !== "TEXTAREA" || !isAnywhereChatInput(target)) {
+        return;
+      }
+      if (isComposingRef.current || event.isComposing || event.ctrlKey || event.metaKey || event.altKey) {
+        return;
+      }
+
+      if (target.selectionStart !== target.selectionEnd) {
+        return;
+      }
+
+      const userMessages = getUserMessagesWithText();
+      if (userMessages.length === 0) {
+        return;
+      }
+
+      if (event.key === "ArrowUp") {
+        if ((target.value || "").startsWith("/")) {
+          return;
+        }
+        const cursorPosition = target.selectionStart || 0;
+        if (target.value.substring(0, cursorPosition).includes("\n")) {
+          return;
+        }
+
+        if (historyIndexRef.current === -1) {
+          draftRef.current = target.value;
+        }
+
+        const messageText = findMessageInDirection(userMessages, historyIndexRef.current + 1, 1);
+        if (!messageText) {
+          return;
+        }
+
+        event.preventDefault();
+        historyIndexRef.current = messageText.index;
+        setTextareaValue(target, messageText.text);
+        return;
+      }
+
+      if (historyIndexRef.current < 0) {
+        return;
+      }
+      const cursorPosition = target.selectionStart || 0;
+      if (target.value.substring(cursorPosition).includes("\n")) {
+        return;
+      }
+
+      const messageText = findMessageInDirection(userMessages, historyIndexRef.current - 1, -1);
+      event.preventDefault();
+      if (!messageText) {
+        historyIndexRef.current = -1;
+        setTextareaValue(target, draftRef.current);
+        return;
+      }
+
+      historyIndexRef.current = messageText.index;
+      setTextareaValue(target, messageText.text);
+    };
+
+    const handleFocus = (event: FocusEvent) => {
+      if (!isAnywhereChatInput(event.target)) {
+        return;
+      }
+      historyIndexRef.current = -1;
+      draftRef.current = "";
+    };
+
+    document.addEventListener("keydown", handleKeyDown, true);
+    document.addEventListener("focusin", handleFocus, true);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown, true);
+      document.removeEventListener("focusin", handleFocus, true);
+    };
+  }, [getUserMessagesWithText, isAnywhereChatInput]);
 
   const resolveCurrentChatName = useCallback(
     (chats: ChatSpec[]): string => {
@@ -1395,6 +1696,11 @@ export default function AnywhereChat({
     setRuntimeStatusFromApi(null);
     setRuntimeStatusError(null);
     setTransientMessages([]);
+    historyIndexRef.current = -1;
+    draftRef.current = "";
+    userMessagesCacheRef.current = [];
+    cachedMessageCountRef.current = 0;
+    setShowAllApprovals(false);
 
   }, [clearRuntimeStatusRetry, loadCurrentChatName, sessionId]);
 
@@ -1555,6 +1861,152 @@ export default function AnywhereChat({
       window.removeEventListener("model-switched", handleModelSwitched);
     };
   }, [loadRuntimeInputs]);
+
+  useEffect(() => {
+    let cancelled = false;
+    planApi
+      .getPlanConfig(selectedAgent)
+      .then((config) => {
+        if (!cancelled) {
+          setPlanEnabled(config.enabled);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPlanEnabled(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedAgent]);
+
+  useEffect(() => {
+    agentApi
+      .getTranscriptionProviderType()
+      .then((result) => {
+        setWhisperEnabled(result.transcription_provider_type !== "disabled");
+      })
+      .catch(() => {
+        setWhisperEnabled(false);
+      });
+  }, []);
+
+  useEffect(() => {
+    const currentBackendSession = backendSessionIdRef.current || sessionId;
+    const sessionApprovals = approvals.filter((approval) =>
+      approval.root_session_id === sessionId
+      || approval.session_id === sessionId
+      || (currentBackendSession && (
+        approval.root_session_id === currentBackendSession
+        || approval.session_id === currentBackendSession
+      )),
+    );
+
+    const key = sessionApprovals
+      .map((approval) => approval.request_id)
+      .sort()
+      .join(",");
+
+    if (key === approvalKeyRef.current) {
+      return;
+    }
+    approvalKeyRef.current = key;
+
+    const nextMap = new Map<string, ApprovalMessageData>();
+    for (const approval of sessionApprovals) {
+      nextMap.set(approval.request_id, {
+        requestId: approval.request_id,
+        sessionId: approval.session_id,
+        rootSessionId: approval.root_session_id,
+        agentId: approval.agent_id,
+        ownerAgentId: approval.owner_agent_id,
+        toolName: approval.tool_name,
+        severity: approval.severity,
+        findingsCount: approval.findings_count,
+        findingsSummary: approval.findings_summary,
+        toolParams: approval.tool_params,
+        createdAt: approval.created_at,
+        timeoutSeconds: approval.timeout_seconds,
+      });
+    }
+
+    setApprovalRequests(nextMap);
+  }, [approvals, sessionId]);
+
+  const handleApprove = useCallback(async (requestId: string) => {
+    const request = approvalRequests.get(requestId);
+    if (!request) {
+      return;
+    }
+
+    const rootSessionId = request.rootSessionId || sessionId;
+    setClosingApprovalIds((prev) => (prev.includes(requestId) ? prev : [...prev, requestId]));
+    try {
+      await commandsApi.sendApprovalCommand("approve", requestId, rootSessionId);
+      setApprovals((prev) => prev.filter((item) => item.request_id !== requestId));
+      window.setTimeout(() => {
+        setApprovalRequests((prev) => {
+          const next = new Map(prev);
+          next.delete(requestId);
+          return next;
+        });
+        setClosingApprovalIds((prev) => prev.filter((id) => id !== requestId));
+      }, 320);
+      message.success(t("approval.approved", "Approved"));
+    } catch (error) {
+      setClosingApprovalIds((prev) => prev.filter((id) => id !== requestId));
+      throw error;
+    }
+  }, [approvalRequests, sessionId, setApprovals, t]);
+
+  const handleDeny = useCallback(async (requestId: string) => {
+    const request = approvalRequests.get(requestId);
+    if (!request) {
+      return;
+    }
+
+    const rootSessionId = request.rootSessionId || sessionId;
+    setClosingApprovalIds((prev) => (prev.includes(requestId) ? prev : [...prev, requestId]));
+    try {
+      await commandsApi.sendApprovalCommand("deny", requestId, rootSessionId);
+      setApprovals((prev) => prev.filter((item) => item.request_id !== requestId));
+      window.setTimeout(() => {
+        setApprovalRequests((prev) => {
+          const next = new Map(prev);
+          next.delete(requestId);
+          return next;
+        });
+        setClosingApprovalIds((prev) => prev.filter((id) => id !== requestId));
+      }, 320);
+      message.success(t("approval.denied", "Denied"));
+    } catch (error) {
+      setClosingApprovalIds((prev) => prev.filter((id) => id !== requestId));
+      throw error;
+    }
+  }, [approvalRequests, sessionId, setApprovals, t]);
+
+  useEffect(() => {
+    const pendingAnchor = pendingSearchAnchorRef.current;
+    if (!pendingAnchor) {
+      return;
+    }
+
+    let attempts = 0;
+    const maxAttempts = 10;
+    const timer = window.setInterval(() => {
+      attempts += 1;
+      const done = tryScrollToSearchAnchor(pendingAnchor.query, pendingAnchor.messageId);
+      if (shouldStopSearchAnchorRetry({ done, attempts, maxAttempts })) {
+        pendingSearchAnchorRef.current = null;
+        window.clearInterval(timer);
+      }
+    }, 180);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [chatHistory?.messages, sessionId, tryScrollToSearchAnchor]);
 
   useEffect(() => {
     void loadChatHistory();
@@ -2094,6 +2546,21 @@ export default function AnywhereChat({
         data.biz_params?.auto_continue === true;
       const lastInput = input.slice(-1);
       const latestUserText = extractLatestUserText(input);
+
+      if (planEnabled && latestUserText.trim() === "/plan") {
+        setPlanPanelOpen(true);
+        return new Response(
+          JSON.stringify({
+            status: AgentScopeRuntimeRunStatus.Completed,
+            output: [],
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
       const bootstrapText = isPipelineDesignBootstrapText(latestUserText);
       const shouldInlinePipelineGuide =
         !bootstrapText && shouldSuggestPipelineOpportunity(latestUserText);
@@ -2442,6 +2909,7 @@ export default function AnywhereChat({
       persistStreamSession,
       runtimeStatusOpen,
       runningConfig?.auto_continue_enabled,
+      planEnabled,
       selectedAgent,
       sessionId,
       t,
@@ -2464,6 +2932,16 @@ export default function AnywhereChat({
         description: t("chat.commands.compact.description"),
       },
       {
+        command: "/mission",
+        value: "mission",
+        description: t("chat.commands.mission.description", "Create mission draft"),
+      },
+      {
+        command: "/skills",
+        value: "skills",
+        description: t("chat.commands.skills.description", "Show skill market"),
+      },
+      {
         command: "/approve",
         value: "approve",
         description: t("chat.commands.approve.description"),
@@ -2474,6 +2952,13 @@ export default function AnywhereChat({
         description: t("chat.commands.deny.description"),
       },
     ];
+    if (planEnabled) {
+      commandSuggestions.push({
+        command: "/plan",
+        value: "plan ",
+        description: t("chat.commands.plan.description", "Manage execution plan"),
+      });
+    }
     const welcomeConfig = (i18nConfig.welcome || {}) as WelcomeConfigShape;
     const selectedPromptValues = welcomePromptsWhenEmpty || welcomePrompts || [];
     const prompts =
@@ -2520,7 +3005,13 @@ export default function AnywhereChat({
       sender: {
         ...senderConfig,
         beforeSubmit: handleBeforeSubmit,
-        allowSpeech: true,
+        allowSpeech: !whisperEnabled,
+        prefix: whisperEnabled ? (
+          <WhisperSpeechButton
+            buttonRef={whisperSpeechRef}
+            onTranscription={handleWhisperTranscription}
+          />
+        ) : undefined,
         attachments: {
           trigger: function (props: AttachmentTriggerProps) {
             const tooltipKey = !multimodalCaps.supportsMultimodal
@@ -2622,9 +3113,12 @@ export default function AnywhereChat({
     isDark,
     multimodalCaps,
     appendPromptToDraftInput,
+    handleWhisperTranscription,
+    planEnabled,
     sessionId,
     singleSessionApi,
     t,
+    whisperEnabled,
     welcomeDescription,
     welcomeGreeting,
     welcomePromptClickBehavior,
@@ -2949,6 +3443,19 @@ export default function AnywhereChat({
     t,
   ]);
 
+  const approvalVisibility = useMemo(
+    () => resolveApprovalVisibility(
+      Array.from(approvalRequests.values()),
+      APPROVAL_VISIBLE_LIMIT,
+      showAllApprovals,
+    ),
+    [approvalRequests, showAllApprovals],
+  );
+
+  const sortedApprovalRequests = approvalVisibility.sorted;
+  const visibleApprovalRequests = approvalVisibility.visible;
+  const hiddenApprovalCount = approvalVisibility.hiddenCount;
+
   return (
     <div
       className={`${hostClassName} copaw-chat-anywhere-layout ${styles.anywhereLayout}`}
@@ -3006,6 +3513,24 @@ export default function AnywhereChat({
               </span>
             </Button>
           </Popover>
+          {planEnabled ? (
+            <Tooltip title={t("plan.title", "Plan")} mouseEnterDelay={0.3}>
+              <IconButton
+                bordered={false}
+                icon={<PlanIcon />}
+                onClick={() => setPlanPanelOpen(true)}
+                aria-label={t("plan.title", "Plan")}
+              />
+            </Tooltip>
+          ) : null}
+          <Tooltip title={t("chat.searchTooltip", "Search")} mouseEnterDelay={0.3}>
+            <IconButton
+              bordered={false}
+              icon={<SparkSearchLine />}
+              onClick={() => setSearchPanelOpen(true)}
+              aria-label={t("chat.searchTooltip", "Search")}
+            />
+          </Tooltip>
           <Tooltip title={t("chat.newChat", "New Chat")} mouseEnterDelay={0.3}>
             <IconButton
               bordered={false}
@@ -3060,7 +3585,108 @@ export default function AnywhereChat({
               tailUserActionHost,
             )
           : null}
+
+        {hiddenApprovalCount > 0 ? (
+          <Button
+            size="small"
+            type="default"
+            className={styles.approvalMoreButton}
+            onClick={() => setShowAllApprovals(true)}
+          >
+            {t("approval.moreCount", {
+              defaultValue: `还有 ${hiddenApprovalCount} 条待处理`,
+              count: hiddenApprovalCount,
+            })}
+          </Button>
+        ) : null}
+        {showAllApprovals && sortedApprovalRequests.length > APPROVAL_VISIBLE_LIMIT ? (
+          <Button
+            size="small"
+            type="text"
+            className={styles.approvalCollapseButton}
+            onClick={() => setShowAllApprovals(false)}
+          >
+            {t("approval.collapseList", "收起审批列表")}
+          </Button>
+        ) : null}
+
+        {visibleApprovalRequests.map((request, index) => (
+          <div
+            key={request.requestId}
+            className={`${styles.approvalCardOverlay} ${closingApprovalIds.includes(request.requestId) ? styles.approvalCardOverlayExit : ""}`}
+            style={{
+              right: 12,
+              bottom: 12 + index * 18,
+              zIndex: 1100 + index,
+            }}
+          >
+            <ApprovalCard
+              requestId={request.requestId}
+              agentId={request.agentId}
+              ownerAgentId={request.ownerAgentId}
+              toolName={request.toolName}
+              severity={request.severity}
+              findingsCount={request.findingsCount}
+              findingsSummary={request.findingsSummary}
+              toolParams={request.toolParams}
+              createdAt={request.createdAt}
+              timeoutSeconds={request.timeoutSeconds}
+              sessionId={request.sessionId}
+              rootSessionId={request.rootSessionId}
+              onApprove={handleApprove}
+              onDeny={handleDeny}
+              onCancel={() => {
+                const stopSessionId = request.rootSessionId || sessionId;
+                if (!stopSessionId) {
+                  return;
+                }
+                void chatApi.stopConsoleChat(stopSessionId).catch((error) => {
+                  console.error("AnywhereChat: stop chat failed", error);
+                });
+              }}
+            />
+          </div>
+        ))}
       </div>
+
+      <ChatSearchPanel
+        open={searchPanelOpen}
+        onClose={() => {
+          setSearchPanelOpen(false);
+          focusChatInput();
+        }}
+        onSelectChat={({ chatId, messageId, query }) => {
+          pendingSearchAnchorRef.current = { query, messageId };
+
+          if (chatId === sessionId) {
+            const scoped = tryScrollToSearchAnchor(query, messageId);
+            if (!scoped) {
+              focusChatInput();
+            }
+            return;
+          }
+
+          if (!onSelectHistoryChat) {
+            message.warning(
+              t(
+                "chat.historySwitchUnavailable",
+                "Current page does not support switching history chats.",
+              ),
+            );
+            return;
+          }
+          onSelectHistoryChat(chatId);
+        }}
+      />
+      {planEnabled ? (
+        <PlanPanel
+          open={planPanelOpen}
+          onClose={() => {
+            setPlanPanelOpen(false);
+            focusChatInput();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

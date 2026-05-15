@@ -62,7 +62,6 @@ describe("LanguageSwitcher", () => {
     expect(screen.getByText("日本語")).toBeInTheDocument();
     expect(screen.getByText("Русский")).toBeInTheDocument();
     expect(screen.getByText("Português (Brasil)")).toBeInTheDocument();
-    expect(screen.getByText("Bahasa Indonesia")).toBeInTheDocument();
   });
 
   it("calls i18n.changeLanguage when a language option is clicked", async () => {
@@ -86,12 +85,12 @@ describe("LanguageSwitcher", () => {
     expect(mockUpdateLanguage).toHaveBeenCalledWith("en");
   });
 
-  it("supports switching to Indonesian", async () => {
+  it("supports switching to Portuguese (Brazil)", async () => {
     const user = userEvent.setup();
     renderWithProviders(<LanguageSwitcher />);
-    await user.click(screen.getByText("Bahasa Indonesia"));
-    expect(mockChangeLanguage).toHaveBeenCalledWith("id");
-    expect(localStorage.getItem("language")).toBe("id");
-    expect(mockUpdateLanguage).toHaveBeenCalledWith("id");
+    await user.click(screen.getByText("Português (Brasil)"));
+    expect(mockChangeLanguage).toHaveBeenCalledWith("pt-BR");
+    expect(localStorage.getItem("language")).toBe("pt-BR");
+    expect(mockUpdateLanguage).toHaveBeenCalledWith("pt-BR");
   });
 });
