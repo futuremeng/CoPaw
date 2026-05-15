@@ -589,6 +589,7 @@ export default function ProjectDetailPage() {
   const [manualRecoverCandidates, setManualRecoverCandidates] = useState<ChatSpec[]>([]);
   const [manualRecoverChatId, setManualRecoverChatId] = useState("");
   const [chatStarting, setChatStarting] = useState(false);
+  const [projectAgentContext, setProjectAgentContext] = useState("");
   const [selectedStepId, setSelectedStepId] = useState("");
   const [deletingProject, setDeletingProject] = useState(false);
   const [automationDrawerOpen, setAutomationDrawerOpen] = useState(false);
@@ -713,6 +714,36 @@ export default function ProjectDetailPage() {
         currentLease.projectId,
         currentLease.leaseId,
       ).catch(() => undefined);
+    };
+  }, [currentAgent?.id, selectedProject?.id]);
+
+  useEffect(() => {
+    const agentId = currentAgent?.id;
+    const projectId = selectedProject?.id;
+    if (!agentId || !projectId) {
+      setProjectAgentContext("");
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const results = await Promise.allSettled([
+        agentsApi.readProjectFile(agentId, projectId, ".agent/AGENTS.md"),
+        agentsApi.readProjectFile(agentId, projectId, ".agent/PROJECT.md"),
+      ]);
+      if (cancelled) {
+        return;
+      }
+      const parts: string[] = [];
+      if (results[0].status === "fulfilled" && results[0].value?.content) {
+        parts.push(`=== .agent/AGENTS.md ===\n${results[0].value.content}`);
+      }
+      if (results[1].status === "fulfilled" && results[1].value?.content) {
+        parts.push(`=== .agent/PROJECT.md ===\n${results[1].value.content}`);
+      }
+      setProjectAgentContext(parts.join("\n\n"));
+    })();
+    return () => {
+      cancelled = true;
     };
   }, [currentAgent?.id, selectedProject?.id]);
 
@@ -3123,26 +3154,28 @@ export default function ProjectDetailPage() {
       onSelectRunHistoryChat={selectRunChatSession}
       onOpenManualRecoverDialog={handleOpenManualRecoverDialogFromChat}
       onAssistantTurnCompleted={handleAssistantTurnCompletedFromChat}
-    />
-  ), [
-    activeDesignChatId,
-    activeRunChatId,
-    activeWorkspaceChatId,
-    autoAttachRequest,
-    chatStarting,
-    handleAssistantTurnCompletedFromChat,
-    handleChatAutoAttachHandled,
-    handleOpenManualRecoverDialogFromChat,
-    handleStartDesignChat,
-    handleStartRunChat,
-    handleStartWorkspaceChat,
-    projectChatMode,
-    projectFileCount,
-    selectWorkspaceChatSession,
-    selectDesignChatSession,
-    selectRunChatSession,
-    selectedRunId,
-  ]);
+        projectAgentContext={projectAgentContext}
+      />
+    ), [
+      activeDesignChatId,
+      activeRunChatId,
+      activeWorkspaceChatId,
+      autoAttachRequest,
+      chatStarting,
+      handleAssistantTurnCompletedFromChat,
+      handleChatAutoAttachHandled,
+      handleOpenManualRecoverDialogFromChat,
+      handleStartDesignChat,
+      handleStartRunChat,
+      handleStartWorkspaceChat,
+      projectAgentContext,
+      projectChatMode,
+      projectFileCount,
+      selectWorkspaceChatSession,
+      selectDesignChatSession,
+      selectRunChatSession,
+      selectedRunId,
+    ]);
 
   const knowledgeDockTabItems = useMemo(() => {
     if (!selectedProject) {

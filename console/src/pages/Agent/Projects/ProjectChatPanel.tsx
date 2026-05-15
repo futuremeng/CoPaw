@@ -45,6 +45,7 @@ interface ProjectChatPanelProps {
   onSelectRunHistoryChat: (chatId: string) => void;
   onOpenManualRecoverDialog?: () => void;
   onAssistantTurnCompleted?: () => void;
+  projectAgentContext?: string;
 }
 
 function ProjectChatPanel({
@@ -65,6 +66,7 @@ function ProjectChatPanel({
   onSelectRunHistoryChat,
   onOpenManualRecoverDialog,
   onAssistantTurnCompleted,
+  projectAgentContext,
 }: ProjectChatPanelProps) {
   const { t } = useTranslation();
   const hasUserFiles = projectFileCount > 0;
@@ -248,6 +250,7 @@ function ProjectChatPanel({
                         historyMenuActionLabel={t("projects.chat.manualRecover", "手动恢复对话关联")}
                         onHistoryMenuAction={onOpenManualRecoverDialog}
                         onAssistantTurnCompleted={onAssistantTurnCompleted}
+                        projectContext={projectAgentContext}
                         inputPlaceholder={t(
                           "projects.chat.placeholder",
                           "Describe what you want to adjust in this run, and I will help iterate.",
@@ -328,6 +331,7 @@ function ProjectChatPanel({
                         historyMenuActionLabel={t("projects.chat.manualRecover", "手动恢复对话关联")}
                         onHistoryMenuAction={onOpenManualRecoverDialog}
                         onAssistantTurnCompleted={onAssistantTurnCompleted}
+                        projectContext={projectAgentContext}
                         inputPlaceholder={t(
                           "projects.chat.designPlaceholder",
                           "Describe your target workflow and constraints, and I will draft/refine the project flow.",
@@ -410,6 +414,7 @@ function ProjectChatPanel({
                       historyMenuActionLabel={t("projects.chat.manualRecover", "手动恢复对话关联")}
                       onHistoryMenuAction={onOpenManualRecoverDialog}
                       onAssistantTurnCompleted={onAssistantTurnCompleted}
+                      projectContext={projectAgentContext}
                       welcomePromptClickBehavior="append"
                       inputPlaceholder={t(
                         "projects.chat.collaborationPlaceholder",
