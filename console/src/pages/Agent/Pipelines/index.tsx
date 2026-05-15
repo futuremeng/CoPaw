@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Button, Card, Empty, Modal, Select, Spin, Tag, Typography, message } from "antd";
+import { Button, Card, Drawer, Empty, Modal, Select, Spin, Tag, Typography, message } from "antd";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { agentsApi } from "../../../api/modules/agents";
@@ -32,6 +32,7 @@ import type {
   AgentProjectSummary,
   AgentSummary,
   ProjectPipelineRunDetail,
+  ProjectPipelineRunStep,
   PipelineValidationError,
   ProjectPipelineTemplateStep,
   ProjectPipelineRunSummary,
@@ -165,6 +166,8 @@ const INDEPENDENT_PIPELINE_SCOPE_ID = "__independent__";
 const BUILTIN_PIPELINE_SCOPE_ID = "__builtin__";
 const PIPELINE_DRAFT_STORAGE_PREFIX = "copaw:pipelines:drafts:";
 const BUILTIN_KNOWLEDGE_PIPELINE_TEMPLATE_ID = "builtin-knowledge-processing-v1";
+const INITIAL_VISIBLE_RUNS = 30;
+const LOAD_MORE_RUNS_STEP = 10;
 const LEGACY_PROJECT_KNOWLEDGE_STEP_IDS = new Set([
   "file_analysis",
   "source_scan",
@@ -571,6 +574,19 @@ function runTimeValue(run: RunItem): number {
   return Number.isFinite(value) ? value : 0;
 }
 
+function formatStepDuration(step: ProjectPipelineRunStep): string {
+  const metricsDuration = Number((step.metrics as Record<string, unknown> | undefined)?.duration_sec);
+  if (Number.isFinite(metricsDuration) && metricsDuration > 0) {
+    return `${metricsDuration.toFixed(2)}s`;
+  }
+  const started = step.started_at ? Date.parse(step.started_at) : NaN;
+  const ended = step.ended_at ? Date.parse(step.ended_at) : NaN;
+  if (!Number.isFinite(started) || !Number.isFinite(ended) || ended < started) {
+    return "-";
+  }
+  return `${((ended - started) / 1000).toFixed(2)}s`;
+}
+
 function templateMtimeValue(value: unknown): number {
   const raw = Number(value || 0);
   if (!Number.isFinite(raw) || raw <= 0) return 0;
@@ -919,6 +935,12 @@ export default function PipelinesPage() {
   const [runsLoadingKeys, setRunsLoadingKeys] = useState<Record<string, boolean>>({});
   const [runsErrorByKey, setRunsErrorByKey] = useState<Record<string, string>>({});
   const [runDetailsByKey, setRunDetailsByKey] = useState<Record<string, ProjectPipelineRunDetail>>({});
+  const [runsVisibleLimitByPipelineKey, setRunsVisibleLimitByPipelineKey] = useState<Record<string, number>>({});
+  const [selectedRunKey, setSelectedRunKey] = useState("");
+  const [selectedRunStepId, setSelectedRunStepId] = useState("");
+  const [stepDetailDrawerOpen, setStepDetailDrawerOpen] = useState(false);
+  const [selectedRunDetailLoadingKey, setSelectedRunDetailLoadingKey] = useState("");
+  const [selectedRunDetailErrorByKey, setSelectedRunDetailErrorByKey] = useState<Record<string, string>>({});
   const [selectedPipelineKey, setSelectedPipelineKey] = useState("");
   const [sourceFilter, setSourceFilter] = useState<"all" | "independent" | "project" | "builtin">("all");
   const [selectedCurrentVersion, setSelectedCurrentVersion] = useState("");
@@ -938,6 +960,7 @@ export default function PipelinesPage() {
   const [expandedDraftDiffKeys, setExpandedDraftDiffKeys] = useState<string[]>([]);
   const [draftDiffViewMode, setDraftDiffViewMode] = useState<"changedOnly" | "full">("changedOnly");
   const [lastDraftMdMtime, setLastDraftMdMtime] = useState(0);
+  const [newVersionNodesExpanded, setNewVersionNodesExpanded] = useState(false);
   const [saveStreamEvents, setSaveStreamEvents] = useState<Array<{ event: string; ts: number; detail: string }>>([]);
   const [saveStreamError, setSaveStreamError] = useState("");
   const [saveValidationErrors, setSaveValidationErrors] = useState<PipelineValidationError[]>([]);
@@ -1086,6 +1109,7 @@ export default function PipelinesPage() {
         setRunsLoadingKeys({});
         setRunsErrorByKey({});
         setRunDetailsByKey({});
+        setRunsVisibleLimitByPipelineKey({});
         setDraftPipelineKeys(restoredDraftKeys);
 
         if (persisted && restoredDraftKeys.length > 0) {
@@ -1187,6 +1211,7 @@ export default function PipelinesPage() {
         setRunsLoadingKeys({});
         setRunsErrorByKey({});
         setRunDetailsByKey({});
+        setRunsVisibleLimitByPipelineKey({});
       } catch (err) {
         console.warn("failed to load fallback pipeline templates", err);
       }
@@ -1386,6 +1411,10 @@ export default function PipelinesPage() {
       setRunsLoadedKeys((prev) => ({ ...prev, [key]: true }));
       setRunsLoadingKeys((prev) => ({ ...prev, [key]: false }));
       setRunsErrorByKey((prev) => ({ ...prev, [key]: "" }));
+      setRunsVisibleLimitByPipelineKey((prev) => ({
+        ...prev,
+        [key]: prev[key] || INITIAL_VISIBLE_RUNS,
+      }));
       return;
     }
 
@@ -1429,6 +1458,10 @@ export default function PipelinesPage() {
       const nextRuns = Array.from(dedupedRuns.values()).sort((a, b) => runTimeValue(b) - runTimeValue(a));
       setRunsByPipelineKey((prev) => ({ ...prev, [key]: nextRuns }));
       setRunsLoadedKeys((prev) => ({ ...prev, [key]: true }));
+      setRunsVisibleLimitByPipelineKey((prev) => ({
+        ...prev,
+        [key]: prev[key] || INITIAL_VISIBLE_RUNS,
+      }));
     } catch (err) {
       console.warn("failed to load project pipeline runs", err);
       setRunsErrorByKey((prev) => ({
@@ -1876,6 +1909,7 @@ export default function PipelinesPage() {
       setRunsLoadingKeys({});
       setRunsErrorByKey({});
       setRunDetailsByKey({});
+      setRunsVisibleLimitByPipelineKey({});
       const remoteDraft = await agentsApi.getPipelineDraft(selectedAgent, selectedTemplateItem.id);
       if (remoteDraft.steps && remoteDraft.steps.length > 0) {
         setDraftNewVersionSteps(remoteDraft.steps);
@@ -2007,6 +2041,67 @@ export default function PipelinesPage() {
     void loadRunsForPipeline(selectedPipeline, { force });
   }, [loadRunsForPipeline, selectedPipeline]);
 
+  const handleLoadMoreRuns = useCallback(() => {
+    if (!selectedPipeline) {
+      return;
+    }
+    setRunsVisibleLimitByPipelineKey((prev) => ({
+      ...prev,
+      [selectedPipeline.key]: (prev[selectedPipeline.key] || INITIAL_VISIBLE_RUNS) + LOAD_MORE_RUNS_STEP,
+    }));
+  }, [selectedPipeline]);
+
+  const handleSelectRun = useCallback((run: RunItem) => {
+    const runKey = buildRunIdentity(run);
+    setSelectedRunKey(runKey);
+    setSelectedRunStepId("");
+    setStepDetailDrawerOpen(false);
+    setSelectedRunDetailErrorByKey((prev) => {
+      if (!prev[runKey]) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[runKey];
+      return next;
+    });
+
+    if (!selectedAgent || runDetailsByKey[runKey] || selectedRunDetailLoadingKey === runKey) {
+      return;
+    }
+
+    setSelectedRunDetailLoadingKey(runKey);
+    void agentsApi
+      .getProjectPipelineRun(selectedAgent, run.projectId, run.id)
+      .then((detail) => {
+        setRunDetailsByKey((prev) => ({
+          ...prev,
+          [runKey]: detail,
+        }));
+        setSelectedRunDetailErrorByKey((prev) => {
+          if (!prev[runKey]) {
+            return prev;
+          }
+          const next = { ...prev };
+          delete next[runKey];
+          return next;
+        });
+      })
+      .catch(() => {
+        setSelectedRunDetailErrorByKey((prev) => ({
+          ...prev,
+          [runKey]: t("pipelines.runDetailLoadFailed", "Failed to load run details. Click to retry."),
+        }));
+      })
+      .finally(() => {
+        setSelectedRunDetailLoadingKey((prev) => (prev === runKey ? "" : prev));
+      });
+  }, [runDetailsByKey, selectedAgent, selectedRunDetailLoadingKey, t]);
+
+  const handleOpenRunStep = useCallback((stepId: string) => {
+    setSelectedRunStepId(stepId);
+    setStepDetailDrawerOpen(true);
+  }, []);
+
   const newVersionDiffItems = useMemo(
     () =>
       compareTemplate && currentTemplate
@@ -2065,12 +2160,143 @@ export default function PipelinesPage() {
     [runsErrorByKey, selectedPipeline],
   );
 
+  const selectedRunsVisibleLimit = useMemo(() => {
+    if (!selectedPipeline) {
+      return INITIAL_VISIBLE_RUNS;
+    }
+    return runsVisibleLimitByPipelineKey[selectedPipeline.key] || INITIAL_VISIBLE_RUNS;
+  }, [runsVisibleLimitByPipelineKey, selectedPipeline]);
+
+  const selectedPipelineRuns = useMemo(() => {
+    if (!selectedPipeline || selectedPipeline.source !== "project") {
+      return [];
+    }
+    return runsByPipelineKey[selectedPipeline.key] || [];
+  }, [runsByPipelineKey, selectedPipeline]);
+
   const visibleRuns = useMemo(() => {
     if (!selectedPipeline || selectedPipeline.source !== "project") {
       return [];
     }
-    return (runsByPipelineKey[selectedPipeline.key] || []).slice(0, 30);
-  }, [runsByPipelineKey, selectedPipeline]);
+    return selectedPipelineRuns.slice(0, selectedRunsVisibleLimit);
+  }, [selectedPipeline, selectedPipelineRuns, selectedRunsVisibleLimit]);
+
+  const latestRun = useMemo(() => visibleRuns[0] || null, [visibleRuns]);
+
+  const latestRunKey = useMemo(
+    () => (latestRun ? buildRunIdentity(latestRun) : ""),
+    [latestRun],
+  );
+
+  const latestRunDetail = useMemo(
+    () => (latestRunKey ? runDetailsByKey[latestRunKey] || null : null),
+    [latestRunKey, runDetailsByKey],
+  );
+
+  const hasMoreRuns = useMemo(
+    () => selectedPipelineRuns.length > visibleRuns.length,
+    [selectedPipelineRuns.length, visibleRuns.length],
+  );
+
+  const latestRunSummaryItems = useMemo(() => {
+    if (!latestRun || !latestRunDetail) {
+      return [];
+    }
+    const durationValue =
+      typeof latestRunDetail.observability?.duration_sec === "number"
+        ? `${latestRunDetail.observability.duration_sec.toFixed(2)}s`
+        : "-";
+    const passedChecks = latestRunDetail.convergence?.passed_checks ?? 0;
+    const totalChecks = latestRunDetail.convergence?.total_checks ?? 0;
+    const scoreValue = Number.isFinite(latestRunDetail.convergence?.score)
+      ? latestRunDetail.convergence.score.toFixed(2)
+      : "-";
+    const checksRateValue = totalChecks > 0
+      ? `${Math.round((passedChecks / totalChecks) * 100)}% (${passedChecks}/${totalChecks})`
+      : "-";
+    return [
+      {
+        label: t("pipelines.latestRunStatus", "Status"),
+        value: latestRun.status || "-",
+      },
+      {
+        label: t("pipelines.latestRunScore", "Score"),
+        value: scoreValue,
+      },
+      {
+        label: t("pipelines.latestRunDuration", "Duration"),
+        value: durationValue,
+      },
+      {
+        label: t("pipelines.latestRunChecksRate", "Checks"),
+        value: checksRateValue,
+      },
+      {
+        label: t("pipelines.latestRunUpdatedAt", "Updated"),
+        value: latestRun.updated_at || latestRun.created_at || "-",
+      },
+    ];
+  }, [latestRun, latestRunDetail, t]);
+
+  const selectedRunItem = useMemo(
+    () => (selectedRunKey ? selectedPipelineRuns.find((run) => buildRunIdentity(run) === selectedRunKey) || null : null),
+    [selectedPipelineRuns, selectedRunKey],
+  );
+
+  const selectedRunDetail = useMemo(
+    () => (selectedRunKey ? runDetailsByKey[selectedRunKey] || null : null),
+    [runDetailsByKey, selectedRunKey],
+  );
+
+  const selectedRunLoading = useMemo(
+    () => selectedRunDetailLoadingKey === selectedRunKey,
+    [selectedRunDetailLoadingKey, selectedRunKey],
+  );
+
+  const selectedRunError = useMemo(
+    () => (selectedRunKey ? selectedRunDetailErrorByKey[selectedRunKey] || "" : ""),
+    [selectedRunDetailErrorByKey, selectedRunKey],
+  );
+
+  const selectedRunStep = useMemo(
+    () => (selectedRunDetail && selectedRunStepId
+      ? selectedRunDetail.steps.find((step) => step.id === selectedRunStepId) || null
+      : null),
+    [selectedRunDetail, selectedRunStepId],
+  );
+
+  useEffect(() => {
+    if (!selectedPipeline || selectedPipeline.source !== "project") {
+      return;
+    }
+    if (runsLoadedKeys[selectedPipeline.key] || runsLoadingKeys[selectedPipeline.key]) {
+      return;
+    }
+    void loadRunsForPipeline(selectedPipeline);
+  }, [loadRunsForPipeline, runsLoadedKeys, runsLoadingKeys, selectedPipeline]);
+
+  useEffect(() => {
+    if (!selectedPipeline || selectedPipeline.source !== "project") {
+      return;
+    }
+    setRunsVisibleLimitByPipelineKey((prev) => {
+      if (prev[selectedPipeline.key] === INITIAL_VISIBLE_RUNS) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [selectedPipeline.key]: INITIAL_VISIBLE_RUNS,
+      };
+    });
+  }, [selectedPipeline]);
+
+  useEffect(() => {
+    setSelectedRunKey("");
+    setSelectedRunStepId("");
+    setStepDetailDrawerOpen(false);
+    setSelectedRunDetailLoadingKey("");
+    setSelectedRunDetailErrorByKey({});
+  }, [selectedPipeline?.key]);
 
   useEffect(() => {
     if (!selectedAgent || !selectedPipeline || selectedPipeline.source !== "project" || !selectedRunsLoaded) {
@@ -2660,6 +2886,7 @@ export default function PipelinesPage() {
       setRunsLoadingKeys({});
       setRunsErrorByKey({});
       setRunDetailsByKey({});
+      setRunsVisibleLimitByPipelineKey({});
       setDraftPipelineKeys(preservedDraftKeys);
       setSourceFilter("independent");
       setSelectedPipelineKey(buildPipelineGroupKey(safeTemplateId, "independent"));
@@ -4101,11 +4328,21 @@ export default function PipelinesPage() {
               )}
             </Card>
 
+            {editMode && (
             <Card
               title={t("pipelines.newVersionNodes")}
               className={styles.columnCard}
               extra={
                 <div className={styles.newVersionActions}>
+                  <Button
+                    type="text"
+                    size="small"
+                    onClick={() => setNewVersionNodesExpanded((prev) => !prev)}
+                  >
+                    {newVersionNodesExpanded
+                      ? t("pipelines.collapseNewVersionNodes", "Collapse")
+                      : t("pipelines.expandNewVersionNodes", "Expand")}
+                  </Button>
                   {editMode && draftParseStatus === "ready" && realtimeDraftDiffItems.length > 0 ? (
                     <Button
                       size="small"
@@ -4144,7 +4381,7 @@ export default function PipelinesPage() {
                 </div>
               }
             >
-              {editMode && (saveStreamEvents.length > 0 || saveStreamError) ? (
+              {newVersionNodesExpanded && editMode && (saveStreamEvents.length > 0 || saveStreamError) ? (
                 <div className={styles.saveStreamPanel}>
                   <Text type="secondary" className={styles.saveStreamTitle}>
                     {t("pipelines.saveStreamTimeline")}
@@ -4229,7 +4466,7 @@ export default function PipelinesPage() {
                 </div>
               ) : null}
 
-              {editMode && draftParseStatus === "ready" && draftNewVersionSteps.length > 0 ? (
+              {newVersionNodesExpanded && editMode && draftParseStatus === "ready" && draftNewVersionSteps.length > 0 ? (
                 <>
                   <Text type="secondary" className={styles.draftStatusText}>
                     {t("pipelines.draftRealtimeReady")}
@@ -4326,30 +4563,30 @@ export default function PipelinesPage() {
                     ))}
                   </div>
                 </>
-              ) : editMode && draftParseStatus === "error" ? (
+              ) : newVersionNodesExpanded && editMode && draftParseStatus === "error" ? (
                 <Empty description={draftParseError || t("pipelines.draftParseError")} />
-              ) : editMode ? (
+              ) : newVersionNodesExpanded && editMode ? (
                 <Empty
                   description={t(
                     "pipelines.draftRealtimeHint",
                     "当右侧编辑对话修改流程 Markdown 工作文件后，这里会根据后端 draft 自动更新。",
                   )}
                 />
-              ) : !compareTemplate ? (
+              ) : newVersionNodesExpanded && !compareTemplate ? (
                 <Empty
                   description={t(
                     "pipelines.selectNewVersion",
                     "Select a version as the new draft to compare with current nodes.",
                   )}
                 />
-              ) : newVersionDiffItems.length === 0 ? (
+              ) : newVersionNodesExpanded && newVersionDiffItems.length === 0 ? (
                 <Empty
                   description={t(
                     "pipelines.noDiff",
                     "No diff available for this version pair.",
                   )}
                 />
-              ) : (
+              ) : newVersionNodesExpanded ? (
                 <div className={styles.list}>
                   {newVersionDiffItems.map((item) => (
                     <div key={`${item.kind}-${item.id}`} className={styles.listItemStatic}>
@@ -4389,8 +4626,11 @@ export default function PipelinesPage() {
                     </div>
                   ))}
                 </div>
+              ) : (
+                <Empty description={t("pipelines.newVersionNodesCollapsed", "Collapsed")} />
               )}
             </Card>
+            )}
 
             <Card
               title={editMode ? t("pipelines.editChat") : t("pipelines.recentRuns")}
@@ -4576,6 +4816,52 @@ export default function PipelinesPage() {
                 />
               ) : (
                 <div className={styles.list}>
+                  <div className={styles.latestRunSummary}>
+                    <div className={styles.latestRunSummaryHeader}>
+                      <Text strong>{t("pipelines.latestRunSummary", "Latest Run Summary")}</Text>
+                      <Tag color={statusTagColor(latestRun?.status || "pending")}>
+                        {latestRun?.status || "-"}
+                      </Tag>
+                    </div>
+                    <Text type="secondary" className={styles.helperText}>
+                      {t("pipelines.projectLabel", {
+                        name: latestRun?.projectName || "-",
+                      })}
+                    </Text>
+                    {latestRunDetail ? (
+                      <div className={styles.latestRunSummaryMetrics}>
+                        {latestRunSummaryItems.map((item) => (
+                          <div key={item.label} className={styles.latestRunSummaryMetric}>
+                            <Text type="secondary" className={styles.latestRunSummaryLabel}>
+                              {item.label}
+                            </Text>
+                            <Text>{item.value}</Text>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className={styles.latestRunSummaryLoading}>
+                        <Spin size="small" />
+                        <Text type="secondary">
+                          {t("pipelines.latestRunLoading", "Loading latest run summary...")}
+                        </Text>
+                      </div>
+                    )}
+                    {hasMoreRuns ? (
+                      <div className={styles.loadMoreWrap}>
+                        <Button size="small" onClick={handleLoadMoreRuns}>
+                          {t("pipelines.loadMoreRuns", "加载更多")}
+                        </Button>
+                        <Text type="secondary" className={styles.helperText}>
+                          {t("pipelines.visibleRunsCount", {
+                            visible: visibleRuns.length,
+                            total: selectedPipelineRuns.length,
+                            defaultValue: `Showing ${visibleRuns.length} / ${selectedPipelineRuns.length}`,
+                          })}
+                        </Text>
+                      </div>
+                    ) : null}
+                  </div>
                   {visibleRuns.map((run) => {
                     const runKey = buildRunIdentity(run);
                     const detail = runDetailsByKey[runKey];
@@ -4584,8 +4870,21 @@ export default function PipelinesPage() {
                       typeof observability?.duration_sec === "number"
                         ? `${observability.duration_sec.toFixed(2)}s`
                         : "-";
+                    const isSelected = selectedRunKey === runKey;
                     return (
-                    <div key={runKey} className={styles.listItemStatic}>
+                    <div
+                      key={runKey}
+                      role="button"
+                      tabIndex={0}
+                      className={`${styles.listItem} ${isSelected ? styles.selected : ""}`}
+                      onClick={() => handleSelectRun(run)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          handleSelectRun(run);
+                        }
+                      }}
+                    >
                       <div className={styles.listItemHeader}>
                         <Text strong>{run.template_id}</Text>
                         <Tag color={statusTagColor(run.status)}>{run.status}</Tag>
@@ -4616,7 +4915,8 @@ export default function PipelinesPage() {
                           size="small"
                           type="link"
                           className={styles.runLink}
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             setSourceFilter("project");
                             setSelectedPipelineKey(
                               buildPipelineGroupKey(run.template_id, "project", run.projectId),
@@ -4630,7 +4930,10 @@ export default function PipelinesPage() {
                           size="small"
                           type="link"
                           className={styles.runLink}
-                          onClick={() => navigate("/projects")}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate("/projects");
+                          }}
                         >
                           {t("pipelines.goToProjects")}
                         </Button>
@@ -4641,6 +4944,314 @@ export default function PipelinesPage() {
                 </div>
               )}
             </Card>
+
+            {!editMode ? (
+              <Card
+                title={selectedRunItem
+                  ? `${t("pipelines.runDetails")} · ${selectedRunItem.template_id}`
+                  : t("pipelines.runDetails")}
+                className={styles.columnCard}
+              >
+                {selectedPipeline?.source !== "project" ? (
+                  <Empty
+                    description={t(
+                      "pipelines.runsProjectOnly",
+                      "Runs are available for project pipelines only.",
+                    )}
+                  />
+                ) : !selectedRunsLoaded ? (
+                  <Empty
+                    description={t(
+                      "pipelines.selectRunToView",
+                      "Select a run to view details.",
+                    )}
+                  />
+                ) : !selectedRunKey || !selectedRunItem ? (
+                  <Empty
+                    description={t(
+                      "pipelines.selectRunToView",
+                      "Select a run to view details.",
+                    )}
+                  />
+                ) : (
+                  <div className={styles.list}>
+                    <div className={styles.runDetailPanel}>
+                      <div className={styles.runDetailPanelHeader}>
+                        <div className={styles.runDetailPanelHeaderMain}>
+                          <Text strong>{selectedRunItem.template_id}</Text>
+                          <Text type="secondary" className={styles.helperText}>
+                            {t("pipelines.projectLabel", { name: selectedRunItem.projectName })}
+                          </Text>
+                        </div>
+                        <Tag color={statusTagColor(selectedRunItem.status)}>{selectedRunItem.status}</Tag>
+                      </div>
+
+                      {!selectedRunDetail && selectedRunLoading ? (
+                        <div className={styles.latestRunSummaryLoading}>
+                          <Spin size="small" />
+                          <Text type="secondary">
+                            {t("pipelines.runDetailLoading", "Loading run details...")}
+                          </Text>
+                        </div>
+                      ) : !selectedRunDetail && selectedRunError ? (
+                        <div className={styles.runDetailContent}>
+                          <Text type="danger">{selectedRunError}</Text>
+                          <Button size="small" onClick={() => handleSelectRun(selectedRunItem)}>
+                            {t("common.retry", "Retry")}
+                          </Button>
+                        </div>
+                      ) : selectedRunDetail ? (
+                        <div className={styles.runDetailContent}>
+                          <div className={styles.detailGroup}>
+                            <Text strong className={styles.detailGroupTitle}>
+                              {t("pipelines.baseInfo", "Base Info")}
+                            </Text>
+                            <div className={styles.detailSection}>
+                              <Text strong className={styles.detailLabel}>{t("pipelines.runId")}</Text>
+                              <Text type="secondary">{selectedRunDetail.id}</Text>
+                            </div>
+                            <div className={styles.detailSection}>
+                              <Text strong className={styles.detailLabel}>{t("pipelines.createdAt")}</Text>
+                              <Text type="secondary">{selectedRunDetail.created_at}</Text>
+                            </div>
+                            <div className={styles.detailSection}>
+                              <Text strong className={styles.detailLabel}>{t("pipelines.updatedAt")}</Text>
+                              <Text type="secondary">{selectedRunDetail.updated_at}</Text>
+                            </div>
+                          </div>
+
+                          {selectedRunDetail.observability ? (
+                            <div className={styles.detailGroup}>
+                              <Text strong className={styles.detailGroupTitle}>
+                                {t("pipelines.observability", "Observability")}
+                              </Text>
+                              <div className={styles.detailSection}>
+                                <Text strong className={styles.detailLabel}>{t("pipelines.stage")}</Text>
+                                <Text type="secondary">{selectedRunDetail.observability.stage || "-"}</Text>
+                              </div>
+                              <div className={styles.detailSection}>
+                                <Text strong className={styles.detailLabel}>{t("pipelines.duration", "Duration")}</Text>
+                                <Text type="secondary">
+                                  {typeof selectedRunDetail.observability.duration_sec === "number"
+                                    ? `${selectedRunDetail.observability.duration_sec.toFixed(2)}s`
+                                    : "-"}
+                                </Text>
+                              </div>
+                              <div className={styles.detailSection}>
+                                <Text strong className={styles.detailLabel}>{t("pipelines.errorClass")}</Text>
+                                <Text type="secondary">{selectedRunDetail.observability.error_class || "-"}</Text>
+                              </div>
+                            </div>
+                          ) : null}
+
+                          {selectedRunDetail.convergence ? (
+                            <div className={styles.detailGroup}>
+                              <Text strong className={styles.detailGroupTitle}>
+                                {t("pipelines.convergence", "Convergence")}
+                              </Text>
+                              <div className={styles.detailSection}>
+                                <Text strong className={styles.detailLabel}>{t("pipelines.convergenceScore")}</Text>
+                                <Text type="secondary">{selectedRunDetail.convergence.score || "-"}</Text>
+                              </div>
+                              <div className={styles.detailSection}>
+                                <Text strong className={styles.detailLabel}>{t("pipelines.convergenceChecks")}</Text>
+                                <Text type="secondary">
+                                  {selectedRunDetail.convergence.passed_checks}/{selectedRunDetail.convergence.total_checks}
+                                </Text>
+                              </div>
+                            </div>
+                          ) : null}
+
+                          <div className={styles.detailGroup}>
+                            <Text strong className={styles.detailGroupTitle}>
+                              {t("pipelines.stepDetails", "Step Details")} ({selectedRunDetail.steps.length})
+                            </Text>
+                            {selectedRunDetail.steps.length === 0 ? (
+                              <Text type="secondary" className={styles.helperText}>
+                                {t("pipelines.emptyStepDetails", "No step details available.")}
+                              </Text>
+                            ) : (
+                              <div className={styles.runStepList}>
+                                {selectedRunDetail.steps.map((step) => {
+                                  const outputKeys = Object.keys(step.outputs || {});
+                                  const metricKeys = Object.keys(step.metrics || {});
+                                  return (
+                                    <div
+                                      key={step.id}
+                                      role="button"
+                                      tabIndex={0}
+                                      className={styles.runStepCard}
+                                      onClick={() => handleOpenRunStep(step.id)}
+                                      onKeyDown={(event) => {
+                                        if (event.key === "Enter" || event.key === " ") {
+                                          event.preventDefault();
+                                          handleOpenRunStep(step.id);
+                                        }
+                                      }}
+                                    >
+                                      <div className={styles.listItemHeader}>
+                                        <Text strong>{step.name || step.id}</Text>
+                                        <div className={styles.runStepTags}>
+                                          <Tag color="blue">{step.kind || "-"}</Tag>
+                                          <Tag color={statusTagColor(step.status || "pending")}>{step.status || "-"}</Tag>
+                                        </div>
+                                      </div>
+                                      <Text type="secondary" className={styles.helperText}>{step.id}</Text>
+                                      <Text type="secondary" className={styles.helperText}>{step.description || "-"}</Text>
+                                      <div className={styles.runStepMetaRow}>
+                                        <Text type="secondary" className={styles.helperText}>
+                                          {t("pipelines.duration", "Duration")}: {formatStepDuration(step)}
+                                        </Text>
+                                        <Text type="secondary" className={styles.helperText}>
+                                          {t("pipelines.dependsOn", "Depends on")}: {step.depends_on?.length ? step.depends_on.join(", ") : "-"}
+                                        </Text>
+                                      </div>
+                                      <div className={styles.runStepMetaRow}>
+                                        <Text type="secondary" className={styles.helperText}>
+                                          {t("pipelines.outputs", "Outputs")}: {outputKeys.length ? outputKeys.join(", ") : "-"}
+                                        </Text>
+                                        <Text type="secondary" className={styles.helperText}>
+                                          {t("pipelines.metrics", "Metrics")}: {metricKeys.length ? metricKeys.join(", ") : "-"}
+                                        </Text>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                )}
+              </Card>
+            ) : null}
+
+            <Drawer
+              title={(
+                <div className={styles.runDetailDrawerTitleWrap}>
+                  <div className={styles.runDetailDrawerTitleTop}>
+                    <Text strong>{selectedRunStep?.name || t("pipelines.stepDetails", "Step Details")}</Text>
+                    {selectedRunStep ? (
+                      <Tag color={statusTagColor(selectedRunStep.status || "pending")}>{selectedRunStep.status || "-"}</Tag>
+                    ) : null}
+                  </div>
+                  <Text type="secondary" className={styles.helperText}>
+                    {selectedRunStep?.id || "-"}
+                  </Text>
+                </div>
+              )}
+              open={stepDetailDrawerOpen && !editMode && Boolean(selectedRunStep)}
+              onClose={() => setStepDetailDrawerOpen(false)}
+              placement="right"
+              width={520}
+              className={styles.runDetailDrawer}
+            >
+              {!selectedRunStep ? (
+                <Empty description={t("pipelines.selectStepToView", "Select a step to view details.")} />
+              ) : (
+                <div className={styles.runDetailContent}>
+                  <div className={styles.detailGroup}>
+                    <Text strong className={styles.detailGroupTitle}>
+                      {t("pipelines.stepBaseInfo", "Step Base Info")}
+                    </Text>
+                    <div className={styles.detailSection}>
+                      <Text strong className={styles.detailLabel}>
+                        {t("pipelines.stepId", "Step ID")}
+                      </Text>
+                      <Text type="secondary">{selectedRunStep.id}</Text>
+                    </div>
+                    <div className={styles.detailSection}>
+                      <Text strong className={styles.detailLabel}>
+                        {t("pipelines.name", "Name")}
+                      </Text>
+                      <Text type="secondary">{selectedRunStep.name || "-"}</Text>
+                    </div>
+                    <div className={styles.detailSection}>
+                      <Text strong className={styles.detailLabel}>
+                        {t("pipelines.kind", "Kind")}
+                      </Text>
+                      <Text type="secondary">{selectedRunStep.kind || "-"}</Text>
+                    </div>
+                    <div className={styles.detailSection}>
+                      <Text strong className={styles.detailLabel}>
+                        {t("pipelines.status")}
+                      </Text>
+                      <Tag color={statusTagColor(selectedRunStep.status || "pending")}>{selectedRunStep.status || "-"}</Tag>
+                    </div>
+                    <div className={styles.detailSection}>
+                      <Text strong className={styles.detailLabel}>
+                        {t("pipelines.duration", "Duration")}
+                      </Text>
+                      <Text type="secondary">{formatStepDuration(selectedRunStep)}</Text>
+                    </div>
+                  </div>
+                  <div className={styles.detailGroup}>
+                    <Text strong className={styles.detailGroupTitle}>
+                      {t("pipelines.schedule", "Schedule")}
+                    </Text>
+                    <div className={styles.detailSection}>
+                      <Text strong className={styles.detailLabel}>{t("pipelines.startedAt", "Started")}</Text>
+                      <Text type="secondary">{selectedRunStep.started_at || "-"}</Text>
+                    </div>
+                    <div className={styles.detailSection}>
+                      <Text strong className={styles.detailLabel}>{t("pipelines.endedAt", "Ended")}</Text>
+                      <Text type="secondary">{selectedRunStep.ended_at || "-"}</Text>
+                    </div>
+                    <div className={styles.detailSection}>
+                      <Text strong className={styles.detailLabel}>{t("pipelines.dependsOn", "Depends on")}</Text>
+                      <Text type="secondary">{selectedRunStep.depends_on?.length ? selectedRunStep.depends_on.join(", ") : "-"}</Text>
+                    </div>
+                  </div>
+
+                  <div className={styles.detailGroup}>
+                    <Text strong className={styles.detailGroupTitle}>
+                      {t("pipelines.stepDescription", "Description")}
+                    </Text>
+                    <Text type="secondary">{selectedRunStep.description || "-"}</Text>
+                  </div>
+
+                  <div className={styles.detailGroup}>
+                    <Text strong className={styles.detailGroupTitle}>
+                      {t("pipelines.inputs", "Inputs")}
+                    </Text>
+                    <pre className={styles.detailJsonBlock}>{JSON.stringify(selectedRunStep.inputs || {}, null, 2)}</pre>
+                  </div>
+
+                  <div className={styles.detailGroup}>
+                    <Text strong className={styles.detailGroupTitle}>
+                      {t("pipelines.outputs", "Outputs")}
+                    </Text>
+                    <pre className={styles.detailJsonBlock}>{JSON.stringify(selectedRunStep.outputs || {}, null, 2)}</pre>
+                  </div>
+
+                  <div className={styles.detailGroup}>
+                    <Text strong className={styles.detailGroupTitle}>
+                      {t("pipelines.metrics", "Metrics")}
+                    </Text>
+                    <pre className={styles.detailJsonBlock}>{JSON.stringify(selectedRunStep.metrics || {}, null, 2)}</pre>
+                  </div>
+
+                  <div className={styles.detailGroup}>
+                    <Text strong className={styles.detailGroupTitle}>
+                      {t("pipelines.evidence", "Evidence")}
+                    </Text>
+                    {selectedRunStep.evidence?.length ? (
+                      <div className={styles.runStepEvidenceList}>
+                        {selectedRunStep.evidence.map((item, index) => (
+                          <Text key={`${selectedRunStep.id}-evidence-${index}`} type="secondary" className={styles.helperText}>
+                            {item}
+                          </Text>
+                        ))}
+                      </div>
+                    ) : (
+                      <Text type="secondary">-</Text>
+                    )}
+                  </div>
+                </div>
+              )}
+            </Drawer>
           </div>
         )}
       </div>

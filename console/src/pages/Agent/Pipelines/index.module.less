@@ -125,6 +125,11 @@
     border-color: #d9d9d9;
     background-color: #fafafa;
   }
+
+  &:focus-visible {
+    outline: 2px solid rgba(22, 119, 255, 0.35);
+    outline-offset: 2px;
+  }
 }
 
 .listItemStatic {
@@ -139,6 +144,7 @@
 .selected {
   border: 2px solid #1677ff;
   background: #f0f7ff;
+  box-shadow: 0 0 0 1px rgba(22, 119, 255, 0.08), 0 6px 16px rgba(22, 119, 255, 0.08);
 }
 
 .listItemHeader {
@@ -146,6 +152,53 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+.latestRunSummary {
+  border: 1px solid rgba(22, 119, 255, 0.18);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(22, 119, 255, 0.04);
+}
+
+.latestRunSummaryHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.latestRunSummaryMetrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.latestRunSummaryMetric {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.latestRunSummaryLabel {
+  font-size: 12px;
+}
+
+.latestRunSummaryLoading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.loadMoreWrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .helperText {
@@ -379,6 +432,153 @@
   align-self: flex-start;
 }
 
+.runDetailPanel {
+  border: 1px solid rgba(22, 119, 255, 0.2);
+  border-radius: 10px;
+  background: rgba(22, 119, 255, 0.03);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.runDetailPanelHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  padding-bottom: 8px;
+}
+
+.runDetailPanelHeaderMain {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.runDetailDrawer {
+  :global(.copaw-drawer-body),
+  :global(.ant-drawer-body) {
+    padding: 16px;
+  }
+}
+
+.runDetailDrawerTitleWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.runDetailDrawerTitleTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.runDetailContent {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.detailGroup {
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fff;
+}
+
+.detailGroupTitle {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.runStepList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.runStepCard {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  padding: 10px;
+  background: rgba(250, 250, 250, 0.8);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+
+  &:hover {
+    border-color: rgba(22, 119, 255, 0.5);
+    background: rgba(22, 119, 255, 0.06);
+  }
+
+  &:focus-visible {
+    outline: 2px solid rgba(22, 119, 255, 0.35);
+    outline-offset: 2px;
+  }
+}
+
+.runStepTags {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.runStepMetaRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.detailSection {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px dashed rgba(0, 0, 0, 0.08);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.detailLabel {
+  min-width: 112px;
+  font-size: 14px;
+}
+
+.detailJsonBlock {
+  margin: 0;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.02);
+  font-size: 12px;
+  line-height: 1.45;
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.runStepEvidenceList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 160px;
+  overflow: auto;
+}
+
 @media (max-width: 1439px) {
   .columns {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -405,6 +605,10 @@
   }
 
   .diffPairGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .latestRunSummaryMetrics {
     grid-template-columns: 1fr;
   }
 
