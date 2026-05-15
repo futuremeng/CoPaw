@@ -1,6 +1,8 @@
-import { memo, useEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
+  DiffSourceToggleWrapper,
   codeBlockPlugin,
+  diffSourcePlugin,
   headingsPlugin,
   imagePlugin,
   linkPlugin,
@@ -9,6 +11,9 @@ import {
   quotePlugin,
   tablePlugin,
   thematicBreakPlugin,
+  toolbarPlugin,
+  useCellValue,
+  viewMode$,
 } from "@mdxeditor/editor";
 import "@mdxeditor/editor/style.css";
 import "katex/dist/katex.min.css";
@@ -18,6 +23,24 @@ import styles from "./index.module.less";
 interface ProjectMdxReadonlyPreviewProps {
   filePath: string;
   markdown: string;
+}
+
+type EditorViewMode = "rich-text" | "source" | "diff";
+
+const MDX_PREVIEW_MODE_STORAGE_KEY = "projectMdxReadonlyPreviewMode";
+
+interface ViewModeSyncProps {
+  onViewModeChange: (mode: EditorViewMode) => void;
+}
+
+function ViewModeSync({ onViewModeChange }: ViewModeSyncProps) {
+  const viewMode = useCellValue(viewMode$);
+
+  useEffect(() => {
+    onViewModeChange(viewMode);
+  }, [onViewModeChange, viewMode]);
+
+  return null;
 }
 
 function normalizeWhitespace(value: string): string {
@@ -71,6 +94,12 @@ function normalizeMarkdownForMdxEditor(markdown: string): string {
 
 function ProjectMdxReadonlyPreview({ filePath, markdown }: ProjectMdxReadonlyPreviewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const [viewMode, setViewMode] = useState<EditorViewMode>(() => {
+    if (typeof window === "undefined") {
+      return "rich-text";
+    }
+    return window.localStorage.getItem(MDX_PREVIEW_MODE_STORAGE_KEY) === "source" ? "source" : "rich-text";
+  });
   const plugins = useMemo(() => ([
     headingsPlugin(),
     listsPlugin(),
@@ -80,13 +109,28 @@ function ProjectMdxReadonlyPreview({ filePath, markdown }: ProjectMdxReadonlyPre
     imagePlugin(),
     tablePlugin(),
     codeBlockPlugin(),
-  ]), []);
+    toolbarPlugin({
+      toolbarContents: () => (
+        <>
+          <DiffSourceToggleWrapper options={["rich-text", "source"]} SourceToolbar={<></>}>
+            <></>
+          </DiffSourceToggleWrapper>
+          <ViewModeSync onViewModeChange={setViewMode} />
+        </>
+      ),
+    }),
+    diffSourcePlugin({ viewMode }),
+  ]), [viewMode]);
   const normalizedMarkdown = useMemo(
     () => normalizeMarkdownForMdxEditor(markdown),
     [markdown],
   );
 
   useEffect(() => {
+    if (viewMode !== "rich-text") {
+      return;
+    }
+
     const root = containerRef.current?.querySelector("[role='textbox'][aria-label='editable markdown']");
     if (!(root instanceof HTMLElement)) {
       return;
@@ -101,7 +145,14 @@ function ProjectMdxReadonlyPreview({ filePath, markdown }: ProjectMdxReadonlyPre
       strict: "ignore",
       ignoredTags: ["script", "noscript", "style", "textarea", "pre", "code"],
     });
-  }, [filePath, normalizedMarkdown]);
+  }, [filePath, normalizedMarkdown, viewMode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(MDX_PREVIEW_MODE_STORAGE_KEY, viewMode === "source" ? "source" : "rich-text");
+  }, [viewMode]);
 
   return (
     <div className={styles.mdxPreviewPane} ref={containerRef}>
