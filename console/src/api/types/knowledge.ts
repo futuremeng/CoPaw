@@ -353,7 +353,7 @@ export interface ProjectKnowledgeSyncState {
   last_success_at?: string | null;
   updated_at?: string | null;
   latest_job_id: string;
-  latest_workflow_run_id?: string;
+  latest_pipeline_run_id?: string;
   latest_source_id: string;
   last_result: Record<string, unknown>;
   operation_id?: string;

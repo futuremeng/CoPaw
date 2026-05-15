@@ -1684,13 +1684,13 @@ export default function PipelinesPage() {
         template_id: selectedPipeline.id,
       });
       message.success(
-        t("pipelines.projectBuiltinRunStarted", "Built-in project workflow run started."),
+        t("pipelines.projectBuiltinRunStarted", "Built-in project pipeline run started."),
       );
       await loadRunsForPipeline(selectedPipeline, { force: true });
     } catch (err) {
       console.error("failed to run project builtin knowledge workflow", err);
       message.error(
-        t("pipelines.projectBuiltinRunFailed", "Failed to start built-in project workflow run."),
+        t("pipelines.projectBuiltinRunFailed", "Failed to start built-in project pipeline run."),
       );
     } finally {
       setBuiltinRunLoading(false);
@@ -1710,13 +1710,13 @@ export default function PipelinesPage() {
         { note: "retry from pipelines" },
       );
       message.success(
-        t("pipelines.projectBuiltinRetryStarted", "Built-in project workflow retry started."),
+        t("pipelines.projectBuiltinRetryStarted", "Built-in project pipeline retry started."),
       );
       await loadRunsForPipeline(selectedPipeline, { force: true });
     } catch (err) {
       console.error("failed to retry project builtin knowledge workflow", err);
       message.error(
-        t("pipelines.projectBuiltinRetryFailed", "Failed to retry built-in project workflow run."),
+        t("pipelines.projectBuiltinRetryFailed", "Failed to retry built-in project pipeline run."),
       );
     } finally {
       setBuiltinRunLoading(false);

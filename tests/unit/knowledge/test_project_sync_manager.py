@@ -109,7 +109,7 @@ def test_build_pipeline_trace_includes_stage_artifacts(tmp_path: Path):
             },
             "agentic": {
                 "mode": "agentic",
-                "source": "workflow-artifacts",
+                "source": "pipeline-artifacts",
                 "summary_lines": ["Run: run-1"],
                 "artifacts": [],
             },

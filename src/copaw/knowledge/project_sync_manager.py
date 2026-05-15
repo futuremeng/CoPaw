@@ -392,7 +392,7 @@ class ProjectKnowledgeSyncManager:
 			"indexed_processing_fingerprint": "",
 			"updated_at": self._now_iso(),
 			"latest_job_id": "",
-			"latest_workflow_run_id": "",
+			"latest_pipeline_run_id": "",
 			"latest_requested_mode": "agentic",
 			"latest_source_id": "",
 			"last_result": {},

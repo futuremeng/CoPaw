@@ -733,12 +733,12 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function getWorkflowRunMeta(syncState: ProjectKnowledgeSyncState | null): Record<string, unknown> {
-  const workflowRun = syncState?.last_result?.workflow_run;
-  if (!workflowRun || typeof workflowRun !== "object") {
+function getPipelineRunMeta(syncState: ProjectKnowledgeSyncState | null): Record<string, unknown> {
+  const pipelineRun = syncState?.last_result?.pipeline_run;
+  if (!pipelineRun || typeof pipelineRun !== "object") {
     return {};
   }
-  return workflowRun as Record<string, unknown>;
+  return pipelineRun as Record<string, unknown>;
 }
 
 function isProcessingMode(
@@ -1338,7 +1338,7 @@ function deriveModeOutputs(
     },
     agentic: {
       mode: "agentic",
-      source: "workflow-artifacts",
+      source: "pipeline-artifacts",
       summaryLines: [
         `Run: ${processingModes.find((item) => item.mode === "agentic")?.runId || ""}`,
         `Status: ${processingModes.find((item) => item.mode === "agentic")?.status || "idle"}`,
@@ -2260,11 +2260,11 @@ export function useProjectKnowledgeState(
       return backendModes;
     }
 
-    const workflowRunMeta = getWorkflowRunMeta(syncState);
-    const workflowRunId = String(
-      workflowRunMeta.run_id || (syncState as Record<string, unknown> | null)?.latest_workflow_run_id || "",
+    const pipelineRunMeta = getPipelineRunMeta(syncState);
+    const pipelineRunId = String(
+      pipelineRunMeta.run_id || (syncState as Record<string, unknown> | null)?.latest_pipeline_run_id || "",
     ).trim();
-    const workflowStatus = String(workflowRunMeta.status || "").trim().toLowerCase();
+    const pipelineStatus = String(pipelineRunMeta.status || "").trim().toLowerCase();
     const activeTaskType = String(activeKnowledgeTask?.task_type || "").trim().toLowerCase();
     const syncPercent = typeof syncState?.percent === "number"
       ? Math.max(0, Math.min(100, Math.round(syncState.percent)))
@@ -2412,9 +2412,9 @@ export function useProjectKnowledgeState(
           : fastAvailable
             ? "queued"
             : "idle";
-    const agenticStatus: ProjectKnowledgeModeState["status"] = ["running", "pending", "queued"].includes(workflowStatus)
-      ? (workflowStatus === "queued" ? "queued" : "running")
-      : ["failed", "blocked", "cancelled"].includes(workflowStatus)
+    const agenticStatus: ProjectKnowledgeModeState["status"] = ["running", "pending", "queued"].includes(pipelineStatus)
+      ? (pipelineStatus === "queued" ? "queued" : "running")
+      : ["failed", "blocked", "cancelled"].includes(pipelineStatus)
         ? "failed"
         : agenticAvailable
           ? "ready"
@@ -2500,17 +2500,17 @@ export function useProjectKnowledgeState(
         available: agenticAvailable,
         progress: agenticStatus === "running" ? syncPercent : null,
         stage: agenticStatus === "running"
-          ? String(syncState?.stage_message || syncState?.current_stage || "Running multi-agent workflow")
+          ? String(syncState?.stage_message || syncState?.current_stage || "Running multi-agent pipeline")
           : agenticAvailable
             ? "Multi-agent outputs ready"
-            : workflowRunId
-              ? "Workflow run exists but outputs are incomplete"
-              : "Waiting for multi-agent workflow scheduling",
+            : pipelineRunId
+              ? "Pipeline run exists but outputs are incomplete"
+              : "Waiting for multi-agent pipeline scheduling",
         summary: agenticAvailable
           ? "最高质量产物层，优先作为知识消费来源。"
           : "长耗时深加工轨道，产物缺失时将自动降级。",
-        lastUpdatedAt: String(workflowRunMeta.updated_at || latestUpdatedAt || "").trim(),
-        runId: workflowRunId,
+        lastUpdatedAt: String(pipelineRunMeta.updated_at || latestUpdatedAt || "").trim(),
+        runId: pipelineRunId,
         jobId: String(syncState?.latest_job_id || "").trim(),
         documentCount: fastDocumentCount,
         chunkCount: fastChunkCount,

@@ -223,7 +223,7 @@ def build_mode_outputs(manager: Any, state: dict[str, Any], processing_modes: li
 	index_result = _as_dict(last_result.get("index"))
 	memify_result = _as_dict(last_result.get("memify"))
 	quality_result = _as_dict(last_result.get("quality_loop"))
-	workflow_run = _as_dict(last_result.get("workflow_run"))
+	pipeline_run = _as_dict(last_result.get("pipeline_run"))
 
 	document_graph_artifacts, document_graph_count = resolve_document_graph_artifacts(manager, memify_result)
 
@@ -285,8 +285,8 @@ def build_mode_outputs(manager: Any, state: dict[str, Any], processing_modes: li
 		})
 	agentic_output = {
 		"mode": "agentic",
-		"source": "workflow-artifacts",
-		"summary_lines": [f"Run: {str(workflow_run.get('run_id') or '')}".strip()],
+		"source": "pipeline-artifacts",
+		"summary_lines": [f"Run: {str(pipeline_run.get('run_id') or '')}".strip()],
 		"artifacts": agentic_artifacts,
 	}
 
@@ -305,7 +305,7 @@ def build_global_metrics(
 	source_status: dict[str, Any] | None,
 ) -> dict[str, Any]:
 	last_result = _as_dict(state.get("last_result"))
-	workflow_run = _as_dict(last_result.get("workflow_run"))
+	pipeline_run = _as_dict(last_result.get("pipeline_run"))
 	quality_loop = _as_dict(last_result.get("quality_loop"))
 	agentic_rounds = quality_loop.get("rounds") if isinstance(quality_loop.get("rounds"), list) else []
 	agentic_after = agentic_rounds[-1].get("after") if agentic_rounds and isinstance(agentic_rounds[-1], dict) else {}
@@ -318,8 +318,8 @@ def build_global_metrics(
 			"char_count": 0,
 			"token_count": 0,
 		}
-	workflow_status = str(workflow_run.get("status") or workflow_run.get("run_status") or "").strip().lower()
-	if workflow_status in {"pending", "running"}:
+	pipeline_status = str(pipeline_run.get("status") or pipeline_run.get("run_status") or "").strip().lower()
+	if pipeline_status in {"pending", "running"}:
 		return {
 			"document_count": 0,
 			"snapshot_count": 0,
@@ -328,9 +328,9 @@ def build_global_metrics(
 			"char_count": 0,
 			"token_count": 0,
 		}
-	if workflow_status == "succeeded" and not isinstance(agentic_after, dict):
+	if pipeline_status == "succeeded" and not isinstance(agentic_after, dict):
 		agentic_after = {}
-	if workflow_status == "succeeded" and not agentic_after:
+	if pipeline_status == "succeeded" and not agentic_after:
 		return {
 			"document_count": 0,
 			"snapshot_count": 0,
@@ -350,7 +350,7 @@ def build_processing_modes(
 	l2_metrics: dict[str, Any],
 ) -> list[dict[str, Any]]:
 	last_result = _as_dict(state.get("last_result"))
-	workflow_run = _as_dict(last_result.get("workflow_run"))
+	pipeline_run = _as_dict(last_result.get("pipeline_run"))
 	quality_loop = _as_dict(last_result.get("quality_loop"))
 	semantic_status = str(semantic_engine.get("status") or "idle").strip().lower()
 	semantic_summary = str(semantic_engine.get("summary") or "").strip()
@@ -386,7 +386,7 @@ def build_processing_modes(
 
 	agentic_rounds = quality_loop.get("rounds") if isinstance(quality_loop.get("rounds"), list) else []
 	agentic_after = agentic_rounds[-1].get("after") if agentic_rounds and isinstance(agentic_rounds[-1], dict) else {}
-	workflow_status = str(workflow_run.get("status") or workflow_run.get("run_status") or "").strip().lower()
+	pipeline_status = str(pipeline_run.get("status") or pipeline_run.get("run_status") or "").strip().lower()
 	agentic_mode = {
 		"mode": "agentic",
 		"status": "queued",
@@ -397,23 +397,23 @@ def build_processing_modes(
 		"relation_count": 0,
 		"quality_score": None,
 	}
-	if workflow_status in {"pending", "running"}:
+	if pipeline_status in {"pending", "running"}:
 		agentic_mode.update({
 			"status": "running",
-			"summary": "Agentic workflow in progress",
+			"summary": "Agentic pipeline in progress",
 			"stage": "Building agentic outputs",
 		})
-	elif workflow_status == "succeeded" and isinstance(agentic_after, dict) and agentic_after:
+	elif pipeline_status == "succeeded" and isinstance(agentic_after, dict) and agentic_after:
 		agentic_mode.update({
 			"status": "ready",
 			"available": True,
-			"summary": "Agentic workflow ready",
+			"summary": "Agentic pipeline ready",
 			"stage": "Agentic outputs ready",
 			"entity_count": _safe_int(agentic_after.get("entity_count")),
 			"relation_count": _safe_int(agentic_after.get("relation_count")),
 			"quality_score": _safe_float(agentic_after.get("quality_score") or quality_loop.get("score_after")),
 		})
-	elif workflow_status == "succeeded":
+	elif pipeline_status == "succeeded":
 		agentic_mode.update({
 			"status": "queued",
 			"available": False,
@@ -516,7 +516,7 @@ def build_mode_metrics(
 	last_result = _as_dict(state.get("last_result"))
 	quality_loop = _as_dict(last_result.get("quality_loop"))
 	memify_result = _as_dict(last_result.get("memify"))
-	workflow_run = _as_dict(last_result.get("workflow_run"))
+	pipeline_run = _as_dict(last_result.get("pipeline_run"))
 
 	fast_metrics = {
 		"mode": "fast",
@@ -550,7 +550,7 @@ def build_mode_metrics(
 
 	agentic_rounds = quality_loop.get("rounds") if isinstance(quality_loop.get("rounds"), list) else []
 	agentic_after = agentic_rounds[-1].get("after") if agentic_rounds and isinstance(agentic_rounds[-1], dict) else {}
-	workflow_status = str(workflow_run.get("status") or "").strip().lower()
+	pipeline_status = str(pipeline_run.get("status") or "").strip().lower()
 	quality_report_path = str(
 		quality_loop.get("enrichment_quality_report_path")
 		or memify_result.get("enrichment_quality_report_path")
@@ -563,7 +563,7 @@ def build_mode_metrics(
 		or ""
 	).strip()
 	graph_path = str(memify_result.get("graph_path") or "").strip()
-	if workflow_status == "succeeded":
+	if pipeline_status == "succeeded":
 		agentic_metrics = {
 			"mode": "agentic",
 			"document_count": _safe_int(l1_metrics.get("document_count")),

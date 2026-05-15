@@ -109,7 +109,7 @@ function buildKnowledgeState(projectId: string): ProjectKnowledgeState {
     modeOutputs: {
       fast: { mode: "fast", source: "indexed-preview", summaryLines: ["Documents: 1"], artifacts: [] },
       nlp: { mode: "nlp", source: "graph-artifacts", summaryLines: ["Entities: 0"], artifacts: [] },
-      agentic: { mode: "agentic", source: "workflow-artifacts", summaryLines: ["Run:"], artifacts: [] },
+      agentic: { mode: "agentic", source: "pipeline-artifacts", summaryLines: ["Run:"], artifacts: [] },
     },
     quantMetrics: {
       totalSources: 1,

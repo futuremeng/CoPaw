@@ -141,7 +141,7 @@ _DEFAULT_PROJECT_TEMPLATES = {
     "- Historical user references may use original/.\n"
     "- In this project, use {{DATA_DIR}}/ as canonical location.\n",
     "project/.scripts/README.md": "# .scripts directory\n\n"
-    "Purpose: builtin executable scripts for project workflows.\n\n"
+    "Purpose: builtin executable scripts for project pipelines.\n\n"
     "## Mapping to artifact kind\n"
     "- .scripts/*.py are builtin project files.\n",
     "project/.pipelines/templates/README.md": "# .pipelines/templates directory\n\n"

@@ -148,7 +148,7 @@ def test_knowledge_workflow_orchestrator_persists_pipeline_run(
     assert not (project_dir / ".knowledge" / f"{source.id}--chunk-manifest.json").exists()
 
 
-def test_project_sync_manager_records_workflow_run_metadata(
+def test_project_sync_manager_records_pipeline_run_metadata(
     tmp_path: Path,
     monkeypatch,
 ):
@@ -209,10 +209,10 @@ def test_project_sync_manager_records_workflow_run_metadata(
     assert response["accepted"] is True
     state = manager.get_state(project_id)
     assert state["status"] == "succeeded"
-    assert state["latest_workflow_run_id"] == "run-knowledge-123"
+    assert state["latest_pipeline_run_id"] == "run-knowledge-123"
     assert state["indexed_processing_fingerprint"] == "fp-123"
-    assert state["last_result"]["workflow_run"]["template_id"] == KNOWLEDGE_WORKFLOW_TEMPLATE_ID
-    assert state["last_result"]["workflow_run"]["mode"] == "agentic"
+    assert state["last_result"]["pipeline_run"]["template_id"] == KNOWLEDGE_WORKFLOW_TEMPLATE_ID
+    assert state["last_result"]["pipeline_run"]["mode"] == "agentic"
     assert [item["mode"] for item in state["processing_modes"]] == ["fast", "nlp", "agentic"]
     assert state["processing_modes"][0]["available"] is True
     assert state["processing_modes"][1]["available"] is False
@@ -227,7 +227,7 @@ def test_project_sync_manager_records_workflow_run_metadata(
     assert state["output_scheduler"]["next_mode"] == "agentic"
     assert state["mode_outputs"]["fast"]["source"] == "indexed-preview"
     assert state["mode_outputs"]["nlp"]["source"] == "graph-artifacts"
-    assert state["mode_outputs"]["agentic"]["source"] == "workflow-artifacts"
+    assert state["mode_outputs"]["agentic"]["source"] == "pipeline-artifacts"
     assert state["mode_metrics"]["fast"]["document_count"] == 0
     assert state["mode_metrics"]["nlp"]["entity_count"] == 0
     assert state["mode_metrics"]["agentic"].get("artifact_count", 0) == 0

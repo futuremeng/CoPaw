@@ -111,9 +111,9 @@ def run_sync_loop(
 			quantization_stage=quantization_stage,
 		)
 		normalized_result = dict(result or {})
-		workflow_run = normalized_result.get("workflow_run")
-		if not isinstance(workflow_run, dict):
-			workflow_run = {
+		pipeline_run = normalized_result.get("pipeline_run")
+		if not isinstance(pipeline_run, dict):
+			pipeline_run = {
 				"run_id": str(normalized_result.get("run_id") or ""),
 				"status": str(
 					normalized_result.get("run_status")
@@ -129,7 +129,7 @@ def run_sync_loop(
 				"processing_fingerprint": str(normalized_result.get("processing_fingerprint") or ""),
 				"artifacts": list(normalized_result.get("artifacts") or []),
 			}
-			normalized_result["workflow_run"] = workflow_run
+			normalized_result["pipeline_run"] = pipeline_run
 		with manager._lock:
 			state = manager._load_state(project_id, hydrate=False)
 			fingerprint = str(normalized_result.get("processing_fingerprint") or "").strip()
@@ -146,7 +146,7 @@ def run_sync_loop(
 				"updated_at": now,
 				"last_finished_at": now,
 				"last_success_at": now,
-				"latest_workflow_run_id": str(normalized_result.get("run_id") or ""),
+				"latest_pipeline_run_id": str(normalized_result.get("run_id") or ""),
 				"latest_job_id": str(normalized_result.get("latest_job_id") or ""),
 				"last_result": normalized_result,
 				"indexed_processing_fingerprint": fingerprint,

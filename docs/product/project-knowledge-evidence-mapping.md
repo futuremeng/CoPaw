@@ -30,13 +30,13 @@ This document maps each metric shown in the six-layer matrix to:
 
 | Layer | Metric (UI) | Display Value Source | Evidence Key | Backend Metric Source | Evidence Artifact Preference |
 |---|---|---|---|---|---|
-| Data Preprocess | Audit Status | Derived by UI state (`l3Ready/l3Running`) | `audit_status` | mode-level status from `processing_modes[agentic]` | `workflow_artifact`, `quality_report`, `enriched_graph`, `graph` |
-| Lexical | Audit Focus (lexical) | UI fixed text | `audit_focus` | mode-level audit context | `workflow_artifact`, `quality_report`, `enriched_graph`, `graph` |
-| Syntax | Audit Focus (syntax) | UI fixed text | `audit_focus` | mode-level audit context | `workflow_artifact`, `quality_report`, `enriched_graph`, `graph` |
-| Semantic | Audit Focus (semantic) | UI fixed text | `audit_focus` | mode-level audit context | `workflow_artifact`, `quality_report`, `enriched_graph`, `graph` |
-| Pragmatic | Quality Score | `l3Mode.qualityScore` | `quality_score` | `processing_modes[agentic].quality_score` (quality loop snapshot) | `quality_report`, `workflow_artifact`, `enriched_graph` |
-| Pragmatic | Audit Round | `l3Mode.auditRound` (fallback `l3Mode.runId`) | `audit_round` | workflow run / quality loop context | `workflow_artifact`, `quality_report`, `enriched_graph` |
-| Pragmatic | Delta vs L2 | UI computed delta (`l3-l2`) | `enhancement_delta` | derived from L2/L3 entity+relation counts | `enriched_graph`, `workflow_artifact`, `quality_report`, `graph` |
+| Data Preprocess | Audit Status | Derived by UI state (`l3Ready/l3Running`) | `audit_status` | mode-level status from `processing_modes[agentic]` | `pipeline_artifact`, `quality_report`, `enriched_graph`, `graph` |
+| Lexical | Audit Focus (lexical) | UI fixed text | `audit_focus` | mode-level audit context | `pipeline_artifact`, `quality_report`, `enriched_graph`, `graph` |
+| Syntax | Audit Focus (syntax) | UI fixed text | `audit_focus` | mode-level audit context | `pipeline_artifact`, `quality_report`, `enriched_graph`, `graph` |
+| Semantic | Audit Focus (semantic) | UI fixed text | `audit_focus` | mode-level audit context | `pipeline_artifact`, `quality_report`, `enriched_graph`, `graph` |
+| Pragmatic | Quality Score | `l3Mode.qualityScore` | `quality_score` | `processing_modes[agentic].quality_score` (quality loop snapshot) | `quality_report`, `pipeline_artifact`, `enriched_graph` |
+| Pragmatic | Audit Round | `l3Mode.auditRound` (fallback `l3Mode.runId`) | `audit_round` | pipeline run / quality loop context | `pipeline_artifact`, `quality_report`, `enriched_graph` |
+| Pragmatic | Delta vs L2 | UI computed delta (`l3-l2`) | `enhancement_delta` | derived from L2/L3 entity+relation counts | `enriched_graph`, `pipeline_artifact`, `quality_report`, `graph` |
 
 ## Not Implemented Layer
 
@@ -56,4 +56,4 @@ Current matrix evidence keys used by UI are all covered by backend `evidence_pat
 1. Open Project Knowledge Processing panel.
 2. For each enabled `View Evidence` button in L2/L3, click and confirm file tree selection jumps to expected artifact path.
 3. Confirm Phrase-layer buttons are disabled.
-4. Confirm when agentic workflow artifacts are empty, L3 buttons can still resolve to `quality_report` or `enriched_graph` paths.
+4. Confirm when agentic pipeline artifacts are empty, L3 buttons can still resolve to `quality_report` or `enriched_graph` paths.

@@ -185,7 +185,7 @@ Project Knowledge Dock 当前使用以下标签页承载该工作流：
 2. active_output_resolution
 3. processing_scheduler
 4. mode_outputs
-5. latest_workflow_run_id
+5. latest_pipeline_run_id
 
 此外，graph-query 已支持 output_mode，使 Explore 与 Outputs 在消费侧遵循同一模式语义。
 

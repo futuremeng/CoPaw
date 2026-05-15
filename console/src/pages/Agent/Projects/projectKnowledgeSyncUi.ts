@@ -25,7 +25,7 @@ function getProjectKnowledgeArtifactPriority(artifact: ProjectKnowledgeArtifactL
   if (kind === "enriched_graph") {
     return 1;
   }
-  if (kind === "workflow_artifact" && path.endsWith("graph.enriched.json")) {
+  if (kind === "pipeline_artifact" && path.endsWith("graph.enriched.json")) {
     return 2;
   }
   if (kind === "quality_report" || path.includes("quality-report")) {
@@ -37,7 +37,7 @@ function getProjectKnowledgeArtifactPriority(artifact: ProjectKnowledgeArtifactL
   if (kind === "document_graph_dir") {
     return 5;
   }
-  if (kind === "workflow_artifact") {
+  if (kind === "pipeline_artifact") {
     return 6;
   }
   if (kind === "preview") {

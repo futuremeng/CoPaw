@@ -430,7 +430,7 @@ def test_processing_mode_overrides_take_precedence_during_active_run(tmp_path: P
             "last_result": {
                 "index": {"document_count": 3, "chunk_count": 7},
                 "memify": {"relation_count": 12, "node_count": 5},
-                "workflow_run": {"run_id": "run-h", "status": "pending"},
+                "pipeline_run": {"run_id": "run-h", "status": "pending"},
             },
             "processing_mode_overrides": {
                 "fast": {
@@ -653,7 +653,7 @@ def test_project_sync_mode_metrics_agentic_evidence_paths_fallback_to_quality_ar
                 }
             ],
         },
-        "workflow_run": {
+        "pipeline_run": {
             "status": "succeeded",
             "mode": "agentic",
             "run_id": "run-agentic-evidence-fallback",
@@ -864,7 +864,7 @@ def test_project_sync_processing_modes_block_when_semantic_engine_unavailable(tm
     state["last_result"] = {
         "index": {"document_count": 1, "chunk_count": 4},
         "memify": {"node_count": 12, "relation_count": 18},
-        "workflow_run": {"status": "succeeded", "mode": "agentic", "run_id": "run-blocked"},
+        "pipeline_run": {"status": "succeeded", "mode": "agentic", "run_id": "run-blocked"},
     }
     state["semantic_engine"] = {}
     manager._save_state(state)
@@ -916,7 +916,7 @@ def test_project_sync_agentic_mode_does_not_reuse_memify_counts_while_pending(tm
             "syntax_relation_count": 9,
         },
         "memify": {"node_count": 12, "relation_count": 18},
-        "workflow_run": {"status": "pending", "mode": "agentic", "run_id": "run-pending"},
+        "pipeline_run": {"status": "pending", "mode": "agentic", "run_id": "run-pending"},
     }
     state["semantic_engine"] = {}
     manager._save_state(state)
@@ -973,7 +973,7 @@ def test_project_sync_agentic_mode_prefers_quality_snapshot_metrics(tmp_path: Pa
                 }
             ],
         },
-        "workflow_run": {"status": "succeeded", "mode": "agentic", "run_id": "run-final"},
+        "pipeline_run": {"status": "succeeded", "mode": "agentic", "run_id": "run-final"},
     }
     state["semantic_engine"] = {}
     manager._save_state(state)
