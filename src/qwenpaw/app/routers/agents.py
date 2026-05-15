@@ -106,6 +106,7 @@ _DEFAULT_PROJECT_TEMPLATES = {
     "name: Example project\n"
     "description: Short summary\n"
     "status: active\n"
+    "workspacePath: /absolute/path/to/projects/project-abcde123\n"
     "data_dir: .data\n"
     "tags: [demo, draft]\n"
     "artifact_profile:\n"
@@ -116,14 +117,22 @@ _DEFAULT_PROJECT_TEMPLATES = {
     "---\n\n"
     "Project details go below.\n",
     "project/AGENTS.md": "# Project Collaboration Rules\n\n"
-    "Use this file only for the highest-signal project rules.\n\n"
-    "- Workspace root is this project directory.\n"
-    "- Resolve files by relative path from project root.\n"
-    "- Save new user-facing files in the project root by default; use subdirectories only when explicitly required.\n"
-    "- If a requested path starts with original/, retry {{DATA_DIR}}/ once.\n"
-    "- Prefer exact file reads over broad scans.\n"
-    "- Artifact mapping: .scripts/*.py => builtin, .pipelines/templates/*.json => builtin, {{DATA_DIR}}/* and .pipelines/runs/* => builtin.\n"
-    "- Put detailed behavior and distillation rules in .skills/project-artifact-governor/SKILL.md.\n",
+    "Before resolving any file, read `.agent/PROJECT.md` frontmatter to get\n"
+    "`workspacePath` (absolute path to project root) and `data_dir` (data subdirectory).\n\n"
+    "## Path Resolution\n\n"
+    "- Workspace root: value of `workspacePath` in `.agent/PROJECT.md` frontmatter.\n"
+    "- Resolve all files relative to workspace root unless an absolute path is given.\n"
+    "- Data artifacts live in `{{DATA_DIR}}/`; remap `original/` → `{{DATA_DIR}}/` once on miss.\n"
+    "- Save new user-facing files in workspace root by default; use subdirectories only when explicitly requested.\n\n"
+    "## File Priorities\n\n"
+    "- Prefer exact file reads over broad directory scans.\n"
+    "- Check `.agent/PLAN.md` for current milestones and next actions.\n"
+    "- Detailed distillation rules are in `.skills/project-artifact-governor/SKILL.md`.\n\n"
+    "## Artifact Mapping\n\n"
+    "- `.scripts/*.py` → builtin\n"
+    "- `.pipelines/templates/*.json` → builtin\n"
+    "- `{{DATA_DIR}}/*`, `.pipelines/runs/*` → builtin\n"
+    "- Distilled method/checklist from repeated evidence → skill\n",
     "project/.data/README.md": "# {{DATA_DIR}} directory\n\n"
     "Purpose: case artifacts and evidence outputs.\n\n"
     "## Mapping to artifact kind\n"
@@ -2227,6 +2236,7 @@ def _clone_project(
     metadata["id"] = cloned_id
     metadata["name"] = cloned_name
     metadata["created_time"] = _format_iso_time(time.time())
+    metadata["workspacePath"] = str(target_dir.resolve())
     tags = _parse_project_tags(metadata.get("tags"))
     if "cloned" not in tags:
         tags.append("cloned")
@@ -2281,6 +2291,7 @@ def _create_project(
         "description": (body.description or "").strip(),
         "status": (body.status or "active").strip() or "active",
         "created_time": _format_iso_time(time.time()),
+        "workspacePath": str(project_dir.resolve()),
         "data_dir": data_subdir,
         "tags": [item.strip() for item in body.tags if str(item).strip()],
         "artifact_distill_mode": _normalize_project_artifact_distill_mode(
@@ -2293,7 +2304,12 @@ def _create_project(
             exclude_none=True,
         ),
     }
-    body_text = (body.description or "").strip() or f"# {project_name}"
+    body_text = (body.description or "").strip() or (
+        f"# {project_name}\n\n"
+        "## Goal\n\nDescribe the project goal here.\n\n"
+        "## Status\n\nActive.\n\n"
+        "## Notes\n\nKey decisions, constraints, and context go here.\n"
+    )
     _write_project_frontmatter(metadata_file, metadata, body_text)
     _scaffold_project_governance_files(project_dir, data_subdir)
     _copy_builtin_pipeline_template_to_project(project_dir)

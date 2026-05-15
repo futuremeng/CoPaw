@@ -790,6 +790,12 @@ def test_clone_project_records_realtime_event(
     )
     assert cloned_summary.created_time != source_summary.created_time
 
+    cloned_metadata_file = cloned_project_dir / "PROJECT.md"
+    cloned_metadata, _ = agents_router_module._read_project_frontmatter_with_body(
+        cloned_metadata_file,
+    )
+    assert cloned_metadata.get("workspacePath") == str(cloned_project_dir.resolve())
+
 
 def test_load_project_summary_falls_back_when_created_time_missing(
     tmp_path: Path,
