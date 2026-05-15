@@ -1047,6 +1047,16 @@ class AgentsRunningConfig(BaseModel):
         ),
     )
 
+    shell_command_executable: str = Field(
+        default="",
+        description=(
+            "Path to the shell used by execute_shell_command on Unix/macOS "
+            "(e.g. /bin/bash, /bin/zsh). On Windows, supports powershell.exe / "
+            "pwsh.exe. When empty, falls back to $SHELL, then /bin/sh "
+            "(or cmd.exe on Windows)"
+        ),
+    )
+
     auto_continue_enabled: bool = Field(
         default=True,
         description=(
