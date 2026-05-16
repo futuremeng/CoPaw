@@ -233,6 +233,7 @@ def _build_spec_from_cli(
     mode: str,
     save_result_to_inbox: Optional[bool] = None,
     share_session: bool = True,
+    timeout_seconds: int = 120,
 ) -> dict:
     """Build CronJobSpec JSON payload from CLI args (no id)."""
     schedule = _build_schedule_from_cli(
@@ -255,7 +256,7 @@ def _build_spec_from_cli(
     runtime = {
         "share_session": share_session,
         "max_concurrency": 1,
-        "timeout_seconds": 120,
+        "timeout_seconds": timeout_seconds,
         "misfire_grace_seconds": 60,
     }
     if task_type == "text":
@@ -473,6 +474,18 @@ def _build_spec_from_cli(
     ),
 )
 @click.option(
+    "--timeout",
+    "timeout_seconds",
+    type=click.IntRange(min=1),
+    default=120,
+    show_default=True,
+    help=(
+        "Maximum execution time in seconds for agent tasks. "
+        "If the task takes longer, it will be cancelled. "
+        "Increase for complex tasks (e.g. --timeout 1800)."
+    ),
+)
+@click.option(
     "--base-url",
     default=None,
     help="Override the API base URL. Defaults to global --host/--port.",
@@ -504,6 +517,7 @@ def create_job(
     mode: str,
     save_result_to_inbox: Optional[bool],
     share_session: bool,
+    timeout_seconds: int,
     base_url: Optional[str],
     agent_id: str,
 ) -> None:
@@ -560,6 +574,7 @@ def create_job(
             mode=mode,
             save_result_to_inbox=save_result_to_inbox,
             share_session=share_session,
+            timeout_seconds=timeout_seconds,
         )
     # Early local validation: catch obvious errors before hitting the server.
     schedule = payload.get("schedule", {})
