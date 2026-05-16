@@ -5012,18 +5012,6 @@ async def upload_agent_project_file(
             workspace.workspace_dir,
             [project_dir / uploaded.path],
         )
-        try:
-            _maybe_start_project_auto_knowledge_sync(
-                workspace,
-                projectId,
-                [uploaded.path],
-                trigger="project_upload",
-            )
-        except Exception:
-            logger.exception(
-                "Failed to start project auto knowledge sync after upload: %s",
-                projectId,
-            )
         return uploaded
     except HTTPException:
         raise
