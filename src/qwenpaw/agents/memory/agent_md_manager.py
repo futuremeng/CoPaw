@@ -30,7 +30,10 @@ class AgentMdManager:
         # Dynamically get memory_dir from config if agent_id provided
         if agent_id:
             agent_config = load_agent_config(agent_id)
-            memory_dir_name = agent_config.running.daily_memory_dir
+            running_cfg = getattr(agent_config, "running", None)
+            memory_dir_name = (
+                getattr(running_cfg, "daily_memory_dir", None) or "memory"
+            )
         else:
             memory_dir_name = "memory"
 

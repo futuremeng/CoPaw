@@ -2,6 +2,7 @@ import { useAgentsData, FileListPanel, FileEditor } from "./components";
 import styles from "./index.module.less";
 import { UploadOutlined, DownloadOutlined } from "@ant-design/icons";
 import { Button, Tooltip } from "@agentscope-ai/design";
+import { Spin } from "antd";
 import { workspaceApi } from "../../../api/modules/workspace";
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
@@ -18,6 +19,7 @@ export default function WorkspacePage() {
     expandedMemory,
     fileContent,
     loading,
+    initializing,
     workspacePath,
     hasChanges,
     enabledFiles,
@@ -106,6 +108,16 @@ export default function WorkspacePage() {
   const handleUploadClick = () => {
     fileInputRef.current?.click();
   };
+
+  if (initializing) {
+    return (
+      <div className={styles.workspacePage}>
+        <div className={styles.loadingState}>
+          <Spin size="large" tip={t("common.loading")} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.workspacePage}>

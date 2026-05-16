@@ -22,12 +22,17 @@ export const useAgentsData = () => {
   const [fileContent, setFileContent] = useState("");
   const [originalContent, setOriginalContent] = useState("");
   const [loading, setLoading] = useState(false);
+  const [initializing, setInitializing] = useState(true);
   const [workspacePath, setWorkspacePath] = useState<string | null>(null);
   const [enabledFiles, setEnabledFiles] = useState<string[]>([]);
   const { message } = useAppMessage();
 
   useEffect(() => {
+    let cancelled = false;
+
     const initializeData = async () => {
+      setInitializing(true);
+
       // Remember currently selected file name
       const previouslySelectedFilename = selectedFile?.filename;
 
@@ -36,38 +41,66 @@ export const useAgentsData = () => {
       setOriginalContent("");
       setExpandedMemory(false);
 
-      const enabled = await fetchEnabledFiles();
-      const fileList = await workspaceApi.listFiles();
-      const sortedFiles = sortFilesByEnabled(
-        fileList as unknown as MarkdownFile[],
-        enabled,
-      );
-      setFiles(sortedFiles);
+      try {
+        const enabled = await fetchEnabledFiles();
+        const fileList = await workspaceApi.listFiles();
+        if (cancelled) {
+          return;
+        }
 
-      // Set workspace path (handle both Unix '/' and Windows '\' separators)
-      if (fileList.length > 0) {
-        setWorkspacePath(getParentDir(fileList[0].path));
-      } else {
-        setWorkspacePath("");
-      }
-
-      // Try to re-select the same file in new workspace
-      if (previouslySelectedFilename) {
-        const sameFile = sortedFiles.find(
-          (f) => f.filename === previouslySelectedFilename,
+        const sortedFiles = sortFilesByEnabled(
+          fileList as unknown as MarkdownFile[],
+          enabled,
         );
-        if (sameFile) {
-          // Auto-load the same file from new workspace
-          await handleFileClick(sameFile);
+        setFiles(sortedFiles);
+
+        // Set workspace path (handle both Unix '/' and Windows '\\' separators)
+        if (fileList.length > 0) {
+          setWorkspacePath(getParentDir(fileList[0].path));
         } else {
-          // File doesn't exist in new workspace, clear selection
+          setWorkspacePath("");
+        }
+
+        // Try to re-select the same file in new workspace
+        if (previouslySelectedFilename) {
+          const sameFile = sortedFiles.find(
+            (f) => f.filename === previouslySelectedFilename,
+          );
+          if (sameFile) {
+            // Auto-load the same file from new workspace
+            await handleFileClick(sameFile);
+          } else {
+            // File doesn't exist in new workspace, clear selection
+            setSelectedFile(null);
+          }
+        } else {
           setSelectedFile(null);
         }
-      } else {
-        setSelectedFile(null);
+      } catch (error) {
+        console.error("Failed to initialize workspace data", error);
+        if (!cancelled) {
+          setFiles([]);
+          setDailyMemories([]);
+          setSelectedFile(null);
+          setFileContent("");
+          setOriginalContent("");
+          setWorkspacePath("");
+          setEnabledFiles([]);
+          setExpandedMemory(false);
+          message.error("Failed to load workspace");
+        }
+      } finally {
+        if (!cancelled) {
+          setInitializing(false);
+        }
       }
     };
+
     initializeData();
+
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAgent]);
 
@@ -280,6 +313,7 @@ export const useAgentsData = () => {
     expandedMemory,
     fileContent,
     loading,
+    initializing,
     workspacePath,
     hasChanges,
     enabledFiles,
