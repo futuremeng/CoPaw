@@ -1,16 +1,16 @@
 type TranslateFn = (key: string, defaultValue: string) => string;
 
 const ENTITY_TYPE_LABELS: Record<string, [string, string]> = {
-  document: ["projects.knowledge.graphEntityType.document", "Document"],
-  entity: ["projects.knowledge.graphEntityType.entity", "Entity"],
-  path: ["projects.knowledge.graphEntityType.path", "Path"],
-  version: ["projects.knowledge.graphEntityType.version", "Version"],
-  snapshot: ["projects.knowledge.graphEntityType.snapshot", "Snapshot"],
+  document: ["copaw.projects.knowledge.graphEntityType.document", "Document"],
+  entity: ["copaw.projects.knowledge.graphEntityType.entity", "Entity"],
+  path: ["copaw.projects.knowledge.graphEntityType.path", "Path"],
+  version: ["copaw.projects.knowledge.graphEntityType.version", "Version"],
+  snapshot: ["copaw.projects.knowledge.graphEntityType.snapshot", "Snapshot"],
 };
 
 const RELATION_TYPE_LABELS: Record<string, [string, string]> = {
-  mentions: ["projects.knowledge.graphRelationType.mentions", "Mentions"],
-  co_occurs_with: ["projects.knowledge.graphRelationType.co_occurs_with", "Co-occurs with"],
+  mentions: ["copaw.projects.knowledge.graphRelationType.mentions", "Mentions"],
+  co_occurs_with: ["copaw.projects.knowledge.graphRelationType.co_occurs_with", "Co-occurs with"],
 };
 
 function humanizeGraphFilterValue(value: string): string {

@@ -182,63 +182,57 @@ export default function ProjectKnowledgeNerPanel(props: ProjectKnowledgeNerPanel
             {t("projects.knowledgeDock.tabNer", "NER")}
           </Typography.Title>
           <Typography.Text type="secondary">
-            {t(
-              "projects.knowledge.nerRoleHint",
-              "NER uses interlinear sentence-normalized text as input and persists results/statistics under .knowledge/ner.",
-            )}
+            {t("copaw.projects.knowledge.nerRoleHint")}
           </Typography.Text>
         </div>
       </div>
 
       {documents.length === 0 ? (
         <Empty
-          description={t(
-            "projects.knowledge.nerEmptySource",
-            "No source content loaded yet. Open Sources or trigger sync first.",
-          )}
+          description={t("copaw.projects.knowledge.nerEmptySource")}
         />
       ) : (
         <>
           <div className={styles.projectKnowledgeSignalGrid}>
             <div className={styles.projectKnowledgeSignalCard}>
               <Typography.Text type="secondary">
-                {t("projects.knowledge.nerReadyChunks", "Ready Documents")}
+                {t("copaw.projects.knowledge.nerReadyChunks")}
               </Typography.Text>
               <Typography.Text strong>{summary.readyDocuments}</Typography.Text>
             </div>
             <div className={styles.projectKnowledgeSignalCard}>
               <Typography.Text type="secondary">
-                {t("projects.knowledge.nerUnavailableChunks", "Unavailable Documents")}
+                {t("copaw.projects.knowledge.nerUnavailableChunks")}
               </Typography.Text>
               <Typography.Text strong>{summary.unavailableDocuments}</Typography.Text>
             </div>
             <div className={styles.projectKnowledgeSignalCard}>
               <Typography.Text type="secondary">
-                {t("projects.knowledge.nerUniqueEntities", "Unique Entities")}
+                {t("copaw.projects.knowledge.nerUniqueEntities")}
               </Typography.Text>
               <Typography.Text strong>{summary.uniqueEntityCount}</Typography.Text>
             </div>
             <div className={styles.projectKnowledgeSignalCard}>
               <Typography.Text type="secondary">
-                {t("projects.knowledge.nerEntityMentions", "Entity Mentions")}
+                {t("copaw.projects.knowledge.nerEntityMentions")}
               </Typography.Text>
               <Typography.Text strong>{summary.mentionTotal}</Typography.Text>
             </div>
             <div className={styles.projectKnowledgeSignalCard}>
               <Typography.Text type="secondary">
-                {t("projects.knowledge.nerBatchCount", "NER Batches")}
+                {t("copaw.projects.knowledge.nerBatchCount")}
               </Typography.Text>
               <Typography.Text strong>{summary.batchTotal}</Typography.Text>
             </div>
             <div className={styles.projectKnowledgeSignalCard}>
               <Typography.Text type="secondary">
-                {t("projects.knowledge.nerWorkerRestartCount", "Worker Restarts")}
+                {t("copaw.projects.knowledge.nerWorkerRestartCount")}
               </Typography.Text>
               <Typography.Text strong>{summary.workerRestartTotal}</Typography.Text>
             </div>
             <div className={styles.projectKnowledgeSignalCard}>
               <Typography.Text type="secondary">
-                {t("projects.knowledge.nerWorkerPidCount", "Worker PID Count")}
+                {t("copaw.projects.knowledge.nerWorkerPidCount")}
               </Typography.Text>
               <Typography.Text strong>{summary.workerPidCount}</Typography.Text>
             </div>
@@ -246,12 +240,12 @@ export default function ProjectKnowledgeNerPanel(props: ProjectKnowledgeNerPanel
 
           <div className={styles.projectKnowledgePanelBody}>
             <Typography.Text type="secondary">
-              {t("projects.knowledge.nerLabelDistribution", "Label Distribution")}
+              {t("copaw.projects.knowledge.nerLabelDistribution")}
             </Typography.Text>
             <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
               {summary.labelRanking.length === 0 ? (
                 <Typography.Text type="secondary">
-                  {t("projects.knowledge.nerNoLabelDistribution", "No label stats yet")}
+                  {t("copaw.projects.knowledge.nerNoLabelDistribution")}
                 </Typography.Text>
               ) : (
                 summary.labelRanking.map((item) => (
@@ -263,12 +257,12 @@ export default function ProjectKnowledgeNerPanel(props: ProjectKnowledgeNerPanel
             </div>
 
             <Typography.Text type="secondary" style={{ display: "block", marginTop: 12 }}>
-              {t("projects.knowledge.nerInputModes", "Input Modes")}
+              {t("copaw.projects.knowledge.nerInputModes")}
             </Typography.Text>
             <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
               {summary.inputModeSummary.length === 0 ? (
                 <Typography.Text type="secondary">
-                  {t("projects.knowledge.nerNoInputModes", "No input mode stats yet")}
+                  {t("copaw.projects.knowledge.nerNoInputModes")}
                 </Typography.Text>
               ) : (
                 summary.inputModeSummary.map((item) => (
@@ -281,12 +275,12 @@ export default function ProjectKnowledgeNerPanel(props: ProjectKnowledgeNerPanel
 
             <div style={{ marginTop: 16 }}>
               <Typography.Text type="secondary">
-                {t("projects.knowledge.nerTopEntities", "Top Entities")}
+                {t("copaw.projects.knowledge.nerTopEntities")}
               </Typography.Text>
               {summary.topEntities.length === 0 ? (
                 <Empty
                   style={{ marginTop: 8 }}
-                  description={t("projects.knowledge.nerNoEntities", "No NER entities yet")}
+                  description={t("copaw.projects.knowledge.nerNoEntities")}
                 />
               ) : (
                 <div className={styles.projectKnowledgeSelectableList} style={{ marginTop: 8 }}>
@@ -297,7 +291,7 @@ export default function ProjectKnowledgeNerPanel(props: ProjectKnowledgeNerPanel
                         <Tag>{item.label}</Tag>
                       </div>
                       <Typography.Text type="secondary">
-                        {t("projects.knowledge.nerTableMentions", "Mentions")}: {item.mentionCount}
+                        {t("copaw.projects.knowledge.nerTableMentions")}: {item.mentionCount}
                       </Typography.Text>
                     </div>
                   ))}

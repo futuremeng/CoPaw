@@ -23,6 +23,9 @@ cd "$REPO_ROOT"
 step "Pipeline template conformance"
 python "$REPO_ROOT/scripts/check_pipeline_template_conformance.py" --root "$REPO_ROOT"
 
+step "CoPaw locale split guard"
+python "$REPO_ROOT/scripts/check_copaw_locale_split.py"
+
 step "Backend checks"
 if [[ "${LOCAL_GATE_STRICT:-0}" == "1" ]]; then
   echo "Running full backend unit tests (strict mode)..."

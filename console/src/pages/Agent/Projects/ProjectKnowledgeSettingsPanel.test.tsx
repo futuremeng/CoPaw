@@ -254,7 +254,7 @@ describe("ProjectKnowledgeSettingsPanel", () => {
     );
 
     await waitFor(() => {
-      expect(document.body.textContent || "").toContain("projects.knowledge.syncStage.cooldown");
+      expect(document.body.textContent || "").toContain("copaw.projects.knowledge.syncStage.cooldown");
       expect(document.body.textContent || "").toContain("Semantic engine unavailable: HanLP2 module is not installed.");
     });
   });

@@ -1027,9 +1027,9 @@ export default function PipelinesPage() {
     [currentAgent?.projects],
   );
 
-  const independentScopeLabel = t("pipelines.independentScope");
-  const builtinScopeLabel = t("pipelines.builtin", "Built-in");
-  const projectScopeLabel = t("pipelines.project", "Project");
+  const independentScopeLabel = t("copaw.pipelines.independentScope");
+  const builtinScopeLabel = t("copaw.pipelines.builtin");
+  const projectScopeLabel = t("copaw.pipelines.project");
 
   useEffect(() => {
     let mounted = true;
@@ -1139,22 +1139,12 @@ export default function PipelinesPage() {
           setDraftNewVersionSteps(persisted.draftNewVersionSteps || []);
           setDraftParseStatus(persisted.draftParseStatus || "idle");
           setDraftParseError(persisted.draftParseError || "");
-          message.info(
-            t(
-              "pipelines.localDraftRestored",
-              "已恢复本地未保存草稿。",
-            ),
-          );
+          message.info(t("copaw.pipelines.localDraftRestored"));
         }
       } catch (err) {
         console.error("failed to load pipeline management data", err);
         if (mounted) {
-          setError(
-            t(
-              "pipelines.loadFailed",
-              "Failed to load pipeline management data.",
-            ),
-          );
+          setError(t("copaw.pipelines.loadFailed"));
         }
       } finally {
         if (mounted) setLoading(false);
@@ -1479,7 +1469,7 @@ export default function PipelinesPage() {
       console.warn("failed to load project pipeline runs", err);
       setRunsErrorByKey((prev) => ({
         ...prev,
-        [key]: t("pipelines.loadRunsFailed", "Failed to load pipeline runs."),
+        [key]: t("copaw.pipelines.loadRunsFailed"),
       }));
     } finally {
       setRunsLoadingKeys((prev) => ({ ...prev, [key]: false }));
@@ -1531,15 +1521,11 @@ export default function PipelinesPage() {
         force: true,
         processingMode: builtinProcessingMode,
       });
-      message.success(
-        t("pipelines.builtinRunStarted", "Built-in project knowledge pipeline started."),
-      );
+      message.success(t("copaw.pipelines.builtinRunStarted"));
       await refreshBuiltinSyncState();
     } catch (err) {
       console.error("failed to run built-in project knowledge pipeline", err);
-      message.error(
-        t("pipelines.builtinRunFailed", "Failed to start built-in project knowledge pipeline."),
-      );
+      message.error(t("copaw.pipelines.builtinRunFailed"));
     } finally {
       setBuiltinRunLoading(false);
     }
@@ -1564,15 +1550,11 @@ export default function PipelinesPage() {
         processingMode: builtinProcessingMode,
         quantizationStage: builtinSyncState?.quantization_stage,
       });
-      message.success(
-        t("pipelines.builtinRetryStarted", "Built-in project knowledge pipeline retry started."),
-      );
+      message.success(t("copaw.pipelines.builtinRetryStarted"));
       await refreshBuiltinSyncState();
     } catch (err) {
       console.error("failed to retry built-in project knowledge pipeline", err);
-      message.error(
-        t("pipelines.builtinRetryFailed", "Failed to retry built-in project knowledge pipeline."),
-      );
+      message.error(t("copaw.pipelines.builtinRetryFailed"));
     } finally {
       setBuiltinRunLoading(false);
     }
@@ -1696,15 +1678,11 @@ export default function PipelinesPage() {
       await agentsApi.createProjectPipelineRun(selectedAgent, selectedBuiltinProjectId, {
         template_id: selectedPipeline.id,
       });
-      message.success(
-        t("pipelines.projectBuiltinRunStarted", "Built-in project pipeline run started."),
-      );
+      message.success(t("copaw.pipelines.projectBuiltinRunStarted"));
       await loadRunsForPipeline(selectedPipeline, { force: true });
     } catch (err) {
       console.error("failed to run project builtin knowledge workflow", err);
-      message.error(
-        t("pipelines.projectBuiltinRunFailed", "Failed to start built-in project pipeline run."),
-      );
+      message.error(t("copaw.pipelines.projectBuiltinRunFailed"));
     } finally {
       setBuiltinRunLoading(false);
     }
@@ -1722,15 +1700,11 @@ export default function PipelinesPage() {
         projectBuiltinLatestRun.id,
         { note: "retry from pipelines" },
       );
-      message.success(
-        t("pipelines.projectBuiltinRetryStarted", "Built-in project pipeline retry started."),
-      );
+      message.success(t("copaw.pipelines.projectBuiltinRetryStarted"));
       await loadRunsForPipeline(selectedPipeline, { force: true });
     } catch (err) {
       console.error("failed to retry project builtin knowledge workflow", err);
-      message.error(
-        t("pipelines.projectBuiltinRetryFailed", "Failed to retry built-in project pipeline run."),
-      );
+      message.error(t("copaw.pipelines.projectBuiltinRetryFailed"));
     } finally {
       setBuiltinRunLoading(false);
     }
@@ -1832,10 +1806,7 @@ export default function PipelinesPage() {
 
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
-      event.returnValue = t(
-        "pipelines.unsavedLeaveWarning",
-        "当前有未保存的流程草稿，离开后将丢失。",
-      );
+      event.returnValue = t("copaw.pipelines.unsavedLeaveWarning");
     };
 
     window.addEventListener("beforeunload", handleBeforeUnload);
@@ -1946,10 +1917,10 @@ export default function PipelinesPage() {
         hasLocalBackup && hasRemoteBackup && localFingerprint !== remoteFingerprint,
       );
 
-      message.success(t("pipelines.conflictRefreshed"));
+      message.success(t("copaw.pipelines.conflictRefreshed"));
     } catch (error) {
       console.error("failed to refresh pipelines after conflict", error);
-      message.error(t("pipelines.conflictRefreshFailed"));
+      message.error(t("copaw.pipelines.conflictRefreshFailed"));
     }
   }, [
     builtinScopeLabel,
@@ -1971,7 +1942,7 @@ export default function PipelinesPage() {
     setDraftParseError("");
     setExpandedDraftDiffKeys([]);
     setConflictRestoreAvailable(false);
-    message.success(t("pipelines.conflictLocalRestored"));
+    message.success(t("copaw.pipelines.conflictLocalRestored"));
   }, [conflictLocalDraftBackup, t]);
 
   const handleUseRemoteDraftAfterConflict = useCallback(() => {
@@ -1984,7 +1955,7 @@ export default function PipelinesPage() {
     setExpandedDraftDiffKeys([]);
     setConflictRestoreAvailable(true);
     setConflictMergeAvailable(false);
-    message.success(t("pipelines.conflictRemoteApplied"));
+    message.success(t("copaw.pipelines.conflictRemoteApplied"));
   }, [conflictRemoteDraftBackup, t]);
 
   const handleMergeDraftAfterConflict = useCallback(() => {
@@ -2001,7 +1972,7 @@ export default function PipelinesPage() {
     setExpandedDraftDiffKeys([]);
     setConflictRestoreAvailable(true);
     setConflictMergeAvailable(false);
-    message.success(t("pipelines.conflictMerged"));
+    message.success(t("copaw.pipelines.conflictMerged"));
   }, [conflictLocalDraftBackup, conflictRemoteDraftBackup, t]);
 
   const requestCloseEditMode = () => {
@@ -2011,11 +1982,8 @@ export default function PipelinesPage() {
     }
 
     Modal.confirm({
-      title: t("pipelines.unsavedDraftTitle"),
-      content: t(
-        "pipelines.unsavedExitConfirm",
-        "当前流程草稿尚未保存，退出编辑后改动可能丢失。是否继续？",
-      ),
+      title: t("copaw.pipelines.unsavedDraftTitle"),
+      content: t("copaw.pipelines.unsavedExitConfirm"),
       okText: t("common.confirm"),
       cancelText: t("common.cancel"),
       onOk: () => {
@@ -2032,11 +2000,8 @@ export default function PipelinesPage() {
     }
 
     Modal.confirm({
-      title: t("pipelines.unsavedDraftTitle"),
-      content: t(
-        "pipelines.unsavedSwitchConfirm",
-        "当前流程草稿尚未保存，切换流程后改动可能丢失。是否继续切换？",
-      ),
+      title: t("copaw.pipelines.unsavedDraftTitle"),
+      content: t("copaw.pipelines.unsavedSwitchConfirm"),
       okText: t("common.confirm"),
       cancelText: t("common.cancel"),
       onOk: () => {
@@ -2102,7 +2067,7 @@ export default function PipelinesPage() {
       .catch(() => {
         setSelectedRunDetailErrorByKey((prev) => ({
           ...prev,
-          [runKey]: t("pipelines.runDetailLoadFailed", "Failed to load run details. Click to retry."),
+          [runKey]: t("copaw.pipelines.runDetailLoadFailed"),
         }));
       })
       .finally(() => {
@@ -2235,35 +2200,35 @@ export default function PipelinesPage() {
       : "-";
     return [
       {
-        label: t("pipelines.latestRunStatus"),
+        label: t("copaw.pipelines.latestRunStatus"),
         value: latestRun.status || "-",
       },
       {
-        label: t("pipelines.latestRunScore"),
+        label: t("copaw.pipelines.latestRunScore"),
         value: scoreValue,
       },
       {
-        label: t("pipelines.latestRunDuration"),
+        label: t("copaw.pipelines.latestRunDuration"),
         value: durationValue,
       },
       {
-        label: t("pipelines.latestRunChecksRate"),
+        label: t("copaw.pipelines.latestRunChecksRate"),
         value: checksRateValue,
       },
       {
-        label: t("pipelines.latestRunUpdatedAt"),
+        label: t("copaw.pipelines.latestRunUpdatedAt"),
         value: latestRun.updated_at || latestRun.created_at || "-",
       },
       {
-        label: t("pipelines.latestRunRpaActions"),
+        label: t("copaw.pipelines.latestRunRpaActions"),
         value: rpaActionsValue > 0 ? String(rpaActionsValue) : "-",
       },
       {
-        label: t("pipelines.latestRunRpaStopFailures"),
+        label: t("copaw.pipelines.latestRunRpaStopFailures"),
         value: rpaFailuresValue > 0 ? String(rpaFailuresValue) : "0",
       },
       {
-        label: t("pipelines.latestRunRpaDuration"),
+        label: t("copaw.pipelines.latestRunRpaDuration"),
         value: rpaDurationValue,
       },
     ];
@@ -2549,8 +2514,8 @@ export default function PipelinesPage() {
         : undefined;
       const editGuide = t(
         isEmptyNodes
-          ? "pipelines.editInputPlaceholderInit"
-          : "pipelines.editInputPlaceholder",
+          ? "copaw.pipelines.editInputPlaceholderInit"
+          : "copaw.pipelines.editInputPlaceholder",
         isEmptyNodes
           ? "这是一个新流程，请先定义目标、关键步骤和完成标准，我会帮你生成首版节点草案。"
           : "围绕当前流程 {{name}} ({{version}}) 描述你的改造目标，例如：新增校验节点、调整重试策略、优化输出结构。",
@@ -2611,7 +2576,7 @@ export default function PipelinesPage() {
             parseRetryCount: 0,
           });
           message.success(
-            t("pipelines.boundSessionRestored"),
+            t("copaw.pipelines.boundSessionRestored"),
           );
           return;
         }
@@ -2633,7 +2598,7 @@ export default function PipelinesPage() {
       });
 
       const created = await chatApi.createChat({
-        name: t("pipelines.designSessionName"),
+        name: t("copaw.pipelines.designSessionName"),
         session_id: buildPipelineEntrySessionId(),
         user_id: "default",
         channel: "console",
@@ -2675,7 +2640,7 @@ export default function PipelinesPage() {
           parseRetryCount: 0,
         });
         message.success(
-          t("pipelines.boundSessionCreated"),
+          t("copaw.pipelines.boundSessionCreated"),
         );
         return;
       }
@@ -2702,19 +2667,14 @@ export default function PipelinesPage() {
 
       const to = buildPipelineDesignChatPath(created.id);
       trackNavigation({
-        source: "pipelines.handleOpenDesignChat",
+        source: "copaw.pipelines.handleOpenDesignChat",
         from: "/pipelines",
         to,
         reason: "start-pipeline-design-chat-inline",
       });
     } catch (error) {
       console.error("failed to start pipeline design chat", error);
-      message.error(
-        t(
-          "pipelines.startChatFailed",
-          "Failed to start pipeline design chat. Please try again.",
-        ),
-      );
+      message.error(t("copaw.pipelines.startChatFailed"));
     } finally {
       setDesignChatStarting(false);
     }
@@ -2722,7 +2682,7 @@ export default function PipelinesPage() {
 
   const handleCreatePipelineAndEnterEdit = async () => {
     if (!selectedAgent) {
-      message.warning(t("pipelines.noAgent"));
+      message.warning(t("copaw.pipelines.noAgent"));
       return;
     }
 
@@ -2731,12 +2691,12 @@ export default function PipelinesPage() {
     const draftVersion = "0.1.0";
     const draftTemplate: TemplateItem = {
       id: draftId,
-      name: t("pipelines.newPipelineName"),
+      name: t("copaw.pipelines.newPipelineName"),
       version: draftVersion,
-      description: t("pipelines.newPipelineDescription"),
+      description: t("copaw.pipelines.newPipelineDescription"),
       steps: [],
       projectId: INDEPENDENT_PIPELINE_SCOPE_ID,
-      projectName: t("pipelines.independentScope"),
+      projectName: t("copaw.pipelines.independentScope"),
     };
 
     const draftGroupKey = buildPipelineGroupKey(draftTemplate.id, "independent");
@@ -2802,7 +2762,7 @@ export default function PipelinesPage() {
 
   const handleImportBuiltinRpaTemplate = useCallback(async () => {
     if (!selectedAgent) {
-      message.warning(t("pipelines.noAgent"));
+      message.warning(t("copaw.pipelines.noAgent"));
       return;
     }
     setRpaImporting(true);
@@ -2814,14 +2774,14 @@ export default function PipelinesPage() {
       applyImportedRpaTemplate(imported);
       message.success(
         t(
-          "pipelines.rpaImportBuiltinSuccess",
+          "copaw.pipelines.rpaImportBuiltinSuccess",
           { name: imported.name || imported.id },
         ),
       );
     } catch (error) {
       console.error("failed to import builtin rpa template", error);
       message.error(
-        t("pipelines.rpaImportBuiltinFailed"),
+        t("copaw.pipelines.rpaImportBuiltinFailed"),
       );
     } finally {
       setRpaImporting(false);
@@ -2830,14 +2790,14 @@ export default function PipelinesPage() {
 
   const handleConfirmImportRpaJson = useCallback(async () => {
     if (!selectedAgent) {
-      message.warning(t("pipelines.noAgent"));
+      message.warning(t("copaw.pipelines.noAgent"));
       return;
     }
 
     const raw = rpaImportJson.trim();
     if (!raw) {
       message.warning(
-        t("pipelines.rpaImportJsonEmpty"),
+        t("copaw.pipelines.rpaImportJsonEmpty"),
       );
       return;
     }
@@ -2847,7 +2807,7 @@ export default function PipelinesPage() {
       parsed = JSON.parse(raw) as RpaTemplatePackageDocument;
     } catch {
       message.error(
-        t("pipelines.rpaImportJsonInvalid"),
+        t("copaw.pipelines.rpaImportJsonInvalid"),
       );
       return;
     }
@@ -2864,14 +2824,14 @@ export default function PipelinesPage() {
       setRpaImportTemplateId("");
       message.success(
         t(
-          "pipelines.rpaImportJsonSuccess",
+          "copaw.pipelines.rpaImportJsonSuccess",
           { name: imported.name || imported.id },
         ),
       );
     } catch (error) {
       console.error("failed to import rpa package json", error);
       message.error(
-        t("pipelines.rpaImportJsonFailed"),
+        t("copaw.pipelines.rpaImportJsonFailed"),
       );
     } finally {
       setRpaImporting(false);
@@ -2880,12 +2840,12 @@ export default function PipelinesPage() {
 
   const handleExportSelectedPipelineAsRpaJson = useCallback(async () => {
     if (!selectedAgent || !selectedTemplateItem || !selectedPipeline) {
-      message.warning(t("pipelines.noAgent"));
+      message.warning(t("copaw.pipelines.noAgent"));
       return;
     }
     if (selectedPipeline.source !== "independent") {
       message.warning(
-        t("pipelines.rpaExportIndependentOnly"),
+        t("copaw.pipelines.rpaExportIndependentOnly"),
       );
       return;
     }
@@ -2910,12 +2870,12 @@ export default function PipelinesPage() {
       setRpaExportFileName(`${safeTemplateId}.rpa-template.json`);
       setRpaExportModalOpen(true);
       message.success(
-        t("pipelines.rpaExportSuccess"),
+        t("copaw.pipelines.rpaExportSuccess"),
       );
     } catch (error) {
       console.error("failed to export rpa package", error);
       message.error(
-        t("pipelines.rpaExportFailed"),
+        t("copaw.pipelines.rpaExportFailed"),
       );
     } finally {
       setRpaExporting(false);
@@ -2928,11 +2888,11 @@ export default function PipelinesPage() {
     try {
       await navigator.clipboard.writeText(rpaExportJson);
       message.success(
-        t("pipelines.rpaExportCopySuccess"),
+        t("copaw.pipelines.rpaExportCopySuccess"),
       );
     } catch {
       message.warning(
-        t("pipelines.rpaExportCopyFailed"),
+        t("copaw.pipelines.rpaExportCopyFailed"),
       );
     }
   }, [rpaExportJson, t]);
@@ -2953,11 +2913,11 @@ export default function PipelinesPage() {
       link.remove();
       URL.revokeObjectURL(href);
       message.success(
-        t("pipelines.rpaExportDownloadSuccess"),
+        t("copaw.pipelines.rpaExportDownloadSuccess"),
       );
     } catch {
       message.error(
-        t("pipelines.rpaExportDownloadFailed"),
+        t("copaw.pipelines.rpaExportDownloadFailed"),
       );
     }
   }, [rpaExportFileName, rpaExportJson, t]);
@@ -3015,7 +2975,7 @@ export default function PipelinesPage() {
 
       message.loading({
         key: saveToastKey,
-        content: t("pipelines.saveDraftPending"),
+        content: t("copaw.pipelines.saveDraftPending"),
         duration: 0,
       });
 
@@ -3141,7 +3101,7 @@ export default function PipelinesPage() {
       setConflictMergeAvailable(false);
 
       message.destroy(saveToastKey);
-      message.success(t("pipelines.saveDraftSuccess"));
+      message.success(t("copaw.pipelines.saveDraftSuccess"));
     } catch (error) {
       console.error("failed to save draft pipeline", error);
       message.destroy(saveToastKey);
@@ -3156,7 +3116,7 @@ export default function PipelinesPage() {
       if (!saveStreamError) {
         setSaveStreamError(String(error));
       }
-      message.error(t("pipelines.saveDraftFailed"));
+      message.error(t("copaw.pipelines.saveDraftFailed"));
     } finally {
       setDraftSaving(false);
     }
@@ -3164,7 +3124,7 @@ export default function PipelinesPage() {
 
   const handleEnterEditMode = async () => {
     if (!selectedPipeline || !currentTemplate) {
-      message.warning(t("pipelines.selectPipelineFirst"));
+      message.warning(t("copaw.pipelines.selectPipelineFirst"));
       return;
     }
 
@@ -3173,8 +3133,8 @@ export default function PipelinesPage() {
     setEditGuidePlaceholder(
       t(
         isEmptyNodes
-          ? "pipelines.editInputPlaceholderInit"
-          : "pipelines.editInputPlaceholder",
+          ? "copaw.pipelines.editInputPlaceholderInit"
+          : "copaw.pipelines.editInputPlaceholder",
         isEmptyNodes
           ? "这是一个新流程，请先定义目标、关键步骤和完成标准，我会帮你生成首版节点草案。"
           : "围绕当前流程 {{name}} ({{version}}) 描述你的改造目标，例如：新增校验节点、调整重试策略、优化输出结构。",
@@ -3210,7 +3170,7 @@ export default function PipelinesPage() {
           active: false,
         }));
         message.warning(
-          t("pipelines.incrementalProposalEmpty"),
+          t("copaw.pipelines.incrementalProposalEmpty"),
         );
         return;
       }
@@ -3258,7 +3218,7 @@ export default function PipelinesPage() {
           }));
 
           message.success(
-            t("pipelines.incrementalStepSaved", {
+            t("copaw.pipelines.incrementalStepSaved", {
               current: index + 1,
               total: plannedSteps.length,
             }),
@@ -3275,18 +3235,18 @@ export default function PipelinesPage() {
         }));
         setEditWelcomeMode("default");
         message.success(
-          t("pipelines.incrementalGenerationDone"),
+          t("copaw.pipelines.incrementalGenerationDone"),
         );
       } catch (error) {
         console.error("failed to apply confirmed pipeline proposal", error);
         setDraftParseStatus("error");
-        setDraftParseError(t("pipelines.stepSaveFailed"));
+        setDraftParseError(t("copaw.pipelines.stepSaveFailed"));
         setIncrementalGeneration((prev) => ({
           ...prev,
           createStage: "await_confirm",
           parseRetryCount: 0,
         }));
-        message.error(t("pipelines.stepSaveFailed"));
+        message.error(t("copaw.pipelines.stepSaveFailed"));
       }
     },
     [
@@ -3316,8 +3276,8 @@ export default function PipelinesPage() {
       const strategyInput = strategy === "stepwise" ? "1" : "2";
       const strategyLabel =
         strategy === "stepwise"
-          ? t("pipelines.strategyStepwise")
-          : t("pipelines.strategyPlanThenRefine");
+          ? t("copaw.pipelines.strategyStepwise")
+          : t("copaw.pipelines.strategyPlanThenRefine");
 
       try {
         sessionApi.setLastUserMessage(designChatSessionId, strategyInput);
@@ -3328,14 +3288,14 @@ export default function PipelinesPage() {
           channel: "console",
         });
         message.info(
-          t("pipelines.strategySelectedHint", {
+          t("copaw.pipelines.strategySelectedHint", {
             strategy: strategyLabel,
           }),
         );
       } catch (error) {
         console.error("failed to submit strategy selection", error);
         message.error(
-          t("pipelines.strategySubmitFailed"),
+          t("copaw.pipelines.strategySubmitFailed"),
         );
       }
     },
@@ -3371,10 +3331,7 @@ export default function PipelinesPage() {
       lastSuccessfulRevision: undefined,
     }));
 
-    const prompt = t(
-      "pipelines.reenterTopicPrompt",
-      "请重新描述你想创建的流程主题，我会先记录主题，再让你选择创建策略。",
-    );
+    const prompt = t("copaw.pipelines.reenterTopicPrompt");
 
     try {
       sessionApi.setLastUserMessage(designChatSessionId, prompt);
@@ -3385,12 +3342,12 @@ export default function PipelinesPage() {
         channel: "console",
       });
       message.info(
-        t("pipelines.reenterTopicHint"),
+        t("copaw.pipelines.reenterTopicHint"),
       );
     } catch (error) {
       console.error("failed to request topic re-entry", error);
       message.warning(
-        t("pipelines.reenterTopicFailed"),
+        t("copaw.pipelines.reenterTopicFailed"),
       );
     }
   }, [designChatSessionId, editMode, t]);
@@ -3450,7 +3407,7 @@ export default function PipelinesPage() {
           });
 
           message.info(
-            t("pipelines.incrementalTopicCaptured"),
+            t("copaw.pipelines.incrementalTopicCaptured"),
           );
           await dispatchSyntheticPrompt(firstPrompt);
           return;
@@ -3481,7 +3438,7 @@ export default function PipelinesPage() {
         });
 
         message.info(
-          t("pipelines.incrementalEditStart"),
+          t("copaw.pipelines.incrementalEditStart"),
         );
         await dispatchSyntheticPrompt(firstPrompt);
       };
@@ -3513,10 +3470,7 @@ export default function PipelinesPage() {
               lastSyntheticPrompt: strategyPrompt,
             }));
             message.info(
-              t(
-                "pipelines.incrementalStrategyChooseHint",
-                "请先选择策略：回复 1（逐节点）或 2（先规划后逐个改）。",
-              ),
+              t("copaw.pipelines.incrementalStrategyChooseHint"),
             );
             return;
           }
@@ -3555,7 +3509,7 @@ export default function PipelinesPage() {
             }));
 
             message.info(
-              t("pipelines.incrementalGenerationStart"),
+              t("copaw.pipelines.incrementalGenerationStart"),
             );
             await dispatchSyntheticPrompt(firstPrompt);
             return;
@@ -3580,7 +3534,7 @@ export default function PipelinesPage() {
           }));
 
           message.info(
-            t("pipelines.incrementalProposalStart"),
+            t("copaw.pipelines.incrementalProposalStart"),
           );
           await dispatchSyntheticPrompt(proposalPrompt);
           return;
@@ -3599,7 +3553,7 @@ export default function PipelinesPage() {
             }));
             setEditWelcomeMode("default");
             message.success(
-              t("pipelines.incrementalGenerationDone"),
+              t("copaw.pipelines.incrementalGenerationDone"),
             );
             return;
           }
@@ -3618,15 +3572,15 @@ export default function PipelinesPage() {
                 lastSyntheticPrompt: repairPrompt,
               }));
               message.info(
-                t("pipelines.stepParseRepairing"),
+                t("copaw.pipelines.stepParseRepairing"),
               );
               return;
             }
 
             setDraftParseStatus("error");
-            setDraftParseError(parsed.error || t("pipelines.stepParseFailed"));
+            setDraftParseError(parsed.error || t("copaw.pipelines.stepParseFailed"));
             message.warning(
-              parsed.error || t("pipelines.stepParseFailed"),
+              parsed.error || t("copaw.pipelines.stepParseFailed"),
             );
             return;
           }
@@ -3660,7 +3614,7 @@ export default function PipelinesPage() {
             const totalSteps = incrementalGeneration.totalStepsExpected;
 
             message.success(
-              t("pipelines.incrementalStepSaved", {
+              t("copaw.pipelines.incrementalStepSaved", {
                 current: Math.min(generatedCount, totalSteps),
                 total: totalSteps,
               }),
@@ -3704,8 +3658,8 @@ export default function PipelinesPage() {
           } catch (error) {
             console.error("failed to save incremental pipeline step", error);
             setDraftParseStatus("error");
-            setDraftParseError(t("pipelines.stepSaveFailed"));
-            message.error(t("pipelines.stepSaveFailed"));
+            setDraftParseError(t("copaw.pipelines.stepSaveFailed"));
+            message.error(t("copaw.pipelines.stepSaveFailed"));
             return;
           }
         }
@@ -3727,15 +3681,15 @@ export default function PipelinesPage() {
                 lastSyntheticPrompt: repairPrompt,
               }));
               message.info(
-                t("pipelines.stepParseRepairing"),
+                t("copaw.pipelines.stepParseRepairing"),
               );
               return;
             }
 
             setDraftParseStatus("error");
-            setDraftParseError(parsedProposal.error || t("pipelines.stepParseFailed"));
+            setDraftParseError(parsedProposal.error || t("copaw.pipelines.stepParseFailed"));
             message.warning(
-              parsedProposal.error || t("pipelines.stepParseFailed"),
+              parsedProposal.error || t("copaw.pipelines.stepParseFailed"),
             );
             return;
           }
@@ -3754,10 +3708,7 @@ export default function PipelinesPage() {
           setDraftParseError("");
           setExpandedDraftDiffKeys([]);
           message.info(
-            t(
-              "pipelines.incrementalProposalReady",
-              "节点组合初步方案已生成，请回复“确认创建流程”后按节点逐个写入。",
-            ),
+            t("copaw.pipelines.incrementalProposalReady"),
           );
           return;
         }
@@ -3786,14 +3737,11 @@ export default function PipelinesPage() {
                 lastSyntheticPrompt: refreshedPrompt,
               }));
               message.info(
-                t("pipelines.incrementalProposalRefresh"),
+                t("copaw.pipelines.incrementalProposalRefresh"),
               );
             } else {
               message.info(
-                t(
-                  "pipelines.incrementalProposalConfirmHint",
-                  "请先确认方案，回复“确认创建流程”后开始逐节点写入。",
-                ),
+                t("copaw.pipelines.incrementalProposalConfirmHint"),
               );
             }
             return;
@@ -3815,7 +3763,7 @@ export default function PipelinesPage() {
             active: false,
           }));
           message.success(
-            parsed.message || t("pipelines.incrementalEditDone"),
+            parsed.message || t("copaw.pipelines.incrementalEditDone"),
           );
           return;
         }
@@ -3826,7 +3774,7 @@ export default function PipelinesPage() {
             active: false,
           }));
           message.info(
-            parsed.message || t("pipelines.incrementalNeedsUserInput"),
+            parsed.message || t("copaw.pipelines.incrementalNeedsUserInput"),
           );
           return;
         }
@@ -3845,7 +3793,7 @@ export default function PipelinesPage() {
               lastSyntheticPrompt: repairPrompt,
             }));
             message.info(
-              t("pipelines.stepParseRepairing"),
+              t("copaw.pipelines.stepParseRepairing"),
             );
             return;
           }
@@ -3855,8 +3803,8 @@ export default function PipelinesPage() {
             active: false,
           }));
           setDraftParseStatus("error");
-          setDraftParseError(parsed.error || t("pipelines.stepParseFailed"));
-          message.warning(parsed.error || t("pipelines.stepParseFailed"));
+          setDraftParseError(parsed.error || t("copaw.pipelines.stepParseFailed"));
+          message.warning(parsed.error || t("copaw.pipelines.stepParseFailed"));
           return;
         }
 
@@ -3885,8 +3833,8 @@ export default function PipelinesPage() {
 
           message.success(
             parsed.operation === "delete"
-              ? t("pipelines.incrementalDeleteApplied")
-              : t("pipelines.incrementalEditApplied"),
+              ? t("copaw.pipelines.incrementalDeleteApplied")
+              : t("copaw.pipelines.incrementalEditApplied"),
           );
 
           // Check operation budget before continuing auto-loop
@@ -3899,11 +3847,9 @@ export default function PipelinesPage() {
               lastSuccessfulRevision: updated.revision,
             }));
             message.info(
-              t(
-                "pipelines.operationBudgetExhausted",
-                "已自动应用 {{count}} 次变更，请确认当前结果后继续。",
-                { count: nextOperationsApplied },
-              ),
+              t("copaw.pipelines.operationBudgetExhausted", {
+                count: nextOperationsApplied,
+              }),
             );
             return;
           }
@@ -3936,8 +3882,8 @@ export default function PipelinesPage() {
             active: false,
           }));
           setDraftParseStatus("error");
-          setDraftParseError(t("pipelines.stepSaveFailed"));
-          message.error(t("pipelines.stepSaveFailed"));
+          setDraftParseError(t("copaw.pipelines.stepSaveFailed"));
+          message.error(t("copaw.pipelines.stepSaveFailed"));
           return;
         }
       }
@@ -3968,11 +3914,9 @@ export default function PipelinesPage() {
             const firstError = draftInfo.validation_errors[0];
             setSaveValidationErrors(draftInfo.validation_errors);
             message.warning(
-              t(
-                "pipelines.draftValidationFailed",
-                "流程 Markdown 校验失败：{{detail}}",
-                { detail: firstError.message || firstError.error_code || "unknown error" },
-              ),
+              t("copaw.pipelines.draftValidationFailed", {
+                detail: firstError.message || firstError.error_code || "unknown error",
+              }),
             );
             return;
           }
@@ -4098,7 +4042,7 @@ export default function PipelinesPage() {
           <div className={styles.diffPairGrid}>
             <div className={`${styles.diffPairColumn} ${styles.diffPairOld}`}>
               <Text type="secondary" className={styles.diffPairLabel}>
-                {t("pipelines.diffOldValue")}
+                {t("copaw.pipelines.diffOldValue")}
               </Text>
               <Text className={styles.diffOldText}>
                 {renderDiffTokenText(
@@ -4110,7 +4054,7 @@ export default function PipelinesPage() {
             </div>
             <div className={`${styles.diffPairColumn} ${styles.diffPairNew}`}>
               <Text type="secondary" className={styles.diffPairLabel}>
-                {t("pipelines.diffNewValue")}
+                {t("copaw.pipelines.diffNewValue")}
               </Text>
               <Text className={styles.diffNewText}>
                 {renderDiffTokenText(
@@ -4138,14 +4082,9 @@ export default function PipelinesPage() {
       <div className={styles.header}>
         <div>
           <Title level={3} className={styles.title}>
-            {t("pipelines.title")}
+            {t("copaw.pipelines.title")}
           </Title>
-          <Text className={styles.subtitle}>
-            {t(
-              "pipelines.description",
-              "Manage reusable pipeline definitions across projects, then validate and tune in Projects.",
-            )}
-          </Text>
+          <Text className={styles.subtitle}>{t("copaw.pipelines.description")}</Text>
         </div>
         <div className={styles.actions}>
           <Select
@@ -4154,10 +4093,10 @@ export default function PipelinesPage() {
             style={{ width: 180 }}
             onChange={(value) => setSourceFilter(value)}
             options={[
-              { value: "all", label: t("pipelines.sourceFilterAll") },
-              { value: "independent", label: t("pipelines.sourceFilterIndependent") },
-              { value: "project", label: t("pipelines.sourceFilterProject") },
-              { value: "builtin", label: t("pipelines.builtin", "Built-in") },
+              { value: "all", label: t("copaw.pipelines.sourceFilterAll") },
+              { value: "independent", label: t("copaw.pipelines.sourceFilterIndependent") },
+              { value: "project", label: t("copaw.pipelines.sourceFilterProject") },
+              { value: "builtin", label: t("copaw.pipelines.builtin") },
             ]}
           />
           <Button
@@ -4166,23 +4105,23 @@ export default function PipelinesPage() {
             disabled={designChatStarting}
             onClick={() => void handleCreatePipelineAndEnterEdit()}
           >
-            {t("pipelines.create")}
+            {t("copaw.pipelines.create")}
           </Button>
           <Button
             loading={rpaImporting}
             disabled={rpaImporting || !selectedAgent}
             onClick={() => void handleImportBuiltinRpaTemplate()}
           >
-            {t("pipelines.rpaImportBuiltinAction")}
+            {t("copaw.rpa.importBuiltinAction")}
           </Button>
           <Button
             disabled={rpaImporting || !selectedAgent}
             onClick={() => setRpaImportModalOpen(true)}
           >
-            {t("pipelines.rpaImportJsonAction")}
+            {t("copaw.rpa.importJsonAction")}
           </Button>
           <Button type="primary" onClick={() => navigate("/projects")}>
-            {t("pipelines.openProjects")}
+            {t("copaw.pipelines.openProjects")}
           </Button>
         </div>
       </div>
@@ -4190,10 +4129,7 @@ export default function PipelinesPage() {
       {projects.length === 0 ? (
         <Card size="small" style={{ marginBottom: 16 }}>
           <Text type="secondary">
-            {t(
-              "pipelines.noProjectsIndependentHint",
-              "当前没有项目，但你仍可新建与编辑独立流程草稿。需要落盘时请先创建项目。",
-            )}
+            {t("copaw.pipelines.noProjectsIndependentHint")}
           </Text>
         </Card>
       ) : null}
@@ -4201,19 +4137,19 @@ export default function PipelinesPage() {
       <div className={styles.metrics}>
         <Card size="small" className={styles.metricCard}>
           <Text className={styles.metricLabel}>
-            {t("pipelines.totalTemplates")}
+            {t("copaw.pipelines.totalTemplates")}
           </Text>
           <div className={styles.metricValue}>{templates.length}</div>
         </Card>
         <Card size="small" className={styles.metricCard}>
           <Text className={styles.metricLabel}>
-            {t("pipelines.totalRuns")}
+            {t("copaw.pipelines.totalRuns")}
           </Text>
           <div className={styles.metricValue}>{hasAnyRunsLoaded ? allLoadedRuns.length : "-"}</div>
         </Card>
         <Card size="small" className={styles.metricCard}>
           <Text className={styles.metricLabel}>
-            {t("pipelines.runningRuns")}
+            {t("copaw.pipelines.runningRuns")}
           </Text>
           <div className={styles.metricValue}>{hasAnyRunsLoaded ? runningCount : "-"}</div>
         </Card>
@@ -4231,30 +4167,24 @@ export default function PipelinesPage() {
         ) : !currentAgent ? (
           <Card>
             <Empty
-              description={t("pipelines.noAgent")}
+              description={t("copaw.pipelines.noAgent")}
             />
           </Card>
         ) : projects.length === 0 && templates.length === 0 ? (
           <Card>
             <Empty
-              description={t(
-                "pipelines.noProjects",
-                "No projects found for the current agent.",
-              )}
+              description={t("copaw.pipelines.noProjects")}
             />
           </Card>
         ) : (
           <div className={styles.columns}>
             <Card
-              title={t("pipelines.library")}
+              title={t("copaw.pipelines.library")}
               className={styles.columnCard}
             >
               {pipelineGroups.length === 0 ? (
                 <Empty
-                  description={t(
-                    "pipelines.emptyTemplates",
-                    "No pipeline templates found yet.",
-                  )}
+                  description={t("copaw.pipelines.emptyTemplates")}
                 />
               ) : (
                 <div className={styles.list}>
@@ -4281,32 +4211,32 @@ export default function PipelinesPage() {
                           <Tag>{item.versions.length}</Tag>
                           {isProjectBuiltinKnowledge ? (
                             <>
-                              <Tag color="purple">{t("pipelines.builtin", "Built-in")}</Tag>
+                              <Tag color="purple">{t("copaw.pipelines.builtin")}</Tag>
                               <Tag color="blue">{`Project:${derivedProjectId}`}</Tag>
                             </>
                           ) : (
                             <Tag color={item.source === "independent" ? "cyan" : item.source === "project" ? "gold" : "purple"}>
                               {item.source === "independent"
-                                ? t("pipelines.independent")
+                                ? t("copaw.pipelines.independent")
                                 : item.source === "project"
-                                  ? t("pipelines.project")
-                                  : t("pipelines.builtin", "Built-in")}
+                                  ? t("copaw.pipelines.project")
+                                  : t("copaw.pipelines.builtin")}
                             </Tag>
                           )}
                           {draftPipelineKeys.includes(item.key) ? (
                             <Tag color="warning">
-                              {t("pipelines.draftBadge")}
+                              {t("copaw.pipelines.draftBadge")}
                             </Tag>
                           ) : null}
                         </div>
                         <Text type="secondary">{item.description || item.id}</Text>
                         <Text type="secondary" className={styles.helperText}>
-                          {t("pipelines.versionCount", {
+                          {t("copaw.pipelines.versionCount", {
                             count: item.versions.length,
                           })}
                         </Text>
                         <Text type="secondary" className={styles.helperText}>
-                          {t("pipelines.usedIn", {
+                          {t("copaw.pipelines.usedIn", {
                             count: item.projects.length,
                           })}
                         </Text>
@@ -4323,7 +4253,7 @@ export default function PipelinesPage() {
             </Card>
 
             <Card
-              title={t("pipelines.nodes")}
+              title={t("copaw.pipelines.nodes")}
               className={styles.columnCard}
               extra={
                 <div className={styles.nodesActions}>
@@ -4333,7 +4263,7 @@ export default function PipelinesPage() {
                         size="small"
                         className={styles.versionSelect}
                         value={selectedBuiltinProjectId || undefined}
-                        placeholder={t("pipelines.projectLabel", { name: "" })}
+                        placeholder={t("copaw.pipelines.projectLabel", { name: "" })}
                         options={projects.map((project) => ({
                           label: project.name,
                           value: project.id,
@@ -4357,7 +4287,7 @@ export default function PipelinesPage() {
                         disabled={builtinRunLoading || !selectedBuiltinProjectId}
                         onClick={() => void handleRunBuiltinProjectKnowledgePipeline()}
                       >
-                        {t("pipelines.run", "Run")}
+                        {t("copaw.pipelines.run")}
                       </Button>
                       <Button
                         size="small"
@@ -4365,7 +4295,7 @@ export default function PipelinesPage() {
                         disabled={builtinRunLoading || !selectedBuiltinProjectId}
                         onClick={() => void handleRetryBuiltinProjectKnowledgePipeline()}
                       >
-                        {t("pipelines.retry", "Retry")}
+                        {t("copaw.pipelines.retry")}
                       </Button>
                     </>
                   ) : selectedIsProjectBuiltinKnowledgeWorkflowPipeline ? (
@@ -4374,7 +4304,7 @@ export default function PipelinesPage() {
                         size="small"
                         className={styles.versionSelect}
                         value={selectedBuiltinProjectId || undefined}
-                        placeholder={t("pipelines.projectLabel", { name: "" })}
+                        placeholder={t("copaw.pipelines.projectLabel", { name: "" })}
                         options={(selectedPipeline?.projects || []).map((project) => ({
                           label: project.name,
                           value: project.id,
@@ -4387,7 +4317,7 @@ export default function PipelinesPage() {
                         disabled={builtinRunLoading || !selectedBuiltinProjectId || !selectedAgent}
                         onClick={() => void handleRunProjectBuiltinKnowledgeWorkflowPipeline()}
                       >
-                        {t("pipelines.run", "Run")}
+                        {t("copaw.pipelines.run")}
                       </Button>
                       <Button
                         size="small"
@@ -4395,7 +4325,7 @@ export default function PipelinesPage() {
                         disabled={builtinRunLoading || !selectedBuiltinProjectId || !projectBuiltinLatestRun || !selectedAgent}
                         onClick={() => void handleRetryProjectBuiltinKnowledgeWorkflowPipeline()}
                       >
-                        {t("pipelines.retry", "Retry")}
+                        {t("copaw.pipelines.retry")}
                       </Button>
                     </>
                   ) : null}
@@ -4403,7 +4333,7 @@ export default function PipelinesPage() {
                     size="small"
                     className={styles.versionSelect}
                     value={selectedCurrentVersion || undefined}
-                    placeholder={t("pipelines.currentVersion")}
+                    placeholder={t("copaw.pipelines.currentVersion")}
                     options={(selectedPipeline?.versions || []).map((item) => ({
                       label: item.version || "0",
                       value: normalizeVersion(item.version),
@@ -4426,7 +4356,7 @@ export default function PipelinesPage() {
                     }
                     onClick={() => void handleExportSelectedPipelineAsRpaJson()}
                   >
-                    {t("pipelines.rpaExportAction")}
+                    {t("copaw.rpa.exportAction")}
                   </Button>
                   {editMode ? (
                     <>
@@ -4438,14 +4368,14 @@ export default function PipelinesPage() {
                           disabled={draftSaving}
                           onClick={() => void handleSaveDraftPipeline()}
                         >
-                          {t("pipelines.saveDraft")}
+                          {t("copaw.pipelines.saveDraft")}
                         </Button>
                       ) : null}
                       <Button
                         size="small"
                         onClick={requestCloseEditMode}
                       >
-                        {t("pipelines.exitEdit")}
+                        {t("copaw.pipelines.exitEdit")}
                       </Button>
                     </>
                   ) : (
@@ -4456,7 +4386,7 @@ export default function PipelinesPage() {
                       disabled={!currentTemplate || designChatStarting || !selectedPipelineEditable}
                       onClick={() => void handleEnterEditMode()}
                     >
-                      {t("pipelines.enterEdit")}
+                      {t("copaw.pipelines.enterEdit")}
                     </Button>
                   )}
                 </div>
@@ -4466,7 +4396,7 @@ export default function PipelinesPage() {
                 <div className={styles.list} style={{ marginBottom: 12 }}>
                   <div className={styles.listItemStatic}>
                     <div className={styles.listItemHeader}>
-                      <Text strong>{t("pipelines.templatePath", "Template Path")}</Text>
+                      <Text strong>{t("copaw.pipelines.templatePath")}</Text>
                     </div>
                     <Text type="secondary">{selectedPipelineFilePath || "-"}</Text>
                   </div>
@@ -4476,48 +4406,45 @@ export default function PipelinesPage() {
                 <div className={styles.list} style={{ marginBottom: 12 }}>
                   <div className={styles.listItemStatic}>
                     <div className={styles.listItemHeader}>
-                      <Text strong>{t("pipelines.builtinRuntime", "Runtime Status")}</Text>
+                      <Text strong>{t("copaw.pipelines.builtinRuntime")}</Text>
                       <Tag color={statusTagColor(String(builtinSyncState?.status || "idle"))}>
                         {String(builtinSyncState?.status || "idle")}
                       </Tag>
                       {builtinSyncLoading ? <Tag>{t("common.loading", "Loading")}</Tag> : null}
                     </div>
                     <Text type="secondary">
-                      {t("pipelines.projectLabel", {
+                      {t("copaw.pipelines.projectLabel", {
                         name: projects.find((item) => item.id === selectedBuiltinProjectId)?.name || selectedBuiltinProjectId || "-",
                       })}
                     </Text>
                     <Text type="secondary" className={styles.helperText}>
-                      {t("pipelines.currentStage", "Stage")}: {String(builtinSyncState?.current_stage || builtinSyncState?.stage || "idle")}
+                      {t("copaw.pipelines.currentStage")}: {String(builtinSyncState?.current_stage || builtinSyncState?.stage || "idle")}
                     </Text>
                     <Text type="secondary" className={styles.helperText}>
-                      {t("pipelines.progress", "Progress")}: {Number(builtinSyncState?.progress || 0)}%
+                      {t("copaw.pipelines.progress")}: {Number(builtinSyncState?.progress || 0)}%
                     </Text>
                     {builtinSyncState?.last_error ? (
                       <Text type="danger" className={styles.helperText}>
-                        {t("pipelines.lastError", "Last error")}: {builtinSyncState.last_error}
+                        {t("copaw.pipelines.lastError")}: {builtinSyncState.last_error}
                       </Text>
                     ) : null}
                   </div>
                   {builtinRuntimeStages.map((stage) => (
                     <div key={stage.key} className={styles.listItemStatic}>
                       <div className={styles.listItemHeader}>
-                        <Text strong>{stage.label}</Text>
+                        <Text strong>{stage.labelKey ? t(stage.labelKey, stage.label) : stage.label}</Text>
                         <Tag color={statusTagColor(stage.status)}>{stage.status}</Tag>
                       </div>
                       {stage.legacyMapped ? (
                         <Text type="secondary" className={styles.helperText}>
-                          {t(
-                            "pipelines.builtinLegacyMapping",
-                            "Mapped from legacy NLP sub-stages",
-                          )}
+                          {t("copaw.pipelines.builtinLegacyMapping")}
                         </Text>
                       ) : null}
                       <Text type="secondary" className={styles.helperText}>
-                        {t("pipelines.progress", "Progress")}: {stage.progress == null ? "-" : `${stage.progress}%`}
+                        {t("copaw.pipelines.progress")}: {stage.progress == null ? "-" : `${stage.progress}%`}
                       </Text>
                       <Text type="secondary" className={styles.helperText}>
-                        {t("pipelines.summary", "Summary")}: {stage.summary || "-"}
+                        {t("copaw.pipelines.summary")}: {stage.summary || "-"}
                       </Text>
                     </div>
                   ))}
@@ -4526,14 +4453,14 @@ export default function PipelinesPage() {
                 <div className={styles.list} style={{ marginBottom: 12 }}>
                   <div className={styles.listItemStatic}>
                     <div className={styles.listItemHeader}>
-                      <Text strong>{t("pipelines.latestRun", "Latest Run")}</Text>
+                      <Text strong>{t("copaw.pipelines.latestRun")}</Text>
                       <Tag color={statusTagColor(String(projectBuiltinLatestRun?.status || "idle"))}>
                         {String(projectBuiltinLatestRun?.status || "idle")}
                       </Tag>
                       {projectBuiltinRunDetailLoading ? <Tag>{t("common.loading", "Loading")}</Tag> : null}
                     </div>
                     <Text type="secondary">
-                      {t("pipelines.projectLabel", {
+                      {t("copaw.pipelines.projectLabel", {
                         name:
                           selectedPipeline?.projects.find((item) => item.id === selectedBuiltinProjectId)?.name
                           || selectedBuiltinProjectId
@@ -4541,17 +4468,17 @@ export default function PipelinesPage() {
                       })}
                     </Text>
                     <Text type="secondary" className={styles.helperText}>
-                      {t("pipelines.updatedAt", "Updated")}: {projectBuiltinLatestRun?.updated_at || projectBuiltinLatestRun?.created_at || "-"}
+                      {t("copaw.pipelines.updatedAt")}: {projectBuiltinLatestRun?.updated_at || projectBuiltinLatestRun?.created_at || "-"}
                     </Text>
                     <Text type="secondary" className={styles.helperText}>
-                      {t("pipelines.currentStage", "Stage")}: {projectBuiltinCurrentStage}
+                      {t("copaw.pipelines.currentStage")}: {projectBuiltinCurrentStage}
                     </Text>
                     <Text type="secondary" className={styles.helperText}>
-                      {t("pipelines.progress", "Progress")}: {projectBuiltinRunProgress == null ? "-" : `${projectBuiltinRunProgress}%`}
+                      {t("copaw.pipelines.progress")}: {projectBuiltinRunProgress == null ? "-" : `${projectBuiltinRunProgress}%`}
                     </Text>
                     {projectBuiltinLastError ? (
                       <Text type="danger" className={styles.helperText}>
-                        {t("pipelines.lastError", "Last error")}: {projectBuiltinLastError}
+                        {t("copaw.pipelines.lastError")}: {projectBuiltinLastError}
                       </Text>
                     ) : null}
                   </div>
@@ -4559,17 +4486,11 @@ export default function PipelinesPage() {
               ) : null}
               {!currentTemplate ? (
                 <Empty
-                  description={t(
-                    "pipelines.selectPipeline",
-                    "Select a pipeline to view nodes.",
-                  )}
+                  description={t("copaw.pipelines.selectPipeline")}
                 />
               ) : currentTemplateDisplaySteps.length === 0 ? (
                 <Empty
-                  description={t(
-                    "pipelines.emptyNodes",
-                    "No nodes in this pipeline version.",
-                  )}
+                  description={t("copaw.pipelines.emptyNodes")}
                 />
               ) : (
                 <div className={styles.list}>
@@ -4591,7 +4512,7 @@ export default function PipelinesPage() {
 
             {editMode && (
             <Card
-              title={t("pipelines.newVersionNodes")}
+              title={t("copaw.pipelines.newVersionNodes")}
               className={styles.columnCard}
               extra={
                 <div className={styles.newVersionActions}>
@@ -4601,8 +4522,8 @@ export default function PipelinesPage() {
                     onClick={() => setNewVersionNodesExpanded((prev) => !prev)}
                   >
                     {newVersionNodesExpanded
-                      ? t("pipelines.collapseNewVersionNodes", "Collapse")
-                      : t("pipelines.expandNewVersionNodes", "Expand")}
+                      ? t("copaw.pipelines.collapseNewVersionNodes")
+                      : t("copaw.pipelines.expandNewVersionNodes")}
                   </Button>
                   {editMode && draftParseStatus === "ready" && realtimeDraftDiffItems.length > 0 ? (
                     <Button
@@ -4614,15 +4535,15 @@ export default function PipelinesPage() {
                       }
                     >
                       {draftDiffViewMode === "changedOnly"
-                        ? t("pipelines.diffViewFull")
-                        : t("pipelines.diffViewChangedOnly")}
+                        ? t("copaw.pipelines.diffViewFull")
+                        : t("copaw.pipelines.diffViewChangedOnly")}
                     </Button>
                   ) : null}
                   {editMode && draftParseStatus === "ready" && realtimeDraftDiffItems.length > 0 ? (
                     <Button size="small" onClick={toggleAllDraftDiffDetails}>
                       {allDraftDiffExpanded
-                        ? t("pipelines.diffCollapseAll")
-                        : t("pipelines.diffExpandAll")}
+                        ? t("copaw.pipelines.diffCollapseAll")
+                        : t("copaw.pipelines.diffExpandAll")}
                     </Button>
                   ) : null}
                   <Select
@@ -4630,7 +4551,7 @@ export default function PipelinesPage() {
                     className={styles.versionSelect}
                     value={selectedCompareVersion || undefined}
                     allowClear
-                    placeholder={t("pipelines.compareVersion")}
+                    placeholder={t("copaw.pipelines.compareVersion")}
                     options={(selectedPipeline?.versions || [])
                       .filter((item) => normalizeVersion(item.version) !== selectedCurrentVersion)
                       .map((item) => ({
@@ -4645,7 +4566,7 @@ export default function PipelinesPage() {
               {newVersionNodesExpanded && editMode && (saveStreamEvents.length > 0 || saveStreamError) ? (
                 <div className={styles.saveStreamPanel}>
                   <Text type="secondary" className={styles.saveStreamTitle}>
-                    {t("pipelines.saveStreamTimeline")}
+                    {t("copaw.pipelines.saveStreamTimeline")}
                   </Text>
                   {saveStreamEvents.map((item, index) => (
                     <Text key={`${item.event}-${item.ts}-${index}`} type="secondary" className={styles.saveStreamItem}>
@@ -4655,7 +4576,7 @@ export default function PipelinesPage() {
                   ))}
                   {saveStreamError ? (
                     <Text type="danger" className={styles.saveStreamError}>
-                      {t("pipelines.saveStreamError", {
+                      {t("copaw.pipelines.saveStreamError", {
                         detail: saveStreamError,
                       })}
                     </Text>
@@ -4687,17 +4608,13 @@ export default function PipelinesPage() {
                   {saveConflictInfo ? (
                     <div className={styles.conflictPanel}>
                       <Text type="warning" className={styles.conflictTitle}>
-                        {t("pipelines.conflictTitle")}
+                        {t("copaw.pipelines.conflictTitle")}
                       </Text>
                       <Text type="secondary" className={styles.validationErrorText}>
-                        {t(
-                          "pipelines.conflictDetail",
-                          "本地预期 revision={{expected}}，远端当前 revision={{current}}。",
-                          {
-                            expected: saveConflictInfo.expectedRevision,
-                            current: saveConflictInfo.currentRevision,
-                          },
-                        )}
+                        {t("copaw.pipelines.conflictDetail", {
+                          expected: saveConflictInfo.expectedRevision,
+                          current: saveConflictInfo.currentRevision,
+                        })}
                       </Text>
                       {saveConflictInfo.currentContentHash ? (
                         <Text type="secondary" className={styles.validationErrorText}>
@@ -4705,21 +4622,21 @@ export default function PipelinesPage() {
                         </Text>
                       ) : null}
                       <Button size="small" onClick={() => void handleRefreshAfterConflict()}>
-                        {t("pipelines.conflictRefresh")}
+                        {t("copaw.pipelines.conflictRefresh")}
                       </Button>
                       {conflictRemoteDraftBackup.length > 0 ? (
                         <Button size="small" onClick={() => void handleUseRemoteDraftAfterConflict()}>
-                          {t("pipelines.conflictUseRemote")}
+                          {t("copaw.pipelines.conflictUseRemote")}
                         </Button>
                       ) : null}
                       {conflictMergeAvailable ? (
                         <Button size="small" onClick={() => void handleMergeDraftAfterConflict()}>
-                          {t("pipelines.conflictMerge")}
+                          {t("copaw.pipelines.conflictMerge")}
                         </Button>
                       ) : null}
                       {conflictRestoreAvailable ? (
                         <Button size="small" onClick={() => void handleRestoreLocalDraftAfterConflict()}>
-                          {t("pipelines.conflictRestoreLocal")}
+                          {t("copaw.pipelines.conflictRestoreLocal")}
                         </Button>
                       ) : null}
                     </div>
@@ -4730,7 +4647,7 @@ export default function PipelinesPage() {
               {newVersionNodesExpanded && editMode && draftParseStatus === "ready" && draftNewVersionSteps.length > 0 ? (
                 <>
                   <Text type="secondary" className={styles.draftStatusText}>
-                    {t("pipelines.draftRealtimeReady")}
+                    {t("copaw.pipelines.draftRealtimeReady")}
                   </Text>
                   <div className={styles.list}>
                     {realtimeDraftDiffItems.map((item) => (
@@ -4749,12 +4666,12 @@ export default function PipelinesPage() {
                             }
                           >
                             {item.kind === "added"
-                              ? t("pipelines.diffAdded")
+                              ? t("copaw.pipelines.diffAdded")
                               : item.kind === "removed"
-                                ? t("pipelines.diffRemoved")
+                                ? t("copaw.pipelines.diffRemoved")
                                 : item.kind === "changed"
-                                  ? t("pipelines.diffChanged")
-                                  : t("pipelines.diffUnchanged")}
+                                  ? t("copaw.pipelines.diffChanged")
+                                  : t("copaw.pipelines.diffUnchanged")}
                           </Tag>
                           {item.current?.kind ? <Tag color="processing">{item.current.kind}</Tag> : null}
                         </div>
@@ -4774,8 +4691,8 @@ export default function PipelinesPage() {
                                 onClick={() => toggleDraftDiffDetails(detailKey)}
                               >
                                 {expanded
-                                  ? t("pipelines.diffDetailHide")
-                                  : t("pipelines.diffDetailShow")}
+                                  ? t("copaw.pipelines.diffDetailHide")
+                                  : t("copaw.pipelines.diffDetailShow")}
                               </Button>
                               {expanded ? (
                                 <div className={styles.diffDetailPanel}>
@@ -4815,7 +4732,7 @@ export default function PipelinesPage() {
                         })()}
                         {item.kind === "changed" && item.changedFields.length > 0 ? (
                           <Text type="secondary" className={styles.helperText}>
-                            {t("pipelines.diffFields", {
+                            {t("copaw.pipelines.diffFields", {
                               fields: item.changedFields.join(", "),
                             })}
                           </Text>
@@ -4825,27 +4742,18 @@ export default function PipelinesPage() {
                   </div>
                 </>
               ) : newVersionNodesExpanded && editMode && draftParseStatus === "error" ? (
-                <Empty description={draftParseError || t("pipelines.draftParseError")} />
+                <Empty description={draftParseError || t("copaw.pipelines.draftParseError")} />
               ) : newVersionNodesExpanded && editMode ? (
                 <Empty
-                  description={t(
-                    "pipelines.draftRealtimeHint",
-                    "当右侧编辑对话修改流程 Markdown 工作文件后，这里会根据后端 draft 自动更新。",
-                  )}
+                  description={t("copaw.pipelines.draftRealtimeHint")}
                 />
               ) : newVersionNodesExpanded && !compareTemplate ? (
                 <Empty
-                  description={t(
-                    "pipelines.selectNewVersion",
-                    "Select a version as the new draft to compare with current nodes.",
-                  )}
+                  description={t("copaw.pipelines.selectNewVersion")}
                 />
               ) : newVersionNodesExpanded && newVersionDiffItems.length === 0 ? (
                 <Empty
-                  description={t(
-                    "pipelines.noDiff",
-                    "No diff available for this version pair.",
-                  )}
+                  description={t("copaw.pipelines.noDiff")}
                 />
               ) : newVersionNodesExpanded ? (
                 <div className={styles.list}>
@@ -4865,12 +4773,12 @@ export default function PipelinesPage() {
                           }
                         >
                           {item.kind === "added"
-                            ? t("pipelines.diffAdded")
+                            ? t("copaw.pipelines.diffAdded")
                             : item.kind === "removed"
-                              ? t("pipelines.diffRemoved")
+                              ? t("copaw.pipelines.diffRemoved")
                               : item.kind === "changed"
-                                ? t("pipelines.diffChanged")
-                                : t("pipelines.diffUnchanged")}
+                                ? t("copaw.pipelines.diffChanged")
+                                : t("copaw.pipelines.diffUnchanged")}
                         </Tag>
                       </div>
                       <Text type="secondary">{item.id}</Text>
@@ -4879,7 +4787,7 @@ export default function PipelinesPage() {
                       </Text>
                       {item.kind === "changed" && item.changedFields.length > 0 && (
                         <Text type="secondary" className={styles.helperText}>
-                          {t("pipelines.diffFields", {
+                          {t("copaw.pipelines.diffFields", {
                             fields: item.changedFields.join(", "),
                           })}
                         </Text>
@@ -4888,18 +4796,18 @@ export default function PipelinesPage() {
                   ))}
                 </div>
               ) : (
-                <Empty description={t("pipelines.newVersionNodesCollapsed", "Collapsed")} />
+                <Empty description={t("copaw.pipelines.newVersionNodesCollapsed")} />
               )}
             </Card>
             )}
 
             <Card
-              title={editMode ? t("pipelines.editChat") : t("pipelines.recentRuns")}
+              title={editMode ? t("copaw.pipelines.editChat") : t("copaw.pipelines.recentRuns")}
               className={`${styles.columnCard} ${editMode ? styles.chatColumn : ""}`}
               extra={
                 editMode && designChatSessionId ? (
                   <Button size="small" onClick={() => navigate(`/chat/${designChatSessionId}`)}>
-                    {t("pipelines.openInFullChat")}
+                    {t("copaw.pipelines.openInFullChat")}
                   </Button>
                 ) : !editMode && selectedPipeline?.source === "project" ? (
                   <Button
@@ -4909,7 +4817,7 @@ export default function PipelinesPage() {
                   >
                     {selectedRunsLoaded
                       ? t("common.refresh")
-                      : t("pipelines.loadRuns", "Load Runs")}
+                      : t("copaw.pipelines.loadRuns")}
                   </Button>
                 ) : undefined
               }
@@ -4927,30 +4835,19 @@ export default function PipelinesPage() {
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                           <Text type="secondary">
                             {incrementalGeneration.createStage === "applying"
-                              ? t("pipelines.incrementalProgress", {
+                              ? t("copaw.pipelines.incrementalProgress", {
                                 current: incrementalGeneration.currentStep,
                                 total: incrementalGeneration.totalStepsExpected,
                               })
                               : incrementalGeneration.createStage === "ask_strategy"
-                                ? t(
-                                  "pipelines.incrementalChooseStrategyBanner",
-                                  "第 2 步：请选择创建策略（1 逐节点 / 2 先规划后逐个改）。",
-                                )
+                                ? t("copaw.pipelines.incrementalChooseStrategyBanner")
                                 : incrementalGeneration.createStage === "stepwise"
-                                  ? t(
-                                    "pipelines.incrementalStepwiseBanner",
-                                    "逐节点模式进行中：每次生成并写入 1 个节点。",
-                                  )
+                                  ? t("copaw.pipelines.incrementalStepwiseBanner")
                                   : incrementalGeneration.createStage === "proposal"
-                                    ? t(
-                                      "pipelines.incrementalProposalBuildingBanner",
-                                      "正在生成节点组合方案，请稍候确认。",
-                                    )
-                              : t(
-                                "pipelines.incrementalProposalAwaitConfirm",
-                                "节点组合方案已就绪（{{count}} 个节点），确认后将逐个写入。",
-                                { count: incrementalGeneration.plannedSteps.length },
-                              )}
+                                    ? t("copaw.pipelines.incrementalProposalBuildingBanner")
+                                    : t("copaw.pipelines.incrementalProposalAwaitConfirm", {
+                                      count: incrementalGeneration.plannedSteps.length,
+                                    })}
                           </Text>
                           {incrementalGeneration.createStage === "await_confirm" ? (
                             <Button
@@ -4958,7 +4855,7 @@ export default function PipelinesPage() {
                               type="primary"
                               onClick={() => void applyConfirmedCreatePlan("确认创建流程")}
                             >
-                              {t("pipelines.confirmAndCreate")}
+                              {t("copaw.pipelines.confirmAndCreate")}
                             </Button>
                           ) : incrementalGeneration.createStage === "ask_strategy" ? (
                             <div style={{ display: "flex", gap: 8 }}>
@@ -4966,14 +4863,14 @@ export default function PipelinesPage() {
                                 size="small"
                                 onClick={() => void handleSelectCreateStrategyByButton("stepwise")}
                               >
-                                {t("pipelines.strategyStepwise")}
+                                {t("copaw.pipelines.strategyStepwise")}
                               </Button>
                               <Button
                                 size="small"
                                 type="primary"
                                 onClick={() => void handleSelectCreateStrategyByButton("plan_then_refine")}
                               >
-                                {t("pipelines.strategyPlanThenRefine")}
+                                {t("copaw.pipelines.strategyPlanThenRefine")}
                               </Button>
                             </div>
                           ) : null}
@@ -4981,10 +4878,10 @@ export default function PipelinesPage() {
                         {incrementalGeneration.userRequirements ? (
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                             <Text type="secondary" style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                              {t("pipelines.topicSummaryLabel")}: {incrementalGeneration.userRequirements}
+                              {t("copaw.pipelines.topicSummaryLabel")}: {incrementalGeneration.userRequirements}
                             </Text>
                             <Button size="small" type="link" onClick={() => void handleEditCreateTopic()}>
-                              {t("pipelines.editTopic")}
+                              {t("copaw.pipelines.editTopic")}
                             </Button>
                           </div>
                         ) : null}
@@ -5005,16 +4902,16 @@ export default function PipelinesPage() {
                         inputPlaceholder={editGuidePlaceholder || undefined}
                         welcomeGreeting={t(
                           editWelcomeMode === "init"
-                            ? "pipelines.editWelcomeGreetingInit"
-                            : "pipelines.editWelcomeGreeting",
+                            ? "copaw.pipelines.editWelcomeGreetingInit"
+                            : "copaw.pipelines.editWelcomeGreeting",
                           editWelcomeMode === "init"
                             ? "你要做一个关于什么的流程？先告诉我流程目标与场景。"
                             : "流程编辑助手已就绪，你想先改哪一步？",
                         )}
                         welcomeDescription={t(
                           editWelcomeMode === "init"
-                            ? "pipelines.editWelcomeDescriptionInit"
-                            : "pipelines.editWelcomeDescription",
+                            ? "copaw.pipelines.editWelcomeDescriptionInit"
+                            : "copaw.pipelines.editWelcomeDescription",
                           editWelcomeMode === "init"
                             ? [
                               "先用一句话描述：你要做一个关于什么的流程。",
@@ -5027,14 +4924,8 @@ export default function PipelinesPage() {
                           editWelcomeMode === "init"
                             ? []
                             : [
-                              t(
-                                "pipelines.editWelcomePrompt1",
-                                "分析当前流程瓶颈，并直接修改流程 Markdown 工作文件落实优化建议。",
-                              ),
-                              t(
-                                "pipelines.editWelcomePrompt2",
-                                "我要改这个流程：新增校验节点、调整重试策略，并把变更写回流程 Markdown。",
-                              ),
+                              t("copaw.pipelines.editWelcomePrompt1"),
+                              t("copaw.pipelines.editWelcomePrompt2"),
                             ]
                         }
                       />
@@ -5042,25 +4933,16 @@ export default function PipelinesPage() {
                   </div>
                 ) : (
                   <Empty
-                    description={t(
-                      "pipelines.chatPanelHint",
-                      "Start a design chat to iterate without leaving this page.",
-                    )}
+                    description={t("copaw.pipelines.chatPanelHint")}
                   />
                 )
               ) : selectedPipeline?.source !== "project" ? (
                 <Empty
-                  description={t(
-                    "pipelines.runsProjectOnly",
-                    "Runs are available for project pipelines only.",
-                  )}
+                  description={t("copaw.pipelines.runsProjectOnly")}
                 />
               ) : !selectedRunsLoaded ? (
                 <Empty
-                  description={t(
-                    "pipelines.runsOnDemandHint",
-                    "Runs are loaded on demand. Click Load Runs to fetch execution records.",
-                  )}
+                  description={t("copaw.pipelines.runsOnDemandHint")}
                 />
               ) : selectedRunsLoading && visibleRuns.length === 0 ? (
                 <div className={styles.loadingWrap}>
@@ -5070,22 +4952,19 @@ export default function PipelinesPage() {
                 <Empty description={selectedRunsError} />
               ) : visibleRuns.length === 0 ? (
                 <Empty
-                  description={t(
-                    "pipelines.emptyRuns",
-                    "No pipeline runs yet.",
-                  )}
+                  description={t("copaw.pipelines.emptyRuns")}
                 />
               ) : (
                 <div className={styles.list}>
                   <div className={styles.latestRunSummary}>
                     <div className={styles.latestRunSummaryHeader}>
-                      <Text strong>{t("pipelines.latestRunSummary")}</Text>
+                      <Text strong>{t("copaw.pipelines.latestRunSummary")}</Text>
                       <Tag color={statusTagColor(latestRun?.status || "pending")}>
                         {latestRun?.status || "-"}
                       </Tag>
                     </div>
                     <Text type="secondary" className={styles.helperText}>
-                      {t("pipelines.projectLabel", {
+                      {t("copaw.pipelines.projectLabel", {
                         name: latestRun?.projectName || "-",
                       })}
                     </Text>
@@ -5104,17 +4983,17 @@ export default function PipelinesPage() {
                       <div className={styles.latestRunSummaryLoading}>
                         <Spin size="small" />
                         <Text type="secondary">
-                          {t("pipelines.latestRunLoading")}
+                          {t("copaw.pipelines.latestRunLoading")}
                         </Text>
                       </div>
                     )}
                     {hasMoreRuns ? (
                       <div className={styles.loadMoreWrap}>
                         <Button size="small" onClick={handleLoadMoreRuns}>
-                          {t("pipelines.loadMoreRuns", "加载更多")}
+                          {t("copaw.pipelines.loadMoreRuns")}
                         </Button>
                         <Text type="secondary" className={styles.helperText}>
-                          {t("pipelines.visibleRunsCount", {
+                          {t("copaw.pipelines.visibleRunsCount", {
                             visible: visibleRuns.length,
                             total: selectedPipelineRuns.length,
                             defaultValue: `Showing ${visibleRuns.length} / ${selectedPipelineRuns.length}`,
@@ -5153,7 +5032,7 @@ export default function PipelinesPage() {
                         <Tag color={statusTagColor(run.status)}>{run.status}</Tag>
                       </div>
                       <Text type="secondary">
-                        {t("pipelines.projectLabel", {
+                        {t("copaw.pipelines.projectLabel", {
                           name: run.projectName,
                         })}
                       </Text>
@@ -5163,19 +5042,19 @@ export default function PipelinesPage() {
                       {observability ? (
                         <>
                           <Text type="secondary" className={styles.helperText}>
-                            {t("pipelines.currentStage", "Stage")}: {observability.stage || "-"}
+                            {t("copaw.pipelines.currentStage")}: {observability.stage || "-"}
                           </Text>
                           <Text type="secondary" className={styles.helperText}>
-                            {t("pipelines.duration", "Duration")}: {durationValue}
+                            {t("copaw.pipelines.duration")}: {durationValue}
                           </Text>
                           <Text type="secondary" className={styles.helperText}>
-                            {t("pipelines.errorClass", "Error class")}: {observability.error_class || "-"}
+                            {t("copaw.pipelines.errorClass")}: {observability.error_class || "-"}
                           </Text>
                           <Text type="secondary" className={styles.helperText}>
-                            {t("pipelines.latestRunRpaActions")}: {rpaActions > 0 ? rpaActions : "-"}
+                            {t("copaw.pipelines.latestRunRpaActions")}: {rpaActions > 0 ? rpaActions : "-"}
                           </Text>
                           <Text type="secondary" className={styles.helperText}>
-                            {t("pipelines.latestRunRpaStopFailures")}: {rpaStopFailures}
+                            {t("copaw.pipelines.latestRunRpaStopFailures")}: {rpaStopFailures}
                           </Text>
                         </>
                       ) : null}
@@ -5193,7 +5072,7 @@ export default function PipelinesPage() {
                             setSelectedCompareVersion("");
                           }}
                         >
-                          {t("pipelines.focusPipeline")}
+                          {t("copaw.pipelines.focusPipeline")}
                         </Button>
                         <Button
                           size="small"
@@ -5204,7 +5083,7 @@ export default function PipelinesPage() {
                             navigate("/projects");
                           }}
                         >
-                          {t("pipelines.goToProjects")}
+                          {t("copaw.pipelines.goToProjects")}
                         </Button>
                       </div>
                     </div>
@@ -5217,30 +5096,21 @@ export default function PipelinesPage() {
             {!editMode ? (
               <Card
                 title={selectedRunItem
-                  ? `${t("pipelines.runDetails")} · ${selectedRunItem.template_id}`
-                  : t("pipelines.runDetails")}
+                  ? `${t("copaw.pipelines.runDetails")} · ${selectedRunItem.template_id}`
+                  : t("copaw.pipelines.runDetails")}
                 className={styles.columnCard}
               >
                 {selectedPipeline?.source !== "project" ? (
                   <Empty
-                    description={t(
-                      "pipelines.runsProjectOnly",
-                      "Runs are available for project pipelines only.",
-                    )}
+                    description={t("copaw.pipelines.runsProjectOnly")}
                   />
                 ) : !selectedRunsLoaded ? (
                   <Empty
-                    description={t(
-                      "pipelines.selectRunToView",
-                      "Select a run to view details.",
-                    )}
+                    description={t("copaw.pipelines.selectRunToView")}
                   />
                 ) : !selectedRunKey || !selectedRunItem ? (
                   <Empty
-                    description={t(
-                      "pipelines.selectRunToView",
-                      "Select a run to view details.",
-                    )}
+                    description={t("copaw.pipelines.selectRunToView")}
                   />
                 ) : (
                   <div className={styles.list}>
@@ -5249,7 +5119,7 @@ export default function PipelinesPage() {
                         <div className={styles.runDetailPanelHeaderMain}>
                           <Text strong>{selectedRunItem.template_id}</Text>
                           <Text type="secondary" className={styles.helperText}>
-                            {t("pipelines.projectLabel", { name: selectedRunItem.projectName })}
+                            {t("copaw.pipelines.projectLabel", { name: selectedRunItem.projectName })}
                           </Text>
                         </div>
                         <Tag color={statusTagColor(selectedRunItem.status)}>{selectedRunItem.status}</Tag>
@@ -5259,7 +5129,7 @@ export default function PipelinesPage() {
                         <div className={styles.latestRunSummaryLoading}>
                           <Spin size="small" />
                           <Text type="secondary">
-                            {t("pipelines.runDetailLoading", "Loading run details...")}
+                            {t("copaw.pipelines.runDetailLoading")}
                           </Text>
                         </div>
                       ) : !selectedRunDetail && selectedRunError ? (
@@ -5273,18 +5143,18 @@ export default function PipelinesPage() {
                         <div className={styles.runDetailContent}>
                           <div className={styles.detailGroup}>
                             <Text strong className={styles.detailGroupTitle}>
-                              {t("pipelines.baseInfo", "Base Info")}
+                              {t("copaw.pipelines.baseInfo")}
                             </Text>
                             <div className={styles.detailSection}>
-                              <Text strong className={styles.detailLabel}>{t("pipelines.runId")}</Text>
+                              <Text strong className={styles.detailLabel}>{t("copaw.pipelines.runId")}</Text>
                               <Text type="secondary">{selectedRunDetail.id}</Text>
                             </div>
                             <div className={styles.detailSection}>
-                              <Text strong className={styles.detailLabel}>{t("pipelines.createdAt")}</Text>
+                              <Text strong className={styles.detailLabel}>{t("copaw.pipelines.createdAt")}</Text>
                               <Text type="secondary">{selectedRunDetail.created_at}</Text>
                             </div>
                             <div className={styles.detailSection}>
-                              <Text strong className={styles.detailLabel}>{t("pipelines.updatedAt")}</Text>
+                              <Text strong className={styles.detailLabel}>{t("copaw.pipelines.updatedAt")}</Text>
                               <Text type="secondary">{selectedRunDetail.updated_at}</Text>
                             </div>
                           </div>
@@ -5292,14 +5162,14 @@ export default function PipelinesPage() {
                           {selectedRunDetail.observability ? (
                             <div className={styles.detailGroup}>
                               <Text strong className={styles.detailGroupTitle}>
-                                {t("pipelines.observability")}
+                                {t("copaw.pipelines.observability")}
                               </Text>
                               <div className={styles.detailSection}>
-                                <Text strong className={styles.detailLabel}>{t("pipelines.stage")}</Text>
+                                <Text strong className={styles.detailLabel}>{t("copaw.pipelines.stage")}</Text>
                                 <Text type="secondary">{selectedRunDetail.observability.stage || "-"}</Text>
                               </div>
                               <div className={styles.detailSection}>
-                                <Text strong className={styles.detailLabel}>{t("pipelines.duration", "Duration")}</Text>
+                                <Text strong className={styles.detailLabel}>{t("copaw.pipelines.duration")}</Text>
                                 <Text type="secondary">
                                   {typeof selectedRunDetail.observability.duration_sec === "number"
                                     ? `${selectedRunDetail.observability.duration_sec.toFixed(2)}s`
@@ -5307,19 +5177,19 @@ export default function PipelinesPage() {
                                 </Text>
                               </div>
                               <div className={styles.detailSection}>
-                                <Text strong className={styles.detailLabel}>{t("pipelines.errorClass")}</Text>
+                                <Text strong className={styles.detailLabel}>{t("copaw.pipelines.errorClass")}</Text>
                                 <Text type="secondary">{selectedRunDetail.observability.error_class || "-"}</Text>
                               </div>
                               <div className={styles.detailSection}>
-                                <Text strong className={styles.detailLabel}>{t("pipelines.latestRunRpaActions")}</Text>
+                                <Text strong className={styles.detailLabel}>{t("copaw.pipelines.latestRunRpaActions")}</Text>
                                 <Text type="secondary">{Number(selectedRunDetail.observability.rpa_actions_executed || 0) || "-"}</Text>
                               </div>
                               <div className={styles.detailSection}>
-                                <Text strong className={styles.detailLabel}>{t("pipelines.latestRunRpaStopFailures")}</Text>
+                                <Text strong className={styles.detailLabel}>{t("copaw.pipelines.latestRunRpaStopFailures")}</Text>
                                 <Text type="secondary">{Number(selectedRunDetail.observability.rpa_stop_condition_failures || 0)}</Text>
                               </div>
                               <div className={styles.detailSection}>
-                                <Text strong className={styles.detailLabel}>{t("pipelines.latestRunRpaDuration")}</Text>
+                                <Text strong className={styles.detailLabel}>{t("copaw.pipelines.latestRunRpaDuration")}</Text>
                                 <Text type="secondary">
                                   {typeof selectedRunDetail.observability.rpa_action_duration_ms_total === "number"
                                     ? `${selectedRunDetail.observability.rpa_action_duration_ms_total.toFixed(1)}ms`
@@ -5327,7 +5197,7 @@ export default function PipelinesPage() {
                                 </Text>
                               </div>
                               <div className={styles.detailSection}>
-                                <Text strong className={styles.detailLabel}>{t("pipelines.rpaActionBreakdown")}</Text>
+                                <Text strong className={styles.detailLabel}>{t("copaw.pipelines.rpaActionBreakdown")}</Text>
                                 <Text type="secondary">
                                   {Object.entries(selectedRunDetail.observability.rpa_action_count_by_kind || {})
                                     .map(([kind, count]) => `${kind}:${count}`)
@@ -5340,14 +5210,14 @@ export default function PipelinesPage() {
                           {selectedRunDetail.convergence ? (
                             <div className={styles.detailGroup}>
                               <Text strong className={styles.detailGroupTitle}>
-                                {t("pipelines.convergence", "Convergence")}
+                                {t("copaw.pipelines.convergence")}
                               </Text>
                               <div className={styles.detailSection}>
-                                <Text strong className={styles.detailLabel}>{t("pipelines.convergenceScore")}</Text>
+                                <Text strong className={styles.detailLabel}>{t("copaw.pipelines.convergenceScore")}</Text>
                                 <Text type="secondary">{selectedRunDetail.convergence.score || "-"}</Text>
                               </div>
                               <div className={styles.detailSection}>
-                                <Text strong className={styles.detailLabel}>{t("pipelines.convergenceChecks")}</Text>
+                                <Text strong className={styles.detailLabel}>{t("copaw.pipelines.convergenceChecks")}</Text>
                                 <Text type="secondary">
                                   {selectedRunDetail.convergence.passed_checks}/{selectedRunDetail.convergence.total_checks}
                                 </Text>
@@ -5357,11 +5227,11 @@ export default function PipelinesPage() {
 
                           <div className={styles.detailGroup}>
                             <Text strong className={styles.detailGroupTitle}>
-                              {t("pipelines.stepDetails", "Step Details")} ({selectedRunDetail.steps.length})
+                              {t("copaw.pipelines.stepDetails")} ({selectedRunDetail.steps.length})
                             </Text>
                             {selectedRunDetail.steps.length === 0 ? (
                               <Text type="secondary" className={styles.helperText}>
-                                {t("pipelines.emptyStepDetails", "No step details available.")}
+                                {t("copaw.pipelines.emptyStepDetails")}
                               </Text>
                             ) : (
                               <div className={styles.runStepList}>
@@ -5393,18 +5263,18 @@ export default function PipelinesPage() {
                                       <Text type="secondary" className={styles.helperText}>{step.description || "-"}</Text>
                                       <div className={styles.runStepMetaRow}>
                                         <Text type="secondary" className={styles.helperText}>
-                                          {t("pipelines.duration", "Duration")}: {formatStepDuration(step)}
+                                          {t("copaw.pipelines.duration")}: {formatStepDuration(step)}
                                         </Text>
                                         <Text type="secondary" className={styles.helperText}>
-                                          {t("pipelines.dependsOn", "Depends on")}: {step.depends_on?.length ? step.depends_on.join(", ") : "-"}
+                                          {t("copaw.pipelines.dependsOn")}: {step.depends_on?.length ? step.depends_on.join(", ") : "-"}
                                         </Text>
                                       </div>
                                       <div className={styles.runStepMetaRow}>
                                         <Text type="secondary" className={styles.helperText}>
-                                          {t("pipelines.outputs", "Outputs")}: {outputKeys.length ? outputKeys.join(", ") : "-"}
+                                          {t("copaw.pipelines.outputs")}: {outputKeys.length ? outputKeys.join(", ") : "-"}
                                         </Text>
                                         <Text type="secondary" className={styles.helperText}>
-                                          {t("pipelines.metrics", "Metrics")}: {metricKeys.length ? metricKeys.join(", ") : "-"}
+                                          {t("copaw.pipelines.metrics")}: {metricKeys.length ? metricKeys.join(", ") : "-"}
                                         </Text>
                                       </div>
                                     </div>
@@ -5425,7 +5295,7 @@ export default function PipelinesPage() {
               title={(
                 <div className={styles.runDetailDrawerTitleWrap}>
                   <div className={styles.runDetailDrawerTitleTop}>
-                    <Text strong>{selectedRunStep?.name || t("pipelines.stepDetails", "Step Details")}</Text>
+                    <Text strong>{selectedRunStep?.name || t("copaw.pipelines.stepDetails")}</Text>
                     {selectedRunStep ? (
                       <Tag color={statusTagColor(selectedRunStep.status || "pending")}>{selectedRunStep.status || "-"}</Tag>
                     ) : null}
@@ -5442,93 +5312,93 @@ export default function PipelinesPage() {
               className={styles.runDetailDrawer}
             >
               {!selectedRunStep ? (
-                <Empty description={t("pipelines.selectStepToView", "Select a step to view details.")} />
+                <Empty description={t("copaw.pipelines.selectStepToView")} />
               ) : (
                 <div className={styles.runDetailContent}>
                   <div className={styles.detailGroup}>
                     <Text strong className={styles.detailGroupTitle}>
-                      {t("pipelines.stepBaseInfo", "Step Base Info")}
+                      {t("copaw.pipelines.stepBaseInfo")}
                     </Text>
                     <div className={styles.detailSection}>
                       <Text strong className={styles.detailLabel}>
-                        {t("pipelines.stepId", "Step ID")}
+                        {t("copaw.pipelines.stepId")}
                       </Text>
                       <Text type="secondary">{selectedRunStep.id}</Text>
                     </div>
                     <div className={styles.detailSection}>
                       <Text strong className={styles.detailLabel}>
-                        {t("pipelines.name", "Name")}
+                        {t("copaw.pipelines.name")}
                       </Text>
                       <Text type="secondary">{selectedRunStep.name || "-"}</Text>
                     </div>
                     <div className={styles.detailSection}>
                       <Text strong className={styles.detailLabel}>
-                        {t("pipelines.kind", "Kind")}
+                        {t("copaw.pipelines.kind")}
                       </Text>
                       <Text type="secondary">{selectedRunStep.kind || "-"}</Text>
                     </div>
                     <div className={styles.detailSection}>
                       <Text strong className={styles.detailLabel}>
-                        {t("pipelines.status")}
+                        {t("copaw.pipelines.status")}
                       </Text>
                       <Tag color={statusTagColor(selectedRunStep.status || "pending")}>{selectedRunStep.status || "-"}</Tag>
                     </div>
                     <div className={styles.detailSection}>
                       <Text strong className={styles.detailLabel}>
-                        {t("pipelines.duration", "Duration")}
+                        {t("copaw.pipelines.duration")}
                       </Text>
                       <Text type="secondary">{formatStepDuration(selectedRunStep)}</Text>
                     </div>
                   </div>
                   <div className={styles.detailGroup}>
                     <Text strong className={styles.detailGroupTitle}>
-                      {t("pipelines.schedule", "Schedule")}
+                      {t("copaw.pipelines.schedule")}
                     </Text>
                     <div className={styles.detailSection}>
-                      <Text strong className={styles.detailLabel}>{t("pipelines.startedAt", "Started")}</Text>
+                      <Text strong className={styles.detailLabel}>{t("copaw.pipelines.startedAt")}</Text>
                       <Text type="secondary">{selectedRunStep.started_at || "-"}</Text>
                     </div>
                     <div className={styles.detailSection}>
-                      <Text strong className={styles.detailLabel}>{t("pipelines.endedAt", "Ended")}</Text>
+                      <Text strong className={styles.detailLabel}>{t("copaw.pipelines.endedAt")}</Text>
                       <Text type="secondary">{selectedRunStep.ended_at || "-"}</Text>
                     </div>
                     <div className={styles.detailSection}>
-                      <Text strong className={styles.detailLabel}>{t("pipelines.dependsOn", "Depends on")}</Text>
+                      <Text strong className={styles.detailLabel}>{t("copaw.pipelines.dependsOn")}</Text>
                       <Text type="secondary">{selectedRunStep.depends_on?.length ? selectedRunStep.depends_on.join(", ") : "-"}</Text>
                     </div>
                   </div>
 
                   <div className={styles.detailGroup}>
                     <Text strong className={styles.detailGroupTitle}>
-                      {t("pipelines.stepDescription", "Description")}
+                      {t("copaw.pipelines.stepDescription")}
                     </Text>
                     <Text type="secondary">{selectedRunStep.description || "-"}</Text>
                   </div>
 
                   <div className={styles.detailGroup}>
                     <Text strong className={styles.detailGroupTitle}>
-                      {t("pipelines.inputs", "Inputs")}
+                      {t("copaw.pipelines.inputs")}
                     </Text>
                     <pre className={styles.detailJsonBlock}>{JSON.stringify(selectedRunStep.inputs || {}, null, 2)}</pre>
                   </div>
 
                   <div className={styles.detailGroup}>
                     <Text strong className={styles.detailGroupTitle}>
-                      {t("pipelines.outputs", "Outputs")}
+                      {t("copaw.pipelines.outputs")}
                     </Text>
                     <pre className={styles.detailJsonBlock}>{JSON.stringify(selectedRunStep.outputs || {}, null, 2)}</pre>
                   </div>
 
                   <div className={styles.detailGroup}>
                     <Text strong className={styles.detailGroupTitle}>
-                      {t("pipelines.metrics", "Metrics")}
+                      {t("copaw.pipelines.metrics")}
                     </Text>
                     <pre className={styles.detailJsonBlock}>{JSON.stringify(selectedRunStep.metrics || {}, null, 2)}</pre>
                   </div>
 
                   <div className={styles.detailGroup}>
                     <Text strong className={styles.detailGroupTitle}>
-                      {t("pipelines.evidence", "Evidence")}
+                      {t("copaw.pipelines.evidence")}
                     </Text>
                     {selectedRunStep.evidence?.length ? (
                       <div className={styles.runStepEvidenceList}>
@@ -5547,7 +5417,7 @@ export default function PipelinesPage() {
             </Drawer>
 
             <Modal
-              title={t("pipelines.rpaImportModalTitle")}
+              title={t("copaw.pipelines.rpaImportModalTitle")}
               open={rpaImportModalOpen}
               onCancel={() => {
                 if (rpaImporting) return;
@@ -5555,30 +5425,30 @@ export default function PipelinesPage() {
               }}
               onOk={() => void handleConfirmImportRpaJson()}
               okButtonProps={{ loading: rpaImporting }}
-              okText={t("pipelines.rpaImportModalConfirm")}
+              okText={t("copaw.pipelines.rpaImportModalConfirm")}
               cancelText={t("common.cancel")}
               destroyOnClose
             >
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <Text type="secondary">
-                  {t("pipelines.rpaImportModalHint")}
+                  {t("copaw.pipelines.rpaImportModalHint")}
                 </Text>
                 <Input
                   value={rpaImportTemplateId}
                   onChange={(event) => setRpaImportTemplateId(event.target.value)}
-                  placeholder={t("pipelines.rpaImportTargetIdPlaceholder")}
+                  placeholder={t("copaw.pipelines.rpaImportTargetIdPlaceholder")}
                 />
                 <TextArea
                   value={rpaImportJson}
                   onChange={(event) => setRpaImportJson(event.target.value)}
                   autoSize={{ minRows: 10, maxRows: 18 }}
-                  placeholder={t("pipelines.rpaImportJsonPlaceholder")}
+                  placeholder={t("copaw.pipelines.rpaImportJsonPlaceholder")}
                 />
               </div>
             </Modal>
 
             <Modal
-              title={t("pipelines.rpaExportModalTitle")}
+              title={t("copaw.pipelines.rpaExportModalTitle")}
               open={rpaExportModalOpen}
               onCancel={() => {
                 if (rpaExporting) return;
@@ -5591,21 +5461,21 @@ export default function PipelinesPage() {
                   loading={rpaExporting}
                   disabled={!selectedAgent || !selectedTemplateItem}
                 >
-                  {t("pipelines.rpaExportRegenerateAction")}
+                  {t("copaw.pipelines.rpaExportRegenerateAction")}
                 </Button>,
                 <Button
                   key="download"
                   onClick={handleDownloadExportedRpaJson}
                   disabled={!rpaExportJson.trim()}
                 >
-                  {t("pipelines.rpaExportDownloadAction")}
+                  {t("copaw.pipelines.rpaExportDownloadAction")}
                 </Button>,
                 <Button
                   key="copy"
                   onClick={() => void handleCopyExportedRpaJson()}
                   disabled={!rpaExportJson.trim()}
                 >
-                  {t("pipelines.rpaExportCopyAction")}
+                  {t("copaw.pipelines.rpaExportCopyAction")}
                 </Button>,
                 <Button
                   key="close"
@@ -5618,22 +5488,22 @@ export default function PipelinesPage() {
             >
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <Text type="secondary">
-                  {t("pipelines.rpaExportModalHint")}
+                  {t("copaw.pipelines.rpaExportModalHint")}
                 </Text>
                 <Input
                   value={rpaExportAuthor}
                   onChange={(event) => setRpaExportAuthor(event.target.value)}
-                  placeholder={t("pipelines.rpaExportAuthorPlaceholder")}
+                  placeholder={t("copaw.pipelines.rpaExportAuthorPlaceholder")}
                 />
                 <Input
                   value={rpaExportTags}
                   onChange={(event) => setRpaExportTags(event.target.value)}
-                  placeholder={t("pipelines.rpaExportTagsPlaceholder")}
+                  placeholder={t("copaw.pipelines.rpaExportTagsPlaceholder")}
                 />
                 <Input
                   value={rpaExportNote}
                   onChange={(event) => setRpaExportNote(event.target.value)}
-                  placeholder={t("pipelines.rpaExportNotePlaceholder")}
+                  placeholder={t("copaw.pipelines.rpaExportNotePlaceholder")}
                 />
                 <TextArea
                   value={rpaExportJson}

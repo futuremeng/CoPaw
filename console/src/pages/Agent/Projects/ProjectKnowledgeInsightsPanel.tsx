@@ -27,7 +27,7 @@ export default function ProjectKnowledgeInsightsPanel(
           <Space wrap className={styles.projectKnowledgeInsightActions}>
             {knowledgeState.insightAction === "settings" ? (
               <Button size="small" type="primary" onClick={onOpenSettings}>
-                {t("projects.knowledge.actionOpenSettings", "Open settings")}
+                {t("copaw.projects.knowledge.actionOpenSettings")}
               </Button>
             ) : null}
             {knowledgeState.insightAction === "query" ? (
@@ -36,7 +36,7 @@ export default function ProjectKnowledgeInsightsPanel(
                 type="primary"
                 onClick={() => onRunSuggestedQuery?.(knowledgeState.suggestedQuery)}
               >
-                {t("projects.knowledge.actionRunSuggestedQuery")}
+                {t("copaw.projects.knowledge.actionRunSuggestedQuery")}
               </Button>
             ) : null}
           </Space>
@@ -45,25 +45,25 @@ export default function ProjectKnowledgeInsightsPanel(
         <div className={styles.projectKnowledgeSignalGrid}>
           <div className={styles.projectKnowledgeSignalCard}>
             <Typography.Text type="secondary">
-              {t("projects.knowledge.signalDocuments")}
+              {t("copaw.projects.knowledge.signalDocuments")}
             </Typography.Text>
             <Typography.Text strong>{knowledgeState.quantMetrics.documentCount}</Typography.Text>
           </div>
           <div className={styles.projectKnowledgeSignalCard}>
             <Typography.Text type="secondary">
-              {t("projects.knowledge.signalChunks")}
+              {t("copaw.projects.knowledge.signalChunks")}
             </Typography.Text>
             <Typography.Text strong>{knowledgeState.quantMetrics.chunkCount}</Typography.Text>
           </div>
           <div className={styles.projectKnowledgeSignalCard}>
             <Typography.Text type="secondary">
-              {t("projects.knowledge.signalRelations")}
+              {t("copaw.projects.knowledge.signalRelations")}
             </Typography.Text>
             <Typography.Text strong>{knowledgeState.quantMetrics.relationCount}</Typography.Text>
           </div>
           <div className={styles.projectKnowledgeSignalCard}>
             <Typography.Text type="secondary">
-              {t("projects.knowledge.insightSuggestedQuery", "Suggested query")}
+              {t("copaw.projects.knowledge.insightSuggestedQuery")}
             </Typography.Text>
             <Typography.Text>{knowledgeState.suggestedQuery}</Typography.Text>
           </div>

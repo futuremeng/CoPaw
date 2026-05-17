@@ -82,8 +82,18 @@ bash scripts/local-gate.sh
 ```
 
 - Runs a minimal local quality gate for merge-risk regressions.
-- Includes: sync status check, console build, pipeline template conformance scan, backend smoke checks, knowledge route check, and i18n missing-key audit.
+- Includes: sync status check, console build, pipeline template conformance scan, CoPaw locale split guard, backend smoke checks, knowledge route check, and i18n missing-key audit.
 - Exits with non-zero status on first failure.
+
+Run only the locale split guard:
+
+```bash
+python scripts/check_copaw_locale_split.py
+make check-locale-split
+```
+
+- Verifies split CoPaw locale files exist and are non-empty.
+- Fails if split CoPaw module copy flows back into base locale files.
 - Run full backend unit tests in strict mode:
 
 ```bash

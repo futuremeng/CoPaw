@@ -32,21 +32,21 @@ function modeUnavailableReason(
   t: ReturnType<typeof useTranslation>["t"],
 ): string {
   if (!mode) {
-    return t("projects.knowledge.outputs.fallbackUnknown", "状态未知");
+    return t("copaw.projects.knowledge.outputs.fallbackUnknown");
   }
   if (mode.status === "failed") {
-    return t("projects.knowledge.outputs.fallbackFailed", "运行失败");
+    return t("copaw.projects.knowledge.outputs.fallbackFailed");
   }
   if (mode.status === "queued") {
-    return t("projects.knowledge.outputs.fallbackQueued", "仍在排队");
+    return t("copaw.projects.knowledge.outputs.fallbackQueued");
   }
   if (mode.status === "running") {
-    return t("projects.knowledge.outputs.fallbackRunning", "仍在运行");
+    return t("copaw.projects.knowledge.outputs.fallbackRunning");
   }
   if (!mode.available) {
-    return t("projects.knowledge.outputs.fallbackUnavailable", "产物未就绪");
+    return t("copaw.projects.knowledge.outputs.fallbackUnavailable");
   }
-  return t("projects.knowledge.outputs.fallbackNotSelected", "未被选为当前消费层");
+  return t("copaw.projects.knowledge.outputs.fallbackNotSelected");
 }
 
 function isPreviewableKnowledgeArtifactPath(path: string): boolean {
@@ -207,7 +207,7 @@ export default function ProjectKnowledgeOutputsPanel(
     ].filter(Boolean);
 
     return {
-      title: t("projects.knowledge.outputs.documentGraphReady", "文档级 graphify 中间层已生成"),
+      title: t("copaw.projects.knowledge.outputs.documentGraphReady"),
       payloadSummary,
       manifestPath: manifestArtifact?.path || "",
       directoryPath: directoryArtifact?.path || "",
@@ -241,12 +241,7 @@ export default function ProjectKnowledgeOutputsPanel(
           <Typography.Title level={5} className={styles.projectKnowledgeSectionTitle}>
             {t("projects.knowledgeDock.tabOutputs", "Outputs")}
           </Typography.Title>
-          <Typography.Text type="secondary">
-            {t(
-              "projects.knowledge.outputsRoleHint",
-              "这里聚焦最终消费层与产物清单，不重复展示加工调度细节。",
-            )}
-          </Typography.Text>
+          <Typography.Text type="secondary">{t("copaw.projects.knowledge.outputsRoleHint")}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeTabActions}>
           <Select
@@ -273,7 +268,7 @@ export default function ProjectKnowledgeOutputsPanel(
             }}
             loading={props.knowledgeState.graphLoading}
           >
-            {t("projects.knowledge.actionRefreshSignals", "Refresh")}
+            {t("copaw.projects.knowledge.actionRefreshSignals")}
           </Button>
         </div>
       </div>
@@ -282,28 +277,28 @@ export default function ProjectKnowledgeOutputsPanel(
         <Alert
           type="warning"
           showIcon
-          message={t("projects.knowledge.refreshPending", "参数已变更，等待手动刷新")}
-          description={t("projects.knowledge.refreshPendingHint", "点击右上角 Refresh 以应用最新图谱查询条件。")}
+          message={t("copaw.projects.knowledge.refreshPending")}
+          description={t("copaw.projects.knowledge.refreshPendingHint")}
         />
       ) : null}
 
       <div className={styles.projectKnowledgeOutputsHero}>
         <div className={styles.projectKnowledgeOutputsHeroMain}>
-          <Typography.Text type="secondary">{t("projects.knowledge.outputs.currentMode", "当前输出层关注")}</Typography.Text>
+          <Typography.Text type="secondary">{t("copaw.projects.knowledge.outputs.currentMode")}</Typography.Text>
           <Typography.Title level={5} className={styles.projectKnowledgeSectionTitle}>
             {selectedModeState
               ? getProjectKnowledgeModeTitle(selectedModeState.mode, t)
-              : t("projects.knowledge.processing.none", "暂无")}
+              : t("copaw.projects.knowledge.processing.none")}
           </Typography.Title>
           <Typography.Text type="secondary">{props.knowledgeState.outputResolution.reason}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeOutputsHeroAside}>
           <div className={styles.projectKnowledgeHeaderStat}>
-            <Typography.Text type="secondary">{t("projects.knowledge.outputs.fallbackChain", "自动降级链")}</Typography.Text>
+            <Typography.Text type="secondary">{t("copaw.projects.knowledge.outputs.fallbackChain")}</Typography.Text>
             <Typography.Text strong>{fallbackTrail}</Typography.Text>
           </div>
           <div className={styles.projectKnowledgeHeaderStat}>
-            <Typography.Text type="secondary">{t("projects.knowledge.outputs.artifactCount", "Artifacts")}</Typography.Text>
+            <Typography.Text type="secondary">{t("copaw.projects.knowledge.outputs.artifactCount")}</Typography.Text>
             <Typography.Text strong>{artifactCount}</Typography.Text>
           </div>
         </div>
@@ -313,26 +308,26 @@ export default function ProjectKnowledgeOutputsPanel(
         <Alert
           type="info"
           showIcon
-          message={t("projects.knowledge.outputs.skippedLayers", "上层未命中原因")}
+          message={t("copaw.projects.knowledge.outputs.skippedLayers")}
           description={fallbackSkippedSummary}
         />
       ) : null}
 
       <div className={styles.projectKnowledgeSignalGrid}>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("projects.knowledge.outputs.selectedMode", "Selected Mode")}</Typography.Text>
+          <Typography.Text type="secondary">{t("copaw.projects.knowledge.outputs.selectedMode")}</Typography.Text>
           <Typography.Text strong>{getProjectKnowledgeModeLabel(selectedModeState.mode, t)}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("projects.knowledge.outputs.artifactCount", "Artifacts")}</Typography.Text>
+          <Typography.Text type="secondary">{t("copaw.projects.knowledge.outputs.artifactCount")}</Typography.Text>
           <Typography.Text strong>{artifactCount}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("projects.knowledge.entities", "Entities")}</Typography.Text>
+          <Typography.Text type="secondary">{t("copaw.projects.knowledge.entities")}</Typography.Text>
           <Typography.Text strong>{selectedModeState.entityCount}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("projects.knowledge.signalRelations", "Relations")}</Typography.Text>
+          <Typography.Text type="secondary">{t("copaw.projects.knowledge.signalRelations")}</Typography.Text>
           <Typography.Text strong>{selectedModeState.relationCount}</Typography.Text>
         </div>
       </div>
@@ -340,9 +335,9 @@ export default function ProjectKnowledgeOutputsPanel(
       <Alert
         type="info"
         showIcon
-        message={t("projects.knowledge.outputs.selectedSource", "当前模式产物来源")}
+        message={t("copaw.projects.knowledge.outputs.selectedSource")}
         description={[
-          selectedModeOutput?.source || t("projects.knowledge.outputs.noSource", "unknown"),
+          selectedModeOutput?.source || t("copaw.projects.knowledge.outputs.noSource"),
           ...(selectedModeOutput?.summaryLines || []),
         ].filter(Boolean).join(" · ")}
       />
@@ -351,7 +346,7 @@ export default function ProjectKnowledgeOutputsPanel(
         <Alert
           type="info"
           showIcon
-          message={t("projects.knowledge.outputs.latestOutputSummary", "Latest output provenance")}
+          message={t("copaw.projects.knowledge.outputs.latestOutputSummary")}
           description={latestSummaryModel.outputParts.join(" · ")}
         />
       ) : null}
@@ -364,13 +359,13 @@ export default function ProjectKnowledgeOutputsPanel(
                 {documentGraphSummary.title}
               </div>
               <Typography.Text>
-                {documentGraphSummary.payloadSummary || t("projects.knowledge.outputs.documentGraphPayloadFallback", "Document graphify payloads are ready.")}
+                {documentGraphSummary.payloadSummary || t("copaw.projects.knowledge.outputs.documentGraphPayloadFallback")}
               </Typography.Text>
             </div>
             {documentGraphSummary.manifestPath ? (
               <div className={styles.artifactSummaryGroup}>
                 <div className={styles.artifactSummaryTitle}>
-                  {t("projects.knowledge.outputs.documentGraphManifestLabel", "Manifest")}
+                  {t("copaw.projects.knowledge.outputs.documentGraphManifestLabel")}
                 </div>
                 {props.onSelectArtifactPath ? (
                   <Button
@@ -389,7 +384,7 @@ export default function ProjectKnowledgeOutputsPanel(
             {documentGraphSummary.directoryPath ? (
               <div className={styles.artifactSummaryGroup}>
                 <div className={styles.artifactSummaryTitle}>
-                  {t("projects.knowledge.outputs.documentGraphDirectoryLabel", "Payload Directory")}
+                  {t("copaw.projects.knowledge.outputs.documentGraphDirectoryLabel")}
                 </div>
                 {props.onSelectArtifactPath ? (
                   <Button
@@ -408,7 +403,7 @@ export default function ProjectKnowledgeOutputsPanel(
             {(documentGraphSummary.manifestPath || documentGraphSummary.directoryPath) && props.onSelectArtifactPath ? (
               <div className={styles.artifactSummaryGroup}>
                 <div className={styles.artifactSummaryTitle}>
-                  {t("projects.knowledge.outputs.documentGraphActions", "Actions")}
+                  {t("copaw.projects.knowledge.outputs.documentGraphActions")}
                 </div>
                 <div>
                   {documentGraphSummary.manifestPath ? (
@@ -418,7 +413,7 @@ export default function ProjectKnowledgeOutputsPanel(
                       style={{ paddingInline: 0, height: "auto" }}
                       onClick={() => props.onSelectArtifactPath?.(documentGraphSummary.manifestPath)}
                     >
-                      {t("projects.knowledge.outputs.previewManifest", "Preview manifest")}
+                      {t("copaw.projects.knowledge.outputs.previewManifest")}
                     </Button>
                   ) : null}
                   {documentGraphSummary.directoryPath ? (
@@ -428,7 +423,7 @@ export default function ProjectKnowledgeOutputsPanel(
                       style={{ paddingInline: 0, height: "auto", marginLeft: 12 }}
                       onClick={() => props.onSelectArtifactPath?.(documentGraphSummary.directoryPath)}
                     >
-                      {t("projects.knowledge.outputs.openPayloadDirectory", "Open payload directory")}
+                      {t("copaw.projects.knowledge.outputs.openPayloadDirectory")}
                     </Button>
                   ) : null}
                 </div>
@@ -465,7 +460,7 @@ export default function ProjectKnowledgeOutputsPanel(
       {artifactCount > visibleArtifacts.length ? (
         <div className={styles.projectKnowledgeListFooter}>
           <Typography.Text type="secondary">
-            {t("projects.knowledge.outputs.renderedArtifacts", "Showing {{shown}} / {{total}} artifacts", {
+            {t("copaw.projects.knowledge.outputs.renderedArtifacts", {
               shown: visibleArtifacts.length,
               total: artifactCount,
             })}
@@ -474,7 +469,7 @@ export default function ProjectKnowledgeOutputsPanel(
             size="small"
             onClick={() => setVisibleArtifactCount((prev) => prev + LOAD_MORE_ARTIFACTS_STEP)}
           >
-            {t("projects.knowledge.outputs.loadMoreArtifacts", "Load more")}
+            {t("copaw.projects.knowledge.outputs.loadMoreArtifacts")}
           </Button>
         </div>
       ) : null}
@@ -483,11 +478,8 @@ export default function ProjectKnowledgeOutputsPanel(
         <Alert
           type="warning"
           showIcon
-          message={t("projects.knowledge.outputs.compatTitle", "当前图谱记录仍在兼容层")}
-          description={t(
-            "projects.knowledge.outputs.compatDescription",
-            "下方关系列表暂时仍复用当前最佳可用图谱查询结果；artifact 视图已经按模式切分。",
-          )}
+          message={t("copaw.projects.knowledge.outputs.compatTitle")}
+          description={t("copaw.projects.knowledge.outputs.compatDescription")}
         />
       ) : null}
 
@@ -501,7 +493,7 @@ export default function ProjectKnowledgeOutputsPanel(
               setKeyword(nextValue);
             });
           }}
-          placeholder={t("projects.knowledge.relationSearchPlaceholder", "Search entities, relations, or document paths")}
+          placeholder={t("copaw.projects.knowledge.relationSearchPlaceholder")}
           allowClear
         />
         <Select
@@ -509,7 +501,7 @@ export default function ProjectKnowledgeOutputsPanel(
           allowClear
           size="small"
           classNames={{ popup: { root: styles.projectKnowledgeSelectDropdown } }}
-          placeholder={t("projects.knowledge.relationTypeFilter", "Relation type filter (shows all by default)")}
+          placeholder={t("copaw.projects.knowledge.relationTypeFilter")}
           options={predicateOptions.map((item) => ({
             label: formatGraphRelationTypeLabel(item, (key, defaultValue) => t(key, defaultValue)),
             value: item,
@@ -527,7 +519,7 @@ export default function ProjectKnowledgeOutputsPanel(
       <div className={styles.projectKnowledgePanelBody}>
         {!canShowGraphRecords ? (
           <div className={styles.projectKnowledgeEmpty}>
-            <Empty description={t("projects.knowledge.outputs.highOrderEmpty", "结构化或增强结果尚未就绪，暂时无法展示实体关系结果。")} />
+            <Empty description={t("copaw.projects.knowledge.outputs.highOrderEmpty")} />
           </div>
         ) : props.knowledgeState.graphLoading && !props.knowledgeState.graphResult ? (
           <div className={styles.projectKnowledgeEmpty}><Empty description={t("common.loading", "Loading")} /></div>
@@ -535,7 +527,7 @@ export default function ProjectKnowledgeOutputsPanel(
           <>
             <div className={styles.projectKnowledgeListFooter}>
               <Typography.Text type="secondary">
-                {t("projects.knowledge.outputs.renderedRelations", "Showing {{shown}} / {{total}} relations", {
+                {t("copaw.projects.knowledge.outputs.renderedRelations", {
                   shown: visibleRelations.length,
                   total: filteredRecords.length,
                 })}
@@ -562,16 +554,16 @@ export default function ProjectKnowledgeOutputsPanel(
                 size="small"
                 onClick={() => setVisibleRelationCount((prev) => prev + LOAD_MORE_RELATIONS_STEP)}
               >
-                {t("projects.knowledge.outputs.loadMoreRelations", "Load more")}
+                {t("copaw.projects.knowledge.outputs.loadMoreRelations")}
               </Button>
             </div>
           ) : null}
           </>
         ) : (
           <div className={styles.projectKnowledgeEmpty}>
-            <Empty description={t("projects.knowledge.emptyResult", "No result")}>
+            <Empty description={t("copaw.projects.knowledge.emptyResult")}>
               <Button type="primary" onClick={() => props.onRunSuggestedQuery?.(props.knowledgeState.suggestedQuery)}>
-                {t("projects.knowledge.actionRunSuggestedQuery", "Run suggested query")}
+                {t("copaw.projects.knowledge.actionRunSuggestedQuery")}
               </Button>
             </Empty>
           </div>

@@ -173,7 +173,7 @@ function buildKnowledgeState(projectId: string): ProjectKnowledgeState {
     syncAlertDescription: "",
     suggestedQuery: `Summarize key entities, modules, and relations in project ${projectId}`,
     insightAction: "healthy",
-    insightMessageKey: "projects.knowledge.insightHealthy",
+    insightMessageKey: "copaw.projects.knowledge.insightHealthy",
     loadProjectSourceStatus: vi.fn().mockResolvedValue(undefined),
     semanticBySourceId: {},
     semanticLoadingBySourceId: {},

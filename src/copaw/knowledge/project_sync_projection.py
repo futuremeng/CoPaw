@@ -618,16 +618,18 @@ def build_pipeline_trace(
 ) -> dict[str, Any]:
 	mode_map = {str(item.get("mode") or ""): item for item in processing_modes if isinstance(item, dict)}
 	stage_defs = [
-		("fast", "L1 · Fast", l1_metrics),
-		("nlp", "L2 · NLP", l2_metrics),
-		("agentic", "L3 · Agentic", l3_metrics),
+		("fast", "copaw.projects.knowledge.pipelineStage.fast", "L1 · Fast", l1_metrics),
+		("nlp", "copaw.projects.knowledge.pipelineStage.nlp", "L2 · NLP", l2_metrics),
+		("agentic", "copaw.projects.knowledge.pipelineStage.agentic", "L3 · Agentic", l3_metrics),
 	]
 	stages = []
-	for mode, label, metrics in stage_defs:
+	for mode, label_key, label, metrics in stage_defs:
 		payload = mode_map.get(mode) or {}
 		output = mode_outputs.get(mode) if isinstance(mode_outputs.get(mode), dict) else {}
 		stages.append({
+			"key": mode,
 			"mode": mode,
+			"label_key": label_key,
 			"label": label,
 			"status": str(payload.get("status") or "queued"),
 			"available": bool(payload.get("available")),

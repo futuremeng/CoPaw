@@ -1635,11 +1635,11 @@ export function useProjectKnowledgeState(
     const mode = overrideMode ?? graphQueryMode;
     const outputMode = overrideOutputMode ?? defaultOutputModeForQuery;
     if (!params.projectId) {
-      setGraphError(t("projects.knowledge.emptyQuery"));
+      setGraphError(t("copaw.projects.knowledge.emptyQuery"));
       return;
     }
     if (mode === "cypher" && !query) {
-      setGraphError(t("projects.knowledge.emptyQuery"));
+      setGraphError(t("copaw.projects.knowledge.emptyQuery"));
       return;
     }
 
@@ -1703,7 +1703,7 @@ export function useProjectKnowledgeState(
       setActiveGraphNodeId(null);
       setGraphNeedsRefresh(false);
     } catch (err) {
-      const messageText = err instanceof Error ? err.message : t("projects.knowledge.queryFailed");
+      const messageText = err instanceof Error ? err.message : t("copaw.projects.knowledge.queryFailed");
       setGraphError(messageText);
     } finally {
       setGraphLoading(false);
@@ -2855,12 +2855,12 @@ export function useProjectKnowledgeState(
 
   const insightMessageKey = useMemo(() => {
     if (insightAction === "settings") {
-      return "projects.knowledge.insightNeedRegister";
+      return "copaw.projects.knowledge.insightNeedRegister";
     }
     if (insightAction === "query") {
-      return "projects.knowledge.insightNeedExplore";
+      return "copaw.projects.knowledge.insightNeedExplore";
     }
-    return "projects.knowledge.insightHealthy";
+    return "copaw.projects.knowledge.insightHealthy";
   }, [insightAction]);
 
   const knowledgeState = useMemo<ProjectKnowledgeState>(() => ({

@@ -301,6 +301,7 @@ export interface ProjectKnowledgePipelineArtifactPayload {
 export interface ProjectKnowledgePipelineStagePayload {
   key: ProjectKnowledgeProcessingMode;
   label: string;
+  label_key?: string;
   optional?: boolean;
   status: "idle" | "queued" | "running" | "ready" | "failed" | "blocked";
   available?: boolean;

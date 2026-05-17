@@ -66,7 +66,7 @@ export default function ProjectKnowledgeRelationsPanel(
           <Typography.Text type="secondary">
             {props.knowledgeState.graphQueryText
               ? props.knowledgeState.graphQueryText
-              : t("projects.knowledge.relationsHint", "Inspect extracted subject-predicate-object relations.")}
+              : t("copaw.projects.knowledge.relationsHint")}
           </Typography.Text>
         </div>
         <div className={styles.projectKnowledgeTabActions}>
@@ -79,7 +79,7 @@ export default function ProjectKnowledgeRelationsPanel(
             }}
             loading={props.knowledgeState.graphLoading}
           >
-            {t("projects.knowledge.actionRefreshSignals", "Refresh")}
+            {t("copaw.projects.knowledge.actionRefreshSignals")}
           </Button>
           {!props.knowledgeState.relationRecords.length ? (
             <Button
@@ -87,7 +87,7 @@ export default function ProjectKnowledgeRelationsPanel(
               type="primary"
               onClick={() => props.onRunSuggestedQuery?.(props.knowledgeState.suggestedQuery)}
             >
-              {t("projects.knowledge.actionRunSuggestedQuery")}
+              {t("copaw.projects.knowledge.actionRunSuggestedQuery")}
             </Button>
           ) : null}
         </div>
@@ -95,19 +95,19 @@ export default function ProjectKnowledgeRelationsPanel(
 
       <div className={styles.projectKnowledgeSignalGrid}>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("projects.knowledge.signalRelations")}</Typography.Text>
+          <Typography.Text type="secondary">{t("copaw.projects.knowledge.signalRelations")}</Typography.Text>
           <Typography.Text strong>{relationSummary.relations}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("projects.knowledge.entities", "Entities")}</Typography.Text>
+          <Typography.Text type="secondary">{t("copaw.projects.knowledge.entities")}</Typography.Text>
           <Typography.Text strong>{relationSummary.entities}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("projects.knowledge.predicates", "Relation Types")}</Typography.Text>
+          <Typography.Text type="secondary">{t("copaw.projects.knowledge.predicates")}</Typography.Text>
           <Typography.Text strong>{relationSummary.predicates}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("projects.knowledge.sources", "Sources")}</Typography.Text>
+          <Typography.Text type="secondary">{t("copaw.projects.knowledge.sources")}</Typography.Text>
           <Typography.Text strong>{relationSummary.sources}</Typography.Text>
         </div>
       </div>
@@ -120,7 +120,7 @@ export default function ProjectKnowledgeRelationsPanel(
         <Input
           value={keyword}
           onChange={(event) => setKeyword(event.target.value)}
-          placeholder={t("projects.knowledge.relationSearchPlaceholder", "Search entities, relations, or document paths")}
+          placeholder={t("copaw.projects.knowledge.relationSearchPlaceholder")}
           allowClear
         />
         <Select
@@ -128,7 +128,7 @@ export default function ProjectKnowledgeRelationsPanel(
           allowClear
           size="small"
           classNames={{ popup: { root: styles.projectKnowledgeSelectDropdown } }}
-          placeholder={t("projects.knowledge.relationTypeFilter", "Relation type filter (shows all by default)")}
+          placeholder={t("copaw.projects.knowledge.relationTypeFilter")}
           options={predicateOptions.map((item) => ({
             label: formatGraphRelationTypeLabel(item, (key, defaultValue) => t(key, defaultValue)),
             value: item,
@@ -159,7 +159,7 @@ export default function ProjectKnowledgeRelationsPanel(
           </div>
         ) : (
           <div className={styles.projectKnowledgeEmpty}>
-            <Empty description={t("projects.knowledge.emptyResult")} />
+            <Empty description={t("copaw.projects.knowledge.emptyResult")} />
           </div>
         )}
       </div>

@@ -3,6 +3,7 @@ import type { ProjectKnowledgeSyncState } from "../../../api/types/knowledge";
 export type BuiltinRuntimeStage = {
   key: string;
   label: string;
+  labelKey?: string;
   status: string;
   summary: string;
   progress?: number | null;
@@ -112,6 +113,7 @@ export function deriveBuiltinProjectKnowledgeStages(
     return {
       key: stage.key,
       label: stage.key,
+      labelKey: `copaw.pipelines.builtinRuntimeStage.${stage.key}`,
       status,
       summary,
       progress,

@@ -240,7 +240,7 @@ export default function ProjectKnowledgeSettingsPanel(
   const handleRegisterProjectSource = useCallback(async () => {
     const location = (projectWorkspaceDir || "").trim();
     if (!location) {
-      message.error(t("projects.knowledge.sourcePathMissing"));
+      message.error(t("copaw.projects.knowledge.sourcePathMissing"));
       return;
     }
     try {
@@ -262,11 +262,11 @@ export default function ProjectKnowledgeSettingsPanel(
       await api.indexKnowledgeSource(projectSourceId, {
         projectId,
       });
-      message.success(t("projects.knowledge.sourceRegisterSuccess"));
+      message.success(t("copaw.projects.knowledge.sourceRegisterSuccess"));
       await loadProjectSourceStatus();
     } catch (err) {
       const messageText =
-        err instanceof Error ? err.message : t("projects.knowledge.sourceRegisterFailed");
+        err instanceof Error ? err.message : t("copaw.projects.knowledge.sourceRegisterFailed");
       message.error(messageText);
     } finally {
       setRegistering(false);
@@ -286,11 +286,11 @@ export default function ProjectKnowledgeSettingsPanel(
       await api.indexKnowledgeSource(projectSourceId, {
         projectId,
       });
-      message.success(t("projects.knowledge.retryIndexSuccess"));
+      message.success(t("copaw.projects.knowledge.retryIndexSuccess"));
       await loadProjectSourceStatus();
     } catch (err) {
       const messageText =
-        err instanceof Error ? err.message : t("projects.knowledge.retryIndexFailed");
+        err instanceof Error ? err.message : t("copaw.projects.knowledge.retryIndexFailed");
       message.error(messageText);
     } finally {
       setRetrying(false);
@@ -299,7 +299,7 @@ export default function ProjectKnowledgeSettingsPanel(
 
   const handleToggleAutoSink = useCallback(async (enabled: boolean) => {
     if (!agentId) {
-      message.error(t("projects.knowledge.autoSinkAgentMissing"));
+      message.error(t("copaw.projects.knowledge.autoSinkAgentMissing"));
       return;
     }
     try {
@@ -311,11 +311,11 @@ export default function ProjectKnowledgeSettingsPanel(
       onProjectAutoKnowledgeSinkChange?.(enabled);
       message.success(
         enabled
-          ? t("projects.knowledge.autoSinkEnabled")
-          : t("projects.knowledge.autoSinkDisabled"),
+          ? t("copaw.projects.knowledge.autoSinkEnabled")
+          : t("copaw.projects.knowledge.autoSinkDisabled"),
       );
     } catch (err) {
-      const messageText = err instanceof Error ? err.message : t("projects.knowledge.autoSinkUpdateFailed");
+      const messageText = err instanceof Error ? err.message : t("copaw.projects.knowledge.autoSinkUpdateFailed");
       message.error(messageText);
     } finally {
       setUpdatingAutoSink(false);
@@ -331,8 +331,8 @@ export default function ProjectKnowledgeSettingsPanel(
       setMemifyEnabled(enabled);
       message.success(
         enabled
-          ? t("projects.knowledge.memifyEnabled", "Entity extraction enabled")
-          : t("projects.knowledge.memifyDisabled", "Entity extraction disabled"),
+          ? t("copaw.projects.knowledge.memifyEnabled")
+          : t("copaw.projects.knowledge.memifyDisabled"),
       );
       if (enabled && (projectWorkspaceDir || "").trim()) {
         try {
@@ -349,7 +349,7 @@ export default function ProjectKnowledgeSettingsPanel(
         }
       }
     } catch (err) {
-      const messageText = err instanceof Error ? err.message : t("projects.knowledge.memifyUpdateFailed", "Failed to update entity extraction setting");
+      const messageText = err instanceof Error ? err.message : t("copaw.projects.knowledge.memifyUpdateFailed");
       message.error(messageText);
     } finally {
       setMemifyUpdating(false);
@@ -358,7 +358,7 @@ export default function ProjectKnowledgeSettingsPanel(
 
   const handleManualSink = useCallback(async () => {
     if (!(projectWorkspaceDir || "").trim()) {
-      message.error(t("projects.knowledge.sourcePathMissing"));
+      message.error(t("copaw.projects.knowledge.sourcePathMissing"));
       return;
     }
     try {
@@ -371,9 +371,9 @@ export default function ProjectKnowledgeSettingsPanel(
         quantizationStage: getProjectKnowledgeQuantizationStage("agentic"),
       });
       setSyncState(response.state);
-      message.success(t("projects.knowledge.manualSinkStarted"));
+      message.success(t("copaw.projects.knowledge.manualSinkStarted"));
     } catch (err) {
-      const messageText = err instanceof Error ? err.message : t("projects.knowledge.manualSinkFailed");
+      const messageText = err instanceof Error ? err.message : t("copaw.projects.knowledge.manualSinkFailed");
       message.error(messageText);
     } finally {
       setManualSinking(false);
@@ -502,22 +502,10 @@ export default function ProjectKnowledgeSettingsPanel(
       return [] as string[];
     }
     return [
-      t(
-        "projects.knowledge.semanticSidecarHintEnable",
-        "1. Set COPAW_HANLP_SIDECAR_ENABLED=1 and point COPAW_HANLP_SIDECAR_PYTHON to a dedicated Python 3.9 interpreter.",
-      ),
-      t(
-        "projects.knowledge.semanticSidecarHintInstall",
-        "2. Install HanLP into that sidecar environment with: <sidecar-python> -m pip install hanlp",
-      ),
-      t(
-        "projects.knowledge.semanticSidecarHintOffline",
-        "3. Optional for offline use: set COPAW_HANLP_HOME and preload ~/.hanlp plus ~/.cache/huggingface.",
-      ),
-      t(
-        "projects.knowledge.semanticSidecarHintVerify",
-        "4. Run qwenpaw doctor to verify the HanLP sidecar before rerunning project sync.",
-      ),
+      t("copaw.projects.knowledge.semanticSidecarHintEnable"),
+      t("copaw.projects.knowledge.semanticSidecarHintInstall"),
+      t("copaw.projects.knowledge.semanticSidecarHintOffline"),
+      t("copaw.projects.knowledge.semanticSidecarHintVerify"),
     ];
   }, [showSidecarHint, t]);
 
@@ -531,7 +519,7 @@ export default function ProjectKnowledgeSettingsPanel(
           <Typography.Text type="secondary">
             {syncState?.status && syncState.status !== "idle"
               ? syncAlertDescription
-              : t("projects.knowledge.settingsHint", "Configure project knowledge indexing and extraction.")}
+              : t("copaw.projects.knowledge.settingsHint")}
           </Typography.Text>
         </div>
         <Badge
@@ -539,8 +527,8 @@ export default function ProjectKnowledgeSettingsPanel(
           text={
             sourceLoaded
               ? sourceRegistered
-                ? t("projects.knowledge.sourceRegistered")
-                : t("projects.knowledge.sourceNotRegistered")
+                ? t("copaw.projects.knowledge.sourceRegistered")
+                : t("copaw.projects.knowledge.sourceNotRegistered")
               : t("common.loading", "Loading")
           }
         />
@@ -549,17 +537,17 @@ export default function ProjectKnowledgeSettingsPanel(
       <section className={styles.projectKnowledgeLayerSection}>
         <div className={styles.projectKnowledgeLayerHeader}>
           <Typography.Text strong>
-            {t("projects.knowledge.layerIndexTitle", "Layer 1: Document Chunking & Indexing")}
+            {t("copaw.projects.knowledge.layerIndexTitle")}
           </Typography.Text>
           <Typography.Text type="secondary">
-            {t("projects.knowledge.layerIndexDesc", "Raw project files are chunked first. Every chunk keeps source path for bidirectional traceability.")}
+            {t("copaw.projects.knowledge.layerIndexDesc")}
           </Typography.Text>
         </div>
 
         <div className={styles.projectKnowledgeSettingsActions}>
           <Space size={6}>
             <Typography.Text type="secondary">
-              {t("projects.knowledge.autoSyncLabel", "Auto Sync")}
+              {t("copaw.projects.knowledge.autoSyncLabel")}
             </Typography.Text>
             <Switch
               checked={autoSinkEnabled}
@@ -577,7 +565,7 @@ export default function ProjectKnowledgeSettingsPanel(
               void handleManualSink();
             }}
           >
-            {t("projects.knowledge.manualSink", "Run Sync")}
+            {t("copaw.projects.knowledge.manualSink")}
           </Button>
 
           <Button
@@ -589,27 +577,22 @@ export default function ProjectKnowledgeSettingsPanel(
             }}
           >
             {sourceRegistered
-              ? t("projects.knowledge.sourceReindex", "Reindex")
-              : t("projects.knowledge.sourceRegister", "Register Source")}
+              ? t("copaw.projects.knowledge.sourceReindex")
+              : t("copaw.projects.knowledge.sourceRegister")}
           </Button>
         </div>
 
-        <Typography.Text type="secondary">
-          {t(
-            "projects.knowledge.sourceVisibilityHint",
-            "Registering this source only controls global visibility. Project-local sync and processing run regardless.",
-          )}
-        </Typography.Text>
+        <Typography.Text type="secondary">{t("copaw.projects.knowledge.sourceVisibilityHint")}</Typography.Text>
 
         <div className={styles.projectKnowledgeSettingsRowCompact}>
           <Space size={10} className={styles.projectKnowledgeStatsInline}>
             <Typography.Text type="secondary">
-              {t("projects.knowledge.docCount", {
+              {t("copaw.projects.knowledge.docCount", {
                 count: projectSource?.status?.document_count ?? 0,
               })}
             </Typography.Text>
             <Typography.Text type="secondary">
-              {t("projects.knowledge.chunkCount", {
+              {t("copaw.projects.knowledge.chunkCount", {
                 count: projectSource?.status?.chunk_count ?? 0,
               })}
             </Typography.Text>
@@ -617,11 +600,11 @@ export default function ProjectKnowledgeSettingsPanel(
         </div>
 
         <div className={styles.projectKnowledgeMetaRowCompact}>
-          <Typography.Text type="secondary" ellipsis={{ tooltip: `${t("projects.knowledge.sourceId")} ${projectSourceId}` }}>
-            {t("projects.knowledge.sourceId")} {projectSourceId}
+          <Typography.Text type="secondary" ellipsis={{ tooltip: `${t("copaw.projects.knowledge.sourceId")} ${projectSourceId}` }}>
+            {t("copaw.projects.knowledge.sourceId")} {projectSourceId}
           </Typography.Text>
           <Typography.Text type="secondary">
-            {t("projects.knowledge.lastIndexed")} {indexedAtLabel}
+            {t("copaw.projects.knowledge.lastIndexed")} {indexedAtLabel}
           </Typography.Text>
         </div>
       </section>
@@ -631,17 +614,17 @@ export default function ProjectKnowledgeSettingsPanel(
       <section className={styles.projectKnowledgeLayerSection}>
         <div className={styles.projectKnowledgeLayerHeader}>
           <Typography.Text strong>
-            {t("projects.knowledge.layerGraphTitle", "Layer 2: Entity & Relation Extraction")}
+            {t("copaw.projects.knowledge.layerGraphTitle")}
           </Typography.Text>
           <Typography.Text type="secondary">
-            {t("projects.knowledge.layerGraphDesc", "Entities and relations are extracted from chunks, then linked back to source documents.")}
+            {t("copaw.projects.knowledge.layerGraphDesc")}
           </Typography.Text>
         </div>
 
         <div className={styles.projectKnowledgeSettingsActions}>
           <Space size={6}>
             <Typography.Text type="secondary">
-              {t("projects.knowledge.memifyLabel", "Entity Extraction")}
+              {t("copaw.projects.knowledge.memifyLabel")}
             </Typography.Text>
             <Switch
               checked={memifyEnabled}
@@ -657,13 +640,13 @@ export default function ProjectKnowledgeSettingsPanel(
           <div className={styles.projectKnowledgeSettingsRowCompact}>
             <Space size={10} className={styles.projectKnowledgeStatsInline}>
               <Typography.Text type="secondary">
-                {t("projects.knowledge.entities", "Entities")}: {memifyStats.nodeCount}
+                {t("copaw.projects.knowledge.entities")}: {memifyStats.nodeCount}
               </Typography.Text>
               <Typography.Text type="secondary">
-                {t("projects.knowledge.signalRelations", "Relations")}: {memifyStats.relationCount}
+                {t("copaw.projects.knowledge.signalRelations")}: {memifyStats.relationCount}
               </Typography.Text>
               <Typography.Text type="secondary">
-                {t("projects.knowledge.entityCoverage", "Entity Coverage")}: {entityCoverageLabel}
+                {t("copaw.projects.knowledge.entityCoverage")}: {entityCoverageLabel}
               </Typography.Text>
             </Space>
           </div>
@@ -671,7 +654,7 @@ export default function ProjectKnowledgeSettingsPanel(
 
         {!memifyStats.hasStats && memifyEnabled ? (
           <Typography.Text type="secondary">
-            {t("projects.knowledge.entityStatsHint", "Run a sync once to generate entity and relation stats.")}
+            {t("copaw.projects.knowledge.entityStatsHint")}
           </Typography.Text>
         ) : null}
 
@@ -679,14 +662,14 @@ export default function ProjectKnowledgeSettingsPanel(
           <Alert
             type={semanticAlertType}
             showIcon
-            message={`${t("projects.knowledge.semanticEngineStatus", "Semantic Engine")}: ${semanticReasonLabel}`}
+            message={`${t("copaw.projects.knowledge.semanticEngineStatus")}: ${semanticReasonLabel}`}
             description={(
               <div>
                 <div>{semanticDescription}</div>
                 {showSidecarHint ? (
                   <div style={{ marginTop: 8 }}>
                     <Typography.Text strong>
-                      {t("projects.knowledge.semanticSidecarHintTitle", "HanLP sidecar setup")}
+                      {t("copaw.projects.knowledge.semanticSidecarHintTitle")}
                     </Typography.Text>
                     <div style={{ marginTop: 4 }}>
                       {semanticSidecarHint.map((line) => (
@@ -700,7 +683,7 @@ export default function ProjectKnowledgeSettingsPanel(
                       style={{ paddingInline: 0, marginTop: 8 }}
                       onClick={() => navigate("/nlp")}
                     >
-                      {t("projects.knowledge.openNlpSettings", "Open NLP settings")}
+                      {t("copaw.projects.knowledge.openNlpSettings")}
                     </Button>
                   </div>
                 ) : null}
@@ -712,17 +695,17 @@ export default function ProjectKnowledgeSettingsPanel(
 
       <details className={styles.projectKnowledgeCompatDetails}>
         <summary className={styles.projectKnowledgeCompatSummary}>
-          {t("projects.knowledge.compatSettingsTitle", "Compatibility Settings")}
+          {t("copaw.projects.knowledge.compatSettingsTitle")}
         </summary>
         <div className={styles.projectKnowledgeCompatBody}>
           <Checkbox
             checked={includeGlobal}
             onChange={(event) => onIncludeGlobalChange(event.target.checked)}
           >
-            {t("projects.knowledge.includeGlobal", "Include global knowledge during query")}
+            {t("copaw.projects.knowledge.includeGlobal")}
           </Checkbox>
           <Typography.Text type="secondary">
-            {t("projects.knowledge.includeGlobalHint", "This option affects query scope and will be moved to query controls in a later iteration.")}
+            {t("copaw.projects.knowledge.includeGlobalHint")}
           </Typography.Text>
         </div>
       </details>
@@ -731,7 +714,7 @@ export default function ProjectKnowledgeSettingsPanel(
         <Alert
           type="error"
           showIcon
-          message={t("projects.knowledge.indexError")}
+          message={t("copaw.projects.knowledge.indexError")}
           description={projectSource.status.error}
           action={
             <Button
@@ -742,7 +725,7 @@ export default function ProjectKnowledgeSettingsPanel(
                 void handleRetryIndex();
               }}
             >
-              {t("projects.knowledge.retryIndex")}
+              {t("copaw.projects.knowledge.retryIndex")}
             </Button>
           }
         />
@@ -752,7 +735,7 @@ export default function ProjectKnowledgeSettingsPanel(
         <Alert
           type={syncAlertType}
           showIcon
-          message={t("projects.knowledge.sinkJob", "Knowledge Sync")}
+          message={t("copaw.projects.knowledge.sinkJob")}
           description={syncAlertDescription}
         />
       ) : null}
@@ -760,7 +743,7 @@ export default function ProjectKnowledgeSettingsPanel(
       {syncOperationSummary ? (
         <div className={styles.projectKnowledgeMetaRowCompact}>
           <Typography.Text type="secondary">
-            {t("projects.knowledge.syncOperationId", "Operation")}: {" "}
+            {t("copaw.projects.knowledge.syncOperationId")}: {" "}
             {syncOperationSummary.operationId
               ? (
                 <Typography.Text
@@ -772,7 +755,7 @@ export default function ProjectKnowledgeSettingsPanel(
               : "-"}
           </Typography.Text>
           <Typography.Text type="secondary">
-            {t("projects.knowledge.syncIdempotencyKey", "Idempotency")}: {" "}
+            {t("copaw.projects.knowledge.syncIdempotencyKey")}: {" "}
             {syncOperationSummary.idempotencyKey
               ? (
                 <Typography.Text
@@ -784,17 +767,17 @@ export default function ProjectKnowledgeSettingsPanel(
               : "-"}
           </Typography.Text>
           <Typography.Text type="secondary">
-            {t("projects.knowledge.syncDeduplicated", "Deduplicated")}: {syncOperationSummary.deduplicated ? t("common.yes", "Yes") : t("common.no", "No")}
+            {t("copaw.projects.knowledge.syncDeduplicated")}: {syncOperationSummary.deduplicated ? t("common.yes", "Yes") : t("common.no", "No")}
             {syncOperationSummary.action
-              ? ` · ${t("projects.knowledge.syncLastAction", "Action")}: ${syncOperationSummary.action}`
+              ? ` · ${t("copaw.projects.knowledge.syncLastAction")}: ${syncOperationSummary.action}`
               : ""}
             {syncOperationSummary.quantizationStage
-              ? ` · ${t("projects.knowledge.syncQuantizationStage", "Stage")}: ${syncOperationSummary.quantizationStage}`
+              ? ` · ${t("copaw.projects.knowledge.syncQuantizationStage")}: ${syncOperationSummary.quantizationStage}`
               : ""}
           </Typography.Text>
           {syncOperationSummary.updatedAt ? (
             <Typography.Text type="secondary">
-              {t("projects.knowledge.syncOperationUpdatedAt", "Updated")}: {syncOperationSummary.updatedAt}
+              {t("copaw.projects.knowledge.syncOperationUpdatedAt")}: {syncOperationSummary.updatedAt}
             </Typography.Text>
           ) : null}
         </div>

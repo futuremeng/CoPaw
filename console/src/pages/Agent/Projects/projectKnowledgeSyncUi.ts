@@ -99,12 +99,12 @@ export function getProjectKnowledgeModeLabel(
   t: Translate,
 ): string {
   if (mode === "fast") {
-    return t("projects.knowledge.processing.fast", "极速模式");
+    return t("copaw.projects.knowledge.processing.fast");
   }
   if (mode === "nlp") {
-    return t("projects.knowledge.processing.nlp", "NLP 模式");
+    return t("copaw.projects.knowledge.processing.nlp");
   }
-  return t("projects.knowledge.processing.agentic", "多智能体模式");
+  return t("copaw.projects.knowledge.processing.agentic");
 }
 
 export function getProjectKnowledgeModeTitle(
@@ -119,12 +119,31 @@ export function getProjectKnowledgeModeRouteHint(
   t: Translate,
 ): string {
   if (mode === "fast") {
-    return t("projects.knowledge.processing.fastHint", "极速索引与预览，优先保障可用性。");
+    return t("copaw.projects.knowledge.processing.fastHint");
   }
   if (mode === "nlp") {
-    return t("projects.knowledge.processing.nlpHint", "实体关系抽取与图谱构建，作为中阶结构化产物层。");
+    return t("copaw.projects.knowledge.processing.nlpHint");
   }
-  return t("projects.knowledge.processing.agenticHint", "多智能体协作与质量环迭代，提供最高质量产物。");
+  return t("copaw.projects.knowledge.processing.agenticHint");
+}
+
+export function getProjectKnowledgePipelineStageLabel(
+  stage: { key?: string | null; label?: string | null; label_key?: string | null },
+  t: Translate,
+): string {
+  const explicitKey = String(stage.label_key || "").trim();
+  if (explicitKey) {
+    const fallback = String(stage.label || stage.key || "").trim() || explicitKey;
+    return t(explicitKey, fallback);
+  }
+  const modeKey = String(stage.key || "").trim();
+  if (modeKey === "fast" || modeKey === "nlp" || modeKey === "agentic") {
+    return t(
+      `copaw.projects.knowledge.pipelineStage.${modeKey}`,
+      String(stage.label || modeKey).trim() || modeKey,
+    );
+  }
+  return String(stage.label || modeKey).trim();
 }
 
 function formatSyncTime(raw: string | null | undefined): string {
@@ -165,7 +184,7 @@ export function getProjectKnowledgeSyncStageLabel(
   t: Translate,
 ): string {
   const stage = String(syncState.current_stage || syncState.status || "idle").trim() || "idle";
-  return t(`projects.knowledge.syncStage.${stage}`);
+  return t(`copaw.projects.knowledge.syncStage.${stage}`);
 }
 
 export function getProjectKnowledgeSemanticSummary(
@@ -197,7 +216,7 @@ export function getProjectKnowledgeSemanticSummary(
             : reasonCode === "SEMANTIC_STATE_UNKNOWN"
               ? "Semantic engine status is unknown."
               : String(semanticEngine.summary || semanticEngine.reason || "").trim();
-  return t(`projects.knowledge.semanticReasonSummary.${reasonCode}`, fallback);
+  return t(`copaw.projects.knowledge.semanticReasonSummary.${reasonCode}`, fallback);
 }
 
 export function getProjectKnowledgeSemanticReasonLabel(
@@ -229,7 +248,7 @@ export function getProjectKnowledgeSemanticReasonLabel(
             : reasonCode === "SEMANTIC_STATE_UNKNOWN"
               ? "Unknown Semantic State"
               : "Ready";
-  return t(`projects.knowledge.semanticReasonCode.${reasonCode}`, fallback);
+  return t(`copaw.projects.knowledge.semanticReasonCode.${reasonCode}`, fallback);
 }
 
 export function getProjectKnowledgeSemanticDescription(
@@ -244,8 +263,8 @@ export function getProjectKnowledgeSemanticDescription(
   const fallbackReason = String(semanticEngine.reason || "").trim();
   const suffix = summary || fallbackReason;
   return suffix
-    ? `${t("projects.knowledge.semanticEngineCode", "Code")}: ${reasonCode}. ${suffix}`
-    : `${t("projects.knowledge.semanticEngineCode", "Code")}: ${reasonCode}`;
+    ? `${t("copaw.projects.knowledge.semanticEngineCode")}: ${reasonCode}. ${suffix}`
+    : `${t("copaw.projects.knowledge.semanticEngineCode")}: ${reasonCode}`;
 }
 
 export function getProjectKnowledgeSyncAlertDescription(
@@ -264,21 +283,21 @@ export function getProjectKnowledgeSyncAlertDescription(
       ? `ETA ${syncState.eta_seconds}s`
       : "",
     graphStats
-      ? t("projects.knowledge.syncGraphStats", {
+      ? t("copaw.projects.knowledge.syncGraphStats", {
           nodes: graphStats.nodeCount,
           relations: graphStats.relationCount,
         })
       : "",
     syncState.changed_count > 0
-      ? t("projects.knowledge.syncChangedCount", { count: syncState.changed_count })
+      ? t("copaw.projects.knowledge.syncChangedCount", { count: syncState.changed_count })
       : "",
     syncState.status === "queued" && syncState.scheduled_for
-      ? t("projects.knowledge.syncScheduledFor", {
+      ? t("copaw.projects.knowledge.syncScheduledFor", {
           time: formatSyncTime(syncState.scheduled_for),
         })
       : "",
     syncState.last_trigger
-      ? t("projects.knowledge.syncTrigger", {
+      ? t("copaw.projects.knowledge.syncTrigger", {
           trigger: syncState.last_trigger,
         })
       : "",

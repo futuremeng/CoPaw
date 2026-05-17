@@ -1,0 +1,11 @@
+{
+  "copaw": {
+    "rpa": {
+      "moduleTitle": "RPA",
+      "moduleDescription": "CoPaw RPA texts are split from upstream resources.",
+      "importBuiltinAction": "Import Built-in RPA",
+      "importJsonAction": "Import RPA JSON",
+      "exportAction": "Export RPA"
+    }
+  }
+}

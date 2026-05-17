@@ -10,6 +10,7 @@ import {
   Typography,
   message,
 } from "antd";
+import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import {
   limitGraphVisualizationRecords,
@@ -55,6 +56,24 @@ interface ProjectKnowledgePanelProps {
     GraphQueryResults: React.ComponentType<Record<string, unknown>>;
     GraphVisualization: React.ComponentType<Record<string, unknown>>;
   };
+}
+
+function resolvePipelineStageLabel(
+  stage: { key?: string | null; label?: string | null; label_key?: string | null },
+  t: TFunction,
+): string {
+  const explicitKey = String(stage.label_key || "").trim();
+  if (explicitKey) {
+    const fallback = String(stage.label || stage.key || "").trim() || explicitKey;
+    return t(explicitKey, fallback);
+  }
+
+  const stageKey = String(stage.key || "").trim();
+  if (stageKey === "fast" || stageKey === "nlp" || stageKey === "agentic") {
+    return t(`copaw.projects.knowledge.pipelineStage.${stageKey}`, String(stage.label || "").trim() || stageKey);
+  }
+
+  return String(stage.label || stageKey).trim();
 }
 
 function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
@@ -172,42 +191,42 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
   const formatLayerStatus = useCallback((status: string) => {
     if (status === "ready") {
       return {
-        text: t("projects.knowledge.processing.statusReady", "Ready"),
+        text: t("copaw.projects.knowledge.processing.statusReady"),
         color: "success",
       } as const;
     }
     if (status === "running") {
       return {
-        text: t("projects.knowledge.processing.statusRunning", "Running"),
+        text: t("copaw.projects.knowledge.processing.statusRunning"),
         color: "processing",
       } as const;
     }
     if (status === "queued") {
       return {
-        text: t("projects.knowledge.processing.statusQueued", "Queued"),
+        text: t("copaw.projects.knowledge.processing.statusQueued"),
         color: "gold",
       } as const;
     }
     if (status === "blocked") {
       return {
-        text: t("projects.knowledge.processing.statusBlocked", "Blocked"),
+        text: t("copaw.projects.knowledge.processing.statusBlocked"),
         color: "orange",
       } as const;
     }
     if (status === "failed") {
       return {
-        text: t("projects.knowledge.processing.statusFailed", "Failed"),
+        text: t("copaw.projects.knowledge.processing.statusFailed"),
         color: "error",
       } as const;
     }
     if (status === "missing") {
       return {
-        text: t("projects.knowledge.processing.statusMissing", "Missing"),
+        text: t("copaw.projects.knowledge.processing.statusMissing"),
         color: "default",
       } as const;
     }
     return {
-      text: t("projects.knowledge.processing.statusIdle", "Idle"),
+      text: t("copaw.projects.knowledge.processing.statusIdle"),
       color: "default",
     } as const;
   }, [t]);
@@ -219,17 +238,17 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
     return [
       {
         key: "l1",
-        label: t("projects.knowledge.layerL1", "Sources"),
+        label: t("copaw.projects.knowledge.layerL1"),
         ...l1,
       },
       {
         key: "l2",
-        label: t("projects.knowledge.layerL2", "Structured"),
+        label: t("copaw.projects.knowledge.layerL2"),
         ...l2,
       },
       {
         key: "l3",
-        label: t("projects.knowledge.layerL3", "Enhanced"),
+        label: t("copaw.projects.knowledge.layerL3"),
         ...l3,
       },
     ];
@@ -240,27 +259,27 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
     return [
       {
         key: "documents",
-        label: t("projects.knowledge.metricDocuments", "文档数"),
+        label: t("copaw.projects.knowledge.metricDocuments"),
         value: metrics.documentCount || 0,
         hint: `${metrics.snapshotCount || 0} snapshots`,
       },
       {
         key: "chunks",
-        label: t("projects.knowledge.metricChunks", "Chunk 数"),
+        label: t("copaw.projects.knowledge.metricChunks"),
         value: metrics.chunkCount || 0,
-        hint: t("projects.knowledge.metricChunkHint", "切块是后续实体与句法的输入层"),
+        hint: t("copaw.projects.knowledge.metricChunkHint"),
       },
       {
         key: "sentences",
-        label: t("projects.knowledge.metricSentences", "句子数"),
+        label: t("copaw.projects.knowledge.metricSentences"),
         value: metrics.sentenceCount || 0,
         hint: `${metrics.sentenceWithEntitiesCount || 0} sentences with entities`,
       },
       {
         key: "entities",
-        label: t("projects.knowledge.metricEntities", "实体 / 关系"),
+        label: t("copaw.projects.knowledge.metricEntities"),
         value: `${metrics.entityCount || 0} / ${metrics.relationCount || 0}`,
-        hint: t("projects.knowledge.metricEntityHint", "当前图谱可见性与抽取质量的核心指标"),
+        hint: t("copaw.projects.knowledge.metricEntityHint"),
       },
     ];
   }, [knowledgeState.quantMetrics, t]);
@@ -281,11 +300,11 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
     const stages = knowledgeState.syncState?.pipeline_trace?.stages || [];
     return stages.slice(0, 3).map((stage) => ({
       key: `${stage.key}-${stage.label}`,
-      label: stage.label,
+      label: resolvePipelineStageLabel(stage, t),
       status: String(stage.status || "idle").trim().toLowerCase(),
       summary: stage.summary,
     }));
-  }, [knowledgeState.syncState?.pipeline_trace?.stages]);
+  }, [knowledgeState.syncState?.pipeline_trace?.stages, t]);
 
   const diagnosticsIssues = useMemo(() => {
     const issues: Array<{
@@ -308,7 +327,7 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
         key: "nlp-blocked",
         level: "error",
         targetMode: "nlp",
-        text: t("projects.knowledge.gapNlpBlocked", "NLP 主流程异常：{{reason}}", {
+        text: t("copaw.projects.knowledge.gapNlpBlocked", {
           reason: String(l2Mode?.summary || "").trim(),
         }),
       });
@@ -320,7 +339,7 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
         level: "warning",
         targetMode: "nlp",
         targetStage: "ner",
-        text: t("projects.knowledge.gapNlpPending", "NLP 处理中：NER/Syntax 关键产物尚未就绪"),
+        text: t("copaw.projects.knowledge.gapNlpPending"),
       });
     }
 
@@ -330,7 +349,7 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
         level: "error",
         targetMode: "nlp",
         targetStage: "ner",
-        text: t("projects.knowledge.gapNerEmpty", "NER 未产出可用结果（0/{{documents}} 标准化文档）", {
+        text: t("copaw.projects.knowledge.gapNerEmpty", {
           documents: l2ChunkCount,
         }),
       });
@@ -342,7 +361,7 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
         level: "warning",
         targetMode: "nlp",
         targetStage: "syntax",
-        text: t("projects.knowledge.gapSyntaxEmpty", "Syntax 未产出可用结果（0/{{documents}} 标准化文档）", {
+        text: t("copaw.projects.knowledge.gapSyntaxEmpty", {
           documents: l2ChunkCount,
         }),
       });
@@ -354,7 +373,7 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
         level: "warning",
         targetMode: "nlp",
         targetStage: "cor",
-        text: t("projects.knowledge.gapCorUnavailable", "COR 不可用：{{reason}}", {
+        text: t("copaw.projects.knowledge.gapCorUnavailable", {
           reason: corReason,
         }),
       });
@@ -373,7 +392,7 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
         key: "graphify-empty",
         level: "warning",
         targetMode: "nlp",
-        text: t("projects.knowledge.gapGraphifyEmpty", "Graphify 文档图为空：document_count=0"),
+        text: t("copaw.projects.knowledge.gapGraphifyEmpty"),
       });
     }
 
@@ -419,14 +438,14 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
       <div className={styles.projectKnowledgeExploreSourcePanel}>
         <div className={styles.projectKnowledgeSourceRow}>
           <Typography.Text type="secondary">
-            {t("projects.knowledge.dataSource", "Data Source")}
+            {t("copaw.projects.knowledge.dataSource")}
           </Typography.Text>
           <Select
             size="small"
             value={effectiveSourceId || undefined}
             classNames={{ popup: { root: styles.projectKnowledgeSelectDropdown } }}
             options={sourceOptions}
-            placeholder={t("projects.knowledge.dataSourceSelect", "Select source")}
+            placeholder={t("copaw.projects.knowledge.dataSourceSelect")}
             onChange={(value) => {
               const next = String(value || "").trim();
               knowledgeState.setSelectedSourceId(next);
@@ -452,8 +471,8 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
           className={styles.projectKnowledgeQueryNotice}
           type="warning"
           showIcon
-          message={t("projects.knowledge.refreshPending", "参数已变更，等待手动刷新")}
-          description={t("projects.knowledge.refreshPendingHint", "请点击图谱区域右上角 Refresh 以应用最新设置。")}
+          message={t("copaw.projects.knowledge.refreshPending")}
+          description={t("copaw.projects.knowledge.refreshPendingHint")}
         />
       ) : null}
       <div className={styles.projectKnowledgeControls}>
@@ -463,8 +482,8 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
           classNames={{ popup: { root: styles.projectKnowledgeSelectDropdown } }}
           onChange={(value) => props.knowledgeState.setGraphQueryMode(value as "template" | "cypher")}
           options={[
-            { label: t("projects.knowledge.queryModeTemplate"), value: "template" },
-            { label: t("projects.knowledge.queryModeCypherMvp"), value: "cypher" },
+            { label: t("copaw.projects.knowledge.queryModeTemplate"), value: "template" },
+            { label: t("copaw.projects.knowledge.queryModeCypherMvp"), value: "cypher" },
           ]}
           style={{ width: 160 }}
         />
@@ -478,7 +497,7 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
             label: formatGraphEntityTypeLabel(item, (key, defaultValue) => t(key, defaultValue)),
             value: item,
           }))}
-          placeholder={t("projects.knowledge.entityTypeFilter", "Entity type filter (shows all by default)")}
+          placeholder={t("copaw.projects.knowledge.entityTypeFilter")}
           allowClear
           maxTagCount="responsive"
           style={{ minWidth: 180 }}
@@ -493,7 +512,7 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
             label: formatGraphRelationTypeLabel(item, (key, defaultValue) => t(key, defaultValue)),
             value: item,
           }))}
-          placeholder={t("projects.knowledge.relationTypeFilter", "Relation type filter (shows all by default)")}
+          placeholder={t("copaw.projects.knowledge.relationTypeFilter")}
           allowClear
           maxTagCount="responsive"
           style={{ minWidth: 220 }}
@@ -503,13 +522,13 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
           onChange={(event) => props.knowledgeState.setGraphQueryText(event.target.value)}
           onSearch={(value) => {
             if (!value.trim() && props.knowledgeState.graphQueryMode === "cypher") {
-              message.warning(t("projects.knowledge.emptyQuery"));
+              message.warning(t("copaw.projects.knowledge.emptyQuery"));
               return;
             }
             void props.knowledgeState.runGraphQuery(value);
           }}
-          placeholder={t("projects.knowledge.queryPlaceholder")}
-          enterButton={t("projects.knowledge.query")}
+          placeholder={t("copaw.projects.knowledge.queryPlaceholder")}
+          enterButton={t("copaw.projects.knowledge.query")}
           loading={props.knowledgeState.graphLoading}
           allowClear
         />
@@ -538,7 +557,7 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
           className={styles.projectKnowledgeQueryNotice}
           type="info"
           showIcon
-          message={t("projects.knowledge.latestWorkflowSummary", "Latest workflow snapshot")}
+          message={t("copaw.projects.knowledge.latestWorkflowSummary")}
           description={latestSummaryModel.workflowParts.join(" · ")}
         />
       ) : null}
@@ -548,7 +567,7 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
           className={styles.projectKnowledgeQueryNotice}
           type={diagnosticsAlertType}
           showIcon
-          message={t("projects.knowledge.gapSummaryTitle", "量化缺口摘要")}
+          message={t("copaw.projects.knowledge.gapSummaryTitle")}
           description={(
             <div>
               {diagnosticsIssues.map((item) => (
@@ -560,7 +579,7 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
                       size="small"
                       onClick={() => onOpenProcessing(item.targetMode, item.targetStage)}
                     >
-                      {t("projects.knowledge.openProcessingAction", "查看 Processing")}
+                      {t("copaw.projects.knowledge.openProcessingAction")}
                     </Button>
                   ) : null}
                 </div>
@@ -646,7 +665,7 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
             </Suspense>
           ) : (
             <div className={styles.projectKnowledgeEmpty}>
-              <Empty description={t("projects.knowledge.emptyResult")} />
+              <Empty description={t("copaw.projects.knowledge.emptyResult")} />
             </div>
           )}
         </div>
@@ -724,7 +743,7 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
                 <GraphQueryResultsComponent
                   compact
                   frameless
-                  title={t("projects.knowledge.query", "查询")}
+                  title={t("copaw.projects.knowledge.query")}
                   queryHeader={queryControls}
                   records={props.knowledgeState.graphResult.records}
                   summary={props.knowledgeState.graphResult.summary}
@@ -743,7 +762,7 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
               <div className={styles.projectKnowledgeExploreQueryPane}>
                 {queryControls}
                 <div className={styles.projectKnowledgeEmpty}>
-                  <Empty description={t("projects.knowledge.emptyResult")} />
+                  <Empty description={t("copaw.projects.knowledge.emptyResult")} />
                 </div>
               </div>
             )}

@@ -89,11 +89,11 @@ function formatEntityValue(
     return value;
   }
   if (mode.status === "running" || mode.status === "queued") {
-    return t("projects.knowledge.processing.metricPending", "生成中");
+    return t("copaw.projects.knowledge.processing.metricPending");
   }
   const readyCount = Math.max(0, Number(mode.nerReadyChunkCount || 0));
   if (readyCount <= 0) {
-    return t("projects.knowledge.processing.metricUnavailable", "未产出");
+    return t("copaw.projects.knowledge.processing.metricUnavailable");
   }
   return value;
 }
@@ -113,29 +113,23 @@ function describeStaleSources(
   t: ReturnType<typeof useTranslation>["t"],
 ): string {
   if (freshness.staleSources.length === 0) {
-    return t(
-      "projects.knowledge.processing.staleHint",
-      "最近 15 秒未收到新的运行快照，当前处理状态可能已过期。",
-    );
+    return t("copaw.projects.knowledge.processing.staleHint");
   }
 
   const sourceLabels = freshness.staleSources.map((source) => (
     source === "project-sync"
-      ? t("projects.knowledge.processing.channelProjectSync", "project-sync 通道")
-      : t("projects.knowledge.processing.channelTasks", "tasks 通道")
+      ? t("copaw.projects.knowledge.processing.channelProjectSync")
+      : t("copaw.projects.knowledge.processing.channelTasks")
   ));
   const sourceSummary = sourceLabels.length > 1
     ? sourceLabels.join(" / ")
     : sourceLabels[0];
   const primaryStatus = freshness.channelStatus[freshness.staleSources[0]];
   const statusLabel = primaryStatus === "connecting"
-    ? t("projects.knowledge.processing.channelConnecting", "连接中")
-    : t("projects.knowledge.processing.channelReconnecting", "重连中");
+    ? t("copaw.projects.knowledge.processing.channelConnecting")
+    : t("copaw.projects.knowledge.processing.channelReconnecting");
 
-  return `${sourceSummary}${statusLabel}，${t(
-    "projects.knowledge.processing.staleHintSuffix",
-    "最近 15 秒未收到新的运行快照，当前处理状态可能已过期。",
-  )}`;
+  return `${sourceSummary}${statusLabel}，${t("copaw.projects.knowledge.processing.staleHintSuffix")}`;
 }
 
 function formatPercent(value: number): string {
@@ -202,20 +196,19 @@ function buildKnowledgeLayerRows(
   const l2NerReadyChunks = Math.max(0, Number(l2Mode?.nerReadyChunkCount || 0));
   const l3Quality = l3Mode?.qualityScore != null
     ? `${Math.round(Number(l3Mode.qualityScore) * 100)}%`
-    : t("projects.knowledge.processing.metricPending", "生成中");
+    : t("copaw.projects.knowledge.processing.metricPending");
 
   const buildL3Cell = (
     summaryKey: string,
-    summaryFallback: string,
     metrics: ProjectKnowledgeLayerCellMetric[],
     reason?: string,
   ): ProjectKnowledgeLayerCell => ({
     status: mapModeToLayerStatus(l3Mode, l3Ready, false),
     summary: l3Ready
-      ? t(summaryKey, summaryFallback)
+      ? t(summaryKey)
       : l3Running
-        ? t("projects.knowledge.processing.l3AuditRunning", "增强审校运行中")
-        : t("projects.knowledge.processing.l3AuditPending", "等待增强审校产物"),
+        ? t("copaw.projects.knowledge.processing.l3AuditRunning")
+        : t("copaw.projects.knowledge.processing.l3AuditPending"),
     reason,
     metrics,
   });
@@ -223,23 +216,20 @@ function buildKnowledgeLayerRows(
   return [
     {
       key: "dataPreprocess",
-      title: t("projects.knowledge.processing.layerDataPreprocessTitle", "数据层与预处理层"),
-      description: t(
-        "projects.knowledge.processing.layerDataPreprocessDesc",
-        "以 inlinear 为输入基础，完成分词标准化并建立后续分析入口。",
-      ),
+      title: t("copaw.projects.knowledge.processing.layerDataPreprocessTitle"),
+      description: t("copaw.projects.knowledge.processing.layerDataPreprocessDesc"),
       l2: {
         status: mapModeToLayerStatus(l2Mode, l2TokenCount > 0),
-        summary: t("projects.knowledge.processing.layerDataPreprocessL2", "已完成分词标准化，可支撑后续分析"),
+        summary: t("copaw.projects.knowledge.processing.layerDataPreprocessL2"),
         metrics: [
           {
-            label: t("projects.knowledge.documents", "文档数"),
+            label: t("copaw.projects.knowledge.documents"),
             value: l2DocumentCount,
             evidenceKey: "document_count",
             evidencePath: resolveEvidencePathByKey(l2EvidencePaths, "document_count"),
           },
           {
-            label: t("projects.knowledge.processing.syntaxTokens", "Token 数"),
+            label: t("copaw.projects.knowledge.processing.syntaxTokens"),
             value: l2TokenCount,
             evidenceKey: "tokenize_token_count",
             evidencePath: resolveEvidencePathByKey(l2EvidencePaths, "tokenize_token_count"),
@@ -247,16 +237,15 @@ function buildKnowledgeLayerRows(
         ],
       },
       l3: buildL3Cell(
-        "projects.knowledge.processing.layerDataPreprocessL3",
-        "审计预处理完整性与输入一致性",
+        "copaw.projects.knowledge.processing.layerDataPreprocessL3",
         [
           {
-            label: t("projects.knowledge.processing.auditStatus", "审计状态"),
+            label: t("copaw.projects.knowledge.processing.auditStatus"),
             value: l3Ready
-              ? t("projects.knowledge.processing.stageReady", "已就绪")
+              ? t("copaw.projects.knowledge.processing.stageReady")
               : l3Running
-                ? t("projects.knowledge.processing.stageRunning", "运行中")
-                : t("projects.knowledge.processing.stagePending", "待执行"),
+                ? t("copaw.projects.knowledge.processing.stageRunning")
+                : t("copaw.projects.knowledge.processing.stagePending"),
             evidenceKey: "audit_status",
             evidencePath: resolveEvidencePathByKey(l3EvidencePaths, "audit_status"),
           },
@@ -265,23 +254,20 @@ function buildKnowledgeLayerRows(
     },
     {
       key: "lexical",
-      title: t("projects.knowledge.processing.layerLexicalTitle", "词汇层次"),
-      description: t(
-        "projects.knowledge.processing.layerLexicalDesc",
-        "聚焦分词与词性标注，反映词法处理覆盖度与稳定性。",
-      ),
+      title: t("copaw.projects.knowledge.processing.layerLexicalTitle"),
+      description: t("copaw.projects.knowledge.processing.layerLexicalDesc"),
       l2: {
         status: mapModeToLayerStatus(l2Mode, l2PosCount > 0),
-        summary: t("projects.knowledge.processing.layerLexicalL2", "已形成分词与词性统计"),
+        summary: t("copaw.projects.knowledge.processing.layerLexicalL2"),
         metrics: [
           {
-            label: t("projects.knowledge.processing.syntaxPosCount", "词性标注数"),
+            label: t("copaw.projects.knowledge.processing.syntaxPosCount"),
             value: l2PosCount,
             evidenceKey: "syntax_pos_count",
             evidencePath: resolveEvidencePathByKey(l2EvidencePaths, "syntax_pos_count"),
           },
           {
-            label: t("projects.knowledge.processing.posCoverageDocument", "词性覆盖率(文档分词口径)"),
+            label: t("copaw.projects.knowledge.processing.posCoverageDocument"),
             value: l2PosCoverage,
             evidenceKey: "pos_coverage_on_document_tokens",
             evidencePath: resolveEvidencePathByKey(l2EvidencePaths, "pos_coverage_on_document_tokens"),
@@ -289,12 +275,11 @@ function buildKnowledgeLayerRows(
         ],
       },
       l3: buildL3Cell(
-        "projects.knowledge.processing.layerLexicalL3",
-        "审计词法质量与异常分布",
+        "copaw.projects.knowledge.processing.layerLexicalL3",
         [
           {
-            label: t("projects.knowledge.processing.auditFocus", "审计焦点"),
-            value: t("projects.knowledge.processing.auditFocusLexical", "词性一致性/异常词分布"),
+            label: t("copaw.projects.knowledge.processing.auditFocus"),
+            value: t("copaw.projects.knowledge.processing.auditFocusLexical"),
             evidenceKey: "audit_focus",
             evidencePath: resolveEvidencePathByKey(l3EvidencePaths, "audit_focus"),
           },
@@ -303,53 +288,47 @@ function buildKnowledgeLayerRows(
     },
     {
       key: "phrase",
-      title: t("projects.knowledge.processing.layerPhraseTitle", "短语层次"),
-      description: t(
-        "projects.knowledge.processing.layerPhraseDesc",
-        "短语边界与短语类型识别能力，当前以占位状态呈现。",
-      ),
+      title: t("copaw.projects.knowledge.processing.layerPhraseTitle"),
+      description: t("copaw.projects.knowledge.processing.layerPhraseDesc"),
       l2: {
         status: mapModeToLayerStatus(l2Mode, false, true),
-        summary: t("projects.knowledge.processing.layerPhraseL2", "短语层指标待实现"),
+        summary: t("copaw.projects.knowledge.processing.layerPhraseL2"),
         reason: "PHRASE_LAYER_NOT_IMPLEMENTED",
         metrics: [
           {
-            label: t("projects.knowledge.processing.stageReason", "原因"),
+            label: t("copaw.projects.knowledge.processing.stageReason"),
             value: "PHRASE_LAYER_NOT_IMPLEMENTED",
           },
         ],
       },
       l3: {
         status: mapModeToLayerStatus(l3Mode, false, true),
-        summary: t("projects.knowledge.processing.layerPhraseL3", "短语层审计占位，等待底层能力接入"),
+        summary: t("copaw.projects.knowledge.processing.layerPhraseL3"),
         reason: "PHRASE_LAYER_NOT_IMPLEMENTED",
         metrics: [
           {
-            label: t("projects.knowledge.processing.auditStatus", "审计状态"),
-            value: t("projects.knowledge.processing.stageUnavailable", "不可用"),
+            label: t("copaw.projects.knowledge.processing.auditStatus"),
+            value: t("copaw.projects.knowledge.processing.stageUnavailable"),
           },
         ],
       },
     },
     {
       key: "syntax",
-      title: t("projects.knowledge.processing.layerSyntaxTitle", "句法层次"),
-      description: t(
-        "projects.knowledge.processing.layerSyntaxDesc",
-        "面向句法依存关系与句子结构化，提供关系构建的基础。",
-      ),
+      title: t("copaw.projects.knowledge.processing.layerSyntaxTitle"),
+      description: t("copaw.projects.knowledge.processing.layerSyntaxDesc"),
       l2: {
         status: mapModeToLayerStatus(l2Mode, l2SyntaxRelations > 0),
-        summary: t("projects.knowledge.processing.layerSyntaxL2", "已形成句法结构统计"),
+        summary: t("copaw.projects.knowledge.processing.layerSyntaxL2"),
         metrics: [
           {
-            label: t("projects.knowledge.processing.syntaxSentences", "句子数"),
+            label: t("copaw.projects.knowledge.processing.syntaxSentences"),
             value: l2SyntaxSentences,
             evidenceKey: "syntax_sentence_count",
             evidencePath: resolveEvidencePathByKey(l2EvidencePaths, "syntax_sentence_count"),
           },
           {
-            label: t("projects.knowledge.processing.syntaxRelations", "句法关系数"),
+            label: t("copaw.projects.knowledge.processing.syntaxRelations"),
             value: l2SyntaxRelations,
             evidenceKey: "syntax_relation_count",
             evidencePath: resolveEvidencePathByKey(l2EvidencePaths, "syntax_relation_count"),
@@ -357,12 +336,11 @@ function buildKnowledgeLayerRows(
         ],
       },
       l3: buildL3Cell(
-        "projects.knowledge.processing.layerSyntaxL3",
-        "审计句法关系一致性与结构完整性",
+        "copaw.projects.knowledge.processing.layerSyntaxL3",
         [
           {
-            label: t("projects.knowledge.processing.auditFocus", "审计焦点"),
-            value: t("projects.knowledge.processing.auditFocusSyntax", "依存关系一致性"),
+            label: t("copaw.projects.knowledge.processing.auditFocus"),
+            value: t("copaw.projects.knowledge.processing.auditFocusSyntax"),
             evidenceKey: "audit_focus",
             evidencePath: resolveEvidencePathByKey(l3EvidencePaths, "audit_focus"),
           },
@@ -371,23 +349,20 @@ function buildKnowledgeLayerRows(
     },
     {
       key: "semantic",
-      title: t("projects.knowledge.processing.layerSemanticTitle", "语义层次"),
-      description: t(
-        "projects.knowledge.processing.layerSemanticDesc",
-        "关注上下文语义角色与实体语义关联，支撑知识图谱语义质量。",
-      ),
+      title: t("copaw.projects.knowledge.processing.layerSemanticTitle"),
+      description: t("copaw.projects.knowledge.processing.layerSemanticDesc"),
       l2: {
         status: mapModeToLayerStatus(l2Mode, l2NerEntities > 0 || l2NerReadyChunks > 0),
-        summary: t("projects.knowledge.processing.layerSemanticL2", "实体与语义关系已进入结构化统计"),
+        summary: t("copaw.projects.knowledge.processing.layerSemanticL2"),
         metrics: [
           {
-            label: t("projects.knowledge.processing.nerEntities", "识别实体数"),
+            label: t("copaw.projects.knowledge.processing.nerEntities"),
             value: l2NerEntities,
             evidenceKey: "ner_entity_count",
             evidencePath: resolveEvidencePathByKey(l2EvidencePaths, "ner_entity_count"),
           },
           {
-            label: t("projects.knowledge.processing.readyChunks", "就绪标准化文档数"),
+            label: t("copaw.projects.knowledge.processing.readyChunks"),
             value: l2NerReadyChunks,
             evidenceKey: "ner_ready_chunk_count",
             evidencePath: resolveEvidencePathByKey(l2EvidencePaths, "ner_ready_chunk_count"),
@@ -395,12 +370,11 @@ function buildKnowledgeLayerRows(
         ],
       },
       l3: buildL3Cell(
-        "projects.knowledge.processing.layerSemanticL3",
-        "审计语义冲突并增强实体关系一致性",
+        "copaw.projects.knowledge.processing.layerSemanticL3",
         [
           {
-            label: t("projects.knowledge.processing.auditFocus", "审计焦点"),
-            value: t("projects.knowledge.processing.auditFocusSemantic", "语义冲突/实体归一"),
+            label: t("copaw.projects.knowledge.processing.auditFocus"),
+            value: t("copaw.projects.knowledge.processing.auditFocusSemantic"),
             evidenceKey: "audit_focus",
             evidencePath: resolveEvidencePathByKey(l3EvidencePaths, "audit_focus"),
           },
@@ -409,51 +383,48 @@ function buildKnowledgeLayerRows(
     },
     {
       key: "pragmatic",
-      title: t("projects.knowledge.processing.layerPragmaticTitle", "语用与推理层次"),
-      description: t(
-        "projects.knowledge.processing.layerPragmaticDesc",
-        "结合上下文与多智能体协作进行高阶推理、审计与知识增强。",
-      ),
+      title: t("copaw.projects.knowledge.processing.layerPragmaticTitle"),
+      description: t("copaw.projects.knowledge.processing.layerPragmaticDesc"),
       l2: {
         status: "pending",
-        summary: t("projects.knowledge.processing.layerPragmaticL2", "该层由增强审校负责，结构化处理仅保留占位说明"),
+        summary: t("copaw.projects.knowledge.processing.layerPragmaticL2"),
         metrics: [
           {
-            label: t("projects.knowledge.processing.layerOwner", "负责层"),
-            value: t("projects.knowledge.layerL3", "Enhanced"),
+            label: t("copaw.projects.knowledge.processing.layerOwner"),
+            value: t("copaw.projects.knowledge.layerL3"),
           },
         ],
       },
       l3: {
         status: mapModeToLayerStatus(l3Mode, l3Ready),
         summary: l3Ready
-          ? t("projects.knowledge.processing.layerPragmaticL3", "多智能体推理增强已产出可消费结果")
+          ? t("copaw.projects.knowledge.processing.layerPragmaticL3")
           : l3Running
-            ? t("projects.knowledge.processing.l3ReasoningRunning", "增强推理运行中")
-            : t("projects.knowledge.processing.l3ReasoningPending", "等待增强推理结果"),
+            ? t("copaw.projects.knowledge.processing.l3ReasoningRunning")
+            : t("copaw.projects.knowledge.processing.l3ReasoningPending"),
         metrics: [
           {
-            label: t("projects.knowledge.processing.qualityScore", "质量分"),
+            label: t("copaw.projects.knowledge.processing.qualityScore"),
             value: l3Quality,
             evidenceKey: "quality_score",
             evidencePath: resolveEvidencePathByKey(l3EvidencePaths, "quality_score"),
           },
           {
-            label: t("projects.knowledge.processing.auditRound", "审计轮次"),
+            label: t("copaw.projects.knowledge.processing.auditRound"),
             value: l3Mode?.auditRound
               ? `#${l3Mode.auditRound}`
-              : l3Mode?.runId || t("projects.knowledge.processing.metricUnavailable", "未产出"),
+              : l3Mode?.runId || t("copaw.projects.knowledge.processing.metricUnavailable"),
             evidenceKey: "audit_round",
             evidencePath: resolveEvidencePathByKey(l3EvidencePaths, "audit_round"),
           },
           {
-            label: t("projects.knowledge.processing.enhancementDelta", "相对结构化结果增量"),
+            label: t("copaw.projects.knowledge.processing.enhancementDelta"),
             value: hasL3Outputs
-              ? t("projects.knowledge.processing.deltaSummary", "+{{entities}} 实体 / +{{relations}} 关系", {
+              ? t("copaw.projects.knowledge.processing.deltaSummary", {
                 entities: entityDelta,
                 relations: relationDelta,
               })
-              : t("projects.knowledge.processing.outputPendingLong", "等待形成独立增强结果"),
+              : t("copaw.projects.knowledge.processing.outputPendingLong"),
             evidenceKey: "enhancement_delta",
             evidencePath: resolveEvidencePathByKey(l3EvidencePaths, "enhancement_delta"),
           },
@@ -483,15 +454,15 @@ function nlpStageStatusLabel(
   t: ReturnType<typeof useTranslation>["t"],
 ): string {
   if (status === "ready") {
-    return t("projects.knowledge.processing.stageReady", "已就绪");
+    return t("copaw.projects.knowledge.processing.stageReady");
   }
   if (status === "running") {
-    return t("projects.knowledge.processing.stageRunning", "运行中");
+    return t("copaw.projects.knowledge.processing.stageRunning");
   }
   if (status === "unavailable") {
-    return t("projects.knowledge.processing.stageUnavailable", "不可用");
+    return t("copaw.projects.knowledge.processing.stageUnavailable");
   }
-  return t("projects.knowledge.processing.stagePending", "待执行");
+  return t("copaw.projects.knowledge.processing.stagePending");
 }
 
 export default function ProjectKnowledgeProcessingPanel(
@@ -588,15 +559,12 @@ export default function ProjectKnowledgeProcessingPanel(
           </Typography.Title>
           <div className={styles.projectKnowledgeModeMeta}>
             <Typography.Text type="secondary">
-              {t(
-                "projects.knowledge.processingRoleHint",
-                "Processing 只展示结构化处理与增强审校，不再重复展示 Sources 基础统计。",
-              )}
+              {t("copaw.projects.knowledge.processingRoleHint")}
             </Typography.Text>
             {hasStaleProcessing ? (
               <Tooltip title={staleTooltip}>
                 <Tag color="orange">
-                  {t("projects.knowledge.processing.staleTag", "状态可能已过期")}
+                  {t("copaw.projects.knowledge.processing.staleTag")}
                 </Tag>
               </Tooltip>
             ) : null}
@@ -604,10 +572,10 @@ export default function ProjectKnowledgeProcessingPanel(
         </div>
         <div className={styles.projectKnowledgeTabActions}>
           <Button size="small" onClick={() => void props.knowledgeState.loadProjectSourceStatus()}>
-            {t("projects.knowledge.actionRefreshSignals", "Refresh")}
+            {t("copaw.projects.knowledge.actionRefreshSignals")}
           </Button>
           <Button size="small" type="primary" onClick={props.onOpenSettings}>
-            {t("projects.knowledge.actionOpenSettings", "Open settings")}
+            {t("copaw.projects.knowledge.actionOpenSettings")}
           </Button>
         </div>
       </div>
@@ -616,26 +584,26 @@ export default function ProjectKnowledgeProcessingPanel(
         <div className={styles.projectKnowledgeProcessingStickySummary}>
           <div className={styles.projectKnowledgeSignalGrid}>
             <div className={styles.projectKnowledgeSignalCard}>
-              <Typography.Text type="secondary">{t("projects.knowledge.processing.l2Entities", "结构化实体数")}</Typography.Text>
+              <Typography.Text type="secondary">{t("copaw.projects.knowledge.processing.l2Entities")}</Typography.Text>
               <Typography.Text strong>{formatEntityValue(l2Mode, t)}</Typography.Text>
             </div>
             <div className={styles.projectKnowledgeSignalCard}>
-              <Typography.Text type="secondary">{t("projects.knowledge.processing.l2Relations", "结构化关系数")}</Typography.Text>
+              <Typography.Text type="secondary">{t("copaw.projects.knowledge.processing.l2Relations")}</Typography.Text>
               <Typography.Text strong>{displayRelationCount(l2Mode)}</Typography.Text>
             </div>
             <div className={styles.projectKnowledgeSignalCard}>
-              <Typography.Text type="secondary">{t("projects.knowledge.processing.l3Entities", "增强后实体数")}</Typography.Text>
+              <Typography.Text type="secondary">{t("copaw.projects.knowledge.processing.l3Entities")}</Typography.Text>
               <Typography.Text strong>
                 {l3Mode && !modeHasIndependentOutputs(l3Mode)
-                  ? t("projects.knowledge.processing.outputPending", "未产出")
+                  ? t("copaw.projects.knowledge.processing.outputPending")
                   : (l3Mode?.entityCount || 0)}
               </Typography.Text>
             </div>
             <div className={styles.projectKnowledgeSignalCard}>
-              <Typography.Text type="secondary">{t("projects.knowledge.processing.l3Relations", "增强后关系数")}</Typography.Text>
+              <Typography.Text type="secondary">{t("copaw.projects.knowledge.processing.l3Relations")}</Typography.Text>
               <Typography.Text strong>
                 {l3Mode && !modeHasIndependentOutputs(l3Mode)
-                  ? t("projects.knowledge.processing.outputPending", "未产出")
+                  ? t("copaw.projects.knowledge.processing.outputPending")
                   : (l3Mode?.relationCount || 0)}
               </Typography.Text>
             </div>
@@ -669,13 +637,13 @@ export default function ProjectKnowledgeProcessingPanel(
         <div className={styles.projectKnowledgeLayerMatrix}>
           <div className={styles.projectKnowledgeLayerMatrixHeader}>
             <Typography.Text strong>
-              {t("projects.knowledge.processing.layerDimension", "知识计量六层")}
+              {t("copaw.projects.knowledge.processing.layerDimension")}
             </Typography.Text>
             <Typography.Text strong>
-              {t("projects.knowledge.processing.layerL2Column", "结构化处理")}
+              {t("copaw.projects.knowledge.processing.layerL2Column")}
             </Typography.Text>
             <Typography.Text strong>
-              {t("projects.knowledge.processing.layerL3Column", "增强审校")}
+              {t("copaw.projects.knowledge.processing.layerL3Column")}
             </Typography.Text>
           </div>
           {layerRows.map((row) => (
@@ -728,7 +696,7 @@ export default function ProjectKnowledgeProcessingPanel(
                             });
                           }}
                         >
-                          {t("projects.knowledge.processing.viewBasis", "查看依据")}
+                          {t("copaw.projects.knowledge.processing.viewBasis")}
                         </Button>
                           );
                         })()}
@@ -737,7 +705,7 @@ export default function ProjectKnowledgeProcessingPanel(
                   </div>
                   {cell.reason ? (
                     <Typography.Text type="secondary">
-                      {t("projects.knowledge.processing.stageReason", "原因")}: {cell.reason}
+                      {t("copaw.projects.knowledge.processing.stageReason")}: {cell.reason}
                     </Typography.Text>
                   ) : null}
                 </div>
@@ -749,7 +717,7 @@ export default function ProjectKnowledgeProcessingPanel(
       </div>
 
       <Modal
-        title={t("projects.knowledge.processing.evidenceDetailTitle", "指标依据详情")}
+        title={t("copaw.projects.knowledge.processing.evidenceDetailTitle")}
         open={Boolean(activeEvidence)}
         onCancel={() => setActiveEvidence(null)}
         footer={null}
@@ -759,32 +727,29 @@ export default function ProjectKnowledgeProcessingPanel(
           <div className={styles.projectKnowledgeEvidenceDetail}>
             <Typography.Text strong>{activeEvidence.metricLabel}</Typography.Text>
             <Typography.Text type="secondary">
-              {t("projects.knowledge.processing.evidenceMetricValue", "当前值")}: {activeEvidence.metricValue}
+              {t("copaw.projects.knowledge.processing.evidenceMetricValue")}: {activeEvidence.metricValue}
             </Typography.Text>
             <Typography.Text type="secondary">{activeEvidence.summary}</Typography.Text>
             <Typography.Text>
-              {t(
-                "projects.knowledge.processing.evidenceAggregationHint",
-                "该指标为聚合或派生结果，建议通过计算口径与样本文件联合核实，而非单文件断言。",
-              )}
+              {t("copaw.projects.knowledge.processing.evidenceAggregationHint")}
             </Typography.Text>
 
             <div className={styles.projectKnowledgeEvidenceSection}>
               <Typography.Text strong>
-                {t("projects.knowledge.processing.evidenceFormula", "计算口径")}
+                {t("copaw.projects.knowledge.processing.evidenceFormula")}
               </Typography.Text>
               <Typography.Text type="secondary">
                 {activeEvidence.bundle?.formula
-                  || t("projects.knowledge.processing.evidenceFormulaFallback", "未提供明确公式，请结合下方样本文件复核。")}
+                  || t("copaw.projects.knowledge.processing.evidenceFormulaFallback")}
               </Typography.Text>
             </div>
 
             <div className={styles.projectKnowledgeEvidenceSection}>
               <Typography.Text strong>
-                {t("projects.knowledge.processing.evidenceSampleFiles", "相关样本文件")}
+                {t("copaw.projects.knowledge.processing.evidenceSampleFiles")}
               </Typography.Text>
               <Typography.Text type="secondary">
-                {t("projects.knowledge.processing.evidenceSourceCount", "可用样本数")}: {activeEvidence.bundle?.source_count || evidencePathsForModal.length || 0}
+                {t("copaw.projects.knowledge.processing.evidenceSourceCount")}: {activeEvidence.bundle?.source_count || evidencePathsForModal.length || 0}
               </Typography.Text>
               <div className={styles.projectKnowledgeEvidencePaths}>
                 {evidencePathsForModal.length ? evidencePathsForModal.map((pathText) => (
@@ -800,12 +765,12 @@ export default function ProjectKnowledgeProcessingPanel(
                         void props.onSelectArtifactPath(pathText);
                       }}
                     >
-                      {t("projects.knowledge.processing.evidenceLocateFile", "定位文件")}
+                      {t("copaw.projects.knowledge.processing.evidenceLocateFile")}
                     </Button>
                   </div>
                 )) : (
                   <Typography.Text type="secondary">
-                    {t("projects.knowledge.processing.evidenceNone", "暂无可用依据文件")}
+                    {t("copaw.projects.knowledge.processing.evidenceNone")}
                   </Typography.Text>
                 )}
               </div>

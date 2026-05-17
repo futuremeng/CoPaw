@@ -1,0 +1,41 @@
+{
+  "copaw": {
+    "rpa": {
+      "rpaActionBreakdown": "RPA 动作明细",
+      "rpaImportBuiltinAction": "导入内置 RPA",
+      "rpaImportJsonAction": "导入 RPA JSON",
+      "rpaImportBuiltinSuccess": "已导入内置 RPA 模板：{{name}}",
+      "rpaImportBuiltinFailed": "导入内置 RPA 模板失败，请重试。",
+      "rpaImportJsonEmpty": "请先粘贴 RPA 包 JSON。",
+      "rpaImportJsonInvalid": "JSON 格式无效，请检查后重试。",
+      "rpaImportJsonSuccess": "已导入 RPA 模板：{{name}}",
+      "rpaImportJsonFailed": "导入 RPA JSON 失败，请检查包内容。",
+      "rpaImportModalTitle": "导入 RPA 包",
+      "rpaImportModalConfirm": "导入",
+      "rpaImportModalHint": "粘贴 RPA 包 JSON，并可选覆盖目标模板 ID。",
+      "rpaImportTargetIdPlaceholder": "目标模板 ID（可选）",
+      "rpaImportJsonPlaceholder": "在此粘贴 RPA 包 JSON",
+      "rpaExportAction": "导出 RPA JSON",
+      "rpaExportIndependentOnly": "仅独立流水线模板支持导出为 RPA 包。",
+      "rpaExportSuccess": "RPA 包已生成，可复制或下载。",
+      "rpaExportFailed": "导出 RPA 包失败，请重试。",
+      "rpaExportCopyAction": "复制 JSON",
+      "rpaExportCopySuccess": "RPA JSON 已复制到剪贴板。",
+      "rpaExportCopyFailed": "复制失败，请在弹窗中手动复制。",
+      "rpaExportDownloadAction": "下载 JSON",
+      "rpaExportDownloadSuccess": "RPA JSON 已下载。",
+      "rpaExportDownloadFailed": "下载失败，请复制 JSON 后手动保存。",
+      "rpaExportModalTitle": "导出 RPA 包",
+      "rpaExportModalHint": "下方 JSON 可直接导出为 RPA 包。",
+      "rpaExportRegenerateAction": "带元数据重新生成",
+      "rpaExportAuthorPlaceholder": "作者（可选）",
+      "rpaExportTagsPlaceholder": "标签（可选，逗号分隔）",
+      "rpaExportNotePlaceholder": "备注（可选）",
+      "moduleTitle": "RPA",
+      "moduleDescription": "CoPaw RPA 文案已与 upstream 文案分离。",
+      "importBuiltinAction": "导入内置 RPA",
+      "importJsonAction": "导入 RPA JSON",
+      "exportAction": "导出 RPA"
+    }
+  }
+}

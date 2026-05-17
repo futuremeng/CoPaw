@@ -22,12 +22,7 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
             <Typography.Title level={5} className={styles.projectKnowledgeSectionTitle}>
               {t("projects.knowledgeDock.tabSources", "Sources")}
             </Typography.Title>
-            <Tooltip
-              title={t(
-                "projects.knowledge.sourcesRoleHint",
-                "Shows the latest file inventory and text statistics derived from indexed project artifacts.",
-              )}
-            >
+            <Tooltip title={t("copaw.projects.knowledge.sourcesRoleHint")}>
               <InfoCircleOutlined className={styles.projectKnowledgeHintIcon} />
             </Tooltip>
           </div>
@@ -36,34 +31,34 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
 
       <div className={styles.projectKnowledgeSignalGrid}>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("projects.knowledge.signalDocuments")}</Typography.Text>
+          <Typography.Text type="secondary">{t("copaw.projects.knowledge.signalDocuments")}</Typography.Text>
           <Typography.Text strong>{knowledgeState.quantMetrics.documentCount}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("projects.knowledge.signalSnapshots", "Snapshots")}</Typography.Text>
+          <Typography.Text type="secondary">{t("copaw.projects.knowledge.signalSnapshots")}</Typography.Text>
           <Typography.Text strong>{knowledgeState.quantMetrics.snapshotCount}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("projects.knowledge.signalChunks")}</Typography.Text>
+          <Typography.Text type="secondary">{t("copaw.projects.knowledge.signalChunks")}</Typography.Text>
           <Typography.Text strong>{knowledgeState.quantMetrics.chunkCount}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
           <Typography.Text type="secondary">
-            {t("projects.knowledge.signalSentences", "Sentences")}
+            {t("copaw.projects.knowledge.signalSentences")}
             <span title="基于 interlinear 工件逐句统计">🛈</span>
           </Typography.Text>
           <Typography.Text strong>{knowledgeState.quantMetrics.sentenceCount}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
           <Typography.Text type="secondary">
-            {t("projects.knowledge.signalTokens", "Lightweight Tokens")}
+            {t("copaw.projects.knowledge.signalTokens")}
             <span title="基于轻量化工件分词统计">🛈</span>
           </Typography.Text>
           <Typography.Text strong>{knowledgeState.quantMetrics.tokenCount || 0}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
           <Typography.Text type="secondary">
-            {t("projects.knowledge.signalCharacters", "Characters")}
+            {t("copaw.projects.knowledge.signalCharacters")}
             <span title="基于 interlinear 工件逐句统计">🛈</span>
           </Typography.Text>
           <Typography.Text strong>{knowledgeState.quantMetrics.charCount || 0}</Typography.Text>

@@ -175,15 +175,15 @@ function getRuntimeTaskKey(task: KnowledgeTaskProgress): string {
 function getRuntimeTaskLabel(taskType: string | undefined, translate: (key: string, fallback: string) => string): string {
   switch (String(taskType || "")) {
     case "project_sync":
-      return translate("projects.knowledge.runtimeTaskProjectSync", "Project Sync");
+      return translate("copaw.projects.knowledge.runtimeTaskProjectSync", "Project Sync");
     case "memify":
-      return translate("projects.knowledge.runtimeTaskMemify", "Graph Build");
+      return translate("copaw.projects.knowledge.runtimeTaskMemify", "Graph Build");
     case "quality_loop":
-      return translate("projects.knowledge.runtimeTaskQualityLoop", "Quality Loop");
+      return translate("copaw.projects.knowledge.runtimeTaskQualityLoop", "Quality Loop");
     case "history_backfill":
-      return translate("projects.knowledge.runtimeTaskHistoryBackfill", "History Backfill");
+      return translate("copaw.projects.knowledge.runtimeTaskHistoryBackfill", "History Backfill");
     default:
-      return translate("projects.knowledge.runtimeTaskGeneric", "Knowledge Task");
+      return translate("copaw.projects.knowledge.runtimeTaskGeneric", "Knowledge Task");
   }
 }
 
@@ -220,13 +220,13 @@ function formatQuantizationStageLabel(
     return "";
   }
   if (normalized === "l1") {
-    return translate("projects.knowledge.processing.quantStageL1", "Sources");
+    return translate("copaw.projects.knowledge.processing.quantStageL1", "Sources");
   }
   if (normalized === "l2") {
-    return translate("projects.knowledge.processing.quantStageL2", "Structured");
+    return translate("copaw.projects.knowledge.processing.quantStageL2", "Structured");
   }
   if (normalized === "l3") {
-    return translate("projects.knowledge.processing.quantStageL3", "Enhanced");
+    return translate("copaw.projects.knowledge.processing.quantStageL3", "Enhanced");
   }
   return normalized.toUpperCase();
 }
@@ -792,7 +792,7 @@ export default function ProjectDetailPage() {
   const runtimeSignalValue = useMemo(() => {
     const primaryTask = projectKnowledgeState.activeKnowledgeTask;
     if (!primaryTask) {
-      return t("projects.knowledge.runtimeStatusIdle", "Idle");
+      return t("copaw.projects.knowledge.runtimeStatusIdle");
     }
     const taskLabel = getRuntimeTaskLabel(primaryTask.task_type, translateWithFallback);
     const percent = getRuntimeTaskPercent(primaryTask);
@@ -803,7 +803,7 @@ export default function ProjectDetailPage() {
     return [
       taskLabel,
       typeof percent === "number" ? `${percent}%` : stageLabel,
-      quantizationStage ? `${t("projects.knowledge.syncQuantizationStage", "Stage")}: ${quantizationStage}` : "",
+      quantizationStage ? `${t("copaw.projects.knowledge.syncQuantizationStage")}: ${quantizationStage}` : "",
     ]
       .filter(Boolean)
       .join(" · ");
@@ -815,7 +815,7 @@ export default function ProjectDetailPage() {
       return (
         <div className={styles.knowledgeRuntimeTooltip}>
           <Text type="secondary">
-            {t("projects.knowledge.runtimeStatusNoDetails", "No active knowledge task.")}
+            {t("copaw.projects.knowledge.runtimeStatusNoDetails")}
           </Text>
         </div>
       );
@@ -824,9 +824,9 @@ export default function ProjectDetailPage() {
     return (
       <div className={styles.knowledgeRuntimeTooltip}>
         <div className={styles.knowledgeRuntimeTooltipHeader}>
-          <Text strong>{t("projects.knowledge.signalRuntimeStatus", "Runtime")}</Text>
+          <Text strong>{t("copaw.projects.knowledge.signalRuntimeStatus")}</Text>
           <Text type="secondary">
-            {t("projects.knowledge.runtimeStatusTaskCount", "{{count}} active", {
+            {t("copaw.projects.knowledge.runtimeStatusTaskCount", {
               count: activeTasks.length,
             })}
           </Text>
@@ -900,7 +900,7 @@ export default function ProjectDetailPage() {
                 <div className={styles.knowledgeRuntimeTooltipMeta}>
                   {typeof percent === "number" ? (
                     <Text type="secondary">
-                      {t("projects.knowledge.runtimeStatusProgress", "Progress")}: {percent}%
+                      {t("copaw.projects.knowledge.runtimeStatusProgress")}: {percent}%
                     </Text>
                   ) : null}
                   {typeof current === "number" && typeof total === "number" ? (
@@ -908,17 +908,17 @@ export default function ProjectDetailPage() {
                   ) : null}
                   {updatedAt ? (
                     <Text type="secondary">
-                      {t("projects.knowledge.runtimeStatusUpdatedAt", "Updated")}: {updatedAt}
+                      {t("copaw.projects.knowledge.runtimeStatusUpdatedAt")}: {updatedAt}
                     </Text>
                   ) : null}
                   {typeof changedCount === "number" ? (
                     <Text type="secondary">
-                      {t("projects.knowledge.syncChangedCount", "Changed files: {{count}}", { count: changedCount })}
+                      {t("copaw.projects.knowledge.syncChangedCount", { count: changedCount })}
                     </Text>
                   ) : null}
                   {quantizationStageLabel ? (
                     <Text type="secondary">
-                      {t("projects.knowledge.syncQuantizationStage", "Stage")}: {quantizationStageLabel}
+                      {t("copaw.projects.knowledge.syncQuantizationStage")}: {quantizationStageLabel}
                     </Text>
                   ) : null}
                   {scoreBefore !== null && scoreAfter !== null ? (
@@ -926,29 +926,29 @@ export default function ProjectDetailPage() {
                   ) : null}
                   {delta !== null ? (
                     <Text type="secondary">
-                      {t("projects.knowledge.runtimeStatusScoreDelta", "Score delta")}: {(delta ?? 0) >= 0 ? "+" : ""}{Math.round((delta ?? 0) * 100)}
+                      {t("copaw.projects.knowledge.runtimeStatusScoreDelta")}: {(delta ?? 0) >= 0 ? "+" : ""}{Math.round((delta ?? 0) * 100)}
                     </Text>
                   ) : null}
                 </div>
                 {stopReason ? (
                   <Text type="secondary">
-                    {t("projects.knowledge.runtimeStatusStopReason", "Stop reason")}: {stopReason}
+                    {t("copaw.projects.knowledge.runtimeStatusStopReason")}: {stopReason}
                   </Text>
                 ) : null}
                 {warnings.length ? (
                   <Text type="secondary">
-                    {t("projects.knowledge.runtimeStatusWarnings", "Warnings")}: {warnings.join("; ")}
+                    {t("copaw.projects.knowledge.runtimeStatusWarnings")}: {warnings.join("; ")}
                   </Text>
                 ) : null}
                 {semanticEngine ? (
                   <Text type="secondary">
-                    {t("projects.knowledge.semanticEngineStatus", "Semantic Engine")}: {semanticReasonLabel}
+                    {t("copaw.projects.knowledge.semanticEngineStatus")}: {semanticReasonLabel}
                     {semanticDescription ? `. ${semanticDescription}` : ""}
                   </Text>
                 ) : null}
                 {errorText ? (
                   <Text type="danger">
-                    {t("projects.knowledge.runtimeStatusError", "Error")}: {errorText}
+                    {t("copaw.projects.knowledge.runtimeStatusError")}: {errorText}
                   </Text>
                 ) : null}
               </div>

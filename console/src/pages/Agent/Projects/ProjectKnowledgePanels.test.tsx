@@ -214,7 +214,7 @@ function buildKnowledgeState(): ProjectKnowledgeState {
     syncAlertDescription: "sync ok",
     suggestedQuery: "Summarize key entities",
     insightAction: "query",
-    insightMessageKey: "projects.knowledge.insightNeedExplore",
+    insightMessageKey: "copaw.projects.knowledge.insightNeedExplore",
     loadProjectSourceStatus: vi.fn().mockResolvedValue(undefined),
     semanticBySourceId: {},
     semanticLoadingBySourceId: {},

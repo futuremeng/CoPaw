@@ -56,11 +56,10 @@ export function formatProjectKnowledgeStatsRecordTimestamp(stats: ProjectKnowled
 export function summarizeProjectKnowledgeSourceScanStats(
   t: TranslateFn,
   stats: ProjectKnowledgeStatsLike,
-  key = "projects.knowledge.sourcesRecentScanSummary",
-  fallback = "{{files}} files / {{changed}} changed / {{sources}} sources",
+  key = "copaw.projects.knowledge.sourcesRecentScanSummary",
 ): string {
   const metrics = asMetricsRecord(stats);
-  return t(key, fallback, {
+  return t(key, {
     files: Number(metrics.data_file_count || 0),
     changed: Number(metrics.changed_path_count || 0),
     sources: Number(metrics.source_count || 0),
@@ -70,11 +69,10 @@ export function summarizeProjectKnowledgeSourceScanStats(
 export function summarizeProjectKnowledgeFileAnalysisStats(
   t: TranslateFn,
   stats: ProjectKnowledgeStatsLike,
-  key = "projects.knowledge.sourcesRecentL1RunSummary",
-  fallback = "{{documents}} docs / {{chunks}} chunks / {{sentences}} sentences",
+  key = "copaw.projects.knowledge.sourcesRecentL1RunSummary",
 ): string {
   const metrics = asMetricsRecord(stats);
-  return t(key, fallback, {
+  return t(key, {
     documents: Number(metrics.document_count || 0),
     chunks: Number(metrics.chunk_count || 0),
     sentences: Number(metrics.sentence_count || 0),
@@ -84,11 +82,10 @@ export function summarizeProjectKnowledgeFileAnalysisStats(
 export function summarizeProjectKnowledgeDomainGraphBuildStats(
   t: TranslateFn,
   stats: ProjectKnowledgeStatsLike,
-  key = "projects.knowledge.processing.recentDomainGraphRunSummary",
-  fallback = "{{documents}} docs / {{nodes}} nodes / {{relations}} relations",
+  key = "copaw.projects.knowledge.processing.recentDomainGraphRunSummary",
 ): string {
   const metrics = asMetricsRecord(stats);
-  return t(key, fallback, {
+  return t(key, {
     documents: Number(metrics.document_count || 0),
     nodes: Number(metrics.node_count || 0),
     relations: Number(metrics.relation_count || 0),
@@ -98,15 +95,14 @@ export function summarizeProjectKnowledgeDomainGraphBuildStats(
 export function summarizeProjectKnowledgeQualityReviewStats(
   t: TranslateFn,
   stats: ProjectKnowledgeStatsLike,
-  key = "projects.knowledge.processing.recentQualityReviewSummary",
-  fallback = "{{before}} -> {{after}} / delta {{delta}} / {{rounds}} rounds",
+  key = "copaw.projects.knowledge.processing.recentQualityReviewSummary",
 ): string {
   const metrics = asMetricsRecord(stats);
   const before = Number(metrics.quality_score_before || 0);
   const after = Number(metrics.quality_score_after || 0);
   const delta = Number(metrics.quality_delta || 0);
   const rounds = Number(metrics.quality_rounds || 0);
-  return t(key, fallback, {
+  return t(key, {
     before: before.toFixed(2),
     after: after.toFixed(2),
     delta: delta.toFixed(2),
@@ -124,30 +120,26 @@ export function buildProjectKnowledgeLatestL1SummaryParts(
   const parts: string[] = [];
   if (hasProjectKnowledgeStats(params.snapshotRaw)) {
     parts.push(t(
-      "projects.knowledge.latestSnapshotRawSummary",
-      "scan {{time}} · {{summary}}",
+      "copaw.projects.knowledge.latestSnapshotRawSummary",
       {
         time: formatProjectKnowledgeStatsRecordTimestamp(params.snapshotRaw),
         summary: summarizeProjectKnowledgeSourceScanStats(
           t,
           params.snapshotRaw,
-          "projects.knowledge.latestSnapshotRawMetrics",
-          "{{files}} files / {{changed}} changed",
+          "copaw.projects.knowledge.latestSnapshotRawMetrics",
         ),
       },
     ));
   }
   if (hasProjectKnowledgeStats(params.buildChunks)) {
     parts.push(t(
-      "projects.knowledge.latestBuildChunksSummary",
-      "analysis {{time}} · {{summary}}",
+      "copaw.projects.knowledge.latestBuildChunksSummary",
       {
         time: formatProjectKnowledgeStatsRecordTimestamp(params.buildChunks),
         summary: summarizeProjectKnowledgeFileAnalysisStats(
           t,
           params.buildChunks,
-          "projects.knowledge.latestBuildChunksMetrics",
-          "{{documents}} docs / {{chunks}} chunks / {{sentences}} sentences",
+          "copaw.projects.knowledge.latestBuildChunksMetrics",
         ),
       },
     ));
@@ -168,75 +160,65 @@ export function buildProjectKnowledgeLatestL23SummaryParts(
   const parts: string[] = [];
   if (hasProjectKnowledgeStats(params.buildInterlinear)) {
     parts.push(t(
-      "projects.knowledge.latestBuildInterlinearSummary",
-      "interlinear {{time}} · {{summary}}",
+      "copaw.projects.knowledge.latestBuildInterlinearSummary",
       {
         time: formatProjectKnowledgeStatsRecordTimestamp(params.buildInterlinear),
         summary: summarizeProjectKnowledgeFileAnalysisStats(
           t,
           params.buildInterlinear,
-          "projects.knowledge.latestBuildInterlinearMetrics",
-          "{{documents}} docs / {{chunks}} chunks / {{sentences}} sentences",
+          "copaw.projects.knowledge.latestBuildInterlinearMetrics",
         ),
       },
     ));
   }
   if (hasProjectKnowledgeStats(params.tokenize)) {
     parts.push(t(
-      "projects.knowledge.latestTokenizeSummary",
-      "tokenize {{time}} · {{summary}}",
+      "copaw.projects.knowledge.latestTokenizeSummary",
       {
         time: formatProjectKnowledgeStatsRecordTimestamp(params.tokenize),
         summary: summarizeProjectKnowledgeFileAnalysisStats(
           t,
           params.tokenize,
-          "projects.knowledge.latestTokenizeMetrics",
-          "{{documents}} docs / {{chunks}} chunks / {{sentences}} sentences",
+          "copaw.projects.knowledge.latestTokenizeMetrics",
         ),
       },
     ));
   }
   if (hasProjectKnowledgeStats(params.posTagging)) {
     parts.push(t(
-      "projects.knowledge.latestPosTaggingSummary",
-      "pos {{time}} · {{summary}}",
+      "copaw.projects.knowledge.latestPosTaggingSummary",
       {
         time: formatProjectKnowledgeStatsRecordTimestamp(params.posTagging),
         summary: summarizeProjectKnowledgeFileAnalysisStats(
           t,
           params.posTagging,
-          "projects.knowledge.latestPosTaggingMetrics",
-          "{{documents}} docs / {{chunks}} chunks / {{sentences}} sentences",
+          "copaw.projects.knowledge.latestPosTaggingMetrics",
         ),
       },
     ));
   }
   if (hasProjectKnowledgeStats(params.syntaxParse)) {
     parts.push(t(
-      "projects.knowledge.latestSyntaxParseSummary",
-      "syntax {{time}} · {{summary}}",
+      "copaw.projects.knowledge.latestSyntaxParseSummary",
       {
         time: formatProjectKnowledgeStatsRecordTimestamp(params.syntaxParse),
         summary: summarizeProjectKnowledgeDomainGraphBuildStats(
           t,
           params.syntaxParse,
-          "projects.knowledge.latestSyntaxParseMetrics",
-          "{{documents}} docs / {{nodes}} nodes / {{relations}} relations",
+          "copaw.projects.knowledge.latestSyntaxParseMetrics",
         ),
       },
     ));
   }
   if (hasProjectKnowledgeStats(params.semanticRoleLabeling)) {
     parts.push(t(
-      "projects.knowledge.latestSemanticRoleLabelingSummary",
-      "srl {{time}} · {{summary}}",
+      "copaw.projects.knowledge.latestSemanticRoleLabelingSummary",
       {
         time: formatProjectKnowledgeStatsRecordTimestamp(params.semanticRoleLabeling),
         summary: summarizeProjectKnowledgeQualityReviewStats(
           t,
           params.semanticRoleLabeling,
-          "projects.knowledge.latestSemanticRoleLabelingMetrics",
-          "{{before}} -> {{after}} / delta {{delta}} / {{rounds}} rounds",
+          "copaw.projects.knowledge.latestSemanticRoleLabelingMetrics",
         ),
       },
     ));
@@ -255,30 +237,26 @@ export function buildProjectKnowledgeLatestOutputSummaryParts(
   const parts: string[] = [];
   if ((params.selectedMode === "nlp" || params.selectedMode === "agentic") && hasProjectKnowledgeStats(params.syntaxParse)) {
     parts.push(t(
-      "projects.knowledge.outputs.latestSyntaxProvenance",
-      "syntax provenance {{time}} · {{summary}}",
+      "copaw.projects.knowledge.outputs.latestSyntaxProvenance",
       {
         time: formatProjectKnowledgeStatsRecordTimestamp(params.syntaxParse),
         summary: summarizeProjectKnowledgeDomainGraphBuildStats(
           t,
           params.syntaxParse,
-          "projects.knowledge.outputs.latestSyntaxProvenanceMetrics",
-          "{{documents}} docs / {{nodes}} nodes / {{relations}} relations",
+          "copaw.projects.knowledge.outputs.latestSyntaxProvenanceMetrics",
         ),
       },
     ));
   }
   if (params.selectedMode === "agentic" && hasProjectKnowledgeStats(params.semanticRoleLabeling)) {
     parts.push(t(
-      "projects.knowledge.outputs.latestSemanticRoleLabelingOutcome",
-      "srl outcome {{time}} · {{summary}}",
+      "copaw.projects.knowledge.outputs.latestSemanticRoleLabelingOutcome",
       {
         time: formatProjectKnowledgeStatsRecordTimestamp(params.semanticRoleLabeling),
         summary: summarizeProjectKnowledgeQualityReviewStats(
           t,
           params.semanticRoleLabeling,
-          "projects.knowledge.outputs.latestSemanticRoleLabelingOutcomeMetrics",
-          "{{before}} -> {{after}} / delta {{delta}} / {{rounds}} rounds",
+          "copaw.projects.knowledge.outputs.latestSemanticRoleLabelingOutcomeMetrics",
         ),
       },
     ));
