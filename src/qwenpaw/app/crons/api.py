@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import uuid
+from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from .manager import CronManager
@@ -10,8 +11,16 @@ from .models import (
     CronDispatchTargetsResponse,
     CronExecutionRecord,
     CronJobSpec,
+    CronJobState,
     CronJobView,
 )
+from .repo.json_repo import JsonJobRepository
+from ..runner.repo.json_repo import JsonChatRepository
+from ..agent_context import (
+    get_loaded_agent_for_request,
+    resolve_agent_id_for_request,
+)
+from ...config.utils import load_config
 
 router = APIRouter(prefix="/cron", tags=["cron"])
 
@@ -29,6 +38,22 @@ async def get_cron_manager(
             detail="CronManager not initialized",
         )
     return workspace.cron_manager
+
+
+def _resolve_workspace_dir(request: Request) -> Path:
+    agent_id = resolve_agent_id_for_request(request)
+    config = load_config()
+    return Path(config.agents.profiles[agent_id].workspace_dir).expanduser()
+
+
+def _job_repo_for_request(request: Request) -> JsonJobRepository:
+    workspace_dir = _resolve_workspace_dir(request)
+    return JsonJobRepository(workspace_dir / "jobs.json")
+
+
+def _chat_repo_for_request(request: Request) -> JsonChatRepository:
+    workspace_dir = _resolve_workspace_dir(request)
+    return JsonChatRepository(workspace_dir / "chats.json")
 
 
 @router.get(
@@ -55,10 +80,12 @@ async def list_dispatch_targets(
     ),
 ):
     """List candidate dispatch targets derived from known chats."""
-    from ..agent_context import get_agent_for_request
-
-    workspace = await get_agent_for_request(request)
-    chats = await workspace.chat_manager.list_chats(channel=channel)
+    workspace = get_loaded_agent_for_request(request)
+    if workspace is not None and workspace.chat_manager is not None:
+        chats = await workspace.chat_manager.list_chats(channel=channel)
+    else:
+        chat_repo = _chat_repo_for_request(request)
+        chats = await chat_repo.filter_chats(channel=channel)
     kw = (keyword or "").strip().lower()
 
     deduped: dict[tuple[str, str, str], CronDispatchTargetItem] = {}
@@ -86,28 +113,46 @@ async def list_dispatch_targets(
 
 
 @router.get("/jobs", response_model=list[CronJobSpec])
-async def list_jobs(mgr: CronManager = Depends(get_cron_manager)):
-    return await mgr.list_jobs()
+async def list_jobs(request: Request):
+    workspace = get_loaded_agent_for_request(request)
+    if workspace is not None and workspace.cron_manager is not None:
+        return await workspace.cron_manager.list_jobs()
+
+    repo = _job_repo_for_request(request)
+    return await repo.list_jobs()
 
 
 @router.get("/jobs/{job_id}", response_model=CronJobView)
-async def get_job(job_id: str, mgr: CronManager = Depends(get_cron_manager)):
-    job = await mgr.get_job(job_id)
+async def get_job(job_id: str, request: Request):
+    workspace = get_loaded_agent_for_request(request)
+    if workspace is not None and workspace.cron_manager is not None:
+        job = await workspace.cron_manager.get_job(job_id)
+        state = workspace.cron_manager.get_state(job_id)
+    else:
+        repo = _job_repo_for_request(request)
+        job = await repo.get_job(job_id)
+        state = CronJobState()
+
     if not job:
         raise HTTPException(status_code=404, detail="job not found")
-    return CronJobView(spec=job, state=mgr.get_state(job_id))
+    return CronJobView(spec=job, state=state)
 
 
 @router.post("/jobs", response_model=CronJobSpec)
 async def create_job(
     spec: CronJobSpec,
-    mgr: CronManager = Depends(get_cron_manager),
+    request: Request,
 ):
     # server generates id; ignore client-provided spec.id
     job_id = str(uuid.uuid4())
     created = spec.model_copy(update={"id": job_id})
+    workspace = get_loaded_agent_for_request(request)
     try:
-        await mgr.create_or_replace_job(created)
+        if workspace is not None and workspace.cron_manager is not None:
+            await workspace.cron_manager.create_or_replace_job(created)
+        else:
+            repo = _job_repo_for_request(request)
+            await repo.upsert_job(created)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
     return created
@@ -117,14 +162,19 @@ async def create_job(
 async def replace_job(
     job_id: str,
     spec: CronJobSpec,
-    mgr: CronManager = Depends(get_cron_manager),
+    request: Request,
 ):
     if spec.id is None:
         spec.id = job_id
     elif spec.id != job_id:
         raise HTTPException(status_code=400, detail="job_id mismatch")
+    workspace = get_loaded_agent_for_request(request)
     try:
-        await mgr.create_or_replace_job(spec)
+        if workspace is not None and workspace.cron_manager is not None:
+            await workspace.cron_manager.create_or_replace_job(spec)
+        else:
+            repo = _job_repo_for_request(request)
+            await repo.upsert_job(spec)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
     return spec
@@ -133,9 +183,15 @@ async def replace_job(
 @router.delete("/jobs/{job_id}")
 async def delete_job(
     job_id: str,
-    mgr: CronManager = Depends(get_cron_manager),
+    request: Request,
 ):
-    ok = await mgr.delete_job(job_id)
+    workspace = get_loaded_agent_for_request(request)
+    if workspace is not None and workspace.cron_manager is not None:
+        ok = await workspace.cron_manager.delete_job(job_id)
+    else:
+        repo = _job_repo_for_request(request)
+        ok = await repo.delete_job(job_id)
+
     if not ok:
         raise HTTPException(status_code=404, detail="job not found")
     return {"deleted": True}
@@ -176,20 +232,39 @@ async def run_job(job_id: str, mgr: CronManager = Depends(get_cron_manager)):
 @router.get("/jobs/{job_id}/state")
 async def get_job_state(
     job_id: str,
-    mgr: CronManager = Depends(get_cron_manager),
+    request: Request,
 ):
-    job = await mgr.get_job(job_id)
+    workspace = get_loaded_agent_for_request(request)
+    if workspace is not None and workspace.cron_manager is not None:
+        job = await workspace.cron_manager.get_job(job_id)
+        state = workspace.cron_manager.get_state(job_id)
+    else:
+        repo = _job_repo_for_request(request)
+        job = await repo.get_job(job_id)
+        state = CronJobState()
+
     if not job:
         raise HTTPException(status_code=404, detail="job not found")
-    return mgr.get_state(job_id).model_dump(mode="json")
+    return state.model_dump(mode="json")
 
 
 @router.get("/jobs/{job_id}/history", response_model=list[CronExecutionRecord])
 async def get_job_history(
     job_id: str,
-    mgr: CronManager = Depends(get_cron_manager),
+    request: Request,
 ):
-    job = await mgr.get_job(job_id)
+    workspace = get_loaded_agent_for_request(request)
+    if workspace is not None and workspace.cron_manager is not None:
+        job = await workspace.cron_manager.get_job(job_id)
+    else:
+        repo = _job_repo_for_request(request)
+        job = await repo.get_job(job_id)
+
     if not job:
         raise HTTPException(status_code=404, detail="job not found")
-    return await mgr.get_history(job_id)
+
+    if workspace is not None and workspace.cron_manager is not None:
+        return await workspace.cron_manager.get_history(job_id)
+
+    repo = _job_repo_for_request(request)
+    return await repo.get_history(job_id)

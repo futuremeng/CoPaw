@@ -16,24 +16,9 @@ if (typeof window !== "undefined") {
   const originalError = console.error;
   const originalWarn = console.warn;
 
-  const shouldIgnoreConsoleNoise = (msg: string) => {
-    return (
-      msg.includes(":first-child") ||
-      msg.includes("pseudo class") ||
-      msg.includes("Warning: [antd: Tooltip] `overlayClassName` is deprecated") ||
-      msg.includes("Warning: findDOMNode is deprecated and will be removed in the next major release") ||
-      msg.includes(
-        "Warning: forwardRef render functions accept exactly two parameters",
-      ) ||
-      msg.includes(
-        'Warning: Each child in a list should have a unique "key" prop.',
-      )
-    );
-  };
-
   console.error = function (...args: unknown[]) {
     const msg = args[0]?.toString() || "";
-    if (shouldIgnoreConsoleNoise(msg)) {
+    if (msg.includes(":first-child") || msg.includes("pseudo class")) {
       return;
     }
     originalError.apply(console, args as []);
@@ -42,7 +27,8 @@ if (typeof window !== "undefined") {
   console.warn = function (...args: unknown[]) {
     const msg = args[0]?.toString() || "";
     if (
-      shouldIgnoreConsoleNoise(msg) ||
+      msg.includes(":first-child") ||
+      msg.includes("pseudo class") ||
       msg.includes("potentially unsafe")
     ) {
       return;
