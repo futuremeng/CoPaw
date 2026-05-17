@@ -16,11 +16,9 @@ const cssStubPlugin = {
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
-  // In dev, default to the local backend directly instead of relying on the
-  // Vite proxy. This keeps the console usable even when proxy forwarding is
-  // flaky while preserving explicit overrides via VITE_API_BASE_URL.
-  const apiBaseUrl =
-    env.VITE_API_BASE_URL ?? (mode === "development" ? "http://127.0.0.1:8088" : "");
+  // In dev, default to same-origin and let Vite proxy /api to backend.
+  // This avoids browser CORS preflight failures with custom headers.
+  const apiBaseUrl = env.VITE_API_BASE_URL ?? "";
 
   return {
     define: {

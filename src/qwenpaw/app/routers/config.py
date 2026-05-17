@@ -80,11 +80,17 @@ _ALLOWED_ACP_TOOL_PARSE_MODES = {
     description="Retrieve configuration for all available channels",
 )
 async def list_channels(request: Request) -> dict:
-    """List all channel configs (filtered by available channels)."""
-    from ..agent_context import get_agent_for_request
+    """List all channel configs (filtered by available channels).
 
-    agent = await get_agent_for_request(request)
-    agent_config = agent.config
+    This endpoint intentionally avoids forcing workspace startup. It only
+    needs persisted agent config, so resolve agent id first and read config
+    directly from disk to prevent UI hangs when runtime startup is slow.
+    """
+    from ..agent_context import resolve_agent_id_for_request
+    from ...config.config import load_agent_config
+
+    agent_id = resolve_agent_id_for_request(request)
+    agent_config = load_agent_config(agent_id)
     available = get_available_channels()
 
     # Get channel configs from agent's config (with fallback to empty)
