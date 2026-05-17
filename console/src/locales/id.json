@@ -420,6 +420,13 @@
     "saveSuccess": "Berhasil disimpan",
     "saveFailed": "Gagal menyimpan"
   },
+  "projects": {
+    "workspacePath": "Jalur workspace",
+    "path": {
+      "workspace": "Workspace",
+      "project": "Proyek"
+    }
+  },
   "cronJobs": {
     "title": "Tugas Cron",
     "description": "Buat dan kelola tugas terjadwal yang berjalan otomatis pada waktu tertentu.",

@@ -186,6 +186,13 @@
     "saveSuccess": "保存しました",
     "saveFailed": "保存に失敗しました"
   },
+  "projects": {
+    "workspacePath": "ワークスペースパス",
+    "path": {
+      "workspace": "ワークスペース",
+      "project": "プロジェクト"
+    }
+  },
   "skills": {
     "title": "スキル",
     "description": "エージェントのスキルと機能を管理します。",

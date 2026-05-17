@@ -313,6 +313,13 @@
     "saveSuccess": "Salvo com sucesso",
     "saveFailed": "Falha ao salvar"
   },
+  "projects": {
+    "workspacePath": "Caminho do workspace",
+    "path": {
+      "workspace": "Workspace",
+      "project": "Projeto"
+    }
+  },
   "agent": {
     "parent": "Configuracoes",
     "agents": "Agentes",

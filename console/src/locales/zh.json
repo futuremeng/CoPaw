@@ -280,6 +280,13 @@
     "saveSuccess": "保存成功",
     "saveFailed": "保存失败"
   },
+  "projects": {
+    "workspacePath": "工作区路径",
+    "path": {
+      "workspace": "工作区",
+      "project": "项目"
+    }
+  },
   "agent": {
     "parent": "设置",
     "agents": "智能体",

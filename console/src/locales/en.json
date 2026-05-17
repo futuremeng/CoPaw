@@ -477,6 +477,13 @@
     "saveSuccess": "Saved successfully",
     "saveFailed": "Save failed"
   },
+  "projects": {
+    "workspacePath": "Workspace Path",
+    "path": {
+      "workspace": "Workspace",
+      "project": "Project"
+    }
+  },
   "agent": {
     "parent": "Settings",
     "agents": "Agents",
