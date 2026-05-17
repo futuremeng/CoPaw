@@ -125,7 +125,7 @@ describe("ProjectsListPage", () => {
       description: "demo",
       status: "active",
       workspace_dir: "workspace",
-      data_dir: ".data",
+      data_dir: "output",
       metadata_file: ".agent/PROJECT.md",
       tags: ["demo", "draft"],
       artifact_distill_mode: "file_scan",
@@ -152,7 +152,7 @@ describe("ProjectsListPage", () => {
             description: "older update",
             status: "active",
             workspace_dir: "/tmp/project-old",
-            data_dir: ".data",
+            data_dir: "output",
             metadata_file: ".agent/PROJECT.md",
             tags: [],
             artifact_distill_mode: "file_scan",
@@ -167,7 +167,7 @@ describe("ProjectsListPage", () => {
             description: "newer update",
             status: "active",
             workspace_dir: "/tmp/project-new",
-            data_dir: ".data",
+            data_dir: "output",
             metadata_file: ".agent/PROJECT.md",
             tags: [],
             artifact_distill_mode: "file_scan",
@@ -199,7 +199,7 @@ describe("ProjectsListPage", () => {
             description: "later created",
             status: "active",
             workspace_dir: "/tmp/project-later",
-            data_dir: ".data",
+            data_dir: "output",
             metadata_file: ".agent/PROJECT.md",
             tags: [],
             artifact_distill_mode: "file_scan",
@@ -214,7 +214,7 @@ describe("ProjectsListPage", () => {
             description: "earlier created",
             status: "active",
             workspace_dir: "/tmp/project-earlier",
-            data_dir: ".data",
+            data_dir: "output",
             metadata_file: ".agent/PROJECT.md",
             tags: [],
             artifact_distill_mode: "file_scan",
@@ -238,7 +238,7 @@ describe("ProjectsListPage", () => {
     expect(names).toEqual(["Project Earlier", "Project Later"]);
   });
 
-  it("creates projects with dot-prefixed default data dir", async () => {
+  it("creates projects with default output dir", async () => {
     const user = userEvent.setup();
 
     render(<ProjectsListPage />);
@@ -255,7 +255,7 @@ describe("ProjectsListPage", () => {
         name: "Project One",
         description: "demo",
         status: "active",
-        data_dir: ".data",
+        data_dir: "output",
         tags: ["demo", "draft"],
       });
     });

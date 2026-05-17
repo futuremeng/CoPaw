@@ -99,7 +99,7 @@ _DEFAULT_PROJECT_TEMPLATES = {
     "Store one project per subdirectory, for example:\n\n"
     "- project-abcde123/\n"
     "  - .agent/PROJECT.md\n"
-    "  - .data/\n\n"
+    "  - output/\n\n"
     "The project metadata should be declared in .agent/PROJECT.md frontmatter:\n\n"
     "---\n"
     "id: project-abcde123\n"
@@ -107,7 +107,7 @@ _DEFAULT_PROJECT_TEMPLATES = {
     "description: Short summary\n"
     "status: active\n"
     "workspacePath: /absolute/path/to/projects/project-abcde123\n"
-    "data_dir: .data\n"
+    "data_dir: output\n"
     "tags: [demo, draft]\n"
     "artifact_profile:\n"
     "    skills: []\n"
@@ -133,13 +133,6 @@ _DEFAULT_PROJECT_TEMPLATES = {
     "- `.pipelines/templates/*.json` → builtin\n"
     "- `{{DATA_DIR}}/*`, `.pipelines/runs/*` → builtin\n"
     "- Distilled method/checklist from repeated evidence → skill\n",
-    "project/.data/README.md": "# {{DATA_DIR}} directory\n\n"
-    "Purpose: case artifacts and evidence outputs.\n\n"
-    "## Mapping to artifact kind\n"
-    "- Most files here are case artifacts.\n\n"
-    "## Notes\n"
-    "- Historical user references may use original/.\n"
-    "- In this project, use {{DATA_DIR}}/ as canonical location.\n",
     "project/.scripts/README.md": "# .scripts directory\n\n"
     "Purpose: builtin executable scripts for project pipelines.\n\n"
     "## Mapping to artifact kind\n"
@@ -377,7 +370,7 @@ class CreateProjectRequest(BaseModel):
     name: str
     description: str = ""
     status: str = "active"
-    data_dir: str = ".data"
+    data_dir: str = "output"
     tags: list[str] = Field(default_factory=list)
     artifact_distill_mode: str = "file_scan"
     project_auto_knowledge_sink: bool = True
@@ -577,18 +570,19 @@ _PROJECT_METADATA_RELATIVE_PATHS = (
 _PROJECT_ARTIFACT_DIR_BY_KIND = {
     "skill": ".skills",
     "script": ".scripts",
-    "flow": ".flows",
-    "case": ".cases",
+    "flow": "artifacts/flow",
+    "case": "artifacts/case",
 }
+_PROJECT_PRECREATED_ARTIFACT_DIRS = (
+    ".skills",
+    ".scripts",
+)
 _PROJECT_MANAGED_VISIBLE_HIDDEN_DIRS = {
     ".agent",
     ".memories",
     ".skills",
     ".scripts",
-    ".flows",
-    ".cases",
     ".pipelines",
-    ".data",
 }
 _PROJECT_TREE_IGNORED_NAMES = {
     ".git",
@@ -881,12 +875,12 @@ def _resolve_project_created_time(
 
 
 def _safe_project_data_subdir(raw_value: str) -> str:
-    candidate = (raw_value or "").strip() or ".data"
+    candidate = (raw_value or "").strip() or "output"
     path = Path(candidate)
     if path.is_absolute() or ".." in path.parts:
-        return ".data"
+        return "output"
     normalized = path.as_posix().strip("/")
-    return normalized or ".data"
+    return normalized or "output"
 
 
 def _parse_project_tags(raw_tags: Any) -> list[str]:
@@ -1013,7 +1007,7 @@ def _normalize_project_artifact_profile_storage(
 
 
 def _ensure_project_artifact_layout(project_dir: Path) -> None:
-    for dirname in _PROJECT_ARTIFACT_DIR_BY_KIND.values():
+    for dirname in _PROJECT_PRECREATED_ARTIFACT_DIRS:
         (project_dir / dirname).mkdir(parents=True, exist_ok=True)
 
 
@@ -1185,7 +1179,7 @@ def _load_project_summary(project_dir: Path) -> ProjectSummary | None:
         return None
 
     data_subdir = _safe_project_data_subdir(
-        str(metadata.get("data_dir") or metadata.get("dataDir") or ".data"),
+        str(metadata.get("data_dir") or metadata.get("dataDir") or "output"),
     )
     project_id = (
         str(metadata.get("id") or project_dir.name).strip() or project_dir.name
@@ -1331,16 +1325,6 @@ def _scaffold_project_governance_files(
         plan_md.write_text(
             "# Project Plan\n\n"
             "Track milestones, risks, and next actions here.\n",
-            encoding="utf-8",
-        )
-
-    data_readme = project_dir / data_subdir / "README.md"
-    if not data_readme.exists():
-        data_readme.write_text(
-            _load_project_template_text(
-                "project/.data/README.md",
-                {"DATA_DIR": data_subdir},
-            ),
             encoding="utf-8",
         )
 
@@ -2274,7 +2258,6 @@ def _create_project(
     project_dir.mkdir(parents=True, exist_ok=False)
 
     data_subdir = _safe_project_data_subdir(body.data_dir)
-    (project_dir / data_subdir).mkdir(parents=True, exist_ok=True)
     (project_dir / ".pipelines" / "templates").mkdir(
         parents=True, exist_ok=True
     )

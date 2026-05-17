@@ -58,7 +58,7 @@ def _seed_project(workspace_dir: Path) -> str:
         "name": "Demo Project",
         "description": "For router artifact tests",
         "status": "active",
-        "data_dir": ".data",
+        "data_dir": "output",
         "artifact_profile": {
             "skills": [],
             "scripts": [],
@@ -513,11 +513,11 @@ def test_project_file_summary_endpoint_returns_aggregated_counts(
     client, workspace_dir, project_id = project_artifact_router_client
     project_dir = workspace_dir / "projects" / project_id
     (project_dir / "original").mkdir(parents=True, exist_ok=True)
-    (project_dir / ".data").mkdir(parents=True, exist_ok=True)
+    (project_dir / "output").mkdir(parents=True, exist_ok=True)
     (project_dir / ".scripts").mkdir(parents=True, exist_ok=True)
     (project_dir / ".cache").mkdir(parents=True, exist_ok=True)
     (project_dir / "original" / "brief.md").write_text("brief", encoding="utf-8")
-    (project_dir / ".data" / "notes.txt").write_text("notes", encoding="utf-8")
+    (project_dir / "output" / "notes.txt").write_text("notes", encoding="utf-8")
     (project_dir / ".scripts" / "run.py").write_text("print('ok')", encoding="utf-8")
     (project_dir / ".cache" / "session.log").write_text("noop", encoding="utf-8")
     (project_dir / ".gitkeep").write_text("", encoding="utf-8")
@@ -526,7 +526,7 @@ def test_project_file_summary_endpoint_returns_aggregated_counts(
         workspace_dir,
         [
             project_dir / "original" / "brief.md",
-            project_dir / ".data" / "notes.txt",
+            project_dir / "output" / "notes.txt",
             project_dir / ".scripts" / "run.py",
         ],
     )
@@ -545,7 +545,7 @@ def test_project_file_summary_endpoint_returns_aggregated_counts(
     assert payload["recently_updated_files"] == 4
     assert [item["path"] for item in payload["recent_updates"]] == [
         "original/brief.md",
-        ".data/notes.txt",
+        "output/notes.txt",
         ".scripts/run.py",
         "PROJECT.md",
     ]
@@ -581,17 +581,17 @@ def test_project_file_metadata_endpoint_returns_existing_files_only(
     client, workspace_dir, project_id = project_artifact_router_client
     project_dir = workspace_dir / "projects" / project_id
     (project_dir / "original").mkdir(parents=True, exist_ok=True)
-    (project_dir / ".data").mkdir(parents=True, exist_ok=True)
+    (project_dir / "output").mkdir(parents=True, exist_ok=True)
     (project_dir / "original" / "brief.md").write_text("brief", encoding="utf-8")
-    (project_dir / ".data" / "notes.txt").write_text("notes", encoding="utf-8")
+    (project_dir / "output" / "notes.txt").write_text("notes", encoding="utf-8")
 
     response = client.post(
         f"/agents/default/projects/{project_id}/files/metadata",
         json={
             "paths": [
                 "original/brief.md",
-                ".data/notes.txt",
-                ".data/missing.txt",
+                "output/notes.txt",
+                "output/missing.txt",
                 "original/brief.md",
             ]
         },
@@ -601,7 +601,7 @@ def test_project_file_metadata_endpoint_returns_existing_files_only(
     payload = response.json()
     assert [item["path"] for item in payload] == [
         "original/brief.md",
-        ".data/notes.txt",
+        "output/notes.txt",
     ]
 
 
@@ -714,7 +714,6 @@ def test_create_project_uses_builtin_template_fallbacks(
     assert (project_dir / ".agent" / "AGENTS.md").exists()
     assert (project_dir / ".agent" / "PLAN.md").exists()
     assert (project_dir / ".agent" / "PROJECT.md").exists()
-    assert (project_dir / ".data" / "README.md").exists()
     assert (project_dir / ".pipelines" / "templates" / "README.md").exists()
     assert (project_dir / ".pipelines" / "runs" / "README.md").exists()
     assert (

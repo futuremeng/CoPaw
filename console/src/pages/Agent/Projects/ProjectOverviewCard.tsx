@@ -183,11 +183,8 @@ function isStandardTreeRootDir(dir: string): boolean {
     "intermediate",
     "output",
     ".pipelines",
-    ".data",
     ".skills",
     ".scripts",
-    ".flows",
-    ".cases",
     "metadata",
   ].includes(dir);
 }

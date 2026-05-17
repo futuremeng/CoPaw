@@ -495,7 +495,7 @@ def test_execute_source_scan_writes_project_step_stats(tmp_path: Path):
         source=source,
         config=config,
         running_config=running_config,
-        changed_paths=["data/sample.md"],
+        changed_paths=["output/sample.md"],
         index_path=index_path,
     )
 
@@ -509,7 +509,7 @@ def test_execute_source_scan_writes_project_step_stats(tmp_path: Path):
     assert payload["step_id"] == "snapshot_raw"
     assert payload["metrics"]["changed_path_count"] == 1
     assert payload["metrics"]["data_file_count"] == 1
-    assert payload["changed_paths"] == ["data/sample.md"]
+    assert payload["changed_paths"] == ["output/sample.md"]
 
 
 def test_execute_source_scan_counts_project_root_files_and_skips_builtin_hidden_dirs(tmp_path: Path):
@@ -518,8 +518,8 @@ def test_execute_source_scan_counts_project_root_files_and_skips_builtin_hidden_
     project_dir.mkdir(parents=True, exist_ok=True)
     _write_project_metadata(project_dir, project_id)
     (project_dir / "sample.md").write_text("# Sample\n", encoding="utf-8")
-    (project_dir / ".data").mkdir(parents=True, exist_ok=True)
-    (project_dir / ".data" / "README.md").write_text("builtin\n", encoding="utf-8")
+    (project_dir / ".cache").mkdir(parents=True, exist_ok=True)
+    (project_dir / ".cache" / "README.md").write_text("builtin\n", encoding="utf-8")
 
     orchestrator = KnowledgeWorkflowOrchestrator(
         workspace_dir=tmp_path,

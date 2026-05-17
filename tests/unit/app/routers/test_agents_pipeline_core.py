@@ -249,7 +249,7 @@ def test_append_collab_event_uses_canonical_event_and_observability_fields():
 def test_execute_project_pipeline_run_emits_standardized_events(tmp_path: Path):
     project_dir = tmp_path / "project-a"
     project_dir.mkdir(parents=True, exist_ok=True)
-    data_dir = project_dir / ".data"
+    data_dir = project_dir / "output"
     data_dir.mkdir(parents=True, exist_ok=True)
     (data_dir / "sample.md").write_text("# sample\n", encoding="utf-8")
 

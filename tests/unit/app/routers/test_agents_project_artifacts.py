@@ -37,7 +37,7 @@ def _build_workspace_with_project(
         "name": "Demo Project",
         "description": "For artifact promotion tests",
         "status": "active",
-        "data_dir": ".data",
+        "data_dir": "output",
         "artifact_profile": {
             "skills": [
                 {
@@ -85,7 +85,7 @@ def _build_workspace_with_empty_artifacts(workspace_dir: Path) -> tuple[str, Pat
         "name": "Demo Project",
         "description": "For auto draft tests",
         "status": "active",
-        "data_dir": ".data",
+        "data_dir": "output",
         "artifact_profile": {
             "skills": [],
             "scripts": [],

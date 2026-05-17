@@ -215,7 +215,7 @@ export default function ProjectsListPage() {
         name: values.name.trim(),
         description: values.description?.trim() || "",
         status: "active",
-        data_dir: ".data",
+        data_dir: "output",
         tags,
       });
       message.success(

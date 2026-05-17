@@ -44,7 +44,7 @@ describe("project metrics", () => {
       },
       {
         filename: "flow.json",
-        path: ".flows/flow.json",
+        path: "flows/flow.json",
         size: 4096,
         modified_time: "2026-04-09T11:00:00Z",
       },
