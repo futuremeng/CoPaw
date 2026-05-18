@@ -1,8 +1,9 @@
 import { InfoCircleOutlined } from "@ant-design/icons";
-import { Tooltip, Typography } from "antd";
+import { Table, Tooltip, Typography } from "antd";
 import { useTranslation } from "react-i18next";
 import styles from "./index.module.less";
 import { buildProjectKnowledgeSourcesRecentHistorySectionsFromState } from "./projectKnowledgeRecentHistoryModel";
+import { getTriggerModeLabel, getProcessingStatusLabel } from "./projectKnowledgeSyncUi";
 import type { ProjectKnowledgeState } from "./useProjectKnowledgeState";
 
 interface ProjectKnowledgeSourcesPanelProps {
@@ -13,6 +14,52 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
   const { t } = useTranslation();
   const { knowledgeState } = props;
   const recentHistorySections = buildProjectKnowledgeSourcesRecentHistorySectionsFromState(t, knowledgeState);
+  const changedFiles = knowledgeState.changedFilesNormalized || [];
+
+  const changedFilesColumns = [
+    {
+      title: t("copaw.projects.knowledge.columnPath", "Path"),
+      dataIndex: "path",
+      key: "path",
+      width: "40%",
+      render: (text: string) => (
+        <Typography.Text ellipsis title={text}>
+          {text}
+        </Typography.Text>
+      ),
+    },
+    {
+      title: t("copaw.projects.knowledge.columnTriggerMode", "Launch Mode"),
+      dataIndex: "trigger_mode",
+      key: "trigger_mode",
+      width: "20%",
+      render: (mode?: string) => getTriggerModeLabel(t, mode),
+    },
+    {
+      title: t("copaw.projects.knowledge.columnProcessingStatus", "Processing Status"),
+      dataIndex: "processing_status",
+      key: "processing_status",
+      width: "20%",
+      render: (status?: string) => getProcessingStatusLabel(t, status),
+    },
+    {
+      title: t("copaw.projects.knowledge.columnDetectedAt", "Detected"),
+      dataIndex: "detected_at",
+      key: "detected_at",
+      width: "20%",
+      render: (time?: string) => {
+        if (!time) return "-";
+        const date = new Date(time);
+        return (
+          <Tooltip title={time}>
+            <Typography.Text type="secondary">
+              {date.toLocaleString()}
+            </Typography.Text>
+          </Tooltip>
+        );
+      },
+    },
+  ];
 
   return (
     <div className={styles.projectKnowledgeWorkbench}>
@@ -64,6 +111,26 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
           <Typography.Text strong>{knowledgeState.quantMetrics.charCount || 0}</Typography.Text>
         </div>
       </div>
+
+      {changedFiles.length > 0 && (
+        <div className={styles.projectKnowledgeHistoryStrip}>
+          <div className={styles.projectKnowledgeHistoryHeader}>
+            <Typography.Title level={5} className={styles.projectKnowledgeSectionTitle}>
+              {t("copaw.projects.knowledge.changedFiles", "Changed Files")}
+            </Typography.Title>
+            <Typography.Text type="secondary">
+              {t("copaw.projects.knowledge.changedFilesHint", `${changedFiles.length} files detected`)}
+            </Typography.Text>
+          </div>
+          <Table
+            columns={changedFilesColumns}
+            dataSource={changedFiles.map((file, idx) => ({ ...file, key: file.path || idx }))}
+            pagination={{ pageSize: 10, simple: true }}
+            size="small"
+            bordered={false}
+          />
+        </div>
+      )}
 
       {recentHistorySections.map((section) => (
         <div key={section.key} className={styles.projectKnowledgeHistoryStrip}>

@@ -3280,6 +3280,7 @@ export default function ProjectDetailPage() {
             }
             projectAutoKnowledgeSink={selectedProject.project_auto_knowledge_sink !== false}
             includeGlobal={projectKnowledgeIncludeGlobal}
+            syncState={projectKnowledgeState.syncState}
             onIncludeGlobalChange={setProjectKnowledgeIncludeGlobal}
             onProjectAutoKnowledgeSinkChange={handleProjectAutoKnowledgeSinkChange}
           />

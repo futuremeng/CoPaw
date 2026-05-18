@@ -317,6 +317,26 @@ export interface ProjectKnowledgePipelineTracePayload {
   stages?: ProjectKnowledgePipelineStagePayload[];
 }
 
+export type ProjectKnowledgeChangedFileProcessingStatus =
+  | "idle"
+  | "queued"
+  | "pending"
+  | "indexing"
+  | "graphifying"
+  | "succeeded"
+  | "failed";
+
+export type ProjectKnowledgeChangedFileTriggerMode = "automatic" | "manual";
+
+export interface ProjectKnowledgeChangedFile {
+  path: string;
+  trigger_mode?: ProjectKnowledgeChangedFileTriggerMode;
+  processing_status?: ProjectKnowledgeChangedFileProcessingStatus;
+  detected_at?: string;
+  scope?: "original" | "intermediate" | "derived";
+  file_type?: string;
+}
+
 export interface ProjectKnowledgeSyncState {
   project_id: string;
   task_type?: string;
@@ -343,6 +363,7 @@ export interface ProjectKnowledgeSyncState {
   changed_paths: string[];
   pending_changed_paths: string[];
   changed_count: number;
+  changed_files?: ProjectKnowledgeChangedFile[];
   scheduled_for?: string | null;
   queued_at?: string | null;
   last_change_at?: string | null;

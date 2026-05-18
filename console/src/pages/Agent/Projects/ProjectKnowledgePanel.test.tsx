@@ -178,6 +178,7 @@ function buildKnowledgeState(projectId: string): ProjectKnowledgeState {
     semanticBySourceId: {},
     semanticLoadingBySourceId: {},
     loadSourceSemantic: vi.fn().mockResolvedValue(undefined),
+    changedFilesNormalized: [],
   } as ProjectKnowledgeState;
 }
 

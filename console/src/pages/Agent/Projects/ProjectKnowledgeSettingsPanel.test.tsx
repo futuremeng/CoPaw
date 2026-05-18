@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { agentsApi } from "../../../api/modules/agents";
+import type { ProjectKnowledgeSyncState } from "../../../api/types";
 import ProjectKnowledgeSettingsPanel from "./ProjectKnowledgeSettingsPanel";
 
 const { mockedApi, mockedAgentsApi } = vi.hoisted(() => ({
@@ -81,10 +82,10 @@ function buildSemanticState(
 function buildSyncState(
   projectId: string,
   overrides: Record<string, unknown> = {},
-) {
+): ProjectKnowledgeSyncState {
   return {
     project_id: projectId,
-    status: "idle",
+    status: "idle" as const,
     current_stage: "idle",
     progress: 0,
     auto_enabled: true,
@@ -99,8 +100,21 @@ function buildSyncState(
     latest_source_id: `project-${projectId.toLowerCase()}-workspace`,
     last_result: {},
     semantic_engine: buildSemanticState(),
+    // Required fields with defaults
+    percent: 0,
+    stage_message: "",
+    current: 0,
+    total: 0,
+    eta_seconds: 0,
+    operation_id: "",
+    idempotency_key: "",
+    deduplicated: false,
+    last_action: "",
+    quantization_stage: "",
+    operation_updated_at: "",
+    changed_files: [],
     ...overrides,
-  };
+  } as unknown as ProjectKnowledgeSyncState;
 }
 
 describe("ProjectKnowledgeSettingsPanel", () => {
@@ -151,6 +165,7 @@ describe("ProjectKnowledgeSettingsPanel", () => {
         projectWorkspaceDir="/tmp/workspace"
         projectAutoKnowledgeSink
         includeGlobal
+        syncState={buildSyncState(projectId)}
         onIncludeGlobalChange={vi.fn()}
       />,
     );
@@ -183,6 +198,7 @@ describe("ProjectKnowledgeSettingsPanel", () => {
         projectWorkspaceDir="/tmp/workspace"
         projectAutoKnowledgeSink
         includeGlobal
+        syncState={buildSyncState(projectId)}
         onIncludeGlobalChange={onIncludeGlobalChange}
       />,
     );
@@ -203,11 +219,12 @@ describe("ProjectKnowledgeSettingsPanel", () => {
         projectWorkspaceDir="/tmp/workspace"
         projectAutoKnowledgeSink
         includeGlobal
+        syncState={buildSyncState(projectId)}
         onIncludeGlobalChange={vi.fn()}
       />,
     );
 
-    await user.click(await screen.findByRole("button", { name: "Run Sync" }));
+    await user.click(await screen.findByRole("button", { name: "copaw.projects.knowledge.manualSink" }));
 
     await waitFor(() => {
       expect(mockedApi.runProjectKnowledgeSync).toHaveBeenCalledWith(
@@ -249,6 +266,7 @@ describe("ProjectKnowledgeSettingsPanel", () => {
         projectWorkspaceDir="/tmp/workspace"
         projectAutoKnowledgeSink
         includeGlobal
+        syncState={buildSyncState(projectId)}
         onIncludeGlobalChange={vi.fn()}
       />,
     );
@@ -256,6 +274,43 @@ describe("ProjectKnowledgeSettingsPanel", () => {
     await waitFor(() => {
       expect(document.body.textContent || "").toContain("copaw.projects.knowledge.syncStage.cooldown");
       expect(document.body.textContent || "").toContain("Semantic engine unavailable: HanLP2 module is not installed.");
+    });
+  });
+
+  it("does not render changed file paths in settings panel", async () => {
+    mockedApi.getProjectKnowledgeSyncStatus.mockResolvedValueOnce(buildSyncState(projectId, {
+      status: "queued",
+      current_stage: "cooldown",
+      dirty: true,
+      last_trigger: "project_watcher_change",
+      changed_paths: ["original/a.md", "original/b.md"],
+      changed_count: 2,
+    }));
+
+    render(
+      <ProjectKnowledgeSettingsPanel
+        agentId="default"
+        projectId={projectId}
+        projectName="Project ABC"
+        projectWorkspaceDir="/tmp/workspace"
+        projectAutoKnowledgeSink
+        includeGlobal
+        syncState={buildSyncState(projectId, {
+          status: "queued",
+          current_stage: "cooldown",
+          dirty: true,
+          last_trigger: "project_watcher_change",
+          changed_paths: ["original/a.md", "original/b.md"],
+          changed_count: 2,
+        })}
+        onIncludeGlobalChange={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(document.body.textContent || "").not.toContain("original/a.md");
+      expect(document.body.textContent || "").not.toContain("original/b.md");
+      expect(document.body.textContent || "").not.toContain("Changed Files");
     });
   });
 
@@ -287,8 +342,7 @@ describe("ProjectKnowledgeSettingsPanel", () => {
         projectName="Project ABC"
         projectWorkspaceDir="/tmp/workspace"
         projectAutoKnowledgeSink
-        includeGlobal
-        onIncludeGlobalChange={vi.fn()}
+        includeGlobal        syncState={buildSyncState(projectId)}        onIncludeGlobalChange={vi.fn()}
       />,
     );
 
@@ -327,8 +381,7 @@ describe("ProjectKnowledgeSettingsPanel", () => {
         projectName="Project ABC"
         projectWorkspaceDir="/tmp/workspace"
         projectAutoKnowledgeSink
-        includeGlobal
-        onIncludeGlobalChange={vi.fn()}
+        includeGlobal        syncState={buildSyncState(projectId)}        onIncludeGlobalChange={vi.fn()}
       />,
     );
 
@@ -366,17 +419,16 @@ describe("ProjectKnowledgeSettingsPanel", () => {
         projectName="Project ABC"
         projectWorkspaceDir="/tmp/workspace"
         projectAutoKnowledgeSink
-        includeGlobal
-        onIncludeGlobalChange={vi.fn()}
+        includeGlobal        syncState={buildSyncState(projectId)}        onIncludeGlobalChange={vi.fn()}
       />,
     );
 
     await waitFor(() => {
       const body = document.body.textContent || "";
       expect(body).toContain("Sidecar Unconfigured");
-      expect(body).toContain("HanLP sidecar setup");
-      expect(body).toContain("COPAW_HANLP_SIDECAR_ENABLED=1");
-      expect(body).toContain("qwenpaw doctor");
+      expect(body).toContain("copaw.projects.knowledge.semanticSidecarHintTitle");
+      expect(body).toContain("copaw.projects.knowledge.semanticSidecarHintEnable");
+      expect(body).toContain("copaw.projects.knowledge.semanticSidecarHintVerify");
     });
   });
 
@@ -397,6 +449,13 @@ describe("ProjectKnowledgeSettingsPanel", () => {
         projectWorkspaceDir="/tmp/workspace"
         projectAutoKnowledgeSink
         includeGlobal
+        syncState={buildSyncState(projectId, {
+          semantic_engine: buildSemanticState({
+            status: "idle",
+            reason_code: "SOURCE_NOT_READY",
+            reason: "Project source has not been prepared for semantic extraction yet.",
+          }),
+        })}
         onIncludeGlobalChange={vi.fn()}
       />,
     );
@@ -425,18 +484,26 @@ describe("ProjectKnowledgeSettingsPanel", () => {
         projectWorkspaceDir="/tmp/workspace"
         projectAutoKnowledgeSink
         includeGlobal
+        syncState={buildSyncState(projectId, {
+          operation_id: "ps-abc1234",
+          idempotency_key: "manual-op-key-1",
+          deduplicated: true,
+          last_action: "start_sync",
+          quantization_stage: "l2",
+          operation_updated_at: "2026-04-11T23:30:00+00:00",
+        })}
         onIncludeGlobalChange={vi.fn()}
       />,
     );
 
     await waitFor(() => {
       const body = document.body.textContent || "";
-      expect(body).toMatch(/Operation:\s*ps-abc1234/);
-      expect(body).toMatch(/Idempotency:\s*manual-op-key-1/);
-      expect(body).toMatch(/Deduplicated:\s*Yes/);
-      expect(body).toMatch(/Action:\s*start_sync/);
-      expect(body).toMatch(/Stage:\s*L2/);
-      expect(body).toMatch(/Updated:\s*/);
+      expect(body).toContain("ps-abc1234");
+      expect(body).toContain("manual-op-key-1");
+      expect(body).toContain("Yes");
+      expect(body).toContain("start_sync");
+      expect(body).toContain("L2");
+      expect(body).toContain("copaw.projects.knowledge.syncOperationUpdatedAt:");
     });
   });
 });

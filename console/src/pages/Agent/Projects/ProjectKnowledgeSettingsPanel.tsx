@@ -11,7 +11,7 @@ import {
   message,
 } from "antd";
 import { useNavigate } from "react-router-dom";
-import api, { getApiToken, getApiUrl } from "../../../api";
+import api from "../../../api";
 import type { KnowledgeSourceItem, ProjectKnowledgeSyncState } from "../../../api/types";
 import { agentsApi } from "../../../api/modules/agents";
 import { knowledgeApi } from "../../../api/modules/knowledge";
@@ -32,6 +32,7 @@ interface ProjectKnowledgeSettingsPanelProps {
   projectWorkspaceDir: string;
   projectAutoKnowledgeSink: boolean;
   includeGlobal: boolean;
+  syncState: ProjectKnowledgeSyncState | null;
   onIncludeGlobalChange: (checked: boolean) => void;
   onProjectAutoKnowledgeSinkChange?: (enabled: boolean) => void;
 }
@@ -48,6 +49,7 @@ export default function ProjectKnowledgeSettingsPanel(
     projectWorkspaceDir,
     projectAutoKnowledgeSink,
     includeGlobal,
+    syncState,
     onIncludeGlobalChange,
     onProjectAutoKnowledgeSinkChange,
   } = props;
@@ -61,7 +63,6 @@ export default function ProjectKnowledgeSettingsPanel(
   const [sourceLoaded, setSourceLoaded] = useState(false);
   const [sourceRegistered, setSourceRegistered] = useState(false);
   const [projectSource, setProjectSource] = useState<KnowledgeSourceItem | null>(null);
-  const [syncState, setSyncState] = useState<ProjectKnowledgeSyncState | null>(null);
   const [memifyEnabled, setMemifyEnabled] = useState(false);
   const [memifyUpdating, setMemifyUpdating] = useState(false);
 
@@ -127,102 +128,6 @@ export default function ProjectKnowledgeSettingsPanel(
   useEffect(() => {
     setAutoSinkEnabled(projectAutoKnowledgeSink !== false);
   }, [projectAutoKnowledgeSink]);
-
-  useEffect(() => {
-    setSyncState(null);
-  }, [projectId]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const loadInitialSyncState = async () => {
-      try {
-        const state = await api.getProjectKnowledgeSyncStatus({ projectId });
-        if (!cancelled) {
-          setSyncState(state);
-        }
-      } catch {
-        // best-effort initial sync state load
-      }
-    };
-
-    void loadInitialSyncState();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId]);
-
-  useEffect(() => {
-    if (typeof WebSocket === "undefined") {
-      return;
-    }
-    let disposed = false;
-    let reconnectTimer: number | null = null;
-    let activeSocket: WebSocket | null = null;
-
-    const connect = () => {
-      if (disposed) {
-        return;
-      }
-      try {
-        const baseUrl = getApiUrl("/knowledge/project-sync/ws");
-        const wsUrl = new URL(baseUrl, window.location.origin);
-        wsUrl.protocol = wsUrl.protocol === "https:" ? "wss:" : "ws:";
-        wsUrl.searchParams.set("project_id", projectId);
-        wsUrl.searchParams.set("interval_ms", "1000");
-        const token = getApiToken();
-        if (token) {
-          wsUrl.searchParams.set("token", token);
-        }
-
-        const ws = new WebSocket(wsUrl.toString());
-        activeSocket = ws;
-        ws.onmessage = (event) => {
-          if (disposed) {
-            return;
-          }
-          try {
-            const payload = JSON.parse(event.data || "{}");
-            const nextState = payload?.state;
-            if (!nextState || typeof nextState !== "object") {
-              return;
-            }
-            setSyncState(nextState as ProjectKnowledgeSyncState);
-          } catch {
-            // ignore malformed websocket messages
-          }
-        };
-        ws.onclose = () => {
-          if (disposed) {
-            return;
-          }
-          reconnectTimer = window.setTimeout(() => {
-            connect();
-          }, 1500);
-        };
-      } catch {
-        // ignore websocket construction failure in unsupported environments
-      }
-    };
-
-    connect();
-
-    return () => {
-      disposed = true;
-      if (reconnectTimer) {
-        window.clearTimeout(reconnectTimer);
-      }
-      if (activeSocket) {
-        if (activeSocket.readyState === WebSocket.CONNECTING) {
-          activeSocket.onopen = () => {
-            activeSocket?.close();
-          };
-        } else if (activeSocket.readyState === WebSocket.OPEN) {
-          activeSocket.close();
-        }
-      }
-    };
-  }, [projectId]);
 
   useEffect(() => {
     if (!syncState) {
@@ -336,14 +241,14 @@ export default function ProjectKnowledgeSettingsPanel(
       );
       if (enabled && (projectWorkspaceDir || "").trim()) {
         try {
-          const response = await api.runProjectKnowledgeSync({
+          await api.runProjectKnowledgeSync({
             projectId,
             trigger: "memify-enabled",
             force: true,
             processingMode: "nlp",
             quantizationStage: getProjectKnowledgeQuantizationStage("nlp"),
           });
-          setSyncState(response.state);
+          // syncState will be updated via WebSocket in the hook
         } catch {
           // best-effort: sync trigger failure is non-fatal
         }
@@ -363,14 +268,14 @@ export default function ProjectKnowledgeSettingsPanel(
     }
     try {
       setManualSinking(true);
-      const response = await api.runProjectKnowledgeSync({
+      await api.runProjectKnowledgeSync({
         projectId,
         trigger: "manual-panel",
         force: true,
         processingMode: "agentic",
         quantizationStage: getProjectKnowledgeQuantizationStage("agentic"),
       });
-      setSyncState(response.state);
+      // syncState will be updated via WebSocket in the hook
       message.success(t("copaw.projects.knowledge.manualSinkStarted"));
     } catch (err) {
       const messageText = err instanceof Error ? err.message : t("copaw.projects.knowledge.manualSinkFailed");

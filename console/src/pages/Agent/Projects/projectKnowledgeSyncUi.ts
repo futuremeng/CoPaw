@@ -321,3 +321,34 @@ export function getProjectKnowledgeSyncAlertType(
   }
   return "info";
 }
+
+export function getTriggerModeLabel(t: Translate, triggerMode?: string): string {
+  if (!triggerMode) {
+    return "未知";
+  }
+  if (triggerMode === "automatic") {
+    return t("copaw.projects.knowledge.triggerModeAutomatic", "自动");
+  }
+  if (triggerMode === "manual") {
+    return t("copaw.projects.knowledge.triggerModeManual", "手动");
+  }
+  return String(triggerMode);
+}
+
+export function getProcessingStatusLabel(t: Translate, status?: string): string {
+  if (!status) {
+    return "未知";
+  }
+
+  const statusMap: Record<string, string> = {
+    idle: t("copaw.projects.knowledge.processingStatusNotProcessed", "未加工"),
+    queued: t("copaw.projects.knowledge.processingStatusProcessing", "正在加工"),
+    pending: t("copaw.projects.knowledge.processingStatusProcessing", "正在加工"),
+    indexing: t("copaw.projects.knowledge.processingStatusProcessing", "正在加工"),
+    graphifying: t("copaw.projects.knowledge.processingStatusProcessing", "正在加工"),
+    succeeded: t("copaw.projects.knowledge.processingStatusCompleted", "已完成"),
+    failed: t("copaw.projects.knowledge.processingStatusCompleted", "已完成"),
+  };
+
+  return statusMap[status] || String(status);
+}

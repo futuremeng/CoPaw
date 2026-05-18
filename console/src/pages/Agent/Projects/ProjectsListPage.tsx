@@ -276,7 +276,7 @@ export default function ProjectsListPage() {
           <Button size="small" type="primary" onClick={handleOpenCreate}>
             {t("projects.create", "New Project")}
           </Button>
-          <Button size="small" onClick={() => void loadAgents()} loading={loading}>
+          <Button size="small" onClick={() => void loadPageData()} loading={loading}>
             {t("common.refresh", "Refresh")}
           </Button>
         </div>

@@ -41,12 +41,7 @@ export function buildProjectKnowledgeProcessingRecentHistorySections(
 
   const snapshotRawItems = buildRecentHistoryItems(
     params.snapshotRawHistory,
-    (item) => summarizeProjectKnowledgeSourceScanStats(
-      t,
-      item,
-      "copaw.projects.knowledge.processing.recentSnapshotRawSummary",
-      "{{files}} files / {{changed}} changed / {{sources}} sources",
-    ),
+    (item) => summarizeProjectKnowledgeSourceScanStats(t, item),
   );
   if (snapshotRawItems.length) {
     sections.push({
@@ -59,12 +54,7 @@ export function buildProjectKnowledgeProcessingRecentHistorySections(
 
   const buildChunksItems = buildRecentHistoryItems(
     params.buildChunksHistory,
-    (item) => summarizeProjectKnowledgeFileAnalysisStats(
-      t,
-      item,
-      "copaw.projects.knowledge.processing.recentBuildChunksSummary",
-      "{{documents}} docs / {{chunks}} chunks / {{sentences}} sentences",
-    ),
+    (item) => summarizeProjectKnowledgeFileAnalysisStats(t, item),
   );
   if (buildChunksItems.length) {
     sections.push({
@@ -77,12 +67,7 @@ export function buildProjectKnowledgeProcessingRecentHistorySections(
 
   const buildInterlinearItems = buildRecentHistoryItems(
     params.buildInterlinearHistory,
-    (item) => summarizeProjectKnowledgeFileAnalysisStats(
-      t,
-      item,
-      "copaw.projects.knowledge.processing.recentBuildInterlinearSummary",
-      "{{documents}} docs / {{chunks}} chunks / {{sentences}} sentences",
-    ),
+    (item) => summarizeProjectKnowledgeFileAnalysisStats(t, item),
   );
   if (buildInterlinearItems.length) {
     sections.push({
@@ -95,12 +80,7 @@ export function buildProjectKnowledgeProcessingRecentHistorySections(
 
   const tokenizeItems = buildRecentHistoryItems(
     params.tokenizeHistory,
-    (item) => summarizeProjectKnowledgeFileAnalysisStats(
-      t,
-      item,
-      "copaw.projects.knowledge.processing.recentTokenizeSummary",
-      "{{documents}} docs / {{chunks}} chunks / {{sentences}} sentences",
-    ),
+    (item) => summarizeProjectKnowledgeFileAnalysisStats(t, item),
   );
   if (tokenizeItems.length) {
     sections.push({
@@ -113,12 +93,7 @@ export function buildProjectKnowledgeProcessingRecentHistorySections(
 
   const posTaggingItems = buildRecentHistoryItems(
     params.posTaggingHistory,
-    (item) => summarizeProjectKnowledgeFileAnalysisStats(
-      t,
-      item,
-      "copaw.projects.knowledge.processing.recentPosTaggingSummary",
-      "{{documents}} docs / {{chunks}} chunks / {{sentences}} sentences",
-    ),
+    (item) => summarizeProjectKnowledgeFileAnalysisStats(t, item),
   );
   if (posTaggingItems.length) {
     sections.push({

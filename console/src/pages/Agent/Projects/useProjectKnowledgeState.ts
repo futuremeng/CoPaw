@@ -222,6 +222,13 @@ export interface ProjectKnowledgeState {
     options?: { force?: boolean },
   ) => Promise<KnowledgeSourceContent | null>;
   syncState: ProjectKnowledgeSyncState | null;
+  changedFilesNormalized: Array<{
+    path: string;
+    trigger_mode?: "automatic" | "manual";
+    processing_status?: "idle" | "queued" | "pending" | "indexing" | "graphifying" | "succeeded" | "failed";
+    detected_at?: string;
+    scope?: "original" | "intermediate" | "derived";
+  }>;
   activeKnowledgeTasks: KnowledgeTaskProgress[];
   activeKnowledgeTask: KnowledgeTaskProgress | null;
   latestQualityLoopJob?: QualityLoopJobStatus | null;
@@ -397,6 +404,52 @@ const ACTIVE_KNOWLEDGE_STATUSES = new Set([
   "indexing",
   "graphifying",
 ]);
+
+/**
+ * Normalize changed_files from sync state.
+ * Prefers new changed_files field; falls back to generating from changed_paths + metadata.
+ */
+function normalizeChangedFiles(syncState: ProjectKnowledgeSyncState | null) {
+  if (!syncState) {
+    return [];
+  }
+
+  // If new field exists and is non-empty, use it directly
+  if (Array.isArray(syncState.changed_files) && syncState.changed_files.length > 0) {
+    return syncState.changed_files;
+  }
+
+  // Fallback: generate from changed_paths + metadata
+  const paths = Array.isArray(syncState.changed_paths) ? syncState.changed_paths : [];
+  if (paths.length === 0) {
+    return [];
+  }
+
+  // Determine trigger mode from last_trigger
+  const triggerMode: "automatic" | "manual" = (syncState.last_trigger || "").includes("watcher") || (syncState.last_trigger || "").includes("resume")
+    ? "automatic"
+    : "manual";
+
+  // Map sync status to processing status
+  const statusMap: Record<string, "idle" | "queued" | "pending" | "indexing" | "graphifying" | "succeeded" | "failed"> = {
+    idle: "idle",
+    queued: "queued",
+    pending: "pending",
+    indexing: "indexing",
+    graphifying: "graphifying",
+    succeeded: "succeeded",
+    failed: "failed",
+  };
+  const processingStatus = statusMap[syncState.status] || "idle";
+
+  return paths.map((path) => ({
+    path,
+    trigger_mode: triggerMode,
+    processing_status: processingStatus,
+    detected_at: syncState.updated_at || undefined,
+    scope: "original" as const,
+  }));
+}
 
 function mergeSemanticSummaryIntoStage(
   baseStage: string,
@@ -2877,6 +2930,7 @@ export function useProjectKnowledgeState(
     sourceContentLoadingById,
     loadSourceContent,
     syncState,
+    changedFilesNormalized: normalizeChangedFiles(syncState),
     activeKnowledgeTasks,
     activeKnowledgeTask,
     latestQualityLoopJob,

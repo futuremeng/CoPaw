@@ -380,6 +380,7 @@ class ProjectKnowledgeSyncManager:
 			"changed_paths": [],
 			"pending_changed_paths": [],
 			"changed_count": 0,
+			"changed_files": [],
 			"scheduled_for": None,
 			"queued_at": None,
 			"last_change_at": None,

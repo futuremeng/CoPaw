@@ -5,7 +5,6 @@ import ProjectsListPage from "./ProjectsListPage";
 
 const {
   navigateMock,
-  setAgentsMock,
   mockedSuccess,
   mockedError,
   mockedAgentsApi,

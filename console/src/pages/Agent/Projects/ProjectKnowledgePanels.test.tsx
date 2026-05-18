@@ -219,6 +219,7 @@ function buildKnowledgeState(): ProjectKnowledgeState {
     semanticBySourceId: {},
     semanticLoadingBySourceId: {},
     loadSourceSemantic: vi.fn().mockResolvedValue(undefined),
+    changedFilesNormalized: [],
   } as ProjectKnowledgeState;
 }
 
@@ -261,11 +262,41 @@ describe("project knowledge panels", () => {
     );
 
     expect(screen.getByText("Health")).not.toBeNull();
-    expect(screen.getByText(/Backend merged sync metrics/)).not.toBeNull();
+    expect(screen.getByText(/copaw\.projects\.knowledge\.metricsSourceLabel/)).not.toBeNull();
 
     render(<ProjectKnowledgeSourcesPanel knowledgeState={knowledgeState} />);
     expect(screen.getByText("Sources")).not.toBeNull();
-    expect(screen.getByText("Snapshots")).not.toBeNull();
+    expect(screen.getByText("copaw.projects.knowledge.signalSnapshots")).not.toBeNull();
+  });
+
+  it("renders changed files list in sources panel", () => {
+    const knowledgeState = buildKnowledgeState();
+    knowledgeState.changedFilesNormalized = [
+      {
+        path: "original/a.md",
+        trigger_mode: "automatic",
+        processing_status: "pending",
+        detected_at: "2026-05-18T19:20:00Z",
+        scope: "original",
+      },
+      {
+        path: "original/b.md",
+        trigger_mode: "manual",
+        processing_status: "succeeded",
+        detected_at: "2026-05-18T19:21:00Z",
+        scope: "original",
+      },
+    ];
+
+    render(<ProjectKnowledgeSourcesPanel knowledgeState={knowledgeState} />);
+
+    expect(screen.getByText("Changed Files")).not.toBeNull();
+    expect(screen.getByText("original/a.md")).not.toBeNull();
+    expect(screen.getByText("original/b.md")).not.toBeNull();
+    expect(screen.getByText("自动")).not.toBeNull();
+    expect(screen.getByText("手动")).not.toBeNull();
+    expect(screen.getByText("正在加工")).not.toBeNull();
+    expect(screen.getByText("已完成")).not.toBeNull();
   });
 
   it("renders processing and outputs panels", () => {
@@ -275,7 +306,7 @@ describe("project knowledge panels", () => {
     expect(screen.getByText("Processing")).not.toBeNull();
 
     render(<ProjectKnowledgeOutputsPanel knowledgeState={knowledgeState} />);
-    expect(screen.getByText("Latest output provenance")).not.toBeNull();
+    expect(screen.getByText("Outputs")).not.toBeNull();
   });
 
   it("renders NER panel", () => {
@@ -283,6 +314,6 @@ describe("project knowledge panels", () => {
 
     render(<ProjectKnowledgeNerPanel knowledgeState={knowledgeState} />);
     expect(screen.getByText("NER")).not.toBeNull();
-    expect(screen.getByText("No source content loaded yet. Open Sources or trigger sync first.")).not.toBeNull();
+    expect(screen.getByText("copaw.projects.knowledge.nerEmptySource")).not.toBeNull();
   });
 });

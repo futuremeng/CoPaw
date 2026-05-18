@@ -130,6 +130,12 @@ def queue_or_start_locked(
 			"Project sync queued" if scheduled_for is not None else "Project sync pending",
 			manager._build_semantic_engine_state(state),
 		),
+		"changed_files": _build_changed_files_list(
+			list(state.get("changed_paths") or []),
+			trigger,
+			"queued" if scheduled_for is not None else "pending",
+			now.isoformat(),
+		),
 	})
 	manager._save_state(state)
 	if scheduled_for is not None:
@@ -144,6 +150,40 @@ def queue_or_start_locked(
 			quantization_stage=quantization_stage,
 		)
 	return {"accepted": True, "reason": reason, "state": manager._load_state(project_id)}
+
+
+def _build_changed_files_list(
+	merged_paths: list[str],
+	trigger: str,
+	status: str,
+	now: str,
+) -> list[dict[str, Any]]:
+	"""Build file-level metadata from merged paths list."""
+	# Determine trigger mode from trigger value
+	trigger_mode = "automatic" if any(t in str(trigger or "") for t in ["watcher", "resume"]) else "manual"
+	
+	# Map sync status to processing status
+	status_mapping = {
+		"idle": "idle",
+		"queued": "queued",
+		"pending": "pending",
+		"indexing": "indexing",
+		"graphifying": "graphifying",
+		"succeeded": "succeeded",
+		"failed": "failed",
+	}
+	processing_status = status_mapping.get(str(status or "idle"), "idle")
+	
+	return [
+		{
+			"path": path,
+			"trigger_mode": trigger_mode,
+			"processing_status": processing_status,
+			"detected_at": now,
+			"scope": "original",  # Default scope; can be refined based on path patterns later
+		}
+		for path in merged_paths
+	]
 
 
 def start_sync(
@@ -166,11 +206,13 @@ def start_sync(
 		state = manager._load_state(project_id, hydrate=False)
 		now = manager._now_iso()
 		merged_paths = list(dict.fromkeys([*list(state.get("changed_paths") or []), *list(changed_paths or [])]))
+		changed_files = _build_changed_files_list(merged_paths, trigger, "pending", now)
 		state.update({
 			"project_id": project_id,
 			"auto_enabled": auto_enabled,
 			"changed_paths": merged_paths,
 			"changed_count": len(merged_paths),
+			"changed_files": changed_files,
 			"dirty": bool(merged_paths),
 			"last_change_at": now,
 			"debounce_seconds": manager._normalize_seconds(debounce_seconds),
