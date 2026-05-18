@@ -16,6 +16,11 @@
   4. Интеграция источника сообщества Skills Marketplace
 </p>
 
+<p align="center">
+  <img src="console/public/dingtalk.jpg" alt="CoPaw Dingtalk Group" width="300">
+</p>
+
+
 ## QwenPaw
 
 

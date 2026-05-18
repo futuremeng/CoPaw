@@ -15,6 +15,11 @@
   4. Community Skills Marketplace source integration
 </p>
 
+
+<p align="center">
+  <img src="console/public/dingtalk.jpg" alt="CoPaw Dingtalk Group" width="300">
+</p>
+
 ## QwenPaw
 
 <p align="center"><b>Upstream QwenPaw</b></p>
