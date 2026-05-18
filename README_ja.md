@@ -1,6 +1,29 @@
 <div align="center">
 
-# QwenPaw
+
+# CoPaw
+
+<p align="center">
+  <img src="console/public/copaw-icon.svg" alt="CoPaw Logo" width="120">
+</p>
+
+<p align="center"><b>CoPaw 拡張モジュール</b></p>
+
+<p align="center">
+  1. プロジェクト知識処理の並列レーン: fast / nlp / agentic<br>
+  2. HanLP L2 sidecar ランタイム対応<br>
+  3. ナレッジドックのワークフロータブ: Explore / Sources / Processing / Outputs / Health / Settings<br>
+  4. コミュニティ Skills Marketplace ソース統合
+</p>
+
+
+## QwenPaw
+
+<p align="center"><b>Upstream QwenPaw</b></p>
+
+<p align="center">
+  <img src="https://gw.alicdn.com/imgextra/i1/O1CN01sens5C1TuwioeGexL_!!6000000002443-55-tps-771-132.svg" alt="QwenPaw Logo" width="120">
+</p>
 
 [![GitHub Repo](https://img.shields.io/badge/GitHub-Repo-black.svg?logo=github)](https://github.com/agentscope-ai/QwenPaw)
 [![PyPI](https://img.shields.io/pypi/v/qwenpaw?color=3775A9&label=PyPI&logo=pypi)](https://pypi.org/project/qwenpaw/)
@@ -18,9 +41,8 @@
 
 [[ドキュメント](https://qwenpaw.agentscope.io/)] [[English](README.md)] [[中文](README_zh.md)] [[Русский](README_ru.md)]
 
-<p align="center">
-  <img src="https://gw.alicdn.com/imgextra/i1/O1CN01sens5C1TuwioeGexL_!!6000000002443-55-tps-771-132.svg" alt="QwenPaw Logo" width="120">
-</p>
+
+
 
 <p align="center"><b>あなたのために働き、あなたとともに成長する。</b></p>
 
@@ -97,23 +119,36 @@
 > - **💻 ローカルモデルを使いたい（API Key 不要）**: [ローカルモデル](#ローカルモデル) → モデルダウンロード → 利用開始
 > - **🛠️ コードに貢献または新機能を開発したい**: [ソースからインストール](#ソースからインストール) → [参加方法](#参加方法)
 
-- [ニュース](#ニュース)
-- [クイックスタート](#クイックスタート)
-- [APIキー](#apiキー)
-- [ローカルモデル](#ローカルモデル)
-- [ドキュメント](#ドキュメント)
-- [セキュリティ特性](#セキュリティ特性)
-- [FAQ](#faq)
-- [最新情報をいち早く](#最新情報をいち早く)
-- [ロードマップ](#ロードマップ)
-- [ソースからインストール](#ソースからインストール)
-- [参加方法](#参加方法)
-- [なぜQwenPaw？](#なぜqwenpaw)
-- [開発チーム](#開発チーム)
-- [お問い合わせ](#お問い合わせ)
-- [テレメトリ](#テレメトリ)
-- [ライセンス](#ライセンス)
-- [コントリビューター](#コントリビューター)
+- [CoPaw](#copaw)
+  - [QwenPaw](#qwenpaw)
+  - [ニュース](#ニュース)
+  - [目次](#目次)
+  - [クイックスタート](#クイックスタート)
+    - [オプション 1: pip install](#オプション-1-pip-install)
+    - [オプション 2: スクリプトインストール](#オプション-2-スクリプトインストール)
+    - [オプション 3: Dockerを使用](#オプション-3-dockerを使用)
+    - [オプション 4: Alibaba Cloud ECSへのデプロイ](#オプション-4-alibaba-cloud-ecsへのデプロイ)
+    - [オプション 5: ModelScopeを使用](#オプション-5-modelscopeを使用)
+    - [オプション 6: デスクトップアプリケーション（Beta）](#オプション-6-デスクトップアプリケーションbeta)
+      - [ダウンロード](#ダウンロード)
+      - [特徴](#特徴)
+      - [初回起動](#初回起動)
+      - [macOS: システムセキュリティ制限の回避](#macos-システムセキュリティ制限の回避)
+  - [APIキー](#apiキー)
+  - [ローカルモデル](#ローカルモデル)
+  - [ドキュメント](#ドキュメント)
+  - [セキュリティ特性](#セキュリティ特性)
+  - [FAQ](#faq)
+  - [最新情報をいち早く](#最新情報をいち早く)
+  - [ロードマップ](#ロードマップ)
+  - [ソースからインストール](#ソースからインストール)
+  - [参加方法](#参加方法)
+  - [なぜQwenPaw？](#なぜqwenpaw)
+  - [開発チーム](#開発チーム)
+  - [お問い合わせ](#お問い合わせ)
+  - [テレメトリ](#テレメトリ)
+  - [ライセンス](#ライセンス)
+  - [コントリビューター](#コントリビューター)
 
 ---
 

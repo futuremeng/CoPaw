@@ -2,6 +2,27 @@
 
 # CoPaw
 
+<p align="center">
+  <img src="console/public/copaw-icon.svg" alt="CoPaw Logo" width="120">
+</p>
+
+<p align="center"><b>CoPaw Extension Modules</b></p>
+
+<p align="center">
+  1. Project Knowledge Processing lanes: fast / nlp / agentic<br>
+  2. HanLP L2 sidecar runtime support<br>
+  3. Knowledge dock workflow tabs: Explore / Sources / Processing / Outputs / Health / Settings<br>
+  4. Community Skills Marketplace source integration
+</p>
+
+## QwenPaw
+
+<p align="center"><b>Upstream QwenPaw</b></p>
+
+<p align="center">
+  <img src="https://gw.alicdn.com/imgextra/i1/O1CN01sens5C1TuwioeGexL_!!6000000002443-55-tps-771-132.svg" alt="QwenPaw Logo" width="120">
+</p>
+
 [![GitHub Repo](https://img.shields.io/badge/GitHub-Repo-black.svg?logo=github)](https://github.com/agentscope-ai/QwenPaw)
 [![PyPI](https://img.shields.io/pypi/v/qwenpaw?color=3775A9&label=PyPI&logo=pypi)](https://pypi.org/project/qwenpaw/)
 [![Documentation](https://img.shields.io/badge/Docs-Website-green.svg?logo=readthedocs&label=Docs)](https://qwenpaw.agentscope.io/)
@@ -18,9 +39,6 @@
 
 [[Documentation](https://qwenpaw.agentscope.io/)] [[中文](README_zh.md)] [[日本語](README_ja.md)] [[Русский](README_ru.md)]
 
-<p align="center">
-  <img src="console/public/copaw-icon.svg" alt="CoPaw Logo" width="120">
-</p>
 
 <p align="center"><b>Works for you, grows with you.</b></p>
 
@@ -32,20 +50,18 @@ Your personal AI assistant — easy to install, deploy locally or in the cloud, 
 >
 > **Under your control** — Memory and personalization fully under your control. Deploy locally (data stays on your machine) or in the cloud (your chosen server). No third-party hosting, no data upload.
 >
-> **Skills extension** — Built-in scheduling, PDF/Office processing, news digest, and more; custom skills auto-loaded, no lock-in. Skills determine what CoPaw can do.
+> **Skills extension** — Built-in scheduling, PDF/Office processing, news digest, and more; custom skills auto-loaded, no lock-in. Skills determine what QwenPaw can do.
 >
 > **Multi-agent collaboration** — Create multiple independent agents, each with their own role; enable collaboration skills for inter-agent communication to tackle complex tasks together.
 >
-> **Project knowledge processing** — Inside each project, CoPaw now runs a built-in knowledge workflow with three parallel lanes: fast preview, NLP graph building, and multi-agent deep processing. The Console shows Processing and Outputs tabs, and consumers automatically downgrade from multi-agent to NLP to fast when higher-order artifacts are not ready.
->
 > **Multi-layer security** — Tool guard, file access control, skill security scanning to ensure safe operation.
 >
-> **Every channel** — DingTalk, Feishu, WeChat, Discord, Telegram, and more. One CoPaw, connect as needed.
+> **Every channel** — DingTalk, Feishu, WeChat, Discord, Telegram, and more. One QwenPaw, connect as needed.
 >
 > **Memory-evolving & proactive** — Agent learns from interactions, reflects on experience, and proactively serves you. Gets smarter the more you use it.
 >
 > <details>
-> <summary><b>What you can do with CoPaw</b></summary>
+> <summary><b>What you can do with QwenPaw</b></summary>
 >
 > <br>
 >
@@ -74,23 +90,6 @@ Your personal AI assistant — easy to install, deploy locally or in the cloud, 
 
 - [2026-04-29] We've released **v1.1.5**! See the full [v1.1.5 Release Notes](https://qwenpaw.agentscope.io/release-notes).
 
-- [2026-04-24] We've released **v1.1.4**! See the full [v1.1.4 Release Notes](https://qwenpaw.agentscope.io/release-notes).
-
-  - **[v1.1.4] Added**: Memory & context architecture refactor; plan mode; configurable shell evasion checks; auth-bypass host whitelist; SIP voice channel; session right-click menu; browser launch parameters and shell command timeout; Built-in DeepSeek V4 models.
-  - **[v1.1.4] Changed**: Tool Guard approval system; Docker build improvements; dynamic plugin registration.
-  - **[v1.1.4] New Contributors**: @shadowabi, @shaohuaxi, @vincentyzhj, @hlgone, @twz915, @Nioolek.
-
-- [2026-04-22] We've released **v1.1.3**! See the full [v1.1.3 Release Notes](https://qwenpaw.agentscope.io/release-notes).
-
-- [2026-04-17] We've released **v1.1.2**! See the full [v1.1.2 Release Notes](https://qwenpaw.agentscope.io/release-notes).
-
-  - **[v1.1.2] Added**: Mission Mode (`/mission`) for autonomous, multi-phase task execution; ACP protocol for external agent delegation; `qwenpaw doctor` diagnostic command; `qwenpaw agents create` CLI agent creation; scheduled memory consolidation (Dream); new Debug page.
-  - **[v1.1.2] Changed**: Agent communication tools split into synchronous/asynchronous modes; provider list sorted by availability.
-  - **[v1.1.2] New Contributors**: @FrankJingHao, @ployts, @cqhtyi, @leesf, @flystar32.
-
-- [2026-04-14] We've released **v1.1.1**! See the full [v1.1.1 Release Notes](https://qwenpaw.agentscope.io/release-notes).
-
-- [2026-04-12] **This fork keeps the CoPaw brand on top of the upstream QwenPaw codebase**: upstream renamed the project to QwenPaw, while this fork keeps CoPaw as the user-facing brand.
 - [2026-04-12] **CoPaw is Officially Rebranding to QwenPaw**: This rebranding marks an important step forward into our next phase of open-source development.
 
 The new name better reflects the open ecosystem we are building and the broader direction we are continuing to pursue:
@@ -104,7 +103,7 @@ This rebranding does not change our vision and goals in the open-source communit
 - To stay committed to open-source collaboration and move forward together with the community.
 
 Thank you all for your support along the way.
-CoPaw will keep tracking upstream while staying recognizable to existing users.
+From today on, QwenPaw will stay and grow with you!
 
 ---
 
@@ -117,21 +116,36 @@ CoPaw will keep tracking upstream while staying recognizable to existing users.
 > - **🐍 I don't want to install Python**: [Desktop app](#option-6-desktop-application-beta) or [Script install](#option-2-script-install) or [ModelScope Studio](https://modelscope.cn/studios/fork?target=AgentScope/QwenPaw)
 > - **💻 I want to use local models (no API key needed)**: [Local Models](#local-models) → download model → start using
 > - **🛠️ I want to contribute code or develop new features**: [Install from source](#install-from-source) → [Contributing](#contributing)
-- [News](#news)
-- [Quick Start](#quick-start)
-- [API Key](#api-key)
-- [Local Models](#local-models)
-- [Documentation](#documentation)
-- [Project Knowledge Processing](#project-knowledge-processing)
-- [Security Features](#security-features)
-- [FAQ](#faq)
-- [Staying ahead](#staying-ahead)
-- [Roadmap](#roadmap)
-- [Install from source](#install-from-source)
-- [Contributing](#contributing)
-- [Why CoPaw?](#why-copaw)
-- [Built by](#built-by)
-- [License](#license)
+- [CoPaw](#copaw)
+  - [QwenPaw](#qwenpaw)
+  - [News](#news)
+  - [Table of Contents](#table-of-contents)
+  - [Quick Start](#quick-start)
+    - [Option 1: pip install](#option-1-pip-install)
+    - [Option 2: Script install](#option-2-script-install)
+    - [Option 3: Docker](#option-3-docker)
+    - [Option 4: Deploy on Alibaba Cloud ECS](#option-4-deploy-on-alibaba-cloud-ecs)
+    - [Option 5: Using ModelScope](#option-5-using-modelscope)
+    - [Option 6: Desktop Application (Beta)](#option-6-desktop-application-beta)
+      - [Download](#download)
+      - [Features](#features)
+      - [First Launch](#first-launch)
+      - [macOS: Bypass System Security Restrictions](#macos-bypass-system-security-restrictions)
+  - [API Key](#api-key)
+  - [Local Models](#local-models)
+  - [Documentation](#documentation)
+  - [Security Features](#security-features)
+  - [FAQ](#faq)
+  - [Staying ahead](#staying-ahead)
+  - [Roadmap](#roadmap)
+  - [Install from source](#install-from-source)
+  - [Contributing](#contributing)
+  - [Why QwenPaw?](#why-qwenpaw)
+  - [Built by](#built-by)
+  - [Contact us](#contact-us)
+  - [Telemetry](#telemetry)
+  - [License](#license)
+  - [Contributors](#contributors)
 
 ---
 
@@ -143,8 +157,8 @@ If you prefer managing Python yourself:
 
 ```bash
 pip install qwenpaw
-copaw init --defaults
-copaw app
+qwenpaw init --defaults
+qwenpaw app
 ```
 
 Then open the Console in your browser at **http://127.0.0.1:8088/** to configure your model. To chat in DingTalk, Feishu, WeChat, etc., see the [Channel setup](https://qwenpaw.agentscope.io/docs/channels) documentation.
@@ -246,53 +260,6 @@ qwenpaw uninstall --purge  # removes everything
 
 </details>
 
-
----
-
-## Project Knowledge Processing
-
-The Project page now includes a built-in knowledge workflow for project-scoped indexing, graph construction, and quality review.
-
-Current milestone behavior:
-
-1. Processing lanes run in parallel: `fast`, `nlp`, and `agentic`.
-2. The scheduler keeps fast preview available first, advances NLP graph artifacts next, and continues multi-agent deep processing in the background.
-3. The consumer side always prefers the best available output and automatically downgrades in this order: `agentic -> nlp -> fast`.
-4. The Console exposes this through the Knowledge dock tabs: `Explore`, `Sources`, `Processing`, `Outputs`, `Health`, and `Settings`.
-
-Mode semantics in the current implementation:
-
-1. `fast`: indexed preview artifacts for quick project exploration.
-2. `nlp`: structured graph artifacts such as `graph.json` and related quality outputs.
-3. `agentic`: workflow-level enriched outputs, preferring the highest-quality knowledge artifacts when available.
-
-Graph query consumers now follow the same mode selection. When the selected mode does not yet have a higher-order artifact, CoPaw falls back automatically instead of blocking the user on long-running processing.
-
-### HanLP L2 sidecar setup
-
-Layer 2 NLP in the current implementation is based on the HanLP 2.x local runtime, but CoPaw's main environment targets Python 3.10-3.13 while the upstream HanLP 2.x local install guide targets Python 3.6-3.9. To avoid mixing incompatible runtimes, run HanLP in a dedicated sidecar Python environment.
-
-Recommended setup:
-
-```bash
-python3.9 -m venv ~/.venvs/copaw-hanlp
-~/.venvs/copaw-hanlp/bin/python -m pip install -U pip
-~/.venvs/copaw-hanlp/bin/python -m pip install hanlp
-
-export COPAW_HANLP_SIDECAR_ENABLED=1
-export COPAW_HANLP_SIDECAR_PYTHON="$HOME/.venvs/copaw-hanlp/bin/python"
-# Optional: reuse an existing offline cache/model directory
-export COPAW_HANLP_HOME="$HOME/.hanlp"
-
-qwenpaw doctor
-```
-
-Notes:
-
-1. The main CoPaw app does not need HanLP installed in its own `.venv`.
-2. The first HanLP load may download models into `HANLP_HOME` or `~/.hanlp`.
-3. For offline or intranet deployment, pre-seed both `~/.hanlp` and `~/.cache/huggingface` into the sidecar environment.
-4. In the Project Knowledge Settings panel, Layer 2 will report whether the sidecar is unconfigured, missing, incompatible, or ready.
 
 ---
 
@@ -426,34 +393,6 @@ QwenPaw can run LLMs entirely on your machine — no API keys or cloud services 
 
 ---
 
-## Skills Marketplace Example
-
-You can add a community skills market source in Console or in your `config.json`.
-
-Example source for the `editor-skills` repository:
-
-```json
-{
-  "skills_market": {
-    "markets": [
-      {
-        "id": "editor_skills",
-        "name": "Editor Skills",
-        "type": "git",
-        "url": "https://github.com/futuremeng/editor-skills",
-        "branch": "main",
-        "path": "skills",
-        "enabled": true,
-        "order": 1,
-        "trust": "community"
-      }
-    ]
-  }
-}
-```
-
----
-
 ## Documentation
 
 | Topic                                                                 | Description                                      |
@@ -574,10 +513,10 @@ Join [GitHub Discussions](https://github.com/agentscope-ai/QwenPaw/discussions) 
 
 ---
 
-## Why CoPaw?
+## Why QwenPaw?
 
-CoPaw keeps the familiar companion metaphor from the original fork while continuing to track the upstream QwenPaw codebase.
-We want it to feel less like a cold tool and more like an intelligent, dependable "little paw" that stays close to your actual workflow.
+QwenPaw stands for Qwen Personal Agent Workstation, and also embodies the wisdom of Qwen and the warmth of a Paw.
+We hope it is not a cold tool, but an intelligent and warm "little paw" always ready to help—a most intuitive partner in your digital life.
 
 ---
 
