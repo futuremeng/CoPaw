@@ -16,7 +16,7 @@ import {
 } from "antd";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import type { AgentProjectSummary, AgentSummary } from "../../../api/types/agents";
+import type { AgentProfileConfig, AgentProjectSummary } from "../../../api/types/agents";
 import { agentsApi } from "../../../api/modules/agents";
 import { useAgentStore } from "../../../stores/agentStore";
 import styles from "./projectsList.module.less";
@@ -62,17 +62,10 @@ function compareProjects(
   }) * direction;
 }
 
-function getCurrentAgent(
-  agents: AgentSummary[],
-  selectedAgent: string,
-): AgentSummary | undefined {
-  return agents.find((agent) => agent.id === selectedAgent);
-}
-
 export default function ProjectsListPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { selectedAgent, agents, setAgents } = useAgentStore();
+  const { selectedAgent } = useAgentStore();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [cloningId, setCloningId] = useState("");
@@ -83,6 +76,8 @@ export default function ProjectsListPage() {
   const [creating, setCreating] = useState(false);
   const [sortField, setSortField] = useState<ProjectSortField>("updated");
   const [sortOrder, setSortOrder] = useState<ProjectSortOrder>("desc");
+  const [currentAgent, setCurrentAgent] = useState<AgentProfileConfig | undefined>();
+  const [projects, setProjects] = useState<AgentProjectSummary[]>([]);
   const [createForm] = Form.useForm<{
     id?: string;
     name: string;
@@ -90,42 +85,45 @@ export default function ProjectsListPage() {
     tags?: string;
   }>();
 
-  const currentAgent = useMemo(
-    () => getCurrentAgent(agents, selectedAgent),
-    [agents, selectedAgent],
-  );
+  const loadPageData = useCallback(async () => {
+    if (!selectedAgent) {
+      setCurrentAgent(undefined);
+      setProjects([]);
+      return;
+    }
 
-  const projects = useMemo(
-    () => (currentAgent?.projects || []).slice().sort((left, right) => (
-      compareProjects(left, right, sortField, sortOrder)
-    )),
-    [currentAgent?.projects, sortField, sortOrder],
-  );
-
-  const loadAgents = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const data = await agentsApi.listAgents();
-      setAgents(data.agents);
+      const [agent, projectList] = await Promise.all([
+        agentsApi.getAgent(selectedAgent),
+        agentsApi.listAgentProjects(selectedAgent),
+      ]);
+      setCurrentAgent(agent);
+      setProjects(projectList);
     } catch (err) {
-      console.error("failed to load project list", err);
+      console.error("failed to load project page data", err);
       setError(
         t(
           "projects.loadFailed",
-          "Failed to load projects for the current agent.",
+          "Failed to load project data for the current agent.",
         ),
       );
     } finally {
       setLoading(false);
     }
-  }, [setAgents, t]);
+  }, [selectedAgent, t]);
 
   useEffect(() => {
-    if (!currentAgent) {
-      void loadAgents();
-    }
-  }, [currentAgent, loadAgents]);
+    void loadPageData();
+  }, [loadPageData]);
+
+  const sortedProjects = useMemo(
+    () => projects.slice().sort((left, right) => (
+      compareProjects(left, right, sortField, sortOrder)
+    )),
+    [projects, sortField, sortOrder],
+  );
 
   const handleClone = useCallback(async (
     projectId: string,
@@ -147,14 +145,14 @@ export default function ProjectsListPage() {
           name: cloned.name || cloned.id,
         }),
       );
-      await loadAgents();
+      await loadPageData();
     } catch (err) {
       console.error("failed to clone project", err);
       message.error(t("projects.cloneFailed", "Failed to clone project."));
     } finally {
       setCloningId("");
     }
-  }, [currentAgent, loadAgents, t]);
+  }, [currentAgent, loadPageData, t]);
 
   const handleOpenCreate = useCallback(() => {
     createForm.setFieldsValue({
@@ -189,14 +187,14 @@ export default function ProjectsListPage() {
           name: projectName || projectId,
         }),
       );
-      await loadAgents();
+      await loadPageData();
     } catch (err) {
       console.error("failed to delete project", err);
       message.error(t("projects.deleteFailed", "Failed to delete project."));
     } finally {
       setDeletingId("");
     }
-  }, [currentAgent, loadAgents, t]);
+  }, [currentAgent, loadPageData, t]);
 
   const handleCreateProject = useCallback(async () => {
     if (!currentAgent) {
@@ -224,7 +222,6 @@ export default function ProjectsListPage() {
         }),
       );
       setCreateOpen(false);
-      await loadAgents();
       navigate(`/projects/${encodeURIComponent(created.id)}`);
     } catch (err) {
       if ((err as { errorFields?: unknown[] })?.errorFields) {
@@ -235,7 +232,7 @@ export default function ProjectsListPage() {
     } finally {
       setCreating(false);
     }
-  }, [createForm, currentAgent, loadAgents, navigate, t]);
+  }, [createForm, currentAgent, navigate, t]);
 
   return (
     <div className={styles.projectsPage}>
@@ -290,8 +287,11 @@ export default function ProjectsListPage() {
       <div className={styles.workspaceInfo}>
         <p className={styles.workspacePath}>
           {t("projects.workspacePath", "Workspace Path")}: {" "}
-          {currentAgent?.workspace_dir ||
-            t("projects.noAgent", "No agent is currently available.")}
+          {currentAgent?.workspace_dir || (
+            loading
+              ? t("common.loading", "Loading")
+              : t("projects.noAgent", "No agent is currently available.")
+          )}
         </p>
       </div>
 
@@ -301,7 +301,7 @@ export default function ProjectsListPage() {
         </div>
       ) : !currentAgent ? (
         <Empty description={t("projects.noAgent", "No agent is currently available.")} />
-      ) : projects.length === 0 ? (
+      ) : sortedProjects.length === 0 ? (
         <Empty description={t("projects.noProjects", "No projects in this workspace yet.")}
         >
           <Button type="primary" onClick={handleOpenCreate}>
@@ -310,7 +310,7 @@ export default function ProjectsListPage() {
         </Empty>
       ) : (
         <div className={styles.projectsGrid}>
-          {projects.map((project) => (
+          {sortedProjects.map((project) => (
             <Card
               key={project.id}
               hoverable

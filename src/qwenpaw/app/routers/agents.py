@@ -3608,14 +3608,11 @@ def _collect_agent_summaries(
     config: Any,
     ordered_agent_ids: list[str],
 ) -> list[AgentSummary]:
-    """Build agent summaries with project metadata from disk."""
+    """Build lightweight agent summaries without project expansion."""
     agents: list[AgentSummary] = []
 
     for agent_id in ordered_agent_ids:
         agent_ref = config.agents.profiles[agent_id]
-        workspace_dir = Path(agent_ref.workspace_dir)
-        _ensure_projects_layout(workspace_dir)
-        projects = _list_agent_projects(workspace_dir)
 
         try:
             agent_config = load_agent_config(agent_id)
@@ -3651,8 +3648,6 @@ def _collect_agent_summaries(
                         getattr(agent_config, "system_protected", False)
                         or getattr(agent_ref, "system_protected", False)
                     ),
-                    project_count=len(projects),
-                    projects=projects,
                 ),
             )
         except Exception:  # noqa: E722
@@ -3669,8 +3664,6 @@ def _collect_agent_summaries(
                     system_protected=bool(
                         getattr(agent_ref, "system_protected", False),
                     ),
-                    project_count=len(projects),
-                    projects=projects,
                 ),
             )
 
@@ -3693,6 +3686,28 @@ async def list_agents() -> AgentListResponse:
         ordered_agent_ids,
     )
     return AgentListResponse(agents=agents)
+
+
+@router.get(
+    "/{agentId}/projects",
+    response_model=list[ProjectSummary],
+    summary="List projects for one agent",
+    description="Get projects only for the requested agent workspace",
+)
+async def list_agent_projects(
+    request: Request,
+    agentId: str = PathParam(...),
+) -> list[ProjectSummary]:
+    """List projects for one agent workspace without scanning other agents."""
+    _ = request
+    config = load_config()
+    profile = config.agents.profiles.get(agentId)
+    if profile is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Agent '{agentId}' not found",
+        )
+    return _list_agent_projects(Path(profile.workspace_dir))
 
 
 @router.put(
@@ -4563,16 +4578,12 @@ async def get_project_artifact_profile(
     projectId: str = PathParam(...),
 ) -> ProjectArtifactProfile:
     """Get project unified artifact profile."""
-    manager = _get_multi_agent_manager(request)
-
-    try:
-        workspace = await manager.get_agent(agentId)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    _ = request
+    workspace_dir = _resolve_agent_workspace_dir(agentId)
 
     try:
         return _get_project_artifact_profile(
-            Path(workspace.workspace_dir),
+            workspace_dir,
             projectId,
         )
     except HTTPException:
@@ -4594,16 +4605,12 @@ async def update_project_artifact_profile(
     projectId: str = PathParam(...),
 ) -> ProjectSummary:
     """Update project unified artifact profile."""
-    manager = _get_multi_agent_manager(request)
-
-    try:
-        workspace = await manager.get_agent(agentId)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    _ = request
+    workspace_dir = _resolve_agent_workspace_dir(agentId)
 
     try:
         return _update_project_artifact_profile(
-            Path(workspace.workspace_dir),
+            workspace_dir,
             projectId,
             body,
         )
@@ -4626,16 +4633,12 @@ async def update_project_artifact_distill_mode(
     projectId: str = PathParam(...),
 ) -> ProjectSummary:
     """Update project artifact distill mode."""
-    manager = _get_multi_agent_manager(request)
-
-    try:
-        workspace = await manager.get_agent(agentId)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    _ = request
+    workspace_dir = _resolve_agent_workspace_dir(agentId)
 
     try:
         return _update_project_artifact_distill_mode(
-            Path(workspace.workspace_dir),
+            workspace_dir,
             projectId,
             body.artifact_distill_mode,
         )
@@ -4658,16 +4661,12 @@ async def update_project_workspace_chat_binding(
     projectId: str = PathParam(...),
 ) -> ProjectSummary:
     """Update preferred workspace chat id for a project."""
-    manager = _get_multi_agent_manager(request)
-
-    try:
-        workspace = await manager.get_agent(agentId)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    _ = request
+    workspace_dir = _resolve_agent_workspace_dir(agentId)
 
     try:
         return _update_project_workspace_chat_binding(
-            Path(workspace.workspace_dir),
+            workspace_dir,
             projectId,
             body.preferred_workspace_chat_id,
         )
@@ -4692,16 +4691,12 @@ async def update_project_knowledge_sink(
     projectId: str = PathParam(...),
 ) -> ProjectSummary:
     """Update project auto knowledge sink switch."""
-    manager = _get_multi_agent_manager(request)
-
-    try:
-        workspace = await manager.get_agent(agentId)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    _ = request
+    workspace_dir = _resolve_agent_workspace_dir(agentId)
 
     try:
         return _update_project_auto_knowledge_sink(
-            Path(workspace.workspace_dir),
+            workspace_dir,
             projectId,
             body.project_auto_knowledge_sink,
         )

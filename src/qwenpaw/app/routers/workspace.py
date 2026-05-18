@@ -31,7 +31,10 @@ from ...agents.memory.agent_md_manager import AgentMdManager
 from ...agents.templates import get_workspace_md_template_id
 from ...agents.utils import copy_workspace_md_files
 from ...constant import BUILTIN_QA_AGENT_ID, SUPPORTED_AGENT_LANGUAGES
-from ..agent_context import get_agent_for_request
+from ..agent_context import (
+    get_loaded_agent_for_request,
+    resolve_agent_id_for_request,
+)
 
 from ..project_realtime_events import record_project_realtime_paths
 
@@ -53,6 +56,34 @@ class MdFileContent(BaseModel):
     """Markdown file content."""
 
     content: str = Field(..., description="File content")
+
+
+def _resolve_workspace_target(request: Request) -> tuple[str, Path]:
+    """Resolve target agent/workspace without forcing workspace startup."""
+    loaded_workspace = get_loaded_agent_for_request(request)
+    if loaded_workspace is not None:
+        return loaded_workspace.agent_id, Path(loaded_workspace.workspace_dir)
+
+    agent_id = resolve_agent_id_for_request(request)
+    config = load_config()
+    profile = config.agents.profiles.get(agent_id)
+    if profile is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Agent '{agent_id}' not found",
+        )
+    return agent_id, Path(profile.workspace_dir)
+
+
+def _resolve_workspace_manager(
+    request: Request,
+) -> tuple[str, Path, AgentMdManager]:
+    agent_id, workspace_dir = _resolve_workspace_target(request)
+    return (
+        agent_id,
+        workspace_dir,
+        AgentMdManager(str(workspace_dir), agent_id=agent_id),
+    )
 
 
 def _dir_stats(root: Path) -> tuple[int, int]:
@@ -101,11 +132,7 @@ async def list_working_files(
 ) -> list[MdFileInfo]:
     """List working directory markdown files."""
     try:
-        workspace = await get_agent_for_request(request)
-        workspace_manager = AgentMdManager(
-            str(workspace.workspace_dir),
-            agent_id=workspace.agent_id,
-        )
+        _, _, workspace_manager = _resolve_workspace_manager(request)
         files = [
             MdFileInfo.model_validate(file)
             for file in workspace_manager.list_working_mds()
@@ -129,11 +156,7 @@ async def read_working_file(
 ) -> MdFileContent:
     """Read a working directory markdown file."""
     try:
-        workspace = await get_agent_for_request(request)
-        workspace_manager = AgentMdManager(
-            str(workspace.workspace_dir),
-            agent_id=workspace.agent_id,
-        )
+        _, _, workspace_manager = _resolve_workspace_manager(request)
         content = workspace_manager.read_working_md(md_name)
         return MdFileContent(content=content)
     except FileNotFoundError as exc:
@@ -157,11 +180,7 @@ async def write_working_file(
 ) -> dict:
     """Write a working directory markdown file."""
     try:
-        workspace = await get_agent_for_request(request)
-        workspace_manager = AgentMdManager(
-            str(workspace.workspace_dir),
-            agent_id=workspace.agent_id,
-        )
+        _, _, workspace_manager = _resolve_workspace_manager(request)
         workspace_manager.write_working_md(md_name, body.content)
         return {"written": True}
     except HTTPException:
@@ -181,11 +200,7 @@ async def list_memory_files(
 ) -> list[MdFileInfo]:
     """List memory directory markdown files."""
     try:
-        workspace = await get_agent_for_request(request)
-        workspace_manager = AgentMdManager(
-            str(workspace.workspace_dir),
-            agent_id=workspace.agent_id,
-        )
+        _, _, workspace_manager = _resolve_workspace_manager(request)
         files = [
             MdFileInfo.model_validate(file)
             for file in workspace_manager.list_memory_mds()
@@ -209,11 +224,7 @@ async def read_memory_file(
 ) -> MdFileContent:
     """Read a memory directory markdown file."""
     try:
-        workspace = await get_agent_for_request(request)
-        workspace_manager = AgentMdManager(
-            str(workspace.workspace_dir),
-            agent_id=workspace.agent_id,
-        )
+        _, _, workspace_manager = _resolve_workspace_manager(request)
         content = workspace_manager.read_memory_md(md_name)
         return MdFileContent(content=content)
     except FileNotFoundError as exc:
@@ -237,11 +248,7 @@ async def write_memory_file(
 ) -> dict:
     """Write a memory directory markdown file."""
     try:
-        workspace = await get_agent_for_request(request)
-        workspace_manager = AgentMdManager(
-            str(workspace.workspace_dir),
-            agent_id=workspace.agent_id,
-        )
+        _, _, workspace_manager = _resolve_workspace_manager(request)
         workspace_manager.write_memory_md(md_name, body.content)
         return {"written": True}
     except HTTPException:
@@ -257,11 +264,11 @@ async def write_memory_file(
 )
 async def get_agent_language(request: Request) -> dict:
     """Get agent language setting for current agent."""
-    workspace = await get_agent_for_request(request)
-    agent_config = load_agent_config(workspace.agent_id)
+    agent_id, _ = _resolve_workspace_target(request)
+    agent_config = load_agent_config(agent_id)
     return {
         "language": agent_config.language,
-        "agent_id": workspace.agent_id,
+        "agent_id": agent_id,
     }
 
 
@@ -294,8 +301,7 @@ async def put_agent_language(
             ),
         )
 
-    workspace = await get_agent_for_request(request)
-    agent_id = workspace.agent_id
+    agent_id, workspace_dir = _resolve_workspace_target(request)
 
     agent_config = load_agent_config(agent_id)
     old_language = agent_config.language
@@ -307,7 +313,7 @@ async def put_agent_language(
     if old_language != language:
         copied_files = copy_workspace_md_files(
             language,
-            workspace.workspace_dir,
+            str(workspace_dir),
             md_template_id=get_workspace_md_template_id(
                 agent_config.template_id
                 or ("qa" if agent_id == BUILTIN_QA_AGENT_ID else None),
@@ -589,8 +595,8 @@ async def get_agents_running_config(
     request: Request,
 ) -> AgentsRunningConfig:
     """Get agent running configuration."""
-    workspace = await get_agent_for_request(request)
-    agent_config = load_agent_config(workspace.agent_id)
+    agent_id, _ = _resolve_workspace_target(request)
+    agent_config = load_agent_config(agent_id)
     running = agent_config.running or AgentsRunningConfig()
     running.approval_level = getattr(agent_config, "approval_level", "AUTO")
     return running
@@ -610,17 +616,17 @@ async def put_agents_running_config(
     request: Request = None,
 ) -> AgentsRunningConfig:
     """Update agent running configuration."""
-    workspace = await get_agent_for_request(request)
-    agent_config = load_agent_config(workspace.agent_id)
+    agent_id, _ = _resolve_workspace_target(request)
+    agent_config = load_agent_config(agent_id)
 
     if running_config.approval_level is not None:
         agent_config.approval_level = running_config.approval_level
 
     running_config.approval_level = None
     agent_config.running = running_config
-    save_agent_config(workspace.agent_id, agent_config)
+    save_agent_config(agent_id, agent_config)
 
-    schedule_agent_reload(request, workspace.agent_id)
+    schedule_agent_reload(request, agent_id)
 
     running_config.approval_level = agent_config.approval_level
     return running_config
@@ -636,8 +642,8 @@ async def get_system_prompt_files(
     request: Request,
 ) -> list[str]:
     """Get list of enabled system prompt files."""
-    workspace = await get_agent_for_request(request)
-    agent_config = load_agent_config(workspace.agent_id)
+    agent_id, _ = _resolve_workspace_target(request)
+    agent_config = load_agent_config(agent_id)
     return agent_config.system_prompt_files or []
 
 
@@ -655,12 +661,12 @@ async def put_system_prompt_files(
     request: Request = None,
 ) -> list[str]:
     """Update list of enabled system prompt files."""
-    workspace = await get_agent_for_request(request)
-    agent_config = load_agent_config(workspace.agent_id)
+    agent_id, _ = _resolve_workspace_target(request)
+    agent_config = load_agent_config(agent_id)
     agent_config.system_prompt_files = files
-    save_agent_config(workspace.agent_id, agent_config)
+    save_agent_config(agent_id, agent_config)
 
-    schedule_agent_reload(request, workspace.agent_id)
+    schedule_agent_reload(request, agent_id)
 
     return files
 
@@ -760,9 +766,7 @@ def _validate_and_extract_zip(data: bytes, workspace_dir: Path) -> list[Path]:
 )
 async def download_workspace(request: Request):
     """Stream agent workspace as a zip file."""
-
-    agent = await get_agent_for_request(request)
-    workspace_dir = agent.workspace_dir
+    agent_id, workspace_dir = _resolve_workspace_target(request)
 
     if not workspace_dir.is_dir():
         raise HTTPException(
@@ -773,7 +777,7 @@ async def download_workspace(request: Request):
     buf = await asyncio.to_thread(_zip_directory, workspace_dir)
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    filename = f"qwenpaw_workspace_{agent.agent_id}_{timestamp}.zip"
+    filename = f"qwenpaw_workspace_{agent_id}_{timestamp}.zip"
 
     return StreamingResponse(
         buf,
@@ -819,8 +823,7 @@ async def upload_workspace(
             ),
         )
 
-    agent = await get_agent_for_request(request)
-    workspace_dir = agent.workspace_dir
+    _, workspace_dir = _resolve_workspace_target(request)
     data = await file.read()
 
     try:

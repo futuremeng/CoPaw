@@ -541,7 +541,9 @@ export default function ProjectDetailPage() {
   );
 
   const [loading, setLoading] = useState(false);
+  const [projectsLoading, setProjectsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [projects, setProjects] = useState<AgentProjectSummary[]>([]);
 
   const [resolvedProjectRequestId, setResolvedProjectRequestId] = useState("");
   const [projectFiles, setProjectFiles] = useState<AgentProjectFileInfo[]>([]);
@@ -639,11 +641,6 @@ export default function ProjectDetailPage() {
   const currentAgent = useMemo(
     () => getCurrentAgent(agents, selectedAgent),
     [agents, selectedAgent],
-  );
-
-  const projects = useMemo(
-    () => currentAgent?.projects ?? [],
-    [currentAgent?.projects],
   );
 
   const selectedProject = useMemo(
@@ -1336,6 +1333,31 @@ export default function ProjectDetailPage() {
       setLoading(false);
     }
   }, [setAgents, t]);
+
+  const loadAgentProjects = useCallback(async (agentId: string) => {
+    if (!agentId) {
+      setProjects([]);
+      return;
+    }
+
+    setProjectsLoading(true);
+    setError("");
+    try {
+      const items = await agentsApi.listAgentProjects(agentId);
+      setProjects(items);
+    } catch (err) {
+      console.error("failed to load project list", err);
+      setProjects([]);
+      setError(
+        t(
+          "projects.loadFailed",
+          "Failed to load projects for the current agent.",
+        ),
+      );
+    } finally {
+      setProjectsLoading(false);
+    }
+  }, [t]);
 
   const loadProjectFiles = useCallback(async (
     agentId: string,
@@ -2241,8 +2263,11 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     if (!currentAgent) {
       void loadAgents();
+      setProjects([]);
+      return;
     }
-  }, [currentAgent, loadAgents]);
+    void loadAgentProjects(currentAgent.id);
+  }, [currentAgent, loadAgentProjects, loadAgents]);
 
   useEffect(() => {
     if (!selectedFilePath) {
@@ -2744,24 +2769,15 @@ export default function ProjectDetailPage() {
   ]);
 
   const handleProjectAutoKnowledgeSinkChange = useCallback((enabled: boolean) => {
-    if (!currentAgent || !selectedProject) {
+    if (!selectedProject) {
       return;
     }
-    const nextAgents = agents.map((agent) => {
-      if (agent.id !== currentAgent.id) {
-        return agent;
-      }
-      return {
-        ...agent,
-        projects: (agent.projects || []).map((project) => (
-          project.id === selectedProject.id
-            ? { ...project, project_auto_knowledge_sink: enabled }
-            : project
-        )),
-      };
-    });
-    setAgents(nextAgents);
-  }, [agents, currentAgent, selectedProject, setAgents]);
+    setProjects((prev) => prev.map((project) => (
+      project.id === selectedProject.id
+        ? { ...project, project_auto_knowledge_sink: enabled }
+        : project
+    )));
+  }, [selectedProject]);
 
   const handleSendSelectedFilesToChat = useCallback(async () => {
     if (!currentAgent || !selectedProject || selectedAttachPaths.length === 0) {
@@ -3317,7 +3333,7 @@ export default function ProjectDetailPage() {
               </Button>
               <span className={styles.pathSeparator}>/</span>
               <span className={styles.pathCurrent}>
-                {selectedProject?.name || t("projects.path.projectSpace")}
+                {selectedProject?.name || t("projects.path.projectSpace", "Project Space")}
               </span>
             </div>
           </div>
@@ -3375,6 +3391,10 @@ export default function ProjectDetailPage() {
         </div>
       ) : !currentAgent ? (
         <Empty description={t("projects.noAgent")} />
+      ) : projectsLoading ? (
+        <div className={styles.centerState}>
+          <Spin />
+        </div>
       ) : projects.length === 0 ? (
         <Empty description={t("projects.noProjects")} />
       ) : !selectedProject ? (

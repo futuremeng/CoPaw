@@ -1,7 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import type { AgentSummary } from "../../../api/types/agents";
 import ProjectsListPage from "./ProjectsListPage";
 
 const {
@@ -13,33 +12,18 @@ const {
   storeState,
 } = vi.hoisted(() => ({
   navigateMock: vi.fn(),
-  setAgentsMock: vi.fn(),
   mockedSuccess: vi.fn(),
   mockedError: vi.fn(),
   mockedAgentsApi: {
-    listAgents: vi.fn(),
+    getAgent: vi.fn(),
+    listAgentProjects: vi.fn(),
     createProject: vi.fn(),
     cloneProject: vi.fn(),
     deleteProject: vi.fn(),
   },
   storeState: {
     selectedAgent: "agent-1",
-    agents: [
-      {
-        id: "agent-1",
-        name: "Agent One",
-        description: "",
-        workspace_dir: "/tmp/agent-1",
-        enabled: true,
-        is_builtin: false,
-        builtin_kind: "",
-        builtin_label: "",
-        system_protected: false,
-        project_count: 0,
-        projects: [],
-      },
-    ],
-  } as { selectedAgent: string; agents: AgentSummary[] },
+  } as { selectedAgent: string },
 }));
 
 vi.mock("react-router-dom", () => ({
@@ -66,8 +50,6 @@ vi.mock("react-i18next", () => ({
 vi.mock("../../../stores/agentStore", () => ({
   useAgentStore: () => ({
     selectedAgent: storeState.selectedAgent,
-    agents: storeState.agents,
-    setAgents: setAgentsMock,
   }),
 }));
 
@@ -90,21 +72,6 @@ describe("ProjectsListPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     storeState.selectedAgent = "agent-1";
-    storeState.agents = [
-      {
-        id: "agent-1",
-        name: "Agent One",
-        description: "",
-        workspace_dir: "/tmp/agent-1",
-        enabled: true,
-        is_builtin: false,
-        builtin_kind: "",
-        builtin_label: "",
-        system_protected: false,
-        project_count: 0,
-        projects: [],
-      },
-    ];
     Object.defineProperty(window, "matchMedia", {
       writable: true,
       value: vi.fn().mockImplementation((query: string) => ({
@@ -118,7 +85,12 @@ describe("ProjectsListPage", () => {
         dispatchEvent: vi.fn(),
       })),
     });
-    mockedAgentsApi.listAgents.mockResolvedValue({ agents: [] });
+    mockedAgentsApi.getAgent.mockResolvedValue({
+      id: "agent-1",
+      name: "Agent One",
+      workspace_dir: "/tmp/agent-1",
+    });
+    mockedAgentsApi.listAgentProjects.mockResolvedValue([]);
     mockedAgentsApi.createProject.mockResolvedValue({
       id: "project-1",
       name: "Project One",
@@ -141,93 +113,93 @@ describe("ProjectsListPage", () => {
     });
   });
 
-  it("sorts projects by updated time descending by default", () => {
-    storeState.agents = [
+  it("sorts projects by updated time descending by default", async () => {
+    mockedAgentsApi.listAgentProjects.mockResolvedValue([
       {
-        ...storeState.agents[0],
-        projects: [
-          {
-            id: "project-old",
-            name: "Project Old",
-            description: "older update",
-            status: "active",
-            workspace_dir: "/tmp/project-old",
-            data_dir: "output",
-            metadata_file: ".agent/PROJECT.md",
-            tags: [],
-            artifact_distill_mode: "file_scan",
-            artifact_profile: { skills: [], scripts: [], flows: [], cases: [] },
-            project_auto_knowledge_sink: true,
-            created_time: "2026-04-01T00:00:00Z",
-            updated_time: "2026-04-09T00:00:00Z",
-          },
-          {
-            id: "project-new",
-            name: "Project New",
-            description: "newer update",
-            status: "active",
-            workspace_dir: "/tmp/project-new",
-            data_dir: "output",
-            metadata_file: ".agent/PROJECT.md",
-            tags: [],
-            artifact_distill_mode: "file_scan",
-            artifact_profile: { skills: [], scripts: [], flows: [], cases: [] },
-            project_auto_knowledge_sink: true,
-            created_time: "2026-04-03T00:00:00Z",
-            updated_time: "2026-04-12T00:00:00Z",
-          },
-        ],
+        id: "project-new",
+        name: "Project New",
+        description: "newer update",
+        status: "active",
+        workspace_dir: "/tmp/project-new",
+        data_dir: "output",
+        metadata_file: ".agent/PROJECT.md",
+        tags: [],
+        artifact_distill_mode: "file_scan",
+        artifact_profile: { skills: [], scripts: [], flows: [], cases: [] },
+        project_auto_knowledge_sink: true,
+        created_time: "2026-04-03T00:00:00Z",
+        updated_time: "2026-04-12T00:00:00Z",
       },
-    ];
+      {
+        id: "project-old",
+        name: "Project Old",
+        description: "older update",
+        status: "active",
+        workspace_dir: "/tmp/project-old",
+        data_dir: "output",
+        metadata_file: ".agent/PROJECT.md",
+        tags: [],
+        artifact_distill_mode: "file_scan",
+        artifact_profile: { skills: [], scripts: [], flows: [], cases: [] },
+        project_auto_knowledge_sink: true,
+        created_time: "2026-04-01T00:00:00Z",
+        updated_time: "2026-04-09T00:00:00Z",
+      },
+    ]);
 
     render(<ProjectsListPage />);
 
-    const names = screen.getAllByTestId("project-name").map((item) => item.textContent);
-
-    expect(names).toEqual(["Project New", "Project Old"]);
+    await waitFor(() => {
+      expect(screen.getAllByTestId("project-name").map((item) => item.textContent)).toEqual([
+        "Project New",
+        "Project Old",
+      ]);
+    });
   });
 
   it("switches to created time ascending sort", async () => {
     const user = userEvent.setup();
-    storeState.agents = [
+    mockedAgentsApi.listAgentProjects.mockResolvedValue([
       {
-        ...storeState.agents[0],
-        projects: [
-          {
-            id: "project-later",
-            name: "Project Later",
-            description: "later created",
-            status: "active",
-            workspace_dir: "/tmp/project-later",
-            data_dir: "output",
-            metadata_file: ".agent/PROJECT.md",
-            tags: [],
-            artifact_distill_mode: "file_scan",
-            artifact_profile: { skills: [], scripts: [], flows: [], cases: [] },
-            project_auto_knowledge_sink: true,
-            created_time: "2026-04-08T00:00:00Z",
-            updated_time: "2026-04-10T00:00:00Z",
-          },
-          {
-            id: "project-earlier",
-            name: "Project Earlier",
-            description: "earlier created",
-            status: "active",
-            workspace_dir: "/tmp/project-earlier",
-            data_dir: "output",
-            metadata_file: ".agent/PROJECT.md",
-            tags: [],
-            artifact_distill_mode: "file_scan",
-            artifact_profile: { skills: [], scripts: [], flows: [], cases: [] },
-            project_auto_knowledge_sink: true,
-            created_time: "2026-04-02T00:00:00Z",
-            updated_time: "2026-04-12T00:00:00Z",
-          },
-        ],
+        id: "project-later",
+        name: "Project Later",
+        description: "later created",
+        status: "active",
+        workspace_dir: "/tmp/project-later",
+        data_dir: "output",
+        metadata_file: ".agent/PROJECT.md",
+        tags: [],
+        artifact_distill_mode: "file_scan",
+        artifact_profile: { skills: [], scripts: [], flows: [], cases: [] },
+        project_auto_knowledge_sink: true,
+        created_time: "2026-04-08T00:00:00Z",
+        updated_time: "2026-04-10T00:00:00Z",
       },
-    ];
+      {
+        id: "project-earlier",
+        name: "Project Earlier",
+        description: "earlier created",
+        status: "active",
+        workspace_dir: "/tmp/project-earlier",
+        data_dir: "output",
+        metadata_file: ".agent/PROJECT.md",
+        tags: [],
+        artifact_distill_mode: "file_scan",
+        artifact_profile: { skills: [], scripts: [], flows: [], cases: [] },
+        project_auto_knowledge_sink: true,
+        created_time: "2026-04-02T00:00:00Z",
+        updated_time: "2026-04-11T00:00:00Z",
+      },
+    ]);
 
     render(<ProjectsListPage />);
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId("project-name").map((item) => item.textContent)).toEqual([
+        "Project Earlier",
+        "Project Later",
+      ]);
+    });
 
     await user.click(screen.getByRole("combobox", { name: "Sort projects by" }));
     await user.click(screen.getByText("Created time"));
@@ -242,6 +214,10 @@ describe("ProjectsListPage", () => {
     const user = userEvent.setup();
 
     render(<ProjectsListPage />);
+
+    await waitFor(() => {
+      expect(mockedAgentsApi.getAgent).toHaveBeenCalledWith("agent-1");
+    });
 
     await user.click(screen.getAllByRole("button", { name: "New Project" })[0]);
     await user.type(screen.getByLabelText("Name"), "Project One");

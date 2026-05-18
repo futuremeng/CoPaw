@@ -59,6 +59,10 @@ export const agentsApi = {
   getAgent: (agentId: string) =>
     request<AgentProfileConfig>(`/agents/${agentId}`),
 
+  // List projects for one agent
+  listAgentProjects: (agentId: string) =>
+    request<AgentProjectSummary[]>(`/agents/${agentId}/projects`),
+
   // Create new agent
   createAgent: (agent: CreateAgentRequest) =>
     request<AgentProfileRef>("/agents", {

@@ -15,12 +15,29 @@ from copaw.app.routers import workspace as workspace_router_module
 
 @pytest.fixture
 def workspace_api_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient, Path]:
-    async def _mock_get_agent_for_request(_request):
-        return SimpleNamespace(workspace_dir=tmp_path)
+    def _mock_load_config():
+        return SimpleNamespace(
+            agents=SimpleNamespace(
+                profiles={
+                    "default": SimpleNamespace(workspace_dir=str(tmp_path)),
+                },
+            ),
+        )
 
     monkeypatch.setattr(
-        "copaw.app.agent_context.get_agent_for_request",
-        _mock_get_agent_for_request,
+        workspace_router_module,
+        "get_loaded_agent_for_request",
+        lambda _request: None,
+    )
+    monkeypatch.setattr(
+        workspace_router_module,
+        "resolve_agent_id_for_request",
+        lambda _request: "default",
+    )
+    monkeypatch.setattr(
+        workspace_router_module,
+        "load_config",
+        _mock_load_config,
     )
 
     app = FastAPI()
@@ -62,13 +79,18 @@ def test_workspace_upload_records_project_realtime_event(
 def test_workspace_files_preserves_agent_http_exception(
     monkeypatch: pytest.MonkeyPatch,
 ):
-    async def _mock_get_agent_for_request(_request):
+    def _mock_resolve_agent_id_for_request(_request):
         raise HTTPException(status_code=404, detail="Agent 'missing' not found")
 
     monkeypatch.setattr(
         workspace_router_module,
-        "get_agent_for_request",
-        _mock_get_agent_for_request,
+        "get_loaded_agent_for_request",
+        lambda _request: None,
+    )
+    monkeypatch.setattr(
+        workspace_router_module,
+        "resolve_agent_id_for_request",
+        _mock_resolve_agent_id_for_request,
     )
 
     app = FastAPI()
