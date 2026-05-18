@@ -91,6 +91,46 @@ def project_artifact_router_client(
     return TestClient(app), tmp_path, project_id
 
 
+def test_create_project_endpoint_uses_workspace_fastpath(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        agents_router_module,
+        "_resolve_agent_workspace_dir",
+        lambda _agent_id: tmp_path,
+    )
+
+    def _unexpected_manager_access(_request):
+        raise AssertionError("create project should not access multi_agent_manager")
+
+    monkeypatch.setattr(
+        agents_router_module,
+        "_get_multi_agent_manager",
+        _unexpected_manager_access,
+    )
+
+    app = FastAPI()
+    app.include_router(agents_router_module.router)
+    client = TestClient(app)
+
+    response = client.post(
+        "/agents/default/projects",
+        json={
+            "name": "Fastpath Project",
+            "description": "verify project creation avoids runtime startup",
+            "status": "active",
+            "data_dir": "output",
+            "tags": [],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["name"] == "Fastpath Project"
+    assert payload["id"].startswith("project-")
+
+
 def test_distill_draft_endpoint_is_idempotent(
     project_artifact_router_client: tuple[TestClient, Path, str],
 ):

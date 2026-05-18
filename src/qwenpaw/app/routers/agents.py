@@ -4547,15 +4547,11 @@ async def create_agent_project(
     agentId: str = PathParam(...),
 ) -> ProjectSummary:
     """Create a project under the given agent workspace."""
-    manager = _get_multi_agent_manager(request)
+    _ = request
+    workspace_dir = _resolve_agent_workspace_dir(agentId)
 
     try:
-        workspace = await manager.get_agent(agentId)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-
-    try:
-        return _create_project(Path(workspace.workspace_dir), body)
+        return _create_project(workspace_dir, body)
     except FileExistsError as e:
         raise HTTPException(
             status_code=409, detail=f"Project already exists: {e}"
