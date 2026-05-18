@@ -58,39 +58,37 @@ export default function ProjectKnowledgeRelationsPanel(
 
   return (
     <div className={styles.projectKnowledgeWorkbench}>
-      <div className={styles.projectKnowledgeTabHeader}>
-        <div>
-          <Typography.Title level={5} className={styles.projectKnowledgeSectionTitle}>
-            {t("projects.knowledgeDock.tabRelations", "Relations")}
-          </Typography.Title>
-          <Typography.Text type="secondary">
-            {props.knowledgeState.graphQueryText
-              ? props.knowledgeState.graphQueryText
-              : t("copaw.projects.knowledge.relationsHint")}
-          </Typography.Text>
-        </div>
-        <div className={styles.projectKnowledgeTabActions}>
+      <div>
+        <Typography.Title level={5} className={styles.projectKnowledgeSectionTitle}>
+          {t("projects.knowledgeDock.tabRelations", "Relations")}
+        </Typography.Title>
+        <Typography.Text type="secondary">
+          {props.knowledgeState.graphQueryText
+            ? props.knowledgeState.graphQueryText
+            : t("copaw.projects.knowledge.relationsHint")}
+        </Typography.Text>
+      </div>
+      <div className={styles.projectKnowledgeTabActions}>
+        <Button
+          size="small"
+          onClick={() => {
+            void props.knowledgeState.runGraphQuery(
+              props.knowledgeState.graphQueryText,
+            );
+          }}
+          loading={props.knowledgeState.graphLoading}
+        >
+          {t("copaw.projects.knowledge.actionRefreshSignals")}
+        </Button>
+        {!props.knowledgeState.relationRecords.length ? (
           <Button
             size="small"
-            onClick={() => {
-              void props.knowledgeState.runGraphQuery(
-                props.knowledgeState.graphQueryText,
-              );
-            }}
-            loading={props.knowledgeState.graphLoading}
+            type="primary"
+            onClick={() => props.onRunSuggestedQuery?.(props.knowledgeState.suggestedQuery)}
           >
-            {t("copaw.projects.knowledge.actionRefreshSignals")}
+            {t("copaw.projects.knowledge.actionRunSuggestedQuery")}
           </Button>
-          {!props.knowledgeState.relationRecords.length ? (
-            <Button
-              size="small"
-              type="primary"
-              onClick={() => props.onRunSuggestedQuery?.(props.knowledgeState.suggestedQuery)}
-            >
-              {t("copaw.projects.knowledge.actionRunSuggestedQuery")}
-            </Button>
-          ) : null}
-        </div>
+        ) : null}
       </div>
 
       <div className={styles.projectKnowledgeSignalGrid}>

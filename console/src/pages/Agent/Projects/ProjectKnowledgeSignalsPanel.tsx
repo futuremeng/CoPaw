@@ -109,67 +109,65 @@ export default function ProjectKnowledgeSignalsPanel(
 
   return (
     <div className={styles.projectKnowledgeWorkbench}>
-      <div className={styles.projectKnowledgeTabHeader}>
-        <div>
-          <Typography.Title level={5} className={styles.projectKnowledgeSectionTitle}>
-            {t("projects.knowledgeDock.tabHealth", "Health")}
-          </Typography.Title>
+      <div>
+        <Typography.Title level={5} className={styles.projectKnowledgeSectionTitle}>
+          {t("projects.knowledgeDock.tabHealth", "Health")}
+        </Typography.Title>
+        <Typography.Text type="secondary">
+          {t(knowledgeState.insightMessageKey)}
+        </Typography.Text>
+        {knowledgeState.quantMetricsMeta ? (
           <Typography.Text type="secondary">
-            {t(knowledgeState.insightMessageKey)}
+            {t("copaw.projects.knowledge.metricsSourceLabel")}: {metricsSourceLabel}
+            {metricsUpdatedAtLabel
+              ? ` · ${t("copaw.projects.knowledge.metricsUpdatedAt")}: ${metricsUpdatedAtLabel}`
+              : ""}
           </Typography.Text>
-          {knowledgeState.quantMetricsMeta ? (
-            <Typography.Text type="secondary">
-              {t("copaw.projects.knowledge.metricsSourceLabel")}: {metricsSourceLabel}
-              {metricsUpdatedAtLabel
-                ? ` · ${t("copaw.projects.knowledge.metricsUpdatedAt")}: ${metricsUpdatedAtLabel}`
-                : ""}
-            </Typography.Text>
-          ) : null}
-          {latestSummaryModel.l1Parts.length ? (
-            <Typography.Text type="secondary">
-              {t("copaw.projects.knowledge.latestL1Summary")}: {latestSummaryModel.l1Parts.join(" · ")}
-            </Typography.Text>
-          ) : null}
-          {latestSummaryModel.l23Parts.length ? (
-            <Typography.Text type="secondary">
-              {t("copaw.projects.knowledge.latestL23Summary")}: {latestSummaryModel.l23Parts.join(" · ")}
-            </Typography.Text>
-          ) : null}
-          {showRealtimeConnectionNotice ? (
-            <Alert
-              style={{ marginTop: 8 }}
-              type={realtimeConnectionStatus === "degraded" ? "warning" : "info"}
-              showIcon
-              message={realtimeConnectionText || t("projects.realtime.connecting", "Realtime connecting")}
-              description={
-                (realtimeReconnectAttempt || 0) > 0
-                  ? t("projects.realtime.retryingAttempt", "Attempt {{count}}", {
-                    count: realtimeReconnectAttempt,
-                  })
-                  : undefined
-              }
-            />
-          ) : null}
-        </div>
-        <div className={styles.projectKnowledgeTabActions}>
-          {knowledgeState.insightAction === "settings" ? (
-            <Button size="small" type="primary" onClick={props.onOpenSettings}>
-              {t("copaw.projects.knowledge.actionOpenSettings")}
-            </Button>
-          ) : null}
-          {knowledgeState.insightAction === "query" ? (
-            <Button
-              size="small"
-              type="primary"
-              onClick={() => props.onRunSuggestedQuery?.(knowledgeState.suggestedQuery)}
-            >
-              {t("copaw.projects.knowledge.actionRunSuggestedQuery")}
-            </Button>
-          ) : null}
-          <Button size="small" onClick={() => void knowledgeState.loadProjectSourceStatus()}>
-            {t("copaw.projects.knowledge.actionRefreshSignals")}
+        ) : null}
+        {latestSummaryModel.l1Parts.length ? (
+          <Typography.Text type="secondary">
+            {t("copaw.projects.knowledge.latestL1Summary")}: {latestSummaryModel.l1Parts.join(" · ")}
+          </Typography.Text>
+        ) : null}
+        {latestSummaryModel.l23Parts.length ? (
+          <Typography.Text type="secondary">
+            {t("copaw.projects.knowledge.latestL23Summary")}: {latestSummaryModel.l23Parts.join(" · ")}
+          </Typography.Text>
+        ) : null}
+        {showRealtimeConnectionNotice ? (
+          <Alert
+            style={{ marginTop: 8 }}
+            type={realtimeConnectionStatus === "degraded" ? "warning" : "info"}
+            showIcon
+            message={realtimeConnectionText || t("projects.realtime.connecting", "Realtime connecting")}
+            description={
+              (realtimeReconnectAttempt || 0) > 0
+                ? t("projects.realtime.retryingAttempt", "Attempt {{count}}", {
+                  count: realtimeReconnectAttempt,
+                })
+                : undefined
+            }
+          />
+        ) : null}
+      </div>
+      <div className={styles.projectKnowledgeTabActions}>
+        {knowledgeState.insightAction === "settings" ? (
+          <Button size="small" type="primary" onClick={props.onOpenSettings}>
+            {t("copaw.projects.knowledge.actionOpenSettings")}
           </Button>
-        </div>
+        ) : null}
+        {knowledgeState.insightAction === "query" ? (
+          <Button
+            size="small"
+            type="primary"
+            onClick={() => props.onRunSuggestedQuery?.(knowledgeState.suggestedQuery)}
+          >
+            {t("copaw.projects.knowledge.actionRunSuggestedQuery")}
+          </Button>
+        ) : null}
+        <Button size="small" onClick={() => void knowledgeState.loadProjectSourceStatus()}>
+          {t("copaw.projects.knowledge.actionRefreshSignals")}
+        </Button>
       </div>
 
       <div className={styles.knowledgeModuleHeaderSignals}>

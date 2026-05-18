@@ -269,8 +269,58 @@ describe("project knowledge panels", () => {
     expect(screen.getByText("copaw.projects.knowledge.signalSnapshots")).not.toBeNull();
   });
 
-  it("renders changed files list in sources panel", () => {
+  it("renders knowledge file list in sources panel", () => {
     const knowledgeState = buildKnowledgeState();
+    knowledgeState.projectSources = [
+      {
+        id: "auto-original-a-md",
+        name: "Alpha Note",
+        type: "file",
+        location: "original/a.md",
+        content: "",
+        enabled: true,
+        recursive: false,
+        tags: ["project", "auto"],
+        summary: "",
+        project_id: "project-abc",
+        status: {
+          indexed: true,
+          indexed_at: "2026-05-18T19:20:00Z",
+          document_count: 10,
+          snapshot_count: 1,
+          chunk_count: 20,
+          sentence_count: 30,
+          token_count: 40,
+          char_count: 50,
+          error: null,
+          needs_reindex: false,
+        },
+      },
+      {
+        id: "manual-original-b-md",
+        name: "Beta Note",
+        type: "file",
+        location: "original/b.md",
+        content: "",
+        enabled: true,
+        recursive: false,
+        tags: ["project"],
+        summary: "",
+        project_id: "project-abc",
+        status: {
+          indexed: false,
+          indexed_at: "2026-05-18T19:21:00Z",
+          document_count: 2,
+          snapshot_count: 0,
+          chunk_count: 5,
+          sentence_count: 6,
+          token_count: 7,
+          char_count: 8,
+          error: null,
+          needs_reindex: true,
+        },
+      },
+    ];
     knowledgeState.changedFilesNormalized = [
       {
         path: "original/a.md",
@@ -290,13 +340,18 @@ describe("project knowledge panels", () => {
 
     render(<ProjectKnowledgeSourcesPanel knowledgeState={knowledgeState} />);
 
-    expect(screen.getByText("Changed Files")).not.toBeNull();
+    expect(screen.getByText("Knowledge Files")).not.toBeNull();
     expect(screen.getByText("original/a.md")).not.toBeNull();
     expect(screen.getByText("original/b.md")).not.toBeNull();
     expect(screen.getByText("自动")).not.toBeNull();
     expect(screen.getByText("手动")).not.toBeNull();
     expect(screen.getByText("正在加工")).not.toBeNull();
     expect(screen.getByText("已完成")).not.toBeNull();
+    expect(screen.getByText("10")).not.toBeNull();
+    expect(screen.getByText("20")).not.toBeNull();
+    expect(screen.getByText("30")).not.toBeNull();
+    expect(screen.getByText("40")).not.toBeNull();
+    expect(screen.getByText("50")).not.toBeNull();
   });
 
   it("renders processing and outputs panels", () => {

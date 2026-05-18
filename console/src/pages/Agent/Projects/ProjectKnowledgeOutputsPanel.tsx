@@ -235,42 +235,42 @@ export default function ProjectKnowledgeOutputsPanel(
   );
 
   return (
-    <div className={styles.projectKnowledgeWorkbench}>
-      <div className={styles.projectKnowledgeTabHeader}>
-        <div>
-          <Typography.Title level={5} className={styles.projectKnowledgeSectionTitle}>
-            {t("projects.knowledgeDock.tabOutputs", "Outputs")}
-          </Typography.Title>
-          <Typography.Text type="secondary">{t("copaw.projects.knowledge.outputsRoleHint")}</Typography.Text>
-        </div>
-        <div className={styles.projectKnowledgeTabActions}>
-          <Select
-            size="small"
-            value={selectedMode}
-            classNames={{ popup: { root: styles.projectKnowledgeSelectDropdown } }}
-            style={{ width: 180 }}
-            options={outputModes.map((item) => ({
-              label: getProjectKnowledgeModeTitle(item.mode, t),
-              value: item.mode,
-            }))}
-            onChange={(value) => setSelectedMode(value as ProjectKnowledgeProcessingMode)}
-          />
-          <Button
-            size="small"
-            type={props.knowledgeState.graphNeedsRefresh || modeRefreshPending ? "primary" : "default"}
-            onClick={() => {
-              void props.knowledgeState.runGraphQuery(
-                props.knowledgeState.graphQueryText,
-                props.knowledgeState.graphQueryMode,
-                props.knowledgeState.graphQueryTopK,
-                selectedMode,
-              );
-            }}
-            loading={props.knowledgeState.graphLoading}
-          >
-            {t("copaw.projects.knowledge.actionRefreshSignals")}
-          </Button>
-        </div>
+    <>
+      <div className={styles.projectKnowledgeWorkbench}>
+      <div>
+        <Typography.Title level={5} className={styles.projectKnowledgeSectionTitle}>
+          {t("projects.knowledgeDock.tabOutputs", "Outputs")}
+        </Typography.Title>
+        <Typography.Text type="secondary">{t("copaw.projects.knowledge.outputsRoleHint")}</Typography.Text>
+      </div>
+      <div className={styles.projectKnowledgeTabActions}>
+        <Select
+          size="small"
+          value={selectedMode}
+          classNames={{ popup: { root: styles.projectKnowledgeSelectDropdown } }}
+          style={{ width: 180 }}
+          options={outputModes.map((item) => ({
+            label: getProjectKnowledgeModeTitle(item.mode, t),
+            value: item.mode,
+          }))}
+          onChange={(value) => setSelectedMode(value as ProjectKnowledgeProcessingMode)}
+        />
+        <Button
+          size="small"
+          type={props.knowledgeState.graphNeedsRefresh || modeRefreshPending ? "primary" : "default"}
+          onClick={() => {
+            void props.knowledgeState.runGraphQuery(
+              props.knowledgeState.graphQueryText,
+              props.knowledgeState.graphQueryMode,
+              props.knowledgeState.graphQueryTopK,
+              selectedMode,
+            );
+          }}
+          loading={props.knowledgeState.graphLoading}
+        >
+          {t("copaw.projects.knowledge.actionRefreshSignals")}
+        </Button>
+      </div>
       </div>
 
       {(props.knowledgeState.graphNeedsRefresh || modeRefreshPending) ? (
@@ -569,6 +569,6 @@ export default function ProjectKnowledgeOutputsPanel(
           </div>
         )}
       </div>
-    </div>
+    </>
   );
 }

@@ -271,8 +271,9 @@
         "latestSemanticRoleLabelingSummary": "srl {{time}} · {{summary}}",
         "sourcesRecentSnapshots": "Sources Recent Snapshots",
         "sourcesRecentSnapshotsHint": "Sources Recent Snapshots Hint",
-        "sourcesRecentChunkRuns": "Sources Recent Chunk Runs",
-        "sourcesRecentChunkRunsHint": "Sources Recent Chunk Runs Hint",
+        "sourcesFileListTitle": "Файлы знаний",
+        "sourcesFileListHint": "Файлы, доступные для обработки знаний",
+        "sourcesFileListEmpty": "Файлы знаний не найдены",
         "semanticEngineCode": "Code"
       }
     }

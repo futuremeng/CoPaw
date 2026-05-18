@@ -271,8 +271,9 @@
         "latestSemanticRoleLabelingSummary": "srl {{time}} · {{summary}}",
         "sourcesRecentSnapshots": "最近原始快照",
         "sourcesRecentSnapshotsHint": "最近的 snapshot_raw 项目统计",
-        "sourcesRecentChunkRuns": "最近切块运行",
-        "sourcesRecentChunkRunsHint": "最近的 build_chunks 项目统计",
+        "sourcesFileListTitle": "知识文件",
+        "sourcesFileListHint": "可进行知识加工的文件列表",
+        "sourcesFileListEmpty": "暂无可进行知识加工的文件",
         "semanticEngineCode": "Code"
       }
     }

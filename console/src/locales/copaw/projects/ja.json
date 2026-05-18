@@ -271,8 +271,9 @@
         "latestSemanticRoleLabelingSummary": "srl {{time}} · {{summary}}",
         "sourcesRecentSnapshots": "Sources Recent Snapshots",
         "sourcesRecentSnapshotsHint": "Sources Recent Snapshots Hint",
-        "sourcesRecentChunkRuns": "Sources Recent Chunk Runs",
-        "sourcesRecentChunkRunsHint": "Sources Recent Chunk Runs Hint",
+        "sourcesFileListTitle": "知識ファイル",
+        "sourcesFileListHint": "知識処理が可能なファイルリスト",
+        "sourcesFileListEmpty": "利用可能なファイルがありません",
         "semanticEngineCode": "Code"
       }
     }

@@ -416,28 +416,26 @@ export default function ProjectKnowledgeSettingsPanel(
 
   return (
     <div className={styles.projectKnowledgeWorkbench}>
-      <div className={styles.projectKnowledgeTabHeader}>
-        <div>
-          <Typography.Title level={5} className={styles.projectKnowledgeSectionTitle}>
-            {t("projects.knowledgeDock.tabSettings", "Settings")}
-          </Typography.Title>
-          <Typography.Text type="secondary">
-            {syncState?.status && syncState.status !== "idle"
-              ? syncAlertDescription
-              : t("copaw.projects.knowledge.settingsHint")}
-          </Typography.Text>
-        </div>
-        <Badge
-          status={sourceRegistered ? "success" : "default"}
-          text={
-            sourceLoaded
-              ? sourceRegistered
-                ? t("copaw.projects.knowledge.sourceRegistered")
-                : t("copaw.projects.knowledge.sourceNotRegistered")
-              : t("common.loading", "Loading")
-          }
-        />
+      <div>
+        <Typography.Title level={5} className={styles.projectKnowledgeSectionTitle}>
+          {t("projects.knowledgeDock.tabSettings", "Settings")}
+        </Typography.Title>
+        <Typography.Text type="secondary">
+          {syncState?.status && syncState.status !== "idle"
+            ? syncAlertDescription
+            : t("copaw.projects.knowledge.settingsHint")}
+        </Typography.Text>
       </div>
+      <Badge
+        status={sourceRegistered ? "success" : "default"}
+        text={
+          sourceLoaded
+            ? sourceRegistered
+              ? t("copaw.projects.knowledge.sourceRegistered")
+              : t("copaw.projects.knowledge.sourceNotRegistered")
+            : t("common.loading", "Loading")
+        }
+      />
 
       <section className={styles.projectKnowledgeLayerSection}>
         <div className={styles.projectKnowledgeLayerHeader}>

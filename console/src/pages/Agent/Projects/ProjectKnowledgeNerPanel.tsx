@@ -176,15 +176,13 @@ export default function ProjectKnowledgeNerPanel(props: ProjectKnowledgeNerPanel
 
   return (
     <div className={styles.projectKnowledgeWorkbench}>
-      <div className={styles.projectKnowledgeTabHeader}>
-        <div>
-          <Typography.Title level={5} className={styles.projectKnowledgeSectionTitle}>
-            {t("projects.knowledgeDock.tabNer", "NER")}
-          </Typography.Title>
-          <Typography.Text type="secondary">
-            {t("copaw.projects.knowledge.nerRoleHint")}
-          </Typography.Text>
-        </div>
+      <div>
+        <Typography.Title level={5} className={styles.projectKnowledgeSectionTitle}>
+          {t("projects.knowledgeDock.tabNer", "NER")}
+        </Typography.Title>
+        <Typography.Text type="secondary">
+          {t("copaw.projects.knowledge.nerRoleHint")}
+        </Typography.Text>
       </div>
 
       {documents.length === 0 ? (

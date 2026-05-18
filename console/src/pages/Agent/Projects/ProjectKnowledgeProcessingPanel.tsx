@@ -552,32 +552,30 @@ export default function ProjectKnowledgeProcessingPanel(
 
   return (
     <div className={`${styles.projectKnowledgeWorkbench} ${styles.projectKnowledgeProcessingWorkbench}`}>
-      <div className={styles.projectKnowledgeTabHeader}>
-        <div>
-          <Typography.Title level={5} className={styles.projectKnowledgeSectionTitle}>
-            {t("projects.knowledgeDock.tabProcessing", "Processing")}
-          </Typography.Title>
-          <div className={styles.projectKnowledgeModeMeta}>
-            <Typography.Text type="secondary">
-              {t("copaw.projects.knowledge.processingRoleHint")}
-            </Typography.Text>
-            {hasStaleProcessing ? (
-              <Tooltip title={staleTooltip}>
-                <Tag color="orange">
-                  {t("copaw.projects.knowledge.processing.staleTag")}
-                </Tag>
-              </Tooltip>
-            ) : null}
-          </div>
+      <div>
+        <Typography.Title level={5} className={styles.projectKnowledgeSectionTitle}>
+          {t("projects.knowledgeDock.tabProcessing", "Processing")}
+        </Typography.Title>
+        <div className={styles.projectKnowledgeModeMeta}>
+          <Typography.Text type="secondary">
+            {t("copaw.projects.knowledge.processingRoleHint")}
+          </Typography.Text>
+          {hasStaleProcessing ? (
+            <Tooltip title={staleTooltip}>
+              <Tag color="orange">
+                {t("copaw.projects.knowledge.processing.staleTag")}
+              </Tag>
+            </Tooltip>
+          ) : null}
         </div>
-        <div className={styles.projectKnowledgeTabActions}>
-          <Button size="small" onClick={() => void props.knowledgeState.loadProjectSourceStatus()}>
-            {t("copaw.projects.knowledge.actionRefreshSignals")}
-          </Button>
-          <Button size="small" type="primary" onClick={props.onOpenSettings}>
-            {t("copaw.projects.knowledge.actionOpenSettings")}
-          </Button>
-        </div>
+      </div>
+      <div className={styles.projectKnowledgeTabActions}>
+        <Button size="small" onClick={() => void props.knowledgeState.loadProjectSourceStatus()}>
+          {t("copaw.projects.knowledge.actionRefreshSignals")}
+        </Button>
+        <Button size="small" type="primary" onClick={props.onOpenSettings}>
+          {t("copaw.projects.knowledge.actionOpenSettings")}
+        </Button>
       </div>
 
       <div className={styles.projectKnowledgeProcessingScrollBody}>
