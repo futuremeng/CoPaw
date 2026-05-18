@@ -7,6 +7,10 @@
   <img src="console/public/copaw-icon.svg" alt="CoPaw Logo" width="120">
 </p>
 
+
+[[English](README.md)] [[中文](README_zh.md)] [[日本語](README_ja.md)]
+
+
 <p align="center"><b>Расширения CoPaw</b></p>
 
 <p align="center">
@@ -44,7 +48,7 @@
 [![X](https://img.shields.io/badge/X-Follow_Us-black.svg?logo=x)](https://x.com/agentscope_ai)
 [![DingTalk](https://img.shields.io/badge/DingTalk-Join_Us-orange.svg)](https://qr.dingtalk.com/action/joingroup?code=v1,k1,OmDlBXpjW+I2vWjKDsjvI9dhcXjGZi3bQiojOq3dlDw=&_dt_no_comment=1&origin=11)
 
-[[Документация](https://qwenpaw.agentscope.io/)] [[English](README.md)] [[中文](README_zh.md)] [[日本語](README_ja.md)]
+[[Документация](https://qwenpaw.agentscope.io/)] 
 
 
 

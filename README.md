@@ -6,6 +6,8 @@
   <img src="console/public/copaw-icon.svg" alt="CoPaw Logo" width="120">
 </p>
 
+ [[中文](README_zh.md)] [[日本語](README_ja.md)] [[Русский](README_ru.md)]
+
 <p align="center"><b>CoPaw Extension Modules</b></p>
 
 <p align="center">
@@ -42,7 +44,7 @@
 [![X](https://img.shields.io/badge/X-Follow_Us-black.svg?logo=x)](https://x.com/agentscope_ai)
 [![DingTalk](https://img.shields.io/badge/DingTalk-Join_Us-orange.svg)](https://qr.dingtalk.com/action/joingroup?code=v1,k1,OmDlBXpjW+I2vWjKDsjvI9dhcXjGZi3bQiojOq3dlDw=&_dt_no_comment=1&origin=11)
 
-[[Documentation](https://qwenpaw.agentscope.io/)] [[中文](README_zh.md)] [[日本語](README_ja.md)] [[Русский](README_ru.md)]
+[[Documentation](https://qwenpaw.agentscope.io/)]
 
 
 <p align="center"><b>Works for you, grows with you.</b></p>
