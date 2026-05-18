@@ -77,6 +77,12 @@ def project_artifact_router_client(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> tuple[TestClient, Path, str]:
+    monkeypatch.setattr(
+        agents_router_module,
+        "_resolve_agent_workspace_dir",
+        lambda _agent_id: tmp_path,
+    )
+
     manager = _FakeManager(str(tmp_path))
     monkeypatch.setattr(
         agents_router_module,
@@ -279,7 +285,7 @@ def test_project_knowledge_watch_lease_endpoint_toggles_monitoring_state(
     assert after.file_monitoring_state == "idle"
 
 
-def test_upload_project_file_triggers_auto_knowledge_sync(
+def test_upload_project_file_does_not_trigger_auto_knowledge_sync(
     project_artifact_router_client: tuple[TestClient, Path, str],
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -303,7 +309,7 @@ def test_upload_project_file_triggers_auto_knowledge_sync(
     assert response.status_code == 200
     payload = response.json()
     assert payload["path"] == "original/brief.txt"
-    assert calls == [(project_id, ["original/brief.txt"], "project_upload")]
+    assert calls == []
 
     latest_event_id, changed_paths = collect_project_realtime_changes(
         workspace_dir / "projects" / project_id,
@@ -330,10 +336,58 @@ def test_upload_project_file_defaults_to_project_root(tmp_path: Path):
     assert (project_dir / "brief.txt").read_text(encoding="utf-8") == "hello root"
 
 
+def test_upload_project_file_endpoint_uses_workspace_fastpath(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        agents_router_module,
+        "_resolve_agent_workspace_dir",
+        lambda _agent_id: tmp_path,
+    )
+
+    def _unexpected_manager_access(_request):
+        raise AssertionError("project upload should not access multi_agent_manager")
+
+    monkeypatch.setattr(
+        agents_router_module,
+        "_get_multi_agent_manager",
+        _unexpected_manager_access,
+    )
+
+    app = FastAPI()
+    app.include_router(agents_router_module.router)
+    client = TestClient(app)
+
+    project = _create_project(
+        tmp_path,
+        CreateProjectRequest(
+            name="Upload Fastpath",
+            description="verify file upload avoids runtime startup",
+        ),
+    )
+
+    response = client.post(
+        f"/agents/default/projects/{project.id}/files/upload",
+        data={"target_dir": "original"},
+        files={"file": ("brief.txt", b"hello fastpath", "text/plain")},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["path"] == "original/brief.txt"
+
+
 def test_upload_project_file_activates_idle_monitoring_and_sync(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ):
+    monkeypatch.setattr(
+        agents_router_module,
+        "_resolve_agent_workspace_dir",
+        lambda _agent_id: tmp_path,
+    )
+
     manager = _FakeManager(str(tmp_path))
     monkeypatch.setattr(
         agents_router_module,
@@ -376,10 +430,10 @@ def test_upload_project_file_activates_idle_monitoring_and_sync(
     after = _load_project_summary(tmp_path / "projects" / project.id)
     assert after is not None
     assert after.file_monitoring_state == "active"
-    assert calls == [(project.id, ["original/brief.txt"], "project_upload")]
+    assert calls == []
 
 
-def test_upload_project_file_auto_sync_writes_project_chunks(
+def test_upload_project_file_does_not_auto_sync_chunks(
     project_artifact_router_client: tuple[TestClient, Path, str],
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -441,27 +495,7 @@ def test_upload_project_file_auto_sync_writes_project_chunks(
         / f"project-{project_id}-workspace"
         / "index.json"
     )
-
-    payload = json.loads(index_path.read_text(encoding="utf-8"))
-    chunk_paths = [item.get("chunk_path") for item in payload.get("chunks") or []]
-    uploaded_chunk_path = next(
-        path
-        for path in chunk_paths
-        if isinstance(path, str)
-        and re.fullmatch(
-            r"chunks/original/brief\.snapshot_[0-9]{8}T[0-9]{6}[0-9]{6}Z\.txt\.0\.txt",
-            path,
-        )
-    )
-    chunk_path = workspace_dir / "projects" / project_id / ".knowledge" / uploaded_chunk_path
-    assert chunk_path.exists()
-    assert chunk_path.read_text(encoding="utf-8") == "hello knowledge"
-    uploaded_chunk = next(
-        item
-        for item in payload.get("chunks") or []
-        if item.get("chunk_path") == uploaded_chunk_path
-    )
-    assert "text" not in uploaded_chunk
+    assert not index_path.exists()
 
 
 def test_list_project_files_endpoint_offloads_to_thread(

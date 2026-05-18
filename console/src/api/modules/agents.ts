@@ -312,7 +312,7 @@ export const agentsApi = {
     agentId: string,
     projectId: string,
     file: File,
-    targetDir = "original",
+    targetDir = "",
   ) => {
     const formData = new FormData();
     formData.append("file", file);

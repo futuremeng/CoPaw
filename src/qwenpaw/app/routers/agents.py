@@ -4966,24 +4966,18 @@ async def upload_agent_project_file(
     target_dir: str = Form(""),
 ) -> ProjectFileInfo:
     """Upload a file into project workspace."""
-    manager = _get_multi_agent_manager(request)
+    _ = request
+    workspace_dir = _resolve_agent_workspace_dir(agentId)
 
     try:
-        workspace = await manager.get_agent(agentId)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-
-    try:
-        project_dir = _resolve_project_dir(
-            Path(workspace.workspace_dir), projectId
-        )
+        project_dir = _resolve_project_dir(workspace_dir, projectId)
         uploaded = _upload_project_file(project_dir, file, target_dir)
         update_project_file_monitoring_state(
             project_dir,
             PROJECT_FILE_MONITORING_ACTIVE,
         )
         record_project_realtime_paths(
-            workspace.workspace_dir,
+            str(workspace_dir),
             [project_dir / uploaded.path],
         )
         return uploaded
