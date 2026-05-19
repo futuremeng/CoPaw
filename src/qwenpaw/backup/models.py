@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field
 
 from ._utils.meta import generate_backup_id
 
+BackupTrustMode = Literal["legacy", "foreign"]
+
 
 class BackupScope(BaseModel):
     include_agents: bool = Field(
@@ -57,11 +59,11 @@ class BackupMeta(BaseModel):
         default=None,
         description="Backup HMAC signature in '<scheme>:<hex>' format",
     )
-    imported_via_trust_foreign: Optional[bool] = Field(
+    accepted_via_trust: Optional[bool] = Field(
         default=None,
         description=(
             "Trust state marker: None=legacy/unknown, False=local signed, "
-            "True=trusted foreign/legacy backup."
+            "True=accepted after explicit legacy/foreign trust."
         ),
     )
 
@@ -120,13 +122,18 @@ class RestoreBackupRequest(BaseModel):
     preserve_local_protected_config: Optional[bool] = Field(
         default=None,
         description=(
-            "When None, preserve local critical settings for trusted-foreign "
-            "backups and fully restore local signed backups."
+            "When None, preserve local critical settings for explicitly "
+            "trusted legacy/foreign backups and fully restore local signed "
+            "backups."
         ),
     )
-    trust_legacy: bool = Field(
-        default=False,
-        description="Explicitly trust and sign an unsigned legacy backup.",
+    trust_mode: Optional[BackupTrustMode] = Field(
+        default=None,
+        description=(
+            "Explicit trust action for backups that are not locally signed: "
+            "'legacy' for unsigned legacy backups, 'foreign' for backups "
+            "signed by another instance."
+        ),
     )
 
 
