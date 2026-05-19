@@ -1778,27 +1778,54 @@
 .projectKnowledgeLayerMatrixRow {
   display: grid;
   grid-template-columns: 1.2fr 1fr 1fr;
-  gap: 8px;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #d0d7e6;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+
+  &:hover {
+    border-color: #a8b5c7;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    background: #fafbfc;
+  }
 }
 
 .projectKnowledgeLayerMatrixDimension {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  border: 1px solid #e6edf9;
-  border-radius: 8px;
-  background: #fcfdff;
-  padding: 8px;
+  gap: 6px;
+  border-left: 3px solid #1890ff;
+  border-radius: 4px;
+  background: #f5f8ff;
+  padding: 12px;
+  padding-left: 10px;
+
+  :global(.ant-typography) {
+    margin: 0;
+  }
+
+  :global(.ant-typography-strong) {
+    color: #0b2d66;
+  }
 }
 
 .projectKnowledgeLayerMatrixCell {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   border: 1px solid #e6edf9;
-  border-radius: 8px;
+  border-radius: 6px;
   background: #ffffff;
-  padding: 8px;
+  padding: 12px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: #b3bcd6;
+    background: #fafbfc;
+  }
 }
 
 .projectKnowledgeEvidenceDetail {
