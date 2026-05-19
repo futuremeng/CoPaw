@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Card, Empty, Spin, Typography, message } from "antd";
+import { Button, Empty, Spin, Typography, message } from "antd";
 import { useTranslation } from "react-i18next";
 import AnywhereChat from "../../../components/AnywhereChat";
 import styles from "./index.module.less";
@@ -69,8 +69,8 @@ function ProjectChatPanel({
   projectAgentContext,
 }: ProjectChatPanelProps) {
   const { t } = useTranslation();
+  void selectedRunId;
   const hasUserFiles = projectFileCount > 0;
-  const isRunMode = chatMode === "run";
   const isVsCodeEmbedded = useMemo(() => {
     if (typeof window === "undefined" || typeof navigator === "undefined") {
       return false;
@@ -188,44 +188,17 @@ function ProjectChatPanel({
   );
 
   return (
-    <Card
-      style={{
-        height: "100%",
-        display: "flex",
-        flexDirection: "column",
-        minHeight: 0,
-        overflow: "hidden",
-      }}
-      title={<span className={styles.sectionTitle}>{t("projects.chat.workspaceLabel", "Project collaboration")}</span>}
-      styles={{
-        body: {
-          padding: 0,
-          display: "flex",
-          flexDirection: "column",
-          flex: 1,
-          minHeight: 0,
-          overflow: "hidden",
-        },
-      }}
-      extra={
-        <Text type="secondary" className={styles.panelExtraText}>
-          {isRunMode && selectedRunId
-            ? selectedRunId
-            : t("projects.chat.workspaceLabel", "Project workspace")}
-        </Text>
-      }
-    >
-      <div className={styles.previewBody}>
-        {chatStarting ? (
-          <div className={styles.centerState}>
-            <Spin />
-          </div>
-        ) : (
-          (() => {
+    <div className={styles.chatPanelShell}>
+      {chatStarting ? (
+        <div className={styles.centerState}>
+          <Spin />
+        </div>
+      ) : (
+        (() => {
             if (chatMode === "run") {
               if (activeRunChatId) {
                 return (
-                  <div className={styles.chatPanel}>
+                  <>
                     {!chatRuntimeEnabled ? (
                       <div className={styles.chatEmptyAction}>
                         <div className={styles.chatEmptyActions}>
@@ -285,7 +258,7 @@ function ProjectChatPanel({
                       ),
                     )
                     }
-                  </div>
+                  </>
                 );
               }
 
@@ -306,7 +279,7 @@ function ProjectChatPanel({
             if (chatMode === "design") {
               if (activeDesignChatId) {
                 return (
-                  <div className={styles.chatPanel}>
+                  <>
                     {!chatRuntimeEnabled ? (
                       <div className={styles.chatEmptyAction}>
                         <div className={styles.chatEmptyActions}>
@@ -366,7 +339,7 @@ function ProjectChatPanel({
                       ),
                     )
                     }
-                  </div>
+                  </>
                 );
               }
 
@@ -389,7 +362,7 @@ function ProjectChatPanel({
 
             if (activeWorkspaceChatId) {
               return (
-                <div className={styles.chatPanel}>
+                <>
                   {!chatRuntimeEnabled ? (
                     <div className={styles.chatEmptyAction}>
                       <div className={styles.chatEmptyActions}>
@@ -457,7 +430,7 @@ function ProjectChatPanel({
                     </div>
                   )
                   }
-                </div>
+                </>
               );
             }
 
@@ -477,10 +450,8 @@ function ProjectChatPanel({
               </div>
             );
           })()
-        )}
-
-      </div>
-    </Card>
+      )}
+    </div>
   );
 }
 

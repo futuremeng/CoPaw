@@ -3537,9 +3537,7 @@ export default function ProjectDetailPage() {
                     defaultSize={CHAT_PANE_DEFAULT_SIZE}
                   >
                     <div className={styles.splitterPanel}>
-                      <div className={styles.columnChat}>
-                        {projectChatPanelNode}
-                      </div>
+                      {projectChatPanelNode}
                     </div>
                   </Splitter.Panel>
                 </Splitter>

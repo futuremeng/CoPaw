@@ -2367,40 +2367,9 @@
   }
 }
 
-.columnChat {
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
-
-  :global(.copaw-chat-anywhere-chat) {
-    width: 100%;
-  }
-
-  :global([class*='copaw-markdown']) {
-    width: auto !important;
-    max-width: 100% !important;
-  }
-
-  :global(.ant-card) {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-  }
-
-  :global(.ant-card-body) {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    overflow: hidden;
-  }
-}
-
 .columnLeft,
 .columnMiddle,
-.columnRight,
-.columnChat {
+.columnRight {
   :global(.ant-card-head) {
     min-height: 48px;
   }
@@ -3881,10 +3850,25 @@
   gap: 6px;
 }
 
-.chatPanel {
-  flex: 1;
+.chatPanelShell {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
   overflow: hidden;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  background: #fff;
+
+  :global(.copaw-chat-anywhere-chat) {
+    width: 100%;
+  }
+
+  :global([class*='copaw-markdown']) {
+    width: auto !important;
+    max-width: 100% !important;
+  }
 
   :global([class$='-welcome-prompts-prompts']) {
     width: min(560px, 100%);
