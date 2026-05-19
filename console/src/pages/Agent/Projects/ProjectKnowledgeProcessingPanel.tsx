@@ -556,15 +556,15 @@ export default function ProjectKnowledgeProcessingPanel(
         <div className={styles.projectKnowledgeProcessingStickySummary}>
           <div className={styles.projectKnowledgeSignalGrid}>
             <div className={styles.projectKnowledgeSignalCard}>
-              <Typography.Text type="secondary">{t("copaw.projects.knowledge.processing.l2Entities")}</Typography.Text>
+              <Typography.Text type="secondary">{t("copaw.projects.knowledge.processing.nlpEntities")}</Typography.Text>
               <Typography.Text strong>{formatEntityValue(nlpMode, t)}</Typography.Text>
             </div>
             <div className={styles.projectKnowledgeSignalCard}>
-              <Typography.Text type="secondary">{t("copaw.projects.knowledge.processing.l2Relations")}</Typography.Text>
+              <Typography.Text type="secondary">{t("copaw.projects.knowledge.processing.nlpRelations")}</Typography.Text>
               <Typography.Text strong>{displayRelationCount(nlpMode)}</Typography.Text>
             </div>
             <div className={styles.projectKnowledgeSignalCard}>
-              <Typography.Text type="secondary">{t("copaw.projects.knowledge.processing.l3Entities")}</Typography.Text>
+              <Typography.Text type="secondary">{t("copaw.projects.knowledge.processing.agenticEntities")}</Typography.Text>
               <Typography.Text strong>
                 {agenticMode && !modeHasIndependentOutputs(agenticMode)
                   ? t("copaw.projects.knowledge.processing.outputPending")
@@ -572,7 +572,7 @@ export default function ProjectKnowledgeProcessingPanel(
               </Typography.Text>
             </div>
             <div className={styles.projectKnowledgeSignalCard}>
-              <Typography.Text type="secondary">{t("copaw.projects.knowledge.processing.l3Relations")}</Typography.Text>
+              <Typography.Text type="secondary">{t("copaw.projects.knowledge.processing.agenticRelations")}</Typography.Text>
               <Typography.Text strong>
                 {agenticMode && !modeHasIndependentOutputs(agenticMode)
                   ? t("copaw.projects.knowledge.processing.outputPending")
