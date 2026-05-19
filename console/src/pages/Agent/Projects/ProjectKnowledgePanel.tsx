@@ -182,7 +182,7 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
     || null
   ), [knowledgeState.processingCompareModes, knowledgeState.processingModes]);
 
-  const l3Mode = useMemo(() => (
+  const agenticMode = useMemo(() => (
     knowledgeState.processingCompareModes.find((mode) => mode.mode === "agentic")
     || knowledgeState.processingModes.find((mode) => mode.mode === "agentic")
     || null
@@ -234,7 +234,7 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
   const layerStatusItems = useMemo(() => {
     const l1 = formatLayerStatus(l1Status);
     const l2 = formatLayerStatus(String(nlpMode?.status || "idle").trim().toLowerCase());
-    const l3 = formatLayerStatus(String(l3Mode?.status || "idle").trim().toLowerCase());
+    const l3 = formatLayerStatus(String(agenticMode?.status || "idle").trim().toLowerCase());
     return [
       {
         key: "l1",
@@ -252,7 +252,7 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
         ...l3,
       },
     ];
-  }, [formatLayerStatus, l1Status, nlpMode?.status, l3Mode?.status, t]);
+  }, [formatLayerStatus, l1Status, nlpMode?.status, agenticMode?.status, t]);
 
   const knowledgeSnapshotCards = useMemo(() => {
     const metrics = knowledgeState.quantMetrics;

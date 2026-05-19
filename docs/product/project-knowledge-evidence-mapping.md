@@ -34,8 +34,8 @@ This document maps each metric shown in the six-layer matrix to:
 | Lexical | Audit Focus (lexical) | UI fixed text | `audit_focus` | mode-level audit context | `pipeline_artifact`, `quality_report`, `enriched_graph`, `graph` |
 | Syntax | Audit Focus (syntax) | UI fixed text | `audit_focus` | mode-level audit context | `pipeline_artifact`, `quality_report`, `enriched_graph`, `graph` |
 | Semantic | Audit Focus (semantic) | UI fixed text | `audit_focus` | mode-level audit context | `pipeline_artifact`, `quality_report`, `enriched_graph`, `graph` |
-| Pragmatic | Quality Score | `l3Mode.qualityScore` | `quality_score` | `processing_modes[agentic].quality_score` (quality loop snapshot) | `quality_report`, `pipeline_artifact`, `enriched_graph` |
-| Pragmatic | Audit Round | `l3Mode.auditRound` (fallback `l3Mode.runId`) | `audit_round` | pipeline run / quality loop context | `pipeline_artifact`, `quality_report`, `enriched_graph` |
+| Pragmatic | Quality Score | `agenticMode.qualityScore` | `quality_score` | `processing_modes[agentic].quality_score` (quality loop snapshot) | `quality_report`, `pipeline_artifact`, `enriched_graph` |
+| Pragmatic | Audit Round | `agenticMode.auditRound` (fallback `agenticMode.runId`) | `audit_round` | pipeline run / quality loop context | `pipeline_artifact`, `quality_report`, `enriched_graph` |
 | Pragmatic | Delta vs L2 | UI computed delta (`l3-l2`) | `enhancement_delta` | derived from L2/L3 entity+relation counts | `enriched_graph`, `pipeline_artifact`, `quality_report`, `graph` |
 
 ## Not Implemented Layer

@@ -2674,11 +2674,11 @@ export function useProjectKnowledgeState(
 
   const processingCompareDelta = useMemo<ProjectKnowledgeProcessingCompareDelta>(() => {
     const nlpMode = processingCompareModes.find((item) => item.mode === "nlp") || null;
-    const l3Mode = processingCompareModes.find((item) => item.mode === "agentic") || null;
+    const agenticMode = processingCompareModes.find((item) => item.mode === "agentic") || null;
 
     return {
-      entityDelta: nlpMode && l3Mode ? Math.max(0, l3Mode.entityCount - nlpMode.entityCount) : 0,
-      relationDelta: nlpMode && l3Mode ? Math.max(0, l3Mode.relationCount - nlpMode.relationCount) : 0,
+      entityDelta: nlpMode && agenticMode ? Math.max(0, agenticMode.entityCount - nlpMode.entityCount) : 0,
+      relationDelta: nlpMode && agenticMode ? Math.max(0, agenticMode.relationCount - nlpMode.relationCount) : 0,
     };
   }, [processingCompareModes]);
 

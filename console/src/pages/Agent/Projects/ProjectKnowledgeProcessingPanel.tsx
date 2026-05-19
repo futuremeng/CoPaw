@@ -164,7 +164,7 @@ function mapModeToLayerStatus(
 function buildKnowledgeLayerRows(
   params: {
     nlpMode: ProjectKnowledgeModeState | null;
-    l3Mode: ProjectKnowledgeModeState | null;
+    agenticMode: ProjectKnowledgeModeState | null;
     l2EvidencePaths: Record<string, string>;
     l3EvidencePaths: Record<string, string>;
     quantMetrics: ProjectKnowledgeState["quantMetrics"];
@@ -175,7 +175,7 @@ function buildKnowledgeLayerRows(
 ): ProjectKnowledgeLayerRow[] {
   const {
     nlpMode,
-    l3Mode,
+    agenticMode,
     l2EvidencePaths,
     l3EvidencePaths,
     quantMetrics,
@@ -183,9 +183,9 @@ function buildKnowledgeLayerRows(
     relationDelta,
     t,
   } = params;
-  const hasL3Outputs = modeHasIndependentOutputs(l3Mode);
-  const l3Running = l3Mode?.status === "running" || l3Mode?.status === "queued";
-  const l3Ready = Boolean(l3Mode && hasL3Outputs && l3Mode.status === "ready");
+  const hasL3Outputs = modeHasIndependentOutputs(agenticMode);
+  const l3Running = agenticMode?.status === "running" || agenticMode?.status === "queued";
+  const l3Ready = Boolean(agenticMode && hasL3Outputs && agenticMode.status === "ready");
   const l2DocumentCount = Math.max(0, Number(nlpMode?.documentCount || 0));
   const l2TokenCount = Math.max(0, Number(nlpMode?.syntaxTokenCount || quantMetrics.tokenCount || 0));
   const l2PosCount = Math.max(0, Number(nlpMode?.syntaxPosCount || 0));
@@ -194,8 +194,8 @@ function buildKnowledgeLayerRows(
   const l2SyntaxSentences = Math.max(0, Number(nlpMode?.syntaxSentenceCount || 0));
   const l2NerEntities = Math.max(0, Number(nlpMode?.nerEntityCount || 0));
   const l2NerReadyChunks = Math.max(0, Number(nlpMode?.nerReadyChunkCount || 0));
-  const l3Quality = l3Mode?.qualityScore != null
-    ? `${Math.round(Number(l3Mode.qualityScore) * 100)}%`
+  const l3Quality = agenticMode?.qualityScore != null
+    ? `${Math.round(Number(agenticMode.qualityScore) * 100)}%`
     : t("copaw.projects.knowledge.processing.metricPending");
 
   const buildL3Cell = (
@@ -203,7 +203,7 @@ function buildKnowledgeLayerRows(
     metrics: ProjectKnowledgeLayerCellMetric[],
     reason?: string,
   ): ProjectKnowledgeLayerCell => ({
-    status: mapModeToLayerStatus(l3Mode, l3Ready, false),
+    status: mapModeToLayerStatus(agenticMode, l3Ready, false),
     summary: l3Ready
       ? t(summaryKey)
       : l3Running
@@ -302,7 +302,7 @@ function buildKnowledgeLayerRows(
         ],
       },
       l3: {
-        status: mapModeToLayerStatus(l3Mode, false, true),
+        status: mapModeToLayerStatus(agenticMode, false, true),
         summary: t("copaw.projects.knowledge.processing.layerPhraseL3"),
         reason: "PHRASE_LAYER_NOT_IMPLEMENTED",
         metrics: [
@@ -396,7 +396,7 @@ function buildKnowledgeLayerRows(
         ],
       },
       l3: {
-        status: mapModeToLayerStatus(l3Mode, l3Ready),
+        status: mapModeToLayerStatus(agenticMode, l3Ready),
         summary: l3Ready
           ? t("copaw.projects.knowledge.processing.layerPragmaticL3")
           : l3Running
@@ -411,9 +411,9 @@ function buildKnowledgeLayerRows(
           },
           {
             label: t("copaw.projects.knowledge.processing.auditRound"),
-            value: l3Mode?.auditRound
-              ? `#${l3Mode.auditRound}`
-              : l3Mode?.runId || t("copaw.projects.knowledge.processing.metricUnavailable"),
+            value: agenticMode?.auditRound
+              ? `#${agenticMode.auditRound}`
+              : agenticMode?.runId || t("copaw.projects.knowledge.processing.metricUnavailable"),
             evidenceKey: "audit_round",
             evidencePath: resolveEvidencePathByKey(l3EvidencePaths, "audit_round"),
           },
@@ -483,7 +483,7 @@ export default function ProjectKnowledgeProcessingPanel(
   );
   const hasStaleProcessing = props.knowledgeState.processingFreshness.stale;
   const nlpMode = visibleModes.find((mode) => mode.mode === "nlp") || null;
-  const l3Mode = visibleModes.find((mode) => mode.mode === "agentic") || null;
+  const agenticMode = visibleModes.find((mode) => mode.mode === "agentic") || null;
   const modeMetricsPayload = (props.knowledgeState.syncState?.mode_metrics || {}) as Partial<Record<string, ProjectKnowledgeModeMetricsPayload>>;
   const l2EvidencePaths = (modeMetricsPayload.nlp?.evidence_paths || {}) as Record<string, string>;
   const l3EvidencePaths = (modeMetricsPayload.agentic?.evidence_paths || {}) as Record<string, string>;
@@ -541,7 +541,7 @@ export default function ProjectKnowledgeProcessingPanel(
   }, [activeEvidence]);
   const layerRows = buildKnowledgeLayerRows({
     nlpMode,
-    l3Mode,
+    agenticMode,
     l2EvidencePaths,
     l3EvidencePaths,
     quantMetrics: props.knowledgeState.quantMetrics,
@@ -566,17 +566,17 @@ export default function ProjectKnowledgeProcessingPanel(
             <div className={styles.projectKnowledgeSignalCard}>
               <Typography.Text type="secondary">{t("copaw.projects.knowledge.processing.l3Entities")}</Typography.Text>
               <Typography.Text strong>
-                {l3Mode && !modeHasIndependentOutputs(l3Mode)
+                {agenticMode && !modeHasIndependentOutputs(agenticMode)
                   ? t("copaw.projects.knowledge.processing.outputPending")
-                  : (l3Mode?.entityCount || 0)}
+                  : (agenticMode?.entityCount || 0)}
               </Typography.Text>
             </div>
             <div className={styles.projectKnowledgeSignalCard}>
               <Typography.Text type="secondary">{t("copaw.projects.knowledge.processing.l3Relations")}</Typography.Text>
               <Typography.Text strong>
-                {l3Mode && !modeHasIndependentOutputs(l3Mode)
+                {agenticMode && !modeHasIndependentOutputs(agenticMode)
                   ? t("copaw.projects.knowledge.processing.outputPending")
-                  : (l3Mode?.relationCount || 0)}
+                  : (agenticMode?.relationCount || 0)}
               </Typography.Text>
             </div>
           </div>
