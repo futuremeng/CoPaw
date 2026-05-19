@@ -743,7 +743,7 @@ def test_project_sync_state_exposes_idle_semantic_engine_before_source_ready(tmp
 
     state = manager.get_state(project_id)
 
-    assert state["semantic_engine"]["engine"] == "hanlp2"
+    assert state["semantic_engine"]["engine"] == "hanlp"
     assert state["semantic_engine"]["status"] == "idle"
     assert state["semantic_engine"]["reason_code"] == "SOURCE_NOT_READY"
     assert state["semantic_engine"]["summary"] == "Semantic engine waiting for project source preparation."
@@ -760,7 +760,7 @@ def test_project_sync_state_mirrors_semantic_engine_after_source_selected(tmp_pa
         manager._knowledge_manager,
         "get_semantic_engine_state",
         lambda *_args, **_kwargs: {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "error",
             "reason_code": "HANLP_TOKENIZE_FAILED",
             "reason": "HanLP2 semantic tokenization failed via tok: RuntimeError.",
@@ -790,7 +790,7 @@ def test_project_sync_stage_message_merges_semantic_summary(tmp_path: Path, monk
         manager._knowledge_manager,
         "get_semantic_engine_state",
         lambda *_args, **_kwargs: {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "unavailable",
             "reason_code": "HANLP_IMPORT_UNAVAILABLE",
             "reason": "HanLP2 module is not installed or failed to import.",
@@ -821,7 +821,7 @@ def test_project_sync_pending_stage_message_includes_semantic_reason_code(tmp_pa
         manager._knowledge_manager,
         "get_semantic_engine_state",
         lambda *_args, **_kwargs: {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "unavailable",
             "reason_code": "HANLP_IMPORT_UNAVAILABLE",
             "reason": "HanLP2 module is not installed or failed to import.",
@@ -852,7 +852,7 @@ def test_project_sync_processing_modes_block_when_semantic_engine_unavailable(tm
         manager._knowledge_manager,
         "get_semantic_engine_state",
         lambda *_args, **_kwargs: {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "unavailable",
             "reason_code": "HANLP_SIDECAR_UNCONFIGURED",
             "reason": "HanLP2 sidecar is not configured.",
@@ -899,7 +899,7 @@ def test_project_sync_agentic_mode_does_not_reuse_memify_counts_while_pending(tm
         manager._knowledge_manager,
         "get_semantic_engine_state",
         lambda *_args, **_kwargs: {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
@@ -944,7 +944,7 @@ def test_project_sync_agentic_mode_prefers_quality_snapshot_metrics(tmp_path: Pa
         manager._knowledge_manager,
         "get_semantic_engine_state",
         lambda *_args, **_kwargs: {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
@@ -1073,7 +1073,7 @@ def test_project_sync_nlp_ready_when_required_stages_complete_even_if_cor_unavai
         manager._knowledge_manager,
         "get_semantic_engine_state",
         lambda *_args, **_kwargs: {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
@@ -1136,7 +1136,7 @@ def test_project_sync_nlp_not_available_when_required_syntax_stage_missing(
         manager._knowledge_manager,
         "get_semantic_engine_state",
         lambda *_args, **_kwargs: {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
@@ -1183,7 +1183,7 @@ def test_project_sync_nlp_not_unblocked_by_cor_stage_only(
         manager._knowledge_manager,
         "get_semantic_engine_state",
         lambda *_args, **_kwargs: {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",

@@ -165,7 +165,7 @@ def _build_local_models_payload(config) -> dict[str, Any]:
 
     all_local = all(bool(item.get("local_available")) for item in items) if items else True
     return {
-        "engine": "hanlp2",
+        "engine": "hanlp",
         "status": "ready" if all_local else "unavailable",
         "reason_code": "HANLP_LOCAL_MODELS_READY" if all_local else "HANLP_MODEL_NOT_LOCAL",
         "reason": (

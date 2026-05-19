@@ -108,7 +108,7 @@ def build_semantic_engine_state(manager: Any, state: dict[str, Any]) -> dict[str
 	latest_source_id = str(state.get("latest_source_id") or "").strip()
 	if isinstance(current, dict) and current:
 		payload = dict(current)
-		payload.setdefault("engine", "hanlp2")
+		payload.setdefault("engine", "hanlp")
 		payload.setdefault("status", "idle")
 		payload.setdefault("reason_code", "SOURCE_NOT_READY")
 		payload.setdefault("reason", "Project source has not been prepared for semantic extraction yet.")
@@ -133,7 +133,7 @@ def build_semantic_engine_state(manager: Any, state: dict[str, Any]) -> dict[str
 	if not isinstance(payload, dict) or not payload:
 		payload = dict(manager._default_state(str(state.get("project_id") or "")).get("semantic_engine") or {})
 	payload = dict(payload)
-	payload.setdefault("engine", "hanlp2")
+	payload.setdefault("engine", "hanlp")
 	payload.setdefault("status", "idle")
 	payload.setdefault("reason_code", "SOURCE_NOT_READY")
 	payload.setdefault("reason", "Project source has not been prepared for semantic extraction yet.")

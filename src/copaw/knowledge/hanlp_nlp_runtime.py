@@ -280,7 +280,7 @@ def extract_parse_result(result, task_name):
 
 def ready_payload(reason_code, reason, **extra):
     payload = {
-        "engine": "hanlp2",
+        "engine": "hanlp",
         "status": "ready",
         "reason_code": reason_code,
         "reason": reason,
@@ -291,7 +291,7 @@ def ready_payload(reason_code, reason, **extra):
 
 def unavailable_payload(reason_code, reason, **extra):
     payload = {
-        "engine": "hanlp2",
+        "engine": "hanlp",
         "status": "unavailable",
         "reason_code": reason_code,
         "reason": reason,
@@ -388,7 +388,7 @@ def main():
 		normalized_task_name = normalize_task_key(task_name)
 		if is_coref_task_name(task_name):
 			emit({
-				"engine": "hanlp2",
+				"engine": "hanlp",
 				"status": "error",
 				"reason_code": "HANLP_COREF_NOT_OPEN_SOURCE",
 				"reason": "HanLP coreference_resolution is not open-source and is disabled in CoPaw runtime.",
@@ -465,7 +465,7 @@ def main():
 			texts = ["" for _ in tokens_batch]
 		if is_coref_task_name(task_name):
 			emit({
-				"engine": "hanlp2",
+				"engine": "hanlp",
 				"status": "error",
 				"reason_code": "HANLP_COREF_NOT_OPEN_SOURCE",
 				"reason": "HanLP coreference_resolution is not open-source and is disabled in CoPaw runtime.",
@@ -578,7 +578,7 @@ def configure_runtime_env():
 
 def _default_runtime_state(*, status: str, reason_code: str, reason: str, **extra: Any) -> dict[str, Any]:
 	payload: dict[str, Any] = {
-		"engine": "hanlp2",
+		"engine": "hanlp",
 		"status": status,
 		"reason_code": reason_code,
 		"reason": reason,
@@ -623,7 +623,7 @@ _BRIDGE_CODE = {json.dumps(_BRIDGE_CODE)}
 
 def unavailable_payload(reason_code, reason, **extra):
 	payload = {{
-		"engine": "hanlp2",
+		"engine": "hanlp",
 		"status": "unavailable",
 		"reason_code": reason_code,
 		"reason": reason,

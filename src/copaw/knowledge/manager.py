@@ -376,7 +376,7 @@ class KnowledgeManager:
     ) -> dict[str, Any]:
         payload = dict(state) if isinstance(state, dict) else {}
         normalized: dict[str, Any] = {
-            "engine": str(payload.get("engine") or "hanlp2"),
+            "engine": str(payload.get("engine") or "hanlp"),
             "status": str(payload.get("status") or "unavailable"),
             "reason_code": str(payload.get("reason_code") or fallback_reason_code),
             "reason": str(payload.get("reason") or fallback_reason),
@@ -434,7 +434,7 @@ class KnowledgeManager:
             task_state = self.get_semantic_task_state("ner_msra", config)
             if isinstance(task_state, dict) and task_state:
                 return {
-                    "engine": str(task_state.get("engine") or "hanlp2"),
+                    "engine": str(task_state.get("engine") or "hanlp"),
                     "status": str(task_state.get("status") or "unavailable"),
                     "reason_code": str(task_state.get("reason_code") or "NLP_ENGINE_UNAVAILABLE"),
                     "reason": str(task_state.get("reason") or "NLP semantic engine is not configured."),
@@ -446,7 +446,7 @@ class KnowledgeManager:
             probe_state = self._semantic_runtime.probe(config)
             if isinstance(probe_state, dict) and probe_state:
                 return {
-                    "engine": str(probe_state.get("engine") or "hanlp2"),
+                    "engine": str(probe_state.get("engine") or "hanlp"),
                     "status": str(probe_state.get("status") or "unavailable"),
                     "reason_code": str(probe_state.get("reason_code") or "NLP_ENGINE_UNAVAILABLE"),
                     "reason": str(probe_state.get("reason") or "NLP semantic engine is not configured."),

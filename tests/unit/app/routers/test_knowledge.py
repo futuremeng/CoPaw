@@ -176,7 +176,7 @@ def test_list_sources_returns_semantic_engine_status(
         "get_semantic_engine_state",
         classmethod(
             lambda cls, _config=None: {
-                "engine": "hanlp2",
+                "engine": "hanlp",
                 "status": "unavailable",
                 "reason_code": "HANLP_IMPORT_UNAVAILABLE",
                 "reason": "HanLP2 module is not installed or failed to import.",
@@ -202,7 +202,7 @@ def test_list_sources_returns_semantic_engine_status(
     listing = knowledge_api_client.get("/knowledge/sources?include_semantic=true")
     assert listing.status_code == 200
     source = listing.json()["sources"][0]
-    assert source["semantic_status"]["engine"] == "hanlp2"
+    assert source["semantic_status"]["engine"] == "hanlp"
     assert source["semantic_status"]["status"] == "unavailable"
     assert source["semantic_status"]["reason_code"] == "HANLP_IMPORT_UNAVAILABLE"
 

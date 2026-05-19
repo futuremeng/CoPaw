@@ -411,7 +411,7 @@ class ProjectKnowledgeSyncManager:
 			"lanes": {},
 			"quantization_stages": {},
 			"semantic_engine": {
-				"engine": "hanlp2",
+				"engine": "hanlp",
 				"status": "idle",
 				"reason_code": "SOURCE_NOT_READY",
 				"reason": "Project source has not been prepared for semantic extraction yet.",
@@ -461,7 +461,7 @@ class ProjectKnowledgeSyncManager:
 					task_states[task_key] = dict(task_state)
 		if task_states:
 			payload["task_states"] = task_states
-		payload.setdefault("engine", "hanlp2")
+		payload.setdefault("engine", "hanlp")
 		payload.setdefault("updated_at", self._now_iso())
 		payload["summary"] = self._build_semantic_engine_summary(payload)
 		return payload

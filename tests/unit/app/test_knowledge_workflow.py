@@ -188,7 +188,7 @@ def test_project_sync_manager_records_pipeline_run_metadata(
         manager._knowledge_manager,
         "get_semantic_engine_state",
         lambda *_args, **_kwargs: {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",

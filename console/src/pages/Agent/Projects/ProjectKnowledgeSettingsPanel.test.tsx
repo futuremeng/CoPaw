@@ -52,7 +52,7 @@ function buildRegisteredSource(projectId: string) {
     tags: ["project"],
     summary: "",
     semantic_status: {
-      engine: "hanlp2",
+      engine: "hanlp",
       status: "ready",
       reason_code: "HANLP_READY",
       reason: "HanLP2 semantic engine is ready.",
@@ -71,7 +71,7 @@ function buildSemanticState(
   overrides: Record<string, unknown> = {},
 ) {
   return {
-    engine: "hanlp2",
+    engine: "hanlp",
     status: "ready",
     reason_code: "HANLP_READY",
     reason: "HanLP2 semantic engine is ready.",

@@ -36,7 +36,7 @@ class _FakeStdin:
         request = json.loads(text.strip() or "{}")
         mode = str(request.get("mode") or "probe")
         payload = self._mode_payloads.get(mode) or self._mode_payloads.get("*") or {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "unavailable",
             "reason_code": "HANLP_WORKER_PROTOCOL_ERROR",
             "reason": f"Unexpected mode: {mode}",
@@ -169,7 +169,7 @@ def test_probe_uses_sidecar_bridge_json() -> None:
 
     mode_payloads = {
         "probe": {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
@@ -274,13 +274,13 @@ def test_tokenize_returns_tokens_from_sidecar() -> None:
 
     mode_payloads = {
         "probe": {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
         },
         "tokenize": {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
@@ -306,13 +306,13 @@ def test_model_status_returns_ready_when_sidecar_reports_model_ready() -> None:
 
     mode_payloads = {
         "probe": {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
         },
         "model_status": {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_MODEL_READY",
             "reason": "HanLP2 tokenizer model is ready.",
@@ -337,13 +337,13 @@ def test_local_models_status_alias_returns_model_status() -> None:
 
     mode_payloads = {
         "probe": {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
         },
         "model_status": {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_MODEL_READY",
             "reason": "HanLP2 tokenizer model is ready.",
@@ -368,13 +368,13 @@ def test_ensure_model_returns_unavailable_when_sidecar_reports_model_failure() -
 
     mode_payloads = {
         "probe": {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
         },
         "ensure_model": {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "unavailable",
             "reason_code": "HANLP_MODEL_LOAD_FAILED",
             "reason": "HanLP2 model load failed: RuntimeError.",
@@ -411,13 +411,13 @@ def test_task_status_returns_ready_when_sidecar_reports_task_ready() -> None:
 
     mode_payloads = {
         "probe": {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
         },
         "task_status": {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_TASK_READY",
             "reason": "HanLP task is ready.",
@@ -442,13 +442,13 @@ def test_run_task_returns_structured_result_from_sidecar() -> None:
 
     mode_payloads = {
         "probe": {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
         },
         "run_task": {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_TASK_READY",
             "reason": "HanLP task is ready.",
@@ -479,7 +479,7 @@ def test_run_task_uses_task_specific_timeout_and_disables_timeout_retry() -> Non
     def _fake_probe(_config):
         _ = _config
         return {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
             "reason": "ready",
@@ -492,7 +492,7 @@ def test_run_task_uses_task_specific_timeout_and_disables_timeout_retry() -> Non
         captured["retry_on_timeout"] = retry_on_timeout
         captured["task_key"] = payload.get("task_key")
         return {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_TASK_READY",
             "reason": "HanLP task is ready.",
@@ -526,7 +526,7 @@ def test_task_status_uses_task_specific_timeout_and_disables_timeout_retry() -> 
     def _fake_probe(_config):
         _ = _config
         return {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
             "reason": "ready",
@@ -539,7 +539,7 @@ def test_task_status_uses_task_specific_timeout_and_disables_timeout_retry() -> 
         captured["retry_on_timeout"] = retry_on_timeout
         captured["task_key"] = payload.get("task_key")
         return {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_TASK_READY",
             "reason": "HanLP task is ready.",
@@ -568,7 +568,7 @@ def test_run_task_returns_degraded_when_worker_response_times_out() -> None:
 
     mode_payloads = {
         "run_task": {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_TASK_READY",
             "reason": "HanLP task is ready.",
@@ -577,7 +577,7 @@ def test_run_task_returns_degraded_when_worker_response_times_out() -> None:
     }
 
     runtime.probe = lambda _config: {  # type: ignore[method-assign]
-        "engine": "hanlp2",
+        "engine": "hanlp",
         "status": "ready",
         "reason_code": "HANLP_READY",
         "reason": "ready",
@@ -604,7 +604,7 @@ def test_run_task_short_circuits_after_timeout_breaker_opens() -> None:
 
     mode_payloads = {
         "run_task": {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_TASK_READY",
             "reason": "HanLP task is ready.",
@@ -619,7 +619,7 @@ def test_run_task_short_circuits_after_timeout_breaker_opens() -> None:
         return _SlowPopen(mode_payloads, delay_sec=0.05)
 
     runtime.probe = lambda _config: {  # type: ignore[method-assign]
-        "engine": "hanlp2",
+        "engine": "hanlp",
         "status": "ready",
         "reason_code": "HANLP_READY",
         "reason": "ready",
@@ -647,13 +647,13 @@ def test_run_ner_returns_structured_result_from_sidecar() -> None:
 
     mode_payloads = {
         "probe": {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
         },
         "run_task": {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_TASK_READY",
             "reason": "HanLP task is ready.",
@@ -679,13 +679,13 @@ def test_run_dep_returns_structured_result_from_sidecar() -> None:
 
     mode_payloads = {
         "probe": {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
         },
         "run_task": {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_TASK_READY",
             "reason": "HanLP task is ready.",
@@ -1006,13 +1006,13 @@ def test_persistent_worker_reuses_same_pid_between_calls() -> None:
 
     mode_payloads = {
         "probe": {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
         },
         "tokenize": {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
@@ -1041,13 +1041,13 @@ def test_persistent_worker_restarts_on_channel_failure() -> None:
 
     mode_payloads = {
         "probe": {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
         },
         "tokenize": {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
@@ -1059,7 +1059,7 @@ def test_persistent_worker_restarts_on_channel_failure() -> None:
     cache_key = runtime._cache_key(payload)
     runtime._probe_cache_key = cache_key
     runtime._probe_cache_state = {
-        "engine": "hanlp2",
+        "engine": "hanlp",
         "status": "ready",
         "reason_code": "HANLP_READY",
         "reason": "HanLP2 semantic engine is ready.",
@@ -1087,13 +1087,13 @@ def test_persistent_worker_restarts_when_config_cache_key_changes() -> None:
 
     mode_payloads = {
         "probe": {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
         },
         "tokenize": {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",

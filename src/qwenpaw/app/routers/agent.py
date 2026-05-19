@@ -231,7 +231,7 @@ def _build_hanlp_api_snapshot(payload: dict) -> dict:
         reason = str(model.get("reason") or "HanLP2 tokenizer model is unavailable.")
 
     return {
-        "engine": "hanlp2",
+        "engine": "hanlp",
         "status": status,
         "reason_code": reason_code,
         "reason": reason,

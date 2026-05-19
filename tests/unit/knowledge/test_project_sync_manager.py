@@ -204,7 +204,7 @@ def test_project_sync_start_captures_task_aware_semantic_engine_state(tmp_path: 
         manager._knowledge_manager,
         "get_semantic_engine_state",
         lambda _config=None: {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "unavailable",
             "reason_code": "HANLP_TASK_UNAVAILABLE",
             "reason": "NER model is unavailable.",
@@ -214,7 +214,7 @@ def test_project_sync_start_captures_task_aware_semantic_engine_state(tmp_path: 
         manager._knowledge_manager,
         "get_semantic_task_state",
         lambda task_key, _config=None: {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "task_key": task_key,
             "status": "ready" if task_key == "tokenize" else "unavailable",
             "reason_code": "HANLP_TASK_READY" if task_key == "tokenize" else "HANLP_TASK_UNAVAILABLE",
@@ -250,14 +250,14 @@ def test_build_processing_modes_keeps_nlp_queued_when_tokenize_task_is_ready(tmp
     manager = ProjectKnowledgeSyncManager(tmp_path, knowledge_dirname="knowledge")
 
     semantic_engine = {
-        "engine": "hanlp2",
+        "engine": "hanlp",
         "status": "unavailable",
         "reason_code": "HANLP_TASK_UNAVAILABLE",
         "reason": "NER model is unavailable.",
         "summary": "Semantic engine unavailable: NER model is unavailable.",
         "task_states": {
             "tokenize": {
-                "engine": "hanlp2",
+                "engine": "hanlp",
                 "task_key": "tokenize",
                 "status": "ready",
                 "reason_code": "HANLP_TASK_READY",
@@ -294,7 +294,7 @@ def test_build_semantic_engine_state_prefers_current_snapshot(tmp_path: Path, mo
         manager._knowledge_manager,
         "get_semantic_engine_state",
         lambda *_args, **_kwargs: {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "unavailable",
             "reason_code": "NLP_ENGINE_UNAVAILABLE",
             "reason": "NLP semantic engine is not configured.",
@@ -307,13 +307,13 @@ def test_build_semantic_engine_state_prefers_current_snapshot(tmp_path: Path, mo
             "latest_source_id": "project-source-1",
             "updated_at": "2026-05-12T10:00:00Z",
             "semantic_engine": {
-                "engine": "hanlp2",
+                "engine": "hanlp",
                 "status": "ready",
                 "reason_code": "HANLP_TASK_READY",
                 "reason": "HanLP task is ready.",
                 "task_states": {
                     "tokenize": {
-                        "engine": "hanlp2",
+                        "engine": "hanlp",
                         "status": "ready",
                         "reason_code": "HANLP_TASK_READY",
                         "reason": "HanLP task is ready.",

@@ -261,7 +261,7 @@ def test_list_sources_include_semantic_uses_lightweight_preview_only(tmp_path: P
         manager,
         "get_semantic_engine_state",
         lambda cfg=None: {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "unavailable",
             "reason_code": "NLP_ENGINE_UNAVAILABLE",
             "reason": "NLP semantic engine is not configured.",
@@ -561,7 +561,7 @@ def test_index_source_writes_ner_files_when_semantic_ready(tmp_path: Path):
 
     manager = KnowledgeManager(tmp_path)
     ready_state = {
-        "engine": "hanlp2",
+        "engine": "hanlp",
         "status": "ready",
         "reason_code": "HANLP_READY",
         "reason": "HanLP2 semantic engine is ready.",
@@ -639,7 +639,7 @@ def test_index_source_directory_ner_requires_interlinear_without_fallback(tmp_pa
 
     manager = KnowledgeManager(tmp_path)
     ready_state = {
-        "engine": "hanlp2",
+        "engine": "hanlp",
         "status": "ready",
         "reason_code": "HANLP_READY",
         "reason": "HanLP2 semantic engine is ready.",
@@ -699,7 +699,7 @@ def test_index_source_skips_ner_files_when_semantic_unavailable(tmp_path: Path):
 
     manager = KnowledgeManager(tmp_path)
     unavailable_state = {
-        "engine": "hanlp2",
+        "engine": "hanlp",
         "status": "unavailable",
         "reason_code": "HANLP_SIDECAR_UNCONFIGURED",
         "reason": "HanLP2 sidecar is not configured.",
@@ -752,7 +752,7 @@ def test_index_source_prefers_hanlp_ner_task_mentions_when_available(tmp_path: P
 
     manager = KnowledgeManager(tmp_path)
     ready_state = {
-        "engine": "hanlp2",
+        "engine": "hanlp",
         "status": "ready",
         "reason_code": "HANLP_TASK_READY",
         "reason": "HanLP task is ready.",
@@ -826,7 +826,7 @@ def test_index_source_accepts_wrapped_hanlp_ner_mentions_payload(tmp_path: Path)
 
     manager = KnowledgeManager(tmp_path)
     ready_state = {
-        "engine": "hanlp2",
+        "engine": "hanlp",
         "status": "ready",
         "reason_code": "HANLP_TASK_READY",
         "reason": "HanLP task is ready.",
@@ -883,7 +883,7 @@ def test_index_source_accepts_label_keyed_hanlp_ner_payload(tmp_path: Path):
 
     manager = KnowledgeManager(tmp_path)
     ready_state = {
-        "engine": "hanlp2",
+        "engine": "hanlp",
         "status": "ready",
         "reason_code": "HANLP_TASK_READY",
         "reason": "HanLP task is ready.",
@@ -942,7 +942,7 @@ def test_index_source_does_not_fallback_to_semantic_tokens_when_hanlp_ready_but_
 
     manager = KnowledgeManager(tmp_path)
     ready_state = {
-        "engine": "hanlp2",
+        "engine": "hanlp",
         "status": "ready",
         "reason_code": "HANLP_TASK_READY",
         "reason": "HanLP task is ready.",
@@ -991,7 +991,7 @@ def test_index_source_populates_hanlp_syntax_tasks_when_available(tmp_path: Path
 
     manager = KnowledgeManager(tmp_path)
     ready_state = {
-        "engine": "hanlp2",
+        "engine": "hanlp",
         "status": "ready",
         "reason_code": "HANLP_TASK_READY",
         "reason": "HanLP task is ready.",
@@ -1119,7 +1119,7 @@ def test_index_source_runs_cor_after_ner_and_syntax_uses_original_text(tmp_path:
 
     manager = KnowledgeManager(tmp_path)
     ready_state = {
-        "engine": "hanlp2",
+        "engine": "hanlp",
         "status": "ready",
         "reason_code": "HANLP_TASK_READY",
         "reason": "HanLP task is ready.",
@@ -1213,7 +1213,7 @@ def test_materialize_semantic_artifacts_does_not_read_chunk_files(tmp_path: Path
 
     manager = KnowledgeManager(tmp_path)
     unavailable_state = {
-        "engine": "hanlp2",
+        "engine": "hanlp",
         "status": "unavailable",
         "reason_code": "HANLP_SIDECAR_UNCONFIGURED",
         "reason": "HanLP2 sidecar is not configured.",
@@ -1249,13 +1249,13 @@ def test_write_chunk_tokenize_artifacts_persists_line_aligned_outputs(tmp_path: 
 
     manager = KnowledgeManager(tmp_path)
     unavailable_state = {
-        "engine": "hanlp2",
+        "engine": "hanlp",
         "status": "unavailable",
         "reason_code": "HANLP_SIDECAR_UNCONFIGURED",
         "reason": "HanLP2 sidecar is not configured.",
     }
     ready_state = {
-        "engine": "hanlp2",
+        "engine": "hanlp",
         "status": "ready",
         "reason_code": "HANLP_READY",
         "reason": "HanLP2 semantic engine is ready.",
@@ -1316,7 +1316,7 @@ def test_delete_index_removes_ner_files(tmp_path: Path):
 
     manager = KnowledgeManager(tmp_path)
     ready_state = {
-        "engine": "hanlp2",
+        "engine": "hanlp",
         "status": "ready",
         "reason_code": "HANLP_READY",
         "reason": "HanLP2 semantic engine is ready.",
@@ -1376,7 +1376,7 @@ def test_get_source_chunk_documents_exposes_syntax_artifacts(tmp_path: Path):
 
     manager = KnowledgeManager(tmp_path)
     ready_state = {
-        "engine": "hanlp2",
+        "engine": "hanlp",
         "status": "ready",
         "reason_code": "HANLP_READY",
         "reason": "HanLP2 semantic engine is ready.",
@@ -1648,7 +1648,7 @@ def test_process_knowledge_text_returns_empty_keywords_without_hanlp(tmp_path: P
         manager._semantic_runtime,
         "tokenize",
         return_value=([], {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "unavailable",
             "reason_code": "HANLP_SIDECAR_UNCONFIGURED",
             "reason": "HanLP2 sidecar is not configured.",
@@ -1661,14 +1661,14 @@ def test_process_knowledge_text_returns_empty_keywords_without_hanlp(tmp_path: P
     assert processed["keywords"] == []
 
 
-def test_semantic_tokenizer_uses_hanlp2_tok_and_flattens_nested_tokens(tmp_path: Path):
+def test_semantic_tokenizer_uses_hanlp_tok_and_flattens_nested_tokens(tmp_path: Path):
     manager = KnowledgeManager(tmp_path)
 
     with patch.object(
         manager._semantic_runtime,
         "tokenize",
         return_value=(["Agent", "runner", "关系抽取"], {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
@@ -1704,7 +1704,7 @@ def test_semantic_engine_state_reports_tokenize_runtime_failure(tmp_path: Path):
         manager._semantic_runtime,
         "tokenize",
         return_value=([], {
-            "engine": "hanlp2",
+            "engine": "hanlp",
             "status": "error",
             "reason_code": "HANLP_TOKENIZE_FAILED",
             "reason": "HanLP2 semantic tokenization failed via tok: RuntimeError.",
