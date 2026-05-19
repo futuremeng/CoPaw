@@ -51,14 +51,14 @@ def test_build_status_includes_task_matrix_states(monkeypatch):
             return {
                 "status": "ready",
                 "reason_code": "HANLP_READY",
-                "reason": "HanLP2 semantic engine is ready.",
+                "reason": "HanLP semantic engine is ready.",
             }
 
         def model_status(self, _knowledge):
             return {
                 "status": "ready",
                 "reason_code": "HANLP_MODEL_READY",
-                "reason": "HanLP2 tokenizer model is ready.",
+                "reason": "HanLP tokenizer model is ready.",
             }
 
         def task_status(self, task_key, _knowledge):
@@ -88,7 +88,7 @@ def test_ensure_hanlp_model_aggregates_task_results(monkeypatch):
             return {
                 "status": "ready",
                 "reason_code": "HANLP_MODEL_READY",
-                "reason": "HanLP2 tokenizer model is ready.",
+                "reason": "HanLP tokenizer model is ready.",
             }
 
         def task_status(self, task_key, _knowledge):
@@ -420,7 +420,7 @@ def test_run_hanlp_preload_tracks_stable_order_and_progress(monkeypatch):
             return {
                 "status": "ready",
                 "reason_code": "HANLP_MODEL_READY",
-                "reason": "HanLP2 tokenizer model is ready.",
+                "reason": "HanLP tokenizer model is ready.",
             }
 
         def run_task(self, task_key, _sample_text, _knowledge):

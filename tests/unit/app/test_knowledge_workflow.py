@@ -191,7 +191,7 @@ def test_project_sync_manager_records_pipeline_run_metadata(
             "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
-            "reason": "HanLP2 semantic engine is ready.",
+            "reason": "HanLP semantic engine is ready.",
         },
     )
 

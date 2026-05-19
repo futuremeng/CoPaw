@@ -72,7 +72,7 @@ def build_semantic_engine_summary(manager: Any, engine_state: dict[str, Any]) ->
 	if reason:
 		reason = reason.split(" via ", 1)[0].strip()
 		reason = reason.split(" or ", 1)[0].strip()
-		reason = reason.replace("HanLP2 semantic tokenization", "HanLP2 tokenization")
+		reason = reason.replace("HanLP semantic tokenization", "HanLP tokenization")
 	if status == "error":
 		return f"Semantic engine error: {reason or 'Unknown semantic engine error.'}"
 	if status == "unavailable":
@@ -354,7 +354,7 @@ def build_processing_modes(
 	quality_loop = _as_dict(last_result.get("quality_loop"))
 	semantic_status = str(semantic_engine.get("status") or "idle").strip().lower()
 	semantic_summary = str(semantic_engine.get("summary") or "").strip()
-	semantic_reason = str(semantic_engine.get("reason") or "").replace("HanLP2 sidecar", "HanLP sidecar")
+	semantic_reason = str(semantic_engine.get("reason") or "").replace("HanLP sidecar", "HanLP sidecar")
 
 	fast_ready = _safe_int(index_result.get("document_count")) > 0 or _safe_int(index_result.get("chunk_count")) > 0
 	fast_mode = {

@@ -66,7 +66,7 @@ def test_project_sync_queues_until_debounce_window(tmp_path: Path, monkeypatch):
     assert result["reason"] == "QUEUED"
     assert state["status"] == "queued"
     assert state["current_stage"] == "debouncing"
-    assert "Semantic engine unavailable: HanLP2 sidecar is not configured." in state["stage_message"]
+    assert "Semantic engine unavailable: HanLP sidecar is not configured." in state["stage_message"]
     assert "original/a.md" in state["changed_paths"]
     assert state["scheduled_for"]
     assert len(scheduled) == 1
@@ -763,7 +763,7 @@ def test_project_sync_state_mirrors_semantic_engine_after_source_selected(tmp_pa
             "engine": "hanlp",
             "status": "error",
             "reason_code": "HANLP_TOKENIZE_FAILED",
-            "reason": "HanLP2 semantic tokenization failed via tok: RuntimeError.",
+            "reason": "HanLP semantic tokenization failed via tok: RuntimeError.",
         },
     )
 
@@ -776,7 +776,7 @@ def test_project_sync_state_mirrors_semantic_engine_after_source_selected(tmp_pa
 
     assert hydrated["semantic_engine"]["status"] == "error"
     assert hydrated["semantic_engine"]["reason_code"] == "HANLP_TOKENIZE_FAILED"
-    assert hydrated["semantic_engine"]["summary"] == "Semantic engine error: HanLP2 tokenization failed"
+    assert hydrated["semantic_engine"]["summary"] == "Semantic engine error: HanLP tokenization failed"
 
 
 def test_project_sync_stage_message_merges_semantic_summary(tmp_path: Path, monkeypatch):
@@ -793,7 +793,7 @@ def test_project_sync_stage_message_merges_semantic_summary(tmp_path: Path, monk
             "engine": "hanlp",
             "status": "unavailable",
             "reason_code": "HANLP_IMPORT_UNAVAILABLE",
-            "reason": "HanLP2 module is not installed or failed to import.",
+            "reason": "HanLP module is not installed or failed to import.",
         },
     )
 
@@ -806,7 +806,7 @@ def test_project_sync_stage_message_merges_semantic_summary(tmp_path: Path, monk
     hydrated = manager.get_state(project_id)
 
     assert hydrated["stage_message"] == (
-        "Project sync pending · Semantic engine unavailable: HanLP2 module is not installed"
+        "Project sync pending · Semantic engine unavailable: HanLP module is not installed"
     )
 
 
@@ -824,7 +824,7 @@ def test_project_sync_pending_stage_message_includes_semantic_reason_code(tmp_pa
             "engine": "hanlp",
             "status": "unavailable",
             "reason_code": "HANLP_IMPORT_UNAVAILABLE",
-            "reason": "HanLP2 module is not installed or failed to import.",
+            "reason": "HanLP module is not installed or failed to import.",
         },
     )
 
@@ -855,7 +855,7 @@ def test_project_sync_processing_modes_block_when_semantic_engine_unavailable(tm
             "engine": "hanlp",
             "status": "unavailable",
             "reason_code": "HANLP_SIDECAR_UNCONFIGURED",
-            "reason": "HanLP2 sidecar is not configured.",
+            "reason": "HanLP sidecar is not configured.",
         },
     )
 
@@ -902,7 +902,7 @@ def test_project_sync_agentic_mode_does_not_reuse_memify_counts_while_pending(tm
             "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
-            "reason": "HanLP2 semantic engine is ready.",
+            "reason": "HanLP semantic engine is ready.",
         },
     )
 
@@ -947,7 +947,7 @@ def test_project_sync_agentic_mode_prefers_quality_snapshot_metrics(tmp_path: Pa
             "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
-            "reason": "HanLP2 semantic engine is ready.",
+            "reason": "HanLP semantic engine is ready.",
         },
     )
 
@@ -1076,7 +1076,7 @@ def test_project_sync_nlp_ready_when_required_stages_complete_even_if_cor_unavai
             "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
-            "reason": "HanLP2 semantic engine is ready.",
+            "reason": "HanLP semantic engine is ready.",
         },
     )
 
@@ -1139,7 +1139,7 @@ def test_project_sync_nlp_not_available_when_required_syntax_stage_missing(
             "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
-            "reason": "HanLP2 semantic engine is ready.",
+            "reason": "HanLP semantic engine is ready.",
         },
     )
 
@@ -1186,7 +1186,7 @@ def test_project_sync_nlp_not_unblocked_by_cor_stage_only(
             "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
-            "reason": "HanLP2 semantic engine is ready.",
+            "reason": "HanLP semantic engine is ready.",
         },
     )
 

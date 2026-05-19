@@ -305,31 +305,31 @@ def main():
     payload = load_payload()
 
     if not version_in_range():
-        emit(unavailable_payload("HANLP_PYTHON_UNSUPPORTED", "Current Python version is unsupported by HanLP2 runtime."))
+        emit(unavailable_payload("HANLP_PYTHON_UNSUPPORTED", "Current Python version is unsupported by HanLP runtime."))
         return
 
     try:
         import hanlp
     except Exception:
-        emit(unavailable_payload("HANLP_IMPORT_UNAVAILABLE", "HanLP2 module is not installed or failed to import."))
+        emit(unavailable_payload("HANLP_IMPORT_UNAVAILABLE", "HanLP module is not installed or failed to import."))
         return
 
     if mode == "probe":
         model_id = str(payload.get("model_id") or "FINE_ELECTRA_SMALL_ZH").strip()
-        emit(ready_payload("HANLP_READY", "HanLP2 semantic engine is ready.", resolved_model=model_id, tokens=[]))
+        emit(ready_payload("HANLP_READY", "HanLP semantic engine is ready.", resolved_model=model_id, tokens=[]))
         return
 
     if mode in {"model_status", "ensure_model"}:
         model_id = str(payload.get("model_id") or "").strip()
         if not model_id:
-            emit(unavailable_payload("HANLP_MODEL_UNSPECIFIED", "HanLP2 model is not configured."))
+            emit(unavailable_payload("HANLP_MODEL_UNSPECIFIED", "HanLP model is not configured."))
             return
         try:
             load_model(hanlp, model_id)
         except Exception as exc:
-            emit(unavailable_payload("HANLP_MODEL_LOAD_FAILED", f"HanLP2 model load failed: {type(exc).__name__}."))
+            emit(unavailable_payload("HANLP_MODEL_LOAD_FAILED", f"HanLP model load failed: {type(exc).__name__}."))
             return
-        emit(ready_payload("HANLP_MODEL_READY", "HanLP2 tokenizer model is ready."))
+        emit(ready_payload("HANLP_MODEL_READY", "HanLP tokenizer model is ready."))
         return
 
     if mode == "tokenize":
@@ -339,14 +339,14 @@ def main():
 		if not callable(tokenizer):
 			tokenizer = getattr(hanlp, "tokenize", None)
         if not callable(tokenizer):
-            emit(unavailable_payload("HANLP_TOKENIZE_UNAVAILABLE", "HanLP2 tokenizer is unavailable."))
+            emit(unavailable_payload("HANLP_TOKENIZE_UNAVAILABLE", "HanLP tokenizer is unavailable."))
             return
         try:
 			tokens = run_tokenize_with_fallback(hanlp, tokenizer, text)
         except Exception as exc:
-            emit(unavailable_payload("HANLP_TOKENIZE_FAILED", f"HanLP2 semantic tokenization failed via tok: {type(exc).__name__}."))
+            emit(unavailable_payload("HANLP_TOKENIZE_FAILED", f"HanLP semantic tokenization failed via tok: {type(exc).__name__}."))
             return
-        emit(ready_payload("HANLP_READY", "HanLP2 semantic engine is ready.", tokens=tokens))
+        emit(ready_payload("HANLP_READY", "HanLP semantic engine is ready.", tokens=tokens))
         return
 
 	if mode == "tokenize_batch":
@@ -356,7 +356,7 @@ def main():
 		if not callable(tokenizer):
 			tokenizer = getattr(hanlp, "tokenize", None)
 		if not callable(tokenizer):
-			emit(unavailable_payload("HANLP_TOKENIZE_UNAVAILABLE", "HanLP2 tokenizer is unavailable.", tokens=[]))
+			emit(unavailable_payload("HANLP_TOKENIZE_UNAVAILABLE", "HanLP tokenizer is unavailable.", tokens=[]))
 			return
 
 		token_batches = []
@@ -868,12 +868,12 @@ class NLPRuntime:
 			return _default_runtime_state(
 				status="unavailable",
 				reason_code="HANLP_SIDECAR_PYTHON_MISSING",
-				reason="Configured HanLP2 Python executable was not found.",
+				reason="Configured HanLP Python executable was not found.",
 			)
 		return _default_runtime_state(
 			status="unavailable",
 			reason_code="HANLP_SIDECAR_UNCONFIGURED",
-			reason="HanLP2 sidecar is not configured.",
+			reason="HanLP sidecar is not configured.",
 		)
 
 	@staticmethod
@@ -1026,13 +1026,13 @@ class NLPRuntime:
 			return _default_runtime_state(
 				status="unavailable",
 				reason_code="HANLP_SIDECAR_UNCONFIGURED",
-				reason="HanLP2 sidecar is not configured.",
+				reason="HanLP sidecar is not configured.",
 			)
 		except FileNotFoundError:
 			return _default_runtime_state(
 				status="unavailable",
 				reason_code="HANLP_SIDECAR_PYTHON_MISSING",
-				reason="Configured HanLP2 Python executable was not found.",
+				reason="Configured HanLP Python executable was not found.",
 			)
 
 		state = self._run_bridge(

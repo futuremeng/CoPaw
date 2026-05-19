@@ -172,7 +172,7 @@ def test_probe_uses_sidecar_bridge_json() -> None:
             "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
-            "reason": "HanLP2 semantic engine is ready.",
+            "reason": "HanLP semantic engine is ready.",
         },
     }
 
@@ -277,13 +277,13 @@ def test_tokenize_returns_tokens_from_sidecar() -> None:
             "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
-            "reason": "HanLP2 semantic engine is ready.",
+            "reason": "HanLP semantic engine is ready.",
         },
         "tokenize": {
             "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
-            "reason": "HanLP2 semantic engine is ready.",
+            "reason": "HanLP semantic engine is ready.",
             "tokens": ["Agent", "关系抽取"],
         },
     }
@@ -309,13 +309,13 @@ def test_model_status_returns_ready_when_sidecar_reports_model_ready() -> None:
             "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
-            "reason": "HanLP2 semantic engine is ready.",
+            "reason": "HanLP semantic engine is ready.",
         },
         "model_status": {
             "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_MODEL_READY",
-            "reason": "HanLP2 tokenizer model is ready.",
+            "reason": "HanLP tokenizer model is ready.",
         },
     }
 
@@ -340,13 +340,13 @@ def test_local_models_status_alias_returns_model_status() -> None:
             "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
-            "reason": "HanLP2 semantic engine is ready.",
+            "reason": "HanLP semantic engine is ready.",
         },
         "model_status": {
             "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_MODEL_READY",
-            "reason": "HanLP2 tokenizer model is ready.",
+            "reason": "HanLP tokenizer model is ready.",
         },
     }
 
@@ -371,13 +371,13 @@ def test_ensure_model_returns_unavailable_when_sidecar_reports_model_failure() -
             "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
-            "reason": "HanLP2 semantic engine is ready.",
+            "reason": "HanLP semantic engine is ready.",
         },
         "ensure_model": {
             "engine": "hanlp",
             "status": "unavailable",
             "reason_code": "HANLP_MODEL_LOAD_FAILED",
-            "reason": "HanLP2 model load failed: RuntimeError.",
+            "reason": "HanLP model load failed: RuntimeError.",
         },
     }
 
@@ -414,7 +414,7 @@ def test_task_status_returns_ready_when_sidecar_reports_task_ready() -> None:
             "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
-            "reason": "HanLP2 semantic engine is ready.",
+            "reason": "HanLP semantic engine is ready.",
         },
         "task_status": {
             "engine": "hanlp",
@@ -445,7 +445,7 @@ def test_run_task_returns_structured_result_from_sidecar() -> None:
             "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
-            "reason": "HanLP2 semantic engine is ready.",
+            "reason": "HanLP semantic engine is ready.",
         },
         "run_task": {
             "engine": "hanlp",
@@ -650,7 +650,7 @@ def test_run_ner_returns_structured_result_from_sidecar() -> None:
             "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
-            "reason": "HanLP2 semantic engine is ready.",
+            "reason": "HanLP semantic engine is ready.",
         },
         "run_task": {
             "engine": "hanlp",
@@ -682,7 +682,7 @@ def test_run_dep_returns_structured_result_from_sidecar() -> None:
             "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
-            "reason": "HanLP2 semantic engine is ready.",
+            "reason": "HanLP semantic engine is ready.",
         },
         "run_task": {
             "engine": "hanlp",
@@ -1009,13 +1009,13 @@ def test_persistent_worker_reuses_same_pid_between_calls() -> None:
             "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
-            "reason": "HanLP2 semantic engine is ready.",
+            "reason": "HanLP semantic engine is ready.",
         },
         "tokenize": {
             "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
-            "reason": "HanLP2 semantic engine is ready.",
+            "reason": "HanLP semantic engine is ready.",
             "tokens": ["微软", "发布"],
         },
     }
@@ -1044,13 +1044,13 @@ def test_persistent_worker_restarts_on_channel_failure() -> None:
             "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
-            "reason": "HanLP2 semantic engine is ready.",
+            "reason": "HanLP semantic engine is ready.",
         },
         "tokenize": {
             "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
-            "reason": "HanLP2 semantic engine is ready.",
+            "reason": "HanLP semantic engine is ready.",
             "tokens": ["微软", "发布"],
         },
     }
@@ -1062,7 +1062,7 @@ def test_persistent_worker_restarts_on_channel_failure() -> None:
         "engine": "hanlp",
         "status": "ready",
         "reason_code": "HANLP_READY",
-        "reason": "HanLP2 semantic engine is ready.",
+        "reason": "HanLP semantic engine is ready.",
     }
     runtime._worker_process = _BrokenPopen()
     runtime._worker_cache_key = cache_key
@@ -1090,13 +1090,13 @@ def test_persistent_worker_restarts_when_config_cache_key_changes() -> None:
             "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
-            "reason": "HanLP2 semantic engine is ready.",
+            "reason": "HanLP semantic engine is ready.",
         },
         "tokenize": {
             "engine": "hanlp",
             "status": "ready",
             "reason_code": "HANLP_READY",
-            "reason": "HanLP2 semantic engine is ready.",
+            "reason": "HanLP semantic engine is ready.",
             "tokens": ["微软", "发布"],
         },
     }

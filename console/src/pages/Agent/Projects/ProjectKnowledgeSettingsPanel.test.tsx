@@ -55,7 +55,7 @@ function buildRegisteredSource(projectId: string) {
       engine: "hanlp",
       status: "ready",
       reason_code: "HANLP_READY",
-      reason: "HanLP2 semantic engine is ready.",
+      reason: "HanLP semantic engine is ready.",
     },
     status: {
       indexed: true,
@@ -74,7 +74,7 @@ function buildSemanticState(
     engine: "hanlp",
     status: "ready",
     reason_code: "HANLP_READY",
-    reason: "HanLP2 semantic engine is ready.",
+    reason: "HanLP semantic engine is ready.",
     ...overrides,
   };
 }
@@ -243,7 +243,7 @@ describe("ProjectKnowledgeSettingsPanel", () => {
     mockedApi.getProjectKnowledgeSyncStatus.mockResolvedValueOnce(buildSyncState(projectId, {
       status: "queued",
       current_stage: "cooldown",
-      stage_message: "Waiting for debounce/cooldown window · Semantic engine unavailable: HanLP2 module is not installed.",
+      stage_message: "Waiting for debounce/cooldown window · Semantic engine unavailable: HanLP module is not installed.",
       progress: 1,
       dirty: true,
       last_trigger: "project_watcher_change",
@@ -253,8 +253,8 @@ describe("ProjectKnowledgeSettingsPanel", () => {
       semantic_engine: buildSemanticState({
         status: "unavailable",
         reason_code: "HANLP_IMPORT_UNAVAILABLE",
-        reason: "HanLP2 module is not installed or failed to import.",
-        summary: "Semantic engine unavailable: HanLP2 module is not installed.",
+        reason: "HanLP module is not installed or failed to import.",
+        summary: "Semantic engine unavailable: HanLP module is not installed.",
       }),
     }));
 
@@ -273,7 +273,7 @@ describe("ProjectKnowledgeSettingsPanel", () => {
 
     await waitFor(() => {
       expect(document.body.textContent || "").toContain("copaw.projects.knowledge.syncStage.cooldown");
-      expect(document.body.textContent || "").toContain("Semantic engine unavailable: HanLP2 module is not installed.");
+      expect(document.body.textContent || "").toContain("Semantic engine unavailable: HanLP module is not installed.");
     });
   });
 
@@ -319,7 +319,7 @@ describe("ProjectKnowledgeSettingsPanel", () => {
       semantic_engine: buildSemanticState({
         status: "unavailable",
         reason_code: "HANLP_IMPORT_UNAVAILABLE",
-        reason: "HanLP2 module is not installed or failed to import.",
+        reason: "HanLP module is not installed or failed to import.",
       }),
     }));
     mockedApi.listKnowledgeSources.mockResolvedValueOnce({
@@ -329,7 +329,7 @@ describe("ProjectKnowledgeSettingsPanel", () => {
           semantic_status: buildSemanticState({
             status: "unavailable",
             reason_code: "HANLP_IMPORT_UNAVAILABLE",
-            reason: "HanLP2 module is not installed or failed to import.",
+            reason: "HanLP module is not installed or failed to import.",
           }),
         },
       ],
@@ -349,7 +349,7 @@ describe("ProjectKnowledgeSettingsPanel", () => {
     await waitFor(() => {
       expect(document.body.textContent || "").toContain("Module Unavailable");
       expect(document.body.textContent || "").toContain("HANLP_IMPORT_UNAVAILABLE");
-      expect(document.body.textContent || "").toContain("Semantic engine unavailable: HanLP2 module is not installed.");
+      expect(document.body.textContent || "").toContain("Semantic engine unavailable: HanLP module is not installed.");
     });
   });
 
@@ -358,7 +358,7 @@ describe("ProjectKnowledgeSettingsPanel", () => {
       semantic_engine: buildSemanticState({
         status: "error",
         reason_code: "HANLP_TOKENIZE_FAILED",
-        reason: "HanLP2 semantic tokenization failed via tok: RuntimeError.",
+        reason: "HanLP semantic tokenization failed via tok: RuntimeError.",
       }),
     }));
     mockedApi.listKnowledgeSources.mockResolvedValueOnce({
@@ -368,7 +368,7 @@ describe("ProjectKnowledgeSettingsPanel", () => {
           semantic_status: buildSemanticState({
             status: "error",
             reason_code: "HANLP_TOKENIZE_FAILED",
-            reason: "HanLP2 semantic tokenization failed via tok: RuntimeError.",
+            reason: "HanLP semantic tokenization failed via tok: RuntimeError.",
           }),
         },
       ],
@@ -396,7 +396,7 @@ describe("ProjectKnowledgeSettingsPanel", () => {
       semantic_engine: buildSemanticState({
         status: "unavailable",
         reason_code: "HANLP_SIDECAR_UNCONFIGURED",
-        reason: "HanLP2 sidecar is not configured.",
+        reason: "HanLP sidecar is not configured.",
       }),
     }));
     mockedApi.listKnowledgeSources.mockResolvedValueOnce({
@@ -406,7 +406,7 @@ describe("ProjectKnowledgeSettingsPanel", () => {
           semantic_status: buildSemanticState({
             status: "unavailable",
             reason_code: "HANLP_SIDECAR_UNCONFIGURED",
-            reason: "HanLP2 sidecar is not configured.",
+            reason: "HanLP sidecar is not configured.",
           }),
         },
       ],

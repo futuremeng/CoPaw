@@ -179,7 +179,7 @@ def test_list_sources_returns_semantic_engine_status(
                 "engine": "hanlp",
                 "status": "unavailable",
                 "reason_code": "HANLP_IMPORT_UNAVAILABLE",
-                "reason": "HanLP2 module is not installed or failed to import.",
+                "reason": "HanLP module is not installed or failed to import.",
             }
         ),
     )

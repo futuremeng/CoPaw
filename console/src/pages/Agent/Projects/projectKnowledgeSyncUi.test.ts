@@ -21,7 +21,7 @@ describe("projectKnowledgeSyncUi semantic helpers", () => {
       engine: "hanlp",
       status: "unavailable",
       reason_code: "HANLP_SIDECAR_UNCONFIGURED",
-      reason: "HanLP2 sidecar is not configured.",
+      reason: "HanLP sidecar is not configured.",
     }, t)).toBe("Semantic engine unavailable: HanLP sidecar is not configured.");
   });
 
@@ -30,8 +30,8 @@ describe("projectKnowledgeSyncUi semantic helpers", () => {
       engine: "hanlp",
       status: "unavailable",
       reason_code: "HANLP_IMPORT_UNAVAILABLE",
-      reason: "HanLP2 module is not installed or failed to import.",
-    }, t)).toBe("Semantic engine unavailable: HanLP2 module is not installed.");
+      reason: "HanLP module is not installed or failed to import.",
+    }, t)).toBe("Semantic engine unavailable: HanLP module is not installed.");
   });
 
   it("maps tokenize failure to localized reason label", () => {
@@ -39,7 +39,7 @@ describe("projectKnowledgeSyncUi semantic helpers", () => {
       engine: "hanlp",
       status: "error",
       reason_code: "HANLP_TOKENIZE_FAILED",
-      reason: "HanLP2 semantic tokenization failed via tok: RuntimeError.",
+      reason: "HanLP semantic tokenization failed via tok: RuntimeError.",
     }, t)).toBe("Tokenization Failed");
   });
 
@@ -48,7 +48,7 @@ describe("projectKnowledgeSyncUi semantic helpers", () => {
       engine: "hanlp",
       status: "unavailable",
       reason_code: "HANLP_SIDECAR_PYTHON_MISSING",
-      reason: "HanLP2 sidecar Python executable was not found.",
+      reason: "HanLP sidecar Python executable was not found.",
     }, t)).toBe("Sidecar Python Missing");
   });
 
