@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Badge,
@@ -81,11 +81,13 @@ import {
   type TreeDisplayMode,
 } from "./projectLayoutPrefs";
 import type { ProjectFileFilterKey } from "./filtering";
-import { computeProjectFileInventorySummary } from "./metrics";
+import { computeProjectFileInventorySummary, isRecentlyUpdatedFile } from "./metrics";
 import { isBuiltInProjectFile } from "./builtInFiles";
 import type {
   AgentProjectSummary,
   AgentProjectFileInfo,
+  AgentProjectFileQueryRequest,
+  AgentProjectFileQuerySummary,
   AgentProjectFileSummary,
   AgentProjectFileTreeNode,
   ProjectPipelineArtifactRecord,
@@ -166,6 +168,92 @@ function resolveStageFromFilter(filter: ProjectFileFilterKey | ""): ProjectStage
     return "builtin";
   }
   return "source";
+}
+
+function buildProjectFilesQueryFromViewState(params: {
+  activeStage: ProjectStageKey;
+  selectedMetricFilter: ProjectFileFilterKey | "";
+  searchQuery?: string;
+}): AgentProjectFileQueryRequest {
+  const base: AgentProjectFileQueryRequest = {
+    include_ignored: false,
+    sort_by: "path",
+    sort_order: "asc",
+    offset: 0,
+    limit: 5000,
+    include_builtin: false,
+  };
+
+  const { activeStage, selectedMetricFilter } = params;
+  const normalizedSearch = String(params.searchQuery || "").trim();
+  if (normalizedSearch) {
+    base.search = normalizedSearch;
+  }
+
+  if (selectedMetricFilter === "builtin" || activeStage === "builtin") {
+    return {
+      ...base,
+      include_builtin: true,
+      stages: ["builtin"],
+    };
+  }
+
+  switch (selectedMetricFilter) {
+    case "original":
+    case "intermediate":
+    case "artifact":
+      return {
+        ...base,
+        stages: [selectedMetricFilter],
+      };
+    case "markdown":
+      return {
+        ...base,
+        content_types: ["markdown"],
+      };
+    case "text":
+      return {
+        ...base,
+        content_types: ["text"],
+      };
+    case "script":
+      return {
+        ...base,
+        content_types: ["script"],
+      };
+    case "otherType":
+      return {
+        ...base,
+        content_types: ["other"],
+      };
+    case "agent":
+      return {
+        ...base,
+        path_prefix: ".agent/",
+      };
+    case "skill":
+      return {
+        ...base,
+        path_prefix: ".skills/",
+      };
+    case "flow":
+    case "case":
+      return {
+        ...base,
+        path_prefix: "pipelines/",
+      };
+    default:
+      break;
+  }
+
+  if (activeStage === "source") {
+    return {
+      ...base,
+      stages: ["original", "intermediate", "artifact"],
+    };
+  }
+
+  return base;
 }
 
 function getRuntimeTaskKey(task: KnowledgeTaskProgress): string {
@@ -521,6 +609,41 @@ function resolveNerStructuredArtifactPath(
   return candidates[0];
 }
 
+function countFromRecord(record: Record<string, number> | undefined, key: string): number {
+  return Math.max(0, Number(record?.[key] || 0));
+}
+
+function buildVisibleSummaryFromQuerySummary(
+  querySummary: AgentProjectFileQuerySummary,
+  files: AgentProjectFileInfo[],
+) {
+  const totalFiles = Math.max(0, Number(querySummary.total_matched || querySummary.returned || 0));
+  const totalFileBytes = files.reduce((sum, item) => sum + Math.max(0, Number(item.size || 0)), 0);
+  const averageFileBytes = totalFiles > 0 ? totalFileBytes / totalFiles : 0;
+  const nowMs = Date.now();
+  const recentlyUpdatedFiles = files.reduce(
+    (sum, item) => sum + (isRecentlyUpdatedFile(item.modified_time, nowMs) ? 1 : 0),
+    0,
+  );
+
+  return {
+    totalFiles,
+    originalFiles: countFromRecord(querySummary.stage_counts, "original"),
+    intermediateFiles: countFromRecord(querySummary.stage_counts, "intermediate"),
+    artifactFiles: countFromRecord(querySummary.stage_counts, "artifact"),
+    knowledgeMetrics: {
+      totalFiles,
+      markdownFiles: countFromRecord(querySummary.content_type_counts, "markdown"),
+      textFiles: countFromRecord(querySummary.content_type_counts, "text"),
+      scriptFiles: countFromRecord(querySummary.content_type_counts, "script"),
+      otherTypeFiles: countFromRecord(querySummary.content_type_counts, "other"),
+      recentlyUpdatedFiles,
+      averageFileBytes,
+      totalFileBytes,
+    },
+  };
+}
+
 export default function ProjectDetailPage() {
   const { t, i18n } = useTranslation();
   const translateWithFallback = useCallback(
@@ -547,6 +670,8 @@ export default function ProjectDetailPage() {
 
   const [resolvedProjectRequestId, setResolvedProjectRequestId] = useState("");
   const [projectFiles, setProjectFiles] = useState<AgentProjectFileInfo[]>([]);
+  const [projectFilesQuerySummary, setProjectFilesQuerySummary] =
+    useState<AgentProjectFileQuerySummary | null>(null);
   const [projectTreeNodes, setProjectTreeNodes] = useState<AgentProjectFileTreeNode[]>([]);
   const [projectFileSummary, setProjectFileSummary] = useState<AgentProjectFileSummary | null>(null);
   const [knownProjectFilesByPath, setKnownProjectFilesByPath] =
@@ -615,6 +740,8 @@ export default function ProjectDetailPage() {
     useState<Record<string, RuntimeTaskDetail>>({});
   const [pendingKnowledgeQuery, setPendingKnowledgeQuery] = useState("");
   const [selectedMetricFilter, setSelectedMetricFilter] = useState<ProjectFileFilterKey | "">("");
+  const [projectFileSearchQuery, setProjectFileSearchQuery] = useState("");
+  const deferredProjectFileSearchQuery = useDeferredValue(projectFileSearchQuery);
   const [treeDisplayMode, setTreeDisplayMode] = useState<TreeDisplayMode>("filter");
   const [leftPaneSize, setLeftPaneSize] = useState(LEFT_PANE_EXPANDED_SIZE);
   const [workbenchPaneSize, setWorkbenchPaneSize] = useState(WORKBENCH_PANE_DEFAULT_SIZE);
@@ -624,6 +751,7 @@ export default function ProjectDetailPage() {
   const workspaceFocusChatIdRef = useRef("");
   const designFocusChatIdRef = useRef("");
   const projectFilesLoadKeyRef = useRef("");
+  const projectFilesViewLoadKeyRef = useRef("");
   const runRestoreAttemptKeyRef = useRef("");
   const automationDrawerAutoOpenKeyRef = useRef("");
   const pipelineManualActivationRef = useRef(false);
@@ -646,6 +774,20 @@ export default function ProjectDetailPage() {
   const selectedProject = useMemo(
     () => projects.find((project) => matchesRouteProject(project, routeProjectId)),
     [projects, routeProjectId],
+  );
+
+  const projectFilesQueryBody = useMemo(
+    () => buildProjectFilesQueryFromViewState({
+      activeStage,
+      selectedMetricFilter,
+      searchQuery: deferredProjectFileSearchQuery,
+    }),
+    [activeStage, deferredProjectFileSearchQuery, selectedMetricFilter],
+  );
+
+  const projectFilesQuerySignature = useMemo(
+    () => JSON.stringify(projectFilesQueryBody),
+    [projectFilesQueryBody],
   );
 
   const projectKnowledgeState = useProjectKnowledgeState({
@@ -1172,8 +1314,10 @@ export default function ProjectDetailPage() {
   );
 
   const visibleProjectSummary = useMemo(
-    () => computeProjectFileInventorySummary(visibleProjectFiles),
-    [visibleProjectFiles],
+    () => projectFilesQuerySummary
+      ? buildVisibleSummaryFromQuerySummary(projectFilesQuerySummary, projectFiles)
+      : computeProjectFileInventorySummary(visibleProjectFiles),
+    [projectFiles, projectFilesQuerySummary, visibleProjectFiles],
   );
 
   const flushWorkspaceResize = useCallback((sizes: number[]) => {
@@ -1376,11 +1520,24 @@ export default function ProjectDetailPage() {
     try {
       for (const projectRequestId of projectIds) {
         try {
-          const files = await agentsApi.listProjectFiles(agentId, projectRequestId);
-          const filteredFiles = files.filter(
-            (item) => !isIgnoredProjectFile(item.path),
+          const queryResponse = await agentsApi.queryProjectFiles(
+            agentId,
+            projectRequestId,
+            projectFilesQueryBody,
           );
+          const filteredFiles = queryResponse.items
+            .map((item) => ({
+              filename: item.filename,
+              path: item.path,
+              size: item.size,
+              modified_time: item.modified_time,
+              stage: item.stage,
+              content_type: item.content_type,
+              builtin: item.builtin,
+              ignored: item.ignored,
+            }));
           setProjectFiles(filteredFiles);
+          setProjectFilesQuerySummary(queryResponse.summary || null);
           setKnownProjectFilesByPath(buildProjectFilesByPath(filteredFiles));
           setResolvedProjectRequestId(projectRequestId);
           const preservedFile = previousSelection
@@ -1406,13 +1563,14 @@ export default function ProjectDetailPage() {
     } catch (err) {
       console.error("failed to load project files", err);
       setProjectFiles([]);
+      setProjectFilesQuerySummary(null);
       setError(
         t("projects.loadFilesFailed"),
       );
     } finally {
       setFilesLoading(false);
     }
-  }, [selectedFilePath, t]);
+  }, [projectFilesQueryBody, selectedFilePath, t]);
 
   const loadProjectTreeDirectory = useCallback(async (
     agentId: string,
@@ -2290,6 +2448,7 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     setResolvedProjectRequestId("");
     setProjectFiles([]);
+    setProjectFilesQuerySummary(null);
     setProjectTreeNodes([]);
     setProjectFileSummary(null);
     setKnownProjectFilesByPath({});
@@ -2309,6 +2468,7 @@ export default function ProjectDetailPage() {
     setWorkspaceFocusChatId("");
     setDesignFocusChatId("");
     projectFilesLoadKeyRef.current = "";
+    projectFilesViewLoadKeyRef.current = "";
     resetUploadState();
     setSelectedAttachPaths([]);
     setSendingSelectedFiles(false);
@@ -2332,6 +2492,7 @@ export default function ProjectDetailPage() {
       setKnowledgeModuleCollapsed(parsed.knowledgeModuleCollapsed);
       setKnowledgeDockTab(parsed.knowledgeDockTab);
       setSelectedMetricFilter(parsed.selectedMetricFilter);
+      setProjectFileSearchQuery("");
       setTreeDisplayMode(parsed.treeDisplayMode);
       setTreeExpandedKeys(restoredTreeExpandedKeys);
       setSelectedFilePath(restoredSelectedTreeFilePath);
@@ -2345,6 +2506,7 @@ export default function ProjectDetailPage() {
       setKnowledgeModuleCollapsed(parsed.knowledgeModuleCollapsed);
       setKnowledgeDockTab(parsed.knowledgeDockTab);
       setSelectedMetricFilter(parsed.selectedMetricFilter);
+      setProjectFileSearchQuery("");
       setTreeDisplayMode(parsed.treeDisplayMode);
       setTreeExpandedKeys(parsed.treeExpandedKeys);
       setSelectedFilePath(parsed.selectedTreeFilePath);
@@ -2435,8 +2597,25 @@ export default function ProjectDetailPage() {
       return;
     }
     projectFilesLoadKeyRef.current = loadKey;
+    projectFilesViewLoadKeyRef.current = `${loadKey}:${projectFilesQuerySignature}`;
     void handleRefreshProjectFiles();
-  }, [currentAgent, handleRefreshProjectFiles, selectedProject]);
+  }, [currentAgent, handleRefreshProjectFiles, projectFilesQuerySignature, selectedProject]);
+
+  useEffect(() => {
+    if (!currentAgent || !selectedProject) {
+      return;
+    }
+    const baseLoadKey = `${currentAgent.id}:${selectedProject.id}`;
+    if (projectFilesLoadKeyRef.current !== baseLoadKey) {
+      return;
+    }
+    const viewLoadKey = `${baseLoadKey}:${projectFilesQuerySignature}`;
+    if (projectFilesViewLoadKeyRef.current === viewLoadKey) {
+      return;
+    }
+    projectFilesViewLoadKeyRef.current = viewLoadKey;
+    void loadProjectFiles(currentAgent.id, selectedProject, { preserveSelection: true });
+  }, [currentAgent, loadProjectFiles, projectFilesQuerySignature, selectedProject]);
 
   useEffect(() => {
     if (!currentAgent || !selectedProject) {
@@ -3448,6 +3627,8 @@ export default function ProjectDetailPage() {
                             expandedKeys={treeExpandedKeys}
                             staleDirectoryPaths={staleProjectTreeDirectoryPaths}
                             selectedAttachPaths={selectedAttachPaths}
+                            treeFilterQuery={projectFileSearchQuery}
+                            onTreeFilterQueryChange={setProjectFileSearchQuery}
                             activeStage={activeStage}
                             selectedMetricFilter={selectedMetricFilter}
                             onMetricFilterChange={setSelectedMetricFilter}

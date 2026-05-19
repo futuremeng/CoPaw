@@ -13,6 +13,8 @@ import type {
   ImportAgentSquareRequest,
   ImportAgentSquareResponse,
   AgentProjectFileInfo,
+  AgentProjectFileQueryRequest,
+  AgentProjectFileQueryResponse,
   AgentProjectFileContent,
   AgentProjectFileSummary,
   AgentProjectSummary,
@@ -124,8 +126,40 @@ export const agentsApi = {
 
   // Agent project files
   listProjectFiles: (agentId: string, projectId: string) =>
-    request<AgentProjectFileInfo[]>(
-      `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/files`,
+    request<AgentProjectFileQueryResponse>(
+      `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/files/query`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          include_ignored: false,
+          sort_by: "path",
+          sort_order: "asc",
+          offset: 0,
+          limit: 5000,
+        }),
+      },
+    ).then((payload) => payload.items.map((item) => ({
+      filename: item.filename,
+      path: item.path,
+      size: item.size,
+      modified_time: item.modified_time,
+      stage: item.stage,
+      content_type: item.content_type,
+      builtin: item.builtin,
+      ignored: item.ignored,
+    }))),
+
+  queryProjectFiles: (
+    agentId: string,
+    projectId: string,
+    body: AgentProjectFileQueryRequest,
+  ) =>
+    request<AgentProjectFileQueryResponse>(
+      `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/files/query`,
+      {
+        method: "POST",
+        body: JSON.stringify(body || {}),
+      },
     ),
 
   listProjectFileTree: (

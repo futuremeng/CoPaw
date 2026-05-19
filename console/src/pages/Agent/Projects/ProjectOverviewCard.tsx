@@ -71,6 +71,8 @@ interface ProjectOverviewCardProps {
   expandedKeys?: string[];
   staleDirectoryPaths?: string[];
   selectedAttachPaths: string[];
+  treeFilterQuery?: string;
+  onTreeFilterQueryChange?: (value: string) => void;
   onUploadFiles: () => void;
   onExpandedKeysChange?: (keys: string[]) => void;
   onConsumeStaleDirectoryPaths?: (paths: string[]) => void;
@@ -159,6 +161,29 @@ function isIntermediateFile(path: string): boolean {
 
 function isArtifactFile(path: string): boolean {
   return isPathInStandardDir(path, "output");
+}
+
+function isBuiltInProjectEntry(file: Pick<AgentProjectFileInfo, "path" | "builtin">): boolean {
+  if (typeof file.builtin === "boolean") {
+    return file.builtin;
+  }
+  return isBuiltInProjectFile(file.path);
+}
+
+function resolveProjectFileStage(file: Pick<AgentProjectFileInfo, "path" | "stage">): "original" | "intermediate" | "artifact" | "other" {
+  if (file.stage === "original" || file.stage === "intermediate" || file.stage === "artifact") {
+    return file.stage;
+  }
+  if (isOriginalInputFile(file.path)) {
+    return "original";
+  }
+  if (isIntermediateFile(file.path)) {
+    return "intermediate";
+  }
+  if (isArtifactFile(file.path)) {
+    return "artifact";
+  }
+  return "other";
 }
 
 function isAgentProjectFile(path: string): boolean {
@@ -597,6 +622,8 @@ export default function ProjectOverviewCard({
   expandedKeys: controlledExpandedKeys,
   staleDirectoryPaths = [],
   selectedAttachPaths,
+  treeFilterQuery,
+  onTreeFilterQueryChange,
   onUploadFiles,
   onExpandedKeysChange,
   onConsumeStaleDirectoryPaths,
@@ -609,7 +636,7 @@ export default function ProjectOverviewCard({
   const { t } = useTranslation();
   const [workspaceSummaryExpanded, setWorkspaceSummaryExpanded] = useState(false);
   const [treeTransitioning, setTreeTransitioning] = useState(false);
-  const [treeFilterQuery, setTreeFilterQuery] = useState("");
+  const [localTreeFilterQuery, setLocalTreeFilterQuery] = useState("");
   const [internalExpandedKeys, setInternalExpandedKeys] = useState<string[]>([]);
   const [lazyTreeItems, setLazyTreeItems] = useState<LazyTreeItem[]>([]);
   const [refreshingDirectoryPaths, setRefreshingDirectoryPaths] = useState<string[]>([]);
@@ -617,7 +644,8 @@ export default function ProjectOverviewCard({
   const lazyTreeItemsRef = useRef<LazyTreeItem[]>([]);
   const loadingTreeDirectoryPathsRef = useRef<Set<string>>(new Set());
   const updatedDateParts = formatUpdatedDateParts(selectedProject?.updated_time);
-  const deferredTreeFilterQuery = useDeferredValue(treeFilterQuery);
+  const effectiveTreeFilterQuery = treeFilterQuery ?? localTreeFilterQuery;
+  const deferredTreeFilterQuery = useDeferredValue(effectiveTreeFilterQuery);
   const normalizedTreeFilterQuery = normalizeProjectPath(deferredTreeFilterQuery.trim());
   const expandedKeys = useMemo(
     () => normalizeTreeKeys(controlledExpandedKeys ?? internalExpandedKeys),
@@ -625,11 +653,11 @@ export default function ProjectOverviewCard({
   );
 
   const builtInFiles = useMemo(
-    () => projectFiles.filter((item) => isBuiltInProjectFile(item.path)),
+    () => projectFiles.filter((item) => isBuiltInProjectEntry(item)),
     [projectFiles],
   );
   const nonBuiltInFiles = useMemo(
-    () => projectFiles.filter((item) => !isBuiltInProjectFile(item.path)),
+    () => projectFiles.filter((item) => !isBuiltInProjectEntry(item)),
     [projectFiles],
   );
   const stageScopedFiles =
@@ -664,13 +692,14 @@ export default function ProjectOverviewCard({
   );
   const filteredFiles = stageScopedFiles.filter((item) => {
     const normalizedPath = normalizeProjectPath(item.path);
+    const fileStage = resolveProjectFileStage(item);
     switch (selectedMetricFilter) {
       case "original":
-        return isOriginalInputFile(normalizedPath);
+        return fileStage === "original";
       case "intermediate":
-        return isIntermediateFile(normalizedPath);
+        return fileStage === "intermediate";
       case "artifact":
-        return isArtifactFile(normalizedPath);
+        return fileStage === "artifact";
       case "agent":
         return isAgentProjectFile(normalizedPath);
       case "skill":
@@ -680,7 +709,7 @@ export default function ProjectOverviewCard({
       case "case":
         return isCaseProjectFile(normalizedPath);
       case "builtin":
-        return isBuiltInProjectFile(item.path);
+        return isBuiltInProjectEntry(item);
       case "markdown":
         return matchesProjectKnowledgeFilter("markdown", item);
       case "text":
@@ -783,8 +812,12 @@ export default function ProjectOverviewCard({
   }, [projectTreeNodes, treeOnly]);
 
   useEffect(() => {
-    setTreeFilterQuery("");
-  }, [selectedProject?.id]);
+    if (typeof treeFilterQuery === "string") {
+      onTreeFilterQueryChange?.("");
+      return;
+    }
+    setLocalTreeFilterQuery("");
+  }, [onTreeFilterQueryChange, selectedProject?.id, treeFilterQuery]);
 
   const loadTreeDirectory = useCallback(async (path: string, options?: { force?: boolean }) => {
     if (!useLazyTreeMode || !onLoadProjectTreeChildren) {
@@ -1088,9 +1121,14 @@ export default function ProjectOverviewCard({
             <Input
               size="small"
               allowClear
-              value={treeFilterQuery}
+              value={effectiveTreeFilterQuery}
               onChange={(event) => {
-                setTreeFilterQuery(event.target.value);
+                const next = event.target.value;
+                if (typeof treeFilterQuery === "string") {
+                  onTreeFilterQueryChange?.(next);
+                } else {
+                  setLocalTreeFilterQuery(next);
+                }
               }}
               className={styles.treeFilterInput}
               prefix={<SearchOutlined />}

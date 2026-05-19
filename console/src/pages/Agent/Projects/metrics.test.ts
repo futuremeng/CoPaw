@@ -107,6 +107,52 @@ describe("project metrics", () => {
     vi.useRealTimers();
   });
 
+  it("prefers backend stage and content_type labels when present", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-09T12:00:00Z"));
+
+    const files: AgentProjectFileInfo[] = [
+      {
+        filename: "readme.bin",
+        path: "output/readme.bin",
+        size: 128,
+        modified_time: "2026-04-09T11:00:00Z",
+        stage: "original",
+        content_type: "markdown",
+      },
+      {
+        filename: "notes.unknown",
+        path: "random/notes.unknown",
+        size: 64,
+        modified_time: "2026-04-09T10:00:00Z",
+        stage: "artifact",
+        content_type: "text",
+      },
+      {
+        filename: "data.raw",
+        path: "random/data.raw",
+        size: 256,
+        modified_time: "2026-04-09T09:00:00Z",
+        stage: "intermediate",
+        content_type: "other",
+      },
+    ];
+
+    const summary = computeProjectFileInventorySummary(files);
+    expect(summary.originalFiles).toBe(1);
+    expect(summary.intermediateFiles).toBe(1);
+    expect(summary.artifactFiles).toBe(1);
+    expect(summary.knowledgeMetrics.markdownFiles).toBe(1);
+    expect(summary.knowledgeMetrics.textFiles).toBe(1);
+    expect(summary.knowledgeMetrics.otherTypeFiles).toBe(1);
+
+    expect(matchesProjectKnowledgeFilter("markdown", files[0])).toBe(true);
+    expect(matchesProjectKnowledgeFilter("text", files[1])).toBe(true);
+    expect(matchesProjectKnowledgeFilter("otherType", files[2])).toBe(true);
+
+    vi.useRealTimers();
+  });
+
   it("formats file sizes across byte, KB and MB ranges", () => {
     expect(formatFileSize(512)).toBe("512 B");
     expect(formatFileSize(1536)).toBe("1.5 KB");

@@ -7,7 +7,7 @@ import ProjectDetailPage from "./ProjectDetailPage";
 const {
   mockedAcquireProjectKnowledgeWatchLease,
   mockedListProjectFileTree,
-  mockedListProjectFiles,
+  mockedQueryProjectFiles,
   mockedReleaseProjectKnowledgeWatchLease,
   mockedReadProjectFile,
   mockedGetProjectFileSummary,
@@ -24,7 +24,7 @@ const {
 } = vi.hoisted(() => ({
   mockedAcquireProjectKnowledgeWatchLease: vi.fn(),
   mockedListProjectFileTree: vi.fn(),
-  mockedListProjectFiles: vi.fn(),
+  mockedQueryProjectFiles: vi.fn(),
   mockedReleaseProjectKnowledgeWatchLease: vi.fn(),
   mockedReadProjectFile: vi.fn(),
   mockedGetProjectFileSummary: vi.fn(),
@@ -190,7 +190,7 @@ vi.mock("../../../api/modules/agents", () => ({
   agentsApi: {
     acquireProjectKnowledgeWatchLease: mockedAcquireProjectKnowledgeWatchLease,
     listProjectFileTree: mockedListProjectFileTree,
-    listProjectFiles: mockedListProjectFiles,
+    queryProjectFiles: mockedQueryProjectFiles,
     releaseProjectKnowledgeWatchLease: mockedReleaseProjectKnowledgeWatchLease,
     readProjectFile: mockedReadProjectFile,
     getProjectFileSummary: mockedGetProjectFileSummary,
@@ -348,14 +348,40 @@ describe("ProjectDetailPage refresh scheduling", () => {
         has_child_directories: false,
       },
     ]);
-    mockedListProjectFiles.mockResolvedValue([
-      {
-        filename: "guide.md",
-        path: "original/guide.md",
-        size: 128,
-        modified_time: "2026-04-29T00:00:00Z",
+    mockedQueryProjectFiles.mockResolvedValue({
+      items: [
+        {
+          filename: "guide.md",
+          path: "original/guide.md",
+          size: 128,
+          modified_time: "2026-04-29T00:00:00Z",
+          stage: "original",
+          content_type: "markdown",
+          builtin: false,
+          ignored: false,
+        },
+      ],
+      summary: {
+        total_matched: 1,
+        offset: 0,
+        limit: 5000,
+        returned: 1,
+        builtin_count: 0,
+        ignored_count: 0,
+        stage_counts: { original: 1, intermediate: 0, artifact: 0, builtin: 0, other: 0 },
+        content_type_counts: { markdown: 1, text: 0, script: 0, other: 0 },
       },
-    ]);
+      query_meta: {
+        search: "",
+        path_prefix: "",
+        stages: [],
+        content_types: [],
+        include_builtin: null,
+        include_ignored: false,
+        sort_by: "path",
+        sort_order: "asc",
+      },
+    });
     mockedReadProjectFile.mockResolvedValue({ content: "hello" });
     mockedGetProjectFileSummary.mockResolvedValue({
       total_files: 1,
@@ -383,6 +409,19 @@ describe("ProjectDetailPage refresh scheduling", () => {
     await waitFor(() => {
       expect(mockedAcquireProjectKnowledgeWatchLease).toHaveBeenCalledWith("agent-1", "proj-1");
     });
+    expect(mockedQueryProjectFiles).toHaveBeenCalledWith(
+      "agent-1",
+      "proj-1",
+      expect.objectContaining({
+        include_ignored: false,
+        sort_by: "path",
+        sort_order: "asc",
+        offset: 0,
+        limit: 5000,
+        include_builtin: false,
+        stages: ["original", "intermediate", "artifact"],
+      }),
+    );
 
     view.unmount();
 
@@ -445,7 +484,7 @@ describe("ProjectDetailPage refresh scheduling", () => {
     const view = renderPage();
     try {
       await waitFor(() => {
-        expect(mockedListProjectFiles).toHaveBeenCalledTimes(1);
+        expect(mockedQueryProjectFiles).toHaveBeenCalledTimes(1);
         expect(mockedListProjectFileTree).toHaveBeenCalledTimes(1);
         expect(mockedGetProjectFileSummary).toHaveBeenCalledTimes(1);
       });
@@ -461,9 +500,50 @@ describe("ProjectDetailPage refresh scheduling", () => {
         });
       });
 
-      expect(mockedListProjectFiles).toHaveBeenCalledTimes(1);
+      expect(mockedQueryProjectFiles).toHaveBeenCalledTimes(1);
       expect(mockedListProjectFileTree).toHaveBeenCalledTimes(1);
       expect(mockedGetProjectFileSummary).toHaveBeenCalledTimes(1);
+    } finally {
+      view.unmount();
+    }
+  });
+
+  it("reloads project files with mapped query filters when metric filter changes", async () => {
+    const view = renderPage();
+    try {
+      await waitFor(() => {
+        expect(mockedQueryProjectFiles).toHaveBeenCalledTimes(1);
+      });
+
+      const onMetricFilterChange = (
+        projectOverviewCardState.latestProps?.onMetricFilterChange
+      ) as ((next: "" | "markdown" | "text" | "script" | "otherType") => void) | undefined;
+
+      expect(onMetricFilterChange).toBeTypeOf("function");
+
+      act(() => {
+        onMetricFilterChange?.("markdown");
+      });
+
+      await waitFor(() => {
+        expect(mockedQueryProjectFiles).toHaveBeenCalledTimes(2);
+      });
+
+      const calls = mockedQueryProjectFiles.mock.calls;
+      const latestCall = calls[calls.length - 1];
+      expect(latestCall?.[0]).toBe("agent-1");
+      expect(latestCall?.[1]).toBe("proj-1");
+      expect(latestCall?.[2]).toEqual(
+        expect.objectContaining({
+          include_ignored: false,
+          include_builtin: false,
+          sort_by: "path",
+          sort_order: "asc",
+          offset: 0,
+          limit: 5000,
+          content_types: ["markdown"],
+        }),
+      );
     } finally {
       view.unmount();
     }
@@ -483,20 +563,50 @@ describe("ProjectDetailPage refresh scheduling", () => {
         has_child_directories: false,
       },
     ]);
-    mockedListProjectFiles.mockResolvedValue([
-      {
-        filename: "guide.md",
-        path: "guide.md",
-        size: 128,
-        modified_time: "2026-04-29T00:00:00Z",
+    mockedQueryProjectFiles.mockResolvedValue({
+      items: [
+        {
+          filename: "guide.md",
+          path: "guide.md",
+          size: 128,
+          modified_time: "2026-04-29T00:00:00Z",
+          stage: "original",
+          content_type: "markdown",
+          builtin: false,
+          ignored: false,
+        },
+        {
+          filename: "notes.md",
+          path: "notes.md",
+          size: 64,
+          modified_time: "2026-04-29T00:01:00Z",
+          stage: "original",
+          content_type: "markdown",
+          builtin: false,
+          ignored: false,
+        },
+      ],
+      summary: {
+        total_matched: 2,
+        offset: 0,
+        limit: 5000,
+        returned: 2,
+        builtin_count: 0,
+        ignored_count: 0,
+        stage_counts: { original: 2, intermediate: 0, artifact: 0, builtin: 0, other: 0 },
+        content_type_counts: { markdown: 2, text: 0, script: 0, other: 0 },
       },
-      {
-        filename: "notes.md",
-        path: "notes.md",
-        size: 64,
-        modified_time: "2026-04-29T00:01:00Z",
+      query_meta: {
+        search: "",
+        path_prefix: "",
+        stages: [],
+        content_types: [],
+        include_builtin: null,
+        include_ignored: false,
+        sort_by: "path",
+        sort_order: "asc",
       },
-    ]);
+    });
     mockedGetProjectFileSummary.mockResolvedValue({
       total_files: 2,
       builtin_files: 0,

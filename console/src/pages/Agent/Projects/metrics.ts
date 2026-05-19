@@ -146,6 +146,47 @@ function isArtifactPath(path: string): boolean {
   return normalized === "output" || normalized.startsWith("output/");
 }
 
+function resolveContentType(file: Pick<AgentProjectFileInfo, "path" | "content_type">): ProjectKnowledgeFilterKey {
+  if (file.content_type === "markdown") {
+    return "markdown";
+  }
+  if (file.content_type === "text") {
+    return "text";
+  }
+  if (file.content_type === "script") {
+    return "script";
+  }
+  if (file.content_type === "other") {
+    return "otherType";
+  }
+  if (isMarkdownPath(file.path)) {
+    return "markdown";
+  }
+  if (isTextPath(file.path)) {
+    return "text";
+  }
+  if (isScriptPath(file.path)) {
+    return "script";
+  }
+  return "otherType";
+}
+
+function resolveStage(file: Pick<AgentProjectFileInfo, "path" | "stage">): "original" | "intermediate" | "artifact" | "other" {
+  if (file.stage === "original" || file.stage === "intermediate" || file.stage === "artifact") {
+    return file.stage;
+  }
+  if (isOriginalInputPath(file.path)) {
+    return "original";
+  }
+  if (isIntermediatePath(file.path)) {
+    return "intermediate";
+  }
+  if (isArtifactPath(file.path)) {
+    return "artifact";
+  }
+  return "other";
+}
+
 function isOriginalInputPath(path: string): boolean {
   const normalized = normalizePath(path);
   return normalized === "original" || normalized.startsWith("original/");
@@ -177,20 +218,9 @@ export function isRecentlyUpdatedFile(modifiedTime: string, nowMs: number = Date
 
 export function matchesProjectKnowledgeFilter(
   filter: ProjectKnowledgeFilterKey,
-  file: Pick<AgentProjectFileInfo, "path" | "modified_time">,
+  file: Pick<AgentProjectFileInfo, "path" | "modified_time" | "content_type">,
 ): boolean {
-  switch (filter) {
-    case "markdown":
-      return isMarkdownPath(file.path);
-    case "text":
-      return isTextPath(file.path);
-    case "script":
-      return isScriptPath(file.path);
-    case "otherType":
-      return isOtherTypePath(file.path);
-    default:
-      return false;
-  }
+  return resolveContentType(file) === filter;
 }
 
 export function formatFileSize(bytes: number): string {
@@ -229,27 +259,30 @@ export function computeProjectFileInventorySummary(
 
   for (const file of files) {
     totalFileBytes += Math.max(0, file.size || 0);
-    if (isMarkdownPath(file.path)) {
+    const contentType = resolveContentType(file);
+    const stage = resolveStage(file);
+
+    if (contentType === "markdown") {
       markdownFiles += 1;
     }
-    if (isTextPath(file.path)) {
+    if (contentType === "text") {
       textFiles += 1;
     }
-    if (isScriptPath(file.path)) {
+    if (contentType === "script") {
       scriptFiles += 1;
     }
-    if (isOtherTypePath(file.path)) {
+    if (contentType === "otherType") {
       otherTypeFiles += 1;
     }
-    if (isArtifactPath(file.path)) {
+    if (stage === "artifact") {
       artifactFiles += 1;
     }
     if (isRecentlyUpdatedFile(file.modified_time, nowMs)) {
       recentlyUpdatedFiles += 1;
     }
-    if (isOriginalInputPath(file.path)) {
+    if (stage === "original") {
       originalFiles += 1;
-    } else if (isIntermediatePath(file.path)) {
+    } else if (stage === "intermediate") {
       intermediateFiles += 1;
     }
   }

@@ -17,7 +17,7 @@ import time
 import unicodedata
 from pathlib import Path
 from datetime import datetime
-from typing import Any, cast
+from typing import Any, Literal, cast
 from urllib.parse import unquote, urlparse
 from fastapi import (
     APIRouter,
@@ -84,6 +84,11 @@ from ..project_monitoring_state import (
 from ..project_realtime_events import (
     collect_recent_project_updates,
     record_project_realtime_paths,
+)
+from ..project_file_query import (
+    extension_of_path,
+    query_project_file_records,
+    scan_project_file_records,
 )
 
 logger = logging.getLogger(__name__)
@@ -341,6 +346,68 @@ class ProjectFileSummary(BaseModel):
     case_files: int = 0
     recently_updated_files: int
     recent_updates: list[ProjectFileInfo] = Field(default_factory=list)
+
+
+class ProjectFileQueryRequest(BaseModel):
+    """Request body for querying project files with unified filters."""
+
+    search: str = ""
+    path_prefix: str = ""
+    stages: list[Literal["original", "intermediate", "artifact", "builtin", "other"]] = Field(default_factory=list)
+    content_types: list[Literal["markdown", "text", "script", "other"]] = Field(default_factory=list)
+    include_builtin: bool | None = None
+    include_ignored: bool = False
+    size_min: int | None = None
+    size_max: int | None = None
+    modified_after: str | None = None
+    modified_before: str | None = None
+    sort_by: Literal["path", "modified_time", "size"] = "path"
+    sort_order: Literal["asc", "desc"] = "asc"
+    offset: int = 0
+    limit: int = 200
+
+
+class ProjectFileQuerySummary(BaseModel):
+    """Summary for filtered project file query results."""
+
+    total_matched: int
+    offset: int
+    limit: int
+    returned: int
+    builtin_count: int
+    ignored_count: int
+    stage_counts: dict[str, int] = Field(default_factory=dict)
+    content_type_counts: dict[str, int] = Field(default_factory=dict)
+
+
+class ProjectFileQueryMeta(BaseModel):
+    """Normalized query metadata for observability and debugging."""
+
+    search: str
+    path_prefix: str
+    stages: list[str] = Field(default_factory=list)
+    content_types: list[str] = Field(default_factory=list)
+    include_builtin: bool | None = None
+    include_ignored: bool = False
+    sort_by: str = "path"
+    sort_order: str = "asc"
+
+
+class ProjectFileQueryItem(ProjectFileInfo):
+    """Extended project file row returned by unified query API."""
+
+    stage: str
+    content_type: str
+    builtin: bool = False
+    ignored: bool = False
+
+
+class ProjectFileQueryResponse(BaseModel):
+    """Unified project file query response."""
+
+    items: list[ProjectFileQueryItem] = Field(default_factory=list)
+    summary: ProjectFileQuerySummary
+    query_meta: ProjectFileQueryMeta
 
 
 class ProjectFileMetadataRequest(BaseModel):
@@ -2466,30 +2533,19 @@ def _list_project_file_tree_nodes(
 
 
 def _list_project_files(project_dir: Path) -> list[ProjectFileInfo]:
-    project_root = project_dir.resolve()
     files: list[ProjectFileInfo] = []
-
-    for path in sorted(
-        project_root.rglob("*"), key=lambda item: item.as_posix().lower()
-    ):
-        try:
-            if not path.is_file():
-                continue
-            rel = path.relative_to(project_root).as_posix()
-            stat = path.stat()
-        except (OSError, ValueError):
-            continue
-        if rel.startswith(".git/") or "/.git/" in rel:
+    for record in scan_project_file_records(project_dir):
+        # Keep legacy behavior: hide nested .git tree from file list API.
+        if record.path.startswith(".git/") or "/.git/" in record.path:
             continue
         files.append(
             ProjectFileInfo(
-                filename=path.name,
-                path=rel,
-                size=stat.st_size,
-                modified_time=_format_iso_time(stat.st_mtime),
+                filename=record.filename,
+                path=record.path,
+                size=record.size,
+                modified_time=record.modified_time,
             ),
         )
-
     return files
 
 
@@ -2586,33 +2642,26 @@ def _build_project_file_summary(project_dir: Path) -> ProjectFileSummary:
     flow_files = 0
     case_files = 0
 
-    for path in project_root.rglob("*"):
-        if not path.is_file():
+    for record in scan_project_file_records(project_root):
+        rel_path = record.path
+        if record.ignored:
             continue
-        rel_path = path.relative_to(project_root).as_posix()
-        if _is_ignored_project_metric_file(rel_path):
-            continue
-        try:
-            stat = path.stat()
-        except OSError:
-            continue
-
         total_files += 1
-        extension = _extension_of_project_path(rel_path)
-        is_builtin = _is_builtin_project_metric_file(rel_path)
-        is_markdown = extension in _PROJECT_MARKDOWN_EXTENSIONS
-        is_text_file = extension in _PROJECT_TEXT_FILE_EXTENSIONS
-        is_script_file = extension in _PROJECT_SCRIPT_EXTENSIONS
+        extension = extension_of_path(rel_path)
+        is_builtin = record.builtin
+        is_markdown = record.content_type == "markdown"
+        is_text_file = record.content_type == "text"
+        is_script_file = record.content_type == "script"
         is_text_like = is_markdown or is_text_file or is_script_file
         if is_builtin:
             builtin_files += 1
         else:
             visible_files += 1
-            if _is_original_project_metric_file(rel_path):
+            if record.stage == "original":
                 original_files += 1
-            elif _is_intermediate_project_metric_file(rel_path):
+            elif record.stage == "intermediate":
                 intermediate_files += 1
-            elif _is_artifact_project_metric_file(rel_path):
+            elif record.stage == "artifact":
                 artifact_files += 1
 
         if not is_builtin:
@@ -2638,7 +2687,8 @@ def _build_project_file_summary(project_dir: Path) -> ProjectFileSummary:
             if is_text_like:
                 text_like_files += 1
 
-    derived_files = intermediate_files + artifact_files
+    # Keep legacy semantics: derived_files only tracks intermediate workspace artifacts.
+    derived_files = intermediate_files
     recent_update_records = collect_recent_project_updates(project_root, project_id)
     recent_updates: list[ProjectFileInfo] = []
     for item in recent_update_records:
@@ -2696,6 +2746,32 @@ def _list_project_files_for_workspace(
 ) -> list[ProjectFileInfo]:
     project_dir = _resolve_project_dir(workspace_dir, project_id)
     return _list_project_files(project_dir)
+
+
+def _query_project_files_for_workspace(
+    workspace_dir: Path,
+    project_id: str,
+    payload: ProjectFileQueryRequest,
+) -> ProjectFileQueryResponse:
+    project_dir = _resolve_project_dir(workspace_dir, project_id)
+    result = query_project_file_records(
+        project_dir,
+        search=payload.search,
+        path_prefix=payload.path_prefix,
+        stages=list(payload.stages or []),
+        content_types=list(payload.content_types or []),
+        include_builtin=payload.include_builtin,
+        include_ignored=bool(payload.include_ignored),
+        size_min=payload.size_min,
+        size_max=payload.size_max,
+        modified_after=payload.modified_after,
+        modified_before=payload.modified_before,
+        sort_by=payload.sort_by,
+        sort_order=payload.sort_order,
+        offset=payload.offset,
+        limit=payload.limit,
+    )
+    return ProjectFileQueryResponse.model_validate(result)
 
 
 def _list_project_file_tree_nodes_for_workspace(
@@ -4528,6 +4604,35 @@ async def get_agent_project_files_metadata(
             workspace_dir,
             projectId,
             payload.paths,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post(
+    "/{agentId}/projects/{projectId}/files/query",
+    response_model=ProjectFileQueryResponse,
+    summary="Query project files",
+    description="Query project files using unified filters/sort/pagination",
+)
+async def query_agent_project_files(
+    request: Request,
+    payload: ProjectFileQueryRequest = Body(...),
+    agentId: str = PathParam(...),
+    projectId: str = PathParam(...),
+) -> ProjectFileQueryResponse:
+    """Query project files with centralized classification and filtering rules."""
+    _ = request
+    workspace_dir = _resolve_agent_workspace_dir(agentId)
+
+    try:
+        return await asyncio.to_thread(
+            _query_project_files_for_workspace,
+            workspace_dir,
+            projectId,
+            payload,
         )
     except HTTPException:
         raise

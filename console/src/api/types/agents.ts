@@ -74,6 +74,75 @@ export interface AgentProjectFileInfo {
   path: string;
   size: number;
   modified_time: string;
+  stage?: AgentProjectFileStage;
+  content_type?: AgentProjectFileContentType;
+  builtin?: boolean;
+  ignored?: boolean;
+}
+
+export type AgentProjectFileStage =
+  | "original"
+  | "intermediate"
+  | "artifact"
+  | "builtin"
+  | "other";
+
+export type AgentProjectFileContentType =
+  | "markdown"
+  | "text"
+  | "script"
+  | "other";
+
+export interface AgentProjectFileQueryRequest {
+  search?: string;
+  path_prefix?: string;
+  stages?: AgentProjectFileStage[];
+  content_types?: AgentProjectFileContentType[];
+  include_builtin?: boolean | null;
+  include_ignored?: boolean;
+  size_min?: number | null;
+  size_max?: number | null;
+  modified_after?: string | null;
+  modified_before?: string | null;
+  sort_by?: "path" | "modified_time" | "size";
+  sort_order?: "asc" | "desc";
+  offset?: number;
+  limit?: number;
+}
+
+export interface AgentProjectFileQueryItem extends AgentProjectFileInfo {
+  stage: AgentProjectFileStage;
+  content_type: AgentProjectFileContentType;
+  builtin: boolean;
+  ignored: boolean;
+}
+
+export interface AgentProjectFileQuerySummary {
+  total_matched: number;
+  offset: number;
+  limit: number;
+  returned: number;
+  builtin_count: number;
+  ignored_count: number;
+  stage_counts: Record<string, number>;
+  content_type_counts: Record<string, number>;
+}
+
+export interface AgentProjectFileQueryMeta {
+  search: string;
+  path_prefix: string;
+  stages: string[];
+  content_types: string[];
+  include_builtin: boolean | null;
+  include_ignored: boolean;
+  sort_by: string;
+  sort_order: string;
+}
+
+export interface AgentProjectFileQueryResponse {
+  items: AgentProjectFileQueryItem[];
+  summary: AgentProjectFileQuerySummary;
+  query_meta: AgentProjectFileQueryMeta;
 }
 
 export interface AgentProjectFileTreeNode {
