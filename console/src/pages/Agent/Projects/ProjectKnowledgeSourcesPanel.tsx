@@ -1,6 +1,7 @@
 import { Table, Tooltip, Typography } from "antd";
 import { useTranslation } from "react-i18next";
 import type { AgentProjectFileInfo } from "../../../api/types/agents";
+import { isBuiltInProjectFile } from "./builtInFiles";
 import styles from "./index.module.less";
 import { formatFileSize } from "./metrics";
 import type { ProjectKnowledgeState } from "./useProjectKnowledgeState";
@@ -33,9 +34,16 @@ function formatFileLabel(value?: string | null): string {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+function isBuiltInKnowledgeSource(file: AgentProjectFileInfo): boolean {
+  if (typeof file.builtin === "boolean") {
+    return file.builtin;
+  }
+  return isBuiltInProjectFile(file.path || file.filename || "");
+}
+
 function buildSourceRows(files: AgentProjectFileInfo[]): ProjectKnowledgeSourceRow[] {
   return files
-    .filter((file) => !file.ignored && !file.builtin)
+    .filter((file) => !file.ignored && !isBuiltInKnowledgeSource(file))
     .map((file, index) => ({
       key: `${file.path || file.filename || index}`,
       path: normalizePath(file.path || file.filename),

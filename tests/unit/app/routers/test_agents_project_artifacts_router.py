@@ -557,7 +557,7 @@ def test_list_project_file_tree_endpoint_returns_shallow_nodes(
     ]
 
 
-def test_list_project_file_tree_endpoint_excludes_dot_prefixed_directories(
+def test_list_project_file_tree_endpoint_includes_dot_prefixed_directories(
     project_artifact_router_client: tuple[TestClient, Path, str],
 ):
     client, workspace_dir, project_id = project_artifact_router_client
@@ -575,7 +575,7 @@ def test_list_project_file_tree_endpoint_excludes_dot_prefixed_directories(
     )
     assert root_response.status_code == 200
     root_paths = [item["path"] for item in root_response.json()]
-    assert ".hidden" not in root_paths
+    assert ".hidden" in root_paths
 
     docs_response = client.get(
         f"/agents/default/projects/{project_id}/file-tree",
@@ -583,7 +583,7 @@ def test_list_project_file_tree_endpoint_excludes_dot_prefixed_directories(
     )
     assert docs_response.status_code == 200
     docs_paths = [item["path"] for item in docs_response.json()]
-    assert "docs/.draft" not in docs_paths
+    assert "docs/.draft" in docs_paths
 
 
 def test_list_project_file_tree_endpoint_offloads_to_thread(

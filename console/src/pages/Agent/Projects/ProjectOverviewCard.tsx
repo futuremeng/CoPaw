@@ -660,10 +660,15 @@ export default function ProjectOverviewCard({
     () => projectFiles.filter((item) => !isBuiltInProjectEntry(item)),
     [projectFiles],
   );
-  const stageScopedFiles =
-    activeStage === "builtin" || selectedMetricFilter === "builtin"
-      ? builtInFiles
-      : nonBuiltInFiles;
+  const filterScopedFiles = useMemo(() => {
+    if (activeStage === "builtin" || selectedMetricFilter === "builtin") {
+      return builtInFiles;
+    }
+    if (treeOnly && !selectedMetricFilter) {
+      return projectFiles;
+    }
+    return nonBuiltInFiles;
+  }, [activeStage, builtInFiles, nonBuiltInFiles, projectFiles, selectedMetricFilter, treeOnly]);
   const attachTitle = t("projects.chat.addAttachment", "Add to chat attachments");
   const detachTitle = t("projects.chat.removeAttachment", "Remove from chat attachments");
   const refreshTitle = t("projects.refreshFiles", "Refresh");
@@ -690,7 +695,7 @@ export default function ProjectOverviewCard({
     () => projectVisibleSummary ?? computeProjectFileInventorySummary(nonBuiltInFiles),
     [nonBuiltInFiles, projectVisibleSummary],
   );
-  const filteredFiles = stageScopedFiles.filter((item) => {
+  const filteredFiles = filterScopedFiles.filter((item) => {
     const normalizedPath = normalizeProjectPath(item.path);
     const fileStage = resolveProjectFileStage(item);
     switch (selectedMetricFilter) {
@@ -732,7 +737,7 @@ export default function ProjectOverviewCard({
     [filteredFilePaths, selectedMetricFilter],
   );
   const treeBaseFiles = treeDisplayMode === "highlight"
-    ? (selectedMetricFilter === "builtin" ? projectFiles : stageScopedFiles)
+    ? (selectedMetricFilter === "builtin" ? projectFiles : filterScopedFiles)
     : keywordFilteredFiles;
   const treeFiles = useMemo(
     () => treeBaseFiles.filter((item) => matchesProjectPathQuery(item.path, normalizedTreeFilterQuery)),

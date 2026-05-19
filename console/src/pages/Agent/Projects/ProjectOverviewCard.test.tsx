@@ -203,6 +203,32 @@ describe("ProjectOverviewCard interactions", () => {
     expect(screen.queryByText("guide.md")).toBeNull();
   });
 
+  it("keeps built-in files searchable in tree-only mode without an active filter", async () => {
+    const user = userEvent.setup();
+    renderCard(
+      [
+        {
+          filename: "AGENTS.md",
+          path: ".agent/AGENTS.md",
+          size: 10,
+          modified_time: "2026-04-09T00:00:00Z",
+        },
+        {
+          filename: "guide.md",
+          path: "original/guide.md",
+          size: 10,
+          modified_time: "2026-04-09T00:00:00Z",
+        },
+      ],
+      { treeOnly: true },
+    );
+
+    await user.type(screen.getByPlaceholderText("Filter files"), "agents");
+
+    expect(screen.getByText("AGENTS.md")).toBeDefined();
+    expect(screen.queryByText("guide.md")).toBeNull();
+  });
+
   it("shows only built-in files when builtin stage/filter is active", () => {
     renderCard(
       [
@@ -342,6 +368,39 @@ describe("ProjectOverviewCard interactions", () => {
     });
 
     expect(await screen.findByText("guide.md")).toBeDefined();
+  });
+
+  it("renders built-in root directories in lazy tree mode", () => {
+    renderCard([], {
+      treeOnly: true,
+      projectTreeNodes: [
+        {
+          filename: ".agent",
+          path: ".agent",
+          size: 0,
+          modified_time: "2026-04-09T00:00:00Z",
+          is_directory: true,
+          child_count: 1,
+          descendant_file_count: 1,
+          direct_file_count: 1,
+          has_child_directories: false,
+        },
+        {
+          filename: "original",
+          path: "original",
+          size: 0,
+          modified_time: "2026-04-09T00:00:00Z",
+          is_directory: true,
+          child_count: 1,
+          descendant_file_count: 1,
+          direct_file_count: 1,
+          has_child_directories: false,
+        },
+      ],
+    });
+
+    expect(screen.getByText(".agent")).toBeDefined();
+    expect(screen.getByText("original")).toBeDefined();
   });
 
   it("shows direct file count with plus when a directory still has child directories", () => {

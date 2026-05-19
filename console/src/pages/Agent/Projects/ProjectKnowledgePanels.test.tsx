@@ -330,6 +330,35 @@ describe("project knowledge panels", () => {
     expect(screen.getByText("Text")).not.toBeNull();
   });
 
+  it("excludes builtin sources even when builtin metadata is missing", () => {
+    const knowledgeState = buildKnowledgeState();
+    const projectFiles: AgentProjectFileInfo[] = [
+      {
+        filename: "AGENTS.md",
+        path: ".agent/AGENTS.md",
+        size: 32,
+        modified_time: "2026-05-18T19:19:00Z",
+        stage: "builtin",
+        content_type: "text",
+      },
+      {
+        filename: "a.md",
+        path: "original/a.md",
+        size: 128,
+        modified_time: "2026-05-18T19:20:00Z",
+        stage: "original",
+        content_type: "markdown",
+        builtin: false,
+        ignored: false,
+      },
+    ];
+
+    render(<ProjectKnowledgeSourcesPanel knowledgeState={knowledgeState} projectFiles={projectFiles} />);
+
+    expect(screen.getByText("original/a.md")).not.toBeNull();
+    expect(screen.queryByText(".agent/AGENTS.md")).toBeNull();
+  });
+
   it("renders processing and outputs panels", () => {
     const knowledgeState = buildKnowledgeState();
 
