@@ -557,11 +557,42 @@ def test_list_project_file_tree_endpoint_returns_shallow_nodes(
     ]
 
 
+def test_list_project_file_tree_endpoint_excludes_dot_prefixed_directories(
+    project_artifact_router_client: tuple[TestClient, Path, str],
+):
+    client, workspace_dir, project_id = project_artifact_router_client
+    project_dir = workspace_dir / "projects" / project_id
+    hidden_dir = project_dir / ".hidden"
+    hidden_dir.mkdir(parents=True, exist_ok=True)
+    (hidden_dir / "secret.md").write_text("hidden", encoding="utf-8")
+
+    nested_hidden_dir = project_dir / "docs" / ".draft"
+    nested_hidden_dir.mkdir(parents=True, exist_ok=True)
+    (nested_hidden_dir / "note.md").write_text("nested", encoding="utf-8")
+
+    root_response = client.get(
+        f"/agents/default/projects/{project_id}/file-tree"
+    )
+    assert root_response.status_code == 200
+    root_paths = [item["path"] for item in root_response.json()]
+    assert ".hidden" not in root_paths
+
+    docs_response = client.get(
+        f"/agents/default/projects/{project_id}/file-tree",
+        params={"dir_path": "docs"},
+    )
+    assert docs_response.status_code == 200
+    docs_paths = [item["path"] for item in docs_response.json()]
+    assert "docs/.draft" not in docs_paths
+
+
 def test_list_project_file_tree_endpoint_offloads_to_thread(
     project_artifact_router_client: tuple[TestClient, Path, str],
     monkeypatch: pytest.MonkeyPatch,
 ):
-    client, _workspace_dir, project_id = project_artifact_router_client
+    client, workspace_dir, project_id = project_artifact_router_client
+    project_dir = workspace_dir / "projects" / project_id
+    (project_dir / "original").mkdir(parents=True, exist_ok=True)
     original_to_thread = agents_router_module.asyncio.to_thread
     calls: list[tuple[object, tuple[object, ...]]] = []
 
@@ -573,7 +604,7 @@ def test_list_project_file_tree_endpoint_offloads_to_thread(
 
     response = client.get(
         f"/agents/default/projects/{project_id}/file-tree",
-        params={"dir_path": ".skills"},
+        params={"dir_path": "original"},
     )
 
     assert response.status_code == 200

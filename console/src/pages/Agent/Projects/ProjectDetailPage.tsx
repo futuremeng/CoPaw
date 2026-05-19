@@ -3399,6 +3399,7 @@ export default function ProjectDetailPage() {
         children: (
           <ProjectKnowledgeSourcesPanel
             knowledgeState={projectKnowledgeState}
+            projectFiles={effectiveProjectFiles}
           />
         ),
       },

@@ -1,25 +1,19 @@
 import { InfoCircleOutlined } from "@ant-design/icons";
 import { Table, Tooltip, Typography } from "antd";
 import { useTranslation } from "react-i18next";
+import type { AgentProjectFileInfo } from "../../../api/types/agents";
 import styles from "./index.module.less";
-import { getTriggerModeLabel, getProcessingStatusLabel } from "./projectKnowledgeSyncUi";
+import { formatFileSize } from "./metrics";
 import type { ProjectKnowledgeState } from "./useProjectKnowledgeState";
-
-type ProjectKnowledgeSource = ProjectKnowledgeState["projectSources"][number];
 
 type ProjectKnowledgeSourceRow = {
   key: string;
   path: string;
   title: string;
-  document_count: number;
-  snapshot_count: number;
-  chunk_count: number;
-  sentence_count: number;
-  token_count: number;
-  char_count: number;
-  trigger_mode?: "automatic" | "manual";
-  processing_status?: "idle" | "queued" | "pending" | "indexing" | "graphifying" | "succeeded" | "failed";
-  detected_at?: string;
+  stage: string;
+  contentType: string;
+  size: number;
+  modifiedTime: string;
 };
 
 function normalizePath(value?: string | null): string {
@@ -30,72 +24,28 @@ function normalizePath(value?: string | null): string {
     .replace(/\/$/, "");
 }
 
-function inferSourceOrigin(source: ProjectKnowledgeSource): "automatic" | "manual" {
-  const tags = source.tags || [];
-  const isAuto = tags.includes("auto") || tags.includes("origin:auto") || source.id.startsWith("auto-");
-  return isAuto ? "automatic" : "manual";
+function formatFileLabel(value?: string | null): string {
+  const normalized = String(value || "").trim();
+  if (!normalized) {
+    return "-";
+  }
+  return normalized
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function findMatchingChangedFile(
-  source: ProjectKnowledgeSource,
-  changedFiles: Array<{
-    path: string;
-    trigger_mode?: "automatic" | "manual";
-    processing_status?: "idle" | "queued" | "pending" | "indexing" | "graphifying" | "succeeded" | "failed";
-    detected_at?: string;
-  }>,
-) {
-  const sourceCandidates = [source.id, source.location, source.name]
-    .map(normalizePath)
-    .filter(Boolean);
-  return changedFiles.find((file) => {
-    const filePath = normalizePath(file.path);
-    if (!filePath) {
-      return false;
-    }
-    return sourceCandidates.some((candidate) => {
-      return candidate === filePath
-        || candidate.endsWith(`/${filePath}`)
-        || filePath.endsWith(`/${candidate}`);
-    });
-  });
-}
-
-function toNumber(value: unknown): number {
-  const numberValue = Number(value);
-  return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : 0;
-}
-
-function buildSourceRows(
-  sources: ProjectKnowledgeSource[],
-  changedFiles: Array<{
-    path: string;
-    trigger_mode?: "automatic" | "manual";
-    processing_status?: "idle" | "queued" | "pending" | "indexing" | "graphifying" | "succeeded" | "failed";
-    detected_at?: string;
-  }>,
-): ProjectKnowledgeSourceRow[] {
-  return sources
-    .map((source, index) => {
-      const matchedChangedFile = findMatchingChangedFile(source, changedFiles);
-      const status = source.status || {};
-      const indexedAt = String(status.indexed_at || "").trim();
-      return {
-        key: source.id || source.location || `${index}`,
-        path: normalizePath(source.location || source.id || source.name),
-        title: source.name || source.location || source.id || `${index}`,
-        document_count: toNumber(status.document_count),
-        snapshot_count: toNumber(status.snapshot_count),
-        chunk_count: toNumber(status.chunk_count),
-        sentence_count: toNumber(status.sentence_count),
-        token_count: toNumber(status.token_count),
-        char_count: toNumber(status.char_count),
-        trigger_mode: matchedChangedFile?.trigger_mode || inferSourceOrigin(source),
-        processing_status: matchedChangedFile?.processing_status
-          || (status.error ? "failed" : status.indexed ? "succeeded" : status.needs_reindex ? "pending" : "idle"),
-        detected_at: matchedChangedFile?.detected_at || indexedAt || undefined,
-      };
-    })
+function buildSourceRows(files: AgentProjectFileInfo[]): ProjectKnowledgeSourceRow[] {
+  return files
+    .filter((file) => !file.ignored && !file.builtin)
+    .map((file, index) => ({
+      key: `${file.path || file.filename || index}`,
+      path: normalizePath(file.path || file.filename),
+      title: file.filename || file.path || `${index}`,
+      stage: formatFileLabel(file.stage || "other"),
+      contentType: formatFileLabel(file.content_type || "other"),
+      size: Math.max(0, Number(file.size || 0)),
+      modifiedTime: String(file.modified_time || "").trim(),
+    }))
     .sort((left, right) => left.path.localeCompare(right.path));
 }
 
@@ -112,12 +62,13 @@ function formatTime(value?: string): string {
 
 interface ProjectKnowledgeSourcesPanelProps {
   knowledgeState: ProjectKnowledgeState;
+  projectFiles: AgentProjectFileInfo[];
 }
 
 export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSourcesPanelProps) {
   const { t } = useTranslation();
-  const { knowledgeState } = props;
-  const sourceRows = buildSourceRows(knowledgeState.projectSources || [], knowledgeState.changedFilesNormalized || []);
+  const { knowledgeState, projectFiles } = props;
+  const sourceRows = buildSourceRows(projectFiles || []);
 
   const sourceColumns = [
     {
@@ -138,60 +89,29 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
       ),
     },
     {
-      title: t("copaw.projects.knowledge.signalDocuments"),
-      dataIndex: "document_count",
-      key: "document_count",
-      width: 96,
+      title: t("projects.fileStage", "Stage"),
+      dataIndex: "stage",
+      key: "stage",
+      width: 140,
     },
     {
-      title: t("copaw.projects.knowledge.signalSnapshots"),
-      dataIndex: "snapshot_count",
-      key: "snapshot_count",
-      width: 96,
+      title: t("projects.fileContentType", "Content Type"),
+      dataIndex: "contentType",
+      key: "contentType",
+      width: 160,
     },
     {
-      title: t("copaw.projects.knowledge.signalChunks"),
-      dataIndex: "chunk_count",
-      key: "chunk_count",
-      width: 96,
+      title: t("projects.fileSize", "Size"),
+      dataIndex: "size",
+      key: "size",
+      width: 120,
+      render: (size: number) => formatFileSize(size),
     },
     {
-      title: t("copaw.projects.knowledge.signalSentences"),
-      dataIndex: "sentence_count",
-      key: "sentence_count",
-      width: 112,
-    },
-    {
-      title: t("copaw.projects.knowledge.signalTokens"),
-      dataIndex: "token_count",
-      key: "token_count",
-      width: 112,
-    },
-    {
-      title: t("copaw.projects.knowledge.signalCharacters"),
-      dataIndex: "char_count",
-      key: "char_count",
-      width: 112,
-    },
-    {
-      title: t("copaw.projects.knowledge.columnTriggerMode", "Launch Mode"),
-      dataIndex: "trigger_mode",
-      key: "trigger_mode",
-      width: "10%",
-      render: (mode?: string) => getTriggerModeLabel(t, mode),
-    },
-    {
-      title: t("copaw.projects.knowledge.columnProcessingStatus", "Processing Status"),
-      dataIndex: "processing_status",
-      key: "processing_status",
-      width: "10%",
-      render: (status?: string) => getProcessingStatusLabel(t, status),
-    },
-    {
-      title: t("copaw.projects.knowledge.columnDetectedAt", "Detected"),
-      dataIndex: "detected_at",
-      key: "detected_at",
-      width: "18%",
+      title: t("projects.fileModifiedTime", "Modified"),
+      dataIndex: "modifiedTime",
+      key: "modifiedTime",
+      width: "22%",
       render: (time?: string) => (
         <Tooltip title={time || "-"}>
           <Typography.Text type="secondary">
@@ -260,7 +180,7 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
             size="small"
             bordered={false}
             scroll={{ x: 1200 }}
-            locale={{ emptyText: t("copaw.projects.knowledge.sourcesFileListEmpty", "No knowledge files found") }}
+            locale={{ emptyText: t("copaw.projects.knowledge.sourcesFileListEmpty", "No project files found") }}
           />
         </div>
       )}

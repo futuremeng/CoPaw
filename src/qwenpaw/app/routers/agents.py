@@ -2412,9 +2412,20 @@ def _normalize_project_tree_dir_path(raw_value: str) -> str:
 def _is_visible_project_tree_path(rel_path: str) -> bool:
     if not rel_path:
         return True
+    normalized = str(rel_path or "").strip().replace("\\", "/")
     parts = Path(rel_path).parts
     if any(part in _PROJECT_TREE_IGNORED_NAMES for part in parts):
         return False
+    # Hide entries under dot-prefixed directories from project tree APIs.
+    is_directory_entry = normalized.endswith("/")
+    last_index = len(parts) - 1
+    for index, part in enumerate(parts):
+        if not str(part or "").startswith("."):
+            continue
+        if index < last_index:
+            return False
+        if is_directory_entry:
+            return False
     return True
 
 

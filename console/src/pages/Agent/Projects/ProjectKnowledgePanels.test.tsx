@@ -6,6 +6,7 @@ import ProjectKnowledgeProcessingPanel from "./ProjectKnowledgeProcessingPanel";
 import ProjectKnowledgeSignalsPanel from "./ProjectKnowledgeSignalsPanel";
 import ProjectKnowledgeSourcesPanel from "./ProjectKnowledgeSourcesPanel";
 import { buildModeState } from "./projectKnowledgeTestUtils";
+import type { AgentProjectFileInfo } from "../../../api/types/agents";
 import type { ProjectKnowledgeHeaderSignals, ProjectKnowledgeState } from "./useProjectKnowledgeState";
 
 vi.mock("react-i18next", () => ({
@@ -250,6 +251,28 @@ function buildHeaderSignals(knowledgeState: ProjectKnowledgeState): ProjectKnowl
 describe("project knowledge panels", () => {
   it("renders signals and sources panels", () => {
     const knowledgeState = buildKnowledgeState();
+    const projectFiles: AgentProjectFileInfo[] = [
+      {
+        filename: "a.md",
+        path: "original/a.md",
+        size: 128,
+        modified_time: "2026-05-18T19:20:00Z",
+        stage: "original",
+        content_type: "markdown",
+        builtin: false,
+        ignored: false,
+      },
+      {
+        filename: "b.txt",
+        path: "data/b.txt",
+        size: 64,
+        modified_time: "2026-05-18T19:21:00Z",
+        stage: "intermediate",
+        content_type: "text",
+        builtin: false,
+        ignored: false,
+      },
+    ];
 
     render(
       <ProjectKnowledgeSignalsPanel
@@ -264,94 +287,47 @@ describe("project knowledge panels", () => {
     expect(screen.getByText("Health")).not.toBeNull();
     expect(screen.getByText(/copaw\.projects\.knowledge\.metricsSourceLabel/)).not.toBeNull();
 
-    render(<ProjectKnowledgeSourcesPanel knowledgeState={knowledgeState} />);
+    render(<ProjectKnowledgeSourcesPanel knowledgeState={knowledgeState} projectFiles={projectFiles} />);
     expect(screen.getByText("Sources")).not.toBeNull();
-    expect(screen.getByText("copaw.projects.knowledge.signalSnapshots")).not.toBeNull();
+    expect(screen.getByText("original/a.md")).not.toBeNull();
+    expect(screen.getByText("data/b.txt")).not.toBeNull();
+    expect(screen.queryByText("No project files found")).toBeNull();
   });
 
   it("renders knowledge file list in sources panel", () => {
     const knowledgeState = buildKnowledgeState();
-    knowledgeState.projectSources = [
+    const projectFiles: AgentProjectFileInfo[] = [
       {
-        id: "auto-original-a-md",
-        name: "Alpha Note",
-        type: "file",
-        location: "original/a.md",
-        content: "",
-        enabled: true,
-        recursive: false,
-        tags: ["project", "auto"],
-        summary: "",
-        project_id: "project-abc",
-        status: {
-          indexed: true,
-          indexed_at: "2026-05-18T19:20:00Z",
-          document_count: 10,
-          snapshot_count: 1,
-          chunk_count: 20,
-          sentence_count: 30,
-          token_count: 40,
-          char_count: 50,
-          error: null,
-          needs_reindex: false,
-        },
-      },
-      {
-        id: "manual-original-b-md",
-        name: "Beta Note",
-        type: "file",
-        location: "original/b.md",
-        content: "",
-        enabled: true,
-        recursive: false,
-        tags: ["project"],
-        summary: "",
-        project_id: "project-abc",
-        status: {
-          indexed: false,
-          indexed_at: "2026-05-18T19:21:00Z",
-          document_count: 2,
-          snapshot_count: 0,
-          chunk_count: 5,
-          sentence_count: 6,
-          token_count: 7,
-          char_count: 8,
-          error: null,
-          needs_reindex: true,
-        },
-      },
-    ];
-    knowledgeState.changedFilesNormalized = [
-      {
+        filename: "a.md",
         path: "original/a.md",
-        trigger_mode: "automatic",
-        processing_status: "pending",
-        detected_at: "2026-05-18T19:20:00Z",
-        scope: "original",
+        size: 128,
+        modified_time: "2026-05-18T19:20:00Z",
+        stage: "original",
+        content_type: "markdown",
+        builtin: false,
+        ignored: false,
       },
       {
-        path: "original/b.md",
-        trigger_mode: "manual",
-        processing_status: "succeeded",
-        detected_at: "2026-05-18T19:21:00Z",
-        scope: "original",
+        filename: "b.txt",
+        path: "data/b.txt",
+        size: 64,
+        modified_time: "2026-05-18T19:21:00Z",
+        stage: "intermediate",
+        content_type: "text",
+        builtin: false,
+        ignored: false,
       },
     ];
 
-    render(<ProjectKnowledgeSourcesPanel knowledgeState={knowledgeState} />);
+    render(<ProjectKnowledgeSourcesPanel knowledgeState={knowledgeState} projectFiles={projectFiles} />);
 
-    expect(screen.getByText("Knowledge Files")).not.toBeNull();
+    expect(screen.queryByText("No project files found")).toBeNull();
     expect(screen.getByText("original/a.md")).not.toBeNull();
-    expect(screen.getByText("original/b.md")).not.toBeNull();
-    expect(screen.getByText("自动")).not.toBeNull();
-    expect(screen.getByText("手动")).not.toBeNull();
-    expect(screen.getByText("正在加工")).not.toBeNull();
-    expect(screen.getByText("已完成")).not.toBeNull();
-    expect(screen.getByText("10")).not.toBeNull();
-    expect(screen.getByText("20")).not.toBeNull();
-    expect(screen.getByText("30")).not.toBeNull();
-    expect(screen.getByText("40")).not.toBeNull();
-    expect(screen.getByText("50")).not.toBeNull();
+    expect(screen.getByText("data/b.txt")).not.toBeNull();
+    expect(screen.getByText("Original")).not.toBeNull();
+    expect(screen.getByText("Intermediate")).not.toBeNull();
+    expect(screen.getByText("Markdown")).not.toBeNull();
+    expect(screen.getByText("Text")).not.toBeNull();
   });
 
   it("renders processing and outputs panels", () => {

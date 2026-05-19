@@ -196,7 +196,7 @@ export function getProjectKnowledgeSemanticSummary(
   }
   const reasonCode = String(semanticEngine.reason_code || "").trim();
   const fallback = reasonCode === "SOURCE_NOT_READY"
-    ? "Semantic engine waiting for project source registration."
+    ? "Semantic engine waiting for project files to be scanned."
     : reasonCode === "HANLP2_SIDECAR_UNCONFIGURED"
       ? "Semantic engine unavailable: HanLP sidecar is not configured."
       : reasonCode === "HANLP2_SIDECAR_PYTHON_MISSING"

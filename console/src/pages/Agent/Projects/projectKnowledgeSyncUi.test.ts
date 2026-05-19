@@ -59,7 +59,7 @@ describe("projectKnowledgeSyncUi semantic helpers", () => {
       reason_code: "SOURCE_NOT_READY",
       reason: "Project source has not been prepared for semantic extraction yet.",
     }, t)).toBe(
-      "Code: SOURCE_NOT_READY. Semantic engine waiting for project source registration.",
+      "copaw.projects.knowledge.semanticEngineCode: SOURCE_NOT_READY. Semantic engine waiting for project files to be scanned.",
     );
   });
 
