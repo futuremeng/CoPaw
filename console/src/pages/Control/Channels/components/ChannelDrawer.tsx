@@ -119,6 +119,8 @@ export function ChannelDrawer({
   const currentLang = i18n.language?.startsWith("zh") ? "zh" : "en";
   const label = activeKey ? getChannelLabel(activeKey, t) : activeLabel;
   const { message } = useAppMessage();
+  const channelEnabled = Form.useWatch("enabled", form);
+  const isChannelEnabled = channelEnabled !== false;
   const matrixAuthMethod = Form.useWatch("auth_method", form);
   const isMatrixPasswordAuth = matrixAuthMethod === "password";
 
@@ -351,14 +353,24 @@ export function ChannelDrawer({
             <Form.Item
               name="client_id"
               label="Client ID"
-              rules={[{ required: true }]}
+              rules={[
+                {
+                  required: isChannelEnabled,
+                  message: "Please enter Client ID",
+                },
+              ]}
             >
               <Input placeholder="dingxxxxx" />
             </Form.Item>
             <Form.Item
               name="client_secret"
               label="Client Secret"
-              rules={[{ required: true }]}
+              rules={[
+                {
+                  required: isChannelEnabled,
+                  message: "Please enter Client Secret",
+                },
+              ]}
             >
               <Input.Password />
             </Form.Item>
@@ -405,7 +417,7 @@ export function ChannelDrawer({
                       label="Card Template ID"
                       rules={[
                         {
-                          required: true,
+                          required: isChannelEnabled,
                           message:
                             "Please input card template id when message_type=card",
                         },
