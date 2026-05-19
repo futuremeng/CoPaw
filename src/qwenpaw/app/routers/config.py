@@ -146,15 +146,26 @@ async def put_channels(
     ),
 ) -> ChannelConfig:
     """Update all channel configs."""
-    from ..agent_context import get_agent_for_request
-    from ...config.config import save_agent_config
+    from ..agent_context import (
+        get_loaded_agent_for_request,
+        resolve_agent_id_for_request,
+    )
+    from ...config.config import load_agent_config, save_agent_config
 
-    agent = await get_agent_for_request(request)
-    agent.config.channels = channels_config
-    save_agent_config(agent.agent_id, agent.config)
+    agent_id = resolve_agent_id_for_request(request)
+    agent_config = load_agent_config(agent_id)
+    agent_config.channels = channels_config
+    save_agent_config(agent_id, agent_config)
+
+    loaded_workspace = get_loaded_agent_for_request(
+        request,
+        agent_id=agent_id,
+    )
+    if loaded_workspace is not None:
+        loaded_workspace.config.channels = channels_config
 
     # Hot reload config (async, non-blocking)
-    schedule_agent_reload(request, agent.agent_id)
+    schedule_agent_reload(request, agent_id)
 
     return channels_config
 
@@ -316,7 +327,8 @@ async def get_channel(
     ),
 ) -> ChannelConfigUnion:
     """Get a specific channel config by name."""
-    from ..agent_context import get_agent_for_request
+    from ..agent_context import resolve_agent_id_for_request
+    from ...config.config import load_agent_config
 
     available = get_available_channels()
     if channel_name not in available:
@@ -325,8 +337,8 @@ async def get_channel(
             detail=f"Channel '{channel_name}' not found",
         )
 
-    agent = await get_agent_for_request(request)
-    channels = agent.config.channels
+    agent_id = resolve_agent_id_for_request(request)
+    channels = load_agent_config(agent_id).channels
     if channels is None:
         raise HTTPException(
             status_code=404,
@@ -364,8 +376,11 @@ async def put_channel(
     ),
 ) -> ChannelConfigUnion:
     """Update a specific channel config by name."""
-    from ..agent_context import get_agent_for_request
-    from ...config.config import save_agent_config
+    from ..agent_context import (
+        get_loaded_agent_for_request,
+        resolve_agent_id_for_request,
+    )
+    from ...config.config import load_agent_config, save_agent_config
 
     available = get_available_channels()
     if channel_name not in available:
@@ -374,11 +389,12 @@ async def put_channel(
             detail=f"Channel '{channel_name}' not found",
         )
 
-    agent = await get_agent_for_request(request)
+    agent_id = resolve_agent_id_for_request(request)
+    agent_config = load_agent_config(agent_id)
 
     # Initialize channels if not exists
-    if agent.config.channels is None:
-        agent.config.channels = ChannelConfig()
+    if agent_config.channels is None:
+        agent_config.channels = ChannelConfig()
 
     config_class = _CHANNEL_CONFIG_CLASS_MAP.get(channel_name)
     if config_class is not None:
@@ -388,11 +404,24 @@ async def put_channel(
         channel_config = single_channel_config
 
     # Set channel config in agent's config
-    setattr(agent.config.channels, channel_name, channel_config)
-    save_agent_config(agent.agent_id, agent.config)
+    setattr(agent_config.channels, channel_name, channel_config)
+    save_agent_config(agent_id, agent_config)
+
+    loaded_workspace = get_loaded_agent_for_request(
+        request,
+        agent_id=agent_id,
+    )
+    if loaded_workspace is not None:
+        if loaded_workspace.config.channels is None:
+            loaded_workspace.config.channels = ChannelConfig()
+        setattr(
+            loaded_workspace.config.channels,
+            channel_name,
+            channel_config,
+        )
 
     # Hot reload config (async, non-blocking)
-    schedule_agent_reload(request, agent.agent_id)
+    schedule_agent_reload(request, agent_id)
 
     return channel_config
 
