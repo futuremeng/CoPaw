@@ -2673,12 +2673,12 @@ export function useProjectKnowledgeState(
   );
 
   const processingCompareDelta = useMemo<ProjectKnowledgeProcessingCompareDelta>(() => {
-    const l2Mode = processingCompareModes.find((item) => item.mode === "nlp") || null;
+    const nlpMode = processingCompareModes.find((item) => item.mode === "nlp") || null;
     const l3Mode = processingCompareModes.find((item) => item.mode === "agentic") || null;
 
     return {
-      entityDelta: l2Mode && l3Mode ? Math.max(0, l3Mode.entityCount - l2Mode.entityCount) : 0,
-      relationDelta: l2Mode && l3Mode ? Math.max(0, l3Mode.relationCount - l2Mode.relationCount) : 0,
+      entityDelta: nlpMode && l3Mode ? Math.max(0, l3Mode.entityCount - nlpMode.entityCount) : 0,
+      relationDelta: nlpMode && l3Mode ? Math.max(0, l3Mode.relationCount - nlpMode.relationCount) : 0,
     };
   }, [processingCompareModes]);
 

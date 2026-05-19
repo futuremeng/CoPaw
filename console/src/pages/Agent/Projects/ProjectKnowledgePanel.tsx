@@ -176,7 +176,7 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
     return "idle";
   }, [isSyncRunning, selectedSource]);
 
-  const l2Mode = useMemo(() => (
+  const nlpMode = useMemo(() => (
     knowledgeState.processingCompareModes.find((mode) => mode.mode === "nlp")
     || knowledgeState.processingModes.find((mode) => mode.mode === "nlp")
     || null
@@ -233,7 +233,7 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
 
   const layerStatusItems = useMemo(() => {
     const l1 = formatLayerStatus(l1Status);
-    const l2 = formatLayerStatus(String(l2Mode?.status || "idle").trim().toLowerCase());
+    const l2 = formatLayerStatus(String(nlpMode?.status || "idle").trim().toLowerCase());
     const l3 = formatLayerStatus(String(l3Mode?.status || "idle").trim().toLowerCase());
     return [
       {
@@ -252,7 +252,7 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
         ...l3,
       },
     ];
-  }, [formatLayerStatus, l1Status, l2Mode?.status, l3Mode?.status, t]);
+  }, [formatLayerStatus, l1Status, nlpMode?.status, l3Mode?.status, t]);
 
   const knowledgeSnapshotCards = useMemo(() => {
     const metrics = knowledgeState.quantMetrics;
@@ -314,21 +314,21 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
       targetMode?: ProjectKnowledgeProcessingMode;
       targetStage?: ProjectKnowledgeNlpStageKey;
     }> = [];
-    const l2ChunkCount = Math.max(0, Number(l2Mode?.chunkCount || quantMetrics.chunkCount || 0));
-    const nlpStatus = String(l2Mode?.status || "idle").trim().toLowerCase();
+    const l2ChunkCount = Math.max(0, Number(nlpMode?.chunkCount || quantMetrics.chunkCount || 0));
+    const nlpStatus = String(nlpMode?.status || "idle").trim().toLowerCase();
     const nlpBusy = nlpStatus === "running" || nlpStatus === "queued";
-    const nerReadyChunks = Math.max(0, Number(l2Mode?.nerReadyChunkCount || 0));
-    const syntaxReadyChunks = Math.max(0, Number(l2Mode?.syntaxReadyChunkCount || 0));
-    const corReadyChunks = Math.max(0, Number(l2Mode?.corReadyChunkCount || 0));
-    const corReason = String(l2Mode?.corReason || l2Mode?.corReasonCode || "").trim();
+    const nerReadyChunks = Math.max(0, Number(nlpMode?.nerReadyChunkCount || 0));
+    const syntaxReadyChunks = Math.max(0, Number(nlpMode?.syntaxReadyChunkCount || 0));
+    const corReadyChunks = Math.max(0, Number(nlpMode?.corReadyChunkCount || 0));
+    const corReason = String(nlpMode?.corReason || nlpMode?.corReasonCode || "").trim();
 
-    if ((nlpStatus === "failed" || nlpStatus === "blocked") && String(l2Mode?.summary || "").trim()) {
+    if ((nlpStatus === "failed" || nlpStatus === "blocked") && String(nlpMode?.summary || "").trim()) {
       issues.push({
         key: "nlp-blocked",
         level: "error",
         targetMode: "nlp",
         text: t("copaw.projects.knowledge.gapNlpBlocked", {
-          reason: String(l2Mode?.summary || "").trim(),
+          reason: String(nlpMode?.summary || "").trim(),
         }),
       });
     }
@@ -397,7 +397,7 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
     }
 
     return issues;
-  }, [knowledgeState.syncState?.pipeline_trace?.stages, l2Mode, quantMetrics.chunkCount, quantMetrics.documentCount, t]);
+  }, [knowledgeState.syncState?.pipeline_trace?.stages, nlpMode, quantMetrics.chunkCount, quantMetrics.documentCount, t]);
 
   const diagnosticsAlertType = useMemo(() => (
     diagnosticsIssues.some((item) => item.level === "error") ? "error" : "warning"

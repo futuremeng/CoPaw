@@ -163,7 +163,7 @@ function mapModeToLayerStatus(
 
 function buildKnowledgeLayerRows(
   params: {
-    l2Mode: ProjectKnowledgeModeState | null;
+    nlpMode: ProjectKnowledgeModeState | null;
     l3Mode: ProjectKnowledgeModeState | null;
     l2EvidencePaths: Record<string, string>;
     l3EvidencePaths: Record<string, string>;
@@ -174,7 +174,7 @@ function buildKnowledgeLayerRows(
   },
 ): ProjectKnowledgeLayerRow[] {
   const {
-    l2Mode,
+    nlpMode,
     l3Mode,
     l2EvidencePaths,
     l3EvidencePaths,
@@ -186,14 +186,14 @@ function buildKnowledgeLayerRows(
   const hasL3Outputs = modeHasIndependentOutputs(l3Mode);
   const l3Running = l3Mode?.status === "running" || l3Mode?.status === "queued";
   const l3Ready = Boolean(l3Mode && hasL3Outputs && l3Mode.status === "ready");
-  const l2DocumentCount = Math.max(0, Number(l2Mode?.documentCount || 0));
-  const l2TokenCount = Math.max(0, Number(l2Mode?.syntaxTokenCount || quantMetrics.tokenCount || 0));
-  const l2PosCount = Math.max(0, Number(l2Mode?.syntaxPosCount || 0));
-  const l2PosCoverage = formatPercent(Number(l2Mode?.posCoverageOnDocumentTokens || 0));
-  const l2SyntaxRelations = Math.max(0, Number(l2Mode?.syntaxRelationCount || 0));
-  const l2SyntaxSentences = Math.max(0, Number(l2Mode?.syntaxSentenceCount || 0));
-  const l2NerEntities = Math.max(0, Number(l2Mode?.nerEntityCount || 0));
-  const l2NerReadyChunks = Math.max(0, Number(l2Mode?.nerReadyChunkCount || 0));
+  const l2DocumentCount = Math.max(0, Number(nlpMode?.documentCount || 0));
+  const l2TokenCount = Math.max(0, Number(nlpMode?.syntaxTokenCount || quantMetrics.tokenCount || 0));
+  const l2PosCount = Math.max(0, Number(nlpMode?.syntaxPosCount || 0));
+  const l2PosCoverage = formatPercent(Number(nlpMode?.posCoverageOnDocumentTokens || 0));
+  const l2SyntaxRelations = Math.max(0, Number(nlpMode?.syntaxRelationCount || 0));
+  const l2SyntaxSentences = Math.max(0, Number(nlpMode?.syntaxSentenceCount || 0));
+  const l2NerEntities = Math.max(0, Number(nlpMode?.nerEntityCount || 0));
+  const l2NerReadyChunks = Math.max(0, Number(nlpMode?.nerReadyChunkCount || 0));
   const l3Quality = l3Mode?.qualityScore != null
     ? `${Math.round(Number(l3Mode.qualityScore) * 100)}%`
     : t("copaw.projects.knowledge.processing.metricPending");
@@ -219,7 +219,7 @@ function buildKnowledgeLayerRows(
       title: t("copaw.projects.knowledge.processing.layerDataPreprocessTitle"),
       description: t("copaw.projects.knowledge.processing.layerDataPreprocessDesc"),
       l2: {
-        status: mapModeToLayerStatus(l2Mode, l2TokenCount > 0),
+        status: mapModeToLayerStatus(nlpMode, l2TokenCount > 0),
         summary: t("copaw.projects.knowledge.processing.layerDataPreprocessL2"),
         metrics: [
           {
@@ -257,7 +257,7 @@ function buildKnowledgeLayerRows(
       title: t("copaw.projects.knowledge.processing.layerLexicalTitle"),
       description: t("copaw.projects.knowledge.processing.layerLexicalDesc"),
       l2: {
-        status: mapModeToLayerStatus(l2Mode, l2PosCount > 0),
+        status: mapModeToLayerStatus(nlpMode, l2PosCount > 0),
         summary: t("copaw.projects.knowledge.processing.layerLexicalL2"),
         metrics: [
           {
@@ -291,7 +291,7 @@ function buildKnowledgeLayerRows(
       title: t("copaw.projects.knowledge.processing.layerPhraseTitle"),
       description: t("copaw.projects.knowledge.processing.layerPhraseDesc"),
       l2: {
-        status: mapModeToLayerStatus(l2Mode, false, true),
+        status: mapModeToLayerStatus(nlpMode, false, true),
         summary: t("copaw.projects.knowledge.processing.layerPhraseL2"),
         reason: "PHRASE_LAYER_NOT_IMPLEMENTED",
         metrics: [
@@ -318,7 +318,7 @@ function buildKnowledgeLayerRows(
       title: t("copaw.projects.knowledge.processing.layerSyntaxTitle"),
       description: t("copaw.projects.knowledge.processing.layerSyntaxDesc"),
       l2: {
-        status: mapModeToLayerStatus(l2Mode, l2SyntaxRelations > 0),
+        status: mapModeToLayerStatus(nlpMode, l2SyntaxRelations > 0),
         summary: t("copaw.projects.knowledge.processing.layerSyntaxL2"),
         metrics: [
           {
@@ -352,7 +352,7 @@ function buildKnowledgeLayerRows(
       title: t("copaw.projects.knowledge.processing.layerSemanticTitle"),
       description: t("copaw.projects.knowledge.processing.layerSemanticDesc"),
       l2: {
-        status: mapModeToLayerStatus(l2Mode, l2NerEntities > 0 || l2NerReadyChunks > 0),
+        status: mapModeToLayerStatus(nlpMode, l2NerEntities > 0 || l2NerReadyChunks > 0),
         summary: t("copaw.projects.knowledge.processing.layerSemanticL2"),
         metrics: [
           {
@@ -482,7 +482,7 @@ export default function ProjectKnowledgeProcessingPanel(
     (mode) => mode.mode === "nlp" || mode.mode === "agentic",
   );
   const hasStaleProcessing = props.knowledgeState.processingFreshness.stale;
-  const l2Mode = visibleModes.find((mode) => mode.mode === "nlp") || null;
+  const nlpMode = visibleModes.find((mode) => mode.mode === "nlp") || null;
   const l3Mode = visibleModes.find((mode) => mode.mode === "agentic") || null;
   const modeMetricsPayload = (props.knowledgeState.syncState?.mode_metrics || {}) as Partial<Record<string, ProjectKnowledgeModeMetricsPayload>>;
   const l2EvidencePaths = (modeMetricsPayload.nlp?.evidence_paths || {}) as Record<string, string>;
@@ -540,7 +540,7 @@ export default function ProjectKnowledgeProcessingPanel(
     return merged;
   }, [activeEvidence]);
   const layerRows = buildKnowledgeLayerRows({
-    l2Mode,
+    nlpMode,
     l3Mode,
     l2EvidencePaths,
     l3EvidencePaths,
@@ -552,42 +552,16 @@ export default function ProjectKnowledgeProcessingPanel(
 
   return (
     <div className={`${styles.projectKnowledgeWorkbench} ${styles.projectKnowledgeProcessingWorkbench}`}>
-      <div>
-        <Typography.Title level={5} className={styles.projectKnowledgeSectionTitle}>
-          {t("projects.knowledgeDock.tabProcessing", "Processing")}
-        </Typography.Title>
-        <div className={styles.projectKnowledgeModeMeta}>
-          <Typography.Text type="secondary">
-            {t("copaw.projects.knowledge.processingRoleHint")}
-          </Typography.Text>
-          {hasStaleProcessing ? (
-            <Tooltip title={staleTooltip}>
-              <Tag color="orange">
-                {t("copaw.projects.knowledge.processing.staleTag")}
-              </Tag>
-            </Tooltip>
-          ) : null}
-        </div>
-      </div>
-      <div className={styles.projectKnowledgeTabActions}>
-        <Button size="small" onClick={() => void props.knowledgeState.loadProjectSourceStatus()}>
-          {t("copaw.projects.knowledge.actionRefreshSignals")}
-        </Button>
-        <Button size="small" type="primary" onClick={props.onOpenSettings}>
-          {t("copaw.projects.knowledge.actionOpenSettings")}
-        </Button>
-      </div>
-
       <div className={styles.projectKnowledgeProcessingScrollBody}>
         <div className={styles.projectKnowledgeProcessingStickySummary}>
           <div className={styles.projectKnowledgeSignalGrid}>
             <div className={styles.projectKnowledgeSignalCard}>
               <Typography.Text type="secondary">{t("copaw.projects.knowledge.processing.l2Entities")}</Typography.Text>
-              <Typography.Text strong>{formatEntityValue(l2Mode, t)}</Typography.Text>
+              <Typography.Text strong>{formatEntityValue(nlpMode, t)}</Typography.Text>
             </div>
             <div className={styles.projectKnowledgeSignalCard}>
               <Typography.Text type="secondary">{t("copaw.projects.knowledge.processing.l2Relations")}</Typography.Text>
-              <Typography.Text strong>{displayRelationCount(l2Mode)}</Typography.Text>
+              <Typography.Text strong>{displayRelationCount(nlpMode)}</Typography.Text>
             </div>
             <div className={styles.projectKnowledgeSignalCard}>
               <Typography.Text type="secondary">{t("copaw.projects.knowledge.processing.l3Entities")}</Typography.Text>

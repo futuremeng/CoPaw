@@ -17,14 +17,14 @@ This document maps each metric shown in the six-layer matrix to:
 
 | Layer | Metric (UI) | Display Value Source | Evidence Key | Backend Metric Source | Evidence Artifact Preference |
 |---|---|---|---|---|---|
-| Data Preprocess | Documents | `l2Mode.documentCount` | `document_count` | `processing_modes[nlp].document_count` | `document_graph_manifest`, `index` |
-| Data Preprocess | Token Count | `l2Mode.syntaxTokenCount` (fallback `quantMetrics.tokenCount`) | `syntax_token_count` | `index_result.syntax_token_count` | `graph`, `document_graph_manifest` |
-| Lexical | POS Count | `l2Mode.syntaxPosCount` | `syntax_pos_count` | `index_result.syntax_pos_count` | `graph`, `document_graph_manifest` |
-| Lexical | POS Coverage (doc-token) | `l2Mode.posCoverageOnDocumentTokens` | `pos_coverage_on_document_tokens` | `index_result.pos_coverage_on_document_tokens` | `graph`, `document_graph_manifest` |
-| Syntax | Sentence Count | `l2Mode.syntaxSentenceCount` | `syntax_sentence_count` | `index_result.syntax_sentence_count` | `graph` |
-| Syntax | Relation Count | `l2Mode.syntaxRelationCount` | `syntax_relation_count` | `index_result.syntax_relation_count` | `graph` |
-| Semantic | NER Entity Count | `l2Mode.nerEntityCount` | `ner_entity_count` | `index_result.ner_entity_count` | `graph`, `document_graph_manifest` |
-| Semantic | Ready Normalized Docs | `l2Mode.nerReadyChunkCount` | `ner_ready_chunk_count` | `index_result.ner_ready_chunk_count` | `document_graph_manifest`, `document_graph_dir`, `graph` |
+| Data Preprocess | Documents | `nlpMode.documentCount` | `document_count` | `processing_modes[nlp].document_count` | `document_graph_manifest`, `index` |
+| Data Preprocess | Token Count | `nlpMode.syntaxTokenCount` (fallback `quantMetrics.tokenCount`) | `syntax_token_count` | `index_result.syntax_token_count` | `graph`, `document_graph_manifest` |
+| Lexical | POS Count | `nlpMode.syntaxPosCount` | `syntax_pos_count` | `index_result.syntax_pos_count` | `graph`, `document_graph_manifest` |
+| Lexical | POS Coverage (doc-token) | `nlpMode.posCoverageOnDocumentTokens` | `pos_coverage_on_document_tokens` | `index_result.pos_coverage_on_document_tokens` | `graph`, `document_graph_manifest` |
+| Syntax | Sentence Count | `nlpMode.syntaxSentenceCount` | `syntax_sentence_count` | `index_result.syntax_sentence_count` | `graph` |
+| Syntax | Relation Count | `nlpMode.syntaxRelationCount` | `syntax_relation_count` | `index_result.syntax_relation_count` | `graph` |
+| Semantic | NER Entity Count | `nlpMode.nerEntityCount` | `ner_entity_count` | `index_result.ner_entity_count` | `graph`, `document_graph_manifest` |
+| Semantic | Ready Normalized Docs | `nlpMode.nerReadyChunkCount` | `ner_ready_chunk_count` | `index_result.ner_ready_chunk_count` | `document_graph_manifest`, `document_graph_dir`, `graph` |
 
 ## L3 (Agentic) Matrix Metrics
 
