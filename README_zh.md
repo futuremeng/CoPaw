@@ -13,7 +13,7 @@
 
 <p align="center">
   1. 项目知识处理三条并行通道：fast / nlp / agentic<br>
-  2. HanLP L2 sidecar 独立运行时支持<br>
+  2. HanLP sidecar 独立运行时支持<br>
   3. 知识面板工作流标签：Explore / Sources / Processing / Outputs / Health / Settings<br>
   4. 社区 Skills Marketplace 源集成
 </p>

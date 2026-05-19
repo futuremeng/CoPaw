@@ -12,7 +12,7 @@
 
 <p align="center">
   1. Project Knowledge Processing lanes: fast / nlp / agentic<br>
-  2. HanLP L2 sidecar runtime support<br>
+  2. HanLP sidecar runtime support<br>
   3. Knowledge dock workflow tabs: Explore / Sources / Processing / Outputs / Health / Settings<br>
   4. Community Skills Marketplace source integration
 </p>

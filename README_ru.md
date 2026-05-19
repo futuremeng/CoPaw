@@ -15,7 +15,7 @@
 
 <p align="center">
   1. Параллельные линии обработки знаний проекта: fast / nlp / agentic<br>
-  2. Поддержка sidecar-окружения HanLP L2<br>
+  2. Поддержка sidecar-окружения HanLP<br>
   3. Вкладки workflow в Knowledge dock: Explore / Sources / Processing / Outputs / Health / Settings<br>
   4. Интеграция источника сообщества Skills Marketplace
 </p>

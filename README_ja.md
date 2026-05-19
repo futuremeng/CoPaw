@@ -14,7 +14,7 @@
 
 <p align="center">
   1. プロジェクト知識処理の並列レーン: fast / nlp / agentic<br>
-  2. HanLP L2 sidecar ランタイム対応<br>
+  2. HanLP sidecar ランタイム対応<br>
   3. ナレッジドックのワークフロータブ: Explore / Sources / Processing / Outputs / Health / Settings<br>
   4. コミュニティ Skills Marketplace ソース統合
 </p>
