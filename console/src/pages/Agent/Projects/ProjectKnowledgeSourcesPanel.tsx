@@ -1,4 +1,3 @@
-import { InfoCircleOutlined } from "@ant-design/icons";
 import { Table, Tooltip, Typography } from "antd";
 import { useTranslation } from "react-i18next";
 import type { AgentProjectFileInfo } from "../../../api/types/agents";
@@ -124,17 +123,6 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
 
   return (
     <div className={styles.projectKnowledgeWorkbench}>
-      <div>
-        <div className={styles.projectKnowledgeSectionTitleRow}>
-            <Typography.Title level={5} className={styles.projectKnowledgeSectionTitle}>
-              {t("projects.knowledgeDock.tabSources", "Sources")}
-            </Typography.Title>
-            <Tooltip title={t("copaw.projects.knowledge.sourcesRoleHint")}>
-              <InfoCircleOutlined className={styles.projectKnowledgeHintIcon} />
-            </Tooltip>
-          </div>
-        </div>
-
       <div className={styles.projectKnowledgeSignalGrid}>
         <div className={styles.projectKnowledgeSignalCard}>
           <Typography.Text type="secondary">{t("copaw.projects.knowledge.signalDocuments")}</Typography.Text>
