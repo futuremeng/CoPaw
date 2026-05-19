@@ -129,7 +129,7 @@ function buildKnowledgeState(): ProjectKnowledgeState {
       last_action: "start_sync",
       quantization_stage: "l3",
       operation_updated_at: "2026-04-11T23:30:00+00:00",
-      semantic_engine: { engine: "hanlp2", status: "unavailable", reason_code: "HANLP2_IMPORT_UNAVAILABLE", reason: "", summary: "" },
+      semantic_engine: { engine: "hanlp2", status: "unavailable", reason_code: "HANLP_IMPORT_UNAVAILABLE", reason: "", summary: "" },
     } as ProjectKnowledgeState["syncState"],
     activeKnowledgeTasks: [],
     activeKnowledgeTask: null,

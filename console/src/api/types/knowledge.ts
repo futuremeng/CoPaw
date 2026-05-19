@@ -89,10 +89,10 @@ export interface ProjectKnowledgeSemanticEngineState {
     | "SOURCE_NOT_READY"
     | "SEMANTIC_STATE_INVALID"
     | "SEMANTIC_STATE_UNKNOWN"
-    | "HANLP2_READY"
-    | "HANLP2_IMPORT_UNAVAILABLE"
-    | "HANLP2_ENTRYPOINT_MISSING"
-    | "HANLP2_TOKENIZE_FAILED"
+    | "HANLP_READY"
+    | "HANLP_IMPORT_UNAVAILABLE"
+    | "HANLP_ENTRYPOINT_MISSING"
+    | "HANLP_TOKENIZE_FAILED"
     | string;
   reason: string;
   summary?: string;
@@ -456,10 +456,10 @@ export interface KnowledgeSourceSemanticStatus {
   engine: string;
   status: "ready" | "unavailable" | "error";
   reason_code:
-    | "HANLP2_READY"
-    | "HANLP2_IMPORT_UNAVAILABLE"
-    | "HANLP2_ENTRYPOINT_MISSING"
-    | "HANLP2_TOKENIZE_FAILED"
+    | "HANLP_READY"
+    | "HANLP_IMPORT_UNAVAILABLE"
+    | "HANLP_ENTRYPOINT_MISSING"
+    | "HANLP_TOKENIZE_FAILED"
     | string;
   reason: string;
 }

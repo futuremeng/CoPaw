@@ -223,11 +223,11 @@ def _build_hanlp_api_snapshot(payload: dict) -> dict:
         return str(task.get("status") or "") == "ready"
 
     status = str(sidecar.get("status") or "unavailable")
-    reason_code = str(sidecar.get("reason_code") or "HANLP2_SIDECAR_UNCONFIGURED")
+    reason_code = str(sidecar.get("reason_code") or "HANLP_SIDECAR_UNCONFIGURED")
     reason = str(sidecar.get("reason") or "HanLP2 sidecar is not configured.")
     if status == "ready" and str(model.get("status") or "") != "ready":
         status = str(model.get("status") or "unavailable")
-        reason_code = str(model.get("reason_code") or "HANLP2_MODEL_LOAD_FAILED")
+        reason_code = str(model.get("reason_code") or "HANLP_MODEL_LOAD_FAILED")
         reason = str(model.get("reason") or "HanLP2 tokenizer model is unavailable.")
 
     return {

@@ -305,31 +305,31 @@ def main():
     payload = load_payload()
 
     if not version_in_range():
-        emit(unavailable_payload("HANLP2_PYTHON_UNSUPPORTED", "Current Python version is unsupported by HanLP2 runtime."))
+        emit(unavailable_payload("HANLP_PYTHON_UNSUPPORTED", "Current Python version is unsupported by HanLP2 runtime."))
         return
 
     try:
         import hanlp
     except Exception:
-        emit(unavailable_payload("HANLP2_IMPORT_UNAVAILABLE", "HanLP2 module is not installed or failed to import."))
+        emit(unavailable_payload("HANLP_IMPORT_UNAVAILABLE", "HanLP2 module is not installed or failed to import."))
         return
 
     if mode == "probe":
         model_id = str(payload.get("model_id") or "FINE_ELECTRA_SMALL_ZH").strip()
-        emit(ready_payload("HANLP2_READY", "HanLP2 semantic engine is ready.", resolved_model=model_id, tokens=[]))
+        emit(ready_payload("HANLP_READY", "HanLP2 semantic engine is ready.", resolved_model=model_id, tokens=[]))
         return
 
     if mode in {"model_status", "ensure_model"}:
         model_id = str(payload.get("model_id") or "").strip()
         if not model_id:
-            emit(unavailable_payload("HANLP2_MODEL_UNSPECIFIED", "HanLP2 model is not configured."))
+            emit(unavailable_payload("HANLP_MODEL_UNSPECIFIED", "HanLP2 model is not configured."))
             return
         try:
             load_model(hanlp, model_id)
         except Exception as exc:
-            emit(unavailable_payload("HANLP2_MODEL_LOAD_FAILED", f"HanLP2 model load failed: {type(exc).__name__}."))
+            emit(unavailable_payload("HANLP_MODEL_LOAD_FAILED", f"HanLP2 model load failed: {type(exc).__name__}."))
             return
-        emit(ready_payload("HANLP2_MODEL_READY", "HanLP2 tokenizer model is ready."))
+        emit(ready_payload("HANLP_MODEL_READY", "HanLP2 tokenizer model is ready."))
         return
 
     if mode == "tokenize":
@@ -339,14 +339,14 @@ def main():
 		if not callable(tokenizer):
 			tokenizer = getattr(hanlp, "tokenize", None)
         if not callable(tokenizer):
-            emit(unavailable_payload("HANLP2_TOKENIZE_UNAVAILABLE", "HanLP2 tokenizer is unavailable."))
+            emit(unavailable_payload("HANLP_TOKENIZE_UNAVAILABLE", "HanLP2 tokenizer is unavailable."))
             return
         try:
 			tokens = run_tokenize_with_fallback(hanlp, tokenizer, text)
         except Exception as exc:
-            emit(unavailable_payload("HANLP2_TOKENIZE_FAILED", f"HanLP2 semantic tokenization failed via tok: {type(exc).__name__}."))
+            emit(unavailable_payload("HANLP_TOKENIZE_FAILED", f"HanLP2 semantic tokenization failed via tok: {type(exc).__name__}."))
             return
-        emit(ready_payload("HANLP2_READY", "HanLP2 semantic engine is ready.", tokens=tokens))
+        emit(ready_payload("HANLP_READY", "HanLP2 semantic engine is ready.", tokens=tokens))
         return
 
 	if mode == "tokenize_batch":
@@ -356,7 +356,7 @@ def main():
 		if not callable(tokenizer):
 			tokenizer = getattr(hanlp, "tokenize", None)
 		if not callable(tokenizer):
-			emit(unavailable_payload("HANLP2_TOKENIZE_UNAVAILABLE", "HanLP2 tokenizer is unavailable.", tokens=[]))
+			emit(unavailable_payload("HANLP_TOKENIZE_UNAVAILABLE", "HanLP2 tokenizer is unavailable.", tokens=[]))
 			return
 
 		token_batches = []
@@ -369,14 +369,14 @@ def main():
 				failed_count += 1
 
 		if failed_count:
-			response = ready_payload("HANLP2_BATCH_PARTIAL_DEGRADED", "HanLP batch tokenization partially degraded.", tokens=token_batches)
+			response = ready_payload("HANLP_BATCH_PARTIAL_DEGRADED", "HanLP batch tokenization partially degraded.", tokens=token_batches)
 			response["status"] = "degraded"
-			response["reason_code"] = "HANLP2_BATCH_PARTIAL_DEGRADED"
+			response["reason_code"] = "HANLP_BATCH_PARTIAL_DEGRADED"
 			response["reason"] = f"HanLP batch tokenization partially degraded ({failed_count}/{len(token_batches)} failed)."
 			emit(response)
 			return
 
-		emit(ready_payload("HANLP2_BATCH_READY", "HanLP batch tokenization finished successfully.", tokens=token_batches))
+		emit(ready_payload("HANLP_BATCH_READY", "HanLP batch tokenization finished successfully.", tokens=token_batches))
 		return
 
     if mode in {"task_status", "run_task"}:
@@ -390,13 +390,13 @@ def main():
 			emit({
 				"engine": "hanlp2",
 				"status": "error",
-				"reason_code": "HANLP2_COREF_NOT_OPEN_SOURCE",
+				"reason_code": "HANLP_COREF_NOT_OPEN_SOURCE",
 				"reason": "HanLP coreference_resolution is not open-source and is disabled in CoPaw runtime.",
 				"task_result": None,
 			})
             return
         if mode == "task_status":
-            emit(ready_payload("HANLP2_TASK_READY", "HanLP task is ready."))
+            emit(ready_payload("HANLP_TASK_READY", "HanLP task is ready."))
             return
 
 		task_result = None
@@ -449,9 +449,9 @@ def main():
 				task_result = None
 
         if task_result is None:
-            emit(unavailable_payload("HANLP2_TASK_UNAVAILABLE", "HanLP task is unavailable.", task_result=None))
+            emit(unavailable_payload("HANLP_TASK_UNAVAILABLE", "HanLP task is unavailable.", task_result=None))
             return
-        emit(ready_payload("HANLP2_TASK_READY", "HanLP task is ready.", task_result=task_result))
+        emit(ready_payload("HANLP_TASK_READY", "HanLP task is ready.", task_result=task_result))
         return
 
 	if mode == "run_task_batch":
@@ -467,16 +467,16 @@ def main():
 			emit({
 				"engine": "hanlp2",
 				"status": "error",
-				"reason_code": "HANLP2_COREF_NOT_OPEN_SOURCE",
+				"reason_code": "HANLP_COREF_NOT_OPEN_SOURCE",
 				"reason": "HanLP coreference_resolution is not open-source and is disabled in CoPaw runtime.",
 				"task_results": [None for _ in texts],
 			})
 			return
 		if not texts:
-			emit(unavailable_payload("HANLP2_TASK_UNAVAILABLE", "HanLP batch task requires at least one text.", task_results=[]))
+			emit(unavailable_payload("HANLP_TASK_UNAVAILABLE", "HanLP batch task requires at least one text.", task_results=[]))
 			return
 		if task_name == "task_status":
-			emit(ready_payload("HANLP2_BATCH_READY", "HanLP batch task is ready.", task_results=[None for _ in texts]))
+			emit(ready_payload("HANLP_BATCH_READY", "HanLP batch task is ready.", task_results=[None for _ in texts]))
 			return
 
 		task_results = []
@@ -538,26 +538,26 @@ def main():
 
 		if failed_count:
 			response = ready_payload(
-				"HANLP2_BATCH_PARTIAL_DEGRADED",
+				"HANLP_BATCH_PARTIAL_DEGRADED",
 				f"HanLP batch task partially degraded ({failed_count}/{len(task_results)} failed).",
 				task_results=task_results,
 			)
 			response["status"] = "degraded"
-			response["reason_code"] = "HANLP2_BATCH_PARTIAL_DEGRADED"
+			response["reason_code"] = "HANLP_BATCH_PARTIAL_DEGRADED"
 			emit(response)
 			return
 
-		emit(ready_payload("HANLP2_BATCH_READY", "HanLP batch task finished successfully.", task_results=task_results))
+		emit(ready_payload("HANLP_BATCH_READY", "HanLP batch task finished successfully.", task_results=task_results))
 		return
 
-    emit(unavailable_payload("HANLP2_WORKER_PROTOCOL_ERROR", f"Unexpected mode: {mode}"))
+    emit(unavailable_payload("HANLP_WORKER_PROTOCOL_ERROR", f"Unexpected mode: {mode}"))
 
 
 if __name__ == "__main__":
 	try:
 		main()
 	except Exception:
-		emit(unavailable_payload("HANLP2_BRIDGE_CRASHED", traceback.format_exc()))
+		emit(unavailable_payload("HANLP_BRIDGE_CRASHED", traceback.format_exc()))
 """.replace("\t", "    ")
 
 
@@ -599,7 +599,7 @@ def _worker_dispatch(mode: str, payload: dict[str, Any]) -> dict[str, Any]:
 	if completed.returncode != 0:
 		return _default_runtime_state(
 			status="unavailable",
-			reason_code="HANLP2_BRIDGE_CRASHED",
+			reason_code="HANLP_BRIDGE_CRASHED",
 			reason=(completed.stderr or "HanLP bridge exited unexpectedly.").strip() or "HanLP bridge exited unexpectedly.",
 		)
 	try:
@@ -607,7 +607,7 @@ def _worker_dispatch(mode: str, payload: dict[str, Any]) -> dict[str, Any]:
 	except Exception:
 		return _default_runtime_state(
 			status="unavailable",
-			reason_code="HANLP2_WORKER_PROTOCOL_ERROR",
+			reason_code="HANLP_WORKER_PROTOCOL_ERROR",
 			reason="HanLP worker returned invalid JSON.",
 		)
 
@@ -659,14 +659,14 @@ for line in sys.stdin:
 		bridge_namespace["main"]()
 	except Exception:
 		response = unavailable_payload(
-			"HANLP2_BRIDGE_CRASHED",
+			"HANLP_BRIDGE_CRASHED",
 			"HanLP bridge exited unexpectedly.",
 		)
 	else:
 		raw_response = stdout.getvalue().strip()
 		if not raw_response:
 			response = unavailable_payload(
-				"HANLP2_WORKER_PROTOCOL_ERROR",
+				"HANLP_WORKER_PROTOCOL_ERROR",
 				"HanLP worker returned invalid JSON.",
 			)
 		else:
@@ -674,7 +674,7 @@ for line in sys.stdin:
 				response = json.loads(raw_response)
 			except Exception:
 				response = unavailable_payload(
-					"HANLP2_WORKER_PROTOCOL_ERROR",
+					"HANLP_WORKER_PROTOCOL_ERROR",
 					"HanLP worker returned invalid JSON.",
 				)
 	finally:
@@ -718,7 +718,7 @@ class NLPRuntime:
 		retry_after_sec = max(0.0, open_until - now)
 		return _default_runtime_state(
 			status="busy",
-			reason_code="HANLP2_CIRCUIT_OPEN",
+			reason_code="HANLP_CIRCUIT_OPEN",
 			reason="HanLP worker is temporarily throttled after repeated timeouts.",
 			breaker_key=breaker_key,
 			circuit_open=True,
@@ -856,7 +856,7 @@ class NLPRuntime:
 	def _ensure_sidecar(self, payload: dict[str, Any]) -> Path:
 		executable_text = str(payload.get("python_executable") or "").strip()
 		if not payload.get("enabled") or not executable_text:
-			raise ValueError("HANLP2_SIDECAR_UNCONFIGURED")
+			raise ValueError("HANLP_SIDECAR_UNCONFIGURED")
 		executable = Path(executable_text)
 		if not executable.exists():
 			raise FileNotFoundError(executable_text)
@@ -867,12 +867,12 @@ class NLPRuntime:
 		if isinstance(error, FileNotFoundError):
 			return _default_runtime_state(
 				status="unavailable",
-				reason_code="HANLP2_SIDECAR_PYTHON_MISSING",
+				reason_code="HANLP_SIDECAR_PYTHON_MISSING",
 				reason="Configured HanLP2 Python executable was not found.",
 			)
 		return _default_runtime_state(
 			status="unavailable",
-			reason_code="HANLP2_SIDECAR_UNCONFIGURED",
+			reason_code="HANLP_SIDECAR_UNCONFIGURED",
 			reason="HanLP2 sidecar is not configured.",
 		)
 
@@ -958,7 +958,7 @@ class NLPRuntime:
 				self._stop_worker_locked()
 				response = _default_runtime_state(
 					status="degraded",
-					reason_code="HANLP2_WORKER_TIMEOUT",
+					reason_code="HANLP_WORKER_TIMEOUT",
 					reason=f"HanLP worker did not respond within {float(timeout):.3f}s.",
 					timeout_sec=float(timeout),
 				)
@@ -967,7 +967,7 @@ class NLPRuntime:
 				if not response_text:
 					response = _default_runtime_state(
 						status="unavailable",
-						reason_code="HANLP2_WORKER_PROTOCOL_ERROR",
+						reason_code="HANLP_WORKER_PROTOCOL_ERROR",
 						reason="HanLP worker returned an empty response.",
 					)
 				else:
@@ -994,7 +994,7 @@ class NLPRuntime:
 			return open_state
 		response = self._worker_request(executable, mode=mode, payload=payload, timeout=timeout)
 		with self._lock:
-			if response.get("reason_code") == "HANLP2_WORKER_TIMEOUT":
+			if response.get("reason_code") == "HANLP_WORKER_TIMEOUT":
 				breaker_state = self._record_bridge_timeout_locked(breaker_key, timeout)
 				response["consecutive_timeouts"] = breaker_state["consecutive_timeouts"]
 				if float(breaker_state.get("open_until") or 0.0) > time.monotonic():
@@ -1025,13 +1025,13 @@ class NLPRuntime:
 		except ValueError:
 			return _default_runtime_state(
 				status="unavailable",
-				reason_code="HANLP2_SIDECAR_UNCONFIGURED",
+				reason_code="HANLP_SIDECAR_UNCONFIGURED",
 				reason="HanLP2 sidecar is not configured.",
 			)
 		except FileNotFoundError:
 			return _default_runtime_state(
 				status="unavailable",
-				reason_code="HANLP2_SIDECAR_PYTHON_MISSING",
+				reason_code="HANLP_SIDECAR_PYTHON_MISSING",
 				reason="Configured HanLP2 Python executable was not found.",
 			)
 

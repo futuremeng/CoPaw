@@ -178,7 +178,7 @@ def test_list_sources_returns_semantic_engine_status(
             lambda cls, _config=None: {
                 "engine": "hanlp2",
                 "status": "unavailable",
-                "reason_code": "HANLP2_IMPORT_UNAVAILABLE",
+                "reason_code": "HANLP_IMPORT_UNAVAILABLE",
                 "reason": "HanLP2 module is not installed or failed to import.",
             }
         ),
@@ -204,7 +204,7 @@ def test_list_sources_returns_semantic_engine_status(
     source = listing.json()["sources"][0]
     assert source["semantic_status"]["engine"] == "hanlp2"
     assert source["semantic_status"]["status"] == "unavailable"
-    assert source["semantic_status"]["reason_code"] == "HANLP2_IMPORT_UNAVAILABLE"
+    assert source["semantic_status"]["reason_code"] == "HANLP_IMPORT_UNAVAILABLE"
 
 
 def test_list_sources_filters_by_project_id(
@@ -1171,7 +1171,7 @@ def test_run_knowledge_nlp_task_delegates_to_hanlp_runner(
             "task_key": task_key,
             "request_id": request_body.request_id or "req-test",
             "status": "ready",
-            "reason_code": "HANLP2_TASK_READY",
+            "reason_code": "HANLP_TASK_READY",
             "reason": "ok",
             "result": ["微软", "发布", "新模型"],
             "resolved_model": "FINE_ELECTRA_SMALL_ZH",

@@ -167,7 +167,7 @@ def _build_local_models_payload(config) -> dict[str, Any]:
     return {
         "engine": "hanlp2",
         "status": "ready" if all_local else "unavailable",
-        "reason_code": "HANLP2_LOCAL_MODELS_READY" if all_local else "HANLP2_MODEL_NOT_LOCAL",
+        "reason_code": "HANLP_LOCAL_MODELS_READY" if all_local else "HANLP_MODEL_NOT_LOCAL",
         "reason": (
             "All required HanLP models are present in local cache."
             if all_local
@@ -194,7 +194,7 @@ def _augment_local_models_payload(payload: dict[str, Any], config) -> dict[str, 
     all_local = all(bool(item.get("local_available")) for item in items) if items else True
     result["items"] = items
     result["status"] = "ready" if all_local else "unavailable"
-    result["reason_code"] = "HANLP2_LOCAL_MODELS_READY" if all_local else "HANLP2_MODEL_NOT_LOCAL"
+    result["reason_code"] = "HANLP_LOCAL_MODELS_READY" if all_local else "HANLP_MODEL_NOT_LOCAL"
     result["reason"] = (
         "All required HanLP models are present in local cache."
         if all_local
@@ -336,7 +336,7 @@ async def download_missing_local_models() -> dict:
             {
                 "model_id": model_id,
                 "status": str(result.get("status") or "unavailable"),
-                "reason_code": str(result.get("reason_code") or "HANLP2_MODEL_LOAD_FAILED"),
+                "reason_code": str(result.get("reason_code") or "HANLP_MODEL_LOAD_FAILED"),
                 "reason": str(result.get("reason") or "Model ensure failed."),
             }
         )
@@ -351,12 +351,12 @@ async def download_missing_local_models() -> dict:
         "attempts": attempts,
         "before": {
             "status": str(before.get("status") or "unavailable"),
-            "reason_code": str(before.get("reason_code") or "HANLP2_LOCAL_MODELS_STATUS_FAILED"),
+            "reason_code": str(before.get("reason_code") or "HANLP_LOCAL_MODELS_STATUS_FAILED"),
             "missing_count": len(missing_items),
         },
         "after": {
             "status": str(after.get("status") or "unavailable"),
-            "reason_code": str(after.get("reason_code") or "HANLP2_LOCAL_MODELS_STATUS_FAILED"),
+            "reason_code": str(after.get("reason_code") or "HANLP_LOCAL_MODELS_STATUS_FAILED"),
             "missing_count": len(remaining),
         },
         "remaining": remaining,

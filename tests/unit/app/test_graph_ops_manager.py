@@ -373,7 +373,7 @@ def test_local_memify_emits_path_time_and_version_relations_from_chunk_ner(tmp_p
     ready_state = {
         "engine": "hanlp2",
         "status": "ready",
-        "reason_code": "HANLP2_READY",
+        "reason_code": "HANLP_READY",
         "reason": "HanLP2 semantic engine is ready.",
     }
     with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
@@ -448,7 +448,7 @@ def test_local_graph_query_supports_path_time_filter_sort_and_aggregate(tmp_path
     ready_state = {
         "engine": "hanlp2",
         "status": "ready",
-        "reason_code": "HANLP2_READY",
+        "reason_code": "HANLP_READY",
         "reason": "HanLP2 semantic engine is ready.",
     }
     with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
@@ -559,7 +559,7 @@ def test_local_graph_query_filters_latest_version_and_sorts_by_time(tmp_path):
     ready_state = {
         "engine": "hanlp2",
         "status": "ready",
-        "reason_code": "HANLP2_READY",
+        "reason_code": "HANLP_READY",
         "reason": "HanLP2 semantic engine is ready.",
     }
     with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(

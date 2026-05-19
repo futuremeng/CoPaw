@@ -274,16 +274,16 @@ def _check_hanlp_sidecar(cfg) -> tuple[bool, str, list[str]]:
 
     if status == "ready":
         return True, reason, notes
-    if reason_code == "HANLP2_IMPORT_UNAVAILABLE":
+    if reason_code == "HANLP_IMPORT_UNAVAILABLE":
         notes.append(
             "Install HanLP in the sidecar environment, for example: "
             "<sidecar-python> -m pip install 'hanlp[full]'",
         )
-    elif reason_code == "HANLP2_FULL_INSTALL_REQUIRED":
+    elif reason_code == "HANLP_FULL_INSTALL_REQUIRED":
         notes.append(
             "Install full dependencies in sidecar: <sidecar-python> -m pip install 'hanlp[full]'.",
         )
-    elif reason_code == "HANLP2_SIDECAR_PYTHON_INCOMPATIBLE":
+    elif reason_code == "HANLP_SIDECAR_PYTHON_INCOMPATIBLE":
         notes.append(
             "HanLP 2.x local runtime should use Python 3.6-3.10 according to the upstream install guide.",
         )

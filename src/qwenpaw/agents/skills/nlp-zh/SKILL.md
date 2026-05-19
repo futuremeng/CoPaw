@@ -158,7 +158,7 @@ POST /api/knowledge/tasks/{task_key}/run
   ],
   "debug": {
     "status": "ready",
-    "reason_code": "HANLP2_READY",
+    "reason_code": "HANLP_READY",
     "duration_ms": 42
   }
 }

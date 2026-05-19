@@ -50,21 +50,21 @@ def test_build_status_includes_task_matrix_states(monkeypatch):
         def probe(self, _knowledge):
             return {
                 "status": "ready",
-                "reason_code": "HANLP2_READY",
+                "reason_code": "HANLP_READY",
                 "reason": "HanLP2 semantic engine is ready.",
             }
 
         def model_status(self, _knowledge):
             return {
                 "status": "ready",
-                "reason_code": "HANLP2_MODEL_READY",
+                "reason_code": "HANLP_MODEL_READY",
                 "reason": "HanLP2 tokenizer model is ready.",
             }
 
         def task_status(self, task_key, _knowledge):
             return {
                 "status": "ready" if task_key == "ner_msra" else "unavailable",
-                "reason_code": "HANLP2_TASK_READY" if task_key == "ner_msra" else "HANLP2_TASK_LOAD_FAILED",
+                "reason_code": "HANLP_TASK_READY" if task_key == "ner_msra" else "HANLP_TASK_LOAD_FAILED",
                 "reason": "ok" if task_key == "ner_msra" else "failed",
             }
 
@@ -87,14 +87,14 @@ def test_ensure_hanlp_model_aggregates_task_results(monkeypatch):
         def ensure_model(self, _knowledge):
             return {
                 "status": "ready",
-                "reason_code": "HANLP2_MODEL_READY",
+                "reason_code": "HANLP_MODEL_READY",
                 "reason": "HanLP2 tokenizer model is ready.",
             }
 
         def task_status(self, task_key, _knowledge):
             return {
                 "status": "ready" if task_key == "ner_msra" else "unavailable",
-                "reason_code": "HANLP2_TASK_READY" if task_key == "ner_msra" else "HANLP2_TASK_LOAD_FAILED",
+                "reason_code": "HANLP_TASK_READY" if task_key == "ner_msra" else "HANLP_TASK_LOAD_FAILED",
                 "reason": "ok" if task_key == "ner_msra" else "failed",
             }
 
@@ -419,7 +419,7 @@ def test_run_hanlp_preload_tracks_stable_order_and_progress(monkeypatch):
         def ensure_model(self, _knowledge):
             return {
                 "status": "ready",
-                "reason_code": "HANLP2_MODEL_READY",
+                "reason_code": "HANLP_MODEL_READY",
                 "reason": "HanLP2 tokenizer model is ready.",
             }
 
@@ -429,12 +429,12 @@ def test_run_hanlp_preload_tracks_stable_order_and_progress(monkeypatch):
             if task_key == "alpha":
                 return {}, {
                     "status": "ready",
-                    "reason_code": "HANLP2_TASK_READY",
+                    "reason_code": "HANLP_TASK_READY",
                     "reason": "ready",
                 }
             return {}, {
                 "status": "unavailable",
-                "reason_code": "HANLP2_TASK_LOAD_FAILED",
+                "reason_code": "HANLP_TASK_LOAD_FAILED",
                 "reason": "failed",
             }
 

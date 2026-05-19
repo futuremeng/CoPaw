@@ -167,7 +167,7 @@ def test_build_nlp_progress_contains_phrase_placeholder_stage(tmp_path: Path):
             "syntax_relation_count": 42,
             "cor_done_chunks": 0,
             "cor_ready_chunk_count": 0,
-            "cor_reason_code": "HANLP2_TASK_READY",
+            "cor_reason_code": "HANLP_TASK_READY",
             "cor_reason": "optional",
         },
     )
@@ -206,7 +206,7 @@ def test_project_sync_start_captures_task_aware_semantic_engine_state(tmp_path: 
         lambda _config=None: {
             "engine": "hanlp2",
             "status": "unavailable",
-            "reason_code": "HANLP2_TASK_UNAVAILABLE",
+            "reason_code": "HANLP_TASK_UNAVAILABLE",
             "reason": "NER model is unavailable.",
         },
     )
@@ -217,7 +217,7 @@ def test_project_sync_start_captures_task_aware_semantic_engine_state(tmp_path: 
             "engine": "hanlp2",
             "task_key": task_key,
             "status": "ready" if task_key == "tokenize" else "unavailable",
-            "reason_code": "HANLP2_TASK_READY" if task_key == "tokenize" else "HANLP2_TASK_UNAVAILABLE",
+            "reason_code": "HANLP_TASK_READY" if task_key == "tokenize" else "HANLP_TASK_UNAVAILABLE",
             "reason": "tokenize ready" if task_key == "tokenize" else "NER model is unavailable.",
         },
     )
@@ -252,7 +252,7 @@ def test_build_processing_modes_keeps_nlp_queued_when_tokenize_task_is_ready(tmp
     semantic_engine = {
         "engine": "hanlp2",
         "status": "unavailable",
-        "reason_code": "HANLP2_TASK_UNAVAILABLE",
+        "reason_code": "HANLP_TASK_UNAVAILABLE",
         "reason": "NER model is unavailable.",
         "summary": "Semantic engine unavailable: NER model is unavailable.",
         "task_states": {
@@ -260,7 +260,7 @@ def test_build_processing_modes_keeps_nlp_queued_when_tokenize_task_is_ready(tmp
                 "engine": "hanlp2",
                 "task_key": "tokenize",
                 "status": "ready",
-                "reason_code": "HANLP2_TASK_READY",
+                "reason_code": "HANLP_TASK_READY",
                 "reason": "Tokenize task ready.",
             }
         },
@@ -309,13 +309,13 @@ def test_build_semantic_engine_state_prefers_current_snapshot(tmp_path: Path, mo
             "semantic_engine": {
                 "engine": "hanlp2",
                 "status": "ready",
-                "reason_code": "HANLP2_TASK_READY",
+                "reason_code": "HANLP_TASK_READY",
                 "reason": "HanLP task is ready.",
                 "task_states": {
                     "tokenize": {
                         "engine": "hanlp2",
                         "status": "ready",
-                        "reason_code": "HANLP2_TASK_READY",
+                        "reason_code": "HANLP_TASK_READY",
                         "reason": "HanLP task is ready.",
                     }
                 },

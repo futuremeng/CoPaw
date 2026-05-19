@@ -614,7 +614,7 @@ async def _await_runtime_call(call, *, timeout_sec: float) -> tuple[Any, dict[st
     except asyncio.TimeoutError:
         return [], {
             "status": "degraded",
-            "reason_code": "HANLP2_ROUTE_TIMEOUT",
+            "reason_code": "HANLP_ROUTE_TIMEOUT",
             "reason": f"HanLP task exceeded HTTP guard timeout ({timeout_sec:.3f}s).",
             "timeout_sec": timeout_sec,
             "sidecar_execution_path": "route-guard",
@@ -632,7 +632,7 @@ def _route_timeout_response(*, task_key: str, request_id: str, started: float, t
         task_key=task_key,
         request_id=request_id,
         status="degraded",
-        reason_code="HANLP2_ROUTE_TIMEOUT",
+        reason_code="HANLP_ROUTE_TIMEOUT",
         reason=reason,
         result=None,
         raw_result=None,
@@ -1268,9 +1268,9 @@ async def _run_hanlp_task_batch_impl(
         else:
             normalized_result = raw_item
         item_status = "ready" if raw_item is not None else str(state.get("status") or "degraded")
-        item_reason_code = str(state.get("reason_code") or "HANLP2_BATCH_READY")
-        if item_status != "ready" and item_reason_code == "HANLP2_BATCH_READY":
-            item_reason_code = "HANLP2_BATCH_PARTIAL_DEGRADED"
+        item_reason_code = str(state.get("reason_code") or "HANLP_BATCH_READY")
+        if item_status != "ready" and item_reason_code == "HANLP_BATCH_READY":
+            item_reason_code = "HANLP_BATCH_PARTIAL_DEGRADED"
         items.append(
             {
                 "index": index,
@@ -1289,11 +1289,11 @@ async def _run_hanlp_task_batch_impl(
     failed_count = sum(1 for item in items if str(item.get("status") or "") != "ready")
     if all_ready:
         status = "ready"
-        reason_code = "HANLP2_BATCH_READY"
+        reason_code = "HANLP_BATCH_READY"
         reason = "HanLP batch task finished successfully."
     else:
         status = "degraded"
-        reason_code = "HANLP2_BATCH_PARTIAL_DEGRADED"
+        reason_code = "HANLP_BATCH_PARTIAL_DEGRADED"
         reason = f"HanLP batch task partially degraded ({failed_count}/{len(items)} failed)."
 
     return HanLPTaskRunResponse(

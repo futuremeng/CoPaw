@@ -401,7 +401,7 @@ export default function ProjectKnowledgeSettingsPanel(
   const semanticReasonLabel = getProjectKnowledgeSemanticReasonLabel(semanticStatus, t);
   const semanticDescription = getProjectKnowledgeSemanticDescription(semanticStatus, t);
   const semanticReasonCode = String(semanticStatus?.reason_code || "").trim().toUpperCase();
-  const showSidecarHint = semanticReasonCode.startsWith("HANLP2_SIDECAR_");
+  const showSidecarHint = semanticReasonCode.startsWith("HANLP_SIDECAR_");
   const semanticSidecarHint = useMemo(() => {
     if (!showSidecarHint) {
       return [] as string[];

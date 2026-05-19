@@ -123,8 +123,8 @@ def resolve_nlp_stage_status(
 		normalized_reason = str(reason_code or "").strip()
 		cor_unavailable = (
 			normalized_reason
-			and normalized_reason != "HANLP2_TASK_READY"
-			and normalized_reason != "HANLP2_COREF_HEURISTIC_READY"
+			and normalized_reason != "HANLP_TASK_READY"
+			and normalized_reason != "HANLP_COREF_HEURISTIC_READY"
 			and mode_status not in {"running", "queued"}
 		)
 		if cor_unavailable:

@@ -1001,17 +1001,17 @@ function NlpPage() {
         ? modelReady
           ? {
               status: "ready",
-              reasonCode: "HANLP2_MODEL_READY",
+              reasonCode: "HANLP_MODEL_READY",
               reason: t("nlpConfig.methods.tokenize.readyReason"),
             }
           : {
               status: "unavailable",
-              reasonCode: status?.model.reason_code || "HANLP2_MODEL_LOAD_FAILED",
+              reasonCode: status?.model.reason_code || "HANLP_MODEL_LOAD_FAILED",
               reason: status?.model.reason || t("nlpConfig.methods.tokenize.unavailableReason"),
             }
         : {
             status: "unavailable",
-            reasonCode: status?.sidecar.reason_code || "HANLP2_SIDECAR_UNCONFIGURED",
+            reasonCode: status?.sidecar.reason_code || "HANLP_SIDECAR_UNCONFIGURED",
             reason: status?.sidecar.reason || t("nlpConfig.methods.tokenize.unavailableReason"),
           },
     },
@@ -1020,7 +1020,7 @@ function NlpPage() {
       taskKey: "ner_msra",
       status: {
         status: taskStates.ner_msra?.status || "unavailable",
-        reasonCode: taskStates.ner_msra?.reason_code || "HANLP2_TASK_NOT_CONFIGURED",
+        reasonCode: taskStates.ner_msra?.reason_code || "HANLP_TASK_NOT_CONFIGURED",
         reason: taskStates.ner_msra?.reason || t("nlpConfig.methods.defaultUnavailableReason"),
       },
     },
@@ -1031,7 +1031,7 @@ function NlpPage() {
         status: taskStates.pos_ctb?.status || (sidecarReady ? "ready" : "unavailable"),
         reasonCode:
           taskStates.pos_ctb?.reason_code ||
-          (sidecarReady ? "HANLP2_TASK_API_READY" : "HANLP2_SIDECAR_UNCONFIGURED"),
+          (sidecarReady ? "HANLP_TASK_API_READY" : "HANLP_SIDECAR_UNCONFIGURED"),
         reason:
           taskStates.pos_ctb?.reason ||
           (sidecarReady ? "CTB9_POS_ELECTRA_SMALL" : t("nlpConfig.methods.defaultUnavailableReason")),
@@ -1044,7 +1044,7 @@ function NlpPage() {
         status: taskStates.pos_pku?.status || (sidecarReady ? "ready" : "unavailable"),
         reasonCode:
           taskStates.pos_pku?.reason_code ||
-          (sidecarReady ? "HANLP2_TASK_API_READY" : "HANLP2_SIDECAR_UNCONFIGURED"),
+          (sidecarReady ? "HANLP_TASK_API_READY" : "HANLP_SIDECAR_UNCONFIGURED"),
         reason:
           taskStates.pos_pku?.reason ||
           (sidecarReady ? "PKU_POS_ELECTRA_SMALL" : t("nlpConfig.methods.defaultUnavailableReason")),
@@ -1057,7 +1057,7 @@ function NlpPage() {
         status: taskStates.pos_863?.status || (sidecarReady ? "ready" : "unavailable"),
         reasonCode:
           taskStates.pos_863?.reason_code ||
-          (sidecarReady ? "HANLP2_TASK_API_READY" : "HANLP2_SIDECAR_UNCONFIGURED"),
+          (sidecarReady ? "HANLP_TASK_API_READY" : "HANLP_SIDECAR_UNCONFIGURED"),
         reason:
           taskStates.pos_863?.reason ||
           (sidecarReady ? "C863_POS_ELECTRA_SMALL" : t("nlpConfig.methods.defaultUnavailableReason")),
@@ -1068,7 +1068,7 @@ function NlpPage() {
       taskKey: "dep",
       status: {
         status: taskStates.dep?.status || "unavailable",
-        reasonCode: taskStates.dep?.reason_code || "HANLP2_TASK_NOT_CONFIGURED",
+        reasonCode: taskStates.dep?.reason_code || "HANLP_TASK_NOT_CONFIGURED",
         reason: taskStates.dep?.reason || t("nlpConfig.methods.defaultUnavailableReason"),
       },
     },
@@ -1077,7 +1077,7 @@ function NlpPage() {
       taskKey: "sdp",
       status: {
         status: taskStates.sdp?.status || "unavailable",
-        reasonCode: taskStates.sdp?.reason_code || "HANLP2_TASK_NOT_CONFIGURED",
+        reasonCode: taskStates.sdp?.reason_code || "HANLP_TASK_NOT_CONFIGURED",
         reason: taskStates.sdp?.reason || t("nlpConfig.methods.defaultUnavailableReason"),
       },
     },
@@ -1086,7 +1086,7 @@ function NlpPage() {
       taskKey: "srl",
       status: {
         status: taskStates.srl?.status || "unavailable",
-        reasonCode: taskStates.srl?.reason_code || "HANLP2_TASK_NOT_CONFIGURED",
+        reasonCode: taskStates.srl?.reason_code || "HANLP_TASK_NOT_CONFIGURED",
         reason: taskStates.srl?.reason || t("nlpConfig.methods.defaultUnavailableReason"),
       },
     },
@@ -1095,7 +1095,7 @@ function NlpPage() {
       taskKey: "con",
       status: {
         status: taskStates.con?.status || "unavailable",
-        reasonCode: taskStates.con?.reason_code || "HANLP2_TASK_NOT_CONFIGURED",
+        reasonCode: taskStates.con?.reason_code || "HANLP_TASK_NOT_CONFIGURED",
         reason: taskStates.con?.reason || t("nlpConfig.methods.defaultUnavailableReason"),
       },
     },
@@ -1104,7 +1104,7 @@ function NlpPage() {
       taskKey: "cor",
       status: {
         status: taskStates.cor?.status || "unavailable",
-        reasonCode: taskStates.cor?.reason_code || "HANLP2_COREF_NOT_OPEN_SOURCE",
+        reasonCode: taskStates.cor?.reason_code || "HANLP_COREF_NOT_OPEN_SOURCE",
         reason: taskStates.cor?.reason || t("nlpConfig.methods.cor.unavailableReason"),
       },
     },
@@ -1475,7 +1475,7 @@ function NlpPage() {
               }
             />
 
-            {status?.sidecar.reason_code === "HANLP2_FULL_INSTALL_REQUIRED" ? (
+            {status?.sidecar.reason_code === "HANLP_FULL_INSTALL_REQUIRED" ? (
               <Alert
                 type="warning"
                 showIcon

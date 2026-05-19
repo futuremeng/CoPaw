@@ -3142,7 +3142,7 @@ class KnowledgeManager:
             if mentions and not self._has_meaningful_ner_labels(mentions):
                 invalid_state = dict(state)
                 invalid_state["status"] = "unavailable"
-                invalid_state["reason_code"] = "HANLP2_NER_LABEL_INVALID"
+                invalid_state["reason_code"] = "HANLP_NER_LABEL_INVALID"
                 invalid_state["reason"] = (
                     "HanLP NER returned invalid labels (only fallback-like labels were detected)."
                 )
@@ -3198,7 +3198,7 @@ class KnowledgeManager:
         worker_pids: set[int] = set()
         worker_restart_count = 0
         runtime_status = "ready"
-        runtime_reason_code = "HANLP2_TASK_API_READY"
+        runtime_reason_code = "HANLP_TASK_API_READY"
         runtime_reason = "HanLP NER (msra) model is available."
 
         for start_idx in range(0, len(lines), safe_batch_size):

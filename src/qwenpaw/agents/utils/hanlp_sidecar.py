@@ -525,7 +525,7 @@ def _run_hanlp_preload(force: bool = False) -> None:
     nlp_cfg = _nlp_config(config)
     model_result = {
         "status": str(model_state.get("status") or "unavailable"),
-        "reason_code": str(model_state.get("reason_code") or "HANLP2_MODEL_LOAD_FAILED"),
+        "reason_code": str(model_state.get("reason_code") or "HANLP_MODEL_LOAD_FAILED"),
         "reason": str(model_state.get("reason") or "HanLP model preload failed."),
         "model_id": str(getattr(nlp_cfg, "model_id", "") or "").strip() if nlp_cfg is not None else "",
     }
@@ -585,7 +585,7 @@ def _run_hanlp_preload(force: bool = False) -> None:
             failed_tasks += 1
         task_results[task_key] = {
             "status": task_status,
-            "reason_code": str(task_state.get("reason_code") or "HANLP2_TASK_LOAD_FAILED"),
+            "reason_code": str(task_state.get("reason_code") or "HANLP_TASK_LOAD_FAILED"),
             "reason": str(task_state.get("reason") or "HanLP task preload failed."),
             "model_id": task_model_id,
         }
@@ -663,7 +663,7 @@ def _build_task_status(runtime: NLPRuntime, config) -> dict[str, dict]:
             task_entry.update(
                 {
                     "status": "disabled",
-                    "reason_code": "HANLP2_TASK_DISABLED",
+                    "reason_code": "HANLP_TASK_DISABLED",
                     "reason": "HanLP task is disabled in the task matrix.",
                 }
             )
@@ -672,7 +672,7 @@ def _build_task_status(runtime: NLPRuntime, config) -> dict[str, dict]:
             task_entry.update(
                 {
                     "status": state.get("status") or "unavailable",
-                    "reason_code": state.get("reason_code") or "HANLP2_TASK_LOAD_FAILED",
+                    "reason_code": state.get("reason_code") or "HANLP_TASK_LOAD_FAILED",
                     "reason": state.get("reason") or "HanLP task is unavailable.",
                 }
             )
@@ -700,7 +700,7 @@ def _build_task_status_snapshot(config, *, sidecar_state: dict, model_state: dic
             task_entry.update(
                 {
                     "status": "disabled",
-                    "reason_code": "HANLP2_TASK_DISABLED",
+                    "reason_code": "HANLP_TASK_DISABLED",
                     "reason": "HanLP task is disabled in the task matrix.",
                 }
             )
@@ -708,7 +708,7 @@ def _build_task_status_snapshot(config, *, sidecar_state: dict, model_state: dic
             task_entry.update(
                 {
                     "status": "unavailable",
-                    "reason_code": "HANLP2_COREF_NOT_OPEN_SOURCE",
+                    "reason_code": "HANLP_COREF_NOT_OPEN_SOURCE",
                     "reason": "HanLP coreference_resolution is not open-source and is disabled in CoPaw runtime.",
                 }
             )
@@ -716,7 +716,7 @@ def _build_task_status_snapshot(config, *, sidecar_state: dict, model_state: dic
             task_entry.update(
                 {
                     "status": "unavailable",
-                    "reason_code": str(sidecar_state.get("reason_code") or "HANLP2_SIDECAR_UNCONFIGURED"),
+                    "reason_code": str(sidecar_state.get("reason_code") or "HANLP_SIDECAR_UNCONFIGURED"),
                     "reason": str(sidecar_state.get("reason") or "HanLP2 sidecar is not configured."),
                 }
             )
@@ -724,7 +724,7 @@ def _build_task_status_snapshot(config, *, sidecar_state: dict, model_state: dic
             task_entry.update(
                 {
                     "status": "unavailable",
-                    "reason_code": str(model_state.get("reason_code") or "HANLP2_MODEL_LOAD_FAILED"),
+                    "reason_code": str(model_state.get("reason_code") or "HANLP_MODEL_LOAD_FAILED"),
                     "reason": str(model_state.get("reason") or "HanLP2 tokenizer model is unavailable."),
                 }
             )
@@ -732,7 +732,7 @@ def _build_task_status_snapshot(config, *, sidecar_state: dict, model_state: dic
             task_entry.update(
                 {
                     "status": "ready",
-                    "reason_code": "HANLP2_TASK_READY_UNVERIFIED",
+                    "reason_code": "HANLP_TASK_READY_UNVERIFIED",
                     "reason": "HanLP task is configured. Run task demo to verify model availability.",
                 }
             )
@@ -778,7 +778,7 @@ def _build_status(config, *, include_task_status: bool = True) -> dict:
     return {
         "sidecar": {
             "status": probe_state.get("status") or "unavailable",
-            "reason_code": probe_state.get("reason_code") or "HANLP2_SIDECAR_UNCONFIGURED",
+            "reason_code": probe_state.get("reason_code") or "HANLP_SIDECAR_UNCONFIGURED",
             "reason": probe_state.get("reason") or "HanLP2 sidecar is not configured.",
             "enabled": bool(getattr(nlp_cfg, "enabled", False)),
             "provider": str(getattr(nlp_cfg, "provider", "hanlp") or "hanlp").strip(),
@@ -792,7 +792,7 @@ def _build_status(config, *, include_task_status: bool = True) -> dict:
         },
         "model": {
             "status": model_state.get("status") or "unavailable",
-            "reason_code": model_state.get("reason_code") or "HANLP2_MODEL_LOAD_FAILED",
+            "reason_code": model_state.get("reason_code") or "HANLP_MODEL_LOAD_FAILED",
             "reason": model_state.get("reason") or "HanLP2 tokenizer model is unavailable.",
             "model_id": str(getattr(nlp_cfg, "model_id", "") or "").strip(),
         },
@@ -1018,7 +1018,7 @@ def ensure_hanlp_model() -> dict:
         if not bool(getattr(task_cfg, "enabled", True)):
             task_results[task_key] = {
                 "status": "disabled",
-                "reason_code": "HANLP2_TASK_DISABLED",
+                "reason_code": "HANLP_TASK_DISABLED",
                 "reason": "HanLP task is disabled in the task matrix.",
                 "task_name": str(getattr(task_cfg, "task_name", task_key) or task_key).strip(),
                 "artifact_key": str(getattr(task_cfg, "artifact_key", task_key) or task_key).strip(),
@@ -1031,7 +1031,7 @@ def ensure_hanlp_model() -> dict:
         all_enabled_tasks_ready = all_enabled_tasks_ready and task_ready
         task_results[task_key] = {
             "status": task_state.get("status") or "unavailable",
-            "reason_code": task_state.get("reason_code") or "HANLP2_TASK_LOAD_FAILED",
+            "reason_code": task_state.get("reason_code") or "HANLP_TASK_LOAD_FAILED",
             "reason": task_state.get("reason") or "HanLP task is unavailable.",
             "task_name": str(getattr(task_cfg, "task_name", task_key) or task_key).strip(),
             "artifact_key": str(getattr(task_cfg, "artifact_key", task_key) or task_key).strip(),
@@ -1055,7 +1055,7 @@ def ensure_hanlp_model() -> dict:
         "status_after": status_after,
         "model_result": {
             "status": model_state.get("status") or "unavailable",
-            "reason_code": model_state.get("reason_code") or "HANLP2_MODEL_LOAD_FAILED",
+            "reason_code": model_state.get("reason_code") or "HANLP_MODEL_LOAD_FAILED",
             "reason": model_state.get("reason") or "HanLP2 tokenizer model is unavailable.",
             "model_id": str(getattr(_nlp_config(config), "model_id", "") or "").strip(),
         },

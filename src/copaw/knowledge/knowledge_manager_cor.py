@@ -130,7 +130,7 @@ def write_chunk_cor_artifacts(
         if ready and config is not None:
             # HanLP coreference is intentionally disabled in CoPaw runtime.
             for chunk in group:
-                chunk["cor_reason_code"] = "HANLP2_COREF_NOT_OPEN_SOURCE"
+                chunk["cor_reason_code"] = "HANLP_COREF_NOT_OPEN_SOURCE"
                 chunk["cor_reason"] = (
                     "HanLP coreference_resolution is not open-source and is disabled in CoPaw runtime."
                 )

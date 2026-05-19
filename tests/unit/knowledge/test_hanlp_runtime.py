@@ -38,7 +38,7 @@ class _FakeStdin:
         payload = self._mode_payloads.get(mode) or self._mode_payloads.get("*") or {
             "engine": "hanlp2",
             "status": "unavailable",
-            "reason_code": "HANLP2_WORKER_PROTOCOL_ERROR",
+            "reason_code": "HANLP_WORKER_PROTOCOL_ERROR",
             "reason": f"Unexpected mode: {mode}",
         }
         self._buffer.append(json.dumps(payload, ensure_ascii=False) + "\n")
@@ -146,7 +146,7 @@ def test_probe_reports_unconfigured_sidecar_by_default() -> None:
     state = runtime.probe(Config().knowledge)
 
     assert state["status"] == "unavailable"
-    assert state["reason_code"] == "HANLP2_SIDECAR_UNCONFIGURED"
+    assert state["reason_code"] == "HANLP_SIDECAR_UNCONFIGURED"
 
 
 def test_probe_reports_missing_python_executable(tmp_path: Path) -> None:
@@ -158,7 +158,7 @@ def test_probe_reports_missing_python_executable(tmp_path: Path) -> None:
     state = runtime.probe(config)
 
     assert state["status"] == "unavailable"
-    assert state["reason_code"] == "HANLP2_SIDECAR_PYTHON_MISSING"
+    assert state["reason_code"] == "HANLP_SIDECAR_PYTHON_MISSING"
 
 
 def test_probe_uses_sidecar_bridge_json() -> None:
@@ -171,7 +171,7 @@ def test_probe_uses_sidecar_bridge_json() -> None:
         "probe": {
             "engine": "hanlp2",
             "status": "ready",
-            "reason_code": "HANLP2_READY",
+            "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
         },
     }
@@ -183,7 +183,7 @@ def test_probe_uses_sidecar_bridge_json() -> None:
         state = runtime.probe(config)
 
     assert state["status"] == "ready"
-    assert state["reason_code"] == "HANLP2_READY"
+    assert state["reason_code"] == "HANLP_READY"
 
 
 def test_start_worker_injects_repo_src_into_pythonpath() -> None:
@@ -261,7 +261,7 @@ def load(name):
     assert completed.returncode == 0
     parsed = json.loads(completed.stdout)
     assert parsed["status"] == "ready"
-    assert parsed["reason_code"] == "HANLP2_READY"
+    assert parsed["reason_code"] == "HANLP_READY"
     assert parsed["resolved_model"] == "FINE_ELECTRA_SMALL_ZH"
     assert parsed["tokens"] == []
 
@@ -276,13 +276,13 @@ def test_tokenize_returns_tokens_from_sidecar() -> None:
         "probe": {
             "engine": "hanlp2",
             "status": "ready",
-            "reason_code": "HANLP2_READY",
+            "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
         },
         "tokenize": {
             "engine": "hanlp2",
             "status": "ready",
-            "reason_code": "HANLP2_READY",
+            "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
             "tokens": ["Agent", "关系抽取"],
         },
@@ -308,13 +308,13 @@ def test_model_status_returns_ready_when_sidecar_reports_model_ready() -> None:
         "probe": {
             "engine": "hanlp2",
             "status": "ready",
-            "reason_code": "HANLP2_READY",
+            "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
         },
         "model_status": {
             "engine": "hanlp2",
             "status": "ready",
-            "reason_code": "HANLP2_MODEL_READY",
+            "reason_code": "HANLP_MODEL_READY",
             "reason": "HanLP2 tokenizer model is ready.",
         },
     }
@@ -326,7 +326,7 @@ def test_model_status_returns_ready_when_sidecar_reports_model_ready() -> None:
         state = runtime.model_status(config)
 
     assert state["status"] == "ready"
-    assert state["reason_code"] == "HANLP2_MODEL_READY"
+    assert state["reason_code"] == "HANLP_MODEL_READY"
 
 
 def test_local_models_status_alias_returns_model_status() -> None:
@@ -339,13 +339,13 @@ def test_local_models_status_alias_returns_model_status() -> None:
         "probe": {
             "engine": "hanlp2",
             "status": "ready",
-            "reason_code": "HANLP2_READY",
+            "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
         },
         "model_status": {
             "engine": "hanlp2",
             "status": "ready",
-            "reason_code": "HANLP2_MODEL_READY",
+            "reason_code": "HANLP_MODEL_READY",
             "reason": "HanLP2 tokenizer model is ready.",
         },
     }
@@ -357,7 +357,7 @@ def test_local_models_status_alias_returns_model_status() -> None:
         state = runtime.local_models_status(config)
 
     assert state["status"] == "ready"
-    assert state["reason_code"] == "HANLP2_MODEL_READY"
+    assert state["reason_code"] == "HANLP_MODEL_READY"
 
 
 def test_ensure_model_returns_unavailable_when_sidecar_reports_model_failure() -> None:
@@ -370,13 +370,13 @@ def test_ensure_model_returns_unavailable_when_sidecar_reports_model_failure() -
         "probe": {
             "engine": "hanlp2",
             "status": "ready",
-            "reason_code": "HANLP2_READY",
+            "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
         },
         "ensure_model": {
             "engine": "hanlp2",
             "status": "unavailable",
-            "reason_code": "HANLP2_MODEL_LOAD_FAILED",
+            "reason_code": "HANLP_MODEL_LOAD_FAILED",
             "reason": "HanLP2 model load failed: RuntimeError.",
         },
     }
@@ -388,7 +388,7 @@ def test_ensure_model_returns_unavailable_when_sidecar_reports_model_failure() -
         state = runtime.ensure_model(config)
 
     assert state["status"] == "unavailable"
-    assert state["reason_code"] == "HANLP2_MODEL_LOAD_FAILED"
+    assert state["reason_code"] == "HANLP_MODEL_LOAD_FAILED"
 
 
 def test_default_task_matrix_contains_l2_baseline_tasks() -> None:
@@ -413,13 +413,13 @@ def test_task_status_returns_ready_when_sidecar_reports_task_ready() -> None:
         "probe": {
             "engine": "hanlp2",
             "status": "ready",
-            "reason_code": "HANLP2_READY",
+            "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
         },
         "task_status": {
             "engine": "hanlp2",
             "status": "ready",
-            "reason_code": "HANLP2_TASK_READY",
+            "reason_code": "HANLP_TASK_READY",
             "reason": "HanLP task is ready.",
         },
     }
@@ -431,7 +431,7 @@ def test_task_status_returns_ready_when_sidecar_reports_task_ready() -> None:
         state = runtime.task_status("ner_msra", config)
 
     assert state["status"] == "ready"
-    assert state["reason_code"] == "HANLP2_TASK_READY"
+    assert state["reason_code"] == "HANLP_TASK_READY"
 
 
 def test_run_task_returns_structured_result_from_sidecar() -> None:
@@ -444,13 +444,13 @@ def test_run_task_returns_structured_result_from_sidecar() -> None:
         "probe": {
             "engine": "hanlp2",
             "status": "ready",
-            "reason_code": "HANLP2_READY",
+            "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
         },
         "run_task": {
             "engine": "hanlp2",
             "status": "ready",
-            "reason_code": "HANLP2_TASK_READY",
+            "reason_code": "HANLP_TASK_READY",
             "reason": "HanLP task is ready.",
             "task_result": [{"span": [0, 5], "label": "组织名"}],
         },
@@ -481,7 +481,7 @@ def test_run_task_uses_task_specific_timeout_and_disables_timeout_retry() -> Non
         return {
             "engine": "hanlp2",
             "status": "ready",
-            "reason_code": "HANLP2_READY",
+            "reason_code": "HANLP_READY",
             "reason": "ready",
         }
 
@@ -494,7 +494,7 @@ def test_run_task_uses_task_specific_timeout_and_disables_timeout_retry() -> Non
         return {
             "engine": "hanlp2",
             "status": "ready",
-            "reason_code": "HANLP2_TASK_READY",
+            "reason_code": "HANLP_TASK_READY",
             "reason": "HanLP task is ready.",
             "task_result": [{"text": "微软", "label": "ORG"}],
         }
@@ -528,7 +528,7 @@ def test_task_status_uses_task_specific_timeout_and_disables_timeout_retry() -> 
         return {
             "engine": "hanlp2",
             "status": "ready",
-            "reason_code": "HANLP2_READY",
+            "reason_code": "HANLP_READY",
             "reason": "ready",
         }
 
@@ -541,7 +541,7 @@ def test_task_status_uses_task_specific_timeout_and_disables_timeout_retry() -> 
         return {
             "engine": "hanlp2",
             "status": "ready",
-            "reason_code": "HANLP2_TASK_READY",
+            "reason_code": "HANLP_TASK_READY",
             "reason": "HanLP task is ready.",
         }
 
@@ -570,7 +570,7 @@ def test_run_task_returns_degraded_when_worker_response_times_out() -> None:
         "run_task": {
             "engine": "hanlp2",
             "status": "ready",
-            "reason_code": "HANLP2_TASK_READY",
+            "reason_code": "HANLP_TASK_READY",
             "reason": "HanLP task is ready.",
             "task_result": [{"text": "微软", "label": "ORG"}],
         },
@@ -579,7 +579,7 @@ def test_run_task_returns_degraded_when_worker_response_times_out() -> None:
     runtime.probe = lambda _config: {  # type: ignore[method-assign]
         "engine": "hanlp2",
         "status": "ready",
-        "reason_code": "HANLP2_READY",
+        "reason_code": "HANLP_READY",
         "reason": "ready",
     }
     runtime._ensure_sidecar = lambda payload: Path("/bin/python3")  # type: ignore[assignment]
@@ -589,7 +589,7 @@ def test_run_task_returns_degraded_when_worker_response_times_out() -> None:
 
     assert result == []
     assert state["status"] == "degraded"
-    assert state["reason_code"] == "HANLP2_WORKER_TIMEOUT"
+    assert state["reason_code"] == "HANLP_WORKER_TIMEOUT"
     assert state["consecutive_timeouts"] == 1
 
 
@@ -606,7 +606,7 @@ def test_run_task_short_circuits_after_timeout_breaker_opens() -> None:
         "run_task": {
             "engine": "hanlp2",
             "status": "ready",
-            "reason_code": "HANLP2_TASK_READY",
+            "reason_code": "HANLP_TASK_READY",
             "reason": "HanLP task is ready.",
             "task_result": [{"text": "微软", "label": "ORG"}],
         },
@@ -621,7 +621,7 @@ def test_run_task_short_circuits_after_timeout_breaker_opens() -> None:
     runtime.probe = lambda _config: {  # type: ignore[method-assign]
         "engine": "hanlp2",
         "status": "ready",
-        "reason_code": "HANLP2_READY",
+        "reason_code": "HANLP_READY",
         "reason": "ready",
     }
     runtime._ensure_sidecar = lambda payload: Path("/bin/python3")  # type: ignore[assignment]
@@ -631,10 +631,10 @@ def test_run_task_short_circuits_after_timeout_breaker_opens() -> None:
         second_result, second_state = runtime.run_task("ner_msra", "微软发布新模型", config)
 
     assert first_result == []
-    assert first_state["reason_code"] == "HANLP2_WORKER_TIMEOUT"
+    assert first_state["reason_code"] == "HANLP_WORKER_TIMEOUT"
     assert second_result == []
     assert second_state["status"] == "busy"
-    assert second_state["reason_code"] == "HANLP2_CIRCUIT_OPEN"
+    assert second_state["reason_code"] == "HANLP_CIRCUIT_OPEN"
     assert second_state["circuit_open"] is True
     assert popen_calls["count"] == 1
 
@@ -649,13 +649,13 @@ def test_run_ner_returns_structured_result_from_sidecar() -> None:
         "probe": {
             "engine": "hanlp2",
             "status": "ready",
-            "reason_code": "HANLP2_READY",
+            "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
         },
         "run_task": {
             "engine": "hanlp2",
             "status": "ready",
-            "reason_code": "HANLP2_TASK_READY",
+            "reason_code": "HANLP_TASK_READY",
             "reason": "HanLP task is ready.",
             "task_result": [{"text": "微软", "label": "ORG", "span": [0, 2]}],
         },
@@ -681,13 +681,13 @@ def test_run_dep_returns_structured_result_from_sidecar() -> None:
         "probe": {
             "engine": "hanlp2",
             "status": "ready",
-            "reason_code": "HANLP2_READY",
+            "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
         },
         "run_task": {
             "engine": "hanlp2",
             "status": "ready",
-            "reason_code": "HANLP2_TASK_READY",
+            "reason_code": "HANLP_TASK_READY",
             "reason": "HanLP task is ready.",
             "task_result": [
                 {"token": "微软", "head": 2, "deprel": "nsubj"},
@@ -759,7 +759,7 @@ def parse(text, tasks=None):
     assert completed.returncode == 0
     parsed = json.loads(completed.stdout)
     assert parsed["status"] == "ready"
-    assert parsed["reason_code"] == "HANLP2_TASK_READY"
+    assert parsed["reason_code"] == "HANLP_TASK_READY"
     assert parsed["task_result"] == [{"text": "微软发布新模型", "label": "ORG"}]
 
 
@@ -807,7 +807,7 @@ def test_bridge_run_task_returns_unavailable_for_cor_task(tmp_path: Path) -> Non
     assert completed.returncode == 0
     parsed = json.loads(completed.stdout)
     assert parsed["status"] == "error"
-    assert parsed["reason_code"] == "HANLP2_COREF_NOT_OPEN_SOURCE"
+    assert parsed["reason_code"] == "HANLP_COREF_NOT_OPEN_SOURCE"
     assert parsed["task_result"] is None
 
 
@@ -870,7 +870,7 @@ def parse(text, tasks=None):
     assert completed.returncode == 0
     parsed = json.loads(completed.stdout)
     assert parsed["status"] == "ready"
-    assert parsed["reason_code"] == "HANLP2_TASK_READY"
+    assert parsed["reason_code"] == "HANLP_TASK_READY"
     assert parsed["task_result"] == [{"text": "微软", "label": "ORG"}]
 
 
@@ -929,7 +929,7 @@ def load(model_id):
     assert completed.returncode == 0
     parsed = json.loads(completed.stdout)
     assert parsed["status"] == "ready"
-    assert parsed["reason_code"] == "HANLP2_TASK_READY"
+    assert parsed["reason_code"] == "HANLP_TASK_READY"
     assert parsed["task_result"] == [{"text": "微软", "label": "ORG", "span": [0, 2]}]
 
 
@@ -994,7 +994,7 @@ def tokenize(text):
     assert completed.returncode == 0
     parsed = json.loads(completed.stdout)
     assert parsed["status"] == "ready"
-    assert parsed["reason_code"] == "HANLP2_TASK_READY"
+    assert parsed["reason_code"] == "HANLP_TASK_READY"
     assert parsed["task_result"] == [{"text": "微软", "label": "ORG", "span": [0, 2]}]
 
 
@@ -1008,13 +1008,13 @@ def test_persistent_worker_reuses_same_pid_between_calls() -> None:
         "probe": {
             "engine": "hanlp2",
             "status": "ready",
-            "reason_code": "HANLP2_READY",
+            "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
         },
         "tokenize": {
             "engine": "hanlp2",
             "status": "ready",
-            "reason_code": "HANLP2_READY",
+            "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
             "tokens": ["微软", "发布"],
         },
@@ -1043,13 +1043,13 @@ def test_persistent_worker_restarts_on_channel_failure() -> None:
         "probe": {
             "engine": "hanlp2",
             "status": "ready",
-            "reason_code": "HANLP2_READY",
+            "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
         },
         "tokenize": {
             "engine": "hanlp2",
             "status": "ready",
-            "reason_code": "HANLP2_READY",
+            "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
             "tokens": ["微软", "发布"],
         },
@@ -1061,7 +1061,7 @@ def test_persistent_worker_restarts_on_channel_failure() -> None:
     runtime._probe_cache_state = {
         "engine": "hanlp2",
         "status": "ready",
-        "reason_code": "HANLP2_READY",
+        "reason_code": "HANLP_READY",
         "reason": "HanLP2 semantic engine is ready.",
     }
     runtime._worker_process = _BrokenPopen()
@@ -1089,13 +1089,13 @@ def test_persistent_worker_restarts_when_config_cache_key_changes() -> None:
         "probe": {
             "engine": "hanlp2",
             "status": "ready",
-            "reason_code": "HANLP2_READY",
+            "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
         },
         "tokenize": {
             "engine": "hanlp2",
             "status": "ready",
-            "reason_code": "HANLP2_READY",
+            "reason_code": "HANLP_READY",
             "reason": "HanLP2 semantic engine is ready.",
             "tokens": ["微软", "发布"],
         },

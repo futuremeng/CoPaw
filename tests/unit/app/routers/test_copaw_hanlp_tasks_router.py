@@ -19,7 +19,7 @@ class _FakeRuntime:
         _FakeRuntime.last_ner_model_id = getattr(getattr(config, "nlp", None), "model_id", None)
         return [{"text": text, "label": "ORG", "span": [0, len(text)]}], {
             "status": "ready",
-            "reason_code": "HANLP2_TASK_READY",
+            "reason_code": "HANLP_TASK_READY",
             "reason": "HanLP task is ready.",
         }
 
@@ -27,7 +27,7 @@ class _FakeRuntime:
         _FakeRuntime.last_dep_model_id = getattr(getattr(config, "nlp", None), "model_id", None)
         return [{"token": text, "head": 0, "deprel": "root"}], {
             "status": "ready",
-            "reason_code": "HANLP2_TASK_READY",
+            "reason_code": "HANLP_TASK_READY",
             "reason": "HanLP task is ready.",
         }
 
@@ -35,7 +35,7 @@ class _FakeRuntime:
         _ = config
         return [token for token in text.split(" ") if token], {
             "status": "ready",
-            "reason_code": "HANLP2_TASK_READY",
+            "reason_code": "HANLP_TASK_READY",
             "reason": "HanLP task is ready.",
         }
 
@@ -50,12 +50,12 @@ class _FakeRuntime:
                 ]
             ], {
                 "status": "ready",
-                "reason_code": "HANLP2_TASK_READY",
+                "reason_code": "HANLP_TASK_READY",
                 "reason": "HanLP task is ready.",
             }
         return {"task": task_key, "text": text}, {
             "status": "ready",
-            "reason_code": "HANLP2_TASK_READY",
+            "reason_code": "HANLP_TASK_READY",
             "reason": "HanLP task is ready.",
         }
 
@@ -63,7 +63,7 @@ class _FakeRuntime:
         _ = config
         return [[token for token in text.split(" ") if token] for text in texts], {
             "status": "ready",
-            "reason_code": "HANLP2_BATCH_READY",
+            "reason_code": "HANLP_BATCH_READY",
             "reason": "HanLP batch tokenization finished successfully.",
             "duration_ms": 1,
             "sidecar_elapsed_ms": 1,
@@ -86,7 +86,7 @@ class _FakeRuntime:
                 for _ in texts
             ], {
                 "status": "ready",
-                "reason_code": "HANLP2_BATCH_READY",
+                "reason_code": "HANLP_BATCH_READY",
                 "reason": "HanLP batch task finished successfully.",
                 "duration_ms": 1,
                 "sidecar_elapsed_ms": 1,
@@ -96,7 +96,7 @@ class _FakeRuntime:
             }
         return [{"task": task_key, "text": text} for text in texts], {
             "status": "ready",
-            "reason_code": "HANLP2_BATCH_READY",
+            "reason_code": "HANLP_BATCH_READY",
             "reason": "HanLP batch task finished successfully.",
             "duration_ms": 1,
             "sidecar_elapsed_ms": 1,
@@ -118,18 +118,18 @@ class _FakeRuntime:
                 ]
             ], {
                 "status": "ready",
-                "reason_code": "HANLP2_TASK_READY",
+                "reason_code": "HANLP_TASK_READY",
                 "reason": "HanLP task is ready.",
             }
         if task_key == "ner_msra":
             return [["".join(tokens), "ORGANIZATION", 0, len(tokens)]], {
                 "status": "ready",
-                "reason_code": "HANLP2_TASK_READY",
+                "reason_code": "HANLP_TASK_READY",
                 "reason": "HanLP task is ready.",
             }
         return {"task": task_key, "tokens": tokens}, {
             "status": "ready",
-            "reason_code": "HANLP2_TASK_READY",
+            "reason_code": "HANLP_TASK_READY",
             "reason": "HanLP task is ready.",
         }
 
@@ -152,7 +152,7 @@ class _FakeRuntime:
                 )
             return results, {
                 "status": "ready",
-                "reason_code": "HANLP2_BATCH_READY",
+                "reason_code": "HANLP_BATCH_READY",
                 "reason": "HanLP batch task finished successfully.",
                 "duration_ms": 1,
                 "sidecar_elapsed_ms": 1,
@@ -162,7 +162,7 @@ class _FakeRuntime:
             }
         return [{"task": task_key, "tokens": tokens} for tokens in tokens_batch], {
             "status": "ready",
-            "reason_code": "HANLP2_BATCH_READY",
+            "reason_code": "HANLP_BATCH_READY",
             "reason": "HanLP batch task finished successfully.",
             "duration_ms": 1,
             "sidecar_elapsed_ms": 1,
@@ -177,7 +177,7 @@ class _UnavailableRuntime:
         _ = (text, config)
         return [{"text": "微软", "label": "ORG"}], {
             "status": "unavailable",
-            "reason_code": "HANLP2_MODEL_LOAD_FAILED",
+            "reason_code": "HANLP_MODEL_LOAD_FAILED",
             "reason": "HanLP model load failed.",
         }
 
@@ -185,7 +185,7 @@ class _UnavailableRuntime:
         _ = (text, config)
         return [{"token": "微软", "head": 0, "deprel": "root"}], {
             "status": "unavailable",
-            "reason_code": "HANLP2_MODEL_LOAD_FAILED",
+            "reason_code": "HANLP_MODEL_LOAD_FAILED",
             "reason": "HanLP model load failed.",
         }
 
@@ -193,7 +193,7 @@ class _UnavailableRuntime:
         _ = (text, config)
         return [], {
             "status": "unavailable",
-            "reason_code": "HANLP2_MODEL_LOAD_FAILED",
+            "reason_code": "HANLP_MODEL_LOAD_FAILED",
             "reason": "HanLP model load failed.",
         }
 
@@ -201,7 +201,7 @@ class _UnavailableRuntime:
         _ = (task_key, text, config)
         return None, {
             "status": "unavailable",
-            "reason_code": "HANLP2_MODEL_LOAD_FAILED",
+            "reason_code": "HANLP_MODEL_LOAD_FAILED",
             "reason": "HanLP model load failed.",
         }
 
@@ -209,7 +209,7 @@ class _UnavailableRuntime:
         _ = (texts, config)
         return [[] for _ in texts], {
             "status": "unavailable",
-            "reason_code": "HANLP2_MODEL_LOAD_FAILED",
+            "reason_code": "HANLP_MODEL_LOAD_FAILED",
             "reason": "HanLP model load failed.",
         }
 
@@ -217,7 +217,7 @@ class _UnavailableRuntime:
         _ = (task_key, texts, config)
         return [None for _ in texts], {
             "status": "unavailable",
-            "reason_code": "HANLP2_MODEL_LOAD_FAILED",
+            "reason_code": "HANLP_MODEL_LOAD_FAILED",
             "reason": "HanLP model load failed.",
         }
 
@@ -225,7 +225,7 @@ class _UnavailableRuntime:
         _ = (task_key, tokens, config)
         return None, {
             "status": "unavailable",
-            "reason_code": "HANLP2_MODEL_LOAD_FAILED",
+            "reason_code": "HANLP_MODEL_LOAD_FAILED",
             "reason": "HanLP model load failed.",
         }
 
@@ -233,7 +233,7 @@ class _UnavailableRuntime:
         _ = (task_key, tokens_batch, config)
         return [None for _ in tokens_batch], {
             "status": "unavailable",
-            "reason_code": "HANLP2_MODEL_LOAD_FAILED",
+            "reason_code": "HANLP_MODEL_LOAD_FAILED",
             "reason": "HanLP model load failed.",
         }
 
@@ -243,7 +243,7 @@ class _NestedListNerRuntime(_FakeRuntime):
         _ = config
         return [[], [], [], [[text[:1], "PERSON", 0, 1]]], {
             "status": "ready",
-            "reason_code": "HANLP2_TASK_READY",
+            "reason_code": "HANLP_TASK_READY",
             "reason": "HanLP task is ready.",
         }
 
@@ -266,7 +266,7 @@ class _FragmentedNerRuntime(_FakeRuntime):
         # Simulate sidecar returning fragmented entities with reset local spans.
         return [["北", "LOCATION", 0, 1], ["京", "LOCATION", 0, 1]], {
             "status": "ready",
-            "reason_code": "HANLP2_TASK_READY",
+            "reason_code": "HANLP_TASK_READY",
             "reason": "HanLP task is ready.",
         }
 
@@ -277,7 +277,7 @@ class _SlowTokenizeRuntime(_FakeRuntime):
         time.sleep(0.4)
         return ["微软", "发布", "新模型"], {
             "status": "ready",
-            "reason_code": "HANLP2_TASK_READY",
+            "reason_code": "HANLP_TASK_READY",
             "reason": "HanLP task is ready.",
         }
 
@@ -416,7 +416,7 @@ def test_copaw_hanlp_ner_run_endpoint(monkeypatch):
     assert payload["task_key"] == "ner"
     assert payload["request_id"] == "req-ner-1"
     assert payload["status"] == "ready"
-    assert payload["reason_code"] == "HANLP2_TASK_READY"
+    assert payload["reason_code"] == "HANLP_TASK_READY"
     assert payload["resolved_model"] == "MSRA_NER_ELECTRA_SMALL_ZH"
     assert payload["strategy_mode"] == "auto"
     assert payload["detected_style"] == "modern"
@@ -440,7 +440,7 @@ def test_copaw_hanlp_dep_run_endpoint(monkeypatch):
     assert payload["task_key"] == "dep"
     assert payload["request_id"] == "req-dep-1"
     assert payload["status"] == "ready"
-    assert payload["reason_code"] == "HANLP2_TASK_READY"
+    assert payload["reason_code"] == "HANLP_TASK_READY"
     assert payload["resolved_model"] == "MSRA_NER_BERT_BASE_ZH"
     assert payload["strategy_mode"] == "auto"
     assert payload["detected_style"] == "modern"
@@ -464,7 +464,7 @@ def test_copaw_hanlp_ner_unavailable_hides_result_payload(monkeypatch):
     assert payload["task_key"] == "ner"
     assert payload["request_id"] == "req-ner-unavailable"
     assert payload["status"] == "unavailable"
-    assert payload["reason_code"] == "HANLP2_MODEL_LOAD_FAILED"
+    assert payload["reason_code"] == "HANLP_MODEL_LOAD_FAILED"
     assert payload["fallback_used"] is True
     assert payload["result"] is None
 
@@ -485,7 +485,7 @@ def test_copaw_hanlp_dep_unavailable_hides_result_payload(monkeypatch):
     assert payload["task_key"] == "dep"
     assert payload["request_id"] == "req-dep-unavailable"
     assert payload["status"] == "unavailable"
-    assert payload["reason_code"] == "HANLP2_MODEL_LOAD_FAILED"
+    assert payload["reason_code"] == "HANLP_MODEL_LOAD_FAILED"
     assert payload["fallback_used"] is True
     assert payload["result"] is None
 
@@ -786,7 +786,7 @@ def test_copaw_hanlp_tokenize_batch_of_five_sentences(monkeypatch):
     payload = response.json()
     assert payload["task_key"] == "tokenize"
     assert payload["status"] == "ready"
-    assert payload["reason_code"] == "HANLP2_BATCH_READY"
+    assert payload["reason_code"] == "HANLP_BATCH_READY"
     assert isinstance(payload["result"], list)
     assert len(payload["result"]) == 5
     assert payload["result"][0]["status"] == "ready"
@@ -834,7 +834,7 @@ def test_copaw_hanlp_tokenize_run_slash_endpoint_degrades_on_route_timeout(monke
     payload = response.json()
     assert payload["task_key"] == "tokenize"
     assert payload["status"] == "degraded"
-    assert payload["reason_code"] == "HANLP2_ROUTE_TIMEOUT"
+    assert payload["reason_code"] == "HANLP_ROUTE_TIMEOUT"
     assert payload["result"] is None
     assert payload["fallback_used"] is True
     assert payload["duration_ms"] < 350
@@ -887,7 +887,7 @@ def test_copaw_hanlp_tokenize_run_degrades_when_route_setup_exceeds_deadline(mon
     payload = response.json()
     assert payload["task_key"] == "tokenize"
     assert payload["status"] == "degraded"
-    assert payload["reason_code"] == "HANLP2_ROUTE_TIMEOUT"
+    assert payload["reason_code"] == "HANLP_ROUTE_TIMEOUT"
     assert payload["result"] is None
     assert payload["fallback_used"] is True
 

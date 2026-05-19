@@ -114,7 +114,7 @@ def write_chunk_tokenize_artifacts(
 			raw_tokens, state = manager._semantic_runtime.tokenize(line_text, config)
 			manager._remember_semantic_engine_state(state)
 			if str(state.get("status") or "").strip().lower() != "ready":
-				reason_code = str(state.get("reason_code") or "HANLP2_TOKENIZE_FAILED").strip() or "HANLP2_TOKENIZE_FAILED"
+				reason_code = str(state.get("reason_code") or "HANLP_TOKENIZE_FAILED").strip() or "HANLP_TOKENIZE_FAILED"
 				reason = str(state.get("reason") or "HanLP2 sidecar tokenization failed.").strip()
 				raise RuntimeError(f"Tokenize stage failed at line {line_index}: {reason_code} {reason}")
 			tokens = manager._flatten_tokenize_items(raw_tokens)
