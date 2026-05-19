@@ -290,30 +290,42 @@ async def list_chats(
 
 @router.post("", response_model=ChatSpec)
 async def create_chat(
-    request: ChatSpec,
-    mgr: ChatManager = Depends(get_chat_manager),
+    request: Request,
+    payload: ChatSpec,
 ):
     """Create a new chat.
 
     Server generates chat_id (UUID) automatically.
 
     Args:
-        request: Chat creation request
-        mgr: Chat manager dependency
+        request: FastAPI request object
+        payload: Chat creation request
 
     Returns:
         Created chat spec with UUID
     """
+    workspace = get_loaded_agent_for_request(request)
+    loaded_mgr = workspace.chat_manager if workspace is not None else None
+    use_loaded_mgr = loaded_mgr is not None
+
+    if not use_loaded_mgr:
+        workspace_dir = _resolve_chat_workspace_dir(request)
+        repo = JsonChatRepository(workspace_dir / "chats.json")
+
     chat_id = str(uuid4())
     spec = ChatSpec(
         id=chat_id,
-        name=request.name,
-        session_id=request.session_id,
-        user_id=request.user_id,
-        channel=request.channel,
-        meta=request.meta,
+        name=payload.name,
+        session_id=payload.session_id,
+        user_id=payload.user_id,
+        channel=payload.channel,
+        meta=payload.meta,
     )
-    return await mgr.create_chat(spec)
+    if use_loaded_mgr:
+        return await loaded_mgr.create_chat(spec)
+
+    await repo.upsert_chat(spec)
+    return spec
 
 
 @router.post("/batch-delete", response_model=dict)
