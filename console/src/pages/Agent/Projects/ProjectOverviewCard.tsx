@@ -1040,26 +1040,9 @@ export default function ProjectOverviewCard({
 
   if (treeOnly) {
     return (
-      <Card
-        style={{
-          height: "100%",
-          display: "flex",
-          flexDirection: "column",
-          minHeight: 0,
-          overflow: "hidden",
-        }}
-        title={<span className={styles.sectionTitle}>{t("projects.projectSpaceFiles", "Project Space Files")}</span>}
-        styles={{
-          body: {
-            padding: 12,
-            display: "flex",
-            flexDirection: "column",
-            flex: 1,
-            minHeight: 0,
-            overflow: "hidden",
-          },
-        }}
-        extra={(
+      <div className={`${styles.scrollContainer} ${styles.treeOnlyScrollContainer}`}>
+        <div className={styles.treeOnlyHeaderRow}>
+          <span className={styles.sectionTitle}>{t("projects.projectSpaceFiles", "Project Space Files")}</span>
           <div className={styles.panelExtraActions}>
             <div className={styles.latestUpdatedFileWrap}>
               <Tooltip title={latestUpdatedFilePath || "--"}>
@@ -1094,109 +1077,106 @@ export default function ProjectOverviewCard({
               {t("projects.refreshFiles", "Refresh")}
             </Button>
           </div>
-        )}
-      >
-        <div className={`${styles.scrollContainer} ${styles.treeOnlyScrollContainer}`}>
-          <div className={styles.treeUploadRow}>
-            <Button type="primary" className={styles.treeUploadButton} onClick={onUploadFiles}>
-              {t("projects.upload.button", "Upload Files")}
-            </Button>
+        </div>
+        <div className={styles.treeUploadRow}>
+          <Button type="primary" className={styles.treeUploadButton} onClick={onUploadFiles}>
+            {t("projects.upload.button", "Upload Files")}
+          </Button>
+        </div>
+        <div className={`${styles.overviewTreeToolbar} ${styles.treeToolbarSticky}`}>
+          <div className={styles.treeToolbarLeft}>
+            <Input
+              size="small"
+              allowClear
+              value={treeFilterQuery}
+              onChange={(event) => {
+                setTreeFilterQuery(event.target.value);
+              }}
+              className={styles.treeFilterInput}
+              prefix={<SearchOutlined />}
+              placeholder={t("projects.treeFilterPlaceholder", "Filter files")}
+            />
           </div>
-          <div className={`${styles.overviewTreeToolbar} ${styles.treeToolbarSticky}`}>
-            <div className={styles.treeToolbarLeft}>
-              <Input
-                size="small"
-                allowClear
-                value={treeFilterQuery}
-                onChange={(event) => {
-                  setTreeFilterQuery(event.target.value);
-                }}
-                className={styles.treeFilterInput}
-                prefix={<SearchOutlined />}
-                placeholder={t("projects.treeFilterPlaceholder", "Filter files")}
-              />
-            </div>
-            <div className={styles.treeToolbarRight}>
-              <Segmented
-                size="small"
-                className={styles.treeModeSegment}
-                value={treeDisplayMode}
-                onChange={(value) => onTreeDisplayModeChange(value as TreeDisplayMode)}
-                options={[
-                  { label: t("projects.treeViewMode.filter", "Filter"), value: "filter" },
-                  { label: t("projects.treeViewMode.highlight", "Highlight"), value: "highlight" },
-                ]}
-              />
-            </div>
-          </div>
-          <div
-            className={`${styles.treeTransitionShell} ${styles.treeTransitionShellFullHeight} ${treeTransitioning ? styles.treeTransitionEnter : ""}`}
-          >
-            {useLazyTreeMode && projectTreeLoading && lazyTreeData.length === 0 ? (
-              <div className={styles.centerState}>
-                <Spin />
-              </div>
-            ) : (useLazyTreeMode ? lazyTreeData : treeData).length === 0 ? (
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={emptyTreeDescription}
-              />
-            ) : (
-              <Tree
-                className={`${styles.overviewCompactTree} ${styles.overviewCompactTreeFullHeight}`}
-                selectedKeys={selectedFilePath ? [selectedFilePath] : []}
-                treeData={useLazyTreeMode ? lazyTreeData : treeData}
-                expandedKeys={expandedKeys}
-                onExpand={(keys) => {
-                  const nextKeys = normalizeTreeKeys((keys as string[]).map((key) => String(key)));
-                  const previousKeySet = new Set(expandedKeys);
-                  updateExpandedKeys(nextKeys);
-                  if (!useLazyTreeMode) {
-                    return;
-                  }
-                  for (const key of nextKeys) {
-                    if (!previousKeySet.has(key)) {
-                      const shouldForceRefresh = staleDirectorySet.has(key);
-                      void loadTreeDirectory(key, shouldForceRefresh ? { force: true } : undefined)
-                        .then((loaded) => {
-                          if (loaded && shouldForceRefresh) {
-                            onConsumeStaleDirectoryPaths?.([key]);
-                          }
-                        });
-                    }
-                  }
-                }}
-                loadData={useLazyTreeMode && onLoadProjectTreeChildren
-                  ? async (treeNode) => {
-                    const key = String(treeNode.key || "");
-                    const currentNode = findLazyTreeItem(lazyTreeItemsRef.current, key);
-                    const shouldForceRefresh = staleDirectorySet.has(key);
-                    if (!currentNode || !currentNode.is_directory || (currentNode.loaded && !shouldForceRefresh)) {
-                      return;
-                    }
-                    const loaded = await loadTreeDirectory(
-                      key,
-                      shouldForceRefresh ? { force: true } : undefined,
-                    );
-                    if (loaded && shouldForceRefresh) {
-                      onConsumeStaleDirectoryPaths?.([key]);
-                    }
-                  }
-                  : undefined}
-                onSelect={(keys) => {
-                  const key = String(keys[0] || "");
-                  const selectedLazyNode = useLazyTreeMode
-                    ? findLazyTreeItem(lazyTreeItems, key)
-                    : null;
-                  if (key && (!selectedLazyNode || !selectedLazyNode.is_directory)) {
-                    onSelectFileFromTree(key);
-                  }
-                }}
-              />
-            )}
+          <div className={styles.treeToolbarRight}>
+            <Segmented
+              size="small"
+              className={styles.treeModeSegment}
+              value={treeDisplayMode}
+              onChange={(value) => onTreeDisplayModeChange(value as TreeDisplayMode)}
+              options={[
+                { label: t("projects.treeViewMode.filter", "Filter"), value: "filter" },
+                { label: t("projects.treeViewMode.highlight", "Highlight"), value: "highlight" },
+              ]}
+            />
           </div>
         </div>
-      </Card>
+        <div
+          className={`${styles.treeTransitionShell} ${styles.treeTransitionShellFullHeight} ${treeTransitioning ? styles.treeTransitionEnter : ""}`}
+        >
+          {useLazyTreeMode && projectTreeLoading && lazyTreeData.length === 0 ? (
+            <div className={styles.centerState}>
+              <Spin />
+            </div>
+          ) : (useLazyTreeMode ? lazyTreeData : treeData).length === 0 ? (
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={emptyTreeDescription}
+            />
+          ) : (
+            <Tree
+              className={`${styles.overviewCompactTree} ${styles.overviewCompactTreeFullHeight}`}
+              selectedKeys={selectedFilePath ? [selectedFilePath] : []}
+              treeData={useLazyTreeMode ? lazyTreeData : treeData}
+              expandedKeys={expandedKeys}
+              onExpand={(keys) => {
+                const nextKeys = normalizeTreeKeys((keys as string[]).map((key) => String(key)));
+                const previousKeySet = new Set(expandedKeys);
+                updateExpandedKeys(nextKeys);
+                if (!useLazyTreeMode) {
+                  return;
+                }
+                for (const key of nextKeys) {
+                  if (!previousKeySet.has(key)) {
+                    const shouldForceRefresh = staleDirectorySet.has(key);
+                    void loadTreeDirectory(key, shouldForceRefresh ? { force: true } : undefined)
+                      .then((loaded) => {
+                        if (loaded && shouldForceRefresh) {
+                          onConsumeStaleDirectoryPaths?.([key]);
+                        }
+                      });
+                  }
+                }
+              }}
+              loadData={useLazyTreeMode && onLoadProjectTreeChildren
+                ? async (treeNode) => {
+                  const key = String(treeNode.key || "");
+                  const currentNode = findLazyTreeItem(lazyTreeItemsRef.current, key);
+                  const shouldForceRefresh = staleDirectorySet.has(key);
+                  if (!currentNode || !currentNode.is_directory || (currentNode.loaded && !shouldForceRefresh)) {
+                    return;
+                  }
+                  const loaded = await loadTreeDirectory(
+                    key,
+                    shouldForceRefresh ? { force: true } : undefined,
+                  );
+                  if (loaded && shouldForceRefresh) {
+                    onConsumeStaleDirectoryPaths?.([key]);
+                  }
+                }
+                : undefined}
+              onSelect={(keys) => {
+                const key = String(keys[0] || "");
+                const selectedLazyNode = useLazyTreeMode
+                  ? findLazyTreeItem(lazyTreeItems, key)
+                  : null;
+                if (key && (!selectedLazyNode || !selectedLazyNode.is_directory)) {
+                  onSelectFileFromTree(key);
+                }
+              }}
+            />
+          )}
+        </div>
+      </div>
     );
   }
 
