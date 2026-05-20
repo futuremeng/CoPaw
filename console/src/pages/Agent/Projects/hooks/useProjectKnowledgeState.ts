@@ -103,6 +103,7 @@ export interface ProjectKnowledgeMetricsMeta {
 }
 
 export type ProjectKnowledgeProcessingMode = "fast" | "nlp" | "agentic";
+export type ProjectKnowledgeProcessingScope = "global" | "source";
 export type ProjectKnowledgeRealtimeChannel = "project-sync" | "tasks";
 export type ProjectKnowledgeRealtimeChannelStatus = "idle" | "connecting" | "open" | "reconnecting";
 
@@ -234,6 +235,10 @@ export interface ProjectKnowledgeState {
   latestQualityLoopJob?: QualityLoopJobStatus | null;
   memifyEnabled: boolean;
   processingModes: ProjectKnowledgeModeState[];
+  resolveProcessingModeMetrics?: (
+    scope: ProjectKnowledgeProcessingScope,
+    sourceId?: string,
+  ) => Partial<Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeMetricsPayload>>;
   processingCompareModes: ProjectKnowledgeModeState[];
   processingCompareDelta: ProjectKnowledgeProcessingCompareDelta;
   processingFreshness: ProjectKnowledgeProcessingFreshness;
@@ -2585,6 +2590,48 @@ export function useProjectKnowledgeState(
     t,
   ]);
 
+  const resolveProcessingModeMetrics = useCallback((
+    scope: ProjectKnowledgeProcessingScope,
+    sourceId?: string,
+  ): Partial<Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeMetricsPayload>> => {
+    const globalPayload = (syncState?.mode_metrics || {}) as Partial<Record<
+      ProjectKnowledgeProcessingMode,
+      ProjectKnowledgeModeMetricsPayload
+    >>;
+    if (scope !== "source") {
+      return globalPayload;
+    }
+    const normalizedSourceId = String(sourceId || "").trim();
+    if (!normalizedSourceId) {
+      return globalPayload;
+    }
+    const bySourcePayload = (syncState as {
+      mode_metrics_by_source?: Record<string, Partial<Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeMetricsPayload>>>;
+    } | null)?.mode_metrics_by_source || {};
+    if (bySourcePayload[normalizedSourceId]) {
+      return bySourcePayload[normalizedSourceId];
+    }
+
+    const normalizedLookup = normalizedSourceId
+      .replace(/\\/g, "/")
+      .replace(/\/+/g, "/")
+      .replace(/\/$/, "")
+      .toLowerCase();
+    const matchedSource = projectSources.find((source) => {
+      const candidates = [source.id, source.location, source.name, source.project_id]
+        .map((item) => String(item || "").trim().replace(/\\/g, "/").replace(/\/+/g, "/").replace(/\/$/, "").toLowerCase());
+      return candidates.includes(normalizedLookup);
+    });
+    if (matchedSource) {
+      const resolvedKey = String(matchedSource.id || "").trim();
+      if (resolvedKey && bySourcePayload[resolvedKey]) {
+        return bySourcePayload[resolvedKey];
+      }
+    }
+
+    return globalPayload;
+  }, [projectSources, syncState]);
+
   const outputModes = useMemo<ProjectKnowledgeModeState[]>(
     () => HIGH_ORDER_OUTPUT_MODES
       .map((mode) => processingModes.find((item) => item.mode === mode) || null)
@@ -2936,6 +2983,7 @@ export function useProjectKnowledgeState(
     latestQualityLoopJob,
     memifyEnabled,
     processingModes,
+    resolveProcessingModeMetrics,
     processingCompareModes,
     processingCompareDelta,
     processingFreshness,
@@ -3018,6 +3066,7 @@ export function useProjectKnowledgeState(
     processingCompareModes,
     processingFreshness,
     processingModes,
+    resolveProcessingModeMetrics,
     processingScheduler,
     projectStepStats,
     projectSourceId,

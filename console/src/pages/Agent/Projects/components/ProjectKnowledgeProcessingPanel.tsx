@@ -1,10 +1,15 @@
-import { Button, Modal, Tag, Typography } from "antd";
-import { useMemo, useState } from "react";
+import { Button, Modal, Segmented, Select, Tag, Typography } from "antd";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import styles from "../index.module.less";
 import { buildProjectKnowledgeProcessingRecentHistorySectionsFromState } from "../utils/projectKnowledgeRecentHistoryModel";
+import {
+  buildKnowledgeSourceRows,
+  normalizeKnowledgeSourcePath,
+} from "../utils/projectKnowledgeSourceRows";
 import type {
   ProjectKnowledgeModeState,
+  ProjectKnowledgeProcessingScope,
   ProjectKnowledgeState,
 } from "../hooks/useProjectKnowledgeState";
 import type {
@@ -12,6 +17,7 @@ import type {
   ProjectKnowledgeModeMetricsPayload,
   ProjectKnowledgeProcessingMode,
 } from "../../../../api/types";
+import type { AgentProjectFileInfo } from "../../../../api/types/agents";
 
 type ProjectKnowledgeNlpStageKey = "tokenize" | "ner" | "syntax" | "cor";
 type ProjectKnowledgeLayerKey =
@@ -47,10 +53,12 @@ interface ProjectKnowledgeLayerRow {
 
 interface ProjectKnowledgeProcessingPanelProps {
   knowledgeState: ProjectKnowledgeState;
+  projectFiles: AgentProjectFileInfo[];
   onOpenSettings?: () => void;
   onSelectArtifactPath?: (path: string) => void | Promise<void>;
   focusedMode?: ProjectKnowledgeModeState["mode"];
   focusedStage?: ProjectKnowledgeNlpStageKey;
+  focusedScope?: ProjectKnowledgeProcessingScope;
   focusToken?: number;
 }
 
@@ -103,6 +111,55 @@ function displayRelationCount(mode: ProjectKnowledgeModeState | null): number {
     return Math.max(0, Number(mode.syntaxRelationCount || mode.relationCount || 0));
   }
   return Math.max(0, Number(mode.relationCount || 0));
+}
+
+function mergeModeStateWithMetrics(
+  baseMode: ProjectKnowledgeModeState | null,
+  metrics: ProjectKnowledgeModeMetricsPayload | null,
+): ProjectKnowledgeModeState | null {
+  if (!baseMode || !metrics) {
+    return baseMode;
+  }
+  const next = {
+    ...baseMode,
+  };
+  if (typeof metrics.document_count === "number") {
+    next.documentCount = Math.max(0, Number(metrics.document_count));
+  }
+  if (typeof metrics.chunk_count === "number") {
+    next.chunkCount = Math.max(0, Number(metrics.chunk_count));
+  }
+  if (typeof metrics.entity_count === "number") {
+    next.entityCount = Math.max(0, Number(metrics.entity_count));
+  }
+  if (typeof metrics.relation_count === "number") {
+    next.relationCount = Math.max(0, Number(metrics.relation_count));
+  }
+  if (metrics.quality_score != null && Number.isFinite(Number(metrics.quality_score))) {
+    next.qualityScore = Number(metrics.quality_score);
+  }
+  if (typeof metrics.ner_ready_chunk_count === "number") {
+    next.nerReadyChunkCount = Math.max(0, Number(metrics.ner_ready_chunk_count));
+  }
+  if (typeof metrics.ner_entity_count === "number") {
+    next.nerEntityCount = Math.max(0, Number(metrics.ner_entity_count));
+  }
+  if (typeof metrics.syntax_sentence_count === "number") {
+    next.syntaxSentenceCount = Math.max(0, Number(metrics.syntax_sentence_count));
+  }
+  if (typeof metrics.syntax_token_count === "number") {
+    next.syntaxTokenCount = Math.max(0, Number(metrics.syntax_token_count));
+  }
+  if (typeof metrics.syntax_pos_count === "number") {
+    next.syntaxPosCount = Math.max(0, Number(metrics.syntax_pos_count));
+  }
+  if (typeof metrics.pos_coverage_on_document_tokens === "number") {
+    next.posCoverageOnDocumentTokens = Number(metrics.pos_coverage_on_document_tokens);
+  }
+  if (typeof metrics.syntax_relation_count === "number") {
+    next.syntaxRelationCount = Math.max(0, Number(metrics.syntax_relation_count));
+  }
+  return next;
 }
 
 function formatPercent(value: number): string {
@@ -442,8 +499,12 @@ export default function ProjectKnowledgeProcessingPanel(
   props: ProjectKnowledgeProcessingPanelProps,
 ) {
   const { t } = useTranslation();
+  const [scope, setScope] = useState<ProjectKnowledgeProcessingScope>(props.focusedScope || "global");
   const [activeEvidence, setActiveEvidence] = useState<{
     mode: ProjectKnowledgeProcessingMode;
+    scope: ProjectKnowledgeProcessingScope;
+    sourceId?: string;
+    sourceLabel?: string;
     metricLabel: string;
     metricValue: string | number;
     metricKey: string;
@@ -454,32 +515,110 @@ export default function ProjectKnowledgeProcessingPanel(
   const visibleModes = props.knowledgeState.processingCompareModes.filter(
     (mode) => mode.mode === "nlp" || mode.mode === "agentic",
   );
-  const nlpMode = visibleModes.find((mode) => mode.mode === "nlp") || null;
-  const agenticMode = visibleModes.find((mode) => mode.mode === "agentic") || null;
-  const modeMetricsPayload = (props.knowledgeState.syncState?.mode_metrics || {}) as Partial<Record<string, ProjectKnowledgeModeMetricsPayload>>;
-  const l2EvidencePaths = (modeMetricsPayload.nlp?.evidence_paths || {}) as Record<string, string>;
-  const l3EvidencePaths = (modeMetricsPayload.agentic?.evidence_paths || {}) as Record<string, string>;
+  const sourceRows = useMemo(() => buildKnowledgeSourceRows(props.projectFiles || []), [props.projectFiles]);
+  const sourceIdByPath = useMemo(() => {
+    const lookup = new Map<string, string>();
+    for (const source of props.knowledgeState.projectSources) {
+      const sourceId = String(source.id || "").trim();
+      if (!sourceId) {
+        continue;
+      }
+      const location = normalizeKnowledgeSourcePath(source.location);
+      if (location) {
+        lookup.set(location, sourceId);
+        lookup.set(location.split("/").slice(-1)[0] || location, sourceId);
+      }
+      const name = normalizeKnowledgeSourcePath(source.name);
+      if (name) {
+        lookup.set(name, sourceId);
+      }
+    }
+    return lookup;
+  }, [props.knowledgeState.projectSources]);
+  const sourceOptions = useMemo(() => (
+    sourceRows.map((row) => {
+      const sourceId = sourceIdByPath.get(row.path) || sourceIdByPath.get(row.title) || row.path;
+      return {
+        value: sourceId,
+        label: row.path,
+        title: row.title,
+      };
+    })
+  ), [sourceIdByPath, sourceRows]);
+  const effectiveSourceId = String(
+    props.knowledgeState.selectedSourceId || sourceOptions[0]?.value || "",
+  ).trim();
+  const effectiveSourceOption = sourceOptions.find((item) => item.value === effectiveSourceId) || null;
+  const effectiveSourceLabel = String(
+    effectiveSourceOption?.label || sourceOptions.find((item) => item.value === effectiveSourceId)?.title || effectiveSourceId,
+  ).trim();
+  const supportsSourceScope = sourceOptions.length > 0 || Boolean(props.knowledgeState.selectedSourceId);
+  const effectiveScope: ProjectKnowledgeProcessingScope = scope;
+
+  useEffect(() => {
+    if (props.focusedScope) {
+      setScope(props.focusedScope);
+    }
+  }, [props.focusToken, props.focusedScope]);
+
+  const nlpBaseMode = visibleModes.find((mode) => mode.mode === "nlp") || null;
+  const agenticBaseMode = visibleModes.find((mode) => mode.mode === "agentic") || null;
+  const scopedModeMetricsPayload = useMemo(
+    () => {
+      if (props.knowledgeState.resolveProcessingModeMetrics) {
+        return props.knowledgeState.resolveProcessingModeMetrics(effectiveScope, effectiveSourceId);
+      }
+      return (props.knowledgeState.syncState?.mode_metrics || {}) as Partial<Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeMetricsPayload>>;
+    },
+    [effectiveScope, effectiveSourceId, props.knowledgeState],
+  );
+  const nlpMode = mergeModeStateWithMetrics(nlpBaseMode, scopedModeMetricsPayload.nlp || null);
+  const agenticMode = mergeModeStateWithMetrics(agenticBaseMode, scopedModeMetricsPayload.agentic || null);
+  const scopedL2EvidencePaths = (scopedModeMetricsPayload.nlp?.evidence_paths || {}) as Record<string, string>;
+  const scopedL3EvidencePaths = (scopedModeMetricsPayload.agentic?.evidence_paths || {}) as Record<string, string>;
   const l2EvidenceBundles = useMemo(
-    () => (modeMetricsPayload.nlp?.evidence_bundles || {}) as Record<string, ProjectKnowledgeMetricEvidenceBundlePayload>,
-    [modeMetricsPayload.nlp?.evidence_bundles],
+    () => (scopedModeMetricsPayload.nlp?.evidence_bundles || {}) as Record<string, ProjectKnowledgeMetricEvidenceBundlePayload>,
+    [scopedModeMetricsPayload.nlp?.evidence_bundles],
   );
   const l3EvidenceBundles = useMemo(
-    () => (modeMetricsPayload.agentic?.evidence_bundles || {}) as Record<string, ProjectKnowledgeMetricEvidenceBundlePayload>,
-    [modeMetricsPayload.agentic?.evidence_bundles],
+    () => (scopedModeMetricsPayload.agentic?.evidence_bundles || {}) as Record<string, ProjectKnowledgeMetricEvidenceBundlePayload>,
+    [scopedModeMetricsPayload.agentic?.evidence_bundles],
   );
+  const selectedSource = useMemo(() => (
+    props.knowledgeState.projectSources.find((item) => item.id === effectiveSourceId) || null
+  ), [effectiveSourceId, props.knowledgeState.projectSources]);
+  const hasScopedSourceMetrics = useMemo(() => {
+    if (effectiveScope !== "source" || !effectiveSourceId) {
+      return false;
+    }
+    const payload = (props.knowledgeState.syncState as {
+      mode_metrics_by_source?: Record<string, Partial<Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeMetricsPayload>>>;
+    } | null)?.mode_metrics_by_source || {};
+    const bySource = payload[effectiveSourceId];
+    if (!bySource || typeof bySource !== "object") {
+      return false;
+    }
+    return Boolean(bySource.nlp || bySource.agentic || bySource.fast);
+  }, [effectiveScope, effectiveSourceId, props.knowledgeState.syncState]);
+  const scopedQuantMetrics = useMemo(() => {
+    if (effectiveScope !== "source" || !selectedSource) {
+      return props.knowledgeState.quantMetrics;
+    }
+    const status = selectedSource.status || {};
+    return {
+      ...props.knowledgeState.quantMetrics,
+      documentCount: Math.max(0, Number(status.document_count || 0)),
+      chunkCount: Math.max(0, Number(status.chunk_count || 0)),
+      sentenceCount: Math.max(0, Number(status.sentence_count || 0)),
+      tokenCount: Math.max(0, Number(status.token_count || 0)),
+      relationCount: Math.max(0, Number(nlpMode?.syntaxRelationCount || 0)),
+      entityCount: Math.max(0, Number(nlpMode?.nerEntityCount || 0)),
+    };
+  }, [effectiveScope, nlpMode?.nerEntityCount, nlpMode?.syntaxRelationCount, props.knowledgeState.quantMetrics, selectedSource]);
   const { entityDelta, relationDelta } = props.knowledgeState.processingCompareDelta;
   const recentHistorySections = useMemo(
     () => buildProjectKnowledgeProcessingRecentHistorySectionsFromState(t, props.knowledgeState),
-    [
-      props.knowledgeState.fileAnalysisStats?.history,
-      props.knowledgeState.projectStepStats.build_interlinear?.history,
-      props.knowledgeState.projectStepStats.tokenize?.history,
-      props.knowledgeState.projectStepStats.pos_tagging?.history,
-      props.knowledgeState.projectStepStats.syntax_parse?.history,
-      props.knowledgeState.projectStepStats.semantic_role_labeling?.history,
-      props.knowledgeState.sourceScanStats?.history,
-      t,
-    ],
+    [props.knowledgeState, t],
   );
   const evidencePathsForModal = useMemo(() => {
     const merged: string[] = [];
@@ -510,12 +649,16 @@ export default function ProjectKnowledgeProcessingPanel(
     }
     return merged;
   }, [activeEvidence]);
+  const evidenceSourceCount = Math.max(0, Number(activeEvidence?.bundle?.source_count || 0));
+  const evidenceSampleCoverage = evidenceSourceCount > 0
+    ? `${evidencePathsForModal.length}/${evidenceSourceCount}`
+    : `${evidencePathsForModal.length}`;
   const layerRows = buildKnowledgeLayerRows({
     nlpMode,
     agenticMode,
-    l2EvidencePaths,
-    l3EvidencePaths,
-    quantMetrics: props.knowledgeState.quantMetrics,
+    l2EvidencePaths: scopedL2EvidencePaths,
+    l3EvidencePaths: scopedL3EvidencePaths,
+    quantMetrics: scopedQuantMetrics,
     entityDelta,
     relationDelta,
     t,
@@ -525,6 +668,45 @@ export default function ProjectKnowledgeProcessingPanel(
     <div className={`${styles.projectKnowledgeWorkbench} ${styles.projectKnowledgeProcessingWorkbench}`}>
       <div className={styles.projectKnowledgeProcessingScrollBody}>
         <div className={styles.projectKnowledgeProcessingStickySummary}>
+          <Typography.Text strong>{t("projects.knowledgeDock.tabProcessing", "Processing")}</Typography.Text>
+          <div className={styles.projectKnowledgeProcessingScopeBar}>
+            <Segmented
+              size="small"
+              value={effectiveScope}
+              onChange={(value) => setScope(value as ProjectKnowledgeProcessingScope)}
+              options={[
+                {
+                  label: t("copaw.projects.knowledge.processing.scopeGlobal", "Project"),
+                  value: "global",
+                },
+                {
+                  label: t("copaw.projects.knowledge.processing.scopeSource", "Source"),
+                  value: "source",
+                },
+              ]}
+            />
+            <Select
+              size="small"
+              value={effectiveSourceId || undefined}
+              options={sourceOptions}
+              disabled={effectiveScope !== "source" || !supportsSourceScope}
+              className={styles.projectKnowledgeProcessingScopeSourceSelect}
+              placeholder={t("copaw.projects.knowledge.processing.sourceSelectPlaceholder", "Select source")}
+              onChange={(value) => {
+                props.knowledgeState.setSelectedSourceId(String(value || ""));
+              }}
+            />
+          </div>
+          {effectiveScope === "source" && effectiveSourceLabel ? (
+            <Typography.Text type="secondary">
+              {t("copaw.projects.knowledge.processing.scopeSourceHint", "Current source: {{source}}", { source: effectiveSourceLabel })}
+            </Typography.Text>
+          ) : null}
+          {effectiveScope === "source" && !hasScopedSourceMetrics ? (
+            <Typography.Text type="secondary">
+              {t("copaw.projects.knowledge.processing.scopeSourceFallback", "No source-specific metrics yet; showing project-level aggregate as fallback.")}
+            </Typography.Text>
+          ) : null}
           <div className={styles.projectKnowledgeSignalGrid}>
             <div className={styles.projectKnowledgeSignalCard}>
               <Typography.Text type="secondary">{t("copaw.projects.knowledge.processing.nlpEntities")}</Typography.Text>
@@ -630,6 +812,9 @@ export default function ProjectKnowledgeProcessingPanel(
                             }
                             setActiveEvidence({
                               mode: modeForCell,
+                              scope: effectiveScope,
+                              sourceId: effectiveScope === "source" ? effectiveSourceId : undefined,
+                              sourceLabel: effectiveScope === "source" ? effectiveSourceLabel : undefined,
                               metricLabel: metric.label,
                               metricValue: metric.value,
                               metricKey: metric.evidenceKey,
@@ -672,6 +857,15 @@ export default function ProjectKnowledgeProcessingPanel(
             <Typography.Text type="secondary">
               {t("copaw.projects.knowledge.processing.evidenceMetricValue")}: {activeEvidence.metricValue}
             </Typography.Text>
+            {activeEvidence.scope === "source" && activeEvidence.sourceLabel ? (
+              <Typography.Text type="secondary">
+                {t("copaw.projects.knowledge.processing.evidenceScopeSource", "Source scope: {{source}}", { source: activeEvidence.sourceLabel })}
+              </Typography.Text>
+            ) : (
+              <Typography.Text type="secondary">
+                {t("copaw.projects.knowledge.processing.evidenceScopeGlobal", "Project scope aggregate")}
+              </Typography.Text>
+            )}
             <Typography.Text type="secondary">{activeEvidence.summary}</Typography.Text>
             <Typography.Text>
               {t("copaw.projects.knowledge.processing.evidenceAggregationHint")}
@@ -693,6 +887,9 @@ export default function ProjectKnowledgeProcessingPanel(
               </Typography.Text>
               <Typography.Text type="secondary">
                 {t("copaw.projects.knowledge.processing.evidenceSourceCount")}: {activeEvidence.bundle?.source_count || evidencePathsForModal.length || 0}
+              </Typography.Text>
+              <Typography.Text type="secondary">
+                {t("copaw.projects.knowledge.processing.evidenceSampleCoverage", "Sample coverage")}: {evidenceSampleCoverage}
               </Typography.Text>
               <div className={styles.projectKnowledgeEvidencePaths}>
                 {evidencePathsForModal.length ? evidencePathsForModal.map((pathText) => (

@@ -1,60 +1,14 @@
-import { Table, Tooltip, Typography } from "antd";
+import { Button, Table, Tooltip, Typography } from "antd";
 import { useTranslation } from "react-i18next";
 import type { AgentProjectFileInfo } from "../../../../api/types/agents";
-import { isBuiltInProjectFile } from "../utils/builtInFiles";
 import styles from "../index.module.less";
 import { formatFileSize } from "../utils/metrics";
 import type { ProjectKnowledgeState } from "../hooks/useProjectKnowledgeState";
-
-type ProjectKnowledgeSourceRow = {
-  key: string;
-  path: string;
-  title: string;
-  stage: string;
-  contentType: string;
-  size: number;
-  modifiedTime: string;
-};
-
-function normalizePath(value?: string | null): string {
-  return String(value || "")
-    .trim()
-    .replace(/\\/g, "/")
-    .replace(/\/+/g, "/")
-    .replace(/\/$/, "");
-}
-
-function formatFileLabel(value?: string | null): string {
-  const normalized = String(value || "").trim();
-  if (!normalized) {
-    return "-";
-  }
-  return normalized
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
-function isBuiltInKnowledgeSource(file: AgentProjectFileInfo): boolean {
-  if (typeof file.builtin === "boolean") {
-    return file.builtin;
-  }
-  return isBuiltInProjectFile(file.path || file.filename || "");
-}
-
-function buildSourceRows(files: AgentProjectFileInfo[]): ProjectKnowledgeSourceRow[] {
-  return files
-    .filter((file) => !file.ignored && !isBuiltInKnowledgeSource(file))
-    .map((file, index) => ({
-      key: `${file.path || file.filename || index}`,
-      path: normalizePath(file.path || file.filename),
-      title: file.filename || file.path || `${index}`,
-      stage: formatFileLabel(file.stage || "other"),
-      contentType: formatFileLabel(file.content_type || "other"),
-      size: Math.max(0, Number(file.size || 0)),
-      modifiedTime: String(file.modified_time || "").trim(),
-    }))
-    .sort((left, right) => left.path.localeCompare(right.path));
-}
+import {
+  buildKnowledgeSourceRows,
+  type ProjectKnowledgeSourceRow,
+  normalizeKnowledgeSourcePath,
+} from "../utils/projectKnowledgeSourceRows";
 
 function formatTime(value?: string): string {
   if (!value) {
@@ -70,12 +24,38 @@ function formatTime(value?: string): string {
 interface ProjectKnowledgeSourcesPanelProps {
   knowledgeState: ProjectKnowledgeState;
   projectFiles: AgentProjectFileInfo[];
+  onOpenProcessingForSource?: (sourceId: string) => void;
 }
 
 export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSourcesPanelProps) {
   const { t } = useTranslation();
-  const { knowledgeState, projectFiles } = props;
-  const sourceRows = buildSourceRows(projectFiles || []);
+  const { knowledgeState, projectFiles, onOpenProcessingForSource } = props;
+  const sourceRows = buildKnowledgeSourceRows(projectFiles || []);
+
+  const sourceIdByPath = new Map<string, string>();
+  for (const source of knowledgeState.projectSources) {
+    const sourceId = String(source.id || "").trim();
+    if (!sourceId) {
+      continue;
+    }
+    const location = normalizeKnowledgeSourcePath(source.location);
+    if (location) {
+      sourceIdByPath.set(location, sourceId);
+      sourceIdByPath.set(location.split("/").slice(-1)[0] || location, sourceId);
+    }
+    const name = normalizeKnowledgeSourcePath(source.name);
+    if (name) {
+      sourceIdByPath.set(name, sourceId);
+    }
+  }
+
+  const resolveSourceIdFromRow = (record: ProjectKnowledgeSourceRow): string => {
+    const path = normalizeKnowledgeSourcePath(record.path);
+    const title = normalizeKnowledgeSourcePath(record.title);
+    return sourceIdByPath.get(path)
+      || sourceIdByPath.get(title)
+      || "";
+  };
 
   const sourceColumns = [
     {
@@ -126,6 +106,29 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
           </Typography.Text>
         </Tooltip>
       ),
+    },
+    {
+      title: t("copaw.projects.knowledge.processing.layerL2Column", "Processing"),
+      key: "processing",
+      width: 140,
+      render: (_: unknown, record: ProjectKnowledgeSourceRow) => {
+        const sourceId = resolveSourceIdFromRow(record);
+        return (
+          <Button
+            type="link"
+            size="small"
+            disabled={!sourceId || !onOpenProcessingForSource}
+            onClick={() => {
+              if (!sourceId || !onOpenProcessingForSource) {
+                return;
+              }
+              onOpenProcessingForSource(sourceId);
+            }}
+          >
+            {t("copaw.projects.knowledge.processing.openDetail", "View Processing")}
+          </Button>
+        );
+      },
     },
   ];
 

@@ -730,6 +730,7 @@ export default function ProjectDetailPage() {
   const effectiveKnowledgeDockTab = knowledgeDockTab === "ner" ? "processing" : knowledgeDockTab;
   const [knowledgeProcessingFocusMode, setKnowledgeProcessingFocusMode] = useState<ProjectKnowledgeProcessingMode | "">("");
   const [knowledgeProcessingFocusStage, setKnowledgeProcessingFocusStage] = useState<"tokenize" | "ner" | "syntax" | "cor" | "">("");
+  const [knowledgeProcessingFocusScope, setKnowledgeProcessingFocusScope] = useState<"global" | "source" | "">("");
   const [knowledgeProcessingFocusToken, setKnowledgeProcessingFocusToken] = useState(0);
   const [projectKnowledgeIncludeGlobal, setProjectKnowledgeIncludeGlobal] = useState(true);
   const [knowledgeHeaderSignals, setKnowledgeHeaderSignals] =
@@ -3311,12 +3312,18 @@ export default function ProjectDetailPage() {
   const handleKnowledgeOpenProcessing = useCallback((
     mode?: ProjectKnowledgeProcessingMode,
     stage?: "tokenize" | "ner" | "syntax" | "cor",
+    sourceId?: string,
+    scope?: "global" | "source",
   ) => {
     setKnowledgeDockTab("processing");
+    if (sourceId) {
+      projectKnowledgeState.setSelectedSourceId(sourceId);
+    }
+    setKnowledgeProcessingFocusScope(scope || (sourceId ? "source" : "global"));
     setKnowledgeProcessingFocusMode(mode || "nlp");
     setKnowledgeProcessingFocusStage(stage || "");
     setKnowledgeProcessingFocusToken((prev) => prev + 1);
-  }, []);
+  }, [projectKnowledgeState]);
 
   const handleKnowledgeRunSuggestedQuery = useCallback((query: string) => {
     setPendingKnowledgeQuery(query);
@@ -3400,6 +3407,9 @@ export default function ProjectDetailPage() {
           <ProjectKnowledgeSourcesPanel
             knowledgeState={projectKnowledgeState}
             projectFiles={effectiveProjectFiles}
+            onOpenProcessingForSource={(sourceId) => {
+              handleKnowledgeOpenProcessing("nlp", "tokenize", sourceId, "source");
+            }}
           />
         ),
       },
@@ -3409,10 +3419,12 @@ export default function ProjectDetailPage() {
         children: (
           <ProjectKnowledgeProcessingPanel
             knowledgeState={projectKnowledgeState}
+            projectFiles={effectiveProjectFiles}
             onOpenSettings={handleKnowledgeOpenSettings}
             onSelectArtifactPath={handleSelectArtifactFile}
             focusedMode={knowledgeProcessingFocusMode || undefined}
             focusedStage={knowledgeProcessingFocusStage || undefined}
+            focusedScope={knowledgeProcessingFocusScope || undefined}
             focusToken={knowledgeProcessingFocusToken}
           />
         ),
@@ -3482,6 +3494,7 @@ export default function ProjectDetailPage() {
     pendingKnowledgeQuery,
     knowledgeProcessingFocusMode,
     knowledgeProcessingFocusStage,
+    knowledgeProcessingFocusScope,
     knowledgeProcessingFocusToken,
     projectKnowledgeIncludeGlobal,
     projectKnowledgeState,

@@ -390,6 +390,10 @@ export interface ProjectKnowledgeSyncState {
   output_scheduler?: ProjectKnowledgeProcessingSchedulerPayload;
   mode_outputs?: Partial<Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeOutputPayload>>;
   mode_metrics?: Partial<Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeMetricsPayload>>;
+  mode_metrics_by_source?: Record<
+    string,
+    Partial<Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeMetricsPayload>>
+  >;
   global_metrics?: ProjectKnowledgeGlobalMetricsPayload;
   l2_progress?: ProjectKnowledgeL2ProgressPayload;
   l2_metrics?: ProjectKnowledgeL2MetricsPayload;

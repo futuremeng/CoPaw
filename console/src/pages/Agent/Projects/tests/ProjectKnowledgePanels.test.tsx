@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import ProjectKnowledgeNerPanel from "../components/ProjectKnowledgeNerPanel";
 import ProjectKnowledgeOutputsPanel from "../components/ProjectKnowledgeOutputsPanel";
@@ -224,6 +224,31 @@ function buildKnowledgeState(): ProjectKnowledgeState {
   } as ProjectKnowledgeState;
 }
 
+function buildProjectFiles(): AgentProjectFileInfo[] {
+  return [
+    {
+      filename: "a.md",
+      path: "original/a.md",
+      size: 128,
+      modified_time: "2026-05-18T19:20:00Z",
+      stage: "original",
+      content_type: "markdown",
+      builtin: false,
+      ignored: false,
+    },
+    {
+      filename: "b.txt",
+      path: "data/b.txt",
+      size: 256,
+      modified_time: "2026-05-18T19:21:00Z",
+      stage: "intermediate",
+      content_type: "text",
+      builtin: false,
+      ignored: false,
+    },
+  ];
+}
+
 function buildHeaderSignals(knowledgeState: ProjectKnowledgeState): ProjectKnowledgeHeaderSignals {
   return {
     indexedRatio: knowledgeState.quantMetrics.indexedRatio,
@@ -359,14 +384,85 @@ describe("project knowledge panels", () => {
     expect(screen.queryByText(".agent/AGENTS.md")).toBeNull();
   });
 
+  it("opens processing panel from source row action", async () => {
+    const knowledgeState = buildKnowledgeState();
+    const projectFiles = buildProjectFiles();
+    const openProcessing = vi.fn();
+    knowledgeState.projectSources = [
+      {
+        id: "source-a",
+        name: "a.md",
+        type: "file",
+        location: "original/a.md",
+        content: "",
+        enabled: true,
+        recursive: false,
+        tags: [],
+        summary: "",
+        status: {
+          indexed: true,
+          indexed_at: null,
+          document_count: 1,
+          chunk_count: 1,
+          error: null,
+        },
+      },
+    ] as ProjectKnowledgeState["projectSources"];
+
+    render(
+      <ProjectKnowledgeSourcesPanel
+        knowledgeState={knowledgeState}
+        projectFiles={projectFiles}
+        onOpenProcessingForSource={openProcessing}
+      />,
+    );
+
+    const row = screen.getByText("original/a.md").closest("tr");
+    expect(row).not.toBeNull();
+    fireEvent.click(within(row as HTMLTableRowElement).getByRole("button", { name: "View Processing" }));
+    expect(openProcessing).toHaveBeenCalledWith("source-a");
+  });
+
   it("renders processing and outputs panels", () => {
     const knowledgeState = buildKnowledgeState();
 
-    render(<ProjectKnowledgeProcessingPanel knowledgeState={knowledgeState} />);
+    render(<ProjectKnowledgeProcessingPanel knowledgeState={knowledgeState} projectFiles={buildProjectFiles()} />);
     expect(screen.getByText("Processing")).not.toBeNull();
+    expect(screen.getByText("Project")).not.toBeNull();
+    expect(screen.getByText("Source")).not.toBeNull();
 
     render(<ProjectKnowledgeOutputsPanel knowledgeState={knowledgeState} />);
     expect(screen.getByText("Outputs")).not.toBeNull();
+  });
+
+  it("shows source fallback hint when source scoped metrics are unavailable", async () => {
+    const knowledgeState = buildKnowledgeState();
+    knowledgeState.projectSources = [
+      {
+        id: "source-a",
+        name: "a.md",
+        type: "file",
+        location: "original/a.md",
+        content: "",
+        enabled: true,
+        recursive: false,
+        tags: [],
+        summary: "",
+        status: {
+          indexed: true,
+          indexed_at: null,
+          document_count: 1,
+          chunk_count: 1,
+          error: null,
+        },
+      },
+    ] as ProjectKnowledgeState["projectSources"];
+    knowledgeState.selectedSourceId = "source-a";
+
+    const { default: userEvent } = await import("@testing-library/user-event");
+    render(<ProjectKnowledgeProcessingPanel knowledgeState={knowledgeState} projectFiles={buildProjectFiles()} />);
+    await userEvent.setup().click(screen.getByText("Source"));
+    expect(screen.getByText("No source-specific metrics yet; showing project-level aggregate as fallback.")).not.toBeNull();
   });
 
   it("renders NER panel", () => {
