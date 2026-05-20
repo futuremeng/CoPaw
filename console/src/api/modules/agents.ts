@@ -27,6 +27,7 @@ import type {
   PromoteProjectArtifactRequest,
   PromoteProjectArtifactResponse,
   UpdateProjectArtifactDistillModeRequest,
+  UpdateProjectKnowledgeRegistrationRequest,
   UpdateProjectKnowledgeSinkRequest,
   ReleaseProjectKnowledgeWatchLeaseResponse,
   UpdateProjectWorkspaceChatBindingRequest,
@@ -258,6 +259,19 @@ export const agentsApi = {
   ) =>
     request<AgentProjectSummary>(
       `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/knowledge-sink`,
+      {
+        method: "PUT",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  updateProjectKnowledgeRegistration: (
+    agentId: string,
+    projectId: string,
+    body: UpdateProjectKnowledgeRegistrationRequest,
+  ) =>
+    request<AgentProjectSummary>(
+      `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/knowledge-registration`,
       {
         method: "PUT",
         body: JSON.stringify(body),

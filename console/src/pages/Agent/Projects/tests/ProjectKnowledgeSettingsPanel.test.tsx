@@ -8,12 +8,10 @@ import ProjectKnowledgeSettingsPanel from "../components/ProjectKnowledgeSetting
 const { mockedApi, mockedAgentsApi } = vi.hoisted(() => ({
   mockedApi: {
     listKnowledgeSources: vi.fn(),
-    upsertKnowledgeSource: vi.fn(),
-    indexKnowledgeSource: vi.fn(),
-    deleteKnowledgeSource: vi.fn(),
   },
   mockedAgentsApi: {
     updateProjectKnowledgeSink: vi.fn(),
+    updateProjectKnowledgeRegistration: vi.fn(),
   },
 }));
 
@@ -94,9 +92,7 @@ describe("ProjectKnowledgeSettingsPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockedApi.listKnowledgeSources.mockResolvedValue({ sources: [] });
-    mockedApi.upsertKnowledgeSource.mockResolvedValue({});
-    mockedApi.indexKnowledgeSource.mockResolvedValue({});
-    mockedApi.deleteKnowledgeSource.mockResolvedValue({ deleted: true, source_id: "x" });
+    mockedAgentsApi.updateProjectKnowledgeRegistration.mockResolvedValue({});
   });
 
   it("updates auto workflow toggle via API", async () => {
@@ -109,8 +105,6 @@ describe("ProjectKnowledgeSettingsPanel", () => {
       <ProjectKnowledgeSettingsPanel
         agentId="default"
         projectId={projectId}
-        projectName="Project ABC"
-        projectWorkspaceDir="/tmp/workspace"
         projectAutoKnowledgeSink
         syncState={buildSyncState(projectId)}
       />,
@@ -136,8 +130,6 @@ describe("ProjectKnowledgeSettingsPanel", () => {
       <ProjectKnowledgeSettingsPanel
         agentId="default"
         projectId={projectId}
-        projectName="Project ABC"
-        projectWorkspaceDir="/tmp/workspace"
         projectAutoKnowledgeSink={false}
         syncState={buildSyncState(projectId)}
       />,
@@ -147,10 +139,10 @@ describe("ProjectKnowledgeSettingsPanel", () => {
     await user.click(switches[1]);
 
     await waitFor(() => {
-      expect(mockedApi.upsertKnowledgeSource).toHaveBeenCalledTimes(1);
-      expect(mockedApi.indexKnowledgeSource).toHaveBeenCalledWith(
-        `project-${projectId.toLowerCase()}-workspace`,
-        { projectId },
+      expect(mockedAgentsApi.updateProjectKnowledgeRegistration).toHaveBeenCalledWith(
+        "default",
+        projectId,
+        { project_agent_knowledge_registered: true },
       );
     });
   });
@@ -165,8 +157,6 @@ describe("ProjectKnowledgeSettingsPanel", () => {
       <ProjectKnowledgeSettingsPanel
         agentId="default"
         projectId={projectId}
-        projectName="Project ABC"
-        projectWorkspaceDir="/tmp/workspace"
         projectAutoKnowledgeSink={false}
         syncState={buildSyncState(projectId)}
       />,
@@ -176,9 +166,10 @@ describe("ProjectKnowledgeSettingsPanel", () => {
     await user.click(switches[1]);
 
     await waitFor(() => {
-      expect(mockedApi.deleteKnowledgeSource).toHaveBeenCalledWith(
-        `project-${projectId.toLowerCase()}-workspace`,
-        { projectId },
+      expect(mockedAgentsApi.updateProjectKnowledgeRegistration).toHaveBeenCalledWith(
+        "default",
+        projectId,
+        { project_agent_knowledge_registered: false },
       );
     });
   });

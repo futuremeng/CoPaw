@@ -10,6 +10,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from copaw.config.config import Config
+from copaw.knowledge.project_pipeline_manager import build_project_source_spec
+from qwenpaw.config.utils import load_config
 from qwenpaw.app.project_realtime_events import (
     collect_project_realtime_changes,
     record_project_realtime_paths,
@@ -229,6 +231,53 @@ def test_update_project_knowledge_sink_endpoint(
     after = _load_project_summary(workspace_dir / "projects" / project_id)
     assert after is not None
     assert after.project_auto_knowledge_sink is False
+
+
+def test_update_project_knowledge_registration_endpoint(
+    project_artifact_router_client: tuple[TestClient, Path, str],
+):
+    client, workspace_dir, project_id = project_artifact_router_client
+
+    before = _load_project_summary(workspace_dir / "projects" / project_id)
+    assert before is not None
+    assert before.project_agent_knowledge_registered is False
+
+    enabled = client.put(
+        f"/agents/default/projects/{project_id}/knowledge-registration",
+        json={"project_agent_knowledge_registered": True},
+    )
+    assert enabled.status_code == 200
+    enabled_payload = enabled.json()
+    assert enabled_payload["project_agent_knowledge_registered"] is True
+
+    config_after_enable = load_config()
+    expected_source_id = build_project_source_spec(
+        project_id=project_id,
+        project_name=before.name,
+        project_workspace_dir=before.workspace_dir,
+    ).id
+    assert any(
+        source.id == expected_source_id
+        for source in config_after_enable.knowledge.sources
+    )
+
+    disabled = client.put(
+        f"/agents/default/projects/{project_id}/knowledge-registration",
+        json={"project_agent_knowledge_registered": False},
+    )
+    assert disabled.status_code == 200
+    disabled_payload = disabled.json()
+    assert disabled_payload["project_agent_knowledge_registered"] is False
+
+    config_after_disable = load_config()
+    assert all(
+        source.id != expected_source_id
+        for source in config_after_disable.knowledge.sources
+    )
+
+    after = _load_project_summary(workspace_dir / "projects" / project_id)
+    assert after is not None
+    assert after.project_agent_knowledge_registered is False
 
 
 def test_project_knowledge_watch_lease_endpoint_toggles_monitoring_state(

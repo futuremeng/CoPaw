@@ -20,8 +20,6 @@ import {
 interface ProjectKnowledgeSettingsPanelProps {
   agentId?: string;
   projectId: string;
-  projectName: string;
-  projectWorkspaceDir: string;
   projectAutoKnowledgeSink: boolean;
   syncState: ProjectKnowledgePipelineState | null;
   onProjectAutoKnowledgeSinkChange?: (enabled: boolean) => void;
@@ -34,8 +32,6 @@ export default function ProjectKnowledgeSettingsPanel(
   const {
     agentId,
     projectId,
-    projectName,
-    projectWorkspaceDir,
     projectAutoKnowledgeSink,
     syncState,
     onProjectAutoKnowledgeSinkChange,
@@ -122,40 +118,31 @@ export default function ProjectKnowledgeSettingsPanel(
   }, [agentId, onProjectAutoKnowledgeSinkChange, projectId, t]);
 
   const handleToggleKnowledgeRegistration = useCallback(async (enabled: boolean) => {
-    const location = (projectWorkspaceDir || "").trim();
-    if (enabled && !location) {
-      message.error(t("copaw.projects.knowledge.sourcePathMissing"));
+    if (!agentId) {
+      message.error(t("copaw.projects.knowledge.autoSinkAgentMissing"));
       return;
+    }
+
+    const previousRegistered = sourceRegistered;
+    const previousSource = projectSource;
+    setSourceRegistered(enabled);
+    if (!enabled) {
+      setProjectSource(null);
     }
 
     try {
       setUpdatingRegistration(true);
-      if (enabled) {
-        await api.upsertKnowledgeSource({
-          id: projectSourceId,
-          name: `Project Workspace: ${projectName || projectId}`,
-          type: "directory",
-          location,
-          content: "",
-          enabled: true,
-          recursive: true,
-          project_id: projectId,
-          tags: ["project", `project:${projectId}`, "scope:project"],
-          summary: `Project-scoped knowledge source for ${projectName || projectId}`,
-        }, {
-          projectId,
-        });
-        await api.indexKnowledgeSource(projectSourceId, { projectId });
-        message.success(t("copaw.projects.knowledge.sourceRegisterSuccess"));
-      } else {
-        await api.deleteKnowledgeSource(projectSourceId, { projectId });
-        message.success(
-          t(
+      await agentsApi.updateProjectKnowledgeRegistration(agentId, projectId, {
+        project_agent_knowledge_registered: enabled,
+      });
+      message.success(
+        enabled
+          ? t("copaw.projects.knowledge.sourceRegisterSuccess")
+          : t(
             "copaw.projects.knowledge.sourceUnregisterSuccess",
             "Project knowledge source unregistered",
           ),
-        );
-      }
+      );
       await loadProjectSourceStatus();
     } catch (err) {
       const messageText = err instanceof Error
@@ -164,16 +151,36 @@ export default function ProjectKnowledgeSettingsPanel(
           "copaw.projects.knowledge.sourceRegistrationUpdateFailed",
           "Failed to update project knowledge registration",
         );
+      const endpointUnavailable = /404|405|not\s*found|knowledge-registration/i.test(messageText);
+      if (!enabled && endpointUnavailable) {
+        try {
+          await api.deleteKnowledgeSource(projectSourceId, { projectId });
+          message.success(
+            t(
+              "copaw.projects.knowledge.sourceUnregisterSuccess",
+              "Project knowledge source unregistered",
+            ),
+          );
+          await loadProjectSourceStatus();
+          return;
+        } catch {
+          // fall through to unified error handling
+        }
+      }
+
+      setSourceRegistered(previousRegistered);
+      setProjectSource(previousSource);
       message.error(messageText);
     } finally {
       setUpdatingRegistration(false);
     }
   }, [
+    agentId,
     loadProjectSourceStatus,
-    projectId,
-    projectName,
+    projectSource,
     projectSourceId,
-    projectWorkspaceDir,
+    projectId,
+    sourceRegistered,
     t,
   ]);
 

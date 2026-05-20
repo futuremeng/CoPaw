@@ -202,6 +202,7 @@ class ProjectSummary(BaseModel):
         default_factory=lambda: ProjectArtifactProfile(),
     )
     project_auto_knowledge_sink: bool = True
+    project_agent_knowledge_registered: bool = False
     file_monitoring_state: str = PROJECT_FILE_MONITORING_ACTIVE
     preferred_workspace_chat_id: str = ""
     created_time: str
@@ -441,6 +442,7 @@ class CreateProjectRequest(BaseModel):
     tags: list[str] = Field(default_factory=list)
     artifact_distill_mode: str = "file_scan"
     project_auto_knowledge_sink: bool = True
+    project_agent_knowledge_registered: bool = False
     artifact_profile: ProjectArtifactProfile = Field(
         default_factory=lambda: ProjectArtifactProfile(),
     )
@@ -462,6 +464,12 @@ class UpdateProjectKnowledgeSinkRequest(BaseModel):
     """Request body for updating project auto knowledge sink switch."""
 
     project_auto_knowledge_sink: bool = True
+
+
+class UpdateProjectKnowledgeRegistrationRequest(BaseModel):
+    """Request body for updating project knowledge registration switch."""
+
+    project_agent_knowledge_registered: bool = False
 
 
 class AcquireProjectKnowledgeWatchLeaseResponse(BaseModel):
@@ -713,6 +721,21 @@ def _normalize_project_auto_knowledge_sink(raw_value: Any) -> bool:
     if text in {"0", "false", "no", "off", "disabled"}:
         return False
     return True
+
+
+def _normalize_project_agent_knowledge_registered(raw_value: Any) -> bool:
+    if isinstance(raw_value, bool):
+        return raw_value
+    if isinstance(raw_value, (int, float)):
+        return bool(raw_value)
+    text = str(raw_value or "").strip().lower()
+    if not text:
+        return False
+    if text in {"1", "true", "yes", "on", "enabled"}:
+        return True
+    if text in {"0", "false", "no", "off", "disabled"}:
+        return False
+    return False
 
 
 def _ensure_square_config_initialized() -> None:
@@ -1267,6 +1290,9 @@ def _load_project_summary(project_dir: Path) -> ProjectSummary | None:
     project_auto_knowledge_sink = _normalize_project_auto_knowledge_sink(
         metadata.get("project_auto_knowledge_sink"),
     )
+    project_agent_knowledge_registered = _normalize_project_agent_knowledge_registered(
+        metadata.get("project_agent_knowledge_registered"),
+    )
     file_monitoring_state = normalize_project_file_monitoring_state(
         metadata.get("file_monitoring_state"),
     )
@@ -1290,6 +1316,7 @@ def _load_project_summary(project_dir: Path) -> ProjectSummary | None:
         artifact_distill_mode=artifact_distill_mode,
         artifact_profile=artifact_profile,
         project_auto_knowledge_sink=project_auto_knowledge_sink,
+        project_agent_knowledge_registered=project_agent_knowledge_registered,
         file_monitoring_state=file_monitoring_state,
         preferred_workspace_chat_id=preferred_workspace_chat_id,
         created_time=created_time,
@@ -1652,6 +1679,69 @@ def _update_project_auto_knowledge_sink(
     metadata_file = Path(summary.metadata_file)
     metadata, body = _read_project_frontmatter_with_body(metadata_file)
     metadata["project_auto_knowledge_sink"] = bool(project_auto_knowledge_sink)
+    write_project_metadata(metadata_file, metadata, body)
+
+    updated = _load_project_summary(project_dir)
+    if updated is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to load updated project summary",
+        )
+    return updated
+
+
+def _sync_project_agent_knowledge_registration(
+    summary: ProjectSummary,
+    *,
+    enabled: bool,
+) -> None:
+    config = load_config()
+    changed = False
+
+    if enabled:
+        _, changed = ensure_project_source_registered(
+            config.knowledge,
+            project_id=summary.id,
+            project_name=summary.name,
+            project_workspace_dir=summary.workspace_dir,
+            persist=None,
+        )
+    else:
+        expected_source = build_project_source_spec(
+            project_id=summary.id,
+            project_name=summary.name,
+            project_workspace_dir=summary.workspace_dir,
+        )
+        filtered_sources = [
+            source for source in config.knowledge.sources if source.id != expected_source.id
+        ]
+        if len(filtered_sources) != len(config.knowledge.sources):
+            config.knowledge.sources = filtered_sources
+            changed = True
+
+    if changed:
+        save_config(config)
+
+
+def _update_project_agent_knowledge_registration(
+    workspace_dir: Path,
+    project_id: str,
+    project_agent_knowledge_registered: bool,
+) -> ProjectSummary:
+    project_dir = _resolve_project_dir(workspace_dir, project_id)
+    summary = _load_project_summary(project_dir)
+    if summary is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Project '{project_id}' metadata not found",
+        )
+
+    enabled = bool(project_agent_knowledge_registered)
+    _sync_project_agent_knowledge_registration(summary, enabled=enabled)
+
+    metadata_file = Path(summary.metadata_file)
+    metadata, body = _read_project_frontmatter_with_body(metadata_file)
+    metadata["project_agent_knowledge_registered"] = enabled
     write_project_metadata(metadata_file, metadata, body)
 
     updated = _load_project_summary(project_dir)
@@ -2348,6 +2438,9 @@ def _create_project(
             body.artifact_distill_mode,
         ),
         "project_auto_knowledge_sink": bool(body.project_auto_knowledge_sink),
+        "project_agent_knowledge_registered": bool(
+            body.project_agent_knowledge_registered,
+        ),
         "file_monitoring_state": PROJECT_FILE_MONITORING_IDLE,
         "artifact_profile": normalized_profile.model_dump(
             mode="json",
@@ -4801,6 +4894,37 @@ async def update_project_knowledge_sink(
             workspace_dir,
             projectId,
             body.project_auto_knowledge_sink,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.put(
+    "/{agentId}/projects/{projectId}/knowledge-registration",
+    response_model=ProjectSummary,
+    summary="Update project knowledge registration",
+    description=(
+        "Persist project knowledge registration switch and synchronize "
+        "project workspace source in knowledge config"
+    ),
+)
+async def update_project_knowledge_registration(
+    request: Request,
+    body: UpdateProjectKnowledgeRegistrationRequest = Body(...),
+    agentId: str = PathParam(...),
+    projectId: str = PathParam(...),
+) -> ProjectSummary:
+    """Update project registration as an agent knowledge source."""
+    _ = request
+    workspace_dir = _resolve_agent_workspace_dir(agentId)
+
+    try:
+        return _update_project_agent_knowledge_registration(
+            workspace_dir,
+            projectId,
+            body.project_agent_knowledge_registered,
         )
     except HTTPException:
         raise

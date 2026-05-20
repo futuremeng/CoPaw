@@ -3466,10 +3466,6 @@ export default function ProjectDetailPage() {
           <ProjectKnowledgeSettingsPanel
             agentId={currentAgent?.id}
             projectId={selectedProject.id}
-            projectName={selectedProject.name}
-            projectWorkspaceDir={
-              selectedProject.workspace_dir || currentAgent?.workspace_dir || ""
-            }
             projectAutoKnowledgeSink={selectedProject.project_auto_knowledge_sink !== false}
             syncState={projectKnowledgeState.syncState}
             onProjectAutoKnowledgeSinkChange={handleProjectAutoKnowledgeSinkChange}
