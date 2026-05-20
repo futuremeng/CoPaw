@@ -587,19 +587,6 @@ export default function ProjectKnowledgeProcessingPanel(
   const selectedSource = useMemo(() => (
     props.knowledgeState.projectSources.find((item) => item.id === effectiveSourceId) || null
   ), [effectiveSourceId, props.knowledgeState.projectSources]);
-  const hasScopedSourceMetrics = useMemo(() => {
-    if (effectiveScope !== "source" || !effectiveSourceId) {
-      return false;
-    }
-    const payload = (props.knowledgeState.syncState as {
-      mode_metrics_by_source?: Record<string, Partial<Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeMetricsPayload>>>;
-    } | null)?.mode_metrics_by_source || {};
-    const bySource = payload[effectiveSourceId];
-    if (!bySource || typeof bySource !== "object") {
-      return false;
-    }
-    return Boolean(bySource.nlp || bySource.agentic || bySource.fast);
-  }, [effectiveScope, effectiveSourceId, props.knowledgeState.syncState]);
   const scopedQuantMetrics = useMemo(() => {
     if (effectiveScope !== "source" || !selectedSource) {
       return props.knowledgeState.quantMetrics;
@@ -697,16 +684,6 @@ export default function ProjectKnowledgeProcessingPanel(
               }}
             />
           </div>
-          {effectiveScope === "source" && effectiveSourceLabel ? (
-            <Typography.Text type="secondary">
-              {t("copaw.projects.knowledge.processing.scopeSourceHint", "Current source: {{source}}", { source: effectiveSourceLabel })}
-            </Typography.Text>
-          ) : null}
-          {effectiveScope === "source" && !hasScopedSourceMetrics ? (
-            <Typography.Text type="secondary">
-              {t("copaw.projects.knowledge.processing.scopeSourceFallback", "No source-specific metrics yet; showing project-level aggregate as fallback.")}
-            </Typography.Text>
-          ) : null}
           <div className={styles.projectKnowledgeSignalGrid}>
             <div className={styles.projectKnowledgeSignalCard}>
               <Typography.Text type="secondary">{t("copaw.projects.knowledge.processing.nlpEntities")}</Typography.Text>
