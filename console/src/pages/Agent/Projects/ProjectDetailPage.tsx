@@ -732,7 +732,7 @@ export default function ProjectDetailPage() {
   const [knowledgeProcessingFocusStage, setKnowledgeProcessingFocusStage] = useState<"tokenize" | "ner" | "syntax" | "cor" | "">("");
   const [knowledgeProcessingFocusScope, setKnowledgeProcessingFocusScope] = useState<"global" | "source" | "">("");
   const [knowledgeProcessingFocusToken, setKnowledgeProcessingFocusToken] = useState(0);
-  const [projectKnowledgeIncludeGlobal, setProjectKnowledgeIncludeGlobal] = useState(true);
+  const [projectKnowledgeIncludeGlobal] = useState(true);
   const [knowledgeHeaderSignals, setKnowledgeHeaderSignals] =
     useState<ProjectKnowledgeHeaderSignals>(DEFAULT_KNOWLEDGE_HEADER_SIGNALS);
   const [runtimeSignalTooltipOpen, setRuntimeSignalTooltipOpen] = useState(false);
@@ -3471,9 +3471,7 @@ export default function ProjectDetailPage() {
               selectedProject.workspace_dir || currentAgent?.workspace_dir || ""
             }
             projectAutoKnowledgeSink={selectedProject.project_auto_knowledge_sink !== false}
-            includeGlobal={projectKnowledgeIncludeGlobal}
             syncState={projectKnowledgeState.syncState}
-            onIncludeGlobalChange={setProjectKnowledgeIncludeGlobal}
             onProjectAutoKnowledgeSinkChange={handleProjectAutoKnowledgeSinkChange}
           />
         ),
