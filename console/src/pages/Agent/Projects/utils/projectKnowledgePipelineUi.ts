@@ -184,7 +184,20 @@ export function getProjectKnowledgePipelineStatusLabel(
   t: Translate,
 ): string {
   const stage = String(syncState.current_stage || syncState.status || "idle").trim() || "idle";
-  return t(`copaw.projects.knowledge.syncStage.${stage}`);
+  const fallbackMap: Record<string, string> = {
+    idle: "Idle",
+    queued: "Queued",
+    pending: "Pending",
+    indexing: "Indexing",
+    graphifying: "Graphifying",
+    debouncing: "Waiting",
+    cooldown: "Cooldown",
+    running: "Running",
+    completed: "Done",
+    succeeded: "Done",
+    failed: "Failed",
+  };
+  return t(`copaw.projects.knowledge.syncStage.${stage}`, fallbackMap[stage] || stage);
 }
 
 export function getProjectKnowledgeSemanticSummary(
