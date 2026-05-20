@@ -5,11 +5,11 @@ import {
   getProjectKnowledgeSemanticDescription,
   getProjectKnowledgeSemanticReasonLabel,
   getProjectKnowledgeSemanticSummary,
-} from "../utils/projectKnowledgeSyncUi";
+} from "../utils/projectKnowledgePipelineUi";
 
 const t = ((key: string, fallback?: string) => fallback || key) as TFunction;
 
-describe("projectKnowledgeSyncUi semantic helpers", () => {
+describe("projectKnowledgePipelineUi semantic helpers", () => {
   it("maps processing modes to quantization stages", () => {
     expect(getProjectKnowledgeQuantizationStage("fast")).toBe("l1");
     expect(getProjectKnowledgeQuantizationStage("nlp")).toBe("l2");

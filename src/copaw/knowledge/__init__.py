@@ -9,9 +9,9 @@ from typing import Any
 _EXPORTS = {
 	"KnowledgeManager": ("copaw.knowledge.manager", "KnowledgeManager"),
 	"GraphOpsManager": ("copaw.knowledge.graph_ops", "GraphOpsManager"),
-	"ProjectKnowledgeSyncManager": (
-		"copaw.knowledge.project_sync_manager",
-		"ProjectKnowledgeSyncManager",
+	"ProjectKnowledgePipelineManager": (
+		"copaw.knowledge.project_pipeline_manager",
+		"ProjectKnowledgePipelineManager",
 	),
 	"QuantizationArchitectureManager": (
 		"copaw.knowledge.knowledge_quantization_architecture",

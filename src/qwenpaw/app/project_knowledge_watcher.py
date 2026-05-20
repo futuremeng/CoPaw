@@ -11,12 +11,12 @@ from typing import Any
 from ..config.config import load_agent_config
 from ..config import utils as config_utils
 from ..config.utils import get_config_path, load_config
-from copaw.knowledge.project_sync_manager import (
-    DEFAULT_PROJECT_SYNC_COOLDOWN_SECONDS,
-    DEFAULT_PROJECT_SYNC_DEBOUNCE_SECONDS,
-    ProjectKnowledgeSyncManager,
-    ProjectSyncCommand,
-    ProjectSyncCoordinator,
+from copaw.knowledge.project_pipeline_manager import (
+    DEFAULT_PROJECT_PIPELINE_COOLDOWN_SECONDS,
+    DEFAULT_PROJECT_PIPELINE_DEBOUNCE_SECONDS,
+    ProjectKnowledgePipelineManager,
+    ProjectPipelineCommand,
+    ProjectPipelineCoordinator,
     build_project_source_spec,
     ensure_project_source_registered,
 )
@@ -29,8 +29,8 @@ from .project_realtime_events import record_project_recent_updates
 logger = logging.getLogger(__name__)
 
 DEFAULT_POLL_INTERVAL = 2.0
-DEFAULT_CHANGE_DEBOUNCE_SECONDS = DEFAULT_PROJECT_SYNC_DEBOUNCE_SECONDS
-DEFAULT_SYNC_COOLDOWN_SECONDS = DEFAULT_PROJECT_SYNC_COOLDOWN_SECONDS
+DEFAULT_CHANGE_DEBOUNCE_SECONDS = DEFAULT_PROJECT_PIPELINE_DEBOUNCE_SECONDS
+DEFAULT_SYNC_COOLDOWN_SECONDS = DEFAULT_PROJECT_PIPELINE_COOLDOWN_SECONDS
 _PROJECT_METADATA_RELATIVE_PATHS = (
     ".agent/PROJECT.md",
     ".agent/project.md",
@@ -118,9 +118,9 @@ class ProjectKnowledgeWatcher:
         self._poll_interval = poll_interval
         self._task: asyncio.Task | None = None
         self._snapshots: dict[str, dict[str, Any]] = {}
-        self._sync_coordinator = ProjectSyncCoordinator(
+        self._sync_coordinator = ProjectPipelineCoordinator(
             self._workspace_dir,
-            manager_factory=self._build_project_sync_manager,
+            manager_factory=self._build_project_pipeline_manager,
         )
         self._runtime_context_cache: dict[str, Any] = {
             "global_mtime_ns": None,
@@ -131,7 +131,7 @@ class ProjectKnowledgeWatcher:
 
     async def _dispatch_sync_command_async(
         self,
-        command: ProjectSyncCommand,
+        command: ProjectPipelineCommand,
     ):
         return await asyncio.to_thread(self._sync_coordinator.dispatch, command)
 
@@ -152,8 +152,8 @@ class ProjectKnowledgeWatcher:
             persist=lambda: config_utils.save_config(global_config),
         )
 
-    def _build_project_sync_manager(self, project_id: str) -> ProjectKnowledgeSyncManager:
-        return ProjectKnowledgeSyncManager(
+    def _build_project_pipeline_manager(self, project_id: str) -> ProjectKnowledgePipelineManager:
+        return ProjectKnowledgePipelineManager(
             self._workspace_dir,
             knowledge_dirname=f"projects/{project_id}/.knowledge",
         )
@@ -201,7 +201,7 @@ class ProjectKnowledgeWatcher:
 
     async def start(self) -> None:
         self._snapshots = await self._collect_snapshots_async()
-        await self._resume_project_syncs(self._snapshots)
+        await self._resume_project_pipelines(self._snapshots)
         self._task = asyncio.create_task(
             self._poll_loop(),
             name=f"project_knowledge_watcher_{self._agent_id}",
@@ -212,7 +212,7 @@ class ProjectKnowledgeWatcher:
             self._poll_interval,
         )
 
-    async def _resume_project_syncs(
+    async def _resume_project_pipelines(
         self,
         current: dict[str, dict[str, Any]],
     ) -> None:
@@ -242,7 +242,7 @@ class ProjectKnowledgeWatcher:
                 project_workspace_dir=str(snapshot.get("project_dir") or ""),
             )
             event = await self._dispatch_sync_command_async(
-                ProjectSyncCommand.resume(
+                ProjectPipelineCommand.resume(
                     project_id=project_id,
                     config=knowledge_config,
                     running_config=running_config,
@@ -315,7 +315,7 @@ class ProjectKnowledgeWatcher:
             should_config_reindex = False
             if not should_bootstrap and not changed_paths:
                 reindex_event = await self._dispatch_sync_command_async(
-                    ProjectSyncCommand.check_reindex(
+                    ProjectPipelineCommand.check_reindex(
                         project_id=project_id,
                         config=knowledge_config,
                         running_config=running_config,
@@ -343,7 +343,7 @@ class ProjectKnowledgeWatcher:
                 else ("project_watcher_config_change" if should_config_reindex else "project_watcher_change")
             )
             event = await self._dispatch_sync_command_async(
-                ProjectSyncCommand.start(
+                ProjectPipelineCommand.start(
                     project_id=project_id,
                     config=knowledge_config,
                     running_config=running_config,

@@ -19,8 +19,8 @@ from pydantic import BaseModel, Field
 from ...config import load_config, save_config
 from ...config.config import generate_short_agent_id
 from ..project_realtime_events import record_project_realtime_paths
-from copaw.knowledge.project_sync_manager import (
-    ProjectKnowledgeSyncManager,
+from copaw.knowledge.project_pipeline_manager import (
+    ProjectKnowledgePipelineManager,
     ensure_project_source_registered,
 )
 from ..knowledge_workflow_steps import _load_builtin_pipeline_doc
@@ -2688,7 +2688,7 @@ def _run_builtin_project_knowledge_sync(
         persist=lambda: save_config(config),
     )
 
-    manager = ProjectKnowledgeSyncManager(
+    manager = ProjectKnowledgePipelineManager(
         workspace_dir,
         knowledge_dirname=f"projects/{project_id}/.knowledge",
     )

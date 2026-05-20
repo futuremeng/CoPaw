@@ -12,7 +12,7 @@ from fastapi import HTTPException
 from copaw.config.config import KnowledgeConfig
 from copaw.knowledge.graph_ops import GraphOpsManager
 from copaw.knowledge.manager import KnowledgeManager
-from copaw.knowledge.project_sync_manager import DEFAULT_PROJECT_SYNC_QUALITY_LOOP_ROUNDS
+from copaw.knowledge.project_pipeline_manager import DEFAULT_PROJECT_PIPELINE_QUALITY_LOOP_ROUNDS
 
 from .builtin_agents import (
     BUILTIN_UNDERSTAND_DOMAIN_ANALYZER_ID,
@@ -1043,7 +1043,7 @@ class KnowledgeWorkflowOrchestrator:
             config=config,
             dataset_scope=[source.id],
             project_id=self.project_id,
-            max_rounds=DEFAULT_PROJECT_SYNC_QUALITY_LOOP_ROUNDS,
+            max_rounds=DEFAULT_PROJECT_PIPELINE_QUALITY_LOOP_ROUNDS,
             dry_run=False,
             baseline_result=memify_result,
         )

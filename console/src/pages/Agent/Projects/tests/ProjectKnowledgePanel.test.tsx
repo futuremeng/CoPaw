@@ -83,7 +83,7 @@ function buildKnowledgeState(projectId: string): ProjectKnowledgeState {
       stale: false,
       staleModes: [],
       staleSources: [],
-      channelStatus: { "project-sync": "open", tasks: "open" },
+      channelStatus: { "project-pipeline": "open", tasks: "open" },
     },
     outputModes: [
       buildModeState({ mode: "agentic", status: "idle", available: false }),

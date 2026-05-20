@@ -12,7 +12,7 @@ import {
 } from "antd";
 import { useNavigate } from "react-router-dom";
 import api from "../../../../api";
-import type { KnowledgeSourceItem, ProjectKnowledgeSyncState } from "../../../../api/types";
+import type { KnowledgeSourceItem, ProjectKnowledgePipelineState } from "../../../../api/types";
 import { agentsApi } from "../../../../api/modules/agents";
 import { knowledgeApi } from "../../../../api/modules/knowledge";
 import styles from "../index.module.less";
@@ -21,9 +21,9 @@ import {
   getProjectKnowledgeQuantizationStage,
   getProjectKnowledgeSemanticDescription,
   getProjectKnowledgeSemanticReasonLabel,
-  getProjectKnowledgeSyncAlertDescription,
-  getProjectKnowledgeSyncAlertType,
-} from "../utils/projectKnowledgeSyncUi";
+  getProjectKnowledgePipelineAlertDescription,
+  getProjectKnowledgePipelineAlertType,
+} from "../utils/projectKnowledgePipelineUi";
 
 interface ProjectKnowledgeSettingsPanelProps {
   agentId?: string;
@@ -32,7 +32,7 @@ interface ProjectKnowledgeSettingsPanelProps {
   projectWorkspaceDir: string;
   projectAutoKnowledgeSink: boolean;
   includeGlobal: boolean;
-  syncState: ProjectKnowledgeSyncState | null;
+  syncState: ProjectKnowledgePipelineState | null;
   onIncludeGlobalChange: (checked: boolean) => void;
   onProjectAutoKnowledgeSinkChange?: (enabled: boolean) => void;
 }
@@ -241,7 +241,7 @@ export default function ProjectKnowledgeSettingsPanel(
       );
       if (enabled && (projectWorkspaceDir || "").trim()) {
         try {
-          await api.runProjectKnowledgeSync({
+          await api.runProjectKnowledgePipeline({
             projectId,
             trigger: "memify-enabled",
             force: true,
@@ -268,7 +268,7 @@ export default function ProjectKnowledgeSettingsPanel(
     }
     try {
       setManualSinking(true);
-      await api.runProjectKnowledgeSync({
+      await api.runProjectKnowledgePipeline({
         projectId,
         trigger: "manual-panel",
         force: true,
@@ -286,7 +286,7 @@ export default function ProjectKnowledgeSettingsPanel(
   }, [projectId, projectWorkspaceDir, t]);
 
   const syncAlertType = useMemo(
-    () => getProjectKnowledgeSyncAlertType(syncState),
+    () => getProjectKnowledgePipelineAlertType(syncState),
     [syncState],
   );
 
@@ -294,7 +294,7 @@ export default function ProjectKnowledgeSettingsPanel(
     if (!syncState) {
       return "";
     }
-    return getProjectKnowledgeSyncAlertDescription(syncState, t);
+    return getProjectKnowledgePipelineAlertDescription(syncState, t);
   }, [syncState, t]);
 
   const syncOperationSummary = useMemo(() => {

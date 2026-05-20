@@ -39,7 +39,7 @@ def build_l1_metrics(state: dict[str, Any], source_status: dict[str, Any] | None
 	snapshot_count = _safe_int(source_status.get("snapshot_count"))
 	return {
 		"source_id": latest_source_id or None,
-		"metrics_source": "project_sync_l1_raw",
+		"metrics_source": "project_pipeline_l1_raw",
 		"metrics_updated_at": metrics_updated_at or None,
 		"document_count": indexed_document_count,
 		"snapshot_count": snapshot_count,
@@ -64,7 +64,7 @@ def build_l2_metrics(state: dict[str, Any], index_result: dict[str, Any]) -> dic
 		_safe_int(index_result.get("chunk_count")),
 	)
 	return {
-		"metrics_source": "project_sync_l2_nlp",
+		"metrics_source": "project_pipeline_l2_nlp",
 		"metrics_updated_at": str(state.get("updated_at") or state.get("last_finished_at") or "").strip() or None,
 		"total_chunks": total_chunks,
 		"tokenize_done_chunks": max(_safe_int(l2_progress.get("tokenize_done_chunks")), _safe_int(index_result.get("tokenize_ready_chunk_count"))),
@@ -95,7 +95,7 @@ def build_l2_metrics(state: dict[str, Any], index_result: dict[str, Any]) -> dic
 
 def build_l3_metrics(state: dict[str, Any]) -> dict[str, Any]:
 	return {
-		"metrics_source": "project_sync_l3_placeholder",
+		"metrics_source": "project_pipeline_l3_placeholder",
 		"metrics_updated_at": str(state.get("updated_at") or state.get("last_finished_at") or "").strip() or None,
 		"status": "empty",
 		"reason_code": "L3_NOT_READY",

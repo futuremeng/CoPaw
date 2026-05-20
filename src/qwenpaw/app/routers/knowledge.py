@@ -27,10 +27,10 @@ from ...knowledge import (
     KnowledgeManager,
 )
 from copaw.knowledge.knowledge_quantization_facade import QuantizationFacade
-from copaw.knowledge.project_sync_manager import (
-    ProjectKnowledgeSyncManager,
-    ProjectSyncCommand,
-    ProjectSyncCoordinator,
+from copaw.knowledge.project_pipeline_manager import (
+    ProjectKnowledgePipelineManager,
+    ProjectPipelineCommand,
+    ProjectPipelineCoordinator,
     build_project_source_spec,
     ensure_project_source_registered,
 )
@@ -43,16 +43,16 @@ from ..agent_context import (
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
-_PROJECT_SYNC_RUNTIME_LOCK = Lock()
-_PROJECT_SYNC_RUNTIME_META: dict[str, dict[str, object]] = {}
+_PROJECT_PIPELINE_RUNTIME_LOCK = Lock()
+_PROJECT_PIPELINE_RUNTIME_META: dict[str, dict[str, object]] = {}
 _SUPPORTED_PROJECT_STEP_STATS = frozenset(KNOWLEDGE_WORKFLOW_STEP_IDS)
 
 
-def _project_sync_runtime_key(workspace_dir: str | Path, project_id: str) -> str:
+def _project_pipeline_runtime_key(workspace_dir: str | Path, project_id: str) -> str:
     return f"{Path(workspace_dir).resolve().as_posix()}::{project_id}"
 
 
-def _record_project_sync_runtime_event(
+def _record_project_pipeline_runtime_event(
     *,
     workspace_dir: str | Path,
     project_id: str,
@@ -61,7 +61,7 @@ def _record_project_sync_runtime_event(
     deduplicated: bool,
     action: str,
 ) -> None:
-    key = _project_sync_runtime_key(workspace_dir, project_id)
+    key = _project_pipeline_runtime_key(workspace_dir, project_id)
     payload = {
         "operation_id": operation_id,
         "idempotency_key": idempotency_key,
@@ -69,19 +69,19 @@ def _record_project_sync_runtime_event(
         "last_action": action,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
-    with _PROJECT_SYNC_RUNTIME_LOCK:
-        _PROJECT_SYNC_RUNTIME_META[key] = payload
+    with _PROJECT_PIPELINE_RUNTIME_LOCK:
+        _PROJECT_PIPELINE_RUNTIME_META[key] = payload
 
 
-def _project_sync_state_with_runtime_meta(
+def _project_pipeline_state_with_runtime_meta(
     *,
     workspace_dir: str | Path,
     project_id: str,
     state: dict[str, object],
 ) -> dict[str, object]:
-    key = _project_sync_runtime_key(workspace_dir, project_id)
-    with _PROJECT_SYNC_RUNTIME_LOCK:
-        runtime_meta = dict(_PROJECT_SYNC_RUNTIME_META.get(key) or {})
+    key = _project_pipeline_runtime_key(workspace_dir, project_id)
+    with _PROJECT_PIPELINE_RUNTIME_LOCK:
+        runtime_meta = dict(_PROJECT_PIPELINE_RUNTIME_META.get(key) or {})
     if not runtime_meta:
         return state
     merged = dict(state)
@@ -151,16 +151,16 @@ def _collect_knowledge_tasks_snapshot(
         )
 
     if project_id:
-        project_sync_raw = _project_sync_for_workspace(
+        project_pipeline_raw = _project_pipeline_for_workspace(
             workspace_dir,
             project_id=project_id,
         ).get_state(project_id)
-        project_sync = _project_sync_state_with_runtime_meta(
+        project_pipeline = _project_pipeline_state_with_runtime_meta(
             workspace_dir=workspace_dir,
             project_id=project_id,
-            state=dict(project_sync_raw),
+            state=dict(project_pipeline_raw),
         )
-        if str(project_sync.get("status") or "") in {
+        if str(project_pipeline.get("status") or "") in {
             "queued",
             "pending",
             "indexing",
@@ -168,8 +168,8 @@ def _collect_knowledge_tasks_snapshot(
         }:
             tasks.append(
                 {
-                    "task_id": f"project-sync:{project_id}",
-                    **project_sync,
+                    "task_id": f"project-pipeline:{project_id}",
+                    **project_pipeline,
                 }
             )
 
@@ -463,12 +463,12 @@ def _graph_ops_for_workspace(
     )
 
 
-def _project_sync_for_workspace(
+def _project_pipeline_for_workspace(
     workspace_dir: Path | str,
     *,
     project_id: str | None = None,
-) -> ProjectKnowledgeSyncManager:
-    return ProjectKnowledgeSyncManager(
+) -> ProjectKnowledgePipelineManager:
+    return ProjectKnowledgePipelineManager(
         workspace_dir,
         knowledge_dirname=_knowledge_dirname_for_project(project_id),
     )
@@ -492,21 +492,21 @@ def _normalize_quant_stage(stage: str) -> str:
     return normalized
 
 
-def _project_sync_coordinator_for_workspace(
+def _project_pipeline_coordinator_for_workspace(
     workspace_dir: Path | str,
     *,
     project_id: str | None = None,
-) -> ProjectSyncCoordinator:
+) -> ProjectPipelineCoordinator:
     normalized_project_id = _normalize_project_id(project_id)
 
-    def _factory(_requested_project_id: str) -> ProjectKnowledgeSyncManager:
+    def _factory(_requested_project_id: str) -> ProjectKnowledgePipelineManager:
         resolved_project_id = _normalize_project_id(_requested_project_id) or normalized_project_id
-        return _project_sync_for_workspace(
+        return _project_pipeline_for_workspace(
             workspace_dir,
             project_id=resolved_project_id,
         )
 
-    return ProjectSyncCoordinator(
+    return ProjectPipelineCoordinator(
         workspace_dir,
         manager_factory=_factory,
     )
@@ -1479,14 +1479,14 @@ async def start_memify_job(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
-@router.get("/project-sync/status")
-async def get_project_sync_status(request: Request):
+@router.get("/project-pipeline/status")
+async def get_project_pipeline_status(request: Request):
     """Get project-scoped automatic knowledge synchronization status."""
     config, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
     project_id = _resolve_project_id(request)
     if not project_id:
         raise HTTPException(status_code=400, detail="PROJECT_ID_REQUIRED")
-    manager = _project_sync_for_workspace(
+    manager = _project_pipeline_for_workspace(
         workspace_dir,
         project_id=project_id,
     )
@@ -1500,15 +1500,15 @@ async def get_project_sync_status(request: Request):
             project_workspace_dir=str(project_workspace_dir),
             persist=lambda: save_config(config),
         )
-    return _project_sync_state_with_runtime_meta(
+    return _project_pipeline_state_with_runtime_meta(
         workspace_dir=workspace_dir,
         project_id=project_id,
         state=dict(state),
     )
 
 
-@router.post("/project-sync/run")
-async def run_project_sync(
+@router.post("/project-pipeline/run")
+async def run_project_pipeline(
     request: Request,
     trigger: str = Body(default="manual"),
     changed_paths: list[str] | None = Body(default=None),
@@ -1550,14 +1550,14 @@ async def run_project_sync(
         project_name=project_id,
         project_workspace_dir=str(project_workspace_dir),
     )
-    coordinator = _project_sync_coordinator_for_workspace(
+    coordinator = _project_pipeline_coordinator_for_workspace(
         workspace_dir,
         project_id=project_id,
     )
     try:
         event = await asyncio.to_thread(
             coordinator.dispatch,
-            ProjectSyncCommand.start(
+            ProjectPipelineCommand.start(
                 project_id=project_id,
                 config=knowledge_config,
                 running_config=running_config,
@@ -1571,7 +1571,7 @@ async def run_project_sync(
                 idempotency_key=(idempotency_key or "").strip() or None,
             ),
         )
-        _record_project_sync_runtime_event(
+        _record_project_pipeline_runtime_event(
             workspace_dir=workspace_dir,
             project_id=project_id,
             operation_id=event.operation_id,
@@ -1629,8 +1629,8 @@ async def stream_history_backfill_progress(websocket: WebSocket):
         return
 
 
-@router.websocket("/project-sync/ws")
-async def stream_project_sync(websocket: WebSocket):
+@router.websocket("/project-pipeline/ws")
+async def stream_project_pipeline(websocket: WebSocket):
     """Stream project-scoped knowledge sync snapshots with WebSocket."""
     await websocket.accept()
     interval_ms = _clamp_int(
@@ -1650,7 +1650,7 @@ async def stream_project_sync(websocket: WebSocket):
         return
 
     _, _, _, workspace_dir = await _resolve_knowledge_ws_context(websocket)
-    manager = _project_sync_for_workspace(
+    manager = _project_pipeline_for_workspace(
         workspace_dir,
         project_id=project_id,
     )
@@ -1659,7 +1659,7 @@ async def stream_project_sync(websocket: WebSocket):
     try:
         while True:
             snapshot_raw = await asyncio.to_thread(manager.get_state, project_id)
-            snapshot = _project_sync_state_with_runtime_meta(
+            snapshot = _project_pipeline_state_with_runtime_meta(
                 workspace_dir=workspace_dir,
                 project_id=project_id,
                 state=dict(snapshot_raw),

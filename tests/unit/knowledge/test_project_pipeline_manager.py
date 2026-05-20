@@ -8,14 +8,14 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from copaw.config.config import Config, KnowledgeSourceSpec
-from copaw.knowledge import project_sync_dispatch
-from copaw.knowledge.project_sync_manager import ProjectKnowledgeSyncManager
+from copaw.knowledge import project_pipeline_dispatch
+from copaw.knowledge.project_pipeline_manager import ProjectKnowledgePipelineManager
 
 
 def test_run_sync_loop_failure_preserves_l2_snapshot(tmp_path: Path, monkeypatch):
-    project_id = "project-sync-failure-preserve"
+    project_id = "project-pipeline-failure-preserve"
     source_id = "project-source-1"
-    manager = ProjectKnowledgeSyncManager(tmp_path, knowledge_dirname="knowledge")
+    manager = ProjectKnowledgePipelineManager(tmp_path, knowledge_dirname="knowledge")
 
     state = manager._default_state(project_id)
     state["latest_source_id"] = source_id
@@ -80,7 +80,7 @@ def test_run_sync_loop_failure_preserves_l2_snapshot(tmp_path: Path, monkeypatch
 
 
 def test_build_pipeline_trace_includes_stage_artifacts(tmp_path: Path):
-    manager = ProjectKnowledgeSyncManager(tmp_path, knowledge_dirname="knowledge")
+    manager = ProjectKnowledgePipelineManager(tmp_path, knowledge_dirname="knowledge")
 
     trace = manager._build_pipeline_trace(  # type: ignore[attr-defined]
         {
@@ -142,7 +142,7 @@ def test_build_pipeline_trace_includes_stage_artifacts(tmp_path: Path):
 
 
 def test_build_nlp_progress_contains_phrase_placeholder_stage(tmp_path: Path):
-    manager = ProjectKnowledgeSyncManager(tmp_path, knowledge_dirname="knowledge")
+    manager = ProjectKnowledgePipelineManager(tmp_path, knowledge_dirname="knowledge")
 
     payload = manager._build_nlp_progress(  # type: ignore[attr-defined]
         [
@@ -178,11 +178,11 @@ def test_build_nlp_progress_contains_phrase_placeholder_stage(tmp_path: Path):
     assert phrase_stage.get("reason_code") == "PHRASE_LAYER_NOT_IMPLEMENTED"
 
 
-def test_project_sync_start_captures_task_aware_semantic_engine_state(tmp_path: Path, monkeypatch):
+def test_project_pipeline_start_captures_task_aware_semantic_engine_state(tmp_path: Path, monkeypatch):
     project_id = "project-semantic-state"
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
-    manager = ProjectKnowledgeSyncManager(
+    manager = ProjectKnowledgePipelineManager(
         tmp_path,
         knowledge_dirname=f"projects/{project_id}/.knowledge",
     )
@@ -247,7 +247,7 @@ def test_project_sync_start_captures_task_aware_semantic_engine_state(tmp_path: 
 
 
 def test_build_processing_modes_keeps_nlp_queued_when_tokenize_task_is_ready(tmp_path: Path):
-    manager = ProjectKnowledgeSyncManager(tmp_path, knowledge_dirname="knowledge")
+    manager = ProjectKnowledgePipelineManager(tmp_path, knowledge_dirname="knowledge")
 
     semantic_engine = {
         "engine": "hanlp",
@@ -288,7 +288,7 @@ def test_build_processing_modes_keeps_nlp_queued_when_tokenize_task_is_ready(tmp
 
 
 def test_build_semantic_engine_state_prefers_current_snapshot(tmp_path: Path, monkeypatch):
-    manager = ProjectKnowledgeSyncManager(tmp_path, knowledge_dirname="knowledge")
+    manager = ProjectKnowledgePipelineManager(tmp_path, knowledge_dirname="knowledge")
 
     monkeypatch.setattr(
         manager._knowledge_manager,
@@ -331,7 +331,7 @@ def test_dispatch_scheduled_sync_uses_workspace_agent_config(tmp_path: Path, mon
     project_id = "project-scheduled-config"
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
-    manager = ProjectKnowledgeSyncManager(
+    manager = ProjectKnowledgePipelineManager(
         tmp_path,
         knowledge_dirname=f"projects/{project_id}/.knowledge",
     )
@@ -358,10 +358,10 @@ def test_dispatch_scheduled_sync_uses_workspace_agent_config(tmp_path: Path, mon
     )
     agent_config = SimpleNamespace(running=agent_running)
 
-    monkeypatch.setattr(project_sync_dispatch, "load_config", lambda: root_config)
-    monkeypatch.setattr(project_sync_dispatch, "load_agent_config", lambda _agent_id: agent_config)
+    monkeypatch.setattr(project_pipeline_dispatch, "load_config", lambda: root_config)
+    monkeypatch.setattr(project_pipeline_dispatch, "load_agent_config", lambda _agent_id: agent_config)
 
-    project_sync_dispatch.dispatch_scheduled_sync(manager, project_id=project_id)
+    project_pipeline_dispatch.dispatch_scheduled_sync(manager, project_id=project_id)
 
     assert started
     scheduled_config = started[0]["config"]
@@ -399,7 +399,7 @@ def test_hydrate_processing_view_uses_project_file_analysis_stats(tmp_path: Path
         encoding="utf-8",
     )
 
-    manager = ProjectKnowledgeSyncManager(tmp_path, knowledge_dirname="knowledge")
+    manager = ProjectKnowledgePipelineManager(tmp_path, knowledge_dirname="knowledge")
     manager._knowledge_manager.get_source_status = lambda *args, **kwargs: {}  # type: ignore[method-assign]
 
     hydrated = manager._hydrate_processing_view(

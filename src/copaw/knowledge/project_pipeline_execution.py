@@ -105,7 +105,7 @@ def run_sync_loop(
 			config=config,
 			running_config=running_config,
 			source=source,
-			trigger="project-sync",
+			trigger="project-pipeline",
 			changed_paths=list(state.get("changed_paths") or []),
 			processing_mode=processing_mode,
 			quantization_stage=quantization_stage,

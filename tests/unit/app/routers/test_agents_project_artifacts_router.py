@@ -444,14 +444,14 @@ def test_upload_project_file_does_not_auto_sync_chunks(
 
     monkeypatch.setattr(agents_router_module, "load_config", lambda: config)
     monkeypatch.setattr(agents_router_module, "save_config", lambda _config: None)
-    monkeypatch.setattr(agents_router_module, "DEFAULT_PROJECT_SYNC_DEBOUNCE_SECONDS", 0)
-    monkeypatch.setattr(agents_router_module, "DEFAULT_PROJECT_SYNC_COOLDOWN_SECONDS", 0)
+    monkeypatch.setattr(agents_router_module, "DEFAULT_PROJECT_PIPELINE_DEBOUNCE_SECONDS", 0)
+    monkeypatch.setattr(agents_router_module, "DEFAULT_PROJECT_PIPELINE_COOLDOWN_SECONDS", 0)
 
     def run_worker_inline(self, **kwargs):
         self._run_sync_loop(**kwargs)
 
     monkeypatch.setattr(
-        agents_router_module.ProjectKnowledgeSyncManager,
+        agents_router_module.ProjectKnowledgePipelineManager,
         "_start_worker",
         run_worker_inline,
     )

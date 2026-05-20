@@ -63,10 +63,10 @@ from ...agents.utils import (
 from ...agents.skills_manager import SkillPoolService, get_workspace_skills_dir
 from ..multi_agent_manager import MultiAgentManager
 from ...constant import WORKING_DIR
-from copaw.knowledge.project_sync_manager import (
-    DEFAULT_PROJECT_SYNC_COOLDOWN_SECONDS,
-    DEFAULT_PROJECT_SYNC_DEBOUNCE_SECONDS,
-    ProjectKnowledgeSyncManager,
+from copaw.knowledge.project_pipeline_manager import (
+    DEFAULT_PROJECT_PIPELINE_COOLDOWN_SECONDS,
+    DEFAULT_PROJECT_PIPELINE_DEBOUNCE_SECONDS,
+    ProjectKnowledgePipelineManager,
     build_project_source_spec,
     ensure_project_source_registered,
 )
@@ -1705,7 +1705,7 @@ def _maybe_start_project_auto_knowledge_sync(
         getattr(getattr(workspace, "config", None), "running", None)
         or config.agents.running
     )
-    manager = ProjectKnowledgeSyncManager(
+    manager = ProjectKnowledgePipelineManager(
         workspace_dir,
         knowledge_dirname=f"projects/{project_id}/.knowledge",
     )
@@ -1718,8 +1718,8 @@ def _maybe_start_project_auto_knowledge_sync(
         changed_paths=changed_paths,
         auto_enabled=True,
         force=False,
-        debounce_seconds=DEFAULT_PROJECT_SYNC_DEBOUNCE_SECONDS,
-        cooldown_seconds=DEFAULT_PROJECT_SYNC_COOLDOWN_SECONDS,
+        debounce_seconds=DEFAULT_PROJECT_PIPELINE_DEBOUNCE_SECONDS,
+        cooldown_seconds=DEFAULT_PROJECT_PIPELINE_COOLDOWN_SECONDS,
     )
 
 

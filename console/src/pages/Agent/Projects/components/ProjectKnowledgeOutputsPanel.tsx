@@ -14,7 +14,7 @@ import {
   getProjectKnowledgeModeLabel,
   getProjectKnowledgeModeTitle,
   prioritizeProjectKnowledgeArtifacts,
-} from "../utils/projectKnowledgeSyncUi";
+} from "../utils/projectKnowledgePipelineUi";
 
 interface ProjectKnowledgeOutputsPanelProps {
   knowledgeState: ProjectKnowledgeState;

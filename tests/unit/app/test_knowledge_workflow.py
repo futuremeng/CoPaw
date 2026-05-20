@@ -5,7 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from copaw.config.config import KnowledgeConfig, KnowledgeSourceSpec
-from copaw.knowledge.project_sync_manager import ProjectKnowledgeSyncManager
+from copaw.knowledge.project_pipeline_manager import ProjectKnowledgePipelineManager
 from qwenpaw.app.knowledge_workflow import (
     KNOWLEDGE_WORKFLOW_TEMPLATE_ID,
     KnowledgeWorkflowOrchestrator,
@@ -148,7 +148,7 @@ def test_knowledge_workflow_orchestrator_persists_pipeline_run(
     assert not (project_dir / ".knowledge" / f"{source.id}--chunk-manifest.json").exists()
 
 
-def test_project_sync_manager_records_pipeline_run_metadata(
+def test_project_pipeline_manager_records_pipeline_run_metadata(
     tmp_path: Path,
     monkeypatch,
 ):
@@ -158,7 +158,7 @@ def test_project_sync_manager_records_pipeline_run_metadata(
     _write_project_metadata(project_dir, project_id)
     (project_dir / "data" / "sample.md").write_text("# Sample", encoding="utf-8")
 
-    manager = ProjectKnowledgeSyncManager(
+    manager = ProjectKnowledgePipelineManager(
         tmp_path,
         knowledge_dirname=f"projects/{project_id}/.knowledge",
     )

@@ -2,7 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { agentsApi } from "../../../../api/modules/agents";
-import type { ProjectKnowledgeSyncState } from "../../../../api/types";
+import type { ProjectKnowledgePipelineState } from "../../../../api/types";
 import ProjectKnowledgeSettingsPanel from "../components/ProjectKnowledgeSettingsPanel";
 
 const { mockedApi, mockedAgentsApi } = vi.hoisted(() => ({
@@ -10,8 +10,8 @@ const { mockedApi, mockedAgentsApi } = vi.hoisted(() => ({
     listKnowledgeSources: vi.fn(),
     upsertKnowledgeSource: vi.fn(),
     indexKnowledgeSource: vi.fn(),
-    getProjectKnowledgeSyncStatus: vi.fn(),
-    runProjectKnowledgeSync: vi.fn(),
+    getProjectKnowledgePipelineStatus: vi.fn(),
+    runProjectKnowledgePipeline: vi.fn(),
   },
   mockedAgentsApi: {
     updateProjectKnowledgeSink: vi.fn(),
@@ -82,7 +82,7 @@ function buildSemanticState(
 function buildSyncState(
   projectId: string,
   overrides: Record<string, unknown> = {},
-): ProjectKnowledgeSyncState {
+): ProjectKnowledgePipelineState {
   return {
     project_id: projectId,
     status: "idle" as const,
@@ -114,7 +114,7 @@ function buildSyncState(
     operation_updated_at: "",
     changed_files: [],
     ...overrides,
-  } as unknown as ProjectKnowledgeSyncState;
+  } as unknown as ProjectKnowledgePipelineState;
 }
 
 describe("ProjectKnowledgeSettingsPanel", () => {
@@ -125,8 +125,8 @@ describe("ProjectKnowledgeSettingsPanel", () => {
     mockedApi.listKnowledgeSources.mockResolvedValue({
       sources: [buildRegisteredSource(projectId)],
     });
-    mockedApi.getProjectKnowledgeSyncStatus.mockResolvedValue(buildSyncState(projectId));
-    mockedApi.runProjectKnowledgeSync.mockResolvedValue({
+    mockedApi.getProjectKnowledgePipelineStatus.mockResolvedValue(buildSyncState(projectId));
+    mockedApi.runProjectKnowledgePipeline.mockResolvedValue({
       accepted: true,
       reason: "STARTED",
       state: {
@@ -219,7 +219,23 @@ describe("ProjectKnowledgeSettingsPanel", () => {
         projectWorkspaceDir="/tmp/workspace"
         projectAutoKnowledgeSink
         includeGlobal
-        syncState={buildSyncState(projectId)}
+        syncState={buildSyncState(projectId, {
+          status: "queued",
+          current_stage: "cooldown",
+          stage_message: "Waiting for debounce/cooldown window · Semantic engine unavailable: HanLP module is not installed.",
+          progress: 1,
+          dirty: true,
+          last_trigger: "project_watcher_change",
+          changed_paths: ["original/a.md"],
+          changed_count: 1,
+          scheduled_for: "2026-04-11T23:31:00+00:00",
+          semantic_engine: buildSemanticState({
+            status: "unavailable",
+            reason_code: "HANLP_IMPORT_UNAVAILABLE",
+            reason: "HanLP module is not installed or failed to import.",
+            summary: "Semantic engine unavailable: HanLP module is not installed.",
+          }),
+        })}
         onIncludeGlobalChange={vi.fn()}
       />,
     );
@@ -227,7 +243,7 @@ describe("ProjectKnowledgeSettingsPanel", () => {
     await user.click(await screen.findByRole("button", { name: "copaw.projects.knowledge.manualSink" }));
 
     await waitFor(() => {
-      expect(mockedApi.runProjectKnowledgeSync).toHaveBeenCalledWith(
+      expect(mockedApi.runProjectKnowledgePipeline).toHaveBeenCalledWith(
         expect.objectContaining({
           projectId,
           trigger: "manual-panel",
@@ -240,7 +256,7 @@ describe("ProjectKnowledgeSettingsPanel", () => {
   });
 
   it("renders queued sync stage summary", async () => {
-    mockedApi.getProjectKnowledgeSyncStatus.mockResolvedValueOnce(buildSyncState(projectId, {
+    mockedApi.getProjectKnowledgePipelineStatus.mockResolvedValueOnce(buildSyncState(projectId, {
       status: "queued",
       current_stage: "cooldown",
       stage_message: "Waiting for debounce/cooldown window · Semantic engine unavailable: HanLP module is not installed.",
@@ -266,7 +282,23 @@ describe("ProjectKnowledgeSettingsPanel", () => {
         projectWorkspaceDir="/tmp/workspace"
         projectAutoKnowledgeSink
         includeGlobal
-        syncState={buildSyncState(projectId)}
+        syncState={buildSyncState(projectId, {
+          status: "queued",
+          current_stage: "cooldown",
+          stage_message: "Waiting for debounce/cooldown window · Semantic engine unavailable: HanLP module is not installed.",
+          progress: 1,
+          dirty: true,
+          last_trigger: "project_watcher_change",
+          changed_paths: ["original/a.md"],
+          changed_count: 1,
+          scheduled_for: "2026-04-11T23:31:00+00:00",
+          semantic_engine: buildSemanticState({
+            status: "unavailable",
+            reason_code: "HANLP_IMPORT_UNAVAILABLE",
+            reason: "HanLP module is not installed or failed to import.",
+            summary: "Semantic engine unavailable: HanLP module is not installed.",
+          }),
+        })}
         onIncludeGlobalChange={vi.fn()}
       />,
     );
@@ -278,7 +310,7 @@ describe("ProjectKnowledgeSettingsPanel", () => {
   });
 
   it("does not render changed file paths in settings panel", async () => {
-    mockedApi.getProjectKnowledgeSyncStatus.mockResolvedValueOnce(buildSyncState(projectId, {
+    mockedApi.getProjectKnowledgePipelineStatus.mockResolvedValueOnce(buildSyncState(projectId, {
       status: "queued",
       current_stage: "cooldown",
       dirty: true,
@@ -315,7 +347,7 @@ describe("ProjectKnowledgeSettingsPanel", () => {
   });
 
   it("renders semantic engine status in layer 2", async () => {
-    mockedApi.getProjectKnowledgeSyncStatus.mockResolvedValueOnce(buildSyncState(projectId, {
+    mockedApi.getProjectKnowledgePipelineStatus.mockResolvedValueOnce(buildSyncState(projectId, {
       semantic_engine: buildSemanticState({
         status: "unavailable",
         reason_code: "HANLP_IMPORT_UNAVAILABLE",
@@ -342,7 +374,16 @@ describe("ProjectKnowledgeSettingsPanel", () => {
         projectName="Project ABC"
         projectWorkspaceDir="/tmp/workspace"
         projectAutoKnowledgeSink
-        includeGlobal        syncState={buildSyncState(projectId)}        onIncludeGlobalChange={vi.fn()}
+        includeGlobal
+        syncState={buildSyncState(projectId, {
+          semantic_engine: buildSemanticState({
+            status: "unavailable",
+            reason_code: "HANLP_IMPORT_UNAVAILABLE",
+            reason: "HanLP module is not installed or failed to import.",
+            summary: "Semantic engine unavailable: HanLP module is not installed.",
+          }),
+        })}
+        onIncludeGlobalChange={vi.fn()}
       />,
     );
 
@@ -354,7 +395,7 @@ describe("ProjectKnowledgeSettingsPanel", () => {
   });
 
   it("renders semantic runtime failure code in layer 2", async () => {
-    mockedApi.getProjectKnowledgeSyncStatus.mockResolvedValueOnce(buildSyncState(projectId, {
+    mockedApi.getProjectKnowledgePipelineStatus.mockResolvedValueOnce(buildSyncState(projectId, {
       semantic_engine: buildSemanticState({
         status: "error",
         reason_code: "HANLP_TOKENIZE_FAILED",
@@ -381,7 +422,15 @@ describe("ProjectKnowledgeSettingsPanel", () => {
         projectName="Project ABC"
         projectWorkspaceDir="/tmp/workspace"
         projectAutoKnowledgeSink
-        includeGlobal        syncState={buildSyncState(projectId)}        onIncludeGlobalChange={vi.fn()}
+        includeGlobal
+        syncState={buildSyncState(projectId, {
+          semantic_engine: buildSemanticState({
+            status: "error",
+            reason_code: "HANLP_TOKENIZE_FAILED",
+            reason: "HanLP semantic tokenization failed via tok: RuntimeError.",
+          }),
+        })}
+        onIncludeGlobalChange={vi.fn()}
       />,
     );
 
@@ -392,7 +441,7 @@ describe("ProjectKnowledgeSettingsPanel", () => {
   });
 
   it("renders HanLP sidecar setup guidance for sidecar-related semantic status", async () => {
-    mockedApi.getProjectKnowledgeSyncStatus.mockResolvedValueOnce(buildSyncState(projectId, {
+    mockedApi.getProjectKnowledgePipelineStatus.mockResolvedValueOnce(buildSyncState(projectId, {
       semantic_engine: buildSemanticState({
         status: "unavailable",
         reason_code: "HANLP_SIDECAR_UNCONFIGURED",
@@ -419,7 +468,15 @@ describe("ProjectKnowledgeSettingsPanel", () => {
         projectName="Project ABC"
         projectWorkspaceDir="/tmp/workspace"
         projectAutoKnowledgeSink
-        includeGlobal        syncState={buildSyncState(projectId)}        onIncludeGlobalChange={vi.fn()}
+        includeGlobal
+        syncState={buildSyncState(projectId, {
+          semantic_engine: buildSemanticState({
+            status: "unavailable",
+            reason_code: "HANLP_SIDECAR_UNCONFIGURED",
+            reason: "HanLP sidecar is not configured.",
+          }),
+        })}
+        onIncludeGlobalChange={vi.fn()}
       />,
     );
 
@@ -433,7 +490,7 @@ describe("ProjectKnowledgeSettingsPanel", () => {
   });
 
   it("prefers sync state semantic engine over source fallback", async () => {
-    mockedApi.getProjectKnowledgeSyncStatus.mockResolvedValueOnce(buildSyncState(projectId, {
+    mockedApi.getProjectKnowledgePipelineStatus.mockResolvedValueOnce(buildSyncState(projectId, {
       semantic_engine: buildSemanticState({
         status: "idle",
         reason_code: "SOURCE_NOT_READY",
@@ -466,8 +523,8 @@ describe("ProjectKnowledgeSettingsPanel", () => {
     });
   });
 
-  it("renders project sync operation tracing metadata", async () => {
-    mockedApi.getProjectKnowledgeSyncStatus.mockResolvedValueOnce(buildSyncState(projectId, {
+  it("renders project pipeline operation tracing metadata", async () => {
+    mockedApi.getProjectKnowledgePipelineStatus.mockResolvedValueOnce(buildSyncState(projectId, {
       operation_id: "ps-abc1234",
       idempotency_key: "manual-op-key-1",
       deduplicated: true,

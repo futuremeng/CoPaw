@@ -42,7 +42,7 @@ import type {
 import type { ActiveModelsInfo, ProviderInfo } from "../../../api/types/provider";
 import type { AgentsRunningConfig } from "../../../api/types/agent";
 import type { ChatSpec } from "../../../api/types/chat";
-import type { ProjectKnowledgeProcessingMode, ProjectKnowledgeSyncState } from "../../../api/types/knowledge";
+import type { ProjectKnowledgeProcessingMode, ProjectKnowledgePipelineState } from "../../../api/types/knowledge";
 import { useAgentStore } from "../../../stores/agentStore";
 import { deriveBuiltinProjectKnowledgeStages } from "./builtinStages.ts";
 import styles from "./index.module.less";
@@ -990,7 +990,7 @@ export default function PipelinesPage() {
   const [runningConfig, setRunningConfig] = useState<AgentsRunningConfig | null>(null);
   const [selectedBuiltinProjectId, setSelectedBuiltinProjectId] = useState("");
   const [builtinProcessingMode, setBuiltinProcessingMode] = useState<ProjectKnowledgeProcessingMode>("agentic");
-  const [builtinSyncState, setBuiltinSyncState] = useState<ProjectKnowledgeSyncState | null>(null);
+  const [builtinSyncState, setBuiltinSyncState] = useState<ProjectKnowledgePipelineState | null>(null);
   const [builtinSyncLoading, setBuiltinSyncLoading] = useState(false);
   const [builtinRunLoading, setBuiltinRunLoading] = useState(false);
   const [projectBuiltinRunDetail, setProjectBuiltinRunDetail] = useState<ProjectPipelineRunDetail | null>(null);
@@ -1483,7 +1483,7 @@ export default function PipelinesPage() {
     }
     setBuiltinSyncLoading(true);
     try {
-      const state = await knowledgeApi.getProjectKnowledgeSyncStatus({
+      const state = await knowledgeApi.getProjectKnowledgePipelineStatus({
         projectId: selectedBuiltinProjectId,
       });
       setBuiltinSyncState(state);
@@ -1515,7 +1515,7 @@ export default function PipelinesPage() {
     }
     setBuiltinRunLoading(true);
     try {
-      await knowledgeApi.runProjectKnowledgeSync({
+      await knowledgeApi.runProjectKnowledgePipeline({
         projectId: selectedBuiltinProjectId,
         trigger: "pipelines_builtin",
         force: true,
@@ -1543,7 +1543,7 @@ export default function PipelinesPage() {
     }
     setBuiltinRunLoading(true);
     try {
-      await knowledgeApi.runProjectKnowledgeSync({
+      await knowledgeApi.runProjectKnowledgePipeline({
         projectId: selectedBuiltinProjectId,
         trigger: "pipelines_builtin_retry",
         force: true,

@@ -19,7 +19,7 @@ import type {
   ProjectKnowledgeStepStatsResponse,
   ProjectKnowledgeStepStatsStepId,
   ProjectKnowledgeSourceScanStatsResponse,
-  ProjectKnowledgeSyncState,
+  ProjectKnowledgePipelineState,
   QualityLoopJobStatus,
 } from "../../../../api/types";
 import { filterGraphQuerySourceRecords } from "../../Knowledge/graphQuery";
@@ -27,9 +27,9 @@ import {
   getProjectKnowledgeQuantizationStage,
   prioritizeProjectKnowledgeArtifacts,
   getProjectKnowledgeSemanticSummary,
-  getProjectKnowledgeSyncAlertDescription,
-  getProjectKnowledgeSyncAlertType,
-} from "../utils/projectKnowledgeSyncUi";
+  getProjectKnowledgePipelineAlertDescription,
+  getProjectKnowledgePipelineAlertType,
+} from "../utils/projectKnowledgePipelineUi";
 
 type ProjectGraphQueryMode = "template" | "cypher";
 
@@ -104,7 +104,7 @@ export interface ProjectKnowledgeMetricsMeta {
 
 export type ProjectKnowledgeProcessingMode = "fast" | "nlp" | "agentic";
 export type ProjectKnowledgeProcessingScope = "global" | "source";
-export type ProjectKnowledgeRealtimeChannel = "project-sync" | "tasks";
+export type ProjectKnowledgeRealtimeChannel = "project-pipeline" | "tasks";
 export type ProjectKnowledgeRealtimeChannelStatus = "idle" | "connecting" | "open" | "reconnecting";
 
 export interface ProjectKnowledgeModeState {
@@ -222,7 +222,7 @@ export interface ProjectKnowledgeState {
     sourceId: string,
     options?: { force?: boolean },
   ) => Promise<KnowledgeSourceContent | null>;
-  syncState: ProjectKnowledgeSyncState | null;
+  syncState: ProjectKnowledgePipelineState | null;
   changedFilesNormalized: Array<{
     path: string;
     trigger_mode?: "automatic" | "manual";
@@ -414,7 +414,7 @@ const ACTIVE_KNOWLEDGE_STATUSES = new Set([
  * Normalize changed_files from sync state.
  * Prefers new changed_files field; falls back to generating from changed_paths + metadata.
  */
-function normalizeChangedFiles(syncState: ProjectKnowledgeSyncState | null) {
+function normalizeChangedFiles(syncState: ProjectKnowledgePipelineState | null) {
   if (!syncState) {
     return [];
   }
@@ -484,7 +484,7 @@ function activeKnowledgeTaskPriority(task: KnowledgeTaskProgress): number {
   if (type === "memify") {
     return 1;
   }
-  if (type === "project_sync") {
+  if (type === "project_pipeline") {
     return 2;
   }
   if (type === "history_backfill") {
@@ -677,7 +677,7 @@ function buildSparklinePath(values: number[], width: number, height: number): st
     .join(" ");
 }
 
-function getSyncRelationCount(syncState: ProjectKnowledgeSyncState | null): number {
+function getSyncRelationCount(syncState: ProjectKnowledgePipelineState | null): number {
   const l2Metrics = syncState?.l2_metrics;
   if (l2Metrics && typeof l2Metrics === "object") {
     const l2RelationCount = (l2Metrics as { syntax_relation_count?: unknown }).syntax_relation_count;
@@ -700,7 +700,7 @@ function getSyncRelationCount(syncState: ProjectKnowledgeSyncState | null): numb
   return Number.isFinite(Number(relationCount)) ? Number(relationCount) : Number(relationCount || 0);
 }
 
-function getSyncNodeCount(syncState: ProjectKnowledgeSyncState | null): number {
+function getSyncNodeCount(syncState: ProjectKnowledgePipelineState | null): number {
   const l2Metrics = syncState?.l2_metrics;
   if (l2Metrics && typeof l2Metrics === "object") {
     const l2EntityCount = (l2Metrics as { ner_entity_count?: unknown }).ner_entity_count;
@@ -724,7 +724,7 @@ function getSyncNodeCount(syncState: ProjectKnowledgeSyncState | null): number {
 }
 
 function getSyncIndexCount(
-  syncState: ProjectKnowledgeSyncState | null,
+  syncState: ProjectKnowledgePipelineState | null,
   key: "document_count" | "snapshot_count" | "chunk_count" | "sentence_count" | "char_count" | "token_count",
 ): number {
   const indexResult = syncState?.last_result?.index;
@@ -736,7 +736,7 @@ function getSyncIndexCount(
 }
 
 function getSyncIndexMetric(
-  syncState: ProjectKnowledgeSyncState | null,
+  syncState: ProjectKnowledgePipelineState | null,
   key: string,
 ): number {
   const indexResult = syncState?.last_result?.index;
@@ -748,7 +748,7 @@ function getSyncIndexMetric(
 }
 
 function getSyncEnrichmentMetric(
-  syncState: ProjectKnowledgeSyncState | null,
+  syncState: ProjectKnowledgePipelineState | null,
   key: string,
 ): number {
   const memify = syncState?.last_result?.memify;
@@ -764,7 +764,7 @@ function getSyncEnrichmentMetric(
 }
 
 function getSyncMemifyMetric(
-  syncState: ProjectKnowledgeSyncState | null,
+  syncState: ProjectKnowledgePipelineState | null,
   key: string,
 ): number {
   const memify = syncState?.last_result?.memify;
@@ -791,7 +791,7 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function getPipelineRunMeta(syncState: ProjectKnowledgeSyncState | null): Record<string, unknown> {
+function getPipelineRunMeta(syncState: ProjectKnowledgePipelineState | null): Record<string, unknown> {
   const pipelineRun = syncState?.last_result?.pipeline_run;
   if (!pipelineRun || typeof pipelineRun !== "object") {
     return {};
@@ -835,7 +835,7 @@ function normalizeNullableNumber(value: unknown): number | null {
 }
 
 function getBackendModeMetric(
-  syncState: ProjectKnowledgeSyncState | null,
+  syncState: ProjectKnowledgePipelineState | null,
   mode: ProjectKnowledgeProcessingMode,
 ): ProjectKnowledgeModeMetricsPayload | null {
   const payload = syncState?.mode_metrics;
@@ -850,7 +850,7 @@ function getBackendModeMetric(
 }
 
 function getBackendModeMetricNumber(
-  syncState: ProjectKnowledgeSyncState | null,
+  syncState: ProjectKnowledgePipelineState | null,
   mode: ProjectKnowledgeProcessingMode,
   key: keyof ProjectKnowledgeModeMetricsPayload,
 ): number {
@@ -858,7 +858,7 @@ function getBackendModeMetricNumber(
 }
 
 function getBackendModeMetricNullableNumber(
-  syncState: ProjectKnowledgeSyncState | null,
+  syncState: ProjectKnowledgePipelineState | null,
   mode: ProjectKnowledgeProcessingMode,
   key: keyof ProjectKnowledgeModeMetricsPayload,
 ): number | null {
@@ -866,7 +866,7 @@ function getBackendModeMetricNullableNumber(
 }
 
 function getBackendGlobalMetricNumber(
-  syncState: ProjectKnowledgeSyncState | null,
+  syncState: ProjectKnowledgePipelineState | null,
   key: keyof ProjectKnowledgeGlobalMetricsPayload,
 ): number {
   return normalizeNumber(syncState?.global_metrics?.[key]);
@@ -893,7 +893,7 @@ interface ProjectKnowledgeSourceQuantBaseMetrics {
 }
 
 function hasBackendGlobalCountMetric(
-  syncState: ProjectKnowledgeSyncState | null,
+  syncState: ProjectKnowledgePipelineState | null,
   key: ProjectKnowledgeCountMetricKey,
 ): boolean {
   const payload = syncState?.global_metrics;
@@ -914,7 +914,7 @@ function sumSourceMetric(
 }
 
 function resolveCountMetric(
-  syncState: ProjectKnowledgeSyncState | null,
+  syncState: ProjectKnowledgePipelineState | null,
   sourceTotal: number,
   key: ProjectKnowledgeCountMetricKey,
 ): number {
@@ -927,7 +927,7 @@ function resolveCountMetric(
 export function deriveSourceQuantBaseMetrics(
   projectSources: KnowledgeSourceItem[],
   sourceRegistered: boolean,
-  syncState: ProjectKnowledgeSyncState | null,
+  syncState: ProjectKnowledgePipelineState | null,
 ): ProjectKnowledgeSourceQuantBaseMetrics {
   const totalSources = projectSources.length;
   // indexed 仅代表 interlinear 工件存在，统计已与后端一致
@@ -977,7 +977,7 @@ export function deriveSourceQuantBaseMetrics(
 }
 
 function parseBackendProcessingModes(
-  syncState: ProjectKnowledgeSyncState | null,
+  syncState: ProjectKnowledgePipelineState | null,
   latestQualityLoopJob?: QualityLoopJobStatus | null,
 ): ProjectKnowledgeModeState[] | null {
   const payload = syncState?.processing_modes;
@@ -1208,7 +1208,7 @@ function parseBackendProcessingModes(
 }
 
 function parseBackendOutputResolution(
-  syncState: ProjectKnowledgeSyncState | null,
+  syncState: ProjectKnowledgePipelineState | null,
   processingModes: ProjectKnowledgeModeState[],
 ): ProjectKnowledgeOutputResolution | null {
   const payload = syncState?.output_resolution as ProjectKnowledgeOutputResolutionPayload | undefined;
@@ -1252,7 +1252,7 @@ function parseBackendOutputResolution(
 }
 
 function parseBackendProcessingScheduler(
-  syncState: ProjectKnowledgeSyncState | null,
+  syncState: ProjectKnowledgePipelineState | null,
   processingModes: ProjectKnowledgeModeState[],
   outputResolution: ProjectKnowledgeOutputResolution,
 ): ProjectKnowledgeProcessingScheduler | null {
@@ -1339,7 +1339,7 @@ function deriveProcessingScheduler(
 }
 
 function parseBackendModeOutputs(
-  syncState: ProjectKnowledgeSyncState | null,
+  syncState: ProjectKnowledgePipelineState | null,
 ): Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeOutput> | null {
   const payload = syncState?.mode_outputs;
   if (!payload || typeof payload !== "object") {
@@ -1469,11 +1469,11 @@ export function useProjectKnowledgeState(
   const [trendRangeDays, setTrendRangeDays] = useState<7 | 30>(7);
   const [trendSnapshots, setTrendSnapshots] = useState<ProjectKnowledgeTrendSnapshot[]>([]);
   const [trendExpanded, setTrendExpanded] = useState(true);
-  const [syncState, setSyncState] = useState<ProjectKnowledgeSyncState | null>(null);
+  const [syncState, setSyncState] = useState<ProjectKnowledgePipelineState | null>(null);
   const [activeKnowledgeTasks, setActiveKnowledgeTasks] = useState<KnowledgeTaskProgress[]>([]);
   const [activeKnowledgeTask, setActiveKnowledgeTask] = useState<KnowledgeTaskProgress | null>(null);
   const [latestQualityLoopJob, setLatestQualityLoopJob] = useState<QualityLoopJobStatus | null>(null);
-  const [projectSyncChannelStatus, setProjectSyncChannelStatus] =
+  const [projectPipelineChannelStatus, setProjectPipelineChannelStatus] =
     useState<ProjectKnowledgeRealtimeChannelStatus>("idle");
   const [tasksChannelStatus, setTasksChannelStatus] =
     useState<ProjectKnowledgeRealtimeChannelStatus>("idle");
@@ -1804,7 +1804,7 @@ export function useProjectKnowledgeState(
     }
     setProcessingLaunchMode(mode);
     try {
-      const response = await api.runProjectKnowledgeSync({
+      const response = await api.runProjectKnowledgePipeline({
         projectId: params.projectId,
         trigger: options?.trigger ?? `processing-panel:${mode}`,
         force: options?.force ?? true,
@@ -1847,7 +1847,7 @@ export function useProjectKnowledgeState(
     setActiveKnowledgeTasks([]);
     setActiveKnowledgeTask(null);
     setLatestQualityLoopJob(null);
-    setProjectSyncChannelStatus("idle");
+    setProjectPipelineChannelStatus("idle");
     setTasksChannelStatus("idle");
     setSemanticBySourceId({});
     setSemanticLoadingBySourceId({});
@@ -1924,7 +1924,7 @@ export function useProjectKnowledgeState(
 
   useEffect(() => {
     if (!params.projectId || typeof WebSocket === "undefined") {
-      setProjectSyncChannelStatus("idle");
+      setProjectPipelineChannelStatus("idle");
       return;
     }
     let disposed = false;
@@ -1935,9 +1935,9 @@ export function useProjectKnowledgeState(
       if (disposed) {
         return;
       }
-      setProjectSyncChannelStatus((prev) => (prev === "idle" ? "connecting" : "reconnecting"));
+      setProjectPipelineChannelStatus((prev) => (prev === "idle" ? "connecting" : "reconnecting"));
       try {
-        const baseUrl = getApiUrl("/knowledge/project-sync/ws");
+        const baseUrl = getApiUrl("/knowledge/project-pipeline/ws");
         const wsUrl = new URL(baseUrl, window.location.origin);
         wsUrl.protocol = wsUrl.protocol === "https:" ? "wss:" : "ws:";
         wsUrl.searchParams.set("project_id", params.projectId);
@@ -1953,7 +1953,7 @@ export function useProjectKnowledgeState(
           if (disposed) {
             return;
           }
-          setProjectSyncChannelStatus("open");
+          setProjectPipelineChannelStatus("open");
         };
         ws.onmessage = (event) => {
           if (disposed) {
@@ -1965,7 +1965,7 @@ export function useProjectKnowledgeState(
             if (!nextState || typeof nextState !== "object") {
               return;
             }
-            setSyncState(nextState as ProjectKnowledgeSyncState);
+            setSyncState(nextState as ProjectKnowledgePipelineState);
           } catch {
             // ignore malformed websocket messages
           }
@@ -1974,14 +1974,14 @@ export function useProjectKnowledgeState(
           if (disposed) {
             return;
           }
-          setProjectSyncChannelStatus("reconnecting");
+          setProjectPipelineChannelStatus("reconnecting");
           reconnectTimer = window.setTimeout(() => {
             connect();
           }, 1500);
         };
       } catch {
         // ignore websocket construction failure in unsupported env
-        setProjectSyncChannelStatus("reconnecting");
+        setProjectPipelineChannelStatus("reconnecting");
       }
     };
 
@@ -1989,7 +1989,7 @@ export function useProjectKnowledgeState(
 
     return () => {
       disposed = true;
-      setProjectSyncChannelStatus("idle");
+      setProjectPipelineChannelStatus("idle");
       if (reconnectTimer) {
         window.clearTimeout(reconnectTimer);
       }
@@ -2308,7 +2308,7 @@ export function useProjectKnowledgeState(
   }, [syncState?.global_metrics]);
 
   const syncAlertType = useMemo(
-    () => getProjectKnowledgeSyncAlertType(syncState),
+    () => getProjectKnowledgePipelineAlertType(syncState),
     [syncState],
   );
 
@@ -2454,7 +2454,7 @@ export function useProjectKnowledgeState(
 
     const fastStatus: ProjectKnowledgeModeState["status"] = !fastAvailable && syncState?.status === "failed"
       ? "failed"
-      : ["project_sync", "history_backfill"].includes(activeTaskType)
+      : ["project_pipeline", "history_backfill"].includes(activeTaskType)
         ? "running"
         : fastAvailable
           ? "ready"
@@ -2737,8 +2737,8 @@ export function useProjectKnowledgeState(
       (mode) => mode.status === "running" || mode.status === "queued",
     );
 
-    if (staleModes.length > 0 && projectSyncChannelStatus !== "open") {
-      staleSources.push("project-sync");
+    if (staleModes.length > 0 && projectPipelineChannelStatus !== "open") {
+      staleSources.push("project-pipeline");
     }
     if (hasQueuedOrRunningModes && tasksChannelStatus !== "open") {
       staleSources.push("tasks");
@@ -2749,11 +2749,11 @@ export function useProjectKnowledgeState(
       staleModes,
       staleSources,
       channelStatus: {
-        "project-sync": projectSyncChannelStatus,
+        "project-pipeline": projectPipelineChannelStatus,
         tasks: tasksChannelStatus,
       },
     };
-  }, [processingCompareModes, projectSyncChannelStatus, tasksChannelStatus]);
+  }, [processingCompareModes, projectPipelineChannelStatus, tasksChannelStatus]);
 
   const modeOutputs = useMemo<Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeOutput>>(() => {
     const backendModeOutputs = parseBackendModeOutputs(syncState);
@@ -2778,8 +2778,8 @@ export function useProjectKnowledgeState(
     if (!syncState) {
       return activeTaskText;
     }
-    const syncText = getProjectKnowledgeSyncAlertDescription(syncState, t);
-    if (!activeTaskText || activeKnowledgeTask?.task_type === "project_sync") {
+    const syncText = getProjectKnowledgePipelineAlertDescription(syncState, t);
+    if (!activeTaskText || activeKnowledgeTask?.task_type === "project_pipeline") {
       return syncText;
     }
     return [syncText, activeTaskText].filter(Boolean).join(" · ");

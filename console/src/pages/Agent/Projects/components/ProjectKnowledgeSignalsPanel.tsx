@@ -3,7 +3,7 @@ import { Alert, Button, Select, Space, Tag, Tooltip, Typography } from "antd";
 import { useTranslation } from "react-i18next";
 import styles from "../index.module.less";
 import { buildProjectKnowledgeLatestSummaryModelFromState } from "../utils/projectKnowledgeLatestSummaryModel";
-import { getProjectKnowledgeSemanticReasonLabel } from "../utils/projectKnowledgeSyncUi";
+import { getProjectKnowledgeSemanticReasonLabel } from "../utils/projectKnowledgePipelineUi";
 import type { ProjectRealtimeConnectionStatus } from "../hooks/useProjectRealtimeController";
 import type {
   ProjectKnowledgeHeaderSignals,
@@ -46,8 +46,8 @@ function formatMetricsSourceLabel(source: string, t: ReturnType<typeof useTransl
   if (!normalized) {
     return t("copaw.projects.knowledge.metricsSourceUnknown");
   }
-  if (normalized === "project_sync_merged") {
-    return t("copaw.projects.knowledge.metricsSourceProjectSyncMerged");
+  if (normalized === "project_pipeline_merged") {
+    return t("copaw.projects.knowledge.metricsSourceProjectPipelineMerged");
   }
   if (normalized === "source_status") {
     return t("copaw.projects.knowledge.metricsSourceSourceStatus");

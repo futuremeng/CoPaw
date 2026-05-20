@@ -217,6 +217,223 @@ def collect_source_document_sample_paths(manager: Any, source_id: str) -> list[s
 	]
 
 
+def _collect_project_source_specs(manager: Any, project_id: str) -> list[Any]:
+	getter = getattr(manager._knowledge_manager, "list_sources_from_storage", None)
+	if not callable(getter):
+		return []
+	try:
+		sources = getter()
+	except Exception:
+		return []
+	if not isinstance(sources, list):
+		return []
+	if not project_id:
+		return [item for item in sources if getattr(item, "id", None)]
+	return [
+		item
+		for item in sources
+		if getattr(item, "id", None) and str(getattr(item, "project_id", "") or "").strip() == project_id
+	]
+
+
+def _load_source_index_chunks(manager: Any, source_id: str) -> list[dict[str, Any]]:
+	loader = getattr(manager._knowledge_manager, "_load_index_payload", None)
+	if not callable(loader):
+		return []
+	try:
+		payload = loader(source_id)
+	except Exception:
+		return []
+	if not isinstance(payload, dict):
+		return []
+	chunks = payload.get("chunks")
+	if not isinstance(chunks, list):
+		return []
+	return [item for item in chunks if isinstance(item, dict)]
+
+
+def _first_non_empty_path(manager: Any, chunks: list[dict[str, Any]], keys: list[str]) -> str:
+	for chunk in chunks:
+		for key in keys:
+			path = str(chunk.get(key) or "").strip()
+			if path:
+				return relative_workspace_path(manager, path)
+	return ""
+
+
+def _source_sample_paths(manager: Any, chunks: list[dict[str, Any]]) -> list[str]:
+	paths: list[str] = []
+	for chunk in chunks:
+		doc_path = str(chunk.get("document_path") or "").strip()
+		if doc_path and doc_path not in paths:
+			paths.append(relative_workspace_path(manager, doc_path))
+		if len(paths) >= 5:
+			break
+	return paths
+
+
+def build_mode_metrics_by_source(
+	manager: Any,
+	state: dict[str, Any],
+	mode_metrics: dict[str, Any],
+) -> dict[str, Any]:
+	project_id = str(state.get("project_id") or "").strip()
+	latest_source_id = str(state.get("latest_source_id") or "").strip()
+	source_specs = _collect_project_source_specs(manager, project_id)
+	if not source_specs and latest_source_id:
+		source_specs = [type("_SourceRef", (), {"id": latest_source_id, "project_id": project_id, "location": "", "name": latest_source_id})()]
+
+	status_getter = getattr(manager._knowledge_manager, "get_source_status", None)
+	by_source: dict[str, Any] = {}
+
+	def _build_payload_for_chunks(
+		chunks: list[dict[str, Any]],
+		*,
+		document_count: int,
+		chunk_count: int,
+		token_count: int,
+	) -> dict[str, Any]:
+		sample_paths = _source_sample_paths(manager, chunks)
+		ner_entity_count = sum(_safe_int(chunk.get("ner_entity_count")) for chunk in chunks)
+		ner_ready_chunk_count = sum(1 for chunk in chunks if str(chunk.get("ner_status") or "").strip().lower() == "ready")
+		syntax_sentence_count = sum(_safe_int(chunk.get("syntax_sentence_count")) for chunk in chunks)
+		syntax_token_count = sum(_safe_int(chunk.get("syntax_token_count")) for chunk in chunks)
+		syntax_pos_count = sum(_safe_int(chunk.get("syntax_pos_count")) for chunk in chunks)
+		syntax_relation_count = sum(_safe_int(chunk.get("syntax_relation_count")) for chunk in chunks)
+		cor_cluster_count = sum(_safe_int(chunk.get("cor_cluster_count")) for chunk in chunks)
+		cor_replacement_count = sum(_safe_int(chunk.get("cor_replacement_count")) for chunk in chunks)
+		cor_ready_chunk_count = sum(1 for chunk in chunks if str(chunk.get("cor_status") or "").strip().lower() == "ready")
+		cor_effective_chunk_count = sum(1 for chunk in chunks if _safe_int(chunk.get("cor_replacement_count")) > 0)
+
+		fast_global = _as_dict(mode_metrics.get("fast"))
+		nlp_global = _as_dict(mode_metrics.get("nlp"))
+		agentic_global = _as_dict(mode_metrics.get("agentic"))
+
+		fast_metrics = {
+			**fast_global,
+			"mode": "fast",
+			"document_count": document_count,
+			"chunk_count": chunk_count,
+		}
+		nlp_metrics = {
+			**nlp_global,
+			"mode": "nlp",
+			"document_count": document_count,
+			"chunk_count": chunk_count,
+			"tokenize_token_count": token_count,
+			"ner_ready_chunk_count": ner_ready_chunk_count,
+			"ner_entity_count": ner_entity_count,
+			"syntax_sentence_count": syntax_sentence_count,
+			"syntax_token_count": syntax_token_count,
+			"syntax_pos_count": syntax_pos_count,
+			"syntax_relation_count": syntax_relation_count,
+			"cor_ready_chunk_count": cor_ready_chunk_count,
+			"cor_cluster_count": cor_cluster_count,
+			"cor_replacement_count": cor_replacement_count,
+			"cor_effective_chunk_count": cor_effective_chunk_count,
+			"evidence_paths": {
+				"document_count": _first_non_empty_path(manager, chunks, ["document_path", "snapshot_path"]),
+				"tokenize_token_count": _first_non_empty_path(manager, chunks, ["snapshot_path", "syntax_interlinear_path", "chunk_path"]),
+				"ner_ready_chunk_count": _first_non_empty_path(manager, chunks, ["ner_structured_path", "ner_path"]),
+				"ner_entity_count": _first_non_empty_path(manager, chunks, ["ner_structured_path", "ner_path"]),
+				"syntax_sentence_count": _first_non_empty_path(manager, chunks, ["syntax_structured_path", "syntax_path"]),
+				"syntax_token_count": _first_non_empty_path(manager, chunks, ["syntax_structured_path", "syntax_path"]),
+				"syntax_pos_count": _first_non_empty_path(manager, chunks, ["syntax_structured_path", "syntax_path"]),
+				"syntax_relation_count": _first_non_empty_path(manager, chunks, ["syntax_structured_path", "syntax_path"]),
+				"cor_ready_chunk_count": _first_non_empty_path(manager, chunks, ["cor_structured_path", "cor_path"]),
+				"cor_cluster_count": _first_non_empty_path(manager, chunks, ["cor_structured_path", "cor_path"]),
+				"cor_replacement_count": _first_non_empty_path(manager, chunks, ["cor_structured_path", "cor_path"]),
+				"cor_effective_chunk_count": _first_non_empty_path(manager, chunks, ["cor_structured_path", "cor_path"]),
+			},
+			"evidence_bundles": {
+				"document_count": {
+					"metric_key": "document_count",
+					"metric_kind": "aggregate",
+					"source_count": len(sample_paths),
+					"sample_source_paths": sample_paths,
+				},
+				"tokenize_token_count": {
+					"metric_key": "tokenize_token_count",
+					"metric_kind": "aggregate",
+					"source_count": len(sample_paths),
+					"sample_source_paths": sample_paths,
+				},
+				"ner_entity_count": {
+					"metric_key": "ner_entity_count",
+					"metric_kind": "aggregate",
+					"source_count": len(sample_paths),
+					"sample_source_paths": sample_paths,
+				},
+				"syntax_relation_count": {
+					"metric_key": "syntax_relation_count",
+					"metric_kind": "aggregate",
+					"source_count": len(sample_paths),
+					"sample_source_paths": sample_paths,
+				},
+			},
+		}
+		agentic_metrics = {
+			**agentic_global,
+			"mode": "agentic",
+			"document_count": document_count,
+			"chunk_count": chunk_count,
+		}
+		return {
+			"fast": fast_metrics,
+			"nlp": nlp_metrics,
+			"agentic": agentic_metrics,
+		}
+
+	for source in source_specs:
+		source_id = str(getattr(source, "id", "") or "").strip()
+		if not source_id:
+			continue
+		source_status: dict[str, Any] = {}
+		if callable(status_getter):
+			try:
+				source_status = status_getter(source_id, source=source, lightweight=True)
+			except TypeError:
+				try:
+					source_status = status_getter(source_id=source_id, source=source, lightweight=True)
+				except Exception:
+					source_status = {}
+			except Exception:
+				source_status = {}
+		if not isinstance(source_status, dict):
+			source_status = {}
+
+		chunks = _load_source_index_chunks(manager, source_id)
+		document_count = _safe_int(source_status.get("document_count"))
+		chunk_count = _safe_int(source_status.get("chunk_count"))
+		token_count = _safe_int(source_status.get("token_count"))
+		by_source[source_id] = _build_payload_for_chunks(
+			chunks,
+			document_count=document_count,
+			chunk_count=chunk_count,
+			token_count=token_count,
+		)
+
+		doc_groups: dict[str, list[dict[str, Any]]] = {}
+		for chunk in chunks:
+			doc_key = str(chunk.get("document_path") or "").strip()
+			if not doc_key:
+				continue
+			doc_groups.setdefault(doc_key, []).append(chunk)
+		for doc_key, doc_chunks in doc_groups.items():
+			normalized_doc_key = relative_workspace_path(manager, doc_key)
+			doc_token_count = sum(_safe_int(chunk.get("syntax_token_count")) for chunk in doc_chunks)
+			by_source[normalized_doc_key] = _build_payload_for_chunks(
+				doc_chunks,
+				document_count=1,
+				chunk_count=len(doc_chunks),
+				token_count=doc_token_count,
+			)
+			doc_name = Path(normalized_doc_key).name.strip()
+			if doc_name and doc_name not in by_source:
+				by_source[doc_name] = by_source[normalized_doc_key]
+	return by_source
+
+
 def build_mode_outputs(manager: Any, state: dict[str, Any], processing_modes: list[dict[str, Any]]) -> dict[str, Any]:
 	_ = processing_modes
 	last_result = _as_dict(state.get("last_result"))
@@ -682,6 +899,7 @@ def hydrate_processing_view(manager: Any, state: dict[str, Any]) -> dict[str, An
 	nlp_progress = build_nlp_progress_view(manager, processing_modes, l2_metrics)
 	mode_outputs = build_mode_outputs(manager, payload, processing_modes)
 	mode_metrics = build_mode_metrics(manager, payload, processing_modes, mode_outputs, l1_metrics, l2_metrics, build_l3_metrics(payload))
+	mode_metrics_by_source = build_mode_metrics_by_source(manager, payload, mode_metrics)
 	global_metrics = build_global_metrics(manager, payload, mode_metrics=mode_metrics, source_status=source_status)
 	output_resolution = build_output_resolution(processing_modes, semantic_engine)
 	output_scheduler = build_output_scheduler(processing_modes)
@@ -694,6 +912,7 @@ def hydrate_processing_view(manager: Any, state: dict[str, Any]) -> dict[str, An
 		"output_scheduler": output_scheduler,
 		"mode_outputs": mode_outputs,
 		"mode_metrics": mode_metrics,
+		"mode_metrics_by_source": mode_metrics_by_source,
 		"global_metrics": global_metrics,
 		"l1_metrics": l1_metrics,
 		"l2_metrics": l2_metrics,

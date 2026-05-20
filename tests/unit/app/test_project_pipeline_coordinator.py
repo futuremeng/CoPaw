@@ -4,10 +4,10 @@ from pathlib import Path
 from typing import cast
 
 from copaw.config.config import Config, KnowledgeSourceSpec
-from copaw.knowledge.project_sync_manager import (
-    ProjectKnowledgeSyncManager,
-    ProjectSyncCommand,
-    ProjectSyncCoordinator,
+from copaw.knowledge.project_pipeline_manager import (
+    ProjectKnowledgePipelineManager,
+    ProjectPipelineCommand,
+    ProjectPipelineCoordinator,
 )
 
 
@@ -55,14 +55,14 @@ def _source(project_id: str, project_dir: Path) -> KnowledgeSourceSpec:
     )
 
 
-def test_project_sync_command_generates_stable_operation_id_without_manual_key(tmp_path: Path):
+def test_project_pipeline_command_generates_stable_operation_id_without_manual_key(tmp_path: Path):
     project_id = "project-op-stable"
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
     cfg = Config().knowledge
 
     source = _source(project_id, project_dir)
-    cmd_a = ProjectSyncCommand.start(
+    cmd_a = ProjectPipelineCommand.start(
         project_id=project_id,
         config=cfg,
         running_config=None,
@@ -72,7 +72,7 @@ def test_project_sync_command_generates_stable_operation_id_without_manual_key(t
         auto_enabled=True,
         force=False,
     )
-    cmd_b = ProjectSyncCommand.start(
+    cmd_b = ProjectPipelineCommand.start(
         project_id=project_id,
         config=cfg,
         running_config=None,
@@ -88,14 +88,14 @@ def test_project_sync_command_generates_stable_operation_id_without_manual_key(t
     assert cmd_a.operation_id.startswith("ps-")
 
 
-def test_project_sync_command_respects_manual_idempotency_key(tmp_path: Path):
+def test_project_pipeline_command_respects_manual_idempotency_key(tmp_path: Path):
     project_id = "project-op-manual"
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
     cfg = Config().knowledge
 
     source = _source(project_id, project_dir)
-    cmd = ProjectSyncCommand.start(
+    cmd = ProjectPipelineCommand.start(
         project_id=project_id,
         config=cfg,
         running_config=None,
@@ -111,14 +111,14 @@ def test_project_sync_command_respects_manual_idempotency_key(tmp_path: Path):
     assert cmd.operation_id.startswith("ps-")
 
 
-def test_project_sync_command_tracks_quantization_stage(tmp_path: Path):
+def test_project_pipeline_command_tracks_quantization_stage(tmp_path: Path):
     project_id = "project-op-stage"
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
     cfg = Config().knowledge
 
     source = _source(project_id, project_dir)
-    cmd_l1 = ProjectSyncCommand.start(
+    cmd_l1 = ProjectPipelineCommand.start(
         project_id=project_id,
         config=cfg,
         running_config=None,
@@ -129,7 +129,7 @@ def test_project_sync_command_tracks_quantization_stage(tmp_path: Path):
         force=False,
         quantization_stage="l1",
     )
-    cmd_l2 = ProjectSyncCommand.start(
+    cmd_l2 = ProjectPipelineCommand.start(
         project_id=project_id,
         config=cfg,
         running_config=None,
@@ -146,20 +146,20 @@ def test_project_sync_command_tracks_quantization_stage(tmp_path: Path):
     assert cmd_l1.idempotency_key != cmd_l2.idempotency_key
 
 
-def test_project_sync_coordinator_start_dispatch_injects_operation_metadata(tmp_path: Path):
+def test_project_pipeline_coordinator_start_dispatch_injects_operation_metadata(tmp_path: Path):
     project_id = "project-coordinator-start"
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
     cfg = Config().knowledge
 
     manager = _FakeSyncManager()
-    coordinator = ProjectSyncCoordinator(
+    coordinator = ProjectPipelineCoordinator(
         tmp_path,
-        manager_factory=lambda _pid: cast(ProjectKnowledgeSyncManager, manager),
+        manager_factory=lambda _pid: cast(ProjectKnowledgePipelineManager, manager),
     )
 
     event = coordinator.dispatch(
-        ProjectSyncCommand.start(
+        ProjectPipelineCommand.start(
             project_id=project_id,
             config=cfg,
             running_config=None,
@@ -182,20 +182,20 @@ def test_project_sync_coordinator_start_dispatch_injects_operation_metadata(tmp_
     assert len(manager.start_calls) == 1
 
 
-def test_project_sync_coordinator_resume_dispatch_marks_deduplicated(tmp_path: Path):
+def test_project_pipeline_coordinator_resume_dispatch_marks_deduplicated(tmp_path: Path):
     project_id = "project-coordinator-resume"
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
     cfg = Config().knowledge
 
     manager = _FakeSyncManager()
-    coordinator = ProjectSyncCoordinator(
+    coordinator = ProjectPipelineCoordinator(
         tmp_path,
-        manager_factory=lambda _pid: cast(ProjectKnowledgeSyncManager, manager),
+        manager_factory=lambda _pid: cast(ProjectKnowledgePipelineManager, manager),
     )
 
     event = coordinator.dispatch(
-        ProjectSyncCommand.resume(
+        ProjectPipelineCommand.resume(
             project_id=project_id,
             config=cfg,
             running_config=None,
@@ -212,18 +212,18 @@ def test_project_sync_coordinator_resume_dispatch_marks_deduplicated(tmp_path: P
     assert len(manager.resume_calls) == 1
 
 
-def test_project_sync_coordinator_check_reindex_false_marks_noop_dedup(tmp_path: Path):
+def test_project_pipeline_coordinator_check_reindex_false_marks_noop_dedup(tmp_path: Path):
     project_id = "project-coordinator-check"
     cfg = Config().knowledge
 
     manager = _FakeSyncManager()
-    coordinator = ProjectSyncCoordinator(
+    coordinator = ProjectPipelineCoordinator(
         tmp_path,
-        manager_factory=lambda _pid: cast(ProjectKnowledgeSyncManager, manager),
+        manager_factory=lambda _pid: cast(ProjectKnowledgePipelineManager, manager),
     )
 
     event = coordinator.dispatch(
-        ProjectSyncCommand.check_reindex(
+        ProjectPipelineCommand.check_reindex(
             project_id=project_id,
             config=cfg,
             running_config=None,
@@ -240,7 +240,7 @@ def test_project_sync_coordinator_check_reindex_false_marks_noop_dedup(tmp_path:
 
 
 def test_build_global_metrics_prefers_l1_metrics_values_for_sources(tmp_path: Path):
-    manager = ProjectKnowledgeSyncManager(tmp_path)
+    manager = ProjectKnowledgePipelineManager(tmp_path)
 
     payload = manager._build_global_metrics(
         {

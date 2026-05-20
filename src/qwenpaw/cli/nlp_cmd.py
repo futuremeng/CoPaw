@@ -143,7 +143,7 @@ def _resolve_l2_state_path(
         raise click.ClickException("Either --project-id or --state-file is required.")
 
     dirname = (knowledge_dirname or f"projects/{project_id}/.knowledge").strip()
-    return (Path(WORKING_DIR) / dirname / "project-sync-state.json").resolve()
+    return (Path(WORKING_DIR) / dirname / "project-pipeline-state.json").resolve()
 
 
 def _grade_l2_assessment(
@@ -172,7 +172,7 @@ def _discover_project_state_files(limit: int = 100) -> list[tuple[str, Path]]:
     for child in sorted(root.iterdir(), key=lambda p: p.name):
         if not child.is_dir():
             continue
-        state_path = child / ".knowledge" / "project-sync-state.json"
+        state_path = child / ".knowledge" / "project-pipeline-state.json"
         if state_path.exists():
             out.append((child.name, state_path.resolve()))
             if len(out) >= max(1, limit):
@@ -399,7 +399,7 @@ def run_cmd(
     default=None,
     help="Knowledge directory relative to WORKING_DIR (default: projects/<project_id>/.knowledge).",
 )
-@click.option("--state-file", default=None, help="Explicit project-sync-state.json path.")
+@click.option("--state-file", default=None, help="Explicit project-pipeline-state.json path.")
 @click.option(
     "--sample-text",
     "sample_texts",
@@ -408,7 +408,7 @@ def run_cmd(
 )
 @click.option("--run-probes/--no-run-probes", default=True, help="Run NLP probes for NER/DEP/SDP/CON.")
 @click.option("--probe-timeout", default=20.0, type=float, show_default=True, help="Per task timeout in seconds for probe runs.")
-@click.option("--probe-only", is_flag=True, help="Run probes without loading project sync state.")
+@click.option("--probe-only", is_flag=True, help="Run probes without loading project pipeline state.")
 @click.option("--all-projects", is_flag=True, help="Assess all local projects under WORKING_DIR/projects.")
 @click.option("--allow-empty", is_flag=True, help="In --all-projects mode, return empty result instead of error when no state files found.")
 @click.option("--project-limit", default=100, type=int, show_default=True, help="Max number of projects to scan in batch mode.")
@@ -438,7 +438,7 @@ def assess_l2_cmd(
     export_path: str | None,
     json_output: bool,
 ) -> None:
-    """Assess L2 knowledge quantization using current project sync metrics + NLP probes."""
+    """Assess L2 knowledge quantization using current project pipeline metrics + NLP probes."""
     try:
         threshold_a, threshold_b, threshold_c = normalize_l2_quantization_grade_thresholds(
             grade_a,
@@ -454,7 +454,7 @@ def assess_l2_cmd(
         discovered = _discover_project_state_files(limit=max(1, project_limit))
         if not discovered:
             if not allow_empty:
-                raise click.ClickException("No project-sync-state.json found under WORKING_DIR/projects.")
+                raise click.ClickException("No project-pipeline-state.json found under WORKING_DIR/projects.")
             payload = {
                 "mode": "all-projects",
                 "sort_by": sort_by,

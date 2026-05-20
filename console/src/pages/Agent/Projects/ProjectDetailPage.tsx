@@ -35,7 +35,7 @@ import ProjectKnowledgeSettingsPanel from "./components/ProjectKnowledgeSettings
 import {
   getProjectKnowledgeSemanticDescription,
   getProjectKnowledgeSemanticReasonLabel,
-} from "./utils/projectKnowledgeSyncUi";
+} from "./utils/projectKnowledgePipelineUi";
 import ProjectOverviewCard from "./components/ProjectOverviewCard";
 import ProjectUploadModal from "./components/ProjectUploadModal";
 import ProjectWorkbenchPanel from "./components/ProjectWorkbenchPanel";
@@ -101,7 +101,7 @@ import type {
 import type {
   KnowledgeTaskProgress,
   MemifyJobStatus,
-  ProjectKnowledgeSyncState,
+  ProjectKnowledgePipelineState,
   QualityLoopJobStatus,
 } from "../../../api/types";
 import type { ChatSpec } from "../../../api/types/chat";
@@ -145,7 +145,7 @@ const DEFAULT_KNOWLEDGE_HEADER_SIGNALS: ProjectKnowledgeHeaderSignals = {
   qualityAssessmentScore: 0,
 };
 
-type RuntimeTaskDetail = MemifyJobStatus | QualityLoopJobStatus | ProjectKnowledgeSyncState | null;
+type RuntimeTaskDetail = MemifyJobStatus | QualityLoopJobStatus | ProjectKnowledgePipelineState | null;
 
 const STAGE_FILTERS: Record<ProjectStageKey, ProjectFileFilterKey[]> = {
   source: ["original", "intermediate", "artifact"],
@@ -262,8 +262,8 @@ function getRuntimeTaskKey(task: KnowledgeTaskProgress): string {
 
 function getRuntimeTaskLabel(taskType: string | undefined, translate: (key: string, fallback: string) => string): string {
   switch (String(taskType || "")) {
-    case "project_sync":
-      return translate("copaw.projects.knowledge.runtimeTaskProjectSync", "Project Sync");
+    case "project_pipeline":
+      return translate("copaw.projects.knowledge.runtimeTaskProjectPipeline", "Project Pipeline");
     case "memify":
       return translate("copaw.projects.knowledge.runtimeTaskMemify", "Graph Build");
     case "quality_loop":
@@ -914,7 +914,7 @@ export default function ProjectDetailPage() {
                 }),
               ] as const;
             }
-            if (task.task_type === "project_sync") {
+            if (task.task_type === "project_pipeline") {
               return [taskKey, projectKnowledgeState.syncState] as const;
             }
           } catch {
@@ -937,7 +937,7 @@ export default function ProjectDetailPage() {
     const taskLabel = getRuntimeTaskLabel(primaryTask.task_type, translateWithFallback);
     const percent = getRuntimeTaskPercent(primaryTask);
     const stageLabel = getRuntimeTaskStage(primaryTask);
-    const quantizationStage = primaryTask.task_type === "project_sync"
+    const quantizationStage = primaryTask.task_type === "project_pipeline"
       ? formatQuantizationStageLabel(projectKnowledgeState.syncState?.quantization_stage, translateWithFallback)
       : "";
     return [
@@ -994,19 +994,19 @@ export default function ProjectDetailPage() {
               : task.warnings || [];
             const errorText = String(
               (liveTask as { error?: string | null }).error
-                || ((detail as ProjectKnowledgeSyncState | null)?.last_error ?? "")
+                || ((detail as ProjectKnowledgePipelineState | null)?.last_error ?? "")
                 || task.error
                 || "",
             ).trim();
             const qualityLoopDetail = task.task_type === "quality_loop"
               ? (detail as QualityLoopJobStatus | null)
               : null;
-            const projectSyncDetail = task.task_type === "project_sync"
-              ? ((detail as ProjectKnowledgeSyncState | null) || projectKnowledgeState.syncState || null)
+            const projectPipelineDetail = task.task_type === "project_pipeline"
+              ? ((detail as ProjectKnowledgePipelineState | null) || projectKnowledgeState.syncState || null)
               : null;
-            const semanticEngine = projectSyncDetail?.semantic_engine;
+            const semanticEngine = projectPipelineDetail?.semantic_engine;
             const quantizationStageLabel = formatQuantizationStageLabel(
-              projectSyncDetail?.quantization_stage,
+              projectPipelineDetail?.quantization_stage,
               translateWithFallback,
             );
             const semanticReasonLabel = getProjectKnowledgeSemanticReasonLabel(semanticEngine, t);
@@ -1021,8 +1021,8 @@ export default function ProjectDetailPage() {
               ? qualityLoopDetail.delta
               : null;
             const stopReason = String(qualityLoopDetail?.stop_reason || "").trim();
-            const changedCount = typeof projectSyncDetail?.changed_count === "number"
-              ? projectSyncDetail.changed_count
+            const changedCount = typeof projectPipelineDetail?.changed_count === "number"
+              ? projectPipelineDetail.changed_count
               : null;
 
             return (

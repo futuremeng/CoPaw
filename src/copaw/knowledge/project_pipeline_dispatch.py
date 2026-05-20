@@ -63,7 +63,7 @@ def schedule_dispatch(manager: Any, run_at: datetime, *, project_id: str) -> Non
 
 
 def dispatch_scheduled_sync(manager: Any, *, project_id: str) -> None:
-	from .project_sync_manager import build_project_source_spec
+	from .project_pipeline_manager import build_project_source_spec
 
 	state = manager._load_state(project_id, hydrate=False)
 	project_dir = manager.working_dir / "projects" / project_id
@@ -220,7 +220,7 @@ def start_sync(
 			"latest_source_id": source.id,
 		})
 		updated_at = manager._parse_iso(state.get("updated_at"))
-		stale_active = str(state.get("status") or "") in manager._active_statuses and updated_at is not None and (datetime.now(manager.UTC) - updated_at).total_seconds() >= manager.DEFAULT_PROJECT_SYNC_STALE_AFTER_SECONDS
+		stale_active = str(state.get("status") or "") in manager._active_statuses and updated_at is not None and (datetime.now(manager.UTC) - updated_at).total_seconds() >= manager.DEFAULT_PROJECT_PIPELINE_STALE_AFTER_SECONDS
 		if str(state.get("status") or "") in manager._active_statuses and not force and not stale_active:
 			pending = list(dict.fromkeys([*list(state.get("pending_changed_paths") or []), *list(changed_paths or [])]))
 			state.update({

@@ -293,7 +293,7 @@ vi.mock("../hooks/useProjectUploadController", () => ({
 vi.mock("../hooks/useProjectKnowledgeState", () => ({
   useProjectKnowledgeState: () => mockKnowledgeState,
 }));
-vi.mock("../utils/projectKnowledgeSyncUi", () => ({
+vi.mock("../utils/projectKnowledgePipelineUi", () => ({
   getProjectKnowledgeSemanticDescription: vi.fn().mockReturnValue(""),
   getProjectKnowledgeSemanticReasonLabel: vi.fn().mockReturnValue(""),
 }));

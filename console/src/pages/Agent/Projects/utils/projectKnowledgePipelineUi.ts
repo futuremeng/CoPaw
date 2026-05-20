@@ -1,7 +1,7 @@
 import type {
   ProjectKnowledgeQuantizationStage,
   ProjectKnowledgeSemanticEngineState,
-  ProjectKnowledgeSyncState,
+  ProjectKnowledgePipelineState,
 } from "../../../../api/types";
 import type { TFunction } from "i18next";
 
@@ -160,7 +160,7 @@ function formatSyncTime(raw: string | null | undefined): string {
   return `${hh}:${mm}:${ss}`;
 }
 
-function getGraphStats(syncState: ProjectKnowledgeSyncState): {
+function getGraphStats(syncState: ProjectKnowledgePipelineState): {
   relationCount: number;
   nodeCount: number;
 } | null {
@@ -179,8 +179,8 @@ function getGraphStats(syncState: ProjectKnowledgeSyncState): {
   };
 }
 
-export function getProjectKnowledgeSyncStageLabel(
-  syncState: ProjectKnowledgeSyncState,
+export function getProjectKnowledgePipelineStatusLabel(
+  syncState: ProjectKnowledgePipelineState,
   t: Translate,
 ): string {
   const stage = String(syncState.current_stage || syncState.status || "idle").trim() || "idle";
@@ -267,13 +267,13 @@ export function getProjectKnowledgeSemanticDescription(
     : `${t("copaw.projects.knowledge.semanticEngineCode")}: ${reasonCode}`;
 }
 
-export function getProjectKnowledgeSyncAlertDescription(
-  syncState: ProjectKnowledgeSyncState,
+export function getProjectKnowledgePipelineAlertDescription(
+  syncState: ProjectKnowledgePipelineState,
   t: Translate,
 ): string {
   const graphStats = getGraphStats(syncState);
   const segments = [
-    getProjectKnowledgeSyncStageLabel(syncState, t),
+    getProjectKnowledgePipelineStatusLabel(syncState, t),
     `${syncState.percent ?? syncState.progress ?? 0}%`,
     syncState.stage_message || "",
     typeof syncState.current === "number" && typeof syncState.total === "number" && syncState.total > 0
@@ -307,8 +307,8 @@ export function getProjectKnowledgeSyncAlertDescription(
   return segments.join(" · ");
 }
 
-export function getProjectKnowledgeSyncAlertType(
-  syncState: ProjectKnowledgeSyncState | null,
+export function getProjectKnowledgePipelineAlertType(
+  syncState: ProjectKnowledgePipelineState | null,
 ): "info" | "success" | "error" {
   if (!syncState) {
     return "info";

@@ -177,7 +177,7 @@ async def create_mcp_config_watcher(ws: "Workspace", _):
 
 
 async def create_project_knowledge_watcher(ws: "Workspace", _):
-    """Create project knowledge watcher for automatic project sync."""
+    """Create project knowledge watcher for automatic project pipeline."""
     # pylint: disable=protected-access
     from ..project_knowledge_watcher import ProjectKnowledgeWatcher
 

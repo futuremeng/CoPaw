@@ -15,7 +15,7 @@ def test_assess_l2_all_projects_without_state_fails_by_default(monkeypatch) -> N
     )
 
     assert result.exit_code != 0
-    assert "No project-sync-state.json found under WORKING_DIR/projects." in result.output
+    assert "No project-pipeline-state.json found under WORKING_DIR/projects." in result.output
 
 
 def test_assess_l2_all_projects_allow_empty_returns_json(monkeypatch) -> None:
@@ -60,7 +60,7 @@ def test_grade_without_probes_is_not_treated_as_probe_failure() -> None:
 
 
 def test_assess_l2_all_projects_invalid_state_json_is_marked(monkeypatch, tmp_path: Path) -> None:
-    broken = tmp_path / "project-sync-state.json"
+    broken = tmp_path / "project-pipeline-state.json"
     broken.write_text("{invalid json", encoding="utf-8")
 
     monkeypatch.setattr(

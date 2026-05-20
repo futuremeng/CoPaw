@@ -138,7 +138,7 @@ function buildKnowledgeState(): ProjectKnowledgeState {
     processingModes: [buildModeState(), buildModeState({ mode: "nlp", status: "idle", available: false }), buildModeState({ mode: "agentic", status: "idle", available: false })],
     processingCompareModes: [buildModeState({ mode: "nlp", status: "idle", available: false }), buildModeState({ mode: "agentic", status: "idle", available: false })],
     processingCompareDelta: { entityDelta: 0, relationDelta: 0 },
-    processingFreshness: { stale: false, staleModes: [], staleSources: [], channelStatus: { "project-sync": "open", tasks: "open" } },
+    processingFreshness: { stale: false, staleModes: [], staleSources: [], channelStatus: { "project-pipeline": "open", tasks: "open" } },
     outputModes: [buildModeState({ mode: "agentic", status: "idle", available: false }), buildModeState({ mode: "nlp", status: "idle", available: false })],
     outputResolution: { activeMode: "agentic", availableModes: [], fallbackChain: ["agentic", "nlp"], reason: "" },
     processingScheduler: { strategy: "parallel", modeOrder: ["agentic", "nlp", "fast"], runningModes: [], queuedModes: ["nlp", "agentic"], readyModes: ["fast"], failedModes: [], nextMode: "nlp", consumptionMode: "fast", reason: "" },
@@ -172,7 +172,7 @@ function buildKnowledgeState(): ProjectKnowledgeState {
       qualityAssessmentScore: 0,
     },
     quantMetricsMeta: {
-      source: "project_sync_merged",
+      source: "project_pipeline_merged",
       sourceId: "project-project-abc-workspace",
       updatedAt: "2026-05-12T10:00:00Z",
       sourceStatsUpdatedAt: "2026-05-12T10:00:00Z",
@@ -435,7 +435,7 @@ describe("project knowledge panels", () => {
     expect(screen.getByText("Outputs")).not.toBeNull();
   });
 
-  it("shows source fallback hint when source scoped metrics are unavailable", async () => {
+  it("switches to source scope without fallback hint banner", async () => {
     const knowledgeState = buildKnowledgeState();
     knowledgeState.projectSources = [
       {
@@ -462,7 +462,7 @@ describe("project knowledge panels", () => {
     const { default: userEvent } = await import("@testing-library/user-event");
     render(<ProjectKnowledgeProcessingPanel knowledgeState={knowledgeState} projectFiles={buildProjectFiles()} />);
     await userEvent.setup().click(screen.getByText("Source"));
-    expect(screen.getByText("No source-specific metrics yet; showing project-level aggregate as fallback.")).not.toBeNull();
+    expect(screen.queryByText("No source-specific metrics yet; showing project-level aggregate as fallback.")).toBeNull();
   });
 
   it("renders NER panel", () => {

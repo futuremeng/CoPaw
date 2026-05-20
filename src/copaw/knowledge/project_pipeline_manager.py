@@ -22,18 +22,18 @@ from .knowledge_quantization_metrics import (
 	build_nlp_progress,
 	resolve_nlp_stage_status,
 )
-from . import project_sync_dispatch as sync_dispatch
-from . import project_sync_execution as sync_execution
-from . import project_sync_projection as sync_projection
-from . import project_sync_runtime_state as sync_runtime_state
+from . import project_pipeline_dispatch as sync_dispatch
+from . import project_pipeline_execution as sync_execution
+from . import project_pipeline_projection as sync_projection
+from . import project_pipeline_runtime_state as sync_runtime_state
 
 logger = logging.getLogger(__name__)
 UTC = timezone.utc
 
-DEFAULT_PROJECT_SYNC_DEBOUNCE_SECONDS = 3.0
-DEFAULT_PROJECT_SYNC_COOLDOWN_SECONDS = 10.0
-DEFAULT_PROJECT_SYNC_STALE_AFTER_SECONDS = 120.0
-DEFAULT_PROJECT_SYNC_QUALITY_LOOP_ROUNDS = 3
+DEFAULT_PROJECT_PIPELINE_DEBOUNCE_SECONDS = 3.0
+DEFAULT_PROJECT_PIPELINE_COOLDOWN_SECONDS = 10.0
+DEFAULT_PROJECT_PIPELINE_STALE_AFTER_SECONDS = 120.0
+DEFAULT_PROJECT_PIPELINE_QUALITY_LOOP_ROUNDS = 3
 KNOWLEDGE_PROCESSING_FALLBACK_CHAIN = ["agentic", "nlp", "fast"]
 KNOWLEDGE_OUTPUT_FALLBACK_CHAIN = ["agentic", "nlp"]
 KNOWLEDGE_PROCESSING_SUPPORTED_MODES = {"fast", "nlp", "agentic"}
@@ -116,7 +116,7 @@ def ensure_project_source_registered(
 	return expected, changed
 
 
-class ProjectSyncCommand:
+class ProjectPipelineCommand:
 	def __init__(
 		self,
 		*,
@@ -173,20 +173,20 @@ class ProjectSyncCommand:
 		return f"ps-{hashlib.sha1(seed).hexdigest()[:16]}"
 
 	@classmethod
-	def start(cls, **kwargs) -> "ProjectSyncCommand":
+	def start(cls, **kwargs) -> "ProjectPipelineCommand":
 		return cls(action="start_sync", **kwargs)
 
 	@classmethod
-	def resume(cls, **kwargs) -> "ProjectSyncCommand":
+	def resume(cls, **kwargs) -> "ProjectPipelineCommand":
 		return cls(action="resume_sync", **kwargs)
 
 	@classmethod
-	def check_reindex(cls, **kwargs) -> "ProjectSyncCommand":
+	def check_reindex(cls, **kwargs) -> "ProjectPipelineCommand":
 		return cls(action="check_reindex", **kwargs)
 
 
 @dataclass
-class ProjectSyncEvent:
+class ProjectPipelineEvent:
 	action: str
 	project_id: str
 	payload: Any
@@ -197,33 +197,33 @@ class ProjectSyncEvent:
 	deduplicated: bool = False
 
 
-class ProjectSyncCoordinator:
+class ProjectPipelineCoordinator:
 	def __init__(
 		self,
 		working_dir: Path | str,
 		*,
-		manager_factory: Callable[[str], "ProjectKnowledgeSyncManager"] | None = None,
+		manager_factory: Callable[[str], "ProjectKnowledgePipelineManager"] | None = None,
 	) -> None:
 		self.working_dir = Path(working_dir)
 		self._manager_factory = manager_factory
-		self._sync_managers: dict[str, ProjectKnowledgeSyncManager] = {}
+		self._sync_managers: dict[str, ProjectKnowledgePipelineManager] = {}
 
-	def _build_manager(self, project_id: str) -> "ProjectKnowledgeSyncManager":
+	def _build_manager(self, project_id: str) -> "ProjectKnowledgePipelineManager":
 		if self._manager_factory is not None:
 			return self._manager_factory(project_id)
-		return ProjectKnowledgeSyncManager(
+		return ProjectKnowledgePipelineManager(
 			self.working_dir,
 			knowledge_dirname=f"projects/{project_id}/.knowledge",
 		)
 
-	def _manager(self, project_id: str) -> "ProjectKnowledgeSyncManager":
+	def _manager(self, project_id: str) -> "ProjectKnowledgePipelineManager":
 		manager = self._sync_managers.get(project_id)
 		if manager is None:
 			manager = self._build_manager(project_id)
 			self._sync_managers[project_id] = manager
 		return manager
 
-	def dispatch(self, command: ProjectSyncCommand) -> ProjectSyncEvent:
+	def dispatch(self, command: ProjectPipelineCommand) -> ProjectPipelineEvent:
 		manager = self._manager(command.project_id)
 		if command.action == "check_reindex":
 			payload = manager.check_needs_reindex(
@@ -231,7 +231,7 @@ class ProjectSyncCoordinator:
 				config=command.config,
 				running_config=command.running_config,
 			)
-			return ProjectSyncEvent(
+			return ProjectPipelineEvent(
 				action=command.action,
 				project_id=command.project_id,
 				payload=payload,
@@ -243,7 +243,7 @@ class ProjectSyncCoordinator:
 			)
 		if command.action == "resume_sync":
 			if command.source is None:
-				raise ValueError("ProjectSyncCommand.resume_sync requires source")
+				raise ValueError("ProjectPipelineCommand.resume_sync requires source")
 			payload = manager.resume_sync_if_needed(
 				project_id=command.project_id,
 				config=command.config,
@@ -254,7 +254,7 @@ class ProjectSyncCoordinator:
 			payload.setdefault("operation_id", command.operation_id)
 			payload.setdefault("idempotency_key", command.idempotency_key)
 			payload.setdefault("deduplicated", not bool(payload.get("accepted")))
-			return ProjectSyncEvent(
+			return ProjectPipelineEvent(
 				action=command.action,
 				project_id=command.project_id,
 				payload=payload,
@@ -266,7 +266,7 @@ class ProjectSyncCoordinator:
 			)
 		if command.action == "start_sync":
 			if command.source is None:
-				raise ValueError("ProjectSyncCommand.start_sync requires source")
+				raise ValueError("ProjectPipelineCommand.start_sync requires source")
 			payload = manager.start_sync(
 				project_id=command.project_id,
 				config=command.config,
@@ -285,7 +285,7 @@ class ProjectSyncCoordinator:
 			payload.setdefault("operation_id", command.operation_id)
 			payload.setdefault("idempotency_key", command.idempotency_key)
 			payload.setdefault("deduplicated", False)
-			return ProjectSyncEvent(
+			return ProjectPipelineEvent(
 				action=command.action,
 				project_id=command.project_id,
 				payload=payload,
@@ -295,10 +295,10 @@ class ProjectSyncCoordinator:
 				idempotency_key=command.idempotency_key,
 				deduplicated=bool(payload.get("deduplicated")),
 			)
-		raise ValueError(f"Unsupported project sync command: {command.action}")
+		raise ValueError(f"Unsupported project pipeline command: {command.action}")
 
 
-class ProjectKnowledgeSyncManager:
+class ProjectKnowledgePipelineManager:
 	_locks_guard = threading.Lock()
 	_locks: dict[str, Any] = {}
 	_timers_guard = threading.Lock()
@@ -306,7 +306,7 @@ class ProjectKnowledgeSyncManager:
 	_active_statuses = {"pending", "indexing", "graphifying", "running"}
 	_resumable_statuses = {"queued", "pending", "indexing", "graphifying", "running"}
 	UTC = UTC
-	DEFAULT_PROJECT_SYNC_STALE_AFTER_SECONDS = DEFAULT_PROJECT_SYNC_STALE_AFTER_SECONDS
+	DEFAULT_PROJECT_PIPELINE_STALE_AFTER_SECONDS = DEFAULT_PROJECT_PIPELINE_STALE_AFTER_SECONDS
 
 	def __init__(
 		self,
@@ -317,7 +317,7 @@ class ProjectKnowledgeSyncManager:
 		self.working_dir = Path(working_dir)
 		self.knowledge_dirname = knowledge_dirname
 		self.knowledge_root = self.working_dir / knowledge_dirname
-		self.state_path = self.knowledge_root / "project-sync-state.json"
+		self.state_path = self.knowledge_root / "project-pipeline-state.json"
 		self._lock = self._get_lock(str(self.state_path.resolve()))
 		knowledge_manager_cls = getattr(importlib.import_module("copaw.knowledge.manager"), "KnowledgeManager")
 		self._knowledge_manager = knowledge_manager_cls(
@@ -363,7 +363,7 @@ class ProjectKnowledgeSyncManager:
 	def _default_state(self, project_id: str) -> dict[str, Any]:
 		return {
 			"project_id": project_id,
-			"task_type": "project_sync",
+			"task_type": "project_pipeline",
 			"status": "idle",
 			"current_stage": "idle",
 			"stage": "idle",
@@ -403,6 +403,7 @@ class ProjectKnowledgeSyncManager:
 			"output_scheduler": {},
 			"mode_outputs": {},
 			"mode_metrics": {},
+			"mode_metrics_by_source": {},
 			"global_metrics": {},
 			"l1_metrics": {},
 			"l2_metrics": {},

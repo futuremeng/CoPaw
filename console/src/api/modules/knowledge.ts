@@ -25,9 +25,9 @@ import type {
   ProjectKnowledgeStepStatsStepId,
   ProjectKnowledgeStepStatsResponse,
   ProjectKnowledgeSourceScanStatsResponse,
-  ProjectKnowledgeSyncRunRequest,
-  ProjectKnowledgeSyncRunResponse,
-  ProjectKnowledgeSyncState,
+  ProjectKnowledgePipelineRunRequest,
+  ProjectKnowledgePipelineRunResponse,
+  ProjectKnowledgePipelineState,
 } from "../types";
 
 const withProjectId = (path: string, projectId?: string) => {
@@ -377,14 +377,14 @@ export const knowledgeApi = {
       ),
     ),
 
-  getProjectKnowledgeSyncStatus: (options: { projectId: string }) =>
-    request<ProjectKnowledgeSyncState>(
-      withProjectId("/knowledge/project-sync/status", options.projectId),
+  getProjectKnowledgePipelineStatus: (options: { projectId: string }) =>
+    request<ProjectKnowledgePipelineState>(
+      withProjectId("/knowledge/project-pipeline/status", options.projectId),
     ),
 
-  runProjectKnowledgeSync: (payload: ProjectKnowledgeSyncRunRequest) =>
-    request<ProjectKnowledgeSyncRunResponse>(
-      withProjectId("/knowledge/project-sync/run", payload.projectId),
+  runProjectKnowledgePipeline: (payload: ProjectKnowledgePipelineRunRequest) =>
+    request<ProjectKnowledgePipelineRunResponse>(
+      withProjectId("/knowledge/project-pipeline/run", payload.projectId),
       {
         method: "POST",
         body: JSON.stringify({

@@ -1,4 +1,4 @@
-import type { ProjectKnowledgeSyncState } from "../../../api/types/knowledge";
+import type { ProjectKnowledgePipelineState } from "../../../api/types/knowledge";
 
 export type BuiltinRuntimeStage = {
   key: string;
@@ -11,7 +11,7 @@ export type BuiltinRuntimeStage = {
 };
 
 export function deriveBuiltinProjectKnowledgeStages(
-  syncState: ProjectKnowledgeSyncState | null,
+  syncState: ProjectKnowledgePipelineState | null,
 ): BuiltinRuntimeStage[] {
   const workflowStatus = String(syncState?.status || "idle").trim().toLowerCase();
   const stageToken = String(syncState?.current_stage || syncState?.stage || "").trim().toLowerCase();

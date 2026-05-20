@@ -708,7 +708,7 @@ def test_search_knowledge_rejects_invalid_scope_type(
     assert response.json().get("detail") == "INVALID_SCOPE_TYPE"
 
 
-def test_project_sync_run_does_not_expose_project_source_to_global_search(
+def test_project_pipeline_run_does_not_expose_project_source_to_global_search(
     knowledge_api_client: TestClient,
     tmp_path: Path,
     monkeypatch,
@@ -723,7 +723,7 @@ def test_project_sync_run_does_not_expose_project_source_to_global_search(
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
     assert saved.status_code == 200
 
-    class _FakeProjectSyncManager:
+    class _FakeProjectPipelineManager:
         def get_state(self, _project_id):
             return {"project_id": _project_id, "status": "idle"}
 
@@ -739,17 +739,17 @@ def test_project_sync_run_does_not_expose_project_source_to_global_search(
 
     monkeypatch.setattr(
         knowledge_router_module,
-        "_project_sync_for_workspace",
-        lambda *_args, **_kwargs: _FakeProjectSyncManager(),
+        "_project_pipeline_for_workspace",
+        lambda *_args, **_kwargs: _FakeProjectPipelineManager(),
     )
     monkeypatch.setattr(
         knowledge_router_module,
-        "_project_sync_coordinator_for_workspace",
+        "_project_pipeline_coordinator_for_workspace",
         lambda *_args, **_kwargs: _FakeCoordinator(),
     )
 
     run_response = knowledge_api_client.post(
-        f"/knowledge/project-sync/run?project_id={project_id}",
+        f"/knowledge/project-pipeline/run?project_id={project_id}",
         json={
             "trigger": "manual-test",
             "changed_paths": ["original/note.md"],
@@ -1197,11 +1197,11 @@ def test_run_knowledge_nlp_task_delegates_to_hanlp_runner(
     assert payload["status"] == "ready"
 
 
-def test_get_project_sync_status_offloads_state_read_to_thread(
+def test_get_project_pipeline_status_offloads_state_read_to_thread(
     knowledge_api_client: TestClient,
     monkeypatch,
 ):
-    class _FakeProjectSyncManager:
+    class _FakeProjectPipelineManager:
         def get_state(self, project_id):
             return {"project_id": project_id, "status": "idle"}
 
@@ -1214,12 +1214,12 @@ def test_get_project_sync_status_offloads_state_read_to_thread(
 
     monkeypatch.setattr(
         knowledge_router_module,
-        "_project_sync_for_workspace",
-        lambda *_args, **_kwargs: _FakeProjectSyncManager(),
+        "_project_pipeline_for_workspace",
+        lambda *_args, **_kwargs: _FakeProjectPipelineManager(),
     )
     monkeypatch.setattr(knowledge_router_module.asyncio, "to_thread", fake_to_thread)
 
-    response = knowledge_api_client.get("/knowledge/project-sync/status?project_id=threaded-project")
+    response = knowledge_api_client.get("/knowledge/project-pipeline/status?project_id=threaded-project")
 
     assert response.status_code == 200
     assert response.json()["project_id"] == "threaded-project"
@@ -1227,7 +1227,7 @@ def test_get_project_sync_status_offloads_state_read_to_thread(
     assert any(call[0].__name__ == "get_state" for call in calls)
 
 
-def test_get_project_sync_status_does_not_auto_register_project_source(
+def test_get_project_pipeline_status_does_not_auto_register_project_source(
     knowledge_api_client: TestClient,
     tmp_path: Path,
     monkeypatch,
@@ -1242,7 +1242,7 @@ def test_get_project_sync_status_does_not_auto_register_project_source(
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
     assert saved.status_code == 200
 
-    class _FakeProjectSyncManager:
+    class _FakeProjectPipelineManager:
         def get_state(self, project_id):
             return {"project_id": project_id, "status": "idle", "latest_source_id": ""}
 
@@ -1262,16 +1262,16 @@ def test_get_project_sync_status_does_not_auto_register_project_source(
 
     monkeypatch.setattr(
         knowledge_router_module,
-        "_project_sync_for_workspace",
-        lambda *_args, **_kwargs: _FakeProjectSyncManager(),
+        "_project_pipeline_for_workspace",
+        lambda *_args, **_kwargs: _FakeProjectPipelineManager(),
     )
     monkeypatch.setattr(
         knowledge_router_module,
-        "_project_sync_coordinator_for_workspace",
+        "_project_pipeline_coordinator_for_workspace",
         lambda *_args, **_kwargs: _FakeCoordinator(),
     )
 
-    response = knowledge_api_client.get(f"/knowledge/project-sync/status?project_id={project_id}")
+    response = knowledge_api_client.get(f"/knowledge/project-pipeline/status?project_id={project_id}")
 
     assert response.status_code == 200
     assert captured["source_id"] == f"project-{project_id}-workspace"
@@ -1279,12 +1279,12 @@ def test_get_project_sync_status_does_not_auto_register_project_source(
     assert knowledge_router_module.load_config().knowledge.sources == []
 
 
-def test_run_project_sync_offloads_dispatch_to_thread(
+def test_run_project_pipeline_offloads_dispatch_to_thread(
     knowledge_api_client: TestClient,
     tmp_path: Path,
     monkeypatch,
 ):
-    project_id = "threaded-project-sync"
+    project_id = "threaded-project-pipeline"
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1294,7 +1294,7 @@ def test_run_project_sync_offloads_dispatch_to_thread(
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
     assert saved.status_code == 200
 
-    class _FakeProjectSyncManager:
+    class _FakeProjectPipelineManager:
         def start_sync(self, **kwargs):
             return {
                 "accepted": True,
@@ -1311,13 +1311,13 @@ def test_run_project_sync_offloads_dispatch_to_thread(
 
     monkeypatch.setattr(
         knowledge_router_module,
-        "_project_sync_for_workspace",
-        lambda *_args, **_kwargs: _FakeProjectSyncManager(),
+        "_project_pipeline_for_workspace",
+        lambda *_args, **_kwargs: _FakeProjectPipelineManager(),
     )
     monkeypatch.setattr(knowledge_router_module.asyncio, "to_thread", fake_to_thread)
 
     response = knowledge_api_client.post(
-        f"/knowledge/project-sync/run?project_id={project_id}",
+        f"/knowledge/project-pipeline/run?project_id={project_id}",
         json={
             "trigger": "manual-test",
             "changed_paths": ["notes.md"],
@@ -1339,7 +1339,7 @@ def test_run_project_sync_offloads_dispatch_to_thread(
     assert getattr(command, "quantization_stage", "") == "l2"
 
 
-def test_run_project_sync_auto_registers_project_source(
+def test_run_project_pipeline_auto_registers_project_source(
     knowledge_api_client: TestClient,
     tmp_path: Path,
     monkeypatch,
@@ -1354,7 +1354,7 @@ def test_run_project_sync_auto_registers_project_source(
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
     assert saved.status_code == 200
 
-    class _FakeProjectSyncManager:
+    class _FakeProjectPipelineManager:
         def get_state(self, project_id):
             return {"project_id": project_id, "status": "idle"}
 
@@ -1374,17 +1374,17 @@ def test_run_project_sync_auto_registers_project_source(
 
     monkeypatch.setattr(
         knowledge_router_module,
-        "_project_sync_for_workspace",
-        lambda *_args, **_kwargs: _FakeProjectSyncManager(),
+        "_project_pipeline_for_workspace",
+        lambda *_args, **_kwargs: _FakeProjectPipelineManager(),
     )
     monkeypatch.setattr(
         knowledge_router_module,
-        "_project_sync_coordinator_for_workspace",
+        "_project_pipeline_coordinator_for_workspace",
         lambda *_args, **_kwargs: _FakeCoordinator(),
     )
 
     response = knowledge_api_client.post(
-        f"/knowledge/project-sync/run?project_id={project_id}",
+        f"/knowledge/project-pipeline/run?project_id={project_id}",
         json={
             "trigger": "manual-test",
             "changed_paths": ["notes.md"],
@@ -1403,12 +1403,12 @@ def test_run_project_sync_auto_registers_project_source(
     assert str(sources[0].location).endswith(f"projects/{project_id}")
 
 
-def test_run_project_sync_allows_fast_mode_when_memify_disabled(
+def test_run_project_pipeline_allows_fast_mode_when_memify_disabled(
     knowledge_api_client: TestClient,
     tmp_path: Path,
     monkeypatch,
 ):
-    project_id = "fast-only-project-sync"
+    project_id = "fast-only-project-pipeline"
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1420,19 +1420,19 @@ def test_run_project_sync_allows_fast_mode_when_memify_disabled(
 
     captured: dict[str, object] = {}
 
-    class _FakeProjectSyncManager:
+    class _FakeProjectPipelineManager:
         def start_sync(self, **kwargs):
             captured.update(kwargs)
             return {"accepted": True, "project_id": kwargs["project_id"], "status": "queued"}
 
     monkeypatch.setattr(
         knowledge_router_module,
-        "_project_sync_for_workspace",
-        lambda *_args, **_kwargs: _FakeProjectSyncManager(),
+        "_project_pipeline_for_workspace",
+        lambda *_args, **_kwargs: _FakeProjectPipelineManager(),
     )
 
     response = knowledge_api_client.post(
-        f"/knowledge/project-sync/run?project_id={project_id}",
+        f"/knowledge/project-pipeline/run?project_id={project_id}",
         json={"trigger": "manual-test", "force": True, "processing_mode": "fast"},
     )
 
@@ -1440,12 +1440,12 @@ def test_run_project_sync_allows_fast_mode_when_memify_disabled(
     assert captured["processing_mode"] == "fast"
 
 
-def test_run_project_sync_returns_operation_metadata(
+def test_run_project_pipeline_returns_operation_metadata(
     knowledge_api_client: TestClient,
     tmp_path: Path,
     monkeypatch,
 ):
-    project_id = "project-sync-op-meta"
+    project_id = "project-pipeline-op-meta"
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1455,7 +1455,7 @@ def test_run_project_sync_returns_operation_metadata(
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
     assert saved.status_code == 200
 
-    class _FakeProjectSyncManager:
+    class _FakeProjectPipelineManager:
         def start_sync(self, **kwargs):
             return {
                 "accepted": True,
@@ -1468,12 +1468,12 @@ def test_run_project_sync_returns_operation_metadata(
 
     monkeypatch.setattr(
         knowledge_router_module,
-        "_project_sync_for_workspace",
-        lambda *_args, **_kwargs: _FakeProjectSyncManager(),
+        "_project_pipeline_for_workspace",
+        lambda *_args, **_kwargs: _FakeProjectPipelineManager(),
     )
 
     response = knowledge_api_client.post(
-        f"/knowledge/project-sync/run?project_id={project_id}",
+        f"/knowledge/project-pipeline/run?project_id={project_id}",
         json={
             "trigger": "manual-test",
             "processing_mode": "agentic",
@@ -1920,25 +1920,25 @@ def test_project_scoped_memify_jobs_are_isolated(
     assert not global_jobs.exists()
 
 
-def test_project_sync_status_ws_snapshot(
+def test_project_pipeline_status_ws_snapshot(
     knowledge_api_client: TestClient,
 ):
     with knowledge_api_client.websocket_connect(
-        "/knowledge/project-sync/ws?project_id=project-sync-demo&interval_ms=300",
+        "/knowledge/project-pipeline/ws?project_id=project-pipeline-demo&interval_ms=300",
     ) as ws:
         payload = ws.receive_json()
 
     assert payload["type"] == "snapshot"
-    assert payload["state"]["project_id"] == "project-sync-demo"
+    assert payload["state"]["project_id"] == "project-pipeline-demo"
     assert payload["state"]["status"] == "idle"
 
 
-def test_project_sync_status_projects_runtime_operation_metadata(
+def test_project_pipeline_status_projects_runtime_operation_metadata(
     knowledge_api_client: TestClient,
     tmp_path: Path,
     monkeypatch,
 ):
-    project_id = "project-sync-runtime-status"
+    project_id = "project-pipeline-runtime-status"
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1948,9 +1948,9 @@ def test_project_sync_status_projects_runtime_operation_metadata(
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
     assert saved.status_code == 200
 
-    knowledge_router_module._PROJECT_SYNC_RUNTIME_META.clear()
+    knowledge_router_module._PROJECT_PIPELINE_RUNTIME_META.clear()
 
-    class _FakeProjectSyncManager:
+    class _FakeProjectPipelineManager:
         def start_sync(self, **kwargs):
             return {
                 "accepted": True,
@@ -1975,12 +1975,12 @@ def test_project_sync_status_projects_runtime_operation_metadata(
 
     monkeypatch.setattr(
         knowledge_router_module,
-        "_project_sync_for_workspace",
-        lambda *_args, **_kwargs: _FakeProjectSyncManager(),
+        "_project_pipeline_for_workspace",
+        lambda *_args, **_kwargs: _FakeProjectPipelineManager(),
     )
 
     started = knowledge_api_client.post(
-        f"/knowledge/project-sync/run?project_id={project_id}",
+        f"/knowledge/project-pipeline/run?project_id={project_id}",
         json={
             "trigger": "manual-test",
             "processing_mode": "agentic",
@@ -1990,7 +1990,7 @@ def test_project_sync_status_projects_runtime_operation_metadata(
     assert started.status_code == 200
 
     status = knowledge_api_client.get(
-        f"/knowledge/project-sync/status?project_id={project_id}"
+        f"/knowledge/project-pipeline/status?project_id={project_id}"
     )
     assert status.status_code == 200
     payload = status.json()
@@ -2000,12 +2000,12 @@ def test_project_sync_status_projects_runtime_operation_metadata(
     assert payload["deduplicated"] is True
 
 
-def test_project_sync_ws_snapshot_includes_latest_run_operation_metadata(
+def test_project_pipeline_ws_snapshot_includes_latest_run_operation_metadata(
     knowledge_api_client: TestClient,
     tmp_path: Path,
     monkeypatch,
 ):
-    project_id = "project-sync-runtime-ws"
+    project_id = "project-pipeline-runtime-ws"
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
 
@@ -2015,9 +2015,9 @@ def test_project_sync_ws_snapshot_includes_latest_run_operation_metadata(
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
     assert saved.status_code == 200
 
-    knowledge_router_module._PROJECT_SYNC_RUNTIME_META.clear()
+    knowledge_router_module._PROJECT_PIPELINE_RUNTIME_META.clear()
 
-    class _FakeProjectSyncManager:
+    class _FakeProjectPipelineManager:
         def start_sync(self, **kwargs):
             return {
                 "accepted": True,
@@ -2036,12 +2036,12 @@ def test_project_sync_ws_snapshot_includes_latest_run_operation_metadata(
 
     monkeypatch.setattr(
         knowledge_router_module,
-        "_project_sync_for_workspace",
-        lambda *_args, **_kwargs: _FakeProjectSyncManager(),
+        "_project_pipeline_for_workspace",
+        lambda *_args, **_kwargs: _FakeProjectPipelineManager(),
     )
 
     started = knowledge_api_client.post(
-        f"/knowledge/project-sync/run?project_id={project_id}",
+        f"/knowledge/project-pipeline/run?project_id={project_id}",
         json={
             "trigger": "manual-test",
             "processing_mode": "agentic",
@@ -2051,7 +2051,7 @@ def test_project_sync_ws_snapshot_includes_latest_run_operation_metadata(
     assert started.status_code == 200
 
     with knowledge_api_client.websocket_connect(
-        f"/knowledge/project-sync/ws?project_id={project_id}&interval_ms=300",
+        f"/knowledge/project-pipeline/ws?project_id={project_id}&interval_ms=300",
     ) as ws:
         payload = ws.receive_json()
 
@@ -2061,17 +2061,17 @@ def test_project_sync_ws_snapshot_includes_latest_run_operation_metadata(
     assert str(payload["state"].get("operation_id") or "").startswith("ps-")
 
 
-def test_project_sync_run_does_not_auto_register_source_and_persists_state(
+def test_project_pipeline_run_does_not_auto_register_source_and_persists_state(
     knowledge_api_client: TestClient,
     tmp_path: Path,
 ):
-    logger = logging.getLogger("test_project_sync")
-    logger.debug("Starting test_project_sync_run_does_not_auto_register_source_and_persists_state")
-    project_id = "project-sync-demo"
+    logger = logging.getLogger("test_project_pipeline")
+    logger.debug("Starting test_project_pipeline_run_does_not_auto_register_source_and_persists_state")
+    project_id = "project-pipeline-demo"
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
     (project_dir / "notes.md").write_text(
-        "project sync content for graphify bootstrap",
+        "project pipeline content for graphify bootstrap",
         encoding="utf-8",
     )
 
@@ -2082,7 +2082,7 @@ def test_project_sync_run_does_not_auto_register_source_and_persists_state(
     assert saved.status_code == 200
 
     started = knowledge_api_client.post(
-        f"/knowledge/project-sync/run?project_id={project_id}",
+        f"/knowledge/project-pipeline/run?project_id={project_id}",
         json={
             "trigger": "manual-test",
             "changed_paths": ["notes.md"],
@@ -2096,7 +2096,7 @@ def test_project_sync_run_does_not_auto_register_source_and_persists_state(
     last_payload = None
     while time.time() < deadline:
         response = knowledge_api_client.get(
-            f"/knowledge/project-sync/status?project_id={project_id}"
+            f"/knowledge/project-pipeline/status?project_id={project_id}"
         )
         assert response.status_code == 200
         last_payload = response.json()
@@ -2112,19 +2112,19 @@ def test_project_sync_run_does_not_auto_register_source_and_persists_state(
         "graphifying",
         "succeeded",
     }
-    assert last_payload["latest_source_id"] == "project-project-sync-demo-workspace"
+    assert last_payload["latest_source_id"] == "project-project-pipeline-demo-workspace"
 
     source_ids = {
         source.id for source in knowledge_router_module.load_config().knowledge.sources
     }
-    assert "project-project-sync-demo-workspace" not in source_ids
+    assert "project-project-pipeline-demo-workspace" not in source_ids
 
     state_path = (
         tmp_path
         / "projects"
         / project_id
         / ".knowledge"
-        / "project-sync-state.json"
+        / "project-pipeline-state.json"
     )
     assert state_path.exists()
 
@@ -2244,11 +2244,11 @@ def test_quantization_compare_endpoints(
     assert sources_payload["b"]["entity_count"] == 4
 
 
-def test_project_sync_status_includes_lane_and_quantization_stage_skeleton(
+def test_project_pipeline_status_includes_lane_and_quantization_stage_skeleton(
     knowledge_api_client: TestClient,
     tmp_path: Path,
 ):
-    project_id = "project-sync-lane-skeleton"
+    project_id = "project-pipeline-lane-skeleton"
     (tmp_path / "projects" / project_id).mkdir(parents=True, exist_ok=True)
 
     config_payload = Config().knowledge.model_dump(mode="json")
@@ -2258,7 +2258,7 @@ def test_project_sync_status_includes_lane_and_quantization_stage_skeleton(
     assert saved.status_code == 200
 
     response = knowledge_api_client.get(
-        f"/knowledge/project-sync/status?project_id={project_id}"
+        f"/knowledge/project-pipeline/status?project_id={project_id}"
     )
 
     assert response.status_code == 200

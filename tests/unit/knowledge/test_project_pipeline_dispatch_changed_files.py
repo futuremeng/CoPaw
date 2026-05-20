@@ -1,7 +1,7 @@
-"""Tests for changed_files generation in project sync dispatch."""
+"""Tests for changed_files generation in project pipeline dispatch."""
 
 import pytest
-from src.copaw.knowledge.project_sync_dispatch import _build_changed_files_list
+from src.copaw.knowledge.project_pipeline_dispatch import _build_changed_files_list
 
 
 def test_build_changed_files_list_empty():

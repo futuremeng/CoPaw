@@ -64,7 +64,7 @@ async def test_project_knowledge_watcher_triggers_bootstrap_sync(
         return {"accepted": True, "reason": "STARTED", "state": {"project_id": kwargs["project_id"]}}
 
     monkeypatch.setattr(
-        watcher_module.ProjectKnowledgeSyncManager,
+        watcher_module.ProjectKnowledgePipelineManager,
         "start_sync",
         fake_start_sync,
     )
@@ -128,7 +128,7 @@ async def test_project_knowledge_watcher_skips_idle_projects_before_first_file_a
     )
     monkeypatch.setattr("qwenpaw.config.utils.save_config", lambda _config: None)
     monkeypatch.setattr(
-        watcher_module.ProjectKnowledgeSyncManager,
+        watcher_module.ProjectKnowledgePipelineManager,
         "start_sync",
         lambda self, **kwargs: calls.append(kwargs),
     )
@@ -172,7 +172,7 @@ async def test_project_knowledge_watcher_resume_syncs_on_startup(
     )
     monkeypatch.setattr("qwenpaw.config.utils.save_config", lambda _config: None)
     monkeypatch.setattr(
-        watcher_module.ProjectKnowledgeSyncManager,
+        watcher_module.ProjectKnowledgePipelineManager,
         "resume_sync_if_needed",
         lambda self, **kwargs: resumed.append(kwargs) or {"accepted": True, "reason": "RESUMED"},
     )
@@ -183,7 +183,7 @@ async def test_project_knowledge_watcher_resume_syncs_on_startup(
         poll_interval=0.01,
     )
 
-    await watcher._resume_project_syncs(watcher._collect_snapshots())
+    await watcher._resume_project_pipelines(watcher._collect_snapshots())
 
     assert len(resumed) == 1
     assert resumed[0]["project_id"] == "project-resume"
@@ -220,7 +220,7 @@ async def test_project_knowledge_watcher_bootstrap_writes_project_chunks_automat
         self._run_sync_loop(**kwargs)
 
     monkeypatch.setattr(
-        watcher_module.ProjectKnowledgeSyncManager,
+        watcher_module.ProjectKnowledgePipelineManager,
         "_start_worker",
         run_worker_inline,
     )
@@ -313,7 +313,7 @@ async def test_project_knowledge_watcher_change_updates_project_chunks_automatic
         self._run_sync_loop(**kwargs)
 
     monkeypatch.setattr(
-        watcher_module.ProjectKnowledgeSyncManager,
+        watcher_module.ProjectKnowledgePipelineManager,
         "_start_worker",
         run_worker_inline,
     )
@@ -438,7 +438,7 @@ async def test_project_knowledge_watcher_triggers_on_file_change(
         return {"accepted": True, "reason": "STARTED", "state": {"project_id": kwargs["project_id"]}}
 
     monkeypatch.setattr(
-        watcher_module.ProjectKnowledgeSyncManager,
+        watcher_module.ProjectKnowledgePipelineManager,
         "start_sync",
         fake_start_sync,
     )
@@ -496,7 +496,7 @@ async def test_project_knowledge_watcher_records_recent_updates_for_visible_chan
     )
     monkeypatch.setattr("qwenpaw.config.utils.save_config", lambda _config: None)
     monkeypatch.setattr(
-        watcher_module.ProjectKnowledgeSyncManager,
+        watcher_module.ProjectKnowledgePipelineManager,
         "start_sync",
         lambda self, **kwargs: {"accepted": True, "reason": "STARTED", "state": {"project_id": kwargs["project_id"]}},
     )
@@ -633,12 +633,12 @@ async def test_project_knowledge_watcher_triggers_on_processing_config_change(
         return {"accepted": True, "reason": "STARTED", "state": {"project_id": kwargs["project_id"]}}
 
     monkeypatch.setattr(
-        watcher_module.ProjectKnowledgeSyncManager,
+        watcher_module.ProjectKnowledgePipelineManager,
         "start_sync",
         fake_start_sync,
     )
     monkeypatch.setattr(
-        watcher_module.ProjectKnowledgeSyncManager,
+        watcher_module.ProjectKnowledgePipelineManager,
         "check_needs_reindex",
         lambda self, **_kwargs: True,
     )

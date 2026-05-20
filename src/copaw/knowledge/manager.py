@@ -422,7 +422,7 @@ class KnowledgeManager:
         )
 
     def get_semantic_engine_state(self, config: KnowledgeConfig | None = None) -> dict:
-        """Return the current semantic engine state for project-sync gating."""
+        """Return the current semantic engine state for project-pipeline gating."""
         if config is None:
             return self._semantic_engine_state(
                 status="unavailable",

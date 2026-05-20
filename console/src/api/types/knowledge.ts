@@ -337,7 +337,7 @@ export interface ProjectKnowledgeChangedFile {
   file_type?: string;
 }
 
-export interface ProjectKnowledgeSyncState {
+export interface ProjectKnowledgePipelineState {
   project_id: string;
   task_type?: string;
   status:
@@ -402,7 +402,7 @@ export interface ProjectKnowledgeSyncState {
   pipeline_trace?: ProjectKnowledgePipelineTracePayload;
 }
 
-export interface ProjectKnowledgeSyncRunRequest {
+export interface ProjectKnowledgePipelineRunRequest {
   projectId: string;
   trigger?: string;
   changedPaths?: string[];
@@ -412,13 +412,13 @@ export interface ProjectKnowledgeSyncRunRequest {
   idempotencyKey?: string;
 }
 
-export interface ProjectKnowledgeSyncRunResponse {
+export interface ProjectKnowledgePipelineRunResponse {
   accepted: boolean;
   reason: string;
   operation_id?: string;
   idempotency_key?: string;
   deduplicated?: boolean;
-  state: ProjectKnowledgeSyncState;
+  state: ProjectKnowledgePipelineState;
 }
 
 export interface KnowledgeAutomationConfig {
