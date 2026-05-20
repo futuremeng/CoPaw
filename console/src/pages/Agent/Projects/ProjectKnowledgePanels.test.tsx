@@ -1,13 +1,13 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import ProjectKnowledgeNerPanel from "./ProjectKnowledgeNerPanel";
-import ProjectKnowledgeOutputsPanel from "./ProjectKnowledgeOutputsPanel";
-import ProjectKnowledgeProcessingPanel from "./ProjectKnowledgeProcessingPanel";
-import ProjectKnowledgeSignalsPanel from "./ProjectKnowledgeSignalsPanel";
-import ProjectKnowledgeSourcesPanel from "./ProjectKnowledgeSourcesPanel";
-import { buildModeState } from "./projectKnowledgeTestUtils";
+import ProjectKnowledgeNerPanel from "./components/ProjectKnowledgeNerPanel";
+import ProjectKnowledgeOutputsPanel from "./components/ProjectKnowledgeOutputsPanel";
+import ProjectKnowledgeProcessingPanel from "./components/ProjectKnowledgeProcessingPanel";
+import ProjectKnowledgeSignalsPanel from "./components/ProjectKnowledgeSignalsPanel";
+import ProjectKnowledgeSourcesPanel from "./components/ProjectKnowledgeSourcesPanel";
+import { buildModeState } from "./utils/projectKnowledgeTestUtils";
 import type { AgentProjectFileInfo } from "../../../api/types/agents";
-import type { ProjectKnowledgeHeaderSignals, ProjectKnowledgeState } from "./useProjectKnowledgeState";
+import type { ProjectKnowledgeHeaderSignals, ProjectKnowledgeState } from "./hooks/useProjectKnowledgeState";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({

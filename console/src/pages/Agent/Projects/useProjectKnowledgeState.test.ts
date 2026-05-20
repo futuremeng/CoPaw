@@ -9,7 +9,7 @@ import {
   pickActiveKnowledgeTask,
   resolveProjectKnowledgeStepStats,
   resolveProjectKnowledgeL1StepStats,
-} from "./useProjectKnowledgeState";
+} from "./hooks/useProjectKnowledgeState";
 
 function buildTask(
   overrides: Partial<KnowledgeTaskProgress> = {},

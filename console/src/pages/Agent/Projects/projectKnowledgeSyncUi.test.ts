@@ -5,7 +5,7 @@ import {
   getProjectKnowledgeSemanticDescription,
   getProjectKnowledgeSemanticReasonLabel,
   getProjectKnowledgeSemanticSummary,
-} from "./projectKnowledgeSyncUi";
+} from "./utils/projectKnowledgeSyncUi";
 
 const t = ((key: string, fallback?: string) => fallback || key) as TFunction;
 

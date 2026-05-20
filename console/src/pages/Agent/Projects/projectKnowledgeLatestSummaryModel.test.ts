@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildProjectKnowledgeLatestSummaryModel,
   buildProjectKnowledgeLatestSummaryModelFromState,
-} from "./projectKnowledgeLatestSummaryModel";
+} from "./utils/projectKnowledgeLatestSummaryModel";
 
 const t = (
   _key: string,

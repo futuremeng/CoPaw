@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { agentsApi } from "../../../api/modules/agents";
 import type { ProjectKnowledgeSyncState } from "../../../api/types";
-import ProjectKnowledgeSettingsPanel from "./ProjectKnowledgeSettingsPanel";
+import ProjectKnowledgeSettingsPanel from "./components/ProjectKnowledgeSettingsPanel";
 
 const { mockedApi, mockedAgentsApi } = vi.hoisted(() => ({
   mockedApi: {

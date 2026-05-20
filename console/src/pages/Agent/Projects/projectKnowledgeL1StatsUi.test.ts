@@ -8,7 +8,7 @@ import {
   summarizeProjectKnowledgeFileAnalysisStats,
   summarizeProjectKnowledgeQualityReviewStats,
   summarizeProjectKnowledgeSourceScanStats,
-} from "./projectKnowledgeL1StatsUi";
+} from "./utils/projectKnowledgeL1StatsUi";
 
 const t = (
   _key: string,

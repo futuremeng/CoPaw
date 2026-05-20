@@ -16,7 +16,7 @@ import {
   isTextPath,
   isScriptPath,
   isOtherTypePath,
-} from "./metrics";
+} from "./utils/metrics";
 
 describe("project metrics", () => {
   it("classifies project files into knowledge-related buckets", () => {

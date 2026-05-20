@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import ProjectMdxReadonlyPreview from "./ProjectMdxReadonlyPreview";
+import ProjectMdxReadonlyPreview from "./components/ProjectMdxReadonlyPreview";
 
 const problematicFilePath = "/Users/futuremeng/.copaw/workspaces/default/projects/project-2ZHU4d/aacid__duxiu_files__20240613T213851Z__kTftdqCUQCBG3XMeXyoaPz_260317_002144.md";
 

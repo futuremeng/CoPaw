@@ -1,10 +1,10 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import ProjectKnowledgePanel from "./ProjectKnowledgePanel";
-import { buildModeState } from "./projectKnowledgeTestUtils";
+import ProjectKnowledgePanel from "./components/ProjectKnowledgePanel";
+import { buildModeState } from "./utils/projectKnowledgeTestUtils";
 import type { KnowledgeSourceItem } from "../../../api/types";
-import type { ProjectKnowledgeState } from "./useProjectKnowledgeState";
+import type { ProjectKnowledgeState } from "./hooks/useProjectKnowledgeState";
 
 const mockRecordsToVisualizationData = vi.fn((_: unknown, __?: unknown) => ({ nodes: [], edges: [] }));
 
@@ -263,10 +263,10 @@ describe("ProjectKnowledgePanel", () => {
       />,
     );
 
-    expect(screen.getByText("Latest workflow snapshot")).not.toBeNull();
-    expect(screen.getByText(/5 files \/ 2 changed/)).not.toBeNull();
-    expect(screen.getByText(/3 docs \/ 7 chunks \/ 11 sentences/)).not.toBeNull();
-    expect(screen.getByText(/0.91 -> 0.95 \/ delta 0.04 \/ 1 rounds/)).not.toBeNull();
+    expect(screen.getByText("copaw.projects.knowledge.latestWorkflowSummary")).not.toBeNull();
+    expect(screen.getByText(/copaw\.projects\.knowledge\.latestSnapshotRawSummary/)).not.toBeNull();
+    expect(screen.getByText(/copaw\.projects\.knowledge\.latestBuildChunksSummary/)).not.toBeNull();
+    expect(screen.getByText(/copaw\.projects\.knowledge\.latestSemanticRoleLabelingSummary/)).not.toBeNull();
   });
 
   it("switches sources", async () => {
@@ -314,8 +314,8 @@ describe("ProjectKnowledgePanel", () => {
       />,
     );
 
-    expect(screen.getByText("Data Source")).not.toBeNull();
-    expect(screen.getByText("Sources")).not.toBeNull();
+    expect(screen.getByText("copaw.projects.knowledge.dataSource")).not.toBeNull();
+    expect(screen.getByText("Workspace Source")).not.toBeNull();
 
     await user.click(screen.getByText("Workspace Source"));
     await user.click(await screen.findByText("Docs Source"));

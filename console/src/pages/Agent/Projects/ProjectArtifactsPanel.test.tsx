@@ -1,15 +1,15 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import ProjectArtifactsPanel from "./ProjectArtifactsPanel";
-import type { ProjectKnowledgeState } from "./useProjectKnowledgeState";
+import ProjectArtifactsPanel from "./components/ProjectArtifactsPanel";
+import type { ProjectKnowledgeState } from "./hooks/useProjectKnowledgeState";
 
-vi.mock("./ProjectMdxReadonlyPreview", () => ({
+vi.mock("./components/ProjectMdxReadonlyPreview", () => ({
   default: ({ markdown }: { filePath: string; markdown: string }) => (
     <div data-testid="project-mdx-preview">{markdown}</div>
   ),
 }));
 
-vi.mock("./ProjectDocumentKnowledgeVisualization", () => ({
+vi.mock("./components/ProjectDocumentKnowledgeVisualization", () => ({
   default: ({ selectedFilePath }: { selectedFilePath: string }) => (
     <div data-testid="project-knowledge-visualization">viz:{selectedFilePath}</div>
   ),

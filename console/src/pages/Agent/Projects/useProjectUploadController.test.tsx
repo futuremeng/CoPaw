@@ -2,7 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { agentsApi } from "../../../api/modules/agents";
-import useProjectUploadController from "./useProjectUploadController";
+import useProjectUploadController from "./hooks/useProjectUploadController";
 
 const { mockedAgentsApi, mockedSuccess, mockedError } = vi.hoisted(() => ({
   mockedAgentsApi: {

@@ -4,7 +4,7 @@ import {
   defaultProjectLayoutPrefs,
   parseProjectLayoutPrefs,
   PROJECT_LAYOUT_PREFS_PREFIX,
-} from "./projectLayoutPrefs";
+} from "./utils/projectLayoutPrefs";
 
 describe("project layout prefs", () => {
   it("builds storage key with project id", () => {

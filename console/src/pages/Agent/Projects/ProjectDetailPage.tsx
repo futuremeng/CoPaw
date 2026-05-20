@@ -21,57 +21,57 @@ import { useTranslation } from "react-i18next";
 import { agentsApi } from "../../../api/modules/agents";
 import { chatApi } from "../../../api/modules/chat";
 import { knowledgeApi } from "../../../api/modules/knowledge";
-import ProjectAutomationPanel from "./ProjectAutomationPanel";
+import ProjectAutomationPanel from "./components/ProjectAutomationPanel";
 import ProjectChatPanel, {
   type ProjectChatAutoAttachRequest,
   type ProjectChatMode,
-} from "./ProjectChatPanel";
-import ProjectKnowledgePanel from "./ProjectKnowledgePanel";
-import ProjectKnowledgeOutputsPanel from "./ProjectKnowledgeOutputsPanel";
-import ProjectKnowledgeProcessingPanel from "./ProjectKnowledgeProcessingPanel";
-import ProjectKnowledgeSignalsPanel from "./ProjectKnowledgeSignalsPanel";
-import ProjectKnowledgeSourcesPanel from "./ProjectKnowledgeSourcesPanel";
-import ProjectKnowledgeSettingsPanel from "./ProjectKnowledgeSettingsPanel";
+} from "./components/ProjectChatPanel";
+import ProjectKnowledgePanel from "./components/ProjectKnowledgePanel";
+import ProjectKnowledgeOutputsPanel from "./components/ProjectKnowledgeOutputsPanel";
+import ProjectKnowledgeProcessingPanel from "./components/ProjectKnowledgeProcessingPanel";
+import ProjectKnowledgeSignalsPanel from "./components/ProjectKnowledgeSignalsPanel";
+import ProjectKnowledgeSourcesPanel from "./components/ProjectKnowledgeSourcesPanel";
+import ProjectKnowledgeSettingsPanel from "./components/ProjectKnowledgeSettingsPanel";
 import {
   getProjectKnowledgeSemanticDescription,
   getProjectKnowledgeSemanticReasonLabel,
-} from "./projectKnowledgeSyncUi";
-import ProjectOverviewCard from "./ProjectOverviewCard";
-import ProjectUploadModal from "./ProjectUploadModal";
-import ProjectWorkbenchPanel from "./ProjectWorkbenchPanel";
-import ProjectMetricsPanel from "./ProjectMetricsPanel";
-import ProjectEvidencePanel from "./ProjectEvidencePanel";
-import useArtifactSelectionGuards from "./useArtifactSelectionGuards";
-import useProjectChatEnsureController from "./useProjectChatEnsureController";
-import useProjectChatFocusEffects from "./useProjectChatFocusEffects";
-import usePreferredProjectWorkspaceChat from "./usePreferredProjectWorkspaceChat";
-import useProjectDesignChatController from "./useProjectDesignChatController";
-import useLeaveConfirmGuard from "./useLeaveConfirmGuard";
-import useOpenUploadQuery from "./useOpenUploadQuery";
-import useProjectRealtimeController from "./useProjectRealtimeController";
-import useProjectUploadController from "./useProjectUploadController";
+} from "./utils/projectKnowledgeSyncUi";
+import ProjectOverviewCard from "./components/ProjectOverviewCard";
+import ProjectUploadModal from "./components/ProjectUploadModal";
+import ProjectWorkbenchPanel from "./components/ProjectWorkbenchPanel";
+import ProjectMetricsPanel from "./components/ProjectMetricsPanel";
+import ProjectEvidencePanel from "./components/ProjectEvidencePanel";
+import useArtifactSelectionGuards from "./hooks/useArtifactSelectionGuards";
+import useProjectChatEnsureController from "./hooks/useProjectChatEnsureController";
+import useProjectChatFocusEffects from "./hooks/useProjectChatFocusEffects";
+import usePreferredProjectWorkspaceChat from "./hooks/usePreferredProjectWorkspaceChat";
+import useProjectDesignChatController from "./hooks/useProjectDesignChatController";
+import useLeaveConfirmGuard from "./hooks/useLeaveConfirmGuard";
+import useOpenUploadQuery from "./hooks/useOpenUploadQuery";
+import useProjectRealtimeController from "./hooks/useProjectRealtimeController";
+import useProjectUploadController from "./hooks/useProjectUploadController";
 import {
   type ProjectKnowledgeHeaderSignals,
   type ProjectKnowledgeProcessingMode,
   useProjectKnowledgeState,
-} from "./useProjectKnowledgeState";
+} from "./hooks/useProjectKnowledgeState";
 import {
   buildAttachDraftPrompt,
   buildAutoAttachAnalysisPrompt,
   buildImplementationAdvancePrompt,
   buildPromotionDraftPrompt,
   buildValidationRoundPrompt,
-} from "./projectChatPrompts";
+} from "./utils/projectChatPrompts";
 import {
   isIgnoredProjectFile,
   resolveArtifactSelectionPath,
   isPreviewablePath,
   selectSeedSourceFiles,
-} from "./projectFileSelectionUtils";
+} from "./utils/projectFileSelectionUtils";
 import {
   buildProjectIdCandidates,
   matchesRouteProject,
-} from "./projectIdUtils";
+} from "./utils/projectIdUtils";
 import {
   buildProjectLayoutStorageKey,
   type KnowledgeDockTabKey,
@@ -79,10 +79,10 @@ import {
   type ProjectDetailLayoutPrefs,
   type ProjectStageKey,
   type TreeDisplayMode,
-} from "./projectLayoutPrefs";
-import type { ProjectFileFilterKey } from "./filtering";
-import { computeProjectFileInventorySummary, isRecentlyUpdatedFile } from "./metrics";
-import { isBuiltInProjectFile } from "./builtInFiles";
+} from "./utils/projectLayoutPrefs";
+import type { ProjectFileFilterKey } from "./utils/filtering";
+import { computeProjectFileInventorySummary, isRecentlyUpdatedFile } from "./utils/metrics";
+import { isBuiltInProjectFile } from "./utils/builtInFiles";
 import type {
   AgentProjectSummary,
   AgentProjectFileInfo,

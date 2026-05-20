@@ -1,10 +1,10 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import ProjectWorkbenchPanel from "./ProjectWorkbenchPanel";
-import type { ProjectKnowledgeState } from "./useProjectKnowledgeState";
+import ProjectWorkbenchPanel from "./components/ProjectWorkbenchPanel";
+import type { ProjectKnowledgeState } from "./hooks/useProjectKnowledgeState";
 
-vi.mock("./ProjectArtifactsPanel", () => ({
+vi.mock("./components/ProjectArtifactsPanel", () => ({
   default: () => <div>artifacts</div>,
 }));
 

@@ -9,7 +9,7 @@ vi.mock("katex/contrib/auto-render", () => ({
   default: renderMathInElementMock,
 }));
 
-import ProjectMdxReadonlyPreview from "./ProjectMdxReadonlyPreview";
+import ProjectMdxReadonlyPreview from "./components/ProjectMdxReadonlyPreview";
 
 describe("ProjectMdxReadonlyPreview integration", () => {
   it("renders markdown content through MDXEditor", async () => {

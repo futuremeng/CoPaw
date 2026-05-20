@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import ProjectMdxReadonlyPreview from "./ProjectMdxReadonlyPreview";
+import ProjectMdxReadonlyPreview from "./components/ProjectMdxReadonlyPreview";
 
 describe("ProjectMdxReadonlyPreview raw html table", () => {
   it("renders markdown containing a raw html table", async () => {

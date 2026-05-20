@@ -8,8 +8,8 @@ import type {
   AgentProjectSummary,
   AgentProjectFileTreeNode,
 } from "../../../api/types/agents";
-import ProjectOverviewCard from "./ProjectOverviewCard";
-import type { ProjectStageKey } from "./projectLayoutPrefs";
+import ProjectOverviewCard from "./components/ProjectOverviewCard";
+import type { ProjectStageKey } from "./utils/projectLayoutPrefs";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
