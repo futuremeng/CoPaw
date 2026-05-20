@@ -1,9 +1,9 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { agentsApi } from "../../../api/modules/agents";
-import type { ProjectKnowledgeSyncState } from "../../../api/types";
-import ProjectKnowledgeSettingsPanel from "./components/ProjectKnowledgeSettingsPanel";
+import { agentsApi } from "../../../../api/modules/agents";
+import type { ProjectKnowledgeSyncState } from "../../../../api/types";
+import ProjectKnowledgeSettingsPanel from "../components/ProjectKnowledgeSettingsPanel";
 
 const { mockedApi, mockedAgentsApi } = vi.hoisted(() => ({
   mockedApi: {
@@ -18,14 +18,14 @@ const { mockedApi, mockedAgentsApi } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("../../../api", () => ({
+vi.mock("../../../../api", () => ({
   __esModule: true,
   default: mockedApi,
   getApiUrl: (path: string) => path,
   getApiToken: () => "",
 }));
 
-vi.mock("../../../api/modules/agents", () => ({
+vi.mock("../../../../api/modules/agents", () => ({
   agentsApi: mockedAgentsApi,
 }));
 

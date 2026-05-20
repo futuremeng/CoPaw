@@ -1,10 +1,10 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import ProjectKnowledgePanel from "./components/ProjectKnowledgePanel";
-import { buildModeState } from "./utils/projectKnowledgeTestUtils";
-import type { KnowledgeSourceItem } from "../../../api/types";
-import type { ProjectKnowledgeState } from "./hooks/useProjectKnowledgeState";
+import ProjectKnowledgePanel from "../components/ProjectKnowledgePanel";
+import { buildModeState } from "../utils/projectKnowledgeTestUtils";
+import type { KnowledgeSourceItem } from "../../../../api/types";
+import type { ProjectKnowledgeState } from "../hooks/useProjectKnowledgeState";
 
 const mockRecordsToVisualizationData = vi.fn((_: unknown, __?: unknown) => ({ nodes: [], edges: [] }));
 
@@ -25,8 +25,8 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-vi.mock("../Knowledge/graphQuery", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../Knowledge/graphQuery")>();
+vi.mock("../../Knowledge/graphQuery", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../Knowledge/graphQuery")>();
   return {
     ...actual,
     limitGraphVisualizationRecords: (records: unknown[], topK?: number) => {

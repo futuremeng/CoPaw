@@ -4,7 +4,7 @@ import {
   buildProjectKnowledgeProcessingRecentHistorySectionsFromState,
   buildProjectKnowledgeSourcesRecentHistorySections,
   buildProjectKnowledgeSourcesRecentHistorySectionsFromState,
-} from "./utils/projectKnowledgeRecentHistoryModel";
+} from "../utils/projectKnowledgeRecentHistoryModel";
 
 const t = (
   _key: string,

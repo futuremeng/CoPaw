@@ -2,7 +2,7 @@ import type { PropsWithChildren, ReactNode } from "react";
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import ProjectDetailPage from "./ProjectDetailPage";
+import ProjectDetailPage from "../ProjectDetailPage";
 
 const {
   mockedAcquireProjectKnowledgeWatchLease,
@@ -182,11 +182,11 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-vi.mock("../../../stores/agentStore", () => ({
+vi.mock("../../../../stores/agentStore", () => ({
   useAgentStore: () => mockAgentStoreState,
 }));
 
-vi.mock("../../../api/modules/agents", () => ({
+vi.mock("../../../../api/modules/agents", () => ({
   agentsApi: {
     acquireProjectKnowledgeWatchLease: mockedAcquireProjectKnowledgeWatchLease,
     listProjectFileTree: mockedListProjectFileTree,
@@ -199,7 +199,7 @@ vi.mock("../../../api/modules/agents", () => ({
   },
 }));
 
-vi.mock("../../../api/modules/chat", () => ({
+vi.mock("../../../../api/modules/chat", () => ({
   chatApi: {
     clearChatMeta: vi.fn().mockResolvedValue(undefined),
     createChat: vi.fn().mockResolvedValue({ id: "chat-1" }),
@@ -208,14 +208,14 @@ vi.mock("../../../api/modules/chat", () => ({
   },
 }));
 
-vi.mock("../../../api/modules/knowledge", () => ({
+vi.mock("../../../../api/modules/knowledge", () => ({
   knowledgeApi: {
     getQualityLoopJobStatus: vi.fn().mockResolvedValue(null),
     getMemifyJobStatus: vi.fn().mockResolvedValue(null),
   },
 }));
 
-vi.mock("./hooks/useProjectRealtimeController", () => ({
+vi.mock("../hooks/useProjectRealtimeController", () => ({
   default: (args: {
     onFileTreeInvalidated?: typeof realtimeControllerState.onFileTreeInvalidated;
     onPipelineInvalidated?: typeof realtimeControllerState.onPipelineInvalidated;
@@ -229,12 +229,12 @@ vi.mock("./hooks/useProjectRealtimeController", () => ({
   },
 }));
 
-vi.mock("./components/ProjectAutomationPanel", () => ({ default: () => <div /> }));
-vi.mock("./components/ProjectKnowledgePanel", () => ({ default: () => <div /> }));
-vi.mock("./components/ProjectKnowledgeNerPanel", () => ({ default: () => <div /> }));
-vi.mock("./components/ProjectKnowledgeOutputsPanel", () => ({ default: () => <div /> }));
-vi.mock("./components/ProjectKnowledgeProcessingPanel", () => ({ default: () => <div /> }));
-vi.mock("./components/ProjectKnowledgeSignalsPanel", () => ({
+vi.mock("../components/ProjectAutomationPanel", () => ({ default: () => <div /> }));
+vi.mock("../components/ProjectKnowledgePanel", () => ({ default: () => <div /> }));
+vi.mock("../components/ProjectKnowledgeNerPanel", () => ({ default: () => <div /> }));
+vi.mock("../components/ProjectKnowledgeOutputsPanel", () => ({ default: () => <div /> }));
+vi.mock("../components/ProjectKnowledgeProcessingPanel", () => ({ default: () => <div /> }));
+vi.mock("../components/ProjectKnowledgeSignalsPanel", () => ({
   default: (props: {
     runtimeSignalValue?: string;
     runtimeSignalTooltipContent?: ReactNode;
@@ -254,19 +254,19 @@ vi.mock("./components/ProjectKnowledgeSignalsPanel", () => ({
     </div>
   ),
 }));
-vi.mock("./components/ProjectKnowledgeSourcesPanel", () => ({ default: () => <div /> }));
-vi.mock("./components/ProjectKnowledgeSettingsPanel", () => ({ default: () => <div /> }));
-vi.mock("./components/ProjectOverviewCard", () => ({
+vi.mock("../components/ProjectKnowledgeSourcesPanel", () => ({ default: () => <div /> }));
+vi.mock("../components/ProjectKnowledgeSettingsPanel", () => ({ default: () => <div /> }));
+vi.mock("../components/ProjectOverviewCard", () => ({
   default: (props: Record<string, unknown>) => {
     projectOverviewCardState.latestProps = props;
     return <div />;
   },
 }));
-vi.mock("./components/ProjectUploadModal", () => ({ default: () => <div /> }));
-vi.mock("./components/ProjectWorkbenchPanel", () => ({ default: () => <div /> }));
-vi.mock("./components/ProjectMetricsPanel", () => ({ default: () => <div /> }));
-vi.mock("./components/ProjectEvidencePanel", () => ({ default: () => <div /> }));
-vi.mock("./components/ProjectChatPanel", () => ({
+vi.mock("../components/ProjectUploadModal", () => ({ default: () => <div /> }));
+vi.mock("../components/ProjectWorkbenchPanel", () => ({ default: () => <div /> }));
+vi.mock("../components/ProjectMetricsPanel", () => ({ default: () => <div /> }));
+vi.mock("../components/ProjectEvidencePanel", () => ({ default: () => <div /> }));
+vi.mock("../components/ProjectChatPanel", () => ({
   default: (props: { onAssistantTurnCompleted?: () => void }) => (
     <button type="button" onClick={props.onAssistantTurnCompleted}>
       assistant-turn-completed
@@ -274,26 +274,26 @@ vi.mock("./components/ProjectChatPanel", () => ({
   ),
 }));
 
-vi.mock("./hooks/useArtifactSelectionGuards", () => ({ default: () => undefined }));
-vi.mock("./hooks/useProjectChatEnsureController", () => ({
+vi.mock("../hooks/useArtifactSelectionGuards", () => ({ default: () => undefined }));
+vi.mock("../hooks/useProjectChatEnsureController", () => ({
   default: () => mockProjectChatEnsureControllerState,
 }));
-vi.mock("./hooks/useProjectChatFocusEffects", () => ({ default: () => undefined }));
-vi.mock("./hooks/usePreferredProjectWorkspaceChat", () => ({
+vi.mock("../hooks/useProjectChatFocusEffects", () => ({ default: () => undefined }));
+vi.mock("../hooks/usePreferredProjectWorkspaceChat", () => ({
   default: () => mockPreferredWorkspaceChatState,
 }));
-vi.mock("./hooks/useProjectDesignChatController", () => ({
+vi.mock("../hooks/useProjectDesignChatController", () => ({
   default: () => mockProjectDesignChatControllerState,
 }));
-vi.mock("./hooks/useLeaveConfirmGuard", () => ({ default: () => undefined }));
-vi.mock("./hooks/useOpenUploadQuery", () => ({ default: () => undefined }));
-vi.mock("./hooks/useProjectUploadController", () => ({
+vi.mock("../hooks/useLeaveConfirmGuard", () => ({ default: () => undefined }));
+vi.mock("../hooks/useOpenUploadQuery", () => ({ default: () => undefined }));
+vi.mock("../hooks/useProjectUploadController", () => ({
   default: () => mockProjectUploadControllerState,
 }));
-vi.mock("./hooks/useProjectKnowledgeState", () => ({
+vi.mock("../hooks/useProjectKnowledgeState", () => ({
   useProjectKnowledgeState: () => mockKnowledgeState,
 }));
-vi.mock("./utils/projectKnowledgeSyncUi", () => ({
+vi.mock("../utils/projectKnowledgeSyncUi", () => ({
   getProjectKnowledgeSemanticDescription: vi.fn().mockReturnValue(""),
   getProjectKnowledgeSemanticReasonLabel: vi.fn().mockReturnValue(""),
 }));

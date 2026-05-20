@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildProjectIdCandidates, projectDirNameFromMetadata } from "./utils/projectIdUtils";
+import { buildProjectIdCandidates, projectDirNameFromMetadata } from "../utils/projectIdUtils";
 
 describe("projectId utils", () => {
   it("resolves project directory from direct PROJECT.md path", () => {

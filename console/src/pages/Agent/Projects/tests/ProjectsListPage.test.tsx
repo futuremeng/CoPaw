@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import ProjectsListPage from "./ProjectsListPage";
+import ProjectsListPage from "../ProjectsListPage";
 
 const {
   navigateMock,
@@ -46,13 +46,13 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-vi.mock("../../../stores/agentStore", () => ({
+vi.mock("../../../../stores/agentStore", () => ({
   useAgentStore: () => ({
     selectedAgent: storeState.selectedAgent,
   }),
 }));
 
-vi.mock("../../../api/modules/agents", () => ({
+vi.mock("../../../../api/modules/agents", () => ({
   agentsApi: mockedAgentsApi,
 }));
 

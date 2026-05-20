@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getProjectFilterLabelDescriptor,
   toggleProjectFileFilter,
-} from "./utils/filtering";
+} from "../utils/filtering";
 
 describe("project filtering helpers", () => {
   it("toggles project file filter on repeated click", () => {

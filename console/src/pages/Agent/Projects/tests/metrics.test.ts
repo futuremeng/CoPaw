@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { AgentProjectFileInfo } from "../../../api/types/agents";
+import type { AgentProjectFileInfo } from "../../../../api/types/agents";
 import {
   buildProjectKnowledgeCardModels,
   computeProjectFileInventorySummary,
@@ -16,7 +16,7 @@ import {
   isTextPath,
   isScriptPath,
   isOtherTypePath,
-} from "./utils/metrics";
+} from "../utils/metrics";
 
 describe("project metrics", () => {
   it("classifies project files into knowledge-related buckets", () => {

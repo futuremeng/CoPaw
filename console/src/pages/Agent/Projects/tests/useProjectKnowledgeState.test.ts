@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { KnowledgeTaskProgress } from "../../../api/types";
-import type { KnowledgeSourceItem, ProjectKnowledgeSyncState } from "../../../api/types";
+import type { KnowledgeTaskProgress } from "../../../../api/types";
+import type { KnowledgeSourceItem, ProjectKnowledgeSyncState } from "../../../../api/types";
 import {
   applySourceFilterToGraphQueryResponse,
   deriveSourceQuantBaseMetrics,
@@ -9,7 +9,7 @@ import {
   pickActiveKnowledgeTask,
   resolveProjectKnowledgeStepStats,
   resolveProjectKnowledgeL1StepStats,
-} from "./hooks/useProjectKnowledgeState";
+} from "../hooks/useProjectKnowledgeState";
 
 function buildTask(
   overrides: Partial<KnowledgeTaskProgress> = {},

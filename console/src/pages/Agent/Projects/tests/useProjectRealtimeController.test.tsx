@@ -1,13 +1,13 @@
 import { render, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import useProjectRealtimeController from "./hooks/useProjectRealtimeController";
+import useProjectRealtimeController from "../hooks/useProjectRealtimeController";
 
 const { mockedGetApiToken, mockedGetApiUrl } = vi.hoisted(() => ({
   mockedGetApiToken: vi.fn(),
   mockedGetApiUrl: vi.fn(),
 }));
 
-vi.mock("../../../api", () => ({
+vi.mock("../../../../api", () => ({
   getApiToken: mockedGetApiToken,
   getApiUrl: mockedGetApiUrl,
 }));

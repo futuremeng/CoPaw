@@ -3,7 +3,7 @@ import {
   isPreviewablePath,
   pickPreviewablePathFromTreeNodes,
   resolveArtifactSelectionPath,
-} from "./utils/projectFileSelectionUtils";
+} from "../utils/projectFileSelectionUtils";
 
 describe("project file selection utils", () => {
   it("allows managed hidden directories to be previewed", () => {

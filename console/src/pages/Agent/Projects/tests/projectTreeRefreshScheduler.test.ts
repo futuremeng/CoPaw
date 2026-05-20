@@ -3,7 +3,7 @@ import {
   createProjectTreeRefreshSchedulerState,
   resetProjectTreeRefreshSchedulerState,
   scheduleProjectTreeRefresh,
-} from "./utils/projectTreeRefreshScheduler";
+} from "../utils/projectTreeRefreshScheduler";
 
 describe("projectTreeRefreshScheduler", () => {
   it("coalesces close refresh requests into one execution", async () => {

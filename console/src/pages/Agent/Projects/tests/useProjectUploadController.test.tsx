@@ -1,8 +1,8 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { agentsApi } from "../../../api/modules/agents";
-import useProjectUploadController from "./hooks/useProjectUploadController";
+import { agentsApi } from "../../../../api/modules/agents";
+import useProjectUploadController from "../hooks/useProjectUploadController";
 
 const { mockedAgentsApi, mockedSuccess, mockedError } = vi.hoisted(() => ({
   mockedAgentsApi: {
@@ -12,7 +12,7 @@ const { mockedAgentsApi, mockedSuccess, mockedError } = vi.hoisted(() => ({
   mockedError: vi.fn(),
 }));
 
-vi.mock("../../../api/modules/agents", () => ({
+vi.mock("../../../../api/modules/agents", () => ({
   agentsApi: mockedAgentsApi,
 }));
 
