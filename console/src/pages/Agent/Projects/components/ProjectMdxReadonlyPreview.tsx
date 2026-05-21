@@ -95,10 +95,7 @@ function normalizeMarkdownForMdxEditor(markdown: string): string {
 function ProjectMdxReadonlyPreview({ filePath, markdown }: ProjectMdxReadonlyPreviewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [viewMode, setViewMode] = useState<EditorViewMode>(() => {
-    if (typeof window === "undefined") {
-      return "rich-text";
-    }
-    return window.localStorage.getItem(MDX_PREVIEW_MODE_STORAGE_KEY) === "source" ? "source" : "rich-text";
+    return "source";
   });
   const plugins = useMemo(() => ([
     headingsPlugin(),

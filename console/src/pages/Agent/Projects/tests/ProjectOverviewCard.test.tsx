@@ -203,6 +203,60 @@ describe("ProjectOverviewCard interactions", () => {
     expect(screen.queryByText("guide.md")).toBeNull();
   });
 
+  it("does not clear controlled tree filter input while typing", async () => {
+    const user = userEvent.setup();
+
+    function ControlledTreeFilterHarness() {
+      const [query, setQuery] = useState("");
+      const [selectedMetricFilter, setSelectedMetricFilter] = useState<
+        "" | "original" | "intermediate" | "artifact" | "agent" | "skill" | "flow" | "case" | "builtin" | "markdown" | "text" | "script" | "otherType"
+      >(""
+      );
+      const [treeDisplayMode, setTreeDisplayMode] = useState<"filter" | "highlight">("filter");
+
+      return (
+        <ProjectOverviewCard
+          activeStage="source"
+          selectedMetricFilter={selectedMetricFilter}
+          onMetricFilterChange={setSelectedMetricFilter}
+          treeDisplayMode={treeDisplayMode}
+          onTreeDisplayModeChange={setTreeDisplayMode}
+          treeOnly
+          selectedProject={buildProjectSummary()}
+          projectFileCount={1}
+          pipelineTemplateCount={0}
+          pipelineRunCount={0}
+          projectWorkspaceSummary="snapshot"
+          projectFiles={[
+            {
+              filename: "README.md",
+              path: "data/README.md",
+              size: 10,
+              modified_time: "2026-04-09T00:00:00Z",
+            },
+          ]}
+          projectFileSummary={null}
+          projectTreeNodes={[]}
+          priorityFilePaths={[]}
+          selectedFilePath=""
+          selectedAttachPaths={[]}
+          treeFilterQuery={query}
+          onTreeFilterQueryChange={setQuery}
+          onUploadFiles={vi.fn()}
+          onSelectFileFromTree={vi.fn()}
+          onAttachArtifactToChat={vi.fn()}
+        />
+      );
+    }
+
+    render(<ControlledTreeFilterHarness />);
+
+    const input = screen.getByPlaceholderText("Filter files") as HTMLInputElement;
+    await user.type(input, "readme");
+
+    expect(input.value).toBe("readme");
+  });
+
   it("keeps built-in files searchable in tree-only mode without an active filter", async () => {
     const user = userEvent.setup();
     renderCard(

@@ -20,9 +20,10 @@ describe("ProjectMdxReadonlyPreview integration", () => {
       />,
     );
 
-    expect(await screen.findByText("Hello")).toBeTruthy();
-    const editor = await screen.findByRole("textbox", { name: "editable markdown" });
+    const editor = await screen.findByRole("textbox");
+    expect(screen.getByRole("radio", { name: "Source mode" }).getAttribute("aria-checked")).toBe("true");
     expect(editor.textContent).toContain("This is");
+    expect(editor.textContent).toContain("Hello");
     expect(editor.textContent).toContain("markdown");
   });
 
@@ -34,8 +35,9 @@ describe("ProjectMdxReadonlyPreview integration", () => {
       />,
     );
 
-    expect(await screen.findByText("Title")).toBeTruthy();
-    const editor = await screen.findByRole("textbox", { name: "editable markdown" });
+    const editor = await screen.findByRole("textbox");
+    expect(screen.getByRole("radio", { name: "Source mode" }).getAttribute("aria-checked")).toBe("true");
+    expect(editor.textContent).toContain("Title");
     expect(editor.textContent).toContain("Paragraph");
     expect(editor.textContent?.length || 0).toBeGreaterThan(0);
   });
@@ -50,9 +52,10 @@ describe("ProjectMdxReadonlyPreview integration", () => {
       />,
     );
 
-    await screen.findByRole("textbox", { name: "editable markdown" });
+    await screen.findByRole("textbox");
     await waitFor(() => {
-      expect(renderMathInElementMock).toHaveBeenCalled();
+      expect(screen.getByRole("radio", { name: "Source mode" }).getAttribute("aria-checked")).toBe("true");
     });
+    expect(renderMathInElementMock).not.toHaveBeenCalled();
   });
 });

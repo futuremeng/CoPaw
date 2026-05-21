@@ -69,7 +69,21 @@ export default function useArtifactSelectionGuards({
       || knownProjectFilePaths.has(selectedFilePath)
       || projectFiles.some((item) => item.path === selectedFilePath);
     if (!stillVisible) {
-      setSelectedFilePath("");
+      const rootLevelFallback = projectFiles.find((item) => (
+        !item.path.includes("/") && isPreviewablePath(item.path)
+      ))?.path || "";
+      const projectFilesFallback = projectFiles.find((item) => isPreviewablePath(item.path))?.path || "";
+      const artifactFallback = artifactRecords.find((item) => isPreviewablePath(item.path))?.path || "";
+      const knownPathFallback = Array.from(knownProjectFilePaths)
+        .sort((left, right) => left.localeCompare(right))
+        .find((item) => isPreviewablePath(item)) || "";
+      setSelectedFilePath(
+        rootLevelFallback
+        || projectFilesFallback
+        || artifactFallback
+        || knownPathFallback
+        || "",
+      );
     }
   }, [
     artifactRecords,

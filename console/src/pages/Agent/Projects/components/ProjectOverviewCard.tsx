@@ -822,7 +822,7 @@ export default function ProjectOverviewCard({
       return;
     }
     setLocalTreeFilterQuery("");
-  }, [onTreeFilterQueryChange, selectedProject?.id, treeFilterQuery]);
+  }, [onTreeFilterQueryChange, selectedProject?.id]);
 
   const loadTreeDirectory = useCallback(async (path: string, options?: { force?: boolean }) => {
     if (!useLazyTreeMode || !onLoadProjectTreeChildren) {

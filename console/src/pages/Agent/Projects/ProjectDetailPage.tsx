@@ -1539,15 +1539,22 @@ export default function ProjectDetailPage() {
             }));
           setProjectFiles(filteredFiles);
           setProjectFilesQuerySummary(queryResponse.summary || null);
-          setKnownProjectFilesByPath(buildProjectFilesByPath(filteredFiles));
+          // Keep a superset cache so selection does not get invalidated by transient file-tree filters.
+          setKnownProjectFilesByPath((prev) => ({
+            ...prev,
+            ...buildProjectFilesByPath(filteredFiles),
+          }));
           setResolvedProjectRequestId(projectRequestId);
           const preservedFile = previousSelection
             ? filteredFiles.find((item) => item.path === previousSelection)
             : undefined;
+          const rootLevelDefaultFile = filteredFiles.find((item) => (
+            !item.path.includes("/") && isPreviewablePath(item.path)
+          ));
           const defaultFile = filteredFiles.find((item) =>
             isPreviewablePath(item.path),
           );
-          const nextSelectedPath = preservedFile?.path || defaultFile?.path || "";
+          const nextSelectedPath = preservedFile?.path || rootLevelDefaultFile?.path || defaultFile?.path || "";
           if (nextSelectedPath) {
             setSelectedFilePath(nextSelectedPath);
           }
@@ -2889,9 +2896,46 @@ export default function ProjectDetailPage() {
     }
   }, [currentAgent, loadAgents, navigate, selectedProject, t]);
 
+  const normalizeProjectArtifactPath = useCallback((inputPath: string): string => {
+    let nextPath = String(inputPath || "").trim().replace(/\\/g, "/");
+    if (!nextPath) {
+      return "";
+    }
+
+    // 兼容 file:// URL
+    if (nextPath.startsWith("file://")) {
+      nextPath = nextPath.replace(/^file:\/\//, "");
+    }
+
+    const workspaceDir = String(selectedProject?.workspace_dir || "").trim().replace(/\\/g, "/");
+    if (workspaceDir) {
+      const workspacePrefix = workspaceDir.endsWith("/") ? workspaceDir : `${workspaceDir}/`;
+      if (nextPath === workspaceDir) {
+        nextPath = "";
+      } else if (nextPath.startsWith(workspacePrefix)) {
+        nextPath = nextPath.slice(workspacePrefix.length);
+      }
+    }
+
+    const projectIdCandidates = buildProjectIdCandidates(selectedProject);
+    for (const candidate of projectIdCandidates) {
+      const normalizedCandidate = String(candidate || "").trim();
+      if (!normalizedCandidate) {
+        continue;
+      }
+      const prefix = `projects/${normalizedCandidate}/`;
+      if (nextPath.startsWith(prefix)) {
+        nextPath = nextPath.slice(prefix.length);
+        break;
+      }
+    }
+
+    return nextPath.replace(/^\.\//, "").replace(/^\/+/, "");
+  }, [selectedProject]);
+
   const handleSelectArtifactFile = useCallback(async (path: string) => {
     setWorkbenchSyncNotice(null);
-    const normalizedPath = String(path || "").trim().replace(/\\/g, "/");
+    const normalizedPath = normalizeProjectArtifactPath(path);
     if (!normalizedPath) {
       return;
     }
@@ -2938,7 +2982,20 @@ export default function ProjectDetailPage() {
     }
 
     setSelectedFilePath(normalizedPath);
-  }, [currentAgent, loadProjectTreeDirectory, selectedProject]);
+  }, [currentAgent, loadProjectTreeDirectory, normalizeProjectArtifactPath, selectedProject]);
+
+  const handleLocateArtifactFile = useCallback(async (path: string) => {
+    const normalizedPath = normalizeProjectArtifactPath(path);
+    if (!normalizedPath) {
+      return;
+    }
+
+    // 定位链路：先写过滤条件触发文件树查询，再选中文件触发预览。
+    const filterKeyword = normalizedPath.split("/").pop() || normalizedPath;
+    setProjectFileSearchQuery(filterKeyword);
+
+    await handleSelectArtifactFile(normalizedPath);
+  }, [handleSelectArtifactFile, normalizeProjectArtifactPath]);
 
   const handleAttachArtifactToChat = useCallback((path: string) => {
     setSelectedAttachPaths((prev) =>
@@ -3421,7 +3478,7 @@ export default function ProjectDetailPage() {
             knowledgeState={projectKnowledgeState}
             projectFiles={effectiveProjectFiles}
             onOpenSettings={handleKnowledgeOpenSettings}
-            onSelectArtifactPath={handleSelectArtifactFile}
+            onSelectArtifactPath={handleLocateArtifactFile}
             focusedMode={knowledgeProcessingFocusMode || undefined}
             focusedStage={knowledgeProcessingFocusStage || undefined}
             focusedScope={knowledgeProcessingFocusScope || undefined}
@@ -3436,7 +3493,7 @@ export default function ProjectDetailPage() {
           <ProjectKnowledgeOutputsPanel
             knowledgeState={projectKnowledgeState}
             onRunSuggestedQuery={handleKnowledgeRunSuggestedQuery}
-            onSelectArtifactPath={handleSelectArtifactFile}
+            onSelectArtifactPath={handleLocateArtifactFile}
           />
         ),
       },
@@ -3860,7 +3917,7 @@ export default function ProjectDetailPage() {
                         statusTagColor={statusTagColor}
                         formatRunTimeLabel={formatRunTimeLabel}
                         onSelectArtifactPath={(path) => {
-                          handleSelectArtifactFile(path);
+                          handleLocateArtifactFile(path);
                           setAutomationDrawerOpen(false);
                         }}
                       />

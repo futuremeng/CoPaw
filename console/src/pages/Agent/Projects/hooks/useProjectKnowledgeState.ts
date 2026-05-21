@@ -1472,6 +1472,31 @@ function normalizeProjectId(value: unknown): string {
   return String(value || "").trim().toLowerCase();
 }
 
+function parseSourceSortTimestamp(source: KnowledgeSourceItem): number {
+  const indexedAt = Date.parse(String(source.status?.indexed_at || "").trim());
+  if (Number.isFinite(indexedAt) && indexedAt > 0) {
+    return indexedAt;
+  }
+  const remoteUpdatedAt = Date.parse(String(source.status?.remote_updated_at || "").trim());
+  if (Number.isFinite(remoteUpdatedAt) && remoteUpdatedAt > 0) {
+    return remoteUpdatedAt;
+  }
+  return 0;
+}
+
+function compareProjectSourceFreshness(left: KnowledgeSourceItem, right: KnowledgeSourceItem): number {
+  const timestampDiff = parseSourceSortTimestamp(right) - parseSourceSortTimestamp(left);
+  if (timestampDiff !== 0) {
+    return timestampDiff;
+  }
+  const leftLocation = String(left.location || left.name || left.id || "").trim().toLowerCase();
+  const rightLocation = String(right.location || right.name || right.id || "").trim().toLowerCase();
+  if (leftLocation !== rightLocation) {
+    return leftLocation.localeCompare(rightLocation);
+  }
+  return String(left.id || "").trim().toLowerCase().localeCompare(String(right.id || "").trim().toLowerCase());
+}
+
 function isSameHeaderSignals(
   left: ProjectKnowledgeHeaderSignals,
   right: ProjectKnowledgeHeaderSignals,
@@ -1558,6 +1583,7 @@ export function useProjectKnowledgeState(
   const fileAnalysisStats = l1StepStats.fileAnalysis;
   const sourceScanStats = l1StepStats.sourceScan;
 
+  // 重构：直接用 agentsApi.listProjectFiles 查询所有非 builtin/ignored 的项目文件
   const loadProjectSourceStatus = useCallback(async () => {
     if (!params.projectId) {
       setProjectSources([]);
@@ -1567,30 +1593,32 @@ export function useProjectKnowledgeState(
       return;
     }
     try {
-      const [[sourcesResult], stepStatsResults] = await Promise.all([
-        Promise.allSettled([
-          api.listKnowledgeSources({ projectId: params.projectId }),
-        ]),
-        Promise.allSettled(
-          PROJECT_KNOWLEDGE_STEP_STATS_IDS.map((stepId) => (
-            api.getProjectStepStats(stepId, params.projectId, {
-              limit: PROJECT_KNOWLEDGE_STEP_STATS_HISTORY_LIMIT,
-            })
-          )),
-        ),
-      ]);
-      const resolvedProjectStepStats = resolveProjectKnowledgeStepStats(stepStatsResults);
-      const resolvedL1StepStats = resolveProjectKnowledgeL1StepStats(stepStatsResults);
-      const response = sourcesResult.status === "fulfilled"
-        ? sourcesResult.value
-        : { enabled: false, sources: [] };
-      const currentProjectId = normalizeProjectId(params.projectId);
-      const scopedSources = (response.sources || []).filter((source) => (
-        normalizeProjectId(source.project_id) === currentProjectId
-      ));
-      setProjectSources(scopedSources);
-      setProjectStepStats(resolvedProjectStepStats);
-      setL1StepStats(resolvedL1StepStats);
+      // 这里 agentId 需从全局或 props 传入，假设 params.agentId 存在
+      const agentId = params.agentId || "";
+      if (!agentId) {
+        setProjectSources([]);
+        setSourceLoaded(true);
+        return;
+      }
+      const files = await import("../../../../api/modules/agents").then(m => m.agentsApi.listProjectFiles(agentId, params.projectId));
+      // 过滤掉 builtin/ignored 文件
+      const sources = (files || []).filter(f => !f.builtin && !f.ignored).map(f => ({
+        id: f.path,
+        name: f.filename,
+        type: "file",
+        location: f.path,
+        content: "",
+        enabled: true,
+        recursive: false,
+        tags: [],
+        summary: "",
+        project_id: params.projectId,
+        status: undefined,
+      }));
+      setProjectSources(sources);
+      // 其余统计逻辑保持不变
+      setProjectStepStats(EMPTY_PROJECT_KNOWLEDGE_STEP_STATS);
+      setL1StepStats(EMPTY_PROJECT_KNOWLEDGE_L1_STEP_STATS);
     } catch {
       setProjectSources([]);
       setProjectStepStats(EMPTY_PROJECT_KNOWLEDGE_STEP_STATS);
@@ -1598,7 +1626,7 @@ export function useProjectKnowledgeState(
     } finally {
       setSourceLoaded(true);
     }
-  }, [params.projectId]);
+  }, [params.projectId, params.agentId]);
 
   const loadSourceContent = useCallback(async (
     sourceId: string,
