@@ -684,6 +684,8 @@ async def put_knowledge_config(
     return _effective_knowledge_config(config.knowledge, running_config)
 
 
+
+# 新实现：基于项目文件动态生成 sources
 @router.get("/sources")
 async def list_sources(
     request: Request,
@@ -691,23 +693,30 @@ async def list_sources(
 ):
     _, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
     project_id = _resolve_project_id(request)
-    scoped_knowledge_config = knowledge_config
-    if project_id:
-        scoped_knowledge_config = knowledge_config.model_copy(deep=True)
-        scoped_knowledge_config.sources = [
-            source
-            for source in knowledge_config.sources
-            if _normalize_project_id(getattr(source, "project_id", "")) == project_id
-        ]
-    manager = _manager_for_workspace(
-        workspace_dir,
-        project_id=project_id,
+    project_dir = Path(workspace_dir)
+    from ..project_file_query import query_project_file_records
+    # 查询所有项目文件，过滤 builtin/ignored
+    file_query = query_project_file_records(
+        project_dir,
+        include_builtin=False,
+        include_ignored=False,
+        limit=5000,
     )
-    sources = await asyncio.to_thread(
-        manager.list_sources,
-        scoped_knowledge_config,
-        bool(include_semantic),
-    )
+    sources = []
+    for file in file_query.get("items", []):
+        sources.append({
+            "id": file["path"],
+            "name": file["filename"],
+            "type": "file",
+            "location": file["path"],
+            "content": "",
+            "enabled": True,
+            "recursive": False,
+            "tags": [],
+            "summary": "",
+            "project_id": project_id,
+            "status": None,
+        })
     return {
         "enabled": bool(knowledge_config.enabled),
         "sources": sources,
