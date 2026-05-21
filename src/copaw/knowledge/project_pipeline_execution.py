@@ -82,6 +82,7 @@ def run_sync_loop(
 		state = manager._load_state(project_id, hydrate=False)
 		preserved_l2_metrics = dict(state.get("l2_metrics") or {}) if isinstance(state.get("l2_metrics"), dict) else {}
 		preserved_l2_progress = dict(state.get("l2_progress") or {}) if isinstance(state.get("l2_progress"), dict) else {}
+		preserved_l2_documents_progress = list(state.get("l2_documents_progress") or []) if isinstance(state.get("l2_documents_progress"), list) else []
 		state.update({
 			"status": "pending",
 			"current_stage": "pending",
@@ -90,9 +91,21 @@ def run_sync_loop(
 			"latest_source_id": source.id,
 			"latest_requested_mode": processing_mode,
 			"semantic_engine": manager._capture_semantic_engine_state(config),
+			"l2_progress": {},
+			"l2_metrics": {},
+			"l2_documents_progress": [],
 			"updated_at": manager._now_iso(),
 		})
 		manager._save_state(state)
+
+	def _status_callback(patch: dict[str, Any]) -> None:
+		if not isinstance(patch, dict) or not patch:
+			return
+		with manager._lock:
+			current_state = manager._load_state(project_id, hydrate=False)
+			current_state.update(dict(patch))
+			current_state["updated_at"] = manager._now_iso()
+			manager._save_state(current_state)
 	try:
 		from qwenpaw.app.knowledge_workflow import KnowledgeWorkflowOrchestrator
 
@@ -109,6 +122,7 @@ def run_sync_loop(
 			changed_paths=list(state.get("changed_paths") or []),
 			processing_mode=processing_mode,
 			quantization_stage=quantization_stage,
+			status_callback=_status_callback,
 		)
 		normalized_result = dict(result or {})
 		pipeline_run = normalized_result.get("pipeline_run")
@@ -182,6 +196,7 @@ def run_sync_loop(
 				"last_finished_at": manager._now_iso(),
 				"l2_metrics": preserved_l2_metrics,
 				"l2_progress": preserved_l2_progress,
+				"l2_documents_progress": preserved_l2_documents_progress,
 			})
 			manager._save_state(state)
 

@@ -779,6 +779,10 @@ class KnowledgeManager:
             "tokenize_ready_chunk_count": 0,
             "tokenize_line_count": 0,
             "tokenize_token_count": 0,
+            "tokenize_done_lines": 0,
+            "tokenize_total_lines": 0,
+            "tokenize_done_documents": 0,
+            "tokenize_total_documents": 0,
             "cor_ready_chunk_count": 0,
             "cor_cluster_count": 0,
             "cor_replacement_count": 0,
@@ -792,6 +796,7 @@ class KnowledgeManager:
             "syntax_pos_tag_type_count": 0,
             "syntax_relation_count": 0,
         }
+        last_documents_progress: list[dict[str, Any]] = []
 
         def _emit_l2(stage_payload: dict[str, Any]) -> None:
             if progress_callback is None:
@@ -808,6 +813,13 @@ class KnowledgeManager:
                 for key, value in stage_metrics.items():
                     if key in live_metrics:
                         live_metrics[key] = max(0, _safe_count_int(value))
+            documents_progress = stage_payload.get("documents_progress")
+            if isinstance(documents_progress, list):
+                # Keep the latest tokenize document snapshot so later stages
+                # do not overwrite it with an empty payload.
+                last_documents_progress[:] = [
+                    dict(item) for item in documents_progress if isinstance(item, dict)
+                ]
 
             processed = stage_done["tokenize"] + stage_done["cor"] + stage_done["ner"] + stage_done["syntax"]
             denom = total_chunks * 4
@@ -830,11 +842,16 @@ class KnowledgeManager:
                     "l2_progress": {
                         "total_chunks": total_chunks,
                         "tokenize_done_chunks": stage_done["tokenize"],
+                        "tokenize_done_lines": _safe_count_int(live_metrics.get("tokenize_done_lines") or 0),
+                        "tokenize_total_lines": _safe_count_int(live_metrics.get("tokenize_total_lines") or 0),
+                        "tokenize_done_documents": _safe_count_int(live_metrics.get("tokenize_done_documents") or 0),
+                        "tokenize_total_documents": _safe_count_int(live_metrics.get("tokenize_total_documents") or 0),
                         "cor_done_chunks": stage_done["cor"],
                         "ner_done_chunks": stage_done["ner"],
                         "syntax_done_chunks": stage_done["syntax"],
                     },
                     "l2_metrics": dict(live_metrics),
+                    "l2_documents_progress": list(last_documents_progress),
                 }
             )
 

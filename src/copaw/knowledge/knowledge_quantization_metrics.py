@@ -58,16 +58,38 @@ def build_l1_metrics(state: dict[str, Any], source_status: dict[str, Any] | None
 def build_l2_metrics(state: dict[str, Any], index_result: dict[str, Any]) -> dict[str, Any]:
 	live_l2 = state.get("l2_metrics") if isinstance(state.get("l2_metrics"), dict) else {}
 	l2_progress = state.get("l2_progress") if isinstance(state.get("l2_progress"), dict) else {}
+	l2_documents_progress = state.get("l2_documents_progress") if isinstance(state.get("l2_documents_progress"), list) else []
 	index_result = index_result or {}
 	total_chunks = max(
 		_safe_int(l2_progress.get("total_chunks")),
 		_safe_int(index_result.get("chunk_count")),
+	)
+	tokenize_done_lines = max(
+		_safe_int(l2_progress.get("tokenize_done_lines")),
+		_safe_int(index_result.get("tokenize_line_count")),
+	)
+	tokenize_total_lines = max(
+		_safe_int(l2_progress.get("tokenize_total_lines")),
+		tokenize_done_lines,
+	)
+	tokenize_done_documents = max(
+		_safe_int(l2_progress.get("tokenize_done_documents")),
+		_safe_int(index_result.get("tokenize_ready_chunk_count")),
+	)
+	tokenize_total_documents = max(
+		_safe_int(l2_progress.get("tokenize_total_documents")),
+		_safe_int(index_result.get("chunk_count")),
+		tokenize_done_documents,
 	)
 	return {
 		"metrics_source": "project_pipeline_l2_nlp",
 		"metrics_updated_at": str(state.get("updated_at") or state.get("last_finished_at") or "").strip() or None,
 		"total_chunks": total_chunks,
 		"tokenize_done_chunks": max(_safe_int(l2_progress.get("tokenize_done_chunks")), _safe_int(index_result.get("tokenize_ready_chunk_count"))),
+		"tokenize_done_lines": tokenize_done_lines,
+		"tokenize_total_lines": tokenize_total_lines,
+		"tokenize_done_documents": tokenize_done_documents,
+		"tokenize_total_documents": tokenize_total_documents,
 		"cor_done_chunks": max(_safe_int(l2_progress.get("cor_done_chunks")), _safe_int(index_result.get("cor_ready_chunk_count"))),
 		"ner_done_chunks": max(_safe_int(l2_progress.get("ner_done_chunks")), _safe_int(index_result.get("ner_ready_chunk_count"))),
 		"syntax_done_chunks": max(_safe_int(l2_progress.get("syntax_done_chunks")), _safe_int(index_result.get("syntax_ready_chunk_count"))),
@@ -90,6 +112,7 @@ def build_l2_metrics(state: dict[str, Any], index_result: dict[str, Any]) -> dic
 		"syntax_relation_count": max(_safe_int(live_l2.get("syntax_relation_count")), _safe_int(index_result.get("syntax_relation_count"))),
 		"entity_count": max(_safe_int(live_l2.get("ner_entity_count")), _safe_int(index_result.get("ner_entity_count"))),
 		"relation_count": max(_safe_int(live_l2.get("syntax_relation_count")), _safe_int(index_result.get("syntax_relation_count"))),
+		"documents_progress": [item for item in l2_documents_progress if isinstance(item, dict)],
 	}
 
 
@@ -175,8 +198,13 @@ def build_nlp_progress(
 				"status": resolve_nlp_stage_status(mode_status=mode_status, total_chunks=total_chunks, ready_chunks=tokenize_ready, done_chunks=tokenize_done),
 				"done_chunks": tokenize_done,
 				"ready_chunks": tokenize_ready,
+				"done_lines": _safe_int(l2_metrics.get("tokenize_done_lines")),
+				"total_lines": _safe_int(l2_metrics.get("tokenize_total_lines")),
+				"done_documents": _safe_int(l2_metrics.get("tokenize_done_documents")),
+				"total_documents": _safe_int(l2_metrics.get("tokenize_total_documents")),
 				"line_count": _safe_int(l2_metrics.get("tokenize_line_count")),
 				"token_count": _safe_int(l2_metrics.get("tokenize_token_count")),
+				"documents_progress": [item for item in (l2_metrics.get("documents_progress") or []) if isinstance(item, dict)],
 			},
 			"ner": {
 				"key": "ner",

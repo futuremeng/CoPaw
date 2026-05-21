@@ -211,9 +211,23 @@ export interface ProjectKnowledgeMetricEvidenceBundlePayload {
 export interface ProjectKnowledgeL2ProgressPayload {
   total_chunks?: number;
   tokenize_done_chunks?: number;
+  tokenize_done_lines?: number;
+  tokenize_total_lines?: number;
+  tokenize_done_documents?: number;
+  tokenize_total_documents?: number;
   cor_done_chunks?: number;
   ner_done_chunks?: number;
   syntax_done_chunks?: number;
+}
+
+export interface ProjectKnowledgeTokenizeDocumentProgressPayload {
+  source_id?: string;
+  document_path?: string;
+  status?: "queued" | "running" | "ready" | "failed";
+  done_lines?: number;
+  total_lines?: number;
+  token_count_ready?: number;
+  updated_at?: string;
 }
 
 export interface ProjectKnowledgeL2MetricsPayload {
@@ -245,6 +259,11 @@ export interface ProjectKnowledgeNlpStagePayload {
   status: "ready" | "running" | "pending" | "unavailable";
   done_chunks?: number;
   ready_chunks?: number;
+  done_lines?: number;
+  total_lines?: number;
+  done_documents?: number;
+  total_documents?: number;
+  documents_progress?: ProjectKnowledgeTokenizeDocumentProgressPayload[];
   line_count?: number;
   entity_count?: number;
   sentence_count?: number;
@@ -396,6 +415,7 @@ export interface ProjectKnowledgePipelineState {
   >;
   global_metrics?: ProjectKnowledgeGlobalMetricsPayload;
   l2_progress?: ProjectKnowledgeL2ProgressPayload;
+  l2_documents_progress?: ProjectKnowledgeTokenizeDocumentProgressPayload[];
   l2_metrics?: ProjectKnowledgeL2MetricsPayload;
   nlp_progress?: ProjectKnowledgeNlpProgressPayload;
   semantic_engine?: ProjectKnowledgeSemanticEngineState;

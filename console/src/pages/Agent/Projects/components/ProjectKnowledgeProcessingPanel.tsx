@@ -124,46 +124,55 @@ function mergeModeStateWithMetrics(
     ...baseMode,
   };
   if (typeof metrics.document_count === "number") {
-    next.documentCount = Math.max(0, Number(metrics.document_count));
+    next.documentCount = Math.max(0, Number(next.documentCount || 0), Number(metrics.document_count));
   }
   if (typeof metrics.chunk_count === "number") {
-    next.chunkCount = Math.max(0, Number(metrics.chunk_count));
+    next.chunkCount = Math.max(0, Number(next.chunkCount || 0), Number(metrics.chunk_count));
   }
   if (typeof metrics.entity_count === "number") {
-    next.entityCount = Math.max(0, Number(metrics.entity_count));
+    next.entityCount = Math.max(0, Number(next.entityCount || 0), Number(metrics.entity_count));
   }
   if (typeof metrics.relation_count === "number") {
-    next.relationCount = Math.max(0, Number(metrics.relation_count));
+    next.relationCount = Math.max(0, Number(next.relationCount || 0), Number(metrics.relation_count));
   }
   if (metrics.quality_score != null && Number.isFinite(Number(metrics.quality_score))) {
     next.qualityScore = Number(metrics.quality_score);
   }
   if (typeof metrics.ner_ready_chunk_count === "number") {
-    next.nerReadyChunkCount = Math.max(0, Number(metrics.ner_ready_chunk_count));
+    next.nerReadyChunkCount = Math.max(0, Number(next.nerReadyChunkCount || 0), Number(metrics.ner_ready_chunk_count));
   }
   if (typeof metrics.ner_entity_count === "number") {
-    next.nerEntityCount = Math.max(0, Number(metrics.ner_entity_count));
+    next.nerEntityCount = Math.max(0, Number(next.nerEntityCount || 0), Number(metrics.ner_entity_count));
   }
   if (typeof metrics.syntax_sentence_count === "number") {
-    next.syntaxSentenceCount = Math.max(0, Number(metrics.syntax_sentence_count));
+    next.syntaxSentenceCount = Math.max(0, Number(next.syntaxSentenceCount || 0), Number(metrics.syntax_sentence_count));
   }
   if (typeof metrics.syntax_token_count === "number") {
-    next.syntaxTokenCount = Math.max(0, Number(metrics.syntax_token_count));
+    next.syntaxTokenCount = Math.max(0, Number(next.syntaxTokenCount || 0), Number(metrics.syntax_token_count));
   }
   if (typeof metrics.syntax_pos_count === "number") {
-    next.syntaxPosCount = Math.max(0, Number(metrics.syntax_pos_count));
+    next.syntaxPosCount = Math.max(0, Number(next.syntaxPosCount || 0), Number(metrics.syntax_pos_count));
   }
   if (typeof metrics.pos_coverage_on_document_tokens === "number") {
     next.posCoverageOnDocumentTokens = Number(metrics.pos_coverage_on_document_tokens);
   }
   if (typeof metrics.syntax_relation_count === "number") {
-    next.syntaxRelationCount = Math.max(0, Number(metrics.syntax_relation_count));
+    next.syntaxRelationCount = Math.max(0, Number(next.syntaxRelationCount || 0), Number(metrics.syntax_relation_count));
   }
   return next;
 }
 
 function formatPercent(value: number): string {
   return `${Math.max(0, Math.min(100, Math.round(value * 100)))}%`;
+}
+
+function formatDoneTotal(done: number, total: number): string {
+  const safeDone = Math.max(0, Number(done || 0));
+  const safeTotal = Math.max(0, Number(total || 0));
+  if (safeTotal <= 0) {
+    return `${safeDone}/-`;
+  }
+  return `${safeDone}/${safeTotal}`;
 }
 
 function resolveEvidencePathByKey(
@@ -197,7 +206,6 @@ function buildKnowledgeLayerRows(
     agenticMode: ProjectKnowledgeModeState | null;
     l2EvidencePaths: Record<string, string>;
     l3EvidencePaths: Record<string, string>;
-    quantMetrics: ProjectKnowledgeState["quantMetrics"];
     entityDelta: number;
     relationDelta: number;
     t: ReturnType<typeof useTranslation>["t"];
@@ -208,7 +216,6 @@ function buildKnowledgeLayerRows(
     agenticMode,
     l2EvidencePaths,
     l3EvidencePaths,
-    quantMetrics,
     entityDelta,
     relationDelta,
     t,
@@ -216,8 +223,20 @@ function buildKnowledgeLayerRows(
   const hasL3Outputs = modeHasIndependentOutputs(agenticMode);
   const l3Running = agenticMode?.status === "running" || agenticMode?.status === "queued";
   const l3Ready = Boolean(agenticMode && hasL3Outputs && agenticMode.status === "ready");
-  const l2DocumentCount = Math.max(0, Number(nlpMode?.documentCount || 0));
-  const l2TokenCount = Math.max(0, Number(nlpMode?.syntaxTokenCount || quantMetrics.tokenCount || 0));
+  const l2DocumentCount = Math.max(0, Number(nlpMode?.tokenizeDoneDocuments || nlpMode?.documentCount || 0));
+  const l2TotalDocuments = Math.max(0, Number(nlpMode?.tokenizeTotalDocuments || 0));
+  const l2DoneLines = Math.max(0, Number(nlpMode?.tokenizeDoneLines || 0));
+  const l2TotalLines = Math.max(0, Number(nlpMode?.tokenizeTotalLines || 0));
+  const l2TokenCountFromDocuments = (nlpMode?.tokenizeDocumentsProgress || []).reduce((sum, item) => {
+    if (String(item?.status || "").trim().toLowerCase() !== "ready") {
+      return sum;
+    }
+    return sum + Math.max(0, Number(item?.token_count_ready || 0));
+  }, 0);
+  const l2TokenCount = l2TokenCountFromDocuments > 0
+    ? l2TokenCountFromDocuments
+    : Math.max(0, Number(nlpMode?.syntaxTokenCount || 0));
+  const l2TokenizeFinished = l2TotalDocuments > 0 && l2DocumentCount >= l2TotalDocuments;
   const l2PosCount = Math.max(0, Number(nlpMode?.syntaxPosCount || 0));
   const l2PosCoverage = formatPercent(Number(nlpMode?.posCoverageOnDocumentTokens || 0));
   const l2SyntaxRelations = Math.max(0, Number(nlpMode?.syntaxRelationCount || 0));
@@ -249,14 +268,20 @@ function buildKnowledgeLayerRows(
       title: t("copaw.projects.knowledge.processing.layerDataPreprocessTitle"),
       description: t("copaw.projects.knowledge.processing.layerDataPreprocessDesc"),
       l2: {
-        status: mapModeToLayerStatus(nlpMode, l2TokenCount > 0),
+        status: mapModeToLayerStatus(nlpMode, l2TokenizeFinished || l2TokenCount > 0),
         summary: t("copaw.projects.knowledge.processing.layerDataPreprocessL2"),
         metrics: [
           {
             label: t("copaw.projects.knowledge.documents"),
-            value: l2DocumentCount,
+            value: formatDoneTotal(l2DocumentCount, l2TotalDocuments),
             evidenceKey: "document_count",
             evidencePath: resolveEvidencePathByKey(l2EvidencePaths, "document_count"),
+          },
+          {
+            label: t("copaw.projects.knowledge.processing.tokenizeLineProgress", "Tokenize lines"),
+            value: formatDoneTotal(l2DoneLines, l2TotalLines),
+            evidenceKey: "tokenize_line_count",
+            evidencePath: resolveEvidencePathByKey(l2EvidencePaths, "tokenize_line_count"),
           },
           {
             label: t("copaw.projects.knowledge.processing.syntaxTokens"),
@@ -584,24 +609,6 @@ export default function ProjectKnowledgeProcessingPanel(
     () => (scopedModeMetricsPayload.agentic?.evidence_bundles || {}) as Record<string, ProjectKnowledgeMetricEvidenceBundlePayload>,
     [scopedModeMetricsPayload.agentic?.evidence_bundles],
   );
-  const selectedSource = useMemo(() => (
-    props.knowledgeState.projectSources.find((item) => item.id === effectiveSourceId) || null
-  ), [effectiveSourceId, props.knowledgeState.projectSources]);
-  const scopedQuantMetrics = useMemo(() => {
-    if (effectiveScope !== "source" || !selectedSource) {
-      return props.knowledgeState.quantMetrics;
-    }
-    const status = selectedSource.status || {};
-    return {
-      ...props.knowledgeState.quantMetrics,
-      documentCount: Math.max(0, Number(status.document_count || 0)),
-      chunkCount: Math.max(0, Number(status.chunk_count || 0)),
-      sentenceCount: Math.max(0, Number(status.sentence_count || 0)),
-      tokenCount: Math.max(0, Number(status.token_count || 0)),
-      relationCount: Math.max(0, Number(nlpMode?.syntaxRelationCount || 0)),
-      entityCount: Math.max(0, Number(nlpMode?.nerEntityCount || 0)),
-    };
-  }, [effectiveScope, nlpMode?.nerEntityCount, nlpMode?.syntaxRelationCount, props.knowledgeState.quantMetrics, selectedSource]);
   const { entityDelta, relationDelta } = props.knowledgeState.processingCompareDelta;
   const recentHistorySections = useMemo(
     () => buildProjectKnowledgeProcessingRecentHistorySectionsFromState(t, props.knowledgeState),
@@ -645,11 +652,29 @@ export default function ProjectKnowledgeProcessingPanel(
     agenticMode,
     l2EvidencePaths: scopedL2EvidencePaths,
     l3EvidencePaths: scopedL3EvidencePaths,
-    quantMetrics: scopedQuantMetrics,
     entityDelta,
     relationDelta,
     t,
   });
+  const tokenizeDocumentsProgress = useMemo(() => {
+    const rows = (nlpMode?.tokenizeDocumentsProgress || []).map((item) => ({
+      sourceId: String(item.source_id || "").trim(),
+      documentPath: String(item.document_path || "").trim(),
+      status: String(item.status || "queued").trim().toLowerCase(),
+      doneLines: Math.max(0, Number(item.done_lines || 0)),
+      totalLines: Math.max(0, Number(item.total_lines || 0)),
+      readyTokens: Math.max(0, Number(item.token_count_ready || 0)),
+      updatedAt: String(item.updated_at || "").trim(),
+    })).filter((item) => item.documentPath);
+    if (effectiveScope !== "source") {
+      return rows;
+    }
+    return rows.filter((item) => item.sourceId === effectiveSourceId);
+  }, [effectiveScope, effectiveSourceId, nlpMode?.tokenizeDocumentsProgress]);
+  const tokenizeRunningDocuments = useMemo(
+    () => tokenizeDocumentsProgress.filter((item) => item.status === "running" || item.status === "queued"),
+    [tokenizeDocumentsProgress],
+  );
 
   return (
     <div className={`${styles.projectKnowledgeWorkbench} ${styles.projectKnowledgeProcessingWorkbench}`}>
@@ -708,6 +733,37 @@ export default function ProjectKnowledgeProcessingPanel(
                   ? t("copaw.projects.knowledge.processing.outputPending")
                   : (agenticMode?.relationCount || 0)}
               </Typography.Text>
+            </div>
+          </div>
+          <div className={styles.projectKnowledgeHistoryStrip}>
+            <div className={styles.projectKnowledgeHistoryHeader}>
+              <Typography.Text strong>
+                {t("copaw.projects.knowledge.processing.tokenizeProgressTitle", "Tokenize progress")}
+              </Typography.Text>
+              <Typography.Text type="secondary">
+                {formatDoneTotal(
+                  Math.max(0, Number(nlpMode?.tokenizeDoneLines || 0)),
+                  Math.max(0, Number(nlpMode?.tokenizeTotalLines || 0)),
+                )}
+                {" · "}
+                {t("copaw.projects.knowledge.processing.tokenizeRunningDocs", "Running docs")}: {tokenizeRunningDocuments.length}
+              </Typography.Text>
+            </div>
+            <div className={styles.projectKnowledgeHistoryList}>
+              {tokenizeDocumentsProgress.length === 0 ? (
+                <div className={styles.projectKnowledgeHistoryItem}>
+                  <Typography.Text type="secondary">
+                    {t("copaw.projects.knowledge.processing.tokenizeProgressEmpty", "No tokenize progress yet")}
+                  </Typography.Text>
+                </div>
+              ) : tokenizeDocumentsProgress.map((item) => (
+                <div key={`${item.sourceId}-${item.documentPath}`} className={styles.projectKnowledgeHistoryItem}>
+                  <Typography.Text strong>{item.documentPath}</Typography.Text>
+                  <Typography.Text type="secondary">
+                    {item.status} · {formatDoneTotal(item.doneLines, item.totalLines)} · tokens {item.readyTokens}
+                  </Typography.Text>
+                </div>
+              ))}
             </div>
           </div>
           {recentHistorySections.map((section) => (

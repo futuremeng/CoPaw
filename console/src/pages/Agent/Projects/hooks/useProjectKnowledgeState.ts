@@ -20,6 +20,7 @@ import type {
   ProjectKnowledgeStepStatsStepId,
   ProjectKnowledgeSourceScanStatsResponse,
   ProjectKnowledgePipelineState,
+  ProjectKnowledgeTokenizeDocumentProgressPayload,
   QualityLoopJobStatus,
 } from "../../../../api/types";
 import { filterGraphQuerySourceRecords } from "../../Knowledge/graphQuery";
@@ -145,6 +146,11 @@ export interface ProjectKnowledgeModeState {
   posCoverageOnDocumentTokens?: number;
   syntaxRelationCount?: number;
   l2TotalChunks?: number;
+  tokenizeDoneLines?: number;
+  tokenizeTotalLines?: number;
+  tokenizeDoneDocuments?: number;
+  tokenizeTotalDocuments?: number;
+  tokenizeDocumentsProgress?: ProjectKnowledgeTokenizeDocumentProgressPayload[];
   corDoneChunks?: number;
   nerDoneChunks?: number;
   syntaxDoneChunks?: number;
@@ -834,6 +840,32 @@ function normalizeNullableNumber(value: unknown): number | null {
       : null;
 }
 
+function normalizeTokenizeDocumentsProgress(
+  value: unknown,
+): ProjectKnowledgeTokenizeDocumentProgressPayload[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"))
+    .map((item) => {
+      const statusText = String(item.status || "").trim().toLowerCase();
+      const status = ["queued", "running", "ready", "failed"].includes(statusText)
+        ? (statusText as "queued" | "running" | "ready" | "failed")
+        : "queued";
+      return {
+        source_id: String(item.source_id || "").trim() || undefined,
+        document_path: String(item.document_path || "").trim() || undefined,
+        status,
+        done_lines: normalizeNumber(item.done_lines),
+        total_lines: normalizeNumber(item.total_lines),
+        token_count_ready: normalizeNumber(item.token_count_ready),
+        updated_at: String(item.updated_at || "").trim() || undefined,
+      };
+    })
+    .filter((item) => Boolean(item.document_path));
+}
+
 function getBackendModeMetric(
   syncState: ProjectKnowledgePipelineState | null,
   mode: ProjectKnowledgeProcessingMode,
@@ -1001,6 +1033,11 @@ function parseBackendProcessingModes(
       const nlpSyntaxStage = nlpStages?.syntax;
       const nlpCorStage = nlpStages?.cor;
       const isNlpMode = modePayload.mode === "nlp";
+      const tokenizeStageDocuments = normalizeTokenizeDocumentsProgress(nlpTokenizeStage?.documents_progress);
+      const l2TokenizeDocuments = normalizeTokenizeDocumentsProgress(syncState?.l2_documents_progress);
+      const tokenizeDocumentsProgress = tokenizeStageDocuments.length > 0
+        ? tokenizeStageDocuments
+        : l2TokenizeDocuments;
       const latestQualityLoopRound = Array.isArray(latestQualityLoopJob?.rounds)
         ? latestQualityLoopJob.rounds[latestQualityLoopJob.rounds.length - 1] as Record<string, unknown> | undefined
         : undefined;
@@ -1177,6 +1214,31 @@ function parseBackendProcessingModes(
             normalizeNumber(l2Progress?.total_chunks),
           )
           : undefined,
+        tokenizeDoneLines: isNlpMode
+          ? Math.max(
+            normalizeNumber(nlpTokenizeStage?.done_lines),
+            normalizeNumber(l2Progress?.tokenize_done_lines),
+          )
+          : undefined,
+        tokenizeTotalLines: isNlpMode
+          ? Math.max(
+            normalizeNumber(nlpTokenizeStage?.total_lines),
+            normalizeNumber(l2Progress?.tokenize_total_lines),
+          )
+          : undefined,
+        tokenizeDoneDocuments: isNlpMode
+          ? Math.max(
+            normalizeNumber(nlpTokenizeStage?.done_documents),
+            normalizeNumber(l2Progress?.tokenize_done_documents),
+          )
+          : undefined,
+        tokenizeTotalDocuments: isNlpMode
+          ? Math.max(
+            normalizeNumber(nlpTokenizeStage?.total_documents),
+            normalizeNumber(l2Progress?.tokenize_total_documents),
+          )
+          : undefined,
+        tokenizeDocumentsProgress: isNlpMode ? tokenizeDocumentsProgress : undefined,
         corDoneChunks: isNlpMode
           ? Math.max(
             normalizeNumber(nlpCorStage?.done_chunks),
@@ -2091,6 +2153,60 @@ export function useProjectKnowledgeState(
   }, [params.projectId]);
 
   useEffect(() => {
+    if (!params.projectId) {
+      return;
+    }
+
+    let disposed = false;
+    let inFlight = false;
+
+    const pollFallback = async () => {
+      if (disposed || inFlight) {
+        return;
+      }
+      if (projectPipelineChannelStatus === "open" && tasksChannelStatus === "open") {
+        return;
+      }
+
+      inFlight = true;
+      try {
+        if (projectPipelineChannelStatus !== "open") {
+          const nextState = await api.getProjectKnowledgePipelineStatus({
+            projectId: params.projectId,
+          });
+          if (!disposed) {
+            setSyncState(nextState);
+          }
+        }
+
+        if (tasksChannelStatus !== "open") {
+          const snapshot = await api.getKnowledgeTasksSnapshot({
+            projectId: params.projectId,
+          });
+          if (!disposed) {
+            const tasks = Array.isArray(snapshot?.tasks)
+              ? (snapshot.tasks as KnowledgeTaskProgress[])
+              : [];
+            setActiveKnowledgeTasks(getActiveKnowledgeTasks(tasks));
+            setActiveKnowledgeTask(pickActiveKnowledgeTask(tasks));
+          }
+        }
+      } catch {
+        // Keep best-effort fallback silent to avoid noisy UX while reconnecting.
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    void pollFallback();
+    const timer = window.setInterval(pollFallback, 2500);
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+    };
+  }, [params.projectId, projectPipelineChannelStatus, tasksChannelStatus]);
+
+  useEffect(() => {
     if (!syncState) {
       return;
     }
@@ -2405,6 +2521,9 @@ export function useProjectKnowledgeState(
       0,
     );
     const nlpSyntaxTokenCount = Math.max(
+      normalizeNumber(
+        ((syncState?.nlp_progress?.stages?.tokenize as { token_count?: unknown } | undefined)?.token_count),
+      ),
       getBackendModeMetricNumber(syncState, "nlp", "tokenize_token_count"),
       normalizeNumber(syncState?.l2_metrics?.tokenize_token_count),
       0,
@@ -2429,9 +2548,20 @@ export function useProjectKnowledgeState(
       0,
     );
     const l2TotalChunks = normalizeNumber(syncState?.l2_progress?.total_chunks);
+    const l2TokenizeDoneLines = normalizeNumber(syncState?.l2_progress?.tokenize_done_lines);
+    const l2TokenizeTotalLines = normalizeNumber(syncState?.l2_progress?.tokenize_total_lines);
+    const l2TokenizeDoneDocuments = normalizeNumber(syncState?.l2_progress?.tokenize_done_documents);
+    const l2TokenizeTotalDocuments = normalizeNumber(syncState?.l2_progress?.tokenize_total_documents);
     const l2CorDoneChunks = normalizeNumber(syncState?.l2_progress?.cor_done_chunks);
     const l2NerDoneChunks = normalizeNumber(syncState?.l2_progress?.ner_done_chunks);
     const l2SyntaxDoneChunks = normalizeNumber(syncState?.l2_progress?.syntax_done_chunks);
+    const nlpTokenizeDocumentsProgress = normalizeTokenizeDocumentsProgress(
+      (syncState?.nlp_progress?.stages?.tokenize as { documents_progress?: unknown } | undefined)?.documents_progress,
+    );
+    const l2TokenizeDocumentsProgress = normalizeTokenizeDocumentsProgress(syncState?.l2_documents_progress);
+    const tokenizeDocumentsProgress = nlpTokenizeDocumentsProgress.length > 0
+      ? nlpTokenizeDocumentsProgress
+      : l2TokenizeDocumentsProgress;
     const nlpCorReadyChunkRatio = getBackendModeMetricNullableNumber(syncState, "nlp", "cor_ready_chunk_ratio")
       ?? normalizeNullableNumber(getSyncIndexMetric(syncState, "cor_ready_chunk_ratio"));
     const nlpCorEffectiveChunkRatio = getBackendModeMetricNullableNumber(syncState, "nlp", "cor_effective_chunk_ratio")
@@ -2548,6 +2678,11 @@ export function useProjectKnowledgeState(
         posCoverageOnDocumentTokens: nlpPosCoverageOnDocumentTokens ?? undefined,
         syntaxRelationCount: nlpSyntaxRelationCount,
         l2TotalChunks,
+        tokenizeDoneLines: l2TokenizeDoneLines,
+        tokenizeTotalLines: l2TokenizeTotalLines,
+        tokenizeDoneDocuments: l2TokenizeDoneDocuments,
+        tokenizeTotalDocuments: l2TokenizeTotalDocuments,
+        tokenizeDocumentsProgress,
         corDoneChunks: l2CorDoneChunks,
         nerDoneChunks: l2NerDoneChunks,
         syntaxDoneChunks: l2SyntaxDoneChunks,

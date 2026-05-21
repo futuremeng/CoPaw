@@ -46,33 +46,117 @@ def write_chunk_tokenize_artifacts(
 	tokenize_line_so_far = 0
 	tokenize_token_so_far = 0
 	document_token_totals: dict[str, int] = {}
+	document_progress_entries: list[dict[str, Any]] = []
+	document_progress_index: dict[str, int] = {}
+
+	for group in chunk_groups:
+		representative = group[0]
+		document_path = str(
+			representative.get("document_path")
+			or representative.get("snapshot_relative_path")
+			or representative.get("chunk_path")
+			or ""
+		).strip()
+		if not document_path:
+			document_path = f"document-{len(document_progress_entries) + 1}"
+		if document_path in document_progress_index:
+			continue
+		document_progress_index[document_path] = len(document_progress_entries)
+		document_progress_entries.append(
+			{
+				"source_id": str(source.id or "").strip(),
+				"document_path": document_path,
+				"status": "queued",
+				"done_lines": 0,
+				"total_lines": 0,
+				"token_count_ready": 0,
+				"updated_at": datetime.now(UTC).isoformat(),
+			}
+		)
+
+	def _set_document_progress(
+		*,
+		document_path: str,
+		status: str,
+		done_lines: int,
+		total_lines: int,
+		token_count_ready: int,
+	) -> None:
+		normalized_path = str(document_path or "").strip()
+		if not normalized_path:
+			return
+		entry_index = document_progress_index.get(normalized_path)
+		if entry_index is None:
+			entry_index = len(document_progress_entries)
+			document_progress_index[normalized_path] = entry_index
+			document_progress_entries.append(
+				{
+					"source_id": str(source.id or "").strip(),
+					"document_path": normalized_path,
+					"status": "queued",
+					"done_lines": 0,
+					"total_lines": 0,
+					"token_count_ready": 0,
+					"updated_at": datetime.now(UTC).isoformat(),
+				}
+			)
+		entry = document_progress_entries[entry_index]
+		entry["status"] = str(status or "queued").strip() or "queued"
+		entry["done_lines"] = max(0, int(done_lines))
+		entry["total_lines"] = max(0, int(total_lines))
+		entry["token_count_ready"] = max(0, int(token_count_ready))
+		entry["updated_at"] = datetime.now(UTC).isoformat()
+
+	def _build_progress_snapshot() -> tuple[list[dict[str, Any]], dict[str, int]]:
+		rows = [dict(item) for item in document_progress_entries]
+		tokenize_done_lines = sum(max(0, _safe_count_int(item.get("done_lines") or 0)) for item in rows)
+		tokenize_total_lines = sum(max(0, _safe_count_int(item.get("total_lines") or 0)) for item in rows)
+		tokenize_done_documents = sum(1 for item in rows if str(item.get("status") or "").strip().lower() == "ready")
+		return rows, {
+			"tokenize_done_lines": tokenize_done_lines,
+			"tokenize_total_lines": max(tokenize_done_lines, tokenize_total_lines),
+			"tokenize_done_documents": tokenize_done_documents,
+			"tokenize_total_documents": total_documents,
+		}
 
 	for index, group in enumerate(chunk_groups, start=1):
 		representative = group[0]
+		document_path = str(
+			representative.get("document_path")
+			or representative.get("snapshot_relative_path")
+			or representative.get("chunk_path")
+			or ""
+		).strip()
+		if not document_path:
+			document_path = f"document-{index}"
 
 		if all(manager._chunk_stage_ready_for_resume(chunk, stage="tokenize") for chunk in group):
 			for chunk in group:
 				current_tokenize_paths.update(manager._chunk_stage_paths(chunk, stage="tokenize"))
 			tokenize_ready_so_far += 1
-			document_path = str(
-				representative.get("document_path")
-				or representative.get("snapshot_relative_path")
-				or ""
-			).strip()
+			document_line_count = max(
+				max(0, _safe_count_int(chunk.get("tokenize_line_count") or 0))
+				for chunk in group
+			)
 			group_token_count = max(
 				max(0, _safe_count_int(chunk.get("tokenize_token_count") or 0))
 				for chunk in group
 			)
 			if document_path:
 				document_token_totals[document_path] = document_token_totals.get(document_path, 0) + group_token_count
-			tokenize_line_so_far += max(
-				max(0, _safe_count_int(chunk.get("tokenize_line_count") or 0))
-				for chunk in group
-			)
+			tokenize_line_so_far += document_line_count
 			tokenize_token_so_far += max(
 				max(0, _safe_count_int(chunk.get("tokenize_token_count") or 0))
 				for chunk in group
 			)
+			_set_document_progress(
+				document_path=document_path,
+				status="ready",
+				done_lines=document_line_count,
+				total_lines=document_line_count,
+				token_count_ready=group_token_count,
+			)
+			documents_progress, tokenize_progress = _build_progress_snapshot()
 			if progress_callback is not None:
 				progress_callback(
 					{
@@ -83,7 +167,9 @@ def write_chunk_tokenize_artifacts(
 							"tokenize_ready_chunk_count": tokenize_ready_so_far,
 							"tokenize_line_count": tokenize_line_so_far,
 							"tokenize_token_count": tokenize_token_so_far,
+							**tokenize_progress,
 						},
+						"documents_progress": documents_progress,
 					}
 				)
 			continue
@@ -106,10 +192,36 @@ def write_chunk_tokenize_artifacts(
 		if tokenize_input_mode == "interlinear_required" or not str(resolved_text or "").strip():
 			raise RuntimeError("Tokenize stage requires non-empty interlinear-aligned input text.")
 
+		resolved_lines = str(resolved_text or "").splitlines()
+		total_line_count = len(resolved_lines)
+		_set_document_progress(
+			document_path=document_path,
+			status="running",
+			done_lines=0,
+			total_lines=total_line_count,
+			token_count_ready=0,
+		)
+		documents_progress, tokenize_progress = _build_progress_snapshot()
+		if progress_callback is not None:
+			progress_callback(
+				{
+					"stage": "tokenize",
+					"done_chunks": max(0, index - 1),
+					"total_chunks": total_documents,
+					"metrics": {
+						"tokenize_ready_chunk_count": tokenize_ready_so_far,
+						"tokenize_line_count": tokenize_line_so_far,
+						"tokenize_token_count": tokenize_token_so_far,
+						**tokenize_progress,
+					},
+					"documents_progress": documents_progress,
+				}
+			)
+
 		line_entries: list[dict[str, Any]] = []
 		line_count = 0
 		token_count = 0
-		for line_index, line_text in enumerate(str(resolved_text or "").splitlines(), start=1):
+		for line_index, line_text in enumerate(resolved_lines, start=1):
 			line_count += 1
 			raw_tokens, state = manager._semantic_runtime.tokenize(line_text, config)
 			manager._remember_semantic_engine_state(state)
@@ -139,6 +251,29 @@ def write_chunk_tokenize_artifacts(
 					"tokens": token_rows,
 				}
 			)
+			if progress_callback is not None and (line_index % 5 == 0 or line_index == total_line_count):
+				_set_document_progress(
+					document_path=document_path,
+					status="running",
+					done_lines=line_index,
+					total_lines=total_line_count,
+					token_count_ready=0,
+				)
+				documents_progress, tokenize_progress = _build_progress_snapshot()
+				progress_callback(
+					{
+						"stage": "tokenize",
+						"done_chunks": max(0, index - 1),
+						"total_chunks": total_documents,
+						"metrics": {
+							"tokenize_ready_chunk_count": tokenize_ready_so_far,
+							"tokenize_line_count": tokenize_line_so_far,
+							"tokenize_token_count": tokenize_token_so_far,
+							**tokenize_progress,
+						},
+						"documents_progress": documents_progress,
+					}
+				)
 
 		structured_payload = {
 			"artifact": "tokenize_structured",
@@ -223,7 +358,15 @@ def write_chunk_tokenize_artifacts(
 		document_path = str(representative.get("document_path") or representative.get("snapshot_relative_path") or "").strip()
 		if document_path:
 			document_token_totals[document_path] = document_token_totals.get(document_path, 0) + token_count
+		_set_document_progress(
+			document_path=document_path,
+			status="ready",
+			done_lines=line_count,
+			total_lines=total_line_count,
+			token_count_ready=token_count,
+		)
 		manager._write_source_tokenize_manifest(source.id, current_tokenize_paths)
+		documents_progress, tokenize_progress = _build_progress_snapshot()
 		manager._write_l2_checkpoint(
 			source.id,
 			payload,
@@ -234,6 +377,7 @@ def write_chunk_tokenize_artifacts(
 				"tokenize_ready_chunk_count": tokenize_ready_so_far,
 				"tokenize_line_count": tokenize_line_so_far,
 				"tokenize_token_count": tokenize_token_so_far,
+				**tokenize_progress,
 			},
 		)
 		if progress_callback is not None:
@@ -246,7 +390,9 @@ def write_chunk_tokenize_artifacts(
 						"tokenize_ready_chunk_count": tokenize_ready_so_far,
 						"tokenize_line_count": tokenize_line_so_far,
 						"tokenize_token_count": tokenize_token_so_far,
+						**tokenize_progress,
 					},
+					"documents_progress": documents_progress,
 				}
 			)
 

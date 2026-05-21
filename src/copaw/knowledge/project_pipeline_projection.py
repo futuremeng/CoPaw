@@ -32,6 +32,59 @@ def _as_dict(value: Any) -> dict[str, Any]:
 	return value if isinstance(value, dict) else {}
 
 
+def _merge_runtime_nlp_progress(
+	hydrated: dict[str, Any],
+	runtime: dict[str, Any],
+) -> dict[str, Any]:
+	merged = dict(hydrated)
+	for key in ("mode", "status", "stage", "summary", "updated_at"):
+		value = runtime.get(key)
+		if value not in {None, ""}:
+			merged[key] = value
+	for key in ("total_chunks", "entity_count", "relation_count"):
+		merged[key] = max(_safe_int(merged.get(key)), _safe_int(runtime.get(key)))
+
+	hydrated_stages = _as_dict(merged.get("stages"))
+	runtime_stages = _as_dict(runtime.get("stages"))
+	for stage_key, stage_payload in runtime_stages.items():
+		runtime_stage = _as_dict(stage_payload)
+		if not runtime_stage:
+			continue
+		stage = _as_dict(hydrated_stages.get(stage_key))
+		stage_merged = dict(stage)
+		for key in ("key", "required", "status", "reason_code", "reason"):
+			value = runtime_stage.get(key)
+			if value not in {None, ""}:
+				stage_merged[key] = value
+		for key in (
+			"done_chunks",
+			"ready_chunks",
+			"done_lines",
+			"total_lines",
+			"done_documents",
+			"total_documents",
+			"line_count",
+			"token_count",
+			"entity_count",
+			"sentence_count",
+			"pos_count",
+			"pos_tag_type_count",
+			"relation_count",
+			"cluster_count",
+			"replacement_count",
+			"effective_chunk_count",
+		):
+			stage_merged[key] = max(_safe_int(stage_merged.get(key)), _safe_int(runtime_stage.get(key)))
+		documents_progress = runtime_stage.get("documents_progress")
+		if isinstance(documents_progress, list) and documents_progress:
+			stage_merged["documents_progress"] = [
+				dict(item) for item in documents_progress if isinstance(item, dict)
+			]
+		hydrated_stages[stage_key] = stage_merged
+	merged["stages"] = hydrated_stages
+	return merged
+
+
 def _task_states(semantic_engine: dict[str, Any]) -> dict[str, Any]:
 	return _as_dict(semantic_engine.get("task_states"))
 
@@ -897,6 +950,9 @@ def hydrate_processing_view(manager: Any, state: dict[str, Any]) -> dict[str, An
 	semantic_engine = build_semantic_engine_state(manager, payload)
 	processing_modes = build_processing_modes(manager, payload, index_result, semantic_engine, l2_metrics)
 	nlp_progress = build_nlp_progress_view(manager, processing_modes, l2_metrics)
+	runtime_nlp_progress = _as_dict(payload.get("nlp_progress"))
+	if runtime_nlp_progress:
+		nlp_progress = _merge_runtime_nlp_progress(nlp_progress, runtime_nlp_progress)
 	mode_outputs = build_mode_outputs(manager, payload, processing_modes)
 	mode_metrics = build_mode_metrics(manager, payload, processing_modes, mode_outputs, l1_metrics, l2_metrics, build_l3_metrics(payload))
 	mode_metrics_by_source = build_mode_metrics_by_source(manager, payload, mode_metrics)

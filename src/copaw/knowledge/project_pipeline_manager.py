@@ -407,6 +407,7 @@ class ProjectKnowledgePipelineManager:
 			"global_metrics": {},
 			"l1_metrics": {},
 			"l2_metrics": {},
+			"l2_documents_progress": [],
 			"nlp_progress": {},
 			"l3_metrics": {},
 			"lanes": {},
