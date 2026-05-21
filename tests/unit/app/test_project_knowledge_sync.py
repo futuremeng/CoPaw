@@ -734,6 +734,71 @@ def test_project_pipeline_document_count_evidence_bundle_uses_source_samples(tmp
     assert token_bundle["artifact_paths"] == [".agent/AGENTS.md", "docs/spec.md"]
 
 
+def test_project_pipeline_tokenize_line_evidence_prefers_interlinear_path(tmp_path: Path, monkeypatch):
+    project_id = "project-tokenize-line-evidence"
+    manager = ProjectKnowledgePipelineManager(
+        tmp_path,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+
+    source_id = f"project-{project_id}-workspace"
+    source_ref = type("SourceRef", (), {
+        "id": source_id,
+        "project_id": project_id,
+        "location": "",
+        "name": source_id,
+    })()
+
+    monkeypatch.setattr(
+        manager._knowledge_manager,
+        "list_sources_from_storage",
+        lambda: [source_ref],
+    )
+    monkeypatch.setattr(
+        manager._knowledge_manager,
+        "get_source_status",
+        lambda source_id, lightweight=True: {
+            "document_count": 1,
+            "chunk_count": 1,
+            "token_count": 42,
+        },
+    )
+    monkeypatch.setattr(
+        manager._knowledge_manager,
+        "_load_index_payload",
+        lambda source_id: {
+            "chunks": [
+                {
+                    "document_path": f"/workspace/{project_id}/doc.md",
+                    "tokenize_line_count": 10,
+                    "tokenize_token_count": 42,
+                    "tokenize_interlinear_path": f"interlinear/{project_id}.txt",
+                    "tokenize_structured_path": f"tokenize/{project_id}.tokenize.json",
+                    "tokenize_path": f"tokenize/{project_id}.tokenize.txt",
+                    "snapshot_path": f"/workspace/{project_id}/.knowledge/raw/doc.snapshot.md",
+                },
+            ],
+        },
+    )
+
+    state = manager.get_state(project_id)
+    state["latest_source_id"] = source_id
+    state["last_result"] = {
+        "index": {
+            "document_count": 1,
+            "chunk_count": 1,
+            "tokenize_line_count": 10,
+            "tokenize_token_count": 42,
+            "tokenize_ready_chunk_count": 1,
+        },
+    }
+    manager._save_state(state)
+
+    hydrated = manager.get_state(project_id)
+    by_source_nlp = hydrated["mode_metrics_by_source"][source_id]["nlp"]
+    assert by_source_nlp["evidence_paths"]["tokenize_line_count"].endswith(f"interlinear/{project_id}.txt")
+
+
 def test_project_pipeline_state_exposes_idle_semantic_engine_before_source_ready(tmp_path: Path):
     project_id = "project-i"
     manager = ProjectKnowledgePipelineManager(

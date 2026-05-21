@@ -357,6 +357,7 @@ def build_mode_metrics_by_source(
 		cor_replacement_count = sum(_safe_int(chunk.get("cor_replacement_count")) for chunk in chunks)
 		cor_ready_chunk_count = sum(1 for chunk in chunks if str(chunk.get("cor_status") or "").strip().lower() == "ready")
 		cor_effective_chunk_count = sum(1 for chunk in chunks if _safe_int(chunk.get("cor_replacement_count")) > 0)
+		tokenize_line_count = sum(_safe_int(chunk.get("tokenize_line_count")) for chunk in chunks)
 
 		fast_global = _as_dict(mode_metrics.get("fast"))
 		nlp_global = _as_dict(mode_metrics.get("nlp"))
@@ -373,6 +374,7 @@ def build_mode_metrics_by_source(
 			"mode": "nlp",
 			"document_count": document_count,
 			"chunk_count": chunk_count,
+			"tokenize_line_count": tokenize_line_count,
 			"tokenize_token_count": token_count,
 			"ner_ready_chunk_count": ner_ready_chunk_count,
 			"ner_entity_count": ner_entity_count,
@@ -386,6 +388,7 @@ def build_mode_metrics_by_source(
 			"cor_effective_chunk_count": cor_effective_chunk_count,
 			"evidence_paths": {
 				"document_count": _first_non_empty_path(manager, chunks, ["document_path", "snapshot_path"]),
+				"tokenize_line_count": _first_non_empty_path(manager, chunks, ["tokenize_interlinear_path", "syntax_interlinear_path", "tokenize_structured_path", "tokenize_path", "snapshot_path", "chunk_path"]),
 				"tokenize_token_count": _first_non_empty_path(manager, chunks, ["snapshot_path", "syntax_interlinear_path", "chunk_path"]),
 				"ner_ready_chunk_count": _first_non_empty_path(manager, chunks, ["ner_structured_path", "ner_path"]),
 				"ner_entity_count": _first_non_empty_path(manager, chunks, ["ner_structured_path", "ner_path"]),
@@ -401,6 +404,12 @@ def build_mode_metrics_by_source(
 			"evidence_bundles": {
 				"document_count": {
 					"metric_key": "document_count",
+					"metric_kind": "aggregate",
+					"source_count": len(sample_paths),
+					"sample_source_paths": sample_paths,
+				},
+				"tokenize_line_count": {
+					"metric_key": "tokenize_line_count",
 					"metric_kind": "aggregate",
 					"source_count": len(sample_paths),
 					"sample_source_paths": sample_paths,
