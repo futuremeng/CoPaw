@@ -389,7 +389,7 @@ def build_mode_metrics_by_source(
 			"evidence_paths": {
 				"document_count": _first_non_empty_path(manager, chunks, ["document_path", "snapshot_path"]),
 				"tokenize_line_count": _first_non_empty_path(manager, chunks, ["tokenize_interlinear_path", "syntax_interlinear_path", "tokenize_structured_path", "tokenize_path", "snapshot_path", "chunk_path"]),
-				"tokenize_token_count": _first_non_empty_path(manager, chunks, ["snapshot_path", "syntax_interlinear_path", "chunk_path"]),
+				"tokenize_token_count": _first_non_empty_path(manager, chunks, ["tokenize_structured_path", "tokenize_path", "snapshot_path", "syntax_interlinear_path", "chunk_path"]),
 				"ner_ready_chunk_count": _first_non_empty_path(manager, chunks, ["ner_structured_path", "ner_path"]),
 				"ner_entity_count": _first_non_empty_path(manager, chunks, ["ner_structured_path", "ner_path"]),
 				"syntax_sentence_count": _first_non_empty_path(manager, chunks, ["syntax_structured_path", "syntax_path"]),

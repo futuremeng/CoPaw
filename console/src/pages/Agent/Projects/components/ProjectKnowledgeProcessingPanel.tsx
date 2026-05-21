@@ -556,7 +556,7 @@ export default function ProjectKnowledgeProcessingPanel(
     const merged: string[] = [];
     const samplePaths = activeEvidence?.bundle?.sample_source_paths || [];
     const artifactPaths = activeEvidence?.bundle?.artifact_paths || [];
-    if (activeEvidence?.metricKey === "tokenize_line_count" && activeEvidence?.fallbackPath) {
+    if ((activeEvidence?.metricKey === "tokenize_line_count" || activeEvidence?.metricKey === "tokenize_token_count") && activeEvidence?.fallbackPath) {
       const normalizedPath = String(activeEvidence.fallbackPath || "").trim();
       if (normalizedPath) {
         merged.push(normalizedPath);
