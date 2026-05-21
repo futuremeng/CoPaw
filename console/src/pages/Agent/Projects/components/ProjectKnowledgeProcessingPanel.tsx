@@ -1,11 +1,10 @@
-import { Button, Modal, Segmented, Select, Tag, Typography } from "antd";
-import { useEffect, useMemo, useState } from "react";
+import { Button, Modal, Select, Tag, Typography } from "antd";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import styles from "../index.module.less";
 import { buildProjectKnowledgeProcessingRecentHistorySectionsFromState } from "../utils/projectKnowledgeRecentHistoryModel";
 import {
   buildKnowledgeSourceRows,
-  normalizeKnowledgeSourcePath,
 } from "../utils/projectKnowledgeSourceRows";
 import type {
   ProjectKnowledgeModeState,
@@ -67,50 +66,6 @@ function modeHasIndependentOutputs(mode: ProjectKnowledgeModeState | null): bool
     return false;
   }
   return mode.available || mode.entityCount > 0 || mode.relationCount > 0 || mode.qualityScore != null;
-}
-
-function displayEntityCount(mode: ProjectKnowledgeModeState | null): number {
-  if (!mode) {
-    return 0;
-  }
-  if (mode.mode === "nlp") {
-    return Math.max(0, Number(mode.nerEntityCount || mode.entityCount || 0));
-  }
-  return Math.max(0, Number(mode.entityCount || 0));
-}
-
-function formatEntityValue(
-  mode: ProjectKnowledgeModeState | null,
-  t: ReturnType<typeof useTranslation>["t"],
-): string | number {
-  if (!mode) {
-    return 0;
-  }
-  const value = displayEntityCount(mode);
-  if (mode.mode !== "nlp") {
-    return value;
-  }
-  if (value > 0) {
-    return value;
-  }
-  if (mode.status === "running" || mode.status === "queued") {
-    return t("copaw.projects.knowledge.processing.metricPending");
-  }
-  const readyCount = Math.max(0, Number(mode.nerReadyChunkCount || 0));
-  if (readyCount <= 0) {
-    return t("copaw.projects.knowledge.processing.metricUnavailable");
-  }
-  return value;
-}
-
-function displayRelationCount(mode: ProjectKnowledgeModeState | null): number {
-  if (!mode) {
-    return 0;
-  }
-  if (mode.mode === "nlp") {
-    return Math.max(0, Number(mode.syntaxRelationCount || mode.relationCount || 0));
-  }
-  return Math.max(0, Number(mode.relationCount || 0));
 }
 
 function mergeModeStateWithMetrics(
@@ -524,10 +479,9 @@ export default function ProjectKnowledgeProcessingPanel(
   props: ProjectKnowledgeProcessingPanelProps,
 ) {
   const { t } = useTranslation();
-  const [scope, setScope] = useState<ProjectKnowledgeProcessingScope>(props.focusedScope || "global");
   const [activeEvidence, setActiveEvidence] = useState<{
     mode: ProjectKnowledgeProcessingMode;
-    scope: ProjectKnowledgeProcessingScope;
+    scope: "global" | "source";
     sourceId?: string;
     sourceLabel?: string;
     metricLabel: string;
@@ -541,73 +495,57 @@ export default function ProjectKnowledgeProcessingPanel(
     (mode) => mode.mode === "nlp" || mode.mode === "agentic",
   );
   const sourceRows = useMemo(() => buildKnowledgeSourceRows(props.projectFiles || []), [props.projectFiles]);
-  const sourceIdByPath = useMemo(() => {
-    const lookup = new Map<string, string>();
-    for (const source of props.knowledgeState.projectSources) {
-      const sourceId = String(source.id || "").trim();
-      if (!sourceId) {
-        continue;
-      }
-      const location = normalizeKnowledgeSourcePath(source.location);
-      if (location) {
-        lookup.set(location, sourceId);
-        lookup.set(location.split("/").slice(-1)[0] || location, sourceId);
-      }
-      const name = normalizeKnowledgeSourcePath(source.name);
-      if (name) {
-        lookup.set(name, sourceId);
-      }
-    }
-    return lookup;
-  }, [props.knowledgeState.projectSources]);
+  // 已移除 sourceRowByLookup，因下拉选项已直接基于 sourceRows 生成
+  // 下拉选项直接遍历所有有效项目文件，允许每个文件都能手动发起加工
   const sourceOptions = useMemo(() => (
-    sourceRows.map((row) => {
-      const sourceId = sourceIdByPath.get(row.path) || sourceIdByPath.get(row.title) || row.path;
-      return {
-        value: sourceId,
-        label: row.path,
-        title: row.title,
-      };
-    })
-  ), [sourceIdByPath, sourceRows]);
+    sourceRows.map((row) => ({
+      value: row.path, // 用 path 作为唯一标识
+      label: row.path,
+      title: row.title,
+    }))
+  ), [sourceRows]);
   const effectiveSourceId = String(
-    props.knowledgeState.selectedSourceId || sourceOptions[0]?.value || "",
+    sourceOptions.some((item) => item.value === props.knowledgeState.selectedSourceId)
+      ? props.knowledgeState.selectedSourceId
+      : (sourceOptions[0]?.value || ""),
   ).trim();
   const effectiveSourceOption = sourceOptions.find((item) => item.value === effectiveSourceId) || null;
   const effectiveSourceLabel = String(
     effectiveSourceOption?.label || sourceOptions.find((item) => item.value === effectiveSourceId)?.title || effectiveSourceId,
   ).trim();
-  const supportsSourceScope = sourceOptions.length > 0 || Boolean(props.knowledgeState.selectedSourceId);
-  const effectiveScope: ProjectKnowledgeProcessingScope = scope;
-
-  useEffect(() => {
-    if (props.focusedScope) {
-      setScope(props.focusedScope);
-    }
-  }, [props.focusToken, props.focusedScope]);
 
   const nlpBaseMode = visibleModes.find((mode) => mode.mode === "nlp") || null;
   const agenticBaseMode = visibleModes.find((mode) => mode.mode === "agentic") || null;
-  const scopedModeMetricsPayload = useMemo(
+  const globalModeMetricsPayload = useMemo(
     () => {
       if (props.knowledgeState.resolveProcessingModeMetrics) {
-        return props.knowledgeState.resolveProcessingModeMetrics(effectiveScope, effectiveSourceId);
+        return props.knowledgeState.resolveProcessingModeMetrics("global", effectiveSourceId);
       }
       return (props.knowledgeState.syncState?.mode_metrics || {}) as Partial<Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeMetricsPayload>>;
     },
-    [effectiveScope, effectiveSourceId, props.knowledgeState],
+    [effectiveSourceId, props.knowledgeState],
   );
-  const nlpMode = mergeModeStateWithMetrics(nlpBaseMode, scopedModeMetricsPayload.nlp || null);
-  const agenticMode = mergeModeStateWithMetrics(agenticBaseMode, scopedModeMetricsPayload.agentic || null);
-  const scopedL2EvidencePaths = (scopedModeMetricsPayload.nlp?.evidence_paths || {}) as Record<string, string>;
-  const scopedL3EvidencePaths = (scopedModeMetricsPayload.agentic?.evidence_paths || {}) as Record<string, string>;
+  const sourceModeMetricsPayload = useMemo(
+    () => {
+      if (props.knowledgeState.resolveProcessingModeMetrics) {
+        return props.knowledgeState.resolveProcessingModeMetrics("source", effectiveSourceId);
+      }
+      return (props.knowledgeState.syncState?.mode_metrics || {}) as Partial<Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeMetricsPayload>>;
+    },
+    [effectiveSourceId, props.knowledgeState],
+  );
+  const globalNlpMode = mergeModeStateWithMetrics(nlpBaseMode, globalModeMetricsPayload.nlp || null);
+  const sourceNlpMode = mergeModeStateWithMetrics(nlpBaseMode, sourceModeMetricsPayload.nlp || null);
+  const sourceAgenticMode = mergeModeStateWithMetrics(agenticBaseMode, sourceModeMetricsPayload.agentic || null);
+  const sourceL2EvidencePaths = (sourceModeMetricsPayload.nlp?.evidence_paths || {}) as Record<string, string>;
+  const sourceL3EvidencePaths = (sourceModeMetricsPayload.agentic?.evidence_paths || {}) as Record<string, string>;
   const l2EvidenceBundles = useMemo(
-    () => (scopedModeMetricsPayload.nlp?.evidence_bundles || {}) as Record<string, ProjectKnowledgeMetricEvidenceBundlePayload>,
-    [scopedModeMetricsPayload.nlp?.evidence_bundles],
+    () => (sourceModeMetricsPayload.nlp?.evidence_bundles || {}) as Record<string, ProjectKnowledgeMetricEvidenceBundlePayload>,
+    [sourceModeMetricsPayload.nlp?.evidence_bundles],
   );
   const l3EvidenceBundles = useMemo(
-    () => (scopedModeMetricsPayload.agentic?.evidence_bundles || {}) as Record<string, ProjectKnowledgeMetricEvidenceBundlePayload>,
-    [scopedModeMetricsPayload.agentic?.evidence_bundles],
+    () => (sourceModeMetricsPayload.agentic?.evidence_bundles || {}) as Record<string, ProjectKnowledgeMetricEvidenceBundlePayload>,
+    [sourceModeMetricsPayload.agentic?.evidence_bundles],
   );
   const { entityDelta, relationDelta } = props.knowledgeState.processingCompareDelta;
   const recentHistorySections = useMemo(
@@ -647,17 +585,30 @@ export default function ProjectKnowledgeProcessingPanel(
   const evidenceSampleCoverage = evidenceSourceCount > 0
     ? `${evidencePathsForModal.length}/${evidenceSourceCount}`
     : `${evidencePathsForModal.length}`;
+  const globalDocumentCount = Math.max(0, Number(globalNlpMode?.tokenizeDoneDocuments || globalNlpMode?.documentCount || 0));
+  const globalTotalDocuments = Math.max(0, Number(globalNlpMode?.tokenizeTotalDocuments || 0));
+  const globalDoneLines = Math.max(0, Number(globalNlpMode?.tokenizeDoneLines || 0));
+  const globalTotalLines = Math.max(0, Number(globalNlpMode?.tokenizeTotalLines || 0));
+  const globalTokenCountFromDocuments = (globalNlpMode?.tokenizeDocumentsProgress || []).reduce((sum, item) => {
+    if (String(item?.status || "").trim().toLowerCase() !== "ready") {
+      return sum;
+    }
+    return sum + Math.max(0, Number(item?.token_count_ready || 0));
+  }, 0);
+  const globalTokenCount = globalTokenCountFromDocuments > 0
+    ? globalTokenCountFromDocuments
+    : Math.max(0, Number(globalNlpMode?.syntaxTokenCount || 0));
   const layerRows = buildKnowledgeLayerRows({
-    nlpMode,
-    agenticMode,
-    l2EvidencePaths: scopedL2EvidencePaths,
-    l3EvidencePaths: scopedL3EvidencePaths,
+    nlpMode: sourceNlpMode,
+    agenticMode: sourceAgenticMode,
+    l2EvidencePaths: sourceL2EvidencePaths,
+    l3EvidencePaths: sourceL3EvidencePaths,
     entityDelta,
     relationDelta,
     t,
   });
   const tokenizeDocumentsProgress = useMemo(() => {
-    const rows = (nlpMode?.tokenizeDocumentsProgress || []).map((item) => ({
+    return (globalNlpMode?.tokenizeDocumentsProgress || []).map((item) => ({
       sourceId: String(item.source_id || "").trim(),
       documentPath: String(item.document_path || "").trim(),
       status: String(item.status || "queued").trim().toLowerCase(),
@@ -666,11 +617,7 @@ export default function ProjectKnowledgeProcessingPanel(
       readyTokens: Math.max(0, Number(item.token_count_ready || 0)),
       updatedAt: String(item.updated_at || "").trim(),
     })).filter((item) => item.documentPath);
-    if (effectiveScope !== "source") {
-      return rows;
-    }
-    return rows.filter((item) => item.sourceId === effectiveSourceId);
-  }, [effectiveScope, effectiveSourceId, nlpMode?.tokenizeDocumentsProgress]);
+  }, [globalNlpMode?.tokenizeDocumentsProgress]);
   const tokenizeRunningDocuments = useMemo(
     () => tokenizeDocumentsProgress.filter((item) => item.status === "running" || item.status === "queued"),
     [tokenizeDocumentsProgress],
@@ -679,62 +626,28 @@ export default function ProjectKnowledgeProcessingPanel(
   return (
     <div className={`${styles.projectKnowledgeWorkbench} ${styles.projectKnowledgeProcessingWorkbench}`}>
       <div className={styles.projectKnowledgeProcessingScrollBody}>
-        <div className={styles.projectKnowledgeProcessingStickySummary}>
+        <div className={styles.projectKnowledgeProcessingSection}>
           <Typography.Text strong>{t("projects.knowledgeDock.tabProcessing", "Processing")}</Typography.Text>
-          <div className={styles.projectKnowledgeProcessingScopeBar}>
-            <Segmented
-              size="small"
-              value={effectiveScope}
-              onChange={(value) => setScope(value as ProjectKnowledgeProcessingScope)}
-              options={[
-                {
-                  label: t("copaw.projects.knowledge.processing.scopeGlobal", "Project"),
-                  value: "global",
-                },
-                {
-                  label: t("copaw.projects.knowledge.processing.scopeSource", "Source"),
-                  value: "source",
-                },
-              ]}
-            />
-            <Select
-              size="small"
-              value={effectiveSourceId || undefined}
-              options={sourceOptions}
-              disabled={effectiveScope !== "source" || !supportsSourceScope}
-              className={styles.projectKnowledgeProcessingScopeSourceSelect}
-              placeholder={t("copaw.projects.knowledge.processing.sourceSelectPlaceholder", "Select source")}
-              onChange={(value) => {
-                props.knowledgeState.setSelectedSourceId(String(value || ""));
-              }}
-            />
-          </div>
+          <Typography.Text type="secondary">
+            {t("copaw.projects.knowledge.processing.globalOverviewHint", "项目全局占位指标，后续会继续细化")}
+          </Typography.Text>
           <div className={styles.projectKnowledgeSignalGrid}>
             <div className={styles.projectKnowledgeSignalCard}>
-              <Typography.Text type="secondary">{t("copaw.projects.knowledge.processing.nlpEntities")}</Typography.Text>
-              <Typography.Text strong>{formatEntityValue(nlpMode, t)}</Typography.Text>
+              <Typography.Text type="secondary">{t("copaw.projects.knowledge.documents")}</Typography.Text>
+              <Typography.Text strong>{formatDoneTotal(globalDocumentCount, globalTotalDocuments)}</Typography.Text>
             </div>
             <div className={styles.projectKnowledgeSignalCard}>
-              <Typography.Text type="secondary">{t("copaw.projects.knowledge.processing.nlpRelations")}</Typography.Text>
-              <Typography.Text strong>{displayRelationCount(nlpMode)}</Typography.Text>
+              <Typography.Text type="secondary">{t("copaw.projects.knowledge.processing.tokenizeLineProgress", "Tokenize lines")}</Typography.Text>
+              <Typography.Text strong>{formatDoneTotal(globalDoneLines, globalTotalLines)}</Typography.Text>
             </div>
             <div className={styles.projectKnowledgeSignalCard}>
-              <Typography.Text type="secondary">{t("copaw.projects.knowledge.processing.agenticEntities")}</Typography.Text>
-              <Typography.Text strong>
-                {agenticMode && !modeHasIndependentOutputs(agenticMode)
-                  ? t("copaw.projects.knowledge.processing.outputPending")
-                  : (agenticMode?.entityCount || 0)}
-              </Typography.Text>
-            </div>
-            <div className={styles.projectKnowledgeSignalCard}>
-              <Typography.Text type="secondary">{t("copaw.projects.knowledge.processing.agenticRelations")}</Typography.Text>
-              <Typography.Text strong>
-                {agenticMode && !modeHasIndependentOutputs(agenticMode)
-                  ? t("copaw.projects.knowledge.processing.outputPending")
-                  : (agenticMode?.relationCount || 0)}
-              </Typography.Text>
+              <Typography.Text type="secondary">{t("copaw.projects.knowledge.processing.syntaxTokens")}</Typography.Text>
+              <Typography.Text strong>{globalTokenCount}</Typography.Text>
             </div>
           </div>
+        </div>
+
+        <div className={styles.projectKnowledgeProcessingSection}>
           <div className={styles.projectKnowledgeHistoryStrip}>
             <div className={styles.projectKnowledgeHistoryHeader}>
               <Typography.Text strong>
@@ -742,8 +655,8 @@ export default function ProjectKnowledgeProcessingPanel(
               </Typography.Text>
               <Typography.Text type="secondary">
                 {formatDoneTotal(
-                  Math.max(0, Number(nlpMode?.tokenizeDoneLines || 0)),
-                  Math.max(0, Number(nlpMode?.tokenizeTotalLines || 0)),
+                  Math.max(0, Number(globalNlpMode?.tokenizeDoneLines || 0)),
+                  Math.max(0, Number(globalNlpMode?.tokenizeTotalLines || 0)),
                 )}
                 {" · "}
                 {t("copaw.projects.knowledge.processing.tokenizeRunningDocs", "Running docs")}: {tokenizeRunningDocuments.length}
@@ -792,87 +705,105 @@ export default function ProjectKnowledgeProcessingPanel(
           ))}
         </div>
 
-        <div className={styles.projectKnowledgeLayerMatrix}>
-          <div className={styles.projectKnowledgeLayerMatrixHeader}>
+        <div className={styles.projectKnowledgeProcessingSection}>
+          <div className={styles.projectKnowledgeLayerHeaderRow}>
             <Typography.Text strong>
               {t("copaw.projects.knowledge.processing.layerDimension")}
             </Typography.Text>
-            <Typography.Text strong>
-              {t("copaw.projects.knowledge.processing.layerL2Column")}
-            </Typography.Text>
-            <Typography.Text strong>
-              {t("copaw.projects.knowledge.processing.layerL3Column")}
-            </Typography.Text>
+            <Select
+              size="small"
+              value={effectiveSourceId || undefined}
+              options={sourceOptions}
+              disabled={!sourceOptions.length}
+              className={styles.projectKnowledgeProcessingScopeSourceSelect}
+              placeholder={t("copaw.projects.knowledge.processing.sourceSelectPlaceholder", "Select source")}
+              onChange={(value) => {
+                props.knowledgeState.setSelectedSourceId(String(value || ""));
+              }}
+            />
           </div>
-          {layerRows.map((row) => (
-            <div key={row.key} className={styles.projectKnowledgeLayerMatrixRow}>
-              <div className={styles.projectKnowledgeLayerMatrixDimension}>
-                <Typography.Text strong>{row.title}</Typography.Text>
-                <Typography.Text type="secondary">{row.description}</Typography.Text>
-              </div>
-              {[row.l2, row.l3].map((cell, index) => (
-                <div key={`${row.key}-${index}`} className={styles.projectKnowledgeLayerMatrixCell}>
-                  <div className={styles.projectKnowledgeModeMeta}>
-                    <Tag color={nlpStageTagColor(cell.status)}>{nlpStageStatusLabel(cell.status, t)}</Tag>
-                  </div>
-                  <Typography.Text>{cell.summary}</Typography.Text>
-                  <div className={styles.projectKnowledgeProcessingStageMetrics}>
-                    {cell.metrics.map((metric) => (
-                      <div key={`${row.key}-${index}-${metric.label}`} className={styles.projectKnowledgeProcessingStageMetric}>
-                        <div className={styles.projectKnowledgeProcessingStageMetricMain}>
-                          <Typography.Text type="secondary">{metric.label}</Typography.Text>
-                          <Typography.Text strong>{metric.value}</Typography.Text>
-                        </div>
-                        {(() => {
-                          const modeForCell: ProjectKnowledgeProcessingMode = index === 0 ? "nlp" : "agentic";
-                          const evidenceBundle = metric.evidenceKey
-                            ? ((modeForCell === "nlp" ? l2EvidenceBundles : l3EvidenceBundles)[metric.evidenceKey] || null)
-                            : null;
-                          const hasEvidence = Boolean(
-                            metric.evidencePath
-                            || (evidenceBundle?.sample_source_paths && evidenceBundle.sample_source_paths.length > 0)
-                            || (evidenceBundle?.artifact_paths && evidenceBundle.artifact_paths.length > 0),
-                          );
-                          return (
-                        <Button
-                          type="link"
-                          size="small"
-                          disabled={!hasEvidence}
-                          style={{ paddingInline: 0, height: "auto" }}
-                          onClick={() => {
-                            if (!metric.evidenceKey || !hasEvidence) {
-                              return;
-                            }
-                            setActiveEvidence({
-                              mode: modeForCell,
-                              scope: effectiveScope,
-                              sourceId: effectiveScope === "source" ? effectiveSourceId : undefined,
-                              sourceLabel: effectiveScope === "source" ? effectiveSourceLabel : undefined,
-                              metricLabel: metric.label,
-                              metricValue: metric.value,
-                              metricKey: metric.evidenceKey,
-                              summary: cell.summary,
-                              bundle: evidenceBundle,
-                              fallbackPath: metric.evidencePath || "",
-                            });
-                          }}
-                        >
-                          {t("copaw.projects.knowledge.processing.viewBasis")}
-                        </Button>
-                          );
-                        })()}
-                      </div>
-                    ))}
-                  </div>
-                  {cell.reason ? (
-                    <Typography.Text type="secondary">
-                      {t("copaw.projects.knowledge.processing.stageReason")}: {cell.reason}
-                    </Typography.Text>
-                  ) : null}
-                </div>
-              ))}
+          <div className={styles.projectKnowledgeLayerMatrix}>
+            <div className={styles.projectKnowledgeLayerMatrixHeader}>
+              <Typography.Text strong>
+                {t("copaw.projects.knowledge.processing.layerDimension")}
+              </Typography.Text>
+              <Typography.Text strong>
+                {t("copaw.projects.knowledge.processing.layerL2Column")}
+              </Typography.Text>
+              <Typography.Text strong>
+                {t("copaw.projects.knowledge.processing.layerL3Column")}
+              </Typography.Text>
             </div>
-          ))}
+            {layerRows.map((row) => (
+              <div key={row.key} className={styles.projectKnowledgeLayerMatrixRow}>
+                <div className={styles.projectKnowledgeLayerMatrixDimension}>
+                  <Typography.Text strong>{row.title}</Typography.Text>
+                  <Typography.Text type="secondary">{row.description}</Typography.Text>
+                </div>
+                {[row.l2, row.l3].map((cell, index) => (
+                  <div key={`${row.key}-${index}`} className={styles.projectKnowledgeLayerMatrixCell}>
+                    <div className={styles.projectKnowledgeModeMeta}>
+                      <Tag color={nlpStageTagColor(cell.status)}>{nlpStageStatusLabel(cell.status, t)}</Tag>
+                    </div>
+                    <Typography.Text>{cell.summary}</Typography.Text>
+                    <div className={styles.projectKnowledgeProcessingStageMetrics}>
+                      {cell.metrics.map((metric) => (
+                        <div key={`${row.key}-${index}-${metric.label}`} className={styles.projectKnowledgeProcessingStageMetric}>
+                          <div className={styles.projectKnowledgeProcessingStageMetricMain}>
+                            <Typography.Text type="secondary">{metric.label}</Typography.Text>
+                            <Typography.Text strong>{metric.value}</Typography.Text>
+                          </div>
+                          {(() => {
+                            const modeForCell: ProjectKnowledgeProcessingMode = index === 0 ? "nlp" : "agentic";
+                            const evidenceBundle = metric.evidenceKey
+                              ? ((modeForCell === "nlp" ? l2EvidenceBundles : l3EvidenceBundles)[metric.evidenceKey] || null)
+                              : null;
+                            const hasEvidence = Boolean(
+                              metric.evidencePath
+                              || (evidenceBundle?.sample_source_paths && evidenceBundle.sample_source_paths.length > 0)
+                              || (evidenceBundle?.artifact_paths && evidenceBundle.artifact_paths.length > 0),
+                            );
+                            return (
+                              <Button
+                                type="link"
+                                size="small"
+                                disabled={!hasEvidence}
+                                style={{ paddingInline: 0, height: "auto" }}
+                                onClick={() => {
+                                  if (!metric.evidenceKey || !hasEvidence) {
+                                    return;
+                                  }
+                                  setActiveEvidence({
+                                    mode: modeForCell,
+                                    scope: "source",
+                                    sourceId: effectiveSourceId || undefined,
+                                    sourceLabel: effectiveSourceLabel || undefined,
+                                    metricLabel: metric.label,
+                                    metricValue: metric.value,
+                                    metricKey: metric.evidenceKey,
+                                    summary: cell.summary,
+                                    bundle: evidenceBundle,
+                                    fallbackPath: metric.evidencePath || "",
+                                  });
+                                }}
+                              >
+                                {t("copaw.projects.knowledge.processing.viewBasis")}
+                              </Button>
+                            );
+                          })()}
+                        </div>
+                      ))}
+                    </div>
+                    {cell.reason ? (
+                      <Typography.Text type="secondary">
+                        {t("copaw.projects.knowledge.processing.stageReason")}: {cell.reason}
+                      </Typography.Text>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
         </div>
 
       </div>
@@ -882,7 +813,7 @@ export default function ProjectKnowledgeProcessingPanel(
         open={Boolean(activeEvidence)}
         onCancel={() => setActiveEvidence(null)}
         footer={null}
-        width={680}
+        width={1080}
       >
         {activeEvidence ? (
           <div className={styles.projectKnowledgeEvidenceDetail}>
