@@ -33,7 +33,6 @@ qwenpaw currently imports from copaw for shared modules, which inverts ownership
 - src/qwenpaw/knowledge/hanlp_runtime.py
 - src/qwenpaw/knowledge/manager.py
 - src/qwenpaw/knowledge/module_skills.py
-- src/qwenpaw/knowledge/project_sync.py
 
 ## Non-conformant: Dual Shared Implementation Drift (P1)
 

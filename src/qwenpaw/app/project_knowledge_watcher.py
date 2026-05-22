@@ -103,7 +103,7 @@ def _normalize_auto_sink(raw_value: Any) -> bool:
 
 
 class ProjectKnowledgeWatcher:
-    """Poll project workspaces and trigger automatic knowledge sync on changes."""
+    """Poll project workspaces and trigger automatic knowledge pipeline on changes."""
 
     def __init__(
         self,

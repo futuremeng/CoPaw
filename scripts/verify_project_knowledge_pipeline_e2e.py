@@ -111,7 +111,7 @@ def _wait_for_status(
     poll_interval_sec: float,
 ) -> dict[str, Any]:
     start = time.monotonic()
-    status_url = f"{api_base.rstrip('/')}/knowledge/project-sync/status?project_id={parse.quote(project_id)}"
+    status_url = f"{api_base.rstrip('/')}/knowledge/project-pipeline/status?project_id={parse.quote(project_id)}"
     headers = {"X-Agent-Id": agent_id}
 
     last_payload: dict[str, Any] = {}
@@ -139,7 +139,7 @@ def run_verification(args: argparse.Namespace) -> VerificationResult:
 
     created_input = _ensure_minimal_input(project_dir, args.input_relative_path)
 
-    run_url = f"{args.api_base.rstrip('/')}/knowledge/project-sync/run?project_id={parse.quote(args.project_id)}"
+    run_url = f"{args.api_base.rstrip('/')}/knowledge/project-pipeline/run?project_id={parse.quote(args.project_id)}"
     headers = {"X-Agent-Id": args.agent_id}
     run_payload = _http_json(
         "POST",
@@ -195,8 +195,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--processing-mode", default="agentic", choices=["fast", "nlp", "agentic"])
     parser.add_argument("--trigger", default="manual-e2e-verify")
-    parser.add_argument("--force", action="store_true", default=True, help="Force project sync run")
-    parser.add_argument("--no-force", action="store_false", dest="force", help="Do not force project sync run")
+    parser.add_argument("--force", action="store_true", default=True, help="Force project pipeline run")
+    parser.add_argument("--no-force", action="store_false", dest="force", help="Do not force project pipeline run")
     parser.add_argument("--timeout-sec", type=float, default=300.0)
     parser.add_argument("--poll-interval-sec", type=float, default=2.0)
     parser.add_argument(

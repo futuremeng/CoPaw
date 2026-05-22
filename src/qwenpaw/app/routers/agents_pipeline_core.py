@@ -2663,7 +2663,7 @@ def _normalize_quantization_stage(raw_stage: Any) -> str | None:
     return text
 
 
-def _run_builtin_project_knowledge_sync(
+def _run_builtin_project_knowledge_pipeline(
     *,
     project_id: str,
     project_dir: Path,
@@ -2704,7 +2704,7 @@ def _run_builtin_project_knowledge_sync(
     state = manager.get_state(project_id)
     status = str((state or {}).get("status") or "").strip().lower()
     if status == "failed":
-        reason = str((state or {}).get("error") or "PROJECT_KNOWLEDGE_SYNC_FAILED").strip()
+        reason = str((state or {}).get("error") or "PROJECT_KNOWLEDGE_PIPELINE_FAILED").strip()
         raise RuntimeError(reason)
     return state if isinstance(state, dict) else {}
 
@@ -4095,24 +4095,24 @@ def _create_project_pipeline_run(
     template = _resolve_pipeline_template(project_dir, body.template_id)
     template_doc = _load_project_template_doc(project_dir, template.id)
     run_parameters = dict(body.parameters or {})
-    knowledge_sync_snapshot: dict[str, Any] = {}
+    knowledge_pipeline_snapshot: dict[str, Any] = {}
 
     if template.id == _PROJECT_KNOWLEDGE_PLATFORM_TEMPLATE_ID:
         try:
-            sync_state = _run_builtin_project_knowledge_sync(
+            pipeline_state = _run_builtin_project_knowledge_pipeline(
                 project_id=project_id,
                 project_dir=project_dir,
                 parameters=run_parameters,
             )
-            if isinstance(sync_state, dict):
-                knowledge_sync_snapshot = {
-                    "status": str(sync_state.get("status") or "").strip(),
+            if isinstance(pipeline_state, dict):
+                knowledge_pipeline_snapshot = {
+                    "status": str(pipeline_state.get("status") or "").strip(),
                     "current_stage": str(
-                        sync_state.get("current_stage") or sync_state.get("stage") or ""
+                        pipeline_state.get("current_stage") or pipeline_state.get("stage") or ""
                     ).strip(),
-                    "progress": int(sync_state.get("progress") or 0),
-                    "updated_at": str(sync_state.get("updated_at") or "").strip() or None,
-                    "last_error": str(sync_state.get("last_error") or "").strip() or None,
+                    "progress": int(pipeline_state.get("progress") or 0),
+                    "updated_at": str(pipeline_state.get("updated_at") or "").strip() or None,
+                    "last_error": str(pipeline_state.get("last_error") or "").strip() or None,
                 }
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -4121,8 +4121,8 @@ def _create_project_pipeline_run(
         except Exception as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    if knowledge_sync_snapshot:
-        run_parameters["knowledge_sync_snapshot"] = knowledge_sync_snapshot
+    if knowledge_pipeline_snapshot:
+        run_parameters["knowledge_pipeline_snapshot"] = knowledge_pipeline_snapshot
 
     now = _pipeline_now_iso()
     run_id = f"run-{generate_short_agent_id()}"

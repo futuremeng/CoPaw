@@ -4,7 +4,7 @@ import urllib.request
 from pathlib import Path
 
 project_id = "project-2ZHU4d"
-run_url = f"http://localhost:5173/api/knowledge/project-sync/run?project_id={project_id}"
+run_url = f"http://localhost:5173/api/knowledge/project-pipeline/run?project_id={project_id}"
 ner_dir = Path("/Users/futuremeng/.copaw/workspaces/default/projects/project-2ZHU4d/.knowledge/ner")
 
 payload = {

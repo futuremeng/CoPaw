@@ -358,7 +358,7 @@ def test_create_project_knowledge_pipeline_run_triggers_sync_helper(tmp_path: Pa
         }
 
     monkeypatch.setattr(
-        "qwenpaw.app.routers.agents_pipeline_core._run_builtin_project_knowledge_sync",
+        "qwenpaw.app.routers.agents_pipeline_core._run_builtin_project_knowledge_pipeline",
         _fake_sync_helper,
     )
 
@@ -375,7 +375,7 @@ def test_create_project_knowledge_pipeline_run_triggers_sync_helper(tmp_path: Pa
     assert called["project_dir"] == project_dir
     assert called["parameters"] == {"processing_mode": "agentic"}
     assert run.status == "succeeded"
-    assert run.parameters.get("knowledge_sync_snapshot") == {
+    assert run.parameters.get("knowledge_pipeline_snapshot") == {
         "status": "succeeded",
         "current_stage": "quality_review",
         "progress": 100,

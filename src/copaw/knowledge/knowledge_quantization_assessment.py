@@ -155,7 +155,7 @@ def grade_l2_quantization_assessment(
 			"risk_labels": ["missing_state_metrics"],
 			"reasons": ["No L2 state metrics available (probe-only or missing state)."],
 			"recommendations": [
-				"Run project knowledge sync first to generate L2 metrics.",
+				"Run project knowledge pipeline first to generate L2 metrics.",
 				"Then rerun assess-l2 with --project-id or --state-file.",
 			],
 		}

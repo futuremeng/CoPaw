@@ -928,14 +928,14 @@ def test_project_pipeline_stage_message_merges_semantic_summary(tmp_path: Path, 
 
     state = manager.get_state(project_id)
     state["latest_source_id"] = f"project-{project_id}-workspace"
-    state["stage_message"] = "Project sync pending"
+    state["stage_message"] = "Project pipeline pending"
     state["semantic_engine"] = {}
     manager._save_state(state)
 
     hydrated = manager.get_state(project_id)
 
     assert hydrated["stage_message"] == (
-        "Project sync pending · Semantic engine unavailable: HanLP module is not installed"
+        "Project pipeline pending · Semantic engine unavailable: HanLP module is not installed"
     )
 
 
@@ -961,7 +961,7 @@ def test_project_pipeline_pending_stage_message_includes_semantic_reason_code(tm
     state["status"] = "pending"
     state["stage"] = "pending"
     state["latest_source_id"] = f"project-{project_id}-workspace"
-    state["stage_message"] = "Project sync pending"
+    state["stage_message"] = "Project pipeline pending"
     state["semantic_engine"] = {}
     manager._save_state(state)
 

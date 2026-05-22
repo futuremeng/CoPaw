@@ -2,7 +2,7 @@ import json
 import time
 import urllib.request
 
-url = 'http://localhost:5173/api/knowledge/project-sync/status?project_id=project-2ZHU4d'
+url = 'http://localhost:5173/api/knowledge/project-pipeline/status?project_id=project-2ZHU4d'
 vals = []
 for _ in range(3):
     with urllib.request.urlopen(url, timeout=30) as resp:

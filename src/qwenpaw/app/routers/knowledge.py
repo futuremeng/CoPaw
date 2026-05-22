@@ -1490,7 +1490,7 @@ async def start_memify_job(
 
 @router.get("/project-pipeline/status")
 async def get_project_pipeline_status(request: Request):
-    """Get project-scoped automatic knowledge synchronization status."""
+    """Get project-scoped automatic knowledge pipeline status."""
     config, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
     project_id = _resolve_project_id(request)
     if not project_id:
@@ -1526,7 +1526,7 @@ async def run_project_pipeline(
     quantization_stage: str | None = Body(default=None),
     idempotency_key: str = Body(default=""),
 ):
-    """Start project-scoped automatic knowledge synchronization."""
+    """Start project-scoped automatic knowledge pipeline."""
     config, knowledge_config, running_config, workspace_dir, _ = await _resolve_knowledge_request_context(request)
     _ensure_knowledge_enabled_flag(knowledge_config.enabled)
     normalized_mode = (processing_mode or "agentic").strip().lower() or "agentic"
@@ -1640,7 +1640,7 @@ async def stream_history_backfill_progress(websocket: WebSocket):
 
 @router.websocket("/project-pipeline/ws")
 async def stream_project_pipeline(websocket: WebSocket):
-    """Stream project-scoped knowledge sync snapshots with WebSocket."""
+    """Stream project-scoped knowledge pipeline snapshots with WebSocket."""
     await websocket.accept()
     interval_ms = _clamp_int(
         websocket.query_params.get("interval_ms"),

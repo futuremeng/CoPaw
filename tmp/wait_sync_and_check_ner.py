@@ -3,7 +3,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-status_url = 'http://localhost:5173/api/knowledge/project-sync/status?project_id=project-2ZHU4d'
+status_url = 'http://localhost:5173/api/knowledge/project-pipeline/status?project_id=project-2ZHU4d'
 ner_dir = Path('/Users/futuremeng/.copaw/workspaces/default/projects/project-2ZHU4d/.knowledge/ner')
 
 deadline = time.time() + 90

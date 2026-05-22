@@ -127,7 +127,7 @@ def queue_or_start_locked(
 		"semantic_engine": manager._capture_semantic_engine_state(config),
 		"scheduled_for": scheduled_for.isoformat() if scheduled_for is not None else None,
 		"stage_message": manager._merge_stage_message_with_semantic_summary(
-			"Project sync queued" if scheduled_for is not None else "Project sync pending",
+			"Project pipeline queued" if scheduled_for is not None else "Project pipeline pending",
 			manager._build_semantic_engine_state(state),
 		),
 		"changed_files": _build_changed_files_list(

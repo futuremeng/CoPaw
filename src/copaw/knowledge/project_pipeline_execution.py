@@ -156,7 +156,7 @@ def run_sync_loop(
 				"status": "succeeded",
 				"current_stage": "completed",
 				"stage": "completed",
-				"stage_message": "Project sync completed",
+				"stage_message": "Project pipeline completed",
 				"updated_at": now,
 				"last_finished_at": now,
 				"last_success_at": now,
