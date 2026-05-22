@@ -746,6 +746,21 @@ export default function ProjectKnowledgeProcessingPanel(
                 <div className={styles.projectKnowledgeLayerMatrixDimension}>
                   <Typography.Text strong>{row.title}</Typography.Text>
                   <Typography.Text type="secondary">{row.description}</Typography.Text>
+                  <Button
+                    type="link"
+                    size="small"
+                    disabled={row.key === "phrase"}
+                    style={{ paddingInline: 0, height: "auto" }}
+                    onClick={() => {
+                      void props.knowledgeState.rerunKnowledgeLayer(row.key, {
+                        sourceId: effectiveSourceId || undefined,
+                        force: true,
+                        overwrite: true,
+                      });
+                    }}
+                  >
+                    {t("copaw.projects.knowledge.processing.rerunLayer", "Rerun Layer")}
+                  </Button>
                 </div>
                 {[row.l2, row.l3].map((cell, index) => (
                   <div key={`${row.key}-${index}`} className={styles.projectKnowledgeLayerMatrixCell}>

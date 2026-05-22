@@ -391,6 +391,75 @@ def test_knowledge_workflow_quantization_stage_l1_stays_fast_slice(
     assert called["memify"] is False
 
 
+def test_knowledge_workflow_rerun_tokenize_skips_snapshot_slice(
+    tmp_path: Path,
+    monkeypatch,
+):
+    project_id = "project-rerun-tokenize"
+    project_dir = tmp_path / "projects" / project_id
+    data_dir = project_dir / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    _write_project_metadata(project_dir, project_id)
+    (data_dir / "sample.md").write_text("# Sample\n\nKnowledge workflow content.", encoding="utf-8")
+
+    orchestrator = KnowledgeWorkflowOrchestrator(
+        workspace_dir=tmp_path,
+        project_id=project_id,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+    source = _build_source(project_dir, project_id)
+    config = KnowledgeConfig(enabled=True, memify_enabled=True)
+    running_config = SimpleNamespace(knowledge_chunk_size=500)
+
+    _stub_semantic_materialization(monkeypatch)
+    monkeypatch.setattr(
+        "copaw.knowledge.graph_ops.GraphOpsManager.execute_memify_once",
+        lambda self, **kwargs: {
+            "status": "succeeded",
+            "relation_count": 0,
+            "node_count": 0,
+            "document_count": 0,
+        },
+    )
+    monkeypatch.setattr(
+        "copaw.knowledge.graph_ops.GraphOpsManager.maybe_start_quality_self_drive",
+        lambda self, **kwargs: {"accepted": False, "reason": "QUALITY_TARGET_MET"},
+    )
+
+    # Warm once to ensure index payload exists; rerun should then skip snapshot slice.
+    orchestrator.run(
+        config=config,
+        running_config=running_config,
+        source=source,
+        trigger="manual-panel",
+        changed_paths=["data/sample.md"],
+        processing_mode="fast",
+    )
+
+    monkeypatch.setattr(
+        "copaw.knowledge.manager.KnowledgeManager.index_source",
+        lambda self, *args, **kwargs: (_ for _ in ()).throw(AssertionError("index_source should be skipped")),
+    )
+
+    result = orchestrator.run(
+        config=config,
+        running_config=running_config,
+        source=source,
+        trigger="manual-rerun",
+        changed_paths=["data/sample.md"],
+        processing_mode="fast",
+        execution_context={"rerun_step_id": "tokenize"},
+    )
+
+    assert result["processing_mode"] == "nlp"
+    run = _load_project_pipeline_run(project_dir, result["run_id"])
+    status_by_step = {step.id: step.status for step in run.steps}
+    assert status_by_step["snapshot_raw"] == "skipped"
+    assert status_by_step["build_chunks"] == "skipped"
+    assert status_by_step["build_interlinear"] == "skipped"
+    assert status_by_step["tokenize"] == "succeeded"
+
+
 def test_knowledge_workflow_status_callback_emits_lane_ready_transitions(
     tmp_path: Path,
     monkeypatch,

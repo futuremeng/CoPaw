@@ -159,6 +159,8 @@ function buildKnowledgeState(projectId: string): ProjectKnowledgeState {
     setActiveGraphNodeId: vi.fn(),
     runGraphQuery: vi.fn().mockResolvedValue(undefined),
     startProcessingMode: vi.fn().mockResolvedValue(undefined),
+    runSourceFullPipeline: vi.fn().mockResolvedValue(undefined),
+    rerunKnowledgeLayer: vi.fn().mockResolvedValue(undefined),
     processingLaunchMode: null,
     resetGraphQuery: vi.fn(),
     trendRangeDays: 7,

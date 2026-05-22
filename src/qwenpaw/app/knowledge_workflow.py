@@ -43,6 +43,8 @@ KNOWLEDGE_WORKFLOW_TEMPLATE_NAME = "Knowledge Processing Workflow"
 # available (e.g. test fixtures).
 KNOWLEDGE_WORKFLOW_TEMPLATE_VERSION = "2.0.0"
 KNOWLEDGE_PROCESSING_MODES = {"fast", "nlp", "agentic"}
+_WORKFLOW_STEP_ORDER = tuple(KNOWLEDGE_WORKFLOW_STEP_IDS)
+_WORKFLOW_STEP_INDEX = {step_id: index for index, step_id in enumerate(_WORKFLOW_STEP_ORDER)}
 
 
 def _lane_overrides(
@@ -201,6 +203,41 @@ def _build_initial_run(
     )
 
 
+def _resolve_layer_to_step(layer: str) -> str:
+    normalized = str(layer or "").strip().lower()
+    if normalized == "datapreprocess":
+        return "snapshot_raw"
+    if normalized in {"lexical", "syntax", "semantic"}:
+        return "tokenize"
+    if normalized == "pragmatic":
+        return "semantic_role_labeling"
+    return ""
+
+
+def _normalize_requested_start_step(raw_step_id: str, raw_layer: str) -> str:
+    requested = str(raw_step_id or "").strip().lower()
+    if not requested:
+        requested = _resolve_layer_to_step(raw_layer)
+    if requested not in _WORKFLOW_STEP_INDEX:
+        return ""
+    if requested in {"snapshot_raw", "build_chunks", "build_interlinear"}:
+        return "snapshot_raw"
+    if requested in {"tokenize", "pos_tagging", "syntax_parse"}:
+        return "tokenize"
+    if requested == "semantic_role_labeling":
+        return "semantic_role_labeling"
+    return ""
+
+
+def _mode_for_start_step(start_step: str, current_mode: str) -> str:
+    mode = str(current_mode or "agentic").strip().lower() or "agentic"
+    if start_step == "tokenize" and mode == "fast":
+        return "nlp"
+    if start_step == "semantic_role_labeling" and mode != "agentic":
+        return "agentic"
+    return mode
+
+
 def _resolve_project_dir_with_fallback(workspace_dir: Path, project_id: str) -> Path:
     try:
         return agents_router_impl._resolve_project_dir(workspace_dir, project_id)
@@ -248,6 +285,7 @@ class KnowledgeWorkflowOrchestrator:
         changed_paths: list[str] | None = None,
         processing_mode: str | None = None,
         quantization_stage: str | None = None,  # 新增参数
+        execution_context: dict[str, Any] | None = None,
         status_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> dict[str, Any]:
         normalized_mode = str(processing_mode or "agentic").strip().lower() or "agentic"
@@ -260,6 +298,17 @@ class KnowledgeWorkflowOrchestrator:
             normalized_mode = "nlp"
         elif quant_stage == "l3":
             normalized_mode = "agentic"
+        execution_ctx = dict(execution_context or {})
+        requested_start_step = _normalize_requested_start_step(
+            str(execution_ctx.get("rerun_step_id") or ""),
+            str(execution_ctx.get("rerun_layer") or ""),
+        )
+        if requested_start_step:
+            normalized_mode = _mode_for_start_step(requested_start_step, normalized_mode)
+            if normalized_mode == "nlp" and quant_stage == "l1":
+                quant_stage = "l2"
+            elif normalized_mode == "agentic" and quant_stage in {"l1", "l2"}:
+                quant_stage = "l3"
         normalized_changed_paths = [
             str(item or "").strip().replace("\\", "/")
             for item in (changed_paths or [])
@@ -274,6 +323,8 @@ class KnowledgeWorkflowOrchestrator:
         run.parameters["processing_mode"] = normalized_mode
         if quant_stage:
             run.parameters["quantization_stage"] = quant_stage
+        if requested_start_step:
+            run.parameters["rerun_start_step"] = requested_start_step
         self._append_run_event(
             run,
             event="workflow.started",
@@ -287,12 +338,19 @@ class KnowledgeWorkflowOrchestrator:
         nlp_result: dict[str, Any] | None = None
         memify_result: dict[str, Any] | None = None
         quality_loop_result: dict[str, Any] | None = None
+        start_step = self._resolve_effective_start_step(source.id, requested_start_step)
+        start_index = _WORKFLOW_STEP_INDEX.get(start_step, 0)
+        if start_index > 0:
+            for step_id in _WORKFLOW_STEP_ORDER[:start_index]:
+                self._mark_step_skipped(run, step_id, reason=f"rerun-from:{start_step}")
+            self._persist(run)
 
         index_path = self.knowledge_manager._source_index_path(source.id)
         quality_report_path = self.graph_ops.enrichment_quality_report_path
 
         # ── Step 1 of 7: snapshot_raw ──────────────────────────────────────
-        self._patch_step(
+        if start_index <= _WORKFLOW_STEP_INDEX["snapshot_raw"]:
+            self._patch_step(
             run,
             "snapshot_raw",
             actor=BUILTIN_UNDERSTAND_PROJECT_SCANNER_ID,
@@ -330,11 +388,14 @@ class KnowledgeWorkflowOrchestrator:
                 changed_paths=normalized_changed_paths,
                 index_path=index_path,
             ),
-        )
-        index_result = dict(run.steps[0].metrics.get("result") or {})
+            )
+            index_result = dict(run.steps[0].metrics.get("result") or {})
+        else:
+            index_result = self._load_index_result_from_payload(source.id)
 
         # ── Step 2 of 7: build_chunks (pass-through from snapshot_raw) ────
-        self._patch_step(
+        if start_index <= _WORKFLOW_STEP_INDEX["build_chunks"]:
+            self._patch_step(
             run,
             "build_chunks",
             actor=BUILTIN_UNDERSTAND_FILE_ANALYZER_ID,
@@ -374,10 +435,11 @@ class KnowledgeWorkflowOrchestrator:
                 evidence=run.steps[0].evidence[:5],
                 artifacts=[],
             ),
-        )
+            )
 
         # ── Step 3 of 7: build_interlinear (pass-through from snapshot_raw)
-        self._patch_step(
+        if start_index <= _WORKFLOW_STEP_INDEX["build_interlinear"]:
+            self._patch_step(
             run,
             "build_interlinear",
             actor=BUILTIN_UNDERSTAND_FILE_ANALYZER_ID,
@@ -417,7 +479,7 @@ class KnowledgeWorkflowOrchestrator:
                 evidence=run.steps[0].evidence[:5],
                 artifacts=[],
             ),
-        )
+            )
 
         if normalized_mode == "fast":
             return self._finalize_run(
@@ -466,7 +528,8 @@ class KnowledgeWorkflowOrchestrator:
                 }
             )
 
-        self._patch_step(
+        if start_index <= _WORKFLOW_STEP_INDEX["tokenize"]:
+            self._patch_step(
             run,
             "tokenize",
             actor=BUILTIN_UNDERSTAND_DOMAIN_ANALYZER_ID,
@@ -502,11 +565,14 @@ class KnowledgeWorkflowOrchestrator:
                 config=config,
                 progress_callback=_nlp_progress,
             ),
-        )
-        nlp_result = dict(run.steps[3].metrics.get("result") or {})
+            )
+            nlp_result = dict(run.steps[3].metrics.get("result") or {})
+        else:
+            nlp_result = self._load_nlp_result_from_payload(source.id)
 
         # ── Step 5 of 7: pos_tagging (pass-through from tokenize) ─────────
-        self._patch_step(
+        if start_index <= _WORKFLOW_STEP_INDEX["pos_tagging"]:
+            self._patch_step(
             run,
             "pos_tagging",
             actor=BUILTIN_UNDERSTAND_DOMAIN_ANALYZER_ID,
@@ -549,10 +615,11 @@ class KnowledgeWorkflowOrchestrator:
                 evidence=run.steps[3].evidence[:5],
                 artifacts=[],
             ),
-        )
+            )
 
         # ── Step 6 of 7: syntax_parse (pass-through from tokenize) ────────
-        self._patch_step(
+        if start_index <= _WORKFLOW_STEP_INDEX["syntax_parse"]:
+            self._patch_step(
             run,
             "syntax_parse",
             actor=BUILTIN_UNDERSTAND_DOMAIN_ANALYZER_ID,
@@ -593,7 +660,7 @@ class KnowledgeWorkflowOrchestrator:
                 evidence=run.steps[3].evidence[:5],
                 artifacts=[],
             ),
-        )
+            )
 
         if normalized_mode == "nlp":
             return self._finalize_run(
@@ -612,7 +679,8 @@ class KnowledgeWorkflowOrchestrator:
             )
 
         # ── Step 7 of 7: semantic_role_labeling (placeholder) ─────────────
-        self._patch_step(
+        if start_index <= _WORKFLOW_STEP_INDEX["semantic_role_labeling"]:
+            self._patch_step(
             run,
             "semantic_role_labeling",
             actor=BUILTIN_UNDERSTAND_DOMAIN_ANALYZER_ID,
@@ -644,7 +712,7 @@ class KnowledgeWorkflowOrchestrator:
                 ),
             },
             executor=lambda step: self._execute_semantic_role_labeling(),
-        )
+            )
 
         return self._finalize_run(
             run,
@@ -659,6 +727,80 @@ class KnowledgeWorkflowOrchestrator:
             quality_loop_result=quality_loop_result,
             quality_report_path=quality_report_path,
             status_callback=status_callback,
+        )
+
+    def _resolve_effective_start_step(self, source_id: str, requested_step: str) -> str:
+        if not requested_step:
+            return "snapshot_raw"
+        if requested_step == "snapshot_raw":
+            return "snapshot_raw"
+        payload = self.knowledge_manager._load_index_payload_safe(source_id)
+        if not isinstance(payload, dict):
+            return "snapshot_raw"
+        has_chunks = isinstance(payload.get("chunks"), list)
+        if requested_step == "tokenize":
+            return "tokenize" if has_chunks else "snapshot_raw"
+        if requested_step == "semantic_role_labeling":
+            if int(payload.get("tokenize_ready_chunk_count") or 0) > 0:
+                return "semantic_role_labeling"
+            return "tokenize" if has_chunks else "snapshot_raw"
+        return "snapshot_raw"
+
+    def _load_index_result_from_payload(self, source_id: str) -> dict[str, Any]:
+        payload = self.knowledge_manager._load_index_payload_safe(source_id)
+        if not isinstance(payload, dict):
+            return {}
+        return {
+            "document_count": int(payload.get("document_count") or 0),
+            "snapshot_count": int(payload.get("snapshot_count") or 0),
+            "chunk_count": int(payload.get("chunk_count") or 0),
+            "sentence_count": int(payload.get("sentence_count") or 0),
+            "tokenize_line_count": int(payload.get("tokenize_line_count") or 0),
+        }
+
+    def _load_nlp_result_from_payload(self, source_id: str) -> dict[str, Any]:
+        payload = self.knowledge_manager._load_index_payload_safe(source_id)
+        if not isinstance(payload, dict):
+            return {}
+        return {
+            "tokenize_ready_chunk_count": int(payload.get("tokenize_ready_chunk_count") or 0),
+            "tokenize_line_count": int(payload.get("tokenize_line_count") or 0),
+            "tokenize_token_count": int(payload.get("tokenize_token_count") or 0),
+            "pos_ready_chunk_count": int(payload.get("pos_ready_chunk_count") or 0),
+            "pos_line_count": int(payload.get("pos_line_count") or 0),
+            "pos_token_count": int(payload.get("pos_token_count") or 0),
+            "pos_count": int(payload.get("pos_count") or payload.get("syntax_pos_count") or 0),
+            "pos_tag_type_count": int(payload.get("pos_tag_type_count") or payload.get("syntax_pos_tag_type_count") or 0),
+            "syntax_pos_count": int(payload.get("syntax_pos_count") or 0),
+            "syntax_pos_tag_type_count": int(payload.get("syntax_pos_tag_type_count") or 0),
+            "pos_coverage_on_syntax_tokens": float(payload.get("pos_coverage_on_syntax_tokens") or 0.0),
+            "syntax_relation_count": int(payload.get("syntax_relation_count") or 0),
+            "syntax_sentence_count": int(payload.get("syntax_sentence_count") or 0),
+            "syntax_token_count": int(payload.get("syntax_token_count") or 0),
+        }
+
+    def _mark_step_skipped(self, run: PipelineRunDetail, step_id: str, *, reason: str) -> None:
+        step = self._step_by_id(run, step_id)
+        if step.status in {"succeeded", "skipped"}:
+            return
+        now = _pipeline_now_iso()
+        step.status = "skipped"
+        step.started_at = now
+        step.ended_at = now
+        step.metrics = {
+            **step.metrics,
+            "skipped": True,
+            "skip_reason": reason,
+            "carried_forward": True,
+        }
+        self._append_run_event(
+            run,
+            event="step.carried_forward",
+            actor="knowledge-workflow",
+            status="succeeded",
+            step_id=step.id,
+            message=f"{step.name} skipped ({reason})",
+            metrics={"carried_forward": True, "reason": reason},
         )
     def _finalize_run(
         self,

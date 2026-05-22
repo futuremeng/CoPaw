@@ -105,6 +105,13 @@ export interface ProjectKnowledgeMetricsMeta {
 
 export type ProjectKnowledgeProcessingMode = "fast" | "nlp" | "agentic";
 export type ProjectKnowledgeProcessingScope = "global" | "source";
+export type ProjectKnowledgeLayerKey =
+  | "dataPreprocess"
+  | "lexical"
+  | "phrase"
+  | "syntax"
+  | "semantic"
+  | "pragmatic";
 export type ProjectKnowledgeRealtimeChannel = "project-pipeline" | "tasks";
 export type ProjectKnowledgeRealtimeChannelStatus = "idle" | "connecting" | "open" | "reconnecting";
 
@@ -284,7 +291,20 @@ export interface ProjectKnowledgeState {
   ) => Promise<void>;
   startProcessingMode: (
     mode: ProjectKnowledgeProcessingMode,
-    options?: { force?: boolean; trigger?: string; quantizationStage?: ProjectKnowledgeQuantizationStage },
+    options?: {
+      force?: boolean;
+      trigger?: string;
+      quantizationStage?: ProjectKnowledgeQuantizationStage;
+      sourceFilePath?: string;
+      rerunLayer?: string;
+      rerunStepId?: string;
+      overwrite?: boolean;
+    },
+  ) => Promise<void>;
+  runSourceFullPipeline: (sourceFilePath: string, options?: { force?: boolean; overwrite?: boolean }) => Promise<void>;
+  rerunKnowledgeLayer: (
+    layer: ProjectKnowledgeLayerKey,
+    options?: { sourceId?: string; force?: boolean; overwrite?: boolean },
   ) => Promise<void>;
   processingLaunchMode: ProjectKnowledgeProcessingMode | null;
   resetGraphQuery: () => void;
@@ -343,6 +363,22 @@ const PROJECT_GRAPH_QUERY_TOP_K = 200;
 const HIGH_ORDER_OUTPUT_MODES: ProjectKnowledgeProcessingMode[] = ["agentic", "nlp"];
 const PROCESSING_STALE_AFTER_MS = 15_000;
 const PROJECT_KNOWLEDGE_STEP_STATS_HISTORY_LIMIT = 5;
+
+function resolveExecutionForLayer(layer: ProjectKnowledgeLayerKey): {
+  mode: ProjectKnowledgeProcessingMode;
+  quantizationStage: ProjectKnowledgeQuantizationStage;
+} | null {
+  if (layer === "dataPreprocess") {
+    return { mode: "fast", quantizationStage: "l1" };
+  }
+  if (layer === "pragmatic") {
+    return { mode: "agentic", quantizationStage: "l3" };
+  }
+  if (layer === "phrase") {
+    return null;
+  }
+  return { mode: "nlp", quantizationStage: "l2" };
+}
 
 const EMPTY_PROJECT_KNOWLEDGE_STEP_STATS: ProjectKnowledgeStepStatsState = {};
 
@@ -1887,7 +1923,15 @@ export function useProjectKnowledgeState(
 
   const startProcessingMode = useCallback(async (
     mode: ProjectKnowledgeProcessingMode,
-    options?: { force?: boolean; trigger?: string; quantizationStage?: ProjectKnowledgeQuantizationStage },
+    options?: {
+      force?: boolean;
+      trigger?: string;
+      quantizationStage?: ProjectKnowledgeQuantizationStage;
+      sourceFilePath?: string;
+      rerunLayer?: string;
+      rerunStepId?: string;
+      overwrite?: boolean;
+    },
   ) => {
     if (!params.projectId) {
       return;
@@ -1900,12 +1944,59 @@ export function useProjectKnowledgeState(
         force: options?.force ?? true,
         processingMode: mode,
         quantizationStage: options?.quantizationStage ?? getProjectKnowledgeQuantizationStage(mode),
+        sourceFilePath: options?.sourceFilePath,
+        rerunLayer: options?.rerunLayer,
+        rerunStepId: options?.rerunStepId,
+        overwrite: options?.overwrite ?? true,
       });
       setSyncState(response.state);
     } finally {
       setProcessingLaunchMode(null);
     }
   }, [params.projectId]);
+
+  const runSourceFullPipeline = useCallback(async (
+    sourceFilePath: string,
+    options?: { force?: boolean; overwrite?: boolean },
+  ) => {
+    const normalizedPath = String(sourceFilePath || "").trim();
+    if (!normalizedPath) {
+      return;
+    }
+    await startProcessingMode("agentic", {
+      force: options?.force ?? true,
+      overwrite: options?.overwrite ?? true,
+      trigger: "manual:source-file-full",
+      quantizationStage: "l3",
+      sourceFilePath: normalizedPath,
+    });
+  }, [startProcessingMode]);
+
+  const rerunKnowledgeLayer = useCallback(async (
+    layer: ProjectKnowledgeLayerKey,
+    options?: { sourceId?: string; force?: boolean; overwrite?: boolean },
+  ) => {
+    const execution = resolveExecutionForLayer(layer);
+    if (!execution) {
+      return;
+    }
+    const sourceId = String(options?.sourceId || "").trim();
+    const source = sourceId
+      ? projectSources.find((item) => String(item.id || "").trim() === sourceId)
+      : null;
+    const sourceFilePath = source && String(source.location || "").trim()
+      ? String(source.location || "").trim()
+      : undefined;
+
+    await startProcessingMode(execution.mode, {
+      force: options?.force ?? true,
+      overwrite: options?.overwrite ?? true,
+      trigger: "manual:layer-rerun",
+      quantizationStage: execution.quantizationStage,
+      sourceFilePath,
+      rerunLayer: layer,
+    });
+  }, [projectSources, startProcessingMode]);
 
   const resetGraphQuery = useCallback(() => {
     setGraphError("");
@@ -3180,6 +3271,8 @@ export function useProjectKnowledgeState(
     setActiveGraphNodeId,
     runGraphQuery,
     startProcessingMode,
+    runSourceFullPipeline,
+    rerunKnowledgeLayer,
     processingLaunchMode,
     resetGraphQuery,
     trendRangeDays,
@@ -3244,6 +3337,8 @@ export function useProjectKnowledgeState(
     resetGraphQuery,
     runGraphQuery,
     startProcessingMode,
+    runSourceFullPipeline,
+    rerunKnowledgeLayer,
     processingLaunchMode,
     selectedSourceId,
     semanticBySourceId,

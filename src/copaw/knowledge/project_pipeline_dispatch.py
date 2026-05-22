@@ -80,6 +80,7 @@ def dispatch_scheduled_sync(manager: Any, *, project_id: str) -> None:
 		source=source,
 		processing_mode=str(state.get("latest_requested_mode") or "agentic"),
 		quantization_stage=str(state.get("quantization_stage") or "").strip() or None,
+		execution_context=dict(state.get("execution_context") or {}),
 	)
 
 
@@ -94,6 +95,7 @@ def queue_or_start_locked(
 	trigger: str,
 	processing_mode: str,
 	quantization_stage: str | None,
+	execution_context: dict[str, Any] | None,
 	force: bool,
 ) -> dict[str, Any]:
 	now = datetime.now(manager.UTC)
@@ -124,6 +126,7 @@ def queue_or_start_locked(
 		"last_trigger": trigger,
 		"latest_requested_mode": processing_mode,
 		"quantization_stage": quantization_stage,
+		"execution_context": dict(execution_context or {}),
 		"semantic_engine": manager._capture_semantic_engine_state(config),
 		"scheduled_for": scheduled_for.isoformat() if scheduled_for is not None else None,
 		"stage_message": manager._merge_stage_message_with_semantic_summary(
@@ -148,6 +151,7 @@ def queue_or_start_locked(
 			source=source,
 			processing_mode=processing_mode,
 			quantization_stage=quantization_stage,
+			execution_context=execution_context,
 		)
 	return {"accepted": True, "reason": reason, "state": manager._load_state(project_id)}
 
@@ -201,6 +205,7 @@ def start_sync(
 	cooldown_seconds: float | None = None,
 	processing_mode: str = "agentic",
 	quantization_stage: str | None = None,
+	execution_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
 	with manager._lock:
 		state = manager._load_state(project_id, hydrate=False)
@@ -218,6 +223,7 @@ def start_sync(
 			"debounce_seconds": manager._normalize_seconds(debounce_seconds),
 			"cooldown_seconds": manager._normalize_seconds(cooldown_seconds),
 			"latest_source_id": source.id,
+			"execution_context": dict(execution_context or state.get("execution_context") or {}),
 		})
 		updated_at = manager._parse_iso(state.get("updated_at"))
 		stale_active = str(state.get("status") or "") in manager._active_statuses and updated_at is not None and (datetime.now(manager.UTC) - updated_at).total_seconds() >= manager.DEFAULT_PROJECT_PIPELINE_STALE_AFTER_SECONDS
@@ -239,6 +245,7 @@ def start_sync(
 			trigger=trigger,
 			processing_mode=processing_mode,
 			quantization_stage=quantization_stage,
+			execution_context=execution_context,
 			force=bool(force or stale_active),
 		)
 

@@ -201,6 +201,8 @@ function buildKnowledgeState(): ProjectKnowledgeState {
     setActiveGraphNodeId: vi.fn(),
     runGraphQuery: vi.fn().mockResolvedValue(undefined),
     startProcessingMode: vi.fn().mockResolvedValue(undefined),
+    runSourceFullPipeline: vi.fn().mockResolvedValue(undefined),
+    rerunKnowledgeLayer: vi.fn().mockResolvedValue(undefined),
     processingLaunchMode: null,
     resetGraphQuery: vi.fn(),
     trendRangeDays: 7,
@@ -313,7 +315,6 @@ describe("project knowledge panels", () => {
     expect(screen.getByText(/copaw\.projects\.knowledge\.metricsSourceLabel/)).not.toBeNull();
 
     render(<ProjectKnowledgeSourcesPanel knowledgeState={knowledgeState} projectFiles={projectFiles} />);
-    expect(screen.getByText("Sources")).not.toBeNull();
     expect(screen.getByText("original/a.md")).not.toBeNull();
     expect(screen.getByText("data/b.txt")).not.toBeNull();
     expect(screen.queryByText("No project files found")).toBeNull();
@@ -428,8 +429,7 @@ describe("project knowledge panels", () => {
 
     render(<ProjectKnowledgeProcessingPanel knowledgeState={knowledgeState} projectFiles={buildProjectFiles()} />);
     expect(screen.getByText("Processing")).not.toBeNull();
-    expect(screen.getByText("Project")).not.toBeNull();
-    expect(screen.getByText("Source")).not.toBeNull();
+    expect(screen.getAllByText("copaw.projects.knowledge.processing.layerDimension").length).toBeGreaterThan(0);
 
     render(<ProjectKnowledgeOutputsPanel knowledgeState={knowledgeState} />);
     expect(screen.getByText("Outputs")).not.toBeNull();
@@ -459,10 +459,57 @@ describe("project knowledge panels", () => {
     ] as ProjectKnowledgeState["projectSources"];
     knowledgeState.selectedSourceId = "source-a";
 
-    const { default: userEvent } = await import("@testing-library/user-event");
     render(<ProjectKnowledgeProcessingPanel knowledgeState={knowledgeState} projectFiles={buildProjectFiles()} />);
-    await userEvent.setup().click(screen.getByText("Source"));
     expect(screen.queryByText("No source-specific metrics yet; showing project-level aggregate as fallback.")).toBeNull();
+  });
+
+  it("triggers full flow run from source row action", () => {
+    const knowledgeState = buildKnowledgeState();
+    const projectFiles = buildProjectFiles();
+
+    render(
+      <ProjectKnowledgeSourcesPanel
+        knowledgeState={knowledgeState}
+        projectFiles={projectFiles}
+      />,
+    );
+
+    const row = screen.getByText("original/a.md").closest("tr");
+    expect(row).not.toBeNull();
+    fireEvent.click(within(row as HTMLTableRowElement).getByRole("button", { name: "Run Full Flow" }));
+    expect(knowledgeState.runSourceFullPipeline).toHaveBeenCalledWith("original/a.md", {
+      force: true,
+      overwrite: true,
+    });
+  });
+
+  it("triggers layer rerun from processing matrix", () => {
+    const knowledgeState = buildKnowledgeState();
+    knowledgeState.projectSources = [
+      {
+        id: "source-a",
+        name: "a.md",
+        type: "file",
+        location: "original/a.md",
+        content: "",
+        enabled: true,
+        recursive: false,
+        tags: [],
+        summary: "",
+        status: {
+          indexed: true,
+          indexed_at: null,
+          document_count: 1,
+          chunk_count: 1,
+          error: null,
+        },
+      },
+    ] as ProjectKnowledgeState["projectSources"];
+    knowledgeState.selectedSourceId = "source-a";
+
+    render(<ProjectKnowledgeProcessingPanel knowledgeState={knowledgeState} projectFiles={buildProjectFiles()} />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Rerun Layer" })[0]);
+    expect(knowledgeState.rerunKnowledgeLayer).toHaveBeenCalled();
   });
 
   it("renders NER panel", () => {

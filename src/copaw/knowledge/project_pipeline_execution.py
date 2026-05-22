@@ -47,6 +47,7 @@ def resume_sync_if_needed(
 			running_config=running_config,
 			source=source,
 			processing_mode=processing_mode,
+			execution_context=dict(state.get("execution_context") or {}),
 		)
 		return {"accepted": True, "reason": "RESUMED", "state": manager._load_state(project_id)}
 
@@ -77,6 +78,7 @@ def run_sync_loop(
 	source: KnowledgeSourceSpec,
 	processing_mode: str = "agentic",
 	quantization_stage: str | None = None,
+	execution_context: dict[str, Any] | None = None,
 ) -> None:
 	with manager._lock:
 		state = manager._load_state(project_id, hydrate=False)
@@ -90,6 +92,7 @@ def run_sync_loop(
 			"last_error": "",
 			"latest_source_id": source.id,
 			"latest_requested_mode": processing_mode,
+			"execution_context": dict(execution_context or state.get("execution_context") or {}),
 			"semantic_engine": manager._capture_semantic_engine_state(config),
 			"l2_progress": {},
 			"l2_metrics": {},
@@ -122,6 +125,7 @@ def run_sync_loop(
 			changed_paths=list(state.get("changed_paths") or []),
 			processing_mode=processing_mode,
 			quantization_stage=quantization_stage,
+			execution_context=dict(state.get("execution_context") or execution_context or {}),
 			status_callback=_status_callback,
 		)
 		normalized_result = dict(result or {})

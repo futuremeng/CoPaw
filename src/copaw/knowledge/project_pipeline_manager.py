@@ -133,6 +133,7 @@ class ProjectPipelineCommand:
 		cooldown_seconds: float | None = None,
 		processing_mode: str | None = None,
 		quantization_stage: str | None = None,
+		execution_context: dict[str, Any] | None = None,
 		idempotency_key: str | None = None,
 	) -> None:
 		self.action = action
@@ -148,6 +149,7 @@ class ProjectPipelineCommand:
 		self.cooldown_seconds = cooldown_seconds
 		self.processing_mode = (processing_mode or "").strip() or None
 		self.quantization_stage = (quantization_stage or "").strip().lower() or None
+		self.execution_context = dict(execution_context or {})
 		self.idempotency_key = self._normalize_idempotency_key(idempotency_key)
 		self.operation_id = self._build_operation_id()
 
@@ -163,6 +165,7 @@ class ProjectPipelineCommand:
 			"force": bool(self.force),
 			"processing_mode": self.processing_mode or "",
 			"quantization_stage": self.quantization_stage or "",
+			"execution_context": self.execution_context,
 			"source_id": str(getattr(self.source, "id", "") or ""),
 		}
 		encoded = json.dumps(payload, ensure_ascii=True, sort_keys=True).encode("utf-8")
@@ -280,6 +283,7 @@ class ProjectPipelineCoordinator:
 				cooldown_seconds=float(command.cooldown_seconds or 0),
 				processing_mode=str(command.processing_mode or "agentic"),
 				quantization_stage=command.quantization_stage,
+				execution_context=command.execution_context,
 			)
 			payload = dict(payload or {})
 			payload.setdefault("operation_id", command.operation_id)
@@ -396,6 +400,7 @@ class ProjectKnowledgePipelineManager:
 			"latest_pipeline_run_id": "",
 			"latest_requested_mode": "agentic",
 			"latest_source_id": "",
+			"execution_context": {},
 			"last_result": {},
 			"processing_modes": [],
 			"processing_mode_overrides": {},
@@ -572,6 +577,7 @@ class ProjectKnowledgePipelineManager:
 		trigger: str,
 		processing_mode: str,
 		quantization_stage: str | None,
+		execution_context: dict[str, Any] | None,
 		force: bool,
 	) -> dict[str, Any]:
 		return sync_dispatch.queue_or_start_locked(
@@ -584,6 +590,7 @@ class ProjectKnowledgePipelineManager:
 			trigger=trigger,
 			processing_mode=processing_mode,
 			quantization_stage=quantization_stage,
+			execution_context=execution_context,
 			force=force,
 		)
 
@@ -602,6 +609,7 @@ class ProjectKnowledgePipelineManager:
 		cooldown_seconds: float | None = None,
 		processing_mode: str = "agentic",
 		quantization_stage: str | None = None,
+		execution_context: dict[str, Any] | None = None,
 	) -> dict[str, Any]:
 		return sync_dispatch.start_sync(
 			self,
@@ -617,6 +625,7 @@ class ProjectKnowledgePipelineManager:
 			cooldown_seconds=cooldown_seconds,
 			processing_mode=processing_mode,
 			quantization_stage=quantization_stage,
+			execution_context=execution_context,
 		)
 
 	def resume_sync_if_needed(
@@ -658,6 +667,7 @@ class ProjectKnowledgePipelineManager:
 		source: KnowledgeSourceSpec,
 		processing_mode: str = "agentic",
 		quantization_stage: str | None = None,
+		execution_context: dict[str, Any] | None = None,
 	) -> None:
 		sync_execution.run_sync_loop(
 			self,
@@ -667,4 +677,5 @@ class ProjectKnowledgePipelineManager:
 			source=source,
 			processing_mode=processing_mode,
 			quantization_stage=quantization_stage,
+			execution_context=execution_context,
 		)

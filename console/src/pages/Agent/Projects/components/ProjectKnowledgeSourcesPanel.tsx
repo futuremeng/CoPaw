@@ -110,23 +110,37 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
     {
       title: t("copaw.projects.knowledge.processing.layerL2Column", "Processing"),
       key: "processing",
-      width: 140,
+      width: 240,
       render: (_: unknown, record: ProjectKnowledgeSourceRow) => {
         const sourceId = resolveSourceIdFromRow(record);
         return (
-          <Button
-            type="link"
-            size="small"
-            disabled={!sourceId || !onOpenProcessingForSource}
-            onClick={() => {
-              if (!sourceId || !onOpenProcessingForSource) {
-                return;
-              }
-              onOpenProcessingForSource(sourceId);
-            }}
-          >
-            {t("copaw.projects.knowledge.processing.openDetail", "View Processing")}
-          </Button>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <Button
+              type="link"
+              size="small"
+              disabled={!sourceId || !onOpenProcessingForSource}
+              onClick={() => {
+                if (!sourceId || !onOpenProcessingForSource) {
+                  return;
+                }
+                onOpenProcessingForSource(sourceId);
+              }}
+            >
+              {t("copaw.projects.knowledge.processing.openDetail", "View Processing")}
+            </Button>
+            <Button
+              type="link"
+              size="small"
+              onClick={() => {
+                void knowledgeState.runSourceFullPipeline(record.path, {
+                  force: true,
+                  overwrite: true,
+                });
+              }}
+            >
+              {t("copaw.projects.knowledge.processing.runFullFlow", "Run Full Flow")}
+            </Button>
+          </div>
         );
       },
     },

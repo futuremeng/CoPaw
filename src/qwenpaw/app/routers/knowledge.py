@@ -452,6 +452,27 @@ def _build_manual_ner_source_id(file_path: Path) -> str:
     return f"manual-ner-{digest}"
 
 
+def _build_project_file_source_spec(
+    *,
+    project_id: str,
+    file_path: Path,
+) -> KnowledgeSourceSpec:
+    digest = hashlib.sha1(file_path.as_posix().encode("utf-8")).hexdigest()[:16]
+    source_id = f"project-file-{digest}"
+    return KnowledgeSourceSpec(
+        id=source_id,
+        name=f"Project Source File: {file_path.name}",
+        type="file",
+        location=file_path.as_posix(),
+        content="",
+        enabled=True,
+        recursive=False,
+        project_id=project_id,
+        tags=["project", "source-file", f"project:{project_id}"],
+        summary=f"Project-scoped source file for {file_path.name}",
+    )
+
+
 def _graph_ops_for_workspace(
     workspace_dir: Path | str,
     *,
@@ -570,12 +591,16 @@ async def _resolve_knowledge_request_context(request: Request | None):
 
     if request is not None:
         try:
+            explicit_agent_requested = bool(
+                getattr(request.state, "agent_id", None)
+                or request.headers.get("X-Agent-Id")
+            )
             agent_id = resolve_agent_id_for_request(request)
             workspace = get_loaded_agent_for_request(request, agent_id=agent_id)
             if workspace is not None:
                 running_config = workspace.config.running
                 workspace_dir = workspace.workspace_dir
-            else:
+            elif explicit_agent_requested:
                 agent_ref = config.agents.profiles.get(agent_id)
                 if agent_ref is not None:
                     workspace_dir = Path(agent_ref.workspace_dir).expanduser()
@@ -679,7 +704,12 @@ async def put_knowledge_config(
         config.agents.running = running_config
 
     if previous_enabled != knowledge_config.enabled:
-        sync_knowledge_module_skills(knowledge_config.enabled)
+        try:
+            sync_knowledge_module_skills(knowledge_config.enabled)
+        except Exception:
+            # Module skills are optional runtime assets; config writes should
+            # still succeed when those assets are unavailable.
+            pass
     save_config(config)
     return _effective_knowledge_config(config.knowledge, running_config)
 
@@ -1499,16 +1529,7 @@ async def get_project_pipeline_status(request: Request):
         workspace_dir,
         project_id=project_id,
     )
-    project_workspace_dir = (Path(workspace_dir) / "projects" / project_id).resolve()
     state = await asyncio.to_thread(manager.get_state, project_id)
-    if knowledge_config.enabled and bool(getattr(knowledge_config, "memify_enabled", False)):
-        ensure_project_source_registered(
-            config.knowledge,
-            project_id=project_id,
-            project_name=project_id,
-            project_workspace_dir=str(project_workspace_dir),
-            persist=lambda: save_config(config),
-        )
     return _project_pipeline_state_with_runtime_meta(
         workspace_dir=workspace_dir,
         project_id=project_id,
@@ -1522,13 +1543,18 @@ async def run_project_pipeline(
     trigger: str = Body(default="manual"),
     changed_paths: list[str] | None = Body(default=None),
     force: bool = Body(default=False),
-    processing_mode: str = Body(default="agentic"),
+    processing_mode: str | None = Body(default=None),
     quantization_stage: str | None = Body(default=None),
+    source_file_path: str | None = Body(default=None),
+    rerun_layer: str | None = Body(default=None),
+    rerun_step_id: str | None = Body(default=None),
+    overwrite: bool = Body(default=True),
     idempotency_key: str = Body(default=""),
 ):
     """Start project-scoped automatic knowledge pipeline."""
     config, knowledge_config, running_config, workspace_dir, _ = await _resolve_knowledge_request_context(request)
     _ensure_knowledge_enabled_flag(knowledge_config.enabled)
+    processing_mode_explicit = processing_mode is not None
     normalized_mode = (processing_mode or "agentic").strip().lower() or "agentic"
     normalized_stage = (quantization_stage or "").strip().lower() or None
     if normalized_mode not in {"fast", "nlp", "agentic"}:
@@ -1542,23 +1568,53 @@ async def run_project_pipeline(
     if not project_id:
         raise HTTPException(status_code=400, detail="PROJECT_ID_REQUIRED")
 
+    semantic_engine = _manager_for_workspace(
+        workspace_dir,
+        project_id=project_id,
+    ).get_semantic_engine_state(knowledge_config)
+    semantic_status = str(semantic_engine.get("status") or "").strip().lower()
+    if (
+        not processing_mode_explicit
+        and normalized_mode in {"nlp", "agentic"}
+        and semantic_status in {"unavailable", "error"}
+    ):
+        normalized_mode = "fast"
+        normalized_stage = "l1"
+
     project_workspace_dir = (Path(workspace_dir) / "projects" / project_id).resolve()
     if not project_workspace_dir.exists() or not project_workspace_dir.is_dir():
         raise HTTPException(status_code=404, detail="PROJECT_WORKSPACE_NOT_FOUND")
 
-    ensure_project_source_registered(
-        config.knowledge,
-        project_id=project_id,
-        project_name=project_id,
-        project_workspace_dir=str(project_workspace_dir),
-        persist=lambda: save_config(config),
-    )
+    resolved_source_file_path = ""
+    normalized_rerun_layer = str(rerun_layer or "").strip().lower()
+    normalized_rerun_step_id = str(rerun_step_id or "").strip().lower()
+    if source_file_path and str(source_file_path).strip():
+        resolved_file = _resolve_ner_target_file_path(
+            workspace_dir=workspace_dir,
+            project_id=project_id,
+            file_path=str(source_file_path),
+        )
+        resolved_source_file_path = resolved_file.relative_to(project_workspace_dir).as_posix()
+        source = _build_project_file_source_spec(
+            project_id=project_id,
+            file_path=resolved_file,
+        )
+        if not changed_paths:
+            changed_paths = [resolved_source_file_path]
+    else:
+        source = build_project_source_spec(
+            project_id=project_id,
+            project_name=project_id,
+            project_workspace_dir=str(project_workspace_dir),
+        )
 
-    source = build_project_source_spec(
-        project_id=project_id,
-        project_name=project_id,
-        project_workspace_dir=str(project_workspace_dir),
-    )
+    execution_context = {
+        "scope": "source_file" if resolved_source_file_path else "project",
+        "source_file_path": resolved_source_file_path,
+        "rerun_layer": normalized_rerun_layer,
+        "rerun_step_id": normalized_rerun_step_id,
+        "overwrite": bool(overwrite),
+    }
     coordinator = _project_pipeline_coordinator_for_workspace(
         workspace_dir,
         project_id=project_id,
@@ -1577,6 +1633,7 @@ async def run_project_pipeline(
                 force=bool(force),
                 processing_mode=normalized_mode,
                 quantization_stage=normalized_stage,
+                execution_context=execution_context,
                 idempotency_key=(idempotency_key or "").strip() or None,
             ),
         )

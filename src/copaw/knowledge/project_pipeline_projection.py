@@ -37,10 +37,23 @@ def _merge_runtime_nlp_progress(
 	runtime: dict[str, Any],
 ) -> dict[str, Any]:
 	merged = dict(hydrated)
-	for key in ("mode", "status", "stage", "summary", "updated_at"):
+	hydrated_status = str(hydrated.get("status") or "").strip().lower()
+	runtime_status = str(runtime.get("status") or "").strip().lower()
+	allow_runtime_status_override = True
+	if (
+		runtime_status in {"queued", "pending", "idle"}
+		and hydrated_status in {"blocked", "ready", "failed"}
+	):
+		allow_runtime_status_override = False
+
+	for key in ("mode", "stage", "summary", "updated_at"):
 		value = runtime.get(key)
 		if value not in {None, ""}:
 			merged[key] = value
+	if allow_runtime_status_override:
+		status_value = runtime.get("status")
+		if status_value not in {None, ""}:
+			merged["status"] = status_value
 	for key in ("total_chunks", "entity_count", "relation_count"):
 		merged[key] = max(_safe_int(merged.get(key)), _safe_int(runtime.get(key)))
 
@@ -52,7 +65,17 @@ def _merge_runtime_nlp_progress(
 			continue
 		stage = _as_dict(hydrated_stages.get(stage_key))
 		stage_merged = dict(stage)
+		hydrated_stage_status = str(stage.get("status") or "").strip().lower()
+		runtime_stage_status = str(runtime_stage.get("status") or "").strip().lower()
+		allow_runtime_stage_status_override = True
+		if (
+			runtime_stage_status in {"queued", "pending", "idle"}
+			and hydrated_stage_status in {"ready", "running", "failed", "unavailable"}
+		):
+			allow_runtime_stage_status_override = False
 		for key in ("key", "required", "status", "reason_code", "reason"):
+			if key == "status" and not allow_runtime_stage_status_override:
+				continue
 			value = runtime_stage.get(key)
 			if value not in {None, ""}:
 				stage_merged[key] = value

@@ -396,6 +396,13 @@ export interface ProjectKnowledgePipelineState {
   latest_job_id: string;
   latest_pipeline_run_id?: string;
   latest_source_id: string;
+  execution_context?: {
+    scope?: "project" | "source_file";
+    source_file_path?: string;
+    rerun_layer?: string;
+    rerun_step_id?: string;
+    overwrite?: boolean;
+  };
   last_result: Record<string, unknown>;
   operation_id?: string;
   idempotency_key?: string;
@@ -429,6 +436,10 @@ export interface ProjectKnowledgePipelineRunRequest {
   force?: boolean;
   processingMode?: ProjectKnowledgeProcessingMode;
   quantizationStage?: ProjectKnowledgeQuantizationStage;
+  sourceFilePath?: string;
+  rerunLayer?: string;
+  rerunStepId?: string;
+  overwrite?: boolean;
   idempotencyKey?: string;
 }
 
