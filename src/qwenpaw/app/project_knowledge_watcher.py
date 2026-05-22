@@ -102,6 +102,21 @@ def _normalize_auto_sink(raw_value: Any) -> bool:
     return True
 
 
+def _normalize_project_agent_knowledge_registered(raw_value: Any) -> bool:
+    if isinstance(raw_value, bool):
+        return raw_value
+    if isinstance(raw_value, (int, float)):
+        return bool(raw_value)
+    text = str(raw_value or "").strip().lower()
+    if not text:
+        return False
+    if text in {"1", "true", "yes", "on", "enabled"}:
+        return True
+    if text in {"0", "false", "no", "off", "disabled"}:
+        return False
+    return False
+
+
 class ProjectKnowledgeWatcher:
     """Poll project workspaces and trigger automatic knowledge pipeline on changes."""
 
@@ -223,6 +238,8 @@ class ProjectKnowledgeWatcher:
         for project_id, snapshot in current.items():
             if not snapshot.get("auto_enabled"):
                 continue
+            if not bool(snapshot.get("project_knowledge_registered")):
+                continue
             if (
                 normalize_project_file_monitoring_state(
                     snapshot.get("file_monitoring_state"),
@@ -295,6 +312,8 @@ class ProjectKnowledgeWatcher:
 
         for project_id, snapshot in current.items():
             if not snapshot.get("auto_enabled"):
+                continue
+            if not bool(snapshot.get("project_knowledge_registered")):
                 continue
             if (
                 normalize_project_file_monitoring_state(
@@ -396,6 +415,9 @@ class ProjectKnowledgeWatcher:
         project_id = str(meta.get("id") or project_dir.name).strip() or project_dir.name
         project_name = str(meta.get("name") or project_id).strip() or project_id
         auto_enabled = _normalize_auto_sink(meta.get("project_auto_knowledge_sink"))
+        project_knowledge_registered = _normalize_project_agent_knowledge_registered(
+            meta.get("project_agent_knowledge_registered")
+        )
 
         file_map: dict[str, str] = {}
         for path in sorted(project_dir.rglob("*"), key=lambda item: item.as_posix().lower()):
@@ -422,6 +444,7 @@ class ProjectKnowledgeWatcher:
             "project_dir": str(project_dir),
             "metadata_file": str(metadata_file),
             "auto_enabled": auto_enabled,
+            "project_knowledge_registered": project_knowledge_registered,
             "file_monitoring_state": normalize_project_file_monitoring_state(
                 meta.get("file_monitoring_state"),
             ),

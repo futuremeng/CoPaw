@@ -422,18 +422,35 @@ def main():
 		if task_result is None and normalized_task_name == "ner_msra":
 			if model is None:
 				model = choose_ner_model(hanlp, spec.get("model_id"))
-			if not token_input and callable(tokenizer):
+			if callable(model):
 				try:
-					token_input = run_tokenize_with_fallback(hanlp, tokenizer, text)
-				except Exception:
-					token_input = []
-			if callable(model) and token_input:
-				try:
-					task_result = model(token_input)
+					task_result = model(text)
+				except IndexError:
+					if not token_input and callable(tokenizer):
+						try:
+							token_input = run_tokenize_with_fallback(hanlp, tokenizer, text)
+						except Exception:
+							token_input = []
+					if token_input:
+						try:
+							task_result = model(token_input)
+						except Exception:
+							task_result = None
 				except Exception:
 					task_result = None
+			if task_result is None and callable(model):
+				if not token_input and callable(tokenizer):
+					try:
+						token_input = run_tokenize_with_fallback(hanlp, tokenizer, text)
+					except Exception:
+						token_input = []
+				if token_input:
+					try:
+						task_result = model(token_input)
+					except Exception:
+						task_result = None
 
-		if task_result is None and callable(parse) and normalized_task_name != "ner_msra":
+		if task_result is None and callable(parse):
             try:
                 task_result = extract_parse_result(parse(text, tasks=[task_name]), task_name)
             except Exception:

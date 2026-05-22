@@ -1769,6 +1769,7 @@ def _maybe_start_project_auto_knowledge_sync(
     if (
         summary is None
         or not summary.project_auto_knowledge_sink
+        or not summary.project_agent_knowledge_registered
         or summary.file_monitoring_state != PROJECT_FILE_MONITORING_ACTIVE
     ):
         return None
@@ -1777,14 +1778,6 @@ def _maybe_start_project_auto_knowledge_sync(
     knowledge_config = config.knowledge
     if not knowledge_config.enabled or not bool(getattr(knowledge_config, "memify_enabled", False)):
         return None
-
-    ensure_project_source_registered(
-        config.knowledge,
-        project_id=project_id,
-        project_name=summary.name or project_id,
-        project_workspace_dir=str(project_dir),
-        persist=lambda: save_config(config),
-    )
 
     source = build_project_source_spec(
         project_id=project_id,

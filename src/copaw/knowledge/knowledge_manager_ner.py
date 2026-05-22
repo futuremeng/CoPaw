@@ -94,14 +94,19 @@ def write_chunk_ner_artifacts(
             map_rows=map_rows,
             source=source,
             allow_fallback=source.type in {"text", "chat"},
+            chunks_only=manager._source_requires_chunks_only(source),
         )
-        if ner_input_mode == "interlinear_required" or not str(resolved_text or "").strip():
+        if ner_input_mode in {"interlinear_required", "chunks_required"} or not str(resolved_text or "").strip():
             for chunk in group:
                 chunk["ner_status"] = "unavailable"
                 chunk["ner_entity_count"] = 0
-                chunk["ner_input_mode"] = "interlinear_required"
-                chunk["ner_reason_code"] = "INTERLINEAR_REQUIRED"
-                chunk["ner_reason"] = "NER requires interlinear input and fallback is disabled."
+                chunk["ner_input_mode"] = ner_input_mode
+                if ner_input_mode == "chunks_required":
+                    chunk["ner_reason_code"] = "CHUNKS_REQUIRED"
+                    chunk["ner_reason"] = "NER requires chunk text input and fallback is disabled."
+                else:
+                    chunk["ner_reason_code"] = "INTERLINEAR_REQUIRED"
+                    chunk["ner_reason"] = "NER requires interlinear input and fallback is disabled."
             if progress_callback is not None:
                 progress_callback(
                     {

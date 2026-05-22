@@ -188,9 +188,10 @@ def write_chunk_tokenize_artifacts(
 			map_rows=map_rows,
 			source=source,
 			allow_fallback=source.type in {"text", "chat"},
+			chunks_only=manager._source_requires_chunks_only(source),
 		)
-		if tokenize_input_mode == "interlinear_required" or not str(resolved_text or "").strip():
-			raise RuntimeError("Tokenize stage requires non-empty interlinear-aligned input text.")
+		if tokenize_input_mode in {"interlinear_required", "chunks_required"} or not str(resolved_text or "").strip():
+			raise RuntimeError("Tokenize stage requires non-empty aligned chunk/interlinear input text.")
 
 		resolved_lines = str(resolved_text or "").splitlines()
 		total_line_count = len(resolved_lines)

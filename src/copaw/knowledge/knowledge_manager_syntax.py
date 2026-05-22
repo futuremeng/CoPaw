@@ -107,11 +107,12 @@ def write_chunk_syntax_artifacts(
             map_rows=map_rows,
             source=source,
             allow_fallback=source.type in {"text", "chat"},
+            chunks_only=manager._source_requires_chunks_only(source),
         )
-        if syntax_input_mode == "interlinear_required" or not str(resolved_text or "").strip():
+        if syntax_input_mode in {"interlinear_required", "chunks_required"} or not str(resolved_text or "").strip():
             for chunk in group:
                 chunk["syntax_status"] = "unavailable"
-                chunk["syntax_input_mode"] = "interlinear_required"
+                chunk["syntax_input_mode"] = syntax_input_mode
                 chunk["syntax_interlinear_path"] = str(interlinear_path or "")
                 chunk["syntax_sentence_count"] = 0
                 chunk["syntax_token_count"] = 0

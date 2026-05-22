@@ -34,7 +34,7 @@ async def test_project_knowledge_watcher_triggers_bootstrap_sync(
     project_dir = tmp_path / "projects" / "project-a"
     project_dir.mkdir(parents=True, exist_ok=True)
     (project_dir / "PROJECT.md").write_text(
-        "---\nid: project-a\nname: Project A\nproject_auto_knowledge_sink: true\n---\n",
+        "---\nid: project-a\nname: Project A\nproject_auto_knowledge_sink: true\nproject_agent_knowledge_registered: true\n---\n",
         encoding="utf-8",
     )
     (project_dir / "original" / "brief.md").parent.mkdir(parents=True, exist_ok=True)
@@ -107,7 +107,58 @@ async def test_project_knowledge_watcher_skips_idle_projects_before_first_file_a
         "id: project-idle\n"
         "name: Project Idle\n"
         "project_auto_knowledge_sink: true\n"
+        "project_agent_knowledge_registered: true\n"
         "file_monitoring_state: idle\n"
+        "---\n",
+        encoding="utf-8",
+    )
+    (project_dir / "original" / "brief.md").parent.mkdir(parents=True, exist_ok=True)
+    (project_dir / "original" / "brief.md").write_text("hello", encoding="utf-8")
+
+    config = Config()
+    config.knowledge.enabled = True
+    config.knowledge.memify_enabled = True
+
+    calls: list[dict] = []
+
+    monkeypatch.setattr(watcher_module, "load_config", lambda: config)
+    monkeypatch.setattr(
+        watcher_module,
+        "load_agent_config",
+        lambda _agent_id: type("AgentCfg", (), {"running": config.agents.running})(),
+    )
+    monkeypatch.setattr("qwenpaw.config.utils.save_config", lambda _config: None)
+    monkeypatch.setattr(
+        watcher_module.ProjectKnowledgePipelineManager,
+        "start_sync",
+        lambda self, **kwargs: calls.append(kwargs),
+    )
+
+    watcher = watcher_module.ProjectKnowledgeWatcher(
+        agent_id="default",
+        workspace_dir=tmp_path,
+        poll_interval=0.01,
+    )
+    current = watcher._collect_snapshots()
+    await watcher._handle_snapshot_changes(current)
+
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_project_knowledge_watcher_skips_unregistered_project_sources(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    project_dir = tmp_path / "projects" / "project-unregistered"
+    project_dir.mkdir(parents=True, exist_ok=True)
+    (project_dir / "PROJECT.md").write_text(
+        "---\n"
+        "id: project-unregistered\n"
+        "name: Project Unregistered\n"
+        "project_auto_knowledge_sink: true\n"
+        "project_agent_knowledge_registered: false\n"
+        "file_monitoring_state: active\n"
         "---\n",
         encoding="utf-8",
     )
@@ -152,7 +203,7 @@ async def test_project_knowledge_watcher_resume_syncs_on_startup(
     project_dir = tmp_path / "projects" / "project-resume"
     project_dir.mkdir(parents=True, exist_ok=True)
     (project_dir / "PROJECT.md").write_text(
-        "---\nid: project-resume\nname: Project Resume\nproject_auto_knowledge_sink: true\n---\n",
+        "---\nid: project-resume\nname: Project Resume\nproject_auto_knowledge_sink: true\nproject_agent_knowledge_registered: true\n---\n",
         encoding="utf-8",
     )
     (project_dir / "original" / "note.md").parent.mkdir(parents=True, exist_ok=True)
@@ -197,7 +248,7 @@ async def test_project_knowledge_watcher_bootstrap_writes_project_chunks_automat
     project_dir = tmp_path / "projects" / "project-auto-chunks"
     project_dir.mkdir(parents=True, exist_ok=True)
     (project_dir / "PROJECT.md").write_text(
-        "---\nid: project-auto-chunks\nname: Project Auto Chunks\nproject_auto_knowledge_sink: true\n---\n\nproject bootstrap body\n",
+        "---\nid: project-auto-chunks\nname: Project Auto Chunks\nproject_auto_knowledge_sink: true\nproject_agent_knowledge_registered: true\n---\n\nproject bootstrap body\n",
         encoding="utf-8",
     )
     brief_path = project_dir / "original" / "brief.md"
@@ -291,7 +342,7 @@ async def test_project_knowledge_watcher_change_updates_project_chunks_automatic
     project_dir.mkdir(parents=True, exist_ok=True)
     project_md_path = project_dir / "PROJECT.md"
     project_md_path.write_text(
-        "---\nid: project-change-chunks\nname: Project Change Chunks\nproject_auto_knowledge_sink: true\n---\n\nbody v1\n",
+        "---\nid: project-change-chunks\nname: Project Change Chunks\nproject_auto_knowledge_sink: true\nproject_agent_knowledge_registered: true\n---\n\nbody v1\n",
         encoding="utf-8",
     )
 
@@ -373,7 +424,7 @@ async def test_project_knowledge_watcher_change_updates_project_chunks_automatic
 
     time.sleep(0.02)
     project_md_path.write_text(
-        "---\nid: project-change-chunks\nname: Project Change Chunks\nproject_auto_knowledge_sink: true\n---\n\nbody v2-updated\n",
+        "---\nid: project-change-chunks\nname: Project Change Chunks\nproject_auto_knowledge_sink: true\nproject_agent_knowledge_registered: true\n---\n\nbody v2-updated\n",
         encoding="utf-8",
     )
     bumped = time.time() + 2
@@ -416,7 +467,7 @@ async def test_project_knowledge_watcher_triggers_on_file_change(
     project_dir.mkdir(parents=True, exist_ok=True)
     project_md_path = project_dir / "PROJECT.md"
     project_md_path.write_text(
-        "---\nid: project-b\nname: Project B\nproject_auto_knowledge_sink: true\n---\n\nbody v1\n",
+        "---\nid: project-b\nname: Project B\nproject_auto_knowledge_sink: true\nproject_agent_knowledge_registered: true\n---\n\nbody v1\n",
         encoding="utf-8",
     )
 
@@ -453,7 +504,7 @@ async def test_project_knowledge_watcher_triggers_on_file_change(
 
     time.sleep(0.02)
     project_md_path.write_text(
-        "---\nid: project-b\nname: Project B\nproject_auto_knowledge_sink: true\n---\n\nbody v2\n",
+        "---\nid: project-b\nname: Project B\nproject_auto_knowledge_sink: true\nproject_agent_knowledge_registered: true\n---\n\nbody v2\n",
         encoding="utf-8",
     )
     bumped = time.time() + 2
@@ -479,7 +530,7 @@ async def test_project_knowledge_watcher_records_recent_updates_for_visible_chan
     project_dir.mkdir(parents=True, exist_ok=True)
     metadata_path = project_dir / "PROJECT.md"
     metadata_path.write_text(
-        "---\nid: project-visible\nname: Project Visible\nproject_auto_knowledge_sink: true\n---\n",
+        "---\nid: project-visible\nname: Project Visible\nproject_auto_knowledge_sink: true\nproject_agent_knowledge_registered: true\n---\n",
         encoding="utf-8",
     )
     readme_path = project_dir / "README.md"
@@ -608,7 +659,7 @@ async def test_project_knowledge_watcher_triggers_on_processing_config_change(
     project_dir = tmp_path / "projects" / "project-c"
     project_dir.mkdir(parents=True, exist_ok=True)
     (project_dir / "PROJECT.md").write_text(
-        "---\nid: project-c\nname: Project C\nproject_auto_knowledge_sink: true\n---\n",
+        "---\nid: project-c\nname: Project C\nproject_auto_knowledge_sink: true\nproject_agent_knowledge_registered: true\n---\n",
         encoding="utf-8",
     )
     note_path = project_dir / "original" / "note.md"

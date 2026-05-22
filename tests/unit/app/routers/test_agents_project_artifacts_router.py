@@ -284,6 +284,12 @@ def test_project_knowledge_watch_lease_endpoint_toggles_monitoring_state(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ):
+    monkeypatch.setattr(
+        agents_router_module,
+        "_resolve_agent_workspace_dir",
+        lambda _agent_id: tmp_path,
+    )
+
     manager = _FakeManager(str(tmp_path))
     monkeypatch.setattr(
         agents_router_module,

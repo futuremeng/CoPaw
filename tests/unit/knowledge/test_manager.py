@@ -427,6 +427,97 @@ def test_search_supports_scope_filters(tmp_path: Path):
     assert all(item["source_id"] == "agent-source" for item in agent_result["hits"])
 
 
+def test_search_skips_unregistered_project_workspace_source(tmp_path: Path):
+    config = Config().knowledge
+
+    workspace_source = KnowledgeSourceSpec(
+        id="project-project-demo-workspace",
+        name="Project Workspace: Demo",
+        type="directory",
+        location=str(tmp_path / "projects" / "project-demo"),
+        content="",
+        enabled=True,
+        recursive=True,
+        project_id="project-demo",
+        tags=["project"],
+        summary="",
+    )
+    agent_source = KnowledgeSourceSpec(
+        id="agent-source",
+        name="Agent Source",
+        type="text",
+        content="Gamma knowledge in agent scope.",
+        enabled=True,
+        recursive=False,
+        tags=["scope:agent:demo-agent"],
+        summary="",
+    )
+    config.sources = [workspace_source, agent_source]
+
+    manager = KnowledgeManager(tmp_path)
+
+    project_dir = tmp_path / "projects" / "project-demo"
+    project_dir.mkdir(parents=True, exist_ok=True)
+    (project_dir / "PROJECT.md").write_text(
+        "---\n"
+        "id: project-demo\n"
+        "name: Project Demo\n"
+        "project_agent_knowledge_registered: false\n"
+        "---\n",
+        encoding="utf-8",
+    )
+
+    project_interlinear_path = manager.root_dir / "interlinear" / "project.txt"
+    project_interlinear_path.parent.mkdir(parents=True, exist_ok=True)
+    project_interlinear_path.write_text("gamma project scoped content", encoding="utf-8")
+    agent_interlinear_path = manager.root_dir / "interlinear" / "agent.txt"
+    agent_interlinear_path.parent.mkdir(parents=True, exist_ok=True)
+    agent_interlinear_path.write_text("gamma agent scoped content", encoding="utf-8")
+
+    def fake_manifest(source_id: str) -> dict[str, object]:
+        if source_id == "project-project-demo-workspace":
+            return {
+                "artifacts": [
+                    {
+                        "path": "interlinear/project.txt",
+                        "document_path": "project.md",
+                        "title": "Project",
+                        "line_no": 1,
+                    }
+                ]
+            }
+        if source_id == "agent-source":
+            return {
+                "artifacts": [
+                    {
+                        "path": "interlinear/agent.txt",
+                        "document_path": "agent.md",
+                        "title": "Agent",
+                        "line_no": 1,
+                    }
+                ]
+            }
+        return {"artifacts": []}
+
+    manager._load_source_interlinear_manifest = fake_manifest  # type: ignore[method-assign]
+
+    disabled_result = manager.search("gamma", config, limit=10)
+    assert disabled_result["hits"]
+    assert all(item["source_id"] != "project-project-demo-workspace" for item in disabled_result["hits"])
+
+    (project_dir / "PROJECT.md").write_text(
+        "---\n"
+        "id: project-demo\n"
+        "name: Project Demo\n"
+        "project_agent_knowledge_registered: true\n"
+        "---\n",
+        encoding="utf-8",
+    )
+
+    enabled_result = manager.search("gamma", config, limit=10)
+    assert any(item["source_id"] == "project-project-demo-workspace" for item in enabled_result["hits"])
+
+
 def test_process_source_candidates_reads_snapshot_text_without_chunk_text(tmp_path: Path):
     config = Config().knowledge
     config.index.chunk_size = 10_000
@@ -751,6 +842,51 @@ def test_index_source_directory_ner_requires_interlinear_without_fallback(tmp_pa
     assert "cor_path" not in chunk
     assert "cor_structured_path" not in chunk
     assert "cor_annotated_path" not in chunk
+
+
+def test_index_source_project_directory_uses_chunks_input_mode(tmp_path: Path):
+    project_root = tmp_path / "project-chunks-input"
+    project_root.mkdir(parents=True, exist_ok=True)
+    (project_root / "README.md").write_text("AgentRunner uses ToolDispatcher.", encoding="utf-8")
+
+    config = Config().knowledge
+    config.index.chunk_size = 10_000
+    source = KnowledgeSourceSpec(
+        id="project-chunks-input-workspace",
+        name="Project Chunks Input",
+        type="directory",
+        location=str(project_root),
+        content="",
+        enabled=True,
+        recursive=True,
+        project_id="project-chunks-input",
+        tags=["project"],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    ready_state = {
+        "engine": "hanlp",
+        "status": "ready",
+        "reason_code": "HANLP_READY",
+        "reason": "HanLP semantic engine is ready.",
+    }
+    with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
+        manager._semantic_runtime,
+        "tokenize",
+        return_value=(
+            ["AgentRunner", "ToolDispatcher"],
+            ready_state,
+        ),
+    ), patch.object(manager, "_resolve_chunk_interlinear_path", return_value=""):
+        manager.index_source(source, config)
+
+    payload = json.loads(manager._source_index_path(source.id).read_text(encoding="utf-8"))
+    chunk = payload["chunks"][0]
+
+    assert chunk["ner_input_mode"] == "chunks_full_document"
+    assert chunk["syntax_input_mode"] == "chunks_full_document"
+    assert chunk["cor_input_mode"] == "chunks_full_document"
 
 
 def test_index_source_skips_ner_files_when_semantic_unavailable(tmp_path: Path):

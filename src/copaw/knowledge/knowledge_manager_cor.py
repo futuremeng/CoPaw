@@ -102,14 +102,19 @@ def write_chunk_cor_artifacts(
             map_rows=map_rows,
             source=source,
             allow_fallback=source.type in {"text", "chat"},
+            chunks_only=manager._source_requires_chunks_only(source),
         )
-        if cor_input_mode == "interlinear_required" or not str(chunk_text or "").strip():
+        if cor_input_mode in {"interlinear_required", "chunks_required"} or not str(chunk_text or "").strip():
             for chunk in group:
                 chunk["cor_status"] = "unavailable"
-                chunk["cor_input_mode"] = "interlinear_required"
+                chunk["cor_input_mode"] = cor_input_mode
                 chunk["cor_interlinear_path"] = str(interlinear_path or "")
-                chunk["cor_reason_code"] = "INTERLINEAR_REQUIRED"
-                chunk["cor_reason"] = "COR requires interlinear input and fallback is disabled."
+                if cor_input_mode == "chunks_required":
+                    chunk["cor_reason_code"] = "CHUNKS_REQUIRED"
+                    chunk["cor_reason"] = "COR requires chunk text input and fallback is disabled."
+                else:
+                    chunk["cor_reason_code"] = "INTERLINEAR_REQUIRED"
+                    chunk["cor_reason"] = "COR requires interlinear input and fallback is disabled."
             if progress_callback is not None:
                 progress_callback(
                     {

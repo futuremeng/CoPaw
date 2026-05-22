@@ -48,7 +48,7 @@ class GraphOpsManager:
         self,
         working_dir: Path | str = WORKING_DIR,
         *,
-        knowledge_dirname: str = "knowledge",
+        knowledge_dirname: str = ".knowledge",
     ) -> None:
         self.working_dir = Path(working_dir)
         self.knowledge_dirname = knowledge_dirname

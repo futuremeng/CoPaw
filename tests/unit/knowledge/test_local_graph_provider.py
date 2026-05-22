@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from copaw.config.config import Config, KnowledgeSourceSpec
-from copaw.knowledge.local_graph_store import persist_local_graph, query_local_graph
+from copaw.knowledge.local_graph_provider import persist_local_graph, query_local_graph
 from copaw.knowledge.manager import KnowledgeManager
 
 

@@ -1190,12 +1190,15 @@ class KnowledgeManager:
             return {"query": query, "hits": []}
 
         hits: list[dict[str, Any]] = []
+        project_registration_cache: dict[str, bool] = {}
         project_scope_set = {
             item.strip()
             for item in (project_scope or [])
             if item and item.strip()
         }
         for source in config.sources:
+            if not self._project_registration_enabled(source, cache=project_registration_cache):
+                continue
             if source_ids and source.id not in source_ids:
                 continue
             if source_types and source.type not in source_types:
@@ -1213,6 +1216,47 @@ class KnowledgeManager:
                     continue
             interlinear_manifest = self._load_source_interlinear_manifest(source.id)
             artifacts = interlinear_manifest.get("artifacts", [])
+            if not artifacts:
+                payload = self._load_index_payload(source.id) or {}
+                for chunk in payload.get("chunks") or []:
+                    if not isinstance(chunk, dict):
+                        continue
+                    chunk_path = str(chunk.get("chunk_path") or "").strip()
+                    if not chunk_path:
+                        continue
+                    try:
+                        text = (self.root_dir / chunk_path).read_text(encoding="utf-8")
+                    except Exception:
+                        text = ""
+                    score = self._score_chunk(text, terms)
+                    if score <= 0:
+                        continue
+                    chunk_id = str(chunk.get("chunk_id") or "").strip() or source.id
+                    evidence_id = self._build_search_evidence_id(
+                        source_id=source.id,
+                        document_path=str(chunk.get("document_path") or ""),
+                        chunk_path=chunk_path,
+                        line_no=0,
+                    )
+                    hits.append(
+                        {
+                            "source_id": source.id,
+                            "source_name": source_map[source.id].name,
+                            "source_type": source.type,
+                            "document_path": chunk.get("document_path"),
+                            "document_title": chunk.get("document_title") or chunk.get("document_path"),
+                            "chunk_id": chunk_id,
+                            "chunk_path": chunk_path,
+                            "line_no": 0,
+                            "evidence_id": evidence_id,
+                            "scope_type": source_scope_type,
+                            "scope_id": source_scope_id,
+                            "scope_priority": 100 if source_scope_type == "agent" else 50,
+                            "score": score,
+                            "snippet": self._build_snippet(text, terms),
+                        },
+                    )
+                continue
             for artifact in artifacts:
                 interlinear_path = artifact.get("path")
                 if not interlinear_path:
@@ -2391,7 +2435,130 @@ class KnowledgeManager:
         if source_content:
             return source_content, "source_content_fallback"
 
+        chunk_text_parts: list[str] = []
+        for chunk in chunks:
+            chunk_path = str(chunk.get("chunk_path") or "").strip()
+            if not chunk_path:
+                continue
+            try:
+                chunk_text = (self.root_dir / chunk_path).read_text(encoding="utf-8").strip()
+            except FileNotFoundError:
+                continue
+            if chunk_text:
+                chunk_text_parts.append(chunk_text)
+        if chunk_text_parts:
+            return "\n".join(chunk_text_parts), "chunk_path_fallback"
+
         return "", "source_text_unavailable"
+
+    def _resolve_chunks_text(self, chunks: list[dict[str, Any]]) -> tuple[str, str]:
+        parts: list[str] = []
+        for chunk in chunks:
+            chunk_path = str(chunk.get("chunk_path") or "").strip()
+            if not chunk_path:
+                continue
+            try:
+                chunk_text = (self.root_dir / chunk_path).read_text(encoding="utf-8").strip()
+            except FileNotFoundError:
+                continue
+            if chunk_text:
+                parts.append(chunk_text)
+        if parts:
+            return "\n".join(parts), "chunks_full_document"
+        return "", "chunks_text_unavailable"
+
+    @staticmethod
+    def _source_requires_chunks_only(source: KnowledgeSourceSpec | None) -> bool:
+        if source is None:
+            return False
+        project_id = str(getattr(source, "project_id", "") or "").strip()
+        if project_id:
+            return True
+        source_id = str(getattr(source, "id", "") or "").strip().lower()
+        return source_id.startswith("project-") and source_id.endswith("-workspace")
+
+    @staticmethod
+    def _is_project_workspace_source(source: KnowledgeSourceSpec) -> bool:
+        source_id = str(getattr(source, "id", "") or "").strip().lower()
+        if not (source_id.startswith("project-") and source_id.endswith("-workspace")):
+            return False
+        return str(getattr(source, "type", "") or "").strip().lower() == "directory"
+
+    @staticmethod
+    def _normalize_project_registration_flag(raw_value: Any) -> bool:
+        if isinstance(raw_value, bool):
+            return raw_value
+        if isinstance(raw_value, (int, float)):
+            return bool(raw_value)
+        text = str(raw_value or "").strip().lower()
+        if not text:
+            return False
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return False
+
+    @staticmethod
+    def _parse_markdown_frontmatter(text: str) -> dict[str, Any]:
+        raw = str(text or "")
+        if not raw.startswith("---\n"):
+            return {}
+        lines = raw.splitlines()
+        end = -1
+        for idx in range(1, len(lines)):
+            if lines[idx].strip() == "---":
+                end = idx
+                break
+        if end == -1:
+            return {}
+        header = "\n".join(lines[1:end])
+        try:
+            import yaml
+
+            data = yaml.safe_load(header) or {}
+        except Exception:
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def _project_registration_enabled(
+        self,
+        source: KnowledgeSourceSpec,
+        cache: dict[str, bool] | None = None,
+    ) -> bool:
+        if not self._is_project_workspace_source(source):
+            return True
+
+        project_id = str(getattr(source, "project_id", "") or "").strip()
+        if not project_id:
+            return False
+        if cache is not None and project_id in cache:
+            return cache[project_id]
+
+        metadata_candidates = (
+            self.project_root / "projects" / project_id / ".agent" / "PROJECT.md",
+            self.project_root / "projects" / project_id / ".agent" / "project.md",
+            self.project_root / "projects" / project_id / "PROJECT.md",
+            self.project_root / "projects" / project_id / "project.md",
+        )
+        enabled = False
+        for metadata_path in metadata_candidates:
+            if not metadata_path.exists() or not metadata_path.is_file():
+                continue
+            try:
+                payload = self._parse_markdown_frontmatter(
+                    metadata_path.read_text(encoding="utf-8", errors="ignore")
+                )
+            except Exception:
+                payload = {}
+            enabled = self._normalize_project_registration_flag(
+                payload.get("project_agent_knowledge_registered")
+            )
+            break
+
+        if cache is not None:
+            cache[project_id] = enabled
+        return enabled
 
     @staticmethod
     def _chunk_document_group_key(chunk: dict[str, Any]) -> str:
@@ -2424,7 +2591,17 @@ class KnowledgeManager:
         map_rows: list[dict[str, str]],
         source: KnowledgeSourceSpec | None = None,
         allow_fallback: bool = True,
+        chunks_only: bool = False,
     ) -> tuple[str, str, str, str]:
+        if chunks_only:
+            chunks_text, chunks_input_mode = self._resolve_chunks_text(chunks)
+            if chunks_text:
+                return chunks_text, chunks_text, "", chunks_input_mode
+            if not allow_fallback:
+                return "", "", "", "chunks_required"
+            source_text, input_mode = self._resolve_document_source_text(chunks, source=source)
+            return source_text, source_text, "", input_mode
+
         interlinear_path = ""
         for chunk in chunks:
             interlinear_path = self._resolve_chunk_interlinear_path(chunk, map_rows)
