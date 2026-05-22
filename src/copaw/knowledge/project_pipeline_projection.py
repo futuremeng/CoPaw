@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from .knowledge_quantization_metrics import (
 	build_l1_metrics,
@@ -394,7 +394,7 @@ def build_mode_metrics_by_source(
 				"ner_entity_count": _first_non_empty_path(manager, chunks, ["ner_structured_path", "ner_path"]),
 				"syntax_sentence_count": _first_non_empty_path(manager, chunks, ["syntax_structured_path", "syntax_path"]),
 				"syntax_token_count": _first_non_empty_path(manager, chunks, ["syntax_structured_path", "syntax_path"]),
-				"syntax_pos_count": _first_non_empty_path(manager, chunks, ["syntax_structured_path", "syntax_path"]),
+					"syntax_pos_count": _first_non_empty_path(manager, chunks, ["pos_structured_path", "pos_path", "syntax_structured_path", "syntax_path"]),
 				"syntax_relation_count": _first_non_empty_path(manager, chunks, ["syntax_structured_path", "syntax_path"]),
 				"cor_ready_chunk_count": _first_non_empty_path(manager, chunks, ["cor_structured_path", "cor_path"]),
 				"cor_cluster_count": _first_non_empty_path(manager, chunks, ["cor_structured_path", "cor_path"]),
@@ -453,10 +453,10 @@ def build_mode_metrics_by_source(
 		source_status: dict[str, Any] = {}
 		if callable(status_getter):
 			try:
-				source_status = status_getter(source_id, source=source, lightweight=True)
+				source_status = cast(dict[str, Any], status_getter(source_id, source=source, lightweight=True))
 			except TypeError:
 				try:
-					source_status = status_getter(source_id=source_id, source=source, lightweight=True)
+					source_status = cast(dict[str, Any], status_getter(source_id=source_id, source=source, lightweight=True))
 				except Exception:
 					source_status = {}
 			except Exception:
@@ -947,7 +947,7 @@ def hydrate_processing_view(manager: Any, state: dict[str, Any]) -> dict[str, An
 	file_stats_loader = getattr(manager._knowledge_manager, "load_project_step_stats", None)
 	if project_id and callable(file_stats_loader):
 		try:
-			file_analysis_stats = file_stats_loader(project_id=project_id, step_id="file_analysis")
+			file_analysis_stats = cast(dict[str, Any], file_stats_loader(project_id=project_id, step_id="file_analysis"))
 		except Exception:
 			file_analysis_stats = {}
 	if not isinstance(file_analysis_stats, dict):

@@ -115,9 +115,15 @@ def write_chunk_syntax_artifacts(
                 chunk["syntax_interlinear_path"] = str(interlinear_path or "")
                 chunk["syntax_sentence_count"] = 0
                 chunk["syntax_token_count"] = 0
-                chunk["syntax_pos_count"] = 0
-                chunk["syntax_pos_tag_type_count"] = 0
-                chunk["syntax_pos_tag_types"] = []
+                existing_pos_count = _safe_count_int(chunk.get("syntax_pos_count") or chunk.get("pos_count") or 0)
+                existing_pos_tag_types = [
+                    str(item).strip()
+                    for item in (chunk.get("syntax_pos_tag_types") or chunk.get("pos_tag_types") or [])
+                    if str(item).strip()
+                ]
+                chunk["syntax_pos_count"] = existing_pos_count
+                chunk["syntax_pos_tag_types"] = existing_pos_tag_types
+                chunk["syntax_pos_tag_type_count"] = len(existing_pos_tag_types)
                 chunk["syntax_relation_count"] = 0
             if progress_callback is not None:
                 progress_callback(
@@ -199,9 +205,15 @@ def write_chunk_syntax_artifacts(
             chunk["syntax_interlinear_path"] = str(interlinear_path or "")
             chunk["syntax_sentence_count"] = syntax_sentence_count
             chunk["syntax_token_count"] = syntax_token_count
-            chunk["syntax_pos_count"] = syntax_pos_count
-            chunk["syntax_pos_tag_type_count"] = syntax_pos_tag_type_count
-            chunk["syntax_pos_tag_types"] = syntax_pos_tag_types
+            chunk["syntax_pos_count"] = max(_safe_count_int(chunk.get("syntax_pos_count") or chunk.get("pos_count") or 0), syntax_pos_count)
+            existing_pos_tag_types = [
+                str(item).strip()
+                for item in (chunk.get("syntax_pos_tag_types") or chunk.get("pos_tag_types") or [])
+                if str(item).strip()
+            ]
+            merged_pos_tag_types = sorted({*existing_pos_tag_types, *syntax_pos_tag_types})
+            chunk["syntax_pos_tag_types"] = merged_pos_tag_types
+            chunk["syntax_pos_tag_type_count"] = max(len(existing_pos_tag_types), syntax_pos_tag_type_count, len(merged_pos_tag_types))
             chunk["syntax_relation_count"] = syntax_relation_count
             chunk["syntax_path"] = syntax_relative_path.as_posix()
             chunk["syntax_structured_path"] = syntax_structured_relative_path.as_posix()

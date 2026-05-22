@@ -26,6 +26,7 @@ from ..config.config import KnowledgeConfig, KnowledgeSourceSpec
 from .hanlp_nlp_runtime import NLPRuntime
 from .knowledge_manager_cor import write_chunk_cor_artifacts
 from .knowledge_manager_ner import write_chunk_ner_artifacts
+from .knowledge_manager_pos import write_chunk_pos_artifacts
 from .knowledge_manager_semantic import write_chunk_tokenize_artifacts
 from .knowledge_manager_syntax import write_chunk_syntax_artifacts
 
@@ -148,12 +149,14 @@ _AUTO_COLLECT_URL_MIN_CONTENT_CHARS = 1000
 _NER_SENTENCE_DELIMITERS = {"。", "！", "？", "!", "?", ";", "；", ".", "\n"}
 _TOKENIZE_FORMAT_VERSION = "0.1"
 _TOKENIZE_LINE_STATS_FORMAT_VERSION = "0.1"
+_POS_FORMAT_VERSION = "0.1"
 _COR_FORMAT_VERSION = "0.1"
 _NER_FORMAT_VERSION = "1.1"
 _SYNTAX_FORMAT_VERSION = "0.2"
 _SEMANTIC_STAGE_PATH_KEYS = {
     "cor": ("cor_path", "cor_structured_path", "cor_annotated_path"),
     "ner": ("ner_path", "ner_structured_path", "ner_annotated_path", "ner_stats_path"),
+    "pos": ("pos_path", "pos_structured_path", "pos_line_stats_path"),
     "syntax": ("syntax_path", "syntax_structured_path", "syntax_annotated_path"),
 }
 _INTERLINEAR_CHAR_RE = re.compile(r"[A-Za-z0-9\u4e00-\u9fff]")
@@ -332,6 +335,7 @@ class KnowledgeManager:
         self.chunks_dir = self.knowledge_dir / "chunks"
         self.cor_dir = self.knowledge_dir / "cor"
         self.ner_dir = self.knowledge_dir / "ner"
+        self.pos_dir = self.knowledge_dir / "pos"
         self.syntax_dir = self.knowledge_dir / "syntax"
         self.tokenize_dir = self.knowledge_dir / "tokenize"
         self.interlinear_dir = self.knowledge_dir / "interlinear"
@@ -773,8 +777,7 @@ class KnowledgeManager:
             payload["chunks"] = []
             raw_chunks = []
         total_chunks = len(raw_chunks)
-
-        stage_done = {"tokenize": 0, "cor": 0, "ner": 0, "syntax": 0}
+        stage_done = {"tokenize": 0, "pos": 0, "cor": 0, "ner": 0, "syntax": 0}
         live_metrics: dict[str, Any] = {
             "tokenize_ready_chunk_count": 0,
             "tokenize_line_count": 0,
@@ -783,6 +786,11 @@ class KnowledgeManager:
             "tokenize_total_lines": 0,
             "tokenize_done_documents": 0,
             "tokenize_total_documents": 0,
+            "pos_ready_chunk_count": 0,
+            "pos_line_count": 0,
+            "pos_token_count": 0,
+            "pos_count": 0,
+            "pos_tag_type_count": 0,
             "cor_ready_chunk_count": 0,
             "cor_cluster_count": 0,
             "cor_replacement_count": 0,
@@ -802,7 +810,7 @@ class KnowledgeManager:
             if progress_callback is None:
                 return
             stage = str(stage_payload.get("stage") or "").strip().lower()
-            if stage not in {"tokenize", "cor", "ner", "syntax"}:
+            if stage not in {"tokenize", "pos", "cor", "ner", "syntax"}:
                 return
             done_chunks = max(0, _safe_count_int(stage_payload.get("done_chunks") or 0))
             if total_chunks > 0:
@@ -821,11 +829,17 @@ class KnowledgeManager:
                     dict(item) for item in documents_progress if isinstance(item, dict)
                 ]
 
-            processed = stage_done["tokenize"] + stage_done["cor"] + stage_done["ner"] + stage_done["syntax"]
-            denom = total_chunks * 4
+            processed = (
+                stage_done["tokenize"]
+                + stage_done["pos"]
+                + stage_done["cor"]
+                + stage_done["ner"]
+                + stage_done["syntax"]
+            )
+            denom = total_chunks * 5
             ratio = (processed / denom) if denom > 0 else 1.0
             progress = 45 + int(max(0.0, min(1.0, ratio)) * 25)
-            stage_title = {"tokenize": "Tokenize", "cor": "COR", "ner": "NER", "syntax": "Syntax"}.get(
+            stage_title = {"tokenize": "Tokenize", "pos": "POS", "cor": "COR", "ner": "NER", "syntax": "Syntax"}.get(
                 stage,
                 stage.upper(),
             )
@@ -834,6 +848,7 @@ class KnowledgeManager:
                     "stage_message": (
                         f"L2 {stage_title} {stage_done[stage]}/{total_chunks}"
                         f" · Tokenize {stage_done['tokenize']}/{total_chunks}"
+                        f" · POS {stage_done['pos']}/{total_chunks}"
                         f" · COR {stage_done['cor']}/{total_chunks}"
                         f" · NER {stage_done['ner']}/{total_chunks}"
                         f" · Syntax {stage_done['syntax']}/{total_chunks}"
@@ -846,6 +861,7 @@ class KnowledgeManager:
                         "tokenize_total_lines": _safe_count_int(live_metrics.get("tokenize_total_lines") or 0),
                         "tokenize_done_documents": _safe_count_int(live_metrics.get("tokenize_done_documents") or 0),
                         "tokenize_total_documents": _safe_count_int(live_metrics.get("tokenize_total_documents") or 0),
+                        "pos_done_chunks": stage_done["pos"],
                         "cor_done_chunks": stage_done["cor"],
                         "ner_done_chunks": stage_done["ner"],
                         "syntax_done_chunks": stage_done["syntax"],
@@ -863,7 +879,7 @@ class KnowledgeManager:
             progress_start=45,
             progress_end=52,
         )
-        self._write_chunk_ner_artifacts(
+        self._write_chunk_pos_artifacts(
             source,
             payload,
             config=config,
@@ -871,21 +887,29 @@ class KnowledgeManager:
             progress_start=53,
             progress_end=60,
         )
-        self._write_chunk_syntax_artifacts(
+        self._write_chunk_ner_artifacts(
             source,
             payload,
             config=config,
             progress_callback=_emit_l2,
             progress_start=61,
-            progress_end=67,
+            progress_end=66,
+        )
+        self._write_chunk_syntax_artifacts(
+            source,
+            payload,
+            config=config,
+            progress_callback=_emit_l2,
+            progress_start=67,
+            progress_end=70,
         )
         self._write_chunk_cor_artifacts(
             source,
             payload,
             config=config,
             progress_callback=_emit_l2,
-            progress_start=68,
-            progress_end=70,
+            progress_start=71,
+            progress_end=74,
         )
 
         self._apply_semantic_stage_metrics(payload)
@@ -905,6 +929,11 @@ class KnowledgeManager:
         tokenize_ready_chunk_count = 0
         tokenize_line_count = 0
         tokenize_token_count = 0
+        pos_ready_chunk_count = 0
+        pos_line_count = 0
+        pos_token_count = 0
+        pos_count = 0
+        pos_tag_types: set[str] = set()
         ner_ready_chunk_count = 0
         ner_entity_count = 0
         ner_batch_count = 0
@@ -927,6 +956,18 @@ class KnowledgeManager:
                 tokenize_ready_chunk_count += 1
             tokenize_line_count += max(0, _safe_count_int(chunk.get("tokenize_line_count") or 0))
             tokenize_token_count += max(0, _safe_count_int(chunk.get("tokenize_token_count") or 0))
+
+            if str(chunk.get("pos_status") or "").strip() == "ready":
+                pos_ready_chunk_count += 1
+            pos_line_count += max(0, _safe_count_int(chunk.get("pos_line_count") or 0))
+            pos_token_count += max(0, _safe_count_int(chunk.get("pos_token_count") or 0))
+            pos_count += max(0, _safe_count_int(chunk.get("pos_count") or 0))
+            raw_pos_tag_types = chunk.get("pos_tag_types")
+            if isinstance(raw_pos_tag_types, list):
+                for item in raw_pos_tag_types:
+                    tag = str(item or "").strip()
+                    if tag:
+                        pos_tag_types.add(tag)
 
             if str(chunk.get("ner_status") or "").strip() == "ready":
                 ner_ready_chunk_count += 1
@@ -998,6 +1039,12 @@ class KnowledgeManager:
         payload["tokenize_ready_chunk_count"] = tokenize_ready_chunk_count
         payload["tokenize_line_count"] = tokenize_line_count
         payload["tokenize_token_count"] = tokenize_token_count
+        payload["pos_ready_chunk_count"] = pos_ready_chunk_count
+        payload["pos_line_count"] = pos_line_count
+        payload["pos_token_count"] = pos_token_count
+        payload["pos_count"] = pos_count
+        payload["pos_tag_type_count"] = len(pos_tag_types)
+        payload["pos_tag_types"] = sorted(pos_tag_types)
         payload["ner_ready_chunk_count"] = ner_ready_chunk_count
         payload["ner_entity_count"] = ner_entity_count
         payload["ner_batch_count"] = ner_batch_count
@@ -1006,10 +1053,12 @@ class KnowledgeManager:
         payload["syntax_ready_chunk_count"] = syntax_ready_chunk_count
         payload["syntax_sentence_count"] = syntax_sentence_count
         payload["syntax_token_count"] = syntax_token_count
-        payload["syntax_pos_count"] = syntax_pos_count
+        payload["syntax_pos_count"] = max(syntax_pos_count, pos_count)
+        syntax_pos_tag_types.update(pos_tag_types)
+        payload["syntax_pos_tag_types"] = sorted(syntax_pos_tag_types)
         payload["syntax_pos_tag_type_count"] = len(syntax_pos_tag_types)
         payload["pos_coverage_on_syntax_tokens"] = (
-            float(syntax_pos_count / syntax_token_count) if syntax_token_count > 0 else 0.0
+            float(payload["syntax_pos_count"] / syntax_token_count) if syntax_token_count > 0 else 0.0
         )
         source_id = str(payload.get("source_id") or "").strip()
         tokenize_file_token_total = self._load_source_tokenize_file_total_count(source_id) if source_id else 0
@@ -1020,7 +1069,7 @@ class KnowledgeManager:
             payload["tokenize_file_token_total"] = 0
         document_token_count = _safe_count_int(payload.get("token_count") or 0)
         payload["pos_coverage_on_document_tokens"] = (
-            float(syntax_pos_count / document_token_count) if document_token_count > 0 else 0.0
+            float(payload["syntax_pos_count"] / document_token_count) if document_token_count > 0 else 0.0
         )
         payload["syntax_relation_count"] = syntax_relation_count
 
@@ -1058,6 +1107,8 @@ class KnowledgeManager:
             self._delete_cor_path(cor_path)
         for ner_path in self._load_source_ner_manifest(source_id):
             self._delete_ner_path(ner_path)
+        for pos_path in self._load_source_pos_manifest(source_id):
+            self._delete_pos_path(pos_path)
         for syntax_path in self._load_source_syntax_manifest(source_id):
             self._delete_syntax_path(syntax_path)
         for tokenize_path in self._load_source_tokenize_manifest(source_id):
@@ -1074,6 +1125,7 @@ class KnowledgeManager:
             "chunk-manifest.json",
             "cor-manifest.json",
             "ner-manifest.json",
+            "pos-manifest.json",
             "syntax-manifest.json",
             "tokenize-manifest.json",
             "tokenize-file-totals.json",
@@ -1103,6 +1155,7 @@ class KnowledgeManager:
         self.chunks_dir.mkdir(parents=True, exist_ok=True)
         self.cor_dir.mkdir(parents=True, exist_ok=True)
         self.ner_dir.mkdir(parents=True, exist_ok=True)
+        self.pos_dir.mkdir(parents=True, exist_ok=True)
         self.syntax_dir.mkdir(parents=True, exist_ok=True)
         self.tokenize_dir.mkdir(parents=True, exist_ok=True)
         self.interlinear_dir.mkdir(parents=True, exist_ok=True)
@@ -1643,6 +1696,9 @@ class KnowledgeManager:
     def _source_ner_manifest_path(self, source_id: str) -> Path:
         return self._source_storage_path(source_id, "ner-manifest.json")
 
+    def _source_pos_manifest_path(self, source_id: str) -> Path:
+        return self._source_storage_path(source_id, "pos-manifest.json")
+
     def _source_syntax_manifest_path(self, source_id: str) -> Path:
         return self._source_storage_path(source_id, "syntax-manifest.json")
 
@@ -1786,6 +1842,25 @@ class KnowledgeManager:
             if isinstance(item, str) and str(item).strip()
         }
 
+    def _load_source_pos_manifest(self, source_id: str) -> set[str]:
+        path = self._source_pos_manifest_path(source_id)
+        if not path.exists():
+            return set()
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return set()
+        if not isinstance(payload, dict):
+            return set()
+        pos_paths = payload.get("pos_paths")
+        if not isinstance(pos_paths, list):
+            return set()
+        return {
+            str(item).strip()
+            for item in pos_paths
+            if isinstance(item, str) and str(item).strip()
+        }
+
     def _load_source_tokenize_manifest(self, source_id: str) -> set[str]:
         path = self._source_tokenize_manifest_path(source_id)
         if not path.exists():
@@ -1839,6 +1914,20 @@ class KnowledgeManager:
                 {
                     "source_id": source_id,
                     "syntax_paths": sorted(syntax_paths),
+                    "updated_at": datetime.now(UTC).isoformat(),
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+    def _write_source_pos_manifest(self, source_id: str, pos_paths: set[str]) -> None:
+        self._source_pos_manifest_path(source_id).write_text(
+            json.dumps(
+                {
+                    "source_id": source_id,
+                    "pos_paths": sorted(pos_paths),
                     "updated_at": datetime.now(UTC).isoformat(),
                 },
                 ensure_ascii=False,
@@ -2438,6 +2527,25 @@ class KnowledgeManager:
                 break
             current = current.parent
 
+    def _delete_pos_path(self, relative_path: str | Path | None) -> None:
+        text = str(relative_path or "").strip()
+        if not text:
+            return
+        target = self.root_dir / text
+        if not target.exists() or not target.is_file():
+            return
+        try:
+            target.unlink()
+        except FileNotFoundError:
+            return
+        current = target.parent
+        while current != self.pos_dir and current.exists():
+            try:
+                current.rmdir()
+            except OSError:
+                break
+            current = current.parent
+
     def _delete_tokenize_path(self, relative_path: str | Path | None) -> None:
         text = str(relative_path or "").strip()
         if not text:
@@ -2698,6 +2806,29 @@ class KnowledgeManager:
         tokenize_path = self._build_tokenize_relative_path(chunk_relative_path)
         base = tokenize_path.name[:-4] if tokenize_path.name.endswith(".txt") else tokenize_path.name
         return tokenize_path.with_name(f"{base}.line-stats.json")
+
+    def _build_pos_relative_path(self, chunk_relative_path: str) -> Path:
+        chunk_path = Path(str(chunk_relative_path or "").strip())
+        if not chunk_path.parts:
+            return self.pos_dir.relative_to(self.root_dir) / "knowledge.pos.txt"
+        relative_parts = chunk_path.parts[1:] if chunk_path.parts[0] == self.chunks_dir.name else chunk_path.parts
+        basename = chunk_path.name
+        if basename.endswith(".txt"):
+            basename = f"{basename[:-4]}.pos.txt"
+        else:
+            basename = f"{basename}.pos.txt"
+        target = self.pos_dir.joinpath(*relative_parts[:-1], basename)
+        return target.relative_to(self.root_dir)
+
+    def _build_pos_structured_relative_path(self, chunk_relative_path: str) -> Path:
+        pos_path = self._build_pos_relative_path(chunk_relative_path)
+        base = pos_path.name[:-4] if pos_path.name.endswith(".txt") else pos_path.name
+        return pos_path.with_name(f"{base}.json")
+
+    def _build_pos_line_stats_relative_path(self, chunk_relative_path: str) -> Path:
+        pos_path = self._build_pos_relative_path(chunk_relative_path)
+        base = pos_path.name[:-4] if pos_path.name.endswith(".txt") else pos_path.name
+        return pos_path.with_name(f"{base}.line-stats.json")
 
     def _chunk_file_key(self, chunk: dict[str, Any]) -> str:
         return str(chunk.get("document_path") or chunk.get("document_title") or "knowledge").strip()
@@ -4182,6 +4313,26 @@ class KnowledgeManager:
             progress_end=progress_end,
         )
 
+    def _write_chunk_pos_artifacts(
+        self,
+        source: KnowledgeSourceSpec,
+        payload: dict[str, Any],
+        *,
+        config: KnowledgeConfig | None,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
+        progress_start: int = 53,
+        progress_end: int = 60,
+    ) -> set[str]:
+        return write_chunk_pos_artifacts(
+            self,
+            source,
+            payload,
+            config=config,
+            progress_callback=progress_callback,
+            progress_start=progress_start,
+            progress_end=progress_end,
+        )
+
     def _write_chunk_syntax_artifacts(
         self,
         source: KnowledgeSourceSpec,
@@ -4285,6 +4436,7 @@ class KnowledgeManager:
             "chunk-manifest.json",
             "cor-manifest.json",
             "ner-manifest.json",
+            "pos-manifest.json",
             "syntax-manifest.json",
             "tokenize-manifest.json",
             "tokenize-file-totals.json",
@@ -4308,6 +4460,10 @@ class KnowledgeManager:
                 candidates.append(path)
         for ner_path in self._load_source_ner_manifest(source_id):
             path = self.root_dir / str(ner_path)
+            if path.exists() and path.is_file():
+                candidates.append(path)
+        for pos_path in self._load_source_pos_manifest(source_id):
+            path = self.root_dir / str(pos_path)
             if path.exists() and path.is_file():
                 candidates.append(path)
         for syntax_path in self._load_source_syntax_manifest(source_id):
@@ -4507,6 +4663,7 @@ class KnowledgeManager:
 
         self._write_source_chunk_manifest(source.id, current_chunk_paths)
         if include_semantic_artifacts:
+            self._write_chunk_pos_artifacts(source, payload, config=config)
             self._write_chunk_ner_artifacts(source, payload, config=config)
             self._write_chunk_syntax_artifacts(source, payload, config=config)
             self._write_chunk_cor_artifacts(source, payload, config=config)

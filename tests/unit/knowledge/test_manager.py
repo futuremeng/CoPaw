@@ -618,6 +618,76 @@ def test_index_source_writes_ner_files_when_semantic_ready(tmp_path: Path):
     assert "## Sentence 1" in syntax_annotated
 
 
+def test_index_source_writes_pos_files_when_pos_batch_ready(tmp_path: Path):
+    config = Config().knowledge
+    config.index.chunk_size = 10_000
+    source = KnowledgeSourceSpec(
+        id="pos-ready-source",
+        name="POS Ready Source",
+        type="text",
+        content="Alpha Beta\nGamma Delta",
+        enabled=True,
+        recursive=False,
+        tags=[],
+        summary="",
+    )
+
+    manager = KnowledgeManager(tmp_path)
+    ready_state = {
+        "engine": "hanlp",
+        "status": "ready",
+        "reason_code": "HANLP_READY",
+        "reason": "HanLP semantic engine is ready.",
+    }
+    with patch.object(
+        manager._semantic_runtime,
+        "tokenize",
+        side_effect=lambda text, _config=None: ([token for token in text.split() if token], ready_state),
+    ), patch.object(
+        manager._semantic_runtime,
+        "run_task_tokenized_batch",
+        return_value=(
+            [
+                [
+                    {"token": "Alpha", "pos": "NN"},
+                    {"token": "Beta", "pos": "VV"},
+                ],
+                [
+                    {"token": "Gamma", "pos": "NN"},
+                    {"token": "Delta", "pos": "NN"},
+                ],
+            ],
+            ready_state,
+        ),
+    ), patch.object(
+        manager._semantic_runtime,
+        "run_task",
+        return_value=([], ready_state),
+    ):
+        manager.index_source(source, config, include_semantic_artifacts=False)
+        manager.materialize_semantic_artifacts_for_source(source, config=config)
+
+    payload = json.loads(manager._source_index_path(source.id).read_text(encoding="utf-8"))
+    chunk = payload["chunks"][0]
+    pos_path = manager.root_dir / chunk["pos_path"]
+    pos_structured_path = manager.root_dir / chunk["pos_structured_path"]
+    pos_line_stats_path = manager.root_dir / chunk["pos_line_stats_path"]
+
+    assert chunk["pos_status"] == "ready"
+    assert chunk["pos_count"] == 4
+    assert chunk["syntax_pos_count"] == 4
+    assert chunk["syntax_pos_tag_type_count"] == 2
+    assert pos_path.exists()
+    assert pos_structured_path.exists()
+    assert pos_line_stats_path.exists()
+
+    pos_structured = json.loads(pos_structured_path.read_text(encoding="utf-8"))
+    assert pos_structured["artifact"] == "pos_structured"
+    assert pos_structured["line_count"] == 2
+    assert pos_structured["pos_count"] == 4
+    assert pos_structured["lines"][0]["tokens"][0]["pos"] == "NN"
+
+
 def test_index_source_directory_ner_requires_interlinear_without_fallback(tmp_path: Path):
     project_root = tmp_path / "project-no-interlinear"
     project_root.mkdir(parents=True, exist_ok=True)
