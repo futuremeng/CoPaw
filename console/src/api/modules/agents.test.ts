@@ -120,3 +120,35 @@ describe("agentsApi.listProjectFiles", () => {
     ]);
   });
 });
+
+describe("agentsApi.readProjectFile", () => {
+  afterEach(() => vi.clearAllMocks());
+
+  it("encodes dot-prefixed path segments to avoid dotfile URL filtering", async () => {
+    vi.mocked(request).mockResolvedValue({ content: "ok" });
+
+    await agentsApi.readProjectFile(
+      "agent-1",
+      "project-a",
+      ".knowledge/interlinear/sample.snapshot.txt",
+    );
+
+    expect(request).toHaveBeenCalledWith(
+      "/agents/agent-1/projects/project-a/files/%2Eknowledge/interlinear/sample%2Esnapshot%2Etxt",
+    );
+  });
+
+  it("keeps slash boundaries while encoding reserved path characters", async () => {
+    vi.mocked(request).mockResolvedValue({ content: "ok" });
+
+    await agentsApi.readProjectFile(
+      "agent-1",
+      "project/a",
+      "notes/part 1+#.md",
+    );
+
+    expect(request).toHaveBeenCalledWith(
+      "/agents/agent-1/projects/project%2Fa/files/notes/part%201%2B%23%2Emd",
+    );
+  });
+});

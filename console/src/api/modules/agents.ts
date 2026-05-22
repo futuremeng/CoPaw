@@ -53,6 +53,11 @@ import type {
 } from "../types/agents";
 import type { MdFileInfo, MdFileContent } from "../types/workspace";
 
+function encodeProjectFilePathSegment(part: string): string {
+  // Encode dots as well to avoid proxy dotfile filters on segments like ".knowledge".
+  return encodeURIComponent(part).replace(/\./g, "%2E");
+}
+
 // Multi-agent management API
 export const agentsApi = {
   // List all agents
@@ -352,7 +357,7 @@ export const agentsApi = {
     request<AgentProjectFileContent>(
       `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/files/${filePath
         .split("/")
-        .map((part) => encodeURIComponent(part))
+        .map((part) => encodeProjectFilePathSegment(part))
         .join("/")}`,
     ),
 
