@@ -2111,12 +2111,52 @@ export function useProjectKnowledgeState(
     let disposed = false;
     let reconnectTimer: number | null = null;
     let activeSocket: WebSocket | null = null;
+    let reconnectAttempt = 0;
 
-    const connect = () => {
-      if (disposed) {
+    const clearReconnectTimer = () => {
+      if (reconnectTimer !== null) {
+        window.clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+    };
+
+    const scheduleReconnect = () => {
+      if (disposed || document.hidden || reconnectTimer !== null) {
         return;
       }
-      setProjectPipelineChannelStatus((prev) => (prev === "idle" ? "connecting" : "reconnecting"));
+      setProjectPipelineChannelStatus("reconnecting");
+      const baseDelay = Math.min(15_000, 1_000 * (2 ** Math.max(0, reconnectAttempt)));
+      const jitter = Math.floor(Math.random() * 250);
+      reconnectAttempt += 1;
+      reconnectTimer = window.setTimeout(() => {
+        reconnectTimer = null;
+        connect();
+      }, baseDelay + jitter);
+    };
+
+    const closeSocket = () => {
+      if (!activeSocket) {
+        return;
+      }
+      const socket = activeSocket;
+      activeSocket = null;
+      if (socket.readyState === WebSocket.CONNECTING) {
+        socket.onopen = () => {
+          socket.close();
+        };
+      } else if (socket.readyState === WebSocket.OPEN) {
+        socket.close();
+      }
+    };
+
+    const connect = () => {
+      if (disposed || document.hidden) {
+        return;
+      }
+      clearReconnectTimer();
+      setProjectPipelineChannelStatus(
+        reconnectAttempt === 0 ? "connecting" : "reconnecting",
+      );
       try {
         const baseUrl = getApiUrl("/knowledge/project-pipeline/ws");
         const wsUrl = new URL(baseUrl, window.location.origin);
@@ -2134,6 +2174,7 @@ export function useProjectKnowledgeState(
           if (disposed) {
             return;
           }
+          reconnectAttempt = 0;
           setProjectPipelineChannelStatus("open");
         };
         ws.onmessage = (event) => {
@@ -2152,37 +2193,43 @@ export function useProjectKnowledgeState(
           }
         };
         ws.onclose = () => {
+          if (activeSocket === ws) {
+            activeSocket = null;
+          }
           if (disposed) {
             return;
           }
-          setProjectPipelineChannelStatus("reconnecting");
-          reconnectTimer = window.setTimeout(() => {
-            connect();
-          }, 1500);
+          scheduleReconnect();
+        };
+        ws.onerror = () => {
+          if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+            ws.close();
+          }
         };
       } catch {
-        // ignore websocket construction failure in unsupported env
-        setProjectPipelineChannelStatus("reconnecting");
+        scheduleReconnect();
       }
     };
 
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        clearReconnectTimer();
+        closeSocket();
+        setProjectPipelineChannelStatus("idle");
+        return;
+      }
+      scheduleReconnect();
+    };
+
     connect();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       disposed = true;
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       setProjectPipelineChannelStatus("idle");
-      if (reconnectTimer) {
-        window.clearTimeout(reconnectTimer);
-      }
-      if (activeSocket) {
-        if (activeSocket.readyState === WebSocket.CONNECTING) {
-          activeSocket.onopen = () => {
-            activeSocket?.close();
-          };
-        } else if (activeSocket.readyState === WebSocket.OPEN) {
-          activeSocket.close();
-        }
-      }
+      clearReconnectTimer();
+      closeSocket();
     };
   }, [params.projectId]);
 
@@ -2194,12 +2241,50 @@ export function useProjectKnowledgeState(
     let disposed = false;
     let reconnectTimer: number | null = null;
     let activeSocket: WebSocket | null = null;
+    let reconnectAttempt = 0;
 
-    const connect = () => {
-      if (disposed) {
+    const clearReconnectTimer = () => {
+      if (reconnectTimer !== null) {
+        window.clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+    };
+
+    const scheduleReconnect = () => {
+      if (disposed || document.hidden || reconnectTimer !== null) {
         return;
       }
-      setTasksChannelStatus((prev) => (prev === "idle" ? "connecting" : "reconnecting"));
+      setTasksChannelStatus("reconnecting");
+      const baseDelay = Math.min(15_000, 1_000 * (2 ** Math.max(0, reconnectAttempt)));
+      const jitter = Math.floor(Math.random() * 250);
+      reconnectAttempt += 1;
+      reconnectTimer = window.setTimeout(() => {
+        reconnectTimer = null;
+        connect();
+      }, baseDelay + jitter);
+    };
+
+    const closeSocket = () => {
+      if (!activeSocket) {
+        return;
+      }
+      const socket = activeSocket;
+      activeSocket = null;
+      if (socket.readyState === WebSocket.CONNECTING) {
+        socket.onopen = () => {
+          socket.close();
+        };
+      } else if (socket.readyState === WebSocket.OPEN) {
+        socket.close();
+      }
+    };
+
+    const connect = () => {
+      if (disposed || document.hidden) {
+        return;
+      }
+      clearReconnectTimer();
+      setTasksChannelStatus(reconnectAttempt === 0 ? "connecting" : "reconnecting");
       try {
         const baseUrl = getApiUrl("/knowledge/tasks/ws");
         const wsUrl = new URL(baseUrl, window.location.origin);
@@ -2217,6 +2302,7 @@ export function useProjectKnowledgeState(
           if (disposed) {
             return;
           }
+          reconnectAttempt = 0;
           setTasksChannelStatus("open");
         };
         ws.onmessage = (event) => {
@@ -2237,37 +2323,43 @@ export function useProjectKnowledgeState(
           }
         };
         ws.onclose = () => {
+          if (activeSocket === ws) {
+            activeSocket = null;
+          }
           if (disposed) {
             return;
           }
-          setTasksChannelStatus("reconnecting");
-          reconnectTimer = window.setTimeout(() => {
-            connect();
-          }, 1500);
+          scheduleReconnect();
+        };
+        ws.onerror = () => {
+          if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+            ws.close();
+          }
         };
       } catch {
-        // ignore websocket construction failure in unsupported env
-        setTasksChannelStatus("reconnecting");
+        scheduleReconnect();
       }
     };
 
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        clearReconnectTimer();
+        closeSocket();
+        setTasksChannelStatus("idle");
+        return;
+      }
+      scheduleReconnect();
+    };
+
     connect();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       disposed = true;
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       setTasksChannelStatus("idle");
-      if (reconnectTimer) {
-        window.clearTimeout(reconnectTimer);
-      }
-      if (activeSocket) {
-        if (activeSocket.readyState === WebSocket.CONNECTING) {
-          activeSocket.onopen = () => {
-            activeSocket?.close();
-          };
-        } else if (activeSocket.readyState === WebSocket.OPEN) {
-          activeSocket.close();
-        }
-      }
+      clearReconnectTimer();
+      closeSocket();
     };
   }, [params.projectId]);
 

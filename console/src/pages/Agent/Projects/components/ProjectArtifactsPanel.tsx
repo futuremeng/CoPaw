@@ -12,6 +12,7 @@ import { shouldHideKnowledgeVisualization } from "../utils/projectFileSelectionU
 import styles from "../index.module.less";
 
 const { Text } = Typography;
+const MAX_PREVIEW_CHAR_COUNT = 180_000;
 
 function isMarkdownFilePath(filePath: string): boolean {
   return /\.(md|markdown|mdx)$/i.test(filePath);
@@ -68,6 +69,11 @@ export default function ProjectArtifactsPanel({
     && !isEmptyFilePreview
     && isMarkdownFilePath(selectedFilePath),
   );
+  const isLargePreviewContent = fileContent.length > MAX_PREVIEW_CHAR_COUNT;
+  const previewContent = isLargePreviewContent
+    ? fileContent.slice(0, MAX_PREVIEW_CHAR_COUNT)
+    : fileContent;
+  const shouldRenderRichMarkdown = shouldRenderMdxPreview && !isLargePreviewContent;
   const shouldShowKnowledgeVisualization = !shouldHideKnowledgeVisualization(selectedFilePath);
 
   const previewNode = contentLoading ? (
@@ -81,13 +87,26 @@ export default function ProjectArtifactsPanel({
           image={Empty.PRESENTED_IMAGE_SIMPLE}
           description={t("projects.emptyFile", "This file is empty")}
         />
-      ) : shouldRenderMdxPreview ? (
+      ) : shouldRenderRichMarkdown ? (
         <ProjectMdxReadonlyPreview
           filePath={selectedFilePath}
-          markdown={fileContent}
+          markdown={previewContent}
         />
       ) : (
-        <pre className={styles.previewContent}>{fileContent}</pre>
+        <>
+          {isLargePreviewContent ? (
+            <div className={styles.previewTruncateHint}>
+              <Text type="secondary">
+                {t(
+                  "projects.previewLargeFileTruncated",
+                  "Large file preview is truncated to the first {{count}} characters for smoother rendering.",
+                  { count: MAX_PREVIEW_CHAR_COUNT },
+                )}
+              </Text>
+            </div>
+          ) : null}
+          <pre className={styles.previewContent}>{previewContent}</pre>
+        </>
       )}
     </>
   ) : (
