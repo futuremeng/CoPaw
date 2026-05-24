@@ -1,18 +1,20 @@
 # -*- coding: utf-8 -*-
-"""CoPaw Agent - Main agent implementation.
+"""QwenPaw Agent - Main agent implementation.
 
-This module provides the main CoPawAgent class built on ReActAgent,
+This module provides the main QwenPawAgent class built on ReActAgent,
 with integrated tools, skills, and memory management.
 """
+
+from __future__ import annotations
 
 import asyncio
 import logging
 import os
-import re
 from pathlib import Path
 from typing import Any, List, Literal, Optional, Type, TYPE_CHECKING
 
 from agentscope.agent import ReActAgent
+from agentscope.agent._react_agent import _MemoryMark
 from agentscope.memory import InMemoryMemory
 from agentscope.message import Msg
 from agentscope.tool import Toolkit
@@ -21,7 +23,7 @@ from pydantic import BaseModel
 
 from ..app.mcp import HttpStatefulClient, StdIOStatefulClient
 from .command_handler import CommandHandler
-from .hooks import BootstrapHook, MemoryCompactionHook
+from .hooks import BootstrapHook
 from .model_factory import create_model_and_formatter
 from .prompt import (
     build_multimodal_hint,
@@ -31,51 +33,44 @@ from .prompt import (
 from .skill_system import (
     apply_skill_config_env_overrides,
     ensure_skills_initialized,
-    get_working_skills_dir,
     get_workspace_skills_dir,
-    list_available_skills,
     resolve_effective_skills,
 )
 from .tool_guard_mixin import ToolGuardMixin
 from .tools import (
     browser_use,
     delegate_external_agent,
-    list_agents,
     chat_with_agent,
     check_agent_task,
     submit_to_agent,
     desktop_screenshot,
     edit_file,
     execute_shell_command,
-    glob_search,
-    graph_query,
-    grep_search,
     get_current_time,
     get_token_usage,
-    knowledge_search,
-    memify_run,
-    memify_status,
+    glob_search,
+    grep_search,
+    list_agents,
+    materialize_skill,
     read_file,
     send_file_to_user,
     set_user_timezone,
-    skill_market_install,
-    skill_market_search,
-    triplet_focus_search,
     view_image,
     view_video,
     write_file,
-    create_memory_search_tool,
 )
 from .utils import process_file_and_media_blocks_in_message
-from ..config import load_config
 from ..constant import (
+    MEDIA_UNSUPPORTED_PLACEHOLDER,
     WORKING_DIR,
 )
-from ..agents.memory import BaseMemoryManager
 from ..providers.model_capability_cache import get_capability_cache
 
 if TYPE_CHECKING:
+    from ..agents.memory import BaseMemoryManager
+    from ..agents.context import BaseContextManager
     from ..config.config import AgentProfileConfig
+    from .context import AgentContext
 
 logger = logging.getLogger(__name__)
 
@@ -83,62 +78,8 @@ logger = logging.getLogger(__name__)
 NamesakeStrategy = Literal["override", "skip", "raise", "rename"]
 
 
-def _interrupt_reply_text(language: str) -> str:
-    """Return localized reply text used when current response is interrupted."""
-    lang = (language or "").strip().lower().split("-")[0]
-    if lang == "zh":
-        return "收到，我已停止上一条回复。请继续说你的问题。"
-    if lang == "ja":
-        return "了解しました。先ほどの応答を停止しました。続けてご質問ください。"
-    if lang == "ru":
-        return "Принял, я остановил предыдущий ответ. Продолжайте, пожалуйста."
-    return "Got it. I have stopped the previous response. Please continue with your question."
-
-
-_EVIDENCE_QUERY_PATTERN = re.compile(
-    r"(配置|数据库|db|database|host|port|url|endpoint|env|环境|密钥|api\s*key|"
-    r"连接串|connection|schema|迁移|migration|索引|index|版本|version|为什么|why|"
-    r"依据|来源|source|cite|引用)",
-    re.IGNORECASE,
-)
-
-
-def _is_evidence_required_query(query: str | None) -> bool:
-    if not query:
-        return False
-    text = query.strip()
-    if not text:
-        return False
-    if text.startswith("/"):
-        return False
-    return bool(_EVIDENCE_QUERY_PATTERN.search(text))
-
-
-def _extract_text_blocks(content: Any) -> list[str]:
-    if not isinstance(content, list):
-        return []
-    out: list[str] = []
-    for block in content:
-        if isinstance(block, dict):
-            text = block.get("text")
-        else:
-            text = getattr(block, "text", None)
-        if isinstance(text, str) and text.strip():
-            out.append(text.strip())
-    return out
-
-
-def _summarize_evidence_section(title: str, text: str) -> str:
-    compact = re.sub(r"\s+", " ", text or "").strip()
-    if not compact:
-        return ""
-    if len(compact) > 1200:
-        compact = compact[:1200].rstrip() + "..."
-    return f"### {title}\n{compact}"
-
-
-class CoPawAgent(ToolGuardMixin, ReActAgent):
-    """CoPaw Agent with integrated tools, skills, and memory management.
+class QwenPawAgent(ToolGuardMixin, ReActAgent):
+    """QwenPaw Agent with integrated tools, skills, and memory management.
 
     This agent extends ReActAgent with:
     - Built-in tools (shell, file operations, browser, etc.)
@@ -151,7 +92,7 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
     MRO note
     ~~~~~~~~
     ``ToolGuardMixin`` overrides ``_acting`` and ``_reasoning`` via
-    Python's MRO: CoPawAgent → ToolGuardMixin → ReActAgent.  If you
+    Python's MRO: QwenPawAgent → ToolGuardMixin → ReActAgent.  If you
     add a ``_acting`` or ``_reasoning`` override in this class, you
     **must** call ``super()._acting(...)`` / ``super()._reasoning(...)``
     so the guard interception remains active.
@@ -161,16 +102,16 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
         self,
         agent_config: "AgentProfileConfig",
         env_context: Optional[str] = None,
-        enable_memory_manager: bool = True,
         mcp_clients: Optional[List[Any]] = None,
-        memory_manager: "BaseMemoryManager | None" = None,
+        memory_manager: BaseMemoryManager | None = None,
+        context_manager: BaseContextManager | None = None,
         request_context: Optional[dict[str, str]] = None,
         namesake_strategy: NamesakeStrategy = "skip",
         workspace_dir: Path | None = None,
-        flow_memory_path: str | None = None,
         task_tracker: Any | None = None,
+        plan_notebook: Any | None = None,
     ):
-        """Initialize CoPawAgent.
+        """Initialize QwenPawAgent.
 
         Args:
             agent_config: Agent profile configuration containing all settings
@@ -178,10 +119,11 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
                 memory_compact_threshold, etc.) and language setting.
             env_context: Optional environment context to prepend to
                 system prompt
-            enable_memory_manager: Whether to enable memory manager
             mcp_clients: Optional list of MCP clients for tool
                 integration
-            memory_manager: Optional memory manager instance
+            memory_manager: Optional memory manager instance. Pass ``None``
+                to disable the memory manager entirely.
+            context_manager: Optional context manager instance
             request_context: Optional request context with session_id,
                 user_id, channel, agent_id
             namesake_strategy: Strategy to handle namesake tool functions.
@@ -196,19 +138,38 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
         self._mcp_clients = mcp_clients or []
         self._namesake_strategy = namesake_strategy
         self._workspace_dir = workspace_dir
-        self._flow_memory_path = flow_memory_path
-        self._focus_dir: Path | None = None
         self._task_tracker = task_tracker
 
         # Extract configuration from agent_config
         running_config = agent_config.running
         self._language = agent_config.language
 
+        # Resolve effective skills once and share across toolkit /
+        # skill registration.
+        workspace_dir = self._workspace_dir or WORKING_DIR
+        ensure_skills_initialized(workspace_dir)
+        channel_name = self._request_context.get("channel", "console")
+        try:
+            effective_skills = resolve_effective_skills(
+                workspace_dir,
+                channel_name,
+            )
+        except Exception:  # pylint: disable=broad-except
+            effective_skills = []
+
         # Initialize toolkit with built-in tools
-        toolkit = self._create_toolkit(namesake_strategy=namesake_strategy)
+        toolkit = self._create_toolkit(
+            namesake_strategy=namesake_strategy,
+            effective_skills=effective_skills,
+        )
 
         # Load and register skills
-        self._register_skills(toolkit)
+        self._register_skills(toolkit, effective_skills=effective_skills)
+
+        # Initialize memory_manager and context_manager for use
+        # in _build_sys_prompt
+        self.memory_manager = memory_manager
+        self.context_manager = context_manager
 
         # Build system prompt
         sys_prompt = self._build_sys_prompt()
@@ -226,29 +187,45 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
             f"{model_info} (class: {model.__class__.__name__})",
         )
         # Initialize parent ReActAgent
-        super().__init__(
-            name="Friday",
-            model=model,
-            sys_prompt=sys_prompt,
-            toolkit=toolkit,
-            memory=InMemoryMemory(),
-            formatter=formatter,
-            max_iters=running_config.max_iters,
-        )
+        init_kwargs: dict[str, Any] = {
+            "name": agent_config.name or "QwenPaw",
+            "model": model,
+            "sys_prompt": sys_prompt,
+            "toolkit": toolkit,
+            "memory": InMemoryMemory(),
+            "formatter": formatter,
+            "max_iters": running_config.max_iters,
+        }
+        if plan_notebook is not None:
+            init_kwargs["plan_notebook"] = plan_notebook
+        super().__init__(**init_kwargs)
 
-        # Setup memory manager
-        self._setup_memory_manager(
-            enable_memory_manager,
-            memory_manager,
-            namesake_strategy,
-        )
+        # Register memory tools provided by the memory manager
+        if self.memory_manager is not None:
+            memory_tools = self.memory_manager.list_memory_tools()
+            for tool_fn in memory_tools:
+                self.toolkit.register_tool_function(
+                    tool_fn,
+                    namesake_strategy=self._namesake_strategy,
+                )
+            logger.debug(
+                "Registered memory tools: %s",
+                [fn.__name__ for fn in memory_tools],
+            )
+
+        # Configure context manager memory if available
+        if self.context_manager is not None:
+            self.memory: "AgentContext" = (
+                self.context_manager.get_agent_context()
+            )
+            logger.debug("Context manager configured")
 
         # Setup command handler
         self.command_handler = CommandHandler(
             agent_name=self.name,
             memory=self.memory,
             memory_manager=self.memory_manager,
-            enable_memory_manager=self._enable_memory_manager,
+            context_manager=self.context_manager,
         )
 
         # Register hooks
@@ -257,6 +234,7 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
     def _create_toolkit(
         self,
         namesake_strategy: NamesakeStrategy = "skip",
+        effective_skills: list[str] | None = None,
     ) -> Toolkit:
         """Create and populate toolkit with built-in tools.
 
@@ -264,12 +242,14 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
             namesake_strategy: Strategy to handle namesake tool functions.
                 Options: "override", "skip", "raise", "rename"
                 (default: "skip")
+            effective_skills: Skills enabled for this workspace + channel,
+                used to gate skill-specific tools.
 
         Returns:
             Configured toolkit instance
         """
+        effective_skills = effective_skills or []
         toolkit = Toolkit()
-        config = load_config()
 
         # Check which tools are enabled from agent config
         enabled_tools = {}
@@ -300,7 +280,7 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
                 "all tools will be disabled",
             )
 
-        # Map of tool functions
+        # Map of tool functions (hardcoded builtin tools)
         tool_functions = {
             "execute_shell_command": execute_shell_command,
             "read_file": read_file,
@@ -316,60 +296,57 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
             "get_current_time": get_current_time,
             "set_user_timezone": set_user_timezone,
             "get_token_usage": get_token_usage,
-            "knowledge_search": knowledge_search,
-            "graph_query": graph_query,
-            "memify_run": memify_run,
-            "memify_status": memify_status,
-            "triplet_focus_search": triplet_focus_search,
-            "skill_market_search": skill_market_search,
-            "skill_market_install": skill_market_install,
             "delegate_external_agent": delegate_external_agent,
             "list_agents": list_agents,
             "chat_with_agent": chat_with_agent,
             "submit_to_agent": submit_to_agent,
             "check_agent_task": check_agent_task,
+            # Register only when the `make-skill` skill is enabled.
+            **(
+                {"materialize_skill": materialize_skill}
+                if "make-skill" in effective_skills
+                else {}
+            ),
         }
 
-        # Register only enabled tools
-        for tool_name, tool_func in tool_functions.items():
-            tool_enabled = enabled_tools.get(tool_name, True)
-            if tool_name == "knowledge_search":
-                tool_enabled = (
-                    tool_enabled
-                    and bool(getattr(config.knowledge, "enabled", False))
-                    and bool(getattr(config.agents.running, "knowledge_enabled", True))
-                    and bool(
-                        getattr(
-                            config.agents.running,
-                            "knowledge_retrieval_enabled",
-                            True,
-                        )
-                    )
-                )
-            elif tool_name == "graph_query":
-                tool_enabled = (
-                    tool_enabled
-                    and bool(getattr(config.knowledge, "enabled", False))
-                    and bool(getattr(config.agents.running, "knowledge_enabled", True))
-                    and bool(getattr(config.knowledge, "graph_query_enabled", False))
-                )
-            elif tool_name in {"memify_run", "memify_status"}:
-                tool_enabled = (
-                    tool_enabled
-                    and bool(getattr(config.knowledge, "enabled", False))
-                    and bool(getattr(config.agents.running, "knowledge_enabled", True))
-                    and bool(getattr(config.knowledge, "memify_enabled", False))
-                )
-            elif tool_name == "triplet_focus_search":
-                tool_enabled = (
-                    tool_enabled
-                    and bool(getattr(config.knowledge, "enabled", False))
-                    and bool(getattr(config.agents.running, "knowledge_enabled", True))
-                    and bool(getattr(config.knowledge, "triplet_search_enabled", False))
-                )
+        # Track hardcoded built-in tools for backward compatibility
+        hardcoded_builtin_tools = set(tool_functions.keys())
 
-            # If tool not in config, enable by default (backward compatibility)
-            if not tool_enabled:
+        # Dynamically load plugin-registered tools
+        from . import tools as tools_module
+
+        plugin_tools = set()
+        for tool_name in getattr(tools_module, "__all__", []):
+            if tool_name not in tool_functions:
+                tool_func = getattr(tools_module, tool_name, None)
+                if callable(tool_func):
+                    tool_functions[tool_name] = tool_func
+                    plugin_tools.add(tool_name)
+                    logger.debug(
+                        "Discovered plugin tool: %s",
+                        tool_name,
+                    )
+
+        # Register tools with appropriate defaults
+        for tool_name, tool_func in tool_functions.items():
+            # For plugin tools: skip if not in config (security)
+            # For hardcoded tools: default to enabled (backward compatibility)
+            if tool_name in plugin_tools:
+                if tool_name not in enabled_tools:
+                    logger.debug(
+                        "Skipped unconfigured plugin tool: %s",
+                        tool_name,
+                    )
+                    continue
+            else:
+                # Hardcoded built-in tool: use default-to-enabled
+                pass
+
+            # Check if tool is enabled
+            if not enabled_tools.get(
+                tool_name,
+                tool_name in hardcoded_builtin_tools,
+            ):
                 logger.debug("Skipped disabled tool: %s", tool_name)
                 continue
 
@@ -420,44 +397,20 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
 
         return toolkit
 
-    def _register_skills(self, toolkit: Toolkit) -> None:
+    def _register_skills(
+        self,
+        toolkit: Toolkit,
+        effective_skills: list[str],
+    ) -> None:
         """Load and register skills from workspace directory.
-
-        Uses the registry-backed skill resolver to determine effective
-        skills for the current channel.
 
         Args:
             toolkit: Toolkit to register skills to
+            effective_skills: Resolved skill names for the current
+                workspace + channel.
         """
-        workspace_dir = getattr(self, "_workspace_dir", None) or WORKING_DIR
-
-        def _call_skill_func(func, *args):
-            try:
-                return func(*args)
-            except TypeError:
-                return func()
-
-        _call_skill_func(ensure_skills_initialized, workspace_dir)
-
-        request_context = getattr(self, "_request_context", {})
-        channel_name = request_context.get("channel", "console")
-
-        available_skills = _call_skill_func(
-            list_available_skills,
-            Path(workspace_dir),
-        )
-        if available_skills:
-            effective_skills = available_skills
-            working_skills_dir = _call_skill_func(
-                get_working_skills_dir,
-                Path(workspace_dir),
-            )
-        else:
-            effective_skills = resolve_effective_skills(
-                workspace_dir,
-                channel_name,
-            )
-            working_skills_dir = get_workspace_skills_dir(Path(workspace_dir))
+        workspace_dir = self._workspace_dir or WORKING_DIR
+        working_skills_dir = get_workspace_skills_dir(Path(workspace_dir))
 
         for skill_name in effective_skills:
             skill_dir = working_skills_dir / skill_name
@@ -497,6 +450,8 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
             working_dir=self._workspace_dir,
             agent_id=agent_id,
             heartbeat_enabled=heartbeat_enabled,
+            language=self._language,
+            memory_manager=self.memory_manager,
         )
         logger.debug("System prompt:\n%s...", sys_prompt[:100])
 
@@ -508,99 +463,7 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
         if self._env_context is not None:
             sys_prompt = sys_prompt + "\n\n" + self._env_context
 
-        flow_memory = self._load_flow_memory_content()
-        if flow_memory:
-            sys_prompt = (
-                sys_prompt
-                + "\n\n# Flow Scoped Memory\n\n"
-                + flow_memory
-            )
-
         return sys_prompt
-
-    def set_flow_memory_path(self, flow_memory_path: str | None) -> None:
-        """Set flow-scoped memory path used in system prompt rebuilding."""
-        self._flow_memory_path = flow_memory_path
-
-    def set_focus_dir(self, focus_dir: Path | None) -> None:
-        """Set focus-level working directory for the current chat context.
-
-        When set, file tools resolve relative paths against this directory
-        instead of the full agent workspace_dir.
-
-        Args:
-            focus_dir: Path to the focus directory, or ``None`` to clear.
-        """
-        self._focus_dir = focus_dir
-
-    def clear_focus_dir(self) -> None:
-        """Clear focus-level working directory and fallback to workspace root."""
-        self._focus_dir = None
-
-    def set_task_dir(self, task_dir: Path | None) -> None:
-        """Backward-compatible alias for set_focus_dir()."""
-        self.set_focus_dir(task_dir)
-
-    def update_env_context(self, env_context: str) -> None:
-        """Replace the environment context string.
-
-        Useful after task-level context is resolved (e.g. pipeline_edit) to
-        update the working_dir shown in the system prompt before
-        :meth:`rebuild_sys_prompt` is called.
-
-        Args:
-            env_context: New environment context string.
-        """
-        self._env_context = env_context
-
-    def _load_flow_memory_content(self) -> str:
-        """Load temporary flow-scoped memory content for current pipeline editing session."""
-        if not self._flow_memory_path:
-            return ""
-
-        try:
-            path = Path(self._flow_memory_path)
-            if not path.exists() or not path.is_file():
-                return ""
-            return path.read_text(encoding="utf-8").strip()
-        except Exception as exc:
-            logger.warning("Failed to load flow memory file %s: %s", self._flow_memory_path, exc)
-            return ""
-
-    def _setup_memory_manager(
-        self,
-        enable_memory_manager: bool,
-        memory_manager: BaseMemoryManager | None,
-        namesake_strategy: NamesakeStrategy,
-    ) -> None:
-        """Setup memory manager and register memory search tool if enabled.
-
-        Args:
-            enable_memory_manager: Whether to enable memory manager
-            memory_manager: Optional memory manager instance
-            namesake_strategy: Strategy to handle namesake tool functions
-        """
-        # Check env var: if ENABLE_MEMORY_MANAGER=false, disable memory manager
-        env_enable_mm = os.getenv("ENABLE_MEMORY_MANAGER", "")
-        if env_enable_mm.lower() == "false":
-            enable_memory_manager = False
-
-        self._enable_memory_manager: bool = enable_memory_manager
-        self.memory_manager = memory_manager
-
-        # Register memory_search tool if enabled and available
-        if self._enable_memory_manager and self.memory_manager is not None:
-            # update memory manager
-            self.memory = self.memory_manager.get_in_memory_memory()
-            self.memory_manager.chat_model = self.model
-            self.memory_manager.formatter = self.formatter
-
-            # Register memory_search as a tool function
-            self.toolkit.register_tool_function(
-                create_memory_search_tool(self.memory_manager),
-                namesake_strategy=namesake_strategy,
-            )
-            logger.debug("Registered memory_search tool")
 
     def _register_hooks(self) -> None:
         """Register pre-reasoning and pre-acting hooks."""
@@ -620,17 +483,30 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
         )
         logger.debug("Registered bootstrap hook")
 
-        # Memory compaction hook - auto-compact when context is full
-        if self._enable_memory_manager and self.memory_manager is not None:
-            memory_compact_hook = MemoryCompactionHook(
-                memory_manager=self.memory_manager,
+        # Context manager hooks - delegate compaction / tool-result pruning
+        # to the context manager's lifecycle methods
+        if self.context_manager is not None:
+            self.register_instance_hook(
+                hook_type="pre_reply",
+                hook_name="context_pre_reply",
+                hook=self.context_manager.pre_reply,
             )
             self.register_instance_hook(
                 hook_type="pre_reasoning",
-                hook_name="memory_compact_hook",
-                hook=memory_compact_hook.__call__,
+                hook_name="context_pre_reasoning",
+                hook=self.context_manager.pre_reasoning,
             )
-            logger.debug("Registered memory compaction hook")
+            self.register_instance_hook(
+                hook_type="post_acting",
+                hook_name="context_post_acting",
+                hook=self.context_manager.post_acting,
+            )
+            self.register_instance_hook(
+                hook_type="post_reply",
+                hook_name="context_post_reply",
+                hook=self.context_manager.post_reply,
+            )
+            logger.debug("Registered context manager hooks")
 
     def rebuild_sys_prompt(self) -> None:
         """Rebuild and replace the system prompt.
@@ -803,9 +679,7 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
     @staticmethod
     def _rebuild_mcp_client(client: Any) -> Any | None:
         """Rebuild a fresh MCP client instance from stored config metadata."""
-        rebuild_info = getattr(client, "_copaw_rebuild_info", None)
-        if not isinstance(rebuild_info, dict):
-            rebuild_info = getattr(client, "_qwenpaw_rebuild_info", None)
+        rebuild_info = getattr(client, "_qwenpaw_rebuild_info", None)
         if not isinstance(rebuild_info, dict):
             return None
 
@@ -821,7 +695,6 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
                     env=rebuild_info.get("env", {}),
                     cwd=rebuild_info.get("cwd"),
                 )
-                setattr(rebuilt_client, "_copaw_rebuild_info", rebuild_info)
                 setattr(rebuilt_client, "_qwenpaw_rebuild_info", rebuild_info)
                 return rebuilt_client
 
@@ -837,7 +710,6 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
                 url=rebuild_info.get("url"),
                 headers=headers,
             )
-            setattr(rebuilt_client, "_copaw_rebuild_info", rebuild_info)
             setattr(rebuilt_client, "_qwenpaw_rebuild_info", rebuild_info)
             return rebuilt_client
         except Exception:  # pylint: disable=broad-except
@@ -871,7 +743,7 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
         inp = tool_call.get("input")
         if not isinstance(inp, dict):
             return
-        for key in CoPawAgent._PLAN_JSON_KEYS:
+        for key in QwenPawAgent._PLAN_JSON_KEYS:
             val = inp.get(key)
             if isinstance(val, str):
                 try:
@@ -1230,6 +1102,7 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
 
         return await self._auto_continue_if_text_only(msg, tool_choice)
 
+    # pylint: disable=too-many-branches
     async def _summarizing(self) -> Msg:
         """Override summarizing with proactive media filtering,
         passive fallback, and tool_use block filtering.
@@ -1300,7 +1173,6 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
                                 "rejects_media",
                                 True,
                             )
-                            return self._strip_tool_use_from_msg(msg)
                     finally:
                         self._set_formatter_media_strip(False)
                 else:
@@ -1315,6 +1187,12 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
                             "Capability flag may be wrong.",
                         )
 
+                    logger.warning(
+                        "_summarizing failed (%s). "
+                        "Stripped %d media block(s) from memory, retrying.",
+                        e,
+                        n_stripped,
+                    )
                     msg = await super()._summarizing()
                     if model_key:
                         get_capability_cache().learn(
@@ -1393,7 +1271,7 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
         round of calls has ended.
         """
         if isinstance(msg.content, str):
-            msg.content += CoPawAgent._ROUND_END_NOTICE
+            msg.content += QwenPawAgent._ROUND_END_NOTICE
             return msg
 
         filtered = [
@@ -1411,7 +1289,9 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
                 n_removed,
             )
 
-        filtered.append({"type": "text", "text": CoPawAgent._ROUND_END_NOTICE})
+        filtered.append(
+            {"type": "text", "text": QwenPawAgent._ROUND_END_NOTICE},
+        )
         msg.content = filtered
         return msg
 
@@ -1439,10 +1319,6 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
         ]
         return any(kw in error_str for kw in keywords)
 
-    _MEDIA_PLACEHOLDER = (
-        "[Media content removed - model does not support this media type]"
-    )
-
     def _strip_media_blocks_from_memory(self) -> int:
         """Remove media blocks (image/audio/video) from all messages.
 
@@ -1461,12 +1337,14 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
                 continue
 
             new_content = []
+            stripped_this_message = 0
             for block in msg.content:
                 if (
                     isinstance(block, dict)
                     and block.get("type") in media_types
                 ):
                     total_stripped += 1
+                    stripped_this_message += 1
                     continue
 
                 if (
@@ -1485,14 +1363,18 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
                     ]
                     stripped_count = original_len - len(block["output"])
                     total_stripped += stripped_count
+                    stripped_this_message += stripped_count
                     if stripped_count > 0 and not block["output"]:
-                        block["output"] = self._MEDIA_PLACEHOLDER
+                        block["output"] = MEDIA_UNSUPPORTED_PLACEHOLDER
 
                 new_content.append(block)
 
-            if not new_content and total_stripped > 0:
+            if not new_content and stripped_this_message > 0:
                 new_content.append(
-                    {"type": "text", "text": self._MEDIA_PLACEHOLDER},
+                    {
+                        "type": "text",
+                        "text": MEDIA_UNSUPPORTED_PLACEHOLDER,
+                    },
                 )
 
             msg.content = new_content
@@ -1508,24 +1390,28 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
         """Override reply to process file blocks and handle commands.
 
         Args:
-            msg: Input message(s)
-            structured_model: Optional structured output model
+            msg: Input message(s) from user
+            structured_model: Optional pydantic model for structured output
 
         Returns:
             Response message
         """
         # Set workspace_dir and recent_max_bytes in context for tool functions
         from ..config.context import (
-            set_current_focus_dir,
             set_current_workspace_dir,
             set_current_recent_max_bytes,
+            set_current_shell_command_timeout,
             set_current_shell_command_executable,
         )
 
         set_current_workspace_dir(self._workspace_dir)
-        set_current_focus_dir(self._focus_dir)
+        light_ctx = self._agent_config.running.light_context_config
+        pruning_config = light_ctx.tool_result_pruning_config
         set_current_recent_max_bytes(
-            self._agent_config.running.tool_result_compact.recent_max_bytes,
+            pruning_config.pruning_recent_msg_max_bytes,
+        )
+        set_current_shell_command_timeout(
+            self._agent_config.running.shell_command_timeout,
         )
         set_current_shell_command_executable(
             self._agent_config.running.shell_command_executable or None,
@@ -1548,100 +1434,7 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
             return msg
 
         # Normal message processing
-        logger.info("CoPawAgent.reply: max_iters=%s", self.max_iters)
-
-        evidence_sections: list[str] = []
-        if _is_evidence_required_query(query):
-            running = self._agent_config.running
-
-            # Proactively pull memory evidence for factual/config questions.
-            if self.memory_manager is not None:
-                timeout_s = float(
-                    getattr(running.memory_summary, "force_memory_search_timeout", 8.0),
-                )
-                try:
-                    mem_resp = await asyncio.wait_for(
-                        self.memory_manager.memory_search(
-                            query=query[:160],
-                            max_results=min(
-                                int(getattr(running.memory_summary, "force_max_results", 5)),
-                                8,
-                            ),
-                            min_score=float(
-                                getattr(running.memory_summary, "force_min_score", 0.1),
-                            ),
-                        ),
-                        timeout=timeout_s,
-                    )
-                    memory_text = "\n".join(_extract_text_blocks(getattr(mem_resp, "content", None)))
-                    section = _summarize_evidence_section("Memory Evidence", memory_text)
-                    if section:
-                        evidence_sections.append(section)
-                except BaseException as e:
-                    logger.warning("proactive memory evidence fetch failed: %s", e)
-
-            # Pull knowledge evidence when retrieval is enabled.
-            if bool(getattr(running, "knowledge_enabled", True)) and bool(
-                getattr(running, "knowledge_retrieval_enabled", True),
-            ):
-                try:
-                    know_resp = await asyncio.wait_for(
-                        knowledge_search(
-                            query=query[:160],
-                            max_results=5,
-                            min_score=1.0,
-                        ),
-                        timeout=8.0,
-                    )
-                    knowledge_text = "\n".join(_extract_text_blocks(getattr(know_resp, "content", None)))
-                    section = _summarize_evidence_section("Knowledge Evidence", knowledge_text)
-                    if section:
-                        evidence_sections.append(section)
-                except BaseException as e:
-                    logger.warning("proactive knowledge evidence fetch failed: %s", e)
-
-            if evidence_sections and hasattr(self.memory, "_long_term_memory"):
-                joined = "\n\n".join(evidence_sections)
-                existing = getattr(self.memory, "_long_term_memory", "") or ""
-                if existing:
-                    self.memory._long_term_memory = (
-                        f"{existing}\n\n## Proactive Evidence Context\n\n{joined}"
-                    )
-                else:
-                    self.memory._long_term_memory = (
-                        f"## Proactive Evidence Context\n\n{joined}"
-                    )
-
-        if hasattr(self.memory, "_long_term_memory"):
-            running = self._agent_config.running
-            ms = running.memory_summary
-            if (
-                ms.force_memory_search
-                and self.memory_manager is not None
-                and query
-            ):
-                try:
-                    result = await asyncio.wait_for(
-                        self.memory_manager.memory_search(
-                            query=query[:100],
-                            max_results=ms.force_max_results,
-                            min_score=ms.force_min_score,
-                        ),
-                        timeout=ms.force_memory_search_timeout,
-                    )
-                    self.memory._long_term_memory = "\n".join(
-                        block["text"]
-                        for block in (result.content or [])
-                        if isinstance(block, dict) and block.get("text")
-                    )
-                except BaseException as e:
-                    logger.warning(
-                        "force_memory_search failed or timed out,"
-                        f" skipping e={e}",
-                    )
-                    self.memory._long_term_memory = ""
-            else:
-                self.memory._long_term_memory = ""
+        logger.info("QwenPawAgent.reply: max_iters=%s", self.max_iters)
 
         request_context = getattr(self, "_request_context", {}) or {}
         channel_name = request_context.get("channel", "console")
@@ -1667,21 +1460,3 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
                     "Exception occurred during interrupt cleanup",
                     exc_info=True,
                 )
-
-    async def handle_interrupt(
-        self,
-        msg: Msg | list[Msg] | None = None,
-        structured_model: Type[BaseModel] | None = None,
-    ) -> Msg:
-        """Override default interruption response with localized wording."""
-        del msg, structured_model
-
-        response_msg = Msg(
-            self.name,
-            _interrupt_reply_text(self._agent_config.language),
-            "assistant",
-            metadata={"_is_interrupted": True},
-        )
-        await self.print(response_msg, True)
-        await self.memory.add(response_msg)
-        return response_msg

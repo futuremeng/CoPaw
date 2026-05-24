@@ -27,6 +27,7 @@ export const KEY_TO_PATH: Record<string, string> = {
   knowledge: "/knowledge",
   skills: "/skills",
   "skill-pool": "/skill-pool",
+  market: "/market",
   tools: "/tools",
   mcp: "/mcp",
   acp: "/acp",
@@ -57,6 +58,7 @@ export const KEY_TO_LABEL: Record<string, string> = {
   knowledge: "nav.knowledge",
   skills: "nav.skills",
   "skill-pool": "nav.skillPool",
+  market: "nav.market",
   tools: "nav.tools",
   mcp: "nav.mcp",
   acp: "nav.acp",
@@ -87,6 +89,11 @@ export const getFaqUrl = (lang: string): string =>
 
 export const getReleaseNotesUrl = (lang: string): string =>
   `https://qwenpaw.agentscope.io/release-notes?lang=${getWebsiteLang(lang)}`;
+
+export const getFeatureDemosUrl = (lang: string): string =>
+  `https://qwenpaw.agentscope.io/docs/functiondemo?lang=${getWebsiteLang(
+    lang,
+  )}`;
 
 // ── Version helpers ────────────────────────────────────────────────────────
 
@@ -167,7 +174,7 @@ pip install -e .
 
 \`\`\`
 docker pull agentscope/qwenpaw:latest
-docker run -p 127.0.0.1:8088:8088 -v qwenpaw-data:/app/working agentscope/qwenpaw:latest
+docker run -p 127.0.0.1:8088:8088 -v qwenpaw-data:/app/working -v qwenpaw-secrets:/app/working.secret -v qwenpaw-backups:/app/working.backups agentscope/qwenpaw:latest
 \`\`\`
 
 升级后重启服务 copaw app。`,
@@ -199,7 +206,7 @@ pip install -e .
 
 \`\`\`
 docker pull agentscope/qwenpaw:latest
-docker run -p 127.0.0.1:8088:8088 -v qwenpaw-data:/app/working agentscope/qwenpaw:latest
+docker run -p 127.0.0.1:8088:8088 -v qwenpaw-data:/app/working -v qwenpaw-secrets:/app/working.secret -v qwenpaw-backups:/app/working.backups agentscope/qwenpaw:latest
 \`\`\`
 
 After upgrading, restart the service with \`qwenpaw app\`.`,
@@ -231,7 +238,7 @@ pip install -e .
 
 \`\`\`
 docker pull agentscope/qwenpaw:latest
-docker run -p 127.0.0.1:8088:8088 -v qwenpaw-data:/app/working agentscope/qwenpaw:latest
+docker run -p 127.0.0.1:8088:8088 -v qwenpaw-data:/app/working -v qwenpaw-secrets:/app/working.secret -v qwenpaw-backups:/app/working.backups agentscope/qwenpaw:latest
 \`\`\`
 
 After upgrading, restart the service with \`qwenpaw app\`.`,

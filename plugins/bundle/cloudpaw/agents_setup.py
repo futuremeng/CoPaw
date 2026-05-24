@@ -125,63 +125,52 @@ def _build_acp_config(spec: dict[str, Any]) -> Any:
 
 
 def _inject_llm_env(env: dict[str, str]) -> None:
-    """Inject the current QwenPaw LLM provider configuration into env.
+    """Inject LLM config for iac-code.
 
-    If the user has not explicitly set IAC_CODE_PROVIDER / IAC_CODE_API_KEY,
-    we read the active LLM configuration from the QwenPaw provider manager
-    and pass it through so iac-code uses the same model backend.
+    For iac-code >= 0.1.2: write llm_source: qwenpaw to settings.yml
+    so iac-code reads config directly from QwenPaw.
+
+    For older versions: inject IAC_CODE_* environment variables.
     """
     import os
 
     if os.environ.get("IAC_CODE_PROVIDER") or env.get("IAC_CODE_PROVIDER"):
         return
 
-    try:
-        from qwenpaw.providers.provider_manager import ProviderManager
+    _write_qwenpaw_mode_to_settings()
+    return
 
-        pm = ProviderManager()
-        active_slot = pm.get_active_model()
-        if active_slot is None:
-            return
 
-        provider_id = active_slot.provider_id or ""
-        model = active_slot.model or ""
-        if not provider_id:
-            return
+def _write_qwenpaw_mode_to_settings() -> None:
+    """Write llm_source: qwenpaw to ~/.iac-code/settings.yml."""
+    import yaml
 
-        provider = pm.get_provider(provider_id)
-        api_key = getattr(provider, "api_key", "") or "" if provider else ""
-        base_url = getattr(provider, "base_url", "") or "" if provider else ""
+    settings_path = Path.home() / ".iac-code" / "settings.yml"
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
 
-        _PROVIDER_MAP = {
-            "dashscope": "DashScope",
-            "aliyun-codingplan": "DashScopeTokenPlan",
-            "aliyun-codingplan-intl": "DashScopeTokenPlan",
-            "openai": "OpenAI",
-            "anthropic": "Anthropic",
-            "deepseek": "DeepSeek",
-        }
-        iac_provider = _PROVIDER_MAP.get(
-            provider_id.lower(),
-            "OpenAPICompatible",
-        )
+    # Load existing settings
+    if settings_path.exists():
+        try:
+            with open(settings_path, "r", encoding="utf-8") as f:
+                settings = yaml.safe_load(f) or {}
+        except Exception:
+            settings = {}
+    else:
+        settings = {}
 
-        if iac_provider:
-            env.setdefault("IAC_CODE_PROVIDER", iac_provider)
-        if api_key:
-            env.setdefault("IAC_CODE_API_KEY", api_key)
-        if model:
-            env.setdefault("IAC_CODE_MODEL", model)
-        if base_url and iac_provider == "OpenAPICompatible":
-            env.setdefault("IAC_CODE_BASE_URL", base_url)
-
-        logger.info(
-            "Injected LLM config for iac-code: provider=%s, model=%s",
-            iac_provider,
-            model,
-        )
-    except Exception as exc:
-        logger.debug("Failed to inject LLM config for iac-code: %s", exc)
+    # Write llm_source: qwenpaw
+    if settings.get("llm_source") != "qwenpaw":
+        settings["llm_source"] = "qwenpaw"
+        try:
+            with open(settings_path, "w", encoding="utf-8") as f:
+                yaml.dump(
+                    settings,
+                    f,
+                    default_flow_style=False,
+                    allow_unicode=True,
+                )
+        except Exception as exc:
+            logger.warning("Failed to write iac-code settings.yml: %s", exc)
 
 
 def ensure_builtin_agents() -> None:

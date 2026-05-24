@@ -9,6 +9,7 @@ import {
   CONTEXT_MANAGER_BACKEND_MAPPINGS,
   MEMORY_MANAGER_BACKEND_MAPPINGS,
 } from "../../../constants/backendMappings";
+import type { ToolExecutionLevel } from "./components/ToolExecutionLevelCard";
 
 export function useAgentConfig() {
   const { t } = useTranslation();
@@ -24,6 +25,8 @@ export function useAgentConfig() {
   const [savingLang, setSavingLang] = useState(false);
   const [timezone, setTimezone] = useState<string>("UTC");
   const [savingTimezone, setSavingTimezone] = useState(false);
+  const [approvalLevel, setApprovalLevel] =
+    useState<ToolExecutionLevel>("AUTO");
 
   const normalizeConfigForForm = useCallback(
     (config: AgentsRunningConfig) => {
@@ -40,6 +43,7 @@ export function useAgentConfig() {
         ...(config as AgentsRunningConfig),
         auto_continue_on_text_only: config.auto_continue_on_text_only ?? false,
         shell_command_timeout: config.shell_command_timeout ?? 60.0,
+        shell_command_executable: config.shell_command_executable ?? "",
         context_manager_backend: contextBackend,
         memory_manager_backend: memoryBackend,
         auto_title_config: config.auto_title_config ?? {
@@ -60,6 +64,10 @@ export function useAgentConfig() {
         api.getAgentLanguage(),
         api.getUserTimezone(),
       ]);
+      const loadedLevel = (
+        config.approval_level || "AUTO"
+      ).toUpperCase() as ToolExecutionLevel;
+      setApprovalLevel(loadedLevel);
       setRunningConfigSnapshot(config);
       form.setFieldsValue(normalizeConfigForForm(config));
       setLanguage(langResp.language);
@@ -84,9 +92,13 @@ export function useAgentConfig() {
       const payload = {
         ...(runningConfigSnapshot ?? {}),
         ...values,
+        approval_level: approvalLevel,
       } as AgentsRunningConfig;
       const savedConfig = await api.updateAgentRunningConfig(payload);
       setRunningConfigSnapshot(savedConfig);
+      setApprovalLevel(
+        ((savedConfig.approval_level || "AUTO") as string).toUpperCase() as ToolExecutionLevel,
+      );
       form.setFieldsValue(normalizeConfigForForm(savedConfig));
       message.success(t("agentConfig.saveSuccess"));
     } catch (err) {
@@ -97,7 +109,14 @@ export function useAgentConfig() {
     } finally {
       setSaving(false);
     }
-  }, [form, message, normalizeConfigForForm, runningConfigSnapshot, t]);
+  }, [
+    approvalLevel,
+    form,
+    message,
+    normalizeConfigForForm,
+    runningConfigSnapshot,
+    t,
+  ]);
 
   const handleLanguageChange = useCallback(
     (value: string): void => {
@@ -170,6 +189,8 @@ export function useAgentConfig() {
     savingLang,
     timezone,
     savingTimezone,
+    approvalLevel,
+    setApprovalLevel,
     fetchConfig,
     handleSave,
     handleLanguageChange,

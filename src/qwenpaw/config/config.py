@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-import os
 import json
 import re
 from pathlib import Path
-from typing import Optional, Union, Dict, List, Literal, Any, Set, cast
+from typing import Optional, Union, Dict, List, Literal, Any, Set
 
 from pydantic import (
     BaseModel,
@@ -236,6 +235,9 @@ class DingTalkConfig(BaseChannelConfig):
 class FeishuConfig(BaseChannelConfig):
     """Feishu/Lark channel: app_id, app_secret; optional encrypt_key,
     verification_token for event handler. media_dir for received media.
+    domain: 'feishu' for China, 'lark' for international.
+    streaming_enabled: enable CardKit streaming card updates for real-time
+    typewriter-style text output.
     """
 
     app_id: str = ""
@@ -243,6 +245,8 @@ class FeishuConfig(BaseChannelConfig):
     encrypt_key: str = ""
     verification_token: str = ""
     media_dir: Optional[str] = None
+    domain: Literal["feishu", "lark"] = "feishu"
+    streaming_enabled: bool = False
 
 
 class QQConfig(BaseChannelConfig):
@@ -363,22 +367,31 @@ class VoiceChannelConfig(BaseChannelConfig):
 
 
 class SIPChannelConfig(BaseChannelConfig):
-    """SIP voice channel configuration."""
+    """SIP voice channel: dual-track (pyVoIP dev / LiveKit production)."""
 
-    sip_mode: Literal["dev", "livekit"] = "dev"
-    sip_server: str = ""
+    sip_mode: str = "dev"
+    sip_host: str = "0.0.0.0"
+    sip_port: int = 5061
     sip_username: str = ""
     sip_password: str = ""
-    sip_host: str = "0.0.0.0"
-    sip_port: int = 5060
+    sip_server: str = ""
+    sip_transport: str = "UDP"
     rtp_port_low: int = 10000
     rtp_port_high: int = 20000
+    dashscope_api_key: str = ""
+    tts_provider: str = "aliyun"
+    tts_voice: str = ""
+    stt_provider: str = "aliyun"
+    language: str = "zh-CN"
+    welcome_greeting: str = "你好，我是QwenPaw"
+    call_timeout: float = 120.0
     livekit_url: str = ""
     livekit_api_key: str = ""
     livekit_api_secret: str = ""
     livekit_sip_trunk_id: str = ""
     livekit_room_name: str = "sip-inbound"
     livekit_output_sample_rate: int = 24000
+    max_concurrent_calls: int = 5
 
 
 class XiaoYiConfig(BaseChannelConfig):
@@ -488,41 +501,6 @@ class AgentsDefaultsConfig(BaseModel):
     heartbeat: Optional[HeartbeatConfig] = None
 
 
-class EmbeddingConfig(BaseModel):
-    """Embedding model configuration."""
-
-    model_config = ConfigDict(extra="ignore")
-
-    backend: str = Field(
-        default="openai",
-        description="Embedding backend (openai, etc.)",
-    )
-    api_key: str = Field(
-        default="",
-        description="API key for embedding provider",
-    )
-    base_url: str = Field(default="", description="Base URL for embedding API")
-    model_name: str = Field(default="", description="Embedding model name")
-    dimensions: int = Field(default=1024, description="Embedding dimensions")
-    enable_cache: bool = Field(
-        default=True,
-        description="Whether to enable embedding cache",
-    )
-    use_dimensions: bool = Field(
-        default=False,
-        description="Whether to use custom dimensions",
-    )
-    max_cache_size: int = Field(default=3000, description="Maximum cache size")
-    max_input_length: int = Field(
-        default=8192,
-        description="Maximum input length for embedding",
-    )
-    max_batch_size: int = Field(
-        default=10,
-        description="Maximum batch size for embedding",
-    )
-
-
 class AutoMemorySearchConfig(BaseModel):
     """Auto memory search configuration."""
 
@@ -530,15 +508,15 @@ class AutoMemorySearchConfig(BaseModel):
 
     enabled: bool = Field(
         default=False,
-        description="Whether to enable automatic memory search",
+        description="Whether to auto search memory on every turn",
     )
 
     max_results: int = Field(
-        default=1,
+        default=2,
         ge=1,
         description=(
-            "Maximum number of results to return when auto memory "
-            "search is enabled"
+            "Maximum number of results to return when auto memory"
+            " search is enabled"
         ),
     )
 
@@ -547,14 +525,14 @@ class AutoMemorySearchConfig(BaseModel):
         ge=0.0,
         le=1.0,
         description=(
-            "Minimum relevance score for results when auto memory "
-            "search is enabled"
+            "Minimum relevance score for results when auto memory"
+            " search is enabled"
         ),
     )
 
 
 class EmbeddingModelConfig(BaseModel):
-    """Embedding model configuration for ReMeLight."""
+    """Embedding model configuration."""
 
     model_config = ConfigDict(extra="ignore")
 
@@ -641,15 +619,17 @@ class ReMeLightMemoryConfig(BaseModel):
 
     auto_memory_interval: int | None = Field(
         default=None,
-        description=(
-            "Auto memory every N user queries. None disables periodic auto "
-            "memory."
-        ),
+        description="Auto memory every N user queries. None disables "
+        "periodic auto memory, 1 means auto memory after every user "
+        "query, 2 means every 2 queries, etc. WARNING: Setting too "
+        "small (e.g., 1-3) may cause high token usage and heavy "
+        "background task burden. Recommended: 5 or 10.",
     )
 
     dream_cron: str = Field(
         default="0 23 * * *",
-        description="Cron expression for dream-based memory optimization job",
+        description="Cron expression for dream-based memory optimization job "
+        "(empty to disable)",
     )
 
     auto_memory_search_config: AutoMemorySearchConfig = Field(
@@ -663,51 +643,35 @@ class ReMeLightMemoryConfig(BaseModel):
     rebuild_memory_index_on_start: bool = Field(
         default=False,
         description=(
-            "Whether to clear and rebuild the memory search index when the "
-            "agent starts."
+            "Whether to clear and rebuild the memory search index when the"
+            " agent starts. Set to False to skip re-indexing and only monitor"
+            " new file changes."
         ),
     )
 
     recursive_file_watcher: bool = Field(
         default=False,
         description=(
-            "Whether to watch memory directory recursively for indexing."
+            "Whether to watch memory directory recursively. "
+            "Set to True to include subdirectories like memory/subdirectory/* "
+            "in vector search indexing."
         ),
     )
 
 
 class ContextCompactConfig(BaseModel):
-    """Context compaction and token-counting configuration."""
+    """Context compaction configuration."""
 
     model_config = ConfigDict(extra="ignore")
 
-    token_count_model: str = Field(
-        default="default",
-        description="Model to use for token counting",
-    )
-
-    token_count_use_mirror: bool = Field(
-        default=False,
-        description="Whether to use HuggingFace mirror for token counting",
-    )
-
-    token_count_estimate_divisor: float = Field(
-        default=4,
-        ge=2,
-        le=5,
-        description=(
-            "Divisor for byte-based token estimation (byte_len / divisor)"
-        ),
-    )
-
-    context_compact_enabled: bool = Field(
+    enabled: bool = Field(
         default=True,
         description="Whether to enable automatic context compaction",
     )
 
-    memory_compact_ratio: float = Field(
-        default=0.75,
-        ge=0.3,
+    compact_threshold_ratio: float = Field(
+        default=0.8,
+        ge=0.1,
         le=0.9,
         description=(
             "Compaction trigger threshold ratio: compaction is triggered when "
@@ -715,9 +679,9 @@ class ContextCompactConfig(BaseModel):
         ),
     )
 
-    memory_reserve_ratio: float = Field(
+    reserve_threshold_ratio: float = Field(
         default=0.1,
-        ge=0.05,
+        ge=0,
         le=0.3,
         description=(
             "Context reserve threshold ratio: the most recent fraction of the "
@@ -731,183 +695,94 @@ class ContextCompactConfig(BaseModel):
     )
 
 
-class ToolResultCompactConfig(BaseModel):
-    """Tool result compaction thresholds and retention configuration."""
+class ToolResultPruningConfig(BaseModel):
+    """Tool result pruning configuration."""
 
     model_config = ConfigDict(extra="ignore")
 
     enabled: bool = Field(
         default=True,
-        description="Whether to enable tool result compaction",
+        description="Whether to enable tool result pruning",
     )
 
-    recent_n: int = Field(
+    pruning_recent_n: int = Field(
         default=2,
         ge=1,
         le=10,
         description="Number of recent messages to use recent_max_bytes for",
     )
 
-    old_max_bytes: int = Field(
+    pruning_old_msg_max_bytes: int = Field(
         default=3000,
         ge=100,
-        description=(
-            "Byte threshold for old messages in tool result compaction"
-        ),
+        description=("Byte threshold for old messages in tool result pruning"),
     )
 
-    recent_max_bytes: int = Field(
+    pruning_recent_msg_max_bytes: int = Field(
         default=50000,
         ge=1000,
         description=(
-            "Byte threshold for recent messages in tool result compaction"
+            "Byte threshold for recent messages in tool result pruning"
         ),
     )
 
-    retention_days: int = Field(
+    offload_retention_days: int = Field(
         default=5,
         ge=1,
         le=10,
         description="Number of days to retain tool result files",
     )
 
+    tool_results_cache: str = Field(
+        default="tool_results",
+        description="Directory name for tool result cache files "
+        "relative to working_dir",
+    )
 
-class _LegacyLightContextCompactConfig:
-    """Compatibility view for legacy light-context compaction access."""
+    exempt_file_extensions: List[str] = Field(
+        default_factory=lambda: [".md"],
+        description=(
+            "File extensions exempt from tool result pruning. "
+            "Tool results for read_file operations on these file types "
+            "will use recent_max_bytes instead of old_max_bytes."
+        ),
+    )
 
-    def __init__(self, source: ContextCompactConfig):
-        self._source = source
-
-    @property
-    def enabled(self) -> bool:
-        return self._source.context_compact_enabled
-
-    @property
-    def compact_threshold_ratio(self) -> float:
-        return self._source.memory_compact_ratio
-
-    @property
-    def reserve_threshold_ratio(self) -> float:
-        return self._source.memory_reserve_ratio
-
-    @property
-    def token_count_estimate_divisor(self) -> float:
-        return self._source.token_count_estimate_divisor
-
-
-class _LegacyToolResultPruningConfig:
-    """Compatibility view for legacy light-context tool-result pruning."""
-
-    def __init__(self, source: ToolResultCompactConfig):
-        self._source = source
-
-    @property
-    def enabled(self) -> bool:
-        return self._source.enabled
-
-    @property
-    def pruning_recent_n(self) -> int:
-        return self._source.recent_n
-
-    @property
-    def pruning_old_msg_max_bytes(self) -> int:
-        return self._source.old_max_bytes
-
-    @property
-    def pruning_recent_msg_max_bytes(self) -> int:
-        return self._source.recent_max_bytes
-
-    @property
-    def offload_retention_days(self) -> int:
-        return self._source.retention_days
-
-    @property
-    def tool_results_cache(self) -> str:
-        return "tool-results"
+    exempt_tool_names: List[str] = Field(
+        default_factory=lambda: ["chat_with_agent"],
+        description=(
+            "Tool names exempt from tool result pruning. "
+            "Tool results from these tools will use recent_max_bytes "
+            "instead of old_max_bytes."
+        ),
+    )
 
 
-class _LegacyLightContextConfig:
-    """Compatibility adapter for callers still expecting light_context_config."""
-
-    def __init__(self, running: "AgentsRunningConfig"):
-        self._running = running
-
-    @property
-    def context_compact_config(self) -> _LegacyLightContextCompactConfig:
-        return _LegacyLightContextCompactConfig(self._running.context_compact)
-
-    @property
-    def tool_result_pruning_config(self) -> _LegacyToolResultPruningConfig:
-        return _LegacyToolResultPruningConfig(self._running.tool_result_compact)
-
-    @property
-    def token_count_estimate_divisor(self) -> float:
-        return self.context_compact_config.token_count_estimate_divisor
-
-    @property
-    def dialog_path(self) -> str:
-        return "dialogs"
-
-
-class MemorySummaryConfig(BaseModel):
-    """Memory summarization and search configuration."""
+class LightContextConfig(BaseModel):
+    """Light context manager configuration."""
 
     model_config = ConfigDict(extra="ignore")
 
-    memory_summary_enabled: bool = Field(
-        default=True,
-        description="Whether to enable memory summarization during compaction",
+    dialog_path: str = Field(
+        default="dialog",
+        description="Path for dialog persistence to jsonl files "
+        "relative to working_dir.",
     )
 
-    memory_prompt_enabled: bool = Field(
-        default=True,
+    token_count_estimate_divisor: float = Field(
+        default=4,
+        ge=2,
+        le=5,
         description=(
-            "Whether to include the memory guidance section in the system"
-            " prompt (the <!-- memory:start/end --> block in AGENTS.md)."
-            " Set to False to omit it and save tokens."
+            "Divisor for byte-based token estimation (byte_len / divisor)"
         ),
     )
 
-    force_memory_search: bool = Field(
-        default=False,
-        description="Whether to force memory search on every turn",
+    context_compact_config: ContextCompactConfig = Field(
+        default_factory=ContextCompactConfig,
     )
-
-    force_max_results: int = Field(
-        default=1,
-        ge=1,
-        description=(
-            "Maximum number of results to return when force memory"
-            " search is enabled"
-        ),
-    )
-
-    force_min_score: float = Field(
-        default=0.3,
-        ge=0.0,
-        le=1.0,
-        description=(
-            "Minimum relevance score for results when force memory"
-            " search is enabled"
-        ),
-    )
-
-    force_memory_search_timeout: float = Field(
-        default=10.0,
-        gt=0.0,
-        description=(
-            "Timeout in seconds for force memory search. Increase this value"
-            " when using remote embedding APIs that may have higher latency."
-        ),
-    )
-
-    rebuild_memory_index_on_start: bool = Field(
-        default=False,
-        description=(
-            "Whether to clear and rebuild the memory search index when the"
-            " agent starts. Set to False to skip re-indexing and only monitor"
-            " new file changes."
-        ),
+    tool_result_pruning_config: ToolResultPruningConfig = Field(
+        default_factory=ToolResultPruningConfig,
     )
 
 
@@ -961,7 +836,10 @@ class AgentsRunningConfig(BaseModel):
         description=(
             "When the model returns a text-only assistant message (no tool "
             "calls), inject one follow-up hint and run one extra reasoning "
-            "pass with the same tool policy."
+            "pass with the same tool_choice as the current step (typically "
+            "'auto'), so the model can either emit tool calls or finish with "
+            "text. Does not use tool_choice='required' (that would force "
+            "tools and prevent a natural summary when the task is done)."
         ),
     )
 
@@ -1050,18 +928,13 @@ class AgentsRunningConfig(BaseModel):
     shell_command_executable: str = Field(
         default="",
         description=(
-            "Path to the shell used by execute_shell_command on Unix/macOS "
-            "(e.g. /bin/bash, /bin/zsh). On Windows, supports powershell.exe / "
-            "pwsh.exe. When empty, falls back to $SHELL, then /bin/sh "
-            "(or cmd.exe on Windows)"
-        ),
-    )
-
-    auto_continue_enabled: bool = Field(
-        default=True,
-        description=(
-            "Whether chat auto-continue is enabled when the assistant response "
-            "is detected as likely incomplete."
+            "Path to the shell used by execute_shell_command. "
+            "Linux/macOS: e.g. /bin/bash, /bin/zsh. "
+            "Windows: supports powershell.exe, pwsh.exe, or POSIX-like "
+            "shells such as Git Bash. "
+            "When empty, falls back to the $SHELL environment variable, "
+            "then to the platform default (/bin/sh on Unix, cmd.exe on "
+            "Windows)."
         ),
     )
 
@@ -1092,14 +965,10 @@ class AgentsRunningConfig(BaseModel):
         description="Maximum length for /history command output",
     )
 
-    context_compact: ContextCompactConfig = Field(
-        default_factory=ContextCompactConfig,
-        description="Context compaction configuration",
-    )
+    context_manager_backend: str = Field(default="light")
 
-    tool_result_compact: ToolResultCompactConfig = Field(
-        default_factory=ToolResultCompactConfig,
-        description="Tool result compaction configuration",
+    light_context_config: LightContextConfig = Field(
+        default_factory=LightContextConfig,
     )
 
     auto_title_config: AutoTitleConfig = Field(
@@ -1110,87 +979,31 @@ class AgentsRunningConfig(BaseModel):
         ),
     )
 
+    memory_manager_backend: str = Field(default="remelight")
+
+    adbpg_memory_config: Optional[ADBPGMemoryConfig] = Field(
+        default=None,
+        description="ADBPG memory configuration (used when "
+        "memory_manager_backend='adbpg')",
+    )
+
     reme_light_memory_config: ReMeLightMemoryConfig = Field(
         default_factory=ReMeLightMemoryConfig,
     )
 
-    memory_summary: MemorySummaryConfig = Field(
-        default_factory=MemorySummaryConfig,
-        description="Memory summarization and search configuration",
-    )
-
-    knowledge_enabled: bool = Field(
-        default=False,
-        description="Whether knowledge ingestion and retrieval are enabled",
-    )
-
-    knowledge_auto_collect_chat_files: bool = Field(
-        default=False,
-        description="Whether to auto-collect uploaded chat files into knowledge",
-    )
-
-    knowledge_auto_collect_chat_urls: bool = Field(
-        default=True,
-        description="Whether to auto-collect chat URLs into knowledge",
-    )
-
-    knowledge_auto_collect_long_text: bool = Field(
-        default=False,
-        description="Whether to auto-collect long chat text into knowledge",
-    )
-
-    knowledge_long_text_min_chars: int = Field(
-        default=2000,
-        ge=200,
-        description="Minimum characters before long chat text is collected",
-    )
-
-    knowledge_chunk_size: int = Field(
-        default=1200,
-        ge=200,
-        le=8000,
-        description="Chunk size for knowledge indexing",
-    )
-
-    embedding_config: EmbeddingConfig = Field(
-        default_factory=EmbeddingConfig,
-        description="Embedding model configuration",
-    )
-
-    memory_manager_backend: Literal["remelight"] = Field(
-        default="remelight",
-        description=(
-            "Memory manager backend type. "
-            "Currently only 'remelight' is supported."
-        ),
+    daily_memory_dir: str = Field(
+        default="memory",
+        description="Dir name to daily summary file",
     )
 
     approval_level: Optional[str] = Field(
         default=None,
         description=(
             "Tool execution security level (proxied from agent profile): "
-            "STRICT, SMART, AUTO, or OFF."
+            "STRICT, SMART, AUTO, or OFF.  When set via running-config API, "
+            "the value is written back to the agent profile."
         ),
     )
-
-    @property
-    def memory_compact_reserve(self) -> int:
-        """Memory compact reserve size (tokens)."""
-        return int(
-            self.max_input_length * self.context_compact.memory_reserve_ratio,
-        )
-
-    @property
-    def memory_compact_threshold(self) -> int:
-        """Memory compact threshold size (tokens)."""
-        return int(
-            self.max_input_length * self.context_compact.memory_compact_ratio,
-        )
-
-    @property
-    def light_context_config(self) -> _LegacyLightContextConfig:
-        """Backward-compatible view for legacy light-context callers."""
-        return _LegacyLightContextConfig(self)
 
 
 class AgentsLLMRoutingConfig(BaseModel):
@@ -1236,21 +1049,14 @@ class AgentProfileRef(BaseModel):
         default=True,
         description="Whether agent is enabled (controls instance loading)",
     )
-    is_builtin: bool = Field(
+
+
+class PlanConfig(BaseModel):
+    """Plan mode configuration (stored in agent.json)."""
+
+    enabled: bool = Field(
         default=False,
-        description="Whether this agent is a system-managed builtin agent",
-    )
-    builtin_kind: str = Field(
-        default="",
-        description="Stable builtin agent kind identifier",
-    )
-    builtin_label: str = Field(
-        default="",
-        description="Short UI label for builtin agent families",
-    )
-    system_protected: bool = Field(
-        default=False,
-        description="Whether destructive management operations are blocked",
+        description="Whether plan mode is enabled for this agent",
     )
 
 
@@ -1263,25 +1069,13 @@ class AgentProfileConfig(BaseModel):
     id: str = Field(..., description="Unique agent ID")
     name: str = Field(..., description="Human-readable agent name")
     description: str = Field(default="", description="Agent description")
-    is_builtin: bool = Field(
-        default=False,
-        description="Whether this agent is a system-managed builtin agent",
-    )
-    builtin_kind: str = Field(
-        default="",
-        description="Stable builtin agent kind identifier",
-    )
-    builtin_label: str = Field(
-        default="",
-        description="Short UI label for builtin agent families",
-    )
-    system_protected: bool = Field(
-        default=False,
-        description="Whether destructive management operations are blocked",
-    )
     workspace_dir: str = Field(
         default="",
         description="Path to agent's workspace (optional, for reference)",
+    )
+    template_id: Optional[str] = Field(
+        default=None,
+        description="Builtin template used when this agent was created",
     )
 
     # Agent-specific configurations
@@ -1317,6 +1111,16 @@ class AgentProfileConfig(BaseModel):
         default="zh",
         description="Language setting for this agent",
     )
+    approval_level: str = Field(
+        default="AUTO",
+        description=(
+            "Tool execution security level: "
+            "STRICT (all tools need approval), "
+            "SMART (low-risk auto-allowed), "
+            "AUTO (only guarded tools), "
+            "OFF (guard disabled)"
+        ),
+    )
     system_prompt_files: List[str] = Field(
         default_factory=lambda: ["AGENTS.md", "SOUL.md", "PROFILE.md"],
         description="System prompt markdown files",
@@ -1325,10 +1129,6 @@ class AgentProfileConfig(BaseModel):
         default=None,
         description="Tools configuration for this agent",
     )
-    plan: Optional["PlanConfig"] = Field(
-        default=None,
-        description="Plan mode configuration for this agent",
-    )
     security: Optional["SecurityConfig"] = Field(
         default=None,
         description="Security configuration for this agent",
@@ -1336,6 +1136,10 @@ class AgentProfileConfig(BaseModel):
     acp: Optional[ACPConfig] = Field(
         default=None,
         description="ACP configuration for this agent",
+    )
+    plan: PlanConfig = Field(
+        default_factory=PlanConfig,
+        description="Plan mode configuration for this agent",
     )
 
 
@@ -1489,7 +1293,7 @@ class MCPClientConfig(BaseModel):
                 "streamablehttp": "streamable_http",
                 "http": "streamable_http",
                 "stdio": "stdio",
-                "sse": "streamable_http",
+                "sse": "sse",
             }
             payload["transport"] = transport_alias_map.get(
                 normalized,
@@ -1528,11 +1332,10 @@ class MCPConfig(BaseModel):
         default_factory=lambda: {
             "tavily_search": MCPClientConfig(
                 name="tavily_mcp",
-                # Auto-enable if TAVILY_API_KEY exists in environment
-                enabled=bool(os.getenv("TAVILY_API_KEY")),
+                enabled=False,
                 command="npx",
                 args=["-y", "tavily-mcp@latest"],
-                env={"TAVILY_API_KEY": os.getenv("TAVILY_API_KEY", "")},
+                env={"TAVILY_API_KEY": ""},
             ),
         },
     )
@@ -1542,14 +1345,17 @@ class BuiltinToolConfig(BaseModel):
     """Configuration for a single built-in tool."""
 
     name: str = Field(..., description="Tool function name")
-    enabled: bool = Field(True, description="Whether the tool is enabled")
+    enabled: bool = Field(
+        default=True,
+        description="Whether the tool is enabled",
+    )
     description: str = Field(default="", description="Tool description")
     display_to_user: bool = Field(
-        True,
+        default=True,
         description="Whether tool output is rendered to user channels",
     )
     async_execution: bool = Field(
-        False,
+        default=False,
         description="Whether to execute the tool asynchronously in background",
     )
     icon: str | None = Field(
@@ -1560,25 +1366,9 @@ class BuiltinToolConfig(BaseModel):
         default_factory=dict,
         description="Tool-specific configuration (e.g., API keys)",
     )
-def _builtin_tool(
-    name: str,
-    description: str,
-    icon: str,
-    *,
-    enabled: bool = True,
-    display_to_user: bool = True,
-    async_execution: bool = False,
-) -> BuiltinToolConfig:
-    return BuiltinToolConfig(
-        name=name,
-        enabled=enabled,
-        description=description,
-        display_to_user=display_to_user,
-        async_execution=async_execution,
-        icon=icon,
-    )
 
 
+# pylint: disable=too-many-nested-blocks
 def _default_builtin_tools() -> Dict[str, BuiltinToolConfig]:
     """Return a fresh copy of the canonical built-in tool definitions.
 
@@ -1586,113 +1376,124 @@ def _default_builtin_tools() -> Dict[str, BuiltinToolConfig]:
     from plugins.
     """
     tools = {
-        "execute_shell_command": _builtin_tool(
-            "execute_shell_command",
-            "Execute shell commands",
-            "💻",
+        "execute_shell_command": BuiltinToolConfig(
+            name="execute_shell_command",
+            enabled=True,
+            description="Execute shell commands",
+            icon="💻",
         ),
-        "read_file": _builtin_tool(
-            "read_file",
-            "Read file contents",
-            "📄",
+        "read_file": BuiltinToolConfig(
+            name="read_file",
+            enabled=True,
+            description="Read file contents",
+            icon="📄",
         ),
-        "write_file": _builtin_tool(
-            "write_file",
-            "Write content to file",
-            "✍️",
+        "write_file": BuiltinToolConfig(
+            name="write_file",
+            enabled=True,
+            description="Write content to file",
+            icon="✍️",
         ),
-        "edit_file": _builtin_tool(
-            "edit_file",
-            "Edit file using find-and-replace",
-            "🖊️",
+        "edit_file": BuiltinToolConfig(
+            name="edit_file",
+            enabled=True,
+            description="Edit file using find-and-replace",
+            icon="🖊️",
         ),
-        "grep_search": _builtin_tool(
-            "grep_search",
-            "Search file contents by pattern",
-            "🔍",
+        "grep_search": BuiltinToolConfig(
+            name="grep_search",
+            enabled=True,
+            description="Search file contents by pattern",
+            icon="🔍",
         ),
-        "glob_search": _builtin_tool(
-            "glob_search",
-            "Find files matching a glob pattern",
-            "📁",
+        "glob_search": BuiltinToolConfig(
+            name="glob_search",
+            enabled=True,
+            description="Find files matching a glob pattern",
+            icon="📁",
         ),
-        "browser_use": _builtin_tool(
-            "browser_use",
-            "Browser automation and web interaction",
-            "🌐",
+        "browser_use": BuiltinToolConfig(
+            name="browser_use",
+            enabled=True,
+            description="Browser automation and web interaction",
+            icon="🌐",
         ),
-        "desktop_screenshot": _builtin_tool(
-            "desktop_screenshot",
-            "Capture desktop screenshots",
-            "📸",
+        "desktop_screenshot": BuiltinToolConfig(
+            name="desktop_screenshot",
+            enabled=True,
+            description="Capture desktop screenshots",
+            icon="📸",
         ),
-        "view_image": _builtin_tool(
-            "view_image",
-            "Load an image into LLM context for visual analysis",
-            "🖼️",
+        "view_image": BuiltinToolConfig(
+            name="view_image",
+            enabled=True,
+            description="Load an image into LLM context for visual analysis",
             display_to_user=False,
+            icon="🖼️",
         ),
-        "view_video": _builtin_tool(
-            "view_video",
-            "Load a video into LLM context for visual analysis",
-            "🎥",
+        "view_video": BuiltinToolConfig(
+            name="view_video",
+            enabled=True,
+            description="Load a video into LLM context for visual analysis",
             display_to_user=False,
+            icon="🎥",
         ),
-        "send_file_to_user": _builtin_tool(
-            "send_file_to_user",
-            "Send files to user",
-            "📤",
+        "send_file_to_user": BuiltinToolConfig(
+            name="send_file_to_user",
+            enabled=True,
+            description="Send files to user",
+            icon="📤",
         ),
-        "get_current_time": _builtin_tool(
-            "get_current_time",
-            "Get current date and time",
-            "🕐",
+        "get_current_time": BuiltinToolConfig(
+            name="get_current_time",
+            enabled=True,
+            description="Get current date and time",
+            icon="🕐",
         ),
-        "set_user_timezone": _builtin_tool(
-            "set_user_timezone",
-            "Set user timezone",
-            "🌍",
+        "set_user_timezone": BuiltinToolConfig(
+            name="set_user_timezone",
+            enabled=True,
+            description="Set user timezone",
+            icon="🌍",
         ),
-        "get_token_usage": _builtin_tool(
-            "get_token_usage",
-            "Get llm token usage",
-            "📊",
+        "get_token_usage": BuiltinToolConfig(
+            name="get_token_usage",
+            enabled=True,
+            description="Get llm token usage",
+            icon="📊",
         ),
-        "delegate_external_agent": _builtin_tool(
-            "delegate_external_agent",
-            "Delegate work to an external ACP agent runner",
-            "📡",
+        "delegate_external_agent": BuiltinToolConfig(
+            name="delegate_external_agent",
             enabled=False,
+            description="Delegate work to an external ACP agent runner",
+            icon="📡",
         ),
-        "list_agents": _builtin_tool(
-            "list_agents",
-            "List configured agents from the local API",
-            "🤖",
+        "list_agents": BuiltinToolConfig(
+            name="list_agents",
+            enabled=True,
+            description="List configured agents from the local API",
+            icon="🤖",
         ),
-        "chat_with_agent": _builtin_tool(
-            "chat_with_agent",
-            "Send a message to another configured agent and wait for the response",
-            "💬",
+        "chat_with_agent": BuiltinToolConfig(
+            name="chat_with_agent",
+            enabled=True,
+            description=(
+                "Send a message to another configured agent and wait for "
+                "the response"
+            ),
+            icon="💬",
         ),
-        "skill_market_search": _builtin_tool(
-            "skill_market_search",
-            "Search enabled skill markets for installable skills",
-            "🧩",
+        "submit_to_agent": BuiltinToolConfig(
+            name="submit_to_agent",
+            enabled=True,
+            description="Submit a background task to another configured agent",
+            icon="📨",
         ),
-        "skill_market_install": _builtin_tool(
-            "skill_market_install",
-            "Install a skill from enabled markets after explicit confirmation",
-            "📥",
-        ),
-        "submit_to_agent": _builtin_tool(
-            "submit_to_agent",
-            "Submit a background task to another configured agent",
-            "📨",
-        ),
-        "check_agent_task": _builtin_tool(
-            "check_agent_task",
-            "Check the status of a background agent task",
-            "⏳",
+        "check_agent_task": BuiltinToolConfig(
+            name="check_agent_task",
+            enabled=True,
+            description="Check the status of a background agent task",
+            icon="⏳",
         ),
     }
 
@@ -1796,20 +1597,12 @@ def build_qa_agent_tools_config() -> ToolsConfig:
 
 
 def build_local_agent_tools_config() -> ToolsConfig:
-    """Tools preset for builtin local agents.
+    """Tools preset for local collaborative agents.
 
-    Local agents keep the standard built-in tool set so they behave like a
-    normal workspace agent, with model selection handled elsewhere.
-    """
-
-    return ToolsConfig()
-
-
-def build_understand_builtin_tools_config() -> ToolsConfig:
-    """Tools preset for builtin understand-analysis agents.
-
-    These agents are intended for repository analysis and future pipeline
-    orchestration, so the initial preset remains intentionally narrow.
+    Inter-agent coordination tools are enabled by default, along with
+    execute_shell_command and file read/write/edit tools, so a local small
+    model can escalate planning work while still handling basic workspace
+    actions. All other built-ins are disabled.
     """
     allow = frozenset(
         {
@@ -1821,7 +1614,6 @@ def build_understand_builtin_tools_config() -> ToolsConfig:
             "read_file",
             "write_file",
             "edit_file",
-            "view_image",
         },
     )
     builtin_tools = {
@@ -1876,10 +1668,11 @@ class ToolGuardConfig(BaseModel):
     )
 
 
-class PlanConfig(BaseModel):
-    """Per-agent plan mode configuration."""
+class FileGuardConfig(BaseModel):
+    """File guard settings under ``security.file_guard``."""
 
-    enabled: bool = Field(default=False)
+    enabled: bool = True
+    sensitive_files: List[str] = Field(default_factory=list)
 
 
 class SkillScannerWhitelistEntry(BaseModel):
@@ -1926,627 +1719,18 @@ class SecurityConfig(BaseModel):
     """Top-level ``security`` section in config.json."""
 
     tool_guard: ToolGuardConfig = Field(default_factory=ToolGuardConfig)
+    file_guard: FileGuardConfig = Field(default_factory=FileGuardConfig)
     skill_scanner: SkillScannerConfig = Field(
         default_factory=SkillScannerConfig,
     )
-
-
-class KnowledgeSourceSpec(BaseModel):
-    """A single knowledge source definition."""
-
-    model_config = ConfigDict(extra="allow")
-
-    id: str = Field(
-        ...,
-        min_length=1,
-        max_length=64,
-        pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$",
-        description="Stable source id",
-    )
-    name: str = Field(..., min_length=1, max_length=120, description="Display name")
-    type: Literal["file", "directory", "url", "text", "chat"] = Field(
-        default="file",
-        description="Source type",
-    )
-    location: str = Field(
-        default="",
-        description="Filesystem path or URL location",
-    )
-    content: str = Field(
-        default="",
-        description="Inline text content when type is text",
-    )
-    enabled: bool = Field(default=True)
-    recursive: bool = Field(default=False)
-    tags: List[str] = Field(default_factory=list)
-    summary: str = Field(default="")
-    project_id: str = Field(
-        default="",
-        description="Optional project scope id. Empty means global source.",
-    )
-
-    @model_validator(mode="after")
-    def validate_source(self):
-        if self.type in {"file", "directory", "url"} and not self.location.strip():
-            raise ValueError(
-                f"location is required for knowledge source type '{self.type}'",
-            )
-        if self.type == "text" and not (
-            self.content.strip() or self.location.strip()
-        ):
-            raise ValueError(
-                "content or location is required for knowledge source type 'text'",
-            )
-        return self
-
-
-class KnowledgeIndexConfig(BaseModel):
-    """Knowledge indexing behavior."""
-
-    chunk_size: int = Field(default=1200, ge=200, le=8000)
-    chunk_overlap: int = Field(default=150, ge=0, le=2000)
-    include_globs: List[str] = Field(default_factory=list)
-    exclude_globs: List[str] = Field(default_factory=list)
-    max_file_size: int = Field(
-        default=5 * 1024 * 1024,
-        ge=1024,
-        description="Max single-file size (bytes) for indexing/downloading.",
-    )
-
-
-class KnowledgeAutomationConfig(BaseModel):
-    """Deprecated legacy automation section for compatibility."""
-
-    knowledge_auto_collect_chat_files: bool = Field(default=False)
-    knowledge_auto_collect_chat_urls: bool = Field(default=True)
-    knowledge_auto_collect_long_text: bool = Field(default=False)
-    knowledge_long_text_min_chars: int = Field(default=2000, ge=200)
-    url_exclude_private_addresses: bool = Field(default=True)
-    url_exclude_token_params: bool = Field(default=True)
-    url_exclude_patterns: List[str] = Field(default_factory=list)
-
-
-class KnowledgeNLPAutoClassicalChineseConfig(BaseModel):
-    """Automatic routing options for classical Chinese text."""
-
-    enabled: bool = Field(default=True)
-    threshold: float = Field(default=0.22, ge=0.0, le=1.0)
-    model_id: str = Field(
-        default="hanlp.pretrained.mtl.KYOTO_EVAHAN_TOK_LEM_POS_UDEP_LZH",
-        description="Model id used when classical Chinese detection score exceeds threshold.",
-    )
-
-
-class KnowledgeNLPStrategyConfig(BaseModel):
-    """Model routing strategy for request-scoped NLP execution."""
-
-    mode: Literal["auto", "manual", "hybrid"] = Field(default="auto")
-    default_model_id: str = Field(
-        default="",
-        description="Default model id for request-scoped routing; fallback to nlp.model_id when empty.",
-    )
-    task_overrides: Dict[str, str] = Field(
-        default_factory=dict,
-        description="Optional model id overrides keyed by task key, e.g. ner_msra/dep.",
-    )
-    auto_classical_chinese: KnowledgeNLPAutoClassicalChineseConfig = Field(
-        default_factory=KnowledgeNLPAutoClassicalChineseConfig,
-    )
-
-
-class KnowledgeNLPConfig(BaseModel):
-    """Generic NLP runtime configuration."""
-
-    provider: Literal["hanlp", "rex_uninlu", "placeholder"] = Field(
-        default="hanlp",
-        description="Configured NLP provider. HanLP is active during transition to RexUniNLU.",
-    )
-
-    enabled: bool = Field(default=False)
-    python_executable: str = Field(
-        default="",
-        description="Optional Python executable used by external NLP runtime.",
-    )
-    model_id: str = Field(
-        default="iic/nlp_deberta_rex-uninlu_chinese-base",
-        description="Default model id for NLP provider runtime.",
-    )
-    probe_timeout_sec: float = Field(default=5.0, ge=0.5, le=60.0)
-    tokenize_timeout_sec: float = Field(default=15.0, ge=0.5, le=120.0)
-    ner_batch_size: int = Field(
-        default=32,
-        ge=1,
-        le=512,
-        description="Sentence batch size for NER processing on interlinear text.",
-    )
-    model_home: str = Field(
-        default="",
-        description="Optional local cache/model home for NLP runtime.",
-    )
-    preload_on_startup: bool = Field(
-        default=False,
-        description="Whether to preload HanLP models in the background after app startup.",
-    )
-    preload_scope: Literal["critical", "all_enabled_tasks"] = Field(
-        default="critical",
-        description="Which HanLP task models should be warmed when preload is enabled.",
-    )
-    task_matrix: KnowledgeHanLPTaskMatrixConfig = Field(
-        default_factory=lambda: KnowledgeHanLPTaskMatrixConfig(),
-        description="NLP task matrix for L2 annotation and evaluation.",
-    )
-    strategy: KnowledgeNLPStrategyConfig = Field(
-        default_factory=KnowledgeNLPStrategyConfig,
-        description="Request-scoped NLP model routing strategy.",
-    )
-
-    @model_validator(mode="after")
-    def _inject_from_env(self) -> "KnowledgeNLPConfig":
-        provider = os.environ.get("COPAW_NLP_PROVIDER", "").strip().lower()
-        if provider in {"hanlp", "rex_uninlu", "placeholder"}:
-            self.provider = cast(
-                Literal["hanlp", "rex_uninlu", "placeholder"],
-                provider,
-            )
-
-        enabled_raw = (
-            os.environ.get("COPAW_NLP_ENABLED", "").strip()
-            or os.environ.get("COPAW_HANLP_SIDECAR_ENABLED", "").strip()
-        )
-        if enabled_raw:
-            self.enabled = enabled_raw.lower() not in {"0", "false", "no"}
-
-        python_executable = (
-            os.environ.get("COPAW_NLP_PYTHON_EXECUTABLE", "").strip()
-            or os.environ.get("COPAW_HANLP_SIDECAR_PYTHON", "").strip()
-        )
-        if python_executable:
-            self.python_executable = python_executable
-
-        model_id = (
-            os.environ.get("COPAW_NLP_MODEL_ID", "").strip()
-            or os.environ.get("COPAW_HANLP_MODEL_ID", "").strip()
-        )
-        if model_id:
-            self.model_id = model_id
-
-        model_home = (
-            os.environ.get("COPAW_NLP_MODEL_HOME", "").strip()
-            or os.environ.get("COPAW_HANLP_HOME", "").strip()
-        )
-        if model_home:
-            self.model_home = model_home
-
-        preload_enabled_raw = (
-            os.environ.get("COPAW_NLP_PRELOAD_ON_STARTUP", "").strip()
-            or os.environ.get("COPAW_HANLP_PRELOAD_ON_STARTUP", "").strip()
-        )
-        if preload_enabled_raw:
-            self.preload_on_startup = preload_enabled_raw.lower() not in {"0", "false", "no"}
-
-        preload_scope = (
-            os.environ.get("COPAW_NLP_PRELOAD_SCOPE", "").strip().lower()
-            or os.environ.get("COPAW_HANLP_PRELOAD_SCOPE", "").strip().lower()
-        )
-        if preload_scope in {"critical", "all_enabled_tasks"}:
-            self.preload_scope = cast(
-                Literal["critical", "all_enabled_tasks"],
-                preload_scope,
-            )
-
-        probe_timeout = (
-            os.environ.get("COPAW_NLP_PROBE_TIMEOUT_SEC", "").strip()
-            or os.environ.get("COPAW_HANLP_SIDECAR_PROBE_TIMEOUT_SEC", "").strip()
-        )
-        if probe_timeout:
-            try:
-                self.probe_timeout_sec = max(0.5, min(float(probe_timeout), 60.0))
-            except ValueError:
-                pass
-
-        tokenize_timeout = (
-            os.environ.get("COPAW_NLP_TOKENIZE_TIMEOUT_SEC", "").strip()
-            or os.environ.get("COPAW_HANLP_SIDECAR_TOKENIZE_TIMEOUT_SEC", "").strip()
-        )
-        if tokenize_timeout:
-            try:
-                self.tokenize_timeout_sec = max(0.5, min(float(tokenize_timeout), 120.0))
-            except ValueError:
-                pass
-
-        ner_batch_size_raw = os.environ.get("COPAW_NLP_NER_BATCH_SIZE", "").strip()
-        if ner_batch_size_raw:
-            try:
-                self.ner_batch_size = max(1, min(int(ner_batch_size_raw), 512))
-            except ValueError:
-                pass
-
-        return self
-
-
-class KnowledgeHanLPSidecarConfig(KnowledgeNLPConfig):
-    """Deprecated compatibility alias for legacy hanlp config path."""
-
-
-class KnowledgeHanLPTaskConfig(BaseModel):
-    """One HanLP task entry in the L2 evaluation matrix."""
-
-    enabled: bool = Field(default=True)
-    task_name: str = Field(
-        default="",
-        description="HanLP task identifier such as ner/msra, dep, sdp, or con.",
-    )
-    model_id: str = Field(
-        default="",
-        description="Optional model identifier used when the task needs a dedicated local model.",
-    )
-    timeout_sec: float = Field(default=30.0, ge=0.5, le=180.0)
-    artifact_key: str = Field(
-        default="",
-        description="Stable artifact key used for output naming and downstream routing.",
-    )
-    eval_role: Literal["primary", "compare", "auxiliary"] = Field(default="compare")
-
-
-def _default_hanlp_tasks() -> Dict[str, KnowledgeHanLPTaskConfig]:
-    return {
-        "cor": KnowledgeHanLPTaskConfig(
-            enabled=True,
-            task_name="coreference_resolution",
-            artifact_key="cor",
-            eval_role="primary",
-        ),
-        "ner_msra": KnowledgeHanLPTaskConfig(
-            enabled=True,
-            task_name="ner/msra",
-            model_id="MSRA_NER_ELECTRA_SMALL_ZH",
-            artifact_key="ner_msra",
-            eval_role="primary",
-        ),
-        "dep": KnowledgeHanLPTaskConfig(
-            enabled=True,
-            task_name="dep",
-            model_id="CTB9_DEP_ELECTRA_SMALL",
-            artifact_key="dep",
-            eval_role="primary",
-        ),
-        "sdp": KnowledgeHanLPTaskConfig(
-            enabled=True,
-            task_name="sdp",
-            model_id="SEMEVAL16_ALL_ELECTRA_SMALL_ZH",
-            artifact_key="sdp",
-            eval_role="primary",
-        ),
-        "con": KnowledgeHanLPTaskConfig(
-            enabled=True,
-            task_name="con",
-            model_id="CTB9_CON_FULL_TAG_ELECTRA_SMALL",
-            artifact_key="con",
-            eval_role="auxiliary",
-        ),
-        "srl": KnowledgeHanLPTaskConfig(
-            enabled=True,
-            task_name="srl",
-            model_id="CPB3_SRL_ELECTRA_SMALL",
-            artifact_key="srl",
-            eval_role="auxiliary",
-            timeout_sec=60.0,
-        ),
-        "pos_ctb": KnowledgeHanLPTaskConfig(
-            enabled=True,
-            task_name="pos",
-            model_id="CTB9_POS_ELECTRA_SMALL",
-            artifact_key="pos_ctb",
-            eval_role="compare",
-            timeout_sec=60.0,
-        ),
-        "pos_pku": KnowledgeHanLPTaskConfig(
-            enabled=True,
-            task_name="pos",
-            model_id="PKU_POS_ELECTRA_SMALL",
-            artifact_key="pos_pku",
-            eval_role="compare",
-            timeout_sec=60.0,
-        ),
-        "pos_863": KnowledgeHanLPTaskConfig(
-            enabled=True,
-            task_name="pos",
-            model_id="C863_POS_ELECTRA_SMALL",
-            artifact_key="pos_863",
-            eval_role="compare",
-            timeout_sec=60.0,
-        ),
-    }
-
-
-class KnowledgeHanLPTaskMatrixConfig(BaseModel):
-    """HanLP task matrix used by the L2 annotation baseline."""
-
-    tasks: Dict[str, KnowledgeHanLPTaskConfig] = Field(default_factory=_default_hanlp_tasks)
-
-    @model_validator(mode="after")
-    def _ensure_default_tasks(self) -> "KnowledgeHanLPTaskMatrixConfig":
-        defaults = _default_hanlp_tasks()
-        for key, task in defaults.items():
-            if key not in self.tasks:
-                self.tasks[key] = task
-        return self
-
-
-class GraphifyConfig(BaseModel):
-    """Graphify knowledge graph engine configuration.
-
-    Local file mode (primary): point graph_path at graphify-out/graph.json
-    built by running ``graphify <dataset_dir>`` in advance.
-
-    Remote mode: set endpoint to a hosted Graphify service URL.
-
-    Environment overrides (take precedence over config file values):
-      COPAW_GRAPHIFY_GRAPH_PATH   – path to graph.json
-      COPAW_GRAPHIFY_DATASET_DIR  – directory to build graph from
-    COPAW_GRAPHIFY_ENDPOINT     – remote service URL
-    COPAW_GRAPHIFY_API_KEY      – remote service API key
-      COPAW_GRAPHIFY_DATASET      – dataset name for remote service
-      COPAW_GRAPHIFY_FALLBACK     – "0"/"false" disables local fallback
-    COPAW_GRAPHIFY_REQUEST_TIMEOUT_SEC – remote HTTP timeout seconds
-    """
-
-    # --- local file mode ---
-    graph_path: str = Field(
-        default="",
-        description="Path to graphify-out/graph.json (local file mode).",
-    )
-    dataset_dir: str = Field(
-        default="",
-        description="Directory to run graphify on for memify (build graph).",
-    )
-
-    # --- remote service mode ---
-    endpoint: str = Field(
-        default="",
-        description="Graphify service endpoint URL (future hosted mode).",
-    )
-    api_key: str = Field(
-        default="",
-        description="API key for hosted Graphify service.",
-    )
-    dataset: str = Field(
-        default="copaw",
-        description="Dataset name for hosted Graphify service.",
-    )
-
-    # --- behaviour ---
-    fallback_to_local: bool = Field(
-        default=True,
+    allow_no_auth_hosts: List[str] = Field(
+        default_factory=lambda: ["127.0.0.1", "::1"],
         description=(
-            "Fall back to local_lexical engine when Graphify fails. "
-            "Set to False to surface errors instead."
+            "List of client IP addresses that can access API endpoints "
+            "without authentication. By default, localhost addresses "
+            "(127.0.0.1 for IPv4, ::1 for IPv6) are allowed. "
+            "WARNING: Only add trusted IP addresses to this list."
         ),
-    )
-    bfs_depth: int = Field(
-        default=3,
-        ge=1,
-        le=6,
-        description="BFS traversal depth for graph queries.",
-    )
-    token_budget: int = Field(
-        default=2000,
-        ge=100,
-        description="Max output token budget for graph query results.",
-    )
-    request_timeout_sec: float = Field(
-        default=15.0,
-        ge=1.0,
-        le=120.0,
-        description="Timeout in seconds for Graphify remote HTTP calls.",
-    )
-
-    @model_validator(mode="after")
-    def _inject_from_env(self) -> "GraphifyConfig":
-        """Override string fields from environment variables when set."""
-        str_map = {
-            "COPAW_GRAPHIFY_GRAPH_PATH": "graph_path",
-            "COPAW_GRAPHIFY_DATASET_DIR": "dataset_dir",
-            "COPAW_GRAPHIFY_ENDPOINT": "endpoint",
-            "COPAW_GRAPHIFY_API_KEY": "api_key",
-            "COPAW_GRAPHIFY_DATASET": "dataset",
-        }
-        for env_var, field_name in str_map.items():
-            val = os.environ.get(env_var, "").strip()
-            if val:
-                setattr(self, field_name, val)
-        fallback_raw = os.environ.get("COPAW_GRAPHIFY_FALLBACK", "").strip()
-        if fallback_raw:
-            self.fallback_to_local = fallback_raw.lower() not in {"0", "false", "no"}
-        timeout_raw = os.environ.get("COPAW_GRAPHIFY_REQUEST_TIMEOUT_SEC", "").strip()
-        if timeout_raw:
-            try:
-                self.request_timeout_sec = max(1.0, min(float(timeout_raw), 120.0))
-            except ValueError:
-                pass
-        return self
-
-
-class KnowledgeConfig(BaseModel):
-    """Knowledge feature configuration."""
-
-    version: int = Field(default=1, ge=1)
-    enabled: bool = Field(default=False)
-    engine: Literal["local_lexical"] = Field(
-        default="local_lexical",
-    )
-    sources: List[KnowledgeSourceSpec] = Field(default_factory=list)
-    index: KnowledgeIndexConfig = Field(default_factory=KnowledgeIndexConfig)
-    automation: KnowledgeAutomationConfig = Field(
-        default_factory=KnowledgeAutomationConfig,
-    )
-    nlp: KnowledgeNLPConfig = Field(
-        default_factory=KnowledgeNLPConfig,
-    )
-    graphify: GraphifyConfig = Field(
-        default_factory=GraphifyConfig,
-        description="Graphify engine configuration.",
-    )
-    graph_query_enabled: bool = Field(default=False)
-    allow_cypher_query: bool = Field(default=False)
-    memify_enabled: bool = Field(default=True)
-    triplet_search_enabled: bool = Field(default=False)
-    enrichment_pipeline_enabled: bool = Field(default=False)
-    enrichment_pipeline_id: str = Field(
-        default="system-knowledge-enrichment-v1",
-    )
-
-    @model_validator(mode="before")
-    @classmethod
-    def _migrate_legacy_hanlp_field(cls, values):
-        if not isinstance(values, dict):
-            return values
-        if "nlp" not in values and "hanlp" in values:
-            values["nlp"] = values.get("hanlp")
-        return values
-
-    @property
-    def hanlp(self) -> KnowledgeNLPConfig:
-        """Deprecated compatibility alias for legacy code paths."""
-        return self.nlp
-
-    @hanlp.setter
-    def hanlp(self, value: KnowledgeNLPConfig) -> None:
-        self.nlp = value
-
-
-class SkillMarketSpec(BaseModel):
-    """A single skills market entry."""
-
-    id: str = Field(..., description="Stable market id")
-    name: str = Field(..., description="Display name")
-    type: Literal["git"] = Field(default="git")
-    url: str = Field(..., description="Git repository URL")
-    branch: str = Field(default="", description="Optional branch")
-    path: str = Field(
-        default="index.json",
-        description="Path to market index file in repo",
-    )
-    enabled: bool = Field(default=True)
-    order: int = Field(default=999)
-    trust: Optional[Literal["official", "community", "custom"]] = None
-
-
-class SkillsMarketCacheConfig(BaseModel):
-    """Cache policy for market index aggregation."""
-
-    ttl_sec: int = Field(default=600, ge=0, le=24 * 3600)
-
-
-class SkillsMarketInstallConfig(BaseModel):
-    """Default install behavior for marketplace installs."""
-
-    overwrite_default: bool = Field(default=False)
-
-
-class SkillsMarketConfig(BaseModel):
-    """Skills market root config."""
-
-    version: int = Field(default=1, ge=1)
-    markets: List[SkillMarketSpec] = Field(default_factory=list)
-    cache: SkillsMarketCacheConfig = Field(
-        default_factory=SkillsMarketCacheConfig,
-    )
-    install: SkillsMarketInstallConfig = Field(
-        default_factory=SkillsMarketInstallConfig,
-    )
-
-
-class AgentsSquareSourceSpec(BaseModel):
-    """A single Agents Square source entry."""
-
-    id: str = Field(..., description="Stable source id")
-    name: str = Field(..., description="Display name")
-    type: Literal["git"] = Field(default="git")
-    provider: Literal["agency_markdown_repo", "index_json_repo"] = Field(
-        default="agency_markdown_repo",
-    )
-    url: str = Field(..., description="Git repository URL")
-    branch: str = Field(default="", description="Optional branch")
-    path: str = Field(
-        default=".",
-        description="Path to source root in repository",
-    )
-    enabled: bool = Field(default=True)
-    order: int = Field(default=999)
-    trust: Optional[Literal["official", "community", "custom"]] = None
-    license_hint: str = Field(default="")
-    pinned: bool = Field(
-        default=False,
-        description="Pinned sources cannot be removed via API",
-    )
-
-
-class AgentsSquareCacheConfig(BaseModel):
-    """Cache policy for Agents Square item aggregation."""
-
-    ttl_sec: int = Field(default=600, ge=0, le=24 * 3600)
-
-
-class AgentsSquareInstallConfig(BaseModel):
-    """Default install behavior for Agents Square imports."""
-
-    overwrite_default: bool = Field(default=False)
-    preserve_workspace_files: bool = Field(default=True)
-
-
-class AgentsSquareConfig(BaseModel):
-    """Agents Square root config."""
-
-    version: int = Field(default=1, ge=1)
-    sources: List[AgentsSquareSourceSpec] = Field(
-        default_factory=lambda: [
-            AgentsSquareSourceSpec(
-                id="agency-agents-zh",
-                name="agency-agents-zh",
-                provider="agency_markdown_repo",
-                url="https://github.com/jnMetaCode/agency-agents-zh",
-                branch="main",
-                path=".",
-                enabled=True,
-                order=1,
-                trust="community",
-                license_hint="MIT",
-                pinned=True,
-            ),
-            AgentsSquareSourceSpec(
-                id="agency-agents",
-                name="agency-agents",
-                provider="agency_markdown_repo",
-                url="https://github.com/msitarzewski/agency-agents.git",
-                branch="main",
-                path=".",
-                enabled=False,
-                order=2,
-                trust="official",
-                license_hint="MIT",
-                pinned=True,
-            ),
-            AgentsSquareSourceSpec(
-                id="agent-teams",
-                name="agent-teams",
-                provider="agency_markdown_repo",
-                url="https://github.com/dsclca12/agent-teams",
-                branch="main",
-                path=".",
-                enabled=False,
-                order=3,
-                trust="community",
-                license_hint="MIT",
-                pinned=True,
-            ),
-        ],
-    )
-    cache: AgentsSquareCacheConfig = Field(
-        default_factory=AgentsSquareCacheConfig,
-    )
-    install: AgentsSquareInstallConfig = Field(
-        default_factory=AgentsSquareInstallConfig,
     )
 
 
@@ -2558,13 +1742,6 @@ class Config(BaseModel):
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
     last_api: LastApiConfig = LastApiConfig()
     agents: AgentsConfig = Field(default_factory=AgentsConfig)
-    knowledge: KnowledgeConfig = Field(default_factory=KnowledgeConfig)
-    skills_market: SkillsMarketConfig = Field(
-        default_factory=SkillsMarketConfig,
-    )
-    agents_square: AgentsSquareConfig = Field(
-        default_factory=AgentsSquareConfig,
-    )
     last_dispatch: Optional[LastDispatchConfig] = None
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     acp: ACPConfig = Field(default_factory=ACPConfig)
@@ -2616,7 +1793,6 @@ def build_fallback_agent_profile_config(
     if agent_id not in config.agents.profiles:
         raise ValueError(f"Agent '{agent_id}' not found in config")
 
-
     agent_ref = config.agents.profiles[agent_id]
     workspace_dir = Path(agent_ref.workspace_dir).expanduser()
     return AgentProfileConfig(
@@ -2657,6 +1833,7 @@ def build_fallback_agent_profile_config(
         ),
         acp=(config.acp if hasattr(config, "acp") and config.acp else None),
     )
+
 
 def load_agent_config(agent_id: str) -> AgentProfileConfig:
     """Load agent's complete configuration from workspace/agent.json with
@@ -2761,13 +1938,7 @@ def load_agent_config(agent_id: str) -> AgentProfileConfig:
         except Exception:
             pass
 
-        if not isinstance(data, dict):
-            raise ConfigurationException(
-                config_key="agent",
-                message="Invalid agent.json format: expected object",
-            )
-
-        agent_config = AgentProfileConfig.model_validate(data)
+        agent_config = AgentProfileConfig(**data)
 
         # Cache the config with its mtime
         _agent_config_cache[agent_id] = (agent_config, current_mtime)
@@ -2957,3 +2128,28 @@ def migrate_legacy_config_to_multi_agent() -> bool:
     print(f"  Default agent config: {agent_config_path}")
 
     return True
+
+
+def get_model_max_input_length(
+    agent_config: "AgentProfileConfig",
+) -> int:
+    """Return ``max_input_length`` from the active model's ``ModelInfo``.
+
+    Falls back to 128 * 1024 (131072) if model info is unavailable.
+    Accepts an already-loaded *agent_config* to avoid redundant file I/O
+    on hot paths (pre_reasoning, compact_context, summarize, etc.).
+    """
+    from ..providers import ProviderManager
+
+    model_slot = agent_config.active_model
+    if model_slot and model_slot.provider_id and model_slot.model:
+        try:
+            manager = ProviderManager.get_instance()
+            provider = manager.get_provider(model_slot.provider_id)
+            if provider:
+                model_info = provider.get_model_info(model_slot.model)
+                if model_info is not None:
+                    return model_info.max_input_length
+        except Exception:
+            pass
+    return 128 * 1024

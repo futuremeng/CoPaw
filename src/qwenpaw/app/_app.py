@@ -214,7 +214,7 @@ agent_app = AgentApp(
     runner=runner,
     enable_stream_task=True,
     stream_task_queue="stream_query",
-    stream_task_timeout=300,
+    stream_task_timeout=1800,
 )
 
 
@@ -559,6 +559,14 @@ async def lifespan(  # pylint: disable=too-many-statements,too-many-branches
             await stop_all_browsers()
         except Exception as e:
             logger.error(f"Error stopping browsers during shutdown: {e}")
+
+        # Close the shared httpx client owned by the skills hub module.
+        from ..agents.skill_system.hub import aclose_hub_client
+
+        try:
+            await aclose_hub_client()
+        except Exception as e:
+            logger.error(f"Error closing skills hub HTTP client: {e}")
 
         logger.info("Application shutdown complete")
 

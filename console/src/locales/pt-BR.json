@@ -10,6 +10,7 @@
     "upload": "Enviar",
     "download": "Baixar",
     "refresh": "Atualizar",
+    "search": "Pesquisar",
     "enable": "Ativar",
     "disable": "Desativar",
     "enabled": "Ativado",
@@ -408,6 +409,7 @@
     "clickToFill": "Click to fill in URL",
     "invalidSkillUrlSource": "Please verify the skill URL is from a supported marketplace",
     "type": "Tipo",
+    "installedFrom": "Instalado de",
     "source": "Origem",
     "path": "Caminho",
     "skillDescription": "Descricao",
@@ -595,6 +597,7 @@
     "skillCount": "{{count}} Skills",
     "skillName": "Skill Nome",
     "status": "Status",
+    "installedFrom": "Instalado de",
     "updateBuiltin": "Atualizar",
     "updateConfirmTitle": "Atualizar {{name}}",
     "updateConfirmContent": "Update to version {{version}}? This will replace the current pool copy with the latest built-in version.",
@@ -817,6 +820,16 @@
     "pleaseSelectRepeatEndType": "Selecione a condição de término",
     "pleaseInputRepeatUntil": "Selecione a data final",
     "pleaseInputRepeatCount": "Informe o número de execuções",
+    "validation": {
+      "cronRequired": "A expressão cron é obrigatória para agendamentos recorrentes.",
+      "runAtRequired": "O horário de execução é obrigatório para agendamentos únicos.",
+      "repeatUntilRequired": "Ao usar \"Encerrar em data\", selecione a data final.",
+      "repeatCountRequired": "Ao usar \"Contagem limitada\", informe o número de execuções.",
+      "repeatUntilAfterRunAt": "A data final deve ser posterior ao horário de execução. Escolha uma data final após o horário de execução.",
+      "textRequired": "O conteúdo da mensagem é obrigatório quando o tipo da tarefa é text.",
+      "requestRequired": "O conteúdo da requisição é obrigatório quando o tipo da tarefa é agent.",
+      "invalidCronExpression": "Expressão cron inválida. Use o formato cron de 5 campos."
+    },
     "runtimeShareSession": "Compartilhar sessão",
     "shareSessionTooltip": "Quando ativado, compartilha a sessão com o usuário de destino. Quando desativado, cada execução cria contexto isolado com ID de execução único. Adequado para tarefas independentes sem memória. Padrão: ativado",
     "listView": "Lista",
@@ -909,6 +922,7 @@
     "filterThinkingTooltip": "Show model thinking/reasoning content to users (turn off to hide)",
     "streamingEnabled": "Saída em Streaming",
     "streamingEnabledDingtalkHint": "Apenas efetivo quando o tipo de mensagem é Card",
+    "streamingEnabledFeishuHint": "Requer habilitar a permissão cardkit:card:write na página de gerenciamento de permissões da Plataforma Aberta Feishu",
     "ackMessage": "Acknowledgment Message",
     "ackMessageTooltip": "Send an instant reply when a message is received, before agent processing begins. Leave empty to disable.",
     "ackMessagePlaceholder": "⏳ Processing...",
@@ -1170,6 +1184,10 @@
     "modelConfigSaved": "Configuration saved for model {{name}}",
     "modelConfigSaveFailed": "Falha ao Salvar Modelo Configuracao",
     "modelConfigLabel": "Modelo Configuracao",
+    "maxTokensLabel": "Máx. Tokens",
+    "maxTokensHint": "Número máximo de tokens de saída por resposta",
+    "maxInputLengthLabel": "Comprimento Máximo do Contexto",
+    "maxInputLengthHint": "Tamanho da janela de contexto do modelo, controla o limite de compactação do contexto (≥1000)",
     "protocol": "Protocol",
     "protocolHint": "Choose the provider API protocol for this configuration.",
     "selectProtocol": "Please Selecionar a protocol",
@@ -1688,12 +1706,14 @@
     "modelNotConfigured": "Please configure a model in Settings before using chat"
   },
   "header": {
-    "changelog": "Changelog",
-    "docs": "Doc",
+    "changelog": "Registro de Alterações",
+    "docs": "Documentação",
     "tutorial": "Tutorial",
-    "faq": "FAQ",
+    "featureDemos": "Demonstração de Funções",
+    "faq": "Perguntas Frequentes",
     "github": "GitHub",
-    "updateAvailable": "Atualizar Available"
+    "resources": "Documentação",
+    "updateAvailable": "Atualização Disponível"
   },
   "theme": {
     "dark": "Dark",
@@ -2079,7 +2099,22 @@
     "author": "Autor",
     "unknown": "Desconhecido",
     "loadFailed": "Falha ao carregar lista de plugins",
-    "confirmTitle": "Confirmar Desinstalação"
+    "confirmTitle": "Confirmar Desinstalação",
+    "officialTitle": "Plugins Oficiais",
+    "officialDesc": "Instale plugins publicados a partir do CDN de downloads.",
+    "catalogRefresh": "Atualizar",
+    "catalogEmpty": "Nenhum plugin oficial disponível (o catálogo CDN pode estar vazio)",
+    "catalogLoadFailed": "Falha ao carregar o catálogo de plugins oficiais",
+    "catalogInstall": "Instalar",
+    "catalogReinstall": "Reinstalar",
+    "catalogUpgrade": "Atualização disponível",
+    "catalogUpgradeBtn": "Atualizar",
+    "catalogInstalled": "Instalado",
+    "catalogSha256": "SHA256",
+    "kindBundle": "Pacote",
+    "kindTool": "Ferramenta",
+    "filterByName": "Filtrar por nome",
+    "filterByKind": "Filtrar por tipo"
   },
   "plan": {
     "title": "Plan",
@@ -2157,5 +2192,47 @@
     "detailPayload": "Dados",
     "detailExecutionTrace": "Rastro de execução",
     "detailTraceEmpty": "Nenhum rastro de execução disponível"
+  },
+  "market": {
+    "searchPlaceholder": "Buscar habilidades em várias plataformas",
+    "providerUnavailable": "Provedor indisponível",
+    "noResults": "Nenhum resultado",
+    "startTyping": "Digite uma consulta acima para buscar no mercado",
+    "noDescription": "Nenhuma descrição fornecida",
+    "targetPool": "Pool",
+    "targetWorkspace": "Workspace",
+    "install": "Instalar",
+    "installQueue": "Fila de instalação",
+    "clearCompleted": "Limpar",
+    "retry": "Tentar novamente",
+    "status": {
+      "queued": "Na fila",
+      "installing": "Instalando",
+      "completed": "Concluído",
+      "failed": "Falhou",
+      "cancelled": "Cancelado"
+    },
+    "loadMore": "Carregar mais",
+    "noMoreResults": "Sem mais resultados",
+    "detail": {
+      "title": "Detalhes da habilidade",
+      "version": "Versão",
+      "author": "Autor",
+      "sourceUrl": "URL de instalação",
+      "slug": "Identificador",
+      "missing": "—"
+    },
+    "stats": {
+      "downloads": "Downloads",
+      "installs": "Instalações",
+      "likes": "Curtidas",
+      "views": "Visualizações",
+      "category": "Categoria",
+      "updatedAt": "Atualizado em"
+    },
+    "queueMsg": {
+      "timedOut": "A instalação expirou",
+      "failedPrefix": "Falhou: {{msg}}"
+    }
   }
 }

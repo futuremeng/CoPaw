@@ -8,6 +8,7 @@ from .agents import router as agents_router
 from .config import router as config_router
 from .local_models import router as local_models_router
 from .providers import router as providers_router
+from .market import router as market_router
 from .skills import router as skills_router
 from .skills_stream import router as skills_stream_router
 from .sidecar import router as sidecar_router
@@ -29,6 +30,7 @@ from .knowledge import router as knowledge_router
 from .agents_pipeline import router as agents_pipeline_router
 from .project_realtime import router as project_realtime_router
 from .plugins import router as plugins_router
+from .frontend_plugin import router as frontend_plugin_router
 from .backup import router as backup_router
 
 router = APIRouter()
@@ -41,11 +43,12 @@ router.include_router(config_router)
 router.include_router(console_router)
 router.include_router(cron_router)
 router.include_router(local_models_router)
-router.include_router(mcp_router)
 router.include_router(mcp_oauth_router)
+router.include_router(mcp_router)
 router.include_router(messages_router)
 router.include_router(providers_router)
 router.include_router(runner_router)
+router.include_router(market_router)
 router.include_router(skills_router)
 router.include_router(skills_stream_router)
 router.include_router(sidecar_router)
@@ -59,6 +62,7 @@ router.include_router(files_router)
 router.include_router(settings_router)
 router.include_router(knowledge_router)
 router.include_router(plugins_router)
+router.include_router(frontend_plugin_router)
 router.include_router(backup_router)
 
 

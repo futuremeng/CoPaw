@@ -3,75 +3,50 @@ from __future__ import annotations
 
 import logging
 import os
-import subprocess
-import sys
-from pathlib import Path
 
 import click
 import uvicorn
 
+from ..app.auth import is_auth_enabled
 from ..constant import LOG_LEVEL_ENV
 from ..config.utils import write_last_api
-from ..runtime_mode import get_runtime_app_import_path
+from ..utils.http import is_loopback_host
 from ..utils.logging import setup_logger, SuppressPathAccessLogFilter
 
 
-def _debugger_attached() -> bool:
-    """Return True when running under a debugger (debugpy/pdb/pydevd)."""
-    trace_fn = sys.gettrace()
-    if trace_fn is not None:
-        return True
-    return bool(os.environ.get("DEBUGPY_LAUNCHER_PORT"))
+logger = logging.getLogger(__name__)
 
 
-def _kill_port(port: int, signal: str = "TERM") -> None:
-    """Kill process(es) occupying the specified port."""
-    try:
-        # Try lsof first (macOS, Linux)
-        result = subprocess.run(
-            ["lsof", "-ti", f":{port}"],
-            capture_output=True,
-            text=True,
-            timeout=2,
-        )
-        pids = result.stdout.strip().split() if result.stdout.strip() else []
-        
-        if not pids:
-            # Fallback: try netstat (Linux)
-            result = subprocess.run(
-                ["netstat", "-tlnp"],
-                capture_output=True,
-                text=True,
-                timeout=2,
-            )
-            for line in result.stdout.split("\n"):
-                if f":{port} " in line:
-                    parts = line.split()
-                    if len(parts) > 0:
-                        pid_part = parts[-1].split("/")[0]
-                        if pid_part.isdigit():
-                            pids.append(pid_part)
-        
-        # Kill found processes
-        for pid_str in pids:
-            try:
-                pid = int(pid_str)
-                if pid > 0:
-                    click.echo(
-                        f"[copaw] Killing PID {pid} on port {port}...",
-                        err=True,
-                    )
-                    subprocess.run(
-                        ["kill", f"-{signal}", str(pid)],
-                        timeout=2,
-                        check=False,
-                    )
-            except (ValueError, subprocess.TimeoutExpired):
-                pass
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        # lsof/netstat not available or timeout, silently continue
-        pass
+def _format_bind_address(host: str, port: int) -> str:
+    """Return a readable bind address for startup logs."""
+    normalized_host = host.strip()
+    if ":" in normalized_host and not normalized_host.startswith("["):
+        normalized_host = f"[{normalized_host}]"
+    return f"{normalized_host}:{port}"
 
+
+def _warn_if_auth_off_non_loopback_bind(host: str, port: int) -> None:
+    """Warn when QwenPaw is reachable beyond loopback without auth."""
+    if is_auth_enabled() or is_loopback_host(host):
+        return
+
+    bind_address = _format_bind_address(host, port)
+    warning = f"""
+============================================================
+SECURITY NOTICE: QwenPaw is bound to {bind_address} without authentication.
+
+Anyone who can reach this address may access QwenPaw APIs without login.
+
+Recommended:
+  - Restrict access to a trusted network interface or protected environment.
+  - Enable authentication with QWENPAW_AUTH_ENABLED=true if untrusted users or
+    processes may reach this address.
+============================================================
+""".strip()
+    if logger.isEnabledFor(logging.WARNING):
+        logger.warning("\n%s", warning)
+    else:
+        click.echo(warning, err=True)
 
 
 @click.command("app")
@@ -112,7 +87,7 @@ def _kill_port(port: int, signal: str = "TERM") -> None:
     default=None,
     help="[DEPRECATED] Number of worker processes. "
     "This option is deprecated and will be removed in a future version. "
-    "CoPaw always uses 1 worker.",
+    "QwenPaw always uses 1 worker.",
 )
 def app_cmd(
     host: str,
@@ -122,20 +97,7 @@ def app_cmd(
     log_level: str,
     hide_access_paths: tuple[str, ...],
 ) -> None:
-    """Run CoPaw FastAPI app."""
-    # Kill any existing process on this port
-    _kill_port(port)
-    
-    # Uvicorn reload mode spawns a supervisor/worker process pair and can make
-    # VS Code debug sessions appear frozen or stop after Continue.
-    if reload and _debugger_attached() and os.environ.get("QWENPAW_DEBUG_ALLOW_RELOAD") != "1":
-        click.echo(
-            "[copaw] Debugger detected: disabling --reload for stable single-process debugging. "
-            "Set QWENPAW_DEBUG_ALLOW_RELOAD=1 to force reload mode.",
-            err=True,
-        )
-        reload = False
-
+    """Run QwenPaw FastAPI app."""
     # Handle deprecated --workers parameter
     if workers is not None:
         click.echo(
@@ -144,7 +106,7 @@ def app_cmd(
             err=True,
         )
         click.echo(
-            "   CoPaw always uses 1 worker for stability. "
+            "   QwenPaw always uses 1 worker for stability. "
             "Your specified value will be ignored.",
             err=True,
         )
@@ -176,32 +138,13 @@ def app_cmd(
             SuppressPathAccessLogFilter(paths),
         )
 
-    run_kwargs = {
-        "host": host,
-        "port": port,
-        "reload": reload,
-        "workers": 1,
-        "log_level": log_level,
-    }
+    _warn_if_auth_off_non_loopback_bind(host, port)
 
-    if reload:
-        repo_root = Path(__file__).resolve().parents[3]
-        run_kwargs.update(
-            {
-                "reload_dirs": [str(repo_root / "src"), str(repo_root / "tests")],
-                "reload_excludes": [
-                    ".venv/*",
-                    "**/.venv/*",
-                    "node_modules/*",
-                    "**/node_modules/*",
-                    ".git/*",
-                    "**/.git/*",
-                ],
-            },
-        )
-
-    app_import_path = get_runtime_app_import_path()
     uvicorn.run(
-        app_import_path,
-        **run_kwargs,
+        "qwenpaw.app._app:app",
+        host=host,
+        port=port,
+        reload=reload,
+        workers=1,
+        log_level=log_level,
     )

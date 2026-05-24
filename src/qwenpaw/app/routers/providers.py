@@ -131,6 +131,14 @@ class AddModelRequest(BaseModel):
 
 
 class ModelConfigRequest(BaseModel):
+    max_tokens: Optional[int] = Field(
+        default=None,
+        description="Maximum output tokens per response.",
+    )
+    max_input_length: Optional[int] = Field(
+        default=None,
+        description="Maximum input context window size (tokens).",
+    )
     generate_kwargs: Optional[dict] = Field(
         default_factory=dict,
         description=(
@@ -589,7 +597,11 @@ async def configure_model(
         provider_info = await manager.update_model_config(
             provider_id=provider_id,
             model_id=model_id,
-            config={"generate_kwargs": body.generate_kwargs},
+            config={
+                "generate_kwargs": body.generate_kwargs,
+                "max_tokens": body.max_tokens,
+                "max_input_length": body.max_input_length,
+            },
         )
     except (ValueError, AppBaseException) as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

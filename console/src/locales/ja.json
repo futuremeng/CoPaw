@@ -10,6 +10,7 @@
     "upload": "アップロード",
     "download": "ダウンロード",
     "refresh": "更新",
+    "search": "検索",
     "enable": "有効化",
     "disable": "無効化",
     "enabled": "有効",
@@ -209,6 +210,7 @@
     "clickToFill": "クリックして URL を入力",
     "invalidSkillUrlSource": "サポートされているマーケットプレイスのスキルURLであることを確認してください",
     "type": "タイプ",
+    "installedFrom": "インストール元",
     "source": "ソース",
     "path": "パス",
     "skillDescription": "説明",
@@ -392,6 +394,7 @@
     "skillCount": "{{count}} スキル",
     "skillName": "スキル名",
     "status": "状態",
+    "installedFrom": "インストール元",
     "updateBuiltin": "更新",
     "updateConfirmTitle": "{{name}} を更新",
     "updateConfirmContent": "バージョン {{version}} に更新しますか？現在のプールコピーが最新の組み込みバージョンに置き換えられます。",
@@ -616,6 +619,16 @@
     "pleaseSelectRepeatEndType": "終了条件を選択してください",
     "pleaseInputRepeatUntil": "終了日時を選択してください",
     "pleaseInputRepeatCount": "実行回数を入力してください",
+    "validation": {
+      "cronRequired": "繰り返しスケジュールには Cron 式が必要です。",
+      "runAtRequired": "単発スケジュールには実行日時が必要です。",
+      "repeatUntilRequired": "「日時で終了」を選択した場合は終了日時が必要です。",
+      "repeatCountRequired": "「回数で終了」を選択した場合は実行回数が必要です。",
+      "repeatUntilAfterRunAt": "終了日時は実行日時より後である必要があります。実行日時より後の日時を指定してください。",
+      "textRequired": "タスクタイプが text の場合、メッセージ内容は必須です。",
+      "requestRequired": "タスクタイプが agent の場合、リクエスト内容は必須です。",
+      "invalidCronExpression": "Cron 式が不正です。5 フィールド形式を使用してください。"
+    },
     "listView": "リスト表示",
     "calendarView": "カレンダー表示",
     "calendarEmptyHint": "Scheduled タスクはまだありません。作成するとカレンダーに表示されます。",
@@ -706,6 +719,7 @@
     "filterThinkingTooltip": "モデルの思考・推論内容をユーザーに表示します（オフにすると非表示）",
     "streamingEnabled": "ストリーミング出力",
     "streamingEnabledDingtalkHint": "メッセージタイプがCardの場合のみ有効",
+    "streamingEnabledFeishuHint": "Feishuオープンプラットフォームの権限管理ページでcardkit:card:write権限を有効にする必要があります",
     "ackMessage": "即時確認メッセージ",
     "ackMessageTooltip": "メッセージ受信時にエージェント処理の前に即時返信を送信します。空欄で無効化。",
     "ackMessagePlaceholder": "⏳ 処理中...",
@@ -971,6 +985,10 @@
     "modelConfigSaved": "モデル {{name}} の設定が保存されました",
     "modelConfigSaveFailed": "モデル設定の保存に失敗しました",
     "modelConfigLabel": "モデル設定",
+    "maxTokensLabel": "最大出力トークン数",
+    "maxTokensHint": "1回のレスポンスあたりの最大出力トークン数",
+    "maxInputLengthLabel": "最大コンテキスト長",
+    "maxInputLengthHint": "モデルのコンテキストウィンドウサイズ、コンテキスト圧縮のしきい値を制御します（≥1000）",
     "protocol": "プロトコル",
     "protocolHint": "この設定のプロバイダーAPIプロトコルを選択してください。",
     "selectProtocol": "プロトコルを選択してください",
@@ -1488,8 +1506,10 @@
     "changelog": "変更履歴",
     "docs": "ドキュメント",
     "tutorial": "チュートリアル",
+    "featureDemos": "機能デモ",
     "faq": "よくある質問",
     "github": "GitHub",
+    "resources": "ドキュメント資料",
     "updateAvailable": "利用可能な更新"
   },
   "theme": {
@@ -2044,7 +2064,22 @@
     "author": "作成者",
     "unknown": "不明",
     "loadFailed": "プラグイン一覧の読み込みに失敗しました",
-    "confirmTitle": "アンインストールの確認"
+    "confirmTitle": "アンインストールの確認",
+    "officialTitle": "公式プラグイン",
+    "officialDesc": "ダウンロード CDN から公開済みプラグインをインストールします。",
+    "catalogRefresh": "更新",
+    "catalogEmpty": "利用可能な公式プラグインがありません（CDN カタログが空の可能性があります）",
+    "catalogLoadFailed": "公式プラグインカタログの読み込みに失敗しました",
+    "catalogInstall": "インストール",
+    "catalogReinstall": "再インストール",
+    "catalogUpgrade": "アップグレード可能",
+    "catalogUpgradeBtn": "アップグレード",
+    "catalogInstalled": "インストール済み",
+    "catalogSha256": "SHA256",
+    "kindBundle": "バンドル",
+    "kindTool": "ツール",
+    "filterByName": "名前で絞り込み",
+    "filterByKind": "タグで絞り込み"
   },
   "plan": {
     "title": "プラン",
@@ -2122,5 +2157,47 @@
     "detailPayload": "追加情報",
     "detailExecutionTrace": "実行トレース",
     "detailTraceEmpty": "実行トレースはありません"
+  },
+  "market": {
+    "searchPlaceholder": "プラットフォームを横断してスキルを検索",
+    "providerUnavailable": "ソースが利用できません",
+    "noResults": "結果が見つかりません",
+    "startTyping": "上の検索ボックスにキーワードを入力してスキルを探します",
+    "noDescription": "説明はありません",
+    "targetPool": "プール",
+    "targetWorkspace": "ワークスペース",
+    "install": "インストール",
+    "installQueue": "インストールキュー",
+    "clearCompleted": "クリア",
+    "retry": "再試行",
+    "status": {
+      "queued": "待機中",
+      "installing": "インストール中",
+      "completed": "完了",
+      "failed": "失敗",
+      "cancelled": "キャンセル済み"
+    },
+    "loadMore": "もっと読み込む",
+    "noMoreResults": "これ以上ありません",
+    "detail": {
+      "title": "スキルの詳細",
+      "version": "バージョン",
+      "author": "作成者",
+      "sourceUrl": "インストール URL",
+      "slug": "識別子",
+      "missing": "—"
+    },
+    "stats": {
+      "downloads": "ダウンロード数",
+      "installs": "インストール数",
+      "likes": "いいね数",
+      "views": "閲覧数",
+      "category": "カテゴリ",
+      "updatedAt": "更新日"
+    },
+    "queueMsg": {
+      "timedOut": "インストールがタイムアウトしました",
+      "failedPrefix": "失敗：{{msg}}"
+    }
   }
 }

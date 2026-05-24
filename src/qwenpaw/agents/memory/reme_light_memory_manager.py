@@ -1,84 +1,90 @@
 # -*- coding: utf-8 -*-
-# pylint: disable=too-many-branches
-# mypy: ignore-errors
-"""ReMeLight-backed memory manager for CoPaw agents."""
+"""ReMeLight-backed memory manager for agents."""
 import importlib.metadata
-import inspect
 import json
 import logging
-import os
 import platform
 import shutil
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from agentscope.agent import ReActAgent
-from agentscope.message import Msg, TextBlock
-from agentscope.message import ToolResultBlock, ToolUseBlock
+from agentscope.message import Msg, TextBlock, ToolResultBlock, ToolUseBlock
 from agentscope.tool import Toolkit, ToolResponse
 
-from qwenpaw.agents.memory.base_memory_manager import BaseMemoryManager
-from qwenpaw.agents.model_factory import create_model_and_formatter
-from qwenpaw.agents.tools import (
-    create_memory_search_tool,
-    edit_file,
-    read_file,
-    write_file,
+from .base_memory_manager import BaseMemoryManager, memory_registry
+from .prompts import (
+    MEMORY_GUIDANCE_ZH,
+    MEMORY_GUIDANCE_EN,
+    DREAM_OPTIMIZATION_ZH,
+    DREAM_OPTIMIZATION_EN,
 )
-from qwenpaw.agents.utils import get_token_counter
-from qwenpaw.config import load_config
-from qwenpaw.config.config import load_agent_config
-from qwenpaw.config.context import (
+from ..model_factory import create_model_and_formatter
+from ..utils import get_token_counter
+from ...config import load_config
+from ...config.config import load_agent_config, get_model_max_input_length
+from ...config.context import (
     set_current_workspace_dir,
     set_current_recent_max_bytes,
 )
-from qwenpaw.constant import EnvVarLoader
-from .prompts import (
-    DREAM_OPTIMIZATION_EN,
-    DREAM_OPTIMIZATION_ZH,
-    MEMORY_GUIDANCE_EN,
-    MEMORY_GUIDANCE_ZH,
-)
-
-if TYPE_CHECKING:
-    from reme.memory.file_based.reme_in_memory_memory import ReMeInMemoryMemory
+from ...constant import EnvVarLoader
 
 logger = logging.getLogger(__name__)
 
+_REME_STORE_VERSION = "v1"
 _EXPECTED_REME_VERSION = "0.3.1.8"
 # Maximum number of tokens from query splitting
 MAX_QUERY_TOKENS = 50
 
 
+def _detect_memory_manager_backend() -> str:
+    """Detect the memory store backend from environment variables.
+
+    Resolves ``MEMORY_STORE_BACKEND`` with the following priority:
+    - ``local``: always used on Windows
+    - ``chroma``: used when ``chromadb`` is importable (non-Windows)
+    - falls back to ``local`` when ``chromadb`` is unavailable
+
+    Returns:
+        Backend name string: ``"local"``, ``"chroma"``, or any explicitly
+        configured value.
+    """
+    backend_env = EnvVarLoader.get_str("MEMORY_STORE_BACKEND", "auto")
+    if backend_env != "auto":
+        return backend_env
+
+    if platform.system() == "Windows":
+        return "local"
+
+    try:
+        import chromadb  # noqa: F401 pylint: disable=unused-import
+
+        return "chroma"
+    except Exception as e:
+        logger.warning(
+            f"""
+chromadb import failed, falling back to `local` backend.
+This is often caused by an outdated system SQLite (requires >= 3.35).
+Please upgrade your system SQLite to >= 3.35.
+See: https://docs.trychroma.com/docs/overview/troubleshooting#sqlite
+| Error: {e}
+            """,
+        )
+        return "local"
+
+
+@memory_registry.register("remelight")
 class ReMeLightMemoryManager(BaseMemoryManager):
-    """Memory manager that wraps ReMeLight for CoPaw agents via composition.
+    """Memory manager backed by ReMeLight.
 
-    Holds a ``ReMeLight`` instance (``self._reme``) and delegates all
-    lifecycle / search / compaction calls to it.
-
-    Capabilities:
-    - Conversation compaction via compact_memory()
-    - Memory summarization with file tools via summary_memory()
-    - Vector and full-text search via memory_search()
+    Delegates lifecycle, search, and compaction to a ``ReMeLight`` instance
+    (``self._reme``).
     """
 
     def __init__(self, working_dir: str, agent_id: str):
-        """Initialize with ReMeLight.
-
-        Args:
-            working_dir: Working directory for memory storage.
-            agent_id: Agent ID for config loading.
-
-        Embedding priority: config > env var (EMBEDDING_API_KEY /
-        EMBEDDING_BASE_URL / EMBEDDING_MODEL_NAME).
-        Backend: MEMORY_STORE_BACKEND env var (auto/local/chroma,
-        default auto).
-        """
         super().__init__(working_dir=working_dir, agent_id=agent_id)
         self._reme_version_ok: bool = self._check_reme_version()
-        self._version_mismatch_warned: bool = False
         self._reme = None
 
         logger.info(
@@ -86,28 +92,7 @@ class ReMeLightMemoryManager(BaseMemoryManager):
             f"agent_id={agent_id}, working_dir={working_dir}",
         )
 
-        backend_env = EnvVarLoader.get_str("MEMORY_STORE_BACKEND", "auto")
-        if backend_env == "auto":
-            if platform.system() == "Windows":
-                memory_backend = "local"
-            else:
-                try:
-                    import chromadb  # noqa: F401 pylint: disable=unused-import
-
-                    memory_backend = "chroma"
-                except Exception as e:
-                    logger.warning(
-                        f"""
-chromadb import failed, falling back to `local` backend.
-This is often caused by an outdated system SQLite (requires >= 3.35).
-Please upgrade your system SQLite to >= 3.35.
-See: https://docs.trychroma.com/docs/overview/troubleshooting#sqlite
-| Error: {e}
-                        """,
-                    )
-                    memory_backend = "local"
-        else:
-            memory_backend = backend_env
+        memory_manager_backend = _detect_memory_manager_backend()
 
         from reme.reme_light import ReMeLight
 
@@ -129,50 +114,51 @@ See: https://docs.trychroma.com/docs/overview/troubleshooting#sqlite
         agent_config = load_agent_config(self.agent_id)
         reme_cfg = agent_config.running.reme_light_memory_config
         rebuild_on_start = reme_cfg.rebuild_memory_index_on_start
+
+        store_name = "memory"
+        effective_rebuild = self._resolve_rebuild_on_start(
+            working_dir=working_dir,
+            store_version=_REME_STORE_VERSION,
+            rebuild_on_start=rebuild_on_start,
+        )
+
         recursive_file_watcher = reme_cfg.recursive_file_watcher
 
-        reme_kwargs = {
-            "working_dir": working_dir,
-            "default_embedding_model_config": emb_config,
-            "default_file_store_config": {
-                "backend": memory_backend,
-                "store_name": "copaw",
+        self._reme = ReMeLight(
+            working_dir=working_dir,
+            default_embedding_model_config=emb_config,
+            default_file_store_config={
+                "backend": memory_manager_backend,
+                "store_name": store_name,
                 "vector_enabled": vector_enabled,
                 "fts_enabled": fts_enabled,
             },
-        }
-        reme_signature = inspect.signature(ReMeLight.__init__)
-        if "default_file_watcher_config" in reme_signature.parameters:
-            reme_kwargs["default_file_watcher_config"] = {
-                "rebuild_index_on_start": rebuild_on_start,
+            default_file_watcher_config={
+                "rebuild_index_on_start": effective_rebuild,
                 "recursive": recursive_file_watcher,
-            }
-        elif rebuild_on_start:
-            logger.warning(
-                "ReMeLight init does not support default_file_watcher_config; "
-                "rebuild_memory_index_on_start will be ignored for this version",
-            )
-
-        self._reme = ReMeLight(**reme_kwargs)
+            },
+        )
 
         self.summary_toolkit = Toolkit()
+        from qwenpaw.agents.tools import (
+            read_file,
+            write_file,
+            edit_file,
+        )  # noqa: PLC0415
+
         self.summary_toolkit.register_tool_function(read_file)
         self.summary_toolkit.register_tool_function(write_file)
         self.summary_toolkit.register_tool_function(edit_file)
 
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
     @staticmethod
     def _mask_key(key: str) -> str:
-        """Mask API key, showing first 5 chars only."""
+        """Mask an API key, showing only the first 5 characters."""
         return key[:5] + "*" * (len(key) - 5) if len(key) > 5 else key
 
     @staticmethod
     def _check_reme_version() -> bool:
-        """Return False (and warn) when installed reme-ai version
-        mismatches."""
+        """Return ``False`` (and warn) when the installed reme-ai version
+        does not match the expected version."""
         try:
             installed = importlib.metadata.version("reme-ai")
         except importlib.metadata.PackageNotFoundError:
@@ -188,9 +174,8 @@ See: https://docs.trychroma.com/docs/overview/troubleshooting#sqlite
         return True
 
     def _warn_if_version_mismatch(self) -> None:
-        """Warn once per instance if the cached version check failed."""
-        if not self._reme_version_ok and not self._version_mismatch_warned:
-            self._version_mismatch_warned = True
+        """Warn once per call if the cached version check failed."""
+        if not self._reme_version_ok:
             logger.warning(
                 "reme-ai version mismatch, "
                 f"expected={_EXPECTED_REME_VERSION}. "
@@ -198,46 +183,8 @@ See: https://docs.trychroma.com/docs/overview/troubleshooting#sqlite
                 " to align.",
             )
 
-    @staticmethod
-    def _compact_tool_result_kwargs_compat(
-        kwargs: dict,
-        compact_fn,
-    ) -> dict:
-        """Normalize compact_tool_result kwargs across reme-ai versions.
-
-        Newer CoPaw config fields use *_max_bytes, while some reme-ai
-        versions still accept old_threshold/recent_threshold.
-        """
-        normalized = dict(kwargs)
-        if "old_max_bytes" in normalized and "old_threshold" not in normalized:
-            normalized["old_threshold"] = normalized.pop("old_max_bytes")
-        if (
-            "recent_max_bytes" in normalized
-            and "recent_threshold" not in normalized
-        ):
-            normalized["recent_threshold"] = normalized.pop(
-                "recent_max_bytes",
-            )
-
-        signature = inspect.signature(compact_fn)
-        accepted = set(signature.parameters.keys())
-        return {k: v for k, v in normalized.items() if k in accepted}
-
-    def _prepare_model_formatter(self) -> None:
-        """Lazily initialize chat_model and formatter if not already set."""
-        self._warn_if_version_mismatch()
-        if self.chat_model is None or self.formatter is None:
-            self.chat_model, self.formatter = create_model_and_formatter(
-                self.agent_id,
-            )
-
-    # ------------------------------------------------------------------
-    # Public helpers
-    # ------------------------------------------------------------------
-
     def get_embedding_config(self) -> dict:
-        """Return embedding config with priority:
-        config > env var > default."""
+        """Return embedding config: config > env var > default."""
         self._warn_if_version_mismatch()
         cfg = load_agent_config(
             self.agent_id,
@@ -258,41 +205,52 @@ See: https://docs.trychroma.com/docs/overview/troubleshooting#sqlite
             "max_batch_size": cfg.max_batch_size,
         }
 
-    async def restart_embedding_model(self):
-        """Restart the embedding model with current config."""
-        self._warn_if_version_mismatch()
-        if self._reme is None:
-            return
-        await self._reme.restart(
-            restart_config={
-                "embedding_models": {"default": self.get_embedding_config()},
-            },
+    @staticmethod
+    def _resolve_rebuild_on_start(
+        working_dir: str,
+        store_version: str,
+        rebuild_on_start: bool,
+    ) -> bool:
+        """Return effective ``rebuild_index_on_start`` value.
+
+        Uses a sentinel file ``.reme_store_{store_version}`` to detect whether
+        the current store version has been initialized. Forces a one-time
+        rebuild when the sentinel is absent. Bump *_REME_STORE_VERSION* to
+        trigger another one-time rebuild on next start.
+        """
+        sentinel_name = f".reme_store_{store_version}"
+        sentinel_path = Path(working_dir) / sentinel_name
+
+        if sentinel_path.exists():
+            return rebuild_on_start
+
+        logger.info(
+            f"Sentinel '{sentinel_name}' not found, forcing rebuild.",
         )
+
+        try:
+            for old in Path(working_dir).glob(".reme_store_*"):
+                old.unlink(missing_ok=True)
+        except Exception as e:
+            logger.warning(f"Failed to remove old sentinels: {e}")
+
+        try:
+            sentinel_path.touch()
+        except Exception as e:
+            logger.warning(f"Failed to create sentinel '{sentinel_name}': {e}")
+
+        return True
 
     # ------------------------------------------------------------------
     # BaseMemoryManager interface
     # ------------------------------------------------------------------
 
-    async def start(self) -> None:
+    async def start(self):
         """Start the ReMeLight lifecycle."""
         self._warn_if_version_mismatch()
         if self._reme is None:
             return None
-        await self._reme.start()
-        return None
-
-    def get_memory_prompt(self, language: str = "zh") -> str:
-        """Return the localized memory guidance block for system prompts."""
-        agent_config = load_agent_config(self.agent_id)
-        if not agent_config.running.memory_summary.memory_prompt_enabled:
-            return ""
-        if language == "zh":
-            return MEMORY_GUIDANCE_ZH
-        return MEMORY_GUIDANCE_EN
-
-    def list_memory_tools(self) -> list:
-        """Return memory tools exposed to the agent toolkit."""
-        return [create_memory_search_tool(self)]
+        return await self._reme.start()
 
     async def close(self) -> bool:
         """Close ReMeLight and perform cleanup."""
@@ -304,161 +262,19 @@ See: https://docs.trychroma.com/docs/overview/troubleshooting#sqlite
             return True
         result = await self._reme.close()
         logger.info(
-            f"ReMeLightMemoryManager closed: "
-            f"agent_id={self.agent_id}, result={result}",
+            f"ReMeLightMemoryManager closed: agent_id={self.agent_id}, "
+            f"result={result}",
         )
         return result
 
-    async def compact_tool_result(self, **kwargs) -> None:
-        """Compact tool results by truncating large outputs."""
-        self._warn_if_version_mismatch()
-        if self._reme is None:
-            return None
-        compat_kwargs = self._compact_tool_result_kwargs_compat(
-            kwargs,
-            self._reme.compact_tool_result,
-        )
-        await self._reme.compact_tool_result(**compat_kwargs)
-        return None
+    def get_memory_prompt(self, language: str = "zh") -> str:
+        """Return the memory guidance prompt for the system prompt."""
+        prompts = {"zh": MEMORY_GUIDANCE_ZH, "en": MEMORY_GUIDANCE_EN}
+        return prompts.get(language, MEMORY_GUIDANCE_EN)
 
-    async def check_context(self, **kwargs) -> tuple:
-        """Check context size and determine if compaction is needed."""
-        self._warn_if_version_mismatch()
-        if self._reme is None:
-            return ([], [], True)
-        return await self._reme.check_context(**kwargs)
-
-    async def compact_memory(
-        self,
-        messages: list[Msg],
-        previous_summary: str = "",
-        extra_instruction: str = "",
-        **_kwargs,
-    ) -> str:
-        """Compact messages into a condensed summary.
-
-        Returns the compacted string, or empty string on failure.
-        """
-        self._prepare_model_formatter()
-        if self._reme is None:
-            return ""
-        if self.chat_model is None or self.formatter is None:
-            return ""
-
-        agent_config = load_agent_config(self.agent_id)
-        cc = agent_config.running.context_compact
-
-        if extra_instruction:
-            result = await self._reme.compact_memory(
-                messages=messages,
-                as_llm=self.chat_model,
-                as_llm_formatter=self.formatter,
-                as_token_counter=get_token_counter(agent_config),
-                language=agent_config.language,
-                max_input_length=agent_config.running.max_input_length,
-                compact_ratio=cc.memory_compact_ratio,
-                previous_summary=previous_summary,
-                return_dict=True,
-                add_thinking_block=cc.compact_with_thinking_block,
-                extra_instruction=extra_instruction,
-            )
-        else:
-            # Compatible with older versions of ReMe
-            result = await self._reme.compact_memory(
-                messages=messages,
-                as_llm=self.chat_model,
-                as_llm_formatter=self.formatter,
-                as_token_counter=get_token_counter(agent_config),
-                language=agent_config.language,
-                max_input_length=agent_config.running.max_input_length,
-                compact_ratio=cc.memory_compact_ratio,
-                previous_summary=previous_summary,
-                return_dict=True,
-                add_thinking_block=cc.compact_with_thinking_block,
-            )
-
-        if isinstance(result, str):
-            logger.error(
-                "compact_memory returned str instead of dict, "
-                f"result: {result[:200]}... "
-                "Please install the latest reme package.",
-            )
-            return result
-
-        if not result.get("is_valid", True):
-            unique_id = uuid.uuid4().hex[:8]
-            filepath = os.path.join(
-                agent_config.workspace_dir,
-                f"compact_invalid_{unique_id}.json",
-            )
-            try:
-                with open(filepath, "w", encoding="utf-8") as f:
-                    json.dump(result, f, ensure_ascii=False, indent=2)
-                logger.error(
-                    f"Invalid compact result saved to {filepath}. "
-                    f"user_msg: {result.get('user_message', '')[:200]}..., "
-                    "history_compact: "
-                    f"{result.get('history_compact', '')[:200]}...",
-                )
-                logger.error(
-                    "Please upload the log: "
-                    "https://github.com/agentscope-ai/CoPaw/issues",
-                )
-            except Exception as _e:
-                logger.error(f"Failed to save invalid compact result: {_e}")
-            return ""
-
-        return result.get("history_compact", "")
-
-    async def summary_memory(self, messages: list[Msg], **_kwargs) -> str:
-        """Generate a comprehensive summary of the given messages."""
-        self._prepare_model_formatter()
-        if self._reme is None:
-            return ""
-        if self.chat_model is None or self.formatter is None:
-            return ""
-
-        agent_config = load_agent_config(self.agent_id)
-        cc = agent_config.running.context_compact
-
-        set_current_workspace_dir(Path(self.working_dir))
-        recent_max_bytes = (
-            agent_config.running.tool_result_compact.recent_max_bytes
-        )
-        set_current_recent_max_bytes(recent_max_bytes)
-
-        return await self._reme.summary_memory(
-            messages=messages,
-            as_llm=self.chat_model,
-            as_llm_formatter=self.formatter,
-            as_token_counter=get_token_counter(agent_config),
-            toolkit=self.summary_toolkit,
-            language=agent_config.language,
-            max_input_length=agent_config.running.max_input_length,
-            compact_ratio=cc.memory_compact_ratio,
-            timezone=load_config().user_timezone or None,
-            add_thinking_block=cc.compact_with_thinking_block,
-        )
-
-    async def dream_memory(self, **kwargs) -> None:
-        """Run one dream-based memory optimization task when supported.
-
-        Falls back to no-op for reme-ai versions that do not expose
-        ``dream_memory`` yet.
-        """
-        self._warn_if_version_mismatch()
-        if self._reme is None:
-            return None
-
-        dream_fn = getattr(self._reme, "dream_memory", None)
-        if dream_fn is None:
-            logger.debug(
-                "ReMe backend has no dream_memory; skipping dream pass",
-            )
-            return None
-
-        await dream_fn(**kwargs)
-        return None
+    def list_memory_tools(self):
+        """Return memory tool functions to register with the agent toolkit."""
+        return [self.memory_search]
 
     @staticmethod
     def _is_cjk(char: str) -> bool:
@@ -527,7 +343,26 @@ See: https://docs.trychroma.com/docs/overview/troubleshooting#sqlite
         max_results: int = 5,
         min_score: float = 0.1,
     ) -> ToolResponse:
-        """Search stored memories for relevant content."""
+        """
+        Search MEMORY.md and memory/*.md files semantically.
+
+        Use this tool before answering questions about prior work,
+        decisions, dates, people, preferences, or todos. Returns top
+        relevant snippets with file paths and line numbers.
+
+        Args:
+            query (`str`):
+                The semantic search query to find relevant memory snippets.
+            max_results (`int`, optional):
+                Maximum number of search results to return. Defaults to 5.
+            min_score (`float`, optional):
+                Minimum similarity score for results. Defaults to 0.1.
+
+        Returns:
+            `ToolResponse`:
+                Search results formatted with paths, line numbers, and
+                content.
+        """
         self._warn_if_version_mismatch()
         if self._reme is None or not getattr(self._reme, "_started", False):
             return ToolResponse(
@@ -552,14 +387,29 @@ See: https://docs.trychroma.com/docs/overview/troubleshooting#sqlite
             min_score=min_score,
         )
 
-    def get_in_memory_memory(self, **_kwargs) -> "ReMeInMemoryMemory | None":
-        """Retrieve the in-memory memory object with token counting support."""
-        self._warn_if_version_mismatch()
-        if self._reme is None:
-            return None
+    async def summarize(self, messages: list[Msg], **_kwargs) -> str:
+        """Generate a summary of the given messages and persist to memory."""
         agent_config = load_agent_config(self.agent_id)
-        return self._reme.get_in_memory_memory(
+        light_ctx = agent_config.running.light_context_config
+        cc = light_ctx.context_compact_config
+        chat_model, formatter = create_model_and_formatter(self.agent_id)
+
+        set_current_workspace_dir(Path(self.working_dir))
+        pruning_cfg = light_ctx.tool_result_pruning_config
+        recent_max_bytes = pruning_cfg.pruning_recent_msg_max_bytes
+        set_current_recent_max_bytes(recent_max_bytes)
+
+        return await self._reme.summary_memory(
+            messages=messages,
+            as_llm=chat_model,
+            as_llm_formatter=formatter,
             as_token_counter=get_token_counter(agent_config),
+            toolkit=self.summary_toolkit,
+            language=agent_config.language,
+            max_input_length=get_model_max_input_length(agent_config),
+            compact_ratio=cc.compact_threshold_ratio,
+            timezone=load_config().user_timezone or None,
+            add_thinking_block=cc.compact_with_thinking_block,
         )
 
     async def retrieve(

@@ -8,7 +8,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, AsyncGenerator, Coroutine, cast
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Coroutine
 
 import frontmatter as fm
 from agentscope.message import Msg, TextBlock
@@ -33,7 +33,7 @@ from .mission_dispatch import (
 from .session import SafeJSONSession
 from .utils import build_env_context
 from ..channels.schema import DEFAULT_CHANNEL
-from ...agents.react_agent import CoPawAgent
+from ...agents.react_agent import QwenPawAgent
 from ...exceptions import convert_model_exception
 from ...agents.utils.file_handling import (
     read_text_file_with_encoding_fallback,
@@ -93,12 +93,8 @@ async def _stream_printing_messages_interruptible(
                 and printing_msg == _PRINT_END_SIGNAL
             ):
                 break
-            if not isinstance(printing_msg, tuple) or len(printing_msg) < 2:
-                continue
-            msg = printing_msg[0]
-            last = printing_msg[1]
-            if isinstance(msg, Msg) and isinstance(last, bool):
-                yield msg, last
+            msg, last, _ = printing_msg
+            yield msg, last
 
         exception = task.exception()
         if exception is not None:
@@ -305,10 +301,60 @@ class AgentRunner(Runner):
         elif isinstance(content, str):
             last.content = new_text
 
-    async def query_handler(  # pyright: ignore[reportIncompatibleMethodOverride]
+    async def _persist_exchange_to_session(
+        self,
+        session_id: str,
+        user_id: str,
+        channel: str,
+        msgs: list,
+        response_msg: "Msg",
+    ) -> None:
+        """Persist a user-message + response to session memory.
+
+        Used by early-exit paths (/mission info, /skill info) that bypass
+        the full agent pipeline and would otherwise leave session memory
+        unsaved — causing the response to vanish when the frontend
+        reloads the session from the backend.
+        """
+        if not session_id or not user_id:
+            return
+        try:
+            context_manager = self.context_manager
+            if context_manager is None:
+                return
+            memory = context_manager.get_agent_context()
+            if memory is None:
+                return
+            state = await self.session.get_session_state_dict(
+                session_id,
+                user_id,
+                channel,
+                allow_not_exist=True,
+            )
+            memory_state = (state or {}).get("agent", {}).get("memory", {})
+            memory.load_state_dict(memory_state, strict=False)
+            if msgs:
+                await memory.add(msgs[-1])
+            await memory.add(response_msg)
+            await self.session.update_session_state(
+                session_id=session_id,
+                key="agent.memory",
+                value=memory.state_dict(),
+                user_id=user_id,
+                channel=channel,
+            )
+            preview = session_id[:12] if len(session_id) >= 12 else session_id
+            logger.debug("Persisted exchange to session %s", preview)
+        except Exception:
+            logger.debug(
+                "Failed to persist exchange to session",
+                exc_info=True,
+            )
+
+    async def query_handler(
         self,
         msgs,
-        request: AgentRequest | None = None,
+        request: AgentRequest = None,
         **kwargs,
     ):
         """
@@ -319,7 +365,7 @@ class AgentRunner(Runner):
             f"msgs={msgs}, request={request}",
         )
         query = _get_last_user_text(msgs)
-        session_id = str(getattr(request, "session_id", "") or "")
+        session_id = getattr(request, "session_id", "") or ""
 
         # Check if query is a command (including /approval)
         logger.debug(f"Query: {query!r}, is_command: {_is_command(query)}")
@@ -349,19 +395,11 @@ class AgentRunner(Runner):
         agent = None
         chat = None
         session_state_loaded = False
-        user_id = ""
-        channel = DEFAULT_CHANNEL
-        base_request_context: dict[str, Any] = {
-            "session_id": session_id,
-            "user_id": user_id,
-            "channel": channel,
-            "agent_id": self.agent_id,
-            "root_agent_id": self.agent_id,
-        }
+        _cron_memory_snapshot = None
         try:
-            session_id = str(getattr(request, "session_id", "") or "")
-            user_id = str(getattr(request, "user_id", "") or "")
-            channel = str(getattr(request, "channel", DEFAULT_CHANNEL) or DEFAULT_CHANNEL)
+            session_id = request.session_id
+            user_id = request.user_id
+            channel = getattr(request, "channel", DEFAULT_CHANNEL)
 
             logger.info(
                 "Handle agent query:\n%s",
@@ -387,8 +425,13 @@ class AgentRunner(Runner):
             # Load agent-specific configuration
             agent_config = load_agent_config(self.agent_id)
 
-            _default_shell = os.environ.get("SHELL") or (
-                "cmd.exe" if sys.platform == "win32" else "/bin/sh"
+            _configured_shell = (
+                agent_config.running.shell_command_executable or None
+            )
+            _default_shell = (
+                _configured_shell
+                or os.environ.get("SHELL")
+                or ("cmd.exe" if sys.platform == "win32" else "/bin/sh")
             )
             env_context = build_env_context(
                 session_id=session_id,
@@ -462,6 +505,13 @@ class AgentRunner(Runner):
                 agent_name=self.agent_name,
             )
             if isinstance(mission_result, Msg):
+                await self._persist_exchange_to_session(
+                    session_id,
+                    user_id,
+                    channel,
+                    msgs,
+                    mission_result,
+                )
                 yield mission_result, True
                 return
             if isinstance(mission_result, dict):
@@ -599,14 +649,16 @@ class AgentRunner(Runner):
                     )
                     plan_notebook = None
 
-            agent = CoPawAgent(
+            agent = QwenPawAgent(
                 agent_config=agent_config,
                 env_context=env_context,
                 mcp_clients=mcp_clients,
                 memory_manager=self.memory_manager,
+                context_manager=self.context_manager,
                 request_context=base_request_context,
                 workspace_dir=self.workspace_dir,
                 task_tracker=self._task_tracker,
+                plan_notebook=plan_notebook,
             )
             await agent.register_mcp_clients()
             agent.set_console_output_enabled(enabled=False)
@@ -631,16 +683,20 @@ class AgentRunner(Runner):
             )
 
             if self._chat_manager is not None:
+                _req_extra = getattr(request, "model_extra", None) or {}
+                _session_source = _req_extra.get("session_source", "chat")
                 logger.debug(
                     f"Runner: Calling get_or_create_chat for "
                     f"session_id={session_id}, user_id={user_id}, "
-                    f"channel={channel}, name={name}",
+                    f"channel={channel}, name={name}, "
+                    f"source={_session_source}",
                 )
                 chat = await self._chat_manager.get_or_create_chat(
                     session_id,
                     user_id,
                     channel,
                     name=name,
+                    source=_session_source,
                 )
                 logger.debug(f"Runner: Got chat: {chat.id}")
             else:
@@ -657,6 +713,13 @@ class AgentRunner(Runner):
                     agent.toolkit.skills,
                 )
                 if skill_response is not None:
+                    await self._persist_exchange_to_session(
+                        session_id,
+                        user_id,
+                        channel,
+                        msgs,
+                        skill_response,
+                    )
                     yield skill_response, True
                     return
 
@@ -667,6 +730,7 @@ class AgentRunner(Runner):
                     _states = await self.session.get_session_state_dict(
                         session_id=session_id,
                         user_id=user_id,
+                        channel=channel,
                         allow_not_exist=True,
                     )
                     _agent_st = _states.get("agent", {})
@@ -680,6 +744,7 @@ class AgentRunner(Runner):
                             key="agent.plan_notebook",
                             value=plan_notebook.state_dict(),
                             user_id=user_id,
+                            channel=channel,
                             create_if_not_exist=False,
                         )
                 except Exception:
@@ -698,6 +763,7 @@ class AgentRunner(Runner):
                 await self.session.load_session_state(
                     session_id=session_id,
                     user_id=user_id,
+                    channel=channel,
                     agent=agent,
                 )
             except KeyError as e:
@@ -719,6 +785,23 @@ class AgentRunner(Runner):
                 from ...plan.hints import clear_plan_awaiting_user_confirm
 
                 clear_plan_awaiting_user_confirm(plan_notebook)
+
+            # Isolated cron: run without any prior context so each execution
+            # is independent (saves tokens, avoids stale-context interference).
+            _extra = getattr(request, "model_extra", None) or {}
+            if (
+                _extra.get("session_source") == "cron"
+                and agent.memory is not None
+            ):
+                # Snapshot the full history before clearing
+                _cron_memory_snapshot = agent.memory.state_dict()
+                await agent.memory.clear()
+                logger.debug(
+                    "Isolated cron execution: snapshotted and cleared agent "
+                    "memory (%d items) for session_id=%s",
+                    len(_cron_memory_snapshot.get("memory", [])),
+                    session_id,
+                )
 
             # Rebuild system prompt so it always reflects the latest
             # AGENTS.md / SOUL.md / PROFILE.md, not the stale one saved
@@ -768,10 +851,10 @@ class AgentRunner(Runner):
             logger.info(f"query_handler: {session_id} cancelled!")
 
             # Cancel all pending approvals for this root session
-            root_session_id = str(base_request_context.get(
+            root_session_id = base_request_context.get(
                 "root_session_id",
                 session_id,
-            ) or session_id)
+            )
             from ..approvals.service import get_approval_service
 
             approval_svc = get_approval_service()
@@ -813,6 +896,10 @@ class AgentRunner(Runner):
             logger.exception(f"Error in query handler: {converted}{path_hint}")
             if debug_dump_path:
                 setattr(converted, "debug_dump_path", debug_dump_path)
+                if hasattr(converted, "add_note"):
+                    converted.add_note(
+                        f"(Details:  {debug_dump_path})",
+                    )
                 suffix = f"\n(Details:  {debug_dump_path})"
                 if hasattr(converted, "message") and isinstance(
                     converted.message,
@@ -826,9 +913,28 @@ class AgentRunner(Runner):
             raise converted from e
         finally:
             if agent is not None and session_state_loaded:
+                # For isolated cron: restore the full history (snapshot) plus
+                # the new messages produced by this execution
+                if (
+                    _cron_memory_snapshot is not None
+                    and agent.memory is not None
+                ):
+                    new_messages = await agent.memory.get_memory()
+                    agent.memory.load_state_dict(_cron_memory_snapshot)
+                    if new_messages:
+                        await agent.memory.add(new_messages)
+                    logger.debug(
+                        "Isolated cron: restored %d historical + %d new "
+                        "messages for session_id=%s",
+                        len(_cron_memory_snapshot.get("memory", [])),
+                        len(new_messages) if new_messages else 0,
+                        session_id,
+                    )
+
                 await self.session.save_session_state(
                     session_id=session_id,
                     user_id=user_id,
+                    channel=channel,
                     agent=agent,
                 )
 

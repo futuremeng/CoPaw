@@ -146,7 +146,15 @@ function contentToRequestParts(
 function normalizeOutputMessageContent(content: unknown): unknown {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return content;
-  return content as ContentItem[];
+  return (content as ContentItem[]).map((c) => {
+    if (c.type === "file") {
+      return {
+        ...c,
+        file_name: (c.filename as string) || (c.file_name as string) || "file",
+      };
+    }
+    return c;
+  });
 }
 
 function hasVisibleTextContent(content: unknown): boolean {
@@ -617,6 +625,59 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
    */
   preferredChatId: string | null = null;
 
+  // ---------------------------------------------------------------------------
+  // Session switch lock (issue #4557)
+  // Prevents rapid session switching from causing infinite loops by blocking
+  // all clicks until the current switch completes (data loaded + URL updated).
+  // ---------------------------------------------------------------------------
+
+  /** Whether a session switch is currently in progress. */
+  isSessionSwitching = false;
+
+  /** Short-lived result cache so the library's subsequent getSession call
+   *  (triggered by setCurrentSessionId → useAsyncEffect) can reuse the
+   *  already-fetched session without making another network request. */
+  private sessionResultCache: Map<string, IAgentScopeRuntimeWebUISession> =
+    new Map();
+
+  /**
+   * Pre-load a session's data. Returns the session with its realId resolved.
+   * Used by handleSessionClick to load data BEFORE setting currentSessionId,
+   * so the library's automatic getSession call hits the result cache.
+   */
+  async preloadSession(sessionId: string): Promise<{
+    session: IAgentScopeRuntimeWebUISession;
+    realId: string | null;
+  }> {
+    this.isSessionSwitching = true;
+    try {
+      const session = await this.getSession(sessionId);
+      const extendedSession = session as ExtendedSession;
+      const realId = extendedSession.realId || null;
+
+      // Cache the result so subsequent getSession calls return immediately.
+      this.sessionResultCache.set(sessionId, session);
+      if (realId) {
+        this.sessionResultCache.set(realId, session);
+      }
+      // Clear cache after 3s (enough for the library's useAsyncEffect to fire).
+      setTimeout(() => {
+        this.sessionResultCache.delete(sessionId);
+        if (realId) this.sessionResultCache.delete(realId);
+      }, 3000);
+
+      return { session, realId };
+    } catch (error) {
+      this.isSessionSwitching = false;
+      throw error;
+    }
+  }
+
+  /** Called after navigate + setCurrentSessionId are both done. */
+  finishSessionSwitch(): void {
+    this.isSessionSwitching = false;
+  }
+
   /**
    * Cache the latest user message for a chat so it can be patched into
    * history during reconnect (the backend only persists it after generation
@@ -791,6 +852,13 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
   onSessionSelected:
     | ((sessionId: string | null | undefined, realId: string | null) => void)
     | null = null;
+
+  /**
+   * The last chatId that onSessionSelected navigated to. ChatSessionInitializer
+   * checks this to avoid re-triggering setCurrentSessionId for a URL change
+   * that was already handled by onSessionSelected (issue #4557).
+   */
+  lastNavigatedChatId: string | null = null;
 
   /**
    * Called when a new session is created.
@@ -1031,10 +1099,18 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
     return this.sessionListRequest;
   }
 
-  /** Track the last session ID that triggered onSessionSelected to avoid duplicate calls. */
-  private lastSelectedSessionId: string | null = null;
+  /**
+   * Track both displayId and realId of the last selected session to avoid
+   * duplicate onSessionSelected calls when the same session is loaded via
+   * either its displayId or realId (issue #4557).
+   */
+  private lastSelectedIds: Set<string> = new Set();
 
   async getSession(sessionId: string) {
+    // Check short-lived result cache first (populated by preloadSession).
+    const cached = this.sessionResultCache.get(sessionId);
+    if (cached) return cached;
+
     // Deduplicate: reuse the in-flight request if one is already running
     // for the same sessionId so concurrent calls share one network request.
     const existingRequest = this.sessionRequests.get(sessionId);
@@ -1045,11 +1121,16 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
 
     try {
       const session = await requestPromise;
-      // Trigger onSessionSelected only when session actually changes
-      if (sessionId !== this.lastSelectedSessionId) {
-        this.lastSelectedSessionId = sessionId;
-        const extendedSession = session as ExtendedSession;
-        const realId = extendedSession.realId || null;
+      const extendedSession = session as ExtendedSession;
+      const realId = extendedSession.realId || null;
+
+      // Only trigger onSessionSelected if neither the displayId nor the
+      // realId has already been selected. This prevents the infinite loop
+      // where displayId and realId alternate triggering onSessionSelected.
+      if (!this.lastSelectedIds.has(sessionId)) {
+        this.lastSelectedIds.clear();
+        this.lastSelectedIds.add(sessionId);
+        if (realId) this.lastSelectedIds.add(realId);
         this.onSessionSelected?.(sessionId, realId);
       }
       return session;

@@ -13,6 +13,7 @@ import { cronJobApi } from "./modules/cronjob";
 import { chatApi, sessionApi } from "./modules/chat";
 import { envApi } from "./modules/env";
 import { providerApi } from "./modules/provider";
+import { marketApi } from "./modules/market";
 import { skillApi } from "./modules/skill";
 import { agentApi } from "./modules/agent";
 import { agentsApi } from "./modules/agents";
@@ -64,6 +65,9 @@ export const api = {
 
   // Skills
   ...skillApi,
+
+  // Skill Market
+  ...marketApi,
 
   // Workspace
   ...workspaceApi,

@@ -123,6 +123,7 @@ export function ChannelDrawer({
   const isChannelEnabled = channelEnabled !== false;
   const matrixAuthMethod = Form.useWatch("auth_method", form);
   const isMatrixPasswordAuth = matrixAuthMethod === "password";
+  const feishuDomain = (Form.useWatch("domain", form) as string) || "feishu";
 
   // Parent calls form.setFieldsValue() before the Form mounts, which wins over
   // initialValues. Re-apply auth_method after open so the dropdown is correct.
@@ -489,6 +490,7 @@ export function ChannelDrawer({
               successStatus="success"
               successCredentialKey="app_id"
               pollInterval={2000}
+              params={{ domain: feishuDomain }}
               onSuccess={(credentials) => {
                 form.setFieldsValue({
                   app_id: credentials.app_id,
@@ -1363,7 +1365,8 @@ export function ChannelDrawer({
 
           {(activeKey === "wecom" ||
             activeKey === "telegram" ||
-            activeKey === "dingtalk") && (
+            activeKey === "dingtalk" ||
+            activeKey === "feishu") && (
             <Form.Item
               name="streaming_enabled"
               label={t("channels.streamingEnabled")}
@@ -1371,6 +1374,8 @@ export function ChannelDrawer({
               tooltip={
                 activeKey === "dingtalk"
                   ? t("channels.streamingEnabledDingtalkHint")
+                  : activeKey === "feishu"
+                  ? t("channels.streamingEnabledFeishuHint")
                   : undefined
               }
             >

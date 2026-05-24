@@ -44,6 +44,18 @@ class ModelInfo(BaseModel):
         default=False,
         description="Whether this model is free to use (e.g., no API cost)",
     )
+    max_tokens: int = Field(
+        default=8192,
+        ge=1,
+        description="Maximum number of tokens the model can generate per "
+        "response. Merged into generate_kwargs unless explicitly overridden.",
+    )
+    max_input_length: int = Field(
+        default=128 * 1024,
+        ge=1000,
+        description="Maximum input context window size (tokens). "
+        "Controls when context compaction is triggered.",
+    )
     generate_kwargs: Dict[str, Any] = Field(
         default_factory=dict,
         description="Per-model generation parameters that override "
@@ -299,18 +311,24 @@ class Provider(ProviderInfo, ABC):
 
     def get_effective_generate_kwargs(self, model_id: str) -> Dict[str, Any]:
         """Return merged generate_kwargs: provider-level as base, model-level
-        overrides on top (deep merge for nested dicts).
+        overrides on top (deep merge for nested dicts).  The model's
+        ``max_tokens`` is injected unless already present in kwargs.
 
         Always returns a new dict so callers never mutate provider state.
         """
         for model in self.models + self.extra_models:
             if model.id == model_id:
-                if model.generate_kwargs:
-                    return self._deep_merge(
+                result = (
+                    self._deep_merge(
                         self.generate_kwargs,
                         model.generate_kwargs,
                     )
-                break
+                    if model.generate_kwargs
+                    else dict(self.generate_kwargs)
+                )
+                if "max_tokens" not in result:
+                    result["max_tokens"] = model.max_tokens
+                return result
         return dict(self.generate_kwargs)
 
     def update_model_config(
@@ -327,6 +345,13 @@ class Provider(ProviderInfo, ABC):
                     and isinstance(config["generate_kwargs"], dict)
                 ):
                     model.generate_kwargs = config["generate_kwargs"]
+                if "max_tokens" in config and config["max_tokens"] is not None:
+                    model.max_tokens = int(config["max_tokens"])
+                if (
+                    "max_input_length" in config
+                    and config["max_input_length"] is not None
+                ):
+                    model.max_input_length = int(config["max_input_length"])
                 return True
         return False
 
@@ -335,6 +360,13 @@ class Provider(ProviderInfo, ABC):
         return any(
             model.id == model_id for model in self.models + self.extra_models
         )
+
+    def get_model_info(self, model_id: str) -> ModelInfo | None:
+        """Return the ModelInfo for *model_id*, or None."""
+        for model in self.models + self.extra_models:
+            if model.id == model_id:
+                return model
+        return None
 
     @abstractmethod
     def get_chat_model_instance(self, model_id: str) -> ChatModelBase:

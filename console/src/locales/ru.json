@@ -10,6 +10,7 @@
     "upload": "Загрузить",
     "download": "Скачать",
     "refresh": "Обновить",
+    "search": "Поиск",
     "enable": "Включить",
     "disable": "Отключить",
     "enabled": "Включено",
@@ -209,6 +210,7 @@
     "clickToFill": "Нажмите, чтобы заполнить URL",
     "invalidSkillUrlSource": "Пожалуйста, убедитесь, что URL навыка из поддерживаемого маркетплейса",
     "type": "Тип",
+    "installedFrom": "Установлено из",
     "source": "Источник",
     "path": "Путь",
     "skillDescription": "Описание",
@@ -392,6 +394,7 @@
     "skillCount": "{{count}} навыков",
     "skillName": "Название навыка",
     "status": "Статус",
+    "installedFrom": "Установлено из",
     "updateBuiltin": "Обновить",
     "updateConfirmTitle": "Обновить {{name}}",
     "updateConfirmContent": "Обновить до версии {{version}}? Текущая копия в пуле будет заменена последней встроенной версией.",
@@ -616,6 +619,16 @@
     "pleaseSelectRepeatEndType": "Выберите условие окончания",
     "pleaseInputRepeatUntil": "Выберите дату окончания",
     "pleaseInputRepeatCount": "Введите число запусков",
+    "validation": {
+      "cronRequired": "Для повторяющегося расписания требуется cron-выражение.",
+      "runAtRequired": "Для одноразового расписания требуется время выполнения.",
+      "repeatUntilRequired": "При выборе «До даты» необходимо указать дату окончания.",
+      "repeatCountRequired": "При выборе «Ограниченное число запусков» необходимо указать количество запусков.",
+      "repeatUntilAfterRunAt": "Дата окончания должна быть позже времени выполнения. Выберите дату окончания после времени выполнения.",
+      "textRequired": "При типе задачи text содержимое сообщения обязательно.",
+      "requestRequired": "При типе задачи agent содержимое запроса обязательно.",
+      "invalidCronExpression": "Некорректное cron-выражение. Используйте формат из 5 полей."
+    },
     "listView": "Список",
     "calendarView": "Календарь",
     "calendarEmptyHint": "Запланированных задач пока нет. Создайте задачи по расписанию, чтобы увидеть их в календаре.",
@@ -706,6 +719,7 @@
     "filterThinkingTooltip": "Показывать пользователям рассуждения модели (выключите, чтобы скрыть)",
     "streamingEnabled": "Потоковый вывод",
     "streamingEnabledDingtalkHint": "Действует только при типе сообщения Card",
+    "streamingEnabledFeishuHint": "Необходимо включить разрешение cardkit:card:write на странице управления разрешениями открытой платформы Feishu",
     "ackMessage": "Сообщение подтверждения",
     "ackMessageTooltip": "Отправить мгновенный ответ при получении сообщения до начала обработки агентом. Оставьте пустым для отключения.",
     "ackMessagePlaceholder": "⏳ Обработка...",
@@ -971,6 +985,10 @@
     "modelConfigSaved": "Конфигурация модели {{name}} сохранена",
     "modelConfigSaveFailed": "Не удалось сохранить конфигурацию модели",
     "modelConfigLabel": "Конфигурация модели",
+    "maxTokensLabel": "Макс. токенов",
+    "maxTokensHint": "Максимальное количество выходных токенов на ответ",
+    "maxInputLengthLabel": "Макс. длина контекста",
+    "maxInputLengthHint": "Размер контекстного окна модели, управляет порогом сжатия контекста (≥1000)",
     "protocol": "Протокол",
     "protocolHint": "Выберите протокол API провайдера для этой конфигурации.",
     "selectProtocol": "Пожалуйста, выберите протокол",
@@ -1503,8 +1521,10 @@
     "changelog": "Список изменений",
     "docs": "Документация",
     "tutorial": "Руководство",
+    "featureDemos": "Демонстрация функций",
     "faq": "FAQ",
     "github": "GitHub",
+    "resources": "Документация",
     "updateAvailable": "Доступно обновление"
   },
   "theme": {
@@ -2059,7 +2079,22 @@
     "author": "Автор",
     "unknown": "Неизвестно",
     "loadFailed": "Не удалось загрузить список плагинов",
-    "confirmTitle": "Подтвердить удаление"
+    "confirmTitle": "Подтвердить удаление",
+    "officialTitle": "Официальные плагины",
+    "officialDesc": "Установка опубликованных плагинов с CDN загрузок.",
+    "catalogRefresh": "Обновить",
+    "catalogEmpty": "Нет доступных официальных плагинов (каталог CDN может быть пуст)",
+    "catalogLoadFailed": "Не удалось загрузить каталог официальных плагинов",
+    "catalogInstall": "Установить",
+    "catalogReinstall": "Переустановить",
+    "catalogUpgrade": "Доступно обновление",
+    "catalogUpgradeBtn": "Обновить",
+    "catalogInstalled": "Установлен",
+    "catalogSha256": "SHA256",
+    "kindBundle": "Пакет",
+    "kindTool": "Инструмент",
+    "filterByName": "Фильтр по имени",
+    "filterByKind": "Фильтр по типу"
   },
   "plan": {
     "title": "План",
@@ -2137,5 +2172,47 @@
     "detailPayload": "Данные",
     "detailExecutionTrace": "Трассировка выполнения",
     "detailTraceEmpty": "Трассировка выполнения недоступна"
+  },
+  "market": {
+    "searchPlaceholder": "Поиск навыков по платформам",
+    "providerUnavailable": "Источник недоступен",
+    "noResults": "Ничего не найдено",
+    "startTyping": "Введите запрос выше, чтобы найти навык в маркете",
+    "noDescription": "Описание отсутствует",
+    "targetPool": "Пул",
+    "targetWorkspace": "Рабочее пространство",
+    "install": "Установить",
+    "installQueue": "Очередь установки",
+    "clearCompleted": "Очистить",
+    "retry": "Повторить",
+    "status": {
+      "queued": "В очереди",
+      "installing": "Установка",
+      "completed": "Готово",
+      "failed": "Ошибка",
+      "cancelled": "Отменено"
+    },
+    "loadMore": "Загрузить ещё",
+    "noMoreResults": "Больше результатов нет",
+    "detail": {
+      "title": "Сведения о навыке",
+      "version": "Версия",
+      "author": "Автор",
+      "sourceUrl": "URL установки",
+      "slug": "Идентификатор",
+      "missing": "—"
+    },
+    "stats": {
+      "downloads": "Скачивания",
+      "installs": "Установки",
+      "likes": "Лайки",
+      "views": "Просмотры",
+      "category": "Категория",
+      "updatedAt": "Обновлено"
+    },
+    "queueMsg": {
+      "timedOut": "Время установки истекло",
+      "failedPrefix": "Ошибка: {{msg}}"
+    }
   }
 }
