@@ -4,6 +4,7 @@ import { moduleRegistry } from "../plugins/moduleRegistry";
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
+const IMPORT_TIMEOUT_MS = 12000;
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -15,7 +16,7 @@ const RETRY_DELAY_MS = 1000;
  *   "../../pages/Settings/Debug"         →  "Settings/Debug/index"
  */
 function pathToModuleKey(importPath: string): string {
-  const hasExplicitExtension = /\.[^.\/]+$/.test(importPath);
+  const hasExplicitExtension = /\.[^./]+$/.test(importPath);
   const key = importPath.replace(/^.*\/pages\//, "").replace(/\.[^.]+$/, "");
   // Bare-directory imports are registered as "<Dir>/index" in registerHostModules
   return !hasExplicitExtension && key.includes("/") && !/\/index$/.test(key)
@@ -27,7 +28,24 @@ function retryImport<T extends ComponentType<unknown>>(
   factory: () => Promise<{ default: T }>,
   retries: number,
 ): Promise<{ default: T }> {
-  return factory().catch((error: unknown) => {
+  const timedFactory = () =>
+    new Promise<{ default: T }>((resolve, reject) => {
+      const timer = window.setTimeout(() => {
+        reject(new Error(`Chunk import timed out after ${IMPORT_TIMEOUT_MS}ms`));
+      }, IMPORT_TIMEOUT_MS);
+
+      factory()
+        .then((result) => {
+          window.clearTimeout(timer);
+          resolve(result);
+        })
+        .catch((error: unknown) => {
+          window.clearTimeout(timer);
+          reject(error);
+        });
+    });
+
+  return timedFactory().catch((error: unknown) => {
     if (retries <= 0) throw error;
     return new Promise<{ default: T }>((resolve) =>
       setTimeout(

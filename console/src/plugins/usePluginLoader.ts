@@ -10,6 +10,9 @@
 
 import { getApiUrl, getApiToken } from "../api/config";
 
+const PLUGIN_LIST_TIMEOUT_MS = 8000;
+const PLUGIN_SCRIPT_TIMEOUT_MS = 12000;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Plugin manifest type (mirrors backend PluginInfo)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -41,7 +44,23 @@ async function executePluginScript(entryUrl: string): Promise<void> {
   const headers: Record<string, string> = {};
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const response = await fetch(entryUrl, { headers });
+  const controller = new AbortController();
+  const timeoutHandle = window.setTimeout(() => {
+    controller.abort();
+  }, PLUGIN_SCRIPT_TIMEOUT_MS);
+
+  let response: Response;
+  try {
+    response = await fetch(entryUrl, { headers, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error(`Timeout ${PLUGIN_SCRIPT_TIMEOUT_MS}ms for ${entryUrl}`);
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutHandle);
+  }
+
   if (!response.ok) {
     throw new Error(`HTTP ${response.status} for ${entryUrl}`);
   }
@@ -79,7 +98,29 @@ export async function loadAllPlugins(): Promise<{
     const token = getApiToken();
     const headers: Record<string, string> = {};
     if (token) headers["Authorization"] = `Bearer ${token}`;
-    const res = await fetch(getApiUrl("/frontend_plugin"), { headers });
+    const controller = new AbortController();
+    const timeoutHandle = window.setTimeout(() => {
+      controller.abort();
+    }, PLUGIN_LIST_TIMEOUT_MS);
+
+    let res: Response;
+    try {
+      res = await fetch(getApiUrl("/frontend_plugin"), {
+        headers,
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        console.warn(
+          `[PluginLoader] /api/frontend_plugin timed out after ${PLUGIN_LIST_TIMEOUT_MS}ms`,
+        );
+        return { loaded: 0, failed: [] };
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timeoutHandle);
+    }
+
     if (!res.ok) {
       console.warn(`[PluginLoader] /api/plugins returned ${res.status}`);
       return { loaded: 0, failed: [] };

@@ -22,6 +22,7 @@ function isChunkLoadError(error: unknown): boolean {
     msg.includes("loading chunk") ||
     msg.includes("loading css chunk") ||
     msg.includes("dynamically imported module") ||
+    msg.includes("chunk import timed out") ||
     msg.includes("failed to fetch") ||
     error.name === "ChunkLoadError"
   );

@@ -55,19 +55,26 @@ export function PluginProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let disposed = false;
+
     // Re-sync state whenever any plugin registers new capabilities
     const unsub = pluginSystem.subscribe(() => {
+      if (disposed) return;
       setToolRenderConfig(pluginSystem.getToolRenderConfig());
       setPluginRoutes(pluginSystem.getRoutes());
     });
 
     // Load all installed plugins (non-fatal: one bad plugin won’t block others)
     loadAllPlugins().then(({ failed }) => {
+      if (disposed) return;
       if (failed.length > 0) setError(failed.join("; "));
       setLoading(false);
     });
 
-    return unsub;
+    return () => {
+      disposed = true;
+      unsub();
+    };
   }, []);
 
   return (

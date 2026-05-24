@@ -36,6 +36,8 @@ import { getApiUrl, getApiToken, clearAuthToken } from "./api/config";
 import "./styles/layout.css";
 import "./styles/form-override.css";
 
+const AUTH_VERIFY_TIMEOUT_MS = 8000;
+
 const antdLocaleMap: Record<string, Locale> = {
   zh: zhCN,
   en: enUS,
@@ -80,9 +82,19 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
           return;
         }
         try {
-          const r = await fetch(getApiUrl("/auth/verify"), {
-            headers: { Authorization: `Bearer ${token}` },
-          });
+          const controller = new AbortController();
+          const timeoutHandle = window.setTimeout(() => {
+            controller.abort();
+          }, AUTH_VERIFY_TIMEOUT_MS);
+          let r: Response;
+          try {
+            r = await fetch(getApiUrl("/auth/verify"), {
+              headers: { Authorization: `Bearer ${token}` },
+              signal: controller.signal,
+            });
+          } finally {
+            window.clearTimeout(timeoutHandle);
+          }
           if (cancelled) return;
           if (r.ok) {
             setStatus("ok");
@@ -165,7 +177,7 @@ function AppInner() {
 
   // Wait for plugins to load before rendering routes that might be patched
   if (pluginsLoading) {
-    return null;
+    return <div style={{ padding: 24 }}>Loading plugins...</div>;
   }
 
   return (

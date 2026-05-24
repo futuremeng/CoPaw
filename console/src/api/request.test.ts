@@ -49,6 +49,7 @@ describe("request", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.clearAllMocks();
   });
 
@@ -153,5 +154,62 @@ describe("request", () => {
       "/api/models/active",
       expect.any(Object),
     );
+  });
+
+  it("throws timeout error when request exceeds timeoutMs", async () => {
+    vi.useFakeTimers();
+    global.fetch = vi.fn(
+      (_url: RequestInfo | URL, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            reject(new DOMException("Aborted", "AbortError"));
+          });
+        }),
+    ) as typeof fetch;
+
+    const pending = request("/models", { timeoutMs: 10 });
+    const assertion = expect(pending).rejects.toThrow(
+      "Request timeout after 10ms",
+    );
+    await vi.advanceTimersByTimeAsync(20);
+
+    await assertion;
+    vi.useRealTimers();
+  });
+
+  it("throws aborted error when caller aborts signal", async () => {
+    const controller = new AbortController();
+    global.fetch = vi.fn(
+      (_url: RequestInfo | URL, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            reject(new DOMException("Aborted", "AbortError"));
+          });
+        }),
+    ) as typeof fetch;
+
+    const pending = request("/models", {
+      signal: controller.signal,
+      timeoutMs: 1000,
+    });
+    controller.abort();
+
+    await expect(pending).rejects.toThrow("Request aborted");
+  });
+
+  it("aborts in-flight request on navigation change by default", async () => {
+    global.fetch = vi.fn(
+      (_url: RequestInfo | URL, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            reject(new DOMException("Aborted", "AbortError"));
+          });
+        }),
+    ) as typeof fetch;
+
+    const pending = request("/models", { timeoutMs: 1000 });
+    window.dispatchEvent(new Event("qwenpaw:navigation-change"));
+
+    await expect(pending).rejects.toThrow("Request aborted");
   });
 });
