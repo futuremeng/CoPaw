@@ -1845,6 +1845,7 @@ class KnowledgeIndexConfig(BaseModel):
     graph_path: str = ""
     bfs_depth: int = 2
     token_budget: int = 4096
+    chunk_size: int = 1200
 
 
 class KnowledgeAutomationConfig(BaseModel):
@@ -1853,6 +1854,10 @@ class KnowledgeAutomationConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     enabled: bool = False
+    knowledge_auto_collect_chat_files: bool = False
+    knowledge_auto_collect_chat_urls: bool = False
+    knowledge_auto_collect_long_text: bool = False
+    knowledge_long_text_min_chars: int = 500
 
 
 class GraphifyConfig(BaseModel):
@@ -1880,6 +1885,7 @@ class KnowledgeConfig(BaseModel):
         default_factory=KnowledgeAutomationConfig,
     )
     graphify: GraphifyConfig = Field(default_factory=GraphifyConfig)
+    memify_enabled: bool = False
 
 
 class AgentsSquareSourceSpec(BaseModel):
