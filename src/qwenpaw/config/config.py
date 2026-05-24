@@ -1049,6 +1049,22 @@ class AgentProfileRef(BaseModel):
         default=True,
         description="Whether agent is enabled (controls instance loading)",
     )
+    is_builtin: bool = Field(
+        default=False,
+        description="Whether this profile refers to a system-managed builtin agent.",
+    )
+    builtin_kind: str = Field(
+        default="",
+        description="Builtin agent category identifier.",
+    )
+    builtin_label: str = Field(
+        default="",
+        description="Human-facing builtin group label shown in UI.",
+    )
+    system_protected: bool = Field(
+        default=False,
+        description="Whether destructive operations on this agent are blocked.",
+    )
 
 
 class PlanConfig(BaseModel):
@@ -1069,6 +1085,22 @@ class AgentProfileConfig(BaseModel):
     id: str = Field(..., description="Unique agent ID")
     name: str = Field(..., description="Human-readable agent name")
     description: str = Field(default="", description="Agent description")
+    is_builtin: bool = Field(
+        default=False,
+        description="Whether this is a system-managed builtin agent.",
+    )
+    builtin_kind: str = Field(
+        default="",
+        description="Builtin agent category identifier.",
+    )
+    builtin_label: str = Field(
+        default="",
+        description="Human-facing builtin group label shown in UI.",
+    )
+    system_protected: bool = Field(
+        default=False,
+        description="Whether destructive operations on this agent are blocked.",
+    )
     workspace_dir: str = Field(
         default="",
         description="Path to agent's workspace (optional, for reference)",
