@@ -1623,6 +1623,15 @@ def build_local_agent_tools_config() -> ToolsConfig:
     return ToolsConfig(builtin_tools=builtin_tools)
 
 
+def build_understand_builtin_tools_config() -> ToolsConfig:
+    """Backward-compatible tools preset for builtin understand agents.
+
+    Understand agents now share the same capability preset as local
+    collaborative agents.
+    """
+    return build_local_agent_tools_config()
+
+
 class ToolGuardRuleConfig(BaseModel):
     """A single user-defined guard rule (stored in config.json)."""
 
@@ -1734,6 +1743,192 @@ class SecurityConfig(BaseModel):
     )
 
 
+class KnowledgeSourceSpec(BaseModel):
+    """Compatibility source spec for CoPaw knowledge modules."""
+
+    model_config = ConfigDict(extra="allow")
+
+    id: str = ""
+    name: str = ""
+    type: str = ""
+    location: str = ""
+    content: str = ""
+    summary: str = ""
+    tags: List[str] = Field(default_factory=list)
+    enabled: bool = True
+    recursive: bool = False
+    project_id: str = ""
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return getattr(self, key, default)
+
+
+class KnowledgeTaskSpec(BaseModel):
+    """Task-level HanLP runtime settings."""
+
+    model_config = ConfigDict(extra="allow")
+
+    enabled: bool = True
+    task_name: str = ""
+    model_id: str = ""
+    artifact_key: str = ""
+    eval_role: str = "compare"
+    timeout_sec: float = 30.0
+
+
+class KnowledgeHanLPTaskConfig(KnowledgeTaskSpec):
+    """Compatibility alias for HanLP task matrix entries."""
+
+
+class KnowledgeTaskMatrixConfig(BaseModel):
+    """HanLP task matrix configuration."""
+
+    model_config = ConfigDict(extra="allow")
+
+    tasks: Dict[str, KnowledgeHanLPTaskConfig] = Field(default_factory=dict)
+
+
+class KnowledgeNLPConfig(BaseModel):
+    """Compatibility NLP runtime configuration."""
+
+    model_config = ConfigDict(extra="allow")
+
+    enabled: bool = False
+    python_executable: str = ""
+    model_id: str = ""
+    model_home: str = ""
+    probe_timeout_sec: float = 5.0
+    tokenize_timeout_sec: float = 15.0
+    task_matrix: KnowledgeTaskMatrixConfig = Field(
+        default_factory=KnowledgeTaskMatrixConfig,
+    )
+
+
+class KnowledgeIndexConfig(BaseModel):
+    """Compatibility indexing configuration."""
+
+    model_config = ConfigDict(extra="allow")
+
+    dataset_dir: str = ""
+    graph_path: str = ""
+    bfs_depth: int = 2
+    token_budget: int = 4096
+
+
+class KnowledgeAutomationConfig(BaseModel):
+    """Compatibility automation configuration."""
+
+    model_config = ConfigDict(extra="allow")
+
+    enabled: bool = False
+
+
+class GraphifyConfig(BaseModel):
+    """Compatibility Graphify provider configuration."""
+
+    model_config = ConfigDict(extra="allow")
+
+    endpoint: str = ""
+    api_key: str = ""
+    graph_path: str = ""
+    dataset_dir: str = ""
+    request_timeout_sec: float = 15.0
+
+
+class KnowledgeConfig(BaseModel):
+    """Compatibility top-level knowledge config used by CoPaw modules."""
+
+    model_config = ConfigDict(extra="allow")
+
+    enabled: bool = True
+    sources: List[KnowledgeSourceSpec] = Field(default_factory=list)
+    nlp: KnowledgeNLPConfig = Field(default_factory=KnowledgeNLPConfig)
+    index: KnowledgeIndexConfig = Field(default_factory=KnowledgeIndexConfig)
+    automation: KnowledgeAutomationConfig = Field(
+        default_factory=KnowledgeAutomationConfig,
+    )
+    graphify: GraphifyConfig = Field(default_factory=GraphifyConfig)
+
+
+class AgentsSquareSourceSpec(BaseModel):
+    """One source entry for Agents Square catalog discovery."""
+
+    id: str = ""
+    url: str = ""
+    branch: str = ""
+    path: str = "."
+    provider: str = "index_json"
+    enabled: bool = True
+    order: int = 0
+    pinned: bool = False
+    license_hint: str = ""
+
+
+class AgentsSquareCacheConfig(BaseModel):
+    """Caching settings for Agents Square listing."""
+
+    ttl_sec: int = Field(default=600, ge=0)
+
+
+class AgentsSquareInstallConfig(BaseModel):
+    """Install behavior settings for Agents Square imports."""
+
+    overwrite_default: bool = False
+    preserve_workspace_files: bool = True
+
+
+class AgentsSquareConfig(BaseModel):
+    """Top-level Agents Square source configuration."""
+
+    version: int = Field(default=1, ge=1)
+    sources: List[AgentsSquareSourceSpec] = Field(default_factory=list)
+    cache: AgentsSquareCacheConfig = Field(
+        default_factory=AgentsSquareCacheConfig,
+    )
+    install: AgentsSquareInstallConfig = Field(
+        default_factory=AgentsSquareInstallConfig,
+    )
+
+
+class SkillMarketSpec(BaseModel):
+    """One source entry for skill marketplace aggregation."""
+
+    model_config = ConfigDict(extra="allow")
+
+    id: str = ""
+    url: str = ""
+    branch: str = ""
+    path: str = "index.json"
+    enabled: bool = True
+    order: int = 0
+
+
+class SkillsMarketCacheConfig(BaseModel):
+    """Caching settings for skills marketplace listing."""
+
+    ttl_sec: int = Field(default=600, ge=0)
+
+
+class SkillsMarketInstallConfig(BaseModel):
+    """Install behavior settings for marketplace imports."""
+
+    overwrite_default: bool = False
+    preserve_workspace_files: bool = True
+
+
+class SkillsMarketConfig(BaseModel):
+    """Top-level skills marketplace source configuration."""
+
+    version: int = Field(default=1, ge=1)
+    markets: List[SkillMarketSpec] = Field(default_factory=list)
+    cache: SkillsMarketCacheConfig = Field(
+        default_factory=SkillsMarketCacheConfig,
+    )
+    install: SkillsMarketInstallConfig = Field(
+        default_factory=SkillsMarketInstallConfig,
+    )
+
+
 class Config(BaseModel):
     """Root config (config.json)."""
 
@@ -1744,6 +1939,7 @@ class Config(BaseModel):
     agents: AgentsConfig = Field(default_factory=AgentsConfig)
     last_dispatch: Optional[LastDispatchConfig] = None
     security: SecurityConfig = Field(default_factory=SecurityConfig)
+    knowledge: KnowledgeConfig = Field(default_factory=KnowledgeConfig)
     acp: ACPConfig = Field(default_factory=ACPConfig)
     show_tool_details: bool = True
     user_timezone: str = Field(
@@ -1755,6 +1951,9 @@ class Config(BaseModel):
         default_factory=dict,
         description="Plugin configurations. Key is plugin_id, "
         "value is plugin-specific config dict.",
+    )
+    skills_market: SkillsMarketConfig = Field(
+        default_factory=SkillsMarketConfig,
     )
 
 

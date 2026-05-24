@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from ..config.config import KnowledgeConfig
+KnowledgeConfig = Any
 
 # ---------------------------------------------------------------------------
 # Authoritative HanLP pretrained model → download URL mapping.
