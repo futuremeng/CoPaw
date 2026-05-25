@@ -680,8 +680,6 @@ def _prepare_classical_task_config(task_key: str, effective_config: KnowledgeCon
 
 def _extract_hanlp_model_id(knowledge_config: Any) -> str:
     nlp_cfg = getattr(knowledge_config, "nlp", None)
-    if nlp_cfg is None:
-        nlp_cfg = getattr(knowledge_config, "hanlp", None)
     return str(getattr(nlp_cfg, "model_id", "") or "").strip()
 
 
@@ -844,7 +842,7 @@ def _resolve_model_decision(task_key: str, text: str, knowledge_config: Knowledg
     if not selected_model:
         selected_model = base_model
         if base_model:
-            matched_rules.append("knowledge.nlp.model_id")
+            matched_rules.append("nlp.model_id")
 
     return {
         "strategy_mode": mode,
@@ -919,12 +917,17 @@ async def _resolve_knowledge_config(request: Request) -> KnowledgeConfig:
     config = load_config()
     knowledge_config = getattr(config, "knowledge", None)
     if not isinstance(knowledge_config, KnowledgeConfig):
-        return config.knowledge
+        knowledge_config = config.knowledge
+
+    # Keep runtime compatibility by explicitly attaching top-level nlp config.
+    setattr(knowledge_config, "nlp", config.nlp.model_copy(deep=True))
 
     running_config = getattr(getattr(config, "agents", None), "running", None)
     if running_config is None:
         return knowledge_config
-    return _effective_knowledge_config(knowledge_config, running_config)
+    effective = _effective_knowledge_config(knowledge_config, running_config)
+    setattr(effective, "nlp", config.nlp.model_copy(deep=True))
+    return effective
 
 
 async def _run_hanlp_task_impl(

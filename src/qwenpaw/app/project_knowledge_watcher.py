@@ -196,7 +196,9 @@ class ProjectKnowledgeWatcher:
             and cache.get("agent_mtime_ns") == agent_mtime_ns
         ):
             global_config = cache["global_config"]
-            return global_config, global_config.knowledge, cache["running_config"]
+            knowledge_config = global_config.knowledge.model_copy(deep=True)
+            setattr(knowledge_config, "nlp", global_config.nlp.model_copy(deep=True))
+            return global_config, knowledge_config, cache["running_config"]
 
         global_config, agent_config = await asyncio.gather(
             asyncio.to_thread(load_config),
@@ -209,7 +211,9 @@ class ProjectKnowledgeWatcher:
             "global_config": global_config,
             "running_config": running_config,
         }
-        return global_config, global_config.knowledge, running_config
+        knowledge_config = global_config.knowledge.model_copy(deep=True)
+        setattr(knowledge_config, "nlp", global_config.nlp.model_copy(deep=True))
+        return global_config, knowledge_config, running_config
 
     async def _collect_snapshots_async(self) -> dict[str, dict[str, Any]]:
         return await asyncio.to_thread(self._collect_snapshots)

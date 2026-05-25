@@ -46,7 +46,27 @@ nlp_router = APIRouter(prefix="/nlp", tags=["knowledge"])
 
 _PROJECT_PIPELINE_RUNTIME_LOCK = Lock()
 _PROJECT_PIPELINE_RUNTIME_META: dict[str, dict[str, object]] = {}
-_SUPPORTED_PROJECT_STEP_STATS = frozenset(KNOWLEDGE_WORKFLOW_STEP_IDS)
+_SUPPORTED_PROJECT_STEP_STATS = frozenset(
+    {
+        *KNOWLEDGE_WORKFLOW_STEP_IDS,
+        "file_analysis",
+        "source_scan",
+        "domain_graph_build",
+    }
+)
+
+
+def _normalize_project_step_id(step_id: str) -> str:
+    """Normalize step id by accepting hyphen/underscore variants."""
+    raw = str(step_id or "").strip()
+    if not raw:
+        return ""
+    underscore = raw.replace("-", "_")
+    hyphen = raw.replace("_", "-")
+    for candidate in (underscore, hyphen, raw):
+        if candidate in _SUPPORTED_PROJECT_STEP_STATS:
+            return candidate
+    return ""
 
 
 def _project_pipeline_runtime_key(workspace_dir: str | Path, project_id: str) -> str:
@@ -376,8 +396,8 @@ async def _project_step_stats_response(
     step_id: str,
     limit: int,
 ) -> dict[str, object]:
-    normalized_step_id = str(step_id or "").strip().replace("-", "_")
-    if normalized_step_id not in _SUPPORTED_PROJECT_STEP_STATS:
+    normalized_step_id = _normalize_project_step_id(step_id)
+    if not normalized_step_id:
         raise HTTPException(status_code=404, detail="PROJECT_STEP_STATS_NOT_FOUND")
     _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
     project_id = _resolve_project_id(request)
@@ -583,6 +603,13 @@ def _effective_knowledge_config(
     return effective
 
 
+def _attach_runtime_nlp(knowledge_config: KnowledgeConfig, root_config) -> KnowledgeConfig:
+    """Attach top-level nlp config to runtime knowledge payload."""
+    effective = knowledge_config.model_copy(deep=True)
+    setattr(effective, "nlp", root_config.nlp.model_copy(deep=True))
+    return effective
+
+
 async def _resolve_knowledge_request_context(request: Request | None):
     """Resolve root config + optional agent-scoped runtime/workspace context."""
     config = load_config()
@@ -612,6 +639,7 @@ async def _resolve_knowledge_request_context(request: Request | None):
             pass
 
     knowledge_config = _effective_knowledge_config(config.knowledge, running_config)
+    knowledge_config = _attach_runtime_nlp(knowledge_config, config)
     return config, knowledge_config, running_config, workspace_dir, agent_id
 
 
@@ -636,6 +664,7 @@ async def _resolve_knowledge_ws_context(websocket: WebSocket):
             pass
 
     knowledge_config = _effective_knowledge_config(config.knowledge, running_config)
+    knowledge_config = _attach_runtime_nlp(knowledge_config, config)
     return config, knowledge_config, running_config, workspace_dir
 
 
@@ -658,44 +687,80 @@ async def put_knowledge_config(
     knowledge_config: KnowledgeConfig = Body(...),
 ) -> KnowledgeConfig:
     config, _, running_config, _, agent_id = await _resolve_knowledge_request_context(request)
-    previous_enabled = bool(
-        getattr(running_config, "knowledge_enabled", config.knowledge.enabled)
-    )
+    previous_enabled = bool(getattr(running_config, "knowledge_enabled", False))
 
     # Persist structural knowledge config in root config.
     config.knowledge = knowledge_config
 
     # Runtime knowledge toggles belong to the current agent in multi-agent mode.
-    running_config.knowledge_enabled = knowledge_config.enabled
-    running_config.knowledge_auto_collect_chat_files = (
-        knowledge_config.automation.knowledge_auto_collect_chat_files
-    )
-    running_config.knowledge_auto_collect_chat_urls = (
-        knowledge_config.automation.knowledge_auto_collect_chat_urls
-    )
-    running_config.knowledge_auto_collect_long_text = (
-        knowledge_config.automation.knowledge_auto_collect_long_text
-    )
-    running_config.knowledge_long_text_min_chars = (
-        knowledge_config.automation.knowledge_long_text_min_chars
-    )
-    running_config.knowledge_chunk_size = knowledge_config.index.chunk_size
+    if hasattr(running_config, "knowledge_enabled"):
+        running_config.knowledge_enabled = knowledge_config.enabled
+    if hasattr(running_config, "knowledge_auto_collect_chat_files"):
+        running_config.knowledge_auto_collect_chat_files = (
+            knowledge_config.automation.knowledge_auto_collect_chat_files
+        )
+    if hasattr(running_config, "knowledge_auto_collect_chat_urls"):
+        running_config.knowledge_auto_collect_chat_urls = (
+            knowledge_config.automation.knowledge_auto_collect_chat_urls
+        )
+    if hasattr(running_config, "knowledge_auto_collect_long_text"):
+        running_config.knowledge_auto_collect_long_text = (
+            knowledge_config.automation.knowledge_auto_collect_long_text
+        )
+    if hasattr(running_config, "knowledge_long_text_min_chars"):
+        running_config.knowledge_long_text_min_chars = (
+            knowledge_config.automation.knowledge_long_text_min_chars
+        )
+    if hasattr(running_config, "knowledge_chunk_size"):
+        running_config.knowledge_chunk_size = knowledge_config.index.chunk_size
 
     # Keep deprecated root automation fields in sync for backward compatibility.
-    config.knowledge.enabled = running_config.knowledge_enabled
+    config.knowledge.enabled = bool(
+        getattr(running_config, "knowledge_enabled", knowledge_config.enabled),
+    )
     config.knowledge.automation.knowledge_auto_collect_chat_files = (
-        running_config.knowledge_auto_collect_chat_files
+        bool(
+            getattr(
+                running_config,
+                "knowledge_auto_collect_chat_files",
+                knowledge_config.automation.knowledge_auto_collect_chat_files,
+            ),
+        )
     )
     config.knowledge.automation.knowledge_auto_collect_chat_urls = (
-        running_config.knowledge_auto_collect_chat_urls
+        bool(
+            getattr(
+                running_config,
+                "knowledge_auto_collect_chat_urls",
+                knowledge_config.automation.knowledge_auto_collect_chat_urls,
+            ),
+        )
     )
     config.knowledge.automation.knowledge_auto_collect_long_text = (
-        running_config.knowledge_auto_collect_long_text
+        bool(
+            getattr(
+                running_config,
+                "knowledge_auto_collect_long_text",
+                knowledge_config.automation.knowledge_auto_collect_long_text,
+            ),
+        )
     )
     config.knowledge.automation.knowledge_long_text_min_chars = (
-        running_config.knowledge_long_text_min_chars
+        int(
+            getattr(
+                running_config,
+                "knowledge_long_text_min_chars",
+                knowledge_config.automation.knowledge_long_text_min_chars,
+            ),
+        )
     )
-    config.knowledge.index.chunk_size = running_config.knowledge_chunk_size
+    config.knowledge.index.chunk_size = int(
+        getattr(
+            running_config,
+            "knowledge_chunk_size",
+            knowledge_config.index.chunk_size,
+        ),
+    )
 
     if agent_id:
         agent_config = load_agent_config(agent_id)
@@ -716,7 +781,6 @@ async def put_knowledge_config(
 
 
 
-# 新实现：基于项目文件动态生成 sources
 @router.get("/sources")
 async def list_sources(
     request: Request,
@@ -724,30 +788,21 @@ async def list_sources(
 ):
     _, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
     project_id = _resolve_project_id(request)
-    project_dir = Path(workspace_dir)
-    from ..project_file_query import query_project_file_records
-    # 查询所有项目文件，过滤 builtin/ignored
-    file_query = query_project_file_records(
-        project_dir,
-        include_builtin=False,
-        include_ignored=False,
-        limit=5000,
+    manager = _manager_for_workspace(
+        workspace_dir,
+        project_id=project_id,
     )
-    sources = []
-    for file in file_query.get("items", []):
-        sources.append({
-            "id": file["path"],
-            "name": file["filename"],
-            "type": "file",
-            "location": file["path"],
-            "content": "",
-            "enabled": True,
-            "recursive": False,
-            "tags": [],
-            "summary": "",
-            "project_id": project_id,
-            "status": None,
-        })
+    sources = await asyncio.to_thread(
+        manager.list_sources,
+        knowledge_config,
+        bool(include_semantic),
+    )
+    if project_id:
+        sources = [
+            item
+            for item in list(sources or [])
+            if str((item or {}).get("project_id") or "").strip() == project_id
+        ]
     return {
         "enabled": bool(knowledge_config.enabled),
         "sources": sources,
@@ -913,7 +968,7 @@ async def index_source(source_id: str, request: Request):
         result = await asyncio.to_thread(
             manager.index_source,
             source,
-            config.knowledge,
+            knowledge_config,
             running_config,
         )
     except (FileNotFoundError, ValueError, OSError) as exc:
@@ -947,7 +1002,7 @@ async def index_all_sources(request: Request):
         )
         return await asyncio.to_thread(
             manager.index_all,
-            config.knowledge,
+            knowledge_config,
             running_config,
         )
     except (FileNotFoundError, ValueError, OSError) as exc:
@@ -1056,10 +1111,20 @@ async def search_knowledge(
         workspace_dir,
         project_id=_resolve_project_id(request),
     )
+    search_config = knowledge_config
+    if not projects and not normalized_scope_type and not _resolve_project_id(request):
+        search_config = knowledge_config.model_copy(deep=True)
+        search_config.sources = [
+            source
+            for source in list(search_config.sources or [])
+            if "visibility:sync-only" not in {
+                str(tag).strip().lower() for tag in list(getattr(source, "tags", []) or [])
+            }
+        ]
     return await asyncio.to_thread(
         manager.search,
         query=q,
-        config=config.knowledge,
+        config=search_config,
         limit=limit,
         source_ids=ids or None,
         source_types=types or None,
@@ -1262,7 +1327,7 @@ async def query_knowledge_graph(
         )
         result = await asyncio.to_thread(
             graph_ops.graph_query,
-            config=config.knowledge,
+            config=knowledge_config,
             query_mode=query_mode,
             query_text=query_text,
             dataset_scope=scope_items or None,
@@ -1522,20 +1587,63 @@ async def start_memify_job(
 @router.get("/project-pipeline/status")
 async def get_project_pipeline_status(request: Request):
     """Get project-scoped automatic knowledge pipeline status."""
-    config, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    config, knowledge_config, running_config, workspace_dir, _ = await _resolve_knowledge_request_context(request)
     project_id = _resolve_project_id(request)
     if not project_id:
         raise HTTPException(status_code=400, detail="PROJECT_ID_REQUIRED")
+
     manager = _project_pipeline_for_workspace(
         workspace_dir,
         project_id=project_id,
     )
+    project_workspace_dir = (Path(workspace_dir) / "projects" / project_id).resolve()
+    source = build_project_source_spec(
+        project_id=project_id,
+        project_name=project_id,
+        project_workspace_dir=str(project_workspace_dir),
+    )
+    coordinator = _project_pipeline_coordinator_for_workspace(
+        workspace_dir,
+        project_id=project_id,
+    )
+    try:
+        resume_event = await asyncio.to_thread(
+            coordinator.dispatch,
+            ProjectPipelineCommand.resume(
+                project_id=project_id,
+                config=knowledge_config,
+                running_config=running_config,
+                source=source,
+                idempotency_key=f"route-status-resume:{project_id}",
+            ),
+        )
+        _record_project_pipeline_runtime_event(
+            workspace_dir=workspace_dir,
+            project_id=project_id,
+            operation_id=str(getattr(resume_event, "operation_id", "") or ""),
+            idempotency_key=str(getattr(resume_event, "idempotency_key", "") or ""),
+            deduplicated=bool(getattr(resume_event, "deduplicated", False)),
+            action=str(getattr(resume_event, "action", "") or "resume_sync"),
+        )
+    except AttributeError:
+        pass
+
     state = await asyncio.to_thread(manager.get_state, project_id)
-    return _project_pipeline_state_with_runtime_meta(
+    payload = _project_pipeline_state_with_runtime_meta(
         workspace_dir=workspace_dir,
         project_id=project_id,
         state=dict(state),
     )
+    lanes = dict(payload.get("lanes") or {})
+    lanes.setdefault("retrieval", {"mode": "fast"})
+    lanes.setdefault("quantization", {"mode": "nlp"})
+    payload["lanes"] = lanes
+    quantization_stages = dict(payload.get("quantization_stages") or {})
+    quantization_stages.setdefault("l1", {})
+    quantization_stages.setdefault("l2", {})
+    quantization_stages.setdefault("l3", {})
+    payload["quantization_stages"] = quantization_stages
+    return payload
 
 
 @router.post("/project-pipeline/run")
@@ -1608,6 +1716,14 @@ async def run_project_pipeline(
             project_name=project_id,
             project_workspace_dir=str(project_workspace_dir),
         )
+        if processing_mode_explicit:
+            ensure_project_source_registered(
+                config.knowledge,
+                project_id=project_id,
+                project_name=project_id,
+                project_workspace_dir=str(project_workspace_dir),
+                persist=lambda: save_config(config),
+            )
 
     execution_context = {
         "scope": "source_file" if resolved_source_file_path else "project",

@@ -33,14 +33,16 @@ def _make_config():
             ),
         }
     )
-    hanlp = SimpleNamespace(
+    nlp = SimpleNamespace(
         enabled=False,
+        sidecar_enabled=False,
         python_executable="",
         hanlp_home="",
+        model_home="",
         model_id="FINE_ELECTRA_SMALL_ZH",
         task_matrix=task_matrix,
     )
-    return SimpleNamespace(knowledge=SimpleNamespace(hanlp=hanlp))
+    return SimpleNamespace(knowledge=SimpleNamespace(), nlp=nlp)
 
 
 def test_build_status_includes_task_matrix_states(monkeypatch):
@@ -259,9 +261,9 @@ def test_auto_install_hanlp_sidecar_uses_python_fallback(monkeypatch, tmp_path):
             "returncode": 0,
         },
     ]
-    assert config.knowledge.hanlp.enabled is True
-    assert config.knowledge.hanlp.python_executable == str(python_path)
-    assert config.knowledge.hanlp.hanlp_home == str(tmp_path / "hanlp_sidecar" / "home")
+    assert config.nlp.sidecar_enabled is True
+    assert config.nlp.python_executable == str(python_path)
+    assert config.nlp.model_home == str(tmp_path / "hanlp_sidecar" / "home")
 
 
 def test_auto_install_hanlp_sidecar_reports_missing_bootstrap_prereqs(monkeypatch):
@@ -369,46 +371,45 @@ def test_auto_install_hanlp_sidecar_uses_uv_managed_environment(monkeypatch, tmp
         "uv",
         "uv",
     ]
-    assert config.knowledge.hanlp.python_executable == str(python_path)
+    assert config.nlp.python_executable == str(python_path)
 
 
 def test_run_hanlp_preload_tracks_stable_order_and_progress(monkeypatch):
     config = SimpleNamespace(
-        knowledge=SimpleNamespace(
-            hanlp=SimpleNamespace(
-                model_id="FINE_ELECTRA_SMALL_ZH",
-                task_matrix=SimpleNamespace(
-                    tasks={
-                        "zeta": SimpleNamespace(
-                            enabled=True,
-                            task_name="zeta",
-                            artifact_key="zeta",
-                            eval_role="primary",
-                            model_id="",
-                        ),
-                        "coref": SimpleNamespace(
-                            enabled=True,
-                            task_name="coref",
-                            artifact_key="coref",
-                            eval_role="primary",
-                            model_id="",
-                        ),
-                        "alpha": SimpleNamespace(
-                            enabled=True,
-                            task_name="alpha",
-                            artifact_key="alpha",
-                            eval_role="primary",
-                            model_id="",
-                        ),
-                        "beta": SimpleNamespace(
-                            enabled=False,
-                            task_name="beta",
-                            artifact_key="beta",
-                            eval_role="primary",
-                            model_id="",
-                        ),
-                    },
-                ),
+        knowledge=SimpleNamespace(),
+        nlp=SimpleNamespace(
+            model_id="FINE_ELECTRA_SMALL_ZH",
+            task_matrix=SimpleNamespace(
+                tasks={
+                    "zeta": SimpleNamespace(
+                        enabled=True,
+                        task_name="zeta",
+                        artifact_key="zeta",
+                        eval_role="primary",
+                        model_id="",
+                    ),
+                    "coref": SimpleNamespace(
+                        enabled=True,
+                        task_name="coref",
+                        artifact_key="coref",
+                        eval_role="primary",
+                        model_id="",
+                    ),
+                    "alpha": SimpleNamespace(
+                        enabled=True,
+                        task_name="alpha",
+                        artifact_key="alpha",
+                        eval_role="primary",
+                        model_id="",
+                    ),
+                    "beta": SimpleNamespace(
+                        enabled=False,
+                        task_name="beta",
+                        artifact_key="beta",
+                        eval_role="primary",
+                        model_id="",
+                    ),
+                },
             ),
         ),
     )

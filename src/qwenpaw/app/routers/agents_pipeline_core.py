@@ -2670,7 +2670,8 @@ def _run_builtin_project_knowledge_pipeline(
     parameters: dict[str, Any],
 ) -> dict[str, Any]:
     config = load_config()
-    knowledge_config = config.knowledge
+    knowledge_config = config.knowledge.model_copy(deep=True)
+    setattr(knowledge_config, "nlp", config.nlp.model_copy(deep=True))
     running_config = config.agents.running
 
     processing_mode = _normalize_processing_mode(parameters.get("processing_mode"))

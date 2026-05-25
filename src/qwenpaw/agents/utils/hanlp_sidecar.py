@@ -376,10 +376,7 @@ def _runtime() -> NLPRuntime:
 
 
 def _nlp_config(config):
-    knowledge = getattr(config, "knowledge", None)
-    if knowledge is None:
-        return None
-    return getattr(knowledge, "nlp", None) or getattr(knowledge, "hanlp", None)
+    return getattr(config, "nlp", None)
 
 
 def _task_specs(config) -> dict[str, object]:

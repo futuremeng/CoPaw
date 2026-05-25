@@ -3,10 +3,30 @@
 from __future__ import annotations
 
 import asyncio
+from copy import deepcopy
 import time
 from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
+
+
+def _make_nlp_config(**kwargs) -> SimpleNamespace:
+    payload = deepcopy(kwargs)
+    nlp_cfg = SimpleNamespace(**payload)
+
+    def _model_copy(deep: bool = True):
+        data = deepcopy(payload) if deep else dict(payload)
+        return SimpleNamespace(**data)
+
+    setattr(nlp_cfg, "model_copy", _model_copy)
+    return nlp_cfg
+
+
+def _make_root_config(nlp_cfg: SimpleNamespace) -> SimpleNamespace:
+    return SimpleNamespace(
+        knowledge=SimpleNamespace(),
+        nlp=nlp_cfg,
+    )
 
 
 class _FakeRuntime:
@@ -285,10 +305,8 @@ class _SlowTokenizeRuntime(_FakeRuntime):
 def _install_runtime_mocks(monkeypatch):
     from copaw.app.routers import knowledge_hanlp_tasks as module
 
-    fake_cfg = SimpleNamespace(
-        knowledge=SimpleNamespace(
-            hanlp=SimpleNamespace(model_id="MSRA_NER_BERT_BASE_ZH"),
-        ),
+    fake_cfg = _make_root_config(
+        _make_nlp_config(model_id="MSRA_NER_BERT_BASE_ZH")
     )
     monkeypatch.setattr(module, "load_config", lambda: fake_cfg)
     monkeypatch.setattr(module, "NLPRuntime", lambda: _FakeRuntime())
@@ -297,19 +315,17 @@ def _install_runtime_mocks(monkeypatch):
 def _install_runtime_mocks_with_strategy(monkeypatch):
     from copaw.app.routers import knowledge_hanlp_tasks as module
 
-    cfg = SimpleNamespace(
-        knowledge=SimpleNamespace(
-            nlp=SimpleNamespace(
-                model_id="hanlp.pretrained.mtl.CLOSE_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH",
-                strategy=SimpleNamespace(
-                    mode="auto",
-                    default_model_id="hanlp.pretrained.mtl.CLOSE_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH",
-                    task_overrides={},
-                    auto_classical_chinese=SimpleNamespace(
-                        enabled=True,
-                        threshold=0.2,
-                        model_id="hanlp.pretrained.mtl.KYOTO_EVAHAN_TOK_LEM_POS_UDEP_LZH",
-                    ),
+    cfg = _make_root_config(
+        _make_nlp_config(
+            model_id="hanlp.pretrained.mtl.CLOSE_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH",
+            strategy=SimpleNamespace(
+                mode="auto",
+                default_model_id="hanlp.pretrained.mtl.CLOSE_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH",
+                task_overrides={},
+                auto_classical_chinese=SimpleNamespace(
+                    enabled=True,
+                    threshold=0.2,
+                    model_id="hanlp.pretrained.mtl.KYOTO_EVAHAN_TOK_LEM_POS_UDEP_LZH",
                 ),
             ),
         ),
@@ -321,10 +337,8 @@ def _install_runtime_mocks_with_strategy(monkeypatch):
 def _install_unavailable_runtime_mocks(monkeypatch):
     from copaw.app.routers import knowledge_hanlp_tasks as module
 
-    fake_cfg = SimpleNamespace(
-        knowledge=SimpleNamespace(
-            hanlp=SimpleNamespace(model_id="MSRA_NER_BERT_BASE_ZH"),
-        ),
+    fake_cfg = _make_root_config(
+        _make_nlp_config(model_id="MSRA_NER_BERT_BASE_ZH")
     )
     monkeypatch.setattr(module, "load_config", lambda: fake_cfg)
     monkeypatch.setattr(module, "NLPRuntime", lambda: _UnavailableRuntime())
@@ -333,10 +347,8 @@ def _install_unavailable_runtime_mocks(monkeypatch):
 def _install_nested_list_ner_runtime_mocks(monkeypatch):
     from copaw.app.routers import knowledge_hanlp_tasks as module
 
-    fake_cfg = SimpleNamespace(
-        knowledge=SimpleNamespace(
-            hanlp=SimpleNamespace(model_id="MSRA_NER_BERT_BASE_ZH"),
-        ),
+    fake_cfg = _make_root_config(
+        _make_nlp_config(model_id="MSRA_NER_BERT_BASE_ZH")
     )
     monkeypatch.setattr(module, "load_config", lambda: fake_cfg)
     monkeypatch.setattr(module, "NLPRuntime", lambda: _NestedListNerRuntime())
@@ -345,25 +357,23 @@ def _install_nested_list_ner_runtime_mocks(monkeypatch):
 def _install_runtime_mocks_with_strategy_and_task_matrix(monkeypatch):
     from copaw.app.routers import knowledge_hanlp_tasks as module
 
-    cfg = SimpleNamespace(
-        knowledge=SimpleNamespace(
-            nlp=SimpleNamespace(
-                model_id="hanlp.pretrained.mtl.CLOSE_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH",
-                strategy=SimpleNamespace(
-                    mode="auto",
-                    default_model_id="hanlp.pretrained.mtl.CLOSE_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH",
-                    task_overrides={},
-                    auto_classical_chinese=SimpleNamespace(
-                        enabled=False,
-                        threshold=0.2,
-                        model_id="",
-                    ),
+    cfg = _make_root_config(
+        _make_nlp_config(
+            model_id="hanlp.pretrained.mtl.CLOSE_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH",
+            strategy=SimpleNamespace(
+                mode="auto",
+                default_model_id="hanlp.pretrained.mtl.CLOSE_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH",
+                task_overrides={},
+                auto_classical_chinese=SimpleNamespace(
+                    enabled=False,
+                    threshold=0.2,
+                    model_id="",
                 ),
-                task_matrix=SimpleNamespace(
-                    tasks={
-                        "ner_msra": SimpleNamespace(model_id="MSRA_NER_BERT_BASE_ZH"),
-                    },
-                ),
+            ),
+            task_matrix=SimpleNamespace(
+                tasks={
+                    "ner_msra": SimpleNamespace(model_id="MSRA_NER_BERT_BASE_ZH"),
+                },
             ),
         ),
     )
@@ -374,10 +384,8 @@ def _install_runtime_mocks_with_strategy_and_task_matrix(monkeypatch):
 def _install_fragmented_ner_runtime_mocks(monkeypatch):
     from copaw.app.routers import knowledge_hanlp_tasks as module
 
-    fake_cfg = SimpleNamespace(
-        knowledge=SimpleNamespace(
-            hanlp=SimpleNamespace(model_id="MSRA_NER_BERT_BASE_ZH"),
-        ),
+    fake_cfg = _make_root_config(
+        _make_nlp_config(model_id="MSRA_NER_BERT_BASE_ZH")
     )
     monkeypatch.setattr(module, "load_config", lambda: fake_cfg)
     monkeypatch.setattr(module, "NLPRuntime", lambda: _FragmentedNerRuntime())
@@ -386,13 +394,11 @@ def _install_fragmented_ner_runtime_mocks(monkeypatch):
 def _install_slow_tokenize_runtime_mocks(monkeypatch):
     from copaw.app.routers import knowledge_hanlp_tasks as module
 
-    fake_cfg = SimpleNamespace(
-        knowledge=SimpleNamespace(
-            nlp=SimpleNamespace(
-                model_id="FINE_ELECTRA_SMALL_ZH",
-                tokenize_timeout_sec=0.01,
-                task_matrix=SimpleNamespace(tasks={}),
-            ),
+    fake_cfg = _make_root_config(
+        _make_nlp_config(
+            model_id="FINE_ELECTRA_SMALL_ZH",
+            tokenize_timeout_sec=0.01,
+            task_matrix=SimpleNamespace(tasks={}),
         ),
     )
     monkeypatch.setattr(module, "load_config", lambda: fake_cfg)
@@ -551,21 +557,19 @@ def test_copaw_hanlp_ner_prefers_task_matrix_model_over_strategy_default(monkeyp
 def test_copaw_hanlp_ner_injects_runtime_default_model_when_matrix_empty(monkeypatch):
     from copaw.app.routers import knowledge_hanlp_tasks as module
 
-    cfg = SimpleNamespace(
-        knowledge=SimpleNamespace(
-            nlp=SimpleNamespace(
-                model_id="FINE_ELECTRA_SMALL_ZH",
-                strategy=SimpleNamespace(
-                    mode="auto",
-                    default_model_id="FINE_ELECTRA_SMALL_ZH",
-                    task_overrides={},
-                    auto_classical_chinese=SimpleNamespace(enabled=False, threshold=0.2, model_id=""),
-                ),
-                task_matrix=SimpleNamespace(
-                    tasks={
-                        "ner_msra": SimpleNamespace(model_id=""),
-                    },
-                ),
+    cfg = _make_root_config(
+        _make_nlp_config(
+            model_id="FINE_ELECTRA_SMALL_ZH",
+            strategy=SimpleNamespace(
+                mode="auto",
+                default_model_id="FINE_ELECTRA_SMALL_ZH",
+                task_overrides={},
+                auto_classical_chinese=SimpleNamespace(enabled=False, threshold=0.2, model_id=""),
+            ),
+            task_matrix=SimpleNamespace(
+                tasks={
+                    "ner_msra": SimpleNamespace(model_id=""),
+                },
             ),
         ),
     )
@@ -590,21 +594,19 @@ def test_copaw_hanlp_ner_injects_runtime_default_model_when_matrix_empty(monkeyp
 def test_copaw_hanlp_dep_injects_runtime_default_model_when_matrix_empty(monkeypatch):
     from copaw.app.routers import knowledge_hanlp_tasks as module
 
-    cfg = SimpleNamespace(
-        knowledge=SimpleNamespace(
-            nlp=SimpleNamespace(
-                model_id="FINE_ELECTRA_SMALL_ZH",
-                strategy=SimpleNamespace(
-                    mode="auto",
-                    default_model_id="FINE_ELECTRA_SMALL_ZH",
-                    task_overrides={},
-                    auto_classical_chinese=SimpleNamespace(enabled=False, threshold=0.2, model_id=""),
-                ),
-                task_matrix=SimpleNamespace(
-                    tasks={
-                        "dep": SimpleNamespace(model_id=""),
-                    },
-                ),
+    cfg = _make_root_config(
+        _make_nlp_config(
+            model_id="FINE_ELECTRA_SMALL_ZH",
+            strategy=SimpleNamespace(
+                mode="auto",
+                default_model_id="FINE_ELECTRA_SMALL_ZH",
+                task_overrides={},
+                auto_classical_chinese=SimpleNamespace(enabled=False, threshold=0.2, model_id=""),
+            ),
+            task_matrix=SimpleNamespace(
+                tasks={
+                    "dep": SimpleNamespace(model_id=""),
+                },
             ),
         ),
     )

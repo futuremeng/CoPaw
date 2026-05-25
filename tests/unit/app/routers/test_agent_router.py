@@ -173,17 +173,15 @@ def test_put_nlp_strategy_updates_config(monkeypatch):
     app.include_router(agent_router_module.router)
 
     config = SimpleNamespace(
-        knowledge=SimpleNamespace(
-            nlp=SimpleNamespace(
-                strategy=SimpleNamespace(
-                    mode="auto",
-                    default_model_id="model-default-old",
-                    task_overrides={"ner": "old-model"},
-                    auto_classical_chinese=SimpleNamespace(
-                        enabled=False,
-                        threshold=0.5,
-                        model_id="model-old-lzh",
-                    ),
+        nlp=SimpleNamespace(
+            strategy=SimpleNamespace(
+                mode="auto",
+                default_model_id="model-default-old",
+                task_overrides={"ner": "old-model"},
+                auto_classical_chinese=SimpleNamespace(
+                    enabled=False,
+                    threshold=0.5,
+                    model_id="model-old-lzh",
                 ),
             ),
         ),
@@ -233,18 +231,16 @@ def test_post_nlp_strategy_dry_run_classical_chinese(monkeypatch):
     app.include_router(agent_router_module.router)
 
     config = SimpleNamespace(
-        knowledge=SimpleNamespace(
-            nlp=SimpleNamespace(
-                model_id="model-default",
-                strategy=SimpleNamespace(
-                    mode="auto",
-                    default_model_id="model-default",
-                    task_overrides={},
-                    auto_classical_chinese=SimpleNamespace(
-                        enabled=True,
-                        threshold=0.2,
-                        model_id="model-lzh",
-                    ),
+        nlp=SimpleNamespace(
+            model_id="model-default",
+            strategy=SimpleNamespace(
+                mode="auto",
+                default_model_id="model-default",
+                task_overrides={},
+                auto_classical_chinese=SimpleNamespace(
+                    enabled=True,
+                    threshold=0.2,
+                    model_id="model-lzh",
                 ),
             ),
         ),
@@ -275,18 +271,16 @@ def test_post_nlp_strategy_dry_run_modern_text(monkeypatch):
     app.include_router(agent_router_module.router)
 
     config = SimpleNamespace(
-        knowledge=SimpleNamespace(
-            nlp=SimpleNamespace(
-                model_id="model-default",
-                strategy=SimpleNamespace(
-                    mode="auto",
-                    default_model_id="model-default",
-                    task_overrides={},
-                    auto_classical_chinese=SimpleNamespace(
-                        enabled=True,
-                        threshold=0.5,
-                        model_id="model-lzh",
-                    ),
+        nlp=SimpleNamespace(
+            model_id="model-default",
+            strategy=SimpleNamespace(
+                mode="auto",
+                default_model_id="model-default",
+                task_overrides={},
+                auto_classical_chinese=SimpleNamespace(
+                    enabled=True,
+                    threshold=0.5,
+                    model_id="model-lzh",
                 ),
             ),
         ),

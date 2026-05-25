@@ -1775,7 +1775,8 @@ def _maybe_start_project_auto_knowledge_sync(
         return None
 
     config = load_config()
-    knowledge_config = config.knowledge
+    knowledge_config = config.knowledge.model_copy(deep=True)
+    setattr(knowledge_config, "nlp", config.nlp.model_copy(deep=True))
     if not knowledge_config.enabled or not bool(getattr(knowledge_config, "memify_enabled", False)):
         return None
 

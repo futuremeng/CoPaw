@@ -9,4 +9,4 @@ def test_check_hanlp_sidecar_reports_unconfigured_note() -> None:
 
     assert ok is False
     assert "not configured" in detail.lower()
-    assert any("COPAW_HANLP_SIDECAR_ENABLED=1" in line for line in notes)
+    assert any("nlp.sidecar_enabled=true" in line for line in notes)

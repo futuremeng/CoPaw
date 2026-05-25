@@ -291,10 +291,9 @@ def _classical_detection_score(text: str) -> float:
     return max(0.0, min(score, 1.0))
 
 
-def _resolve_nlp_model_decision(task_key: str, text: str, knowledge_config) -> dict:
+def _resolve_nlp_model_decision(task_key: str, text: str, nlp_cfg) -> dict:
     """Resolve selected model and decision metadata for a given input text/task."""
     normalized_task_key = str(task_key or "ner").strip().lower() or "ner"
-    nlp_cfg = getattr(knowledge_config, "nlp", None)
     strategy = getattr(nlp_cfg, "strategy", None)
     base_model = str(getattr(nlp_cfg, "model_id", "") or "").strip()
     selected_model = base_model
@@ -330,7 +329,7 @@ def _resolve_nlp_model_decision(task_key: str, text: str, knowledge_config) -> d
     if not selected_model:
         selected_model = base_model
         if base_model:
-            matched_rules.append("knowledge.nlp.model_id")
+            matched_rules.append("nlp.model_id")
 
     return {
         "task_key": normalized_task_key,
@@ -717,7 +716,7 @@ async def post_local_whisper_install() -> dict:
 @router.put(
     "/nlp-preload",
     summary="Update NLP preload settings",
-    description="Update HanLP startup preload settings in knowledge.nlp config.",
+    description="Update HanLP startup preload settings in top-level nlp config.",
 )
 async def put_nlp_preload(
     body: NLPPreloadUpdateBody = Body(
@@ -726,13 +725,13 @@ async def put_nlp_preload(
     ),
 ) -> dict:
     config = load_config()
-    config.knowledge.nlp.preload_on_startup = bool(body.enabled)
-    config.knowledge.nlp.preload_scope = str(body.scope)
+    config.nlp.preload_on_startup = bool(body.enabled)
+    config.nlp.preload_scope = str(body.scope)
     save_config(config)
 
     from ...agents.utils.hanlp_sidecar import get_hanlp_preload_status, kickoff_hanlp_preload
 
-    if body.enabled and str(getattr(config.knowledge.nlp, "provider", "hanlp") or "hanlp").strip().lower() == "hanlp":
+    if body.enabled and str(getattr(config.nlp, "provider", "hanlp") or "hanlp").strip().lower() == "hanlp":
         await asyncio.to_thread(kickoff_hanlp_preload, True)
 
     return {
@@ -771,7 +770,7 @@ async def put_nlp_strategy(
 ) -> dict:
     """Update request-scoped NLP model routing strategy."""
     config = load_config()
-    strategy = config.knowledge.nlp.strategy
+    strategy = config.nlp.strategy
 
     strategy.mode = str(body.mode)
     strategy.default_model_id = str(body.default_model_id or "").strip()
@@ -787,7 +786,7 @@ async def put_nlp_strategy(
 
     save_config(config)
     return {
-        "strategy": _build_nlp_strategy_payload(config.knowledge.nlp),
+        "strategy": _build_nlp_strategy_payload(config.nlp),
     }
 
 
@@ -804,10 +803,10 @@ async def post_nlp_strategy_dry_run(
 ) -> dict:
     """Preview model routing strategy decision for input text/task."""
     config = load_config()
-    decision = _resolve_nlp_model_decision(body.task_key, body.text, config.knowledge)
+    decision = _resolve_nlp_model_decision(body.task_key, body.text, config.nlp)
     return {
         "decision": decision,
-        "strategy": _build_nlp_strategy_payload(config.knowledge.nlp),
+        "strategy": _build_nlp_strategy_payload(config.nlp),
     }
 
 
@@ -826,7 +825,7 @@ async def get_hanlp_status() -> dict:
     payload = await get_sidecar_nlp_status()
     payload["deprecated"] = True
     payload["migration"] = {
-        "message": "Use /sidecar/nlp-status and knowledge.nlp configuration.",
+        "message": "Use /sidecar/nlp-status and top-level nlp configuration.",
         "target_endpoint": "/sidecar/nlp-status",
     }
     return payload

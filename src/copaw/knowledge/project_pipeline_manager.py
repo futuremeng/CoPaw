@@ -79,7 +79,7 @@ def build_project_source_spec(
 		enabled=True,
 		recursive=True,
 		project_id=(project_id or "").strip(),
-		tags=["project", f"project:{project_id}", "scope:project"],
+		tags=["project", f"project:{project_id}", "scope:project", "visibility:sync-only"],
 		summary=f"Project-scoped knowledge source for {project_name or project_id}",
 	)
 

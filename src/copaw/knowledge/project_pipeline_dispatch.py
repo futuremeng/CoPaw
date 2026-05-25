@@ -46,7 +46,9 @@ def _resolve_scheduled_sync_config(manager: Any) -> tuple[KnowledgeConfig, Any]:
 		except Exception:
 			running_config = root_config.agents.running
 		break
-	return _effective_knowledge_config(root_config.knowledge, running_config), running_config
+	knowledge_config = _effective_knowledge_config(root_config.knowledge, running_config)
+	setattr(knowledge_config, "nlp", root_config.nlp.model_copy(deep=True))
+	return knowledge_config, running_config
 
 
 def schedule_dispatch(manager: Any, run_at: datetime, *, project_id: str) -> None:

@@ -106,7 +106,7 @@ def _host_has_local_model_artifact(model_id: str, hanlp_home: str = "") -> bool:
 
 
 def _classical_local_item(config) -> dict[str, Any]:
-    model_home = str(getattr(config.knowledge.nlp, "model_home", "") or "")
+    model_home = str(getattr(config.nlp, "model_home", "") or "")
     return {
         "scope": "classical",
         "task_key": "lzh_tok_fine",
@@ -132,7 +132,7 @@ def _effective_task_model_id(task_key: str, task_cfg, default_model_id: str) -> 
 
 
 def _build_local_models_payload(config) -> dict[str, Any]:
-    nlp_cfg = config.knowledge.nlp
+    nlp_cfg = config.nlp
     model_home = str(getattr(nlp_cfg, "model_home", "") or "")
     default_model_id = str(getattr(nlp_cfg, "model_id", "") or "").strip()
     task_matrix = getattr(nlp_cfg, "task_matrix", None)
@@ -216,6 +216,13 @@ def _augment_local_models_payload(payload: dict[str, Any], config) -> dict[str, 
     return result
 
 
+def _runtime_knowledge_config(config) -> Any:
+    """Build runtime knowledge config and attach top-level nlp settings."""
+    knowledge_cfg = config.knowledge.model_copy(deep=True)
+    setattr(knowledge_cfg, "nlp", config.nlp.model_copy(deep=True))
+    return knowledge_cfg
+
+
 @router.get(
     "/nlp-status",
     summary="Check NLP sidecar runtime availability",
@@ -232,7 +239,7 @@ async def get_sidecar_nlp_status(
 ) -> dict:
     """Return provider-aware NLP sidecar runtime status."""
     config = load_config()
-    nlp_cfg = config.knowledge.nlp
+    nlp_cfg = config.nlp
     provider = str(getattr(nlp_cfg, "provider", "hanlp") or "hanlp").strip().lower()
 
     strategy_payload = _build_nlp_strategy_payload(nlp_cfg)
@@ -250,15 +257,19 @@ async def get_sidecar_nlp_status(
         payload["provider"] = "hanlp"
         payload["strategy"] = strategy_payload
         if include_runtime_api:
-            payload["api"] = await asyncio.to_thread(NLPRuntime().api_status, config.knowledge)
+            payload["api"] = await asyncio.to_thread(
+                NLPRuntime().api_status,
+                _runtime_knowledge_config(config),
+            )
         else:
             payload["api"] = _build_hanlp_api_snapshot(payload)
         return payload
 
     runtime = NLPRuntime()
-    sidecar_state = runtime.probe(config.knowledge)
-    model_state = runtime.model_status(config.knowledge)
-    api_payload = runtime.api_status(config.knowledge)
+    runtime_knowledge_config = _runtime_knowledge_config(config)
+    sidecar_state = runtime.probe(runtime_knowledge_config)
+    model_state = runtime.model_status(runtime_knowledge_config)
+    api_payload = runtime.api_status(runtime_knowledge_config)
     model_home = str(getattr(nlp_cfg, "model_home", "") or "")
     return {
         "provider": provider,
@@ -306,7 +317,7 @@ async def get_sidecar_nlp_status(
 async def get_sidecar_nlp_local_models() -> dict:
     """Return local model readiness for current NLP configuration."""
     config = load_config()
-    nlp_cfg = config.knowledge.nlp
+    nlp_cfg = config.nlp
     provider = str(getattr(nlp_cfg, "provider", "hanlp") or "hanlp").strip().lower()
 
     payload = _build_local_models_payload(config)
@@ -326,7 +337,7 @@ async def get_sidecar_nlp_local_models() -> dict:
 async def download_missing_local_models() -> dict:
     """Download all currently missing local models in sequence."""
     config = load_config()
-    nlp_cfg = config.knowledge.nlp
+    nlp_cfg = config.nlp
     provider = str(getattr(nlp_cfg, "provider", "hanlp") or "hanlp").strip().lower()
 
     runtime = NLPRuntime()
@@ -342,7 +353,7 @@ async def download_missing_local_models() -> dict:
 
     attempts: list[dict] = []
     for model_id in model_ids:
-        local_config = config.knowledge.model_copy(deep=True)
+        local_config = _runtime_knowledge_config(config)
         local_config.nlp.model_id = model_id
         result = await asyncio.to_thread(runtime.ensure_model, local_config)
         attempts.append(

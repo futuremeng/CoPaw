@@ -421,7 +421,19 @@ class QuantizationArchitectureManager:
 				source_id=normalized_source,
 				snapshot_id=prev_snapshot,
 			)
-			if not previous_result or previous_result.get("status") != "ready":
+			l1_snapshot = self._resolve_snapshot_id("l1", normalized_source, snapshot_id)
+			l1_result = self.get_stage_result(
+				stage="l1",
+				source_id=normalized_source,
+				snapshot_id=l1_snapshot,
+			)
+			l2_updated_at = str((previous_result or {}).get("manifest", {}).get("updated_at") or "")
+			l1_updated_at = str((l1_result or {}).get("manifest", {}).get("updated_at") or "")
+			if (
+				not previous_result
+				or previous_result.get("status") != "ready"
+				or (l1_updated_at and l2_updated_at and l2_updated_at < l1_updated_at)
+			):
 				raise RuntimeError(f"Dependency not met: {previous_stage} must complete before {normalized_stage}.")
 
 		return self.write_stage_result(

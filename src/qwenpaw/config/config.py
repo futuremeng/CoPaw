@@ -1847,6 +1847,9 @@ class KnowledgeIndexConfig(BaseModel):
     bfs_depth: int = 2
     token_budget: int = 4096
     chunk_size: int = 1200
+    max_file_size: int = 2 * 1024 * 1024
+    include_globs: List[str] = Field(default_factory=list)
+    exclude_globs: List[str] = Field(default_factory=list)
 
 
 class KnowledgeAutomationConfig(BaseModel):
@@ -1880,7 +1883,6 @@ class KnowledgeConfig(BaseModel):
 
     enabled: bool = True
     sources: List[KnowledgeSourceSpec] = Field(default_factory=list)
-    nlp: KnowledgeNLPConfig = Field(default_factory=KnowledgeNLPConfig)
     index: KnowledgeIndexConfig = Field(default_factory=KnowledgeIndexConfig)
     automation: KnowledgeAutomationConfig = Field(
         default_factory=KnowledgeAutomationConfig,
@@ -1978,6 +1980,7 @@ class Config(BaseModel):
     agents: AgentsConfig = Field(default_factory=AgentsConfig)
     last_dispatch: Optional[LastDispatchConfig] = None
     security: SecurityConfig = Field(default_factory=SecurityConfig)
+    nlp: KnowledgeNLPConfig = Field(default_factory=KnowledgeNLPConfig)
     knowledge: KnowledgeConfig = Field(default_factory=KnowledgeConfig)
     acp: ACPConfig = Field(default_factory=ACPConfig)
     show_tool_details: bool = True

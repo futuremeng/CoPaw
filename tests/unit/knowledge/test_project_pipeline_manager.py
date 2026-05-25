@@ -347,8 +347,8 @@ def test_dispatch_scheduled_sync_uses_workspace_agent_config(tmp_path: Path, mon
     monkeypatch.setattr(manager, "_start_worker", lambda **kwargs: started.append(kwargs))
 
     root_config = Config()
-    root_config.knowledge.hanlp.enabled = False
-    root_config.knowledge.hanlp.python_executable = ""
+    root_config.nlp.sidecar_enabled = False
+    root_config.nlp.python_executable = ""
     root_config.agents.profiles = {
         "default": SimpleNamespace(workspace_dir=str(tmp_path)),
     }
@@ -365,7 +365,7 @@ def test_dispatch_scheduled_sync_uses_workspace_agent_config(tmp_path: Path, mon
 
     assert started
     scheduled_config = started[0]["config"]
-    assert getattr(scheduled_config.hanlp, "enabled", None) is False
+    assert getattr(scheduled_config.nlp, "sidecar_enabled", None) is False
     assert getattr(scheduled_config, "index").chunk_size == 1200
     assert started[0]["running_config"] is agent_running
 

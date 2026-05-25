@@ -123,9 +123,11 @@ def _execute_task(task_key: str, text: str) -> tuple[Any, dict[str, str], int]:
     cfg = load_config()
     runtime = NLPRuntime()
     runtime_task_key = _RUNTIME_TASK_KEY.get(task_key, task_key)
+    runtime_cfg = cfg.knowledge.model_copy(deep=True)
+    setattr(runtime_cfg, "nlp", cfg.nlp.model_copy(deep=True))
 
     started = time.perf_counter()
-    result, state = runtime.run_task(runtime_task_key, text, cfg.knowledge)
+    result, state = runtime.run_task(runtime_task_key, text, runtime_cfg)
     elapsed_ms = int((time.perf_counter() - started) * 1000)
     return result, state, elapsed_ms
 

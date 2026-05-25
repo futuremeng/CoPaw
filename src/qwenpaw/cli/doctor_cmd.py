@@ -234,18 +234,20 @@ def _check_web_auth(base: str) -> tuple[bool, str]:
 
 def _check_hanlp_sidecar(cfg) -> tuple[bool, str, list[str]]:
     runtime = NLPRuntime()
-    state = runtime.probe(cfg.knowledge)
+    runtime_cfg = cfg.knowledge.model_copy(deep=True)
+    setattr(runtime_cfg, "nlp", cfg.nlp.model_copy(deep=True))
+    state = runtime.probe(runtime_cfg)
     status = str(state.get("status") or "unavailable").strip().lower()
     reason_code = str(state.get("reason_code") or "").strip().upper()
     reason = str(state.get("reason") or "HanLP sidecar state is unavailable.").strip()
     notes: list[str] = []
 
-    hanlp_cfg = getattr(cfg.knowledge, "hanlp", cfg.knowledge.nlp)
+    hanlp_cfg = cfg.nlp
     if not NLPRuntime._sidecar_enabled(hanlp_cfg):
         if sys.version_info[:2] == (3, 10):
             notes.append(
                 "Main runtime is Python 3.10. Install directly with: "
-                "python -m pip install 'hanlp[full]', then set knowledge.nlp.sidecar_enabled=true.",
+                "python -m pip install 'hanlp[full]', then set nlp.sidecar_enabled=true.",
             )
         else:
             notes.append(
@@ -254,7 +256,7 @@ def _check_hanlp_sidecar(cfg) -> tuple[bool, str, list[str]]:
             )
     elif not str(hanlp_cfg.python_executable or "").strip():
         notes.append(
-            "Set COPAW_HANLP_SIDECAR_PYTHON or knowledge.nlp.python_executable "
+            "Set COPAW_HANLP_SIDECAR_PYTHON or nlp.python_executable "
             "to the dedicated Python 3.6-3.10 sidecar interpreter.",
         )
     else:
