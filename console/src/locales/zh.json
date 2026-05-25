@@ -96,45 +96,45 @@
     "methods": {
       "defaultUnavailableReason": "当前任务不可用",
       "tokenize": {
-        "name": "分词",
+        "name": "分词（TOK）",
         "description": "将文本切分为词语并展示切分结果。",
         "readyReason": "分词能力已就绪",
         "unavailableReason": "分词能力不可用"
       },
       "nerMsra": {
-        "name": "命名实体识别",
+        "name": "命名实体识别（NER）",
         "description": "识别人名、地名、机构名等实体信息。"
       },
       "pos_ctb": {
-        "name": "词性标注（CTB）",
+        "name": "词性标注（POS-CTB）",
         "description": "按 CTB 词性体系输出词性结果。"
       },
       "pos_pku": {
-        "name": "词性标注（PKU）",
+        "name": "词性标注（POS-PKU）",
         "description": "按 PKU 词性体系输出词性结果。"
       },
       "pos_863": {
-        "name": "词性标注（863）",
+        "name": "词性标注（POS-863）",
         "description": "按 863 词性体系输出词性结果。"
       },
       "dep": {
-        "name": "依存句法",
+        "name": "依存句法（DEP）",
         "description": "分析词语之间的依存关系结构。"
       },
       "sdp": {
-        "name": "语义依存",
+        "name": "语义依存（SDP）",
         "description": "分析更深层的语义依存关系。"
       },
       "srl": {
-        "name": "语义角色标注",
+        "name": "语义角色标注（SRL）",
         "description": "识别谓词及其语义角色。"
       },
       "con": {
-        "name": "短语结构分析",
+        "name": "短语结构分析（CON）",
         "description": "生成句子的短语结构树。"
       },
       "cor": {
-        "name": "指代消解",
+        "name": "指代消解（COR）",
         "description": "识别文本中指向同一实体的表达。",
         "unavailableReason": "指代消解模型不可用"
       }
