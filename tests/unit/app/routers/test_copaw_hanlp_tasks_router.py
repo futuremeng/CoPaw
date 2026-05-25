@@ -407,7 +407,7 @@ def test_copaw_hanlp_ner_run_endpoint(monkeypatch):
 
     with TestClient(app) as client:
         response = client.post(
-            "/knowledge/tasks/ner/run",
+            "/api/nlp/tasks/ner/run",
             json={"text": "微软发布新模型", "request_id": "req-ner-1"},
         )
 
@@ -417,7 +417,7 @@ def test_copaw_hanlp_ner_run_endpoint(monkeypatch):
     assert payload["request_id"] == "req-ner-1"
     assert payload["status"] == "ready"
     assert payload["reason_code"] == "HANLP_TASK_READY"
-    assert payload["resolved_model"] == "MSRA_NER_ELECTRA_SMALL_ZH"
+    assert payload["resolved_model"] == "MSRA_NER_BERT_BASE_ZH"
     assert payload["strategy_mode"] == "auto"
     assert payload["detected_style"] == "modern"
     assert payload["fallback_used"] is False
@@ -431,7 +431,7 @@ def test_copaw_hanlp_dep_run_endpoint(monkeypatch):
 
     with TestClient(app) as client:
         response = client.post(
-            "/knowledge/tasks/dep/run",
+            "/api/nlp/tasks/dep/run",
             json={"text": "微软发布新模型", "request_id": "req-dep-1"},
         )
 
@@ -455,7 +455,7 @@ def test_copaw_hanlp_ner_unavailable_hides_result_payload(monkeypatch):
 
     with TestClient(app) as client:
         response = client.post(
-            "/knowledge/tasks/ner/run",
+            "/api/nlp/tasks/ner/run",
             json={"text": "微软发布新模型", "request_id": "req-ner-unavailable"},
         )
 
@@ -476,7 +476,7 @@ def test_copaw_hanlp_dep_unavailable_hides_result_payload(monkeypatch):
 
     with TestClient(app) as client:
         response = client.post(
-            "/knowledge/tasks/dep/run",
+            "/api/nlp/tasks/dep/run",
             json={"text": "微软发布新模型", "request_id": "req-dep-unavailable"},
         )
 
@@ -497,7 +497,7 @@ def test_copaw_hanlp_auto_route_classical_chinese_model(monkeypatch):
 
     with TestClient(app) as client:
         response = client.post(
-            "/knowledge/tasks/ner/run",
+            "/api/nlp/tasks/ner/run",
             json={"text": "吾之道也", "request_id": "req-ner-lzh"},
         )
 
@@ -517,7 +517,7 @@ def test_copaw_hanlp_auto_route_modern_text_uses_default_model(monkeypatch):
 
     with TestClient(app) as client:
         response = client.post(
-            "/knowledge/tasks/ner/run",
+            "/api/nlp/tasks/ner/run",
             json={"text": "我们正在测试模型自动选择能力", "request_id": "req-ner-modern"},
         )
 
@@ -536,7 +536,7 @@ def test_copaw_hanlp_ner_prefers_task_matrix_model_over_strategy_default(monkeyp
 
     with TestClient(app) as client:
         response = client.post(
-            "/knowledge/tasks/ner/run",
+            "/api/nlp/tasks/ner/run",
             json={"text": "微软在北京发布Copaw", "request_id": "req-ner-matrix-priority"},
         )
 
@@ -545,7 +545,7 @@ def test_copaw_hanlp_ner_prefers_task_matrix_model_over_strategy_default(monkeyp
     assert payload["status"] == "ready"
     assert payload["resolved_model"] == "MSRA_NER_BERT_BASE_ZH"
     assert "strategy.default_model_id" in payload["matched_rules"]
-    assert _TaskMatrixProbeRuntime.last_ner_matrix_model_id == "MSRA_NER_ELECTRA_SMALL_ZH"
+    assert _TaskMatrixProbeRuntime.last_ner_matrix_model_id == "MSRA_NER_BERT_BASE_ZH"
 
 
 def test_copaw_hanlp_ner_injects_runtime_default_model_when_matrix_empty(monkeypatch):
@@ -576,7 +576,7 @@ def test_copaw_hanlp_ner_injects_runtime_default_model_when_matrix_empty(monkeyp
 
     with TestClient(app) as client:
         response = client.post(
-            "/knowledge/tasks/ner/run",
+            "/api/nlp/tasks/ner/run",
             json={"text": "微软在北京发布Copaw", "request_id": "req-ner-matrix-default"},
         )
 
@@ -615,7 +615,7 @@ def test_copaw_hanlp_dep_injects_runtime_default_model_when_matrix_empty(monkeyp
 
     with TestClient(app) as client:
         response = client.post(
-            "/knowledge/tasks/dep/run",
+            "/api/nlp/tasks/dep/run",
             json={"text": "微软在北京发布Copaw", "request_id": "req-dep-matrix-default"},
         )
 
@@ -695,7 +695,7 @@ def test_copaw_hanlp_ner_merges_adjacent_fragments_and_repairs_span(monkeypatch)
 
     with TestClient(app) as client:
         response = client.post(
-            "/knowledge/tasks/ner/run",
+            "/api/nlp/tasks/ner/run",
             json={"text": "微软在北京发布Copaw。", "request_id": "req-ner-fragment"},
         )
 
@@ -715,7 +715,7 @@ def test_copaw_hanlp_tokenize_run_endpoint(monkeypatch):
 
     with TestClient(app) as client:
         response = client.post(
-            "/knowledge/tasks/tokenize/run",
+            "/api/nlp/tasks/tokenize/run",
             json={"text": "微软 发布 新模型", "request_id": "req-tokenize-1"},
         )
 
@@ -733,7 +733,7 @@ def test_copaw_hanlp_ner_nested_list_result_is_normalized(monkeypatch):
 
     with TestClient(app) as client:
         response = client.post(
-            "/knowledge/tasks/ner/run",
+            "/api/nlp/tasks/ner/run",
             json={"text": "微软发布新模型", "request_id": "req-ner-nested-list"},
         )
 
@@ -751,7 +751,7 @@ def test_copaw_hanlp_tokenize_run_slash_endpoint(monkeypatch):
 
     with TestClient(app) as client:
         response = client.post(
-            "/knowledge/tasks/tokenize/run",
+            "/api/nlp/tasks/tokenize/run",
             json={"text": "微软 发布 新模型", "request_id": "req-tokenize-2"},
         )
 
@@ -769,7 +769,7 @@ def test_copaw_hanlp_tokenize_batch_of_five_sentences(monkeypatch):
 
     with TestClient(app) as client:
         response = client.post(
-            "/knowledge/tasks/tokenize/run",
+            "/api/nlp/tasks/tokenize/run",
             json={
                 "texts": [
                     "微软 发布 新模型",
@@ -800,7 +800,7 @@ def test_copaw_hanlp_batch_rejects_more_than_five_sentences(monkeypatch):
 
     with TestClient(app) as client:
         response = client.post(
-            "/knowledge/tasks/tokenize/run",
+            "/api/nlp/tasks/tokenize/run",
             json={
                 "texts": [
                     "句子一",
@@ -826,7 +826,7 @@ def test_copaw_hanlp_tokenize_run_slash_endpoint_degrades_on_route_timeout(monke
 
     with TestClient(app) as client:
         response = client.post(
-            "/knowledge/tasks/tokenize/run",
+            "/api/nlp/tasks/tokenize/run",
             json={"text": "微软 发布 新模型", "request_id": "req-tokenize-timeout"},
         )
 
@@ -856,7 +856,8 @@ def test_route_timeout_sec_is_capped_for_interactive_requests():
 
     timeout_sec = module._route_timeout_sec("tokenize", effective_config)
 
-    assert timeout_sec == module._ROUTE_TIMEOUT_MAX_SEC
+    assert timeout_sec == 30.25
+    assert timeout_sec < module._ROUTE_TIMEOUT_MAX_SEC
 
 
 def test_copaw_hanlp_tokenize_run_degrades_when_route_setup_exceeds_deadline(monkeypatch):
@@ -879,7 +880,7 @@ def test_copaw_hanlp_tokenize_run_degrades_when_route_setup_exceeds_deadline(mon
 
     with TestClient(app) as client:
         response = client.post(
-            "/knowledge/tasks/tokenize/run",
+            "/api/nlp/tasks/tokenize/run",
             json={"text": "微软 发布 新模型", "request_id": "req-tokenize-setup-timeout"},
         )
 
@@ -899,11 +900,25 @@ def test_copaw_hanlp_colon_run_endpoint_is_not_supported(monkeypatch):
 
     with TestClient(app) as client:
         response = client.post(
-            "/knowledge/tasks/tokenize:run",
+            "/api/nlp/tasks/tokenize:run",
             json={"text": "微软 发布 新模型", "request_id": "req-tokenize-colon"},
         )
 
     assert response.status_code == 405
+
+
+def test_copaw_hanlp_legacy_knowledge_run_endpoint_is_not_supported(monkeypatch):
+    _install_runtime_mocks(monkeypatch)
+
+    from copaw.app._app import app
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/knowledge/tasks/tokenize/run",
+            json={"text": "微软 发布 新模型", "request_id": "req-tokenize-legacy-knowledge"},
+        )
+
+    assert response.status_code in {404, 405}
 
 
 def test_copaw_hanlp_sdp_run_endpoint(monkeypatch):
@@ -913,7 +928,7 @@ def test_copaw_hanlp_sdp_run_endpoint(monkeypatch):
 
     with TestClient(app) as client:
         response = client.post(
-            "/knowledge/tasks/sdp/run",
+            "/api/nlp/tasks/sdp/run",
             json={"text": "微软发布新模型", "request_id": "req-sdp-1"},
         )
 
@@ -931,7 +946,7 @@ def test_copaw_hanlp_srl_run_endpoint(monkeypatch):
 
     with TestClient(app) as client:
         response = client.post(
-            "/knowledge/tasks/srl/run",
+            "/api/nlp/tasks/srl/run",
             json={"text": "微软发布新模型", "request_id": "req-srl-1"},
         )
 
@@ -951,7 +966,7 @@ def test_copaw_hanlp_srl_run_with_tokens_endpoint(monkeypatch):
 
     with TestClient(app) as client:
         response = client.post(
-            "/knowledge/tasks/srl/run",
+            "/api/nlp/tasks/srl/run",
             json={
                 "tokens": ["HanLP", "支持", "流程", "复用"],
                 "request_id": "req-srl-tokenized-1",
@@ -975,7 +990,7 @@ def test_copaw_hanlp_ner_run_with_tokens_endpoint(monkeypatch):
 
     with TestClient(app) as client:
         response = client.post(
-            "/knowledge/tasks/ner/run",
+            "/api/nlp/tasks/ner/run",
             json={
                 "tokens": ["微软", "发布", "新模型"],
                 "request_id": "req-ner-tokenized-1",
@@ -998,7 +1013,7 @@ def test_copaw_hanlp_srl_run_with_tokens_batch_endpoint(monkeypatch):
 
     with TestClient(app) as client:
         response = client.post(
-            "/knowledge/tasks/srl/run",
+            "/api/nlp/tasks/srl/run",
             json={
                 "tokens_batch": [
                     ["HanLP", "支持", "流程", "复用"],
@@ -1025,7 +1040,7 @@ def test_copaw_hanlp_unknown_task_rejected(monkeypatch):
 
     with TestClient(app) as client:
         response = client.post(
-            "/knowledge/tasks/unknown/run",
+            "/api/nlp/tasks/unknown/run",
             json={"text": "微软发布新模型", "request_id": "req-unknown-1"},
         )
 

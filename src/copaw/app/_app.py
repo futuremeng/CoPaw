@@ -14,4 +14,4 @@ from .routers.knowledge_hanlp_tasks import router as knowledge_hanlp_tasks_route
 
 app.state.runtime_flavor = "copaw"
 app.state.runtime_overlay_enabled = True
-app.include_router(knowledge_hanlp_tasks_router)
+app.include_router(knowledge_hanlp_tasks_router, prefix="/api")

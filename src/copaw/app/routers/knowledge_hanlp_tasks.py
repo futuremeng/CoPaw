@@ -17,7 +17,7 @@ from ...config.config import KnowledgeConfig, KnowledgeHanLPTaskConfig
 from ...knowledge.hanlp_nlp_runtime import NLPRuntime
 from qwenpaw.app.agent_context import get_agent_for_request
 
-router = APIRouter(prefix="/knowledge", tags=["knowledge"])
+router = APIRouter(prefix="/nlp", tags=["knowledge"])
 
 
 class HanLPTaskRunRequest(BaseModel):

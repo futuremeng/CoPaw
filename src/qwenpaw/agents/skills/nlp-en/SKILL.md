@@ -33,7 +33,7 @@ Use this skill for:
 
 All tasks share one endpoint:
 
-POST /api/knowledge/tasks/{task_key}/run
+POST /api/nlp/tasks/{task_key}/run
 
 Minimal payload:
 
@@ -98,7 +98,7 @@ Choose the minimal task that satisfies the request.
 
 ### 3) Execute and parse
 
-Call `/api/knowledge/tasks/{task_key}/run`, then read:
+Call `/api/nlp/tasks/{task_key}/run`, then read:
 
 - result (primary output)
 
@@ -167,13 +167,13 @@ Example:
 ## CLI examples
 
 ```bash
-curl -s -X POST "http://127.0.0.1:8088/api/knowledge/tasks/tokenize/run" \
+curl -s -X POST "http://127.0.0.1:8088/api/nlp/tasks/tokenize/run" \
   -H "Content-Type: application/json" \
   -d '{"text":"北京九录科技有限公司成立于2022年9月。","request_id":"nlp-cli-tokenize-001"}'
 ```
 
 ```bash
-curl -s -X POST "http://127.0.0.1:8088/api/knowledge/tasks/lzh_tok_fine/run" \
+curl -s -X POST "http://127.0.0.1:8088/api/nlp/tasks/lzh_tok_fine/run" \
   -H "Content-Type: application/json" \
   -d '{"text":"赫赫九录，肇基京华。孟氏创立，岁在孟秋。","request_id":"nlp-cli-lzh-001"}'
 ```

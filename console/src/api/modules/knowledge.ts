@@ -223,7 +223,7 @@ export const knowledgeApi = {
       sidecar_execution_path?: string;
       sidecar_execution_detail?: string;
       sidecar_trace_stage_ms?: Record<string, number>;
-    }>(`/knowledge/tasks/${encodeURIComponent(taskKey)}/run`, {
+    }>(`/nlp/tasks/${encodeURIComponent(taskKey)}/run`, {
       method: "POST",
       body: JSON.stringify(payload),
     }),

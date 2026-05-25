@@ -33,7 +33,7 @@ channels:
 
 所有任务统一调用：
 
-POST /api/knowledge/tasks/{task_key}/run
+POST /api/nlp/tasks/{task_key}/run
 
 示例最小请求体：
 
@@ -98,7 +98,7 @@ POST /api/knowledge/tasks/{task_key}/run
 
 ### 3) 执行并解析
 
-调用 `/api/knowledge/tasks/{task_key}/run` 后，优先读取：
+调用 `/api/nlp/tasks/{task_key}/run` 后，优先读取：
 
 - result（主结果）
 
@@ -167,13 +167,13 @@ POST /api/knowledge/tasks/{task_key}/run
 ## CLI 调用示例
 
 ```bash
-curl -s -X POST "http://127.0.0.1:8088/api/knowledge/tasks/tokenize/run" \
+curl -s -X POST "http://127.0.0.1:8088/api/nlp/tasks/tokenize/run" \
   -H "Content-Type: application/json" \
   -d '{"text":"北京九录科技有限公司成立于2022年9月。","request_id":"nlp-cli-tokenize-001"}'
 ```
 
 ```bash
-curl -s -X POST "http://127.0.0.1:8088/api/knowledge/tasks/lzh_tok_fine/run" \
+curl -s -X POST "http://127.0.0.1:8088/api/nlp/tasks/lzh_tok_fine/run" \
   -H "Content-Type: application/json" \
   -d '{"text":"赫赫九录，肇基京华。孟氏创立，岁在孟秋。","request_id":"nlp-cli-lzh-001"}'
 ```

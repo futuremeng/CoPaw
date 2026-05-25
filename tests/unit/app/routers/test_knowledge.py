@@ -39,6 +39,7 @@ def knowledge_api_client(tmp_path: Path, monkeypatch) -> TestClient:
 
     app = FastAPI()
     app.include_router(knowledge_router_module.router)
+    app.include_router(knowledge_router_module.nlp_router)
     return TestClient(app)
 
 
@@ -1186,7 +1187,7 @@ def test_run_knowledge_nlp_task_delegates_to_hanlp_runner(
     monkeypatch.setattr(hanlp_tasks_module, "_run_hanlp_task", fake_run_hanlp_task)
 
     response = knowledge_api_client.post(
-        "/knowledge/tasks/tokenize/run",
+        "/nlp/tasks/tokenize/run",
         json={"text": "微软发布新模型", "request_id": "demo-1"},
     )
 

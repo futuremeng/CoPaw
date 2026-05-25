@@ -42,6 +42,7 @@ from ..agent_context import (
 )
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
+nlp_router = APIRouter(prefix="/nlp", tags=["knowledge"])
 
 _PROJECT_PIPELINE_RUNTIME_LOCK = Lock()
 _PROJECT_PIPELINE_RUNTIME_META: dict[str, dict[str, object]] = {}
@@ -1309,7 +1310,7 @@ async def get_knowledge_tasks_snapshot(request: Request):
     )
 
 
-@router.post("/tasks/{task_key}/run")
+@nlp_router.post("/tasks/{task_key}/run")
 async def run_knowledge_nlp_task(
     task_key: str,
     request: Request,

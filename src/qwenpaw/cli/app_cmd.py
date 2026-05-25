@@ -10,6 +10,7 @@ import uvicorn
 from ..app.auth import is_auth_enabled
 from ..constant import LOG_LEVEL_ENV
 from ..config.utils import write_last_api
+from ..runtime_mode import get_runtime_app_import_path
 from ..utils.http import is_loopback_host
 from ..utils.logging import setup_logger, SuppressPathAccessLogFilter
 
@@ -141,7 +142,7 @@ def app_cmd(
     _warn_if_auth_off_non_loopback_bind(host, port)
 
     uvicorn.run(
-        "qwenpaw.app._app:app",
+        get_runtime_app_import_path(),
         host=host,
         port=port,
         reload=reload,

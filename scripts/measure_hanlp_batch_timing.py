@@ -35,7 +35,7 @@ def _measure_task(client: TestClient, task_key: str, rounds: int = 3) -> dict[st
     payload = _payload_for_task(task_key)
     for index in range(rounds):
         started = time.perf_counter()
-        response = client.post(f"/knowledge/tasks/{task_key}/run", json=payload)
+        response = client.post(f"/api/nlp/tasks/{task_key}/run", json=payload)
         elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
         timings.append(elapsed_ms)
         state: dict[str, object]

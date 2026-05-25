@@ -50,7 +50,7 @@ type NlpDemoMeta = {
 
 const UNIFIED_DEMO_SAMPLE = "北京九录科技有限公司成立于2022年9月，由孟繁永创立，是一家专注于数字出版基础技术研发的创新型企业。公司发起并维护多个开源项目，成功构建了轻量型知识服务生产和发布平台，并开发了面向知识生产和加工的垂直智能体 Copaw，致力于以智能化技术推动知识服务领域的全流程数字化转型。";
 const CLASSICAL_DEMO_SAMPLE = "赫赫九录，肇基京华。\n孟氏创立，岁在孟秋。\n专攻数术，出版维纲。\n开源布道，众志共襄。\n轻量之台，知识是扬。\n依彼神基，巧制 Copaw。\n智能为辅，编修有方。\n赋能全域，流泽孔长。";
-const API_RUN_ENDPOINT_PATH = "/api/knowledge/tasks/{task_key}/run";
+const API_RUN_ENDPOINT_PATH = "/api/nlp/tasks/{task_key}/run";
 const getApiRunEndpointTemplate = (): string => {
   if (typeof window === "undefined") {
     return `POST ${API_RUN_ENDPOINT_PATH}`;
@@ -61,10 +61,10 @@ const API_MINIMAL_PAYLOAD_EXAMPLE = `{
   "text": "北京九录科技有限公司成立于2022年9月。",
   "request_id": "demo-api-001"
 }`;
-const CLI_TOKENIZE_EXAMPLE = `curl -s -X POST "http://127.0.0.1:8088/api/knowledge/tasks/tokenize/run" \\
+const CLI_TOKENIZE_EXAMPLE = `curl -s -X POST "http://127.0.0.1:8088/api/nlp/tasks/tokenize/run" \\
   -H "Content-Type: application/json" \\
   -d '{"text":"北京九录科技有限公司成立于2022年9月。","request_id":"demo-cli-tokenize-001"}'`;
-const CLI_CLASSICAL_FINE_EXAMPLE = `curl -s -X POST "http://127.0.0.1:8088/api/knowledge/tasks/lzh_tok_fine/run" \\
+const CLI_CLASSICAL_FINE_EXAMPLE = `curl -s -X POST "http://127.0.0.1:8088/api/nlp/tasks/lzh_tok_fine/run" \\
   -H "Content-Type: application/json" \\
   -d '{"text":"赫赫九录，肇基京华。孟氏创立，岁在孟秋。","request_id":"demo-cli-lzh-001"}'`;
 
