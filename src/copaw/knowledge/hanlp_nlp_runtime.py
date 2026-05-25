@@ -458,10 +458,24 @@ def main():
 
 		if task_result is None and callable(model) and normalized_task_name != "ner_msra":
 			try:
-				task_result = model(text)
+				if normalized_task_name == "con":
+					if not token_input and callable(tokenizer):
+						token_input = flatten_tokens(tokenizer(text))
+					if token_input:
+						task_result = model(token_input)
+					elif text:
+						task_result = model(text)
+				else:
+					task_result = model(text)
 			except IndexError:
 				if callable(tokenizer):
 					task_result = model(flatten_tokens(tokenizer(text)))
+			except Exception:
+				task_result = None
+
+		if normalized_task_name == "con" and task_result is not None and not isinstance(task_result, (dict, list, str, int, float, bool)):
+			try:
+				task_result = str(task_result)
 			except Exception:
 				task_result = None
 
@@ -542,10 +556,24 @@ def main():
 
 			if task_result is None and callable(model) and normalized_task_name != "ner_msra":
 				try:
-					task_result = model(normalized_text)
+					if normalized_task_name == "con":
+						if not current_tokens and callable(tokenizer):
+							current_tokens = flatten_tokens(tokenizer(normalized_text))
+						if current_tokens:
+							task_result = model(current_tokens)
+						elif normalized_text:
+							task_result = model(normalized_text)
+					else:
+						task_result = model(normalized_text)
 				except IndexError:
 					if callable(tokenizer):
 						task_result = model(flatten_tokens(tokenizer(normalized_text)))
+				except Exception:
+					task_result = None
+
+			if normalized_task_name == "con" and task_result is not None and not isinstance(task_result, (dict, list, str, int, float, bool)):
+				try:
+					task_result = str(task_result)
 				except Exception:
 					task_result = None
 

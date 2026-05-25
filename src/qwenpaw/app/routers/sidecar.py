@@ -23,7 +23,7 @@ _TASK_MODEL_DEFAULTS = {
     "ner_msra": "MSRA_NER_ELECTRA_SMALL_ZH",
     "dep": "CTB9_DEP_ELECTRA_SMALL",
     "sdp": "SEMEVAL16_ALL_ELECTRA_SMALL_ZH",
-    "con": "CTB9_CON_FULL_TAG_ELECTRA_SMALL",
+    "con": "CTB9_CON_ELECTRA_SMALL",
     "srl": "CPB3_SRL_ELECTRA_SMALL",
     "pos_ctb": "CTB9_POS_ELECTRA_SMALL",
     "pos_pku": "PKU_POS_ELECTRA_SMALL",
@@ -81,7 +81,20 @@ def _host_has_local_model_artifact(model_id: str, hanlp_home: str = "") -> bool:
                 keys.append(key)
     if not keys:
         return False
-    subdirs = ("", "tok", "mtl", "ner", "dep", "pos", "sdp", "srl", "con", "classification", "transformers")
+    subdirs = (
+        "",
+        "tok",
+        "mtl",
+        "ner",
+        "dep",
+        "pos",
+        "sdp",
+        "srl",
+        "con",
+        "constituency",
+        "classification",
+        "transformers",
+    )
     for home in _model_cache_homes(hanlp_home):
         for subdir in subdirs:
             base = os.path.join(home, subdir) if subdir else home

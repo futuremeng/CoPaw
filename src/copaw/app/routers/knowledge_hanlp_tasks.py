@@ -118,7 +118,7 @@ _TASK_MODEL_DEFAULTS = {
     "ner_msra": "MSRA_NER_ELECTRA_SMALL_ZH",
     "dep": "CTB9_DEP_ELECTRA_SMALL",
     "sdp": "SEMEVAL16_ALL_ELECTRA_SMALL_ZH",
-    "con": "CTB9_CON_FULL_TAG_ELECTRA_SMALL",
+    "con": "CTB9_CON_ELECTRA_SMALL",
     "srl": "CPB3_SRL_ELECTRA_SMALL",
     "pos_ctb": "CTB9_POS_ELECTRA_SMALL",
     "pos_pku": "PKU_POS_ELECTRA_SMALL",
@@ -1023,14 +1023,45 @@ async def _run_hanlp_task_impl(
         raw_result = result
         normalized_result = _normalize_sdp_result(result)
     elif normalized_task_key == "con":
-        result, state = await _await_runtime_call(
-            lambda: runtime.run_task(
-                normalized_task_key,
-                request_text,
-                effective_config,
-            ),
-            timeout_sec=route_timeout_sec,
-        )
+        if tokenized_tokens:
+            result, state = await _await_runtime_call(
+                lambda: runtime.run_task_tokenized(
+                    normalized_task_key,
+                    tokenized_tokens,
+                    effective_config,
+                ),
+                timeout_sec=route_timeout_sec,
+            )
+        else:
+            tokenized, tokenized_state = await _await_runtime_call(
+                lambda: runtime.tokenize(request_text, effective_config),
+                timeout_sec=route_timeout_sec,
+            )
+            fallback_tokens = [
+                str(token or "").strip()
+                for token in (tokenized if isinstance(tokenized, list) else [])
+                if str(token or "").strip()
+            ]
+            if fallback_tokens:
+                result, state = await _await_runtime_call(
+                    lambda: runtime.run_task_tokenized(
+                        normalized_task_key,
+                        fallback_tokens,
+                        effective_config,
+                    ),
+                    timeout_sec=route_timeout_sec,
+                )
+            else:
+                result, state = await _await_runtime_call(
+                    lambda: runtime.run_task(
+                        normalized_task_key,
+                        request_text,
+                        effective_config,
+                    ),
+                    timeout_sec=route_timeout_sec,
+                )
+                if result is None:
+                    state = tokenized_state
         raw_result = result
         normalized_result = _normalize_con_result(result)
     elif normalized_task_key == "srl":
