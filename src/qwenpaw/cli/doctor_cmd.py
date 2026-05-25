@@ -240,12 +240,12 @@ def _check_hanlp_sidecar(cfg) -> tuple[bool, str, list[str]]:
     reason = str(state.get("reason") or "HanLP sidecar state is unavailable.").strip()
     notes: list[str] = []
 
-    hanlp_cfg = cfg.knowledge.hanlp
-    if not hanlp_cfg.enabled:
+    hanlp_cfg = getattr(cfg.knowledge, "hanlp", cfg.knowledge.nlp)
+    if not NLPRuntime._sidecar_enabled(hanlp_cfg):
         if sys.version_info[:2] == (3, 10):
             notes.append(
                 "Main runtime is Python 3.10. Install directly with: "
-                "python -m pip install 'hanlp[full]', then set knowledge.nlp.enabled=true.",
+                "python -m pip install 'hanlp[full]', then set knowledge.nlp.sidecar_enabled=true.",
             )
         else:
             notes.append(

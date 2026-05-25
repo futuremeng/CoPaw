@@ -766,6 +766,7 @@ def _build_status(config, *, include_task_status: bool = True) -> dict:
         else _build_task_status_snapshot(config, sidecar_state=probe_state, model_state=model_state)
     )
     nlp_cfg = _nlp_config(config)
+    sidecar_enabled = NLPRuntime._sidecar_enabled(nlp_cfg)
     python_executable = str(getattr(nlp_cfg, "python_executable", "") or "").strip()
     python_version_tuple = _python_version(python_executable) if python_executable else None
     python_version = (
@@ -780,7 +781,7 @@ def _build_status(config, *, include_task_status: bool = True) -> dict:
             "status": probe_state.get("status") or "unavailable",
             "reason_code": probe_state.get("reason_code") or "HANLP_SIDECAR_UNCONFIGURED",
             "reason": probe_state.get("reason") or "HanLP sidecar is not configured.",
-            "enabled": bool(getattr(nlp_cfg, "enabled", False)),
+            "enabled": sidecar_enabled,
             "provider": str(getattr(nlp_cfg, "provider", "hanlp") or "hanlp").strip(),
             "python_executable": python_executable,
             "python_version": python_version,
@@ -865,6 +866,7 @@ def _persist_hanlp_runtime_config(
         raise RuntimeError("Missing knowledge NLP config")
     nlp_cfg.provider = "hanlp"
     nlp_cfg.enabled = True
+    nlp_cfg.sidecar_enabled = True
     nlp_cfg.python_executable = str(python_executable)
     if model_home is not None:
         if hasattr(nlp_cfg, "model_home"):

@@ -152,8 +152,8 @@ def test_probe_reports_unconfigured_sidecar_by_default() -> None:
 def test_probe_reports_missing_python_executable(tmp_path: Path) -> None:
     runtime = NLPRuntime()
     config = Config().knowledge
-    config.hanlp.enabled = True
-    config.hanlp.python_executable = str(tmp_path / "missing-python")
+    config.nlp.sidecar_enabled = True
+    config.nlp.python_executable = str(tmp_path / "missing-python")
 
     state = runtime.probe(config)
 
@@ -164,8 +164,34 @@ def test_probe_reports_missing_python_executable(tmp_path: Path) -> None:
 def test_probe_uses_sidecar_bridge_json() -> None:
     runtime = NLPRuntime()
     config = Config().knowledge
-    config.hanlp.enabled = True
-    config.hanlp.python_executable = "/bin/python3"
+    config.nlp.sidecar_enabled = True
+    config.nlp.python_executable = "/bin/python3"
+
+    mode_payloads = {
+        "probe": {
+            "engine": "hanlp",
+            "status": "ready",
+            "reason_code": "HANLP_READY",
+            "reason": "HanLP semantic engine is ready.",
+        },
+    }
+
+    with patch("pathlib.Path.exists", return_value=True), patch(
+        "subprocess.Popen",
+        return_value=_FakePopen(mode_payloads),
+    ):
+        state = runtime.probe(config)
+
+    assert state["status"] == "ready"
+    assert state["reason_code"] == "HANLP_READY"
+
+
+def test_probe_ignores_legacy_nlp_enabled_when_sidecar_is_configured() -> None:
+    runtime = NLPRuntime()
+    config = Config().knowledge
+    config.nlp.enabled = False
+    config.nlp.sidecar_enabled = True
+    config.nlp.python_executable = "/bin/python3"
 
     mode_payloads = {
         "probe": {

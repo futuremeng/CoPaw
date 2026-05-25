@@ -827,7 +827,14 @@ class NLPRuntime:
 
 	@staticmethod
 	def _runtime_config(config: KnowledgeConfig | None) -> Any:
-		return getattr(config, "hanlp", config)
+		return getattr(config, "hanlp", getattr(config, "nlp", config))
+
+	@staticmethod
+	def _sidecar_enabled(runtime_config: Any) -> bool:
+		explicit = getattr(runtime_config, "sidecar_enabled", None)
+		if explicit is not None:
+			return bool(explicit)
+		return bool(str(getattr(runtime_config, "python_executable", "") or "").strip())
 
 	@staticmethod
 	def _task_specs_payload(config: KnowledgeConfig | None) -> dict[str, Any]:
@@ -849,6 +856,7 @@ class NLPRuntime:
 		runtime_config = self._runtime_config(config)
 		return {
 			"enabled": bool(getattr(runtime_config, "enabled", False)),
+			"sidecar_enabled": self._sidecar_enabled(runtime_config),
 			"python_executable": str(getattr(runtime_config, "python_executable", "") or "").strip(),
 			"model_id": str(getattr(runtime_config, "model_id", "") or "").strip(),
 			"hanlp_home": str(getattr(runtime_config, "model_home", "") or "").strip(),
@@ -872,7 +880,7 @@ class NLPRuntime:
 
 	def _ensure_sidecar(self, payload: dict[str, Any]) -> Path:
 		executable_text = str(payload.get("python_executable") or "").strip()
-		if not payload.get("enabled") or not executable_text:
+		if not payload.get("sidecar_enabled") or not executable_text:
 			raise ValueError("HANLP_SIDECAR_UNCONFIGURED")
 		executable = Path(executable_text)
 		if not executable.exists():

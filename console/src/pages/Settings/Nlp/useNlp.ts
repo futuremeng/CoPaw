@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import api from "../../../api";
 import { useAppMessage } from "../../../hooks/useAppMessage";
 
 const NLP_STATUS_SNAPSHOT_KEY = "copaw:nlp-status-snapshot:v1";
 const NLP_STATUS_SNAPSHOT_TTL_MS = 5 * 60 * 1000;
+const NLP_STATUS_REFRESH_INTERVAL_MS = 15 * 1000;
 
 export interface NlpStatus {
   provider?: string;
@@ -157,6 +158,11 @@ type NlpStatusSnapshot = {
   localModelsStatus: NlpLocalModelsStatus | null;
 };
 
+type FetchStatusOptions = {
+  showLoading?: boolean;
+  silent?: boolean;
+};
+
 function readNlpStatusSnapshot(): NlpStatusSnapshot | null {
   if (typeof window === "undefined") {
     return null;
@@ -197,6 +203,7 @@ function writeNlpStatusSnapshot(snapshot: NlpStatusSnapshot): void {
 export function useNlp() {
   const { t } = useTranslation();
   const { message } = useAppMessage();
+  const fetchRequestIdRef = useRef(0);
 
   const [snapshotSeed] = useState<NlpStatusSnapshot | null>(() => readNlpStatusSnapshot());
 
@@ -224,7 +231,9 @@ export function useNlp() {
   const [runningDemoTask, setRunningDemoTask] = useState<string | null>(null);
   const [demoResults, setDemoResults] = useState<Record<string, NlpMethodDemoResult>>({});
 
-  const fetchStatus = async (showLoading = false) => {
+  const fetchStatus = async ({ showLoading = false, silent = false }: FetchStatusOptions = {}) => {
+    const requestId = fetchRequestIdRef.current + 1;
+    fetchRequestIdRef.current = requestId;
     if (showLoading) {
       setLoading(true);
     }
@@ -233,6 +242,9 @@ export function useNlp() {
         api.getNlpStatus(),
         api.getNlpLocalModelsStatus().catch(() => null),
       ]);
+      if (requestId !== fetchRequestIdRef.current) {
+        return;
+      }
       setStatus(statusRes);
       setLocalModelsStatus(localModelsRes);
       writeNlpStatusSnapshot({
@@ -241,17 +253,51 @@ export function useNlp() {
         localModelsStatus: localModelsRes,
       });
     } catch (error) {
+      if (requestId !== fetchRequestIdRef.current) {
+        return;
+      }
       console.error("Failed to load NLP settings:", error);
-      message.error(t("nlpConfig.loadFailed"));
+      if (!silent) {
+        message.error(t("nlpConfig.loadFailed"));
+      }
     } finally {
-      if (showLoading) {
+      if (showLoading && requestId === fetchRequestIdRef.current) {
         setLoading(false);
       }
     }
   };
 
   useEffect(() => {
-    void fetchStatus(snapshotSeed == null);
+    void fetchStatus({
+      showLoading: snapshotSeed == null,
+      silent: snapshotSeed != null,
+    });
+
+    const refreshStatusSilently = () => {
+      void fetchStatus({ silent: true });
+    };
+
+    const intervalId = window.setInterval(
+      refreshStatusSilently,
+      NLP_STATUS_REFRESH_INTERVAL_MS,
+    );
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshStatusSilently();
+      }
+    };
+    const handleWindowFocus = () => {
+      refreshStatusSilently();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleWindowFocus);
+
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleWindowFocus);
+    };
   }, []);
 
   const handleInstall = async () => {

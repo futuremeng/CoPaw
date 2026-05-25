@@ -1826,6 +1826,7 @@ class KnowledgeNLPConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     enabled: bool = False
+    sidecar_enabled: bool | None = None
     python_executable: str = ""
     model_id: str = ""
     model_home: str = ""
