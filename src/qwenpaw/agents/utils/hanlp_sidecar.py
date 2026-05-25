@@ -379,6 +379,17 @@ def _nlp_config(config):
     return getattr(config, "nlp", None)
 
 
+def _runtime_knowledge_config(config):
+    """Build runtime knowledge config and attach top-level nlp settings."""
+    knowledge_cfg = config.knowledge.model_copy(deep=True)
+    nlp_cfg = _nlp_config(config)
+    if nlp_cfg is not None:
+        model_copy = getattr(nlp_cfg, "model_copy", None)
+        runtime_nlp = model_copy(deep=True) if callable(model_copy) else nlp_cfg
+        setattr(knowledge_cfg, "nlp", runtime_nlp)
+    return knowledge_cfg
+
+
 def _task_specs(config) -> dict[str, object]:
     task_matrix = getattr(_nlp_config(config), "task_matrix", None)
     tasks = getattr(task_matrix, "tasks", None)
@@ -517,7 +528,8 @@ def _run_hanlp_preload(force: bool = False) -> None:
     )
 
     runtime = _runtime()
-    model_state = runtime.ensure_model(config.knowledge)
+    runtime_knowledge_cfg = _runtime_knowledge_config(config)
+    model_state = runtime.ensure_model(runtime_knowledge_cfg)
     model_ready = model_state.get("status") == "ready"
     nlp_cfg = _nlp_config(config)
     model_result = {
@@ -573,7 +585,7 @@ def _run_hanlp_preload(force: bool = False) -> None:
             preloaded_models=preloaded_models,
             task_results=task_results,
         )
-        _result, task_state = runtime.run_task(task_key, sample_text, config.knowledge)
+        _result, task_state = runtime.run_task(task_key, sample_text, runtime_knowledge_cfg)
         task_status = str(task_state.get("status") or "unavailable")
         model_ready = model_ready and task_status == "ready"
         if task_status == "ready":
@@ -645,6 +657,7 @@ def kickoff_hanlp_preload(force: bool = False) -> dict:
 
 
 def _build_task_status(runtime: NLPRuntime, config) -> dict[str, dict]:
+    runtime_knowledge_cfg = _runtime_knowledge_config(config)
     task_states: dict[str, dict] = {}
     for task_key, task_cfg in _task_specs(config).items():
         enabled = bool(getattr(task_cfg, "enabled", True))
@@ -665,7 +678,7 @@ def _build_task_status(runtime: NLPRuntime, config) -> dict[str, dict]:
                 }
             )
         else:
-            state = runtime.task_status(task_key, config.knowledge)
+            state = runtime.task_status(task_key, runtime_knowledge_cfg)
             task_entry.update(
                 {
                     "status": state.get("status") or "unavailable",
@@ -755,8 +768,9 @@ def _invalidate_cache() -> None:
 
 def _build_status(config, *, include_task_status: bool = True) -> dict:
     runtime = _runtime()
-    probe_state = runtime.probe(config.knowledge)
-    model_state = runtime.model_status(config.knowledge)
+    runtime_knowledge_cfg = _runtime_knowledge_config(config)
+    probe_state = runtime.probe(runtime_knowledge_cfg)
+    model_state = runtime.model_status(runtime_knowledge_cfg)
     task_states = (
         _build_task_status(runtime, config)
         if include_task_status
@@ -1010,7 +1024,8 @@ def ensure_hanlp_model() -> dict:
     config = load_config()
     status_before = _build_status(config)
     runtime = _runtime()
-    model_state = runtime.ensure_model(config.knowledge)
+    runtime_knowledge_cfg = _runtime_knowledge_config(config)
+    model_state = runtime.ensure_model(runtime_knowledge_cfg)
     task_results: dict[str, dict] = {}
     all_enabled_tasks_ready = True
     for task_key, task_cfg in _task_specs(config).items():
@@ -1025,7 +1040,7 @@ def ensure_hanlp_model() -> dict:
                 "model_id": str(getattr(task_cfg, "model_id", "") or "").strip(),
             }
             continue
-        task_state = runtime.task_status(task_key, config.knowledge)
+        task_state = runtime.task_status(task_key, runtime_knowledge_cfg)
         task_ready = task_state.get("status") == "ready"
         all_enabled_tasks_ready = all_enabled_tasks_ready and task_ready
         task_results[task_key] = {
