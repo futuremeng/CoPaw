@@ -26,8 +26,10 @@ import { getApiUrl } from "../../api/config";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useApprovalContext } from "../../contexts/ApprovalContext";
 import { useAgentStore } from "../../stores/agentStore";
-import AgentScopeRuntimeResponseBuilder from "@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/AgentScopeRuntime/Response/Builder.js";
-import { AgentScopeRuntimeRunStatus } from "@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/AgentScopeRuntime/types.js";
+import {
+  AgentScopeRuntimeResponseBuilder,
+  AgentScopeRuntimeRunStatus,
+} from "./runtimeAdapter.ts";
 import type {
   ActiveModelsInfo,
   AgentsRunningConfig,
@@ -65,6 +67,7 @@ import { ApprovalCard } from "../ApprovalCard/ApprovalCard";
 import PlanPanel from "../PlanPanel";
 import ChatSearchPanel from "./ChatSearchPanel";
 import { resolveApprovalVisibility } from "./approvalVisibility";
+import { createClearHistoryResponseParser } from "./clearHistoryResponseParser";
 import { shouldStopSearchAnchorRetry } from "./searchAnchorRetry";
 import { shouldTriggerWhisperShortcut } from "./shortcutGuard";
 import {
@@ -124,6 +127,7 @@ const AUTO_CONTINUE_MIN_INCREMENT_CHARS = 32;
 const FLUSH_SYNC_PATCH_FLAG = "__copaw_relaxed_flush_sync_patched__";
 const APPROVAL_VISIBLE_LIMIT = 3;
 const SEARCH_ANCHOR_HIGHLIGHT_MS = 1800;
+const ANYWHERE_DRAFT_STORAGE_PREFIX = "copaw_anywhere_chat_input_draft";
 
 function applyRelaxedFlushSyncPatch(): void {
   if (typeof window === "undefined") {
@@ -918,6 +922,7 @@ export default function AnywhereChat({
   const autoContinueAttemptsRef = useRef<Record<string, number>>({});
   const autoContinueInFlightRef = useRef<Record<string, boolean>>({});
   const autoContinueTailRef = useRef<Record<string, string>>({});
+  const pendingClearHistoryRef = useRef(false);
   const pendingSearchAnchorRef = useRef<{ query: string; messageId?: string } | null>(null);
   const highlightedSearchAnchorRef = useRef<HTMLElement | null>(null);
   const searchAnchorHighlightTimerRef = useRef<number | null>(null);
@@ -1009,6 +1014,12 @@ export default function AnywhereChat({
     return root?.querySelector("textarea") as HTMLTextAreaElement | null;
   }, [getInputRoot]);
 
+  const getDraftStorageKey = useCallback(() => {
+    const normalizedHost = hostClassName || "pipeline-anywhere-chat-host";
+    const normalizedSession = sessionId || "default";
+    return `${ANYWHERE_DRAFT_STORAGE_PREFIX}:${normalizedHost}:${normalizedSession}`;
+  }, [hostClassName, sessionId]);
+
   const setDraftInputValue = useCallback(
     (nextValue: string, shouldFocus = true) => {
     const textArea = getInputTextarea();
@@ -1049,6 +1060,16 @@ export default function AnywhereChat({
       textarea?.focus();
     }, 0);
   }, [getInputTextarea]);
+
+  const scheduleHistoryClear = useCallback(() => {
+    queueMicrotask(() => {
+      if (!pendingClearHistoryRef.current) {
+        return;
+      }
+      pendingClearHistoryRef.current = false;
+      chatRef.current?.messages.removeAllMessages();
+    });
+  }, []);
 
   const clearSearchAnchorHighlight = useCallback(() => {
     if (searchAnchorHighlightTimerRef.current !== null) {
@@ -1177,6 +1198,91 @@ export default function AnywhereChat({
       document.removeEventListener("keydown", handleShortcut, true);
     };
   }, [isAnywhereChatInput, whisperEnabled]);
+
+  useEffect(() => {
+    let saveTimer: ReturnType<typeof setTimeout> | null = null;
+    const storageKey = getDraftStorageKey();
+
+    const saveDraft = (textarea: HTMLTextAreaElement) => {
+      const draft = {
+        value: textarea.value,
+        selectionStart: textarea.selectionStart,
+        selectionEnd: textarea.selectionEnd,
+      };
+
+      if (draft.value) {
+        localStorage.setItem(storageKey, JSON.stringify(draft));
+      } else {
+        localStorage.removeItem(storageKey);
+      }
+    };
+
+    const handleInput = (event: Event) => {
+      if (!isAnywhereChatInput(event.target)) {
+        return;
+      }
+
+      const target = event.target as HTMLTextAreaElement;
+      if (saveTimer) {
+        clearTimeout(saveTimer);
+      }
+      saveTimer = setTimeout(() => {
+        saveDraft(target);
+      }, 300);
+    };
+
+    let restoreAttempts = 0;
+    const maxRestoreAttempts = 20;
+    const restoreInterval = window.setInterval(() => {
+      restoreAttempts += 1;
+      const textarea = getInputTextarea();
+
+      if (textarea) {
+        window.clearInterval(restoreInterval);
+        const raw = localStorage.getItem(storageKey);
+        if (raw) {
+          try {
+            const draft = JSON.parse(raw) as {
+              value?: string;
+              selectionStart?: number;
+              selectionEnd?: number;
+            };
+
+            if (draft.value) {
+              setTextareaValue(textarea, draft.value);
+              requestAnimationFrame(() => {
+                textarea.selectionStart = Number.isFinite(draft.selectionStart)
+                  ? (draft.selectionStart as number)
+                  : textarea.value.length;
+                textarea.selectionEnd = Number.isFinite(draft.selectionEnd)
+                  ? (draft.selectionEnd as number)
+                  : textarea.value.length;
+              });
+            }
+          } catch {
+            // Ignore malformed draft data.
+          }
+        }
+      } else if (restoreAttempts >= maxRestoreAttempts) {
+        window.clearInterval(restoreInterval);
+      }
+    }, 100);
+
+    document.addEventListener("input", handleInput, true);
+
+    return () => {
+      window.clearInterval(restoreInterval);
+      if (saveTimer) {
+        clearTimeout(saveTimer);
+      }
+      document.removeEventListener("input", handleInput, true);
+
+      const textarea = getInputTextarea();
+      if (textarea) {
+        saveDraft(textarea);
+      }
+    };
+  }, [getDraftStorageKey, getInputTextarea, isAnywhereChatInput]);
 
   useEffect(() => {
     const findMessageInDirection = (
@@ -3041,6 +3147,7 @@ export default function AnywhereChat({
           />
         ) : undefined,
         attachments: {
+          multiple: true,
           trigger: function (props: AttachmentTriggerProps) {
             const tooltipKey = !multimodalCaps.supportsMultimodal
               ? "chat.attachments.tooltipNoMultimodal"
@@ -3083,6 +3190,12 @@ export default function AnywhereChat({
       api: {
         ...defaultConfig.api,
         fetch: customFetch,
+        responseParser: createClearHistoryResponseParser({
+          markPendingClearHistory: () => {
+            pendingClearHistoryRef.current = true;
+          },
+          clearHistoryWhenCompleted: scheduleHistoryClear,
+        }),
         replaceMediaURL: (url: string) => toDisplayUrl(url),
         cancel(data: { session_id?: string }) {
           const chatIdForStop = data?.session_id || sessionId;
@@ -3144,6 +3257,7 @@ export default function AnywhereChat({
     handleWhisperTranscription,
     planEnabled,
     sessionId,
+    scheduleHistoryClear,
     singleSessionApi,
     t,
     whisperEnabled,
