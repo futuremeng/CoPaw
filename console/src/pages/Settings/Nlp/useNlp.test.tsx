@@ -11,14 +11,16 @@ const { mockMessage, mockApi } = vi.hoisted(() => ({
   mockApi: {
     getNlpStatus: vi.fn(),
     getNlpLocalModelsStatus: vi.fn(),
+    getNlpMethodsCatalog: vi.fn(),
     installHanlp: vi.fn(),
+    installSiameseSidecar: vi.fn(),
     downloadHanlpModel: vi.fn(),
     downloadMissingNlpLocalModels: vi.fn(),
     updateNlpStrategy: vi.fn(),
     updateNlpPreload: vi.fn(),
     triggerNlpPreload: vi.fn(),
     dryRunNlpStrategy: vi.fn(),
-    runNlpTaskDemo: vi.fn(),
+    runNlpProviderTaskDemo: vi.fn(),
   },
 }));
 
@@ -80,6 +82,7 @@ describe("useNlp", () => {
     );
     mockApi.getNlpStatus.mockRejectedValueOnce(new Error("502"));
     mockApi.getNlpLocalModelsStatus.mockRejectedValueOnce(new Error("502"));
+    mockApi.getNlpMethodsCatalog.mockRejectedValueOnce(new Error("502"));
 
     const { result } = renderHook(() => useNlp());
 
@@ -132,6 +135,7 @@ describe("useNlp", () => {
         },
       });
     mockApi.getNlpLocalModelsStatus.mockResolvedValue(null);
+    mockApi.getNlpMethodsCatalog.mockResolvedValue(null);
 
     const { result } = renderHook(() => useNlp());
 

@@ -1446,3 +1446,13 @@ async def run_generic_task(
     http_request: Request,
 ) -> HanLPTaskRunResponse:
     return await _run_hanlp_task(task_key, request, http_request)
+
+
+@router.post("/hanlp/tasks/{task_key}/run", response_model=HanLPTaskRunResponse)
+async def run_hanlp_task_provider_route(
+    task_key: str,
+    request: HanLPTaskRunRequest,
+    http_request: Request,
+) -> HanLPTaskRunResponse:
+    """Provider-specific HanLP route kept in parallel with Siamese routes."""
+    return await _run_hanlp_task(task_key, request, http_request)

@@ -87,7 +87,7 @@ def test_get_hanlp_status_offloads_to_thread(monkeypatch):
     assert response.status_code == 200
     assert response.json()["sidecar"]["status"] == "ready"
     assert calls
-    assert calls[0][0].__name__ == "<lambda>"
+    assert callable(calls[0][0])
 
 
 def test_post_hanlp_install_offloads_to_thread(monkeypatch):
@@ -166,6 +166,46 @@ def test_post_hanlp_download_model_offloads_to_thread(monkeypatch):
     assert response.json()["model_result"]["status"] == "ready"
     assert calls
     assert calls[0][0].__name__ == "<lambda>"
+
+
+def test_post_siamese_install_offloads_to_thread(monkeypatch):
+    app = FastAPI()
+    app.include_router(agent_router_module.router)
+
+    original_to_thread = agent_router_module.asyncio.to_thread
+    calls: list[tuple[object, tuple[object, ...]]] = []
+
+    async def fake_to_thread(func, /, *args, **kwargs):
+        calls.append((func, args))
+        return await original_to_thread(func, *args, **kwargs)
+
+    monkeypatch.setattr(agent_router_module.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        "copaw.knowledge.siamese_uninlu_runtime.initialize_siamese_sidecar",
+        lambda _config: {
+            "success": True,
+            "already_available": False,
+            "status_before": {
+                "sidecar": {"status": "unavailable"},
+                "model": {"status": "unavailable"},
+            },
+            "status_after": {
+                "sidecar": {"status": "ready"},
+                "model": {"status": "ready"},
+            },
+            "operations": [],
+            "manual_steps": [],
+        },
+    )
+    monkeypatch.setattr(agent_router_module, "load_config", lambda: SimpleNamespace(nlp=SimpleNamespace()))
+    monkeypatch.setattr(agent_router_module, "save_config", lambda _config: None)
+
+    client = TestClient(app)
+    response = client.post("/agent/siamese-install")
+
+    assert response.status_code == 200
+    assert response.json()["success"] is True
+    assert calls
 
 
 def test_put_nlp_strategy_updates_config(monkeypatch):

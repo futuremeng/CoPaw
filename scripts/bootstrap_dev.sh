@@ -24,21 +24,25 @@ RECREATE=0
 PYTHON_VERSION="3.10"
 BOOTSTRAP_MAIN=1
 BOOTSTRAP_SIDECAR=1
+BOOTSTRAP_SENTA=1
 SIDECAR_PYTHON_VERSION="${COPAW_HANLP_SIDECAR_PYTHON_VERSION:-3.10}"
+SENTA_PYTHON_VERSION="${COPAW_SENTA_PYTHON_VERSION:-3.10}"
 
 usage() {
     cat <<'EOF'
 Bootstrap CoPaw development environment in the current repository.
 
 Usage:
-    bash scripts/bootstrap_dev.sh [--extras dev] [--recreate] [--with-sidecar|--sidecar-only|--main-only]
+    bash scripts/bootstrap_dev.sh [--extras dev] [--recreate] [--with-sidecar|--sidecar-only|--main-only] [--with-senta|--senta-only]
 
 Options:
   --extras <LIST>   Editable install extras, comma-separated. Default: dev
   --recreate        Remove any existing .venv and rebuild it from scratch
-    --with-sidecar    Bootstrap and verify HanLP sidecar in addition to main env (default behavior)
-    --sidecar-only    Bootstrap and verify sidecar only (skip main env)
-    --main-only       Bootstrap and verify main env only
+  --with-sidecar    Bootstrap and verify HanLP sidecar in addition to main env (default behavior)
+  --sidecar-only    Bootstrap and verify sidecar only (skip main env)
+  --main-only       Bootstrap and verify main env only (skip all sidecars)
+  --with-senta      Also bootstrap Siamese UniNLU senta environment (.venv-senta, default behavior)
+  --senta-only      Bootstrap senta environment only
   -h, --help        Show this help message
 EOF
 }
@@ -65,6 +69,17 @@ while [[ $# -gt 0 ]]; do
         --main-only)
             BOOTSTRAP_MAIN=1
             BOOTSTRAP_SIDECAR=0
+            BOOTSTRAP_SENTA=0
+            shift
+            ;;
+        --with-senta)
+            BOOTSTRAP_SENTA=1
+            shift
+            ;;
+        --senta-only)
+            BOOTSTRAP_MAIN=0
+            BOOTSTRAP_SIDECAR=0
+            BOOTSTRAP_SENTA=1
             shift
             ;;
         -h|--help)
@@ -164,6 +179,14 @@ resolve_sidecar_python() {
     printf '%s\n' "$ROOT_DIR/.venv-hanlp/bin/python"
 }
 
+resolve_senta_python() {
+    if [[ -n "${COPAW_SENTA_PYTHON:-}" ]]; then
+        printf '%s\n' "$COPAW_SENTA_PYTHON"
+        return
+    fi
+    printf '%s\n' "$ROOT_DIR/.venv-senta/bin/python"
+}
+
 is_truthy() {
     local value="${1:-}"
     value="$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')"
@@ -233,6 +256,58 @@ print("hanlp sidecar ready")
 PY
 }
 
+verify_senta_sidecar() {
+    local senta_python="$1"
+    "$senta_python" - <<'PY'
+from modelscope.pipelines import pipeline  # noqa: F401
+from modelscope.utils.constant import Tasks  # noqa: F401
+print("senta sidecar ready")
+PY
+}
+
+bootstrap_senta_sidecar() {
+    local senta_python
+    local senta_dir
+    local senta_mm
+
+    senta_python="$(resolve_senta_python)"
+
+    if [[ "$senta_python" == */bin/python ]]; then
+        senta_dir="${senta_python%/bin/python}"
+        if [[ -z "$senta_dir" ]]; then
+            die "Unable to derive senta directory from interpreter path: $senta_python"
+        fi
+    else
+        die "Senta python path must point to a venv interpreter ending with /bin/python: $senta_python"
+    fi
+
+    if [[ $RECREATE -eq 1 && -d "$senta_dir" ]]; then
+        rm -rf "$senta_dir"
+    fi
+
+    if [[ ! -x "$senta_python" ]]; then
+        info "Creating Siamese UniNLU senta environment at $senta_dir (Python $SENTA_PYTHON_VERSION)..."
+        uv venv "$senta_dir" --python "$SENTA_PYTHON_VERSION" --quiet --clear
+    else
+        info "Using existing senta interpreter: $senta_python"
+    fi
+
+    senta_mm="$("$senta_python" -c 'import sys; print(f"{sys.version_info[0]}.{sys.version_info[1]}")')"
+    if [[ "$senta_mm" != "3.10" ]]; then
+        warn "Senta sidecar is running Python $senta_mm (3.10 recommended)."
+    fi
+
+    info "Installing ModelScope (Siamese UniNLU) into senta environment..."
+    uv pip install --python "$senta_python" \
+        "modelscope[nlp]" \
+        --index-url "$PYPI_MIRROR"
+    verify_senta_sidecar "$senta_python"
+    ensure_runtime_compatibility "$senta_python" "Senta runtime"
+
+    info "Senta sidecar ready: $senta_python"
+    info "Export for runtime: COPAW_SENTA_PYTHON=$senta_python"
+}
+
 bootstrap_hanlp_sidecar() {
     local sidecar_python
     local sidecar_dir
@@ -290,6 +365,10 @@ if [[ $BOOTSTRAP_SIDECAR -eq 1 ]]; then
     bootstrap_hanlp_sidecar
 fi
 
+if [[ $BOOTSTRAP_SENTA -eq 1 ]]; then
+    bootstrap_senta_sidecar
+fi
+
 echo
 printf "${GREEN}${BOLD}Bootstrap complete.${RESET}\n"
 if [[ $BOOTSTRAP_MAIN -eq 1 ]]; then
@@ -304,6 +383,11 @@ if [[ $BOOTSTRAP_SIDECAR -eq 1 ]]; then
     echo "  - HanLP sidecar initialized and verified."
 else
     echo "  - HanLP sidecar not initialized in this run (use --with-sidecar or --sidecar-only)."
+fi
+if [[ $BOOTSTRAP_SENTA -eq 1 ]]; then
+    echo "  - Siamese UniNLU senta environment initialized and verified."
+else
+    echo "  - Senta environment not initialized in this run (use --with-senta or --senta-only)."
 fi
 if [[ -n "${COPAW_HF_ENDPOINT:-}" ]]; then
     echo "  - HuggingFace endpoint: $COPAW_HF_ENDPOINT"

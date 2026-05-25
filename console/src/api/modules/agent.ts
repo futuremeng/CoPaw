@@ -178,6 +178,34 @@ export const agentApi = {
   getNlpStatus: () =>
     request<{
       provider: string;
+      providers?: Record<string, {
+        provider?: string;
+        sidecar: {
+          status: string;
+          reason_code: string;
+          reason: string;
+          enabled: boolean;
+          python_executable: string;
+          python_version?: string;
+          managed: boolean;
+          uv_available: boolean;
+          uv_executable: string;
+          model_home?: string;
+          model_cache_path?: string;
+        };
+        model: {
+          status: string;
+          reason_code: string;
+          reason: string;
+          model_id: string;
+        };
+        tasks?: Record<string, {
+          enabled?: boolean;
+          status?: string;
+          reason_code?: string;
+          reason?: string;
+        }>;
+      }>;
       strategy?: {
         mode?: string;
         default_model_id?: string;
@@ -253,6 +281,19 @@ export const agentApi = {
         local_available: boolean;
       }>;
     }>("/sidecar/nlp-local-models"),
+
+  getNlpMethodsCatalog: () =>
+    request<{
+      selected_provider: string;
+      providers: Record<string, Array<{
+        provider: string;
+        task_key: string;
+        title: string;
+        description?: string;
+        input_mode?: string;
+        route_path?: string;
+      }>>;
+    }>("/sidecar/nlp-methods/catalog"),
 
     downloadMissingNlpLocalModels: () =>
       request<{
@@ -385,6 +426,32 @@ export const agentApi = {
       }[];
       manual_steps: string[];
     }>("/agent/hanlp-install", {
+      method: "POST",
+    }),
+
+  installSiameseSidecar: () =>
+    request<{
+      success: boolean;
+      already_available: boolean;
+      status_before: {
+        sidecar: { status: string };
+        model: { status: string };
+      };
+      status_after: {
+        sidecar: { status: string };
+        model: { status: string };
+      };
+      operations: {
+        name: string;
+        attempted: boolean;
+        installer: string | null;
+        command: string;
+        ok: boolean;
+        output: string;
+        returncode: number | null;
+      }[];
+      manual_steps: string[];
+    }>("/agent/siamese-install", {
       method: "POST",
     }),
 

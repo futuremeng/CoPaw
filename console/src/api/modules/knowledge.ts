@@ -228,6 +228,56 @@ export const knowledgeApi = {
       body: JSON.stringify(payload),
     }),
 
+  runNlpProviderTaskDemo: (
+    provider: "hanlp" | "siamese_uninlu",
+    taskKey: string,
+    payload: {
+      text?: string;
+      text_a?: string;
+      text_b?: string;
+      context?: string;
+      question?: string;
+      choices?: string[];
+      labels?: string[];
+      schema?: unknown;
+      tokens?: string[];
+      texts?: string[];
+      tokens_batch?: string[][];
+      request_id?: string;
+    },
+  ) => {
+    const normalizedProvider = provider === "siamese_uninlu" ? "siamese" : "hanlp";
+    return request<{
+      task_key: string;
+      request_id: string;
+      status: string;
+      reason_code: string;
+      reason: string;
+      result: unknown;
+      raw_result?: unknown;
+      pretty_print?: string;
+      resolved_model: string;
+      strategy_mode?: string;
+      detected_style?: string;
+      detection_score?: number;
+      matched_rules?: string[];
+      fallback_used?: boolean;
+      duration_ms: number;
+      model_cache_path?: string;
+      runtime_python_executable?: string;
+      effective_task_model_id?: string;
+      preload_status?: string;
+      sidecar_elapsed_ms?: number;
+      sidecar_trace_elapsed_ms?: number;
+      sidecar_execution_path?: string;
+      sidecar_execution_detail?: string;
+      sidecar_trace_stage_ms?: Record<string, number>;
+    }>(`/nlp/${normalizedProvider}/tasks/${encodeURIComponent(taskKey)}/run`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
   runKnowledgeHistoryBackfillNow: () =>
     request<KnowledgeHistoryBackfillRunResponse>("/knowledge/history-backfill/run", {
       method: "POST",

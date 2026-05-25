@@ -9,6 +9,35 @@ const NLP_STATUS_REFRESH_INTERVAL_MS = 15 * 1000;
 
 export interface NlpStatus {
   provider?: string;
+  providers?: Record<string, {
+    provider?: string;
+    sidecar: {
+      status: string;
+      reason_code: string;
+      reason: string;
+      enabled: boolean;
+      python_executable: string;
+      python_version?: string;
+      managed: boolean;
+      uv_available: boolean;
+      uv_executable: string;
+      model_home?: string;
+      model_cache_path?: string;
+      hanlp_home?: string;
+    };
+    model: {
+      status: string;
+      reason_code: string;
+      reason: string;
+      model_id: string;
+    };
+    tasks?: Record<string, {
+      enabled?: boolean;
+      status?: string;
+      reason_code?: string;
+      reason?: string;
+    }>;
+  }>;
   strategy?: {
     mode?: string;
     default_model_id?: string;
@@ -104,11 +133,11 @@ export interface NlpMethodDemoResult {
   raw_result?: unknown;
   pretty_print?: string;
   resolved_model: string;
-  strategy_mode: string;
-  detected_style: string;
-  detection_score: number;
-  matched_rules: string[];
-  fallback_used: boolean;
+  strategy_mode?: string;
+  detected_style?: string;
+  detection_score?: number;
+  matched_rules?: string[];
+  fallback_used?: boolean;
   duration_ms: number;
   model_cache_path?: string;
   runtime_python_executable?: string;
@@ -142,6 +171,20 @@ export interface NlpLocalModelsStatus {
   items: NlpLocalModelItem[];
 }
 
+export interface NlpMethodsCatalogItem {
+  provider: string;
+  task_key: string;
+  title: string;
+  description?: string;
+  input_mode?: string;
+  route_path?: string;
+}
+
+export interface NlpMethodsCatalog {
+  selected_provider: string;
+  providers: Record<string, NlpMethodsCatalogItem[]>;
+}
+
 export interface HanlpOperation {
   name: string;
   attempted: boolean;
@@ -156,6 +199,7 @@ type NlpStatusSnapshot = {
   ts: number;
   status: NlpStatus | null;
   localModelsStatus: NlpLocalModelsStatus | null;
+  methodsCatalog: NlpMethodsCatalog | null;
 };
 
 type FetchStatusOptions = {
@@ -183,6 +227,7 @@ function readNlpStatusSnapshot(): NlpStatusSnapshot | null {
       ts: parsed.ts,
       status: (parsed.status || null) as NlpStatus | null,
       localModelsStatus: (parsed.localModelsStatus || null) as NlpLocalModelsStatus | null,
+      methodsCatalog: (parsed.methodsCatalog || null) as NlpMethodsCatalog | null,
     };
   } catch {
     return null;
@@ -209,6 +254,7 @@ export function useNlp() {
 
   const [loading, setLoading] = useState(snapshotSeed == null);
   const [installing, setInstalling] = useState(false);
+  const [initializingSiamese, setInitializingSiamese] = useState(false);
   const [downloadingModel, setDownloadingModel] = useState(false);
   const [downloadingMissingLocalModels, setDownloadingMissingLocalModels] = useState(false);
   const [lastDownloadAttempts, setLastDownloadAttempts] = useState<Array<{
@@ -225,6 +271,9 @@ export function useNlp() {
   const [localModelsStatus, setLocalModelsStatus] = useState<NlpLocalModelsStatus | null>(
     snapshotSeed?.localModelsStatus ?? null,
   );
+  const [methodsCatalog, setMethodsCatalog] = useState<NlpMethodsCatalog | null>(
+    snapshotSeed?.methodsCatalog ?? null,
+  );
   const [lastManualSteps, setLastManualSteps] = useState<string[]>([]);
   const [lastOperations, setLastOperations] = useState<HanlpOperation[]>([]);
   const [lastStrategyDecision, setLastStrategyDecision] = useState<NlpStrategyDryRunDecision | null>(null);
@@ -238,19 +287,22 @@ export function useNlp() {
       setLoading(true);
     }
     try {
-      const [statusRes, localModelsRes] = await Promise.all([
+      const [statusRes, localModelsRes, methodsCatalogRes] = await Promise.all([
         api.getNlpStatus(),
         api.getNlpLocalModelsStatus().catch(() => null),
+        api.getNlpMethodsCatalog().catch(() => null),
       ]);
       if (requestId !== fetchRequestIdRef.current) {
         return;
       }
       setStatus(statusRes);
       setLocalModelsStatus(localModelsRes);
+      setMethodsCatalog(methodsCatalogRes);
       writeNlpStatusSnapshot({
         ts: Date.now(),
         status: statusRes,
         localModelsStatus: localModelsRes,
+        methodsCatalog: methodsCatalogRes,
       });
     } catch (error) {
       if (requestId !== fetchRequestIdRef.current) {
@@ -350,6 +402,28 @@ export function useNlp() {
     }
   };
 
+  const handleInstallSiamese = async () => {
+    setInitializingSiamese(true);
+    try {
+      const res = await api.installSiameseSidecar();
+      setLastManualSteps(res.manual_steps ?? []);
+      setLastOperations(res.operations ?? []);
+      if (res.success) {
+        message.success("Siamese sidecar 初始化完成");
+      } else {
+        message.warning("Siamese sidecar 初始化未完全成功，请查看提示");
+      }
+      await fetchStatus();
+      return res;
+    } catch (error) {
+      console.error("Failed to initialize Siamese sidecar:", error);
+      message.error("Siamese sidecar 初始化失败");
+      return null;
+    } finally {
+      setInitializingSiamese(false);
+    }
+  };
+
   const handleDownloadMissingLocalModels = async () => {
     setDownloadingMissingLocalModels(true);
     setLastDownloadAttempts(null);
@@ -444,7 +518,11 @@ export function useNlp() {
     }
   };
 
-  const runMethodDemo = async (taskKey: string, text: string) => {
+  const runMethodDemo = async (
+    taskKey: string,
+    text: string,
+    providerType: "hanlp" | "siamese_uninlu" = "hanlp",
+  ) => {
     const normalizedTaskKey = String(taskKey || "").trim();
     const normalizedText = String(text || "").trim();
     if (runningDemoTask) {
@@ -459,8 +537,8 @@ export function useNlp() {
     setRunningDemoTask(normalizedTaskKey);
     try {
       let result;
-      if (normalizedTaskKey === "srl" || normalizedTaskKey === "ner") {
-        const tokenizeResult = await api.runNlpTaskDemo("tokenize", {
+      if (providerType === "hanlp" && (normalizedTaskKey === "srl" || normalizedTaskKey === "ner")) {
+        const tokenizeResult = await api.runNlpProviderTaskDemo("hanlp", "tokenize", {
           text: normalizedText,
         });
         const tokens = Array.isArray(tokenizeResult.result)
@@ -470,11 +548,11 @@ export function useNlp() {
           message.warning(`${normalizedTaskKey} demo: tokenize returned empty tokens`);
           return null;
         }
-        result = await api.runNlpTaskDemo(normalizedTaskKey, {
+        result = await api.runNlpProviderTaskDemo(providerType, normalizedTaskKey, {
           tokens,
         });
       } else {
-        result = await api.runNlpTaskDemo(normalizedTaskKey, {
+        result = await api.runNlpProviderTaskDemo(providerType, normalizedTaskKey, {
           text: normalizedText,
         });
       }
@@ -502,6 +580,7 @@ export function useNlp() {
   return {
     loading,
     installing,
+    initializingSiamese,
     downloadingModel,
     downloadingMissingLocalModels,
     lastDownloadAttempts,
@@ -511,6 +590,7 @@ export function useNlp() {
     dryRunningDecision,
     status,
     localModelsStatus,
+    methodsCatalog,
     provider,
     hanlpProviderActive,
     lastManualSteps,
@@ -521,6 +601,7 @@ export function useNlp() {
     modelReady,
     fetchStatus,
     handleInstall,
+    handleInstallSiamese,
     handleDownloadModel,
     handleDownloadMissingLocalModels,
     handleUpdatePreload,

@@ -867,6 +867,30 @@ async def post_hanlp_download_model() -> dict:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+@router.post(
+    "/siamese-install",
+    summary="Initialize Siamese UniNLU sidecar",
+    description=(
+        "Enable Siamese UniNLU sidecar settings and run a warm runtime probe "
+        "to initialize the model runtime."
+    ),
+)
+async def post_siamese_install() -> dict:
+    """Initialize Siamese UniNLU sidecar runtime and persist config fields."""
+    from copaw.knowledge.siamese_uninlu_runtime import initialize_siamese_sidecar
+
+    def _initialize() -> dict:
+        config = load_config()
+        payload = initialize_siamese_sidecar(config)
+        save_config(config)
+        return payload
+
+    try:
+        return await asyncio.to_thread(_initialize)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
 @router.get(
     "/transcription-providers",
     summary="List transcription providers",

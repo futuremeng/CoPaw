@@ -1826,12 +1826,18 @@ class KnowledgeNLPConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     enabled: bool = False
+    provider: str = "hanlp"
+    strategy_mode: str = "manual"
     sidecar_enabled: bool | None = None
     python_executable: str = ""
     model_id: str = ""
     model_home: str = ""
     probe_timeout_sec: float = 5.0
     tokenize_timeout_sec: float = 15.0
+    siamese_sidecar_enabled: bool = False
+    siamese_python_executable: str = ""
+    siamese_model_id: str = "iic/nlp_structbert_siamese-uninlu_chinese-base"
+    siamese_model_revision: str = "master"
     task_matrix: KnowledgeTaskMatrixConfig = Field(
         default_factory=KnowledgeTaskMatrixConfig,
     )

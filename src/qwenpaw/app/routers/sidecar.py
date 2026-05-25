@@ -31,6 +31,14 @@ _TASK_MODEL_DEFAULTS = {
 }
 
 
+def _normalize_siamese_python_executable(path: str) -> str:
+    normalized = str(path or "").strip()
+    if normalized.replace("\\", "/").endswith("/.venv-hanlp/bin/python") or not normalized:
+        project_root = Path(__file__).resolve().parents[4]
+        return str(project_root / ".venv-senta" / "bin" / "python")
+    return normalized
+
+
 def _extract_model_cache_keys(model_id: str) -> list[str]:
     raw = str(model_id or "").strip()
     if not raw:
@@ -223,6 +231,174 @@ def _runtime_knowledge_config(config) -> Any:
     return knowledge_cfg
 
 
+def _build_hanlp_status_payload(config, include_runtime_api: bool, strategy_payload: dict[str, Any]) -> dict[str, Any]:
+    from ...agents.utils.hanlp_sidecar import get_hanlp_sidecar_status
+
+    payload = get_hanlp_sidecar_status(include_task_status=False)
+    sidecar_payload = payload.get("sidecar") if isinstance(payload.get("sidecar"), dict) else {}
+    if isinstance(sidecar_payload, dict):
+        python_version = str(sidecar_payload.get("python_version") or "").strip()
+        if not python_version:
+            python_version = _detect_python_version(str(sidecar_payload.get("python_executable") or ""))
+        sidecar_payload["python_version"] = python_version
+    payload["provider"] = "hanlp"
+    payload["strategy"] = strategy_payload
+    if include_runtime_api:
+        payload["api"] = NLPRuntime().api_status(_runtime_knowledge_config(config))
+    else:
+        payload["api"] = _build_hanlp_api_snapshot(payload)
+    return payload
+
+
+def _build_siamese_status_payload(config, strategy_payload: dict[str, Any]) -> dict[str, Any]:
+    nlp_cfg = config.nlp
+    model_home = str(getattr(nlp_cfg, "model_home", "") or "")
+    siamese_python = _normalize_siamese_python_executable(
+        str(getattr(nlp_cfg, "siamese_python_executable", "") or "")
+    )
+    try:
+        from copaw.knowledge.siamese_uninlu_runtime import SiameseUniNLURuntime
+
+        probe = SiameseUniNLURuntime.probe(config)
+        probe_status = str(probe.get("status") or "unavailable")
+        model_id = str(probe.get("model_id") or getattr(nlp_cfg, "siamese_model_id", "") or "")
+        task_status = "ready" if probe_status == "ready" else ("disabled" if probe_status == "disabled" else "unavailable")
+        tasks = {
+            item["task_key"]: {
+                "enabled": probe_status != "disabled",
+                "status": task_status,
+                "reason_code": str(probe.get("reason_code") or "SIAMESE_UNAVAILABLE"),
+                "reason": str(probe.get("reason") or "Siamese UniNLU unavailable."),
+            }
+            for item in SiameseUniNLURuntime.methods_catalog()
+        }
+        return {
+            "provider": "siamese_uninlu",
+            "strategy": strategy_payload,
+            "sidecar": {
+                "status": probe_status,
+                "reason_code": str(probe.get("reason_code") or "SIAMESE_UNAVAILABLE"),
+                "reason": str(probe.get("reason") or "Siamese UniNLU unavailable."),
+                "enabled": bool(getattr(nlp_cfg, "siamese_sidecar_enabled", False)),
+                "python_executable": siamese_python,
+                "python_version": _detect_python_version(siamese_python),
+                "managed": False,
+                "uv_available": False,
+                "uv_executable": "",
+                "model_home": model_home,
+                "model_cache_path": model_home,
+            },
+            "model": {
+                "status": "ready" if probe_status == "ready" else probe_status,
+                "reason_code": str(probe.get("reason_code") or "SIAMESE_UNAVAILABLE"),
+                "reason": str(probe.get("reason") or "Siamese UniNLU unavailable."),
+                "model_id": model_id,
+            },
+            "tasks": tasks,
+            "api": {
+                "status": "ready" if probe_status == "ready" else probe_status,
+                "reason_code": str(probe.get("reason_code") or "SIAMESE_UNAVAILABLE"),
+                "reason": str(probe.get("reason") or "Siamese API unavailable."),
+            },
+            "preload": {
+                "enabled": False,
+                "scope": "critical",
+                "status": "disabled",
+                "reason": "Startup preload is only available for HanLP.",
+                "model_cache_path": model_home,
+                "preloaded_models": [],
+                "task_results": {},
+            },
+        }
+    except Exception as exc:
+        return {
+            "provider": "siamese_uninlu",
+            "strategy": strategy_payload,
+            "sidecar": {
+                "status": "unavailable",
+                "reason_code": "SIAMESE_RUNTIME_IMPORT_FAILED",
+                "reason": str(exc),
+                "enabled": bool(getattr(nlp_cfg, "siamese_sidecar_enabled", False)),
+                "python_executable": siamese_python,
+                "python_version": _detect_python_version(siamese_python),
+                "managed": False,
+                "uv_available": False,
+                "uv_executable": "",
+                "model_home": model_home,
+                "model_cache_path": model_home,
+            },
+            "model": {
+                "status": "unavailable",
+                "reason_code": "SIAMESE_RUNTIME_IMPORT_FAILED",
+                "reason": str(exc),
+                "model_id": str(getattr(nlp_cfg, "siamese_model_id", "") or ""),
+            },
+            "tasks": {},
+            "api": {
+                "status": "unavailable",
+                "reason_code": "SIAMESE_RUNTIME_IMPORT_FAILED",
+                "reason": str(exc),
+            },
+            "preload": {
+                "enabled": False,
+                "scope": "critical",
+                "status": "disabled",
+                "reason": "Startup preload is only available for HanLP.",
+                "model_cache_path": model_home,
+                "preloaded_models": [],
+                "task_results": {},
+            },
+        }
+
+
+def _build_hanlp_methods_catalog(config) -> list[dict[str, Any]]:
+    names = {
+        "tokenize": "智能分词",
+        "ner": "实体识别",
+        "pos_ctb": "词性分析（CTB）",
+        "pos_pku": "词性分析（PKU）",
+        "pos_863": "词性分析（863）",
+        "dep": "句法依存",
+        "sdp": "语义依存",
+        "srl": "语义角色",
+        "con": "短语结构",
+        "lzh_tok_fine": "古汉语分词（细分）",
+        "lzh_tok_coarse": "古汉语分词（粗分）",
+        "lzh_lem": "古汉语词形还原",
+        "lzh_pos_upos": "古汉语词性（UPOS）",
+        "lzh_pos_xpos": "古汉语词性（XPOS）",
+        "lzh_pos_pku": "古汉语词性（PKU）",
+        "lzh_dep": "古汉语依存句法",
+    }
+    nlp_cfg = config.nlp
+    task_matrix = getattr(nlp_cfg, "task_matrix", None)
+    task_cfgs = getattr(task_matrix, "tasks", {}) if task_matrix is not None else {}
+
+    keys: list[str] = ["tokenize"]
+    if isinstance(task_cfgs, dict):
+        keys.extend(str(key) for key in task_cfgs.keys())
+    for item in ["lzh_tok_fine", "lzh_tok_coarse", "lzh_lem", "lzh_pos_upos", "lzh_pos_xpos", "lzh_pos_pku", "lzh_dep"]:
+        if item not in keys:
+            keys.append(item)
+
+    dedup: list[str] = []
+    for key in keys:
+        if key not in dedup:
+            dedup.append(key)
+
+    return [
+        {
+            "provider": "hanlp",
+            "task_key": task_key,
+            "title": names.get(task_key, task_key),
+            "description": "HanLP task demo",
+            "input_mode": "text",
+            "route_path": f"/api/nlp/hanlp/tasks/{task_key}/run",
+        }
+        for task_key in dedup
+    ]
+
+
 @router.get(
     "/nlp-status",
     summary="Check NLP sidecar runtime availability",
@@ -244,66 +420,27 @@ async def get_sidecar_nlp_status(
 
     strategy_payload = _build_nlp_strategy_payload(nlp_cfg)
 
-    if provider == "hanlp":
-        from ...agents.utils.hanlp_sidecar import get_hanlp_sidecar_status
+    hanlp_payload = await asyncio.to_thread(
+        _build_hanlp_status_payload,
+        config,
+        include_runtime_api,
+        strategy_payload,
+    )
+    siamese_payload = await asyncio.to_thread(
+        _build_siamese_status_payload,
+        config,
+        strategy_payload,
+    )
 
-        payload = await asyncio.to_thread(get_hanlp_sidecar_status, include_task_status=False)
-        sidecar_payload = payload.get("sidecar") if isinstance(payload.get("sidecar"), dict) else {}
-        if isinstance(sidecar_payload, dict):
-            python_version = str(sidecar_payload.get("python_version") or "").strip()
-            if not python_version:
-                python_version = _detect_python_version(str(sidecar_payload.get("python_executable") or ""))
-            sidecar_payload["python_version"] = python_version
-        payload["provider"] = "hanlp"
-        payload["strategy"] = strategy_payload
-        if include_runtime_api:
-            payload["api"] = await asyncio.to_thread(
-                NLPRuntime().api_status,
-                _runtime_knowledge_config(config),
-            )
-        else:
-            payload["api"] = _build_hanlp_api_snapshot(payload)
-        return payload
-
-    runtime = NLPRuntime()
-    runtime_knowledge_config = _runtime_knowledge_config(config)
-    sidecar_state = runtime.probe(runtime_knowledge_config)
-    model_state = runtime.model_status(runtime_knowledge_config)
-    api_payload = runtime.api_status(runtime_knowledge_config)
-    model_home = str(getattr(nlp_cfg, "model_home", "") or "")
-    return {
-        "provider": provider,
-        "sidecar": {
-            "status": str(sidecar_state.get("status") or "unavailable"),
-            "reason_code": str(sidecar_state.get("reason_code") or "NLP_ENGINE_UNAVAILABLE"),
-            "reason": str(sidecar_state.get("reason") or "NLP runtime is unavailable."),
-            "enabled": bool(getattr(nlp_cfg, "enabled", False)),
-            "python_executable": str(getattr(nlp_cfg, "python_executable", "") or ""),
-            "python_version": _detect_python_version(str(getattr(nlp_cfg, "python_executable", "") or "")),
-            "managed": False,
-            "uv_available": False,
-            "uv_executable": "",
-            "model_home": model_home,
-            "model_cache_path": model_home,
-        },
-        "model": {
-            "status": str(model_state.get("status") or "unavailable"),
-            "reason_code": str(model_state.get("reason_code") or "NLP_ENGINE_UNAVAILABLE"),
-            "reason": str(model_state.get("reason") or "NLP model is unavailable."),
-            "model_id": str(getattr(nlp_cfg, "model_id", "") or ""),
-        },
-        "strategy": strategy_payload,
-        "api": api_payload,
-        "preload": {
-            "enabled": bool(getattr(nlp_cfg, "preload_on_startup", False)),
-            "scope": str(getattr(nlp_cfg, "preload_scope", "critical") or "critical"),
-            "status": "disabled",
-            "reason": "Startup preload is only available for HanLP.",
-            "model_cache_path": model_home,
-            "preloaded_models": [],
-            "task_results": {},
-        },
+    providers_payload = {
+        "hanlp": hanlp_payload,
+        "siamese_uninlu": siamese_payload,
     }
+    active_provider = provider if provider in providers_payload else "hanlp"
+    active_payload = dict(providers_payload.get(active_provider) or {})
+    active_payload["provider"] = active_provider
+    active_payload["providers"] = providers_payload
+    return active_payload
 
 
 @router.get(
@@ -319,6 +456,18 @@ async def get_sidecar_nlp_local_models() -> dict:
     config = load_config()
     nlp_cfg = config.nlp
     provider = str(getattr(nlp_cfg, "provider", "hanlp") or "hanlp").strip().lower()
+
+    if provider != "hanlp":
+        return {
+            "provider": provider,
+            "engine": provider,
+            "status": "ready",
+            "reason_code": "NLP_LOCAL_MODELS_NOT_REQUIRED",
+            "reason": "Local model cache probing is currently only required for HanLP.",
+            "require_local_models": False,
+            "model_cache_path": str(getattr(nlp_cfg, "model_home", "") or ""),
+            "items": [],
+        }
 
     payload = _build_local_models_payload(config)
     payload["provider"] = provider
@@ -339,6 +488,26 @@ async def download_missing_local_models() -> dict:
     config = load_config()
     nlp_cfg = config.nlp
     provider = str(getattr(nlp_cfg, "provider", "hanlp") or "hanlp").strip().lower()
+
+    if provider != "hanlp":
+        return {
+            "provider": provider,
+            "success": True,
+            "requested": [],
+            "attempts": [],
+            "before": {
+                "status": "ready",
+                "reason_code": "NLP_LOCAL_MODELS_NOT_REQUIRED",
+                "missing_count": 0,
+            },
+            "after": {
+                "status": "ready",
+                "reason_code": "NLP_LOCAL_MODELS_NOT_REQUIRED",
+                "missing_count": 0,
+            },
+            "remaining": [],
+            "model_cache_path": str(getattr(nlp_cfg, "model_home", "") or ""),
+        }
 
     runtime = NLPRuntime()
     before = _build_local_models_payload(config)
@@ -385,4 +554,31 @@ async def download_missing_local_models() -> dict:
         },
         "remaining": remaining,
         "model_cache_path": str(getattr(nlp_cfg, "model_home", "") or ""),
+    }
+
+
+@router.get(
+    "/nlp-methods/catalog",
+    summary="List NLP methods by provider",
+    description="Return method catalogs for HanLP and SiameseUniNLU provider-specific routes.",
+)
+async def get_sidecar_nlp_methods_catalog() -> dict[str, Any]:
+    """Return provider-scoped NLP method catalog used by the settings UI."""
+    config = load_config()
+    nlp_cfg = config.nlp
+    selected_provider = str(getattr(nlp_cfg, "provider", "hanlp") or "hanlp").strip().lower()
+    hanlp_methods = _build_hanlp_methods_catalog(config)
+    try:
+        from copaw.knowledge.siamese_uninlu_runtime import SiameseUniNLURuntime
+
+        siamese_methods = SiameseUniNLURuntime.methods_catalog()
+    except Exception:
+        siamese_methods = []
+
+    return {
+        "selected_provider": selected_provider,
+        "providers": {
+            "hanlp": hanlp_methods,
+            "siamese_uninlu": siamese_methods,
+        },
     }

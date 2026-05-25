@@ -186,6 +186,20 @@ const CLASSICAL_DEMO_METHODS: DemoMethod[] = [
   },
 ];
 
+const SIAMESE_DEMO_METHODS: DemoMethod[] = [
+  { key: "named_entity_recognition", backendTaskKey: "named_entity_recognition", title: "命名实体识别", placeholder: "输入一段中文文本。", examples: [UNIFIED_DEMO_SAMPLE] },
+  { key: "relation_extraction", backendTaskKey: "relation_extraction", title: "关系抽取", placeholder: "输入包含人物与组织关系的句子。", examples: [UNIFIED_DEMO_SAMPLE] },
+  { key: "event_extraction", backendTaskKey: "event_extraction", title: "事件抽取", placeholder: "输入包含事件信息的句子。", examples: [UNIFIED_DEMO_SAMPLE] },
+  { key: "aspect_sentiment_extraction", backendTaskKey: "aspect_sentiment_extraction", title: "方面级情感", placeholder: "输入产品或服务评价文本。", examples: [UNIFIED_DEMO_SAMPLE] },
+  { key: "coreference_resolution", backendTaskKey: "coreference_resolution", title: "指代消解", placeholder: "输入有代词指代的段落。", examples: [UNIFIED_DEMO_SAMPLE] },
+  { key: "sentiment_classification", backendTaskKey: "sentiment_classification", title: "情感分类", placeholder: "输入一段评论文本。", examples: [UNIFIED_DEMO_SAMPLE] },
+  { key: "text_classification", backendTaskKey: "text_classification", title: "文本分类", placeholder: "输入待分类文本。", examples: [UNIFIED_DEMO_SAMPLE] },
+  { key: "text_matching", backendTaskKey: "text_matching", title: "文本匹配", placeholder: "输入语义匹配场景文本。", examples: [UNIFIED_DEMO_SAMPLE] },
+  { key: "natural_language_inference", backendTaskKey: "natural_language_inference", title: "自然语言推断", placeholder: "输入包含前提与假设的文本。", examples: [UNIFIED_DEMO_SAMPLE] },
+  { key: "reading_comprehension_choice", backendTaskKey: "reading_comprehension_choice", title: "阅读理解（选择）", placeholder: "输入阅读理解题干与上下文。", examples: [UNIFIED_DEMO_SAMPLE] },
+  { key: "reading_comprehension_extractive", backendTaskKey: "reading_comprehension_extractive", title: "阅读理解（抽取）", placeholder: "输入问答上下文。", examples: [UNIFIED_DEMO_SAMPLE] },
+];
+
 function resolveTagColor(status: string): string {
   if (status === "ready") {
     return "success";
@@ -924,16 +938,19 @@ function NlpPage() {
   const {
     loading,
     installing,
+    initializingSiamese,
     downloadingModel,
     downloadingMissingLocalModels,
     lastDownloadAttempts,
     status,
     localModelsStatus,
+    methodsCatalog,
     provider,
     hanlpProviderActive,
     sidecarReady,
     modelReady,
     handleInstall,
+    handleInstallSiamese,
     handleUpdatePreload,
     handleDownloadModel,
     handleDownloadMissingLocalModels,
@@ -953,6 +970,10 @@ function NlpPage() {
   const [activeClassicalDemoMethodKey, setActiveClassicalDemoMethodKey] = useState(CLASSICAL_DEMO_METHODS[0]?.key || "");
   const [activeClassicalDemoRowIndex, setActiveClassicalDemoRowIndex] = useState<number | null>(null);
   const [hoveredClassicalDemoRowIndex, setHoveredClassicalDemoRowIndex] = useState<number | null>(null);
+  const [siameseDemoInputs, setSiameseDemoInputs] = useState<Record<string, string>>({});
+  const [activeSiameseDemoMethodKey, setActiveSiameseDemoMethodKey] = useState(
+    SIAMESE_DEMO_METHODS[0]?.key || "named_entity_recognition",
+  );
   const updatePreloadRef = useRef(handleUpdatePreload);
 
   useEffect(() => {
@@ -978,6 +999,16 @@ function NlpPage() {
     ) as Record<string, string>;
     setClassicalDemoInputs(initial);
   }, [classicalDemoInputs]);
+
+  useEffect(() => {
+    if (Object.keys(siameseDemoInputs).length > 0) {
+      return;
+    }
+    const initial = Object.fromEntries(
+      SIAMESE_DEMO_METHODS.map((item) => [item.backendTaskKey, item.examples[0] || ""]),
+    ) as Record<string, string>;
+    setSiameseDemoInputs(initial);
+  }, [siameseDemoInputs]);
 
   useEffect(() => {
     if (!hanlpProviderActive || !sidecarReady) {
@@ -1349,6 +1380,20 @@ function NlpPage() {
     hasMissingLocalModels || !hanlpProviderActive || !sidecarReady || !activeDemoReady || hasRunningDemo;
   const runClassicalDemoDisabled =
     hasMissingLocalModels || !hanlpProviderActive || !sidecarReady || !activeClassicalDemoReady || hasRunningDemo;
+  const siameseProviderStatus = status?.providers?.siamese_uninlu;
+  const siameseSidecarReady = String(siameseProviderStatus?.sidecar?.status || "") === "ready";
+  const siameseTaskStates = siameseProviderStatus?.tasks || {};
+  const activeSiameseDemoMethod =
+    SIAMESE_DEMO_METHODS.find((item) => item.key === activeSiameseDemoMethodKey) || SIAMESE_DEMO_METHODS[0];
+  const activeSiameseInput = siameseDemoInputs[activeSiameseDemoMethod?.backendTaskKey || ""] || "";
+  const activeSiameseStatus = siameseTaskStates[activeSiameseDemoMethod?.backendTaskKey || ""] || {
+    status: siameseSidecarReady ? "ready" : "unavailable",
+    reason: siameseProviderStatus?.sidecar?.reason || "Siamese 运行环境不可用",
+    reason_code: siameseProviderStatus?.sidecar?.reason_code || "SIAMESE_UNAVAILABLE",
+  };
+  const activeSiameseResult =
+    (demoResults[activeSiameseDemoMethod?.backendTaskKey || ""] || null) as NlpDemoMeta | null;
+  const runSiameseDemoDisabled = !siameseSidecarReady || hasRunningDemo;
 
   useEffect(() => {
     setActiveDemoRowIndex(null);
@@ -1426,12 +1471,24 @@ function NlpPage() {
         : "部署";
 
   const sidecarActionBusy = installing || (!sidecarReady && loading);
+  const siameseActionBusy = initializingSiamese;
+  const siameseActionLabel = initializingSiamese
+    ? "初始化中"
+    : siameseSidecarReady
+      ? "已就绪"
+      : "初始化";
   const runtimeAlertType: "success" | "warning" =
     hanlpProviderActive && sidecarReady && modelReady ? "success" : "warning";
   const compactRuntimeMeta = [
     `提供方 ${provider || "hanlp"}${hanlpProviderActive ? "(启用)" : "(未启用)"}`,
     `路径 ${status?.sidecar.python_executable || t("nlpConfig.notConfigured")}`,
     `Python ${pythonVersion || t("nlpConfig.notConfigured")}`,
+    `模型 ${status?.model?.model_id || t("nlpConfig.notConfigured")}`,
+  ].join(" · ");
+  const compactSiameseRuntimeMeta = [
+    `路径 ${siameseProviderStatus?.sidecar?.python_executable || t("nlpConfig.notConfigured")}`,
+    `Python ${siameseProviderStatus?.sidecar?.python_version || t("nlpConfig.notConfigured")}`,
+    `模型 ${siameseProviderStatus?.model?.model_id || t("nlpConfig.notConfigured")}`,
   ].join(" · ");
 
 
@@ -1453,14 +1510,14 @@ function NlpPage() {
               showIcon
               message={
                 <div className={styles.maintenanceAlertHeader}>
-                  <Typography.Text strong>{t("nlpConfig.infoTitle")}</Typography.Text>
+                  <Typography.Text strong>HanLP运行状态</Typography.Text>
                   <Button
                     size="small"
                     className={`${styles.maintenanceInstallButton} ${sidecarReady ? styles.maintenanceInstallButtonReady : ""}`}
                     type="primary"
                     onClick={handleInstall}
                     loading={sidecarActionBusy}
-                    disabled={sidecarReady || !hanlpProviderActive || sidecarActionBusy}
+                    disabled={sidecarReady || sidecarActionBusy}
                   >
                     {sidecarActionLabel}
                   </Button>
@@ -1469,7 +1526,7 @@ function NlpPage() {
               description={
                 <div className={styles.maintenanceInfoBlock}>
                   <Typography.Text className={styles.maintenanceSecondaryTextSingleLine}>
-                    {`HanLP sidecar 负责项目 NLP。${compactRuntimeMeta}`}
+                    {compactRuntimeMeta}
                   </Typography.Text>
                 </div>
               }
@@ -2038,6 +2095,169 @@ function NlpPage() {
                               },
                             ]}
                           />
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            </div>
+
+            <div id="nlp-section-siamese-demo" className={styles.sectionAnchorOffset}>
+              <div className={styles.alertStack} style={{ marginBottom: 16 }}>
+                <Alert
+                  type={siameseSidecarReady ? "success" : "warning"}
+                  showIcon
+                  message={
+                    <div className={styles.maintenanceAlertHeader}>
+                      <Typography.Text strong>Siamese UniNLU 运行状态</Typography.Text>
+                      <Button
+                        size="small"
+                        className={`${styles.maintenanceInstallButton} ${siameseSidecarReady ? styles.maintenanceInstallButtonReady : ""}`}
+                        type="primary"
+                        onClick={() => {
+                          void handleInstallSiamese();
+                        }}
+                        loading={siameseActionBusy}
+                        disabled={siameseSidecarReady || siameseActionBusy}
+                      >
+                        {siameseActionLabel}
+                      </Button>
+                    </div>
+                  }
+                  description={
+                    <div className={styles.maintenanceInfoBlock}>
+                      <Typography.Text className={styles.maintenanceSecondaryTextSingleLine}>
+                        {compactSiameseRuntimeMeta}
+                      </Typography.Text>
+                    </div>
+                  }
+                />
+              </div>
+
+              <Card className={`${styles.card} ${styles.primaryCard}`}>
+                <Typography.Title level={5} className={styles.cardTitle}>
+                  Siamese UniNLU 全方法演示
+                </Typography.Title>
+                <Typography.Paragraph type="secondary" className={styles.cardDescription}>
+                  与 HanLP 并列运行，覆盖官方 11 类方法。当前运行状态：
+                  {siameseProviderStatus?.sidecar?.status || "unavailable"}
+                  {methodsCatalog?.providers?.siamese_uninlu?.length
+                    ? `（目录 ${methodsCatalog.providers.siamese_uninlu.length} 项）`
+                    : ""}
+                </Typography.Paragraph>
+                <div className={styles.demoWorkbench}>
+                  <div className={styles.demoMethodList}>
+                    {SIAMESE_DEMO_METHODS.map((method) => {
+                      const methodState = siameseTaskStates[method.backendTaskKey];
+                      const active = method.key === activeSiameseDemoMethod?.key;
+                      const stateStatus = String(methodState?.status || (siameseSidecarReady ? "ready" : "unavailable"));
+                      return (
+                        <button
+                          key={method.key}
+                          type="button"
+                          className={`${styles.demoMethodButton} ${active ? styles.demoMethodButtonActive : ""}`}
+                          onClick={() => setActiveSiameseDemoMethodKey(method.key)}
+                        >
+                          <div className={styles.demoMethodMain}>
+                            <div className={styles.demoMethodHeader}>
+                              <Typography.Text strong className={styles.demoMethodTitle}>
+                                {method.title}
+                              </Typography.Text>
+                              <Tag className={styles.demoStatusTag} color={resolveTagColor(stateStatus)}>
+                                {stateStatus === "ready" ? "可用" : stateStatus === "disabled" ? "已禁用" : "暂不可用"}
+                              </Tag>
+                            </div>
+                            <Typography.Text type="secondary" className={styles.demoMethodDescription}>
+                              {method.placeholder}
+                            </Typography.Text>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className={styles.demoPanel}>
+                    <div className={styles.demoInputPanel}>
+                      <Typography.Title level={5} className={styles.cardTitle}>
+                        {activeSiameseDemoMethod?.title}
+                      </Typography.Title>
+                      <Typography.Paragraph type="secondary" className={styles.cardDescription}>
+                        {String(activeSiameseStatus.reason || "Siamese task ready")}
+                      </Typography.Paragraph>
+                      <Space wrap size={8} className={styles.demoExamples}>
+                        {(activeSiameseDemoMethod?.examples || []).map((sample, index) => (
+                          <Button
+                            key={`${activeSiameseDemoMethod?.key || "siamese"}-${index}`}
+                            size="small"
+                            onClick={() =>
+                              setSiameseDemoInputs((prev) => ({
+                                ...prev,
+                                [activeSiameseDemoMethod?.backendTaskKey || ""]: sample,
+                              }))
+                            }
+                          >
+                            {t("nlpConfig.demo.example", { index: index + 1 })}
+                          </Button>
+                        ))}
+                      </Space>
+                      <Input.TextArea
+                        rows={6}
+                        value={activeSiameseInput}
+                        placeholder={activeSiameseDemoMethod?.placeholder}
+                        onChange={(event) =>
+                          setSiameseDemoInputs((prev) => ({
+                            ...prev,
+                            [activeSiameseDemoMethod?.backendTaskKey || ""]: event.target.value,
+                          }))
+                        }
+                      />
+                      <Button
+                        type="primary"
+                        loading={runningDemoTask === activeSiameseDemoMethod?.backendTaskKey}
+                        disabled={runSiameseDemoDisabled}
+                        onClick={() =>
+                          runMethodDemo(
+                            activeSiameseDemoMethod?.backendTaskKey || "named_entity_recognition",
+                            activeSiameseInput,
+                            "siamese_uninlu",
+                          )
+                        }
+                      >
+                        开始 Siamese 分析
+                      </Button>
+                    </div>
+                    <div className={styles.demoResultPanel}>
+                      <Typography.Title level={5} className={styles.cardTitle}>
+                        {t("nlpConfig.demo.resultPanel")}
+                      </Typography.Title>
+                      {!activeSiameseResult ? (
+                        <Typography.Paragraph type="secondary" className={styles.cardDescription}>
+                          点击运行后显示 Siamese 输出。
+                        </Typography.Paragraph>
+                      ) : (
+                        <>
+                          <div className={styles.demoInteractiveArea}>
+                            {renderResultByTask(
+                              activeSiameseDemoMethod?.backendTaskKey || "named_entity_recognition",
+                              activeSiameseResult.result,
+                              activeSiameseInput,
+                              false,
+                              null,
+                              null,
+                              () => {},
+                              () => {},
+                            )}
+                          </div>
+                          <Typography.Paragraph className={styles.operationOutput}>
+                            {activeSiameseResult.reason}
+                          </Typography.Paragraph>
+                          <Typography.Paragraph className={styles.operationOutput}>
+                            {prettyJson(
+                              activeSiameseResult.raw_result !== undefined
+                                ? activeSiameseResult.raw_result
+                                : activeSiameseResult.result,
+                            )}
+                          </Typography.Paragraph>
                         </>
                       )}
                     </div>
