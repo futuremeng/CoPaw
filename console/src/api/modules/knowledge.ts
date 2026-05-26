@@ -245,6 +245,9 @@ export const knowledgeApi = {
       tokens_batch?: string[][];
       request_id?: string;
     },
+    options?: {
+      timeoutMs?: number;
+    },
   ) => {
     const normalizedProvider = provider === "siamese_uninlu" ? "siamese" : "hanlp";
     return request<{
@@ -275,6 +278,7 @@ export const knowledgeApi = {
     }>(`/nlp/${normalizedProvider}/tasks/${encodeURIComponent(taskKey)}/run`, {
       method: "POST",
       body: JSON.stringify(payload),
+      timeoutMs: options?.timeoutMs,
     });
   },
 

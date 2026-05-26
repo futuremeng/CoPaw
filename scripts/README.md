@@ -84,6 +84,13 @@ bash scripts/local-gate.sh
 - Runs a minimal local quality gate for merge-risk regressions.
 - Includes: sync status check, console build, pipeline template conformance scan, CoPaw locale split guard, backend smoke checks, knowledge route check, and i18n missing-key audit.
 - Exits with non-zero status on first failure.
+- Optional semantic quality gate for Siamese tasks (requires local backend on `127.0.0.1:8088`):
+
+```bash
+LOCAL_GATE_SIAMESE_QUALITY=1 bash scripts/local-gate.sh
+```
+
+- Report output: `tmp/siamese_goal_quality_report.json`.
 
 Run only the locale split guard:
 
@@ -99,6 +106,23 @@ make check-locale-split
 ```bash
 LOCAL_GATE_STRICT=1 bash scripts/local-gate.sh
 ```
+
+Run strict backend + Siamese semantic quality together:
+
+```bash
+LOCAL_GATE_STRICT=1 LOCAL_GATE_SIAMESE_QUALITY=1 bash scripts/local-gate.sh
+```
+
+## Verify Siamese semantic goal quality
+
+```bash
+python scripts/verify_siamese_goal_quality.py
+python scripts/verify_siamese_goal_quality.py --output tmp/siamese_goal_quality_report.json
+python scripts/verify_siamese_goal_quality.py --base-url http://127.0.0.1:8088
+```
+
+- Validates task outputs against semantic goals (for example, relation extraction must include person+role evidence), not only HTTP/status success.
+- Returns exit code `0` if all goals pass, otherwise `2`.
 
 ## Run Test
 

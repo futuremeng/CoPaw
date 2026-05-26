@@ -51,6 +51,14 @@ if not any("knowledge" in p for p in paths):
 print("knowledge routes present")
 PY
 
+if [[ "${LOCAL_GATE_SIAMESE_QUALITY:-0}" == "1" ]]; then
+  step "Siamese semantic quality gate"
+  echo "Running Siamese goal-quality verification against live backend (http://127.0.0.1:8088)..."
+  python "$REPO_ROOT/scripts/verify_siamese_goal_quality.py" --output "$REPO_ROOT/tmp/siamese_goal_quality_report.json"
+else
+  echo "Skipping Siamese semantic quality gate (set LOCAL_GATE_SIAMESE_QUALITY=1 to enable)."
+fi
+
 step "i18n missing-key audit"
 cd "$REPO_ROOT/console"
 node --input-type=module <<'JS'

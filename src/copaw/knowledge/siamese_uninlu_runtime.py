@@ -35,58 +35,91 @@ def _resolve_siamese_python_executable(config: Any) -> str:
 _SIAMESE_METHODS: dict[str, dict[str, Any]] = {
     "named_entity_recognition": {
         "title": "命名实体识别",
-        "description": "识别人名、地名、机构名等实体。",
-        "default_schema": {"人物": None, "地点": None, "组织": None},
+        "description": "识别人名、地名、机构名、公司名、产品名等实体。",
+        "default_schema": {
+            "人物": None,
+            "地理位置": None,
+            "组织机构": None,
+            "公司": None,
+            "产品": None,
+        },
     },
     "relation_extraction": {
         "title": "关系抽取",
         "description": "识别实体间关系。",
-        "default_schema": {"人物": {"所属组织": None, "职位": None}},
+        "default_schema": {
+            "人物": {
+                "组织": None,
+                "职位": None,
+            }
+        },
     },
     "event_extraction": {
         "title": "事件抽取",
         "description": "识别事件及论元。",
-        "default_schema": {"事件": {"时间": None, "地点": None, "参与方": None}},
+        "default_schema": {
+            "发布": {
+                "时间": None,
+                "地点": None,
+                "发布方": None,
+                "产品": None,
+            }
+        },
     },
     "aspect_sentiment_extraction": {
         "title": "方面级情感",
         "description": "抽取方面词并判断情感倾向。",
-        "default_schema": {"方面": {"情感": None, "观点": None}},
+        "default_schema": {
+            "属性词": {
+                "正向情感(情感词)": None,
+                "负向情感(情感词)": None,
+                "中性情感(情感词)": None,
+            }
+        },
     },
     "coreference_resolution": {
         "title": "指代消解",
         "description": "抽取可能的指代链线索。",
-        "default_schema": {"实体": {"别称": None, "代词": None}},
+        "default_schema": {
+            "在下面的描述中，代词“它”指代的是“候选实体”吗？": None,
+        },
     },
     "sentiment_classification": {
         "title": "情感分类",
         "description": "文本级情感极性分类。",
+        "default_schema": {"情感分类": None},
         "default_labels": ["正向", "负向", "中性"],
     },
     "text_classification": {
         "title": "文本分类",
         "description": "按给定标签进行文本分类。",
+        "default_schema": {"分类": None},
         "default_labels": ["科技", "财经", "体育", "娱乐"],
     },
     "text_matching": {
         "title": "文本匹配",
         "description": "判断两段文本语义是否匹配。",
+        "default_schema": {"文本匹配": None},
         "default_labels": ["匹配", "不匹配"],
     },
     "natural_language_inference": {
         "title": "自然语言推断",
         "description": "判断蕴含、矛盾或中立。",
+        "default_schema": {"段落2和段落1的关系是：": None},
         "default_labels": ["蕴含", "矛盾", "中立"],
     },
     "reading_comprehension_choice": {
         "title": "阅读理解（选择）",
         "description": "多项选择式阅读理解。",
+        "default_schema": {"问题：在给定上下文中，正确答案是什么？": None},
         "default_labels": ["A", "B", "C", "D"],
     },
     "reading_comprehension_extractive": {
         "title": "阅读理解（抽取）",
         "description": "从文本中抽取答案。",
-        "default_schema": {"答案": None},
+        "default_schema": {
+            "产品名": None,
+        },
     },
 }
 
@@ -232,19 +265,33 @@ class SiameseUniNLURuntime:
 
     @classmethod
     def _coerce_schema(cls, payload: dict[str, Any], task_key: str) -> Any:
+        def _labels_as_schema(values: list[str]) -> dict[str, None]:
+            return {item: None for item in values if str(item).strip()}
+
         schema = payload.get("schema")
         if isinstance(schema, str):
             raw = schema.strip()
             if raw:
                 try:
-                    return json.loads(raw)
+                    parsed = json.loads(raw)
+                    if isinstance(parsed, list):
+                        return _labels_as_schema([str(item).strip() for item in parsed if str(item).strip()])
+                    return parsed
                 except Exception:
                     return raw
+        if isinstance(schema, list):
+            values = [str(item).strip() for item in schema if str(item).strip()]
+            return _labels_as_schema(values)
         if schema is not None:
             return schema
         meta = _SIAMESE_METHODS.get(task_key) or {}
         if "default_schema" in meta:
             return meta.get("default_schema")
+        # Some tasks in the Siamese UIE pipeline expect `schema` even for
+        # label-based demos; derive it from provided/default labels.
+        labels = cls._coerce_labels(payload, task_key)
+        if labels:
+            return _labels_as_schema(labels)
         return None
 
     @classmethod
@@ -336,6 +383,7 @@ class SiameseUniNLURuntime:
             runner_code = f"""
 import json
 import sys
+import traceback
 
 from modelscope.pipelines import pipeline
 from modelscope.utils.constant import Tasks
@@ -356,7 +404,12 @@ try:
     result = model(**kwargs)
     resp = {{"ok": True, "result": result}}
 except Exception as exc:
-    resp = {{"ok": False, "error": str(exc)}}
+    resp = {{
+        "ok": False,
+        "error": str(exc),
+        "error_type": type(exc).__name__,
+        "traceback": traceback.format_exc(),
+    }}
 
 print({marker!r} + json.dumps(resp, ensure_ascii=False, default=str))
 """
@@ -392,7 +445,13 @@ print({marker!r} + json.dumps(resp, ensure_ascii=False, default=str))
 
             decoded = json.loads(payload_line)
             if not bool(decoded.get("ok", False)):
-                raise RuntimeError(str(decoded.get("error") or "Siamese task execution failed."))
+                error_type = str(decoded.get("error_type") or "RuntimeError")
+                error = str(decoded.get("error") or "Siamese task execution failed.")
+                traceback_text = str(decoded.get("traceback") or "").strip()
+                detail = f"{error_type}: {error}"
+                if traceback_text:
+                    detail = f"{detail}\n{traceback_text}"
+                raise RuntimeError(detail)
 
             elapsed_ms = (time.perf_counter() - started) * 1000.0
             return {

@@ -185,6 +185,112 @@ export interface NlpMethodsCatalog {
   providers: Record<string, NlpMethodsCatalogItem[]>;
 }
 
+const SIAMESE_STRUCTURED_TASKS = new Set([
+  "text_matching",
+  "natural_language_inference",
+  "reading_comprehension_choice",
+  "reading_comprehension_extractive",
+]);
+
+function parseJsonObject(text: string): Record<string, unknown> | null {
+  const raw = String(text || "").trim();
+  if (!raw || !raw.startsWith("{")) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return null;
+    }
+    return parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function buildSiameseDemoPayload(
+  taskKey: string,
+  text: string,
+  schema?: unknown,
+): {
+  text?: string;
+  text_a?: string;
+  text_b?: string;
+  context?: string;
+  question?: string;
+  choices?: string[];
+  labels?: string[];
+  schema?: unknown;
+} {
+  const normalizedTaskKey = String(taskKey || "").trim();
+  const parsed = parseJsonObject(text);
+
+  const payload: {
+    text?: string;
+    text_a?: string;
+    text_b?: string;
+    context?: string;
+    question?: string;
+    choices?: string[];
+    labels?: string[];
+    schema?: unknown;
+  } = {};
+
+  if (parsed && SIAMESE_STRUCTURED_TASKS.has(normalizedTaskKey)) {
+    const pickString = (key: "text" | "text_a" | "text_b" | "context" | "question") => {
+      const value = parsed[key];
+      if (typeof value === "string" && value.trim()) {
+        payload[key] = value;
+      }
+    };
+    pickString("text");
+    pickString("text_a");
+    pickString("text_b");
+    pickString("context");
+    pickString("question");
+
+    if (Array.isArray(parsed.choices)) {
+      payload.choices = parsed.choices
+        .map((item) => String(item || "").trim())
+        .filter(Boolean);
+    }
+    if (Array.isArray(parsed.labels)) {
+      payload.labels = parsed.labels
+        .map((item) => String(item || "").trim())
+        .filter(Boolean);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(parsed, "schema")) {
+      payload.schema = parsed.schema;
+    } else if (schema !== undefined) {
+      payload.schema = schema;
+    }
+
+    if (
+      normalizedTaskKey === "reading_comprehension_choice" &&
+      typeof payload.question === "string" &&
+      payload.question.trim() &&
+      payload.schema &&
+      typeof payload.schema === "object" &&
+      !Array.isArray(payload.schema)
+    ) {
+      const schemaRecord = payload.schema as Record<string, unknown>;
+      const keys = Object.keys(schemaRecord);
+      if (keys.length === 1) {
+        payload.schema = { [payload.question]: null };
+      }
+    }
+
+    return payload;
+  }
+
+  payload.text = text;
+  if (schema !== undefined) {
+    payload.schema = schema;
+  }
+  return payload;
+}
+
 export interface HanlpOperation {
   name: string;
   attempted: boolean;
@@ -522,6 +628,7 @@ export function useNlp() {
     taskKey: string,
     text: string,
     providerType: "hanlp" | "siamese_uninlu" = "hanlp",
+    schema?: unknown,
   ) => {
     const normalizedTaskKey = String(taskKey || "").trim();
     const normalizedText = String(text || "").trim();
@@ -537,6 +644,7 @@ export function useNlp() {
     setRunningDemoTask(normalizedTaskKey);
     try {
       let result;
+      const demoTimeoutMs = providerType === "siamese_uninlu" ? 60_000 : undefined;
       if (providerType === "hanlp" && (normalizedTaskKey === "srl" || normalizedTaskKey === "ner")) {
         const tokenizeResult = await api.runNlpProviderTaskDemo("hanlp", "tokenize", {
           text: normalizedText,
@@ -550,11 +658,18 @@ export function useNlp() {
         }
         result = await api.runNlpProviderTaskDemo(providerType, normalizedTaskKey, {
           tokens,
-        });
+        }, { timeoutMs: demoTimeoutMs });
       } else {
+        const requestPayload =
+          providerType === "siamese_uninlu"
+            ? buildSiameseDemoPayload(normalizedTaskKey, normalizedText, schema)
+            : {
+                text: normalizedText,
+                schema,
+              };
         result = await api.runNlpProviderTaskDemo(providerType, normalizedTaskKey, {
-          text: normalizedText,
-        });
+          ...requestPayload,
+        }, { timeoutMs: demoTimeoutMs });
       }
       setDemoResults((prev) => ({ ...prev, [normalizedTaskKey]: result }));
       if (result.status === "ready") {

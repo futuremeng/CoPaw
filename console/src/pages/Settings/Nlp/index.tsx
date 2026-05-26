@@ -19,6 +19,7 @@ type DemoMethod = {
   title: string;
   placeholder: string;
   examples: string[];
+  schema?: string;
 };
 
 type NlpDemoMeta = {
@@ -48,8 +49,52 @@ type NlpDemoMeta = {
   sidecar_trace_stage_ms?: Record<string, number>;
 };
 
-const UNIFIED_DEMO_SAMPLE = "北京九录科技有限公司成立于2022年9月，由孟繁永创立，是一家专注于数字出版基础技术研发的创新型企业。公司发起并维护多个开源项目，成功构建了轻量型知识服务生产和发布平台，并开发了面向知识生产和加工的垂直智能体 Copaw，致力于以智能化技术推动知识服务领域的全流程数字化转型。";
+const UNIFIED_DEMO_SAMPLE = "北京九录科技有限公司推出产品 Copaw。Copaw 是公司面向知识生产和加工场景打造的产品，致力于以智能化技术推动知识服务领域的全流程数字化转型，并持续支持多个开源项目。";
 const CLASSICAL_DEMO_SAMPLE = "赫赫九录，肇基京华。\n孟氏创立，岁在孟秋。\n专攻数术，出版维纲。\n开源布道，众志共襄。\n轻量之台，知识是扬。\n依彼神基，巧制 Copaw。\n智能为辅，编修有方。\n赋能全域，流泽孔长。";
+const SIAMESE_NER_SAMPLE = "北京九录科技有限公司推出产品 Copaw。Copaw 是公司面向知识生产和加工场景打造的产品，致力于以智能化技术推动知识服务领域的全流程数字化转型，并持续支持多个开源项目。";
+const SIAMESE_RELATION_SAMPLE = "孟繁永担任北京九录科技有限公司创始人兼首席执行官，公司总部位于北京。";
+const SIAMESE_EVENT_SAMPLE = "2026年5月，九录科技在北京发布 Copaw 2.0，吸引多家机构参与试点。";
+const SIAMESE_ABSA_SAMPLE = "这款耳机音质很好，但续航一般，价格偏高。";
+const SIAMESE_COREF_SAMPLE = "是的,不是|孟繁永创立了北京九录科技有限公司。他希望它能够持续服务知识生产。";
+const SIAMESE_SENTIMENT_SAMPLE = "整体体验不错，功能完善，但学习成本略高。";
+const SIAMESE_CLASSIFICATION_SAMPLE = "该平台发布了新的模型评测基准，并开放了开发者文档。";
+const SIAMESE_TEXT_MATCHING_SAMPLE = JSON.stringify(
+  {
+    text_a: "Copaw 是知识生产智能体。",
+    text_b: "Copaw 用于知识加工与发布。",
+    labels: ["匹配", "不匹配"],
+  },
+  null,
+  2,
+);
+const SIAMESE_NLI_SAMPLE = JSON.stringify(
+  {
+    text_a: "所有员工都参加了周会。",
+    text_b: "小王参加了周会。",
+    labels: ["蕴含", "矛盾", "中立"],
+  },
+  null,
+  2,
+);
+const SIAMESE_RC_CHOICE_SAMPLE = JSON.stringify(
+  {
+    question: "谁推出了 Copaw？",
+    context: "北京九录科技有限公司推出产品 Copaw，用于知识生产和加工。",
+    choices: ["北京九录科技有限公司", "张三", "李四", "王五"],
+    labels: ["A", "B", "C", "D"],
+  },
+  null,
+  2,
+);
+const SIAMESE_RC_EXTRACTIVE_SAMPLE = JSON.stringify(
+  {
+    question: "文中提到的产品名是什么？",
+    context: "该公司的产品名是 Copaw。",
+    text: "该公司的产品名是 Copaw。",
+  },
+  null,
+  2,
+);
 const API_RUN_ENDPOINT_PATH = "/api/nlp/tasks/{task_key}/run";
 const getApiRunEndpointTemplate = (): string => {
   if (typeof window === "undefined") {
@@ -187,17 +232,124 @@ const CLASSICAL_DEMO_METHODS: DemoMethod[] = [
 ];
 
 const SIAMESE_DEMO_METHODS: DemoMethod[] = [
-  { key: "named_entity_recognition", backendTaskKey: "named_entity_recognition", title: "命名实体识别", placeholder: "输入一段中文文本。", examples: [UNIFIED_DEMO_SAMPLE] },
-  { key: "relation_extraction", backendTaskKey: "relation_extraction", title: "关系抽取", placeholder: "输入包含人物与组织关系的句子。", examples: [UNIFIED_DEMO_SAMPLE] },
-  { key: "event_extraction", backendTaskKey: "event_extraction", title: "事件抽取", placeholder: "输入包含事件信息的句子。", examples: [UNIFIED_DEMO_SAMPLE] },
-  { key: "aspect_sentiment_extraction", backendTaskKey: "aspect_sentiment_extraction", title: "方面级情感", placeholder: "输入产品或服务评价文本。", examples: [UNIFIED_DEMO_SAMPLE] },
-  { key: "coreference_resolution", backendTaskKey: "coreference_resolution", title: "指代消解", placeholder: "输入有代词指代的段落。", examples: [UNIFIED_DEMO_SAMPLE] },
-  { key: "sentiment_classification", backendTaskKey: "sentiment_classification", title: "情感分类", placeholder: "输入一段评论文本。", examples: [UNIFIED_DEMO_SAMPLE] },
-  { key: "text_classification", backendTaskKey: "text_classification", title: "文本分类", placeholder: "输入待分类文本。", examples: [UNIFIED_DEMO_SAMPLE] },
-  { key: "text_matching", backendTaskKey: "text_matching", title: "文本匹配", placeholder: "输入语义匹配场景文本。", examples: [UNIFIED_DEMO_SAMPLE] },
-  { key: "natural_language_inference", backendTaskKey: "natural_language_inference", title: "自然语言推断", placeholder: "输入包含前提与假设的文本。", examples: [UNIFIED_DEMO_SAMPLE] },
-  { key: "reading_comprehension_choice", backendTaskKey: "reading_comprehension_choice", title: "阅读理解（选择）", placeholder: "输入阅读理解题干与上下文。", examples: [UNIFIED_DEMO_SAMPLE] },
-  { key: "reading_comprehension_extractive", backendTaskKey: "reading_comprehension_extractive", title: "阅读理解（抽取）", placeholder: "输入问答上下文。", examples: [UNIFIED_DEMO_SAMPLE] },
+  {
+    key: "named_entity_recognition",
+    backendTaskKey: "named_entity_recognition",
+    title: "命名实体识别",
+    placeholder: "输入包含人物、公司名或产品名的中文文本。",
+    examples: [SIAMESE_NER_SAMPLE],
+    schema: JSON.stringify({ 人物: null, 地理位置: null, 组织机构: null, 公司: null, 产品: null }, null, 2),
+  },
+  {
+    key: "relation_extraction",
+    backendTaskKey: "relation_extraction",
+    title: "关系抽取",
+    placeholder: "输入包含人物与组织关系的句子。",
+    examples: [SIAMESE_RELATION_SAMPLE],
+    schema: JSON.stringify(
+      {
+        人物: {
+          组织: null,
+          职位: null,
+        },
+      },
+      null,
+      2,
+    ),
+  },
+  {
+    key: "event_extraction",
+    backendTaskKey: "event_extraction",
+    title: "事件抽取",
+    placeholder: "输入包含事件信息的句子。",
+    examples: [SIAMESE_EVENT_SAMPLE],
+    schema: JSON.stringify(
+      {
+        发布: {
+          时间: null,
+          地点: null,
+          发布方: null,
+          产品: null,
+        },
+      },
+      null,
+      2,
+    ),
+  },
+  {
+    key: "aspect_sentiment_extraction",
+    backendTaskKey: "aspect_sentiment_extraction",
+    title: "方面级情感",
+    placeholder: "输入产品或服务评价文本。",
+    examples: [SIAMESE_ABSA_SAMPLE],
+    schema: JSON.stringify(
+      {
+        属性词: {
+          "正向情感(情感词)": null,
+          "负向情感(情感词)": null,
+          "中性情感(情感词)": null,
+        },
+      },
+      null,
+      2,
+    ),
+  },
+  {
+    key: "coreference_resolution",
+    backendTaskKey: "coreference_resolution",
+    title: "指代消解",
+    placeholder: "输入“标签|文本”格式（如：是的,不是|...）并包含代词指代。",
+    examples: [SIAMESE_COREF_SAMPLE],
+    schema: JSON.stringify({ "在下面的描述中，代词“它”指代的是“北京九录科技有限公司”吗？": null }, null, 2),
+  },
+  {
+    key: "sentiment_classification",
+    backendTaskKey: "sentiment_classification",
+    title: "情感分类",
+    placeholder: "输入一段评论文本。",
+    examples: [SIAMESE_SENTIMENT_SAMPLE],
+    schema: JSON.stringify({ 情感分类: null }, null, 2),
+  },
+  {
+    key: "text_classification",
+    backendTaskKey: "text_classification",
+    title: "文本分类",
+    placeholder: "输入待分类文本。",
+    examples: [SIAMESE_CLASSIFICATION_SAMPLE],
+    schema: JSON.stringify({ 分类: null }, null, 2),
+  },
+  {
+    key: "text_matching",
+    backendTaskKey: "text_matching",
+    title: "文本匹配",
+    placeholder: "输入 JSON（text_a、text_b、labels）或普通文本。",
+    examples: [SIAMESE_TEXT_MATCHING_SAMPLE],
+    schema: JSON.stringify({ 文本匹配: null }, null, 2),
+  },
+  {
+    key: "natural_language_inference",
+    backendTaskKey: "natural_language_inference",
+    title: "自然语言推断",
+    placeholder: "输入 JSON（text_a、text_b、labels）或普通文本。",
+    examples: [SIAMESE_NLI_SAMPLE],
+    schema: JSON.stringify({ "段落2和段落1的关系是：": null }, null, 2),
+  },
+  {
+    key: "reading_comprehension_choice",
+    backendTaskKey: "reading_comprehension_choice",
+    title: "阅读理解（选择）",
+    placeholder: "输入 JSON（question、context、choices、labels）或普通文本。",
+    examples: [SIAMESE_RC_CHOICE_SAMPLE],
+    schema: JSON.stringify({ "谁推出了 Copaw？": null }, null, 2),
+  },
+  {
+    key: "reading_comprehension_extractive",
+    backendTaskKey: "reading_comprehension_extractive",
+    title: "阅读理解（抽取）",
+    placeholder: "输入 JSON（question、context、text）或普通文本。",
+    examples: [SIAMESE_RC_EXTRACTIVE_SAMPLE],
+    schema: JSON.stringify({ 产品名: null }, null, 2),
+  },
 ];
 
 function resolveTagColor(status: string): string {
@@ -971,6 +1123,7 @@ function NlpPage() {
   const [activeClassicalDemoRowIndex, setActiveClassicalDemoRowIndex] = useState<number | null>(null);
   const [hoveredClassicalDemoRowIndex, setHoveredClassicalDemoRowIndex] = useState<number | null>(null);
   const [siameseDemoInputs, setSiameseDemoInputs] = useState<Record<string, string>>({});
+  const [siameseDemoSchemas, setSiameseDemoSchemas] = useState<Record<string, string>>({});
   const [activeSiameseDemoMethodKey, setActiveSiameseDemoMethodKey] = useState(
     SIAMESE_DEMO_METHODS[0]?.key || "named_entity_recognition",
   );
@@ -1009,6 +1162,16 @@ function NlpPage() {
     ) as Record<string, string>;
     setSiameseDemoInputs(initial);
   }, [siameseDemoInputs]);
+
+  useEffect(() => {
+    if (Object.keys(siameseDemoSchemas).length > 0) {
+      return;
+    }
+    const initial = Object.fromEntries(
+      SIAMESE_DEMO_METHODS.map((item) => [item.backendTaskKey, item.schema || ""]),
+    ) as Record<string, string>;
+    setSiameseDemoSchemas(initial);
+  }, [siameseDemoSchemas]);
 
   useEffect(() => {
     if (!hanlpProviderActive || !sidecarReady) {
@@ -1386,6 +1549,7 @@ function NlpPage() {
   const activeSiameseDemoMethod =
     SIAMESE_DEMO_METHODS.find((item) => item.key === activeSiameseDemoMethodKey) || SIAMESE_DEMO_METHODS[0];
   const activeSiameseInput = siameseDemoInputs[activeSiameseDemoMethod?.backendTaskKey || ""] || "";
+  const activeSiameseSchema = siameseDemoSchemas[activeSiameseDemoMethod?.backendTaskKey || ""] || "";
   const activeSiameseStatus = siameseTaskStates[activeSiameseDemoMethod?.backendTaskKey || ""] || {
     status: siameseSidecarReady ? "ready" : "unavailable",
     reason: siameseProviderStatus?.sidecar?.reason || "Siamese 运行环境不可用",
@@ -2211,6 +2375,22 @@ function NlpPage() {
                           }))
                         }
                       />
+                      {activeSiameseDemoMethod?.schema ? (
+                        <>
+                          <Typography.Text type="secondary">Schema JSON</Typography.Text>
+                          <Input.TextArea
+                            rows={5}
+                            value={activeSiameseSchema}
+                            placeholder={activeSiameseDemoMethod.schema}
+                            onChange={(event) =>
+                              setSiameseDemoSchemas((prev) => ({
+                                ...prev,
+                                [activeSiameseDemoMethod?.backendTaskKey || ""]: event.target.value,
+                              }))
+                            }
+                          />
+                        </>
+                      ) : null}
                       <Button
                         type="primary"
                         loading={runningDemoTask === activeSiameseDemoMethod?.backendTaskKey}
@@ -2220,6 +2400,7 @@ function NlpPage() {
                             activeSiameseDemoMethod?.backendTaskKey || "named_entity_recognition",
                             activeSiameseInput,
                             "siamese_uninlu",
+                            activeSiameseSchema || undefined,
                           )
                         }
                       >
