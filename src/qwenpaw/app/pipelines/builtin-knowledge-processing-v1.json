@@ -14,6 +14,7 @@
       "kind": "ingest",
       "description": "Create a versioned snapshot of each source file into .knowledge/raw, recording file hash, mtime, and byte size.",
       "prompt": "Snapshot source files into .knowledge/raw; emit snapshot-manifest.json with file count, byte totals, and per-file hashes.",
+      "executor": "builtin:knowledge.snapshot_raw",
       "inputs": {
         "source_paths": "list[str]"
       },
@@ -31,6 +32,7 @@
       "kind": "transform",
       "description": "Split raw snapshots into semantic chunks (paragraphs / sections) and write chunk payloads to .knowledge/chunks.",
       "prompt": "Split each snapshot into content chunks; emit chunk-manifest.json with chunk ids, byte ranges, and source refs.",
+      "executor": "builtin:knowledge.build_chunks",
       "inputs": {
         "snapshot_manifest_path": "$snapshot_raw.snapshot_manifest_path"
       },
@@ -48,6 +50,7 @@
       "kind": "transform",
       "description": "Normalise each raw snapshot into sentence-per-line interlinear text files (.knowledge/interlinear) for downstream NLP stages.",
       "prompt": "Produce interlinear sentence files from raw snapshots; emit interlinear-manifest.json with line counts and char statistics.",
+      "executor": "builtin:knowledge.build_interlinear",
       "inputs": {
         "snapshot_manifest_path": "$snapshot_raw.snapshot_manifest_path"
       },
@@ -65,6 +68,7 @@
       "kind": "transform",
       "description": "Run word segmentation on interlinear files and write token sequences to .knowledge/tokenize.",
       "prompt": "Tokenize each interlinear file; emit tokenize-manifest.json with token counts, OOV rates, and per-file totals.",
+      "executor": "builtin:knowledge.tokenize",
       "inputs": {
         "interlinear_manifest_path": "$build_interlinear.interlinear_manifest_path"
       },
@@ -82,6 +86,7 @@
       "kind": "transform",
       "description": "Assign part-of-speech tags to each token using tokenize output; write POS sequences to .knowledge/pos.",
       "prompt": "Tag each token with its POS label (CTB tagset); emit pos-manifest.json with tag type counts and coverage ratio.",
+      "executor": "builtin:knowledge.pos_tagging",
       "inputs": {
         "tokenize_manifest_path": "$tokenize.tokenize_manifest_path"
       },
@@ -99,6 +104,7 @@
       "kind": "transform",
       "description": "Build dependency parse trees from tokenize output and write syntax artifacts to .knowledge/syntax.",
       "prompt": "Parse syntax dependencies for each sentence; emit syntax-manifest.json with sentence count, token count, and relation count.",
+      "executor": "builtin:knowledge.syntax_parse",
       "inputs": {
         "tokenize_manifest_path": "$tokenize.tokenize_manifest_path"
       },
@@ -116,6 +122,7 @@
       "kind": "transform",
       "description": "Identify predicates and annotate semantic role arguments from tokenize output; write SRL artifacts to .knowledge/srl.",
       "prompt": "Label semantic roles for each predicate span; emit srl-manifest.json with predicate count, argument count, and coverage.",
+      "executor": "builtin:knowledge.semantic_role_labeling",
       "inputs": {
         "tokenize_manifest_path": "$tokenize.tokenize_manifest_path"
       },

@@ -189,6 +189,40 @@ Project Knowledge Dock 当前使用以下标签页承载该工作流：
 
 此外，graph-query 已支持 output_mode，使 Explore 与 Outputs 在消费侧遵循同一模式语义。
 
+#### 12.5.1 Project Pipeline 控制面契约（2026-05）
+
+当前项目级知识流程已经补齐最小控制闭环，状态来源不再只依赖本地 pipeline state，同时桥接到 flow engine（全局控制面）。
+
+核心端点：
+
+1. POST /knowledge/project-pipeline/run
+2. GET /knowledge/project-pipeline/status
+3. POST /knowledge/project-pipeline/commands
+4. WS /knowledge/project-pipeline/ws
+
+关键响应字段（run/status/commands/ws 统一语义）：
+
+1. flow_run_id：项目流程对应的 flow engine run id。
+2. operation_id：最近一次路由操作 id（例如 ps-*）。
+3. idempotency_key：最近一次操作幂等键。
+4. deduplicated：最近一次操作是否被去重。
+5. last_action：最近一次动作（如 start_sync / resume_sync / flow_resume）。
+6. recent_control_command：最近一次显式控制命令（pause/resume/cancel）。
+7. control_updated_at：最近一次显式控制命令更新时间（UTC）。
+
+commands 端点控制语义：
+
+1. command_type in {pause, resume, cancel}。
+2. 400：PROJECT_PIPELINE_COMMAND_INVALID。
+3. 404：PROJECT_PIPELINE_FLOW_RUN_NOT_FOUND（尚未建立 flow_run_id 桥接）。
+4. 409：flow run transition not allowed（状态机拒绝迁移）。
+
+联调建议顺序：
+
+1. 调 run，拿到 flow_run_id。
+2. 调 commands（pause/resume/cancel），直接消费 runtime_meta（无需额外再调 status）。
+3. 轮询 status 或订阅 ws，确认 recent_control_command / control_updated_at 增量变化。
+
 ### 12.6 当前阶段的完成标准
 
 本阶段将“统一调度与降级”定义为以下能力已经成立：

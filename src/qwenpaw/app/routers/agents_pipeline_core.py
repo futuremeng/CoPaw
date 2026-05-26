@@ -56,6 +56,7 @@ class PipelineTemplateStep(BaseModel):
     inputs: dict[str, Any] = Field(default_factory=dict)
     prompt: str = ""
     script: str = ""
+    executor: str = ""
     outputs: dict[str, Any] = Field(default_factory=dict)
     depends_on: list[str] = Field(default_factory=list)
     input_bindings: dict[str, str] = Field(default_factory=dict)
@@ -116,6 +117,7 @@ class PipelineRunStep(BaseModel):
     inputs: dict[str, Any] = Field(default_factory=dict)
     prompt: str = ""
     script: str = ""
+    executor: str = ""
     outputs: dict[str, Any] = Field(default_factory=dict)
     depends_on: list[str] = Field(default_factory=list)
     input_bindings: dict[str, str] = Field(default_factory=dict)
@@ -529,6 +531,7 @@ def _parse_pipeline_template_doc(raw: dict[str, Any], fallback_id: str) -> Pipel
                 inputs=raw_inputs if isinstance(raw_inputs, dict) else {},
                 prompt=str(node.get("prompt") or "").strip(),
                 script=str(node.get("script") or "").strip(),
+                executor=str(node.get("executor") or "").strip(),
                 outputs=raw_outputs if isinstance(raw_outputs, dict) else {},
                 depends_on=(
                     [str(item).strip() for item in raw_depends_on if str(item).strip()]
@@ -970,6 +973,7 @@ def _pipeline_steps_to_md(template: PipelineTemplateInfo) -> str:
         lines.append(f"- contract_inputs: {json.dumps(step.inputs or {}, ensure_ascii=False)}")
         lines.append(f"- contract_prompt: {json.dumps((step.prompt or '').strip(), ensure_ascii=False)}")
         lines.append(f"- contract_script: {json.dumps((step.script or '').strip(), ensure_ascii=False)}")
+        lines.append(f"- contract_executor: {json.dumps((step.executor or '').strip(), ensure_ascii=False)}")
         lines.append(f"- contract_outputs: {json.dumps(step.outputs or {}, ensure_ascii=False)}")
         lines.append(f"- contract_depends_on: {json.dumps(step.depends_on or [], ensure_ascii=False)}")
         lines.append(f"- contract_input_bindings: {json.dumps(step.input_bindings or {}, ensure_ascii=False)}")
@@ -997,6 +1001,7 @@ def _parse_pipeline_md(content: str) -> list[PipelineTemplateStep]:
     contract_outputs: dict[str, Any] = {}
     contract_prompt = ""
     contract_script = ""
+    contract_executor = ""
     contract_depends_on: list[str] = []
     contract_input_bindings: dict[str, str] = {}
     contract_retry_policy: dict[str, Any] = {}
@@ -1009,7 +1014,7 @@ def _parse_pipeline_md(content: str) -> list[PipelineTemplateStep]:
 
     def _flush() -> None:
         nonlocal contract_inputs, contract_outputs, contract_prompt, contract_script
-        nonlocal contract_depends_on, contract_input_bindings, contract_retry_policy
+        nonlocal contract_executor, contract_depends_on, contract_input_bindings, contract_retry_policy
         if current is not None:
             desc = " ".join(desc_lines).strip()
             steps.append(
@@ -1021,6 +1026,7 @@ def _parse_pipeline_md(content: str) -> list[PipelineTemplateStep]:
                     inputs=contract_inputs,
                     prompt=contract_prompt,
                     script=contract_script,
+                    executor=contract_executor,
                     outputs=contract_outputs,
                     depends_on=contract_depends_on,
                     input_bindings=contract_input_bindings,
@@ -1031,6 +1037,7 @@ def _parse_pipeline_md(content: str) -> list[PipelineTemplateStep]:
         contract_outputs = {}
         contract_prompt = ""
         contract_script = ""
+        contract_executor = ""
         contract_depends_on = []
         contract_input_bindings = {}
         contract_retry_policy = {}
@@ -1047,7 +1054,7 @@ def _parse_pipeline_md(content: str) -> list[PipelineTemplateStep]:
             if line.startswith("# ") or line.startswith("---"):
                 continue
             contract_match = re.match(
-                r"^\s*-\s*contract_(inputs|prompt|script|outputs|depends_on|input_bindings|retry_policy):\s*(.+?)\s*$",
+                r"^\s*-\s*contract_(inputs|prompt|script|executor|outputs|depends_on|input_bindings|retry_policy):\s*(.+?)\s*$",
                 line,
             )
             if contract_match:
@@ -1068,6 +1075,10 @@ def _parse_pipeline_md(content: str) -> list[PipelineTemplateStep]:
                 if contract_key == "script":
                     parsed_script = _decode_contract_json(contract_value, "")
                     contract_script = str(parsed_script or "").strip()
+                    continue
+                if contract_key == "executor":
+                    parsed_executor = _decode_contract_json(contract_value, "")
+                    contract_executor = str(parsed_executor or "").strip()
                     continue
                 if contract_key == "depends_on":
                     parsed_depends = _decode_contract_json(contract_value, [])
@@ -1321,6 +1332,7 @@ def _template_content_hash(template: PipelineTemplateInfo) -> str:
                 "inputs": step.inputs,
                 "prompt": step.prompt,
                 "script": step.script,
+                "executor": step.executor,
                 "outputs": step.outputs,
                 "depends_on": step.depends_on,
                 "input_bindings": step.input_bindings,
@@ -2061,6 +2073,19 @@ def _validate_pipeline_step(step: PipelineTemplateStep) -> list[PipelineValidati
                     suggestion="Set retry_policy.max_attempts to a small integer such as 1 or 2.",
                 )
             )
+
+    if step.executor and not isinstance(step.executor, str):
+        errors.append(
+            PipelineValidationError(
+                error_code="invalid_step_executor",
+                message="Step executor must be a string.",
+                field_path="executor",
+                step_id=step_id,
+                expected="string",
+                actual=type(step.executor).__name__,
+                suggestion="Use a string identifier such as builtin:knowledge.snapshot_raw.",
+            )
+        )
 
     step_prompt = (step.prompt or "").strip()
     step_script = (step.script or "").strip()
@@ -3895,6 +3920,7 @@ def _load_pipeline_run_from_manifest(project_dir: Path, run_id: str) -> Pipeline
                 ),
                 prompt=str(node.get("contract_prompt") or (template_step.prompt if template_step else "")).strip(),
                 script=str(node.get("contract_script") or (template_step.script if template_step else "")).strip(),
+                executor=str(node.get("contract_executor") or (template_step.executor if template_step else "")).strip(),
                 outputs=(
                     cast(dict[str, Any], node.get("contract_outputs"))
                     if isinstance(node.get("contract_outputs"), dict)
@@ -4043,6 +4069,7 @@ def _list_project_pipeline_runs(project_dir: Path) -> list[PipelineRunSummary]:
                     updated_at=run_detail.updated_at,
                     focus_chat_id=run_detail.focus_chat_id,
                     focus_type=run_detail.focus_type,
+                    executor=str(node.get("executor") or "").strip(),
                     focus_path=run_detail.focus_path,
                 ),
             )

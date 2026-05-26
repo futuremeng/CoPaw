@@ -895,6 +895,42 @@ def test_create_project_uses_builtin_template_fallbacks(
     assert "data/README.md" not in changed_paths
 
 
+def test_load_project_template_text_supports_legacy_hidden_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+):
+    templates_dir = tmp_path / "project-templates"
+    (templates_dir / "project" / "scripts").mkdir(parents=True, exist_ok=True)
+    (templates_dir / "project" / "scripts" / "README.md").write_text(
+        "# scripts directory\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        agents_router_module,
+        "_PROJECT_TEMPLATES_DIR",
+        templates_dir,
+    )
+    monkeypatch.setattr(
+        agents_router_module.importlib.resources,
+        "files",
+        lambda _package: tmp_path / "missing-package",
+    )
+
+    caplog.clear()
+    with caplog.at_level("WARNING"):
+        content = agents_router_module._load_project_template_text(
+            "project/.scripts/README.md"
+        )
+
+    assert content == "# scripts directory\n"
+    assert not any(
+        "Project template missing from package and source tree" in message
+        for message in caplog.messages
+    )
+
+
 def test_create_project_defaults_auto_knowledge_sink_enabled(tmp_path: Path):
     project = _create_project(
         tmp_path,

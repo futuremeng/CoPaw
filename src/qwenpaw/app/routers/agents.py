@@ -99,6 +99,13 @@ _PROJECT_TEMPLATES_DIR = (
     Path(__file__).resolve().parents[1] / "project_templates"
 )
 
+_PROJECT_TEMPLATE_PATH_ALIASES = {
+    "project/.scripts/README.md": "project/scripts/README.md",
+    "project/.pipelines/templates/README.md": "project/pipelines/templates/README.md",
+    "project/.pipelines/runs/README.md": "project/pipelines/runs/README.md",
+    "project/.skills/project-artifact-governor/SKILL.md": "project/skills/project-artifact-governor/SKILL.md",
+}
+
 _DEFAULT_PROJECT_TEMPLATES = {
     "projects/README.md": "# Projects\n\n"
     "Store one project per subdirectory, for example:\n\n"
@@ -1360,21 +1367,33 @@ def _load_project_template_text(
 ) -> str:
     content: str | None = None
 
-    try:
-        template_resource = importlib.resources.files("copaw").joinpath(
-            "app"
-        ).joinpath("project_templates")
-        for part in relative_path.split("/"):
-            template_resource = template_resource.joinpath(part)
-        if template_resource.is_file():
-            content = template_resource.read_text(encoding="utf-8")
-    except Exception:
-        content = None
+    candidate_paths = [relative_path]
+    alias_path = _PROJECT_TEMPLATE_PATH_ALIASES.get(relative_path)
+    if alias_path and alias_path not in candidate_paths:
+        candidate_paths.append(alias_path)
+
+    for package_name in ("qwenpaw", "copaw"):
+        if content is not None:
+            break
+        for candidate in candidate_paths:
+            try:
+                template_resource = importlib.resources.files(package_name).joinpath(
+                    "app"
+                ).joinpath("project_templates")
+                for part in candidate.split("/"):
+                    template_resource = template_resource.joinpath(part)
+                if template_resource.is_file():
+                    content = template_resource.read_text(encoding="utf-8")
+                    break
+            except Exception:
+                continue
 
     if content is None:
-        template_path = _PROJECT_TEMPLATES_DIR / relative_path
-        if template_path.is_file():
-            content = template_path.read_text(encoding="utf-8")
+        for candidate in candidate_paths:
+            template_path = _PROJECT_TEMPLATES_DIR / candidate
+            if template_path.is_file():
+                content = template_path.read_text(encoding="utf-8")
+                break
 
     if content is None:
         content = _DEFAULT_PROJECT_TEMPLATES.get(relative_path)

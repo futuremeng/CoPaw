@@ -36,6 +36,8 @@ from .plan import router as plan_router
 from .git import router as git_router
 from .coding_project import router as coding_project_router
 from .access_control import router as access_control_router
+from .flows import router as flows_router
+from .flows_global import router as flows_global_router
 
 router = APIRouter()
 
@@ -72,6 +74,8 @@ router.include_router(plan_router)
 router.include_router(git_router)
 router.include_router(coding_project_router)
 router.include_router(access_control_router)
+router.include_router(flows_router)
+router.include_router(flows_global_router)
 
 
 def create_agent_scoped_router() -> APIRouter:

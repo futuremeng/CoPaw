@@ -40,6 +40,7 @@ ALLOWED_QWENPAW_TO_COPAW = {
 # extension ownership in copaw.
 ALLOWED_NON_THIN_SHARED = {
     "__init__.py",
+    "app/_app.py",
     "knowledge/__init__.py",
     "knowledge/architecture.py",
     "knowledge/enrichment_pipeline.py",
@@ -51,7 +52,15 @@ ALLOWED_NON_THIN_SHARED = {
 # copaw-only files should remain under extension areas (prefix match).
 ALLOWED_COPAW_ONLY_PREFIXES = (
     "knowledge/",
+    "app/flow_engine/",
 )
+
+# Keep these as explicit file-level exceptions to avoid broad app/router
+# namespace expansion while preserving current extension ownership.
+ALLOWED_COPAW_ONLY_FILES = {
+    "app/routers/knowledge_hanlp_tasks.py",
+    "app/routers/knowledge_siamese_tasks.py",
+}
 
 QWENPAW_TO_COPAW_IMPORT_RE = re.compile(r"^\s*from\s+copaw\.[\w.]+\s+import\s+", re.M)
 COPAW_TO_QWENPAW_IMPORT_RE = re.compile(
@@ -148,6 +157,8 @@ def compute_local_report() -> dict:
             non_thin_shared.append(rel)
 
     for rel in copaw_only:
+        if rel in ALLOWED_COPAW_ONLY_FILES:
+            continue
         if not rel.startswith(ALLOWED_COPAW_ONLY_PREFIXES):
             non_extension_copaw_only.append(rel)
 
@@ -187,6 +198,8 @@ def compute_ref_report(ref: str) -> dict | None:
             non_thin_shared.append(rel)
 
     for rel in copaw_only:
+        if rel in ALLOWED_COPAW_ONLY_FILES:
+            continue
         if not rel.startswith(ALLOWED_COPAW_ONLY_PREFIXES):
             non_extension_copaw_only.append(rel)
 

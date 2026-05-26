@@ -1764,7 +1764,7 @@ export function useProjectKnowledgeState(
     if (payload && (payload.active_mode === "nlp" || payload.active_mode === "agentic")) {
       return payload.active_mode;
     }
-    return "agentic";
+    return "fast";
   }, [syncState]);
 
   const allGraphQueryTopK = useMemo(() => Math.max(

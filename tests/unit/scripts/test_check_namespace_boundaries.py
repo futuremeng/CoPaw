@@ -41,3 +41,19 @@ def test_compute_local_report_has_expected_shape():
     }
     assert isinstance(report["reverse_imports"], list)
     assert isinstance(report["non_thin_shared"], list)
+
+
+def test_allowed_copaw_only_prefixes_includes_flow_engine():
+    mod = _load_module()
+    assert "app/flow_engine/" in mod.ALLOWED_COPAW_ONLY_PREFIXES
+
+
+def test_allowed_copaw_only_files_include_existing_knowledge_task_routers():
+    mod = _load_module()
+    assert "app/routers/knowledge_hanlp_tasks.py" in mod.ALLOWED_COPAW_ONLY_FILES
+    assert "app/routers/knowledge_siamese_tasks.py" in mod.ALLOWED_COPAW_ONLY_FILES
+
+
+def test_allowed_non_thin_shared_includes_copaw_app_overlay():
+    mod = _load_module()
+    assert "app/_app.py" in mod.ALLOWED_NON_THIN_SHARED

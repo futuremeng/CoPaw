@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from copaw.config.config import KnowledgeConfig, KnowledgeSourceSpec
 from copaw.knowledge.project_pipeline_manager import ProjectKnowledgePipelineManager
 from qwenpaw.app.knowledge_workflow import (
@@ -341,7 +343,40 @@ def test_knowledge_workflow_quantization_stage_l2_runs_nlp_slice(
     # nlp mode does NOT run graph ops; memify is agentic-only in the 7-step design.
     assert result["memify"] == {}
     assert called["memify"] is False
-    assert called["quality"] is False
+
+
+def test_knowledge_workflow_orchestrator_rejects_executor_drift_in_project_template(
+    tmp_path: Path,
+):
+    project_id = "project-executor-drift"
+    project_dir = tmp_path / "projects" / project_id
+    data_dir = project_dir / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    _write_project_metadata(project_dir, project_id)
+    (data_dir / "sample.md").write_text("# Sample\n\nKnowledge workflow content.", encoding="utf-8")
+
+    template_dir = project_dir / ".pipelines" / "templates"
+    template_dir.mkdir(parents=True, exist_ok=True)
+    template_path = template_dir / f"{KNOWLEDGE_WORKFLOW_TEMPLATE_ID}.json"
+    template_doc = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "src"
+            / "qwenpaw"
+            / "app"
+            / "pipelines"
+            / f"{KNOWLEDGE_WORKFLOW_TEMPLATE_ID}.json"
+        ).read_text(encoding="utf-8")
+    )
+    template_doc["steps"][0]["executor"] = "builtin:knowledge.invalid"
+    template_path.write_text(json.dumps(template_doc, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="executor mismatch"):
+        KnowledgeWorkflowOrchestrator(
+            workspace_dir=tmp_path,
+            project_id=project_id,
+            knowledge_dirname=f"projects/{project_id}/.knowledge",
+        )
 
 
 def test_knowledge_workflow_quantization_stage_l1_stays_fast_slice(

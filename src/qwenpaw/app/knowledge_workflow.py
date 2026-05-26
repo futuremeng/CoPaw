@@ -10,6 +10,7 @@ from typing import Any, Callable
 from fastapi import HTTPException
 
 from copaw.config.config import KnowledgeConfig
+from copaw.app.flow_engine import FlowDefinition, FlowStepDefinition
 from copaw.knowledge.graph_ops import GraphOpsManager
 from copaw.knowledge.manager import KnowledgeManager
 from copaw.knowledge.project_pipeline_manager import DEFAULT_PROJECT_PIPELINE_QUALITY_LOOP_ROUNDS
@@ -35,6 +36,7 @@ from .routers.agents_pipeline_core import (
     _persist_project_pipeline_run,
     _pipeline_now_iso,
 )
+from .flow_engine_runtime import get_flow_engine_service
 
 KNOWLEDGE_WORKFLOW_TEMPLATE_ID = "builtin-knowledge-processing-v1"
 KNOWLEDGE_WORKFLOW_TEMPLATE_NAME = "Knowledge Processing Workflow"
@@ -45,6 +47,15 @@ KNOWLEDGE_WORKFLOW_TEMPLATE_VERSION = "2.0.0"
 KNOWLEDGE_PROCESSING_MODES = {"fast", "nlp", "agentic"}
 _WORKFLOW_STEP_ORDER = tuple(KNOWLEDGE_WORKFLOW_STEP_IDS)
 _WORKFLOW_STEP_INDEX = {step_id: index for index, step_id in enumerate(_WORKFLOW_STEP_ORDER)}
+_BUILTIN_KNOWLEDGE_STEP_EXECUTORS = {
+    "snapshot_raw": "builtin:knowledge.snapshot_raw",
+    "build_chunks": "builtin:knowledge.build_chunks",
+    "build_interlinear": "builtin:knowledge.build_interlinear",
+    "tokenize": "builtin:knowledge.tokenize",
+    "pos_tagging": "builtin:knowledge.pos_tagging",
+    "syntax_parse": "builtin:knowledge.syntax_parse",
+    "semantic_role_labeling": "builtin:knowledge.semantic_role_labeling",
+}
 
 
 def _lane_overrides(
@@ -71,6 +82,31 @@ def _knowledge_workflow_steps() -> list[PipelineTemplateStep]:
     ]
 
 
+def _knowledge_workflow_steps_from_doc(doc: dict[str, Any]) -> list[PipelineTemplateStep]:
+    _fields = {f for f in PipelineTemplateStep.model_fields}
+    raw_steps = doc.get("steps") or []
+    if not isinstance(raw_steps, list):
+        return []
+    return [
+        PipelineTemplateStep(**{k: v for k, v in spec.items() if k in _fields})
+        for spec in raw_steps
+        if isinstance(spec, dict)
+    ]
+
+
+def _template_from_doc(doc: dict[str, Any]) -> PipelineTemplateInfo:
+    version = str(doc.get("version") or KNOWLEDGE_WORKFLOW_TEMPLATE_VERSION).strip()
+    description = str(doc.get("description") or "").strip()
+    name = str(doc.get("name") or KNOWLEDGE_WORKFLOW_TEMPLATE_NAME).strip() or KNOWLEDGE_WORKFLOW_TEMPLATE_NAME
+    return PipelineTemplateInfo(
+        id=KNOWLEDGE_WORKFLOW_TEMPLATE_ID,
+        name=name,
+        version=version,
+        description=description,
+        steps=_knowledge_workflow_steps_from_doc(doc),
+    )
+
+
 def get_knowledge_workflow_step_ids() -> tuple[str, ...]:
     return KNOWLEDGE_WORKFLOW_STEP_IDS
 
@@ -78,21 +114,70 @@ def get_knowledge_workflow_step_ids() -> tuple[str, ...]:
 def build_knowledge_workflow_template() -> PipelineTemplateInfo:
     try:
         doc = _load_builtin_pipeline_doc()
-        version = str(doc.get("version") or KNOWLEDGE_WORKFLOW_TEMPLATE_VERSION).strip()
-        description = str(doc.get("description") or "").strip()
+        return _template_from_doc(doc)
     except Exception:
-        version = KNOWLEDGE_WORKFLOW_TEMPLATE_VERSION
-        description = (
-            "Builtin project-scoped workflow for knowledge indexing, NLP enrichment, "
-            "and quality review."
+        return PipelineTemplateInfo(
+            id=KNOWLEDGE_WORKFLOW_TEMPLATE_ID,
+            name=KNOWLEDGE_WORKFLOW_TEMPLATE_NAME,
+            version=KNOWLEDGE_WORKFLOW_TEMPLATE_VERSION,
+            description=(
+                "Builtin project-scoped workflow for knowledge indexing, NLP enrichment, "
+                "and quality review."
+            ),
+            steps=_knowledge_workflow_steps(),
         )
-    return PipelineTemplateInfo(
-        id=KNOWLEDGE_WORKFLOW_TEMPLATE_ID,
-        name=KNOWLEDGE_WORKFLOW_TEMPLATE_NAME,
-        version=version,
-        description=description,
-        steps=_knowledge_workflow_steps(),
+
+
+def ensure_project_flow_run_bridge(
+    *,
+    agent_id: str,
+    project_id: str,
+    trigger: str,
+    processing_mode: str,
+    idempotency_key: str,
+) -> str:
+    """Create a mirrored flow-engine run for project knowledge pipeline control plane.
+
+    This is a best-effort bridge and does not replace existing project pipeline execution.
+    """
+    template = build_knowledge_workflow_template()
+    service = get_flow_engine_service()
+
+    flow_definition = FlowDefinition(
+        id=template.id,
+        name=template.name,
+        version=template.version,
+        description=template.description,
+        steps=[
+            FlowStepDefinition(
+                id=step.id,
+                name=step.name,
+                kind=step.kind,
+                executor=step.executor,
+                description=step.description,
+                depends_on=list(step.depends_on or []),
+                retry_policy=dict(step.retry_policy or {}),
+            )
+            for step in template.steps
+        ],
+        tags=["builtin", "knowledge", "project"],
+        system_owned=True,
     )
+    service.register_definition(flow_definition)
+
+    normalized_idempotency_key = (idempotency_key or "").strip()
+    if not normalized_idempotency_key:
+        normalized_idempotency_key = f"knowledge:{project_id}:{trigger}:{processing_mode}"
+
+    run = service.enqueue_run(
+        agent_id=(agent_id or "default").strip() or "default",
+        definition_id=flow_definition.id,
+        scope_kind="project",
+        scope_id=project_id,
+        priority=100,
+        idempotency_key=normalized_idempotency_key,
+    )
+    return run.id
 
 
 def ensure_knowledge_workflow_template(project_dir: Path) -> PipelineTemplateInfo:
@@ -115,6 +200,14 @@ def ensure_knowledge_workflow_template(project_dir: Path) -> PipelineTemplateInf
             json.dumps(source_doc, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
+    try:
+        project_doc = json.loads(template_path.read_text(encoding="utf-8"))
+        if isinstance(project_doc, dict):
+            project_template = _template_from_doc(project_doc)
+            if project_template.steps:
+                return project_template
+    except Exception:
+        pass
     return template
 
 
@@ -175,6 +268,7 @@ def _build_initial_run(
             name=step.name,
             kind=step.kind,
             description=step.description,
+            executor=step.executor,
             status="pending",
             metrics={},
             evidence=[],
@@ -274,6 +368,78 @@ class KnowledgeWorkflowOrchestrator:
             knowledge_dirname=knowledge_dirname,
         )
         self.template = ensure_knowledge_workflow_template(self.project_dir)
+        self._validate_template_executors()
+
+    def _validate_template_executors(self) -> None:
+        expected_step_ids = set(_WORKFLOW_STEP_ORDER)
+        seen_step_ids: set[str] = set()
+        for step in self.template.steps:
+            expected_executor = _BUILTIN_KNOWLEDGE_STEP_EXECUTORS.get(step.id)
+            actual_executor = str(step.executor or "").strip()
+            if expected_executor is None:
+                raise RuntimeError(f"Unsupported knowledge workflow step '{step.id}' in template")
+            if not actual_executor:
+                raise RuntimeError(f"Knowledge workflow step '{step.id}' is missing executor")
+            if actual_executor != expected_executor:
+                raise RuntimeError(
+                    f"Knowledge workflow step '{step.id}' executor mismatch: "
+                    f"expected '{expected_executor}', got '{actual_executor}'"
+                )
+            seen_step_ids.add(step.id)
+        missing_step_ids = [step_id for step_id in _WORKFLOW_STEP_ORDER if step_id not in seen_step_ids]
+        if missing_step_ids:
+            raise RuntimeError(
+                "Knowledge workflow template is missing required steps: "
+                + ", ".join(missing_step_ids)
+            )
+
+    def _dispatch_step_executor(
+        self,
+        step_id: str,
+        *,
+        source=None,
+        config=None,
+        running_config: Any | None = None,
+        changed_paths: list[str] | None = None,
+        index_path: Path | None = None,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
+        metrics: dict[str, Any] | None = None,
+        evidence: list[str] | None = None,
+        artifacts: list[str] | None = None,
+    ) -> Callable[[PipelineRunStep], dict[str, Any]]:
+        expected_executor = _BUILTIN_KNOWLEDGE_STEP_EXECUTORS[step_id]
+
+        def _runner(step: PipelineRunStep) -> dict[str, Any]:
+            actual_executor = str(step.executor or "").strip()
+            if actual_executor != expected_executor:
+                raise RuntimeError(
+                    f"Workflow run step '{step.id}' executor mismatch: "
+                    f"expected '{expected_executor}', got '{actual_executor}'"
+                )
+            if step_id == "snapshot_raw":
+                return self._execute_snapshot_raw(
+                    source=source,
+                    config=config,
+                    running_config=running_config,
+                    changed_paths=changed_paths or [],
+                    index_path=index_path or self.knowledge_manager._source_index_path(source.id),
+                )
+            if step_id == "tokenize":
+                return self._execute_tokenize(
+                    source=source,
+                    config=config,
+                    progress_callback=progress_callback,
+                )
+            if step_id == "semantic_role_labeling":
+                return self._execute_semantic_role_labeling()
+            return self._execute_passthrough(
+                step_id=step_id,
+                metrics=metrics or {},
+                evidence=evidence or [],
+                artifacts=artifacts or [],
+            )
+
+        return _runner
 
     def run(
         self,
@@ -381,7 +547,8 @@ class KnowledgeWorkflowOrchestrator:
                     agentic={"status": "running", "available": False, "progress": 20, "stage": "Building chunks"},
                 ),
             },
-            executor=lambda step: self._execute_snapshot_raw(
+            executor=self._dispatch_step_executor(
+                "snapshot_raw",
                 source=source,
                 config=config,
                 running_config=running_config,
@@ -426,8 +593,8 @@ class KnowledgeWorkflowOrchestrator:
                     agentic={"status": "running", "available": False, "progress": 28, "stage": "Building interlinear"},
                 ),
             },
-            executor=lambda step: self._execute_passthrough(
-                step_id="build_chunks",
+            executor=self._dispatch_step_executor(
+                "build_chunks",
                 metrics={
                     "chunk_count": int(index_result.get("chunk_count") or 0),
                     "document_count": int(index_result.get("document_count") or 0),
@@ -470,8 +637,8 @@ class KnowledgeWorkflowOrchestrator:
                     agentic={"status": "queued", "available": False, "stage": "Waiting for tokenize"},
                 ),
             },
-            executor=lambda step: self._execute_passthrough(
-                step_id="build_interlinear",
+            executor=self._dispatch_step_executor(
+                "build_interlinear",
                 metrics={
                     "tokenize_line_count": int(index_result.get("tokenize_line_count") or 0),
                     "sentence_count": int(index_result.get("sentence_count") or 0),
@@ -560,7 +727,8 @@ class KnowledgeWorkflowOrchestrator:
                     agentic={"status": "running", "available": False, "progress": 70, "stage": "Running POS tagging"},
                 ),
             },
-            executor=lambda step: self._execute_tokenize(
+            executor=self._dispatch_step_executor(
+                "tokenize",
                 source=source,
                 config=config,
                 progress_callback=_nlp_progress,
@@ -603,8 +771,8 @@ class KnowledgeWorkflowOrchestrator:
                     agentic={"status": "running", "available": False, "progress": 78, "stage": "Running syntax parse"},
                 ),
             },
-            executor=lambda step: self._execute_passthrough(
-                step_id="pos_tagging",
+            executor=self._dispatch_step_executor(
+                "pos_tagging",
                 metrics={
                     "pos_count": int(nlp_result.get("pos_count") or nlp_result.get("syntax_pos_count") or 0),
                     "pos_tag_type_count": int(nlp_result.get("pos_tag_type_count") or nlp_result.get("syntax_pos_tag_type_count") or 0),
@@ -650,8 +818,8 @@ class KnowledgeWorkflowOrchestrator:
                     agentic={"status": "running", "available": False, "progress": 86, "stage": "Semantic role labeling"},
                 ),
             },
-            executor=lambda step: self._execute_passthrough(
-                step_id="syntax_parse",
+            executor=self._dispatch_step_executor(
+                "syntax_parse",
                 metrics={
                     "syntax_relation_count": int(nlp_result.get("syntax_relation_count") or 0),
                     "syntax_sentence_count": int(nlp_result.get("syntax_sentence_count") or 0),
@@ -711,7 +879,7 @@ class KnowledgeWorkflowOrchestrator:
                     agentic={"status": "running", "available": False, "progress": 92, "stage": "Building knowledge graph"},
                 ),
             },
-            executor=lambda step: self._execute_semantic_role_labeling(),
+            executor=self._dispatch_step_executor("semantic_role_labeling"),
             )
 
         return self._finalize_run(

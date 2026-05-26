@@ -36,6 +36,13 @@ from copaw.knowledge.project_pipeline_manager import (
 )
 from ...knowledge.module_skills import sync_knowledge_module_skills
 from ..knowledge_workflow_steps import KNOWLEDGE_WORKFLOW_STEP_IDS
+from ..knowledge_workflow import ensure_project_flow_run_bridge
+from ..flow_engine_runtime import get_flow_engine_service
+from .knowledge_models import (
+    ProjectPipelineCommandResponse,
+    ProjectPipelineRunResponse,
+    ProjectPipelineStatusResponse,
+)
 from ..agent_context import (
     get_loaded_agent_for_request,
     resolve_agent_id_for_request,
@@ -81,17 +88,42 @@ def _record_project_pipeline_runtime_event(
     idempotency_key: str,
     deduplicated: bool,
     action: str,
+    flow_run_id: str = "",
+    control_command: str = "",
 ) -> None:
     key = _project_pipeline_runtime_key(workspace_dir, project_id)
+    existing_flow_run_id = ""
+    existing_control_command = ""
+    existing_control_updated_at = ""
+    with _PROJECT_PIPELINE_RUNTIME_LOCK:
+        existing_payload = _PROJECT_PIPELINE_RUNTIME_META.get(key) or {}
+        existing_flow_run_id = str(existing_payload.get("flow_run_id") or "")
+        existing_control_command = str(existing_payload.get("recent_control_command") or "")
+        existing_control_updated_at = str(existing_payload.get("control_updated_at") or "")
+    now_iso = datetime.now(timezone.utc).isoformat()
+    normalized_control_command = str(control_command or "").strip().lower()
     payload = {
         "operation_id": operation_id,
         "idempotency_key": idempotency_key,
         "deduplicated": bool(deduplicated),
         "last_action": action,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "flow_run_id": str(flow_run_id or existing_flow_run_id),
+        "recent_control_command": normalized_control_command or existing_control_command,
+        "control_updated_at": now_iso if normalized_control_command else existing_control_updated_at,
+        "updated_at": now_iso,
     }
     with _PROJECT_PIPELINE_RUNTIME_LOCK:
         _PROJECT_PIPELINE_RUNTIME_META[key] = payload
+
+
+def _get_project_pipeline_runtime_meta(
+    *,
+    workspace_dir: str | Path,
+    project_id: str,
+) -> dict[str, object]:
+    key = _project_pipeline_runtime_key(workspace_dir, project_id)
+    with _PROJECT_PIPELINE_RUNTIME_LOCK:
+        return dict(_PROJECT_PIPELINE_RUNTIME_META.get(key) or {})
 
 
 def _project_pipeline_state_with_runtime_meta(
@@ -100,9 +132,10 @@ def _project_pipeline_state_with_runtime_meta(
     project_id: str,
     state: dict[str, object],
 ) -> dict[str, object]:
-    key = _project_pipeline_runtime_key(workspace_dir, project_id)
-    with _PROJECT_PIPELINE_RUNTIME_LOCK:
-        runtime_meta = dict(_PROJECT_PIPELINE_RUNTIME_META.get(key) or {})
+    runtime_meta = _get_project_pipeline_runtime_meta(
+        workspace_dir=workspace_dir,
+        project_id=project_id,
+    )
     if not runtime_meta:
         return state
     merged = dict(state)
@@ -110,8 +143,130 @@ def _project_pipeline_state_with_runtime_meta(
     merged.setdefault("idempotency_key", runtime_meta.get("idempotency_key"))
     merged.setdefault("deduplicated", runtime_meta.get("deduplicated"))
     merged.setdefault("last_action", runtime_meta.get("last_action"))
+    merged.setdefault("flow_run_id", runtime_meta.get("flow_run_id"))
+    merged.setdefault("recent_control_command", runtime_meta.get("recent_control_command"))
+    merged.setdefault("control_updated_at", runtime_meta.get("control_updated_at"))
     merged.setdefault("operation_updated_at", runtime_meta.get("updated_at"))
     return merged
+
+
+def _map_project_pipeline_status_to_flow_target(status: str) -> str:
+    normalized = str(status or "").strip().lower()
+    if normalized in {"queued", "pending", "indexing", "graphifying", "running"}:
+        return "running"
+    if normalized in {"succeeded", "failed", "cancelled"}:
+        return normalized
+    return ""
+
+
+def _sync_project_pipeline_flow_state(
+    *,
+    agent_id: str,
+    project_id: str,
+    state: dict[str, object],
+) -> None:
+    flow_run_id = str(state.get("flow_run_id") or "").strip()
+    if not flow_run_id:
+        return
+
+    target = _map_project_pipeline_status_to_flow_target(str(state.get("status") or ""))
+    if not target:
+        return
+
+    try:
+        service = get_flow_engine_service()
+        current_run = service.get_run(agent_id=agent_id, run_id=flow_run_id)
+    except Exception:
+        return
+    if current_run is None:
+        return
+
+    current = str(getattr(current_run, "status", "") or "")
+    if current == target:
+        return
+
+    def _try_transition(next_status: str) -> None:
+        nonlocal current
+        try:
+            updated = service.transition_run(
+                agent_id=agent_id,
+                run_id=flow_run_id,
+                status=next_status,
+                payload={
+                    "project_id": project_id,
+                    "project_pipeline_status": str(state.get("status") or ""),
+                },
+            )
+            current = str(updated.status or "")
+        except Exception:
+            return
+
+    if target in {"succeeded", "failed", "cancelled"} and current in {"queued", "paused"}:
+        _try_transition("running")
+    if current != target:
+        _try_transition(target)
+
+
+def _sync_project_pipeline_flow_resume_command(
+    *,
+    agent_id: str,
+    project_id: str,
+    flow_run_id: str,
+    operation_id: str,
+    idempotency_key: str,
+    deduplicated: bool,
+) -> None:
+    normalized_flow_run_id = str(flow_run_id or "").strip()
+    if not normalized_flow_run_id:
+        return
+    try:
+        service = get_flow_engine_service()
+        current_run = service.get_run(agent_id=agent_id, run_id=normalized_flow_run_id)
+    except Exception:
+        return
+    if current_run is None:
+        return
+
+    payload = {
+        "project_id": project_id,
+        "operation_id": operation_id,
+        "idempotency_key": idempotency_key,
+        "deduplicated": bool(deduplicated),
+        "action": "resume_sync",
+    }
+    if not bool(deduplicated):
+        try:
+            service.request_command(
+                agent_id=agent_id,
+                run_id=normalized_flow_run_id,
+                command_type="resume_sync",
+                payload=payload,
+            )
+        except Exception:
+            pass
+
+    current_status = str(getattr(current_run, "status", "") or "")
+    if current_status == "paused":
+        try:
+            service.resume_run(
+                agent_id=agent_id,
+                run_id=normalized_flow_run_id,
+                payload=payload,
+            )
+            return
+        except Exception:
+            pass
+
+    if current_status == "queued":
+        try:
+            service.transition_run(
+                agent_id=agent_id,
+                run_id=normalized_flow_run_id,
+                status="running",
+                payload=payload,
+            )
+        except Exception:
+            pass
 
 
 def _task_sort_key(payload: dict[str, object]) -> tuple[int, str]:
@@ -1303,10 +1458,22 @@ async def query_knowledge_graph(
         raise HTTPException(status_code=400, detail="GRAPH_QUERY_MODE_INVALID")
 
     requested_output_mode = (output_mode or "").strip().lower()
-    fast_preview_only = query_mode == "template" and requested_output_mode == "fast"
+    graph_query_enabled = bool(
+        getattr(knowledge_config, "graph_query_enabled", False)
+    )
+    effective_output_mode = requested_output_mode or None
+    downgraded_to_fast = False
 
-    if not fast_preview_only and not bool(getattr(knowledge_config, "graph_query_enabled", False)):
-        raise HTTPException(status_code=400, detail="GRAPH_QUERY_DISABLED")
+    if not graph_query_enabled:
+        if query_mode == "template":
+            # Keep template queries available on cold-start projects by
+            # forcing fast preview mode when graph query is disabled.
+            effective_output_mode = "fast"
+            downgraded_to_fast = (
+                requested_output_mode not in {"", "fast"}
+            )
+        else:
+            raise HTTPException(status_code=400, detail="GRAPH_QUERY_DISABLED")
 
     if query_mode == "cypher" and not bool(getattr(knowledge_config, "allow_cypher_query", False)):
         raise HTTPException(status_code=400, detail="GRAPH_CYPHER_DISABLED")
@@ -1337,7 +1504,7 @@ async def query_knowledge_graph(
             scope_id=normalized_scope_id or None,
             top_k=top_k,
             timeout_sec=timeout_sec,
-            preferred_output_mode=requested_output_mode or None,
+            preferred_output_mode=effective_output_mode,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -1346,11 +1513,18 @@ async def query_knowledge_graph(
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
+    warnings = list(result.warnings or [])
+    provenance = dict(result.provenance or {})
+    if downgraded_to_fast:
+        warnings.append("AUTO_DOWNGRADED_TO_FAST")
+        provenance["requested_output_mode"] = requested_output_mode
+        provenance["effective_output_mode"] = effective_output_mode
+
     return {
         "records": result.records,
         "summary": result.summary,
-        "provenance": result.provenance,
-        "warnings": result.warnings,
+        "provenance": provenance,
+        "warnings": warnings,
     }
 
 
@@ -1584,10 +1758,11 @@ async def start_memify_job(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
-@router.get("/project-pipeline/status")
+@router.get("/project-pipeline/status", response_model=ProjectPipelineStatusResponse)
 async def get_project_pipeline_status(request: Request):
     """Get project-scoped automatic knowledge pipeline status."""
     config, knowledge_config, running_config, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    agent_id = resolve_agent_id_for_request(request)
     project_id = _resolve_project_id(request)
     if not project_id:
         raise HTTPException(status_code=400, detail="PROJECT_ID_REQUIRED")
@@ -1607,6 +1782,7 @@ async def get_project_pipeline_status(request: Request):
         project_id=project_id,
     )
     try:
+        resume_event = None
         resume_event = await asyncio.to_thread(
             coordinator.dispatch,
             ProjectPipelineCommand.resume(
@@ -1625,6 +1801,19 @@ async def get_project_pipeline_status(request: Request):
             deduplicated=bool(getattr(resume_event, "deduplicated", False)),
             action=str(getattr(resume_event, "action", "") or "resume_sync"),
         )
+
+        runtime_meta = _get_project_pipeline_runtime_meta(
+            workspace_dir=workspace_dir,
+            project_id=project_id,
+        )
+        _sync_project_pipeline_flow_resume_command(
+            agent_id=agent_id,
+            project_id=project_id,
+            flow_run_id=str(runtime_meta.get("flow_run_id") or ""),
+            operation_id=str(getattr(resume_event, "operation_id", "") or ""),
+            idempotency_key=str(getattr(resume_event, "idempotency_key", "") or ""),
+            deduplicated=bool(getattr(resume_event, "deduplicated", False)),
+        )
     except AttributeError:
         pass
 
@@ -1633,6 +1822,11 @@ async def get_project_pipeline_status(request: Request):
         workspace_dir=workspace_dir,
         project_id=project_id,
         state=dict(state),
+    )
+    _sync_project_pipeline_flow_state(
+        agent_id=agent_id,
+        project_id=project_id,
+        state=payload,
     )
     lanes = dict(payload.get("lanes") or {})
     lanes.setdefault("retrieval", {"mode": "fast"})
@@ -1646,7 +1840,7 @@ async def get_project_pipeline_status(request: Request):
     return payload
 
 
-@router.post("/project-pipeline/run")
+@router.post("/project-pipeline/run", response_model=ProjectPipelineRunResponse)
 async def run_project_pipeline(
     request: Request,
     trigger: str = Body(default="manual"),
@@ -1754,6 +1948,27 @@ async def run_project_pipeline(
                 idempotency_key=(idempotency_key or "").strip() or None,
             ),
         )
+
+        flow_run_id = ""
+        if bool(getattr(event, "deduplicated", False)):
+            runtime_meta = _get_project_pipeline_runtime_meta(
+                workspace_dir=workspace_dir,
+                project_id=project_id,
+            )
+            flow_run_id = str(runtime_meta.get("flow_run_id") or "")
+        if not flow_run_id:
+            try:
+                flow_run_id = await asyncio.to_thread(
+                    ensure_project_flow_run_bridge,
+                    agent_id=resolve_agent_id_for_request(request),
+                    project_id=project_id,
+                    trigger=(trigger or "manual").strip() or "manual",
+                    processing_mode=normalized_mode,
+                    idempotency_key=str(getattr(event, "idempotency_key", "") or ""),
+                )
+            except Exception:
+                flow_run_id = ""
+
         _record_project_pipeline_runtime_event(
             workspace_dir=workspace_dir,
             project_id=project_id,
@@ -1761,12 +1976,111 @@ async def run_project_pipeline(
             idempotency_key=event.idempotency_key,
             deduplicated=event.deduplicated,
             action=event.action,
+            flow_run_id=flow_run_id,
         )
-        return event.payload
+
+        payload = dict(getattr(event, "payload", {}) or {})
+        if flow_run_id:
+            payload["flow_run_id"] = flow_run_id
+            _sync_project_pipeline_flow_state(
+                agent_id=resolve_agent_id_for_request(request),
+                project_id=project_id,
+                state={
+                    "flow_run_id": flow_run_id,
+                    "status": str(payload.get("status") or payload.get("reason") or "pending"),
+                },
+            )
+        return payload
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.post("/project-pipeline/commands", response_model=ProjectPipelineCommandResponse)
+async def command_project_pipeline(
+    request: Request,
+    command_type: str = Body(default="pause"),
+    payload: dict[str, object] | None = Body(default=None),
+):
+    """Issue a control command (pause/resume/cancel) for the bridged flow run."""
+    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    agent_id = resolve_agent_id_for_request(request)
+    project_id = _resolve_project_id(request)
+    if not project_id:
+        raise HTTPException(status_code=400, detail="PROJECT_ID_REQUIRED")
+
+    normalized_command = str(command_type or "").strip().lower()
+    if normalized_command not in {"pause", "resume", "cancel"}:
+        raise HTTPException(status_code=400, detail="PROJECT_PIPELINE_COMMAND_INVALID")
+
+    runtime_meta = _get_project_pipeline_runtime_meta(
+        workspace_dir=workspace_dir,
+        project_id=project_id,
+    )
+    flow_run_id = str(runtime_meta.get("flow_run_id") or "").strip()
+    if not flow_run_id:
+        raise HTTPException(status_code=404, detail="PROJECT_PIPELINE_FLOW_RUN_NOT_FOUND")
+
+    flow_service = get_flow_engine_service()
+    command_payload = {
+        "project_id": project_id,
+        "source": "knowledge.project-pipeline.commands",
+        **dict(payload or {}),
+    }
+    try:
+        if normalized_command == "pause":
+            updated = flow_service.pause_run(
+                agent_id=agent_id,
+                run_id=flow_run_id,
+                payload=command_payload,
+            )
+        elif normalized_command == "resume":
+            updated = flow_service.resume_run(
+                agent_id=agent_id,
+                run_id=flow_run_id,
+                payload=command_payload,
+            )
+        else:
+            updated = flow_service.cancel_run(
+                agent_id=agent_id,
+                run_id=flow_run_id,
+                payload=command_payload,
+            )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    _record_project_pipeline_runtime_event(
+        workspace_dir=workspace_dir,
+        project_id=project_id,
+        operation_id=f"manual-flow-{normalized_command}:{project_id}",
+        idempotency_key=f"manual-flow-{normalized_command}:{flow_run_id}",
+        deduplicated=False,
+        action=f"flow_{normalized_command}",
+        flow_run_id=flow_run_id,
+        control_command=normalized_command,
+    )
+    updated_runtime_meta = _get_project_pipeline_runtime_meta(
+        workspace_dir=workspace_dir,
+        project_id=project_id,
+    )
+    return {
+        "project_id": project_id,
+        "flow_run_id": flow_run_id,
+        "command_type": normalized_command,
+        "run": updated.model_dump(mode="json"),
+        "runtime_meta": {
+            "operation_id": str(updated_runtime_meta.get("operation_id") or ""),
+            "idempotency_key": str(updated_runtime_meta.get("idempotency_key") or ""),
+            "last_action": str(updated_runtime_meta.get("last_action") or ""),
+            "recent_control_command": str(updated_runtime_meta.get("recent_control_command") or ""),
+            "control_updated_at": str(updated_runtime_meta.get("control_updated_at") or ""),
+            "flow_run_id": str(updated_runtime_meta.get("flow_run_id") or ""),
+            "deduplicated": bool(updated_runtime_meta.get("deduplicated", False)),
+        },
+    }
 
 
 @router.websocket("/history-backfill/progress/ws")

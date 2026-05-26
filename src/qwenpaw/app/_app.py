@@ -53,6 +53,7 @@ from .migration import (
     ensure_default_agent_exists,
     ensure_builtin_agents_exist,
 )
+from .flow_engine_runtime import get_flow_engine_service
 from .channels.registry import register_custom_channel_routes
 
 # Apply log level on load so reload child process gets same level as CLI.
@@ -286,6 +287,7 @@ async def lifespan(  # pylint: disable=too-many-statements,too-many-branches
     app.state.multi_agent_manager = multi_agent_manager
     app.state.provider_manager = provider_manager
     app.state.local_model_manager = local_model_manager
+    app.state.flow_engine_service = get_flow_engine_service()
     app.state.plugin_loader = None
     app.state.plugin_registry = None
 
