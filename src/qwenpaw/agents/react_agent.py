@@ -36,6 +36,7 @@ from .skill_system import (
     get_workspace_skills_dir,
     resolve_effective_skills,
 )
+from .coding_mode_mixin import CodingModeMixin
 from .tool_guard_mixin import ToolGuardMixin
 from .tools import (
     browser_use,
@@ -78,7 +79,7 @@ logger = logging.getLogger(__name__)
 NamesakeStrategy = Literal["override", "skip", "raise", "rename"]
 
 
-class QwenPawAgent(ToolGuardMixin, ReActAgent):
+class QwenPawAgent(CodingModeMixin, ToolGuardMixin, ReActAgent):
     """QwenPaw Agent with integrated tools, skills, and memory management.
 
     This agent extends ReActAgent with:
@@ -88,14 +89,13 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
     - Bootstrap guidance for first-time setup
     - System command handling (/compact, /new, etc.)
     - Tool-guard security interception (via ToolGuardMixin)
+    - Coding Mode features: Inline Diff (via CodingModeMixin)
 
     MRO note
     ~~~~~~~~
-    ``ToolGuardMixin`` overrides ``_acting`` and ``_reasoning`` via
-    Python's MRO: QwenPawAgent → ToolGuardMixin → ReActAgent.  If you
-    add a ``_acting`` or ``_reasoning`` override in this class, you
-    **must** call ``super()._acting(...)`` / ``super()._reasoning(...)``
-    so the guard interception remains active.
+    MRO: QwenPawAgent → CodingModeMixin → ToolGuardMixin → ReActAgent.
+    Each ``_acting`` override **must** call ``super()._acting(...)`` so
+    the full chain stays active.
     """
 
     def __init__(
@@ -231,7 +231,7 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
         # Register hooks
         self._register_hooks()
 
-    def _create_toolkit(
+    def _create_toolkit(  # pylint: disable=too-many-branches
         self,
         namesake_strategy: NamesakeStrategy = "skip",
         effective_skills: list[str] | None = None,
@@ -394,6 +394,17 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
                 logger.warning(
                     f"Failed to register task management tools: {e}",
                 )
+
+        # Coding Mode tools (lsp, ast_search) — only registered when
+        # coding_mode.enabled is True and the underlying CLI / language
+        # server is reachable.  See CodingModeMixin.
+        try:
+            self._register_coding_mode_tools(
+                toolkit,
+                namesake_strategy=namesake_strategy,
+            )
+        except Exception as e:  # pylint: disable=broad-except
+            logger.warning(f"Failed to register Coding Mode tools: {e}")
 
         return toolkit
 
@@ -1400,11 +1411,15 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
         from ..config.context import (
             set_current_workspace_dir,
             set_current_recent_max_bytes,
+            set_current_session_id,
             set_current_shell_command_timeout,
             set_current_shell_command_executable,
         )
 
         set_current_workspace_dir(self._workspace_dir)
+        set_current_session_id(
+            self._request_context.get("session_id") or None,
+        )
         light_ctx = self._agent_config.running.light_context_config
         pruning_config = light_ctx.tool_result_pruning_config
         set_current_recent_max_bytes(

@@ -28,6 +28,7 @@ import { userTimezoneApi } from "./modules/userTimezone";
 import { languageApi } from "./modules/language";
 import { backupApi } from "./modules/backup";
 import { consoleApi } from "./modules/console";
+import { accessControlApi } from "./modules/accessControl";
 
 export const api = {
   // Root
@@ -99,6 +100,9 @@ export const api = {
 
   // Console
   ...consoleApi,
+
+  // Access Control
+  ...accessControlApi,
 };
 
 export default api;

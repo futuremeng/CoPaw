@@ -214,6 +214,8 @@ class DingTalkChannel(BaseChannel):
         card_auto_layout: bool = False,
         at_sender_on_reply: bool = False,
         streaming_enabled: bool = False,
+        access_control_dm: bool = False,
+        access_control_group: bool = False,
     ):
         # Streaming only makes sense for card mode (AI Card streaming updates).
         # For markdown mode, force streaming_enabled=False so base class
@@ -241,6 +243,8 @@ class DingTalkChannel(BaseChannel):
             deny_message=deny_message,
             require_mention=require_mention,
             streaming_enabled=effective_streaming,
+            access_control_dm=access_control_dm,
+            access_control_group=access_control_group,
         )
         self.enabled = enabled
         self.client_id = client_id
@@ -402,6 +406,12 @@ class DingTalkChannel(BaseChannel):
             streaming_enabled=bool(
                 getattr(config, "streaming_enabled", False),
             ),
+            access_control_dm=bool(
+                getattr(config, "access_control_dm", False),
+            ),
+            access_control_group=bool(
+                getattr(config, "access_control_group", False),
+            ),
         )
 
     # ---------------------------
@@ -452,7 +462,13 @@ class DingTalkChannel(BaseChannel):
     def to_handle_from_target(self, *, user_id: str, session_id: str) -> str:
         # Key by session_id (short suffix of conversation_id) so cron can
         # use the same session_id to look up stored sessionWebhook.
-        return f"dingtalk:sw:{session_id}"
+        # For DM, prefix with user_id to avoid collision when different
+        # conversation_ids share the same suffix.
+        return (
+            f"dingtalk:sw:{user_id}_{session_id}"
+            if user_id
+            else f"dingtalk:sw:{session_id}"
+        )
 
     async def _before_consume_process(self, request: "AgentRequest") -> None:
         """Save session_webhook, send processing reaction, pre-create card."""
@@ -463,10 +479,17 @@ class DingTalkChannel(BaseChannel):
         if session_webhook:
             session_id = getattr(request, "session_id", None)
             if session_id:
-                webhook_key = self.to_handle_from_target(
-                    user_id=getattr(request, "user_id", None) or "",
-                    session_id=session_id,
-                )
+                conversation_type = meta.get("conversation_type")
+                # For DM, use user_id + suffix as key to avoid collision
+                # when different conversation_ids share the same suffix.
+                # For group, use suffix-only key (shared across users).
+                if conversation_type == "dm":
+                    webhook_key = self.to_handle_from_target(
+                        user_id=getattr(request, "user_id", None) or "",
+                        session_id=session_id,
+                    )
+                else:
+                    webhook_key = f"dingtalk:sw:{session_id}"
                 logger.info(
                     "dingtalk _before_consume_process: storing webhook "
                     "session_id=%s conversation_id=%s",
@@ -477,7 +500,7 @@ class DingTalkChannel(BaseChannel):
                     webhook_key,
                     session_webhook,
                     conversation_id=meta.get("conversation_id"),
-                    conversation_type=meta.get("conversation_type"),
+                    conversation_type=conversation_type,
                     sender_staff_id=meta.get("sender_staff_id"),
                 )
 
@@ -672,6 +695,14 @@ class DingTalkChannel(BaseChannel):
             return
         async with self._session_webhook_lock:
             raw = self._session_webhook_store.get(webhook_key)
+            # Fallback to suffix-only key
+            actual_key = webhook_key
+            if raw is None:
+                fallback_key = self._suffix_only_webhook_key(webhook_key)
+                if fallback_key:
+                    raw = self._session_webhook_store.get(fallback_key)
+                    if raw is not None:
+                        actual_key = fallback_key
             if raw is None:
                 return
             entry = raw if isinstance(raw, dict) else {"webhook": raw}
@@ -680,10 +711,10 @@ class DingTalkChannel(BaseChannel):
             logger.info(
                 "dingtalk _invalidate_session_webhook: "
                 "clearing webhook for key=%s",
-                webhook_key,
+                actual_key,
             )
             entry["webhook"] = ""
-            self._session_webhook_store[webhook_key] = entry
+            self._session_webhook_store[actual_key] = entry
             self._save_session_webhook_store_to_disk()
 
     async def _load_session_webhook(self, webhook_key: str) -> Optional[str]:
@@ -695,6 +726,26 @@ class DingTalkChannel(BaseChannel):
             return entry.get("webhook")
         return None
 
+    @staticmethod
+    def _suffix_only_webhook_key(webhook_key: str) -> Optional[str]:
+        """Extract suffix-only fallback key from a user-prefixed key.
+
+        e.g. "dingtalk:sw:user123_tru1C1k=" -> "dingtalk:sw:tru1C1k="
+        Returns None if the key has no user prefix (already suffix-only).
+        """
+        prefix = "dingtalk:sw:"
+        if not webhook_key.startswith(prefix):
+            return None
+        ident = webhook_key[len(prefix) :]
+        # If ident contains '_', it might be user_id + suffix
+        underscore_idx = ident.rfind("_")
+        if underscore_idx < 0:
+            return None  # Already suffix-only
+        suffix = ident[underscore_idx + 1 :]
+        if not suffix:
+            return None
+        return f"{prefix}{suffix}"
+
     async def _load_session_webhook_entry(
         self,
         webhook_key: str,
@@ -702,6 +753,8 @@ class DingTalkChannel(BaseChannel):
         """Load the full webhook entry dict from store (memory then disk).
 
         Returns None if not found or if the webhook is expired.
+        Falls back to suffix-only key for backward compatibility with
+        old DM entries and group chat entries.
         """
         if not webhook_key:
             return None
@@ -713,6 +766,14 @@ class DingTalkChannel(BaseChannel):
                 self._load_session_webhook_store_from_disk()
                 raw = self._session_webhook_store.get(webhook_key)
                 source = "disk"
+
+            # Fallback: try suffix-only key (old DM data / group chat)
+            if raw is None:
+                fallback_key = self._suffix_only_webhook_key(webhook_key)
+                if fallback_key:
+                    raw = self._session_webhook_store.get(fallback_key)
+                    if raw is not None:
+                        source = f"fallback({fallback_key})"
 
             if raw is not None:
                 entry = raw if isinstance(raw, dict) else {"webhook": raw}
@@ -1020,6 +1081,11 @@ class DingTalkChannel(BaseChannel):
                 if raw is None:
                     self._load_session_webhook_store_from_disk()
                     raw = self._session_webhook_store.get(webhook_key)
+                # Fallback to suffix-only key
+                if raw is None:
+                    fallback_key = self._suffix_only_webhook_key(webhook_key)
+                    if fallback_key:
+                        raw = self._session_webhook_store.get(fallback_key)
                 if raw is not None:
                     webhook_entry = (
                         raw if isinstance(raw, dict) else {"webhook": raw}
@@ -2516,7 +2582,6 @@ class DingTalkChannel(BaseChannel):
             bot_prefix=self.bot_prefix,
             download_url_fetcher=self._fetch_and_download_media,
             try_accept_message=self._try_accept_message,
-            check_allowlist=self._check_allowlist,
             require_mention=self.require_mention,
         )
         self._client.register_callback_handler(

@@ -416,7 +416,7 @@ async def get_chat(
 
     memory = restore_in_memory_memory(memories)
 
-    memories = await memory.get_memory(prepend_summary=False)
+    memories = await memory.get_memory(prepend_summary=True)
     messages = agentscope_msg_to_message(memories)
     messages = _truncate_chat_history_messages(messages)
     messages = _compact_chat_history_messages(messages)
