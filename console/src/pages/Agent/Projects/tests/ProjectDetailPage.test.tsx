@@ -647,6 +647,58 @@ describe("ProjectDetailPage refresh scheduling", () => {
     }
   });
 
+  it("retries a transient first-open file load failure before surfacing an error", async () => {
+    mockedQueryProjectFiles
+      .mockRejectedValueOnce(new Error("bootstrap not ready"))
+      .mockResolvedValueOnce({
+        items: [
+          {
+            filename: "guide.md",
+            path: "original/guide.md",
+            size: 128,
+            modified_time: "2026-04-29T00:00:00Z",
+            stage: "original",
+            content_type: "markdown",
+            builtin: false,
+            ignored: false,
+          },
+        ],
+        summary: {
+          total_matched: 1,
+          offset: 0,
+          limit: 5000,
+          returned: 1,
+          builtin_count: 0,
+          ignored_count: 0,
+          stage_counts: { original: 1, intermediate: 0, artifact: 0, builtin: 0, other: 0 },
+          content_type_counts: { markdown: 1, text: 0, script: 0, other: 0 },
+        },
+        query_meta: {
+          search: "",
+          path_prefix: "",
+          stages: [],
+          content_types: [],
+          include_builtin: null,
+          include_ignored: false,
+          sort_by: "path",
+          sort_order: "asc",
+        },
+      });
+
+    const view = renderPage();
+    try {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 500);
+      });
+
+      expect(mockedQueryProjectFiles.mock.calls.length).toBeGreaterThanOrEqual(2);
+      expect(mockedQueryProjectFiles.mock.calls[0]?.[1]).toBe("proj-1");
+      expect(mockedMessageError).not.toHaveBeenCalledWith("projects.loadFilesFailed");
+    } finally {
+      view.unmount();
+    }
+  });
+
   it("surfaces degraded realtime status only through the knowledge health panel", async () => {
     realtimeControllerState.status = "degraded";
     realtimeControllerState.reconnectAttempt = 3;

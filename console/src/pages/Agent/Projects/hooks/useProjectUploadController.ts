@@ -3,7 +3,10 @@ import { message } from "antd";
 import { useTranslation } from "react-i18next";
 import { agentsApi } from "../../../../api/modules/agents";
 import type { AgentProjectSummary, AgentSummary } from "../../../../api/types/agents";
-import { buildProjectIdCandidates } from "../utils/projectIdUtils";
+import {
+  buildProjectRequestCandidates,
+  resolveProjectRequestCandidate,
+} from "../utils/projectRequestResolver";
 
 interface UseProjectUploadControllerParams {
   currentAgent?: AgentSummary;
@@ -41,34 +44,28 @@ export default function useProjectUploadController({
     }
 
     setUploadingFiles(true);
-    const projectIds = [resolvedProjectRequestId, ...buildProjectIdCandidates(selectedProject)]
-      .map((item) => item.trim())
-      .filter(Boolean);
-    const uniqueProjectIds = Array.from(new Set(projectIds));
+    let preferredProjectRequestId = resolvedProjectRequestId;
 
     try {
       let uploadedCount = 0;
       for (const file of pendingUploads) {
-        let uploaded = false;
-        for (const projectRequestId of uniqueProjectIds) {
-          try {
+        const resolved = await resolveProjectRequestCandidate({
+          projectRequestIds: buildProjectRequestCandidates(selectedProject, {
+            preferredProjectRequestId,
+          }),
+          loader: async (projectRequestId) => {
             await agentsApi.uploadProjectFile(
               currentAgent.id,
               projectRequestId,
               file,
               uploadTargetDir,
             );
-            setResolvedProjectRequestId(projectRequestId);
-            uploaded = true;
-            uploadedCount += 1;
-            break;
-          } catch {
-            // Try next id candidate.
-          }
-        }
-        if (!uploaded) {
-          throw new Error(`upload_failed:${file.name}`);
-        }
+            return undefined;
+          },
+        });
+        preferredProjectRequestId = resolved.projectRequestId;
+        setResolvedProjectRequestId(resolved.projectRequestId);
+        uploadedCount += 1;
       }
 
       await onUploadCompleted(currentAgent.id, selectedProject);

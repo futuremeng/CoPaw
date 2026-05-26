@@ -44,6 +44,7 @@ import ProjectEvidencePanel from "./components/ProjectEvidencePanel";
 import useArtifactSelectionGuards from "./hooks/useArtifactSelectionGuards";
 import useProjectChatEnsureController from "./hooks/useProjectChatEnsureController";
 import useProjectChatFocusEffects from "./hooks/useProjectChatFocusEffects";
+import useProjectDetailBootstrap from "./hooks/useProjectDetailBootstrap";
 import usePreferredProjectWorkspaceChat from "./hooks/usePreferredProjectWorkspaceChat";
 import useProjectDesignChatController from "./hooks/useProjectDesignChatController";
 import useLeaveConfirmGuard from "./hooks/useLeaveConfirmGuard";
@@ -72,6 +73,10 @@ import {
   buildProjectIdCandidates,
   matchesRouteProject,
 } from "./utils/projectIdUtils";
+import {
+  buildProjectRequestCandidates,
+  resolveProjectRequestCandidate,
+} from "./utils/projectRequestResolver";
 import {
   buildProjectLayoutStorageKey,
   type KnowledgeDockTabKey,
@@ -1508,7 +1513,7 @@ export default function ProjectDetailPage() {
     agentId: string,
     project: AgentProjectSummary,
     options?: { preserveSelection?: boolean },
-  ) => {
+  ): Promise<string> => {
     setFilesLoading(true);
     const preserveSelection = Boolean(options?.preserveSelection);
     const previousSelection = preserveSelection ? selectedFilePath : "";
@@ -1516,58 +1521,58 @@ export default function ProjectDetailPage() {
       setSelectedFilePath("");
       setFileContent("");
     }
-    const projectIds = buildProjectIdCandidates(project);
-    let loaded = false;
+    const projectIds = buildProjectRequestCandidates(project, {
+      preferredProjectRequestId: resolvedProjectRequestId,
+      routeProjectId,
+    });
     try {
-      for (const projectRequestId of projectIds) {
-        try {
-          const queryResponse = await agentsApi.queryProjectFiles(
-            agentId,
-            projectRequestId,
-            projectFilesQueryBody,
-          );
-          const filteredFiles = queryResponse.items
-            .map((item) => ({
-              filename: item.filename,
-              path: item.path,
-              size: item.size,
-              modified_time: item.modified_time,
-              stage: item.stage,
-              content_type: item.content_type,
-              builtin: item.builtin,
-              ignored: item.ignored,
-            }));
-          setProjectFiles(filteredFiles);
-          setProjectFilesQuerySummary(queryResponse.summary || null);
-          // Keep a superset cache so selection does not get invalidated by transient file-tree filters.
-          setKnownProjectFilesByPath((prev) => ({
-            ...prev,
-            ...buildProjectFilesByPath(filteredFiles),
-          }));
-          setResolvedProjectRequestId(projectRequestId);
-          const preservedFile = previousSelection
-            ? filteredFiles.find((item) => item.path === previousSelection)
-            : undefined;
-          const rootLevelDefaultFile = filteredFiles.find((item) => (
-            !item.path.includes("/") && isPreviewablePath(item.path)
-          ));
-          const defaultFile = filteredFiles.find((item) =>
-            isPreviewablePath(item.path),
-          );
-          const nextSelectedPath = preservedFile?.path || rootLevelDefaultFile?.path || defaultFile?.path || "";
-          if (nextSelectedPath) {
-            setSelectedFilePath(nextSelectedPath);
-          }
-          loaded = true;
-          break;
-        } catch {
-          // Try next id candidate.
-        }
+      const resolved = await resolveProjectRequestCandidate({
+        projectRequestIds: projectIds,
+        retryCount: 1,
+        retryDelayMs: 300,
+        loader: async (projectRequestId) => agentsApi.queryProjectFiles(
+          agentId,
+          projectRequestId,
+          projectFilesQueryBody,
+        ),
+      });
+      const queryResponse = resolved.value;
+      const filteredFiles = queryResponse.items
+        .map((item) => ({
+          filename: item.filename,
+          path: item.path,
+          size: item.size,
+          modified_time: item.modified_time,
+          stage: item.stage,
+          content_type: item.content_type,
+          builtin: item.builtin,
+          ignored: item.ignored,
+        }));
+      setProjectFiles(filteredFiles);
+      setProjectFilesQuerySummary(queryResponse.summary || null);
+      // Keep a superset cache so selection does not get invalidated by transient file-tree filters.
+      setKnownProjectFilesByPath((prev) => ({
+        ...prev,
+        ...buildProjectFilesByPath(filteredFiles),
+      }));
+      setResolvedProjectRequestId(resolved.projectRequestId);
+      const preservedFile = previousSelection
+        ? filteredFiles.find((item) => item.path === previousSelection)
+        : undefined;
+      const rootLevelDefaultFile = filteredFiles.find((item) => (
+        !item.path.includes("/") && isPreviewablePath(item.path)
+      ));
+      const defaultFile = filteredFiles.find((item) =>
+        isPreviewablePath(item.path),
+      );
+      const nextSelectedPath = preservedFile?.path || rootLevelDefaultFile?.path || defaultFile?.path || "";
+      if (nextSelectedPath) {
+        setSelectedFilePath(nextSelectedPath);
       }
-
-      if (!loaded) {
-        throw new Error("project_files_not_found");
-      }
+      setError((prev) => (
+        prev === t("projects.loadFilesFailed") ? "" : prev
+      ));
+      return resolved.projectRequestId;
     } catch (err) {
       console.error("failed to load project files", err);
       setProjectFiles([]);
@@ -1575,71 +1580,65 @@ export default function ProjectDetailPage() {
       setError(
         t("projects.loadFilesFailed"),
       );
+      return "";
     } finally {
       setFilesLoading(false);
     }
-  }, [projectFilesQueryBody, selectedFilePath, t]);
+  }, [projectFilesQueryBody, resolvedProjectRequestId, routeProjectId, selectedFilePath, t]);
 
   const loadProjectTreeDirectory = useCallback(async (
     agentId: string,
     project: AgentProjectSummary,
     dirPath = "",
+    preferredProjectRequestId = "",
   ): Promise<AgentProjectFileTreeNode[]> => {
-    const projectIds = [resolvedProjectRequestId, ...buildProjectIdCandidates(project)]
-      .map((item) => item.trim())
-      .filter(Boolean);
-    const uniqueProjectIds = Array.from(new Set(projectIds));
+    const projectIds = buildProjectRequestCandidates(project, {
+      preferredProjectRequestId: preferredProjectRequestId || resolvedProjectRequestId,
+      routeProjectId,
+    });
 
-    for (const projectRequestId of uniqueProjectIds) {
-      try {
-        const nodes = await agentsApi.listProjectFileTree(
-          agentId,
-          projectRequestId,
-          dirPath,
-        );
-        const visibleNodes = nodes.filter((item) => !isIgnoredProjectFile(item.path));
-        setKnownProjectFilesByPath((prev) => mergeProjectTreeNodesByPath(prev, visibleNodes));
-        setResolvedProjectRequestId(projectRequestId);
-        return visibleNodes;
-      } catch {
-        // Try next candidate id.
-      }
-    }
-
-    throw new Error("project_file_tree_not_found");
-  }, [resolvedProjectRequestId]);
+    const resolved = await resolveProjectRequestCandidate({
+      projectRequestIds: projectIds,
+      loader: async (projectRequestId) => agentsApi.listProjectFileTree(
+        agentId,
+        projectRequestId,
+        dirPath,
+      ),
+    });
+    const visibleNodes = resolved.value.filter((item) => !isIgnoredProjectFile(item.path));
+    setKnownProjectFilesByPath((prev) => mergeProjectTreeNodesByPath(prev, visibleNodes));
+    setResolvedProjectRequestId(resolved.projectRequestId);
+    return visibleNodes;
+  }, [resolvedProjectRequestId, routeProjectId]);
 
   const loadProjectFileSummary = useCallback(async (
     agentId: string,
     project: AgentProjectSummary,
+    preferredProjectRequestId = "",
   ) => {
-    const projectIds = [resolvedProjectRequestId, ...buildProjectIdCandidates(project)]
-      .map((item) => item.trim())
-      .filter(Boolean);
-    const uniqueProjectIds = Array.from(new Set(projectIds));
+    const projectIds = buildProjectRequestCandidates(project, {
+      preferredProjectRequestId: preferredProjectRequestId || resolvedProjectRequestId,
+      routeProjectId,
+    });
 
-    for (const projectRequestId of uniqueProjectIds) {
-      try {
-        const summary = await agentsApi.getProjectFileSummary(agentId, projectRequestId);
-        setProjectFileSummary(summary);
-        setLatestUpdatedFilePath((prev) => pickLatestRecentUpdatePath(summary) || prev || "");
-        setResolvedProjectRequestId(projectRequestId);
-        return summary;
-      } catch {
-        // Try next candidate id.
-      }
-    }
-
-    throw new Error("project_file_summary_not_found");
-  }, [resolvedProjectRequestId]);
+    const resolved = await resolveProjectRequestCandidate({
+      projectRequestIds: projectIds,
+      loader: async (projectRequestId) => agentsApi.getProjectFileSummary(agentId, projectRequestId),
+    });
+    setProjectFileSummary(resolved.value);
+    setLatestUpdatedFilePath((prev) => pickLatestRecentUpdatePath(resolved.value) || prev || "");
+    setResolvedProjectRequestId(resolved.projectRequestId);
+    return resolved.value;
+  }, [resolvedProjectRequestId, routeProjectId]);
 
   const loadProjectTreeRoot = useCallback(async (
     agentId: string,
     project: AgentProjectSummary,
+    preferredProjectRequestId = "",
   ) => {
     setProjectTreeLoading(true);
     try {
-      const nodes = await loadProjectTreeDirectory(agentId, project, "");
+      const nodes = await loadProjectTreeDirectory(agentId, project, "", preferredProjectRequestId);
       setProjectTreeNodes(nodes);
 
       if (!selectedFilePath) {
@@ -1659,25 +1658,16 @@ export default function ProjectDetailPage() {
     }
   }, [loadProjectTreeDirectory, selectedFilePath]);
 
-  const handleRefreshProjectFiles = useCallback(async () => {
-    if (!currentAgent || !selectedProject) {
-      return;
-    }
-
-    const agentId = currentAgent.id;
-    const project = selectedProject;
-    await Promise.allSettled([
-      loadProjectFiles(agentId, project, { preserveSelection: true }),
-      loadProjectTreeRoot(agentId, project),
-      loadProjectFileSummary(agentId, project),
-    ]);
-  }, [
+  const {
+    bootstrapProjectDetailData,
+    handleRefreshProjectFiles,
+  } = useProjectDetailBootstrap({
     currentAgent,
-    loadProjectFileSummary,
+    selectedProject,
     loadProjectFiles,
     loadProjectTreeRoot,
-    selectedProject,
-  ]);
+    loadProjectFileSummary,
+  });
 
   const {
     uploadModalOpen,
@@ -1754,30 +1744,20 @@ export default function ProjectDetailPage() {
   ) => {
     setContentLoading(true);
     setFileContent("");
-    const projectIds = [resolvedProjectRequestId, ...buildProjectIdCandidates(project)]
-      .map((item) => item.trim())
-      .filter(Boolean);
-    const uniqueProjectIds = Array.from(new Set(projectIds));
     try {
-      let loaded = false;
-      for (const projectRequestId of uniqueProjectIds) {
-        try {
-          const data = await agentsApi.readProjectFile(
-            agentId,
-            projectRequestId,
-            filePath,
-          );
-          setFileContent(data.content);
-          setResolvedProjectRequestId(projectRequestId);
-          loaded = true;
-          break;
-        } catch {
-          // Try next id candidate.
-        }
-      }
-      if (!loaded) {
-        throw new Error("project_file_content_not_found");
-      }
+      const resolved = await resolveProjectRequestCandidate({
+        projectRequestIds: buildProjectRequestCandidates(project, {
+          preferredProjectRequestId: resolvedProjectRequestId,
+          routeProjectId,
+        }),
+        loader: async (projectRequestId) => agentsApi.readProjectFile(
+          agentId,
+          projectRequestId,
+          filePath,
+        ),
+      });
+      setFileContent(resolved.value.content);
+      setResolvedProjectRequestId(resolved.projectRequestId);
     } catch (err) {
       console.error("failed to load project file content", err);
       setFileContent(
@@ -1789,70 +1769,53 @@ export default function ProjectDetailPage() {
     } finally {
       setContentLoading(false);
     }
-  }, [resolvedProjectRequestId, t]);
+  }, [resolvedProjectRequestId, routeProjectId, t]);
 
   const fetchProjectFileSnippet = useCallback(async (
     agentId: string,
     project: AgentProjectSummary,
     filePath: string,
   ): Promise<string> => {
-    const projectIds = [resolvedProjectRequestId, ...buildProjectIdCandidates(project)]
-      .map((item) => item.trim())
-      .filter(Boolean);
-    const uniqueProjectIds = Array.from(new Set(projectIds));
-
-    for (const projectRequestId of uniqueProjectIds) {
-      try {
-        const data = await agentsApi.readProjectFile(
-          agentId,
-          projectRequestId,
-          filePath,
-        );
-        setResolvedProjectRequestId(projectRequestId);
-        const normalized = (data.content || "")
-          .replace(/\r\n/g, "\n")
-          .replace(/\n{3,}/g, "\n\n")
-          .trim();
-        return normalized.slice(0, 1200);
-      } catch {
-        // Try next candidate id.
-      }
-    }
-
-    throw new Error("project_file_content_not_found");
-  }, [resolvedProjectRequestId]);
+    const resolved = await resolveProjectRequestCandidate({
+      projectRequestIds: buildProjectRequestCandidates(project, {
+        preferredProjectRequestId: resolvedProjectRequestId,
+        routeProjectId,
+      }),
+      loader: async (projectRequestId) => agentsApi.readProjectFile(
+        agentId,
+        projectRequestId,
+        filePath,
+      ),
+    });
+    setResolvedProjectRequestId(resolved.projectRequestId);
+    return (resolved.value.content || "")
+      .replace(/\r\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim()
+      .slice(0, 1200);
+  }, [resolvedProjectRequestId, routeProjectId]);
 
   const loadRunDetail = useCallback(async (
     agentId: string,
     project: AgentProjectSummary,
     runId: string,
   ) => {
-    const projectIds = [resolvedProjectRequestId, ...buildProjectIdCandidates(project)]
-      .map((item) => item.trim())
-      .filter(Boolean);
-    const uniqueProjectIds = Array.from(new Set(projectIds));
     try {
-      let loaded = false;
-      for (const projectRequestId of uniqueProjectIds) {
-        try {
-          const detail = await agentsApi.getProjectPipelineRun(
-            agentId,
-            projectRequestId,
-            runId,
-          );
-          setRunDetail(detail);
-          setResolvedProjectRequestId(projectRequestId);
-          if (detail.artifacts.length > 0) {
-            setSelectedFilePath((prev) => prev || detail.artifacts[0]);
-          }
-          loaded = true;
-          break;
-        } catch {
-          // Try next id candidate.
-        }
-      }
-      if (!loaded) {
-        throw new Error("project_run_not_found");
+      const resolved = await resolveProjectRequestCandidate({
+        projectRequestIds: buildProjectRequestCandidates(project, {
+          preferredProjectRequestId: resolvedProjectRequestId,
+          routeProjectId,
+        }),
+        loader: async (projectRequestId) => agentsApi.getProjectPipelineRun(
+          agentId,
+          projectRequestId,
+          runId,
+        ),
+      });
+      setRunDetail(resolved.value);
+      setResolvedProjectRequestId(resolved.projectRequestId);
+      if (resolved.value.artifacts.length > 0) {
+        setSelectedFilePath((prev) => prev || resolved.value.artifacts[0]);
       }
     } catch (err) {
       console.error("failed to load pipeline run detail", err);
@@ -1861,39 +1824,26 @@ export default function ProjectDetailPage() {
         t("projects.pipeline.loadRunFailed"),
       );
     }
-  }, [resolvedProjectRequestId, t]);
+  }, [resolvedProjectRequestId, routeProjectId, t]);
 
   const loadPipelineContext = useCallback(async (
     agentId: string,
     project: AgentProjectSummary,
   ) => {
     setPipelineLoading(true);
-    const projectIds = buildProjectIdCandidates(project);
     try {
-      let templates: ProjectPipelineTemplateInfo[] = [];
-      let runs: ProjectPipelineRunSummary[] = [];
-      let loaded = false;
-
-      for (const projectRequestId of projectIds) {
-        try {
-          const [templateData, runData] = await Promise.all([
-            agentsApi.listProjectPipelineTemplates(agentId, projectRequestId),
-            agentsApi.listProjectPipelineRuns(agentId, projectRequestId),
-          ]);
-          templates = templateData;
-          runs = runData;
-          setResolvedProjectRequestId(projectRequestId);
-          loaded = true;
-          break;
-        } catch {
-          // Try next id candidate.
-        }
-      }
-
-      if (!loaded) {
-        throw new Error("project_pipeline_context_not_found");
-      }
-
+      const resolved = await resolveProjectRequestCandidate({
+        projectRequestIds: buildProjectRequestCandidates(project, {
+          preferredProjectRequestId: resolvedProjectRequestId,
+          routeProjectId,
+        }),
+        loader: async (projectRequestId) => Promise.all([
+          agentsApi.listProjectPipelineTemplates(agentId, projectRequestId),
+          agentsApi.listProjectPipelineRuns(agentId, projectRequestId),
+        ]),
+      });
+      const [templates, runs] = resolved.value;
+      setResolvedProjectRequestId(resolved.projectRequestId);
       setError("");
       setPipelineTemplates(templates);
       setPipelineRuns(runs);
@@ -1925,7 +1875,7 @@ export default function ProjectDetailPage() {
     } finally {
       setPipelineLoading(false);
     }
-  }, [t]);
+  }, [resolvedProjectRequestId, routeProjectId, t]);
 
   const handleRealtimeFileTreeInvalidated = useCallback((payload?: {
     changedPaths: string[];
@@ -1979,39 +1929,23 @@ export default function ProjectDetailPage() {
     }
 
     setImportLoading(true);
-    const projectIds = [resolvedProjectRequestId, ...buildProjectIdCandidates(selectedProject)]
-      .map((item) => item.trim())
-      .filter(Boolean);
-    const uniqueProjectIds = Array.from(new Set(projectIds));
 
     try {
-      let importedTemplateId = "";
-      let imported = false;
-
-      for (const projectRequestId of uniqueProjectIds) {
-        try {
-          const result = await agentsApi.importPlatformTemplateIntoProject(
-            currentAgent.id,
-            projectRequestId,
-            { platform_template_id: selectedPlatformTemplateId },
-          );
-          setResolvedProjectRequestId(projectRequestId);
-          importedTemplateId = result.id;
-          imported = true;
-          break;
-        } catch {
-          // Try next candidate id.
-        }
-      }
-
-      if (!imported) {
-        throw new Error("import_platform_template_failed");
-      }
+      const resolved = await resolveProjectRequestCandidate({
+        projectRequestIds: buildProjectRequestCandidates(selectedProject, {
+          preferredProjectRequestId: resolvedProjectRequestId,
+          routeProjectId,
+        }),
+        loader: async (projectRequestId) => agentsApi.importPlatformTemplateIntoProject(
+          currentAgent.id,
+          projectRequestId,
+          { platform_template_id: selectedPlatformTemplateId },
+        ),
+      });
+      setResolvedProjectRequestId(resolved.projectRequestId);
 
       await loadPipelineContext(currentAgent.id, selectedProject);
-      if (importedTemplateId) {
-        setSelectedTemplateId(importedTemplateId);
-      }
+      setSelectedTemplateId(resolved.value.id);
       setImportModalOpen(false);
       message.success(
         t("projects.pipeline.importGlobalSuccess"),
@@ -2030,6 +1964,7 @@ export default function ProjectDetailPage() {
     resolvedProjectRequestId,
     selectedPlatformTemplateId,
     selectedProject,
+    routeProjectId,
     t,
   ]);
 
@@ -2038,29 +1973,25 @@ export default function ProjectDetailPage() {
     project: AgentProjectSummary,
     runId: string,
   ) => {
-    const projectIds = [resolvedProjectRequestId, ...buildProjectIdCandidates(project)]
-      .map((item) => item.trim())
-      .filter(Boolean);
-    const uniqueProjectIds = Array.from(new Set(projectIds));
     try {
-      for (const projectRequestId of uniqueProjectIds) {
-        try {
-          const [runs, detail] = await Promise.all([
-            agentsApi.listProjectPipelineRuns(agentId, projectRequestId),
-            agentsApi.getProjectPipelineRun(agentId, projectRequestId, runId),
-          ]);
-          setPipelineRuns(runs);
-          setRunDetail(detail);
-          setResolvedProjectRequestId(projectRequestId);
-          return;
-        } catch {
-          // Try next id candidate.
-        }
-      }
+      const resolved = await resolveProjectRequestCandidate({
+        projectRequestIds: buildProjectRequestCandidates(project, {
+          preferredProjectRequestId: resolvedProjectRequestId,
+          routeProjectId,
+        }),
+        loader: async (projectRequestId) => Promise.all([
+          agentsApi.listProjectPipelineRuns(agentId, projectRequestId),
+          agentsApi.getProjectPipelineRun(agentId, projectRequestId, runId),
+        ]),
+      });
+      const [runs, detail] = resolved.value;
+      setPipelineRuns(runs);
+      setRunDetail(detail);
+      setResolvedProjectRequestId(resolved.projectRequestId);
     } catch (err) {
       console.error("failed to poll pipeline run", err);
     }
-  }, [resolvedProjectRequestId]);
+  }, [resolvedProjectRequestId, routeProjectId]);
 
   const handleSwitchToRunFocusChat = useCallback((params: {
     runId: string;
@@ -2106,37 +2037,27 @@ export default function ProjectDetailPage() {
       return;
     }
     setCreateRunLoading(true);
-    const projectIds = [resolvedProjectRequestId, ...buildProjectIdCandidates(selectedProject)]
-      .map((item) => item.trim())
-      .filter(Boolean);
-    const uniqueProjectIds = Array.from(new Set(projectIds));
     try {
-      let run: ProjectPipelineRunDetail | null = null;
-      let requestProjectId = "";
-      for (const projectRequestId of uniqueProjectIds) {
-        try {
-          run = await agentsApi.createProjectPipelineRun(
-            currentAgent.id,
-            projectRequestId,
-            {
-              template_id: selectedTemplateId,
-              parameters: {
-                input_scope: "all_original",
-                input_scope_policy: "default_if_no_batch_upload",
-              },
+      const resolved = await resolveProjectRequestCandidate({
+        projectRequestIds: buildProjectRequestCandidates(selectedProject, {
+          preferredProjectRequestId: resolvedProjectRequestId,
+          routeProjectId,
+        }),
+        loader: async (projectRequestId) => agentsApi.createProjectPipelineRun(
+          currentAgent.id,
+          projectRequestId,
+          {
+            template_id: selectedTemplateId,
+            parameters: {
+              input_scope: "all_original",
+              input_scope_policy: "default_if_no_batch_upload",
             },
-          );
-          requestProjectId = projectRequestId;
-          setResolvedProjectRequestId(projectRequestId);
-          break;
-        } catch {
-          // Try next id candidate.
-        }
-      }
-
-      if (!run) {
-        throw new Error("project_pipeline_run_create_failed");
-      }
+          },
+        ),
+      });
+      const run = resolved.value;
+      const requestProjectId = resolved.projectRequestId;
+      setResolvedProjectRequestId(requestProjectId);
 
       await loadPipelineContext(currentAgent.id, selectedProject);
       setSelectedRunId(run.id);
@@ -2153,7 +2074,7 @@ export default function ProjectDetailPage() {
     } finally {
       setCreateRunLoading(false);
     }
-  }, [currentAgent, handleSwitchToRunFocusChat, loadPipelineContext, resolvedProjectRequestId, selectedProject, selectedTemplateId, t]);
+  }, [currentAgent, handleSwitchToRunFocusChat, loadPipelineContext, resolvedProjectRequestId, routeProjectId, selectedProject, selectedTemplateId, t]);
 
   const {
     handleEnsureRunChat,
@@ -2606,8 +2527,8 @@ export default function ProjectDetailPage() {
     }
     projectFilesLoadKeyRef.current = loadKey;
     projectFilesViewLoadKeyRef.current = `${loadKey}:${projectFilesQuerySignature}`;
-    void handleRefreshProjectFiles();
-  }, [currentAgent, handleRefreshProjectFiles, projectFilesQuerySignature, selectedProject]);
+    void bootstrapProjectDetailData(currentAgent.id, selectedProject, { preserveSelection: true });
+  }, [bootstrapProjectDetailData, currentAgent, projectFilesQuerySignature, selectedProject]);
 
   useEffect(() => {
     if (!currentAgent || !selectedProject) {
@@ -2678,34 +2599,31 @@ export default function ProjectDetailPage() {
       return;
     }
 
-    const projectIds = [resolvedProjectRequestId, ...buildProjectIdCandidates(selectedProject)]
-      .map((item) => item.trim())
-      .filter(Boolean);
-    const uniqueProjectIds = Array.from(new Set(projectIds));
-
     let disposed = false;
     setCharStatsContent("");
 
     const load = async () => {
-      for (const projectRequestId of uniqueProjectIds) {
-        try {
-          const data = await agentsApi.readProjectFile(
+      try {
+        const resolved = await resolveProjectRequestCandidate({
+          projectRequestIds: buildProjectRequestCandidates(selectedProject, {
+            preferredProjectRequestId: resolvedProjectRequestId,
+            routeProjectId,
+          }),
+          loader: async (projectRequestId) => agentsApi.readProjectFile(
             currentAgent.id,
             projectRequestId,
             charStatsPath,
-          );
-          if (disposed) {
-            return;
-          }
-          setResolvedProjectRequestId(projectRequestId);
-          setCharStatsContent(data.content || "");
+          ),
+        });
+        if (disposed) {
           return;
-        } catch {
-          // Try next candidate id.
         }
-      }
-      if (!disposed) {
-        setCharStatsContent("");
+        setResolvedProjectRequestId(resolved.projectRequestId);
+        setCharStatsContent(resolved.value.content || "");
+      } catch {
+        if (!disposed) {
+          setCharStatsContent("");
+        }
       }
     };
 
@@ -2718,6 +2636,7 @@ export default function ProjectDetailPage() {
     currentAgent,
     effectiveProjectFiles,
     resolvedProjectRequestId,
+    routeProjectId,
     selectedFilePath,
     selectedProject,
   ]);
@@ -2734,34 +2653,31 @@ export default function ProjectDetailPage() {
       return;
     }
 
-    const projectIds = [resolvedProjectRequestId, ...buildProjectIdCandidates(selectedProject)]
-      .map((item) => item.trim())
-      .filter(Boolean);
-    const uniqueProjectIds = Array.from(new Set(projectIds));
-
     let disposed = false;
     setNerStructuredContent("");
 
     const load = async () => {
-      for (const projectRequestId of uniqueProjectIds) {
-        try {
-          const data = await agentsApi.readProjectFile(
+      try {
+        const resolved = await resolveProjectRequestCandidate({
+          projectRequestIds: buildProjectRequestCandidates(selectedProject, {
+            preferredProjectRequestId: resolvedProjectRequestId,
+            routeProjectId,
+          }),
+          loader: async (projectRequestId) => agentsApi.readProjectFile(
             currentAgent.id,
             projectRequestId,
             nerPath,
-          );
-          if (disposed) {
-            return;
-          }
-          setResolvedProjectRequestId(projectRequestId);
-          setNerStructuredContent(data.content || "");
+          ),
+        });
+        if (disposed) {
           return;
-        } catch {
-          // Try next candidate id.
         }
-      }
-      if (!disposed) {
-        setNerStructuredContent("");
+        setResolvedProjectRequestId(resolved.projectRequestId);
+        setNerStructuredContent(resolved.value.content || "");
+      } catch {
+        if (!disposed) {
+          setNerStructuredContent("");
+        }
       }
     };
 
@@ -2774,6 +2690,7 @@ export default function ProjectDetailPage() {
     currentAgent,
     effectiveProjectFiles,
     resolvedProjectRequestId,
+    routeProjectId,
     selectedFilePath,
     selectedProject,
   ]);
@@ -3266,42 +3183,32 @@ export default function ProjectDetailPage() {
     if (!currentAgent || !selectedProject || !selectedRunId || !action.target_step_id) {
       return;
     }
-
-    const projectIds = [resolvedProjectRequestId, ...buildProjectIdCandidates(selectedProject)]
-      .map((item) => item.trim())
-      .filter(Boolean);
-    const uniqueProjectIds = Array.from(new Set(projectIds));
+    const targetStepId = action.target_step_id;
 
     try {
-      let continuedRun: ProjectPipelineRunDetail | null = null;
-      let requestProjectId = "";
-      for (const projectRequestId of uniqueProjectIds) {
-        try {
-          continuedRun = await agentsApi.retryProjectPipelineRun(
-            currentAgent.id,
-            projectRequestId,
-            selectedRunId,
-            {
-              step_id: action.target_step_id,
-              note: action.title,
-            },
-          );
-          requestProjectId = projectRequestId;
-          setResolvedProjectRequestId(projectRequestId);
-          break;
-        } catch {
-          // Try next candidate id.
-        }
-      }
-
-      if (!continuedRun) {
-        throw new Error("project_pipeline_run_retry_failed");
-      }
+      const resolved = await resolveProjectRequestCandidate({
+        projectRequestIds: buildProjectRequestCandidates(selectedProject, {
+          preferredProjectRequestId: resolvedProjectRequestId,
+          routeProjectId,
+        }),
+        loader: async (projectRequestId) => agentsApi.retryProjectPipelineRun(
+          currentAgent.id,
+          projectRequestId,
+          selectedRunId,
+          {
+            step_id: targetStepId,
+            note: action.title,
+          },
+        ),
+      });
+      const continuedRun = resolved.value;
+      const requestProjectId = resolved.projectRequestId;
+      setResolvedProjectRequestId(requestProjectId);
 
       await loadPipelineContext(currentAgent.id, selectedProject);
       setSelectedRunId(continuedRun.id);
       setRunDetail(continuedRun);
-      setSelectedStepId(action.target_step_id);
+      setSelectedStepId(targetStepId);
       handleSwitchToRunFocusChat({
         runId: continuedRun.id,
         projectRequestId: requestProjectId || selectedProject.id,
@@ -3309,7 +3216,7 @@ export default function ProjectDetailPage() {
       message.success(
         t(
           "projects.pipeline.executeActionSuccess",
-          { stepId: action.target_step_id },
+          { stepId: targetStepId },
         ),
       );
 
@@ -3329,6 +3236,7 @@ export default function ProjectDetailPage() {
     handleSwitchToRunFocusChat,
     loadPipelineContext,
     resolvedProjectRequestId,
+    routeProjectId,
     selectedProject,
     selectedRunId,
     t,
