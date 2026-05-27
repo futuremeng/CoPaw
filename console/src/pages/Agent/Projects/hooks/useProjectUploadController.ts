@@ -19,6 +19,13 @@ interface UseProjectUploadControllerParams {
   ) => Promise<void>;
 }
 
+export type ProjectUploadMode = "files" | "folder";
+
+export interface ProjectPendingUpload {
+  file: File;
+  relativePath: string;
+}
+
 export default function useProjectUploadController({
   currentAgent,
   selectedProject,
@@ -29,13 +36,15 @@ export default function useProjectUploadController({
   const { t } = useTranslation();
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState(false);
-  const [pendingUploads, setPendingUploads] = useState<File[]>([]);
+  const [pendingUploads, setPendingUploads] = useState<ProjectPendingUpload[]>([]);
   const [uploadTargetDir, setUploadTargetDir] = useState("");
+  const [uploadMode, setUploadMode] = useState<ProjectUploadMode>("files");
 
   const resetUploadState = useCallback(() => {
     setUploadModalOpen(false);
     setPendingUploads([]);
     setUploadTargetDir("");
+    setUploadMode("files");
   }, []);
 
   const handleUploadFiles = useCallback(async () => {
@@ -48,7 +57,7 @@ export default function useProjectUploadController({
 
     try {
       let uploadedCount = 0;
-      for (const file of pendingUploads) {
+      for (const item of pendingUploads) {
         const resolved = await resolveProjectRequestCandidate({
           projectRequestIds: buildProjectRequestCandidates(selectedProject, {
             preferredProjectRequestId,
@@ -57,8 +66,9 @@ export default function useProjectUploadController({
             await agentsApi.uploadProjectFile(
               currentAgent.id,
               projectRequestId,
-              file,
+              item.file,
               uploadTargetDir,
+              item.relativePath,
             );
             return undefined;
           },
@@ -101,6 +111,8 @@ export default function useProjectUploadController({
     setPendingUploads,
     uploadTargetDir,
     setUploadTargetDir,
+    uploadMode,
+    setUploadMode,
     resetUploadState,
     handleUploadFiles,
   };

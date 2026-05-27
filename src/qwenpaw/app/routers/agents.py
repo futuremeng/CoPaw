@@ -2977,6 +2977,7 @@ def _upload_project_file(
     project_dir: Path,
     upload: UploadFile,
     target_dir: str,
+    relative_path: str = "",
 ) -> ProjectFileInfo:
     if not upload.filename:
         raise HTTPException(
@@ -2989,9 +2990,24 @@ def _upload_project_file(
         if path.is_absolute() or ".." in path.parts:
             raise HTTPException(status_code=400, detail="Invalid target directory")
         safe_dir = path.as_posix().strip("/")
-    raw_name = Path(upload.filename).name.strip()
-    if not raw_name:
-        raise HTTPException(status_code=400, detail="Invalid filename")
+    raw_relative_path = str(relative_path or "").strip().replace("\\", "/")
+
+    if raw_relative_path:
+        normalized_relative = Path(raw_relative_path)
+        if normalized_relative.is_absolute() or ".." in normalized_relative.parts:
+            raise HTTPException(status_code=400, detail="Invalid relative path")
+        normalized_parts = [part for part in normalized_relative.parts if part and part != "."]
+        if not normalized_parts:
+            raise HTTPException(status_code=400, detail="Invalid relative path")
+        filename = normalized_parts[-1].strip()
+        if not filename:
+            raise HTTPException(status_code=400, detail="Invalid filename")
+        relative_tail = Path(*normalized_parts)
+    else:
+        filename = Path(upload.filename).name.strip()
+        if not filename:
+            raise HTTPException(status_code=400, detail="Invalid filename")
+        relative_tail = Path(filename)
 
     destination_dir = (project_dir / safe_dir).resolve() if safe_dir else project_dir.resolve()
     project_root = project_dir.resolve()
@@ -2999,9 +3015,10 @@ def _upload_project_file(
         raise HTTPException(status_code=400, detail="Invalid target directory")
     destination_dir.mkdir(parents=True, exist_ok=True)
 
-    destination_path = (destination_dir / raw_name).resolve()
+    destination_path = (destination_dir / relative_tail).resolve()
     if not str(destination_path).startswith(str(project_root)):
         raise HTTPException(status_code=400, detail="Invalid destination path")
+    destination_path.parent.mkdir(parents=True, exist_ok=True)
 
     content = upload.file.read()
     destination_path.write_bytes(content)
@@ -5207,6 +5224,7 @@ async def upload_agent_project_file(
     projectId: str = PathParam(...),
     file: UploadFile = File(...),
     target_dir: str = Form(""),
+    relative_path: str = Form(""),
 ) -> ProjectFileInfo:
     """Upload a file into project workspace."""
     _ = request
@@ -5214,7 +5232,12 @@ async def upload_agent_project_file(
 
     try:
         project_dir = _resolve_project_dir(workspace_dir, projectId)
-        uploaded = _upload_project_file(project_dir, file, target_dir)
+        uploaded = _upload_project_file(
+            project_dir,
+            file,
+            target_dir,
+            relative_path,
+        )
         update_project_file_monitoring_state(
             project_dir,
             PROJECT_FILE_MONITORING_ACTIVE,

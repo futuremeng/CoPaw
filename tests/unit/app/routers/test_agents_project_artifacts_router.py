@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from copaw.config.config import Config
@@ -391,6 +391,42 @@ def test_upload_project_file_defaults_to_project_root(tmp_path: Path):
     assert (project_dir / "brief.txt").read_text(encoding="utf-8") == "hello root"
 
 
+def test_upload_project_file_supports_relative_path(tmp_path: Path):
+    from starlette.datastructures import UploadFile
+
+    project_dir = tmp_path / "projects" / "project-demo"
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    uploaded = _upload_project_file(
+        project_dir,
+        UploadFile(filename="ignored.txt", file=io.BytesIO(b"nested file")),
+        "original",
+        "batch-01/docs/notes.md",
+    )
+
+    assert uploaded.path == "original/batch-01/docs/notes.md"
+    assert (project_dir / "original" / "batch-01" / "docs" / "notes.md").read_text(
+        encoding="utf-8"
+    ) == "nested file"
+
+
+def test_upload_project_file_rejects_unsafe_relative_path(tmp_path: Path):
+    from starlette.datastructures import UploadFile
+
+    project_dir = tmp_path / "projects" / "project-demo"
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    with pytest.raises(HTTPException) as exc_info:
+        _upload_project_file(
+            project_dir,
+            UploadFile(filename="ignored.txt", file=io.BytesIO(b"bad")),
+            "",
+            "../outside.txt",
+        )
+
+    assert "Invalid relative path" in str(exc_info.value)
+
+
 def test_upload_project_file_endpoint_uses_workspace_fastpath(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -431,6 +467,30 @@ def test_upload_project_file_endpoint_uses_workspace_fastpath(
     assert response.status_code == 200
     payload = response.json()
     assert payload["path"] == "original/brief.txt"
+
+
+def test_upload_project_file_endpoint_accepts_relative_path(
+    project_artifact_router_client: tuple[TestClient, Path, str],
+):
+    client, workspace_dir, project_id = project_artifact_router_client
+
+    response = client.post(
+        f"/agents/default/projects/{project_id}/files/upload",
+        data={"target_dir": "original", "relative_path": "dataset/a.txt"},
+        files={"file": ("a.txt", b"folder upload", "text/plain")},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["path"] == "original/dataset/a.txt"
+    assert (
+        workspace_dir
+        / "projects"
+        / project_id
+        / "original"
+        / "dataset"
+        / "a.txt"
+    ).read_text(encoding="utf-8") == "folder upload"
 
 
 def test_upload_project_file_activates_idle_monitoring_and_sync(

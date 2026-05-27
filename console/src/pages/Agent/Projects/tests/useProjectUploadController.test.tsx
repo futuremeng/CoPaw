@@ -90,7 +90,10 @@ function TestHarness({ onUploadCompleted }: {
         type="button"
         onClick={() => {
           controller.setPendingUploads([
-            new File(["hello"], "hello.txt", { type: "text/plain" }),
+            {
+              file: new File(["hello"], "hello.txt", { type: "text/plain" }),
+              relativePath: "hello.txt",
+            },
           ]);
         }}
       >
@@ -130,6 +133,7 @@ describe("useProjectUploadController", () => {
         "proj-1",
         expect.any(File),
         "",
+        "hello.txt",
       );
       expect(onUploadCompleted).toHaveBeenCalledWith(
         "agent-1",

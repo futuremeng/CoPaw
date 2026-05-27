@@ -366,10 +366,12 @@ export const agentsApi = {
     projectId: string,
     file: File,
     targetDir = "",
+    relativePath = "",
   ) => {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("target_dir", targetDir);
+    formData.append("relative_path", relativePath);
 
     const response = await fetch(
       getApiUrl(`/agents/${agentId}/projects/${encodeURIComponent(projectId)}/files/upload`),

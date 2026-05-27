@@ -1677,6 +1677,8 @@ export default function ProjectDetailPage() {
     setPendingUploads,
     uploadTargetDir,
     setUploadTargetDir,
+    uploadMode,
+    setUploadMode,
     resetUploadState,
     handleUploadFiles,
   } = useProjectUploadController({
@@ -1697,14 +1699,16 @@ export default function ProjectDetailPage() {
   const openProjectUploadModal = useCallback(() => {
     setPendingUploads([]);
     setUploadTargetDir("");
+    setUploadMode("files");
     setUploadModalOpen(true);
-  }, [setPendingUploads, setUploadTargetDir, setUploadModalOpen]);
+  }, [setPendingUploads, setUploadTargetDir, setUploadMode, setUploadModalOpen]);
 
   const openRunBatchUploadModal = useCallback(() => {
     setPendingUploads([]);
     setUploadTargetDir(selectedRunId ? `original/batches/${selectedRunId}` : "original/batches/manual");
+    setUploadMode("files");
     setUploadModalOpen(true);
-  }, [selectedRunId, setPendingUploads, setUploadTargetDir, setUploadModalOpen]);
+  }, [selectedRunId, setPendingUploads, setUploadTargetDir, setUploadMode, setUploadModalOpen]);
 
   const shouldBlockLeave = useMemo(() => {
     const runInProgress = runDetail?.status === "running" || runDetail?.status === "pending";
@@ -3863,9 +3867,11 @@ export default function ProjectDetailPage() {
             uploadingFiles={uploadingFiles}
             pendingUploads={pendingUploads}
             uploadTargetDir={uploadTargetDir}
+            uploadMode={uploadMode}
             uploadHint={uploadModalHint}
             onChangeUploadTargetDir={setUploadTargetDir}
             onChangePendingUploads={setPendingUploads}
+            onChangeUploadMode={setUploadMode}
             onUpload={() => {
               void handleUploadFiles();
             }}
