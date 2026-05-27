@@ -244,7 +244,7 @@ export default function ProjectKnowledgeSettingsPanel(
         <Typography.Text type="secondary">
           {t(
             "copaw.projects.knowledge.settingsCoreHint",
-            "Only two controls are kept here: auto workflow for new source files, and project knowledge registration for RAG chunk queries.",
+            "Only two controls are kept here: document processing for new source files, and project document registration for RAG chunk queries.",
           )}
         </Typography.Text>
       </div>
@@ -256,14 +256,14 @@ export default function ProjectKnowledgeSettingsPanel(
               <Typography.Text strong>
                 {t(
                   "copaw.projects.knowledge.autoWorkflowTitle",
-                  "Auto workflow for new source files",
+                  "Auto document workflow for new source files",
                 )}
               </Typography.Text>
               <br />
               <Typography.Text type="secondary">
                 {t(
                   "copaw.projects.knowledge.autoWorkflowDesc",
-                  "Default OFF. When enabled, only newly added source files in this project trigger processing.",
+                  "Default OFF. When enabled, only newly added document files in this project trigger processing.",
                 )}
               </Typography.Text>
             </div>
@@ -281,14 +281,14 @@ export default function ProjectKnowledgeSettingsPanel(
               <Typography.Text strong>
                 {t(
                   "copaw.projects.knowledge.registerAsAgentKnowledgeTitle",
-                  "Register as agent knowledge source",
+                  "Register as project document source",
                 )}
               </Typography.Text>
               <br />
               <Typography.Text type="secondary">
                 {t(
                   "copaw.projects.knowledge.registerAsAgentKnowledgeDesc",
-                  "Default OFF. When enabled, this project's chunks are included in RAG knowledge queries.",
+                  "Default OFF. When enabled, this project's document chunks are included in RAG knowledge queries.",
                 )}
               </Typography.Text>
             </div>

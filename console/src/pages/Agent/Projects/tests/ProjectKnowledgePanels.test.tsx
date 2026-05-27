@@ -420,7 +420,7 @@ describe("project knowledge panels", () => {
 
     const row = screen.getByText("original/a.md").closest("tr");
     expect(row).not.toBeNull();
-    fireEvent.click(within(row as HTMLTableRowElement).getByRole("button", { name: "View Processing" }));
+    fireEvent.click(within(row as HTMLTableRowElement).getByRole("button", { name: "View Document Processing" }));
     expect(openProcessing).toHaveBeenCalledWith("source-a");
   });
 
@@ -476,7 +476,7 @@ describe("project knowledge panels", () => {
 
     const row = screen.getByText("original/a.md").closest("tr");
     expect(row).not.toBeNull();
-    fireEvent.click(within(row as HTMLTableRowElement).getByRole("button", { name: "Run Full Flow" }));
+    fireEvent.click(within(row as HTMLTableRowElement).getByRole("button", { name: "Run Document Flow" }));
     expect(knowledgeState.runSourceFullPipeline).toHaveBeenCalledWith("original/a.md", {
       force: true,
       overwrite: true,

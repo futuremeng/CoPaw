@@ -2391,6 +2391,32 @@ def test_read_url_document_skips_binary_content(monkeypatch):
     assert doc["text"] == ""
 
 
+def test_read_file_document_rejects_structured_json(tmp_path: Path):
+    manager = KnowledgeManager(knowledge_router_module.WORKING_DIR)
+    json_file = tmp_path / "document.json"
+    json_file.write_text("{\"hello\": \"world\"}", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="structured data and is not part of document knowledge"):
+        manager._read_file_document(json_file, Config().knowledge)
+
+
+def test_read_url_document_skips_json_content(monkeypatch):
+    class _Resp:
+        headers = {"content-type": "application/json; charset=utf-8"}
+        text = "{\"hello\": \"world\"}"
+
+        @staticmethod
+        def raise_for_status():
+            return None
+
+    monkeypatch.setattr("copaw.knowledge.manager.httpx.get", lambda *args, **kwargs: _Resp())
+
+    doc = KnowledgeManager._read_url_document("https://example.com/a.json")
+
+    assert doc["path"] == "https://example.com/a.json"
+    assert doc["text"] == ""
+
+
 def test_get_memify_job_status_requires_memify_enabled(
     knowledge_api_client: TestClient,
 ):

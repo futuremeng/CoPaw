@@ -115,13 +115,21 @@ _KEYWORD_DEFAULT_TOP_N = 3
 KNOWLEDGE_PROCESSING_VERSION = "2"
 _TEXTUAL_CONTENT_TYPE_MARKERS = (
     "text/",
-    "application/json",
     "application/xml",
     "application/xhtml+xml",
     "application/javascript",
     "application/x-javascript",
+)
+_STRUCTURED_CONTENT_TYPE_MARKERS = (
+    "application/json",
     "application/ld+json",
 )
+_STRUCTURED_FILE_EXTENSIONS = {
+    ".json",
+    ".jsonl",
+    ".ndjson",
+    ".geojson",
+}
 _TEXT_FILE_ENCODINGS = (
     "utf-8",
     "utf-8-sig",
@@ -5341,9 +5349,14 @@ class KnowledgeManager:
                 document["source_path"] = str(path.resolve())
                 documents.append(document)
             except ValueError as exc:
-                if "exceeds max size" not in str(exc) and "not decodable as text" not in str(exc):
+                error_text = str(exc)
+                if (
+                    "exceeds max size" not in error_text
+                    and "not decodable as text" not in error_text
+                    and "structured data and is not part of document knowledge" not in error_text
+                ):
                     raise
-                if "exceeds max size" in str(exc):
+                if "exceeds max size" in error_text:
                     logger.warning(
                         "Skip oversized knowledge file: %s (max=%s bytes)",
                         path,
@@ -5930,6 +5943,10 @@ class KnowledgeManager:
         file_path = path.expanduser().resolve()
         if not file_path.exists() or not file_path.is_file():
             raise FileNotFoundError(f"Knowledge file not found: {file_path}")
+        if file_path.suffix.lower() in _STRUCTURED_FILE_EXTENSIONS:
+            raise ValueError(
+                f"Knowledge file is structured data and is not part of document knowledge: {file_path}"
+            )
         if file_path.stat().st_size > config.index.max_file_size:
             raise ValueError(f"Knowledge file exceeds max size: {file_path}")
         text = self._read_text_file_content(file_path)
@@ -5965,6 +5982,14 @@ class KnowledgeManager:
         ):
             # Skip binary payloads (image/audio/video/pdf/zip, etc.) to avoid
             # turning bytes into garbled text in knowledge sources.
+            return {
+                "path": url,
+                "title": url,
+                "text": "",
+            }
+        if content_type and any(
+            marker in content_type for marker in _STRUCTURED_CONTENT_TYPE_MARKERS
+        ):
             return {
                 "path": url,
                 "title": url,

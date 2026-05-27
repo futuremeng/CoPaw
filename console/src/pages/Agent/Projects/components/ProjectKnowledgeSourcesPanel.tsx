@@ -152,7 +152,7 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
                 onOpenProcessingForSource(sourceId);
               }}
             >
-              {t("copaw.projects.knowledge.processing.openDetail", "View Processing")}
+              {t("copaw.projects.knowledge.processing.openDetail", "View Document Processing")}
             </Button>
             <Button
               type="link"
@@ -164,7 +164,7 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
                 });
               }}
             >
-              {t("copaw.projects.knowledge.processing.runFullFlow", "Run Full Flow")}
+              {t("copaw.projects.knowledge.processing.runFullFlow", "Run Document Flow")}
             </Button>
             <Button
               type="link"
@@ -206,7 +206,7 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
                 });
               }}
             >
-              {t("copaw.projects.knowledge.processing.runFullFlow", "Run Full Flow")}
+              {t("copaw.projects.knowledge.processing.runFullFlow", "Run Document Flow")}
             </Button>
             <Button
               type="link"
@@ -221,7 +221,7 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
             >
               {added
                 ? t("copaw.projects.knowledge.sources.added", "Added")
-                : t("copaw.projects.knowledge.sources.add", "Add to Sources")}
+                : t("copaw.projects.knowledge.sources.add", "Add to Document Sources")}
             </Button>
           </div>
         );
@@ -270,7 +270,7 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
       <div className={styles.projectKnowledgeHistoryStrip}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
           <Typography.Text strong>
-            {t("copaw.projects.knowledge.sources.manualList", "Manual Sources")}
+            {t("copaw.projects.knowledge.sources.manualList", "Document Sources")}
           </Typography.Text>
           <Button size="small" onClick={() => void knowledgeState.loadProjectSourceStatus()}>
             {t("copaw.projects.knowledge.actions.refresh", "Refresh")}
@@ -283,14 +283,14 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
           size="small"
           bordered={false}
           scroll={{ x: 1200 }}
-          locale={{ emptyText: t("copaw.projects.knowledge.sources.manualEmpty", "No manual sources yet") }}
+          locale={{ emptyText: t("copaw.projects.knowledge.sources.manualEmpty", "No document sources yet") }}
         />
       </div>
 
       {candidateRows.length > 0 && (
         <div className={styles.projectKnowledgeHistoryStrip}>
           <Typography.Text strong>
-            {t("copaw.projects.knowledge.sources.candidates", "Auto-discovered Candidates")}
+            {t("copaw.projects.knowledge.sources.candidates", "Structured Candidates")}
           </Typography.Text>
           <Table
             columns={candidateColumns}
