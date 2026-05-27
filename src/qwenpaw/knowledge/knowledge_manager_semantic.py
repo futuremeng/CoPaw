@@ -183,7 +183,7 @@ def write_chunk_tokenize_artifacts(
 			chunk.pop("tokenize_structured_path", None)
 			chunk.pop("tokenize_line_stats_path", None)
 
-		resolved_text, source_text, interlinear_path, tokenize_input_mode = manager._resolve_document_ner_input_text(
+		resolved_text, _source_text, interlinear_path, tokenize_input_mode = manager._resolve_document_ner_input_text(
 			group,
 			map_rows=map_rows,
 			source=source,
@@ -285,10 +285,10 @@ def write_chunk_tokenize_artifacts(
 			"chunk_path": str(representative.get("chunk_path") or ""),
 			"version_id": manager._chunk_version_id(representative),
 			"snapshot_at": str(representative.get("snapshot_at") or ""),
-			"source_text": str(source_text or ""),
-			"input_text": str(resolved_text or ""),
 			"interlinear_path": str(interlinear_path or ""),
 			"tokenize_input_mode": str(tokenize_input_mode or "chunk_fallback"),
+			"line_index_start": 1 if line_count > 0 else 0,
+			"line_index_end": line_count,
 			"line_count": line_count,
 			"token_count": token_count,
 			"lines": line_entries,

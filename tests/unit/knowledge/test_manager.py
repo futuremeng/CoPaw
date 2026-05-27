@@ -111,7 +111,7 @@ def test_directory_source_raw_sync_ignores_internal_knowledge_dir(tmp_path: Path
     )
 
     manager = KnowledgeManager(project_root, knowledge_dirname=".knowledge")
-    manager.index_source(source, config)
+    manager.index_source(source, config, include_semantic_artifacts=False)
 
     raw_dir = manager.raw_dir / source.id / "docs"
     snapshots = list(raw_dir.glob("note.snapshot_*.md"))
@@ -193,7 +193,7 @@ def test_project_directory_raw_snapshots_write_to_top_level_raw_dir(tmp_path: Pa
     )
 
     manager = KnowledgeManager(tmp_path)
-    manager.index_source(source, config)
+    manager.index_source(source, config, include_semantic_artifacts=False)
 
     snapshots = list((manager.raw_dir / "aacid__duxiu_files").glob("260317_002144.snapshot_*.md"))
 
@@ -329,7 +329,7 @@ def test_search_reads_chunk_text_from_chunk_file_when_index_has_no_text(tmp_path
     config.sources = [source]
 
     manager = KnowledgeManager(tmp_path)
-    manager.index_source(source, config)
+    manager.index_source(source, config, include_semantic_artifacts=False)
 
     result = manager.search("gamma", config, limit=5)
 
@@ -341,6 +341,63 @@ def test_search_reads_chunk_text_from_chunk_file_when_index_has_no_text(tmp_path
         assert hit.get("chunk_path")
         assert hit.get("evidence_id", "").startswith("ev-")
         assert hit.get("scope_type") in {"agent", "project"}
+        assert "line_index_start" in hit
+        assert "line_index_end" in hit
+        assert "line_index_path" in hit
+
+
+def test_search_interlinear_hit_includes_line_index_references(tmp_path: Path):
+    config = Config().knowledge
+    config.index.chunk_size = 10_000
+    source = KnowledgeSourceSpec(
+        id="search-interlinear-line-index-source",
+        name="Search Interlinear Line Index Source",
+        type="text",
+        content="Alpha beta. Gamma delta.",
+        enabled=True,
+        recursive=False,
+        tags=[],
+        summary="",
+    )
+    config.sources = [source]
+
+    manager = KnowledgeManager(tmp_path)
+    interlinear_path = manager.root_dir / "interlinear" / "search-interlinear.txt"
+    interlinear_path.parent.mkdir(parents=True, exist_ok=True)
+    interlinear_path.write_text("alpha beta\ngamma delta", encoding="utf-8")
+
+    line_index_path = manager.root_dir / "interlinear" / "search-interlinear.line-index.jsonl"
+    line_index_path.write_text(
+        json.dumps({"line_index": 1, "char_count": 9, "token_count": 2}, ensure_ascii=False) + "\n"
+        + json.dumps({"line_index": 2, "char_count": 10, "token_count": 2}, ensure_ascii=False)
+        + "\n",
+        encoding="utf-8",
+    )
+
+    def fake_manifest(source_id: str) -> dict[str, object]:
+        if source_id != source.id:
+            return {"artifacts": []}
+        return {
+            "artifacts": [
+                {
+                    "path": "interlinear/search-interlinear.txt",
+                    "line_index_path": "interlinear/search-interlinear.line-index.jsonl",
+                    "document_path": "search.md",
+                    "title": "Search",
+                    "line_count": 2,
+                }
+            ]
+        }
+
+    manager._load_source_interlinear_manifest = fake_manifest  # type: ignore[method-assign]
+
+    result = manager.search("gamma", config, limit=5)
+
+    assert result["hits"]
+    hit = result["hits"][0]
+    assert hit.get("line_index_path", "").endswith(".line-index.jsonl")
+    assert int(hit.get("line_index_start") or 0) == 1
+    assert int(hit.get("line_index_end") or 0) == 2
 
 
 def test_search_supports_scope_filters(tmp_path: Path):
@@ -665,7 +722,7 @@ def test_index_source_writes_ner_files_when_semantic_ready(tmp_path: Path):
             ready_state,
         ),
     ), patch.object(manager, "_resolve_chunk_interlinear_path", return_value=""):
-        manager.index_source(source, config)
+        manager.index_source(source, config, include_semantic_artifacts=False)
 
     payload = json.loads(
         manager._source_index_path(source.id).read_text(encoding="utf-8")
@@ -1468,7 +1525,7 @@ def test_write_chunk_tokenize_artifacts_persists_line_aligned_outputs(tmp_path: 
     }
 
     with patch.object(manager._semantic_runtime, "probe", return_value=unavailable_state):
-        manager.index_source(source, config)
+        manager.index_source(source, config, include_semantic_artifacts=False)
 
     payload = json.loads(manager._source_index_path(source.id).read_text(encoding="utf-8"))
     with patch.object(
@@ -1627,7 +1684,7 @@ def test_get_source_chunk_documents_reads_snapshot_text_without_chunk_text(tmp_p
     )
 
     manager = KnowledgeManager(tmp_path)
-    manager.index_source(source, config)
+    manager.index_source(source, config, include_semantic_artifacts=False)
 
     index_path = manager._source_index_path(source.id)
     payload = json.loads(index_path.read_text(encoding="utf-8"))
@@ -1661,7 +1718,7 @@ def test_delete_index_removes_chunk_files(tmp_path: Path):
     )
 
     manager = KnowledgeManager(tmp_path)
-    manager.index_source(source, config)
+    manager.index_source(source, config, include_semantic_artifacts=False)
     chunk_path = manager.root_dir / "chunks" / "delete-chunk-source.0.txt"
 
     assert chunk_path.exists()
@@ -1688,7 +1745,7 @@ def test_index_source_writes_interlinear_and_lightweight_line_stats(tmp_path: Pa
     )
 
     manager = KnowledgeManager(tmp_path)
-    manager.index_source(source, config)
+    manager.index_source(source, config, include_semantic_artifacts=False)
 
     interlinear_manifest = json.loads(
         manager._source_interlinear_manifest_path(source.id).read_text(encoding="utf-8")
@@ -1699,34 +1756,29 @@ def test_index_source_writes_interlinear_and_lightweight_line_stats(tmp_path: Pa
 
     artifacts = interlinear_manifest["artifacts"]
     lightweight_paths = lightweight_manifest["lightweight_paths"]
-    interlinear_text_rel = next(a["path"] for a in artifacts if a["path"].endswith(".txt"))
-    char_stats_rel = next((a["path"] for a in artifacts if a["path"].endswith(".char-stats.json")), None)
+    interlinear_artifact = next(a for a in artifacts if str(a.get("path") or "").endswith(".txt"))
+    interlinear_text_rel = interlinear_artifact["path"]
+    line_index_rel = interlinear_artifact["line_index_path"]
     lightweight_result_rel = next(
         path
         for path in lightweight_paths
-        if path.endswith(".json") and not path.endswith(".token-stats.json")
+        if path.endswith(".json")
     )
-    token_stats_rel = next(path for path in lightweight_paths if path.endswith(".token-stats.json"))
 
     interlinear_text = (manager.root_dir / interlinear_text_rel).read_text(encoding="utf-8")
-    if char_stats_rel:
-        char_stats = json.loads((manager.root_dir / char_stats_rel).read_text(encoding="utf-8"))
-    else:
-        char_stats = []
+    line_index_rows = [
+        json.loads(line)
+        for line in (manager.root_dir / line_index_rel).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
     lightweight_result = json.loads(
         (manager.root_dir / lightweight_result_rel).read_text(encoding="utf-8")
     )
-    token_stats = json.loads((manager.root_dir / token_stats_rel).read_text(encoding="utf-8"))
 
     assert interlinear_text.splitlines() == ["第一句。", "Second line 123!", "第三句？"]
-    if char_stats:
-        assert char_stats == [
-            {"line_no": 1, "char_count": 3},
-            {"line_no": 2, "char_count": 13},
-            {"line_no": 3, "char_count": 3},
-        ]
-    assert [item["line_no"] for item in token_stats] == [1, 2, 3]
-    assert [item["token_count"] for item in token_stats] == [1, 3, 1]
+    assert [item["line_index"] for item in line_index_rows] == [1, 2, 3]
+    assert [item["char_count"] for item in line_index_rows] == [3, 13, 3]
+    assert [item["token_count"] for item in line_index_rows] == [1, 3, 1]
     assert [item["line_no"] for item in lightweight_result] == [1, 2, 3]
     assert [item["token_count"] for item in lightweight_result] == [1, 3, 1]
     assert [item["score"] for item in lightweight_result] == [1, 3, 1]
@@ -1770,7 +1822,7 @@ def test_delete_index_removes_interlinear_and_lightweight_files(tmp_path: Path):
     )
 
     manager = KnowledgeManager(tmp_path)
-    manager.index_source(source, config)
+    manager.index_source(source, config, include_semantic_artifacts=False)
 
     interlinear_manifest = json.loads(
         manager._source_interlinear_manifest_path(source.id).read_text(encoding="utf-8")
@@ -1779,7 +1831,16 @@ def test_delete_index_removes_interlinear_and_lightweight_files(tmp_path: Path):
         manager._source_lightweight_manifest_path(source.id).read_text(encoding="utf-8")
     )
     all_paths = [
-        *(a["path"] for a in interlinear_manifest.get("artifacts", [])),
+        *(
+            path
+            for artifact in interlinear_manifest.get("artifacts", [])
+            if isinstance(artifact, dict)
+            for path in (
+                str(artifact.get("path") or "").strip(),
+                str(artifact.get("line_index_path") or "").strip(),
+            )
+            if path
+        ),
         *(lightweight_manifest.get("lightweight_paths") or []),
     ]
 

@@ -1094,9 +1094,10 @@ class KnowledgeManager:
         # interlinear/Lightweight
         interlinear_manifest = self._load_source_interlinear_manifest(source_id)
         for artifact in interlinear_manifest.get("artifacts", []):
-            path = artifact.get("path")
-            if path:
-                self._delete_interlinear_path(path)
+            for field in ("path", "line_index_path"):
+                path = artifact.get(field)
+                if path:
+                    self._delete_interlinear_path(path)
         lightweight_paths = self._load_source_lightweight_manifest(source_id)
         for lightweight_path in lightweight_paths:
             self._delete_lightweight_path(lightweight_path)
@@ -1237,6 +1238,9 @@ class KnowledgeManager:
                         document_path=str(chunk.get("document_path") or ""),
                         chunk_path=chunk_path,
                         line_no=0,
+                        line_index_start=0,
+                        line_index_end=0,
+                        line_index_path="",
                     )
                     hits.append(
                         {
@@ -1248,6 +1252,9 @@ class KnowledgeManager:
                             "chunk_id": chunk_id,
                             "chunk_path": chunk_path,
                             "line_no": 0,
+                            "line_index_start": 0,
+                            "line_index_end": 0,
+                            "line_index_path": "",
                             "evidence_id": evidence_id,
                             "scope_type": source_scope_type,
                             "scope_id": source_scope_id,
@@ -1262,6 +1269,11 @@ class KnowledgeManager:
                 if not interlinear_path:
                     continue
                 line_no = int(artifact.get("line_no") or 0)
+                line_index_path = str(artifact.get("line_index_path") or "").strip()
+                line_count = _safe_count_int(artifact.get("line_count") or 0)
+                line_index_start = 1 if line_count > 0 else 0
+                line_index_end = line_count if line_count > 0 else 0
+                chunk_id = str(artifact.get("chunk_id") or "").strip() or source.id
                 try:
                     text = (self.root_dir / interlinear_path).read_text(encoding="utf-8")
                 except Exception:
@@ -1274,6 +1286,9 @@ class KnowledgeManager:
                     document_path=str(artifact.get("document_path") or ""),
                     chunk_path=str(interlinear_path),
                     line_no=line_no,
+                    line_index_start=line_index_start,
+                    line_index_end=line_index_end,
+                    line_index_path=line_index_path,
                 )
                 hits.append(
                     {
@@ -1282,9 +1297,12 @@ class KnowledgeManager:
                         "source_type": source.type,
                         "document_path": artifact.get("document_path"),
                         "document_title": artifact.get("title"),
-                        "chunk_id": f"{source.id}:{line_no}" if line_no > 0 else source.id,
+                        "chunk_id": chunk_id,
                         "chunk_path": str(interlinear_path),
                         "line_no": line_no,
+                        "line_index_start": line_index_start,
+                        "line_index_end": line_index_end,
+                        "line_index_path": line_index_path,
                         "evidence_id": evidence_id,
                         "scope_type": source_scope_type,
                         "scope_id": source_scope_id,
@@ -1325,9 +1343,15 @@ class KnowledgeManager:
         document_path: str,
         chunk_path: str,
         line_no: int,
+        line_index_start: int = 0,
+        line_index_end: int = 0,
+        line_index_path: str = "",
     ) -> str:
         """Build a deterministic identifier for a search hit evidence record."""
-        payload = f"{source_id}|{document_path}|{chunk_path}|{line_no}"
+        payload = (
+            f"{source_id}|{document_path}|{chunk_path}|{line_no}"
+            f"|{line_index_start}|{line_index_end}|{line_index_path}"
+        )
         digest = hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
         return f"ev-{digest}"
 
@@ -2064,20 +2088,8 @@ class KnowledgeManager:
             return {}
         if not isinstance(payload, dict):
             return {}
-        # 兼容旧格式
-        if "artifacts" not in payload:
-            interlinear_paths = payload.get("interlinear_paths")
-            if not isinstance(interlinear_paths, list):
-                return {}
-            artifacts = [
-                {"path": str(item).strip()} for item in interlinear_paths if isinstance(item, str) and str(item).strip()
-            ]
-            payload = {
-                "source_id": payload.get("source_id", source_id),
-                "updated_at": payload.get("updated_at"),
-                "artifacts": artifacts,
-                "summary": {},
-            }
+        if not isinstance(payload.get("artifacts"), list):
+            return {}
         return payload
 
     def _load_source_lightweight_manifest(self, source_id: str) -> set[str]:
@@ -2102,21 +2114,28 @@ class KnowledgeManager:
     def _write_source_interlinear_manifest(self, source_id: str, artifacts: list[dict]) -> None:
         """
         写入统一 schema 的 interlinear-manifest.json。
-        artifacts: 每个元素包含 path/document_path/title/chunk_id/sentence_count/char_count/token_count/updated_at 等。
+        artifacts: 每个元素包含 path/line_index_path/document_path/title/line_count/char_count/token_count/updated_at 等。
         """
+        normalized_artifacts = [item for item in artifacts if isinstance(item, dict)]
         summary = {
-            "document_count": len({a.get("document_path") for a in artifacts}),
-            "chunk_count": len(artifacts),
-            "sentence_count": sum(a.get("sentence_count", 0) for a in artifacts),
-            "char_count": sum(a.get("char_count", 0) for a in artifacts),
-            "token_count": sum(a.get("token_count", 0) for a in artifacts),
+            "document_count": len(
+                {
+                    str(a.get("document_path") or "").strip()
+                    for a in normalized_artifacts
+                    if str(a.get("document_path") or "").strip()
+                }
+            ),
+            "artifact_count": len(normalized_artifacts),
+            "line_count": sum(_safe_count_int(a.get("line_count") or 0) for a in normalized_artifacts),
+            "sentence_count": sum(_safe_count_int(a.get("line_count") or 0) for a in normalized_artifacts),
+            "char_count": sum(_safe_count_int(a.get("char_count") or 0) for a in normalized_artifacts),
+            "token_count": sum(_safe_count_int(a.get("token_count") or 0) for a in normalized_artifacts),
         }
         payload = {
             "source_id": source_id,
             "updated_at": datetime.now(UTC).isoformat(),
-            "artifacts": artifacts,
+            "artifacts": normalized_artifacts,
             "summary": summary,
-            # "input_fingerprint": "sha256:TODO",  # 可后续补充
         }
         self._source_interlinear_manifest_path(source_id).write_text(
             json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -2158,9 +2177,8 @@ class KnowledgeManager:
         key = self._safe_name(artifact_key)
         return {
             "interlinear": Path("interlinear") / f"{key}.txt",
-            "char_stats": Path("interlinear") / f"{key}.char-stats.json",
+            "line_index": Path("interlinear") / f"{key}.line-index.jsonl",
             "lightweight_result": Path("lightweight") / f"{key}.json",
-            "token_stats": Path("lightweight") / f"{key}.token-stats.json",
         }
 
     def _write_snapshot_interlinear_and_lightweight(
@@ -2179,11 +2197,11 @@ class KnowledgeManager:
         artifact_key = self._build_interlinear_artifact_key(source_id, snapshot_entry)
         relative_paths = self._build_interlinear_relative_paths(artifact_key)
         interlinear_path = self.root_dir / relative_paths["interlinear"]
-        char_stats_path = self.root_dir / relative_paths["char_stats"]
+        line_index_path = self.root_dir / relative_paths["line_index"]
         lightweight_result_path = self.root_dir / relative_paths["lightweight_result"]
-        token_stats_path = self.root_dir / relative_paths["token_stats"]
 
         interlinear_path.parent.mkdir(parents=True, exist_ok=True)
+        line_index_path.parent.mkdir(parents=True, exist_ok=True)
         lightweight_result_path.parent.mkdir(parents=True, exist_ok=True)
 
         interlinear_path.write_text("\n".join(interlinear_lines), encoding="utf-8")
@@ -2191,14 +2209,19 @@ class KnowledgeManager:
         if not persisted_lines and interlinear_lines:
             persisted_lines = list(interlinear_lines)
 
-        char_stats: list[dict[str, Any]] = []
+        line_index_rows: list[dict[str, Any]] = []
         lightweight_result: list[dict[str, Any]] = []
-        token_stats: list[dict[str, Any]] = []
         for line_no, line_text in enumerate(persisted_lines, start=1):
             char_count = self._count_interlinear_line_chars(line_text)
             tokens = self._tokenize_lightweight_text(line_text, exclude_stop_words=False)
             token_count = len(tokens)
-            char_stats.append({"line_no": line_no, "char_count": char_count})
+            line_index_rows.append(
+                {
+                    "line_index": line_no,
+                    "char_count": char_count,
+                    "token_count": token_count,
+                }
+            )
             lightweight_result.append(
                 {
                     "line_no": line_no,
@@ -2208,26 +2231,20 @@ class KnowledgeManager:
                     "score": token_count,
                 },
             )
-            token_stats.append({"line_no": line_no, "token_count": token_count})
 
-        char_stats_path.write_text(
-            json.dumps(char_stats, ensure_ascii=False, indent=2),
+        line_index_path.write_text(
+            "\n".join(json.dumps(item, ensure_ascii=False) for item in line_index_rows) + "\n",
             encoding="utf-8",
         )
         lightweight_result_path.write_text(
             json.dumps(lightweight_result, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
-        token_stats_path.write_text(
-            json.dumps(token_stats, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
 
         return {
             "interlinear_path": relative_paths["interlinear"].as_posix(),
-            "interlinear_char_stats_path": relative_paths["char_stats"].as_posix(),
+            "interlinear_line_index_path": relative_paths["line_index"].as_posix(),
             "lightweight_path": relative_paths["lightweight_result"].as_posix(),
-            "lightweight_token_stats_path": relative_paths["token_stats"].as_posix(),
         }
 
     def _materialize_interlinear_and_lightweight_for_source(
@@ -2236,7 +2253,14 @@ class KnowledgeManager:
         snapshots: list[dict[str, str]],
     ) -> None:
         previous_interlinear = self._load_source_interlinear_manifest(source_id)
-        previous_interlinear_paths = {a.get("path") for a in previous_interlinear.get("artifacts", []) if a.get("path")}
+        previous_interlinear_paths: set[str] = set()
+        for artifact in previous_interlinear.get("artifacts", []):
+            if not isinstance(artifact, dict):
+                continue
+            for field in ("path", "line_index_path"):
+                path_value = str(artifact.get(field) or "").strip()
+                if path_value:
+                    previous_interlinear_paths.add(path_value)
         previous_lightweight_paths = self._load_source_lightweight_manifest(source_id)
 
         current_interlinear_paths: set[str] = set()
@@ -2249,59 +2273,52 @@ class KnowledgeManager:
             if not generated:
                 continue
             interlinear_path = str(generated.get("interlinear_path") or "").strip()
-            interlinear_char_stats_path = str(generated.get("interlinear_char_stats_path") or "").strip()
+            interlinear_line_index_path = str(generated.get("interlinear_line_index_path") or "").strip()
             lightweight_path = str(generated.get("lightweight_path") or "").strip()
-            lightweight_token_stats_path = str(generated.get("lightweight_token_stats_path") or "").strip()
 
-            for path_value in (interlinear_path, interlinear_char_stats_path):
+            for path_value in (interlinear_path, interlinear_line_index_path):
                 if path_value:
                     current_interlinear_paths.add(path_value)
-            for path_value in (lightweight_path, lightweight_token_stats_path):
+            for path_value in (lightweight_path,):
                 if path_value:
                     current_lightweight_paths.add(path_value)
 
-            # 读取行级统计
-            char_stats = []
-            token_stats = []
-            if interlinear_char_stats_path:
-                char_stats_path = self.root_dir / interlinear_char_stats_path
-                if char_stats_path.exists():
+            line_count = 0
+            char_count = 0
+            token_count = 0
+            if interlinear_line_index_path:
+                line_index_file = self.root_dir / interlinear_line_index_path
+                if line_index_file.exists() and line_index_file.is_file():
                     try:
-                        char_stats = json.loads(char_stats_path.read_text(encoding="utf-8"))
+                        for raw_line in line_index_file.read_text(encoding="utf-8").splitlines():
+                            row_text = str(raw_line or "").strip()
+                            if not row_text:
+                                continue
+                            row = json.loads(row_text)
+                            if not isinstance(row, dict):
+                                continue
+                            line_count += 1
+                            char_count += _safe_count_int(row.get("char_count") or 0)
+                            token_count += _safe_count_int(row.get("token_count") or 0)
                     except Exception:
-                        char_stats = []
-            if lightweight_token_stats_path:
-                token_stats_path = self.root_dir / lightweight_token_stats_path
-                if token_stats_path.exists():
-                    try:
-                        token_stats = json.loads(token_stats_path.read_text(encoding="utf-8"))
-                    except Exception:
-                        token_stats = []
+                        line_count = 0
+                        char_count = 0
+                        token_count = 0
 
-            # 合并行级统计
-            line_stats = {}
-            for row in char_stats:
-                if "line_no" in row:
-                    line_stats[row["line_no"]] = {"char_count": row.get("char_count", 0)}
-            for row in token_stats:
-                if "line_no" in row:
-                    if row["line_no"] not in line_stats:
-                        line_stats[row["line_no"]] = {}
-                    line_stats[row["line_no"]]["token_count"] = row.get("token_count", 0)
-
-            # 生成 artifacts（每行为一个 artifact）
-            for line_no, stats in line_stats.items():
-                artifacts.append({
+            artifacts.append(
+                {
                     "path": interlinear_path,
+                    "line_index_path": interlinear_line_index_path,
                     "document_path": str(snapshot_entry.get("document_path") or "").strip(),
                     "title": str(snapshot_entry.get("title") or "").strip(),
                     "snapshot_path": str(snapshot_entry.get("snapshot_path") or "").strip(),
                     "snapshot_relative_path": str(snapshot_entry.get("snapshot_relative_path") or "").strip(),
-                    "line_no": line_no,
-                    "char_count": stats.get("char_count", 0),
-                    "token_count": stats.get("token_count", 0),
+                    "line_count": line_count,
+                    "char_count": char_count,
+                    "token_count": token_count,
                     "updated_at": datetime.now(UTC).isoformat(),
-                })
+                }
+            )
 
             metadata_rows.append(
                 {
@@ -2309,9 +2326,8 @@ class KnowledgeManager:
                     "snapshot_path": str(snapshot_entry.get("snapshot_path") or "").strip(),
                     "snapshot_relative_path": str(snapshot_entry.get("snapshot_relative_path") or "").strip(),
                     "interlinear_path": interlinear_path,
-                    "interlinear_char_stats_path": interlinear_char_stats_path,
+                    "interlinear_line_index_path": interlinear_line_index_path,
                     "lightweight_path": lightweight_path,
-                    "lightweight_token_stats_path": lightweight_token_stats_path,
                 },
             )
 
@@ -4660,6 +4676,11 @@ class KnowledgeManager:
             path = self.root_dir / artifact_path
             if path.exists() and path.is_file():
                 candidates.append(path)
+            line_index_path = str(artifact.get("line_index_path") or "").strip()
+            if line_index_path:
+                path = self.root_dir / line_index_path
+                if path.exists() and path.is_file():
+                    candidates.append(path)
         for lightweight_path in self._load_source_lightweight_manifest(source_id):
             path = self.root_dir / str(lightweight_path)
             if path.exists() and path.is_file():

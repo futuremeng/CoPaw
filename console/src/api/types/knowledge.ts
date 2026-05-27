@@ -558,6 +558,9 @@ export interface KnowledgeSearchHit {
   chunk_id?: string;
   chunk_path?: string;
   line_no?: number;
+  line_index_start?: number;
+  line_index_end?: number;
+  line_index_path?: string;
   evidence_id?: string;
   scope_type?: "project" | "agent";
   scope_id?: string;
