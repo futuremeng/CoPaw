@@ -111,17 +111,6 @@ const parseTimestamp = (msg: Record<string, unknown>): number => {
   const ms = new Date(ts.replace(" ", "T")).getTime();
   return Number.isNaN(ms) ? 0 : Math.floor(ms / 1000);
 };
-
-/** Extract plain text from a message's content array. */
-const extractTextFromContent = (content: unknown): string => {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return String(content || "");
-  return (content as ContentItem[])
-    .filter((c) => c.type === "text")
-    .map((c) => c.text || "")
-    .filter(Boolean)
-    .join("\n");
-};
 function resolveContentItemUrl(c: ContentItem): ContentItem {
   if (c.type === "image" && c.image_url) {
     return { ...c, image_url: toDisplayUrl(c.image_url as string) };
