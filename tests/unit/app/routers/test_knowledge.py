@@ -721,6 +721,9 @@ def test_project_pipeline_run_does_not_expose_project_source_to_global_search(
     project_id = "global-scope-sync-only"
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
+    note_path = project_dir / "original" / "note.md"
+    note_path.parent.mkdir(parents=True, exist_ok=True)
+    note_path.write_text("hello", encoding="utf-8")
 
     config_payload = Config().knowledge.model_dump(mode="json")
     config_payload["enabled"] = True
@@ -758,6 +761,7 @@ def test_project_pipeline_run_does_not_expose_project_source_to_global_search(
         json={
             "trigger": "manual-test",
             "changed_paths": ["original/note.md"],
+            "source_file_path": "original/note.md",
             "force": True,
             "processing_mode": "nlp",
         },
@@ -3196,6 +3200,7 @@ def test_project_pipeline_run_does_not_auto_register_source_and_persists_state(
         json={
             "trigger": "manual-test",
             "changed_paths": ["notes.md"],
+            "source_file_path": "notes.md",
             "force": True,
         },
     )
@@ -3222,7 +3227,7 @@ def test_project_pipeline_run_does_not_auto_register_source_and_persists_state(
         "graphifying",
         "succeeded",
     }
-    assert last_payload["latest_source_id"] == "project-project-pipeline-demo-workspace"
+    assert str(last_payload["latest_source_id"] or "").startswith("project-file-")
 
     source_ids = {
         source.id for source in knowledge_router_module.load_config().knowledge.sources

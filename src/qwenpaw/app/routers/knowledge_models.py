@@ -152,3 +152,44 @@ class ProjectPipelineRunResponse(BaseModel):
     idempotency_key: str = Field(default="", description="Idempotency key used for this run request.")
     deduplicated: bool = Field(default=False, description="Whether this run request was deduplicated.")
     flow_run_id: str = Field(default="", description="Bridged flow engine run id created/reused for this run.")
+
+
+class ProjectPipelineSourcesResponse(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "project_id": "project-alpha",
+                "manual_source_paths": [
+                    "original/requirements.md",
+                    "output/design/overview.md",
+                ],
+            }
+        }
+    )
+
+    project_id: str = Field(default="", description="Target project id.")
+    manual_source_paths: list[str] = Field(
+        default_factory=list,
+        description="Manually curated source file paths used by project knowledge processing.",
+    )
+
+
+class ProjectPipelineSourceCandidatesResponse(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "project_id": "project-alpha",
+                "candidates": [
+                    "original/requirements.md",
+                    "README.md",
+                    "data/context.txt",
+                ],
+            }
+        }
+    )
+
+    project_id: str = Field(default="", description="Target project id.")
+    candidates: list[str] = Field(
+        default_factory=list,
+        description="Auto-discovered candidate source file paths for manual selection.",
+    )

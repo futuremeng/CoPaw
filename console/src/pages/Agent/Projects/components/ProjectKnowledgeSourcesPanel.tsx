@@ -30,9 +30,10 @@ interface ProjectKnowledgeSourcesPanelProps {
 export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSourcesPanelProps) {
   const { t } = useTranslation();
   const { knowledgeState, projectFiles, onOpenProcessingForSource } = props;
-  const sourceRows = buildKnowledgeSourceRows(projectFiles || []);
+  const discoveredRows = buildKnowledgeSourceRows((projectFiles || []).filter((item) => !item.builtin && !item.ignored));
 
   const sourceIdByPath = new Map<string, string>();
+  const manualPathSet = new Set<string>();
   for (const source of knowledgeState.projectSources) {
     const sourceId = String(source.id || "").trim();
     if (!sourceId) {
@@ -42,12 +43,37 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
     if (location) {
       sourceIdByPath.set(location, sourceId);
       sourceIdByPath.set(location.split("/").slice(-1)[0] || location, sourceId);
+      manualPathSet.add(location);
     }
     const name = normalizeKnowledgeSourcePath(source.name);
     if (name) {
       sourceIdByPath.set(name, sourceId);
     }
   }
+
+  const candidateRows = discoveredRows.filter((row) => !manualPathSet.has(normalizeKnowledgeSourcePath(row.path)));
+
+  const candidateByPath = new Map<string, ProjectKnowledgeSourceRow>();
+  for (const row of candidateRows) {
+    const key = normalizeKnowledgeSourcePath(row.path);
+    if (key) {
+      candidateByPath.set(key, row);
+    }
+  }
+
+  const manualRows: ProjectKnowledgeSourceRow[] = knowledgeState.projectSources.map((source) => {
+    const path = normalizeKnowledgeSourcePath(String(source.location || source.id || ""));
+    const fromCandidate = path ? candidateByPath.get(path) : undefined;
+    return {
+      key: path || String(source.id || source.name || ""),
+      path,
+      title: String(source.name || path),
+      stage: fromCandidate?.stage || "manual",
+      contentType: fromCandidate?.contentType || "-",
+      size: fromCandidate?.size || 0,
+      modifiedTime: fromCandidate?.modifiedTime,
+    };
+  });
 
   const resolveSourceIdFromRow = (record: ProjectKnowledgeSourceRow): string => {
     const path = normalizeKnowledgeSourcePath(record.path);
@@ -140,6 +166,63 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
             >
               {t("copaw.projects.knowledge.processing.runFullFlow", "Run Full Flow")}
             </Button>
+            <Button
+              type="link"
+              size="small"
+              danger
+              onClick={() => {
+                void knowledgeState.removeManualSourcePath(record.path);
+              }}
+            >
+              {t("copaw.projects.knowledge.sources.remove", "Remove")}
+            </Button>
+          </div>
+        );
+      },
+    },
+  ];
+
+  const candidateColumns = [
+    ...sourceColumns.slice(0, 5),
+    {
+      title: t("copaw.projects.knowledge.sources.addAction", "Action"),
+      key: "manualSelect",
+      width: 260,
+      render: (_: unknown, record: ProjectKnowledgeSourceRow) => {
+        const normalized = normalizeKnowledgeSourcePath(record.path);
+        const added = manualPathSet.has(normalized);
+        return (
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <Button
+              type="link"
+              size="small"
+              onClick={() => {
+                if (!normalized) {
+                  return;
+                }
+                void knowledgeState.runSourceFullPipeline(normalized, {
+                  force: true,
+                  overwrite: true,
+                });
+              }}
+            >
+              {t("copaw.projects.knowledge.processing.runFullFlow", "Run Full Flow")}
+            </Button>
+            <Button
+              type="link"
+              size="small"
+              disabled={added}
+              onClick={() => {
+                if (!normalized || added) {
+                  return;
+                }
+                void knowledgeState.addManualSourcePath(normalized);
+              }}
+            >
+              {added
+                ? t("copaw.projects.knowledge.sources.added", "Added")
+                : t("copaw.projects.knowledge.sources.add", "Add to Sources")}
+            </Button>
           </div>
         );
       },
@@ -184,11 +267,34 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
         </div>
       </div>
 
-      {sourceRows.length > 0 && (
+      <div className={styles.projectKnowledgeHistoryStrip}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+          <Typography.Text strong>
+            {t("copaw.projects.knowledge.sources.manualList", "Manual Sources")}
+          </Typography.Text>
+          <Button size="small" onClick={() => void knowledgeState.loadProjectSourceStatus()}>
+            {t("copaw.projects.knowledge.actions.refresh", "Refresh")}
+          </Button>
+        </div>
+        <Table
+          columns={sourceColumns}
+          dataSource={manualRows}
+          pagination={{ pageSize: 10, simple: true }}
+          size="small"
+          bordered={false}
+          scroll={{ x: 1200 }}
+          locale={{ emptyText: t("copaw.projects.knowledge.sources.manualEmpty", "No manual sources yet") }}
+        />
+      </div>
+
+      {candidateRows.length > 0 && (
         <div className={styles.projectKnowledgeHistoryStrip}>
+          <Typography.Text strong>
+            {t("copaw.projects.knowledge.sources.candidates", "Auto-discovered Candidates")}
+          </Typography.Text>
           <Table
-            columns={sourceColumns}
-            dataSource={sourceRows}
+            columns={candidateColumns}
+            dataSource={candidateRows}
             pagination={{ pageSize: 10, simple: true }}
             size="small"
             bordered={false}

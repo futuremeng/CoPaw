@@ -326,12 +326,15 @@ export interface ProjectKnowledgeState {
   insightAction: ProjectKnowledgeInsightAction;
   insightMessageKey: string;
   loadProjectSourceStatus: () => Promise<void>;
+  addManualSourcePath: (sourcePath: string) => Promise<void>;
+  removeManualSourcePath: (sourcePath: string) => Promise<void>;
   semanticBySourceId: Record<string, { subject?: string; summary?: string; keywords?: string[]; semanticStatus?: KnowledgeSourceSemanticStatus }>;
   semanticLoadingBySourceId: Record<string, boolean>;
   loadSourceSemantic: (sourceId: string) => Promise<void>;
 }
 
 interface UseProjectKnowledgeStateParams {
+  agentId?: string;
   projectId: string;
   projectName: string;
   includeGlobal?: boolean;
@@ -1619,7 +1622,7 @@ export function useProjectKnowledgeState(
   const fileAnalysisStats = l1StepStats.fileAnalysis;
   const sourceScanStats = l1StepStats.sourceScan;
 
-  // 重构：直接用 agentsApi.listProjectFiles 查询所有非 builtin/ignored 的项目文件
+  // source 清单改为手工维护；自动发现仅作为备选候选，不直接作为加工源。
   const loadProjectSourceStatus = useCallback(async () => {
     if (!params.projectId) {
       setProjectSources([]);
@@ -1629,30 +1632,48 @@ export function useProjectKnowledgeState(
       return;
     }
     try {
-      // 这里 agentId 需从全局或 props 传入，假设 params.agentId 存在
+      const payload = await api.getProjectKnowledgePipelineSources({
+        projectId: params.projectId,
+      });
+      const manualPaths = Array.isArray(payload.manual_source_paths)
+        ? payload.manual_source_paths.map((item) => String(item || "").trim()).filter(Boolean)
+        : [];
+
       const agentId = params.agentId || "";
-      if (!agentId) {
-        setProjectSources([]);
-        setSourceLoaded(true);
-        return;
+      const metaByPath: Record<string, { filename?: string }> = {};
+      if (agentId && manualPaths.length > 0) {
+        try {
+          const metaRows = await import("../../../../api/modules/agents").then((m) => (
+            m.agentsApi.getProjectFilesMetadata(agentId, params.projectId, manualPaths)
+          ));
+          for (const row of metaRows || []) {
+            const key = String(row.path || "").trim();
+            if (!key) {
+              continue;
+            }
+            metaByPath[key] = {
+              filename: String(row.filename || "").trim(),
+            };
+          }
+        } catch {
+          // 忽略 metadata 拉取失败，降级到路径展示
+        }
       }
-      const files = await import("../../../../api/modules/agents").then(m => m.agentsApi.listProjectFiles(agentId, params.projectId));
-      // 过滤掉 builtin/ignored 文件
-      const sources = (files || []).filter(f => !f.builtin && !f.ignored).map(f => ({
-        id: f.path,
-        name: f.filename,
-        type: "file",
-        location: f.path,
+
+      const sources = manualPaths.map((path) => ({
+        id: path,
+        name: metaByPath[path]?.filename || path.split("/").slice(-1)[0] || path,
+        type: "file" as const,
+        location: path,
         content: "",
         enabled: true,
         recursive: false,
-        tags: [],
+        tags: ["manual"],
         summary: "",
         project_id: params.projectId,
         status: undefined,
       }));
       setProjectSources(sources);
-      // 其余统计逻辑保持不变
       setProjectStepStats(EMPTY_PROJECT_KNOWLEDGE_STEP_STATS);
       setL1StepStats(EMPTY_PROJECT_KNOWLEDGE_L1_STEP_STATS);
     } catch {
@@ -1663,6 +1684,42 @@ export function useProjectKnowledgeState(
       setSourceLoaded(true);
     }
   }, [params.projectId, params.agentId]);
+
+  const addManualSourcePath = useCallback(async (sourcePath: string) => {
+    const normalizedPath = String(sourcePath || "").trim();
+    if (!params.projectId || !normalizedPath) {
+      return;
+    }
+    const currentPaths = projectSources
+      .map((source) => String(source.location || "").trim())
+      .filter(Boolean);
+    if (currentPaths.includes(normalizedPath)) {
+      return;
+    }
+    await api.updateProjectKnowledgePipelineSources({
+      projectId: params.projectId,
+      manualSourcePaths: [...currentPaths, normalizedPath],
+    });
+    await loadProjectSourceStatus();
+  }, [loadProjectSourceStatus, params.projectId, projectSources]);
+
+  const removeManualSourcePath = useCallback(async (sourcePath: string) => {
+    const normalizedPath = String(sourcePath || "").trim();
+    if (!params.projectId || !normalizedPath) {
+      return;
+    }
+    const currentPaths = projectSources
+      .map((source) => String(source.location || "").trim())
+      .filter(Boolean);
+    if (!currentPaths.includes(normalizedPath)) {
+      return;
+    }
+    await api.updateProjectKnowledgePipelineSources({
+      projectId: params.projectId,
+      manualSourcePaths: currentPaths.filter((item) => item !== normalizedPath),
+    });
+    await loadProjectSourceStatus();
+  }, [loadProjectSourceStatus, params.projectId, projectSources]);
 
   const loadSourceContent = useCallback(async (
     sourceId: string,
@@ -1936,6 +1993,15 @@ export function useProjectKnowledgeState(
     if (!params.projectId) {
       return;
     }
+    const selectedSource = selectedSourceId
+      ? projectSources.find((item) => String(item.id || "").trim() === selectedSourceId)
+      : null;
+    const fallbackSourcePath = String(
+      options?.sourceFilePath
+      || selectedSource?.location
+      || projectSources[0]?.location
+      || "",
+    ).trim();
     setProcessingLaunchMode(mode);
     try {
       const response = await api.runProjectKnowledgePipeline({
@@ -1944,7 +2010,7 @@ export function useProjectKnowledgeState(
         force: options?.force ?? true,
         processingMode: mode,
         quantizationStage: options?.quantizationStage ?? getProjectKnowledgeQuantizationStage(mode),
-        sourceFilePath: options?.sourceFilePath,
+        sourceFilePath: fallbackSourcePath || undefined,
         rerunLayer: options?.rerunLayer,
         rerunStepId: options?.rerunStepId,
         overwrite: options?.overwrite ?? true,
@@ -1953,7 +2019,7 @@ export function useProjectKnowledgeState(
     } finally {
       setProcessingLaunchMode(null);
     }
-  }, [params.projectId]);
+  }, [params.projectId, projectSources, selectedSourceId]);
 
   const runSourceFullPipeline = useCallback(async (
     sourceFilePath: string,
@@ -3381,6 +3447,8 @@ export function useProjectKnowledgeState(
     insightAction,
     insightMessageKey,
     loadProjectSourceStatus,
+    addManualSourcePath,
+    removeManualSourcePath,
     semanticBySourceId,
     semanticLoadingBySourceId,
     loadSourceSemantic,
@@ -3405,6 +3473,7 @@ export function useProjectKnowledgeState(
     latestQualityLoopJob,
     memifyEnabled,
     loadProjectSourceStatus,
+    addManualSourcePath,
     loadSourceContent,
     loadSourceSemantic,
     modeOutputs,
@@ -3424,6 +3493,7 @@ export function useProjectKnowledgeState(
     quantMetrics,
     quantMetricsMeta,
     relationKeywordSeed,
+    removeManualSourcePath,
     relationRecords,
     markGraphNeedsRefresh,
     resetGraphQuery,

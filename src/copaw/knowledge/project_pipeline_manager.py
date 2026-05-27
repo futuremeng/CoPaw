@@ -383,6 +383,7 @@ class ProjectKnowledgePipelineManager:
 			"last_trigger": "",
 			"changed_paths": [],
 			"pending_changed_paths": [],
+			"manual_source_paths": [],
 			"changed_count": 0,
 			"changed_files": [],
 			"scheduled_for": None,

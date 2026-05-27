@@ -37,13 +37,14 @@ from copaw.knowledge.project_pipeline_manager import (
     ProjectPipelineCommand,
     ProjectPipelineCoordinator,
     build_project_source_spec,
-    ensure_project_source_registered,
 )
 from ...knowledge.module_skills import sync_knowledge_module_skills
 from ..knowledge_workflow_steps import KNOWLEDGE_WORKFLOW_STEP_IDS
 from ..flow_engine_runtime import get_flow_engine_service
 from .knowledge_models import (
     ProjectPipelineCommandResponse,
+    ProjectPipelineSourceCandidatesResponse,
+    ProjectPipelineSourcesResponse,
     ProjectPipelineRunResponse,
     ProjectPipelineStatusResponse,
 )
@@ -819,6 +820,80 @@ def _build_project_file_source_spec(
         tags=["project", "source-file", f"project:{project_id}"],
         summary=f"Project-scoped source file for {file_path.name}",
     )
+
+
+def _normalize_manual_source_paths(paths: list[str] | None) -> list[str]:
+    normalized: list[str] = []
+    for item in list(paths or []):
+        value = str(item or "").strip().replace("\\", "/")
+        if not value:
+            continue
+        normalized.append(value)
+    return list(dict.fromkeys(normalized))
+
+
+def _load_manual_source_paths(
+    *,
+    manager: ProjectKnowledgePipelineManager,
+    project_id: str,
+) -> list[str]:
+    state = manager.get_state(project_id)
+    return _normalize_manual_source_paths(list(state.get("manual_source_paths") or []))
+
+
+def _persist_manual_source_paths(
+    *,
+    manager: ProjectKnowledgePipelineManager,
+    project_id: str,
+    manual_source_paths: list[str],
+) -> list[str]:
+    normalized = _normalize_manual_source_paths(manual_source_paths)
+    with manager._lock:
+        state = manager._load_state(project_id, hydrate=False)
+        state["manual_source_paths"] = normalized
+        state["updated_at"] = manager._now_iso()
+        manager._save_state(state)
+    return normalized
+
+
+def _resolve_project_manual_source_files(
+    *,
+    workspace_dir: Path | str,
+    project_id: str,
+    manual_source_paths: list[str],
+) -> list[tuple[str, Path]]:
+    resolved: list[tuple[str, Path]] = []
+    for rel_path in _normalize_manual_source_paths(manual_source_paths):
+        try:
+            resolved_file = _resolve_ner_target_file_path(
+                workspace_dir=workspace_dir,
+                project_id=project_id,
+                file_path=rel_path,
+            )
+        except HTTPException:
+            continue
+        resolved.append((rel_path, resolved_file))
+    return resolved
+
+
+def _collect_project_source_candidates(
+    *,
+    project_workspace_dir: Path,
+) -> list[str]:
+    if not project_workspace_dir.exists() or not project_workspace_dir.is_dir():
+        return []
+    filter_config = KnowledgeConfig()
+    candidates: list[str] = []
+    for path in sorted(project_workspace_dir.glob("**/*"), key=lambda item: item.as_posix().lower()):
+        if not path.is_file():
+            continue
+        try:
+            rel_path = path.relative_to(project_workspace_dir).as_posix()
+        except ValueError:
+            continue
+        if KnowledgeManager._is_allowed_path(rel_path, filter_config):
+            candidates.append(rel_path)
+    return candidates
 
 
 def _graph_ops_for_workspace(
@@ -1930,6 +2005,92 @@ async def start_memify_job(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
+@router.get("/project-pipeline/sources", response_model=ProjectPipelineSourcesResponse)
+async def get_project_pipeline_sources(request: Request):
+    """Get manually curated source file paths for project pipeline."""
+    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    project_id = _resolve_project_id(request)
+    if not project_id:
+        raise HTTPException(status_code=400, detail="PROJECT_ID_REQUIRED")
+
+    manager = _project_pipeline_for_workspace(
+        workspace_dir,
+        project_id=project_id,
+    )
+    manual_source_paths = await asyncio.to_thread(
+        _load_manual_source_paths,
+        manager=manager,
+        project_id=project_id,
+    )
+    return {
+        "project_id": project_id,
+        "manual_source_paths": manual_source_paths,
+    }
+
+
+@router.put("/project-pipeline/sources", response_model=ProjectPipelineSourcesResponse)
+async def update_project_pipeline_sources(
+    request: Request,
+    manual_source_paths: list[str] = Body(default_factory=list),
+):
+    """Replace manual source file paths for project pipeline."""
+    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    project_id = _resolve_project_id(request)
+    if not project_id:
+        raise HTTPException(status_code=400, detail="PROJECT_ID_REQUIRED")
+
+    project_workspace_dir = (Path(workspace_dir) / "projects" / project_id).resolve()
+    if not project_workspace_dir.exists() or not project_workspace_dir.is_dir():
+        raise HTTPException(status_code=404, detail="PROJECT_WORKSPACE_NOT_FOUND")
+
+    normalized_paths = _normalize_manual_source_paths(manual_source_paths)
+    resolved_paths: list[str] = []
+    for path in normalized_paths:
+        resolved_file = _resolve_ner_target_file_path(
+            workspace_dir=workspace_dir,
+            project_id=project_id,
+            file_path=path,
+        )
+        resolved_paths.append(resolved_file.relative_to(project_workspace_dir).as_posix())
+
+    manager = _project_pipeline_for_workspace(
+        workspace_dir,
+        project_id=project_id,
+    )
+    persisted = await asyncio.to_thread(
+        _persist_manual_source_paths,
+        manager=manager,
+        project_id=project_id,
+        manual_source_paths=resolved_paths,
+    )
+    return {
+        "project_id": project_id,
+        "manual_source_paths": persisted,
+    }
+
+
+@router.get("/project-pipeline/source-candidates", response_model=ProjectPipelineSourceCandidatesResponse)
+async def get_project_pipeline_source_candidates(request: Request):
+    """List auto-discovered project files as candidate sources for manual selection."""
+    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    project_id = _resolve_project_id(request)
+    if not project_id:
+        raise HTTPException(status_code=400, detail="PROJECT_ID_REQUIRED")
+
+    project_workspace_dir = (Path(workspace_dir) / "projects" / project_id).resolve()
+    if not project_workspace_dir.exists() or not project_workspace_dir.is_dir():
+        raise HTTPException(status_code=404, detail="PROJECT_WORKSPACE_NOT_FOUND")
+
+    candidates = await asyncio.to_thread(
+        _collect_project_source_candidates,
+        project_workspace_dir=project_workspace_dir,
+    )
+    return {
+        "project_id": project_id,
+        "candidates": candidates,
+    }
+
+
 @router.get("/project-pipeline/status", response_model=ProjectPipelineStatusResponse)
 async def get_project_pipeline_status(request: Request):
     """Get project-scoped automatic knowledge pipeline status."""
@@ -1944,11 +2105,34 @@ async def get_project_pipeline_status(request: Request):
         project_id=project_id,
     )
     project_workspace_dir = (Path(workspace_dir) / "projects" / project_id).resolve()
-    source = build_project_source_spec(
-        project_id=project_id,
-        project_name=project_id,
-        project_workspace_dir=str(project_workspace_dir),
-    )
+    state_snapshot = await asyncio.to_thread(manager.get_state, project_id)
+    manual_source_paths = _normalize_manual_source_paths(list(state_snapshot.get("manual_source_paths") or []))
+    execution_context = dict(state_snapshot.get("execution_context") or {})
+    preferred_path = str(execution_context.get("source_file_path") or "").strip()
+    if preferred_path and preferred_path in manual_source_paths:
+        resolved_sources = _resolve_project_manual_source_files(
+            workspace_dir=workspace_dir,
+            project_id=project_id,
+            manual_source_paths=[preferred_path],
+        )
+    else:
+        resolved_sources = _resolve_project_manual_source_files(
+            workspace_dir=workspace_dir,
+            project_id=project_id,
+            manual_source_paths=manual_source_paths,
+        )
+    if resolved_sources:
+        _, source_file = resolved_sources[0]
+        source = _build_project_file_source_spec(
+            project_id=project_id,
+            file_path=source_file,
+        )
+    else:
+        source = build_project_source_spec(
+            project_id=project_id,
+            project_name=project_id,
+            project_workspace_dir=str(project_workspace_dir),
+        )
     coordinator = _project_pipeline_coordinator_for_workspace(
         workspace_dir,
         project_id=project_id,
@@ -2060,6 +2244,14 @@ async def run_project_pipeline(
     if not project_workspace_dir.exists() or not project_workspace_dir.is_dir():
         raise HTTPException(status_code=404, detail="PROJECT_WORKSPACE_NOT_FOUND")
 
+    manager = _project_pipeline_for_workspace(
+        workspace_dir,
+        project_id=project_id,
+    )
+    manual_source_paths = _load_manual_source_paths(
+        manager=manager,
+        project_id=project_id,
+    )
     resolved_source_file_path = ""
     normalized_rerun_layer = str(rerun_layer or "").strip().lower()
     normalized_rerun_step_id = str(rerun_step_id or "").strip().lower()
@@ -2077,19 +2269,20 @@ async def run_project_pipeline(
         if not changed_paths:
             changed_paths = [resolved_source_file_path]
     else:
-        source = build_project_source_spec(
+        resolved_sources = _resolve_project_manual_source_files(
+            workspace_dir=workspace_dir,
             project_id=project_id,
-            project_name=project_id,
-            project_workspace_dir=str(project_workspace_dir),
+            manual_source_paths=manual_source_paths,
         )
-        if processing_mode_explicit:
-            ensure_project_source_registered(
-                config.knowledge,
-                project_id=project_id,
-                project_name=project_id,
-                project_workspace_dir=str(project_workspace_dir),
-                persist=lambda: save_config(config),
-            )
+        if not resolved_sources:
+            raise HTTPException(status_code=400, detail="PROJECT_PIPELINE_MANUAL_SOURCE_REQUIRED")
+        resolved_source_file_path, resolved_file = resolved_sources[0]
+        source = _build_project_file_source_spec(
+            project_id=project_id,
+            file_path=resolved_file,
+        )
+        if not changed_paths:
+            changed_paths = [resolved_source_file_path]
 
     execution_context = {
         "scope": "source_file" if resolved_source_file_path else "project",

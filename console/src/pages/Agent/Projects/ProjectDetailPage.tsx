@@ -799,6 +799,7 @@ export default function ProjectDetailPage() {
   );
 
   const projectKnowledgeState = useProjectKnowledgeState({
+    agentId: currentAgent?.id || "",
     projectId: selectedProject?.id || "",
     projectName: selectedProject?.name || "",
     includeGlobal: projectKnowledgeIncludeGlobal,

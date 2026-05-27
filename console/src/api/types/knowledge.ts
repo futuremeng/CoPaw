@@ -448,6 +448,16 @@ export interface ProjectKnowledgePipelineRunRequest {
   idempotencyKey?: string;
 }
 
+export interface ProjectKnowledgePipelineSourcesPayload {
+  project_id: string;
+  manual_source_paths: string[];
+}
+
+export interface ProjectKnowledgePipelineSourceCandidatesPayload {
+  project_id: string;
+  candidates: string[];
+}
+
 export interface ProjectKnowledgePipelineRunResponse {
   accepted: boolean;
   reason: string;

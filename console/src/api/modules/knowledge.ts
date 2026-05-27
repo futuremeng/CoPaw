@@ -28,6 +28,8 @@ import type {
   ProjectKnowledgePipelineRunRequest,
   ProjectKnowledgePipelineRunResponse,
   ProjectKnowledgePipelineCommandResponse,
+  ProjectKnowledgePipelineSourceCandidatesPayload,
+  ProjectKnowledgePipelineSourcesPayload,
   ProjectKnowledgePipelineState,
 } from "../types";
 
@@ -435,6 +437,30 @@ export const knowledgeApi = {
   getProjectKnowledgePipelineStatus: (options: { projectId: string }) =>
     request<ProjectKnowledgePipelineState>(
       withProjectId("/knowledge/project-pipeline/status", options.projectId),
+    ),
+
+  getProjectKnowledgePipelineSources: (options: { projectId: string }) =>
+    request<ProjectKnowledgePipelineSourcesPayload>(
+      withProjectId("/knowledge/project-pipeline/sources", options.projectId),
+    ),
+
+  updateProjectKnowledgePipelineSources: (payload: {
+    projectId: string;
+    manualSourcePaths: string[];
+  }) =>
+    request<ProjectKnowledgePipelineSourcesPayload>(
+      withProjectId("/knowledge/project-pipeline/sources", payload.projectId),
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          manual_source_paths: payload.manualSourcePaths ?? [],
+        }),
+      },
+    ),
+
+  getProjectKnowledgePipelineSourceCandidates: (options: { projectId: string }) =>
+    request<ProjectKnowledgePipelineSourceCandidatesPayload>(
+      withProjectId("/knowledge/project-pipeline/source-candidates", options.projectId),
     ),
 
   runProjectKnowledgePipeline: (payload: ProjectKnowledgePipelineRunRequest) =>
