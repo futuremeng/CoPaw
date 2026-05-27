@@ -1,10 +1,16 @@
 import { Column, Pie } from "@ant-design/plots";
-import { Card, Empty, Typography } from "antd";
-import { useEffect, useMemo } from "react";
+import { Button, Card, Empty, Typography } from "antd";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { KnowledgeSourceDocument } from "../../../../api/types";
 import styles from "../index.module.less";
 import type { ProjectKnowledgeState } from "../hooks/useProjectKnowledgeState";
+import {
+  parseMarkdownOutline,
+  PROJECT_MARKDOWN_OUTLINE_JUMP_EVENT,
+  isMarkdownDocumentPath,
+  type MarkdownOutlineJumpDetail,
+} from "../utils/markdownOutline";
 
 interface ProjectDocumentKnowledgeVisualizationProps {
   selectedFilePath: string;
@@ -687,6 +693,49 @@ export default function ProjectDocumentKnowledgeVisualization(
       hasSyntax: relationEdges.length > 0,
     };
   }, [charStatsContent, currentDocument, fileContent, nerStructuredContent]);
+  const isMarkdownDocument = isMarkdownDocumentPath(selectedFilePath);
+  const outlineItems = useMemo(() => {
+    if (!isMarkdownDocument) {
+      return [];
+    }
+    return parseMarkdownOutline(fileContent);
+  }, [fileContent, isMarkdownDocument]);
+  const [collapsedOutlineIds, setCollapsedOutlineIds] = useState<Set<string>>(new Set());
+
+  const outlineItemsWithChildren = useMemo(() => {
+    return outlineItems.map((item, index) => {
+      const next = outlineItems[index + 1];
+      return {
+        ...item,
+        hasChildren: Boolean(next && next.level > item.level),
+      };
+    });
+  }, [outlineItems]);
+
+  const visibleOutlineItems = useMemo(() => {
+    const visible: Array<(typeof outlineItemsWithChildren)[number]> = [];
+    const hiddenUnderLevelStack: number[] = [];
+
+    for (const item of outlineItemsWithChildren) {
+      while (
+        hiddenUnderLevelStack.length > 0
+        && item.level <= hiddenUnderLevelStack[hiddenUnderLevelStack.length - 1]
+      ) {
+        hiddenUnderLevelStack.pop();
+      }
+
+      if (hiddenUnderLevelStack.length > 0) {
+        continue;
+      }
+
+      visible.push(item);
+      if (collapsedOutlineIds.has(item.id) && item.hasChildren) {
+        hiddenUnderLevelStack.push(item.level);
+      }
+    }
+
+    return visible;
+  }, [collapsedOutlineIds, outlineItemsWithChildren]);
 
   if (!selectedFilePath) {
     return (
@@ -707,6 +756,106 @@ export default function ProjectDocumentKnowledgeVisualization(
           )}
         </Typography.Text>
       )}
+
+      <Card
+        size="small"
+        className={styles.documentKnowledgeVizCard}
+        title={t("projects.workbench.knowledgeMarkdownOutline", "Markdown 大纲导航")}
+      >
+        {isMarkdownDocument ? (
+          outlineItems.length > 0 ? (
+            <div className={styles.documentOutlineList}>
+                {visibleOutlineItems.map((item) => {
+                  const isCollapsed = collapsedOutlineIds.has(item.id);
+                  return (
+                <div
+                  key={item.id}
+                    className={`${styles.documentOutlineItem} ${styles[`documentOutlineLevel${Math.max(1, Math.min(item.level, 6))}`]}`}
+                >
+                    {item.hasChildren ? (
+                      <Button
+                        type="text"
+                        size="small"
+                        className={styles.documentOutlineToggle}
+                        aria-label={isCollapsed
+                          ? t("projects.workbench.knowledgeOutlineExpand", "Expand")
+                          : t("projects.workbench.knowledgeOutlineCollapse", "Collapse")}
+                        onClick={() => {
+                          setCollapsedOutlineIds((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(item.id)) {
+                              next.delete(item.id);
+                            } else {
+                              next.add(item.id);
+                            }
+                            return next;
+                          });
+                        }}
+                      >
+                        {isCollapsed ? "▸" : "▾"}
+                      </Button>
+                    ) : (
+                      <span className={styles.documentOutlineTogglePlaceholder} aria-hidden="true" />
+                    )}
+                    <span
+                      className={`${styles.documentOutlinePrefix} ${styles[`documentOutlinePrefixLevel${Math.max(1, Math.min(item.level, 6))}`]}`}
+                      aria-hidden="true"
+                    >
+                      {item.level <= 2 ? "◆" : "•"}
+                    </span>
+                  <Button
+                    type="link"
+                    className={styles.documentOutlineButton}
+                    onClick={() => {
+                      if (typeof window === "undefined") {
+                        return;
+                      }
+                      const detail: MarkdownOutlineJumpDetail = {
+                        filePath: selectedFilePath,
+                        headingId: item.id,
+                        headingText: item.text,
+                        line: item.line,
+                      };
+                      window.dispatchEvent(
+                        new CustomEvent<MarkdownOutlineJumpDetail>(
+                          PROJECT_MARKDOWN_OUTLINE_JUMP_EVENT,
+                          { detail },
+                        ),
+                      );
+                    }}
+                  >
+                    {item.text}
+                  </Button>
+                  <Typography.Text type="secondary" className={styles.documentOutlineLine}>
+                      {`H${item.level} · L${item.line}`}
+                  </Typography.Text>
+                </div>
+                  );
+                })}
+            </div>
+          ) : (
+            <div className={styles.documentKnowledgeVizEmpty}>
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={t(
+                  "projects.workbench.knowledgeMarkdownOutlineEmpty",
+                  "No markdown headings found in this document",
+                )}
+              />
+            </div>
+          )
+        ) : (
+          <div className={styles.documentKnowledgeVizEmpty}>
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={t(
+                "projects.workbench.knowledgeMarkdownOutlineNotMarkdown",
+                "Outline navigation is available for Markdown files",
+              )}
+            />
+          </div>
+        )}
+      </Card>
 
       <Card
         size="small"

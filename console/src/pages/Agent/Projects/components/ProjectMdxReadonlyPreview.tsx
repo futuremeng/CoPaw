@@ -23,6 +23,11 @@ import {
   resolveRelativeAssetPath,
   rewriteMarkdownImageSources,
 } from "../../../../utils/relativeAssetPath";
+import {
+  normalizeHeadingForMatch,
+  PROJECT_MARKDOWN_OUTLINE_JUMP_EVENT,
+  type MarkdownOutlineJumpDetail,
+} from "../utils/markdownOutline";
 import styles from "../index.module.less";
 
 interface ProjectMdxReadonlyPreviewProps {
@@ -106,6 +111,7 @@ function ProjectMdxReadonlyPreview({
   projectId,
 }: ProjectMdxReadonlyPreviewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const jumpHighlightTimerRef = useRef<number | null>(null);
   const [viewMode, setViewMode] = useState<EditorViewMode>(() => {
     return "source";
   });
@@ -175,6 +181,77 @@ function ProjectMdxReadonlyPreview({
     }
     window.localStorage.setItem(MDX_PREVIEW_MODE_STORAGE_KEY, viewMode === "source" ? "source" : "rich-text");
   }, [viewMode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    let cancelled = false;
+
+    const findHeadingElement = (targetHeading: string): HTMLElement | null => {
+      const root = containerRef.current;
+      if (!root) {
+        return null;
+      }
+      const headings = Array.from(root.querySelectorAll("h1, h2, h3, h4, h5, h6")) as HTMLElement[];
+      if (headings.length === 0) {
+        return null;
+      }
+      const normalizedTarget = normalizeHeadingForMatch(targetHeading);
+      if (!normalizedTarget) {
+        return null;
+      }
+
+      return headings.find((node) => normalizeHeadingForMatch(node.textContent || "") === normalizedTarget)
+        || headings.find((node) => normalizeHeadingForMatch(node.textContent || "").includes(normalizedTarget))
+        || null;
+    };
+
+    const jumpToHeading = (targetHeading: string, retryCount = 0) => {
+      if (cancelled) {
+        return;
+      }
+      const targetNode = findHeadingElement(targetHeading);
+      if (!targetNode) {
+        if (retryCount < 10) {
+          window.setTimeout(() => jumpToHeading(targetHeading, retryCount + 1), 80);
+        }
+        return;
+      }
+
+      targetNode.scrollIntoView({ behavior: "smooth", block: "start" });
+      targetNode.classList.add(styles.mdxOutlineJumpTarget);
+      if (jumpHighlightTimerRef.current !== null) {
+        window.clearTimeout(jumpHighlightTimerRef.current);
+      }
+      jumpHighlightTimerRef.current = window.setTimeout(() => {
+        targetNode.classList.remove(styles.mdxOutlineJumpTarget);
+        jumpHighlightTimerRef.current = null;
+      }, 1200);
+    };
+
+    const onJump = (event: Event) => {
+      const detail = (event as CustomEvent<MarkdownOutlineJumpDetail>).detail;
+      if (!detail || detail.filePath !== filePath) {
+        return;
+      }
+      if (viewMode !== "rich-text") {
+        setViewMode("rich-text");
+      }
+      jumpToHeading(detail.headingText);
+    };
+
+    window.addEventListener(PROJECT_MARKDOWN_OUTLINE_JUMP_EVENT, onJump as EventListener);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(PROJECT_MARKDOWN_OUTLINE_JUMP_EVENT, onJump as EventListener);
+      if (jumpHighlightTimerRef.current !== null) {
+        window.clearTimeout(jumpHighlightTimerRef.current);
+        jumpHighlightTimerRef.current = null;
+      }
+    };
+  }, [filePath, viewMode]);
 
   return (
     <div className={styles.mdxPreviewPane} ref={containerRef}>
