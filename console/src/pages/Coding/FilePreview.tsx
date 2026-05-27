@@ -12,6 +12,7 @@ import { useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { workspaceApi } from "../../api/modules/workspace";
+import { resolveRelativeAssetPath } from "../../utils/relativeAssetPath";
 import styles from "./FilePreview.module.less";
 
 // ---------------------------------------------------------------------------
@@ -100,10 +101,31 @@ function PdfPreview({ filePath }: { filePath: string }) {
   );
 }
 
-function MarkdownPreview({ content }: { content: string }) {
+function MarkdownPreview({
+  content,
+  filePath,
+}: {
+  content: string;
+  filePath: string;
+}) {
+  const components = useMemo(
+    () => ({
+      img: ({ src = "", ...props }: { src?: string } & Record<string, unknown>) => {
+        const resolvedPath = resolveRelativeAssetPath(filePath, src);
+        const finalSrc = resolvedPath
+          ? workspaceApi.getBinaryFileUrl(resolvedPath)
+          : src;
+        return <img {...props} src={finalSrc} />;
+      },
+    }),
+    [filePath],
+  );
+
   return (
     <div className={styles.markdownWrap}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+        {content}
+      </ReactMarkdown>
     </div>
   );
 }
@@ -170,7 +192,7 @@ export default function FilePreview({ filePath, content }: FilePreviewProps) {
 
   if (type === "image") return <ImagePreview filePath={filePath} />;
   if (type === "pdf") return <PdfPreview filePath={filePath} />;
-  if (type === "markdown") return <MarkdownPreview content={content} />;
+  if (type === "markdown") return <MarkdownPreview content={content} filePath={filePath} />;
   if (type === "csv") return <CsvPreview content={content} />;
   return null;
 }

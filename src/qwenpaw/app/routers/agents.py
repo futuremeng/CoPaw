@@ -31,6 +31,7 @@ from fastapi import (
 )
 from fastapi import Path as PathParam
 from pydantic import BaseModel, Field, field_validator
+from starlette.responses import FileResponse
 
 from agentscope_runtime.engine.schemas.exception import (
     AppBaseException,
@@ -2975,6 +2976,16 @@ def _get_project_files_metadata_for_workspace(
 
 
 def _read_project_text_file(project_dir: Path, rel_path: str) -> str:
+    target = _resolve_project_file_path(project_dir, rel_path)
+    raw = target.read_bytes()
+    if b"\x00" in raw[:4096]:
+        raise HTTPException(
+            status_code=400, detail="Binary file preview is not supported"
+        )
+    return raw.decode("utf-8", errors="replace")
+
+
+def _resolve_project_file_path(project_dir: Path, rel_path: str) -> Path:
     if not _is_safe_relative_path(rel_path):
         raise HTTPException(status_code=400, detail="Invalid file path")
 
@@ -2987,20 +2998,27 @@ def _read_project_text_file(project_dir: Path, rel_path: str) -> str:
         fallback_rel_path = _rewrite_original_to_data_path(target_rel_path)
         if fallback_rel_path and _is_safe_relative_path(fallback_rel_path):
             fallback_target = (project_dir / fallback_rel_path).resolve()
-            if str(fallback_target).startswith(str(project_root)) and fallback_target.exists() and fallback_target.is_file():
+            if (
+                str(fallback_target).startswith(str(project_root))
+                and fallback_target.exists()
+                and fallback_target.is_file()
+            ):
                 target_rel_path = fallback_rel_path
                 target = fallback_target
     if not target.exists() or not target.is_file():
         raise HTTPException(
             status_code=404, detail=f"File '{rel_path}' not found"
         )
+    return target
 
-    raw = target.read_bytes()
-    if b"\x00" in raw[:4096]:
-        raise HTTPException(
-            status_code=400, detail="Binary file preview is not supported"
-        )
-    return raw.decode("utf-8", errors="replace")
+
+def _resolve_project_file_path_for_workspace(
+    workspace_dir: Path,
+    project_id: str,
+    rel_path: str,
+) -> Path:
+    project_dir = _resolve_project_dir(workspace_dir, project_id)
+    return _resolve_project_file_path(project_dir, rel_path)
 
 
 def _read_project_text_file_for_workspace(
@@ -5355,6 +5373,35 @@ async def read_agent_project_file(
             filePath,
         )
         return ProjectFileContent(content=content)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get(
+    "/{agentId}/projects/{projectId}/binary-files/{filePath:path}",
+    summary="Preview project binary file",
+    description="Stream a project file for image/media preview",
+)
+async def preview_agent_project_binary_file(
+    request: Request,
+    agentId: str = PathParam(...),
+    projectId: str = PathParam(...),
+    filePath: str = PathParam(...),
+) -> FileResponse:
+    """Stream one project file as binary response for browser preview."""
+    _ = request
+    workspace_dir = _resolve_agent_workspace_dir(agentId)
+
+    try:
+        target = await asyncio.to_thread(
+            _resolve_project_file_path_for_workspace,
+            workspace_dir,
+            projectId,
+            filePath,
+        )
+        return FileResponse(target, filename=target.name)
     except HTTPException:
         raise
     except Exception as e:

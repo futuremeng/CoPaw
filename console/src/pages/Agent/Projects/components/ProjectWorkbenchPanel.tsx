@@ -18,6 +18,8 @@ function getArtifactDisplayPath(
 }
 
 interface ProjectWorkbenchPanelProps {
+  agentId?: string;
+  projectId?: string;
   syncNotice: {
     changedPaths: string[];
     updatedAt: number;
@@ -43,6 +45,8 @@ interface ProjectWorkbenchPanelProps {
 }
 
 export default function ProjectWorkbenchPanel({
+  agentId,
+  projectId,
   syncNotice,
   filesLoading,
   contentLoading,
@@ -153,6 +157,8 @@ export default function ProjectWorkbenchPanel({
         </div>
       ) : null}
       <ProjectArtifactsPanel
+        agentId={agentId}
+        projectId={projectId}
         filesLoading={filesLoading}
         contentLoading={contentLoading}
         artifactRecords={artifactRecords}

@@ -19,6 +19,8 @@ function isMarkdownFilePath(filePath: string): boolean {
 }
 
 interface ProjectArtifactsPanelProps {
+  agentId?: string;
+  projectId?: string;
   filesLoading: boolean;
   contentLoading: boolean;
   artifactRecords: ProjectPipelineArtifactRecord[];
@@ -37,6 +39,8 @@ interface ProjectArtifactsPanelProps {
 }
 
 export default function ProjectArtifactsPanel({
+  agentId,
+  projectId,
   filesLoading,
   contentLoading,
   artifactRecords,
@@ -91,6 +95,8 @@ export default function ProjectArtifactsPanel({
         <ProjectMdxReadonlyPreview
           filePath={selectedFilePath}
           markdown={previewContent}
+          agentId={agentId}
+          projectId={projectId}
         />
       ) : (
         <>

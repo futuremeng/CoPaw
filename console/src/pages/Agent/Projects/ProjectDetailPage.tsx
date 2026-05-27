@@ -4550,6 +4550,8 @@ export default function ProjectDetailPage() {
                       <div className={styles.columnRight}>
                         <div className={styles.rightWorkbenchPrimary}>
                           <ProjectWorkbenchPanel
+                            agentId={currentAgent?.id}
+                            projectId={selectedProject?.id}
                             syncNotice={workbenchSyncNotice}
                             filesLoading={filesLoading}
                             contentLoading={contentLoading}

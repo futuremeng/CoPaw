@@ -366,6 +366,14 @@ export const agentsApi = {
         .join("/")}`,
     ),
 
+  getProjectBinaryFileUrl: (agentId: string, projectId: string, filePath: string) =>
+    getApiUrl(
+      `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/binary-files/${filePath
+        .split("/")
+        .map((part) => encodeProjectFilePathSegment(part))
+        .join("/")}`,
+    ),
+
   deleteProjectPath: (agentId: string, projectId: string, targetPath: string) =>
     request<DeleteProjectPathResponse>(
       `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/files/${targetPath

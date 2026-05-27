@@ -18,11 +18,18 @@ import {
 import "@mdxeditor/editor/style.css";
 import "katex/dist/katex.min.css";
 import renderMathInElement from "katex/contrib/auto-render";
+import { agentsApi } from "../../../../api/modules/agents";
+import {
+  resolveRelativeAssetPath,
+  rewriteMarkdownImageSources,
+} from "../../../../utils/relativeAssetPath";
 import styles from "../index.module.less";
 
 interface ProjectMdxReadonlyPreviewProps {
   filePath: string;
   markdown: string;
+  agentId?: string;
+  projectId?: string;
 }
 
 type EditorViewMode = "rich-text" | "source" | "diff";
@@ -92,7 +99,12 @@ function normalizeMarkdownForMdxEditor(markdown: string): string {
   return convertHtmlTablesToMarkdown(normalized);
 }
 
-function ProjectMdxReadonlyPreview({ filePath, markdown }: ProjectMdxReadonlyPreviewProps) {
+function ProjectMdxReadonlyPreview({
+  filePath,
+  markdown,
+  agentId,
+  projectId,
+}: ProjectMdxReadonlyPreviewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [viewMode, setViewMode] = useState<EditorViewMode>(() => {
     return "source";
@@ -122,6 +134,19 @@ function ProjectMdxReadonlyPreview({ filePath, markdown }: ProjectMdxReadonlyPre
     () => normalizeMarkdownForMdxEditor(markdown),
     [markdown],
   );
+  const markdownWithResolvedImageSources = useMemo(() => {
+    if (!agentId || !projectId) {
+      return normalizedMarkdown;
+    }
+
+    return rewriteMarkdownImageSources(normalizedMarkdown, (src) => {
+      const resolvedPath = resolveRelativeAssetPath(filePath, src);
+      if (!resolvedPath) {
+        return null;
+      }
+      return agentsApi.getProjectBinaryFileUrl(agentId, projectId, resolvedPath);
+    });
+  }, [agentId, filePath, normalizedMarkdown, projectId]);
 
   useEffect(() => {
     if (viewMode !== "rich-text") {
@@ -154,8 +179,8 @@ function ProjectMdxReadonlyPreview({ filePath, markdown }: ProjectMdxReadonlyPre
   return (
     <div className={styles.mdxPreviewPane} ref={containerRef}>
       <MDXEditor
-        key={`${filePath}:${normalizedMarkdown.length}`}
-        markdown={normalizedMarkdown}
+        key={`${filePath}:${markdownWithResolvedImageSources.length}`}
+        markdown={markdownWithResolvedImageSources}
         plugins={plugins}
         readOnly
       />
