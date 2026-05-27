@@ -22,6 +22,7 @@ import type { ProviderInfo, ModelInfo } from "../../api/types";
 import ModelSelector from "./ModelSelector";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useAgentStore } from "../../stores/agentStore";
+import { useCodingMode } from "../../stores/codingModeStore";
 import { useChatAnywhereInput } from "@agentscope-ai/chat";
 import styles from "./index.module.less";
 import { IconButton } from "@agentscope-ai/design";
@@ -60,10 +61,12 @@ import {
   extractUserMessageText,
   extractTextFromMessage,
   setTextareaValue,
+  formatMessageTime,
   type CopyableResponse,
   type RuntimeLoadingBridgeApi,
 } from "./utils";
 import { openExternalLink } from "../../utils/openExternalLink";
+import { getLastEditorCopy } from "../Coding/lastEditorCopy";
 
 const CHAT_ATTACHMENT_MAX_MB = 10;
 
@@ -575,6 +578,57 @@ function useChatInputDraft(isChatActive: () => boolean) {
   }, [isChatActive]);
 }
 
+/**
+ * When the user pastes into the chat textarea text that was just copied
+ * from the Coding-mode editor, swap the raw paste for the formatted
+ * `path:line[-line]` version (plus optional fenced code). Cmd/Ctrl+C in
+ * the editor stays as a plain-text copy for paste-anywhere; only Chat
+ * pastes get the editor-context format.
+ *
+ * Not gated by route: the Chat composer is also embedded in Coding
+ * mode (side-by-side with the editor), and that's the primary place
+ * users do an editor→chat copy. The handler is already selective (it
+ * checks the paste target is a sender textarea AND the pasted text
+ * matches the last editor copy), so a global listener is safe.
+ */
+function useChatPasteFromEditor() {
+  useEffect(() => {
+    // Anything older than this is treated as stale (different copy session).
+    const STALE_MS = 60_000;
+
+    const handlePaste = (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target || target.tagName !== "TEXTAREA") return;
+      if (!target.closest('[class*="sender"]')) return;
+
+      const last = getLastEditorCopy();
+      if (!last) return;
+      if (Date.now() - last.ts > STALE_MS) return;
+
+      const pasted = e.clipboardData?.getData("text/plain");
+      if (pasted == null || pasted !== last.text) return;
+
+      e.preventDefault();
+      const textarea = target as HTMLTextAreaElement;
+      const start = textarea.selectionStart ?? textarea.value.length;
+      const end = textarea.selectionEnd ?? textarea.value.length;
+      const before = textarea.value.slice(0, start);
+      const after = textarea.value.slice(end);
+      const next = before + last.formatted + after;
+      setTextareaValue(textarea, next);
+      const caret = before.length + last.formatted.length;
+      requestAnimationFrame(() => {
+        textarea.selectionStart = textarea.selectionEnd = caret;
+      });
+    };
+
+    document.addEventListener("paste", handlePaste, true);
+    return () => {
+      document.removeEventListener("paste", handlePaste, true);
+    };
+  }, []);
+}
+
 function RuntimeLoadingBridge({
   bridgeRef,
 }: {
@@ -609,11 +663,26 @@ function RuntimeLoadingBridge({
   return null;
 }
 
+const timestampStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: "var(--ant-color-text-quaternary)",
+  whiteSpace: "nowrap",
+};
+
 export default function ChatPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const { isDark } = useTheme();
+  const { codingMode, initialized } = useCodingMode();
+
+  // Redirect to /coding when coding mode is active
+  useEffect(() => {
+    if (initialized && codingMode) {
+      navigate("/coding", { replace: true });
+    }
+  }, [initialized, codingMode, navigate]);
+
   const chatId = useMemo(() => {
     const match = location.pathname.match(/^\/chat\/(.+)$/);
     return match?.[1];
@@ -828,6 +897,7 @@ export default function ChatPage() {
 
   useMessageHistoryNavigation(chatRef, isChatActive, isComposingRef);
   useChatInputDraft(isChatActive);
+  useChatPasteFromEditor();
 
   const onFileCardClick = useCallback(
     (fileInfo: { name?: string; size?: number; url?: string }) => {
@@ -1287,8 +1357,48 @@ export default function ChatPage() {
               void copyResponse(data);
             },
           },
+          {
+            render: ({
+              data,
+            }: {
+              data: { data?: { created_at?: number } };
+            }) => {
+              return (
+                <span style={timestampStyle}>
+                  {formatMessageTime(data?.data?.created_at ?? 0)}
+                </span>
+              );
+            },
+          },
         ],
         replace: true,
+      },
+      requestActions: {
+        list: [
+          {
+            render: ({ data }: { data: { created_at?: number } }) => {
+              return (
+                <span style={timestampStyle}>
+                  {formatMessageTime(data?.created_at ?? 0)}
+                </span>
+              );
+            },
+          },
+          {
+            icon: <SparkCopyLine />,
+            onClick: ({ data }: { data: { input?: any[] } }) => {
+              const text = (data?.input || [])
+                .map(extractUserMessageText)
+                .join("\n")
+                .trim();
+              if (text) {
+                void copyText(text)
+                  .then(() => message.success(t("common.copied")))
+                  .catch(() => message.error(t("common.copyFailed")));
+              }
+            },
+          },
+        ],
       },
     } as unknown as IAgentScopeRuntimeWebUIOptions;
   }, [

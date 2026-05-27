@@ -4,7 +4,7 @@ import { UploadOutlined, DownloadOutlined } from "@ant-design/icons";
 import { Button, Tooltip } from "@agentscope-ai/design";
 import { Spin } from "antd";
 import { workspaceApi } from "../../../api/modules/workspace";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
 import { useAppMessage } from "../../../hooks/useAppMessage";
@@ -34,8 +34,16 @@ export default function WorkspacePage() {
   } = useAgentsData();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [downloading, setDownloading] = useState(false);
 
   const handleDownload = async () => {
+    if (downloading) return;
+    setDownloading(true);
+    message.loading({
+      content: t("workspace.downloadPreparing"),
+      key: "workspace-download",
+      duration: 0,
+    });
     try {
       const { blob, filename } = await workspaceApi.downloadWorkspace();
       const url = window.URL.createObjectURL(blob);
@@ -46,12 +54,19 @@ export default function WorkspacePage() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      message.success(t("workspace.downloadSuccess"));
+      message.success({
+        content: t("workspace.downloadSuccess"),
+        key: "workspace-download",
+      });
     } catch (error) {
       console.error("Download failed:", error);
-      message.error(
-        t("workspace.downloadFailed") + ": " + (error as Error).message,
-      );
+      message.error({
+        content:
+          t("workspace.downloadFailed") + ": " + (error as Error).message,
+        key: "workspace-download",
+      });
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -158,6 +173,8 @@ export default function WorkspacePage() {
               <Button
                 size="small"
                 onClick={handleDownload}
+                loading={downloading}
+                disabled={downloading}
                 icon={<DownloadOutlined />}
               >
                 {t("common.download")}

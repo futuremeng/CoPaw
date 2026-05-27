@@ -361,6 +361,7 @@ def agentscope_msg_to_message(
             "original_id": msg.id,
             "original_name": msg.name,
             "metadata": msg.metadata,
+            "timestamp": msg.timestamp,
         }
 
         if isinstance(msg.content, str):
