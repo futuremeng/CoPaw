@@ -1,6 +1,7 @@
 import {
   CodeOutlined,
   DeleteOutlined,
+  EditOutlined,
   FileExcelOutlined,
   FileImageOutlined,
   FileMarkdownOutlined,
@@ -9,6 +10,7 @@ import {
   FilePptOutlined,
   FileTextOutlined,
   FileWordOutlined,
+  FolderAddOutlined,
   FolderOpenOutlined,
   MinusOutlined,
   PlusOutlined,
@@ -17,8 +19,13 @@ import {
 } from "@ant-design/icons";
 import { Button, Card, Empty, Input, Segmented, Spin, Tooltip, Tree, Typography } from "antd";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { Key, MouseEvent, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import {
+  ContextMenu,
+  useContextMenu,
+  type ContextMenuItem,
+} from "../../../../components/ContextMenu";
 import type {
   AgentProjectFileInfo,
   AgentProjectFileSummary,
@@ -79,7 +86,13 @@ interface ProjectOverviewCardProps {
   onConsumeStaleDirectoryPaths?: (paths: string[]) => void;
   onSelectFileFromTree: (path: string) => void;
   onAttachArtifactToChat: (path: string) => void;
+  onRequestMoveTreePath?: (sourcePath: string, sourceIsDirectory: boolean, targetDirPath: string) => void;
+  onRequestRenameTreePath?: (path: string, isDirectory: boolean) => void;
+  onRequestCreateChildDirectory?: (parentPath: string) => void;
   onRequestDeleteTreePath?: (path: string, isDirectory: boolean) => void;
+  onRequestDeleteSelectedFilePaths?: (paths: string[]) => void;
+  onRequestMoveSelectedFilePaths?: (paths: string[]) => void;
+  onRequestSetSelectedFilePaths?: (paths: string[]) => void;
   deletingTreePaths?: string[];
   onLoadProjectTreeChildren?: (path: string) => Promise<AgentProjectFileTreeNode[]>;
 }
@@ -282,10 +295,15 @@ function buildFileTree(
   selectedAttachSet: Set<string>,
   highlightedFileSet: Set<string>,
   onAttachArtifactToChat: (path: string) => void,
+  onRequestRenameTreePath: ((path: string, isDirectory: boolean) => void) | undefined,
+  onRequestCreateChildDirectory: ((parentPath: string) => void) | undefined,
   onRequestDeleteTreePath: ((path: string, isDirectory: boolean) => void) | undefined,
+  onOpenNodeContextMenu: ((event: MouseEvent, path: string, isDirectory: boolean, isAttached: boolean) => void) | undefined,
   deletingTreePathSet: Set<string>,
   attachTitle: string,
   detachTitle: string,
+  renameTitle: string,
+  createFolderTitle: string,
   deleteTitle: string,
 ): TreeNode[] {
   type RawNode = {
@@ -345,7 +363,10 @@ function buildFileTree(
         return {
           key: node.key,
           title: (
-            <span className={styles.treeNodeRow}>
+            <span
+              className={styles.treeNodeRow}
+              onContextMenu={(event) => onOpenNodeContextMenu?.(event, node.key, isDirectory, isAttached)}
+            >
               <span
                 className={
                   isDirectory ? styles.compactTreeFolderLabel : styles.compactTreeLeafLabel
@@ -353,12 +374,17 @@ function buildFileTree(
               >
                 {renderNodeIcon(node.title, isDirectory, isPriority)}
                 <span
-                  className={isHighlighted
-                    ? `${styles.treeNodeText} ${styles.treeNodeTextHighlighted}`
-                    : styles.treeNodeText}
+                  className={[
+                    styles.treeNodeText,
+                    isHighlighted ? styles.treeNodeTextHighlighted : "",
+                    isAttached ? styles.treeNodeTextAttached : "",
+                  ].filter(Boolean).join(" ")}
                 >
                   {node.title}
                 </span>
+                {!isDirectory && isAttached ? (
+                  <span className={styles.treeNodeAttachedMark}>✓</span>
+                ) : null}
               </span>
               {!isDirectory ? (
                 <span className={styles.treeNodeActions}>
@@ -372,6 +398,19 @@ function buildFileTree(
                     onClick={(event) => {
                       event.stopPropagation();
                       onAttachArtifactToChat(node.key);
+                    }}
+                  />
+                  <Button
+                    size="small"
+                    type="text"
+                    icon={<EditOutlined />}
+                    className={styles.attachActionButton}
+                    title={renameTitle}
+                    aria-label={renameTitle}
+                    disabled={!onRequestRenameTreePath || isDeleting}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onRequestRenameTreePath?.(node.key, false);
                     }}
                   />
                   <Button
@@ -392,6 +431,32 @@ function buildFileTree(
                 </span>
               ) : (
                 <span className={styles.treeNodeActions}>
+                  <Button
+                    size="small"
+                    type="text"
+                    icon={<FolderAddOutlined />}
+                    className={styles.attachActionButton}
+                    title={createFolderTitle}
+                    aria-label={createFolderTitle}
+                    disabled={!onRequestCreateChildDirectory || isDeleting}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onRequestCreateChildDirectory?.(node.key);
+                    }}
+                  />
+                  <Button
+                    size="small"
+                    type="text"
+                    icon={<EditOutlined />}
+                    className={styles.attachActionButton}
+                    title={renameTitle}
+                    aria-label={renameTitle}
+                    disabled={!onRequestRenameTreePath || isDeleting}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onRequestRenameTreePath?.(node.key, true);
+                    }}
+                  />
                   <Button
                     size="small"
                     type="text"
@@ -431,6 +496,36 @@ function collectDirectoryKeys(nodes: TreeNode[]): string[] {
   };
   walk(nodes);
   return keys;
+}
+
+function collectVisibleLeafKeys(nodes: TreeNode[], expandedKeySet: Set<string>): string[] {
+  const keys: string[] = [];
+  const walk = (items: TreeNode[]) => {
+    for (const item of items) {
+      const isDirectory = Boolean(item.children && item.children.length > 0);
+      if (!isDirectory) {
+        keys.push(String(item.key));
+        continue;
+      }
+      if (expandedKeySet.has(String(item.key))) {
+        walk(item.children || []);
+      }
+    }
+  };
+  walk(nodes);
+  return keys;
+}
+
+function resolveRangePaths(paths: string[], anchorPath: string, targetPath: string): string[] {
+  const anchorIndex = paths.indexOf(anchorPath);
+  const targetIndex = paths.indexOf(targetPath);
+  if (anchorIndex < 0 || targetIndex < 0) {
+    return [targetPath];
+  }
+  const [start, end] = anchorIndex <= targetIndex
+    ? [anchorIndex, targetIndex]
+    : [targetIndex, anchorIndex];
+  return paths.slice(start, end + 1);
 }
 
 function toLazyTreeItems(nodes: AgentProjectFileTreeNode[]): LazyTreeItem[] {
@@ -530,10 +625,15 @@ function buildLazyTreeNodes(
   selectedAttachSet: Set<string>,
   highlightedFileSet: Set<string>,
   onAttachArtifactToChat: (path: string) => void,
+  onRequestRenameTreePath: ((path: string, isDirectory: boolean) => void) | undefined,
+  onRequestCreateChildDirectory: ((parentPath: string) => void) | undefined,
   onRequestDeleteTreePath: ((path: string, isDirectory: boolean) => void) | undefined,
+  onOpenNodeContextMenu: ((event: MouseEvent, path: string, isDirectory: boolean, isAttached: boolean) => void) | undefined,
   deletingTreePathSet: Set<string>,
   attachTitle: string,
   detachTitle: string,
+  renameTitle: string,
+  createFolderTitle: string,
   deleteTitle: string,
   onRefreshTreeDirectory: ((path: string) => void) | undefined,
   refreshingDirectorySet: Set<string>,
@@ -556,10 +656,15 @@ function buildLazyTreeNodes(
           selectedAttachSet,
           highlightedFileSet,
           onAttachArtifactToChat,
+          onRequestRenameTreePath,
+          onRequestCreateChildDirectory,
           onRequestDeleteTreePath,
+          onOpenNodeContextMenu,
           deletingTreePathSet,
           attachTitle,
           detachTitle,
+          renameTitle,
+          createFolderTitle,
           deleteTitle,
           onRefreshTreeDirectory,
           refreshingDirectorySet,
@@ -570,7 +675,10 @@ function buildLazyTreeNodes(
     return {
       key: item.path,
       title: (
-        <span className={styles.treeNodeRow}>
+        <span
+          className={styles.treeNodeRow}
+          onContextMenu={(event) => onOpenNodeContextMenu?.(event, item.path, item.is_directory, isAttached)}
+        >
           <span
             className={
               item.is_directory ? styles.compactTreeFolderLabel : styles.compactTreeLeafLabel
@@ -578,12 +686,17 @@ function buildLazyTreeNodes(
           >
             {renderNodeIcon(item.filename, item.is_directory, isPriority)}
             <span
-              className={isHighlighted
-                ? `${styles.treeNodeText} ${styles.treeNodeTextHighlighted}`
-                : styles.treeNodeText}
+              className={[
+                styles.treeNodeText,
+                isHighlighted ? styles.treeNodeTextHighlighted : "",
+                isAttached ? styles.treeNodeTextAttached : "",
+              ].filter(Boolean).join(" ")}
             >
               {item.filename}
             </span>
+            {!item.is_directory && isAttached ? (
+              <span className={styles.treeNodeAttachedMark}>✓</span>
+            ) : null}
             {directoryCountLabel ? (
               <span className={styles.treeNodeMetaCount}>{directoryCountLabel}</span>
             ) : null}
@@ -601,6 +714,32 @@ function buildLazyTreeNodes(
                 onClick={(event) => {
                   event.stopPropagation();
                   onRefreshTreeDirectory?.(item.path);
+                }}
+              />
+              <Button
+                size="small"
+                type="text"
+                icon={<FolderAddOutlined />}
+                className={styles.attachActionButton}
+                title={createFolderTitle}
+                aria-label={createFolderTitle}
+                disabled={!onRequestCreateChildDirectory || isDeleting}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onRequestCreateChildDirectory?.(item.path);
+                }}
+              />
+              <Button
+                size="small"
+                type="text"
+                icon={<EditOutlined />}
+                className={styles.attachActionButton}
+                title={renameTitle}
+                aria-label={renameTitle}
+                disabled={!onRequestRenameTreePath || isDeleting}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onRequestRenameTreePath?.(item.path, true);
                 }}
               />
               <Button
@@ -631,6 +770,19 @@ function buildLazyTreeNodes(
                 onClick={(event) => {
                   event.stopPropagation();
                   onAttachArtifactToChat(item.path);
+                }}
+              />
+              <Button
+                size="small"
+                type="text"
+                icon={<EditOutlined />}
+                className={styles.attachActionButton}
+                title={renameTitle}
+                aria-label={renameTitle}
+                disabled={!onRequestRenameTreePath || isDeleting}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onRequestRenameTreePath?.(item.path, false);
                 }}
               />
               <Button
@@ -706,7 +858,13 @@ export default function ProjectOverviewCard({
   onConsumeStaleDirectoryPaths,
   onSelectFileFromTree,
   onAttachArtifactToChat,
+  onRequestMoveTreePath,
+  onRequestRenameTreePath,
+  onRequestCreateChildDirectory,
   onRequestDeleteTreePath,
+  onRequestDeleteSelectedFilePaths,
+  onRequestMoveSelectedFilePaths,
+  onRequestSetSelectedFilePaths,
   deletingTreePaths = [],
   onLoadProjectTreeChildren,
 }: ProjectOverviewCardProps) {
@@ -715,10 +873,12 @@ export default function ProjectOverviewCard({
   const { t } = useTranslation();
   const [workspaceSummaryExpanded, setWorkspaceSummaryExpanded] = useState(false);
   const [treeTransitioning, setTreeTransitioning] = useState(false);
+  const [showSelectedOnly, setShowSelectedOnly] = useState(false);
   const [localTreeFilterQuery, setLocalTreeFilterQuery] = useState("");
   const [internalExpandedKeys, setInternalExpandedKeys] = useState<string[]>([]);
   const [lazyTreeItems, setLazyTreeItems] = useState<LazyTreeItem[]>([]);
   const [refreshingDirectoryPaths, setRefreshingDirectoryPaths] = useState<string[]>([]);
+  const [treeSelectionAnchorPath, setTreeSelectionAnchorPath] = useState("");
   const treeExpandedInitializedRef = useRef(false);
   const lazyTreeItemsRef = useRef<LazyTreeItem[]>([]);
   const loadingTreeDirectoryPathsRef = useRef<Set<string>>(new Set());
@@ -751,7 +911,20 @@ export default function ProjectOverviewCard({
   const attachTitle = t("projects.chat.addAttachment", "Add to chat attachments");
   const detachTitle = t("projects.chat.removeAttachment", "Remove from chat attachments");
   const refreshTitle = t("projects.refreshFiles", "Refresh");
+  const renameTitle = t("common.rename", "Rename");
+  const createFolderTitle = t("projects.createFolder", "New Folder");
   const deleteTitle = t("common.delete", "Delete");
+  const deleteSelectedTitle = t("projects.deleteSelectedFiles", "Delete Selected Files");
+  const moveSelectedTitle = t("projects.moveSelectedFiles", "Move Selected Files");
+  const selectVisibleTitle = t("projects.selectVisibleFiles", "Select Visible Files");
+  const clearSelectedTitle = t("projects.clearSelectedFiles", "Clear Selected");
+  const selectedOnlyTitle = t("projects.treeSelectedOnly", "Selected Only");
+  const treeContextMenu = useContextMenu();
+  const [contextMenuTarget, setContextMenuTarget] = useState<{
+    path: string;
+    isDirectory: boolean;
+    isAttached: boolean;
+  } | null>(null);
   const priorityFileSet = useMemo(() => new Set(priorityFilePaths), [priorityFilePaths]);
   const selectedAttachSet = useMemo(() => new Set(selectedAttachPaths), [selectedAttachPaths]);
   const staleDirectorySet = useMemo(
@@ -811,17 +984,27 @@ export default function ProjectOverviewCard({
         return true;
     }
   });
+  const selectionScopedFilteredFiles = useMemo(
+    () => (showSelectedOnly
+      ? filteredFiles.filter((item) => selectedAttachSet.has(item.path))
+      : filteredFiles),
+    [filteredFiles, selectedAttachSet, showSelectedOnly],
+  );
   const keywordFilteredFiles = useMemo(
-    () => filteredFiles.filter((item) => matchesProjectPathQuery(item.path, normalizedTreeFilterQuery)),
-    [filteredFiles, normalizedTreeFilterQuery],
+    () => selectionScopedFilteredFiles.filter((item) => matchesProjectPathQuery(item.path, normalizedTreeFilterQuery)),
+    [normalizedTreeFilterQuery, selectionScopedFilteredFiles],
   );
   const filteredFilePaths = keywordFilteredFiles.map((item) => item.path);
   const highlightedFilePaths = useMemo(
     () => (selectedMetricFilter ? filteredFilePaths : []),
     [filteredFilePaths, selectedMetricFilter],
   );
+  const highlightBaseFiles = useMemo(() => {
+    const base = selectedMetricFilter === "builtin" ? projectFiles : filterScopedFiles;
+    return showSelectedOnly ? base.filter((item) => selectedAttachSet.has(item.path)) : base;
+  }, [filterScopedFiles, projectFiles, selectedAttachSet, selectedMetricFilter, showSelectedOnly]);
   const treeBaseFiles = treeDisplayMode === "highlight"
-    ? (selectedMetricFilter === "builtin" ? projectFiles : filterScopedFiles)
+    ? highlightBaseFiles
     : keywordFilteredFiles;
   const treeFiles = useMemo(
     () => treeBaseFiles.filter((item) => matchesProjectPathQuery(item.path, normalizedTreeFilterQuery)),
@@ -832,6 +1015,7 @@ export default function ProjectOverviewCard({
     () => new Set(treeDisplayMode === "highlight" ? highlightedFilePaths : []),
     [highlightedFilePaths, treeDisplayMode],
   );
+  const visibleTreeFilePaths = useMemo(() => treeFilePaths, [treeFilePaths]);
   const projectKnowledgeMetrics = nonBuiltInSummary.knowledgeMetrics;
   const effectiveKnowledgeMetrics = useMemo(
     () => ({
@@ -860,13 +1044,161 @@ export default function ProjectOverviewCard({
     selectedAttachSet,
     highlightedFileSet,
     onAttachArtifactToChat,
+    onRequestRenameTreePath,
+    onRequestCreateChildDirectory,
     onRequestDeleteTreePath,
+    (event, path, isDirectory, isAttached) => {
+      setContextMenuTarget({ path, isDirectory, isAttached });
+      treeContextMenu.show(event);
+    },
     deletingTreePathSet,
     attachTitle,
     detachTitle,
+    renameTitle,
+    createFolderTitle,
     deleteTitle,
   );
-  const emptyTreeDescription = normalizedTreeFilterQuery
+  const contextMenuItems: ContextMenuItem[] = useMemo(() => {
+    if (!contextMenuTarget) {
+      return [];
+    }
+    if (contextMenuTarget.isDirectory) {
+      return [
+        {
+          key: "new-folder",
+          label: createFolderTitle,
+          onClick: () => onRequestCreateChildDirectory?.(contextMenuTarget.path),
+          disabled: !onRequestCreateChildDirectory,
+        },
+        {
+          key: "rename",
+          label: renameTitle,
+          onClick: () => onRequestRenameTreePath?.(contextMenuTarget.path, true),
+          disabled: !onRequestRenameTreePath,
+        },
+        {
+          key: "delete",
+          label: deleteTitle,
+          danger: true,
+          onClick: () => onRequestDeleteTreePath?.(contextMenuTarget.path, true),
+          disabled: !onRequestDeleteTreePath,
+        },
+      ];
+    }
+    return [
+      {
+        key: "attach",
+        label: contextMenuTarget.isAttached ? detachTitle : attachTitle,
+        onClick: () => onAttachArtifactToChat(contextMenuTarget.path),
+      },
+      {
+        key: "rename",
+        label: renameTitle,
+        onClick: () => onRequestRenameTreePath?.(contextMenuTarget.path, false),
+        disabled: !onRequestRenameTreePath,
+      },
+      {
+        key: "delete",
+        label: deleteTitle,
+        danger: true,
+        onClick: () => onRequestDeleteTreePath?.(contextMenuTarget.path, false),
+        disabled: !onRequestDeleteTreePath,
+      },
+    ];
+  }, [
+    attachTitle,
+    contextMenuTarget,
+    createFolderTitle,
+    deleteTitle,
+    detachTitle,
+    onAttachArtifactToChat,
+    onRequestCreateChildDirectory,
+    onRequestDeleteTreePath,
+    onRequestRenameTreePath,
+    renameTitle,
+  ]);
+  const handleTreeDrop = useCallback((info: {
+    dragNode: { key: Key; isLeaf?: boolean };
+    node: { key: Key; isLeaf?: boolean };
+    dropToGap?: boolean;
+  }) => {
+    if (!onRequestMoveTreePath) {
+      return;
+    }
+    const sourcePath = String(info.dragNode?.key || "").trim();
+    const targetPath = String(info.node?.key || "").trim();
+    if (!sourcePath || !targetPath || sourcePath === targetPath) {
+      return;
+    }
+    if (info.dropToGap) {
+      const lastSlash = targetPath.lastIndexOf("/");
+      const targetDirPath = lastSlash > 0 ? targetPath.slice(0, lastSlash) : "";
+      onRequestMoveTreePath(sourcePath, !Boolean(info.dragNode?.isLeaf), targetDirPath);
+      return;
+    }
+    if (info.node?.isLeaf) {
+      return;
+    }
+    onRequestMoveTreePath(sourcePath, !Boolean(info.dragNode?.isLeaf), targetPath);
+  }, [onRequestMoveTreePath]);
+
+  const handleTreeSelect = useCallback((
+    keys: Key[],
+    info: {
+      node?: { key?: Key; isLeaf?: boolean };
+      nativeEvent?: MouseEvent;
+    },
+  ) => {
+    const key = String(keys[0] || info.node?.key || "");
+    if (!key || info.node?.isLeaf === false) {
+      return;
+    }
+
+    const nativeEvent = info.nativeEvent;
+    const withToggle = Boolean(nativeEvent?.metaKey || nativeEvent?.ctrlKey);
+    const withRange = Boolean(nativeEvent?.shiftKey);
+    const hasSelectionHandler = Boolean(onRequestSetSelectedFilePaths);
+
+    if (hasSelectionHandler && withRange) {
+      const orderedPaths = visibleTreeFilePaths.length > 0 ? visibleTreeFilePaths : treeFilePaths;
+      const anchorPath = treeSelectionAnchorPath || selectedAttachPaths[selectedAttachPaths.length - 1] || key;
+      const rangePaths = resolveRangePaths(orderedPaths, anchorPath, key);
+      if (withToggle) {
+        onRequestSetSelectedFilePaths?.(Array.from(new Set([...selectedAttachPaths, ...rangePaths])));
+      } else {
+        onRequestSetSelectedFilePaths?.(rangePaths);
+      }
+      setTreeSelectionAnchorPath(key);
+      onSelectFileFromTree(key);
+      return;
+    }
+
+    if (hasSelectionHandler && withToggle) {
+      const selectedSet = new Set(selectedAttachPaths);
+      if (selectedSet.has(key)) {
+        selectedSet.delete(key);
+      } else {
+        selectedSet.add(key);
+      }
+      onRequestSetSelectedFilePaths?.(Array.from(selectedSet));
+      setTreeSelectionAnchorPath(key);
+      onSelectFileFromTree(key);
+      return;
+    }
+
+    setTreeSelectionAnchorPath(key);
+    onSelectFileFromTree(key);
+  }, [
+    onRequestSetSelectedFilePaths,
+    onSelectFileFromTree,
+    selectedAttachPaths,
+    treeFilePaths,
+    treeSelectionAnchorPath,
+    visibleTreeFilePaths,
+  ]);
+  const emptyTreeDescription = showSelectedOnly && selectedAttachPaths.length === 0
+    ? t("projects.noSelectedFiles", "No selected files")
+    : normalizedTreeFilterQuery
     ? t("projects.noMatchedFiles", "No files match the current keyword")
     : Boolean(selectedMetricFilter || normalizedTreeFilterQuery)
       ? t("projects.noFilteredFiles", "No related files under the current filter")
@@ -1046,10 +1378,18 @@ export default function ProjectOverviewCard({
       selectedAttachSet,
       highlightedFileSet,
       onAttachArtifactToChat,
+      onRequestRenameTreePath,
+      onRequestCreateChildDirectory,
       onRequestDeleteTreePath,
+      (event, path, isDirectory, isAttached) => {
+        setContextMenuTarget({ path, isDirectory, isAttached });
+        treeContextMenu.show(event);
+      },
       deletingTreePathSet,
       attachTitle,
       detachTitle,
+      renameTitle,
+      createFolderTitle,
       deleteTitle,
       useLazyTreeMode ? handleRefreshTreeDirectory : undefined,
       refreshingDirectorySet,
@@ -1061,8 +1401,12 @@ export default function ProjectOverviewCard({
       highlightedFileSet,
       handleRefreshTreeDirectory,
       onAttachArtifactToChat,
+      onRequestCreateChildDirectory,
       onRequestDeleteTreePath,
+      onRequestRenameTreePath,
       refreshTitle,
+      renameTitle,
+      createFolderTitle,
       refreshingDirectorySet,
       deletingTreePathSet,
       priorityFileSet,
@@ -1070,6 +1414,7 @@ export default function ProjectOverviewCard({
       useLazyTreeMode,
       visibleLazyTreeItems,
       deleteTitle,
+      treeContextMenu,
     ],
   );
 
@@ -1210,9 +1555,42 @@ export default function ProjectOverviewCard({
           </div>
         </div>
         <div className={styles.treeUploadRow}>
-          <Button type="primary" className={styles.treeUploadButton} onClick={onUploadFiles}>
-            {t("projects.upload.button", "Upload Files")}
-          </Button>
+          <div className={styles.chatEmptyActions}>
+            <Button type="primary" className={styles.treeUploadButton} onClick={onUploadFiles}>
+              {t("projects.upload.button", "Upload Files")}
+            </Button>
+            <Button onClick={() => onRequestCreateChildDirectory?.("")}>{createFolderTitle}</Button>
+            <Button
+              disabled={!onRequestSetSelectedFilePaths || treeFilePaths.length === 0}
+              onClick={() => onRequestSetSelectedFilePaths?.(treeFilePaths)}
+            >
+              {selectVisibleTitle}
+            </Button>
+            <Button
+              disabled={!onRequestSetSelectedFilePaths || selectedAttachPaths.length === 0}
+              onClick={() => onRequestSetSelectedFilePaths?.([])}
+            >
+              {clearSelectedTitle}
+            </Button>
+            <Button
+              disabled={!onRequestMoveSelectedFilePaths || selectedAttachPaths.length === 0}
+              onClick={() => onRequestMoveSelectedFilePaths?.(selectedAttachPaths)}
+            >
+              {moveSelectedTitle}
+            </Button>
+            <Button
+              danger
+              disabled={!onRequestDeleteSelectedFilePaths || selectedAttachPaths.length === 0}
+              onClick={() => onRequestDeleteSelectedFilePaths?.(selectedAttachPaths)}
+            >
+              {deleteSelectedTitle}
+            </Button>
+            <Text type="secondary" className={styles.treeSelectedCountText}>
+              {t("projects.selectedFilesCount", "Selected: {{count}}", {
+                count: selectedAttachPaths.length,
+              })}
+            </Text>
+          </div>
         </div>
         <div className={`${styles.overviewTreeToolbar} ${styles.treeToolbarSticky}`}>
           <div className={styles.treeToolbarLeft}>
@@ -1232,6 +1610,13 @@ export default function ProjectOverviewCard({
               prefix={<SearchOutlined />}
               placeholder={t("projects.treeFilterPlaceholder", "Filter files")}
             />
+            <Button
+              size="small"
+              type={showSelectedOnly ? "primary" : "default"}
+              onClick={() => setShowSelectedOnly((prev) => !prev)}
+            >
+              {selectedOnlyTitle}
+            </Button>
           </div>
           <div className={styles.treeToolbarRight}>
             <Segmented
@@ -1263,6 +1648,8 @@ export default function ProjectOverviewCard({
               className={`${styles.overviewCompactTree} ${styles.overviewCompactTreeFullHeight}`}
               selectedKeys={selectedFilePath ? [selectedFilePath] : []}
               treeData={useLazyTreeMode ? lazyTreeData : treeData}
+              draggable={Boolean(onRequestMoveTreePath)}
+              onDrop={handleTreeDrop}
               expandedKeys={expandedKeys}
               onExpand={(keys) => {
                 const nextKeys = normalizeTreeKeys((keys as string[]).map((key) => String(key)));
@@ -1300,18 +1687,31 @@ export default function ProjectOverviewCard({
                   }
                 }
                 : undefined}
-              onSelect={(keys) => {
-                const key = String(keys[0] || "");
+              onSelect={(keys, info) => {
+                const key = String(keys[0] || info?.node?.key || "");
                 const selectedLazyNode = useLazyTreeMode
                   ? findLazyTreeItem(lazyTreeItems, key)
                   : null;
                 if (key && (!selectedLazyNode || !selectedLazyNode.is_directory)) {
-                  onSelectFileFromTree(key);
+                  handleTreeSelect(keys, {
+                    node: {
+                      key: info?.node?.key,
+                      isLeaf: info?.node?.isLeaf,
+                    },
+                    nativeEvent: info?.nativeEvent,
+                  });
                 }
               }}
             />
           )}
         </div>
+        <ContextMenu
+          visible={treeContextMenu.visible}
+          x={treeContextMenu.x}
+          y={treeContextMenu.y}
+          items={contextMenuItems}
+          onClose={treeContextMenu.hide}
+        />
       </div>
     );
   }
@@ -1467,12 +1867,53 @@ export default function ProjectOverviewCard({
         <div className={styles.overviewSection}>
           <div className={styles.subSectionTitle}>{t("projects.workspaceSummaryFiles", "Workspace Files")}</div>
           <div className={styles.treeUploadRow}>
-            <Button type="primary" className={styles.treeUploadButton} onClick={onUploadFiles}>
-              {t("projects.upload.button", "Upload Files")}
-            </Button>
+            <div className={styles.chatEmptyActions}>
+              <Button type="primary" className={styles.treeUploadButton} onClick={onUploadFiles}>
+                {t("projects.upload.button", "Upload Files")}
+              </Button>
+              <Button onClick={() => onRequestCreateChildDirectory?.("")}>{createFolderTitle}</Button>
+              <Button
+                disabled={!onRequestSetSelectedFilePaths || treeFilePaths.length === 0}
+                onClick={() => onRequestSetSelectedFilePaths?.(treeFilePaths)}
+              >
+                {selectVisibleTitle}
+              </Button>
+              <Button
+                disabled={!onRequestSetSelectedFilePaths || selectedAttachPaths.length === 0}
+                onClick={() => onRequestSetSelectedFilePaths?.([])}
+              >
+                {clearSelectedTitle}
+              </Button>
+              <Button
+                disabled={!onRequestMoveSelectedFilePaths || selectedAttachPaths.length === 0}
+                onClick={() => onRequestMoveSelectedFilePaths?.(selectedAttachPaths)}
+              >
+                {moveSelectedTitle}
+              </Button>
+              <Button
+                danger
+                disabled={!onRequestDeleteSelectedFilePaths || selectedAttachPaths.length === 0}
+                onClick={() => onRequestDeleteSelectedFilePaths?.(selectedAttachPaths)}
+              >
+                {deleteSelectedTitle}
+              </Button>
+              <Text type="secondary" className={styles.treeSelectedCountText}>
+                {t("projects.selectedFilesCount", "Selected: {{count}}", {
+                  count: selectedAttachPaths.length,
+                })}
+              </Text>
+            </div>
           </div>
           <div className={styles.overviewTreeToolbar}>
-            <div className={styles.treeToolbarLeft} />
+            <div className={styles.treeToolbarLeft}>
+              <Button
+                size="small"
+                type={showSelectedOnly ? "primary" : "default"}
+                onClick={() => setShowSelectedOnly((prev) => !prev)}
+              >
+                {selectedOnlyTitle}
+              </Button>
+            </div>
             <div className={styles.treeToolbarRight}>
               <Segmented
                 size="small"
@@ -1499,19 +1940,29 @@ export default function ProjectOverviewCard({
                 className={styles.overviewCompactTree}
                 selectedKeys={selectedFilePath && treeFilePaths.includes(selectedFilePath) ? [selectedFilePath] : []}
                 treeData={treeData}
+                draggable={Boolean(onRequestMoveTreePath)}
+                onDrop={handleTreeDrop}
                 expandedKeys={expandedKeys}
                 onExpand={(keys) => updateExpandedKeys((keys as string[]).map((key) => String(key)))}
-                onSelect={(keys) => {
-                  const key = String(keys[0] || "");
-                  if (key) {
-                    onSelectFileFromTree(key);
-                  }
-                }}
+                onSelect={(keys, info) => handleTreeSelect(keys, {
+                  node: {
+                    key: info?.node?.key,
+                    isLeaf: info?.node?.isLeaf,
+                  },
+                  nativeEvent: info?.nativeEvent,
+                })}
               />
             )}
           </div>
         </div>
       </div>
+      <ContextMenu
+        visible={treeContextMenu.visible}
+        x={treeContextMenu.x}
+        y={treeContextMenu.y}
+        items={contextMenuItems}
+        onClose={treeContextMenu.hide}
+      />
     </Card>
   );
 }

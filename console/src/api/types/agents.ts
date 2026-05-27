@@ -217,6 +217,29 @@ export interface DeleteProjectPathResponse {
   is_directory: boolean;
 }
 
+export interface CreateProjectDirectoryRequest {
+  path: string;
+}
+
+export interface CreateProjectDirectoryResponse {
+  success: boolean;
+  path: string;
+  existed: boolean;
+}
+
+export interface MoveProjectPathRequest {
+  source_path: string;
+  target_path: string;
+  conflict_strategy?: "fail_if_exists" | "overwrite";
+}
+
+export interface MoveProjectPathResponse {
+  success: boolean;
+  source_path: string;
+  target_path: string;
+  is_directory: boolean;
+}
+
 export interface PromoteProjectArtifactRequest {
   target_name?: string;
   overwrite?: boolean;

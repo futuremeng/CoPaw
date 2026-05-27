@@ -173,3 +173,54 @@ describe("agentsApi.deleteProjectPath", () => {
     );
   });
 });
+
+describe("agentsApi.createProjectDirectory", () => {
+  afterEach(() => vi.clearAllMocks());
+
+  it("posts create-directory payload to directories endpoint", async () => {
+    vi.mocked(request).mockResolvedValue({ success: true, path: "original/new-dir", existed: false });
+
+    await agentsApi.createProjectDirectory("agent-1", "project/a", {
+      path: "original/new-dir",
+    });
+
+    expect(request).toHaveBeenCalledWith(
+      "/agents/agent-1/projects/project%2Fa/directories",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ path: "original/new-dir" }),
+      }),
+    );
+  });
+});
+
+describe("agentsApi.moveProjectPath", () => {
+  afterEach(() => vi.clearAllMocks());
+
+  it("patches move payload to files/move endpoint", async () => {
+    vi.mocked(request).mockResolvedValue({
+      success: true,
+      source_path: "original/a.txt",
+      target_path: "original/b.txt",
+      is_directory: false,
+    });
+
+    await agentsApi.moveProjectPath("agent-1", "project/a", {
+      source_path: "original/a.txt",
+      target_path: "original/b.txt",
+      conflict_strategy: "fail_if_exists",
+    });
+
+    expect(request).toHaveBeenCalledWith(
+      "/agents/agent-1/projects/project%2Fa/files/move",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({
+          source_path: "original/a.txt",
+          target_path: "original/b.txt",
+          conflict_strategy: "fail_if_exists",
+        }),
+      }),
+    );
+  });
+});

@@ -513,6 +513,37 @@ class DeleteProjectPathResponse(BaseModel):
     is_directory: bool
 
 
+class CreateProjectDirectoryRequest(BaseModel):
+    """Request body for creating a project directory."""
+
+    path: str
+
+
+class CreateProjectDirectoryResponse(BaseModel):
+    """Response body for creating a project directory."""
+
+    success: bool
+    path: str
+    existed: bool = False
+
+
+class MoveProjectPathRequest(BaseModel):
+    """Request body for moving/renaming one project path."""
+
+    source_path: str
+    target_path: str
+    conflict_strategy: Literal["fail_if_exists", "overwrite"] = "fail_if_exists"
+
+
+class MoveProjectPathResponse(BaseModel):
+    """Response body for moving/renaming one project path."""
+
+    success: bool
+    source_path: str
+    target_path: str
+    is_directory: bool
+
+
 class PromoteProjectArtifactRequest(BaseModel):
     """Request body for promoting a project artifact to agent scope."""
 
@@ -3075,6 +3106,82 @@ def _delete_project_path(
     )
 
 
+def _create_project_directory(
+    project_dir: Path,
+    rel_path: str,
+) -> CreateProjectDirectoryResponse:
+    normalized = str(rel_path or "").strip().replace("\\", "/")
+    if not normalized or normalized in {".", "/"}:
+        raise HTTPException(status_code=400, detail="Invalid directory path")
+    if not _is_safe_relative_path(normalized):
+        raise HTTPException(status_code=400, detail="Invalid directory path")
+
+    project_root = project_dir.resolve()
+    target = (project_dir / normalized).resolve()
+    if not str(target).startswith(str(project_root)):
+        raise HTTPException(status_code=400, detail="Invalid directory path")
+
+    if target.exists() and not target.is_dir():
+        raise HTTPException(status_code=409, detail="Target path exists as file")
+
+    existed = target.exists() and target.is_dir()
+    target.mkdir(parents=True, exist_ok=True)
+    return CreateProjectDirectoryResponse(
+        success=True,
+        path=normalized,
+        existed=existed,
+    )
+
+
+def _move_project_path(
+    project_dir: Path,
+    source_path: str,
+    target_path: str,
+    *,
+    conflict_strategy: Literal["fail_if_exists", "overwrite"] = "fail_if_exists",
+) -> MoveProjectPathResponse:
+    normalized_source = str(source_path or "").strip().replace("\\", "/")
+    normalized_target = str(target_path or "").strip().replace("\\", "/")
+    if not normalized_source or not normalized_target:
+        raise HTTPException(status_code=400, detail="Invalid source or target path")
+    if not _is_safe_relative_path(normalized_source) or not _is_safe_relative_path(normalized_target):
+        raise HTTPException(status_code=400, detail="Invalid source or target path")
+    if normalized_source == normalized_target:
+        raise HTTPException(status_code=400, detail="Source and target path are identical")
+
+    project_root = project_dir.resolve()
+    source = (project_dir / normalized_source).resolve()
+    target = (project_dir / normalized_target).resolve()
+    if not str(source).startswith(str(project_root)) or not str(target).startswith(str(project_root)):
+        raise HTTPException(status_code=400, detail="Invalid source or target path")
+    if not source.exists():
+        raise HTTPException(status_code=404, detail=f"Path '{normalized_source}' not found")
+
+    is_directory = source.is_dir()
+    if is_directory:
+        source_prefix = f"{source.as_posix()}/"
+        if target.as_posix().startswith(source_prefix):
+            raise HTTPException(status_code=400, detail="Cannot move a directory into itself")
+
+    if target.exists():
+        if conflict_strategy == "fail_if_exists":
+            raise HTTPException(status_code=409, detail="Target path already exists")
+        if target.is_dir():
+            shutil.rmtree(target, ignore_errors=True)
+        else:
+            target.unlink(missing_ok=True)
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(source), str(target))
+
+    return MoveProjectPathResponse(
+        success=True,
+        source_path=normalized_source,
+        target_path=normalized_target,
+        is_directory=is_directory,
+    )
+
+
 def _is_square_candidate_markdown(path: Path) -> bool:
     if path.suffix.lower() != ".md":
         return False
@@ -5323,6 +5430,77 @@ async def delete_agent_project_path(
             [project_dir / deleted.path],
         )
         return deleted
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post(
+    "/{agentId}/projects/{projectId}/directories",
+    response_model=CreateProjectDirectoryResponse,
+    summary="Create project directory",
+    description="Create one directory under the project workspace",
+)
+async def create_agent_project_directory(
+    request: Request,
+    body: CreateProjectDirectoryRequest = Body(...),
+    agentId: str = PathParam(...),
+    projectId: str = PathParam(...),
+) -> CreateProjectDirectoryResponse:
+    _ = request
+    workspace_dir = _resolve_agent_workspace_dir(agentId)
+
+    try:
+        project_dir = _resolve_project_dir(workspace_dir, projectId)
+        created = _create_project_directory(project_dir, body.path)
+        update_project_file_monitoring_state(
+            project_dir,
+            PROJECT_FILE_MONITORING_ACTIVE,
+        )
+        record_project_realtime_paths(
+            str(workspace_dir),
+            [project_dir / created.path],
+        )
+        return created
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.patch(
+    "/{agentId}/projects/{projectId}/files/move",
+    response_model=MoveProjectPathResponse,
+    summary="Move or rename project path",
+    description="Move/rename one file or directory under the project workspace",
+)
+async def move_agent_project_path(
+    request: Request,
+    body: MoveProjectPathRequest = Body(...),
+    agentId: str = PathParam(...),
+    projectId: str = PathParam(...),
+) -> MoveProjectPathResponse:
+    _ = request
+    workspace_dir = _resolve_agent_workspace_dir(agentId)
+
+    try:
+        project_dir = _resolve_project_dir(workspace_dir, projectId)
+        moved = _move_project_path(
+            project_dir,
+            body.source_path,
+            body.target_path,
+            conflict_strategy=body.conflict_strategy,
+        )
+        update_project_file_monitoring_state(
+            project_dir,
+            PROJECT_FILE_MONITORING_ACTIVE,
+        )
+        record_project_realtime_paths(
+            str(workspace_dir),
+            [project_dir / moved.source_path, project_dir / moved.target_path],
+        )
+        return moved
     except HTTPException:
         raise
     except Exception as e:

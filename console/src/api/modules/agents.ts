@@ -25,6 +25,10 @@ import type {
   CreateProjectRequest,
   DeleteProjectResponse,
   DeleteProjectPathResponse,
+  CreateProjectDirectoryRequest,
+  CreateProjectDirectoryResponse,
+  MoveProjectPathRequest,
+  MoveProjectPathResponse,
   PromoteProjectArtifactRequest,
   PromoteProjectArtifactResponse,
   UpdateProjectArtifactDistillModeRequest,
@@ -370,6 +374,32 @@ export const agentsApi = {
         .join("/")}`,
       {
         method: "DELETE",
+      },
+    ),
+
+  createProjectDirectory: (
+    agentId: string,
+    projectId: string,
+    body: CreateProjectDirectoryRequest,
+  ) =>
+    request<CreateProjectDirectoryResponse>(
+      `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/directories`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  moveProjectPath: (
+    agentId: string,
+    projectId: string,
+    body: MoveProjectPathRequest,
+  ) =>
+    request<MoveProjectPathResponse>(
+      `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/files/move`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(body),
       },
     ),
 

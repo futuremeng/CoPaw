@@ -7,6 +7,7 @@ import {
   Collapse,
   Drawer,
   Empty,
+  Input,
   Modal,
   Popconfirm,
   Select,
@@ -2929,9 +2930,444 @@ export default function ProjectDetailPage() {
     setSelectedAttachPaths,
   ]);
 
+  const normalizeTreeNodeName = useCallback((value: string): string => {
+    const next = String(value || "").trim();
+    if (!next || next === "." || next === "..") {
+      return "";
+    }
+    if (next.includes("/") || next.includes("\\")) {
+      return "";
+    }
+    return next;
+  }, []);
+
+  const remapPathWithPrefix = useCallback((path: string, sourcePath: string, targetPath: string): string => {
+    if (path === sourcePath) {
+      return targetPath;
+    }
+    const sourcePrefix = `${sourcePath}/`;
+    if (path.startsWith(sourcePrefix)) {
+      return `${targetPath}${path.slice(sourcePath.length)}`;
+    }
+    return path;
+  }, []);
+
+  const performCreateProjectTreeDirectory = useCallback(async (
+    parentPath: string,
+    directoryName: string,
+  ) => {
+    if (!currentAgent || !selectedProject) {
+      return;
+    }
+
+    const normalizedParent = normalizeProjectArtifactPath(parentPath);
+    const normalizedName = normalizeTreeNodeName(directoryName);
+    if (!normalizedName) {
+      message.warning(t("projects.invalidDirectoryName", "Invalid folder name"));
+      return;
+    }
+    const targetPath = normalizedParent ? `${normalizedParent}/${normalizedName}` : normalizedName;
+
+    setDeletingProjectPaths((prev) => (
+      prev.includes(targetPath) ? prev : [...prev, targetPath]
+    ));
+
+    let preferredProjectRequestId = resolvedProjectRequestId;
+
+    try {
+      const resolved = await resolveProjectRequestCandidate({
+        projectRequestIds: buildProjectRequestCandidates(selectedProject, {
+          preferredProjectRequestId,
+          routeProjectId,
+        }),
+        loader: async (projectRequestId) => {
+          await agentsApi.createProjectDirectory(
+            currentAgent.id,
+            projectRequestId,
+            { path: targetPath },
+          );
+          return undefined;
+        },
+      });
+      preferredProjectRequestId = resolved.projectRequestId;
+      setResolvedProjectRequestId(resolved.projectRequestId);
+
+      if (normalizedParent) {
+        setTreeExpandedKeys((prev) => mergeExpandedProjectTreeKeys(prev, [normalizedParent]));
+        setStaleProjectTreeDirectoryPaths((prev) => (
+          prev.includes(normalizedParent) ? prev : [...prev, normalizedParent]
+        ));
+      }
+
+      await handleRefreshProjectFiles();
+      message.success(
+        t("projects.createDirectorySuccess", "Created folder: {{path}}", { path: targetPath }),
+      );
+    } catch (err) {
+      console.error("failed to create project directory", err);
+      message.error(t("projects.createDirectoryFailed", "Failed to create folder"));
+    } finally {
+      setDeletingProjectPaths((prev) => prev.filter((path) => path !== targetPath));
+    }
+  }, [
+    currentAgent,
+    handleRefreshProjectFiles,
+    normalizeProjectArtifactPath,
+    normalizeTreeNodeName,
+    resolvedProjectRequestId,
+    routeProjectId,
+    selectedProject,
+    setResolvedProjectRequestId,
+    t,
+  ]);
+
+  const performRenameProjectTreePath = useCallback(async (
+    sourcePath: string,
+    isDirectory: boolean,
+    nextName: string,
+    targetPathOverride?: string,
+    conflictStrategy: "fail_if_exists" | "overwrite" = "fail_if_exists",
+    options?: { refresh?: boolean; showMessage?: boolean; showErrorMessage?: boolean },
+  ) => {
+    const classifyMoveError = (err: unknown): {
+      reason: "conflict" | "unsafe" | "permission" | "notFound" | "other";
+      detail: string;
+    } => {
+      const status = Number((err as { response?: { status?: number } })?.response?.status || 0);
+      const detail = String(
+        (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+        || (err as { message?: unknown })?.message
+        || "",
+      ).trim();
+      const normalizedDetail = detail.toLowerCase();
+
+      if (
+        status === 409
+        || normalizedDetail.includes("exist")
+        || normalizedDetail.includes("conflict")
+      ) {
+        return { reason: "conflict", detail };
+      }
+      if (
+        status === 400
+        && (
+          normalizedDetail.includes("unsafe")
+          || normalizedDetail.includes("invalid")
+          || normalizedDetail.includes("path")
+        )
+      ) {
+        return { reason: "unsafe", detail };
+      }
+      if (status === 403 || normalizedDetail.includes("permission") || normalizedDetail.includes("forbidden")) {
+        return { reason: "permission", detail };
+      }
+      if (status === 404 || normalizedDetail.includes("not found")) {
+        return { reason: "notFound", detail };
+      }
+      return { reason: "other", detail };
+    };
+
+    if (!currentAgent || !selectedProject) {
+      return { ok: false, reason: "other" as const, detail: "missing context" };
+    }
+    const normalizedSourcePath = normalizeProjectArtifactPath(sourcePath);
+    const normalizedName = normalizeTreeNodeName(nextName);
+    if (!normalizedSourcePath || !normalizedName) {
+      message.warning(t("projects.invalidName", "Invalid name"));
+      return { ok: false, reason: "unsafe" as const, detail: "invalid path or name" };
+    }
+
+    const slashIndex = normalizedSourcePath.lastIndexOf("/");
+    const parentPath = slashIndex >= 0 ? normalizedSourcePath.slice(0, slashIndex) : "";
+    const normalizedTargetOverride = normalizeProjectArtifactPath(targetPathOverride || "");
+    const targetPath = normalizedTargetOverride || (parentPath ? `${parentPath}/${normalizedName}` : normalizedName);
+    if (targetPath === normalizedSourcePath) {
+      return { ok: true };
+    }
+
+    const shouldRefresh = options?.refresh !== false;
+    const shouldShowMessage = options?.showMessage !== false;
+    const shouldShowErrorMessage = options?.showErrorMessage !== false;
+
+    setDeletingProjectPaths((prev) => (
+      prev.includes(normalizedSourcePath) ? prev : [...prev, normalizedSourcePath]
+    ));
+
+    let preferredProjectRequestId = resolvedProjectRequestId;
+
+    try {
+      const resolved = await resolveProjectRequestCandidate({
+        projectRequestIds: buildProjectRequestCandidates(selectedProject, {
+          preferredProjectRequestId,
+          routeProjectId,
+        }),
+        loader: async (projectRequestId) => {
+          await agentsApi.moveProjectPath(currentAgent.id, projectRequestId, {
+            source_path: normalizedSourcePath,
+            target_path: targetPath,
+            conflict_strategy: conflictStrategy,
+          });
+          return undefined;
+        },
+      });
+      preferredProjectRequestId = resolved.projectRequestId;
+      setResolvedProjectRequestId(resolved.projectRequestId);
+
+      setSelectedAttachPaths((prev) => {
+        const remapped = prev.map((path) => remapPathWithPrefix(path, normalizedSourcePath, targetPath));
+        return Array.from(new Set(remapped));
+      });
+
+      setTreeExpandedKeys((prev) => {
+        const remapped = prev.map((path) => remapPathWithPrefix(path, normalizedSourcePath, targetPath));
+        return Array.from(new Set(remapped));
+      });
+
+      setKnownProjectFilesByPath((prev) => {
+        const next: Record<string, AgentProjectFileInfo> = {};
+        for (const [path, info] of Object.entries(prev)) {
+          const remappedPath = remapPathWithPrefix(path, normalizedSourcePath, targetPath);
+          next[remappedPath] = {
+            ...info,
+            path: remappedPath,
+          };
+        }
+        return next;
+      });
+
+      setSelectedFilePath((prev) => remapPathWithPrefix(prev, normalizedSourcePath, targetPath));
+      setLatestUpdatedFilePath((prev) => remapPathWithPrefix(prev, normalizedSourcePath, targetPath));
+
+      if (parentPath) {
+        setStaleProjectTreeDirectoryPaths((prev) => (
+          prev.includes(parentPath) ? prev : [...prev, parentPath]
+        ));
+      }
+
+      if (shouldRefresh) {
+        await handleRefreshProjectFiles();
+      }
+      if (shouldShowMessage) {
+        message.success(
+          isDirectory
+            ? t("projects.renameDirectorySuccess", "Renamed folder to: {{path}}", { path: targetPath })
+            : t("projects.renameFileSuccess", "Renamed file to: {{path}}", { path: targetPath }),
+        );
+      }
+      return { ok: true };
+    } catch (err) {
+      console.error("failed to rename project path", err);
+      const failure = classifyMoveError(err);
+      if (shouldShowErrorMessage) {
+        message.error(
+          isDirectory
+            ? t("projects.renameDirectoryFailed", "Failed to rename folder")
+            : t("projects.renameFileFailed", "Failed to rename file"),
+        );
+      }
+      return {
+        ok: false,
+        reason: failure.reason,
+        detail: failure.detail,
+      };
+    } finally {
+      setDeletingProjectPaths((prev) => prev.filter((path) => path !== normalizedSourcePath));
+    }
+  }, [
+    currentAgent,
+    handleRefreshProjectFiles,
+    normalizeProjectArtifactPath,
+    normalizeTreeNodeName,
+    remapPathWithPrefix,
+    resolvedProjectRequestId,
+    routeProjectId,
+    selectedProject,
+    setResolvedProjectRequestId,
+    t,
+  ]);
+
+  const handleRequestMoveProjectTreePath = useCallback((
+    sourcePath: string,
+    sourceIsDirectory: boolean,
+    targetDirPath: string,
+  ) => {
+    const normalizedSourcePath = normalizeProjectArtifactPath(sourcePath);
+    const normalizedTargetDir = normalizeProjectArtifactPath(targetDirPath);
+    if (!normalizedSourcePath) {
+      return;
+    }
+    const sourceName = normalizedSourcePath.split("/").filter(Boolean).pop() || "";
+    if (!sourceName) {
+      return;
+    }
+    const targetPath = normalizedTargetDir ? `${normalizedTargetDir}/${sourceName}` : sourceName;
+    if (targetPath === normalizedSourcePath) {
+      return;
+    }
+    const targetExists = Boolean(knownProjectFilesByPath[targetPath]);
+
+    const executeMove = async (strategy: "fail_if_exists" | "overwrite") => {
+      await performRenameProjectTreePath(
+        normalizedSourcePath,
+        sourceIsDirectory,
+        sourceName,
+        targetPath,
+        strategy,
+      );
+    };
+
+    const openMoveConfirm = () => {
+      Modal.confirm({
+        title: sourceIsDirectory
+          ? t("projects.moveDirectoryTitle", "Move folder")
+          : t("projects.moveFileTitle", "Move file"),
+        content: t(
+          "projects.moveConfirmDescription",
+          "Move {{source}} to {{target}}?",
+          { source: normalizedSourcePath, target: targetPath },
+        ),
+        okText: t("common.confirm", "Confirm"),
+        cancelText: t("common.cancel", "Cancel"),
+        onOk: async () => {
+          await executeMove("fail_if_exists");
+        },
+      });
+    };
+
+    if (targetExists) {
+      Modal.confirm({
+        title: t("projects.moveConflictTitle", "Target already exists"),
+        content: t(
+          "projects.moveConflictDescription",
+          "{{target}} already exists. Overwrite it?",
+          { target: targetPath },
+        ),
+        okText: t("common.overwrite", "Overwrite"),
+        cancelText: t("common.cancel", "Cancel"),
+        okButtonProps: { danger: true },
+        onOk: async () => {
+          await executeMove("overwrite");
+        },
+      });
+      return;
+    }
+
+    openMoveConfirm();
+  }, [knownProjectFilesByPath, normalizeProjectArtifactPath, performRenameProjectTreePath, t]);
+
+  const handleRequestCreateProjectTreeDirectory = useCallback((parentPath: string) => {
+    const normalizedParent = normalizeProjectArtifactPath(parentPath);
+    let nextName = "new-folder";
+
+    Modal.confirm({
+      title: t("projects.createDirectoryTitle", "Create folder"),
+      content: (
+        <Input
+          autoFocus
+          defaultValue={nextName}
+          placeholder={t("projects.createDirectoryPlaceholder", "Folder name")}
+          onChange={(event) => {
+            nextName = event.target.value;
+          }}
+        />
+      ),
+      okText: t("common.create", "Create"),
+      cancelText: t("common.cancel", "Cancel"),
+      onOk: async () => {
+        const normalizedName = normalizeTreeNodeName(nextName);
+        if (!normalizedName) {
+          message.warning(t("projects.invalidDirectoryName", "Invalid folder name"));
+          return Promise.reject(new Error("invalid directory name"));
+        }
+        await performCreateProjectTreeDirectory(normalizedParent, normalizedName);
+        return undefined;
+      },
+    });
+  }, [normalizeProjectArtifactPath, normalizeTreeNodeName, performCreateProjectTreeDirectory, t]);
+
+  const handleRequestRenameProjectTreePath = useCallback((path: string, isDirectory: boolean) => {
+    const normalizedPath = normalizeProjectArtifactPath(path);
+    if (!normalizedPath) {
+      return;
+    }
+    const defaultName = normalizedPath.split("/").filter(Boolean).pop() || "";
+    let nextName = defaultName;
+
+    Modal.confirm({
+      title: isDirectory
+        ? t("projects.renameDirectoryTitle", "Rename folder")
+        : t("projects.renameFileTitle", "Rename file"),
+      content: (
+        <Input
+          autoFocus
+          defaultValue={defaultName}
+          placeholder={t("projects.renamePlaceholder", "New name")}
+          onChange={(event) => {
+            nextName = event.target.value;
+          }}
+        />
+      ),
+      okText: t("common.rename", "Rename"),
+      cancelText: t("common.cancel", "Cancel"),
+      onOk: async () => {
+        const normalizedName = normalizeTreeNodeName(nextName);
+        if (!normalizedName) {
+          message.warning(t("projects.invalidName", "Invalid name"));
+          return Promise.reject(new Error("invalid path name"));
+        }
+        const slashIndex = normalizedPath.lastIndexOf("/");
+        const parentPath = slashIndex >= 0 ? normalizedPath.slice(0, slashIndex) : "";
+        const targetPath = parentPath ? `${parentPath}/${normalizedName}` : normalizedName;
+        if (targetPath === normalizedPath) {
+          return undefined;
+        }
+
+        const targetExists = Boolean(knownProjectFilesByPath[targetPath]);
+        if (!targetExists) {
+          await performRenameProjectTreePath(normalizedPath, isDirectory, normalizedName);
+          return undefined;
+        }
+
+        return new Promise<void>((resolve, reject) => {
+          Modal.confirm({
+            title: t("projects.renameConflictTitle", "Target already exists"),
+            content: t(
+              "projects.renameConflictDescription",
+              "{{target}} already exists. Overwrite it?",
+              { target: targetPath },
+            ),
+            okText: t("common.overwrite", "Overwrite"),
+            cancelText: t("common.cancel", "Cancel"),
+            okButtonProps: { danger: true },
+            onOk: async () => {
+              await performRenameProjectTreePath(
+                normalizedPath,
+                isDirectory,
+                normalizedName,
+                targetPath,
+                "overwrite",
+              );
+              resolve();
+            },
+            onCancel: () => {
+              reject(new Error("rename overwrite cancelled"));
+            },
+          });
+        });
+      },
+    });
+  }, [
+    knownProjectFilesByPath,
+    normalizeProjectArtifactPath,
+    normalizeTreeNodeName,
+    performRenameProjectTreePath,
+    t,
+  ]);
+
   const performDeleteProjectTreePath = useCallback(async (
     normalizedPath: string,
     isDirectory: boolean,
+    options?: { refresh?: boolean; showMessage?: boolean },
   ) => {
     if (!currentAgent || !selectedProject || !normalizedPath) {
       return;
@@ -2942,6 +3378,9 @@ export default function ProjectDetailPage() {
     ));
 
     let preferredProjectRequestId = resolvedProjectRequestId;
+
+    const shouldRefresh = options?.refresh !== false;
+    const shouldShowMessage = options?.showMessage !== false;
 
     try {
       const resolved = await resolveProjectRequestCandidate({
@@ -2994,12 +3433,16 @@ export default function ProjectDetailPage() {
         setLatestUpdatedFilePath("");
       }
 
-      await handleRefreshProjectFiles();
-      message.success(
-        isDirectory
-          ? t("projects.deleteDirectorySuccess", "Deleted folder: {{path}}", { path: normalizedPath })
-          : t("projects.deleteFileSuccess", "Deleted file: {{path}}", { path: normalizedPath }),
-      );
+      if (shouldRefresh) {
+        await handleRefreshProjectFiles();
+      }
+      if (shouldShowMessage) {
+        message.success(
+          isDirectory
+            ? t("projects.deleteDirectorySuccess", "Deleted folder: {{path}}", { path: normalizedPath })
+            : t("projects.deleteFileSuccess", "Deleted file: {{path}}", { path: normalizedPath }),
+        );
+      }
     } catch (err) {
       console.error("failed to delete project path", err);
       message.error(
@@ -3045,6 +3488,318 @@ export default function ProjectDetailPage() {
       },
     });
   }, [normalizeProjectArtifactPath, performDeleteProjectTreePath, t]);
+
+  const handleRequestDeleteSelectedProjectFiles = useCallback((paths: string[]) => {
+    const normalizedPaths = Array.from(new Set(
+      (paths || [])
+        .map((item) => normalizeProjectArtifactPath(item))
+        .filter((item) => Boolean(item)),
+    ));
+    if (normalizedPaths.length === 0) {
+      return;
+    }
+
+    Modal.confirm({
+      title: t("projects.deleteSelectedFilesConfirmTitle", "Delete selected files?"),
+      content: t(
+        "projects.deleteSelectedFilesConfirmDescription",
+        "This will permanently delete {{count}} selected files.",
+        { count: normalizedPaths.length },
+      ),
+      okText: t("common.delete", "Delete"),
+      cancelText: t("common.cancel", "Cancel"),
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        let deletedCount = 0;
+        for (const path of normalizedPaths) {
+          await performDeleteProjectTreePath(path, false, { refresh: false, showMessage: false });
+          deletedCount += 1;
+        }
+        await handleRefreshProjectFiles();
+        message.success(
+          t("projects.deleteSelectedFilesSuccess", "Deleted {{count}} files", {
+            count: deletedCount,
+          }),
+        );
+      },
+    });
+  }, [handleRefreshProjectFiles, normalizeProjectArtifactPath, performDeleteProjectTreePath, t]);
+
+  const handleRequestMoveSelectedProjectFiles = useCallback((paths: string[]) => {
+    const normalizedPaths = Array.from(new Set(
+      (paths || [])
+        .map((item) => normalizeProjectArtifactPath(item))
+        .filter((item) => Boolean(item)),
+    ));
+    if (normalizedPaths.length === 0) {
+      return;
+    }
+
+    let nextTargetDirectory = "";
+
+    const executeBatchMove = async (targetDir: string, strategy: "fail_if_exists" | "overwrite") => {
+      const plans = normalizedPaths
+        .map((sourcePath) => {
+          const sourceName = sourcePath.split("/").filter(Boolean).pop() || "";
+          if (!sourceName) {
+            return null;
+          }
+          const targetPath = targetDir ? `${targetDir}/${sourceName}` : sourceName;
+          if (targetPath === sourcePath) {
+            return null;
+          }
+          return { sourcePath, sourceName, targetPath };
+        })
+        .filter((item): item is { sourcePath: string; sourceName: string; targetPath: string } => Boolean(item));
+
+      if (plans.length === 0) {
+        message.warning(t("projects.moveSelectedNoop", "No files need moving"));
+        return;
+      }
+
+      const targetPathCount = new Map<string, number>();
+      for (const plan of plans) {
+        targetPathCount.set(plan.targetPath, (targetPathCount.get(plan.targetPath) || 0) + 1);
+      }
+      const duplicateTargets = Array.from(targetPathCount.entries())
+        .filter(([, count]) => count > 1)
+        .map(([targetPath]) => targetPath);
+      if (duplicateTargets.length > 0) {
+        message.warning(
+          t(
+            "projects.moveSelectedDuplicateTargets",
+            "Multiple selected files would map to the same target name. Please rename before moving.",
+          ),
+        );
+        return;
+      }
+
+      let successCount = 0;
+      const failedItems: Array<{
+        path: string;
+        reason: "conflict" | "unsafe" | "permission" | "notFound" | "other";
+        detail: string;
+      }> = [];
+
+      for (const plan of plans) {
+        const moved = await performRenameProjectTreePath(
+          plan.sourcePath,
+          false,
+          plan.sourceName,
+          plan.targetPath,
+          strategy,
+          { refresh: false, showMessage: false, showErrorMessage: false },
+        );
+        if (moved?.ok) {
+          successCount += 1;
+        } else {
+          failedItems.push({
+            path: plan.sourcePath,
+            reason: moved?.reason || "other",
+            detail: moved?.detail || "",
+          });
+        }
+      }
+
+      await handleRefreshProjectFiles();
+
+      if (successCount > 0) {
+        message.success(
+          t("projects.moveSelectedFilesSuccess", "Moved {{count}} files", {
+            count: successCount,
+          }),
+        );
+      }
+      if (failedItems.length > 0) {
+        message.error(
+          t("projects.moveSelectedFilesFailedSummary", "Failed to move {{count}} files", {
+            count: failedItems.length,
+          }),
+        );
+
+        const groupedFailures = failedItems.reduce<Record<string, { paths: string[]; details: string[] }>>((acc, item) => {
+          const key = item.reason;
+          if (!acc[key]) {
+            acc[key] = { paths: [], details: [] };
+          }
+          acc[key].paths.push(item.path);
+          if (item.detail) {
+            acc[key].details.push(item.detail);
+          }
+          return acc;
+        }, {});
+
+        const reasonLabel = (reason: string): string => {
+          switch (reason) {
+            case "conflict":
+              return t("projects.moveFailureReasonConflict", "Name conflict");
+            case "unsafe":
+              return t("projects.moveFailureReasonUnsafe", "Invalid path");
+            case "permission":
+              return t("projects.moveFailureReasonPermission", "Permission denied");
+            case "notFound":
+              return t("projects.moveFailureReasonNotFound", "Source not found");
+            default:
+              return t("projects.moveFailureReasonOther", "Other errors");
+          }
+        };
+
+        const reasonSuggestion = (reason: string): string => {
+          switch (reason) {
+            case "conflict":
+              return t(
+                "projects.moveFailureSuggestionConflict",
+                "建议：先重命名冲突文件，或改用覆盖模式后重试。",
+              );
+            case "unsafe":
+              return t(
+                "projects.moveFailureSuggestionUnsafe",
+                "建议：检查目标路径，避免 ..、绝对路径或非法字符。",
+              );
+            case "permission":
+              return t(
+                "projects.moveFailureSuggestionPermission",
+                "建议：确认当前工作区写权限，或切换到可写目录。",
+              );
+            case "notFound":
+              return t(
+                "projects.moveFailureSuggestionNotFound",
+                "建议：刷新文件树后重试，确认源文件未被删除或移动。",
+              );
+            default:
+              return t(
+                "projects.moveFailureSuggestionOther",
+                "建议：查看错误详情并重试；若持续失败请检查后端日志。",
+              );
+          }
+        };
+
+        const failureReportText = Object.entries(groupedFailures)
+          .map(([reason, group]) => {
+            const header = `${reasonLabel(reason)} (${group.paths.length})`;
+            const suggestion = reasonSuggestion(reason);
+            const pathLines = group.paths.map((path) => `- ${path}`).join("\n");
+            const sampleDetail = group.details[0]
+              ? t("projects.moveFailureSampleError", "示例错误：{{detail}}", {
+                detail: group.details[0],
+              })
+              : "";
+            return [header, suggestion, pathLines, sampleDetail].filter(Boolean).join("\n");
+          })
+          .join("\n\n");
+
+        Modal.warning({
+          title: t("projects.moveSelectedFilesFailedDetailTitle", "Some files could not be moved"),
+          content: (
+            <div style={{ maxHeight: 260, overflow: "auto" }}>
+              <div style={{ marginBottom: 8 }}>
+                <Button
+                  size="small"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(failureReportText);
+                      message.success(t("projects.moveFailureReportCopied", "Failure report copied"));
+                    } catch {
+                      message.error(t("projects.moveFailureReportCopyFailed", "Failed to copy report"));
+                    }
+                  }}
+                >
+                  {t("projects.copyFailureReport", "Copy Failure Report")}
+                </Button>
+              </div>
+              {Object.entries(groupedFailures).map(([reason, group]) => (
+                <div key={reason} style={{ marginBottom: 8 }}>
+                  <Text strong>{`${reasonLabel(reason)} (${group.paths.length})`}</Text>
+                  <div>
+                    <Text type="secondary">{reasonSuggestion(reason)}</Text>
+                  </div>
+                  {group.paths.slice(0, 8).map((path) => (
+                    <div key={`${reason}:${path}`}>{path}</div>
+                  ))}
+                  {group.paths.length > 8 ? (
+                    <Text type="secondary">
+                      {t("projects.moveSelectedFilesFailedDetailMore", "...and {{count}} more", {
+                        count: group.paths.length - 8,
+                      })}
+                    </Text>
+                  ) : null}
+                  {group.details.length > 0 ? (
+                    <div>
+                      <Text type="secondary">
+                        {t("projects.moveFailureSampleError", "示例错误：{{detail}}", {
+                          detail: group.details[0],
+                        })}
+                      </Text>
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ),
+          okText: t("common.confirm", "Confirm"),
+        });
+      }
+    };
+
+    Modal.confirm({
+      title: t("projects.moveSelectedFilesTitle", "Move selected files"),
+      content: (
+        <Input
+          autoFocus
+          defaultValue={nextTargetDirectory}
+          placeholder={t("projects.moveSelectedTargetPlaceholder", "Target folder (leave empty for root)")}
+          onChange={(event) => {
+            nextTargetDirectory = event.target.value;
+          }}
+        />
+      ),
+      okText: t("common.move", "Move"),
+      cancelText: t("common.cancel", "Cancel"),
+      onOk: async () => {
+        const normalizedTargetDir = normalizeProjectArtifactPath(nextTargetDirectory || "");
+        const conflicts = normalizedPaths.filter((sourcePath) => {
+          const sourceName = sourcePath.split("/").filter(Boolean).pop() || "";
+          if (!sourceName) {
+            return false;
+          }
+          const targetPath = normalizedTargetDir ? `${normalizedTargetDir}/${sourceName}` : sourceName;
+          return targetPath !== sourcePath && Boolean(knownProjectFilesByPath[targetPath]);
+        });
+
+        if (conflicts.length === 0) {
+          await executeBatchMove(normalizedTargetDir, "fail_if_exists");
+          return;
+        }
+
+        return new Promise<void>((resolve, reject) => {
+          Modal.confirm({
+            title: t("projects.moveConflictTitle", "Target already exists"),
+            content: t(
+              "projects.moveSelectedConflictDescription",
+              "{{count}} files conflict at target location. Overwrite all?",
+              { count: conflicts.length },
+            ),
+            okText: t("common.overwrite", "Overwrite"),
+            cancelText: t("common.cancel", "Cancel"),
+            okButtonProps: { danger: true },
+            onOk: async () => {
+              await executeBatchMove(normalizedTargetDir, "overwrite");
+              resolve();
+            },
+            onCancel: () => {
+              reject(new Error("batch move overwrite cancelled"));
+            },
+          });
+        });
+      },
+    });
+  }, [
+    handleRefreshProjectFiles,
+    knownProjectFilesByPath,
+    normalizeProjectArtifactPath,
+    performRenameProjectTreePath,
+    t,
+  ]);
 
   const handleProjectAutoKnowledgeSinkChange = useCallback((enabled: boolean) => {
     if (!selectedProject) {
@@ -3764,7 +4519,21 @@ export default function ProjectDetailPage() {
                             onAttachArtifactToChat={(path) => {
                               void handleAttachArtifactToChat(path);
                             }}
+                            onRequestMoveTreePath={handleRequestMoveProjectTreePath}
+                            onRequestCreateChildDirectory={handleRequestCreateProjectTreeDirectory}
+                            onRequestRenameTreePath={handleRequestRenameProjectTreePath}
                             onRequestDeleteTreePath={handleRequestDeleteProjectTreePath}
+                            onRequestDeleteSelectedFilePaths={handleRequestDeleteSelectedProjectFiles}
+                            onRequestMoveSelectedFilePaths={handleRequestMoveSelectedProjectFiles}
+                            onRequestMoveSelectedFilePaths={handleRequestMoveSelectedProjectFiles}
+                            onRequestSetSelectedFilePaths={(paths) => {
+                              const normalizedPaths = Array.from(new Set(
+                                (paths || [])
+                                  .map((item) => normalizeProjectArtifactPath(item))
+                                  .filter((item) => Boolean(item)),
+                              ));
+                              setSelectedAttachPaths(normalizedPaths);
+                            }}
                             deletingTreePaths={deletingProjectPaths}
                           />
                         </div>

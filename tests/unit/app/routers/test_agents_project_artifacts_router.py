@@ -20,9 +20,11 @@ from qwenpaw.app.routers import agents as agents_router_module
 from qwenpaw.app.routers.agents import (
     CreateProjectRequest,
     _create_project,
+    _create_project_directory,
     _build_project_file_summary,
     _delete_project_path,
     _load_project_summary,
+    _move_project_path,
     _upload_project_file,
     _write_project_frontmatter,
 )
@@ -552,6 +554,124 @@ def test_delete_project_path_endpoint_accepts_file_and_directory(
     assert dir_payload["path"] == "original/tree"
     assert dir_payload["is_directory"] is True
     assert not (workspace_dir / "projects" / project_id / "original" / "tree").exists()
+
+
+def test_create_project_directory_supports_create_and_existing(tmp_path: Path):
+    project_dir = tmp_path / "projects" / "project-demo"
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    created = _create_project_directory(project_dir, "original/new-dir")
+    assert created.success is True
+    assert created.path == "original/new-dir"
+    assert created.existed is False
+    assert (project_dir / "original" / "new-dir").is_dir()
+
+    existed = _create_project_directory(project_dir, "original/new-dir")
+    assert existed.success is True
+    assert existed.path == "original/new-dir"
+    assert existed.existed is True
+
+
+def test_create_project_directory_rejects_unsafe_path(tmp_path: Path):
+    project_dir = tmp_path / "projects" / "project-demo"
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    with pytest.raises(HTTPException) as exc_info:
+        _create_project_directory(project_dir, "../outside")
+
+    assert exc_info.value.status_code == 400
+
+
+def test_move_project_path_supports_file_and_directory(tmp_path: Path):
+    project_dir = tmp_path / "projects" / "project-demo"
+    (project_dir / "original" / "nested").mkdir(parents=True, exist_ok=True)
+    (project_dir / "original" / "a.txt").write_text("alpha", encoding="utf-8")
+    (project_dir / "original" / "nested" / "b.txt").write_text("beta", encoding="utf-8")
+
+    file_moved = _move_project_path(
+        project_dir,
+        "original/a.txt",
+        "original/renamed.txt",
+    )
+    assert file_moved.success is True
+    assert file_moved.source_path == "original/a.txt"
+    assert file_moved.target_path == "original/renamed.txt"
+    assert file_moved.is_directory is False
+    assert not (project_dir / "original" / "a.txt").exists()
+    assert (project_dir / "original" / "renamed.txt").exists()
+
+    dir_moved = _move_project_path(
+        project_dir,
+        "original/nested",
+        "output/nested",
+    )
+    assert dir_moved.success is True
+    assert dir_moved.source_path == "original/nested"
+    assert dir_moved.target_path == "output/nested"
+    assert dir_moved.is_directory is True
+    assert not (project_dir / "original" / "nested").exists()
+    assert (project_dir / "output" / "nested" / "b.txt").exists()
+
+
+def test_move_project_path_rejects_conflict_and_unsafe_path(tmp_path: Path):
+    project_dir = tmp_path / "projects" / "project-demo"
+    project_dir.mkdir(parents=True, exist_ok=True)
+    (project_dir / "original").mkdir(parents=True, exist_ok=True)
+    (project_dir / "original" / "a.txt").write_text("alpha", encoding="utf-8")
+    (project_dir / "original" / "b.txt").write_text("beta", encoding="utf-8")
+
+    with pytest.raises(HTTPException) as conflict_exc:
+        _move_project_path(
+            project_dir,
+            "original/a.txt",
+            "original/b.txt",
+        )
+    assert conflict_exc.value.status_code == 409
+
+    with pytest.raises(HTTPException) as unsafe_exc:
+        _move_project_path(
+            project_dir,
+            "original/a.txt",
+            "../outside.txt",
+        )
+    assert unsafe_exc.value.status_code == 400
+
+
+def test_create_directory_and_move_path_endpoints(
+    project_artifact_router_client: tuple[TestClient, Path, str],
+):
+    client, workspace_dir, project_id = project_artifact_router_client
+
+    create_resp = client.post(
+        f"/agents/default/projects/{project_id}/directories",
+        json={"path": "original/new-folder"},
+    )
+    assert create_resp.status_code == 200
+    create_payload = create_resp.json()
+    assert create_payload["success"] is True
+    assert create_payload["path"] == "original/new-folder"
+    assert create_payload["existed"] is False
+    assert (workspace_dir / "projects" / project_id / "original" / "new-folder").is_dir()
+
+    source_file = workspace_dir / "projects" / project_id / "original" / "new-folder" / "a.txt"
+    source_file.write_text("doc", encoding="utf-8")
+
+    move_resp = client.patch(
+        f"/agents/default/projects/{project_id}/files/move",
+        json={
+            "source_path": "original/new-folder/a.txt",
+            "target_path": "original/new-folder/b.txt",
+            "conflict_strategy": "fail_if_exists",
+        },
+    )
+    assert move_resp.status_code == 200
+    move_payload = move_resp.json()
+    assert move_payload["success"] is True
+    assert move_payload["source_path"] == "original/new-folder/a.txt"
+    assert move_payload["target_path"] == "original/new-folder/b.txt"
+    assert move_payload["is_directory"] is False
+    assert not source_file.exists()
+    assert (workspace_dir / "projects" / project_id / "original" / "new-folder" / "b.txt").exists()
 
 
 def test_upload_project_file_activates_idle_monitoring_and_sync(
