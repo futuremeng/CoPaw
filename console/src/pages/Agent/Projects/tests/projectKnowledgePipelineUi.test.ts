@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { TFunction } from "i18next";
 import {
+  getProjectKnowledgePipelineAlertDescription,
   getProjectKnowledgeQuantizationStage,
   getProjectKnowledgeSemanticDescription,
   getProjectKnowledgeSemanticReasonLabel,
@@ -71,5 +72,51 @@ describe("projectKnowledgePipelineUi semantic helpers", () => {
       reason: "Backend fallback reason.",
       summary: "Backend fallback summary.",
     }, t)).toBe("Backend fallback summary.");
+  });
+
+  it("renders workflow-step recovery hint in alert description", () => {
+    const text = getProjectKnowledgePipelineAlertDescription({
+      project_id: "p1",
+      status: "failed",
+      current_stage: "failed",
+      progress: 0,
+      auto_enabled: true,
+      dirty: false,
+      dirty_after_run: false,
+      last_trigger: "manual",
+      changed_paths: [],
+      pending_changed_paths: [],
+      changed_count: 0,
+      last_error: "",
+      latest_job_id: "",
+      latest_source_id: "project-p1-workspace",
+      last_result: {},
+      recent_error_code: "TOKENIZE_ENGINE_FAILED",
+      recent_error_source: "workflow_step",
+    }, t);
+    expect(text).toContain("Step-level failure");
+  });
+
+  it("renders execution-loop recovery hint in alert description", () => {
+    const text = getProjectKnowledgePipelineAlertDescription({
+      project_id: "p1",
+      status: "failed",
+      current_stage: "failed",
+      progress: 0,
+      auto_enabled: true,
+      dirty: false,
+      dirty_after_run: false,
+      last_trigger: "manual",
+      changed_paths: [],
+      pending_changed_paths: [],
+      changed_count: 0,
+      last_error: "",
+      latest_job_id: "",
+      latest_source_id: "project-p1-workspace",
+      last_result: {},
+      recent_error_code: "RUNTIME_ERROR_FAILED",
+      recent_error_source: "execution_loop",
+    }, t);
+    expect(text).toContain("Execution-loop failure");
   });
 });

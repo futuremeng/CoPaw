@@ -409,6 +409,11 @@ export interface ProjectKnowledgePipelineState {
   deduplicated?: boolean;
   last_action?: string;
   operation_updated_at?: string;
+  flow_run_id?: string;
+  recent_control_command?: string;
+  control_updated_at?: string;
+  recent_error_code?: string;
+  recent_error_source?: "" | "workflow_step" | "execution_loop" | "flow_control";
   quantization_stage?: ProjectKnowledgeQuantizationStage;
   latest_requested_mode?: ProjectKnowledgeProcessingMode;
   processing_modes?: ProjectKnowledgeProcessingModeStatePayload[];
@@ -450,6 +455,23 @@ export interface ProjectKnowledgePipelineRunResponse {
   idempotency_key?: string;
   deduplicated?: boolean;
   state: ProjectKnowledgePipelineState;
+}
+
+export interface ProjectKnowledgePipelineCommandErrorDetail {
+  error_code?: string;
+  error_source?: string;
+  command_type?: string;
+  flow_run_id?: string;
+  message?: string;
+  recovery_hint?: string;
+}
+
+export interface ProjectKnowledgePipelineCommandResponse {
+  project_id: string;
+  flow_run_id: string;
+  command_type: "pause" | "resume" | "cancel";
+  run: Record<string, unknown>;
+  runtime_meta: Record<string, unknown>;
 }
 
 export interface KnowledgeAutomationConfig {

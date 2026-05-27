@@ -27,6 +27,7 @@ import type {
   ProjectKnowledgeSourceScanStatsResponse,
   ProjectKnowledgePipelineRunRequest,
   ProjectKnowledgePipelineRunResponse,
+  ProjectKnowledgePipelineCommandResponse,
   ProjectKnowledgePipelineState,
 } from "../types";
 
@@ -452,6 +453,22 @@ export const knowledgeApi = {
           rerun_step_id: payload.rerunStepId ?? null,
           overwrite: payload.overwrite ?? true,
           idempotency_key: payload.idempotencyKey ?? "",
+        }),
+      },
+    ),
+
+  commandProjectKnowledgePipeline: (payload: {
+    projectId: string;
+    commandType: "pause" | "resume" | "cancel";
+    payload?: Record<string, unknown>;
+  }) =>
+    request<ProjectKnowledgePipelineCommandResponse>(
+      withProjectId("/knowledge/project-pipeline/commands", payload.projectId),
+      {
+        method: "POST",
+        body: JSON.stringify({
+          command_type: payload.commandType,
+          payload: payload.payload ?? {},
         }),
       },
     ),

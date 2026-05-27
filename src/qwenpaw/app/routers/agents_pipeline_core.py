@@ -61,6 +61,8 @@ class PipelineTemplateStep(BaseModel):
     depends_on: list[str] = Field(default_factory=list)
     input_bindings: dict[str, str] = Field(default_factory=dict)
     retry_policy: dict[str, Any] = Field(default_factory=dict)
+    artifact_schema_ref: str = ""
+    error_contract: list[str] = Field(default_factory=list)
 
 
 class PipelineTemplateInfo(BaseModel):
@@ -122,6 +124,8 @@ class PipelineRunStep(BaseModel):
     depends_on: list[str] = Field(default_factory=list)
     input_bindings: dict[str, str] = Field(default_factory=dict)
     retry_policy: dict[str, Any] = Field(default_factory=dict)
+    artifact_schema_ref: str = ""
+    error_contract: list[str] = Field(default_factory=list)
     status: str
     started_at: str | None = None
     ended_at: str | None = None
@@ -522,6 +526,7 @@ def _parse_pipeline_template_doc(raw: dict[str, Any], fallback_id: str) -> Pipel
         raw_depends_on = node.get("depends_on")
         raw_input_bindings = node.get("input_bindings")
         raw_retry_policy = node.get("retry_policy")
+        raw_error_contract = node.get("error_contract")
         steps.append(
             PipelineTemplateStep(
                 id=step_id,
@@ -544,6 +549,12 @@ def _parse_pipeline_template_doc(raw: dict[str, Any], fallback_id: str) -> Pipel
                     else {}
                 ),
                 retry_policy=raw_retry_policy if isinstance(raw_retry_policy, dict) else {},
+                artifact_schema_ref=str(node.get("artifact_schema_ref") or "").strip(),
+                error_contract=(
+                    [str(item).strip() for item in raw_error_contract if str(item).strip()]
+                    if isinstance(raw_error_contract, list)
+                    else []
+                ),
             ),
         )
 
@@ -620,6 +631,7 @@ def _parse_pipeline_template_doc(raw: dict[str, Any], fallback_id: str) -> Pipel
         seen_step_ids.add(step.id)
 
     validation_errors.extend(_validate_pipeline_dependency_graph(steps))
+    validation_errors.extend(_validate_pipeline_input_references(steps))
     compilation_status = str(raw.get("compilation_status") or "ready").strip() or "ready"
     if validation_errors:
         compilation_status = "invalid"
@@ -978,6 +990,10 @@ def _pipeline_steps_to_md(template: PipelineTemplateInfo) -> str:
         lines.append(f"- contract_depends_on: {json.dumps(step.depends_on or [], ensure_ascii=False)}")
         lines.append(f"- contract_input_bindings: {json.dumps(step.input_bindings or {}, ensure_ascii=False)}")
         lines.append(f"- contract_retry_policy: {json.dumps(step.retry_policy or {}, ensure_ascii=False)}")
+        lines.append(
+            f"- contract_artifact_schema_ref: {json.dumps((step.artifact_schema_ref or '').strip(), ensure_ascii=False)}"
+        )
+        lines.append(f"- contract_error_contract: {json.dumps(step.error_contract or [], ensure_ascii=False)}")
         lines.append("")
     return "\n".join(lines)
 
@@ -1005,6 +1021,8 @@ def _parse_pipeline_md(content: str) -> list[PipelineTemplateStep]:
     contract_depends_on: list[str] = []
     contract_input_bindings: dict[str, str] = {}
     contract_retry_policy: dict[str, Any] = {}
+    contract_artifact_schema_ref = ""
+    contract_error_contract: list[str] = []
 
     def _decode_contract_json(raw_value: str, fallback: Any) -> Any:
         try:
@@ -1015,6 +1033,7 @@ def _parse_pipeline_md(content: str) -> list[PipelineTemplateStep]:
     def _flush() -> None:
         nonlocal contract_inputs, contract_outputs, contract_prompt, contract_script
         nonlocal contract_executor, contract_depends_on, contract_input_bindings, contract_retry_policy
+        nonlocal contract_artifact_schema_ref, contract_error_contract
         if current is not None:
             desc = " ".join(desc_lines).strip()
             steps.append(
@@ -1031,6 +1050,8 @@ def _parse_pipeline_md(content: str) -> list[PipelineTemplateStep]:
                     depends_on=contract_depends_on,
                     input_bindings=contract_input_bindings,
                     retry_policy=contract_retry_policy,
+                    artifact_schema_ref=contract_artifact_schema_ref,
+                    error_contract=contract_error_contract,
                 )
             )
         contract_inputs = {}
@@ -1041,6 +1062,8 @@ def _parse_pipeline_md(content: str) -> list[PipelineTemplateStep]:
         contract_depends_on = []
         contract_input_bindings = {}
         contract_retry_policy = {}
+        contract_artifact_schema_ref = ""
+        contract_error_contract = []
 
     for raw_line in content.splitlines():
         line = raw_line.rstrip()
@@ -1054,7 +1077,7 @@ def _parse_pipeline_md(content: str) -> list[PipelineTemplateStep]:
             if line.startswith("# ") or line.startswith("---"):
                 continue
             contract_match = re.match(
-                r"^\s*-\s*contract_(inputs|prompt|script|executor|outputs|depends_on|input_bindings|retry_policy):\s*(.+?)\s*$",
+                r"^\s*-\s*contract_(inputs|prompt|script|executor|outputs|depends_on|input_bindings|retry_policy|artifact_schema_ref|error_contract):\s*(.+?)\s*$",
                 line,
             )
             if contract_match:
@@ -1107,6 +1130,21 @@ def _parse_pipeline_md(content: str) -> list[PipelineTemplateStep]:
                         if isinstance(parsed_retry_policy, dict)
                         else {}
                     )
+                    continue
+                if contract_key == "artifact_schema_ref":
+                    parsed_artifact_schema_ref = _decode_contract_json(contract_value, "")
+                    contract_artifact_schema_ref = str(parsed_artifact_schema_ref or "").strip()
+                    continue
+                if contract_key == "error_contract":
+                    parsed_error_contract = _decode_contract_json(contract_value, [])
+                    if isinstance(parsed_error_contract, list):
+                        contract_error_contract = [
+                            str(item).strip()
+                            for item in parsed_error_contract
+                            if str(item).strip()
+                        ]
+                    else:
+                        contract_error_contract = []
                     continue
             desc_lines.append(line)
 
@@ -1304,6 +1342,7 @@ def _parse_pipeline_md_strict(
             errors.append(item)
 
     errors.extend(_validate_pipeline_dependency_graph(steps))
+    errors.extend(_validate_pipeline_input_references(steps))
 
     template = PipelineTemplateInfo(
         id=template_id,
@@ -1337,6 +1376,8 @@ def _template_content_hash(template: PipelineTemplateInfo) -> str:
                 "depends_on": step.depends_on,
                 "input_bindings": step.input_bindings,
                 "retry_policy": step.retry_policy,
+                "artifact_schema_ref": step.artifact_schema_ref,
+                "error_contract": step.error_contract,
             }
             for step in template.steps
         ],
@@ -1629,6 +1670,8 @@ def _import_platform_template_to_project(
                 "depends_on": step.depends_on,
                 "input_bindings": step.input_bindings,
                 "retry_policy": step.retry_policy,
+                "artifact_schema_ref": step.artifact_schema_ref,
+                "error_contract": step.error_contract,
             }
             for step in platform_template.steps
         ],
@@ -1703,6 +1746,8 @@ def _publish_project_template_to_platform(
                 "depends_on": step.depends_on,
                 "input_bindings": step.input_bindings,
                 "retry_policy": step.retry_policy,
+                "artifact_schema_ref": step.artifact_schema_ref,
+                "error_contract": step.error_contract,
             }
             for step in source_template.steps
         ],
@@ -1788,6 +1833,8 @@ def _save_agent_pipeline_template(
                 "depends_on": step.depends_on,
                 "input_bindings": step.input_bindings,
                 "retry_policy": step.retry_policy,
+                "artifact_schema_ref": step.artifact_schema_ref,
+                "error_contract": step.error_contract,
             }
             for step in normalized.steps
         ],
@@ -1884,6 +1931,8 @@ def _save_agent_pipeline_template_with_md(
                 "depends_on": step.depends_on,
                 "input_bindings": step.input_bindings,
                 "retry_policy": step.retry_policy,
+                "artifact_schema_ref": step.artifact_schema_ref,
+                "error_contract": step.error_contract,
             }
             for step in parsed_template.steps
         ],
@@ -2074,6 +2123,34 @@ def _validate_pipeline_step(step: PipelineTemplateStep) -> list[PipelineValidati
                 )
             )
 
+    schema_ref = (step.artifact_schema_ref or "").strip()
+    if schema_ref and not re.match(r"^[a-z0-9][a-z0-9._/-]{2,127}$", schema_ref):
+        errors.append(
+            PipelineValidationError(
+                error_code="invalid_step_artifact_schema_ref",
+                message="Step artifact_schema_ref format is invalid.",
+                field_path="artifact_schema_ref",
+                step_id=step_id,
+                expected="lowercase path-like token, e.g. knowledge/snapshot-manifest.v1",
+                actual=schema_ref,
+                suggestion="Use lowercase letters, digits, '.', '_', '-', '/'.",
+            )
+        )
+
+    for idx, error_code in enumerate(step.error_contract or []):
+        if not re.match(r"^[A-Z][A-Z0-9_]{2,63}$", str(error_code or "")):
+            errors.append(
+                PipelineValidationError(
+                    error_code="invalid_step_error_contract_code",
+                    message="Step error_contract code format is invalid.",
+                    field_path=f"error_contract[{idx}]",
+                    step_id=step_id,
+                    expected="UPPER_SNAKE_CASE token",
+                    actual=str(error_code),
+                    suggestion="Use UPPER_SNAKE_CASE, e.g. SNAPSHOT_MANIFEST_MISSING.",
+                )
+            )
+
     if step.executor and not isinstance(step.executor, str):
         errors.append(
             PipelineValidationError(
@@ -2187,6 +2264,92 @@ def _validate_pipeline_dependency_graph(
 
     for step in steps:
         _dfs(step.id, [])
+
+    return errors
+
+
+def _parse_step_output_ref(raw_value: str) -> tuple[str, str] | None | tuple[()]:
+    value = (raw_value or "").strip()
+    if not value.startswith("$"):
+        return None
+    match = re.match(r"^\$([a-z][a-z0-9_-]{0,63})\.([A-Za-z][A-Za-z0-9_]*)$", value)
+    if match is None:
+        return ()
+    return match.group(1), match.group(2)
+
+
+def _validate_pipeline_input_references(
+    steps: list[PipelineTemplateStep],
+) -> list[PipelineValidationError]:
+    errors: list[PipelineValidationError] = []
+    step_map: dict[str, PipelineTemplateStep] = {step.id: step for step in steps}
+
+    for idx, step in enumerate(steps):
+        for field_name, bindings in (
+            ("inputs", step.inputs),
+            ("input_bindings", step.input_bindings),
+        ):
+            if not isinstance(bindings, dict):
+                continue
+            for input_key, raw_value in bindings.items():
+                if not isinstance(raw_value, str):
+                    continue
+                parsed_ref = _parse_step_output_ref(raw_value)
+                if parsed_ref is None:
+                    continue
+                if parsed_ref == ():
+                    errors.append(
+                        PipelineValidationError(
+                            error_code="step_input_reference_invalid_format",
+                            message="Input reference format is invalid.",
+                            field_path=f"steps[{idx}].{field_name}.{input_key}",
+                            step_id=step.id,
+                            expected="$upstream_step.output_key",
+                            actual=raw_value,
+                            suggestion="Use $step_id.output_name format for upstream output references.",
+                        )
+                    )
+                    continue
+
+                upstream_step_id, upstream_output_key = parsed_ref
+                upstream_step = step_map.get(upstream_step_id)
+                if upstream_step is None:
+                    errors.append(
+                        PipelineValidationError(
+                            error_code="step_input_reference_upstream_not_found",
+                            message="Input reference upstream step not found.",
+                            field_path=f"steps[{idx}].{field_name}.{input_key}",
+                            step_id=step.id,
+                            expected="existing upstream step id",
+                            actual=upstream_step_id,
+                            suggestion="Fix reference step id or add the missing upstream step.",
+                        )
+                    )
+                    continue
+                if upstream_output_key not in (upstream_step.outputs or {}):
+                    errors.append(
+                        PipelineValidationError(
+                            error_code="step_input_reference_output_not_declared",
+                            message="Referenced upstream output key is not declared.",
+                            field_path=f"steps[{idx}].{field_name}.{input_key}",
+                            step_id=step.id,
+                            expected=f"one of {sorted((upstream_step.outputs or {}).keys())}",
+                            actual=upstream_output_key,
+                            suggestion="Declare output on upstream step or fix the referenced output key.",
+                        )
+                    )
+                if upstream_step_id not in (step.depends_on or []):
+                    errors.append(
+                        PipelineValidationError(
+                            error_code="step_input_reference_missing_dependency",
+                            message="Input reference requires explicit depends_on edge.",
+                            field_path=f"steps[{idx}].depends_on",
+                            step_id=step.id,
+                            expected=f"includes '{upstream_step_id}'",
+                            actual=json.dumps(step.depends_on or [], ensure_ascii=False),
+                            suggestion="Add upstream step id to depends_on to make execution order explicit.",
+                        )
+                    )
 
     return errors
 
@@ -3520,6 +3683,17 @@ def _persist_project_pipeline_run(project_dir: Path, run: PipelineRunDetail, tem
                 "attempts": 1,
                 "started_at": step.started_at,
                 "ended_at": step.ended_at,
+                "contract_inputs": step.inputs,
+                "contract_prompt": step.prompt,
+                "contract_script": step.script,
+                "contract_executor": step.executor,
+                "contract_outputs": step.outputs,
+                "contract_depends_on": step.depends_on,
+                "contract_input_bindings": step.input_bindings,
+                "contract_retry_policy": step.retry_policy,
+                "contract_artifact_schema_ref": step.artifact_schema_ref,
+                "contract_error_contract": step.error_contract,
+                "resolved_inputs": cast(dict[str, Any], step.metrics.get("resolved_inputs") or {}),
                 "artifact_manifest": artifact_manifest_rel,
                 "metric_pack": metric_pack_rel,
                 "logs": [],
@@ -3886,6 +4060,9 @@ def _load_pipeline_run_from_manifest(project_dir: Path, run_id: str) -> Pipeline
                     if key:
                         metrics[key] = value
 
+        if isinstance(node.get("resolved_inputs"), dict):
+            metrics["resolved_inputs"] = cast(dict[str, Any], node.get("resolved_inputs") or {})
+
         if isinstance(artifact_path, str) and _is_safe_relative_path(artifact_path):
             artifact_file = (run_dir / artifact_path).resolve()
             if artifact_file.exists() and artifact_file.is_file() and str(artifact_file).startswith(str(run_dir)):
@@ -3940,6 +4117,16 @@ def _load_pipeline_run_from_manifest(project_dir: Path, run_id: str) -> Pipeline
                     cast(dict[str, Any], node.get("contract_retry_policy"))
                     if isinstance(node.get("contract_retry_policy"), dict)
                     else (dict(template_step.retry_policy) if template_step else {})
+                ),
+                artifact_schema_ref=str(
+                    node.get("contract_artifact_schema_ref")
+                    or (template_step.artifact_schema_ref if template_step else "")
+                    or ""
+                ).strip(),
+                error_contract=(
+                    [str(item).strip() for item in cast(list[Any], node.get("contract_error_contract")) if str(item).strip()]
+                    if isinstance(node.get("contract_error_contract"), list)
+                    else (list(template_step.error_contract) if template_step else [])
                 ),
                 status=_normalize_step_status(str(node.get("status") or "pending")),
                 started_at=node.get("started_at"),

@@ -1965,7 +1965,20 @@ def test_project_pipeline_command_returns_409_on_invalid_transition(
         json={"command_type": "pause", "payload": {}},
     )
     assert response.status_code == 409
-    assert "transition not allowed" in str(response.json().get("detail") or "")
+    detail = response.json().get("detail") or {}
+    assert detail.get("error_code") == "PROJECT_PIPELINE_COMMAND_CONFLICT"
+    assert detail.get("error_source") == "flow_control"
+    assert detail.get("command_type") == "pause"
+    assert detail.get("flow_run_id") == "flow-run-control-409"
+    assert "transition not allowed" in str(detail.get("message") or "")
+
+    status = knowledge_api_client.get(
+        f"/knowledge/project-pipeline/status?project_id={project_id}"
+    )
+    assert status.status_code == 200
+    payload = status.json()
+    assert payload.get("recent_error_code") == "PROJECT_PIPELINE_COMMAND_CONFLICT"
+    assert payload.get("recent_error_source") == "flow_control"
 
 
 def test_project_pipeline_command_returns_404_without_flow_run_id(
@@ -1981,7 +1994,20 @@ def test_project_pipeline_command_returns_404_without_flow_run_id(
         json={"command_type": "cancel", "payload": {}},
     )
     assert response.status_code == 404
-    assert response.json().get("detail") == "PROJECT_PIPELINE_FLOW_RUN_NOT_FOUND"
+    detail = response.json().get("detail") or {}
+    assert detail.get("error_code") == "PROJECT_PIPELINE_FLOW_RUN_NOT_FOUND"
+    assert detail.get("error_source") == "flow_control"
+    assert detail.get("command_type") == "cancel"
+    assert detail.get("flow_run_id") == ""
+    assert detail.get("message") == "PROJECT_PIPELINE_FLOW_RUN_NOT_FOUND"
+
+    status = knowledge_api_client.get(
+        f"/knowledge/project-pipeline/status?project_id={project_id}"
+    )
+    assert status.status_code == 200
+    payload = status.json()
+    assert payload.get("recent_error_code") == "PROJECT_PIPELINE_FLOW_RUN_NOT_FOUND"
+    assert payload.get("recent_error_source") == "flow_control"
 
 
 def test_restore_knowledge_backup_offloads_filesystem_copy_to_thread(
@@ -2467,6 +2493,18 @@ def test_project_pipeline_status_projects_runtime_operation_metadata(
             return {
                 "project_id": project_id,
                 "status": "idle",
+                "last_result": {
+                    "pipeline_run": {
+                        "step_outputs": {
+                            "snapshot_raw": {
+                                "snapshot_manifest_path": ".knowledge/sources/project-pipeline-runtime-status/snapshot-manifest.json",
+                                "snapshot_count": 2,
+                            }
+                        },
+                        "recent_error_code": "",
+                        "recent_error_source": "invalid-source",
+                    }
+                },
             }
 
     monkeypatch.setattr(
@@ -2496,6 +2534,9 @@ def test_project_pipeline_status_projects_runtime_operation_metadata(
     assert payload["deduplicated"] is True
     assert "recent_control_command" in payload
     assert "control_updated_at" in payload
+    assert payload["step_outputs"]["snapshot_raw"]["snapshot_count"] == 2
+    assert payload["recent_error_code"] == ""
+    assert payload["recent_error_source"] == ""
 
 
 def test_project_pipeline_ws_snapshot_includes_latest_run_operation_metadata(
@@ -2530,6 +2571,18 @@ def test_project_pipeline_ws_snapshot_includes_latest_run_operation_metadata(
             return {
                 "project_id": project_id,
                 "status": "idle",
+                "last_result": {
+                    "pipeline_run": {
+                        "step_outputs": {
+                            "tokenize": {
+                                "tokenize_manifest_path": ".knowledge/sources/project-pipeline-runtime-ws/tokenize-manifest.json",
+                                "token_count": 320,
+                            }
+                        },
+                        "recent_error_code": "TOKENIZE_ENGINE_FAILED",
+                        "recent_error_source": "workflow_step",
+                    }
+                },
             }
 
     monkeypatch.setattr(
@@ -2557,6 +2610,9 @@ def test_project_pipeline_ws_snapshot_includes_latest_run_operation_metadata(
     assert payload["state"]["project_id"] == project_id
     assert payload["state"]["idempotency_key"] == "manual-runtime-ws-1"
     assert str(payload["state"].get("operation_id") or "").startswith("ps-")
+    assert payload["state"]["step_outputs"]["tokenize"]["token_count"] == 320
+    assert payload["state"]["recent_error_code"] == "TOKENIZE_ENGINE_FAILED"
+    assert payload["state"]["recent_error_source"] == "workflow_step"
 
 
 def test_project_pipeline_ws_snapshot_includes_latest_control_command_metadata(
@@ -2710,6 +2766,9 @@ def test_project_pipeline_ws_snapshot_emits_incremental_control_update(
         assert first["type"] == "snapshot"
         assert first["state"]["project_id"] == project_id
         assert not str(first["state"].get("recent_control_command") or "")
+        assert first["state"].get("step_outputs") == {}
+        assert first["state"].get("recent_error_code") == ""
+        assert first["state"].get("recent_error_source") == ""
 
         result_holder: dict[str, object] = {}
 

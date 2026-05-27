@@ -8,6 +8,29 @@ from typing import Any
 from ..config.config import KnowledgeConfig, KnowledgeSourceSpec
 
 
+def _exception_reason_code(exc: Exception) -> str:
+	name = str(type(exc).__name__ or "").strip()
+	if not name:
+		return "PROJECT_PIPELINE_EXECUTION_FAILED"
+	parts: list[str] = []
+	token: list[str] = []
+	for idx, ch in enumerate(name):
+		if ch.isupper() and idx > 0 and token and token[-1].islower():
+			parts.append("".join(token))
+			token = [ch]
+		elif ch.isalnum():
+			token.append(ch)
+		elif token:
+			parts.append("".join(token))
+			token = []
+	if token:
+		parts.append("".join(token))
+	normalized = "_".join(item.upper() for item in parts if item).strip("_")
+	if not normalized:
+		return "PROJECT_PIPELINE_EXECUTION_FAILED"
+	return f"{normalized}_FAILED" if not normalized.endswith("_FAILED") else normalized
+
+
 def start_worker(manager: Any, **kwargs) -> None:
 	manager._run_sync_loop(**kwargs)
 
@@ -146,6 +169,9 @@ def run_sync_loop(
 				"template_id": str(normalized_result.get("template_id") or ""),
 				"processing_fingerprint": str(normalized_result.get("processing_fingerprint") or ""),
 				"artifacts": list(normalized_result.get("artifacts") or []),
+				"step_outputs": dict(normalized_result.get("step_outputs") or {}),
+				"recent_error_code": str(normalized_result.get("recent_error_code") or "").strip(),
+				"recent_error_source": str(normalized_result.get("recent_error_source") or "").strip(),
 			}
 			normalized_result["pipeline_run"] = pipeline_run
 		with manager._lock:
@@ -188,14 +214,31 @@ def run_sync_loop(
 			else:
 				manager._save_state(state)
 	except Exception as exc:
+		reason_code = _exception_reason_code(exc)
+		error_source = "execution_loop"
 		with manager._lock:
 			state = manager._load_state(project_id, hydrate=False)
+			prior_pipeline_run = state.get("last_result", {}).get("pipeline_run") if isinstance(state.get("last_result"), dict) else {}
+			if not isinstance(prior_pipeline_run, dict):
+				prior_pipeline_run = {}
 			state.update({
 				"status": "failed",
 				"current_stage": "failed",
 				"stage": "failed",
 				"failed_stage": str(state.get("current_stage") or "pending") or "pending",
 				"last_error": str(exc),
+				"recent_error_code": reason_code,
+				"recent_error_source": error_source,
+				"last_result": {
+					"pipeline_run": {
+						**prior_pipeline_run,
+						"status": "failed",
+						"mode": str(state.get("latest_requested_mode") or processing_mode or "agentic"),
+						"recent_error_code": reason_code,
+						"recent_error_source": error_source,
+						"step_outputs": dict(prior_pipeline_run.get("step_outputs") or {}),
+					},
+				},
 				"updated_at": manager._now_iso(),
 				"last_finished_at": manager._now_iso(),
 				"l2_metrics": preserved_l2_metrics,

@@ -216,6 +216,91 @@ def test_parse_builtin_project_template_enforces_canonical_steps_even_if_local_d
     assert "quality_review" not in parsed_step_ids
 
 
+def test_parse_builtin_project_template_includes_step_contract_extensions():
+    parsed = _parse_pipeline_template_doc(
+        {
+            "id": "builtin-knowledge-processing-v1",
+            "name": "Project Knowledge Pipeline",
+            "version": "2.0.0",
+            "description": "builtin",
+            "steps": [],
+        },
+        fallback_id="builtin-knowledge-processing-v1",
+    )
+
+    assert parsed is not None
+    assert parsed.compilation_status == "ready"
+    for step in parsed.steps:
+        assert step.artifact_schema_ref
+        assert step.error_contract
+
+
+def test_parse_pipeline_template_reports_upstream_output_reference_mismatch():
+    parsed = _parse_pipeline_template_doc(
+        {
+            "id": "demo-ref-mismatch",
+            "name": "Demo Ref Mismatch",
+            "version": "0.1.0",
+            "steps": [
+                {
+                    "id": "collect",
+                    "name": "Collect",
+                    "kind": "ingest",
+                    "outputs": {"manifest": "str"},
+                    "prompt": "collect",
+                },
+                {
+                    "id": "transform",
+                    "name": "Transform",
+                    "kind": "transform",
+                    "depends_on": ["collect"],
+                    "inputs": {"manifest": "$collect.missing_output"},
+                    "prompt": "transform",
+                },
+            ],
+        },
+        fallback_id="demo-ref-mismatch",
+    )
+
+    assert parsed is not None
+    error_codes = {item.error_code for item in parsed.validation_errors}
+    assert "step_input_reference_output_not_declared" in error_codes
+    assert parsed.compilation_status == "invalid"
+
+
+def test_parse_pipeline_template_reports_reference_without_dependency_edge():
+    parsed = _parse_pipeline_template_doc(
+        {
+            "id": "demo-missing-dep",
+            "name": "Demo Missing Dependency",
+            "version": "0.1.0",
+            "steps": [
+                {
+                    "id": "collect",
+                    "name": "Collect",
+                    "kind": "ingest",
+                    "outputs": {"manifest": "str"},
+                    "prompt": "collect",
+                },
+                {
+                    "id": "transform",
+                    "name": "Transform",
+                    "kind": "transform",
+                    "depends_on": [],
+                    "inputs": {"manifest": "$collect.manifest"},
+                    "prompt": "transform",
+                },
+            ],
+        },
+        fallback_id="demo-missing-dep",
+    )
+
+    assert parsed is not None
+    error_codes = {item.error_code for item in parsed.validation_errors}
+    assert "step_input_reference_missing_dependency" in error_codes
+    assert parsed.compilation_status == "invalid"
+
+
 def test_append_collab_event_uses_canonical_event_and_observability_fields():
     run = PipelineRunDetail(
         id="run-1",

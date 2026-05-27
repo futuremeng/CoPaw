@@ -26,7 +26,6 @@ from .knowledge_workflow_steps import (
     KNOWLEDGE_WORKFLOW_STEP_SPECS,
     _load_builtin_pipeline_doc,
 )
-from .routers import agents as agents_router_impl
 from .routers.agents_pipeline_core import (
     PipelineRunDetail,
     PipelineRunStep,
@@ -268,7 +267,14 @@ def _build_initial_run(
             name=step.name,
             kind=step.kind,
             description=step.description,
+            inputs=dict(step.inputs or {}),
             executor=step.executor,
+            outputs=dict(step.outputs or {}),
+            depends_on=list(step.depends_on or []),
+            input_bindings=dict(step.input_bindings or {}),
+            retry_policy=dict(step.retry_policy or {}),
+            artifact_schema_ref=str(step.artifact_schema_ref or "").strip(),
+            error_contract=list(step.error_contract or []),
             status="pending",
             metrics={},
             evidence=[],
@@ -333,15 +339,11 @@ def _mode_for_start_step(start_step: str, current_mode: str) -> str:
 
 
 def _resolve_project_dir_with_fallback(workspace_dir: Path, project_id: str) -> Path:
-    try:
-        return agents_router_impl._resolve_project_dir(workspace_dir, project_id)
-    except HTTPException:
-        fallback = (workspace_dir / "projects" / project_id).resolve()
-        if fallback.exists() and fallback.is_dir() and str(fallback).startswith(
-            str((workspace_dir / "projects").resolve())
-        ):
-            return fallback
-        raise
+    fallback = (workspace_dir / "projects" / project_id).resolve()
+    projects_root = (workspace_dir / "projects").resolve()
+    if fallback.exists() and fallback.is_dir() and str(fallback).startswith(str(projects_root)):
+        return fallback
+    raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
 
 
 class KnowledgeWorkflowOrchestrator:
@@ -393,10 +395,146 @@ class KnowledgeWorkflowOrchestrator:
                 + ", ".join(missing_step_ids)
             )
 
+    def _template_step_by_id(self, step_id: str) -> PipelineTemplateStep:
+        for step in self.template.steps:
+            if step.id == step_id:
+                return step
+        raise RuntimeError(f"Knowledge workflow template step '{step_id}' missing")
+
+    def _resolve_output_reference(self, run: PipelineRunDetail, raw_value: Any) -> Any:
+        if not isinstance(raw_value, str):
+            return raw_value
+        value = raw_value.strip()
+        if not value.startswith("$"):
+            return raw_value
+        if "." not in value[1:]:
+            return raw_value
+        upstream_step_id, output_key = value[1:].split(".", 1)
+        upstream_step = self._step_by_id(run, upstream_step_id)
+        runtime_outputs = dict(upstream_step.outputs or {})
+        result_outputs = dict((upstream_step.metrics or {}).get("result", {}).get("outputs", {}) or {})
+        if output_key in result_outputs:
+            return result_outputs[output_key]
+        if output_key in runtime_outputs:
+            return runtime_outputs[output_key]
+        return raw_value
+
+    def _resolve_step_inputs(self, run: PipelineRunDetail, step: PipelineRunStep) -> dict[str, Any]:
+        resolved: dict[str, Any] = {}
+        for key, value in dict(step.inputs or {}).items():
+            resolved[str(key)] = self._resolve_output_reference(run, value)
+        for key, value in dict(step.input_bindings or {}).items():
+            resolved[str(key)] = self._resolve_output_reference(run, value)
+        return resolved
+
+    def _manifest_output(self, path: Path) -> str:
+        return _relative_to_project(self.project_dir, path) if path.exists() else ""
+
+    def _upstream_result_for_step(self, run: PipelineRunDetail, step: PipelineRunStep) -> dict[str, Any]:
+        for upstream_step_id in list(step.depends_on or []):
+            upstream_step = self._step_by_id(run, upstream_step_id)
+            payload = dict((upstream_step.metrics or {}).get("result", {}) or {})
+            if payload:
+                return payload
+        return {}
+
+    def _default_passthrough_metrics(
+        self,
+        step_id: str,
+        upstream_result: dict[str, Any],
+    ) -> dict[str, Any]:
+        if step_id == "build_chunks":
+            return {
+                "chunk_count": int(upstream_result.get("chunk_count") or 0),
+                "document_count": int(upstream_result.get("document_count") or 0),
+            }
+        if step_id == "build_interlinear":
+            return {
+                "tokenize_line_count": int(upstream_result.get("tokenize_line_count") or 0),
+                "sentence_count": int(upstream_result.get("sentence_count") or 0),
+            }
+        if step_id == "pos_tagging":
+            return {
+                "pos_count": int(upstream_result.get("pos_count") or upstream_result.get("syntax_pos_count") or 0),
+                "pos_tag_type_count": int(
+                    upstream_result.get("pos_tag_type_count")
+                    or upstream_result.get("syntax_pos_tag_type_count")
+                    or 0
+                ),
+                "syntax_pos_count": int(upstream_result.get("syntax_pos_count") or upstream_result.get("pos_count") or 0),
+                "syntax_pos_tag_type_count": int(
+                    upstream_result.get("syntax_pos_tag_type_count")
+                    or upstream_result.get("pos_tag_type_count")
+                    or 0
+                ),
+                "pos_coverage_on_syntax_tokens": float(upstream_result.get("pos_coverage_on_syntax_tokens") or 0.0),
+            }
+        if step_id == "syntax_parse":
+            return {
+                "syntax_relation_count": int(upstream_result.get("syntax_relation_count") or 0),
+                "syntax_sentence_count": int(upstream_result.get("syntax_sentence_count") or 0),
+                "syntax_token_count": int(upstream_result.get("syntax_token_count") or 0),
+            }
+        return {}
+
+    def _default_passthrough_outputs(
+        self,
+        step_id: str,
+        source_id: str,
+        upstream_result: dict[str, Any],
+    ) -> dict[str, Any]:
+        if not source_id:
+            return {}
+        if step_id == "build_chunks":
+            return {
+                "chunk_manifest_path": self._manifest_output(
+                    self.knowledge_manager._source_chunk_manifest_path(source_id)
+                ),
+                "chunk_count": int(upstream_result.get("chunk_count") or 0),
+            }
+        if step_id == "build_interlinear":
+            return {
+                "interlinear_manifest_path": self._manifest_output(
+                    self.knowledge_manager._source_interlinear_manifest_path(source_id)
+                ),
+                "line_count": int(upstream_result.get("tokenize_line_count") or 0),
+            }
+        if step_id == "pos_tagging":
+            return {
+                "pos_manifest_path": self._manifest_output(
+                    self.knowledge_manager._source_pos_manifest_path(source_id)
+                ),
+                "pos_tag_type_count": int(
+                    upstream_result.get("pos_tag_type_count")
+                    or upstream_result.get("syntax_pos_tag_type_count")
+                    or 0
+                ),
+            }
+        if step_id == "syntax_parse":
+            return {
+                "syntax_manifest_path": self._manifest_output(
+                    self.knowledge_manager._source_syntax_manifest_path(source_id)
+                ),
+                "relation_count": int(upstream_result.get("syntax_relation_count") or 0),
+            }
+        return {}
+
+    def _default_passthrough_evidence(
+        self,
+        run: PipelineRunDetail,
+        step: PipelineRunStep,
+    ) -> list[str]:
+        merged: list[str] = []
+        for upstream_step_id in list(step.depends_on or []):
+            upstream_step = self._step_by_id(run, upstream_step_id)
+            merged.extend(upstream_step.evidence[:5])
+        return list(dict.fromkeys(merged))[:20]
+
     def _dispatch_step_executor(
         self,
         step_id: str,
         *,
+        run: PipelineRunDetail,
         source=None,
         config=None,
         running_config: Any | None = None,
@@ -406,10 +544,12 @@ class KnowledgeWorkflowOrchestrator:
         metrics: dict[str, Any] | None = None,
         evidence: list[str] | None = None,
         artifacts: list[str] | None = None,
+        outputs: dict[str, Any] | None = None,
     ) -> Callable[[PipelineRunStep], dict[str, Any]]:
         expected_executor = _BUILTIN_KNOWLEDGE_STEP_EXECUTORS[step_id]
 
         def _runner(step: PipelineRunStep) -> dict[str, Any]:
+            resolved_inputs = self._resolve_step_inputs(run, step)
             actual_executor = str(step.executor or "").strip()
             if actual_executor != expected_executor:
                 raise RuntimeError(
@@ -423,20 +563,26 @@ class KnowledgeWorkflowOrchestrator:
                     running_config=running_config,
                     changed_paths=changed_paths or [],
                     index_path=index_path or self.knowledge_manager._source_index_path(source.id),
+                    resolved_inputs=resolved_inputs,
                 )
             if step_id == "tokenize":
                 return self._execute_tokenize(
                     source=source,
                     config=config,
                     progress_callback=progress_callback,
+                    resolved_inputs=resolved_inputs,
                 )
             if step_id == "semantic_role_labeling":
-                return self._execute_semantic_role_labeling()
+                return self._execute_semantic_role_labeling(resolved_inputs=resolved_inputs)
             return self._execute_passthrough(
+                run=run,
+                step=step,
                 step_id=step_id,
-                metrics=metrics or {},
-                evidence=evidence or [],
-                artifacts=artifacts or [],
+                metrics=metrics,
+                evidence=evidence,
+                artifacts=artifacts,
+                outputs=outputs,
+                resolved_inputs=resolved_inputs,
             )
 
         return _runner
@@ -549,6 +695,7 @@ class KnowledgeWorkflowOrchestrator:
             },
             executor=self._dispatch_step_executor(
                 "snapshot_raw",
+                run=run,
                 source=source,
                 config=config,
                 running_config=running_config,
@@ -595,12 +742,7 @@ class KnowledgeWorkflowOrchestrator:
             },
             executor=self._dispatch_step_executor(
                 "build_chunks",
-                metrics={
-                    "chunk_count": int(index_result.get("chunk_count") or 0),
-                    "document_count": int(index_result.get("document_count") or 0),
-                },
-                evidence=run.steps[0].evidence[:5],
-                artifacts=[],
+                run=run,
             ),
             )
 
@@ -639,12 +781,7 @@ class KnowledgeWorkflowOrchestrator:
             },
             executor=self._dispatch_step_executor(
                 "build_interlinear",
-                metrics={
-                    "tokenize_line_count": int(index_result.get("tokenize_line_count") or 0),
-                    "sentence_count": int(index_result.get("sentence_count") or 0),
-                },
-                evidence=run.steps[0].evidence[:5],
-                artifacts=[],
+                run=run,
             ),
             )
 
@@ -729,6 +866,7 @@ class KnowledgeWorkflowOrchestrator:
             },
             executor=self._dispatch_step_executor(
                 "tokenize",
+                run=run,
                 source=source,
                 config=config,
                 progress_callback=_nlp_progress,
@@ -773,15 +911,7 @@ class KnowledgeWorkflowOrchestrator:
             },
             executor=self._dispatch_step_executor(
                 "pos_tagging",
-                metrics={
-                    "pos_count": int(nlp_result.get("pos_count") or nlp_result.get("syntax_pos_count") or 0),
-                    "pos_tag_type_count": int(nlp_result.get("pos_tag_type_count") or nlp_result.get("syntax_pos_tag_type_count") or 0),
-                    "syntax_pos_count": int(nlp_result.get("syntax_pos_count") or nlp_result.get("pos_count") or 0),
-                    "syntax_pos_tag_type_count": int(nlp_result.get("syntax_pos_tag_type_count") or nlp_result.get("pos_tag_type_count") or 0),
-                    "pos_coverage_on_syntax_tokens": float(nlp_result.get("pos_coverage_on_syntax_tokens") or 0.0),
-                },
-                evidence=run.steps[3].evidence[:5],
-                artifacts=[],
+                run=run,
             ),
             )
 
@@ -820,13 +950,7 @@ class KnowledgeWorkflowOrchestrator:
             },
             executor=self._dispatch_step_executor(
                 "syntax_parse",
-                metrics={
-                    "syntax_relation_count": int(nlp_result.get("syntax_relation_count") or 0),
-                    "syntax_sentence_count": int(nlp_result.get("syntax_sentence_count") or 0),
-                    "syntax_token_count": int(nlp_result.get("syntax_token_count") or 0),
-                },
-                evidence=run.steps[3].evidence[:5],
-                artifacts=[],
+                run=run,
             ),
             )
 
@@ -879,7 +1003,7 @@ class KnowledgeWorkflowOrchestrator:
                     agentic={"status": "running", "available": False, "progress": 92, "stage": "Building knowledge graph"},
                 ),
             },
-            executor=self._dispatch_step_executor("semantic_role_labeling"),
+            executor=self._dispatch_step_executor("semantic_role_labeling", run=run),
             )
 
         return self._finalize_run(
@@ -970,6 +1094,59 @@ class KnowledgeWorkflowOrchestrator:
             message=f"{step.name} skipped ({reason})",
             metrics={"carried_forward": True, "reason": reason},
         )
+
+    @staticmethod
+    def _fallback_error_code_from_exception(exc: Exception) -> str:
+        raw = str(type(exc).__name__ or "").strip()
+        if not raw:
+            return "WORKFLOW_STEP_EXECUTION_FAILED"
+        parts: list[str] = []
+        token: list[str] = []
+        for idx, ch in enumerate(raw):
+            if ch.isupper() and idx > 0 and token and token[-1].islower():
+                parts.append("".join(token))
+                token = [ch]
+            elif ch.isalnum():
+                token.append(ch)
+            else:
+                if token:
+                    parts.append("".join(token))
+                    token = []
+        if token:
+            parts.append("".join(token))
+        normalized = "_".join(part.upper() for part in parts if part).strip("_")
+        if not normalized:
+            return "WORKFLOW_STEP_EXECUTION_FAILED"
+        return f"{normalized}_FAILED" if not normalized.endswith("_FAILED") else normalized
+
+    def _extract_recent_error_details(self, run: PipelineRunDetail) -> tuple[str, str]:
+        for step in reversed(run.steps):
+            if str(step.status or "").strip().lower() != "failed":
+                continue
+            metrics = step.metrics if isinstance(step.metrics, dict) else {}
+            outputs = step.outputs if isinstance(step.outputs, dict) else {}
+            result = metrics.get("result") if isinstance(metrics.get("result"), dict) else {}
+            for candidate in [
+                metrics.get("reason_code"),
+                metrics.get("error_code"),
+                metrics.get("code"),
+                result.get("reason_code"),
+                result.get("error_code"),
+                outputs.get("reason_code"),
+                outputs.get("error_code"),
+            ]:
+                code = str(candidate or "").strip()
+                if code:
+                    return code, "workflow_step"
+            if step.error_contract:
+                fallback = str(step.error_contract[0] or "").strip()
+                if fallback:
+                    return fallback, "workflow_step"
+        return "", ""
+
+    def _extract_recent_error_code(self, run: PipelineRunDetail) -> str:
+        return self._extract_recent_error_details(run)[0]
+
     def _finalize_run(
         self,
         run: PipelineRunDetail,
@@ -1050,6 +1227,21 @@ class KnowledgeWorkflowOrchestrator:
             config,
             running_config,
         )
+        recent_error_code, recent_error_source = self._extract_recent_error_details(run)
+        pipeline_run_payload = {
+            "run_id": run.id,
+            "status": run.status,
+            "mode": processing_mode,
+            "template_id": self.template.id,
+            "processing_fingerprint": processing_fingerprint,
+            "artifacts": run.artifacts[:],
+            "step_outputs": {
+                step.id: dict(step.outputs or {})
+                for step in run.steps
+            },
+            "recent_error_code": recent_error_code,
+            "recent_error_source": recent_error_source,
+        }
         return {
             "run_id": run.id,
             "run_status": run.status,
@@ -1067,6 +1259,7 @@ class KnowledgeWorkflowOrchestrator:
             "memify": memify_result or {},
             "quality_loop": quality_loop_result or {},
             "artifacts": run.artifacts[:],
+            "pipeline_run": pipeline_run_payload,
         }
 
     def _persist(self, run: PipelineRunDetail) -> None:
@@ -1136,9 +1329,13 @@ class KnowledgeWorkflowOrchestrator:
             ended_at = _pipeline_now_iso()
             step.status = "succeeded"
             step.ended_at = ended_at
+            runtime_outputs = dict(result.get("outputs") or {})
+            if runtime_outputs:
+                step.outputs = runtime_outputs
             step.metrics = {
                 **step.metrics,
                 **result.get("metrics", {}),
+                "resolved_inputs": dict(result.get("resolved_inputs") or {}),
                 "result": result.get("result", {}),
             }
             step.evidence = result.get("evidence", [])[:20]
@@ -1161,11 +1358,16 @@ class KnowledgeWorkflowOrchestrator:
                 status_callback(completed_sync_patch)
         except Exception as exc:
             ended_at = _pipeline_now_iso()
+            reason_code = str((step.error_contract or [""])[0] or "").strip()
+            if not reason_code:
+                reason_code = self._fallback_error_code_from_exception(exc)
             step.status = "failed"
             step.ended_at = ended_at
             step.metrics = {
                 **step.metrics,
                 "error_count": 1,
+                "reason_code": reason_code,
+                "error_type": str(type(exc).__name__ or ""),
             }
             step.evidence = [f"error:{type(exc).__name__}: {exc}"]
             run.status = "failed"
@@ -1178,6 +1380,7 @@ class KnowledgeWorkflowOrchestrator:
                 step_id=step.id,
                 message=f"{step.name} failed: {exc}",
                 evidence=step.evidence,
+                metrics={"reason_code": reason_code},
             )
             self._append_run_event(
                 run,
@@ -1197,6 +1400,7 @@ class KnowledgeWorkflowOrchestrator:
         running_config: Any | None,
         changed_paths: list[str],
         index_path: Path,
+        resolved_inputs: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Steps 1-3 driver: index source (raw + chunk + interlinear artifacts)."""
         data_files = _collect_project_source_files(
@@ -1236,9 +1440,17 @@ class KnowledgeWorkflowOrchestrator:
             metrics=metrics,
             extra_fields={"changed_paths": changed_paths, "data_files": data_files[:20]},
         )
+        outputs = {
+            "snapshot_manifest_path": self._manifest_output(
+                self.knowledge_manager._source_snapshot_manifest_path(source.id)
+            ),
+            "snapshot_count": int(index_result.get("snapshot_count") or 0),
+        }
         return {
             "metrics": metrics,
-            "result": index_result,
+            "result": {**index_result, "outputs": outputs},
+            "outputs": outputs,
+            "resolved_inputs": dict(resolved_inputs or {}),
             "evidence": evidence or [".agent/PROJECT.md"],
             "artifacts": artifacts,
         }
@@ -1246,17 +1458,31 @@ class KnowledgeWorkflowOrchestrator:
     def _execute_passthrough(
         self,
         *,
+        run: PipelineRunDetail,
+        step: PipelineRunStep,
         step_id: str,
-        metrics: dict[str, Any],
-        evidence: list[str],
-        artifacts: list[str],
+        metrics: dict[str, Any] | None,
+        evidence: list[str] | None,
+        artifacts: list[str] | None,
+        outputs: dict[str, Any] | None,
+        resolved_inputs: dict[str, Any],
     ) -> dict[str, Any]:
         """Pass-through executor for steps whose work is done by a preceding step."""
+        source_id = str((run.parameters or {}).get("source_id") or "").strip()
+        upstream_result = self._upstream_result_for_step(run, step)
+        default_metrics = self._default_passthrough_metrics(step_id, upstream_result)
+        default_outputs = self._default_passthrough_outputs(step_id, source_id, upstream_result)
+        merged_metrics = {**default_metrics, **dict(metrics or {})}
+        merged_outputs = {**default_outputs, **dict(outputs or {})}
+        merged_evidence = list(evidence or self._default_passthrough_evidence(run, step))
+        merged_artifacts = list(artifacts or [])
         return {
-            "metrics": metrics,
-            "result": {},
-            "evidence": evidence,
-            "artifacts": artifacts,
+            "metrics": merged_metrics,
+            "result": {"outputs": merged_outputs},
+            "outputs": merged_outputs,
+            "resolved_inputs": resolved_inputs,
+            "evidence": merged_evidence,
+            "artifacts": merged_artifacts,
         }
 
     def _execute_tokenize(
@@ -1265,6 +1491,7 @@ class KnowledgeWorkflowOrchestrator:
         source,
         config,
         progress_callback: Callable[[dict[str, Any]], None] | None,
+        resolved_inputs: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Steps 4-6 driver: tokenize + POS + syntax NLP enrichment."""
         self.knowledge_manager.materialize_semantic_artifacts_for_source(
@@ -1305,15 +1532,32 @@ class KnowledgeWorkflowOrchestrator:
             metrics=metrics,
             extra_fields={},
         )
+        outputs = {
+            "tokenize_manifest_path": self._manifest_output(
+                self.knowledge_manager._source_tokenize_manifest_path(source.id)
+            ),
+            "token_count": int(nlp_payload.get("tokenize_token_count") or 0),
+        }
         return {
             "metrics": metrics,
-            "result": metrics,
+            "result": {**metrics, "outputs": outputs},
+            "outputs": outputs,
+            "resolved_inputs": dict(resolved_inputs or {}),
             "evidence": evidence,
             "artifacts": evidence,
         }
 
-    def _execute_semantic_role_labeling(self) -> dict[str, Any]:
+    def _execute_semantic_role_labeling(
+        self,
+        *,
+        resolved_inputs: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Placeholder step — SRL is reserved for a future release."""
+        outputs = {
+            "srl_manifest_path": "",
+            "predicate_count": 0,
+            "argument_count": 0,
+        }
         return {
             "metrics": {
                 "srl_status": "unavailable",
@@ -1323,7 +1567,10 @@ class KnowledgeWorkflowOrchestrator:
                 "status": "unavailable",
                 "reason_code": "SRL_NOT_IMPLEMENTED",
                 "reason": "Semantic role labeling is reserved for a future release.",
+                "outputs": outputs,
             },
+            "outputs": outputs,
+            "resolved_inputs": dict(resolved_inputs or {}),
             "evidence": [],
             "artifacts": [],
         }

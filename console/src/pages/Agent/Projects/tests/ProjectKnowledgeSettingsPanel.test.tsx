@@ -8,6 +8,7 @@ import ProjectKnowledgeSettingsPanel from "../components/ProjectKnowledgeSetting
 const { mockedApi, mockedAgentsApi } = vi.hoisted(() => ({
   mockedApi: {
     listKnowledgeSources: vi.fn(),
+    commandProjectKnowledgePipeline: vi.fn(),
   },
   mockedAgentsApi: {
     updateProjectKnowledgeSink: vi.fn(),
@@ -92,6 +93,7 @@ describe("ProjectKnowledgeSettingsPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockedApi.listKnowledgeSources.mockResolvedValue({ sources: [] });
+    mockedApi.commandProjectKnowledgePipeline.mockResolvedValue({});
     mockedAgentsApi.updateProjectKnowledgeRegistration.mockResolvedValue({});
   });
 
@@ -171,6 +173,51 @@ describe("ProjectKnowledgeSettingsPanel", () => {
         projectId,
         { project_agent_knowledge_registered: false },
       );
+    });
+  });
+
+  it("sends pipeline pause command from control buttons", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <ProjectKnowledgeSettingsPanel
+        agentId="default"
+        projectId={projectId}
+        projectAutoKnowledgeSink={false}
+        syncState={buildSyncState(projectId)}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Pause" }));
+
+    await waitFor(() => {
+      expect(mockedApi.commandProjectKnowledgePipeline).toHaveBeenCalledWith({
+        projectId,
+        commandType: "pause",
+        payload: { reason: "project-settings-panel" },
+      });
+    });
+  });
+
+  it("handles structured pipeline control errors", async () => {
+    const user = userEvent.setup();
+    mockedApi.commandProjectKnowledgePipeline.mockRejectedValueOnce(
+      new Error("pipeline conflict - {\"detail\":{\"error_code\":\"PROJECT_PIPELINE_COMMAND_CONFLICT\",\"message\":\"transition not allowed\",\"recovery_hint\":\"retry with valid sequence\"}}"),
+    );
+
+    render(
+      <ProjectKnowledgeSettingsPanel
+        agentId="default"
+        projectId={projectId}
+        projectAutoKnowledgeSink={false}
+        syncState={buildSyncState(projectId)}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Pause" }));
+
+    await waitFor(() => {
+      expect(mockedApi.commandProjectKnowledgePipeline).toHaveBeenCalledTimes(1);
     });
   });
 });

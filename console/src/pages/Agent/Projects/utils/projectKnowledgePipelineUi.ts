@@ -284,6 +284,29 @@ export function getProjectKnowledgePipelineAlertDescription(
   syncState: ProjectKnowledgePipelineState,
   t: Translate,
 ): string {
+  const recentErrorCode = String(syncState.recent_error_code || "").trim();
+  const recentErrorSource = String(syncState.recent_error_source || "").trim().toLowerCase();
+  const errorRecoveryHint = recentErrorCode
+    ? recentErrorSource === "workflow_step"
+      ? t(
+        "copaw.projects.knowledge.errorRecovery.workflowStep",
+        "Step-level failure: review step outputs/evidence, then retry from the failed step.",
+      )
+      : recentErrorSource === "execution_loop"
+        ? t(
+          "copaw.projects.knowledge.errorRecovery.executionLoop",
+          "Execution-loop failure: check backend runtime logs, then re-run the full project pipeline.",
+        )
+        : recentErrorSource === "flow_control"
+          ? t(
+            "copaw.projects.knowledge.errorRecovery.flowControl",
+            "Flow-control failure: verify pause/resume/cancel command transitions and flow run state.",
+          )
+          : t(
+            "copaw.projects.knowledge.errorRecovery.generic",
+            "Pipeline failure detected: inspect runtime details before retrying.",
+          )
+    : "";
   const graphStats = getGraphStats(syncState);
   const segments = [
     getProjectKnowledgePipelineStatusLabel(syncState, t),
@@ -314,6 +337,13 @@ export function getProjectKnowledgePipelineAlertDescription(
           trigger: syncState.last_trigger,
         })
       : "",
+    recentErrorCode
+      ? t("copaw.projects.knowledge.syncRecentError", {
+          code: recentErrorCode,
+          source: recentErrorSource || "unknown",
+        })
+      : "",
+    errorRecoveryHint,
     syncState.last_error || "",
   ].filter(Boolean);
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -75,6 +77,18 @@ class ProjectPipelineStatusResponse(BaseModel):
                 "flow_run_id": "flow-run-abc123",
                 "recent_control_command": "resume",
                 "control_updated_at": "2026-05-26T12:00:00+00:00",
+                "step_outputs": {
+                    "snapshot_raw": {
+                        "snapshot_manifest_path": ".knowledge/sources/project-alpha/snapshot-manifest.json",
+                        "snapshot_count": 4,
+                    },
+                    "tokenize": {
+                        "tokenize_manifest_path": ".knowledge/sources/project-alpha/tokenize-manifest.json",
+                        "token_count": 320,
+                    },
+                },
+                "recent_error_code": "",
+                "recent_error_source": "",
                 "lanes": {
                     "retrieval": {"mode": "fast"},
                     "quantization": {"mode": "nlp"},
@@ -98,6 +112,15 @@ class ProjectPipelineStatusResponse(BaseModel):
     flow_run_id: str = Field(default="", description="Bridged flow engine run id.")
     recent_control_command: str = Field(default="", description="Latest control command issued through commands endpoint.")
     control_updated_at: str = Field(default="", description="UTC timestamp of latest control command update.")
+    step_outputs: dict[str, dict[str, object]] = Field(
+        default_factory=dict,
+        description="Latest per-step output payloads keyed by step id.",
+    )
+    recent_error_code: str = Field(default="", description="Latest pipeline error code if available.")
+    recent_error_source: Literal["", "workflow_step", "execution_loop", "flow_control"] = Field(
+        default="",
+        description="Source category of latest pipeline error code.",
+    )
 
 
 class ProjectPipelineRunResponse(BaseModel):

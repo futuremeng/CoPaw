@@ -22,6 +22,11 @@
         "snapshot_manifest_path": "str",
         "snapshot_count": "int"
       },
+      "artifact_schema_ref": "knowledge/snapshot-manifest.v1",
+      "error_contract": [
+        "SNAPSHOT_SOURCE_NOT_FOUND",
+        "SNAPSHOT_WRITE_FAILED"
+      ],
       "depends_on": [],
       "input_bindings": {},
       "retry_policy": {}
@@ -40,6 +45,11 @@
         "chunk_manifest_path": "str",
         "chunk_count": "int"
       },
+      "artifact_schema_ref": "knowledge/chunk-manifest.v1",
+      "error_contract": [
+        "CHUNK_BUILD_INPUT_MISSING",
+        "CHUNK_BUILD_FAILED"
+      ],
       "depends_on": ["snapshot_raw"],
       "input_bindings": {},
       "retry_policy": {}
@@ -58,6 +68,11 @@
         "interlinear_manifest_path": "str",
         "line_count": "int"
       },
+      "artifact_schema_ref": "knowledge/interlinear-manifest.v1",
+      "error_contract": [
+        "INTERLINEAR_INPUT_MISSING",
+        "INTERLINEAR_BUILD_FAILED"
+      ],
       "depends_on": ["snapshot_raw"],
       "input_bindings": {},
       "retry_policy": {}
@@ -76,6 +91,11 @@
         "tokenize_manifest_path": "str",
         "token_count": "int"
       },
+      "artifact_schema_ref": "knowledge/tokenize-manifest.v1",
+      "error_contract": [
+        "TOKENIZE_INPUT_MISSING",
+        "TOKENIZE_ENGINE_FAILED"
+      ],
       "depends_on": ["build_interlinear"],
       "input_bindings": {},
       "retry_policy": {}
@@ -94,6 +114,11 @@
         "pos_manifest_path": "str",
         "pos_tag_type_count": "int"
       },
+      "artifact_schema_ref": "knowledge/pos-manifest.v1",
+      "error_contract": [
+        "POS_INPUT_MISSING",
+        "POS_ENGINE_FAILED"
+      ],
       "depends_on": ["tokenize"],
       "input_bindings": {},
       "retry_policy": {}
@@ -112,6 +137,11 @@
         "syntax_manifest_path": "str",
         "relation_count": "int"
       },
+      "artifact_schema_ref": "knowledge/syntax-manifest.v1",
+      "error_contract": [
+        "SYNTAX_INPUT_MISSING",
+        "SYNTAX_ENGINE_FAILED"
+      ],
       "depends_on": ["tokenize"],
       "input_bindings": {},
       "retry_policy": {}
@@ -131,6 +161,11 @@
         "predicate_count": "int",
         "argument_count": "int"
       },
+      "artifact_schema_ref": "knowledge/srl-manifest.v1",
+      "error_contract": [
+        "SRL_INPUT_MISSING",
+        "SRL_ENGINE_FAILED"
+      ],
       "depends_on": ["tokenize"],
       "input_bindings": {},
       "retry_policy": {}

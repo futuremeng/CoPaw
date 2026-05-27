@@ -77,6 +77,11 @@ def test_run_sync_loop_failure_preserves_l2_snapshot(tmp_path: Path, monkeypatch
     assert failed_state["l2_metrics"]["ner_entity_count"] == 17
     assert failed_state["l2_metrics"]["syntax_relation_count"] == 9
     assert str(failed_state.get("failed_stage") or "").strip() == "pending"
+    assert failed_state["recent_error_code"] == "RUNTIME_ERROR_FAILED"
+    assert failed_state["recent_error_source"] == "execution_loop"
+    assert failed_state["last_result"]["pipeline_run"]["status"] == "failed"
+    assert failed_state["last_result"]["pipeline_run"]["recent_error_code"] == "RUNTIME_ERROR_FAILED"
+    assert failed_state["last_result"]["pipeline_run"]["recent_error_source"] == "execution_loop"
 
 
 def test_build_pipeline_trace_includes_stage_artifacts(tmp_path: Path):

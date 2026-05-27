@@ -36,7 +36,6 @@ from copaw.knowledge.project_pipeline_manager import (
 )
 from ...knowledge.module_skills import sync_knowledge_module_skills
 from ..knowledge_workflow_steps import KNOWLEDGE_WORKFLOW_STEP_IDS
-from ..knowledge_workflow import ensure_project_flow_run_bridge
 from ..flow_engine_runtime import get_flow_engine_service
 from .knowledge_models import (
     ProjectPipelineCommandResponse,
@@ -53,6 +52,9 @@ nlp_router = APIRouter(prefix="/nlp", tags=["knowledge"])
 
 _PROJECT_PIPELINE_RUNTIME_LOCK = Lock()
 _PROJECT_PIPELINE_RUNTIME_META: dict[str, dict[str, object]] = {}
+_PROJECT_PIPELINE_ERROR_SOURCES = {"", "workflow_step", "execution_loop", "flow_control"}
+_PROJECT_PIPELINE_COMMAND_CONFLICT = "PROJECT_PIPELINE_COMMAND_CONFLICT"
+_PROJECT_PIPELINE_FLOW_RUN_NOT_FOUND = "PROJECT_PIPELINE_FLOW_RUN_NOT_FOUND"
 _SUPPORTED_PROJECT_STEP_STATS = frozenset(
     {
         *KNOWLEDGE_WORKFLOW_STEP_IDS,
@@ -90,18 +92,33 @@ def _record_project_pipeline_runtime_event(
     action: str,
     flow_run_id: str = "",
     control_command: str = "",
+    recent_error_code: str | None = None,
+    recent_error_source: str | None = None,
 ) -> None:
     key = _project_pipeline_runtime_key(workspace_dir, project_id)
     existing_flow_run_id = ""
     existing_control_command = ""
     existing_control_updated_at = ""
+    existing_recent_error_code = ""
+    existing_recent_error_source = ""
     with _PROJECT_PIPELINE_RUNTIME_LOCK:
         existing_payload = _PROJECT_PIPELINE_RUNTIME_META.get(key) or {}
         existing_flow_run_id = str(existing_payload.get("flow_run_id") or "")
         existing_control_command = str(existing_payload.get("recent_control_command") or "")
         existing_control_updated_at = str(existing_payload.get("control_updated_at") or "")
+        existing_recent_error_code = str(existing_payload.get("recent_error_code") or "")
+        existing_recent_error_source = str(existing_payload.get("recent_error_source") or "")
     now_iso = datetime.now(timezone.utc).isoformat()
     normalized_control_command = str(control_command or "").strip().lower()
+    normalized_recent_error_code = (
+        existing_recent_error_code
+        if recent_error_code is None
+        else str(recent_error_code or "").strip()
+    )
+    if recent_error_source is None:
+        normalized_recent_error_source = _normalize_project_pipeline_error_source(existing_recent_error_source)
+    else:
+        normalized_recent_error_source = _normalize_project_pipeline_error_source(recent_error_source)
     payload = {
         "operation_id": operation_id,
         "idempotency_key": idempotency_key,
@@ -110,6 +127,8 @@ def _record_project_pipeline_runtime_event(
         "flow_run_id": str(flow_run_id or existing_flow_run_id),
         "recent_control_command": normalized_control_command or existing_control_command,
         "control_updated_at": now_iso if normalized_control_command else existing_control_updated_at,
+        "recent_error_code": normalized_recent_error_code,
+        "recent_error_source": normalized_recent_error_source,
         "updated_at": now_iso,
     }
     with _PROJECT_PIPELINE_RUNTIME_LOCK:
@@ -126,19 +145,74 @@ def _get_project_pipeline_runtime_meta(
         return dict(_PROJECT_PIPELINE_RUNTIME_META.get(key) or {})
 
 
+def _normalize_project_pipeline_error_source(value: object) -> str:
+    source = str(value or "").strip().lower()
+    return source if source in _PROJECT_PIPELINE_ERROR_SOURCES else ""
+
+
+def _project_pipeline_command_error_detail(
+    *,
+    command_type: str,
+    error_code: str,
+    message: str,
+    flow_run_id: str = "",
+) -> dict[str, str]:
+    normalized_command = str(command_type or "").strip().lower()
+    normalized_message = str(message or "").strip() or error_code
+    recovery_hint = (
+        "Check flow run id/state and retry the command."
+        if error_code == _PROJECT_PIPELINE_FLOW_RUN_NOT_FOUND
+        else "Check flow command transition/state, then retry with a valid command sequence."
+    )
+    return {
+        "error_code": error_code,
+        "error_source": "flow_control",
+        "command_type": normalized_command,
+        "flow_run_id": str(flow_run_id or ""),
+        "message": normalized_message,
+        "recovery_hint": recovery_hint,
+    }
+
+
 def _project_pipeline_state_with_runtime_meta(
     *,
     workspace_dir: str | Path,
     project_id: str,
     state: dict[str, object],
 ) -> dict[str, object]:
+    merged = dict(state)
+    normalized_state_error_source = _normalize_project_pipeline_error_source(
+        merged.get("recent_error_source")
+    )
+    if normalized_state_error_source:
+        merged["recent_error_source"] = normalized_state_error_source
+    else:
+        merged.pop("recent_error_source", None)
+    last_result = merged.get("last_result")
+    if isinstance(last_result, dict):
+        pipeline_run = last_result.get("pipeline_run")
+        if isinstance(pipeline_run, dict):
+            step_outputs = pipeline_run.get("step_outputs")
+            if isinstance(step_outputs, dict):
+                merged.setdefault("step_outputs", step_outputs)
+            recent_error_code = str(pipeline_run.get("recent_error_code") or "").strip()
+            if recent_error_code:
+                merged.setdefault("recent_error_code", recent_error_code)
+            recent_error_source = _normalize_project_pipeline_error_source(
+                pipeline_run.get("recent_error_source")
+            )
+            if recent_error_source:
+                merged.setdefault("recent_error_source", recent_error_source)
+    merged.setdefault("step_outputs", {})
+
     runtime_meta = _get_project_pipeline_runtime_meta(
         workspace_dir=workspace_dir,
         project_id=project_id,
     )
     if not runtime_meta:
-        return state
-    merged = dict(state)
+        merged.setdefault("recent_error_code", "")
+        merged.setdefault("recent_error_source", "")
+        return merged
     merged.setdefault("operation_id", runtime_meta.get("operation_id"))
     merged.setdefault("idempotency_key", runtime_meta.get("idempotency_key"))
     merged.setdefault("deduplicated", runtime_meta.get("deduplicated"))
@@ -147,6 +221,16 @@ def _project_pipeline_state_with_runtime_meta(
     merged.setdefault("recent_control_command", runtime_meta.get("recent_control_command"))
     merged.setdefault("control_updated_at", runtime_meta.get("control_updated_at"))
     merged.setdefault("operation_updated_at", runtime_meta.get("updated_at"))
+    runtime_recent_error_code = str(runtime_meta.get("recent_error_code") or "").strip()
+    if not str(merged.get("recent_error_code") or "").strip() and runtime_recent_error_code:
+        merged["recent_error_code"] = runtime_recent_error_code
+    runtime_recent_error_source = _normalize_project_pipeline_error_source(
+        runtime_meta.get("recent_error_source")
+    )
+    if not str(merged.get("recent_error_source") or "").strip() and runtime_recent_error_source:
+        merged["recent_error_source"] = runtime_recent_error_source
+    merged.setdefault("recent_error_code", "")
+    merged.setdefault("recent_error_source", "")
     return merged
 
 
@@ -1958,6 +2042,8 @@ async def run_project_pipeline(
             flow_run_id = str(runtime_meta.get("flow_run_id") or "")
         if not flow_run_id:
             try:
+                from ..knowledge_workflow import ensure_project_flow_run_bridge
+
                 flow_run_id = await asyncio.to_thread(
                     ensure_project_flow_run_bridge,
                     agent_id=resolve_agent_id_for_request(request),
@@ -2020,7 +2106,24 @@ async def command_project_pipeline(
     )
     flow_run_id = str(runtime_meta.get("flow_run_id") or "").strip()
     if not flow_run_id:
-        raise HTTPException(status_code=404, detail="PROJECT_PIPELINE_FLOW_RUN_NOT_FOUND")
+        _record_project_pipeline_runtime_event(
+            workspace_dir=workspace_dir,
+            project_id=project_id,
+            operation_id=f"manual-flow-{normalized_command}-error:{project_id}",
+            idempotency_key=f"manual-flow-{normalized_command}-error:{project_id}",
+            deduplicated=False,
+            action=f"flow_{normalized_command}_failed",
+            recent_error_code=_PROJECT_PIPELINE_FLOW_RUN_NOT_FOUND,
+            recent_error_source="flow_control",
+        )
+        raise HTTPException(
+            status_code=404,
+            detail=_project_pipeline_command_error_detail(
+                command_type=normalized_command,
+                error_code=_PROJECT_PIPELINE_FLOW_RUN_NOT_FOUND,
+                message=_PROJECT_PIPELINE_FLOW_RUN_NOT_FOUND,
+            ),
+        )
 
     flow_service = get_flow_engine_service()
     command_payload = {
@@ -2048,9 +2151,49 @@ async def command_project_pipeline(
                 payload=command_payload,
             )
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        _record_project_pipeline_runtime_event(
+            workspace_dir=workspace_dir,
+            project_id=project_id,
+            operation_id=f"manual-flow-{normalized_command}-error:{project_id}",
+            idempotency_key=f"manual-flow-{normalized_command}-error:{flow_run_id}",
+            deduplicated=False,
+            action=f"flow_{normalized_command}_failed",
+            flow_run_id=flow_run_id,
+            control_command=normalized_command,
+            recent_error_code=_PROJECT_PIPELINE_FLOW_RUN_NOT_FOUND,
+            recent_error_source="flow_control",
+        )
+        raise HTTPException(
+            status_code=404,
+            detail=_project_pipeline_command_error_detail(
+                command_type=normalized_command,
+                error_code=_PROJECT_PIPELINE_FLOW_RUN_NOT_FOUND,
+                message=str(exc),
+                flow_run_id=flow_run_id,
+            ),
+        ) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        _record_project_pipeline_runtime_event(
+            workspace_dir=workspace_dir,
+            project_id=project_id,
+            operation_id=f"manual-flow-{normalized_command}-error:{project_id}",
+            idempotency_key=f"manual-flow-{normalized_command}-error:{flow_run_id}",
+            deduplicated=False,
+            action=f"flow_{normalized_command}_failed",
+            flow_run_id=flow_run_id,
+            control_command=normalized_command,
+            recent_error_code=_PROJECT_PIPELINE_COMMAND_CONFLICT,
+            recent_error_source="flow_control",
+        )
+        raise HTTPException(
+            status_code=409,
+            detail=_project_pipeline_command_error_detail(
+                command_type=normalized_command,
+                error_code=_PROJECT_PIPELINE_COMMAND_CONFLICT,
+                message=str(exc),
+                flow_run_id=flow_run_id,
+            ),
+        ) from exc
 
     _record_project_pipeline_runtime_event(
         workspace_dir=workspace_dir,
@@ -2061,6 +2204,8 @@ async def command_project_pipeline(
         action=f"flow_{normalized_command}",
         flow_run_id=flow_run_id,
         control_command=normalized_command,
+        recent_error_code="",
+        recent_error_source="",
     )
     updated_runtime_meta = _get_project_pipeline_runtime_meta(
         workspace_dir=workspace_dir,

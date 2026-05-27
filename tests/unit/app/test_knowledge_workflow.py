@@ -11,6 +11,7 @@ from copaw.knowledge.project_pipeline_manager import ProjectKnowledgePipelineMan
 from qwenpaw.app.knowledge_workflow import (
     KNOWLEDGE_WORKFLOW_TEMPLATE_ID,
     KnowledgeWorkflowOrchestrator,
+    _build_initial_run,
 )
 from qwenpaw.app.routers.agents_pipeline_core import _load_project_pipeline_run
 
@@ -143,6 +144,17 @@ def test_knowledge_workflow_orchestrator_persists_pipeline_run(
         "semantic_role_labeling",
     ]
     assert all(step.status == "succeeded" for step in run.steps)
+    assert run.steps[0].artifact_schema_ref == "knowledge/snapshot-manifest.v1"
+    assert run.steps[0].outputs["snapshot_manifest_path"].endswith("snapshot-manifest.json")
+    assert run.steps[1].metrics["resolved_inputs"]["snapshot_manifest_path"] == run.steps[0].outputs["snapshot_manifest_path"]
+    assert run.steps[1].outputs["chunk_manifest_path"].endswith("chunk-manifest.json")
+    assert run.steps[2].metrics["resolved_inputs"]["snapshot_manifest_path"] == run.steps[0].outputs["snapshot_manifest_path"]
+    assert run.steps[2].outputs["interlinear_manifest_path"].endswith("interlinear-manifest.json")
+    assert run.steps[3].metrics["resolved_inputs"]["interlinear_manifest_path"] == run.steps[2].outputs["interlinear_manifest_path"]
+    assert run.steps[3].outputs["tokenize_manifest_path"].endswith("tokenize-manifest.json")
+    assert run.steps[4].metrics["resolved_inputs"]["tokenize_manifest_path"] == run.steps[3].outputs["tokenize_manifest_path"]
+    assert run.steps[5].metrics["resolved_inputs"]["tokenize_manifest_path"] == run.steps[3].outputs["tokenize_manifest_path"]
+    assert run.steps[6].metrics["resolved_inputs"]["tokenize_manifest_path"] == run.steps[3].outputs["tokenize_manifest_path"]
     assert any(path.endswith("graphify-out/graph.enriched.json") for path in run.artifacts)
     assert (project_dir / ".knowledge" / "content.md").exists()
     assert (project_dir / ".knowledge" / "chunk-manifest.json").exists()
@@ -731,3 +743,71 @@ def test_run_quality_loop_returns_result(tmp_path: Path, monkeypatch):
     assert result["accepted"] is False
     assert result["score_before"] == 0.95
     assert result["score_after"] == 0.95
+
+
+def test_extract_recent_error_code_prefers_step_reason_code(tmp_path: Path):
+    project_id = "project-recent-error-code"
+    project_dir = tmp_path / "projects" / project_id
+    project_dir.mkdir(parents=True, exist_ok=True)
+    _write_project_metadata(project_dir, project_id)
+
+    orchestrator = KnowledgeWorkflowOrchestrator(
+        workspace_dir=tmp_path,
+        project_id=project_id,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+    run = _build_initial_run(
+        project_id=project_id,
+        source_id=f"project-{project_id}-workspace",
+        trigger="unit-test",
+        changed_paths=[],
+    )
+    tokenize_step = next(step for step in run.steps if step.id == "tokenize")
+    tokenize_step.status = "failed"
+    tokenize_step.metrics = {
+        "reason_code": "TOKENIZE_ENGINE_TIMEOUT",
+        "error_count": 1,
+    }
+
+    code, source = orchestrator._extract_recent_error_details(run)
+    assert code == "TOKENIZE_ENGINE_TIMEOUT"
+    assert source == "workflow_step"
+    assert orchestrator._extract_recent_error_code(run) == "TOKENIZE_ENGINE_TIMEOUT"
+
+
+def test_patch_step_failure_sets_reason_code_from_contract(tmp_path: Path):
+    project_id = "project-step-failure-reason"
+    project_dir = tmp_path / "projects" / project_id
+    project_dir.mkdir(parents=True, exist_ok=True)
+    _write_project_metadata(project_dir, project_id)
+
+    orchestrator = KnowledgeWorkflowOrchestrator(
+        workspace_dir=tmp_path,
+        project_id=project_id,
+        knowledge_dirname=f"projects/{project_id}/.knowledge",
+    )
+    run = _build_initial_run(
+        project_id=project_id,
+        source_id=f"project-{project_id}-workspace",
+        trigger="unit-test",
+        changed_paths=[],
+    )
+
+    with pytest.raises(RuntimeError, match="boom"):
+        orchestrator._patch_step(
+            run,
+            "snapshot_raw",
+            actor="unit-test",
+            status_callback=None,
+            sync_patch={},
+            completed_sync_patch=None,
+            executor=lambda _step: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+    step = next(item for item in run.steps if item.id == "snapshot_raw")
+    assert step.status == "failed"
+    assert step.metrics["reason_code"] == "SNAPSHOT_SOURCE_NOT_FOUND"
+    code, source = orchestrator._extract_recent_error_details(run)
+    assert code == "SNAPSHOT_SOURCE_NOT_FOUND"
+    assert source == "workflow_step"
+    assert orchestrator._extract_recent_error_code(run) == "SNAPSHOT_SOURCE_NOT_FOUND"

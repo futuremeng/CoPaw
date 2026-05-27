@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Badge,
+  Button,
   Space,
   Switch,
   Typography,
@@ -16,6 +17,7 @@ import {
   getProjectKnowledgePipelineAlertDescription,
   getProjectKnowledgePipelineAlertType,
 } from "../utils/projectKnowledgePipelineUi";
+import { parseErrorDetail } from "../../../../utils/error";
 
 interface ProjectKnowledgeSettingsPanelProps {
   agentId?: string;
@@ -38,6 +40,7 @@ export default function ProjectKnowledgeSettingsPanel(
   } = props;
 
   const [updatingAutoSink, setUpdatingAutoSink] = useState(false);
+  const [runningFlowCommand, setRunningFlowCommand] = useState<"pause" | "resume" | "cancel" | "">("");
   const [autoSinkEnabled, setAutoSinkEnabled] = useState(
     projectAutoKnowledgeSink !== false,
   );
@@ -196,6 +199,42 @@ export default function ProjectKnowledgeSettingsPanel(
     return getProjectKnowledgePipelineAlertDescription(syncState, t);
   }, [syncState, t]);
 
+  const flowRunId = String(syncState?.flow_run_id || "").trim();
+  const recentControlCommand = String(syncState?.recent_control_command || "").trim().toLowerCase();
+
+  const handleFlowCommand = useCallback(async (commandType: "pause" | "resume" | "cancel") => {
+    setRunningFlowCommand(commandType);
+    try {
+      await api.commandProjectKnowledgePipeline({
+        projectId,
+        commandType,
+        payload: { reason: "project-settings-panel" },
+      });
+      message.success(
+        commandType === "pause"
+          ? t("copaw.projects.knowledge.control.pauseSuccess", "Pipeline paused")
+          : commandType === "resume"
+            ? t("copaw.projects.knowledge.control.resumeSuccess", "Pipeline resumed")
+            : t("copaw.projects.knowledge.control.cancelSuccess", "Pipeline cancelled"),
+      );
+    } catch (err) {
+      const detail = parseErrorDetail(err) as { message?: unknown; recovery_hint?: unknown; error_code?: unknown } | null;
+      const messageText = String(detail?.message || (err instanceof Error ? err.message : "")).trim()
+        || t("copaw.projects.knowledge.control.commandFailed", "Pipeline control command failed");
+      const recoveryHint = String(detail?.recovery_hint || "").trim();
+      const errorCode = String(detail?.error_code || "").trim();
+      message.error(
+        recoveryHint
+          ? `${messageText} (${recoveryHint})`
+          : errorCode
+            ? `${messageText} (${errorCode})`
+            : messageText,
+      );
+    } finally {
+      setRunningFlowCommand("");
+    }
+  }, [projectId, t]);
+
   return (
     <div className={styles.projectKnowledgeWorkbench}>
       <div>
@@ -276,6 +315,53 @@ export default function ProjectKnowledgeSettingsPanel(
           <Typography.Text type="secondary">
             {t("copaw.projects.knowledge.sourceId")} {projectSource?.id || projectSourceId}
           </Typography.Text>
+
+          <Space direction="vertical" size={8} style={{ width: "100%" }}>
+            <Typography.Text strong>
+              {t("copaw.projects.knowledge.control.title", "Pipeline control")}
+            </Typography.Text>
+            <Typography.Text type="secondary">
+              {flowRunId
+                ? t(
+                  "copaw.projects.knowledge.control.flowRunLabel",
+                  `Flow run: ${flowRunId}`,
+                )
+                : t(
+                  "copaw.projects.knowledge.control.flowRunMissing",
+                  "Flow run id is not available yet. Commands may fail until a run is bridged.",
+                )}
+            </Typography.Text>
+            <Space wrap>
+              <Button
+                onClick={() => {
+                  void handleFlowCommand("pause");
+                }}
+                loading={runningFlowCommand === "pause"}
+                disabled={runningFlowCommand !== "" || recentControlCommand === "pause"}
+              >
+                {t("copaw.projects.knowledge.control.pause", "Pause")}
+              </Button>
+              <Button
+                onClick={() => {
+                  void handleFlowCommand("resume");
+                }}
+                loading={runningFlowCommand === "resume"}
+                disabled={runningFlowCommand !== "" || recentControlCommand === "resume"}
+              >
+                {t("copaw.projects.knowledge.control.resume", "Resume")}
+              </Button>
+              <Button
+                danger
+                onClick={() => {
+                  void handleFlowCommand("cancel");
+                }}
+                loading={runningFlowCommand === "cancel"}
+                disabled={runningFlowCommand !== "" || recentControlCommand === "cancel"}
+              >
+                {t("copaw.projects.knowledge.control.cancel", "Cancel")}
+              </Button>
+            </Space>
+          </Space>
         </Space>
       </section>
 
