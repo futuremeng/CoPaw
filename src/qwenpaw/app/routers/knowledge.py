@@ -26,6 +26,11 @@ from ...knowledge import (
     GraphOpsManager,
     KnowledgeManager,
 )
+from copaw.app.flow_engine import (
+    FlowRunNotFoundError,
+    FlowTransitionConflictError,
+    FlowTransitionNotAllowedError,
+)
 from copaw.knowledge.knowledge_quantization_facade import QuantizationFacade
 from copaw.knowledge.project_pipeline_manager import (
     ProjectKnowledgePipelineManager,
@@ -82,6 +87,73 @@ def _project_pipeline_runtime_key(workspace_dir: str | Path, project_id: str) ->
     return f"{Path(workspace_dir).resolve().as_posix()}::{project_id}"
 
 
+_PROJECT_PIPELINE_RUNTIME_STATE_FIELDS = (
+    "operation_id",
+    "idempotency_key",
+    "deduplicated",
+    "last_action",
+    "flow_run_id",
+    "recent_control_command",
+    "control_updated_at",
+    "recent_error_code",
+    "recent_error_source",
+    "updated_at",
+)
+
+
+def _project_pipeline_state_path(workspace_dir: str | Path, project_id: str) -> Path:
+    return Path(workspace_dir) / _knowledge_dirname_for_project(project_id) / "project-pipeline-state.json"
+
+
+def _persist_project_pipeline_runtime_meta_to_state(
+    *,
+    workspace_dir: str | Path,
+    project_id: str,
+    payload: dict[str, object],
+) -> None:
+    state_path = _project_pipeline_state_path(workspace_dir, project_id)
+    state_payload: dict[str, object] = {}
+    if state_path.exists():
+        try:
+            loaded = json.loads(state_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                state_payload = dict(loaded)
+        except Exception:
+            state_payload = {}
+    for field in _PROJECT_PIPELINE_RUNTIME_STATE_FIELDS:
+        if field == "updated_at":
+            state_payload["operation_updated_at"] = payload.get(field)
+        else:
+            state_payload[field] = payload.get(field)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(json.dumps(state_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _load_project_pipeline_runtime_meta_from_state(
+    *,
+    workspace_dir: str | Path,
+    project_id: str,
+) -> dict[str, object]:
+    state_path = _project_pipeline_state_path(workspace_dir, project_id)
+    if not state_path.exists():
+        return {}
+    try:
+        payload = json.loads(state_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    normalized: dict[str, object] = {}
+    for field in _PROJECT_PIPELINE_RUNTIME_STATE_FIELDS:
+        if field == "updated_at":
+            normalized[field] = payload.get("operation_updated_at")
+        else:
+            normalized[field] = payload.get(field)
+    if not any(normalized.values()):
+        return {}
+    return normalized
+
+
 def _record_project_pipeline_runtime_event(
     *,
     workspace_dir: str | Path,
@@ -133,6 +205,11 @@ def _record_project_pipeline_runtime_event(
     }
     with _PROJECT_PIPELINE_RUNTIME_LOCK:
         _PROJECT_PIPELINE_RUNTIME_META[key] = payload
+    _persist_project_pipeline_runtime_meta_to_state(
+        workspace_dir=workspace_dir,
+        project_id=project_id,
+        payload=payload,
+    )
 
 
 def _get_project_pipeline_runtime_meta(
@@ -142,7 +219,18 @@ def _get_project_pipeline_runtime_meta(
 ) -> dict[str, object]:
     key = _project_pipeline_runtime_key(workspace_dir, project_id)
     with _PROJECT_PIPELINE_RUNTIME_LOCK:
-        return dict(_PROJECT_PIPELINE_RUNTIME_META.get(key) or {})
+        cached = dict(_PROJECT_PIPELINE_RUNTIME_META.get(key) or {})
+    if cached:
+        return cached
+    persisted = _load_project_pipeline_runtime_meta_from_state(
+        workspace_dir=workspace_dir,
+        project_id=project_id,
+    )
+    if not persisted:
+        return {}
+    with _PROJECT_PIPELINE_RUNTIME_LOCK:
+        _PROJECT_PIPELINE_RUNTIME_META[key] = dict(persisted)
+    return dict(persisted)
 
 
 def _normalize_project_pipeline_error_source(value: object) -> str:
@@ -2150,7 +2238,7 @@ async def command_project_pipeline(
                 run_id=flow_run_id,
                 payload=command_payload,
             )
-    except KeyError as exc:
+    except FlowRunNotFoundError as exc:
         _record_project_pipeline_runtime_event(
             workspace_dir=workspace_dir,
             project_id=project_id,
@@ -2172,7 +2260,7 @@ async def command_project_pipeline(
                 flow_run_id=flow_run_id,
             ),
         ) from exc
-    except ValueError as exc:
+    except (FlowTransitionNotAllowedError, FlowTransitionConflictError) as exc:
         _record_project_pipeline_runtime_event(
             workspace_dir=workspace_dir,
             project_id=project_id,

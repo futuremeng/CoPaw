@@ -7,12 +7,26 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from copaw.app.flow_engine import FlowDefinition
+from copaw.app.flow_engine import (
+    FlowDefinition,
+    FlowDefinitionNotFoundError,
+    FlowEngineError,
+    FlowRunNotFoundError,
+    FlowTransitionConflictError,
+    FlowTransitionNotAllowedError,
+)
 
 from ..agent_context import resolve_agent_id_for_request
 from ..flow_engine_runtime import get_flow_engine_service
 
 router = APIRouter(prefix="/flows", tags=["flows"])
+
+
+def _flow_error_detail(exc: FlowEngineError) -> dict[str, str]:
+    return {
+        "error_code": exc.error_code,
+        "message": str(exc),
+    }
 
 
 class FlowRunCreateRequest(BaseModel):
@@ -81,8 +95,8 @@ async def create_flow_run(
             priority=payload.priority,
             idempotency_key=payload.idempotency_key,
         )
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except FlowDefinitionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=_flow_error_detail(exc)) from exc
     return run.model_dump(mode="json")
 
 
@@ -91,7 +105,13 @@ async def get_flow_run(run_id: str, ctx=Depends(_get_agent_flow_service)):
     agent_id, service = ctx
     detail = service.get_run_timeline(run_id=run_id, agent_id=agent_id)
     if detail is None:
-        raise HTTPException(status_code=404, detail="run not found")
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error_code": FlowRunNotFoundError.error_code,
+                "message": f"Flow run '{run_id}' not found",
+            },
+        )
     return {
         "run": detail["run"].model_dump(mode="json"),
         "events": [item.model_dump(mode="json") for item in detail["events"]],
@@ -130,10 +150,10 @@ async def command_flow_run(
         command = commands[-1] if commands else None
         if command is None:
             raise RuntimeError("flow command write failed")
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except FlowRunNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=_flow_error_detail(exc)) from exc
+    except (FlowTransitionNotAllowedError, FlowTransitionConflictError) as exc:
+        raise HTTPException(status_code=409, detail=_flow_error_detail(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 

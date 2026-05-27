@@ -84,6 +84,9 @@ def test_scoped_flows_create_run_and_pause_resume(
         json={"command_type": "pause", "payload": {}},
     )
     assert pause_again_resp.status_code == 409
+    pause_again_detail = pause_again_resp.json().get("detail") or {}
+    assert pause_again_detail.get("error_code") == "FLOW_TRANSITION_NOT_ALLOWED"
+    assert "transition not allowed" in str(pause_again_detail.get("message") or "")
 
     resume_resp = client.post(
         f"/flows/runs/{run_id}/commands",
@@ -131,3 +134,36 @@ def test_global_flow_routes_can_filter_by_agent(
     assert summary_resp.status_code == 200
     assert summary_resp.json()["agent_id"] == "agent-b"
     assert summary_resp.json()["total_runs"] == 1
+
+
+def test_scoped_flows_create_run_returns_structured_not_found_error(
+    flow_api_client: tuple[TestClient, FlowEngineService],
+) -> None:
+    client, _service = flow_api_client
+
+    response = client.post(
+        "/flows/runs",
+        json={
+            "definition_id": "missing-definition",
+            "scope_kind": "project",
+            "scope_id": "project-404",
+        },
+    )
+
+    assert response.status_code == 404
+    detail = response.json().get("detail") or {}
+    assert detail.get("error_code") == "FLOW_DEFINITION_NOT_FOUND"
+    assert "missing-definition" in str(detail.get("message") or "")
+
+
+def test_scoped_flows_get_run_returns_structured_not_found_error(
+    flow_api_client: tuple[TestClient, FlowEngineService],
+) -> None:
+    client, _service = flow_api_client
+
+    response = client.get("/flows/runs/flow-run-missing")
+
+    assert response.status_code == 404
+    detail = response.json().get("detail") or {}
+    assert detail.get("error_code") == "FLOW_RUN_NOT_FOUND"
+    assert "flow-run-missing" in str(detail.get("message") or "")

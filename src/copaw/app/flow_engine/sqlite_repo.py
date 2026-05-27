@@ -267,6 +267,34 @@ class SQLiteFlowEngineRepository:
             return None
         return FlowRunRecord.model_validate(dict(row))
 
+    def get_run_by_idempotency_key(
+        self,
+        *,
+        agent_id: str,
+        definition_id: str,
+        scope_kind: str,
+        scope_id: str,
+        idempotency_key: str,
+    ) -> FlowRunRecord | None:
+        self.ensure_schema()
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT * FROM flow_runs
+                WHERE agent_id = ?
+                  AND definition_id = ?
+                  AND scope_kind = ?
+                  AND scope_id = ?
+                  AND idempotency_key = ?
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                [agent_id, definition_id, scope_kind, scope_id, idempotency_key],
+            ).fetchone()
+        if row is None:
+            return None
+        return FlowRunRecord.model_validate(dict(row))
+
     def list_runs(
         self,
         *,
@@ -316,6 +344,33 @@ class SQLiteFlowEngineRepository:
         run = self.get_run(run_id, agent_id=agent_id)
         if run is None:
             raise KeyError(f"Flow run '{run_id}' not found")
+        return run
+
+    def update_run_status_if_current_status(
+        self,
+        run_id: str,
+        *,
+        agent_id: str,
+        expected_current_status: str,
+        status: str,
+        current_step_id: str = "",
+        updated_at: str,
+    ) -> FlowRunRecord | None:
+        self.ensure_schema()
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE flow_runs
+                SET status = ?, current_step_id = ?, updated_at = ?
+                WHERE id = ? AND agent_id = ? AND status = ?
+                """,
+                [status, current_step_id, updated_at, run_id, agent_id, expected_current_status],
+            )
+            if int(cursor.rowcount or 0) <= 0:
+                return None
+        run = self.get_run(run_id, agent_id=agent_id)
+        if run is None:
+            return None
         return run
 
     def append_event(self, event: FlowEventRecord) -> FlowEventRecord:

@@ -17,7 +17,10 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from copaw.app.flow_engine import FlowTransitionNotAllowedError
+
 from copaw.app.routers import knowledge as knowledge_router_module
+from qwenpaw.app import knowledge_workflow as knowledge_workflow_module
 from copaw.config.config import Config
 from copaw.knowledge import GraphOpsManager, KnowledgeManager
 from copaw.knowledge.knowledge_quantization_architecture import QuantizationArchitectureManager
@@ -1594,7 +1597,7 @@ def test_run_project_pipeline_returns_flow_run_id_when_bridge_available(
         lambda *_args, **_kwargs: _FakeCoordinator(),
     )
     monkeypatch.setattr(
-        knowledge_router_module,
+        knowledge_workflow_module,
         "ensure_project_flow_run_bridge",
         lambda **_kwargs: "flow-run-bridge-1",
     )
@@ -1691,7 +1694,7 @@ def test_project_pipeline_status_syncs_flow_run_terminal_state(
         lambda *_args, **_kwargs: _FakeCoordinator(),
     )
     monkeypatch.setattr(
-        knowledge_router_module,
+        knowledge_workflow_module,
         "ensure_project_flow_run_bridge",
         lambda **_kwargs: "flow-run-sync-1",
     )
@@ -1718,6 +1721,263 @@ def test_project_pipeline_status_syncs_flow_run_terminal_state(
     assert status.status_code == 200
     assert status.json().get("flow_run_id") == "flow-run-sync-1"
     assert fake_flow_service.transitions == ["running", "succeeded"]
+
+
+def test_run_project_pipeline_persists_bridge_flow_run_id_for_later_commands(
+    knowledge_api_client: TestClient,
+    tmp_path: Path,
+    monkeypatch,
+):
+    project_id = "project-pipeline-flow-bridge-persisted"
+    project_dir = tmp_path / "projects" / project_id
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload["enabled"] = True
+    config_payload["memify_enabled"] = True
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    knowledge_router_module._PROJECT_PIPELINE_RUNTIME_META.clear()
+
+    class _FakeProjectPipelineManager:
+        def start_sync(self, **kwargs):
+            return {
+                "accepted": True,
+                "reason": "STARTED",
+                "state": {
+                    "project_id": kwargs["project_id"],
+                    "status": "queued",
+                },
+            }
+
+        def get_state(self, project_id):
+            return {"project_id": project_id, "status": "queued", "last_result": {}}
+
+    class _FakeCoordinator:
+        def dispatch(self, command):
+            action = str(getattr(command, "action", "") or "")
+            if action == "resume_sync":
+                return SimpleNamespace(
+                    action="resume_sync",
+                    operation_id="ps-flow-bridge-persisted-status",
+                    idempotency_key=f"route-status-resume:{project_id}",
+                    deduplicated=False,
+                    payload={"accepted": True, "reason": "RESUMED"},
+                )
+            return SimpleNamespace(
+                action="start_sync",
+                operation_id="ps-flow-bridge-persisted-run",
+                idempotency_key="manual-flow-bridge-persisted-key-1",
+                deduplicated=False,
+                payload={"accepted": True, "project_id": project_id, "status": "queued"},
+            )
+
+    class _FakeFlowRun:
+        def __init__(self):
+            self.id = "flow-run-bridge-persisted-1"
+            self.status = "paused"
+
+        def model_dump(self, mode="json"):
+            return {"id": self.id, "status": self.status}
+
+    class _FakeFlowService:
+        def __init__(self):
+            self.run = _FakeFlowRun()
+            self.commands: list[str] = []
+
+        def pause_run(self, *, agent_id, run_id, payload=None):
+            self.commands.append(f"pause:{run_id}")
+            self.run.status = "paused"
+            return self.run
+
+        def resume_run(self, *, agent_id, run_id, payload=None):
+            self.commands.append(f"resume:{run_id}")
+            self.run.status = "running"
+            return self.run
+
+        def cancel_run(self, *, agent_id, run_id, payload=None):
+            self.commands.append(f"cancel:{run_id}")
+            self.run.status = "cancelled"
+            return self.run
+
+    fake_flow_service = _FakeFlowService()
+
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "_project_pipeline_for_workspace",
+        lambda *_args, **_kwargs: _FakeProjectPipelineManager(),
+    )
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "_project_pipeline_coordinator_for_workspace",
+        lambda *_args, **_kwargs: _FakeCoordinator(),
+    )
+    monkeypatch.setattr(
+        knowledge_workflow_module,
+        "ensure_project_flow_run_bridge",
+        lambda **_kwargs: "flow-run-bridge-persisted-1",
+    )
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "get_flow_engine_service",
+        lambda: fake_flow_service,
+    )
+
+    started = knowledge_api_client.post(
+        f"/knowledge/project-pipeline/run?project_id={project_id}",
+        json={
+            "trigger": "manual-test",
+            "processing_mode": "agentic",
+            "idempotency_key": "manual-flow-bridge-persisted-key-1",
+        },
+    )
+    assert started.status_code == 200
+    assert started.json().get("flow_run_id") == "flow-run-bridge-persisted-1"
+
+    knowledge_router_module._PROJECT_PIPELINE_RUNTIME_META.clear()
+
+    command = knowledge_api_client.post(
+        f"/knowledge/project-pipeline/commands?project_id={project_id}",
+        json={"command_type": "resume", "payload": {}},
+    )
+    assert command.status_code == 200
+    assert fake_flow_service.commands == ["resume:flow-run-bridge-persisted-1"]
+    body = command.json()
+    assert body["flow_run_id"] == "flow-run-bridge-persisted-1"
+    assert body["runtime_meta"]["flow_run_id"] == "flow-run-bridge-persisted-1"
+    assert body["runtime_meta"]["recent_control_command"] == "resume"
+
+
+def test_project_pipeline_ws_snapshot_recovers_persisted_runtime_meta_after_bridge_and_command(
+    knowledge_api_client: TestClient,
+    tmp_path: Path,
+    monkeypatch,
+):
+    project_id = "project-pipeline-ws-persisted-recovery"
+    project_dir = tmp_path / "projects" / project_id
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload["enabled"] = True
+    config_payload["memify_enabled"] = True
+    saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    assert saved.status_code == 200
+
+    knowledge_router_module._PROJECT_PIPELINE_RUNTIME_META.clear()
+
+    class _FakeProjectPipelineManager:
+        def start_sync(self, **kwargs):
+            return {
+                "accepted": True,
+                "reason": "STARTED",
+                "state": {
+                    "project_id": kwargs["project_id"],
+                    "status": "queued",
+                },
+            }
+
+        def get_state(self, project_id):
+            return {
+                "project_id": project_id,
+                "status": "idle",
+                "last_result": {},
+            }
+
+    class _FakeCoordinator:
+        def dispatch(self, command):
+            action = str(getattr(command, "action", "") or "")
+            if action == "resume_sync":
+                return SimpleNamespace(
+                    action="resume_sync",
+                    operation_id="ps-ws-persisted-status",
+                    idempotency_key=f"route-status-resume:{project_id}",
+                    deduplicated=False,
+                    payload={"accepted": True, "reason": "RESUMED"},
+                )
+            return SimpleNamespace(
+                action="start_sync",
+                operation_id="ps-ws-persisted-run",
+                idempotency_key="manual-ws-persisted-key-1",
+                deduplicated=False,
+                payload={"accepted": True, "project_id": project_id, "status": "queued"},
+            )
+
+    class _FakeFlowRun:
+        def __init__(self):
+            self.id = "flow-run-ws-persisted-1"
+            self.status = "paused"
+
+        def model_dump(self, mode="json"):
+            return {"id": self.id, "status": self.status}
+
+    class _FakeFlowService:
+        def __init__(self):
+            self.run = _FakeFlowRun()
+
+        def pause_run(self, *, agent_id, run_id, payload=None):
+            self.run.status = "paused"
+            return self.run
+
+        def resume_run(self, *, agent_id, run_id, payload=None):
+            self.run.status = "running"
+            return self.run
+
+        def cancel_run(self, *, agent_id, run_id, payload=None):
+            self.run.status = "cancelled"
+            return self.run
+
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "_project_pipeline_for_workspace",
+        lambda *_args, **_kwargs: _FakeProjectPipelineManager(),
+    )
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "_project_pipeline_coordinator_for_workspace",
+        lambda *_args, **_kwargs: _FakeCoordinator(),
+    )
+    monkeypatch.setattr(
+        knowledge_workflow_module,
+        "ensure_project_flow_run_bridge",
+        lambda **_kwargs: "flow-run-ws-persisted-1",
+    )
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "get_flow_engine_service",
+        lambda: _FakeFlowService(),
+    )
+
+    started = knowledge_api_client.post(
+        f"/knowledge/project-pipeline/run?project_id={project_id}",
+        json={
+            "trigger": "manual-test",
+            "processing_mode": "agentic",
+            "idempotency_key": "manual-ws-persisted-key-1",
+        },
+    )
+    assert started.status_code == 200
+    assert started.json().get("flow_run_id") == "flow-run-ws-persisted-1"
+
+    knowledge_router_module._PROJECT_PIPELINE_RUNTIME_META.clear()
+
+    command = knowledge_api_client.post(
+        f"/knowledge/project-pipeline/commands?project_id={project_id}",
+        json={"command_type": "resume", "payload": {}},
+    )
+    assert command.status_code == 200
+
+    knowledge_router_module._PROJECT_PIPELINE_RUNTIME_META.clear()
+
+    with knowledge_api_client.websocket_connect(
+        f"/knowledge/project-pipeline/ws?project_id={project_id}&interval_ms=300",
+    ) as ws:
+        payload = ws.receive_json()
+
+    assert payload["type"] == "snapshot"
+    assert payload["state"]["flow_run_id"] == "flow-run-ws-persisted-1"
+    assert payload["state"]["recent_control_command"] == "resume"
+    assert payload["state"]["idempotency_key"] == "manual-flow-resume:flow-run-ws-persisted-1"
 
 
 def test_project_pipeline_status_syncs_resume_command_to_flow_engine(
@@ -1936,13 +2196,13 @@ def test_project_pipeline_command_returns_409_on_invalid_transition(
 
     class _FakeFlowService:
         def pause_run(self, *, agent_id, run_id, payload=None):
-            raise ValueError("flow run transition not allowed: running -> paused")
+            raise FlowTransitionNotAllowedError("flow run transition not allowed: running -> paused")
 
         def resume_run(self, *, agent_id, run_id, payload=None):
-            raise ValueError("flow run transition not allowed: running -> running")
+            raise FlowTransitionNotAllowedError("flow run transition not allowed: running -> running")
 
         def cancel_run(self, *, agent_id, run_id, payload=None):
-            raise ValueError("flow run transition not allowed: succeeded -> cancelled")
+            raise FlowTransitionNotAllowedError("flow run transition not allowed: succeeded -> cancelled")
 
     monkeypatch.setattr(
         knowledge_router_module,
@@ -2537,6 +2797,123 @@ def test_project_pipeline_status_projects_runtime_operation_metadata(
     assert payload["step_outputs"]["snapshot_raw"]["snapshot_count"] == 2
     assert payload["recent_error_code"] == ""
     assert payload["recent_error_source"] == ""
+
+
+def test_project_pipeline_status_recovers_runtime_meta_from_persisted_state(
+    knowledge_api_client: TestClient,
+    tmp_path: Path,
+    monkeypatch,
+):
+    project_id = "project-pipeline-runtime-persisted"
+    project_dir = tmp_path / "projects" / project_id
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    knowledge_router_module._PROJECT_PIPELINE_RUNTIME_META.clear()
+    knowledge_router_module._record_project_pipeline_runtime_event(
+        workspace_dir=tmp_path,
+        project_id=project_id,
+        operation_id="persisted-op",
+        idempotency_key="persisted-key",
+        deduplicated=False,
+        action="flow_resume",
+        flow_run_id="flow-run-persisted-1",
+        control_command="resume",
+        recent_error_code="PROJECT_PIPELINE_COMMAND_CONFLICT",
+        recent_error_source="flow_control",
+    )
+    knowledge_router_module._PROJECT_PIPELINE_RUNTIME_META.clear()
+
+    class _FakeProjectPipelineManager:
+        def get_state(self, project_id):
+            return {
+                "project_id": project_id,
+                "status": "idle",
+                "last_result": {},
+            }
+
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "_project_pipeline_for_workspace",
+        lambda *_args, **_kwargs: _FakeProjectPipelineManager(),
+    )
+
+    response = knowledge_api_client.get(
+        f"/knowledge/project-pipeline/status?project_id={project_id}"
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["flow_run_id"] == "flow-run-persisted-1"
+    assert payload["recent_control_command"] == "resume"
+    assert payload["recent_error_code"] == "PROJECT_PIPELINE_COMMAND_CONFLICT"
+    assert payload["recent_error_source"] == "flow_control"
+    assert payload["idempotency_key"] == "persisted-key"
+
+
+def test_project_pipeline_command_recovers_flow_run_id_from_persisted_state(
+    knowledge_api_client: TestClient,
+    tmp_path: Path,
+    monkeypatch,
+):
+    project_id = "project-pipeline-command-persisted"
+    project_dir = tmp_path / "projects" / project_id
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    knowledge_router_module._PROJECT_PIPELINE_RUNTIME_META.clear()
+    knowledge_router_module._record_project_pipeline_runtime_event(
+        workspace_dir=tmp_path,
+        project_id=project_id,
+        operation_id="persisted-command-op",
+        idempotency_key="persisted-command-key",
+        deduplicated=False,
+        action="start_sync",
+        flow_run_id="flow-run-persisted-command-1",
+    )
+    knowledge_router_module._PROJECT_PIPELINE_RUNTIME_META.clear()
+
+    class _FakeFlowRun:
+        def __init__(self):
+            self.id = "flow-run-persisted-command-1"
+            self.status = "running"
+
+        def model_dump(self, mode="json"):
+            return {"id": self.id, "status": self.status}
+
+    class _FakeFlowService:
+        def __init__(self):
+            self.commands: list[str] = []
+            self.run = _FakeFlowRun()
+
+        def pause_run(self, *, agent_id, run_id, payload=None):
+            self.commands.append(f"pause:{run_id}")
+            self.run.status = "paused"
+            return self.run
+
+        def resume_run(self, *, agent_id, run_id, payload=None):
+            self.commands.append(f"resume:{run_id}")
+            return self.run
+
+        def cancel_run(self, *, agent_id, run_id, payload=None):
+            self.commands.append(f"cancel:{run_id}")
+            self.run.status = "cancelled"
+            return self.run
+
+    fake_flow_service = _FakeFlowService()
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "get_flow_engine_service",
+        lambda: fake_flow_service,
+    )
+
+    response = knowledge_api_client.post(
+        f"/knowledge/project-pipeline/commands?project_id={project_id}",
+        json={"command_type": "pause", "payload": {}},
+    )
+    assert response.status_code == 200
+    assert fake_flow_service.commands == ["pause:flow-run-persisted-command-1"]
+    payload = response.json()
+    assert payload["flow_run_id"] == "flow-run-persisted-command-1"
+    assert payload["runtime_meta"]["flow_run_id"] == "flow-run-persisted-command-1"
+    assert payload["runtime_meta"]["recent_control_command"] == "pause"
 
 
 def test_project_pipeline_ws_snapshot_includes_latest_run_operation_metadata(

@@ -169,3 +169,84 @@ def test_flow_engine_service_rejects_illegal_transition(tmp_path: Path):
 
     with pytest.raises(ValueError):
         service.pause_run(agent_id="agent-a", run_id=run.id)
+
+    events = service.repo.list_events(run.id, agent_id="agent-a")
+    failed_events = [event for event in events if event.event_type == "run.transition_failed"]
+    assert len(failed_events) == 1
+    assert failed_events[0].payload["reason"] == "transition_not_allowed"
+    assert failed_events[0].payload["target_status"] == "paused"
+
+
+def test_flow_engine_service_enqueues_idempotently_by_key(tmp_path: Path):
+    service = FlowEngineService(tmp_path / "flow-engine.sqlite3")
+    definition = _build_definition()
+    service.register_definition(definition)
+
+    first = service.enqueue_run(
+        agent_id="agent-a",
+        definition_id=definition.id,
+        scope_kind="project",
+        scope_id="project-idempotent",
+        idempotency_key="project-idempotent:knowledge",
+    )
+    second = service.enqueue_run(
+        agent_id="agent-a",
+        definition_id=definition.id,
+        scope_kind="project",
+        scope_id="project-idempotent",
+        idempotency_key="project-idempotent:knowledge",
+    )
+
+    assert second.id == first.id
+    runs = service.repo.list_runs(
+        agent_id="agent-a",
+        scope_kind="project",
+        scope_id="project-idempotent",
+    )
+    assert len(runs) == 1
+
+    events = service.repo.list_events(first.id, agent_id="agent-a")
+    event_types = [event.event_type for event in events]
+    assert event_types.count("run.enqueued") == 1
+    assert "run.enqueue_deduplicated" in event_types
+
+
+def test_flow_engine_service_transition_rejects_concurrent_status_conflict(tmp_path: Path):
+    service = FlowEngineService(tmp_path / "flow-engine.sqlite3")
+    definition = _build_definition()
+    service.register_definition(definition)
+    run = service.enqueue_run(
+        agent_id="agent-a",
+        definition_id=definition.id,
+        scope_kind="project",
+        scope_id="project-conflict",
+    )
+
+    original = service.repo.update_run_status_if_current_status
+
+    def _simulate_concurrent_change(*args, **kwargs):
+        service.repo.update_run_status(
+            run.id,
+            agent_id="agent-a",
+            status="paused",
+            updated_at=run.updated_at,
+        )
+        return original(*args, **kwargs)
+
+    service.repo.update_run_status_if_current_status = _simulate_concurrent_change  # type: ignore[assignment]
+
+    with pytest.raises(ValueError, match="transition conflicted"):
+        service.transition_run(
+            agent_id="agent-a",
+            run_id=run.id,
+            status="running",
+            payload={"reason": "concurrency-test"},
+        )
+
+    events = service.repo.list_events(run.id, agent_id="agent-a")
+    failed_events = [event for event in events if event.event_type == "run.transition_failed"]
+    assert len(failed_events) == 1
+    assert failed_events[0].payload["reason"] == "transition_conflict"
+    assert failed_events[0].payload["target_status"] == "running"
+    assert failed_events[0].payload["expected_status"] == "queued"
+    assert failed_events[0].payload["actual_status"] == "paused"

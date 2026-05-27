@@ -8,6 +8,7 @@ import { rootApi } from "./modules/root";
 import { acpApi } from "./modules/acp";
 import { channelApi } from "./modules/channel";
 import { heartbeatApi } from "./modules/heartbeat";
+import { flowsApi } from "./modules/flows";
 import { knowledgeApi } from "./modules/knowledge";
 import { cronJobApi } from "./modules/cronjob";
 import { chatApi, sessionApi } from "./modules/chat";
@@ -42,6 +43,9 @@ export const api = {
 
   // Heartbeat
   ...heartbeatApi,
+
+  // Flows
+  ...flowsApi,
 
   // Knowledge
   ...knowledgeApi,
@@ -109,3 +113,4 @@ export default api;
 
 // Export individual APIs for direct access
 export { agentsApi };
+export { flowsApi };
