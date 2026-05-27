@@ -505,6 +505,14 @@ class DeleteProjectResponse(BaseModel):
     project_id: str
 
 
+class DeleteProjectPathResponse(BaseModel):
+    """Response body for deleting one project file or directory."""
+
+    success: bool
+    path: str
+    is_directory: bool
+
+
 class PromoteProjectArtifactRequest(BaseModel):
     """Request body for promoting a project artifact to agent scope."""
 
@@ -3033,6 +3041,40 @@ def _upload_project_file(
     )
 
 
+def _delete_project_path(
+    project_dir: Path,
+    rel_path: str,
+) -> DeleteProjectPathResponse:
+    normalized = str(rel_path or "").strip().replace("\\", "/")
+    if not normalized or normalized in {".", "/"}:
+        raise HTTPException(status_code=400, detail="Invalid file path")
+    if not _is_safe_relative_path(normalized):
+        raise HTTPException(status_code=400, detail="Invalid file path")
+
+    project_root = project_dir.resolve()
+    target = (project_dir / normalized).resolve()
+    if not str(target).startswith(str(project_root)):
+        raise HTTPException(status_code=400, detail="Invalid file path")
+    if not target.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"File or directory '{normalized}' not found",
+        )
+
+    if target.is_dir():
+        shutil.rmtree(target)
+        is_directory = True
+    else:
+        target.unlink()
+        is_directory = False
+
+    return DeleteProjectPathResponse(
+        success=True,
+        path=normalized,
+        is_directory=is_directory,
+    )
+
+
 def _is_square_candidate_markdown(path: Path) -> bool:
     if path.suffix.lower() != ".md":
         return False
@@ -5247,6 +5289,40 @@ async def upload_agent_project_file(
             [project_dir / uploaded.path],
         )
         return uploaded
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.delete(
+    "/{agentId}/projects/{projectId}/files/{targetPath:path}",
+    response_model=DeleteProjectPathResponse,
+    summary="Delete project file or directory",
+    description="Delete one file or directory under the project workspace",
+)
+async def delete_agent_project_path(
+    request: Request,
+    agentId: str = PathParam(...),
+    projectId: str = PathParam(...),
+    targetPath: str = PathParam(...),
+) -> DeleteProjectPathResponse:
+    """Delete one file or directory under project workspace."""
+    _ = request
+    workspace_dir = _resolve_agent_workspace_dir(agentId)
+
+    try:
+        project_dir = _resolve_project_dir(workspace_dir, projectId)
+        deleted = _delete_project_path(project_dir, targetPath)
+        update_project_file_monitoring_state(
+            project_dir,
+            PROJECT_FILE_MONITORING_ACTIVE,
+        )
+        record_project_realtime_paths(
+            str(workspace_dir),
+            [project_dir / deleted.path],
+        )
+        return deleted
     except HTTPException:
         raise
     except Exception as e:

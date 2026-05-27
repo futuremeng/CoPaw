@@ -211,6 +211,12 @@ export interface DeleteProjectResponse {
   project_id: string;
 }
 
+export interface DeleteProjectPathResponse {
+  success: boolean;
+  path: string;
+  is_directory: boolean;
+}
+
 export interface PromoteProjectArtifactRequest {
   target_name?: string;
   overwrite?: boolean;

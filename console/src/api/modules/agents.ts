@@ -24,6 +24,7 @@ import type {
   CloneProjectRequest,
   CreateProjectRequest,
   DeleteProjectResponse,
+  DeleteProjectPathResponse,
   PromoteProjectArtifactRequest,
   PromoteProjectArtifactResponse,
   UpdateProjectArtifactDistillModeRequest,
@@ -359,6 +360,17 @@ export const agentsApi = {
         .split("/")
         .map((part) => encodeProjectFilePathSegment(part))
         .join("/")}`,
+    ),
+
+  deleteProjectPath: (agentId: string, projectId: string, targetPath: string) =>
+    request<DeleteProjectPathResponse>(
+      `/agents/${agentId}/projects/${encodeURIComponent(projectId)}/files/${targetPath
+        .split("/")
+        .map((part) => encodeProjectFilePathSegment(part))
+        .join("/")}`,
+      {
+        method: "DELETE",
+      },
     ),
 
   uploadProjectFile: async (

@@ -724,6 +724,7 @@ export default function ProjectDetailPage() {
   const [projectAgentContext, setProjectAgentContext] = useState("");
   const [selectedStepId, setSelectedStepId] = useState("");
   const [deletingProject, setDeletingProject] = useState(false);
+  const [deletingProjectPaths, setDeletingProjectPaths] = useState<string[]>([]);
   const [automationDrawerOpen, setAutomationDrawerOpen] = useState(false);
   const [autoAttachRequest, setAutoAttachRequest] = useState<ProjectChatAutoAttachRequest | null>(null);
   const [selectedAttachPaths, setSelectedAttachPaths] = useState<string[]>([]);
@@ -1717,6 +1718,7 @@ export default function ProjectDetailPage() {
     return Boolean(
       selectedAttachPaths.length > 0 ||
       pendingUploads.length > 0 ||
+      deletingProjectPaths.length > 0 ||
       uploadModalOpen ||
       importModalOpen ||
       sendingSelectedFiles ||
@@ -1729,6 +1731,7 @@ export default function ProjectDetailPage() {
   }, [
     chatStarting,
     createRunLoading,
+    deletingProjectPaths.length,
     designFocusChatId,
     importModalOpen,
     pendingUploads.length,
@@ -2926,6 +2929,123 @@ export default function ProjectDetailPage() {
     setSelectedAttachPaths,
   ]);
 
+  const performDeleteProjectTreePath = useCallback(async (
+    normalizedPath: string,
+    isDirectory: boolean,
+  ) => {
+    if (!currentAgent || !selectedProject || !normalizedPath) {
+      return;
+    }
+
+    setDeletingProjectPaths((prev) => (
+      prev.includes(normalizedPath) ? prev : [...prev, normalizedPath]
+    ));
+
+    let preferredProjectRequestId = resolvedProjectRequestId;
+
+    try {
+      const resolved = await resolveProjectRequestCandidate({
+        projectRequestIds: buildProjectRequestCandidates(selectedProject, {
+          preferredProjectRequestId,
+          routeProjectId,
+        }),
+        loader: async (projectRequestId) => {
+          await agentsApi.deleteProjectPath(
+            currentAgent.id,
+            projectRequestId,
+            normalizedPath,
+          );
+          return undefined;
+        },
+      });
+      preferredProjectRequestId = resolved.projectRequestId;
+      setResolvedProjectRequestId(resolved.projectRequestId);
+
+      const removedPrefix = `${normalizedPath}/`;
+      setSelectedAttachPaths((prev) =>
+        prev.filter((path) => path !== normalizedPath && !path.startsWith(removedPrefix)),
+      );
+
+      setKnownProjectFilesByPath((prev) => {
+        const next: Record<string, AgentProjectFileInfo> = {};
+        for (const [path, info] of Object.entries(prev)) {
+          if (path === normalizedPath || path.startsWith(removedPrefix)) {
+            continue;
+          }
+          next[path] = info;
+        }
+        return next;
+      });
+
+      if (
+        selectedFilePath === normalizedPath
+        || selectedFilePath.startsWith(removedPrefix)
+      ) {
+        setSelectedFilePath("");
+        setFileContent("");
+        setCharStatsContent("");
+        setNerStructuredContent("");
+      }
+
+      if (
+        latestUpdatedFilePath === normalizedPath
+        || latestUpdatedFilePath.startsWith(removedPrefix)
+      ) {
+        setLatestUpdatedFilePath("");
+      }
+
+      await handleRefreshProjectFiles();
+      message.success(
+        isDirectory
+          ? t("projects.deleteDirectorySuccess", "Deleted folder: {{path}}", { path: normalizedPath })
+          : t("projects.deleteFileSuccess", "Deleted file: {{path}}", { path: normalizedPath }),
+      );
+    } catch (err) {
+      console.error("failed to delete project path", err);
+      message.error(
+        isDirectory
+          ? t("projects.deleteDirectoryFailed", "Failed to delete folder")
+          : t("projects.deleteFileFailed", "Failed to delete file"),
+      );
+    } finally {
+      setDeletingProjectPaths((prev) => prev.filter((path) => path !== normalizedPath));
+    }
+  }, [
+    currentAgent,
+    handleRefreshProjectFiles,
+    latestUpdatedFilePath,
+    resolvedProjectRequestId,
+    routeProjectId,
+    selectedFilePath,
+    selectedProject,
+    setResolvedProjectRequestId,
+    t,
+  ]);
+
+  const handleRequestDeleteProjectTreePath = useCallback((path: string, isDirectory: boolean) => {
+    const normalizedPath = normalizeProjectArtifactPath(path);
+    if (!normalizedPath) {
+      return;
+    }
+
+    Modal.confirm({
+      title: isDirectory
+        ? t("projects.deleteFileTreeDirectoryConfirmTitle", "Delete folder?")
+        : t("projects.deleteFileTreeFileConfirmTitle", "Delete file?"),
+      content: t(
+        "projects.deleteFileTreeConfirmDescription",
+        "This action is irreversible and will permanently delete {{path}}.",
+        { path: normalizedPath },
+      ),
+      okText: t("common.delete", "Delete"),
+      cancelText: t("common.cancel", "Cancel"),
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        await performDeleteProjectTreePath(normalizedPath, isDirectory);
+      },
+    });
+  }, [normalizeProjectArtifactPath, performDeleteProjectTreePath, t]);
+
   const handleProjectAutoKnowledgeSinkChange = useCallback((enabled: boolean) => {
     if (!selectedProject) {
       return;
@@ -3644,6 +3764,8 @@ export default function ProjectDetailPage() {
                             onAttachArtifactToChat={(path) => {
                               void handleAttachArtifactToChat(path);
                             }}
+                            onRequestDeleteTreePath={handleRequestDeleteProjectTreePath}
+                            deletingTreePaths={deletingProjectPaths}
                           />
                         </div>
                       </div>

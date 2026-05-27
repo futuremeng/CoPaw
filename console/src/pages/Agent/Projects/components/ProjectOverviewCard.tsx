@@ -1,5 +1,6 @@
 import {
   CodeOutlined,
+  DeleteOutlined,
   FileExcelOutlined,
   FileImageOutlined,
   FileMarkdownOutlined,
@@ -78,6 +79,8 @@ interface ProjectOverviewCardProps {
   onConsumeStaleDirectoryPaths?: (paths: string[]) => void;
   onSelectFileFromTree: (path: string) => void;
   onAttachArtifactToChat: (path: string) => void;
+  onRequestDeleteTreePath?: (path: string, isDirectory: boolean) => void;
+  deletingTreePaths?: string[];
   onLoadProjectTreeChildren?: (path: string) => Promise<AgentProjectFileTreeNode[]>;
 }
 
@@ -279,8 +282,11 @@ function buildFileTree(
   selectedAttachSet: Set<string>,
   highlightedFileSet: Set<string>,
   onAttachArtifactToChat: (path: string) => void,
+  onRequestDeleteTreePath: ((path: string, isDirectory: boolean) => void) | undefined,
+  deletingTreePathSet: Set<string>,
   attachTitle: string,
   detachTitle: string,
+  deleteTitle: string,
 ): TreeNode[] {
   type RawNode = {
     key: string;
@@ -335,6 +341,7 @@ function buildFileTree(
         const isPriority = !isDirectory && priorityFileSet.has(node.key);
         const isAttached = !isDirectory && selectedAttachSet.has(node.key);
         const isHighlighted = !isDirectory && highlightedFileSet.has(node.key);
+        const isDeleting = deletingTreePathSet.has(node.key);
         return {
           key: node.key,
           title: (
@@ -367,8 +374,41 @@ function buildFileTree(
                       onAttachArtifactToChat(node.key);
                     }}
                   />
+                  <Button
+                    size="small"
+                    type="text"
+                    icon={<DeleteOutlined />}
+                    className={styles.attachActionButton}
+                    title={deleteTitle}
+                    aria-label={deleteTitle}
+                    danger
+                    loading={isDeleting}
+                    disabled={!onRequestDeleteTreePath || isDeleting}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onRequestDeleteTreePath?.(node.key, false);
+                    }}
+                  />
                 </span>
-              ) : null}
+              ) : (
+                <span className={styles.treeNodeActions}>
+                  <Button
+                    size="small"
+                    type="text"
+                    icon={<DeleteOutlined />}
+                    className={styles.attachActionButton}
+                    title={deleteTitle}
+                    aria-label={deleteTitle}
+                    danger
+                    loading={isDeleting}
+                    disabled={!onRequestDeleteTreePath || isDeleting}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onRequestDeleteTreePath?.(node.key, true);
+                    }}
+                  />
+                </span>
+              )}
             </span>
           ),
           isLeaf: !isDirectory,
@@ -490,8 +530,11 @@ function buildLazyTreeNodes(
   selectedAttachSet: Set<string>,
   highlightedFileSet: Set<string>,
   onAttachArtifactToChat: (path: string) => void,
+  onRequestDeleteTreePath: ((path: string, isDirectory: boolean) => void) | undefined,
+  deletingTreePathSet: Set<string>,
   attachTitle: string,
   detachTitle: string,
+  deleteTitle: string,
   onRefreshTreeDirectory: ((path: string) => void) | undefined,
   refreshingDirectorySet: Set<string>,
   refreshTitle: string,
@@ -500,6 +543,7 @@ function buildLazyTreeNodes(
     const isPriority = !item.is_directory && priorityFileSet.has(item.path);
     const isAttached = !item.is_directory && selectedAttachSet.has(item.path);
     const isHighlighted = !item.is_directory && highlightedFileSet.has(item.path);
+    const isDeleting = deletingTreePathSet.has(item.path);
     const isRefreshingDirectory = item.is_directory && refreshingDirectorySet.has(item.path);
     const directFileCount = item.direct_file_count;
     const directoryCountLabel = item.is_directory && directFileCount > 0
@@ -512,8 +556,11 @@ function buildLazyTreeNodes(
           selectedAttachSet,
           highlightedFileSet,
           onAttachArtifactToChat,
+          onRequestDeleteTreePath,
+          deletingTreePathSet,
           attachTitle,
           detachTitle,
+          deleteTitle,
           onRefreshTreeDirectory,
           refreshingDirectorySet,
           refreshTitle,
@@ -556,6 +603,21 @@ function buildLazyTreeNodes(
                   onRefreshTreeDirectory?.(item.path);
                 }}
               />
+              <Button
+                size="small"
+                type="text"
+                icon={<DeleteOutlined />}
+                className={styles.attachActionButton}
+                title={deleteTitle}
+                aria-label={deleteTitle}
+                danger
+                loading={isDeleting}
+                disabled={!onRequestDeleteTreePath || isDeleting}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onRequestDeleteTreePath?.(item.path, true);
+                }}
+              />
             </span>
           ) : (
             <span className={styles.treeNodeActions}>
@@ -569,6 +631,21 @@ function buildLazyTreeNodes(
                 onClick={(event) => {
                   event.stopPropagation();
                   onAttachArtifactToChat(item.path);
+                }}
+              />
+              <Button
+                size="small"
+                type="text"
+                icon={<DeleteOutlined />}
+                className={styles.attachActionButton}
+                title={deleteTitle}
+                aria-label={deleteTitle}
+                danger
+                loading={isDeleting}
+                disabled={!onRequestDeleteTreePath || isDeleting}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onRequestDeleteTreePath?.(item.path, false);
                 }}
               />
             </span>
@@ -629,6 +706,8 @@ export default function ProjectOverviewCard({
   onConsumeStaleDirectoryPaths,
   onSelectFileFromTree,
   onAttachArtifactToChat,
+  onRequestDeleteTreePath,
+  deletingTreePaths = [],
   onLoadProjectTreeChildren,
 }: ProjectOverviewCardProps) {
   void _projectFileCount;
@@ -672,6 +751,7 @@ export default function ProjectOverviewCard({
   const attachTitle = t("projects.chat.addAttachment", "Add to chat attachments");
   const detachTitle = t("projects.chat.removeAttachment", "Remove from chat attachments");
   const refreshTitle = t("projects.refreshFiles", "Refresh");
+  const deleteTitle = t("common.delete", "Delete");
   const priorityFileSet = useMemo(() => new Set(priorityFilePaths), [priorityFilePaths]);
   const selectedAttachSet = useMemo(() => new Set(selectedAttachPaths), [selectedAttachPaths]);
   const staleDirectorySet = useMemo(
@@ -681,6 +761,10 @@ export default function ProjectOverviewCard({
   const refreshingDirectorySet = useMemo(
     () => new Set(refreshingDirectoryPaths),
     [refreshingDirectoryPaths],
+  );
+  const deletingTreePathSet = useMemo(
+    () => new Set(normalizeTreeKeys(deletingTreePaths)),
+    [deletingTreePaths],
   );
   const treeRootDirCounts = useMemo(
     () => ({
@@ -776,8 +860,11 @@ export default function ProjectOverviewCard({
     selectedAttachSet,
     highlightedFileSet,
     onAttachArtifactToChat,
+    onRequestDeleteTreePath,
+    deletingTreePathSet,
     attachTitle,
     detachTitle,
+    deleteTitle,
   );
   const emptyTreeDescription = normalizedTreeFilterQuery
     ? t("projects.noMatchedFiles", "No files match the current keyword")
@@ -959,8 +1046,11 @@ export default function ProjectOverviewCard({
       selectedAttachSet,
       highlightedFileSet,
       onAttachArtifactToChat,
+      onRequestDeleteTreePath,
+      deletingTreePathSet,
       attachTitle,
       detachTitle,
+      deleteTitle,
       useLazyTreeMode ? handleRefreshTreeDirectory : undefined,
       refreshingDirectorySet,
       refreshTitle,
@@ -971,12 +1061,15 @@ export default function ProjectOverviewCard({
       highlightedFileSet,
       handleRefreshTreeDirectory,
       onAttachArtifactToChat,
+      onRequestDeleteTreePath,
       refreshTitle,
       refreshingDirectorySet,
+      deletingTreePathSet,
       priorityFileSet,
       selectedAttachSet,
       useLazyTreeMode,
       visibleLazyTreeItems,
+      deleteTitle,
     ],
   );
 

@@ -152,3 +152,24 @@ describe("agentsApi.readProjectFile", () => {
     );
   });
 });
+
+describe("agentsApi.deleteProjectPath", () => {
+  afterEach(() => vi.clearAllMocks());
+
+  it("encodes path segments and issues DELETE request", async () => {
+    vi.mocked(request).mockResolvedValue({ success: true, path: "original/a.txt", is_directory: false });
+
+    await agentsApi.deleteProjectPath(
+      "agent-1",
+      "project/a",
+      "original/.cache/a b.txt",
+    );
+
+    expect(request).toHaveBeenCalledWith(
+      "/agents/agent-1/projects/project%2Fa/files/original/%2Ecache/a%20b%2Etxt",
+      expect.objectContaining({
+        method: "DELETE",
+      }),
+    );
+  });
+});

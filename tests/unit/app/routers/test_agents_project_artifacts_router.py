@@ -21,6 +21,7 @@ from qwenpaw.app.routers.agents import (
     CreateProjectRequest,
     _create_project,
     _build_project_file_summary,
+    _delete_project_path,
     _load_project_summary,
     _upload_project_file,
     _write_project_frontmatter,
@@ -491,6 +492,66 @@ def test_upload_project_file_endpoint_accepts_relative_path(
         / "dataset"
         / "a.txt"
     ).read_text(encoding="utf-8") == "folder upload"
+
+
+def test_delete_project_path_supports_file_and_directory(tmp_path: Path):
+    project_dir = tmp_path / "projects" / "project-demo"
+    (project_dir / "original" / "nested").mkdir(parents=True, exist_ok=True)
+    (project_dir / "original" / "nested" / "a.txt").write_text(
+        "alpha",
+        encoding="utf-8",
+    )
+
+    file_result = _delete_project_path(project_dir, "original/nested/a.txt")
+    assert file_result.success is True
+    assert file_result.path == "original/nested/a.txt"
+    assert file_result.is_directory is False
+    assert not (project_dir / "original" / "nested" / "a.txt").exists()
+
+    dir_result = _delete_project_path(project_dir, "original/nested")
+    assert dir_result.success is True
+    assert dir_result.path == "original/nested"
+    assert dir_result.is_directory is True
+    assert not (project_dir / "original" / "nested").exists()
+
+
+def test_delete_project_path_rejects_unsafe_path(tmp_path: Path):
+    project_dir = tmp_path / "projects" / "project-demo"
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    with pytest.raises(HTTPException) as exc_info:
+        _delete_project_path(project_dir, "../outside")
+
+    assert exc_info.value.status_code == 400
+
+
+def test_delete_project_path_endpoint_accepts_file_and_directory(
+    project_artifact_router_client: tuple[TestClient, Path, str],
+):
+    client, workspace_dir, project_id = project_artifact_router_client
+    target_file = workspace_dir / "projects" / project_id / "original" / "tree" / "doc.txt"
+    target_file.parent.mkdir(parents=True, exist_ok=True)
+    target_file.write_text("doc", encoding="utf-8")
+
+    delete_file = client.delete(
+        f"/agents/default/projects/{project_id}/files/original/tree/doc.txt",
+    )
+    assert delete_file.status_code == 200
+    file_payload = delete_file.json()
+    assert file_payload["success"] is True
+    assert file_payload["path"] == "original/tree/doc.txt"
+    assert file_payload["is_directory"] is False
+    assert not target_file.exists()
+
+    delete_dir = client.delete(
+        f"/agents/default/projects/{project_id}/files/original/tree",
+    )
+    assert delete_dir.status_code == 200
+    dir_payload = delete_dir.json()
+    assert dir_payload["success"] is True
+    assert dir_payload["path"] == "original/tree"
+    assert dir_payload["is_directory"] is True
+    assert not (workspace_dir / "projects" / project_id / "original" / "tree").exists()
 
 
 def test_upload_project_file_activates_idle_monitoring_and_sync(
