@@ -295,41 +295,51 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
   const structuredRows = buildRowsForCategory("structured");
   const imageRows = buildRowsForCategory("image");
 
+  const totalSourceCount = allRows.length;
+  const manualSourceCount = manualRows.length;
+  const candidateSourceCount = candidateRows.length;
+  const documentSentenceCount = Math.max(0, Number(knowledgeState.quantMetrics.sentenceCount || 0));
+  const documentTokenCount = Math.max(0, Number(knowledgeState.quantMetrics.tokenCount || 0));
+  const documentCharacterCount = Math.max(0, Number(knowledgeState.quantMetrics.charCount || 0));
+
   return (
     <div className={styles.projectKnowledgeWorkbench}>
       <div className={styles.projectKnowledgeSignalGrid}>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("copaw.projects.knowledge.signalDocuments")}</Typography.Text>
-          <Typography.Text strong>{knowledgeState.quantMetrics.documentCount}</Typography.Text>
-        </div>
-        <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("copaw.projects.knowledge.signalSnapshots")}</Typography.Text>
-          <Typography.Text strong>{knowledgeState.quantMetrics.snapshotCount}</Typography.Text>
-        </div>
-        <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("copaw.projects.knowledge.signalChunks")}</Typography.Text>
-          <Typography.Text strong>{knowledgeState.quantMetrics.chunkCount}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("copaw.projects.knowledge.sourcesPanel.signalTotalSources", "Total Sources")}
+          </Typography.Text>
+          <Typography.Text strong>{totalSourceCount}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
           <Typography.Text type="secondary">
-            {t("copaw.projects.knowledge.signalSentences")}
-            <span title="基于 interlinear 工件逐句统计">🛈</span>
+            {t("copaw.projects.knowledge.sourcesPanel.signalDocumentSources", "Document Sources")}
           </Typography.Text>
-          <Typography.Text strong>{knowledgeState.quantMetrics.sentenceCount}</Typography.Text>
+          <Typography.Text strong>{documentRows.length}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
           <Typography.Text type="secondary">
-            {t("copaw.projects.knowledge.signalTokens")}
-            <span title="基于轻量化工件分词统计">🛈</span>
+            {t("copaw.projects.knowledge.sourcesPanel.signalStructuredSources", "Structured Sources")}
           </Typography.Text>
-          <Typography.Text strong>{knowledgeState.quantMetrics.tokenCount || 0}</Typography.Text>
+          <Typography.Text strong>{structuredRows.length}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
           <Typography.Text type="secondary">
-            {t("copaw.projects.knowledge.signalCharacters")}
-            <span title="基于 interlinear 工件逐句统计">🛈</span>
+            {t("copaw.projects.knowledge.sourcesPanel.signalImageSources", "Image Sources")}
           </Typography.Text>
-          <Typography.Text strong>{knowledgeState.quantMetrics.charCount || 0}</Typography.Text>
+          <Typography.Text strong>{imageRows.length}</Typography.Text>
+        </div>
+        <div className={styles.projectKnowledgeSignalCard}>
+          <Typography.Text type="secondary">
+            {t("copaw.projects.knowledge.sourcesPanel.signalManualSources", "Manual Sources")}
+          </Typography.Text>
+          <Typography.Text strong>{manualSourceCount}</Typography.Text>
+        </div>
+        <div className={styles.projectKnowledgeSignalCard}>
+          <Typography.Text type="secondary">
+            {t("copaw.projects.knowledge.sourcesPanel.signalCandidateSources", "Candidate Sources")}
+          </Typography.Text>
+          <Typography.Text strong>{candidateSourceCount}</Typography.Text>
         </div>
       </div>
 
@@ -346,22 +356,44 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
           items={[
             {
               key: "document",
-              label: t("copaw.projects.knowledge.sourcesPanel.tabDocument", "Document"),
+              label: `${t("copaw.projects.knowledge.sourcesPanel.tabDocument", "Document")} (${documentRows.length})`,
               children: (
-                <Table
-                  columns={sourceColumns}
-                  dataSource={documentRows}
-                  pagination={{ pageSize: 10, simple: true }}
-                  size="small"
-                  bordered={false}
-                  scroll={{ x: 1400 }}
-                  locale={{ emptyText: t("copaw.projects.knowledge.sourcesPanel.emptyDocument", "No document sources found") }}
-                />
+                <>
+                  <div className={styles.projectKnowledgeSignalGrid} style={{ marginBottom: 12 }}>
+                    <div className={styles.projectKnowledgeSignalCard}>
+                      <Typography.Text type="secondary">
+                        {t("copaw.projects.knowledge.sourcesPanel.documentSentenceCount", "Sentences")}
+                      </Typography.Text>
+                      <Typography.Text strong>{documentSentenceCount}</Typography.Text>
+                    </div>
+                    <div className={styles.projectKnowledgeSignalCard}>
+                      <Typography.Text type="secondary">
+                        {t("copaw.projects.knowledge.sourcesPanel.documentTokenCount", "Lightweight Tokens")}
+                      </Typography.Text>
+                      <Typography.Text strong>{documentTokenCount}</Typography.Text>
+                    </div>
+                    <div className={styles.projectKnowledgeSignalCard}>
+                      <Typography.Text type="secondary">
+                        {t("copaw.projects.knowledge.sourcesPanel.documentCharacterCount", "Characters")}
+                      </Typography.Text>
+                      <Typography.Text strong>{documentCharacterCount}</Typography.Text>
+                    </div>
+                  </div>
+                  <Table
+                    columns={sourceColumns}
+                    dataSource={documentRows}
+                    pagination={{ pageSize: 10, simple: true }}
+                    size="small"
+                    bordered={false}
+                    scroll={{ x: 1400 }}
+                    locale={{ emptyText: t("copaw.projects.knowledge.sourcesPanel.emptyDocument", "No document sources found") }}
+                  />
+                </>
               ),
             },
             {
               key: "structured",
-              label: t("copaw.projects.knowledge.sourcesPanel.tabStructured", "Structured"),
+              label: `${t("copaw.projects.knowledge.sourcesPanel.tabStructured", "Structured")} (${structuredRows.length})`,
               children: (
                 <Table
                   columns={sourceColumns}
@@ -376,7 +408,7 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
             },
             {
               key: "image",
-              label: t("copaw.projects.knowledge.sourcesPanel.tabImage", "Image"),
+              label: `${t("copaw.projects.knowledge.sourcesPanel.tabImage", "Image")} (${imageRows.length})`,
               children: (
                 <Table
                   columns={sourceColumns}

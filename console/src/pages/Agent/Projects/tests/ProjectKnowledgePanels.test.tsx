@@ -392,18 +392,28 @@ describe("project knowledge panels", () => {
 
     render(<ProjectKnowledgeSourcesPanel knowledgeState={knowledgeState} projectFiles={projectFiles} />);
 
-    expect(screen.getByRole("tab", { name: "Document" })).not.toBeNull();
-    expect(screen.getByRole("tab", { name: "Structured" })).not.toBeNull();
-    expect(screen.getByRole("tab", { name: "Image" })).not.toBeNull();
+    expect(screen.getByText("Total Sources")).not.toBeNull();
+    expect(screen.getByText("Document Sources")).not.toBeNull();
+    expect(screen.getByText("Structured Sources")).not.toBeNull();
+    expect(screen.getByText("Image Sources")).not.toBeNull();
+    expect(screen.getByText("Manual Sources")).not.toBeNull();
+    expect(screen.getByText("Candidate Sources")).not.toBeNull();
+
+    expect(screen.getByRole("tab", { name: "Document (2)" })).not.toBeNull();
+    expect(screen.getByRole("tab", { name: "Structured (1)" })).not.toBeNull();
+    expect(screen.getByRole("tab", { name: "Image (1)" })).not.toBeNull();
+    expect(screen.getByText("Sentences")).not.toBeNull();
+    expect(screen.getByText("Lightweight Tokens")).not.toBeNull();
+    expect(screen.getByText("Characters")).not.toBeNull();
 
     expect(screen.getByText("original/a.md")).not.toBeNull();
     expect(screen.queryByText("docs/book.pdf")).toBeNull();
 
-    fireEvent.click(screen.getByRole("tab", { name: "Structured" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Structured (1)" }));
     expect(screen.getByText("data/schema.json")).not.toBeNull();
     expect(screen.getByText("JSON")).not.toBeNull();
 
-    fireEvent.click(screen.getByRole("tab", { name: "Image" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Image (1)" }));
     expect(screen.getByText("assets/cover.png")).not.toBeNull();
     expect(screen.getByText("PNG")).not.toBeNull();
   });
