@@ -1,10 +1,12 @@
 import { useCallback, useMemo } from "react";
 import { agentsApi } from "../../../../api/modules/agents";
+import { normalizeProjectApiError } from "../utils/projectApiError";
 import type {
   CreateProjectPipelineRunRequest,
   ImportPlatformTemplateRequest,
   RetryProjectPipelineRunRequest,
 } from "../../../../api/types/agents";
+import type { ProjectWorkspaceAdapterError } from "../adapters";
 
 interface ProjectPipelineFacade {
   listProjectPipelineTemplates: (agentId: string, projectId: string) => ReturnType<typeof agentsApi.listProjectPipelineTemplates>;
@@ -31,6 +33,7 @@ interface ProjectPipelineFacade {
     runId: string,
     body: RetryProjectPipelineRunRequest,
   ) => ReturnType<typeof agentsApi.retryProjectPipelineRun>;
+  normalizeError: (error: unknown) => ProjectWorkspaceAdapterError;
 }
 
 export default function useProjectPipelineFacade(): ProjectPipelineFacade {
@@ -65,6 +68,8 @@ export default function useProjectPipelineFacade(): ProjectPipelineFacade {
     body: RetryProjectPipelineRunRequest,
   ) => agentsApi.retryProjectPipelineRun(agentId, projectId, runId, body), []);
 
+  const normalizeError = useCallback((error: unknown) => normalizeProjectApiError(error), []);
+
   return useMemo(() => ({
     listProjectPipelineTemplates,
     listPlatformFlowTemplates,
@@ -73,6 +78,7 @@ export default function useProjectPipelineFacade(): ProjectPipelineFacade {
     getProjectPipelineRun,
     createProjectPipelineRun,
     retryProjectPipelineRun,
+    normalizeError,
   }), [
     createProjectPipelineRun,
     getProjectPipelineRun,
@@ -80,6 +86,7 @@ export default function useProjectPipelineFacade(): ProjectPipelineFacade {
     listPlatformFlowTemplates,
     listProjectPipelineRuns,
     listProjectPipelineTemplates,
+    normalizeError,
     retryProjectPipelineRun,
   ]);
 }

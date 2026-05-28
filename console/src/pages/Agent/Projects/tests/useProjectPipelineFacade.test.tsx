@@ -47,6 +47,7 @@ describe("useProjectPipelineFacade", () => {
     expect(result.current.getProjectPipelineRun).toBe(first.getProjectPipelineRun);
     expect(result.current.createProjectPipelineRun).toBe(first.createProjectPipelineRun);
     expect(result.current.retryProjectPipelineRun).toBe(first.retryProjectPipelineRun);
+    expect(result.current.normalizeError).toBe(first.normalizeError);
   });
 
   it("delegates API calls through facade methods", async () => {
@@ -77,5 +78,22 @@ describe("useProjectPipelineFacade", () => {
     expect(mockedGetProjectPipelineRun).toHaveBeenCalledWith("agent-1", "proj-1", "run-1");
     expect(mockedCreateProjectPipelineRun).toHaveBeenCalled();
     expect(mockedRetryProjectPipelineRun).toHaveBeenCalled();
+  });
+
+  it("normalizes backend error into status/code/message", () => {
+    const { result } = renderHook(() => useProjectPipelineFacade());
+
+    const normalized = result.current.normalizeError({
+      response: {
+        status: 404,
+        data: {
+          detail: "pipeline run not found",
+        },
+      },
+    });
+
+    expect(normalized.status).toBe(404);
+    expect(normalized.code).toBe("NOT_FOUND");
+    expect(normalized.message).toBe("pipeline run not found");
   });
 });

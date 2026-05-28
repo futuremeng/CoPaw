@@ -1,5 +1,6 @@
 import { createProjectScopedAdapter } from "./projectScopedAdapter";
 import { createWorkspaceScopedAdapter } from "./workspaceScopedAdapter";
+import { normalizeProjectApiError } from "../utils/projectApiError";
 import type {
   ProjectWorkspaceAdapter,
   ProjectWorkspaceAdapterError,
@@ -29,16 +30,7 @@ export function createProjectWorkspaceAdapter(
 }
 
 export function normalizeAdapterError(error: unknown): ProjectWorkspaceAdapterError {
-  if (error instanceof Error) {
-    const status = Number((error as Error & { status?: number }).status || 0) || undefined;
-    return {
-      status,
-      message: error.message || "Unknown adapter error",
-    };
-  }
-  return {
-    message: String(error || "Unknown adapter error"),
-  };
+  return normalizeProjectApiError(error);
 }
 
 export * from "./capabilities";

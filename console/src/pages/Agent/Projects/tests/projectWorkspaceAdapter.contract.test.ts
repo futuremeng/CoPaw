@@ -152,6 +152,23 @@ describe("projectWorkspaceAdapter contract", () => {
 
     const normalized = normalizeAdapterError(err);
     expect(normalized.status).toBe(413);
+    expect(normalized.code).toBe("PAYLOAD_TOO_LARGE");
     expect(normalized.message).toBe("boom");
+  });
+
+  it("preserves structured code from backend response", () => {
+    const normalized = normalizeAdapterError({
+      response: {
+        status: 409,
+        data: {
+          code: "project_path_conflict",
+          detail: "target path already exists",
+        },
+      },
+    });
+
+    expect(normalized.status).toBe(409);
+    expect(normalized.code).toBe("PROJECT_PATH_CONFLICT");
+    expect(normalized.message).toBe("target path already exists");
   });
 });

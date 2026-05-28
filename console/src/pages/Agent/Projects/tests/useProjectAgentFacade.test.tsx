@@ -39,6 +39,7 @@ describe("useProjectAgentFacade", () => {
     expect(result.current.acquireProjectKnowledgeWatchLease).toBe(first.acquireProjectKnowledgeWatchLease);
     expect(result.current.releaseProjectKnowledgeWatchLease).toBe(first.releaseProjectKnowledgeWatchLease);
     expect(result.current.deleteProject).toBe(first.deleteProject);
+    expect(result.current.normalizeError).toBe(first.normalizeError);
   });
 
   it("delegates calls to agents API", async () => {
@@ -55,5 +56,22 @@ describe("useProjectAgentFacade", () => {
     expect(mockedAcquireLease).toHaveBeenCalledWith("agent-1", "proj-1");
     expect(mockedReleaseLease).toHaveBeenCalledWith("agent-1", "proj-1", "lease-1");
     expect(mockedDeleteProject).toHaveBeenCalledWith("agent-1", "proj-1");
+  });
+
+  it("normalizes conflict error shape", () => {
+    const { result } = renderHook(() => useProjectAgentFacade());
+
+    const normalized = result.current.normalizeError({
+      response: {
+        status: 409,
+        data: {
+          detail: "project already exists",
+        },
+      },
+    });
+
+    expect(normalized.status).toBe(409);
+    expect(normalized.code).toBe("CONFLICT");
+    expect(normalized.message).toBe("project already exists");
   });
 });

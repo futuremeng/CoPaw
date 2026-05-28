@@ -27,4 +27,16 @@ describe("ProjectDetailPage architecture guard", () => {
     expect(source).not.toContain('from "./hooks/useProjectPipelineFacade"');
     expect(source).not.toContain('from "./hooks/useProjectAgentFacade"');
   });
+
+  it("does not import low-level workspace or agents API modules directly", () => {
+    const targetFile = path.resolve(
+      __dirname,
+      "..",
+      "ProjectDetailPage.tsx",
+    );
+    const source = fs.readFileSync(targetFile, "utf8");
+
+    expect(source).not.toContain('from "../../../api/modules/agents"');
+    expect(source).not.toContain('from "../../../api/modules/workspace"');
+  });
 });

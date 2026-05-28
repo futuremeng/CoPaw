@@ -1,5 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { agentsApi } from "../../../../api/modules/agents";
+import { normalizeProjectApiError } from "../utils/projectApiError";
+import type { ProjectWorkspaceAdapterError } from "../adapters";
 
 interface ProjectAgentFacade {
   listAgents: () => ReturnType<typeof agentsApi.listAgents>;
@@ -14,6 +16,7 @@ interface ProjectAgentFacade {
     leaseId: string,
   ) => ReturnType<typeof agentsApi.releaseProjectKnowledgeWatchLease>;
   deleteProject: (agentId: string, projectId: string) => ReturnType<typeof agentsApi.deleteProject>;
+  normalizeError: (error: unknown) => ProjectWorkspaceAdapterError;
 }
 
 export default function useProjectAgentFacade(): ProjectAgentFacade {
@@ -31,17 +34,21 @@ export default function useProjectAgentFacade(): ProjectAgentFacade {
   const deleteProject = useCallback((agentId: string, projectId: string) =>
     agentsApi.deleteProject(agentId, projectId), []);
 
+  const normalizeError = useCallback((error: unknown) => normalizeProjectApiError(error), []);
+
   return useMemo(() => ({
     listAgents,
     listAgentProjects,
     acquireProjectKnowledgeWatchLease,
     releaseProjectKnowledgeWatchLease,
     deleteProject,
+    normalizeError,
   }), [
     acquireProjectKnowledgeWatchLease,
     deleteProject,
     listAgentProjects,
     listAgents,
+    normalizeError,
     releaseProjectKnowledgeWatchLease,
   ]);
 }
