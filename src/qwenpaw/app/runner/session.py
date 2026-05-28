@@ -26,6 +26,16 @@ from ...exceptions import AgentStateError
 logger = logging.getLogger(__name__)
 
 
+def _can_export_state(module: Any) -> bool:
+    state_dict = getattr(module, "state_dict", None)
+    return callable(state_dict)
+
+
+def _can_import_state(module: Any) -> bool:
+    load_state_dict = getattr(module, "load_state_dict", None)
+    return callable(load_state_dict)
+
+
 def _safe_json_loads(content: str, filepath: str = "") -> dict:
     """Parse JSON with corruption recovery.
 
@@ -327,10 +337,17 @@ class SafeJSONSession(SessionBase):
         **state_modules_mapping,
     ) -> None:
         """Save state modules to a JSON file using async I/O."""
-        state_dicts = {
-            name: state_module.state_dict()
-            for name, state_module in state_modules_mapping.items()
-        }
+        state_dicts: dict[str, Any] = {}
+        for name, state_module in state_modules_mapping.items():
+            if not _can_export_state(state_module):
+                logger.debug(
+                    "Skip non-state module while saving session state: %s (%s)",
+                    name,
+                    type(state_module).__name__,
+                )
+                continue
+            state_dicts[name] = state_module.state_dict()
+
         session_save_path = self._get_save_path(session_id, user_id=user_id)
         async with self._get_file_lock(session_save_path):
             await self._write_state_dict_unlocked(session_save_path, state_dicts)
@@ -359,8 +376,14 @@ class SafeJSONSession(SessionBase):
             states = await self._read_state_dict(session_save_path)
 
             for name, state_module in state_modules_mapping.items():
-                if name in states:
+                if name in states and _can_import_state(state_module):
                     state_module.load_state_dict(states[name])
+                elif name in states:
+                    logger.debug(
+                        "Skip non-state module while loading session state: %s (%s)",
+                        name,
+                        type(state_module).__name__,
+                    )
             logger.info(
                 "Load session state from %s successfully.",
                 session_save_path,

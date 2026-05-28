@@ -335,3 +335,46 @@ async def test_load_whitespace_only(sess, tmp_session_dir):
     mod = FakeModule()
     await sess.load_session_state("test:session", user_id="", memory=mod)
     assert mod.data is None
+
+
+@pytest.mark.asyncio
+async def test_save_session_state_skips_non_state_modules(sess, tmp_session_dir):
+    """Non-state kwargs (for example channel strings) are ignored safely."""
+    mod = FakeModule()
+    mod.data = {"content": ["ok"], "_compressed_summary": ""}
+
+    await sess.save_session_state(
+        "test:session",
+        user_id="",
+        channel="console",
+        memory=mod,
+    )
+
+    path = os.path.join(tmp_session_dir, "test--session.json")
+    with open(path, encoding="utf-8") as f:
+        result = json.load(f)
+
+    assert "channel" not in result
+    assert result["memory"] == {"content": ["ok"], "_compressed_summary": ""}
+
+
+@pytest.mark.asyncio
+async def test_load_session_state_skips_non_state_modules(sess, tmp_session_dir):
+    """Loading should not fail when kwargs include non-state values."""
+    path = os.path.join(tmp_session_dir, "test--session.json")
+    data = {
+        "memory": {"content": ["hello"], "_compressed_summary": ""},
+        "channel": "console",
+    }
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+
+    mod = FakeModule()
+    await sess.load_session_state(
+        "test:session",
+        user_id="",
+        memory=mod,
+        channel="console",
+    )
+
+    assert mod.data == {"content": ["hello"], "_compressed_summary": ""}
