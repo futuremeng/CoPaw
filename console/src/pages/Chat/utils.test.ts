@@ -6,6 +6,7 @@ import {
   toStoredName,
   normalizeContentUrls,
   toDisplayUrl,
+  sanitizeRuntimeStreamPayload,
 } from "./utils";
 import type { CopyableResponse } from "./utils";
 
@@ -241,5 +242,62 @@ describe("toDisplayUrl", () => {
     expect(toDisplayUrl("file:///uploads/img.png")).toBe(
       "http://localhost:8000/uploads/img.png",
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// sanitizeRuntimeStreamPayload
+// ---------------------------------------------------------------------------
+describe("sanitizeRuntimeStreamPayload", () => {
+  it("dedupes output messages by stable id and keeps latest snapshot", () => {
+    const payload = {
+      object: "response",
+      output: [
+        { id: "m1", content: [{ type: "text", text: "old" }] },
+        { id: "m1", content: [{ type: "text", text: "new" }] },
+        { id: "m2", content: [{ type: "text", text: "another" }] },
+      ],
+    };
+
+    const sanitized = sanitizeRuntimeStreamPayload(payload) as {
+      output: Array<{ id: string; content: Array<{ type: string; text: string }> }>;
+    };
+
+    expect(sanitized.output).toHaveLength(2);
+    expect(sanitized.output[0].id).toBe("m1");
+    expect(sanitized.output[0].content[0].text).toBe("new");
+    expect(sanitized.output[1].id).toBe("m2");
+  });
+
+  it("strips hidden references block in text and keeps raw value", () => {
+    const hidden = [
+      "answer",
+      "<!-- COPAW_REFERENCES_FULL_BEGIN x COPAW_REFERENCES_FULL_END -->",
+      "tail",
+    ].join("\n\n");
+
+    const payload = {
+      object: "response",
+      output: [
+        {
+          id: "m1",
+          content: [{ type: "text", text: hidden }],
+        },
+      ],
+    };
+
+    const sanitized = sanitizeRuntimeStreamPayload(payload) as {
+      output: Array<{
+        content: Array<{
+          type: string;
+          text?: string;
+          copaw_raw_text?: string;
+        }>;
+      }>;
+    };
+
+    const part = sanitized.output[0].content[0];
+    expect(part.text).toBe("answer\n\ntail");
+    expect(part.copaw_raw_text).toBe(hidden);
   });
 });

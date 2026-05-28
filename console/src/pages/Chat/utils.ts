@@ -22,6 +22,127 @@ export type RuntimeLoadingBridgeApi = {
   setLoading?: (loading: boolean | string) => void;
 };
 
+const COPAW_FULL_REFERENCES_BLOCK_RE =
+  /<!--\s*COPAW_REFERENCES_FULL_BEGIN[\s\S]*?COPAW_REFERENCES_FULL_END\s*-->/gi;
+
+function stripHiddenReferencesForDisplay(markdown: string): string {
+  if (!markdown) {
+    return "";
+  }
+
+  return markdown
+    .replace(COPAW_FULL_REFERENCES_BLOCK_RE, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trimEnd();
+}
+
+function getStableOutputMessageId(message: unknown): string | null {
+  if (!message || typeof message !== "object") {
+    return null;
+  }
+
+  const id = (message as { id?: unknown }).id;
+  if (typeof id === "string" && id.trim()) {
+    return id.trim();
+  }
+
+  const messageId = (message as { message_id?: unknown }).message_id;
+  if (typeof messageId === "string" && messageId.trim()) {
+    return messageId.trim();
+  }
+
+  return null;
+}
+
+function dedupeOutputMessagesByStableId<T>(messages: T[]): T[] {
+  const deduped: T[] = [];
+  const indexById = new Map<string, number>();
+
+  for (const message of messages) {
+    const stableId = getStableOutputMessageId(message);
+    if (!stableId) {
+      deduped.push(message);
+      continue;
+    }
+
+    const existingIndex = indexById.get(stableId);
+    if (existingIndex === undefined) {
+      indexById.set(stableId, deduped.length);
+      deduped.push(message);
+      continue;
+    }
+
+    // Streamed updates can resend the same message id; keep the latest snapshot.
+    deduped[existingIndex] = message;
+  }
+
+  return deduped;
+}
+
+export function sanitizeRuntimeStreamPayload<T>(payload: T): T {
+  const sanitizeNode = (node: unknown): [unknown, boolean] => {
+    if (Array.isArray(node)) {
+      let changed = false;
+      const items = node.map((item) => {
+        const [nextItem, itemChanged] = sanitizeNode(item);
+        if (itemChanged) {
+          changed = true;
+        }
+        return nextItem;
+      });
+      return [items, changed];
+    }
+
+    if (!node || typeof node !== "object") {
+      return [node, false];
+    }
+
+    const record = node as Record<string, unknown>;
+    let changed = false;
+    const next: Record<string, unknown> = { ...record };
+
+    const nodeType = typeof record.type === "string" ? record.type : "";
+    if (nodeType === "text" && typeof record.text === "string") {
+      const stripped = stripHiddenReferencesForDisplay(record.text);
+      if (stripped !== record.text) {
+        next.copaw_raw_text = record.text;
+        next.text = stripped;
+        changed = true;
+      }
+    }
+    if (nodeType === "refusal" && typeof record.refusal === "string") {
+      const stripped = stripHiddenReferencesForDisplay(record.refusal);
+      if (stripped !== record.refusal) {
+        next.copaw_raw_refusal = record.refusal;
+        next.refusal = stripped;
+        changed = true;
+      }
+    }
+
+    for (const [key, value] of Object.entries(record)) {
+      if (key === "output" && Array.isArray(value) && value.length > 1) {
+        const deduped = dedupeOutputMessagesByStableId(value);
+        if (deduped.length !== value.length) {
+          next[key] = deduped;
+          changed = true;
+          continue;
+        }
+      }
+
+      const [nextValue, valueChanged] = sanitizeNode(value);
+      if (valueChanged) {
+        next[key] = nextValue;
+        changed = true;
+      }
+    }
+
+    return [changed ? next : node, changed];
+  };
+
+  const [sanitized] = sanitizeNode(payload);
+  return sanitized as T;
+}
+
 // ---------------------------------------------------------------------------
 // Text extraction utilities
 // ---------------------------------------------------------------------------

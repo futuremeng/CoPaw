@@ -61,6 +61,7 @@ import {
   extractUserMessageText,
   extractTextFromMessage,
   setTextareaValue,
+  sanitizeRuntimeStreamPayload,
   formatMessageTime,
   type CopyableResponse,
   type RuntimeLoadingBridgeApi,
@@ -1301,7 +1302,9 @@ export default function ChatPage() {
         ...defaultConfig.api,
         fetch: customFetch,
         responseParser: (chunk: string) => {
-          const payload = JSON.parse(chunk) as Record<string, unknown>;
+          const payload = sanitizeRuntimeStreamPayload(
+            JSON.parse(chunk) as Record<string, unknown>,
+          );
 
           if (payloadRequestsHistoryClear(payload)) {
             pendingClearHistoryRef.current = true;

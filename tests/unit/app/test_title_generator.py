@@ -407,17 +407,20 @@ async def test_swallows_model_timeout(
         return _make_response("late")
 
     model = AsyncMock(side_effect=_slow)
-    with _patch_model_factory(model):
-        await generate_and_update_title(
-            workspace=workspace,
-            chat_id=chat.id,
-            user_message="hello",
-            placeholder_name=chat.name,
-        )
+    with patch("qwenpaw.app.runner.title_generator.logger") as mocked_logger:
+        with _patch_model_factory(model):
+            await generate_and_update_title(
+                workspace=workspace,
+                chat_id=chat.id,
+                user_message="hello",
+                placeholder_name=chat.name,
+            )
 
     saved = await chat_manager.get_chat(chat.id)
     assert saved is not None
     assert saved.name == chat.name
+    mocked_logger.exception.assert_not_called()
+    mocked_logger.info.assert_called_once()
 
 
 async def test_skips_when_auto_title_disabled_by_config(
