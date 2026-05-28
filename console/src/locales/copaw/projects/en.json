@@ -180,7 +180,10 @@
           "agentic": "Agentic",
           "fastHint": "Fast Hint",
           "nlpHint": "Nlp Hint",
-          "agenticHint": "Agentic Hint"
+          "agenticHint": "Agentic Hint",
+          "runStructuredFlow": "Run Structured Flow",
+          "openStructuredDetail": "View Structured Processing",
+          "openImageDetail": "View Image Placeholder"
         },
         "entities": "Entities",
         "signalRelations": "Relations",
@@ -277,6 +280,20 @@
         "qualityLoopNextPlan": "Next plan",
         "signalCoverage": "Coverage",
         "sourcesRoleHint": "Shows the latest file inventory and text statistics derived from indexed project artifacts.",
+        "sourcesPanel": {
+          "title": "Sources",
+          "tabDocument": "Document",
+          "tabStructured": "Structured",
+          "tabImage": "Image",
+          "emptyDocument": "No document sources found",
+          "emptyStructured": "No structured sources found",
+          "emptyImage": "No image sources found",
+          "origin": "Origin",
+          "originManual": "Manual",
+          "originCandidate": "Candidate",
+          "addStructured": "Add to Structured Sources",
+          "addImage": "Add to Image Sources"
+        },
         "signalSnapshots": "Snapshots",
         "signalTokens": "Lightweight Tokens",
         "signalCharacters": "Characters",

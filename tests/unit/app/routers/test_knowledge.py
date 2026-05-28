@@ -2417,6 +2417,42 @@ def test_read_url_document_skips_json_content(monkeypatch):
     assert doc["text"] == ""
 
 
+def test_classify_source_path_distinguishes_document_structured_image_and_ignored():
+    assert KnowledgeManager.classify_source_path("docs/spec.md") == "document"
+    assert KnowledgeManager.classify_source_path("data/schema.json") == "structured"
+    assert KnowledgeManager.classify_source_path("images/cover.png") == "image"
+    assert KnowledgeManager.classify_source_path("docs/book.pdf") == "ignored"
+
+
+def test_collect_project_source_candidates_excludes_pdf(tmp_path: Path):
+    project_workspace = tmp_path / "projects" / "project-a"
+    project_workspace.mkdir(parents=True, exist_ok=True)
+
+    (project_workspace / "data").mkdir(parents=True, exist_ok=True)
+    (project_workspace / "assets").mkdir(parents=True, exist_ok=True)
+
+    (project_workspace / "notes.md").write_text("# doc", encoding="utf-8")
+    (project_workspace / "data" / "schema.json").write_text('{"k":1}', encoding="utf-8")
+    (project_workspace / "assets" / "cover.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    (project_workspace / "docs.pdf").write_bytes(b"%PDF-1.7")
+
+    candidates = knowledge_router_module._collect_project_source_candidates(
+        project_workspace_dir=project_workspace,
+    )
+    by_path = {str(item.get("path") or ""): item for item in candidates}
+
+    assert "notes.md" in by_path
+    assert by_path["notes.md"]["category"] == "document"
+
+    assert "data/schema.json" in by_path
+    assert by_path["data/schema.json"]["category"] == "structured"
+
+    assert "assets/cover.png" in by_path
+    assert by_path["assets/cover.png"]["category"] == "image"
+
+    assert "docs.pdf" not in by_path
+
+
 def test_get_memify_job_status_requires_memify_enabled(
     knowledge_api_client: TestClient,
 ):
@@ -2743,6 +2779,77 @@ def test_project_pipeline_status_ws_snapshot(
     assert payload["type"] == "snapshot"
     assert payload["state"]["project_id"] == "project-pipeline-demo"
     assert payload["state"]["status"] == "idle"
+
+
+def test_project_pipeline_source_candidates_returns_structured_items(
+    knowledge_api_client: TestClient,
+    tmp_path: Path,
+):
+    project_id = "project-candidates-demo"
+    project_dir = tmp_path / "projects" / project_id
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    (project_dir / "notes.md").write_text("# notes", encoding="utf-8")
+    (project_dir / "schema.json").write_text('{"k":1}', encoding="utf-8")
+    (project_dir / "cover.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    (project_dir / "paper.pdf").write_bytes(b"%PDF-1.7")
+
+    response = knowledge_api_client.get(
+        f"/knowledge/project-pipeline/source-candidates?project_id={project_id}"
+    )
+    assert response.status_code == 200
+
+    payload = response.json()
+    assert payload["project_id"] == project_id
+    candidates = payload.get("candidates") or []
+    assert isinstance(candidates, list)
+
+    by_path = {str(item.get("path") or ""): item for item in candidates}
+    assert by_path["notes.md"]["category"] == "document"
+    assert by_path["schema.json"]["category"] == "structured"
+    assert by_path["cover.png"]["category"] == "image"
+    assert "paper.pdf" not in by_path
+
+
+def test_project_pipeline_sources_returns_manual_source_items_and_excludes_pdf(
+    knowledge_api_client: TestClient,
+    tmp_path: Path,
+):
+    project_id = "project-manual-sources-demo"
+    project_dir = tmp_path / "projects" / project_id
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    (project_dir / "notes.md").write_text("# notes", encoding="utf-8")
+    (project_dir / "schema.json").write_text('{"k":1}', encoding="utf-8")
+    (project_dir / "cover.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    (project_dir / "paper.pdf").write_bytes(b"%PDF-1.7")
+
+    updated = knowledge_api_client.put(
+        f"/knowledge/project-pipeline/sources?project_id={project_id}",
+        json=[
+            "notes.md",
+            "schema.json",
+            "cover.png",
+            "paper.pdf",
+        ],
+    )
+    assert updated.status_code == 200
+    updated_payload = updated.json()
+    assert "paper.pdf" not in updated_payload.get("manual_source_paths", [])
+
+    source_items = updated_payload.get("manual_sources") or []
+    by_path = {str(item.get("path") or ""): item for item in source_items}
+    assert by_path["notes.md"]["category"] == "document"
+    assert by_path["schema.json"]["category"] == "structured"
+    assert by_path["cover.png"]["category"] == "image"
+    assert "paper.pdf" not in by_path
+
+    listed = knowledge_api_client.get(
+        f"/knowledge/project-pipeline/sources?project_id={project_id}"
+    )
+    assert listed.status_code == 200
+    listed_payload = listed.json()
+    assert "paper.pdf" not in listed_payload.get("manual_source_paths", [])
 
 
 def test_project_pipeline_status_projects_runtime_operation_metadata(

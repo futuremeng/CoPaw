@@ -1,4 +1,4 @@
-import { Button, Table, Tooltip, Typography } from "antd";
+import { Button, Table, Tabs, Tooltip, Typography } from "antd";
 import { useTranslation } from "react-i18next";
 import type { AgentProjectFileInfo } from "../../../../api/types/agents";
 import styles from "../index.module.less";
@@ -6,6 +6,8 @@ import { formatFileSize } from "../utils/metrics";
 import type { ProjectKnowledgeState } from "../hooks/useProjectKnowledgeState";
 import {
   buildKnowledgeSourceRows,
+  classifyKnowledgeSourceCategory,
+  isExcludedKnowledgeSourcePath,
   type ProjectKnowledgeSourceRow,
   normalizeKnowledgeSourcePath,
 } from "../utils/projectKnowledgeSourceRows";
@@ -21,6 +23,16 @@ function formatTime(value?: string): string {
   return date.toLocaleString();
 }
 
+function formatCandidateLabel(value?: string): string {
+  const normalized = String(value || "").trim();
+  if (!normalized) {
+    return "-";
+  }
+  return normalized
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 interface ProjectKnowledgeSourcesPanelProps {
   knowledgeState: ProjectKnowledgeState;
   projectFiles: AgentProjectFileInfo[];
@@ -31,6 +43,31 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
   const { t } = useTranslation();
   const { knowledgeState, projectFiles, onOpenProcessingForSource } = props;
   const discoveredRows = buildKnowledgeSourceRows((projectFiles || []).filter((item) => !item.builtin && !item.ignored));
+  const backendCandidateRows: ProjectKnowledgeSourceRow[] = Array.isArray(knowledgeState.projectSourceCandidates)
+    ? knowledgeState.projectSourceCandidates
+      .map((item, index) => {
+        const path = normalizeKnowledgeSourcePath(String(item?.path || ""));
+        if (!path || isExcludedKnowledgeSourcePath(path)) {
+          return null;
+        }
+        const category = ["document", "structured", "image"].includes(String(item?.category || ""))
+          ? String(item?.category || "") as "document" | "structured" | "image"
+          : classifyKnowledgeSourceCategory(path);
+        return {
+          key: `candidate-${path}-${index}`,
+          path,
+          title: path.split("/").slice(-1)[0] || path,
+          stage: formatCandidateLabel(String(item?.stage || "other")),
+          contentType: formatCandidateLabel(String(item?.content_type || "other")),
+          size: Math.max(0, Number(item?.size_bytes || 0)),
+          modifiedTime: String(item?.modified_time || "").trim(),
+          category,
+        };
+      })
+      .filter((item): item is ProjectKnowledgeSourceRow => Boolean(item))
+    : [];
+
+  const candidateBaseRows = backendCandidateRows.length > 0 ? backendCandidateRows : discoveredRows;
 
   const sourceIdByPath = new Map<string, string>();
   const manualPathSet = new Set<string>();
@@ -51,7 +88,7 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
     }
   }
 
-  const candidateRows = discoveredRows.filter((row) => !manualPathSet.has(normalizeKnowledgeSourcePath(row.path)));
+  const candidateRows = candidateBaseRows.filter((row) => !manualPathSet.has(normalizeKnowledgeSourcePath(row.path)));
 
   const candidateByPath = new Map<string, ProjectKnowledgeSourceRow>();
   for (const row of candidateRows) {
@@ -61,19 +98,49 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
     }
   }
 
+  const manualMetaByPath = new Map<string, {
+    category: "document" | "structured" | "image";
+    stage: string;
+    contentType: string;
+    size: number;
+    modifiedTime: string;
+  }>();
+  for (const item of knowledgeState.projectManualSources || []) {
+    const normalizedPath = normalizeKnowledgeSourcePath(String(item.path || ""));
+    if (!normalizedPath) {
+      continue;
+    }
+    manualMetaByPath.set(normalizedPath, {
+      category: ["document", "structured", "image"].includes(String(item.category || ""))
+        ? String(item.category || "") as "document" | "structured" | "image"
+        : classifyKnowledgeSourceCategory(normalizedPath),
+      stage: formatCandidateLabel(String(item.stage || "other")),
+      contentType: formatCandidateLabel(String(item.content_type || "other")),
+      size: Math.max(0, Number(item.size_bytes || 0)),
+      modifiedTime: String(item.modified_time || "").trim(),
+    });
+  }
+
   const manualRows: ProjectKnowledgeSourceRow[] = knowledgeState.projectSources.map((source) => {
     const path = normalizeKnowledgeSourcePath(String(source.location || source.id || ""));
+    const manualMeta = path ? manualMetaByPath.get(path) : undefined;
     const fromCandidate = path ? candidateByPath.get(path) : undefined;
     return {
       key: path || String(source.id || source.name || ""),
       path,
       title: String(source.name || path),
-      stage: fromCandidate?.stage || "manual",
-      contentType: fromCandidate?.contentType || "-",
-      size: fromCandidate?.size || 0,
-      modifiedTime: fromCandidate?.modifiedTime,
+      stage: manualMeta?.stage || fromCandidate?.stage || "manual",
+      contentType: manualMeta?.contentType || fromCandidate?.contentType || "-",
+      size: manualMeta?.size || fromCandidate?.size || 0,
+      modifiedTime: manualMeta?.modifiedTime || fromCandidate?.modifiedTime,
+      category: manualMeta?.category || fromCandidate?.category || classifyKnowledgeSourceCategory(path),
     };
-  });
+  }).filter((row) => !isExcludedKnowledgeSourcePath(row.path));
+
+  const allRows = [
+    ...manualRows.map((row) => ({ ...row, sourceOrigin: "manual" as const })),
+    ...candidateRows.map((row) => ({ ...row, sourceOrigin: "candidate" as const })),
+  ];
 
   const resolveSourceIdFromRow = (record: ProjectKnowledgeSourceRow): string => {
     const path = normalizeKnowledgeSourcePath(record.path);
@@ -134,29 +201,52 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
       ),
     },
     {
+      title: t("copaw.projects.knowledge.sourcesPanel.origin", "Origin"),
+      key: "origin",
+      width: 130,
+      render: (_: unknown, record: ProjectKnowledgeSourceRow & { sourceOrigin: "manual" | "candidate" }) => (
+        <Typography.Text type={record.sourceOrigin === "manual" ? "success" : "secondary"}>
+          {record.sourceOrigin === "manual"
+            ? t("copaw.projects.knowledge.sourcesPanel.originManual", "Manual")
+            : t("copaw.projects.knowledge.sourcesPanel.originCandidate", "Candidate")}
+        </Typography.Text>
+      ),
+    },
+    {
       title: t("copaw.projects.knowledge.processing.layerL2Column", "Processing"),
       key: "processing",
-      width: 240,
-      render: (_: unknown, record: ProjectKnowledgeSourceRow) => {
+      width: 320,
+      render: (_: unknown, record: ProjectKnowledgeSourceRow & { sourceOrigin: "manual" | "candidate" }) => {
         const sourceId = resolveSourceIdFromRow(record);
+        const isManual = record.sourceOrigin === "manual";
+        const isImage = record.category === "image";
+        const runLabel = record.category === "structured"
+          ? t("copaw.projects.knowledge.processing.runStructuredFlow", "Run Structured Flow")
+          : t("copaw.projects.knowledge.processing.runFullFlow", "Run Document Flow");
+        const openLabel = record.category === "structured"
+          ? t("copaw.projects.knowledge.processing.openStructuredDetail", "View Structured Processing")
+          : record.category === "image"
+            ? t("copaw.projects.knowledge.processing.openImageDetail", "View Image Placeholder")
+            : t("copaw.projects.knowledge.processing.openDetail", "View Document Processing");
         return (
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <Button
               type="link"
               size="small"
-              disabled={!sourceId || !onOpenProcessingForSource}
+              disabled={!isManual || !sourceId || !onOpenProcessingForSource}
               onClick={() => {
-                if (!sourceId || !onOpenProcessingForSource) {
+                if (!isManual || !sourceId || !onOpenProcessingForSource) {
                   return;
                 }
                 onOpenProcessingForSource(sourceId);
               }}
             >
-              {t("copaw.projects.knowledge.processing.openDetail", "View Document Processing")}
+              {openLabel}
             </Button>
             <Button
               type="link"
               size="small"
+              disabled={isImage}
               onClick={() => {
                 void knowledgeState.runSourceFullPipeline(record.path, {
                   force: true,
@@ -164,17 +254,27 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
                 });
               }}
             >
-              {t("copaw.projects.knowledge.processing.runFullFlow", "Run Document Flow")}
+              {runLabel}
             </Button>
             <Button
               type="link"
               size="small"
-              danger
+              danger={isManual}
               onClick={() => {
-                void knowledgeState.removeManualSourcePath(record.path);
+                if (isManual) {
+                  void knowledgeState.removeManualSourcePath(record.path);
+                  return;
+                }
+                void knowledgeState.addManualSourcePath(record.path);
               }}
             >
-              {t("copaw.projects.knowledge.sources.remove", "Remove")}
+              {isManual
+                ? t("copaw.projects.knowledge.sources.remove", "Remove")
+                : record.category === "structured"
+                  ? t("copaw.projects.knowledge.sourcesPanel.addStructured", "Add to Structured Sources")
+                  : record.category === "image"
+                    ? t("copaw.projects.knowledge.sourcesPanel.addImage", "Add to Image Sources")
+                    : t("copaw.projects.knowledge.sources.add", "Add to Document Sources")}
             </Button>
           </div>
         );
@@ -182,52 +282,18 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
     },
   ];
 
-  const candidateColumns = [
-    ...sourceColumns.slice(0, 5),
-    {
-      title: t("copaw.projects.knowledge.sources.addAction", "Action"),
-      key: "manualSelect",
-      width: 260,
-      render: (_: unknown, record: ProjectKnowledgeSourceRow) => {
-        const normalized = normalizeKnowledgeSourcePath(record.path);
-        const added = manualPathSet.has(normalized);
-        return (
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <Button
-              type="link"
-              size="small"
-              onClick={() => {
-                if (!normalized) {
-                  return;
-                }
-                void knowledgeState.runSourceFullPipeline(normalized, {
-                  force: true,
-                  overwrite: true,
-                });
-              }}
-            >
-              {t("copaw.projects.knowledge.processing.runFullFlow", "Run Document Flow")}
-            </Button>
-            <Button
-              type="link"
-              size="small"
-              disabled={added}
-              onClick={() => {
-                if (!normalized || added) {
-                  return;
-                }
-                void knowledgeState.addManualSourcePath(normalized);
-              }}
-            >
-              {added
-                ? t("copaw.projects.knowledge.sources.added", "Added")
-                : t("copaw.projects.knowledge.sources.add", "Add to Document Sources")}
-            </Button>
-          </div>
-        );
-      },
-    },
-  ];
+  const buildRowsForCategory = (category: ProjectKnowledgeSourceRow["category"]) => allRows
+    .filter((row) => row.category === category)
+    .sort((left, right) => {
+      if (left.sourceOrigin !== right.sourceOrigin) {
+        return left.sourceOrigin === "manual" ? -1 : 1;
+      }
+      return left.path.localeCompare(right.path);
+    });
+
+  const documentRows = buildRowsForCategory("document");
+  const structuredRows = buildRowsForCategory("structured");
+  const imageRows = buildRowsForCategory("image");
 
   return (
     <div className={styles.projectKnowledgeWorkbench}>
@@ -270,39 +336,62 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
       <div className={styles.projectKnowledgeHistoryStrip}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
           <Typography.Text strong>
-            {t("copaw.projects.knowledge.sources.manualList", "Document Sources")}
+            {t("copaw.projects.knowledge.sourcesPanel.title", "Sources")}
           </Typography.Text>
           <Button size="small" onClick={() => void knowledgeState.loadProjectSourceStatus()}>
             {t("copaw.projects.knowledge.actions.refresh", "Refresh")}
           </Button>
         </div>
-        <Table
-          columns={sourceColumns}
-          dataSource={manualRows}
-          pagination={{ pageSize: 10, simple: true }}
-          size="small"
-          bordered={false}
-          scroll={{ x: 1200 }}
-          locale={{ emptyText: t("copaw.projects.knowledge.sources.manualEmpty", "No document sources yet") }}
+        <Tabs
+          items={[
+            {
+              key: "document",
+              label: t("copaw.projects.knowledge.sourcesPanel.tabDocument", "Document"),
+              children: (
+                <Table
+                  columns={sourceColumns}
+                  dataSource={documentRows}
+                  pagination={{ pageSize: 10, simple: true }}
+                  size="small"
+                  bordered={false}
+                  scroll={{ x: 1400 }}
+                  locale={{ emptyText: t("copaw.projects.knowledge.sourcesPanel.emptyDocument", "No document sources found") }}
+                />
+              ),
+            },
+            {
+              key: "structured",
+              label: t("copaw.projects.knowledge.sourcesPanel.tabStructured", "Structured"),
+              children: (
+                <Table
+                  columns={sourceColumns}
+                  dataSource={structuredRows}
+                  pagination={{ pageSize: 10, simple: true }}
+                  size="small"
+                  bordered={false}
+                  scroll={{ x: 1400 }}
+                  locale={{ emptyText: t("copaw.projects.knowledge.sourcesPanel.emptyStructured", "No structured sources found") }}
+                />
+              ),
+            },
+            {
+              key: "image",
+              label: t("copaw.projects.knowledge.sourcesPanel.tabImage", "Image"),
+              children: (
+                <Table
+                  columns={sourceColumns}
+                  dataSource={imageRows}
+                  pagination={{ pageSize: 10, simple: true }}
+                  size="small"
+                  bordered={false}
+                  scroll={{ x: 1400 }}
+                  locale={{ emptyText: t("copaw.projects.knowledge.sourcesPanel.emptyImage", "No image sources found") }}
+                />
+              ),
+            },
+          ]}
         />
       </div>
-
-      {candidateRows.length > 0 && (
-        <div className={styles.projectKnowledgeHistoryStrip}>
-          <Typography.Text strong>
-            {t("copaw.projects.knowledge.sources.candidates", "Structured Candidates")}
-          </Typography.Text>
-          <Table
-            columns={candidateColumns}
-            dataSource={candidateRows}
-            pagination={{ pageSize: 10, simple: true }}
-            size="small"
-            bordered={false}
-            scroll={{ x: 1200 }}
-            locale={{ emptyText: t("copaw.projects.knowledge.sourcesFileListEmpty", "No project files found") }}
-          />
-        </div>
-      )}
     </div>
   );
 }

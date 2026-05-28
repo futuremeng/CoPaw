@@ -2299,9 +2299,9 @@
   height: 100%;
   min-height: 0;
 
-  :global(.ant-tabs),
-  :global(.qwenpaw-tabs),
-  :global(.copaw-tabs) {
+  &:global(.ant-tabs),
+  &:global(.qwenpaw-tabs),
+  &:global(.copaw-tabs) {
     height: 100%;
     min-height: 0;
     display: flex;
@@ -2309,12 +2309,9 @@
     background: transparent;
   }
 
-  :global(.ant-tabs-left > .ant-tabs-nav),
-  :global(.qwenpaw-tabs-left > .qwenpaw-tabs-nav),
-  :global(.copaw-tabs-left > .copaw-tabs-nav),
-  :global(.ant-tabs-nav),
-  :global(.qwenpaw-tabs-nav),
-  :global(.copaw-tabs-nav) {
+  > :global(.ant-tabs-nav),
+  > :global(.qwenpaw-tabs-nav),
+  > :global(.copaw-tabs-nav) {
     width: var(--knowledge-dock-tabs-nav-width);
     min-width: var(--knowledge-dock-tabs-nav-width);
     margin: 0;
@@ -2322,25 +2319,22 @@
     background: var(--knowledge-dock-tabs-nav-bg);
   }
 
-  :global(.ant-tabs-left > .ant-tabs-nav::before),
-  :global(.qwenpaw-tabs-left > .qwenpaw-tabs-nav::before),
-  :global(.copaw-tabs-left > .copaw-tabs-nav::before),
-  :global(.ant-tabs-nav::before),
-  :global(.qwenpaw-tabs-nav::before),
-  :global(.copaw-tabs-nav::before) {
+  > :global(.ant-tabs-nav::before),
+  > :global(.qwenpaw-tabs-nav::before),
+  > :global(.copaw-tabs-nav::before) {
     border-color: var(--knowledge-dock-tabs-nav-border) !important;
   }
 
-  :global(.ant-tabs-nav-list),
-  :global(.qwenpaw-tabs-nav-list),
-  :global(.copaw-tabs-nav-list) {
+  > :global(.ant-tabs-nav) :global(.ant-tabs-nav-list),
+  > :global(.qwenpaw-tabs-nav) :global(.qwenpaw-tabs-nav-list),
+  > :global(.copaw-tabs-nav) :global(.copaw-tabs-nav-list) {
     width: 100%;
     gap: var(--knowledge-dock-tabs-nav-gap);
   }
 
-  :global(.ant-tabs-tab),
-  :global(.qwenpaw-tabs-tab),
-  :global(.copaw-tabs-tab) {
+  > :global(.ant-tabs-nav) :global(.ant-tabs-tab),
+  > :global(.qwenpaw-tabs-nav) :global(.qwenpaw-tabs-tab),
+  > :global(.copaw-tabs-nav) :global(.copaw-tabs-tab) {
     margin: 0 !important;
     padding: 8px 10px !important;
     border-radius: 8px;
@@ -2353,45 +2347,45 @@
     }
   }
 
-  :global(.ant-tabs-tab-btn),
-  :global(.qwenpaw-tabs-tab-btn),
-  :global(.copaw-tabs-tab-btn) {
+  > :global(.ant-tabs-nav) :global(.ant-tabs-tab-btn),
+  > :global(.qwenpaw-tabs-nav) :global(.qwenpaw-tabs-tab-btn),
+  > :global(.copaw-tabs-nav) :global(.copaw-tabs-tab-btn) {
     width: 100%;
     color: inherit !important;
   }
 
-  :global(.ant-tabs-tab-active),
-  :global(.qwenpaw-tabs-tab-active),
-  :global(.copaw-tabs-tab-active) {
+  > :global(.ant-tabs-nav) :global(.ant-tabs-tab-active),
+  > :global(.qwenpaw-tabs-nav) :global(.qwenpaw-tabs-tab-active),
+  > :global(.copaw-tabs-nav) :global(.copaw-tabs-tab-active) {
     background: var(--knowledge-dock-tabs-tab-active-bg) !important;
     color: var(--knowledge-dock-tabs-tab-active-fg) !important;
   }
 
-  :global(.ant-tabs-tab-active .ant-tabs-tab-btn),
-  :global(.qwenpaw-tabs-tab-active .qwenpaw-tabs-tab-btn),
-  :global(.copaw-tabs-tab-active .copaw-tabs-tab-btn) {
+  > :global(.ant-tabs-nav) :global(.ant-tabs-tab-active .ant-tabs-tab-btn),
+  > :global(.qwenpaw-tabs-nav) :global(.qwenpaw-tabs-tab-active .qwenpaw-tabs-tab-btn),
+  > :global(.copaw-tabs-nav) :global(.copaw-tabs-tab-active .copaw-tabs-tab-btn) {
     color: var(--knowledge-dock-tabs-tab-active-fg) !important;
     font-weight: 600;
   }
 
-  :global(.ant-tabs-nav-wrap),
-  :global(.qwenpaw-tabs-nav-wrap),
-  :global(.copaw-tabs-nav-wrap) {
+  > :global(.ant-tabs-nav) :global(.ant-tabs-nav-wrap),
+  > :global(.qwenpaw-tabs-nav) :global(.qwenpaw-tabs-nav-wrap),
+  > :global(.copaw-tabs-nav) :global(.copaw-tabs-nav-wrap) {
     width: 100%;
   }
 
-  :global(.ant-tabs-ink-bar),
-  :global(.qwenpaw-tabs-ink-bar),
-  :global(.copaw-tabs-ink-bar) {
+  > :global(.ant-tabs-nav) :global(.ant-tabs-ink-bar),
+  > :global(.qwenpaw-tabs-nav) :global(.qwenpaw-tabs-ink-bar),
+  > :global(.copaw-tabs-nav) :global(.copaw-tabs-ink-bar) {
     left: auto !important;
     right: 0;
     background: var(--knowledge-dock-tabs-ink-bar) !important;
     border-radius: 999px;
   }
 
-  :global(.ant-tabs-content-holder),
-  :global(.qwenpaw-tabs-content-holder),
-  :global(.copaw-tabs-content-holder) {
+  > :global(.ant-tabs-content-holder),
+  > :global(.qwenpaw-tabs-content-holder),
+  > :global(.copaw-tabs-content-holder) {
     display: flex;
     flex-direction: column;
     flex: 1;
@@ -2402,9 +2396,9 @@
     background: transparent;
   }
 
-  :global(.ant-tabs-content),
-  :global(.qwenpaw-tabs-content),
-  :global(.copaw-tabs-content) {
+  > :global(.ant-tabs-content-holder) > :global(.ant-tabs-content),
+  > :global(.qwenpaw-tabs-content-holder) > :global(.qwenpaw-tabs-content),
+  > :global(.copaw-tabs-content-holder) > :global(.copaw-tabs-content) {
     display: flex;
     flex-direction: column;
     flex: 1;
@@ -2414,18 +2408,18 @@
     background: transparent;
   }
 
-  :global(.qwenpaw-tabs-content-left),
-  :global(.copaw-tabs-content-left) {
+  > :global(.qwenpaw-tabs-content-holder) > :global(.qwenpaw-tabs-content-left),
+  > :global(.copaw-tabs-content-holder) > :global(.copaw-tabs-content-left) {
     height: 100%;
     min-height: 0;
   }
 
-  :global(.ant-tabs-tabpane),
-  :global(.qwenpaw-tabs-tabpane),
-  :global(.ant-tabs-tabpane-active),
-  :global(.qwenpaw-tabs-tabpane-active),
-  :global(.copaw-tabs-tabpane),
-  :global(.copaw-tabs-tabpane-active) {
+  > :global(.ant-tabs-content-holder) :global(.ant-tabs-tabpane),
+  > :global(.qwenpaw-tabs-content-holder) :global(.qwenpaw-tabs-tabpane),
+  > :global(.ant-tabs-content-holder) :global(.ant-tabs-tabpane-active),
+  > :global(.qwenpaw-tabs-content-holder) :global(.qwenpaw-tabs-tabpane-active),
+  > :global(.copaw-tabs-content-holder) :global(.copaw-tabs-tabpane),
+  > :global(.copaw-tabs-content-holder) :global(.copaw-tabs-tabpane-active) {
     display: flex;
     flex-direction: column;
     flex: 1;
@@ -4843,38 +4837,32 @@
     --knowledge-dock-tabs-tab-active-bg: rgba(255, 127, 22, 0.16);
     --knowledge-dock-tabs-ink-bar: #ff7f16;
 
-    :global(.ant-tabs-left),
-    :global(.qwenpaw-tabs-left),
-    :global(.copaw-tabs-left),
-    :global(.ant-tabs),
-    :global(.qwenpaw-tabs),
-    :global(.copaw-tabs) {
+    &:global(.ant-tabs-left),
+    &:global(.qwenpaw-tabs-left),
+    &:global(.copaw-tabs-left),
+    &:global(.ant-tabs),
+    &:global(.qwenpaw-tabs),
+    &:global(.copaw-tabs) {
       background: transparent !important;
     }
 
-    :global(.ant-tabs-left > .ant-tabs-nav),
-    :global(.qwenpaw-tabs-left > .qwenpaw-tabs-nav),
-    :global(.copaw-tabs-left > .copaw-tabs-nav),
-    :global(.ant-tabs-nav),
-    :global(.qwenpaw-tabs-nav),
-    :global(.copaw-tabs-nav) {
+    > :global(.ant-tabs-nav),
+    > :global(.qwenpaw-tabs-nav),
+    > :global(.copaw-tabs-nav) {
       background: var(--knowledge-dock-tabs-nav-bg) !important;
       border-radius: 12px;
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
     }
 
-    :global(.ant-tabs-left > .ant-tabs-nav::before),
-    :global(.qwenpaw-tabs-left > .qwenpaw-tabs-nav::before),
-    :global(.copaw-tabs-left > .copaw-tabs-nav::before),
-    :global(.ant-tabs-nav::before),
-    :global(.qwenpaw-tabs-nav::before),
-    :global(.copaw-tabs-nav::before) {
+    > :global(.ant-tabs-nav::before),
+    > :global(.qwenpaw-tabs-nav::before),
+    > :global(.copaw-tabs-nav::before) {
       border-color: var(--knowledge-dock-tabs-nav-border) !important;
     }
 
-    :global(.ant-tabs-tab),
-    :global(.qwenpaw-tabs-tab),
-    :global(.copaw-tabs-tab) {
+    > :global(.ant-tabs-nav) :global(.ant-tabs-tab),
+    > :global(.qwenpaw-tabs-nav) :global(.qwenpaw-tabs-tab),
+    > :global(.copaw-tabs-nav) :global(.copaw-tabs-tab) {
       color: var(--knowledge-dock-tabs-tab-fg) !important;
 
       &:hover {
@@ -4883,39 +4871,39 @@
       }
     }
 
-    :global(.ant-tabs-tab .ant-tabs-tab-btn),
-    :global(.qwenpaw-tabs-tab .qwenpaw-tabs-tab-btn),
-    :global(.copaw-tabs-tab .copaw-tabs-tab-btn) {
+    > :global(.ant-tabs-nav) :global(.ant-tabs-tab .ant-tabs-tab-btn),
+    > :global(.qwenpaw-tabs-nav) :global(.qwenpaw-tabs-tab .qwenpaw-tabs-tab-btn),
+    > :global(.copaw-tabs-nav) :global(.copaw-tabs-tab .copaw-tabs-tab-btn) {
       color: inherit !important;
     }
 
-    :global(.ant-tabs-tab-active .ant-tabs-tab-btn),
-    :global(.qwenpaw-tabs-tab-active .qwenpaw-tabs-tab-btn),
-    :global(.copaw-tabs-tab-active .copaw-tabs-tab-btn) {
+    > :global(.ant-tabs-nav) :global(.ant-tabs-tab-active .ant-tabs-tab-btn),
+    > :global(.qwenpaw-tabs-nav) :global(.qwenpaw-tabs-tab-active .qwenpaw-tabs-tab-btn),
+    > :global(.copaw-tabs-nav) :global(.copaw-tabs-tab-active .copaw-tabs-tab-btn) {
       color: #ff7f16 !important;
       font-weight: 600;
     }
 
-    :global(.ant-tabs-tab-active),
-    :global(.qwenpaw-tabs-tab-active),
-    :global(.copaw-tabs-tab-active) {
+    > :global(.ant-tabs-nav) :global(.ant-tabs-tab-active),
+    > :global(.qwenpaw-tabs-nav) :global(.qwenpaw-tabs-tab-active),
+    > :global(.copaw-tabs-nav) :global(.copaw-tabs-tab-active) {
       background: rgba(255, 127, 22, 0.16) !important;
       color: #ff7f16 !important;
       box-shadow: inset 0 0 0 1px rgba(255, 127, 22, 0.12);
     }
 
-    :global(.ant-tabs-content-holder),
-    :global(.qwenpaw-tabs-content-holder),
-    :global(.copaw-tabs-content-holder),
-    :global(.ant-tabs-content),
-    :global(.qwenpaw-tabs-content),
-    :global(.copaw-tabs-content) {
+    > :global(.ant-tabs-content-holder),
+    > :global(.qwenpaw-tabs-content-holder),
+    > :global(.copaw-tabs-content-holder),
+    > :global(.ant-tabs-content-holder) > :global(.ant-tabs-content),
+    > :global(.qwenpaw-tabs-content-holder) > :global(.qwenpaw-tabs-content),
+    > :global(.copaw-tabs-content-holder) > :global(.copaw-tabs-content) {
       background: transparent !important;
     }
 
-    :global(.ant-tabs-ink-bar),
-    :global(.qwenpaw-tabs-ink-bar),
-    :global(.copaw-tabs-ink-bar) {
+    > :global(.ant-tabs-nav) :global(.ant-tabs-ink-bar),
+    > :global(.qwenpaw-tabs-nav) :global(.qwenpaw-tabs-ink-bar),
+    > :global(.copaw-tabs-nav) :global(.copaw-tabs-ink-bar) {
       background: #ff7f16 !important;
       width: 3px !important;
       border-radius: 999px;
@@ -4923,9 +4911,9 @@
       left: auto !important;
     }
 
-    :global(.ant-tabs-nav),
-    :global(.qwenpaw-tabs-nav),
-    :global(.copaw-tabs-nav) {
+    > :global(.ant-tabs-nav),
+    > :global(.qwenpaw-tabs-nav),
+    > :global(.copaw-tabs-nav) {
       border-radius: 12px;
     }
   }

@@ -180,7 +180,10 @@
           "agentic": "多智能体模式",
           "fastHint": "极速索引与预览，优先保障可用性。",
           "nlpHint": "实体关系抽取与图谱构建，作为中阶结构化产物层。",
-          "agenticHint": "多智能体协作与质量环迭代，提供最高质量产物。"
+          "agenticHint": "多智能体协作与质量环迭代，提供最高质量产物。",
+          "runStructuredFlow": "运行结构化流程",
+          "openStructuredDetail": "查看结构化加工",
+          "openImageDetail": "查看图像占位状态"
         },
         "entities": "实体数",
         "signalRelations": "Relations",
@@ -277,6 +280,20 @@
         "qualityLoopNextPlan": "Next plan",
         "signalCoverage": "Coverage",
         "sourcesRoleHint": "Shows the latest file inventory and text statistics derived from indexed project artifacts.",
+        "sourcesPanel": {
+          "title": "Sources",
+          "tabDocument": "文档",
+          "tabStructured": "结构化",
+          "tabImage": "图像",
+          "emptyDocument": "暂无文档源",
+          "emptyStructured": "暂无结构化源",
+          "emptyImage": "暂无图像源",
+          "origin": "来源",
+          "originManual": "手工",
+          "originCandidate": "候选",
+          "addStructured": "加入结构化源",
+          "addImage": "加入图像源"
+        },
         "signalSnapshots": "Snapshots",
         "signalTokens": "Lightweight Tokens",
         "signalCharacters": "Characters",

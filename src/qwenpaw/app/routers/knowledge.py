@@ -879,11 +879,37 @@ def _resolve_project_manual_source_files(
 def _collect_project_source_candidates(
     *,
     project_workspace_dir: Path,
-) -> list[str]:
+) -> list[dict[str, object]]:
     if not project_workspace_dir.exists() or not project_workspace_dir.is_dir():
         return []
+
+    def _infer_stage(relative_path: str) -> str:
+        normalized = relative_path.strip().replace("\\", "/")
+        if normalized.startswith("original/"):
+            return "original"
+        if normalized.startswith("intermediate/") or normalized.startswith("metadata/"):
+            return "intermediate"
+        if normalized.startswith("output/"):
+            return "artifact"
+        return "other"
+
+    def _build_source_item(relative_path: str, file_path: Path) -> dict[str, object] | None:
+        suffix = file_path.suffix.lower().lstrip(".")
+        category = KnowledgeManager.classify_source_path(relative_path)
+        if category == "ignored":
+            return None
+        stat = file_path.stat()
+        return {
+            "path": relative_path,
+            "category": category,
+            "stage": _infer_stage(relative_path),
+            "content_type": suffix or "other",
+            "size_bytes": int(stat.st_size),
+            "modified_time": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+        }
+
     filter_config = KnowledgeConfig()
-    candidates: list[str] = []
+    candidates: list[dict[str, object]] = []
     for path in sorted(project_workspace_dir.glob("**/*"), key=lambda item: item.as_posix().lower()):
         if not path.is_file():
             continue
@@ -892,8 +918,55 @@ def _collect_project_source_candidates(
         except ValueError:
             continue
         if KnowledgeManager._is_allowed_path(rel_path, filter_config):
-            candidates.append(rel_path)
+            item = _build_source_item(rel_path, path)
+            if item is not None:
+                candidates.append(item)
     return candidates
+
+
+def _collect_manual_source_items(
+    *,
+    project_workspace_dir: Path,
+    manual_source_paths: list[str],
+) -> list[dict[str, object]]:
+    def _infer_stage(relative_path: str) -> str:
+        normalized = relative_path.strip().replace("\\", "/")
+        if normalized.startswith("original/"):
+            return "original"
+        if normalized.startswith("intermediate/") or normalized.startswith("metadata/"):
+            return "intermediate"
+        if normalized.startswith("output/"):
+            return "artifact"
+        return "other"
+
+    items: list[dict[str, object]] = []
+    for rel_path in _normalize_manual_source_paths(manual_source_paths):
+        normalized = str(rel_path or "").strip().replace("\\", "/")
+        if not normalized:
+            continue
+        category = KnowledgeManager.classify_source_path(normalized)
+        if category == "ignored":
+            continue
+        file_path = (project_workspace_dir / normalized).resolve()
+        suffix = file_path.suffix.lower().lstrip(".")
+        if file_path.exists() and file_path.is_file():
+            stat = file_path.stat()
+            size_bytes = int(stat.st_size)
+            modified_time = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat()
+        else:
+            size_bytes = 0
+            modified_time = ""
+        items.append(
+            {
+                "path": normalized,
+                "category": category,
+                "stage": _infer_stage(normalized),
+                "content_type": suffix or "other",
+                "size_bytes": size_bytes,
+                "modified_time": modified_time,
+            }
+        )
+    return items
 
 
 def _graph_ops_for_workspace(
@@ -2022,9 +2095,21 @@ async def get_project_pipeline_sources(request: Request):
         manager=manager,
         project_id=project_id,
     )
+    manual_source_paths = [
+        path
+        for path in manual_source_paths
+        if KnowledgeManager.classify_source_path(path) != "ignored"
+    ]
+    project_workspace_dir = (Path(workspace_dir) / "projects" / project_id).resolve()
+    manual_source_items = await asyncio.to_thread(
+        _collect_manual_source_items,
+        project_workspace_dir=project_workspace_dir,
+        manual_source_paths=manual_source_paths,
+    )
     return {
         "project_id": project_id,
         "manual_source_paths": manual_source_paths,
+        "manual_sources": manual_source_items,
     }
 
 
@@ -2046,6 +2131,8 @@ async def update_project_pipeline_sources(
     normalized_paths = _normalize_manual_source_paths(manual_source_paths)
     resolved_paths: list[str] = []
     for path in normalized_paths:
+        if KnowledgeManager.classify_source_path(path) == "ignored":
+            continue
         resolved_file = _resolve_ner_target_file_path(
             workspace_dir=workspace_dir,
             project_id=project_id,
@@ -2063,9 +2150,15 @@ async def update_project_pipeline_sources(
         project_id=project_id,
         manual_source_paths=resolved_paths,
     )
+    manual_source_items = await asyncio.to_thread(
+        _collect_manual_source_items,
+        project_workspace_dir=project_workspace_dir,
+        manual_source_paths=persisted,
+    )
     return {
         "project_id": project_id,
         "manual_source_paths": persisted,
+        "manual_sources": manual_source_items,
     }
 
 

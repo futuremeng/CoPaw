@@ -130,6 +130,28 @@ _STRUCTURED_FILE_EXTENSIONS = {
     ".ndjson",
     ".geojson",
 }
+_IMAGE_FILE_EXTENSIONS = {
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",
+    ".bmp",
+    ".tiff",
+    ".tif",
+    ".svg",
+}
+_DOCUMENT_FILE_EXTENSIONS = {
+    ".md",
+    ".mdx",
+    ".txt",
+    ".markdown",
+    ".rst",
+    ".log",
+}
+_IGNORED_SOURCE_FILE_EXTENSIONS = {
+    ".pdf",
+}
 _TEXT_FILE_ENCODINGS = (
     "utf-8",
     "utf-8-sig",
@@ -5354,6 +5376,8 @@ class KnowledgeManager:
                     "exceeds max size" not in error_text
                     and "not decodable as text" not in error_text
                     and "structured data and is not part of document knowledge" not in error_text
+                    and "image data and is not part of document knowledge" not in error_text
+                    and "excluded from processing scope" not in error_text
                 ):
                     raise
                 if "exceeds max size" in error_text:
@@ -5943,9 +5967,18 @@ class KnowledgeManager:
         file_path = path.expanduser().resolve()
         if not file_path.exists() or not file_path.is_file():
             raise FileNotFoundError(f"Knowledge file not found: {file_path}")
+        source_kind = self.classify_source_path(file_path.as_posix())
+        if source_kind == "ignored":
+            raise ValueError(
+                f"Knowledge file is excluded from processing scope: {file_path}"
+            )
         if file_path.suffix.lower() in _STRUCTURED_FILE_EXTENSIONS:
             raise ValueError(
                 f"Knowledge file is structured data and is not part of document knowledge: {file_path}"
+            )
+        if file_path.suffix.lower() in _IMAGE_FILE_EXTENSIONS:
+            raise ValueError(
+                f"Knowledge file is image data and is not part of document knowledge: {file_path}"
             )
         if file_path.stat().st_size > config.index.max_file_size:
             raise ValueError(f"Knowledge file exceeds max size: {file_path}")
@@ -7398,6 +7431,8 @@ class KnowledgeManager:
     @staticmethod
     def _is_allowed_path(relative_path: str, config: KnowledgeConfig) -> bool:
         normalized = relative_path.strip("/")
+        if KnowledgeManager.classify_source_path(normalized) == "ignored":
+            return False
         path_parts = Path(normalized).parts
         if KnowledgeManager._has_hidden_directory_segment(normalized):
             return False
@@ -7422,6 +7457,19 @@ class KnowledgeManager:
     def _safe_name(value: str) -> str:
         safe = re.sub(r"[^A-Za-z0-9._-]+", "-", value).strip("-.")
         return safe or "knowledge"
+
+    @staticmethod
+    def classify_source_path(path: str) -> str:
+        suffix = Path(str(path or "")).suffix.lower()
+        if suffix in _IGNORED_SOURCE_FILE_EXTENSIONS:
+            return "ignored"
+        if suffix in _STRUCTURED_FILE_EXTENSIONS:
+            return "structured"
+        if suffix in _IMAGE_FILE_EXTENSIONS:
+            return "image"
+        if suffix in _DOCUMENT_FILE_EXTENSIONS:
+            return "document"
+        return "document"
 
     @staticmethod
     def _session_filename(session_id: str, user_id: str) -> str:

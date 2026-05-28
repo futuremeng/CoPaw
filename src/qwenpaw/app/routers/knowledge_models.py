@@ -163,14 +163,36 @@ class ProjectPipelineSourcesResponse(BaseModel):
                     "original/requirements.md",
                     "output/design/overview.md",
                 ],
+                "manual_sources": [
+                    {
+                        "path": "original/requirements.md",
+                        "category": "document",
+                        "stage": "original",
+                        "content_type": "md",
+                        "size_bytes": 1024,
+                        "modified_time": "2026-05-28T12:00:00Z",
+                    }
+                ],
             }
         }
     )
+
+    class SourceItem(BaseModel):
+        path: str = Field(default="", description="Project-relative file path.")
+        category: str = Field(default="document", description="Normalized category: document|structured|image.")
+        stage: str = Field(default="other", description="Inferred project file stage.")
+        content_type: str = Field(default="", description="File extension based content type label.")
+        size_bytes: int = Field(default=0, description="File size in bytes.")
+        modified_time: str = Field(default="", description="File modified timestamp in ISO format when available.")
 
     project_id: str = Field(default="", description="Target project id.")
     manual_source_paths: list[str] = Field(
         default_factory=list,
         description="Manually curated source file paths used by project knowledge processing.",
+    )
+    manual_sources: list[SourceItem] = Field(
+        default_factory=list,
+        description="Manual sources with normalized category and file metadata.",
     )
 
 
@@ -180,16 +202,37 @@ class ProjectPipelineSourceCandidatesResponse(BaseModel):
             "example": {
                 "project_id": "project-alpha",
                 "candidates": [
-                    "original/requirements.md",
-                    "README.md",
-                    "data/context.txt",
+                    {
+                        "path": "original/requirements.md",
+                        "category": "document",
+                        "stage": "original",
+                        "content_type": "md",
+                        "size_bytes": 1024,
+                        "modified_time": "2026-05-28T12:00:00Z",
+                    },
+                    {
+                        "path": "data/schema.json",
+                        "category": "structured",
+                        "stage": "intermediate",
+                        "content_type": "json",
+                        "size_bytes": 2048,
+                        "modified_time": "2026-05-28T12:10:00Z",
+                    },
                 ],
             }
         }
     )
 
+    class CandidateItem(BaseModel):
+        path: str = Field(default="", description="Project-relative file path.")
+        category: str = Field(default="document", description="Normalized category: document|structured|image.")
+        stage: str = Field(default="other", description="Inferred project file stage.")
+        content_type: str = Field(default="", description="File extension based content type label.")
+        size_bytes: int = Field(default=0, description="File size in bytes.")
+        modified_time: str = Field(default="", description="File modified timestamp in ISO format when available.")
+
     project_id: str = Field(default="", description="Target project id.")
-    candidates: list[str] = Field(
+    candidates: list[CandidateItem] = Field(
         default_factory=list,
-        description="Auto-discovered candidate source file paths for manual selection.",
+        description="Auto-discovered candidate source file metadata for manual selection.",
     )

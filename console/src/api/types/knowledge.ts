@@ -451,11 +451,21 @@ export interface ProjectKnowledgePipelineRunRequest {
 export interface ProjectKnowledgePipelineSourcesPayload {
   project_id: string;
   manual_source_paths: string[];
+  manual_sources?: ProjectKnowledgePipelineSourceCandidateItem[];
+}
+
+export interface ProjectKnowledgePipelineSourceCandidateItem {
+  path: string;
+  category: "document" | "structured" | "image";
+  stage: string;
+  content_type: string;
+  size_bytes: number;
+  modified_time: string;
 }
 
 export interface ProjectKnowledgePipelineSourceCandidatesPayload {
   project_id: string;
-  candidates: string[];
+  candidates: ProjectKnowledgePipelineSourceCandidateItem[];
 }
 
 export interface ProjectKnowledgePipelineRunResponse {

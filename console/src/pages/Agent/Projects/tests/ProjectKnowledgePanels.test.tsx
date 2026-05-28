@@ -248,6 +248,36 @@ function buildProjectFiles(): AgentProjectFileInfo[] {
       builtin: false,
       ignored: false,
     },
+    {
+      filename: "schema.json",
+      path: "data/schema.json",
+      size: 180,
+      modified_time: "2026-05-18T19:22:00Z",
+      stage: "original",
+      content_type: "text",
+      builtin: false,
+      ignored: false,
+    },
+    {
+      filename: "cover.png",
+      path: "assets/cover.png",
+      size: 640,
+      modified_time: "2026-05-18T19:23:00Z",
+      stage: "original",
+      content_type: "other",
+      builtin: false,
+      ignored: false,
+    },
+    {
+      filename: "book.pdf",
+      path: "docs/book.pdf",
+      size: 1024,
+      modified_time: "2026-05-18T19:24:00Z",
+      stage: "original",
+      content_type: "other",
+      builtin: false,
+      ignored: false,
+    },
   ];
 }
 
@@ -354,6 +384,28 @@ describe("project knowledge panels", () => {
     expect(screen.getByText("Intermediate")).not.toBeNull();
     expect(screen.getByText("Markdown")).not.toBeNull();
     expect(screen.getByText("Text")).not.toBeNull();
+  });
+
+  it("categorizes sources into document/structured/image tabs and hides pdf", () => {
+    const knowledgeState = buildKnowledgeState();
+    const projectFiles = buildProjectFiles();
+
+    render(<ProjectKnowledgeSourcesPanel knowledgeState={knowledgeState} projectFiles={projectFiles} />);
+
+    expect(screen.getByRole("tab", { name: "Document" })).not.toBeNull();
+    expect(screen.getByRole("tab", { name: "Structured" })).not.toBeNull();
+    expect(screen.getByRole("tab", { name: "Image" })).not.toBeNull();
+
+    expect(screen.getByText("original/a.md")).not.toBeNull();
+    expect(screen.queryByText("docs/book.pdf")).toBeNull();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Structured" }));
+    expect(screen.getByText("data/schema.json")).not.toBeNull();
+    expect(screen.getByText("JSON")).not.toBeNull();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Image" }));
+    expect(screen.getByText("assets/cover.png")).not.toBeNull();
+    expect(screen.getByText("PNG")).not.toBeNull();
   });
 
   it("excludes builtin sources even when builtin metadata is missing", () => {

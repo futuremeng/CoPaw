@@ -19,6 +19,7 @@ import type {
   ProjectKnowledgeStepStatsResponse,
   ProjectKnowledgeStepStatsStepId,
   ProjectKnowledgeSourceScanStatsResponse,
+  ProjectKnowledgePipelineSourceCandidateItem,
   ProjectKnowledgePipelineState,
   ProjectKnowledgeTokenizeDocumentProgressPayload,
   QualityLoopJobStatus,
@@ -226,6 +227,8 @@ export interface ProjectKnowledgeState {
   >>;
   fileAnalysisStats: ProjectKnowledgeFileAnalysisStatsResponse | null;
   sourceScanStats: ProjectKnowledgeSourceScanStatsResponse | null;
+  projectSourceCandidates?: ProjectKnowledgePipelineSourceCandidateItem[];
+  projectManualSources?: ProjectKnowledgePipelineSourceCandidateItem[];
   projectSources: KnowledgeSourceItem[];
   selectedSourceId: string;
   setSelectedSourceId: (value: string) => void;
@@ -1572,6 +1575,10 @@ export function useProjectKnowledgeState(
   const { onSignalsChange } = params;
   const [sourceLoaded, setSourceLoaded] = useState(false);
   const [projectSources, setProjectSources] = useState<KnowledgeSourceItem[]>([]);
+  const [projectSourceCandidates, setProjectSourceCandidates] =
+    useState<ProjectKnowledgePipelineSourceCandidateItem[]>([]);
+  const [projectManualSources, setProjectManualSources] =
+    useState<ProjectKnowledgePipelineSourceCandidateItem[]>([]);
   const [projectStepStats, setProjectStepStats] = useState<ProjectKnowledgeStepStatsState>(EMPTY_PROJECT_KNOWLEDGE_STEP_STATS);
   const [l1StepStats, setL1StepStats] = useState<ProjectKnowledgeL1StepStatsState>(EMPTY_PROJECT_KNOWLEDGE_L1_STEP_STATS);
   const [selectedSourceId, setSelectedSourceId] = useState("");
@@ -1626,6 +1633,8 @@ export function useProjectKnowledgeState(
   const loadProjectSourceStatus = useCallback(async () => {
     if (!params.projectId) {
       setProjectSources([]);
+      setProjectSourceCandidates([]);
+      setProjectManualSources([]);
       setProjectStepStats(EMPTY_PROJECT_KNOWLEDGE_STEP_STATS);
       setL1StepStats(EMPTY_PROJECT_KNOWLEDGE_L1_STEP_STATS);
       setSourceLoaded(false);
@@ -1635,6 +1644,43 @@ export function useProjectKnowledgeState(
       const payload = await api.getProjectKnowledgePipelineSources({
         projectId: params.projectId,
       });
+      const normalizedManualSources = Array.isArray(payload.manual_sources)
+        ? payload.manual_sources
+          .map((item) => ({
+            path: String(item?.path || "").trim(),
+            category: ["document", "structured", "image"].includes(String(item?.category || ""))
+              ? String(item?.category || "") as "document" | "structured" | "image"
+              : "document",
+            stage: String(item?.stage || "other").trim() || "other",
+            content_type: String(item?.content_type || "").trim(),
+            size_bytes: Math.max(0, Number(item?.size_bytes || 0)),
+            modified_time: String(item?.modified_time || "").trim(),
+          }))
+          .filter((item) => item.path)
+        : [];
+      setProjectManualSources(normalizedManualSources);
+      try {
+        const candidatePayload = await api.getProjectKnowledgePipelineSourceCandidates({
+          projectId: params.projectId,
+        });
+        const normalizedCandidates = Array.isArray(candidatePayload.candidates)
+          ? candidatePayload.candidates
+            .map((item) => ({
+              path: String(item?.path || "").trim(),
+              category: ["document", "structured", "image"].includes(String(item?.category || ""))
+                ? String(item?.category || "") as "document" | "structured" | "image"
+                : "document",
+              stage: String(item?.stage || "other").trim() || "other",
+              content_type: String(item?.content_type || "").trim(),
+              size_bytes: Math.max(0, Number(item?.size_bytes || 0)),
+              modified_time: String(item?.modified_time || "").trim(),
+            }))
+            .filter((item) => item.path)
+          : [];
+        setProjectSourceCandidates(normalizedCandidates);
+      } catch {
+        setProjectSourceCandidates([]);
+      }
       const manualPaths = Array.isArray(payload.manual_source_paths)
         ? payload.manual_source_paths.map((item) => String(item || "").trim()).filter(Boolean)
         : [];
@@ -1678,6 +1724,8 @@ export function useProjectKnowledgeState(
       setL1StepStats(EMPTY_PROJECT_KNOWLEDGE_L1_STEP_STATS);
     } catch {
       setProjectSources([]);
+      setProjectSourceCandidates([]);
+      setProjectManualSources([]);
       setProjectStepStats(EMPTY_PROJECT_KNOWLEDGE_STEP_STATS);
       setL1StepStats(EMPTY_PROJECT_KNOWLEDGE_L1_STEP_STATS);
     } finally {
@@ -3382,6 +3430,8 @@ export function useProjectKnowledgeState(
     projectStepStats,
     fileAnalysisStats,
     sourceScanStats,
+    projectSourceCandidates,
+    projectManualSources,
     projectSources,
     selectedSourceId,
     setSelectedSourceId,
@@ -3487,6 +3537,8 @@ export function useProjectKnowledgeState(
     processingScheduler,
     projectStepStats,
     projectSourceId,
+    projectSourceCandidates,
+    projectManualSources,
     projectSources,
     fileAnalysisStats,
     sourceScanStats,
