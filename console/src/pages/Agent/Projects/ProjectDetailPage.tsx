@@ -19,7 +19,6 @@ import {
 } from "antd";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { agentsApi } from "../../../api/modules/agents";
 import { chatApi } from "../../../api/modules/chat";
 import { knowledgeApi } from "../../../api/modules/knowledge";
 import ProjectAutomationPanel from "./components/ProjectAutomationPanel";
@@ -52,6 +51,11 @@ import useLeaveConfirmGuard from "./hooks/useLeaveConfirmGuard";
 import useOpenUploadQuery from "./hooks/useOpenUploadQuery";
 import useProjectRealtimeController from "./hooks/useProjectRealtimeController";
 import useProjectUploadController from "./hooks/useProjectUploadController";
+import {
+  useProjectAgentFacade,
+  useProjectPipelineFacade,
+  useProjectWorkspaceFacade,
+} from "./hooks";
 import {
   type ProjectKnowledgeHeaderSignals,
   type ProjectKnowledgeProcessingMode,
@@ -784,6 +788,14 @@ export default function ProjectDetailPage() {
     [projects, routeProjectId],
   );
 
+  const projectWorkspaceFacade = useProjectWorkspaceFacade({
+    scope: "project",
+    agentId: currentAgent?.id,
+    projectId: selectedProject?.id,
+  });
+  const projectPipelineFacade = useProjectPipelineFacade();
+  const projectAgentFacade = useProjectAgentFacade();
+
   const projectFilesQueryBody = useMemo(
     () => buildProjectFilesQueryFromViewState({
       activeStage,
@@ -829,14 +841,14 @@ export default function ProjectDetailPage() {
 
     let disposed = false;
 
-    void agentsApi.acquireProjectKnowledgeWatchLease(agentId, activeProjectId)
+    void projectAgentFacade.acquireProjectKnowledgeWatchLease(agentId, activeProjectId)
       .then((payload) => {
         const leaseId = String(payload?.lease_id || "").trim();
         if (!leaseId) {
           return;
         }
         if (disposed) {
-          void agentsApi.releaseProjectKnowledgeWatchLease(agentId, activeProjectId, leaseId).catch(() => undefined);
+          void projectAgentFacade.releaseProjectKnowledgeWatchLease(agentId, activeProjectId, leaseId).catch(() => undefined);
           return;
         }
         knowledgeWatchLeaseRef.current = {
@@ -857,13 +869,13 @@ export default function ProjectDetailPage() {
         return;
       }
       knowledgeWatchLeaseRef.current = null;
-      void agentsApi.releaseProjectKnowledgeWatchLease(
+      void projectAgentFacade.releaseProjectKnowledgeWatchLease(
         currentLease.agentId,
         currentLease.projectId,
         currentLease.leaseId,
       ).catch(() => undefined);
     };
-  }, [currentAgent?.id, selectedProject?.id]);
+  }, [currentAgent?.id, projectAgentFacade, selectedProject?.id]);
 
   useEffect(() => {
     const agentId = currentAgent?.id;
@@ -872,11 +884,16 @@ export default function ProjectDetailPage() {
       setProjectAgentContext("");
       return;
     }
+    const projectAdapter = projectWorkspaceFacade.getProjectAdapter(projectId);
+    if (!projectAdapter) {
+      setProjectAgentContext("");
+      return;
+    }
     let cancelled = false;
     void (async () => {
       const results = await Promise.allSettled([
-        agentsApi.readProjectFile(agentId, projectId, ".agent/AGENTS.md"),
-        agentsApi.readProjectFile(agentId, projectId, ".agent/PROJECT.md"),
+        projectAdapter.readText(".agent/AGENTS.md"),
+        projectAdapter.readText(".agent/PROJECT.md"),
       ]);
       if (cancelled) {
         return;
@@ -893,7 +910,7 @@ export default function ProjectDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [currentAgent?.id, selectedProject?.id]);
+  }, [currentAgent?.id, projectWorkspaceFacade, selectedProject?.id]);
 
   const fetchRuntimeSignalDetails = useCallback(async () => {
     if (!selectedProject?.id || !projectKnowledgeState.activeKnowledgeTasks.length) {
@@ -1472,7 +1489,7 @@ export default function ProjectDetailPage() {
     setLoading(true);
     setError("");
     try {
-      const data = await agentsApi.listAgents();
+      const data = await projectAgentFacade.listAgents();
       setAgents(data.agents);
     } catch (err) {
       console.error("failed to load agent projects", err);
@@ -1485,7 +1502,7 @@ export default function ProjectDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [setAgents, t]);
+  }, [projectAgentFacade, setAgents, t]);
 
   const loadAgentProjects = useCallback(async (agentId: string) => {
     if (!agentId) {
@@ -1496,7 +1513,7 @@ export default function ProjectDetailPage() {
     setProjectsLoading(true);
     setError("");
     try {
-      const items = await agentsApi.listAgentProjects(agentId);
+      const items = await projectAgentFacade.listAgentProjects(agentId);
       setProjects(items);
     } catch (err) {
       console.error("failed to load project list", err);
@@ -1510,13 +1527,14 @@ export default function ProjectDetailPage() {
     } finally {
       setProjectsLoading(false);
     }
-  }, [t]);
+  }, [projectAgentFacade, t]);
 
   const loadProjectFiles = useCallback(async (
     agentId: string,
     project: AgentProjectSummary,
     options?: { preserveSelection?: boolean },
   ): Promise<string> => {
+    void agentId;
     setFilesLoading(true);
     const preserveSelection = Boolean(options?.preserveSelection);
     const previousSelection = preserveSelection ? selectedFilePath : "";
@@ -1533,11 +1551,24 @@ export default function ProjectDetailPage() {
         projectRequestIds: projectIds,
         retryCount: 1,
         retryDelayMs: 300,
-        loader: async (projectRequestId) => agentsApi.queryProjectFiles(
-          agentId,
-          projectRequestId,
-          projectFilesQueryBody,
-        ),
+        loader: async (projectRequestId) => {
+          const projectAdapter = projectWorkspaceFacade.getProjectAdapter(projectRequestId);
+          if (!projectAdapter) {
+            throw new Error("Project adapter unavailable");
+          }
+          return projectAdapter.queryFiles({
+            search: projectFilesQueryBody.search,
+            pathPrefix: projectFilesQueryBody.path_prefix,
+            stages: projectFilesQueryBody.stages,
+            contentTypes: projectFilesQueryBody.content_types,
+            includeBuiltin: projectFilesQueryBody.include_builtin,
+            includeIgnored: projectFilesQueryBody.include_ignored,
+            sortBy: projectFilesQueryBody.sort_by,
+            sortOrder: projectFilesQueryBody.sort_order,
+            offset: projectFilesQueryBody.offset,
+            limit: projectFilesQueryBody.limit,
+          });
+        },
       });
       const queryResponse = resolved.value;
       const filteredFiles = queryResponse.items
@@ -1545,14 +1576,23 @@ export default function ProjectDetailPage() {
           filename: item.filename,
           path: item.path,
           size: item.size,
-          modified_time: item.modified_time,
+          modified_time: item.modifiedTime,
           stage: item.stage,
-          content_type: item.content_type,
+          content_type: item.contentType,
           builtin: item.builtin,
           ignored: item.ignored,
         }));
       setProjectFiles(filteredFiles);
-      setProjectFilesQuerySummary(queryResponse.summary || null);
+      setProjectFilesQuerySummary({
+        total_matched: queryResponse.summary.totalMatched,
+        returned: queryResponse.summary.returned,
+        offset: queryResponse.summary.offset,
+        limit: queryResponse.summary.limit,
+        builtin_count: queryResponse.summary.builtinCount || 0,
+        ignored_count: queryResponse.summary.ignoredCount || 0,
+        stage_counts: queryResponse.summary.stageCounts || {},
+        content_type_counts: queryResponse.summary.contentTypeCounts || {},
+      });
       // Keep a superset cache so selection does not get invalidated by transient file-tree filters.
       setKnownProjectFilesByPath((prev) => ({
         ...prev,
@@ -1595,6 +1635,7 @@ export default function ProjectDetailPage() {
     dirPath = "",
     preferredProjectRequestId = "",
   ): Promise<AgentProjectFileTreeNode[]> => {
+    void agentId;
     const projectIds = buildProjectRequestCandidates(project, {
       preferredProjectRequestId: preferredProjectRequestId || resolvedProjectRequestId,
       routeProjectId,
@@ -1602,23 +1643,26 @@ export default function ProjectDetailPage() {
 
     const resolved = await resolveProjectRequestCandidate({
       projectRequestIds: projectIds,
-      loader: async (projectRequestId) => agentsApi.listProjectFileTree(
-        agentId,
-        projectRequestId,
-        dirPath,
-      ),
+      loader: async (projectRequestId) => {
+        const projectAdapter = projectWorkspaceFacade.getProjectAdapter(projectRequestId);
+        if (!projectAdapter) {
+          throw new Error("Project adapter unavailable");
+        }
+        return projectAdapter.listTree(dirPath);
+      },
     });
     const visibleNodes = resolved.value.filter((item) => !isIgnoredProjectFile(item.path));
     setKnownProjectFilesByPath((prev) => mergeProjectTreeNodesByPath(prev, visibleNodes));
     setResolvedProjectRequestId(resolved.projectRequestId);
     return visibleNodes;
-  }, [resolvedProjectRequestId, routeProjectId]);
+  }, [projectWorkspaceFacade, resolvedProjectRequestId, routeProjectId]);
 
   const loadProjectFileSummary = useCallback(async (
     agentId: string,
     project: AgentProjectSummary,
     preferredProjectRequestId = "",
   ) => {
+    void agentId;
     const projectIds = buildProjectRequestCandidates(project, {
       preferredProjectRequestId: preferredProjectRequestId || resolvedProjectRequestId,
       routeProjectId,
@@ -1626,13 +1670,19 @@ export default function ProjectDetailPage() {
 
     const resolved = await resolveProjectRequestCandidate({
       projectRequestIds: projectIds,
-      loader: async (projectRequestId) => agentsApi.getProjectFileSummary(agentId, projectRequestId),
+      loader: async (projectRequestId) => {
+        const projectAdapter = projectWorkspaceFacade.getProjectAdapter(projectRequestId);
+        if (!projectAdapter) {
+          throw new Error("Project adapter unavailable");
+        }
+        return projectAdapter.getFileSummary();
+      },
     });
     setProjectFileSummary(resolved.value);
     setLatestUpdatedFilePath((prev) => pickLatestRecentUpdatePath(resolved.value) || prev || "");
     setResolvedProjectRequestId(resolved.projectRequestId);
     return resolved.value;
-  }, [resolvedProjectRequestId, routeProjectId]);
+  }, [projectWorkspaceFacade, resolvedProjectRequestId, routeProjectId]);
 
   const loadProjectTreeRoot = useCallback(async (
     agentId: string,
@@ -1689,6 +1739,7 @@ export default function ProjectDetailPage() {
     selectedProject,
     resolvedProjectRequestId,
     setResolvedProjectRequestId,
+    getProjectAdapter: projectWorkspaceFacade.getProjectAdapter,
     onUploadCompleted: handleRefreshProjectFiles,
   });
 
@@ -1759,11 +1810,13 @@ export default function ProjectDetailPage() {
           preferredProjectRequestId: resolvedProjectRequestId,
           routeProjectId,
         }),
-        loader: async (projectRequestId) => agentsApi.readProjectFile(
-          agentId,
-          projectRequestId,
-          filePath,
-        ),
+        loader: async (projectRequestId) => {
+          const projectAdapter = projectWorkspaceFacade.getProjectAdapter(projectRequestId);
+          if (!projectAdapter) {
+            throw new Error("Project adapter unavailable");
+          }
+          return projectAdapter.readText(filePath);
+        },
       });
       setFileContent(resolved.value.content);
       setResolvedProjectRequestId(resolved.projectRequestId);
@@ -1778,7 +1831,7 @@ export default function ProjectDetailPage() {
     } finally {
       setContentLoading(false);
     }
-  }, [resolvedProjectRequestId, routeProjectId, t]);
+  }, [projectWorkspaceFacade, resolvedProjectRequestId, routeProjectId, t]);
 
   const fetchProjectFileSnippet = useCallback(async (
     agentId: string,
@@ -1790,11 +1843,13 @@ export default function ProjectDetailPage() {
         preferredProjectRequestId: resolvedProjectRequestId,
         routeProjectId,
       }),
-      loader: async (projectRequestId) => agentsApi.readProjectFile(
-        agentId,
-        projectRequestId,
-        filePath,
-      ),
+      loader: async (projectRequestId) => {
+        const projectAdapter = projectWorkspaceFacade.getProjectAdapter(projectRequestId);
+        if (!projectAdapter) {
+          throw new Error("Project adapter unavailable");
+        }
+        return projectAdapter.readText(filePath);
+      },
     });
     setResolvedProjectRequestId(resolved.projectRequestId);
     return (resolved.value.content || "")
@@ -1802,7 +1857,7 @@ export default function ProjectDetailPage() {
       .replace(/\n{3,}/g, "\n\n")
       .trim()
       .slice(0, 1200);
-  }, [resolvedProjectRequestId, routeProjectId]);
+  }, [projectWorkspaceFacade, resolvedProjectRequestId, routeProjectId]);
 
   const loadRunDetail = useCallback(async (
     agentId: string,
@@ -1815,7 +1870,7 @@ export default function ProjectDetailPage() {
           preferredProjectRequestId: resolvedProjectRequestId,
           routeProjectId,
         }),
-        loader: async (projectRequestId) => agentsApi.getProjectPipelineRun(
+        loader: async (projectRequestId) => projectPipelineFacade.getProjectPipelineRun(
           agentId,
           projectRequestId,
           runId,
@@ -1833,7 +1888,7 @@ export default function ProjectDetailPage() {
         t("projects.pipeline.loadRunFailed"),
       );
     }
-  }, [resolvedProjectRequestId, routeProjectId, t]);
+  }, [projectPipelineFacade, resolvedProjectRequestId, routeProjectId, t]);
 
   const loadPipelineContext = useCallback(async (
     agentId: string,
@@ -1847,8 +1902,8 @@ export default function ProjectDetailPage() {
           routeProjectId,
         }),
         loader: async (projectRequestId) => Promise.all([
-          agentsApi.listProjectPipelineTemplates(agentId, projectRequestId),
-          agentsApi.listProjectPipelineRuns(agentId, projectRequestId),
+          projectPipelineFacade.listProjectPipelineTemplates(agentId, projectRequestId),
+          projectPipelineFacade.listProjectPipelineRuns(agentId, projectRequestId),
         ]),
       });
       const [templates, runs] = resolved.value;
@@ -1884,7 +1939,7 @@ export default function ProjectDetailPage() {
     } finally {
       setPipelineLoading(false);
     }
-  }, [resolvedProjectRequestId, routeProjectId, t]);
+  }, [projectPipelineFacade, resolvedProjectRequestId, routeProjectId, t]);
 
   const handleRealtimeFileTreeInvalidated = useCallback((payload?: {
     changedPaths: string[];
@@ -1913,7 +1968,7 @@ export default function ProjectDetailPage() {
     }
     setImportLoading(true);
     try {
-      const templates = await agentsApi.listPlatformFlowTemplates(currentAgent.id);
+      const templates = await projectPipelineFacade.listPlatformFlowTemplates(currentAgent.id);
       setPlatformTemplates(templates);
       setSelectedPlatformTemplateId((prev) => {
         if (prev && templates.some((item) => item.id === prev)) {
@@ -1930,7 +1985,7 @@ export default function ProjectDetailPage() {
     } finally {
       setImportLoading(false);
     }
-  }, [currentAgent, t]);
+  }, [currentAgent, projectPipelineFacade, t]);
 
   const handleImportPlatformTemplate = useCallback(async () => {
     if (!currentAgent || !selectedProject || !selectedPlatformTemplateId) {
@@ -1945,7 +2000,7 @@ export default function ProjectDetailPage() {
           preferredProjectRequestId: resolvedProjectRequestId,
           routeProjectId,
         }),
-        loader: async (projectRequestId) => agentsApi.importPlatformTemplateIntoProject(
+        loader: async (projectRequestId) => projectPipelineFacade.importPlatformTemplateIntoProject(
           currentAgent.id,
           projectRequestId,
           { platform_template_id: selectedPlatformTemplateId },
@@ -1970,6 +2025,7 @@ export default function ProjectDetailPage() {
   }, [
     currentAgent,
     loadPipelineContext,
+    projectPipelineFacade,
     resolvedProjectRequestId,
     selectedPlatformTemplateId,
     selectedProject,
@@ -1989,8 +2045,8 @@ export default function ProjectDetailPage() {
           routeProjectId,
         }),
         loader: async (projectRequestId) => Promise.all([
-          agentsApi.listProjectPipelineRuns(agentId, projectRequestId),
-          agentsApi.getProjectPipelineRun(agentId, projectRequestId, runId),
+          projectPipelineFacade.listProjectPipelineRuns(agentId, projectRequestId),
+          projectPipelineFacade.getProjectPipelineRun(agentId, projectRequestId, runId),
         ]),
       });
       const [runs, detail] = resolved.value;
@@ -2000,7 +2056,7 @@ export default function ProjectDetailPage() {
     } catch (err) {
       console.error("failed to poll pipeline run", err);
     }
-  }, [resolvedProjectRequestId, routeProjectId]);
+  }, [projectPipelineFacade, resolvedProjectRequestId, routeProjectId]);
 
   const handleSwitchToRunFocusChat = useCallback((params: {
     runId: string;
@@ -2052,7 +2108,7 @@ export default function ProjectDetailPage() {
           preferredProjectRequestId: resolvedProjectRequestId,
           routeProjectId,
         }),
-        loader: async (projectRequestId) => agentsApi.createProjectPipelineRun(
+        loader: async (projectRequestId) => projectPipelineFacade.createProjectPipelineRun(
           currentAgent.id,
           projectRequestId,
           {
@@ -2083,7 +2139,7 @@ export default function ProjectDetailPage() {
     } finally {
       setCreateRunLoading(false);
     }
-  }, [currentAgent, handleSwitchToRunFocusChat, loadPipelineContext, resolvedProjectRequestId, routeProjectId, selectedProject, selectedTemplateId, t]);
+  }, [currentAgent, handleSwitchToRunFocusChat, loadPipelineContext, projectPipelineFacade, resolvedProjectRequestId, routeProjectId, selectedProject, selectedTemplateId, t]);
 
   const {
     handleEnsureRunChat,
@@ -2618,11 +2674,13 @@ export default function ProjectDetailPage() {
             preferredProjectRequestId: resolvedProjectRequestId,
             routeProjectId,
           }),
-          loader: async (projectRequestId) => agentsApi.readProjectFile(
-            currentAgent.id,
-            projectRequestId,
-            charStatsPath,
-          ),
+          loader: async (projectRequestId) => {
+            const projectAdapter = projectWorkspaceFacade.getProjectAdapter(projectRequestId);
+            if (!projectAdapter) {
+              throw new Error("Project adapter unavailable");
+            }
+            return projectAdapter.readText(charStatsPath);
+          },
         });
         if (disposed) {
           return;
@@ -2644,6 +2702,7 @@ export default function ProjectDetailPage() {
   }, [
     currentAgent,
     effectiveProjectFiles,
+    projectWorkspaceFacade,
     resolvedProjectRequestId,
     routeProjectId,
     selectedFilePath,
@@ -2672,11 +2731,13 @@ export default function ProjectDetailPage() {
             preferredProjectRequestId: resolvedProjectRequestId,
             routeProjectId,
           }),
-          loader: async (projectRequestId) => agentsApi.readProjectFile(
-            currentAgent.id,
-            projectRequestId,
-            nerPath,
-          ),
+          loader: async (projectRequestId) => {
+            const projectAdapter = projectWorkspaceFacade.getProjectAdapter(projectRequestId);
+            if (!projectAdapter) {
+              throw new Error("Project adapter unavailable");
+            }
+            return projectAdapter.readText(nerPath);
+          },
         });
         if (disposed) {
           return;
@@ -2698,6 +2759,7 @@ export default function ProjectDetailPage() {
   }, [
     currentAgent,
     effectiveProjectFiles,
+    projectWorkspaceFacade,
     resolvedProjectRequestId,
     routeProjectId,
     selectedFilePath,
@@ -2806,7 +2868,7 @@ export default function ProjectDetailPage() {
 
     setDeletingProject(true);
     try {
-      await agentsApi.deleteProject(currentAgent.id, selectedProject.id);
+      await projectAgentFacade.deleteProject(currentAgent.id, selectedProject.id);
       message.success(
         t("projects.deleteSuccess", {
           name: selectedProject.name || selectedProject.id,
@@ -2820,7 +2882,7 @@ export default function ProjectDetailPage() {
     } finally {
       setDeletingProject(false);
     }
-  }, [currentAgent, loadAgents, navigate, selectedProject, t]);
+  }, [currentAgent, loadAgents, navigate, projectAgentFacade, selectedProject, t]);
 
   const normalizeProjectArtifactPath = useCallback((inputPath: string): string => {
     let nextPath = String(inputPath || "").trim().replace(/\\/g, "/");
@@ -2982,11 +3044,11 @@ export default function ProjectDetailPage() {
           routeProjectId,
         }),
         loader: async (projectRequestId) => {
-          await agentsApi.createProjectDirectory(
-            currentAgent.id,
-            projectRequestId,
-            { path: targetPath },
-          );
+          const projectAdapter = projectWorkspaceFacade.getProjectAdapter(projectRequestId);
+          if (!projectAdapter) {
+            throw new Error("Project adapter unavailable");
+          }
+          await projectAdapter.mkdir(targetPath);
           return undefined;
         },
       });
@@ -3019,6 +3081,7 @@ export default function ProjectDetailPage() {
     routeProjectId,
     selectedProject,
     setResolvedProjectRequestId,
+    projectWorkspaceFacade,
     t,
   ]);
 
@@ -3103,11 +3166,11 @@ export default function ProjectDetailPage() {
           routeProjectId,
         }),
         loader: async (projectRequestId) => {
-          await agentsApi.moveProjectPath(currentAgent.id, projectRequestId, {
-            source_path: normalizedSourcePath,
-            target_path: targetPath,
-            conflict_strategy: conflictStrategy,
-          });
+          const projectAdapter = projectWorkspaceFacade.getProjectAdapter(projectRequestId);
+          if (!projectAdapter) {
+            throw new Error("Project adapter unavailable");
+          }
+          await projectAdapter.move(normalizedSourcePath, targetPath, conflictStrategy);
           return undefined;
         },
       });
@@ -3184,6 +3247,7 @@ export default function ProjectDetailPage() {
     routeProjectId,
     selectedProject,
     setResolvedProjectRequestId,
+    projectWorkspaceFacade,
     t,
   ]);
 
@@ -3390,11 +3454,11 @@ export default function ProjectDetailPage() {
           routeProjectId,
         }),
         loader: async (projectRequestId) => {
-          await agentsApi.deleteProjectPath(
-            currentAgent.id,
-            projectRequestId,
-            normalizedPath,
-          );
+          const projectAdapter = projectWorkspaceFacade.getProjectAdapter(projectRequestId);
+          if (!projectAdapter) {
+            throw new Error("Project adapter unavailable");
+          }
+          await projectAdapter.remove(normalizedPath, isDirectory);
           return undefined;
         },
       });
@@ -3463,6 +3527,7 @@ export default function ProjectDetailPage() {
     selectedFilePath,
     selectedProject,
     setResolvedProjectRequestId,
+    projectWorkspaceFacade,
     t,
   ]);
 
@@ -4071,7 +4136,7 @@ export default function ProjectDetailPage() {
           preferredProjectRequestId: resolvedProjectRequestId,
           routeProjectId,
         }),
-        loader: async (projectRequestId) => agentsApi.retryProjectPipelineRun(
+        loader: async (projectRequestId) => projectPipelineFacade.retryProjectPipelineRun(
           currentAgent.id,
           projectRequestId,
           selectedRunId,
@@ -4115,6 +4180,7 @@ export default function ProjectDetailPage() {
     currentAgent,
     handleSwitchToRunFocusChat,
     loadPipelineContext,
+    projectPipelineFacade,
     resolvedProjectRequestId,
     routeProjectId,
     selectedProject,
@@ -4525,7 +4591,6 @@ export default function ProjectDetailPage() {
                             onRequestRenameTreePath={handleRequestRenameProjectTreePath}
                             onRequestDeleteTreePath={handleRequestDeleteProjectTreePath}
                             onRequestDeleteSelectedFilePaths={handleRequestDeleteSelectedProjectFiles}
-                            onRequestMoveSelectedFilePaths={handleRequestMoveSelectedProjectFiles}
                             onRequestMoveSelectedFilePaths={handleRequestMoveSelectedProjectFiles}
                             onRequestSetSelectedFilePaths={(paths) => {
                               const normalizedPaths = Array.from(new Set(

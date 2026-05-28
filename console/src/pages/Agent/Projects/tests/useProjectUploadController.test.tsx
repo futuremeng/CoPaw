@@ -1,19 +1,12 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { agentsApi } from "../../../../api/modules/agents";
 import useProjectUploadController from "../hooks/useProjectUploadController";
 
-const { mockedAgentsApi, mockedSuccess, mockedError } = vi.hoisted(() => ({
-  mockedAgentsApi: {
-    uploadProjectFile: vi.fn(),
-  },
+const { mockedAdapterUpload, mockedSuccess, mockedError } = vi.hoisted(() => ({
+  mockedAdapterUpload: vi.fn(),
   mockedSuccess: vi.fn(),
   mockedError: vi.fn(),
-}));
-
-vi.mock("../../../../api/modules/agents", () => ({
-  agentsApi: mockedAgentsApi,
 }));
 
 vi.mock("antd", async () => {
@@ -81,6 +74,9 @@ function TestHarness({ onUploadCompleted }: {
     },
     resolvedProjectRequestId: "proj-1",
     setResolvedProjectRequestId: vi.fn(),
+    getProjectAdapter: () => ({
+      upload: mockedAdapterUpload,
+    }) as unknown as Parameters<typeof useProjectUploadController>[0]["getProjectAdapter"] extends (...args: unknown[]) => infer R ? R : never,
     onUploadCompleted,
   });
 
@@ -114,7 +110,7 @@ function TestHarness({ onUploadCompleted }: {
 describe("useProjectUploadController", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockedAgentsApi.uploadProjectFile.mockResolvedValue(undefined);
+    mockedAdapterUpload.mockResolvedValue(undefined);
   });
 
   it("refreshes the project workbench after uploads complete", async () => {
@@ -127,10 +123,8 @@ describe("useProjectUploadController", () => {
     await user.click(screen.getByRole("button", { name: "upload" }));
 
     await waitFor(() => {
-      expect(agentsApi.uploadProjectFile).toHaveBeenCalledTimes(1);
-      expect(agentsApi.uploadProjectFile).toHaveBeenCalledWith(
-        "agent-1",
-        "proj-1",
+      expect(mockedAdapterUpload).toHaveBeenCalledTimes(1);
+      expect(mockedAdapterUpload).toHaveBeenCalledWith(
         expect.any(File),
         "",
         "hello.txt",

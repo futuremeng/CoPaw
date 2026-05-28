@@ -6,6 +6,8 @@ import ProjectDetailPage from "../ProjectDetailPage";
 
 const {
   mockedAcquireProjectKnowledgeWatchLease,
+  mockedListAgents,
+  mockedListAgentProjects,
   mockedListProjectFileTree,
   mockedQueryProjectFiles,
   mockedReleaseProjectKnowledgeWatchLease,
@@ -21,8 +23,11 @@ const {
   mockProjectDesignChatControllerState,
   mockKnowledgeState,
   realtimeControllerState,
+  mockedTranslate,
 } = vi.hoisted(() => ({
   mockedAcquireProjectKnowledgeWatchLease: vi.fn(),
+  mockedListAgents: vi.fn(),
+  mockedListAgentProjects: vi.fn(),
   mockedListProjectFileTree: vi.fn(),
   mockedQueryProjectFiles: vi.fn(),
   mockedReleaseProjectKnowledgeWatchLease: vi.fn(),
@@ -120,6 +125,18 @@ const {
       }) => Promise<void>)
       | undefined,
   },
+  mockedTranslate: (
+    key: string,
+    maybeFallbackOrOptions?: string | Record<string, unknown>,
+    maybeOptions?: Record<string, unknown>,
+  ) => {
+    const fallback = typeof maybeFallbackOrOptions === "string" ? maybeFallbackOrOptions : undefined;
+    const options = typeof maybeFallbackOrOptions === "object" ? maybeFallbackOrOptions : maybeOptions;
+    if (typeof fallback === "string") {
+      return fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(options?.[name] ?? ""));
+    }
+    return key;
+  },
 }));
 
 vi.mock("antd", async () => {
@@ -164,18 +181,7 @@ vi.mock("antd", async () => {
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (
-      key: string,
-      maybeFallbackOrOptions?: string | Record<string, unknown>,
-      maybeOptions?: Record<string, unknown>,
-    ) => {
-      const fallback = typeof maybeFallbackOrOptions === "string" ? maybeFallbackOrOptions : undefined;
-      const options = typeof maybeFallbackOrOptions === "object" ? maybeFallbackOrOptions : maybeOptions;
-      if (typeof fallback === "string") {
-        return fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(options?.[name] ?? ""));
-      }
-      return key;
-    },
+    t: mockedTranslate,
     i18n: {
       language: "en",
     },
@@ -189,6 +195,8 @@ vi.mock("../../../../stores/agentStore", () => ({
 vi.mock("../../../../api/modules/agents", () => ({
   agentsApi: {
     acquireProjectKnowledgeWatchLease: mockedAcquireProjectKnowledgeWatchLease,
+    listAgents: mockedListAgents,
+    listAgentProjects: mockedListAgentProjects,
     listProjectFileTree: mockedListProjectFileTree,
     queryProjectFiles: mockedQueryProjectFiles,
     releaseProjectKnowledgeWatchLease: mockedReleaseProjectKnowledgeWatchLease,
@@ -308,12 +316,17 @@ function renderPage() {
   );
 }
 
+let consoleErrorSpy: ReturnType<typeof vi.spyOn> | null = null;
+
 describe("ProjectDetailPage refresh scheduling", () => {
   afterEach(() => {
+    consoleErrorSpy?.mockRestore();
+    consoleErrorSpy = null;
     cleanup();
   });
 
   beforeEach(() => {
+    consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.clearAllMocks();
     mockedAcquireProjectKnowledgeWatchLease.mockResolvedValue({
@@ -322,6 +335,10 @@ describe("ProjectDetailPage refresh scheduling", () => {
       file_monitoring_state: "active",
       acquired_at: "2026-05-12T00:00:00Z",
     });
+    mockedListAgents.mockResolvedValue({
+      agents: mockAgentStoreState.agents,
+    });
+    mockedListAgentProjects.mockResolvedValue(mockAgentStoreState.agents[0]?.projects || []);
     const mutableKnowledgeState = mockKnowledgeState as {
       activeKnowledgeTask: Record<string, unknown> | null;
       activeKnowledgeTasks: Array<Record<string, unknown>>;
@@ -705,8 +722,11 @@ describe("ProjectDetailPage refresh scheduling", () => {
 
     const view = renderPage();
     try {
-      expect(screen.getByTestId("realtime-health-notice").textContent || "").toContain("Realtime degraded");
-      expect(screen.getByTestId("realtime-health-notice").textContent || "").toContain("Attempt 3");
+      await waitFor(() => {
+        const noticeText = screen.getByTestId("realtime-health-notice").textContent || "";
+        expect(noticeText).toContain("Realtime degraded");
+        expect(noticeText).toContain("Attempt 3");
+      });
     } finally {
       view.unmount();
     }
